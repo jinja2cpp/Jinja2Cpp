@@ -20,6 +20,7 @@
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/container/small_vector.hpp>
+#include <algorithm>
 
 #include <cmath>
 #include <cstddef>
@@ -27,6 +28,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <initializer_list>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -218,6 +220,11 @@ void SubscriptExpression::AddIndex(const NodeArena& nodes, NodeRef<Expression> v
     }
     idx.attrName = std::move(attrName);
     m_subscriptExprs.push_back(std::move(idx));
+}
+
+bool SubscriptExpression::IsFoldable(const NodeArena& nodes) const
+{
+    return nodes[m_value].IsFoldable(nodes) && std::all_of(m_subscriptExprs.begin(), m_subscriptExprs.end(), [&nodes](const Index& idx) { return idx.isAttr || nodes[idx.expr].IsFoldable(nodes); });
 }
 
 InternalValue SubscriptExpression::ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values)
@@ -418,6 +425,11 @@ FilteredExpression::FilteredExpression(const NodeArena& nodes, NodeRef<Expressio
     {
         nodes[m_filter].SetConstantBase(nodes, *constant);
     }
+}
+
+bool FilteredExpression::IsFoldable(const NodeArena& nodes) const
+{
+    return nodes[m_expression].IsFoldable(nodes) && nodes[m_filter].IsFoldable(nodes);
 }
 
 InternalValue FilteredExpression::Evaluate(RenderContext& values)
@@ -645,9 +657,19 @@ InternalValue ApplyMathOperation(BinaryExpression::Operation oper, const Interna
     return result;
 }
 
-// a ~ b: both operands as strings of the template's width
-InternalValue ConcatAsStrings(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
+// a ~ b: both operands as strings of the template's width. With markupJoin (Jinja2's
+// markup_join, `~` under autoescape) Markup on either side escapes the other one and the
+// result is Markup
+InternalValue ConcatAsStrings(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context, bool markupJoin)
 {
+    if (markupJoin && (leftVal.IsMarkup() || rightVal.IsMarkup()))
+    {
+        auto* callback = context.GetRendererCallback();
+        InternalValue result = ConcatAsStrings(MarkupEscape(leftVal, callback), MarkupEscape(rightVal, callback), context, false);
+        result.SetMarkup();
+        return result;
+    }
+
     // Two strings of the template's width are copied into the result, allocated once
     // (docs/tasks/0151)
     auto concat = [&leftVal, &rightVal](auto tag) -> std::optional<InternalValue> {
@@ -721,7 +743,7 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
         break;
     }
     case jinja2::BinaryExpression::StringConcat:
-        result = ConcatAsStrings(leftVal, rightVal, context);
+        result = ConcatAsStrings(leftVal, rightVal, context, !m_folded && context.IsAutoescape());
         break;
     default:
         break;
@@ -760,6 +782,12 @@ InternalValue CompareExpression::Evaluate(RenderContext& context)
     return InternalValue(true);
 }
 
+bool SliceExpression::IsFoldable(const NodeArena& nodes) const
+{
+    auto part = [&nodes](const NodeRef<Expression>& expr) { return !expr || nodes[expr].IsFoldable(nodes); };
+    return nodes[m_value].IsFoldable(nodes) && part(m_start) && part(m_stop) && part(m_step);
+}
+
 InternalValue SliceExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
@@ -768,7 +796,19 @@ InternalValue SliceExpression::Evaluate(RenderContext& context)
     auto start = part(m_start);
     auto stop = part(m_stop);
     auto step = part(m_step);
-    return Slice(value, start, stop, step);
+    auto result = Slice(value, start, stop, step);
+    // A slice of Markup is Markup
+    if (value.IsMarkup() && IsStringValue(result))
+    {
+        result.SetMarkup();
+    }
+    return result;
+}
+
+bool TupleCreator::IsFoldable(const NodeArena& nodes) const
+{
+    const auto items = nodes[m_exprs];
+    return std::all_of(items.begin(), items.end(), [&nodes](const NodeRef<Expression>& item) { return nodes[item].IsFoldable(nodes); });
 }
 
 InternalValue TupleCreator::Evaluate(RenderContext& context)
@@ -814,6 +854,12 @@ struct DictKeyGetter : public visitors::BaseVisitor<std::string>
 };
 } // namespace
 
+bool DictCreator::IsFoldable(const NodeArena& nodes) const
+{
+    const auto items = nodes[m_exprs];
+    return std::all_of(items.begin(), items.end(), [&nodes](const Item& item) { return nodes[item.key].IsFoldable(nodes) && nodes[item.value].IsFoldable(nodes); });
+}
+
 InternalValue DictCreator::Evaluate(RenderContext& context)
 {
     CheckStack();
@@ -841,7 +887,19 @@ NodeRef<ExpressionFilter> ExpressionFilter::Make(NodeArena& nodes, const std::st
     {
         argsError = nodes.MakeText(filterName + "() " + error);
     }
-    return nodes.Make<ExpressionFilter>(filter, argsError);
+    // Jinja2 does not fold the filters that take the context, nor can it be told whether a
+    // filter of the environment does
+    static constexpr std::string_view contextFilters[] = { "map", "random", "reject", "rejectattr", "select", "selectattr" };
+    bool foldable = !GetIf<Callable>(&registered) && std::find(std::begin(contextFilters), std::end(contextFilters), filterName) == std::end(contextFilters);
+    for (const auto& arg : params.posParams)
+    {
+        foldable = foldable && nodes[arg].IsFoldable(nodes);
+    }
+    for (const auto& [name, arg] : params.kwParams)
+    {
+        foldable = foldable && nodes[arg].IsFoldable(nodes);
+    }
+    return nodes.Make<ExpressionFilter>(filter, argsError, foldable);
 }
 
 void ExpressionFilter::SetConstantBase(const NodeArena& nodes, const InternalValue& base)

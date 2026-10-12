@@ -91,4 +91,12 @@ CASES = [
     ("env_on_caller_markup_call_site", "{% macro w() %}[{{ caller() }}]{% endmacro %}{% autoescape false %}{% call w() %}<{{ html }}>{% endcall %}{% endautoescape %}", AE),
     ("markup_slice", "{{ (html|safe)[0] is escaped }}{{ (html|safe)[1:3] is escaped }}"),
     ("env_on_concat_markup_var", "{% set a = '<i>'|safe %}{{ a ~ '<u>' }}", AE),
+    ("env_on_concat_chain", "{% set a = '<i>'|safe %}{{ html ~ a ~ 1 }}|{{ a ~ n ~ [1] }}|{{ (html ~ a) ~ html }}|{{ html|safe ~ 2 * 3 ~ html }}", AE),
+    ("env_on_concat_folded", "{{ '<i>'|safe ~ '<u>' ~ html }}|{{ ('<i>'|safe ~ '<u>') ~ html }}|{{ ('<i>'|safe)[0] ~ 'x' }}|{{ ['<i>'|safe]|first ~ '<' }}|{{ '<i>'|safe ~ ('<u>', 1)[0] }}", AE),
+    ("env_on_concat_not_folded", "{{ ['<i>'|safe]|random ~ '<' }}|{{ '<i>'|safe ~ l|map('upper')|first }}|{% macro m() %}<b>{% endmacro %}{{ m() ~ '<' }}", AE),
+    ("env_off_concat_markup", "{% set a = '<i>'|safe %}{{ a ~ '<u>' }}|{{ (a ~ '<u>') is escaped }}"),
+    ("markup_truncate_end", "{{ ('<i>abcdefgh ijklmnop qrs'|safe)|truncate(9,false,'<<') }}|{{ ('<i>abcdefgh ijklmnop qrs'|safe)|truncate(9,true,'<') }}|{{ '<i>'|safe|random is escaped }}"),
+    ("markup_methods_escape", "{{ ('<i> a<b'|safe).split() }}|{{ ('<i>'|safe).partition('i') }}|{{ ('<i>'|safe).join(['<x>', 1]) }}|{{ ('ab'|safe).ljust(4, '&') }}|{{ ('a'|safe).replace('a', '<'|safe) }}|{{ ('<i>'|safe).find('i') }}"),
+    ("markup_method_format", "{{ ('{0}{x}'|safe).format('<a>', x='<b>') }}|{{ ('{0:>5}'|safe).format('<') }}|{{ ('{0[a]}'|safe).format({'a': '<'}) }}|{{ ('{}'|safe).format('<'|safe) }}|{{ ('{!r}'|safe).format('<') }}|{{ ('{}'|safe).format(1.5) }}"),
+    ("markup_repr_nested", "{{ [['<i>'|safe]] }}|{{ {'a': \"it's\"|safe} }}|{{ '%r'|format('<i>'|safe) }}|{{ '<i>'|safe|pprint }}"),
 ]

@@ -2,6 +2,7 @@
 
 #include "expression_evaluator.h"
 #include "internal_value.h"
+#include "markup.h"
 #include "render_context.h"
 #include "unicode_tables.h"
 #include "value_visitors.h"
@@ -869,7 +870,7 @@ struct StrOps
     static Str ToStr(const InternalValue& val, bool asRepr)
     {
         Str result;
-        Apply<visitors::ValueRenderer<CharT>>(val, result, asRepr);
+        visitors::RenderValue(val, result, asRepr);
         return result;
     }
 
@@ -1321,7 +1322,9 @@ struct StrOps
     }
 
     // One replacement field (the text between the braces): name[!conversion][:spec]
-    static Str ReplaceField(View field, const CallParams& params, FieldNumbering& numbering, RenderContext& context)
+    // escape: Markup's format() (markupsafe's EscapeFormatter), which escapes each field after
+    // formatting it and takes Markup fields as they are
+    static Str ReplaceField(View field, const CallParams& params, FieldNumbering& numbering, RenderContext& context, bool escape)
     {
         View spec;
         auto colon = field.find(':');
@@ -1355,12 +1358,24 @@ struct StrOps
         {
             Raise("Unknown conversion specifier");
         }
-        return FormatValue(value, spec);
+        if (!escape)
+        {
+            return FormatValue(value, spec);
+        }
+        if (value.IsMarkup())
+        {
+            if (!spec.empty())
+            {
+                Raise("Unsupported format specification for Markup.");
+            }
+            return ToStr(value, false);
+        }
+        return EscapeHtml<CharT>(FormatValue(value, spec));
     }
 
     // str.format: {}, {0}, {name}, attribute and index lookups {0.x} {a[k]}, !r/!s and a
     // format spec. Nested replacement fields inside a spec are not supported.
-    static InternalValue Format(View self, const CallParams& params, RenderContext& context)
+    static InternalValue Format(View self, const CallParams& params, RenderContext& context, bool escape = false)
     {
         Str result;
         FieldNumbering numbering;
@@ -1389,7 +1404,7 @@ struct StrOps
                 Raise("Nested replacement fields are not supported");
             }
             pos = close;
-            result += ReplaceField(field, params, numbering, context);
+            result += ReplaceField(field, params, numbering, context, escape);
         }
         return Result(std::move(result));
     }
@@ -1483,6 +1498,121 @@ const MethodInfo StrMethods[] = {
     { "removeprefix", StrRemoveprefix, false },
     { "removesuffix", StrRemovesuffix, false },
 };
+
+// ---------------------------------------------------------------------------------------
+// Markup (markupsafe.Markup): the str methods return Markup, a list or tuple of strings one of
+// Markup, and the text a method inserts (replace's new, a fill character, join's items) is
+// escaped first
+
+// Marks the strings a str method returned as Markup
+InternalValue MarkupResult(InternalValue result)
+{
+    if (IsStringValue(result))
+    {
+        result.SetMarkup();
+        return result;
+    }
+    auto list = AsList(result);
+    if (!list || result.Kind() != ValueKind::List)
+    {
+        return result;
+    }
+    InternalValueList items;
+    items.reserve(list->GetSize().value_or(0));
+    for (auto item : *list)
+    {
+        item.SetMarkup(IsStringValue(item));
+        items.push_back(std::move(item));
+    }
+    return list->IsTuple() ? MakeTuple(std::move(items)) : InternalValue(ListAdapter::CreateAdapter(std::move(items)));
+}
+
+constexpr size_t NoEscapedArg = static_cast<size_t>(-1);
+
+// The str method Fn on Markup; the positional argument EscapedArg, if given, is escaped first
+template<MethodFn Fn, size_t EscapedArg = NoEscapedArg>
+InternalValue MarkupMethod(const InternalValue& self, const CallParams& params, RenderContext& context)
+{
+    if constexpr (EscapedArg != NoEscapedArg)
+    {
+        if (params.posParams.size() > EscapedArg)
+        {
+            CallParams escaped = params;
+            escaped.posParams[EscapedArg] = MarkupEscape(params.posParams[EscapedArg], context.GetRendererCallback());
+            return MarkupResult(Fn(self, escaped, context));
+        }
+    }
+    return MarkupResult(Fn(self, params, context));
+}
+
+// Markup.join escapes every item, so items of any type join
+InternalValue MarkupJoin(const InternalValue& self, const CallParams& params, RenderContext& context)
+{
+    CheckArgs(params, "join", 1, 1);
+    bool isConverted = false;
+    auto list = ConvertToList(params.posParams[0], isConverted, false);
+    if (!isConverted)
+    {
+        Raise("can only join an iterable");
+    }
+    InternalValueList items;
+    for (const auto& item : list)
+    {
+        items.push_back(MarkupEscape(item, context.GetRendererCallback()));
+    }
+    CallParams escaped;
+    escaped.posParams.emplace_back(ListAdapter::CreateAdapter(std::move(items)));
+    return MarkupResult(StrJoinMethod(self, escaped, context));
+}
+
+InternalValue MarkupFormat(const InternalValue& self, const CallParams& params, RenderContext& context)
+{
+    return MarkupResult(ApplyStringConverter(self, [&params, &context](auto sv) -> InternalValue {
+        using CharT = typename decltype(sv)::value_type;
+        return StrOps<CharT>::Format(sv, params, context, true);
+    }));
+}
+
+const MethodInfo MarkupMethods[] = {
+    { "upper", MarkupMethod<StrUpper>, false },
+    { "lower", MarkupMethod<StrLower>, false },
+    { "swapcase", MarkupMethod<StrSwapcase>, false },
+    { "title", MarkupMethod<StrTitle>, false },
+    { "capitalize", MarkupMethod<StrCapitalize>, false },
+    { "strip", MarkupMethod<StrStrip>, false },
+    { "lstrip", MarkupMethod<StrLstrip>, false },
+    { "rstrip", MarkupMethod<StrRstrip>, false },
+    { "split", MarkupMethod<StrSplit>, false },
+    { "rsplit", MarkupMethod<StrRsplit>, false },
+    { "splitlines", MarkupMethod<StrSplitlines>, false },
+    { "join", MarkupJoin, false },
+    { "replace", MarkupMethod<StrReplace, 1>, false },
+    { "startswith", StrStartswith, false },
+    { "endswith", StrEndswith, false },
+    { "find", StrFind, false },
+    { "rfind", StrRfind, false },
+    { "index", StrIndex, false },
+    { "rindex", StrRindex, false },
+    { "count", StrCount, false },
+    { "format", MarkupFormat, false },
+    { "isdigit", StrIsdigit, false },
+    { "isdecimal", StrIsdecimal, false },
+    { "isnumeric", StrIsnumeric, false },
+    { "isalpha", StrIsalpha, false },
+    { "isalnum", StrIsalnum, false },
+    { "isspace", StrIsspace, false },
+    { "isupper", StrIsupper, false },
+    { "islower", StrIslower, false },
+    { "zfill", MarkupMethod<StrZfill>, false },
+    { "center", MarkupMethod<StrCenter, 1>, false },
+    { "ljust", MarkupMethod<StrLjust, 1>, false },
+    { "rjust", MarkupMethod<StrRjust, 1>, false },
+    { "partition", MarkupMethod<StrPartition>, false },
+    { "rpartition", MarkupMethod<StrRpartition>, false },
+    { "removeprefix", MarkupMethod<StrRemoveprefix>, false },
+    { "removesuffix", MarkupMethod<StrRemovesuffix>, false },
+};
+static_assert(std::size(MarkupMethods) == std::size(StrMethods), "Markup has every str method");
 
 // ---------------------------------------------------------------------------------------
 // list and tuple
@@ -2016,7 +2146,7 @@ const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view n
     switch (self.Kind())
     {
     case ValueKind::String:
-        return FindIn(StrMethods, name);
+        return self.IsMarkup() ? FindIn(MarkupMethods, name) : FindIn(StrMethods, name);
     case ValueKind::List:
         if (auto list = AsList(self))
         {
@@ -2102,6 +2232,12 @@ InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderC
 InternalValue GetItem(const InternalValue& obj, const InternalValue& key, RenderContext* context)
 {
     auto result = Subscript(obj, key, context);
+    // A character of Markup is Markup
+    if (obj.IsMarkup() && IsStringValue(result) && IsStringValue(obj))
+    {
+        result.SetMarkup();
+        return result;
+    }
     if (result.IsUndefined() && IsStringValue(key))
     {
         if (const auto* method = FindMethod(obj, AsString(key)))

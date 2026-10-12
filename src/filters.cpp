@@ -878,6 +878,20 @@ InternalValue Unique(const ListAdapter& list,
 }
 } // namespace
 
+namespace
+{
+// last, random and reverse index a string, and an item or slice of Markup is Markup (first
+// iterates it, which gives plain characters)
+InternalValue KeepMarkup(const InternalValue& baseVal, InternalValue result)
+{
+    if (baseVal.IsMarkup() && IsStringValue(result))
+    {
+        result.SetMarkup();
+    }
+    return result;
+}
+} // namespace
+
 InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     // Like Python, a string is a sequence of characters and a mapping one of its keys
@@ -907,11 +921,11 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     case FirstItemMode:
         return FirstItem(list, baseVal);
     case LastItemMode:
-        return LastItem(list, baseVal);
+        return KeepMarkup(baseVal, LastItem(list, baseVal));
     case LengthMode:
         return Length(list);
     case RandomMode:
-        return RandomItem(list, baseVal);
+        return KeepMarkup(baseVal, RandomItem(list, baseVal));
     case MaxItemMode:
     {
         auto e = list.end();
@@ -925,7 +939,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         return p != e ? WithParent(baseVal, *p) : InternalValue();
     }
     case ReverseMode:
-        return Reverse(list, baseVal);
+        return KeepMarkup(baseVal, Reverse(list, baseVal));
     case SumItemsMode:
     {
         auto start = GetArgumentValue("start", context);

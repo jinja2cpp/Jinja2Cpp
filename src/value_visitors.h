@@ -607,10 +607,26 @@ struct ValueRenderer<wchar_t> : ValueRendererBase<wchar_t>
     void operator()(const std::string_view& str) const { AppendString(ConvertString<std::wstring>(str)); }
 };
 
+// Writes str(val), or repr(val) when asRepr is set: Markup's repr is Markup('...')
+template<typename CharT>
+void RenderValue(const InternalValue& val, std::basic_string<CharT>& os, bool asRepr, typename ValueRendererBase<CharT>::ContainerStack* containers = nullptr)
+{
+    const bool asMarkup = asRepr && val.IsMarkup() && IsStringValue(val);
+    if (asMarkup)
+    {
+        os.append({ CharT('M'), CharT('a'), CharT('r'), CharT('k'), CharT('u'), CharT('p'), CharT('(') });
+    }
+    Apply<ValueRenderer<CharT>>(val, os, asRepr, containers);
+    if (asMarkup)
+    {
+        os.push_back(CharT(')'));
+    }
+}
+
 template<typename CharT>
 void ValueRendererBase<CharT>::RenderRepr(const InternalValue& val, ContainerStack* containers) const
 {
-    Apply<ValueRenderer<CharT>>(val, *m_os, true, containers);
+    RenderValue(val, *m_os, true, containers);
 }
 
 template<typename CharT>

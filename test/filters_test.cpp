@@ -522,9 +522,9 @@ INSTANTIATE_TEST_SUITE_P(Capitalize, FilterGenericTest, ::testing::Values(
                             ));
 
 INSTANTIATE_TEST_SUITE_P(Escape, FilterGenericTest, ::testing::Values(
-                            InputOutputPair{"'' | escape | pprint", "''"},
-                            InputOutputPair{"'abcd&><efgh' | escape | pprint", "'abcd&amp;&gt;&lt;efgh'"},
-                            InputOutputPair{"'\\\"\\'' | escape | pprint", "'&#34;&#39;'"}
+                            InputOutputPair{"'' | escape | pprint", "Markup('')"},
+                            InputOutputPair{"'abcd&><efgh' | escape | pprint", "Markup('abcd&amp;&gt;&lt;efgh')"},
+                            InputOutputPair{"'\\\"\\'' | escape | pprint", "Markup('&#34;&#39;')"}
                             ));
 
 // clang-format off

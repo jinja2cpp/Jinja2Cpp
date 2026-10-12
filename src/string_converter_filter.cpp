@@ -1507,6 +1507,11 @@ InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, Rende
                 truncated = truncated.substr(0, space);
             }
         }
+        // Markup + end escapes end
+        if (baseVal.IsMarkup())
+        {
+            end = EscapeHtml<CharT>(end);
+        }
         return InternalValue::FromText<CharT>({ truncated, end });
     });
 }
@@ -1697,7 +1702,8 @@ int64_t StringConverter::WordCount(const InternalValue& baseVal)
     return wc;
 }
 
-// Markup's own string methods return Markup; urlize returns Markup under autoescape
+// Markup's own string methods return Markup, as do truncate's slice and concatenation;
+// urlize returns Markup under autoescape
 bool StringConverter::ReturnsMarkup(const InternalValue& baseVal, RenderContext& context) const
 {
     switch (m_mode)
@@ -1708,6 +1714,7 @@ bool StringConverter::ReturnsMarkup(const InternalValue& baseVal, RenderContext&
     case TrimMode:
     case CenterMode:
     case IndentMode:
+    case TruncateMode:
         return baseVal.IsMarkup();
     case UrlizeMode:
         return context.IsAutoescape();

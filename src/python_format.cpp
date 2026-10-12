@@ -26,7 +26,7 @@ namespace
 std::string Str(const InternalValue& val, bool asRepr = false)
 {
     std::string result;
-    Apply<visitors::ValueRenderer<char>>(val, result, asRepr);
+    visitors::RenderValue(val, result, asRepr);
     return result;
 }
 

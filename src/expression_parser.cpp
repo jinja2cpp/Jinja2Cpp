@@ -14,6 +14,7 @@
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/template_env.h>
+#include <boost/container/small_vector.hpp>
 
 #include <cstdint>
 #include <iostream>
@@ -307,6 +308,10 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
     // The operators of one call combine like the old one-function-per-level chains: each
     // right operand starts counting from where this call started (OperatorChain)
     OperatorChain chain(m_operators);
+    // The `~` of one call make one chain, as Jinja2's Concat node: the operators around `~`
+    // bind looser (a new call parses `a ~ b` on their right) or tighter (a ~ b * c)
+    boost::container::small_vector<NodeRef<BinaryExpression>, 4> concats;
+    bool concatFoldable = true;
     auto left = minPrecedence <= Precedence::Not && lexer.PeekNextToken().keyword == Keyword::LogicalNot ? ParseLogicalNot(lexer)
                                                                                                          : ParseUnaryPlusMinus(lexer);
     while (left)
@@ -337,10 +342,26 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
         }
         else
         {
+            if (op.operation == BinaryExpression::StringConcat)
+            {
+                concatFoldable = concatFoldable && (!concats.empty() || m_nodes[*left].IsFoldable(m_nodes)) && m_nodes[*right].IsFoldable(m_nodes);
+            }
             left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, op.operation, *left, *right));
+            if (op.operation == BinaryExpression::StringConcat)
+            {
+                concats.push_back(m_nodes.As<BinaryExpression>(*left));
+            }
         }
     }
 
+    // Jinja2 folds a chain of foldable operands into one str
+    if (left && concatFoldable)
+    {
+        for (const auto concat : concats)
+        {
+            m_nodes[concat].SetFolded();
+        }
+    }
     return left;
 }
 
