@@ -1123,14 +1123,14 @@ JINJA2CPP_OUTLINE_INLINE InternalValue MapCaseUnicode(std::basic_string_view<Cha
 {
     std::basic_string<CharT> result;
     CaseChars<CharT> chars(str);
-    if (upper)
+    if constexpr (upper)
     {
         for (size_t idx = 0; idx != chars.cps.size(); ++idx)
         {
             AppendMapped(result, chars, idx, unicode::ToUpper);
         }
     }
-    else if (capitalize)
+    else if constexpr (capitalize)
     {
         if (!chars.cps.empty())
         {

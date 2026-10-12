@@ -1188,7 +1188,7 @@ ValueConverter::ValueConverter(const FilterParams& params, ValueConverter::Mode 
     }
     case RoundMode:
     {
-        static const auto args = MakeArgumentsTable({ { "precision"s, false }, { "method"s, false, "common"s } });
+        static const auto args = MakeArgumentsTable({ { "precision"s, false, static_cast<int64_t>(0) }, { "method"s, false, "common"s } });
         ParseParams(args, params);
         break;
     }
@@ -1475,10 +1475,11 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 namespace
 {
 
-// The text of `str` without surrounding ASCII whitespace
+// The text of `str` without surrounding ASCII whitespace as CPython's Py_ISSPACE knows it: not
+// the \x1c-\x1f separators, which str.isspace() accepts but int() and float() do not
 std::string StripAsciiSpace(const std::string& str)
 {
-    auto isSpace = [](char ch) { return unicode::IsSpace(static_cast<unsigned char>(ch)) && static_cast<unsigned char>(ch) < 0x80; };
+    auto isSpace = [](char ch) { return ch == ' ' || (ch >= '\t' && ch <= '\r'); };
     auto first = std::find_if_not(str.begin(), str.end(), isSpace);
     auto last = std::find_if_not(str.rbegin(), std::string::const_reverse_iterator(first), isSpace).base();
     return std::string(first, last);
@@ -2180,6 +2181,30 @@ InternalValue ValueConverter::Abs(const InternalValue& baseVal, RenderContext& c
     return InternalValue();
 }
 
+namespace
+{
+// Python's round(x) of a float: the nearest int, halves to even; integers are int64 (0178)
+InternalValue PythonRoundToInt(double value)
+{
+    if (std::isnan(value))
+    {
+        throw std::runtime_error("cannot convert float NaN to integer");
+    }
+    if (std::isinf(value))
+    {
+        throw std::runtime_error("cannot convert float infinity to integer");
+    }
+    // The default rounding mode rounds halves to even
+    const double rounded = std::nearbyint(value);
+    // -2**63 is exact; 2**63 is the first double beyond int64
+    if (rounded < -9223372036854775808.0 || rounded >= 9223372036854775808.0)
+    {
+        visitors::ThrowIntegerOverflow();
+    }
+    return static_cast<int64_t>(rounded);
+}
+} // namespace
+
 InternalValue ValueConverter::Round(const InternalValue& baseVal, RenderContext& context)
 {
     // Jinja2's do_round: round(value, precision), or math.ceil/floor at that precision
@@ -2189,17 +2214,31 @@ InternalValue ValueConverter::Round(const InternalValue& baseVal, RenderContext&
         throw std::runtime_error("round(): method must be common, ceil or floor");
     }
     auto precVal = GetArgumentValue("precision", context);
-    if (!IsEmpty(precVal) && !GetIf<int64_t>(&precVal) && !GetIf<bool>(&precVal))
+    const bool noPrecision = precVal.Kind() == ValueKind::None;
+    if (!noPrecision && !GetIf<int64_t>(&precVal) && !GetIf<bool>(&precVal))
     {
         throw std::runtime_error("round(): precision must be an integer");
     }
-    auto precision = IsEmpty(precVal) ? 0 : ConvertToInt(precVal);
     auto asInt = PythonIntOf(baseVal);
     const auto* dblVal = GetIf<double>(&baseVal);
     if (!asInt && !dblVal)
     {
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
     }
+    if (noPrecision)
+    {
+        // round(value, None) is round(value): an int, halves to even
+        if (method != "common")
+        {
+            throw std::runtime_error("unsupported operand type(s) for ** or pow(): 'int' and 'NoneType'");
+        }
+        if (asInt)
+        {
+            return *asInt;
+        }
+        return PythonRoundToInt(*dblVal);
+    }
+    auto precision = ConvertToInt(precVal);
     if (method == "common")
     {
         // round() of an int is an int

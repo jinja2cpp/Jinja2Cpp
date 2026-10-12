@@ -275,7 +275,7 @@ TEST_F(RecursionLimitsTest, HugeSequencesFailFast)
         "{{ 'x\ny'|indent(2**40) }}",
         "{{ ('a\n' * 1000)|indent(2**30) }}",
         "{{ range(2**40)|reverse|first }}",
-        "{{ 'x'|tojson(2**40) }}",
+        "{{ ['x']|tojson(2**40) }}",
     };
     for (const auto& source : templates)
     {

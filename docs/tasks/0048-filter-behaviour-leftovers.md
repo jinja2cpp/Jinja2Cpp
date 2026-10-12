@@ -3,7 +3,7 @@ status: done
 priority: low
 area: parity
 depends: [0019]
-touches: [src/string_converter_filter.cpp, src/filters.cpp#ValueConverter]
+touches: [src/string_converter_filter.cpp, src/filters.cpp#ValueConverter, src/serialize_filters.cpp, src/python_format.cpp, src/unicode_case.h, src/html_entities.h, scripts/gen_unicode_case.py, scripts/gen_html_entities.py]
 shares: [src/binding/, CMakeLists.txt]
 ---
 # Filter behaviour: what 0019 left behind
@@ -64,10 +64,10 @@ items 3 and 11 handed on:
 2. `striptags` unescapes with the whole `html.entities.html5` table and html.unescape's
    prefix rule (`src/html_entities.h`, `scripts/gen_html_entities.py`), and drops the
    numeric references Python drops (`_invalid_codepoints`).
-3. Deliberate (0015): `int` beyond int64 gives the default; `round` of an int whose result
+3. Deliberate until 0178 (big integers): `int` beyond int64 gives the default; `round` of an int whose result
    leaves int64 raises the 0015 overflow error instead of wrapping.
 5. `round(ndigits < -18)` on ints gives Python's 0 or raises; float overflow raises;
-   ceil/floor scale by a correctly rounded `10**p`, exact for ints.
+   ceil/floor scale by a correctly rounded `10**p`, exact for ints; `round(x, None)` is an int.
 6. `%d`/`%i`/`%u` of a float print its exact integer; 7. `%a` escapes like `ascii()`.
 8. Decided with Ruslan (2026-10-12): the fmt `{}` fallback is gone, `format` is printf-style
    only; the migration note is listed in 0077.

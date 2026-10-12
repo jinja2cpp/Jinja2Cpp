@@ -813,10 +813,10 @@ TEST(CaseFilters, AsciiAndNonAsciiText)
         { L"{{ 'A\x2192XB' | lower }}", L"a\x2192xb" },
         { L"{{ '\x2192xAb' | capitalize }}", L"\x2192xab" },
         { L"{{ 'oNE\x3000tWO\x2192thrEE \x2192x' | title }}", L"One\x3000Two\x2192three \x2192x" },
-        { L"{{ 'ǆa'|capitalize }}|{{ 'ßa'|upper }}|{{ 'ΑΣ ΑΣΑ'|lower }}|{{ 'ΑΣ bΣ'|title }}|{{ 'İ'|lower|length }}|{{ 'ΑΣ.'|capitalize }}|{{ 'ﬁx ǆ'|title }}", L"ǅa|SSA|ας ασα|Ασ Bσ|2|Ας.|FIx Ǆ" },
-        { L"{{ 'éa'|upper }}|{{ 'ÉA'|title }}|{{ 'ÉA'|lower }}|{{ 'éa'|capitalize }}", L"ÉA|Éa|éa|Éa" },
-        { L"[{{ '&hearts; &frac12; &amp x &ampx &notit; &#x1F600; &#0; &#128; &Eacute &copyright'|striptags }}]", L"[♥ ½ & x &x ¬it; \U0001F600 � € É ©right]" },
-        { L"[{{ '&#1; &#x7f; &#xFFFE; &#xD800; &#65 &AMP &NotEqualTilde; &acE; &ampé'|striptags }}]", L"[   � A & ≂̸ ∾̳ &é]" },
+        { L"{{ '\u01C6a'|capitalize }}|{{ '\u00DFa'|upper }}|{{ '\u0391\u03A3 \u0391\u03A3\u0391'|lower }}|{{ '\u0391\u03A3 b\u03A3'|title }}|{{ '\u0130'|lower|length }}|{{ '\u0391\u03A3.'|capitalize }}|{{ '\uFB01x \u01C6'|title }}", L"\u01C5a|SSA|\u03B1\u03C2 \u03B1\u03C3\u03B1|\u0391\u03C3 B\u03C3|2|\u0391\u03C2.|FIx \u01C4" },
+        { L"{{ '\u00E9a'|upper }}|{{ '\u00C9A'|title }}|{{ '\u00C9A'|lower }}|{{ '\u00E9a'|capitalize }}", L"\u00C9A|\u00C9a|\u00E9a|\u00C9a" },
+        { L"[{{ '&hearts; &frac12; &amp x &ampx &notit; &#x1F600; &#0; &#128; &Eacute &copyright'|striptags }}]", L"[\u2665 \u00BD & x &x \u00ACit; \U0001F600 \uFFFD \u20AC \u00C9 \u00A9right]" },
+        { L"[{{ '&#1; &#x7f; &#xFFFE; &#xD800; &#65 &AMP &NotEqualTilde; &acE; &amp\u00E9'|striptags }}]", L"[   \uFFFD A & \u2242\u0338 \u223E\u0333 &\u00E9]" },
     };
     for (const auto& [source, expected] : cases)
     {
@@ -965,15 +965,27 @@ TEST(FilterErrors, RoundBeyondInt64)
 // Non-ASCII text through the narrow engine; the wide engine is covered by the parity case
 TEST(FilterUnicode, IntAndFloatReadUnicodeDigitsAndSpaces)
 {
-    EXPECT_EQ("12|12.0|10|12.5|1000", RenderOrError("{{ '١٢'|int }}|{{ '１２'|float }}|{{ ' 1_0　'|int }}|{{ ' 12.5 '|float }}|{{ '1_000'|int }}", {}));
-    EXPECT_EQ("42|5|-1|18|100.0|12.5|12", RenderOrError("{{ '٤٢'|int }}|{{ '　５　'|int }}|{{ '-１'|int }}|{{ '１２'|int(base=16) }}|{{ '١e٢'|float }}|{{ '١٢.٥'|float }}|{{ '𝟏𝟐'|int }}", {}));
-    EXPECT_EQ("0|7|0|1.0 kB", RenderOrError("{{ 'é'|int }}|{{ '1é'|float(7) }}|{{ '1 2'|int }}|{{ '١٠٠٠'|filesizeformat }}", {}));
+    EXPECT_EQ("12|12.0|10|12.5|1000", RenderOrError("{{ '\331\241\331\242'|int }}|{{ '\357\274\221\357\274\222'|float }}|{{ ' 1_0\343\200\200'|int }}|{{ ' 12.5 '|float }}|{{ '1_000'|int }}", {}));
+    EXPECT_EQ("42|5|-1|18|100.0|12.5|12", RenderOrError("{{ '\331\244\331\242'|int }}|{{ '\343\200\200\357\274\225\343\200\200'|int }}|{{ '-\357\274\221'|int }}|{{ '\357\274\221\357\274\222'|int(base=16) }}|{{ '\331\241e\331\242'|float }}|{{ '\331\241\331\242.\331\245'|float }}|{{ '\360\235\237\217\360\235\237\220'|int }}", {}));
+    EXPECT_EQ("0|7|0|1.0 kB", RenderOrError("{{ '\303\251'|int }}|{{ '1\303\251'|float(7) }}|{{ '1 2'|int }}|{{ '\331\241\331\240\331\240\331\240'|filesizeformat }}", {}));
+}
+
+// Found by the 0048 verifier: Python checks tojson's indent only for non-strings, round(x, None)
+// is an int, and int()/float() strip only ASCII whitespace that Py_ISSPACE knows
+TEST(FilterErrors, VerifierLeftovers)
+{
+    EXPECT_EQ("\"a\"|\"b\"", RenderOrError("{{ 'a'|tojson(1.5) }}|{{ s|tojson(1.5) }}", { { "s", "b" } }));
+    EXPECT_NE(RenderOrError("{{ 1|tojson(1.5) }}", {}).find("can't multiply sequence"), std::string::npos);
+    EXPECT_EQ("2|2|5|-4|2.0", RenderOrError("{{ 1.5|round(None) }}|{{ 2.5|round(None) }}|{{ 5|round(None) }}|{{ -3.5|round(None) }}|{{ 1.5|round }}", {}));
+    EXPECT_NE(RenderOrError("{{ 1.5|round(None, 'floor') }}", {}).find("NoneType"), std::string::npos);
+    EXPECT_NE(RenderOrError("{{ 1e300|round(None) }}", {}).find("64 bits"), std::string::npos);
+    EXPECT_EQ("0|0.0|5|5.0", RenderOrError("{{ '\0345'|int }}|{{ '\0375'|float }}|{{ '\v5\t'|int }}|{{ '\f5\r'|float }}", {}));
 }
 
 TEST(FilterUnicode, PercentAEscapesNonAscii)
 {
-    EXPECT_EQ("'\\xe9'", RenderOrError("{{ '%a'|format('é') }}", {}));
-    EXPECT_EQ("['\\xe9', 'x']", RenderOrError("{{ '%a'|format(['é', 'x']) }}", {}));
-    EXPECT_EQ("'\\xe9'|'\\xdf'|'\\U0001f600'", RenderOrError("{{ '%5a|%-6a|%a'|format('é', 'ß', '😀') }}", {}));
-    EXPECT_EQ("'\\u65e5\\u672c'|'日本'", RenderOrError("{{ '%a|%r'|format('日本', '日本') }}", {}));
+    EXPECT_EQ("'\\xe9'", RenderOrError("{{ '%a'|format('\303\251') }}", {}));
+    EXPECT_EQ("['\\xe9', 'x']", RenderOrError("{{ '%a'|format(['\303\251', 'x']) }}", {}));
+    EXPECT_EQ("'\\xe9'|'\\xdf'|'\\U0001f600'", RenderOrError("{{ '%5a|%-6a|%a'|format('\303\251', '\303\237', '\360\237\230\200') }}", {}));
+    EXPECT_EQ("'\\u65e5\\u672c'|'\346\227\245\346\234\254'", RenderOrError("{{ '%a|%r'|format('\346\227\245\346\234\254', '\346\227\245\346\234\254') }}", {}));
 }

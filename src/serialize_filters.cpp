@@ -474,6 +474,11 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     // Jinja2's do_tojson: json.dumps with sort_keys=True, then htmlsafe_json_dumps escapes
     // <, >, & and ' so the result is safe in HTML and <script> (PythonJsonWriter does both)
     auto indentVal = this->GetArgumentValue("indent", context);
+    // json.dumps encodes a str before it looks at indent, so only other values check it
+    if (!IsEmpty(indentVal) && (IsStringValue(value) || GetAsSameString(std::string(), value)))
+    {
+        indentVal = InternalValue();
+    }
     std::optional<std::string> indent;
     if (auto str = GetAsSameString(std::string(), indentVal))
     {
