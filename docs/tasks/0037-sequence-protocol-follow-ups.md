@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: parity
 depends: [0016]
@@ -50,3 +50,11 @@ multi-target `set` block assign the body explicitly, which fixed `join_attribute
 0019 made `groupby` raise on undefined keys and `slice(0)` raise, so `groupby_string` and
 `slice_zero` match; it also added `IMapAccessor::HasAttributes()`, true for user-provided
 maps (reflected structs), which is the mapping-versus-object flag `is sequence` needs.
+
+Final: the case-insensitive narrow compare orders UTF-8 bytes as unsigned after ASCII
+lower-casing (`CaseInsensitiveLess`); non-ASCII letters are not case-folded, so
+`['é','É']|min` still differs from Python's `lower()` (case `sequences.casefold_non_ascii`, still listed). `sum` starts from the int 0 and
+refuses a string `start`, so string items raise as in Python. `wordwrap(width <= 0)` raises
+(an empty text returns early, as in Python). `m is sequence` is true for a dict and false
+for a reflected object, `loop` and `namespace()`. No line of `test/parity/divergences/`
+names 0037.
