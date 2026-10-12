@@ -54,4 +54,4 @@ deleted, as decided in `docs/api-2.0.md` section 7. Tests: `BasicTests.ValueFrom
 `BasicTests.ValueFromNullptrIsNone` in `test/basic_tests.cpp`. Release notes for 2.0 must
 say that integers other than `int` were stored as `bool` in C++14 builds of 1.x (and `size_t` did not compile at C++17), and
 that characters no longer convert to `Value`, which includes a `UserCallable` whose function
-returns `char`. Values above `INT64_MAX` (`Value(ULLONG_MAX)`) wrap to negative: task 0170.
+returns `char`. Values above `INT64_MAX` (`Value(ULLONG_MAX)`) wrap to negative: task 0171.
