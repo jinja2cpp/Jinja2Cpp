@@ -44,7 +44,7 @@ on `loop()` without an argument; allow `recursive` after a filter in the parser.
 
 **Done when.** The four remaining lines are gone from the statements allow-list.
 
-**Resolution.** The filter no longer sees its own loop's `loop`: a filter that names `loop`
+**Resolution (PR #500).** The filter no longer sees its own loop's `loop`: a filter that names `loop`
 (found by the parser) runs with that slot unbound, or with the outer value in its scope on
 the scopes path, so it sees the loop around it, peeked or not; `for` over a non-iterable
 raises TypeError (an undefined value stays empty, StrictUndefined refuses); `set loop` in a
