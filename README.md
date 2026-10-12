@@ -1,6 +1,6 @@
 # Benchmark trend
 
-Instruction and allocation counts per iteration on master, one record per commit (81 so far, latest [5806e40](https://github.com/jinja2cpp/Jinja2Cpp/commit/5806e40147512b2ff94e671b0972ba00e58b80f4) on 2026-10-12). Written by the `trend` job of `.github/workflows/benchmark.yml` with `bench/trend.py`; the data is `history.jsonl`.
+Instruction and allocation counts per iteration on master, one record per commit (82 so far, latest [dff716f](https://github.com/jinja2cpp/Jinja2Cpp/commit/dff716ff158e5e5b34d269168b88b3f5067ee465) on 2026-10-12). Written by the `trend` job of `.github/workflows/benchmark.yml` with `bench/trend.py`; the data is `history.jsonl`.
 
 Memory is the bytes a loaded template keeps for `Load/*` and the peak heap use of one render for `Render/*`; vs first compares with the first record that has it.
 
@@ -53,46 +53,46 @@ Misses per iteration in callgrind's cache model (`count.py --cache-sim`: 32 KB 8
 
 | Benchmark | D1 read misses | vs previous | D1 write misses | vs previous | LL data read misses | vs previous | I1 misses | vs previous |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Load/chat_llama | 679 | 0% | 699 | 0% | 0 |  | 6,969 | 0% |
-| Render/chat_llama | 1,086 | 0% | 421 | 0% | 0 |  | 3,101 | 0% |
-| Load/chat_mistral | 1,072 | 0% | 1,022 | 0% | 0 |  | 8,296 | 0% |
-| Render/chat_mistral | 1,735 | 0% | 444 | 0% | 0 |  | 8,792 | 0% |
-| Load/chat_qwen | 523 | 0% | 586 | 0% | 0 |  | 4,582 | 0% |
-| Render/chat_qwen | 956 | 0% | 304 | 0% | 0 |  | 2,787 | 0% |
-| Load/config_file | 169 | 0% | 139 | 0% | 0 |  | 2,853 | 0% |
-| Render/config_file | 5,483 | 0% | 1,510 | 0% | 0 |  | 37,915 | 0% |
-| Load/dict_ops | 22 | 0% | 16 | 0% | 0 |  | 1,227 | 0% |
-| Render/dict_ops | 605 | 0% | 406 | 0% | 0 |  | 792 | 0% |
-| Load/expressions | 30 | 0% | 22 | 0% | 0 |  | 1,130 | 0% |
-| Render/expressions | 5 | 0% | 2 | 0% | 0 |  | 246 | 0% |
-| Load/filters | 115 | 0% | 85 | 0% | 0 |  | 1,772 | 0% |
-| Render/filters | 14 | 0% | 2 | 0% | 0 |  | 832 | 0% |
-| Load/for_filter_if | 11 | 0% | 5 | 0% | 0 |  | 1,105 | 0% |
-| Render/for_filter_if | 1,587 | 0% | 61 | 0% | 0 |  | 167 | 0% |
-| Load/for_loop_vars | 22 | 0% | 15 | 0% | 0 |  | 1,101 | 0% |
-| Render/for_loop_vars | 8 | 0% | 2 | 0% | 0 |  | 147 | 0% |
-| Load/for_range | 8 | 0% | 7 | 0% | 0 |  | 708 | 0% |
-| Render/for_range | 1 | 0% | 1 | 0% | 0 |  | 87 | 0% |
-| Load/html_autoescape | 439 | 0% | 494 | 0% | 0 |  | 4,122 | 0% |
-| Render/html_autoescape | 3,538 | 0% | 1,292 | 0% | 0 |  | 35,914 | 0% |
-| Load/inheritance | 5 | 0% | 4 | 0% | 0 |  | 565 | 0% |
-| Render/inheritance | 565 | 0% | 126 | 0% | 0 |  | 700 | 0% |
-| Load/large_static | 1,953 | 0% | 881 | 0% | 0 |  | 237 | 0% |
-| Render/large_static | 705 | 0% | 573 | 0% | 0 |  | 11 | 0% |
-| Load/macros | 83 | 0% | 73 | 0% | 0 |  | 1,551 | 0% |
-| Render/macros | 760 | 0% | 238 | 0% | 0 |  | 512 | 0% |
-| Load/many_tags | 26,632 | 0% | 20,571 | 0% | 0 |  | 249,925 | 0% |
-| Render/many_tags | 6,066 | 0% | 860 | 0% | 0 |  | 135 | 0% |
-| Load/mitsuhiko_table | 26 | 0% | 24 | 0% | 0 |  | 738 | 0% |
-| Render/mitsuhiko_table | 9,286 | 0% | 6,505 | 0% | 0 |  | 290 | 0% |
-| Load/mitsuhiko_table_wide | 95 | 0% | 109 | 0% | 0 |  | 1,094 | 0% |
-| Render/mitsuhiko_table_wide | 9,370 | 0% | 22,968 | 0% | 0 |  | 269 | 0% |
-| Load/plain_text | 0 |  | 2 | 0% | 0 |  | 16 | 0% |
+| Load/chat_llama | 684 | +0.74% | 700 | +0.14% | 0 |  | 6,853 | -1.66% |
+| Render/chat_llama | 1,070 | -1.47% | 418 | -0.71% | 0 |  | 3,195 | +3.03% |
+| Load/chat_mistral | 1,064 | -0.75% | 1,023 | +0.10% | 0 |  | 8,001 | -3.56% |
+| Render/chat_mistral | 1,732 | -0.17% | 445 | +0.23% | 0 |  | 8,272 | -5.91% |
+| Load/chat_qwen | 528 | +0.96% | 583 | -0.51% | 0 |  | 4,398 | -4.02% |
+| Render/chat_qwen | 920 | -3.77% | 296 | -2.63% | 0 |  | 2,768 | -0.68% |
+| Load/config_file | 167 | -1.18% | 143 | +2.88% | 0 |  | 2,813 | -1.40% |
+| Render/config_file | 5,395 | -1.60% | 1,482 | -1.85% | 0 |  | 37,153 | -2.01% |
+| Load/dict_ops | 19 | -13.64% | 14 | -12.50% | 0 |  | 1,220 | -0.57% |
+| Render/dict_ops | 595 | -1.65% | 408 | +0.49% | 0 |  | 822 | +3.79% |
+| Load/expressions | 25 | -16.67% | 19 | -13.64% | 0 |  | 1,148 | +1.59% |
+| Render/expressions | 2 | -60.00% | 1 | -50.00% | 0 |  | 248 | +0.81% |
+| Load/filters | 110 | -4.35% | 84 | -1.18% | 0 |  | 1,697 | -4.23% |
+| Render/filters | 18 | +28.57% | 4 | +100.00% | 0 |  | 817 | -1.80% |
+| Load/for_filter_if | 7 | -36.36% | 5 | 0% | 0 |  | 1,079 | -2.35% |
+| Render/for_filter_if | 1,585 | -0.13% | 61 | 0% | 0 |  | 143 | -14.37% |
+| Load/for_loop_vars | 23 | +4.55% | 11 | -26.67% | 0 |  | 1,064 | -3.36% |
+| Render/for_loop_vars | 7 | -12.50% | 2 | 0% | 0 |  | 118 | -19.73% |
+| Load/for_range | 7 | -12.50% | 7 | 0% | 0 |  | 692 | -2.26% |
+| Render/for_range | 1 | 0% | 1 | 0% | 0 |  | 82 | -5.75% |
+| Load/html_autoescape | 432 | -1.59% | 495 | +0.20% | 0 |  | 3,935 | -4.54% |
+| Render/html_autoescape | 3,293 | -6.92% | 1,205 | -6.73% | 0 |  | 35,530 | -1.07% |
+| Load/inheritance | 6 | +20.00% | 4 | 0% | 0 |  | 574 | +1.59% |
+| Render/inheritance | 564 | -0.18% | 124 | -1.59% | 0 |  | 695 | -0.71% |
+| Load/large_static | 1,954 | +0.05% | 881 | 0% | 0 |  | 211 | -10.97% |
+| Render/large_static | 705 | 0% | 573 | 0% | 0 |  | 19 | +72.73% |
+| Load/macros | 82 | -1.20% | 72 | -1.37% | 0 |  | 1,535 | -1.03% |
+| Render/macros | 761 | +0.13% | 238 | 0% | 0 |  | 492 | -3.91% |
+| Load/many_tags | 26,629 | -0.01% | 20,574 | +0.01% | 0 |  | 248,658 | -0.51% |
+| Render/many_tags | 6,063 | -0.05% | 861 | +0.12% | 0 |  | 534 | +295.56% |
+| Load/mitsuhiko_table | 28 | +7.69% | 31 | +29.17% | 0 |  | 743 | +0.68% |
+| Render/mitsuhiko_table | 9,269 | -0.18% | 6,503 | -0.03% | 0 |  | 293 | +1.03% |
+| Load/mitsuhiko_table_wide | 97 | +2.11% | 108 | -0.92% | 0 |  | 1,308 | +19.56% |
+| Render/mitsuhiko_table_wide | 9,375 | +0.05% | 22,967 | 0% | 0 |  | 306 | +13.75% |
+| Load/plain_text | 0 |  | 2 | 0% | 0 |  | 6 | -62.50% |
 | Render/plain_text | 0 |  | 0 |  | 0 |  | 5 | 0% |
-| Load/strings | 141 | 0% | 111 | 0% | 0 |  | 2,636 | 0% |
-| Render/strings | 465 | 0% | 600 | 0% | 0 |  | 1,396 | 0% |
-| Load/substitute | 1 | 0% | 4 | 0% | 0 |  | 100 | 0% |
-| Render/substitute | 0 |  | 0 |  | 0 |  | 3 | 0% |
+| Load/strings | 147 | +4.26% | 115 | +3.60% | 0 |  | 2,641 | +0.19% |
+| Render/strings | 457 | -1.72% | 600 | 0% | 0 |  | 1,415 | +1.36% |
+| Load/substitute | 2 | +100.00% | 4 | 0% | 0 |  | 98 | -2.00% |
+| Render/substitute | 0 |  | 0 |  | 0 |  | 4 | +33.33% |
 
 ## Charts
 
