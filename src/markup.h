@@ -236,7 +236,7 @@ inline InternalValue EscapeFormatArgs(const InternalValue& args, IRendererCallba
     }
     if (auto map = AsMap(args))
     {
-        InternalValueMap items;
+        InternalDict items;
         for (auto& key : map->GetKeys())
         {
             items[key] = EscapeFormatArg(map->GetValueByName(key), callback);

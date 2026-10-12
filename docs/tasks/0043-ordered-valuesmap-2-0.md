@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: release
 depends: [0031]
@@ -45,3 +45,14 @@ wide multiset comparison in parity_test.cpp), and the library reports SOVERSION 
 
 **Next.** `ValuesMap`'s key type is frozen again until 3.0, so settle non-string keys (0036)
 before or with this release if they need a public type.
+
+**Done.** `ValuesMap` derives from `OrderedMap<std::string, Value>`, now public in
+`include/jinja2cpp/utils/ordered_map.h`; the project is 2.0.0 with SOVERSION 2. Dict reprs print
+in their own order, reflected structs report sorted keys, and `dict()`, `format` keyword
+mappings and Markup-escaped mappings build an `InternalDict` (they were hash-ordered and
+showed up once the repr stopped sorting). `Reflector<nlohmann::ordered_json>` shares a
+template with the `nlohmann::json` one; the bench's `--data=reflect` uses it, and
+`chat_mistral` iterates `tool.items()` again. Corpus cases `statements.ctx_dict_order_*` cover
+context dicts with unsorted keys, small and indexed. The `unordered` divergence kind and the
+wide multiset comparison are gone; the one line that used the kind for a locale difference
+(`wide.filters.format_ascii_repr`) uses the new kind `platform`, which accepts either result.

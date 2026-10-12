@@ -683,10 +683,9 @@ void ValueRendererBase<CharT>::operator()(const MapRef& map) const
         return;
     }
 
-    // Python prints dicts in insertion order; the maps behind MapAdapter are unordered,
-    // so sort the keys to keep the output stable across standard libraries
+    // Python prints dicts in their own order: ValuesMap and InternalDict keep insertion order, reflected
+    // structs report sorted keys
     auto keys = map.GetKeys();
-    std::sort(keys.begin(), keys.end());
 
     ValueRenderer<CharT> keyRenderer(*m_os, true);
     AppendAscii("{");

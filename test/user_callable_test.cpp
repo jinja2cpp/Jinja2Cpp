@@ -322,6 +322,9 @@ INSTANTIATE_TEST_SUITE_P(VarKwArgsParamsConvert, UserCallableParamConvertTest, :
                                             "['arg1': 10.123, 'arg2': [1, 2, 3]]"}
                             ));
 
+// **kwargs keep the call order (docs/tasks/0043)
+INSTANTIATE_TEST_SUITE_P(VarKwArgsOrder, UserCallableParamConvertTest, ::testing::Values(InputOutputPair{ "VarKwArgsFn(z=1, a=2, m=3) | list", "['z', 'a', 'm']" }));
+
 INSTANTIATE_TEST_SUITE_P(GlobalContextAccess, UserCallableParamConvertTest, ::testing::Values(InputOutputPair{ "ContextArgFn(name='test_value')", "100500" }));
 
 INSTANTIATE_TEST_SUITE_P(StringParamConvert, UserCallableParamConvertTest, ::testing::Values(
