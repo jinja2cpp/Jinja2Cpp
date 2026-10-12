@@ -137,7 +137,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0065](0065-identifier-naming-src.md) | readability-identifier-naming for src/ | style | low | done |
 | [0066](0066-tidy-cxx17-checks.md) | clang-tidy bug-class findings that only C++17 shows | robustness | medium | done |
 | [0067](0067-value-integral-construction.md) | `Value` from unsigned and wide integers stores `bool` | robustness | high | open |
-| [0068](0068-package-abi-facts.md) | The installed package does not carry the library's ABI choices | build | high | open |
+| [0068](0068-package-abi-facts.md) | The installed package does not carry the library's ABI choices | build | high | done |
 | [0069](0069-public-header-defects.md) | Defects in the public headers | robustness | medium | open |
 | [0070](0070-cxx23-floor.md) | Drop C++14: C++17 floor, C++23 supported | standards | high | done |
 | [0071](0071-drop-nonstd.md) | Replace optional-lite, variant-lite and string-view-lite with `std::`; pin expected-lite | standards | high | done |
@@ -232,3 +232,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0160](0160-robin-hood-per-render-tables.md) | Per-render robin_hood tables the bench used to hide | perf | medium | done |
 | [0161](0161-lexer-leniencies.md) | The tag lexer accepts two inputs Jinja2 rejects | parity | low | open |
 | [0162](0162-ci-compile-cache-and-queue.md) | CI got slow: no compile cache, serial MSVC builds, macOS queue | ci | high | in-progress |
+| [0163](0163-external-deps-package.md) | The external deps modes do not configure, and no CI job builds them | build | low | open |
