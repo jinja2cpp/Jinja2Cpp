@@ -1421,6 +1421,17 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         return InternalValue(val.ToAdapter());
     }
 
+    // list() of a dictsort pair is the list [key, value]
+    InternalValue operator()(const KeyValuePair& val) const
+    {
+        if (m_params.mode != ValueConverter::ToListMode)
+        {
+            return InternalValue();
+        }
+
+        return ListAdapter::CreateAdapter(InternalValueList{ InternalValue(val.key), val.value });
+    }
+
     InternalValue operator()(const MapRef& val) const
     {
         if (m_params.mode != ValueConverter::ToListMode)

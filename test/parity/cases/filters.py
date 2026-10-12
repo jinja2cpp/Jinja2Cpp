@@ -29,6 +29,7 @@ CASES = [
     ("dictsort_by_value", "{% for k, v in d|dictsort(by='value') %}{{ k }};{% endfor %}"),
     ("dictsort_reverse", "{% for k, v in d|dictsort(reverse=true) %}{{ k }};{% endfor %}"),
     ("dictsort_pair_subscript", "{% set p = {'ab': 1}|dictsort|first %}{{ p[0] }}|{{ p[1] }}|{{ p|length }}"),
+    ("dictsort_pair_sequence", "{% set p = {'ab': 1}|dictsort|first %}{{ p[-1] }}|{{ p[-2] }}|{% for x in p %}{{ x }},{% endfor %}|{{ p|list|length }}|{{ p|last }}"),
     ("dictsort_stable", "{% for k, v in {'b': 1, 'a': 1, 'c': 0}|dictsort(by='value') %}{{ k }}{% endfor %}"),
     ("dictsort_stable_reverse", "{% for k, v in {'b': 1, 'a': 1, 'c': 0}|dictsort(by='value', reverse=true) %}{{ k }}{% endfor %}"),
     ("escape", "{{ html|escape }}"),
