@@ -1,6 +1,6 @@
 # Benchmark trend
 
-Instruction and allocation counts per iteration on master, one record per commit (77 so far, latest [c37bbf5](https://github.com/jinja2cpp/Jinja2Cpp/commit/c37bbf5ef7a02e1e8637fece8ca18ffa7f9283ca) on 2026-10-12). Written by the `trend` job of `.github/workflows/benchmark.yml` with `bench/trend.py`; the data is `history.jsonl`.
+Instruction and allocation counts per iteration on master, one record per commit (78 so far, latest [51a0cdd](https://github.com/jinja2cpp/Jinja2Cpp/commit/51a0cdd14ab90482892cf8fd5bd2d972921123a7) on 2026-10-12). Written by the `trend` job of `.github/workflows/benchmark.yml` with `bench/trend.py`; the data is `history.jsonl`.
 
 Memory is the bytes a loaded template keeps for `Load/*` and the peak heap use of one render for `Render/*`; vs first compares with the first record that has it.
 
@@ -54,13 +54,13 @@ Misses per iteration in callgrind's cache model (`count.py --cache-sim`: 32 KB 8
 | Benchmark | D1 read misses | vs previous | D1 write misses | vs previous | LL data read misses | vs previous | I1 misses | vs previous |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | Load/chat_llama | 679 | 0% | 699 | 0% | 0 |  | 6,887 | 0% |
-| Render/chat_llama | 1,086 | 0% | 421 | 0% | 0 |  | 3,210 | +0.03% |
+| Render/chat_llama | 1,086 | 0% | 421 | 0% | 0 |  | 3,210 | 0% |
 | Load/chat_mistral | 1,072 | 0% | 1,022 | 0% | 0 |  | 8,184 | 0% |
 | Render/chat_mistral | 1,735 | 0% | 444 | 0% | 0 |  | 8,313 | 0% |
 | Load/chat_qwen | 523 | 0% | 586 | 0% | 0 |  | 4,515 | 0% |
-| Render/chat_qwen | 956 | 0% | 304 | 0% | 0 |  | 2,756 | +0.11% |
-| Load/config_file | 169 | -0.59% | 139 | -0.71% | 0 |  | 2,821 | 0% |
-| Render/config_file | 5,483 | +0.04% | 1,510 | +0.07% | 0 |  | 36,324 | 0% |
+| Render/chat_qwen | 956 | 0% | 304 | 0% | 0 |  | 2,756 | 0% |
+| Load/config_file | 169 | 0% | 139 | 0% | 0 |  | 2,821 | 0% |
+| Render/config_file | 5,483 | 0% | 1,510 | 0% | 0 |  | 36,324 | 0% |
 | Load/dict_ops | 22 | 0% | 16 | 0% | 0 |  | 1,227 | 0% |
 | Render/dict_ops | 605 | 0% | 406 | 0% | 0 |  | 808 | 0% |
 | Load/expressions | 30 | 0% | 22 | 0% | 0 |  | 1,164 | 0% |
@@ -69,12 +69,12 @@ Misses per iteration in callgrind's cache model (`count.py --cache-sim`: 32 KB 8
 | Render/filters | 14 | 0% | 2 | 0% | 0 |  | 829 | 0% |
 | Load/for_filter_if | 11 | 0% | 5 | 0% | 0 |  | 1,084 | 0% |
 | Render/for_filter_if | 1,587 | 0% | 61 | 0% | 0 |  | 156 | 0% |
-| Load/for_loop_vars | 22 | +4.76% | 15 | +25.00% | 0 |  | 1,079 | 0% |
+| Load/for_loop_vars | 22 | 0% | 15 | 0% | 0 |  | 1,079 | 0% |
 | Render/for_loop_vars | 8 | 0% | 2 | 0% | 0 |  | 174 | 0% |
 | Load/for_range | 8 | 0% | 7 | 0% | 0 |  | 696 | 0% |
 | Render/for_range | 1 | 0% | 1 | 0% | 0 |  | 93 | 0% |
 | Load/html_autoescape | 439 | 0% | 494 | 0% | 0 |  | 4,050 | 0% |
-| Render/html_autoescape | 3,538 | +3.97% | 1,292 | -0.15% | 0 |  | 34,473 | -1.49% |
+| Render/html_autoescape | 3,538 | 0% | 1,292 | 0% | 0 |  | 34,473 | 0% |
 | Load/inheritance | 5 | 0% | 4 | 0% | 0 |  | 586 | 0% |
 | Render/inheritance | 565 | 0% | 126 | 0% | 0 |  | 707 | 0% |
 | Load/large_static | 1,953 | 0% | 881 | 0% | 0 |  | 266 | 0% |
@@ -90,7 +90,7 @@ Misses per iteration in callgrind's cache model (`count.py --cache-sim`: 32 KB 8
 | Load/plain_text | 0 |  | 2 | 0% | 0 |  | 15 | 0% |
 | Render/plain_text | 0 |  | 0 |  | 0 |  | 5 | 0% |
 | Load/strings | 141 | 0% | 111 | 0% | 0 |  | 2,710 | 0% |
-| Render/strings | 465 | 0% | 600 | 0% | 0 |  | 1,402 | +0.07% |
+| Render/strings | 465 | 0% | 600 | 0% | 0 |  | 1,402 | 0% |
 | Load/substitute | 1 | 0% | 4 | 0% | 0 |  | 107 | 0% |
 | Render/substitute | 0 |  | 0 |  | 0 |  | 3 | 0% |
 
