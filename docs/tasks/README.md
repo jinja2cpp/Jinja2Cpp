@@ -138,7 +138,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0066](0066-tidy-cxx17-checks.md) | clang-tidy bug-class findings that only C++17 shows | robustness | medium | done |
 | [0067](0067-value-integral-construction.md) | `Value` from unsigned and wide integers stores `bool` | robustness | high | open |
 | [0068](0068-package-abi-facts.md) | The installed package does not carry the library's ABI choices | build | high | done |
-| [0069](0069-public-header-defects.md) | Defects in the public headers | robustness | medium | open |
+| [0069](0069-public-header-defects.md) | Defects in the public headers | robustness | medium | done |
 | [0070](0070-cxx23-floor.md) | Drop C++14: C++17 floor, C++23 supported | standards | high | done |
 | [0071](0071-drop-nonstd.md) | Replace optional-lite, variant-lite and string-view-lite with `std::`; pin expected-lite | standards | high | done |
 | [0072](0072-value-api-2-0.md) | 2.0 API: `Value` accessors and `ToString` | release | high | open |
