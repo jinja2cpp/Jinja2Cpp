@@ -1011,8 +1011,7 @@ bool FullExpressionEvaluator::IsFoldable(const NodeArena& nodes) const
 bool CompareExpression::IsFoldable(const NodeArena& nodes) const
 {
     const auto operands = nodes[m_operands];
-    return nodes[m_first].IsFoldable(nodes) &&
-           std::all_of(operands.begin(), operands.end(), [&nodes](const Operand& operand) { return nodes[operand.expr].IsFoldable(nodes); });
+    return nodes[m_first].IsFoldable(nodes) && std::all_of(operands.begin(), operands.end(), [&nodes](const Operand& operand) { return nodes[operand.expr].IsFoldable(nodes); });
 }
 
 bool IfExpression::Evaluate(RenderContext& context)
