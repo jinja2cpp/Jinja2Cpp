@@ -35,6 +35,7 @@ have() { command -v "$1" >/dev/null 2>&1; }
 fmt=clang-format-18; have $fmt || fmt=clang-format
 tidy_excludes=(':!src/binding/rapid_json*' ':!src/binding/nlohmann_json*'
   ':!include/jinja2cpp/binding/rapid_json*' ':!include/jinja2cpp/binding/nlohmann_json*'
+  ':!test/binding/rapid_json*' ':!test/binding/nlohmann_json*'
   ':!include/jinja2cpp/polymorphic_value/*' ':!src/robin_hood.h' ':!src/lexertk.h'
   ':!src/unicode_tables.h')
 
