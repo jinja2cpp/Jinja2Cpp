@@ -225,6 +225,38 @@ auto MakeParseErrorTL(ErrorCode code, const Token& baseTok, const Args&... expec
     return MakeParseError(code, baseTok, { tokCvt(expectedTokens)... });
 }
 
+namespace
+{
+// The statement being parsed ends with `recursive` (Jinja2's `for x in l if c recursive`)
+bool EndsWithRecursive(LexScanner& lexer)
+{
+    const auto state = lexer.GetState();
+    Keyword last = Keyword::Unknown;
+    for (const Token* tok = &lexer.NextToken(); *tok != Token::Eof; tok = &lexer.NextToken())
+    {
+        last = tok->keyword;
+    }
+    lexer.RestoreState(state);
+    return last == Keyword::Recursive;
+}
+
+// The tokens from `from` up to the scanner's position have the identifier `name`, as a name
+// or an attribute: enough to tell that an expression cannot read the name
+bool ReadsName(LexScanner& lexer, const LexScanner::State& from, std::string_view name)
+{
+    const auto state = lexer.GetState();
+    lexer.RestoreState(from);
+    bool isRead = false;
+    while (!isRead && lexer.GetState().m_cur != state.m_cur)
+    {
+        const auto& tok = lexer.NextToken();
+        isRead = tok == Token::Identifier && lexer.GetAsView(tok) == name;
+    }
+    lexer.RestoreState(state);
+    return isRead;
+}
+} // namespace
+
 StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     auto targetTok = lexer.PeekNextToken();
@@ -255,27 +287,31 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         return MakeUnexpected(valueExpr.error());
     }
 
-    Token flagsTok;
-    bool isRecursive = false;
-    if (lexer.EatIfEqual(Keyword::Recursive, &flagsTok))
-    {
-        isRecursive = true;
-    }
-
+    // Jinja2 takes `recursive` after the filter; Jinja2C++ has always taken it before
+    bool isRecursive = lexer.EatIfEqual(Keyword::Recursive);
     const auto outerFrame = m_names.Current();
     auto filterFrame = NameResolver::NoFrame;
     NodeRef<Expression> ifExpr;
+    bool filterReadsLoop = false;
     if (lexer.EatIfEqual(Keyword::If))
     {
-        filterFrame = m_names.PushFilter(outerFrame, isRecursive);
+        // The recursive flag after the filter is not known yet: the filter's frame is a
+        // dynamic region either way when the loop is recursive, so look ahead for it
+        const auto filterStart = lexer.GetState();
+        filterFrame = m_names.PushFilter(outerFrame, isRecursive || EndsWithRecursive(lexer));
         m_names.SetCurrent(filterFrame);
-        auto parsedExpr = exprPraser.ParseFullExpression(lexer, false);
+        auto parsedExpr = exprPraser.ParseFullExpression(lexer);
         m_names.SetCurrent(outerFrame);
         if (!parsedExpr)
         {
             return MakeUnexpected(parsedExpr.error());
         }
         ifExpr = *parsedExpr;
+        filterReadsLoop = ReadsName(lexer, filterStart, "loop");
+        if (!isRecursive)
+        {
+            isRecursive = lexer.EatIfEqual(Keyword::Recursive);
+        }
     }
     else if (lexer.PeekNextToken() != Token::Eof)
     {
@@ -284,6 +320,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     }
 
     auto renderer = m_nodes.Make<ForStatement>(target->target, *valueExpr, ifExpr, isRecursive);
+    m_nodes.Get<ForStatement>(renderer).SetFilterReadsLoop(filterReadsLoop);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ForStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementInfo.frame = m_names.PushFor(outerFrame, renderer, isRecursive);
@@ -637,10 +674,17 @@ StatementsParser::ParseResult StatementsParser::ParseEndIf(LexScanner&, Statemen
 
 StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
+    auto targetTok = lexer.PeekNextToken();
     auto target = ParseAssignTarget(lexer, true);
     if (!target)
     {
         return MakeUnexpected(target.error());
+    }
+    // Jinja2: "Can't assign to special loop variable in for-loop target", for a `set` anywhere
+    // in a loop, a macro or block defined there included
+    if (target->namesLoop && std::any_of(statementsInfo.begin(), statementsInfo.end(), [](const StatementInfo& info) { return info.type == StatementInfo::ForStatement; }))
+    {
+        return MakeParseError(ErrorCode::UnexpectedToken, targetTok);
     }
     const auto vars = target->target;
     m_names.AddStores(m_names.Current(), m_nodes[vars], m_nodes);
