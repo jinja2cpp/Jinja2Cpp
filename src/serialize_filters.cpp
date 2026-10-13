@@ -40,6 +40,13 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     {
     }
 
+    // A value as pprint prints it: Markup as Markup('...')
+    static std::string Print(const InternalValue& val, const RenderContext* context)
+    {
+        auto text = Apply<PrettyPrinter>(val, context);
+        return val.IsMarkup() && IsStringValue(val) ? "Markup(" + text + ")" : text;
+    }
+
     std::string operator()(const ListRef& list) const
     {
         std::string str;
@@ -58,7 +65,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             {
                 fmt::format_to(os, ", ");
             }
-            fmt::format_to(os, "{}", Apply<PrettyPrinter>(v, m_context));
+            fmt::format_to(os, "{}", Print(v, m_context));
         }
         fmt::format_to(os, "]");
 
@@ -89,7 +96,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             }
 
             fmt::format_to(os, "'{}': ", k);
-            fmt::format_to(os, "{}", Apply<PrettyPrinter>(map.GetValueByName(k), m_context));
+            fmt::format_to(os, "{}", Print(map.GetValueByName(k), m_context));
         }
 
         fmt::format_to(os, "}}");
@@ -103,7 +110,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         auto os = std::back_inserter(str);
 
         fmt::format_to(os, "'{}': ", kwPair.key);
-        fmt::format_to(os, "{}", Apply<PrettyPrinter>(kwPair.value, m_context));
+        fmt::format_to(os, "{}", Print(kwPair.value, m_context));
 
         return str;
     }
@@ -145,7 +152,7 @@ PrettyPrint::PrettyPrint(const FilterParams& params)
 
 InternalValue PrettyPrint::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Apply<PrettyPrinter>(baseVal, &context);
+    return PrettyPrinter::Print(baseVal, &context);
 }
 
 Serialize::Serialize(const FilterParams& params, const Serialize::Mode mode)
