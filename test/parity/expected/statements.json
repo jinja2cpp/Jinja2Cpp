@@ -403,6 +403,178 @@
    "output": "ab"
   },
   {
+   "id": "statements.ctx_dict_order_for",
+   "template": "{% for k in u %}{{ k }}{% endfor %}|{% for k, v in u.items() %}{{ k }}={{ v }},{% endfor %}",
+   "context": {
+    "u": {
+     "zeta": 1,
+     "alpha": 2,
+     "Mid": 3,
+     "beta": 4
+    },
+    "big": {
+     "q": 0,
+     "w": 1,
+     "e": 2,
+     "r": 3,
+     "t": 4,
+     "y": 5,
+     "u": 6,
+     "i": 7,
+     "o": 8,
+     "p": 9,
+     "a": 10,
+     "s": 11,
+     "d": 12,
+     "f": 13,
+     "g": 14,
+     "h": 15,
+     "j": 16,
+     "k": 17,
+     "l": 18,
+     "z": 19,
+     "x": 20,
+     "c": 21,
+     "v": 22,
+     "b": 23,
+     "n": 24,
+     "m": 25
+    }
+   },
+   "env": {},
+   "templates": {},
+   "output": "zetaalphaMidbeta|zeta=1,alpha=2,Mid=3,beta=4,"
+  },
+  {
+   "id": "statements.ctx_dict_order_repr",
+   "template": "{{ u }}|{{ u.keys() | list }}|{{ u.values() | list }}|{{ {'n': u} }}",
+   "context": {
+    "u": {
+     "zeta": 1,
+     "alpha": 2,
+     "Mid": 3,
+     "beta": 4
+    },
+    "big": {
+     "q": 0,
+     "w": 1,
+     "e": 2,
+     "r": 3,
+     "t": 4,
+     "y": 5,
+     "u": 6,
+     "i": 7,
+     "o": 8,
+     "p": 9,
+     "a": 10,
+     "s": 11,
+     "d": 12,
+     "f": 13,
+     "g": 14,
+     "h": 15,
+     "j": 16,
+     "k": 17,
+     "l": 18,
+     "z": 19,
+     "x": 20,
+     "c": 21,
+     "v": 22,
+     "b": 23,
+     "n": 24,
+     "m": 25
+    }
+   },
+   "env": {},
+   "templates": {},
+   "output": "{'zeta': 1, 'alpha': 2, 'Mid': 3, 'beta': 4}|['zeta', 'alpha', 'Mid', 'beta']|[1, 2, 3, 4]|{'n': {'zeta': 1, 'alpha': 2, 'Mid': 3, 'beta': 4}}"
+  },
+  {
+   "id": "statements.ctx_dict_order_filters",
+   "template": "{{ u | first }}|{{ u | join(',') }}|{{ u | reverse | join(',') }}|{{ u | list | last }}",
+   "context": {
+    "u": {
+     "zeta": 1,
+     "alpha": 2,
+     "Mid": 3,
+     "beta": 4
+    },
+    "big": {
+     "q": 0,
+     "w": 1,
+     "e": 2,
+     "r": 3,
+     "t": 4,
+     "y": 5,
+     "u": 6,
+     "i": 7,
+     "o": 8,
+     "p": 9,
+     "a": 10,
+     "s": 11,
+     "d": 12,
+     "f": 13,
+     "g": 14,
+     "h": 15,
+     "j": 16,
+     "k": 17,
+     "l": 18,
+     "z": 19,
+     "x": 20,
+     "c": 21,
+     "v": 22,
+     "b": 23,
+     "n": 24,
+     "m": 25
+    }
+   },
+   "env": {},
+   "templates": {},
+   "output": "zeta|zeta,alpha,Mid,beta|beta,Mid,alpha,zeta|beta"
+  },
+  {
+   "id": "statements.ctx_dict_order_big",
+   "template": "{% for k in big %}{{ k }}{% endfor %}|{{ big | length }}|{{ big.k }}",
+   "context": {
+    "u": {
+     "zeta": 1,
+     "alpha": 2,
+     "Mid": 3,
+     "beta": 4
+    },
+    "big": {
+     "q": 0,
+     "w": 1,
+     "e": 2,
+     "r": 3,
+     "t": 4,
+     "y": 5,
+     "u": 6,
+     "i": 7,
+     "o": 8,
+     "p": 9,
+     "a": 10,
+     "s": 11,
+     "d": 12,
+     "f": 13,
+     "g": 14,
+     "h": 15,
+     "j": 16,
+     "k": 17,
+     "l": 18,
+     "z": 19,
+     "x": 20,
+     "c": 21,
+     "v": 22,
+     "b": 23,
+     "n": 24,
+     "m": 25
+    }
+   },
+   "env": {},
+   "templates": {},
+   "output": "qwertyuiopasdfghjklzxcvbnm|26|17"
+  },
+  {
    "id": "statements.for_dict_literal_order",
    "template": "{% for k in {'b': 1, 'a': 2, 'C': 3} %}{{ k }}{% endfor %}",
    "context": {

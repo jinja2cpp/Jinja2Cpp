@@ -25,5 +25,10 @@ later switch of `Result<T>` to `std::expected` (a C++23 floor) is a recompile fo
 Our own tests are the first client: `test/undefined_test.cpp` spells
 `nonstd::make_unexpected`.
 
+`MIGRATION.md` also lists the template syntax 2.0 stops accepting, all of which Jinja2
+rejects too (0094, Ruslan decided 2026-10-12): `{% macro m %}` and `{% call m %}` without
+parentheses (write `m()`), `{'a' = 1}` dict literals (write `{'a': 1}`), and `+}}` (a `+`
+before the end of an expression is the operator; `+%}` on statements is unchanged).
+
 **Done when.** The script migrates a copy of our own 1.x-style tests to warning-free code,
 in CI.

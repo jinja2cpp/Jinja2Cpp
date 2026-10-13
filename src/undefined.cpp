@@ -116,4 +116,20 @@ void ThrowUndefined(const UndefinedInfo& info)
     throw UndefinedError(UndefinedMessage(info));
 }
 
+const char* UndefinedClassName(const UndefinedInfo& info)
+{
+    switch (info.policy)
+    {
+    case UndefinedPolicy::Strict:
+        return "StrictUndefined";
+    case UndefinedPolicy::Chainable:
+        return "ChainableUndefined";
+    case UndefinedPolicy::Debug:
+        return "DebugUndefined";
+    case UndefinedPolicy::Default:
+        break;
+    }
+    return "Undefined";
+}
+
 } // namespace jinja2

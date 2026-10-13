@@ -206,3 +206,11 @@ MULTISTR_TEST(NlohmannJsonTest, NullMemberIsNone, R"({{ json.x is defined }}{{ j
 
     params["json"] = jinja2::Reflect(std::move(values));
 }
+
+// nlohmann::json sorts object keys; ordered_json keeps the document order, nested objects too (task 0043)
+MULTISTR_TEST(NlohmannJsonTest, OrderedJsonKeepsDocumentOrder, R"({{ sorted }}|{{ json }}|{% for k, v in json.inner.items() %}{{ k }}={{ v }},{% endfor %}|{{ json.list[0] | list | join }})", R"({'a': 2, 'b': 1}|{'b': 1, 'a': 2, 'inner': {'z': 1, 'y': 2}, 'list': [{'q': 1, 'p': 2}]}|z=1,y=2,|qp)")
+{
+    const char* doc = R"({"b": 1, "a": 2, "inner": {"z": 1, "y": 2}, "list": [{"q": 1, "p": 2}]})";
+    params["sorted"] = jinja2::Reflect(nlohmann::json::parse(R"({"b": 1, "a": 2})"));
+    params["json"] = jinja2::Reflect(nlohmann::ordered_json::parse(doc));
+}

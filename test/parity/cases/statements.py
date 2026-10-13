@@ -3,6 +3,8 @@ CONTEXT = {"l": [3, 1, 2], "e": [], "d": {"a": 1, "b": 2}, "x": 3,
            "tree": [{"n": "a", "c": [{"n": "b", "c": []}, {"n": "c", "c": [{"n": "d", "c": []}]}]}]}
 LC = {"env": {"extensions": ["loopcontrols"]}}
 DO = {"env": {"extensions": ["do"]}}
+UNSORTED = {"ctx": {"u": {"zeta": 1, "alpha": 2, "Mid": 3, "beta": 4},
+                    "big": {k: i for i, k in enumerate("qwertyuiopasdfghjklzxcvbnm")}}}
 CASES = [
     # for
     ("for", "{% for i in l %}{{ i }}{% endfor %}"),
@@ -15,6 +17,11 @@ CASES = [
     ("for_unpack_parens", "{% for (a, b) in [[1, 2]] %}{{ a }}{{ b }}{% endfor %}"),
     ("for_unpack_string", "{% for a, b in ['xy'] %}{{ a }}-{{ b }}{% endfor %}"),
     ("for_dict_keys", "{% for k in d %}{{ k }}{% endfor %}"),
+    # a dict from the context keeps its insertion order (0043)
+    ("ctx_dict_order_for", "{% for k in u %}{{ k }}{% endfor %}|{% for k, v in u.items() %}{{ k }}={{ v }},{% endfor %}", UNSORTED),
+    ("ctx_dict_order_repr", "{{ u }}|{{ u.keys() | list }}|{{ u.values() | list }}|{{ {'n': u} }}", UNSORTED),
+    ("ctx_dict_order_filters", "{{ u | first }}|{{ u | join(',') }}|{{ u | reverse | join(',') }}|{{ u | list | last }}", UNSORTED),
+    ("ctx_dict_order_big", "{% for k in big %}{{ k }}{% endfor %}|{{ big | length }}|{{ big.k }}", UNSORTED),
     ("for_dict_literal_order", "{% for k in {'b': 1, 'a': 2, 'C': 3} %}{{ k }}{% endfor %}"),
     ("for_dict_duplicate_key", "{% set m = {'b': 1, 'a': 2, 'b': 3} %}{% for k in m %}{{ k }}={{ m[k] }},{% endfor %}"),
     ("for_string", "{% for c in 'abc' %}{{ c }}.{% endfor %}"),

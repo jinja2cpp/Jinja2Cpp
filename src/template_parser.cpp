@@ -868,30 +868,23 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     }
 
     std::string macroName = lexer.GetAsString(nextTok);
-    MacroParamsInfo macroParams;
     // The parameters' defaults count with the body
     const auto marks = m_nodes.Marks();
     const auto outerFrame = m_names.Current();
     m_names.AddStore(outerFrame, macroName);
 
-    if (lexer.EatIfEqual('('))
+    // Jinja2 requires the parameter list, even an empty one
+    if (!lexer.EatIfEqual('('))
     {
-        auto result = ParseMacroParams(lexer);
-        if (!result)
-        {
-            return MakeUnexpected(result.error());
-        }
-
-        macroParams = std::move(result.value());
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::LBracket);
     }
-    else if (lexer.PeekNextToken() != Token::Eof)
+    auto result = ParseMacroParams(lexer);
+    if (!result)
     {
-        const Token& tok = lexer.PeekNextToken();
-
-        return MakeParseErrorTL(ErrorCode::UnexpectedToken, tok, Token::RBracket, Token::Eof);
+        return MakeUnexpected(result.error());
     }
 
-    auto renderer = m_nodes.Make<MacroStatement>(m_nodes, macroName, macroParams);
+    auto renderer = m_nodes.Make<MacroStatement>(m_nodes, macroName, result.value());
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementInfo.marks = marks;
@@ -1082,19 +1075,19 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
 
     std::string macroName = lexer.GetAsString(nextTok);
 
-    CallParamsInfo callParams;
-    const auto beforeCall = m_nodes.Marks();
-    if (lexer.EatIfEqual('('))
+    // Jinja2 expects a call here: `{% call m %}` is an error
+    if (!lexer.EatIfEqual('('))
     {
-        ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
-        auto result = exprParser.ParseCallParams(lexer);
-        if (!result)
-        {
-            return MakeUnexpected(result.error());
-        }
-
-        callParams = std::move(result.value());
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::LBracket);
     }
+    const auto beforeCall = m_nodes.Marks();
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
+    auto result = exprParser.ParseCallParams(lexer);
+    if (!result)
+    {
+        return MakeUnexpected(result.error());
+    }
+    CallParamsInfo callParams = std::move(result.value());
     const auto afterCall = m_nodes.Marks();
     marks.nameRefs += afterCall.nameRefs - beforeCall.nameRefs;
     marks.contextNodes += afterCall.contextNodes - beforeCall.contextNodes;

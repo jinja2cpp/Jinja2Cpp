@@ -1828,6 +1828,11 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     {
         for (const auto& name : list)
         {
+            // Python's select_template finds no template by a name that is not a string and tries the next
+            if (!GetAsSameString(std::string(), name))
+            {
+                continue;
+            }
             rendered = doRender(callback->LoadTemplate(name));
             if (rendered)
             {

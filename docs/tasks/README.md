@@ -114,15 +114,15 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0040](0040-parity-shared-files-serialise-merges.md) | Parity PRs collide in shared generated files | process | high | done |
 | [0041](0041-string-literal-escapes.md) | String literal escape sequences | parity | low | in-progress |
 | [0042](0042-loop-cycle-magic-number.md) | Global function follow-ups: globals are maps | parity | low | open |
-| [0043](0043-ordered-valuesmap-2-0.md) | Insertion-ordered ValuesMap (2.0.0) | release | medium | open |
+| [0043](0043-ordered-valuesmap-2-0.md) | Insertion-ordered ValuesMap (2.0.0) | release | medium | done |
 | [0044](0044-lstrip-blocks-leftovers.md) | lstrip_blocks and modifier leftovers | parity | low | open |
 | [0045](0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | parity | low | open |
 | [0047](0047-none-leftovers.md) | None and undefined: what 0034 left behind | parity | medium | done |
 | [0048](0048-filter-behaviour-leftovers.md) | Filter behaviour: what 0019 left behind | parity | low | open |
 | [0049](0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | parity | low | open |
 | [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | done |
-| [0051](0051-markup-leftovers.md) | Markup: what 0025 left behind | parity | low | open |
-| [0052](0052-undefined-in-filters.md) | Undefined in filters, tests and global functions: what 0026 left behind | parity | low | open |
+| [0051](0051-markup-leftovers.md) | Markup: what 0025 left behind | parity | low | done |
+| [0052](0052-undefined-in-filters.md) | Undefined in filters, tests and global functions: what 0026 left behind | parity | low | done |
 | [0054](0054-clang-tidy-adoption.md) | clang-tidy: adopt the latest checks and modernize the code in batches | style | medium | done |
 | [0055](0055-clang-tidy-bug-findings.md) | Bug-class findings from the clang-tidy survey (0054, batch 1) | robustness | medium | done |
 | [0056](0056-public-api-2-0-review.md) | Public API review and migration path for 2.0.0 | release | medium | done |
@@ -160,10 +160,10 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0088](0088-expression-evaluation-overhead.md) | Expression evaluation is several times slower than Python Jinja2 | perf | medium | done |
 | [0089](0089-gcc-release-maybe-uninitialized.md) | GCC Release builds warn `-Wmaybe-uninitialized` in `polymorphic_cxx14.h` | build | low | done |
 | [0090](0090-drop-boost-regex.md) | Boost.Regex and `JINJA2CPP_USE_REGEX` are dead weight after 0086 | build | medium | done |
-| [0091](0091-for-loop-edge-parity.md) | `for` loop corners that still differ from Jinja2 | parity | low | open |
+| [0091](0091-for-loop-edge-parity.md) | `for` loop corners that still differ from Jinja2 | parity | low | done |
 | [0092](0092-extended-warning-set.md) | Enforce a warning set beyond `-Wall` | build | medium | done |
 | [0093](0093-deeply-nested-values.md) | Deeply nested values overflow the stack when they are destroyed or printed | robustness | medium | open |
-| [0094](0094-differential-fuzzing-findings.md) | Divergences found by differential fuzzing | parity | medium | open |
+| [0094](0094-differential-fuzzing-findings.md) | Divergences found by differential fuzzing | parity | medium | done |
 | [0095](0095-structure-aware-fuzzing.md) | Structure-aware fuzzing: mutate templates, not bytes | robustness | medium | open |
 | [0096](0096-continuous-fuzzing-service.md) | Continuous fuzzing on ClusterFuzzLite or OSS-Fuzz | ci | low | open |
 | [0097](0097-resource-limits.md) | Templates can ask for unbounded time and memory | robustness | medium | open |
@@ -239,8 +239,16 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0167](0167-imported-modules-own-their-context.md) | Imported modules own their context; imported macros run in their module | parity | medium | open |
 | [0168](0168-idtracking-frame-entry-binding.md) | Bind a name the frame assigns at frame entry (Jinja2 idtracking) | parity | low | open |
 | [0169](0169-caller-without-call-block.md) | `caller()` without a call block raises | parity | low | open |
-| [0170](0170-dictsort-pair-tuple-semantics.md) | A dictsort pair still differs from a tuple in `in`, `==`, tests and truthiness | parity | low | open |
-| [0171](0171-gcc-sanitizer-stringop-overflow.md) | The GCC address+undefined build fails in `OutStream::WriteInt` | build | medium | open |
+| [0170](0170-dictsort-pair-tuple-semantics.md) | A dictsort pair still differs from a tuple in `in`, `==`, tests and truthiness | parity | low | done |
+| [0171](0171-gcc-sanitizer-stringop-overflow.md) | The GCC address+undefined build fails in `OutStream::WriteInt` | build | medium | done |
 | [0172](0172-value-unsigned-overflow.md) | Unsigned values above `INT64_MAX` wrap to negative | robustness | low | open |
 | [0173](0173-pprint-python-repr.md) | `pprint` prints JSON-style scalars | parity | low | open |
 | [0174](0174-msvc-c4702-suppression.md) | `/wd4702` hides unreachable code in project code on MSVC | build | low | open |
+| [0175](0175-recursive-loop-filter-leftovers.md) | Recursive loop filter: the outer `loop` at depth > 0, and the legacy `recursive if` order | parity | low | open |
+| [0176](0176-tuple-identity-and-sort-case.md) | A dictsort pair has no identity, and sort folds case inside tuples | parity | low | open |
+| [0177](0177-filters-on-none.md) | Filters that accept None where Python raises | parity | low | open |
+| [0179](0179-caller-markup-eval-context.md) | Autoescape has a lexical and a runtime side | parity | low | open |
+| [0180](0180-markup-from-cpp.md) | Markup from C++ | api | low | open |
+| [0181](0181-select-autoescape.md) | Autoescape chosen by template name (`select_autoescape`) | api | low | open |
+| [0182](0182-markup-percent-repr.md) | `%r` and containers in Markup's `%` | parity | low | open |
+| [0185](0185-fuzz-oom-below-sequence-cap.md) | The fuzz job fails on lists below the sequence cap | robustness | medium | open |

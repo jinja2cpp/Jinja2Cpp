@@ -4,6 +4,7 @@
 #include <jinja2cpp/config.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/utils/i_comparable.h>
+#include <jinja2cpp/utils/ordered_map.h>
 #include <jinja2cpp/value_ptr.h>
 
 #include <atomic>
@@ -16,7 +17,6 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -117,7 +117,7 @@ struct JINJA2CPP_EXPORT IMapItemAccessor : virtual IComparable
  * \brief Helper class for accessing maps specified by the \ref IMapItemAccessor interface
  *
  * In the \ref Value type can be stored either ValuesMap instance or GenericMap instance. ValuesMap is a simple
- * dictionary object based on std::unordered_map. Rather than GenericMap is a more robust object which can provide
+ * dictionary object that keeps insertion order. Rather than GenericMap is a more robust object which can provide
  * access to the different types of dictionary entities. GenericMap takes the \ref IMapItemAccessor interface instance
  * and uses it to access particular items in the dictionaries.
  */
@@ -207,7 +207,7 @@ public:
     /*!
      * \brief Get iterator to the first item of the dictionary
      *
-     * Iterates over `std::pair<std::string, Value>` items in the order of \ref GetKeys (unspecified for reflected
+     * Iterates over `std::pair<std::string, Value>` items in the order of \ref GetKeys (sorted for reflected
      * types), so `for (auto& [key, value] : map)` works. The keys are fetched once, here; each value is fetched when
      * the iterator reaches it. Iterators refer to this object and are invalidated when it is destroyed.
      *
@@ -627,9 +627,16 @@ bool operator!=(const types::ValuePtr<Value>& lhs, const types::ValuePtr<Value>&
 bool operator==(const types::ValuePtr<std::vector<Value>>& lhs, const types::ValuePtr<std::vector<Value>>& rhs);
 bool operator!=(const types::ValuePtr<std::vector<Value>>& lhs, const types::ValuePtr<std::vector<Value>>& rhs);
 
-struct ValuesMap : std::unordered_map<std::string, Value>
+/*!
+ * \brief Simple map of values, keyed by name
+ *
+ * Iterates in insertion order, like a Python dict: a template sees the keys of a context dict, its repr and
+ * `items()` in the order the C++ code added them. The interface follows `std::unordered_map` without the bucket
+ * API, node handles, `hash_function`, `key_eq` and `get_allocator` (see \ref OrderedMap).
+ */
+struct ValuesMap : OrderedMap<std::string, Value>
 {
-    using unordered_map::unordered_map;
+    using OrderedMap::OrderedMap;
 };
 
 bool operator==(const types::ValuePtr<ValuesMap>& lhs, const types::ValuePtr<ValuesMap>& rhs);

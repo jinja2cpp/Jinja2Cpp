@@ -2,11 +2,11 @@
 #define JINJA2CPP_SRC_INTERNAL_VALUE_H
 
 #include "loop_attr.h"
-#include "ordered_map.h"
 
 #include <jinja2cpp/config.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/utils/i_comparable.h>
+#include <jinja2cpp/utils/ordered_map.h>
 #include <jinja2cpp/value.h>
 #include <jinja2cpp/value_ptr.h>
 
