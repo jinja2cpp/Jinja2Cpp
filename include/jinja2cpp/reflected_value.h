@@ -6,6 +6,7 @@
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/utils/i_comparable.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -170,6 +171,8 @@ public:
         {
             result.push_back(i.first);
         }
+        // The accessors are hashed: sort so that iteration and repr do not depend on the standard library
+        std::sort(result.begin(), result.end());
 
         return result;
     }

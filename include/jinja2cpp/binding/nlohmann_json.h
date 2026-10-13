@@ -15,12 +15,15 @@ namespace jinja2
 namespace detail
 {
 
-class NLohmannJsonObjectAccessor : public IMapItemAccessor
-    , public ReflectedDataHolder<nlohmann::json>
+// Json is nlohmann::json, whose objects iterate in key order, or nlohmann::ordered_json, whose objects keep
+// document order (docs/tasks/0043)
+template<typename Json>
+class BasicNLohmannJsonObjectAccessor : public IMapItemAccessor
+    , public ReflectedDataHolder<Json>
 {
 public:
-    using ReflectedDataHolder<nlohmann::json>::ReflectedDataHolder;
-    ~NLohmannJsonObjectAccessor() override = default;
+    using ReflectedDataHolder<Json>::ReflectedDataHolder;
+    ~BasicNLohmannJsonObjectAccessor() override = default;
 
     size_t GetSize() const override
     {
@@ -78,22 +81,23 @@ public:
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const NLohmannJsonObjectAccessor*>(&other);
+        auto* val = dynamic_cast<const BasicNLohmannJsonObjectAccessor*>(&other);
         if (!val)
         {
             return false;
         }
-        return GetValue() == val->GetValue();
+        return this->GetValue() == val->GetValue();
     }
 };
 
 
-struct NLohmannJsonArrayAccessor
+template<typename Json>
+struct BasicNLohmannJsonArrayAccessor
     : IListItemAccessor
     , IIndexBasedAccessor
-    , ReflectedDataHolder<nlohmann::json>
+    , ReflectedDataHolder<Json>
 {
-    using ReflectedDataHolder<nlohmann::json>::ReflectedDataHolder;
+    using ReflectedDataHolder<Json>::ReflectedDataHolder;
 
     std::optional<size_t> GetSize() const override
     {
@@ -108,7 +112,7 @@ struct NLohmannJsonArrayAccessor
 
     std::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
-        using Enum = Enumerator<typename nlohmann::json::const_iterator>;
+        using Enum = Enumerator<typename Json::const_iterator>;
         auto j = this->GetValue();
         if (!j)
         {
@@ -130,21 +134,22 @@ struct NLohmannJsonArrayAccessor
 
     bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const NLohmannJsonArrayAccessor*>(&other);
+        auto* val = dynamic_cast<const BasicNLohmannJsonArrayAccessor*>(&other);
         if (!val)
         {
             return false;
         }
-        return GetValue() == val->GetValue();
+        return this->GetValue() == val->GetValue();
     }
 };
 
-} // namespace detail
+using NLohmannJsonObjectAccessor = BasicNLohmannJsonObjectAccessor<nlohmann::json>;
+using NLohmannJsonArrayAccessor = BasicNLohmannJsonArrayAccessor<nlohmann::json>;
 
-template<>
-struct Reflector<nlohmann::json>
+template<typename Json>
+struct NLohmannJsonReflector
 {
-    static Value Create(nlohmann::json val)
+    static Value Create(Json val)
     {
         Value result;
         switch (val.type())
@@ -154,23 +159,23 @@ struct Reflector<nlohmann::json>
         case nlohmann::detail::value_t::null:
             break;
         case nlohmann::detail::value_t::object:
-            result = GenericMap([accessor = detail::NLohmannJsonObjectAccessor(std::move(val))]() { return &accessor; });
+            result = GenericMap([accessor = BasicNLohmannJsonObjectAccessor<Json>(std::move(val))]() { return &accessor; });
             break;
         case nlohmann::detail::value_t::array:
-            result = GenericList([accessor = detail::NLohmannJsonArrayAccessor(std::move(val))]() { return &accessor; });
+            result = GenericList([accessor = BasicNLohmannJsonArrayAccessor<Json>(std::move(val))]() { return &accessor; });
             break;
         case nlohmann::detail::value_t::string:
-            result = val.get<std::string>();
+            result = val.template get<std::string>();
             break;
         case nlohmann::detail::value_t::boolean:
-            result = val.get<bool>();
+            result = val.template get<bool>();
             break;
         case nlohmann::detail::value_t::number_integer:
         case nlohmann::detail::value_t::number_unsigned:
-            result = val.get<int64_t>();
+            result = val.template get<int64_t>();
             break;
         case nlohmann::detail::value_t::number_float:
-            result = val.get<double>();
+            result = val.template get<double>();
             break;
         case nlohmann::detail::value_t::discarded:
             break;
@@ -178,7 +183,7 @@ struct Reflector<nlohmann::json>
         return result;
     }
 
-    static Value CreateFromPtr(const nlohmann::json* val)
+    static Value CreateFromPtr(const Json* val)
     {
         Value result;
         switch (val->type())
@@ -188,23 +193,23 @@ struct Reflector<nlohmann::json>
         case nlohmann::detail::value_t::null:
             break;
         case nlohmann::detail::value_t::object:
-            result = GenericMap([accessor = detail::NLohmannJsonObjectAccessor(val)]() { return &accessor; });
+            result = GenericMap([accessor = BasicNLohmannJsonObjectAccessor<Json>(val)]() { return &accessor; });
             break;
         case nlohmann::detail::value_t::array:
-            result = GenericList([accessor = detail::NLohmannJsonArrayAccessor(val)]() { return &accessor; });
+            result = GenericList([accessor = BasicNLohmannJsonArrayAccessor<Json>(val)]() { return &accessor; });
             break;
         case nlohmann::detail::value_t::string:
-            result = val->get<std::string>();
+            result = val->template get<std::string>();
             break;
         case nlohmann::detail::value_t::boolean:
-            result = val->get<bool>();
+            result = val->template get<bool>();
             break;
         case nlohmann::detail::value_t::number_integer:
         case nlohmann::detail::value_t::number_unsigned:
-            result = val->get<int64_t>();
+            result = val->template get<int64_t>();
             break;
         case nlohmann::detail::value_t::number_float:
-            result = val->get<double>();
+            result = val->template get<double>();
             break;
         case nlohmann::detail::value_t::discarded:
             break;
@@ -212,6 +217,21 @@ struct Reflector<nlohmann::json>
         return result;
     }
 };
+
+} // namespace detail
+
+template<>
+struct Reflector<nlohmann::json> : detail::NLohmannJsonReflector<nlohmann::json>
+{
+};
+
+// ordered_json (nlohmann 3.9 and later) keeps the document order of objects, as a Python dict from json.loads does
+#if NLOHMANN_JSON_VERSION_MAJOR > 3 || (NLOHMANN_JSON_VERSION_MAJOR == 3 && NLOHMANN_JSON_VERSION_MINOR >= 9)
+template<>
+struct Reflector<nlohmann::ordered_json> : detail::NLohmannJsonReflector<nlohmann::ordered_json>
+{
+};
+#endif
 
 } // namespace jinja2
 

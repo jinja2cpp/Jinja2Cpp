@@ -92,7 +92,7 @@ world: World)")
 
 MULTISTR_TEST(SetTest, Tuple4AssignmentTest,
               R"(
-{% set dict = {'hello' = "Hello", 'world' = "World"} %}
+{% set dict = {'hello': "Hello", 'world': "World"} %}
 hello: {{dict.hello}}
 world: {{dict.world}}
 )",

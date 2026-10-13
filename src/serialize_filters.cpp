@@ -7,6 +7,7 @@
 #include "python_format.h"
 #include "render_context.h"
 #include "string_builder.h"
+#include "undefined.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
@@ -40,6 +41,13 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     {
     }
 
+    // A value as pprint prints it: Markup as Markup('...')
+    static std::string Print(const InternalValue& val, const RenderContext* context)
+    {
+        auto text = Apply<PrettyPrinter>(val, context);
+        return val.IsMarkup() && IsStringValue(val) ? "Markup(" + text + ")" : text;
+    }
+
     std::string operator()(const ListRef& list) const
     {
         std::string str;
@@ -58,7 +66,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             {
                 fmt::format_to(os, ", ");
             }
-            fmt::format_to(os, "{}", Apply<PrettyPrinter>(v, m_context));
+            fmt::format_to(os, "{}", Print(v, m_context));
         }
         fmt::format_to(os, "]");
 
@@ -89,7 +97,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             }
 
             fmt::format_to(os, "'{}': ", k);
-            fmt::format_to(os, "{}", Apply<PrettyPrinter>(map.GetValueByName(k), m_context));
+            fmt::format_to(os, "{}", Print(map.GetValueByName(k), m_context));
         }
 
         fmt::format_to(os, "}}");
@@ -103,7 +111,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         auto os = std::back_inserter(str);
 
         fmt::format_to(os, "'{}': ", kwPair.key);
-        fmt::format_to(os, "{}", Apply<PrettyPrinter>(kwPair.value, m_context));
+        fmt::format_to(os, "{}", Print(kwPair.value, m_context));
 
         return str;
     }
@@ -145,7 +153,7 @@ PrettyPrint::PrettyPrint(const FilterParams& params)
 
 InternalValue PrettyPrint::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Apply<PrettyPrinter>(baseVal, &context);
+    return PrettyPrinter::Print(baseVal, &context);
 }
 
 Serialize::Serialize(const FilterParams& params, const Serialize::Mode mode)
@@ -374,6 +382,11 @@ private:
         {
             Fail();
         }
+        if (const auto* info = GetUndefinedInfo(value))
+        {
+            // json.dumps knows no Undefined; a plain undefined (a host's null) stays null
+            throw std::runtime_error(std::string("Object of type ") + UndefinedClassName(*info) + " is not JSON serializable");
+        }
         if (value.IsNone() || value.IsUndefined())
         {
             m_out += "null";
@@ -568,6 +581,11 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
         }
         format = *formatView;
     }
+    // str() of an undefined is empty, and Python's '' % args has an argument left over
+    if (GetUndefinedInfo(baseVal) && !m_params.posParams.empty())
+    {
+        throw std::runtime_error("not all arguments converted during string formatting");
+    }
     if (m_constFormat || format.find('%') != std::string_view::npos)
     {
         if (!m_params.posParams.empty() && !m_params.kwParams.empty())
@@ -578,7 +596,7 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
         std::string formatted;
         if (!params.kwParams.empty())
         {
-            InternalValueMap mapping;
+            InternalDict mapping;
             for (auto& [name, value] : params.kwParams)
             {
                 mapping[name] = value;

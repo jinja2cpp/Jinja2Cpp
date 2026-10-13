@@ -131,6 +131,8 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
     InternalValue result = item;
     for (const auto& part : path)
     {
+        // Python's environment.getitem fails on a named undefined unless it is chainable
+        CheckUndefinedUse(result, UndefinedUse::Attribute);
         result = Subscript(result, part, &context);
         if (result.IsUndefined() && !IsEmpty(defaultVal))
         {
@@ -138,6 +140,21 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
         }
     }
     return result;
+}
+
+// Jinja2's _filter_test_common for a filter or test name that is not a string: no filter
+// has that name. StrictUndefined already fails when the name is hashed
+[[noreturn]] void ThrowNotACallableName(const char* kind, const InternalValue& name)
+{
+    CheckUndefinedUse(name, UndefinedUse::Operator);
+    std::string message = std::string("No ") + kind + " named ";
+    Apply<visitors::ValueRenderer<char>>(name, message, true);
+    message += '.';
+    if (const auto* info = GetUndefinedInfo(name))
+    {
+        message += " (" + UndefinedMessage(*info) + "; did you forget to quote the callable name?)";
+    }
+    throw std::runtime_error(message);
 }
 
 // Jinja2's make_multi_attrgetter: "a,b.c" sorts by the list [item.a, item.b.c]
@@ -181,11 +198,28 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
     InternalValue attrName = GetArgumentValue("attribute", context);
 
     bool isConverted = false;
-    ListAdapter values = ConvertToList(baseVal, attrName, isConverted, false);
+    ListAdapter values = ConvertToList(baseVal, isConverted, false);
 
     if (!isConverted)
     {
+        // Python's str.join iterates its argument: a number, a bool or None is a TypeError
+        if (GetIf<int64_t>(&baseVal) || GetIf<double>(&baseVal) || GetIf<bool>(&baseVal) || baseVal.IsNone())
+        {
+            throw std::runtime_error(std::string("'") + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object is not iterable");
+        }
         return InternalValue();
+    }
+    // Jinja2's make_attrgetter: a dotted path, digit parts as indexes
+    if (!IsEmpty(attrName))
+    {
+        auto path = AttributePath(attrName);
+        InternalValueList items;
+        ReserveHint(items, values.GetSize().value_or(0));
+        values.ForEach([&](const InternalValue& item) {
+            items.push_back(GetAttributeByPath(item, path, InternalValue(), context));
+            return true;
+        });
+        values = ListAdapter::CreateAdapter(std::move(items));
     }
 
     // Python join converts every item and the delimiter with str(). Under autoescape a
@@ -251,22 +285,40 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
 
     std::vector<InternalValueList> paths = SortKeyPaths(attrName);
 
+    auto isLess = [oper, compType](const InternalValue& key1, const InternalValue& key2, bool& isEqual) {
+        // Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python
+        isEqual = ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, BinaryExpression::LogicalEq, compType));
+        return !isEqual && ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, oper, compType));
+    };
     // Python's sorted() is stable
-    std::stable_sort(values.begin(), values.end(), [&paths, oper, compType, &context](auto& val1, auto& val2) {
-        auto isLess = [oper, compType](const InternalValue& key1, const InternalValue& key2, bool& isEqual) {
-            // Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python
-            isEqual = ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, BinaryExpression::LogicalEq, compType));
-            return !isEqual && ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, oper, compType));
-        };
-        bool isEqual = false;
-        if (paths.empty())
-        {
+    if (paths.empty())
+    {
+        std::stable_sort(values.begin(), values.end(), [&isLess](auto& val1, auto& val2) {
+            bool isEqual = false;
             return isLess(val1, val2, isEqual);
-        }
-        // The key lists compare item by item, like Python lists
-        for (auto& path : paths)
+        });
+        return ListAdapter::CreateAdapter(std::move(values));
+    }
+
+    // sorted(key=...) takes each item's key once, so a key that fails fails for one item too.
+    // The key lists compare item by item, like Python lists
+    const size_t width = paths.size();
+    InternalValueList keys;
+    keys.reserve(values.size() * width);
+    for (const auto& val : values)
+    {
+        for (const auto& path : paths)
         {
-            auto result = isLess(GetAttributeByPath(val1, path, InternalValue(), context), GetAttributeByPath(val2, path, InternalValue(), context), isEqual);
+            keys.push_back(GetAttributeByPath(val, path, InternalValue(), context));
+        }
+    }
+    std::vector<size_t> order(values.size());
+    std::iota(order.begin(), order.end(), size_t{ 0 });
+    std::stable_sort(order.begin(), order.end(), [&](size_t idx1, size_t idx2) {
+        for (size_t n = 0; n != width; ++n)
+        {
+            bool isEqual = false;
+            auto result = isLess(keys[(idx1 * width) + n], keys[(idx2 * width) + n], isEqual);
             if (!isEqual)
             {
                 return result;
@@ -274,7 +326,13 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
         }
         return false;
     });
-
+    InternalValueList sorted;
+    sorted.reserve(values.size());
+    for (auto idx : order)
+    {
+        sorted.push_back(std::move(values[idx]));
+    }
+    values = std::move(sorted);
     return ListAdapter::CreateAdapter(std::move(values));
 }
 
@@ -336,6 +394,7 @@ DictSort::DictSort(const FilterParams& params)
 
 InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
+    CheckUndefinedUse(baseVal, UndefinedUse::Method);
     auto map = AsMap(baseVal);
     if (!map)
     {
@@ -386,7 +445,8 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     }
     else
     {
-        return InternalValue();
+        // Jinja2 raises FilterArgumentError
+        throw std::runtime_error(R"(You can only sort by either "key" or "value")");
     }
 
     auto entries = map->GetEntries();
@@ -592,15 +652,20 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
     }
 
     InternalValue filterName = GetArgumentValue("filter", context);
-    if (IsEmpty(filterName))
+    // A plain undefined (an error path's result) stays lenient
+    if (filterName.IsUndefined() && !GetUndefinedInfo(filterName))
     {
         return InternalValue();
     }
 
-    auto filter = CreateFilter(AsString(filterName), m_mappingParams, context);
-    if (!filter)
+    FilterPtr filter;
+    if (IsStringValue(filterName))
     {
-        return InternalValue();
+        filter = CreateFilter(AsString(filterName), m_mappingParams, context);
+        if (!filter)
+        {
+            return InternalValue();
+        }
     }
 
     bool isConverted = false;
@@ -613,6 +678,11 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
     InternalValueList resultList;
     ReserveHint(resultList, list.GetSize().value_or(0));
     list.ForEach([&](const InternalValue& val) {
+        // Python's map is lazy: a name that is no filter fails at the first item
+        if (!filter)
+        {
+            ThrowNotACallableName("filter", filterName);
+        }
         resultList.push_back(filter->Filter(val, context));
         return true;
     });
@@ -672,7 +742,13 @@ InternalValue WithParent(const InternalValue& baseVal, InternalValue value)
     return value;
 }
 
-InternalValue FirstItem(const ListAdapter& list, const InternalValue& baseVal)
+// Jinja2's first and last of an empty sequence: an undefined that says so when used
+InternalValue NoItem(RenderContext& context, const char* which)
+{
+    return MakeUndefinedWithHint(context, std::string("No ") + which + " item, sequence was empty.");
+}
+
+InternalValue FirstItem(const ListAdapter& list, const InternalValue& baseVal, RenderContext& context)
 {
     const auto& listSize = list.GetSize();
     if (listSize && *listSize > 0)
@@ -684,10 +760,10 @@ InternalValue FirstItem(const ListAdapter& list, const InternalValue& baseVal)
     {
         return WithParent(baseVal, *it);
     }
-    return {};
+    return NoItem(context, "first");
 }
 
-InternalValue LastItem(const ListAdapter& list, const InternalValue& baseVal)
+InternalValue LastItem(const ListAdapter& list, const InternalValue& baseVal, RenderContext& context)
 {
     const auto& listSize = list.GetSize();
     if (listSize && *listSize > 0)
@@ -699,7 +775,7 @@ InternalValue LastItem(const ListAdapter& list, const InternalValue& baseVal)
         result = std::move(item);
         return true;
     });
-    return result ? WithParent(baseVal, std::move(*result)) : InternalValue();
+    return result ? WithParent(baseVal, std::move(*result)) : NoItem(context, "last");
 }
 
 InternalValue Length(const ListAdapter& list)
@@ -860,8 +936,9 @@ InternalValue Unique(const ListAdapter& list,
     InternalValueList values;
     std::vector<UniqueItem> items;
     int64_t idx = 0;
+    const auto path = IsEmpty(attrName) ? InternalValueList() : AttributePath(attrName);
     list.ForEach([&](InternalValue&& v) {
-        items.push_back(UniqueItem{ IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx++ });
+        items.push_back(UniqueItem{ IsEmpty(attrName) ? v : GetAttributeByPath(v, path, InternalValue(), context), idx++ });
         values.push_back(std::move(v));
         return true;
     });
@@ -878,6 +955,20 @@ InternalValue Unique(const ListAdapter& list,
 }
 } // namespace
 
+namespace
+{
+// last, random and reverse index a string, and an item or slice of Markup is Markup (first
+// iterates it, which gives plain characters)
+InternalValue KeepMarkup(const InternalValue& baseVal, InternalValue result)
+{
+    if (baseVal.IsMarkup() && IsStringValue(result))
+    {
+        result.SetMarkup();
+    }
+    return result;
+}
+} // namespace
+
 InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     // Like Python, a string is a sequence of characters and a mapping one of its keys
@@ -886,6 +977,15 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
     if (!isConverted)
     {
+        // Python iterates an undefined as an empty sequence
+        if (baseVal.IsUndefined() && (m_mode == FirstItemMode || m_mode == LastItemMode))
+        {
+            return NoItem(context, m_mode == FirstItemMode ? "first" : "last");
+        }
+        if (baseVal.IsUndefined() && (m_mode == MaxItemMode || m_mode == MinItemMode))
+        {
+            return MakeUndefinedWithHint(context, "No aggregated item, sequence was empty.");
+        }
         return {};
     }
 
@@ -894,38 +994,39 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
     BinaryExpression::CompareType compType = ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
-    auto lessComparator = [&attrName, &compType, &context](auto& val1, auto& val2) {
-        if (IsEmpty(attrName))
-        {
-            return CompareForOrder(val1, val2, BinaryExpression::LogicalLt, compType);
-        }
-        return CompareForOrder(Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), BinaryExpression::LogicalLt, compType);
+    const auto attrPath = IsEmpty(attrName) ? InternalValueList() : AttributePath(attrName);
+    // Python's min and max take each item's key once and keep the first extreme item
+    auto extreme = [&](bool isMax) {
+        std::optional<InternalValue> best;
+        InternalValue bestKey;
+        list.ForEach([&](InternalValue&& item) {
+            InternalValue key = attrPath.empty() ? item : GetAttributeByPath(item, attrPath, InternalValue(), context);
+            if (!best || (isMax ? CompareForOrder(bestKey, key, BinaryExpression::LogicalLt, compType) : CompareForOrder(key, bestKey, BinaryExpression::LogicalLt, compType)))
+            {
+                bestKey = std::move(key);
+                best = std::move(item);
+            }
+            return true;
+        });
+        return best ? WithParent(baseVal, std::move(*best)) : MakeUndefinedWithHint(context, "No aggregated item, sequence was empty.");
     };
 
     switch (m_mode)
     {
     case FirstItemMode:
-        return FirstItem(list, baseVal);
+        return FirstItem(list, baseVal, context);
     case LastItemMode:
-        return LastItem(list, baseVal);
+        return KeepMarkup(baseVal, LastItem(list, baseVal, context));
     case LengthMode:
         return Length(list);
     case RandomMode:
-        return RandomItem(list, baseVal);
+        return KeepMarkup(baseVal, RandomItem(list, baseVal));
     case MaxItemMode:
-    {
-        auto e = list.end();
-        auto p = std::max_element(list.begin(), e, lessComparator);
-        return p != e ? WithParent(baseVal, *p) : InternalValue();
-    }
+        return extreme(true);
     case MinItemMode:
-    {
-        auto e = list.end();
-        auto p = std::min_element(list.begin(), e, lessComparator);
-        return p != e ? WithParent(baseVal, *p) : InternalValue();
-    }
+        return extreme(false);
     case ReverseMode:
-        return Reverse(list, baseVal);
+        return KeepMarkup(baseVal, Reverse(list, baseVal));
     case SumItemsMode:
     {
         auto start = GetArgumentValue("start", context);
@@ -1103,7 +1204,11 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
 
     TesterPtr tester;
 
-    if (!IsEmpty(testerName))
+    // No test was named: a plain undefined is the missing argument. A name that is no test
+    // fails at the first item, as Python's lazy select does
+    const bool isNoName = testerName.IsUndefined() && GetUndefinedInfo(testerName) == nullptr;
+    const bool isBadName = !isNoName && !IsStringValue(testerName);
+    if (IsStringValue(testerName))
     {
         tester = CreateTester(AsString(testerName), m_testingParams, context);
 
@@ -1122,7 +1227,11 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
 
     InternalValueList resultList;
     ReserveHint(resultList, list.GetSize().value_or(0));
-    auto isSelected = [this, tester, attrName, &context](const InternalValue& val) {
+    auto isSelected = [this, tester, attrName, isBadName, &testerName, &context](const InternalValue& val) {
+        if (isBadName)
+        {
+            ThrowNotACallableName("test", testerName);
+        }
         InternalValue attrVal;
         bool isAttr = !IsEmpty(attrName);
         if (isAttr)

@@ -37,8 +37,8 @@ For every case it renders the template with Jinja2C++ and classifies the result:
 
 A case not in `divergences/<area>.txt` must match. A listed case must still diverge in the
 listed kind: when a fix makes it match, the suite fails until its line is deleted, so the
-list only shrinks on purpose. Kind `unordered` accepts either result, for output that
-depends on `std::unordered_map` order and so differs by standard library. Kind `crash` skips a case that would bring the binary down or trip the sanitizers
+list only shrinks on purpose. Kind `platform` accepts either result, for output that
+differs by standard library or locale. Kind `crash` skips a case that would bring the binary down or trip the sanitizers
 (undefined behaviour).
 
 ### The wide-string run
@@ -62,7 +62,7 @@ line per case, sorted by id:
 <case id> <kind> <task> <reason>
 ```
 
-`kind` is one of `output`, `rejects`, `accepts`, `unsupported`, `unordered`, `crash`
+`kind` is one of `output`, `rejects`, `accepts`, `unsupported`, `platform`, `crash`
 (above); `task` is the `docs/tasks/` number that owns the fix. A case blocked by several
 gaps is listed under the first one that has to be fixed. `ParityRegistry.*` fails on an
 unknown case or kind, a missing reason, an id listed twice, or a line in the wrong
