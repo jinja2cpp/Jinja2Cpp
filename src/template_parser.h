@@ -239,6 +239,9 @@ struct StatementInfo
     std::shared_ptr<TransInfo> trans;
     // The resolver's frame of the body (0117 P1)
     NameResolver::FrameId frame = NameResolver::NoFrame;
+    // A macro's or call block's: the tree's marks before its parameters, less what the tags
+    // between them and its body made (MacroStatement::SetBodyMarks)
+    NodeArena::ContextMarks marks;
 
     static StatementInfo Create(Type type, const Token& tok)
     {

@@ -868,6 +868,8 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     }
 
     std::string macroName = lexer.GetAsString(nextTok);
+    // The parameters' defaults count with the body
+    const auto marks = m_nodes.Marks();
     const auto outerFrame = m_names.Current();
     m_names.AddStore(outerFrame, macroName);
 
@@ -885,6 +887,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     auto renderer = m_nodes.Make<MacroStatement>(m_nodes, macroName, result.value());
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroStatement, stmtTok);
     statementInfo.renderer = renderer;
+    statementInfo.marks = marks;
     statementInfo.frame = m_names.PushMacro(outerFrame, renderer);
     statementsInfo.push_back(std::move(statementInfo));
 
@@ -1031,6 +1034,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
         return MakeParseError(ErrorCode::UnexpectedToken, info.token);
     }
     renderer.SetMainBody(TakeBody(info));
+    renderer.SetBodyMarks(info.marks, m_nodes.Marks());
 
     statementsInfo.back().body.push_back(info.renderer);
 
@@ -1045,6 +1049,8 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     }
 
     MacroParamsInfo callbackParams;
+    // The parameters' defaults count with the body, the arguments of the call do not
+    auto marks = m_nodes.Marks();
 
     if (lexer.EatIfEqual('('))
     {
@@ -1074,6 +1080,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     {
         return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::LBracket);
     }
+    const auto beforeCall = m_nodes.Marks();
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     auto result = exprParser.ParseCallParams(lexer);
     if (!result)
@@ -1081,10 +1088,14 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
         return MakeUnexpected(result.error());
     }
     CallParamsInfo callParams = std::move(result.value());
+    const auto afterCall = m_nodes.Marks();
+    marks.nameRefs += afterCall.nameRefs - beforeCall.nameRefs;
+    marks.contextNodes += afterCall.contextNodes - beforeCall.contextNodes;
 
     auto renderer = m_nodes.Make<MacroCallStatement>(m_nodes, macroName, callParams, callbackParams);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroCallStatement, stmtTok);
     statementInfo.renderer = renderer;
+    statementInfo.marks = marks;
     statementInfo.frame = m_names.PushMacro(m_names.Current(), renderer);
     statementsInfo.push_back(std::move(statementInfo));
 
@@ -1111,6 +1122,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner&, Statem
         return MakeParseError(ErrorCode::UnexpectedToken, info.token);
     }
     renderer.SetMainBody(TakeBody(info));
+    renderer.SetBodyMarks(info.marks, m_nodes.Marks());
 
     statementsInfo.back().body.push_back(info.renderer);
 

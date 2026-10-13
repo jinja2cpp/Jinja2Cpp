@@ -133,14 +133,23 @@ struct FrameView
 };
 
 // A view attached to a scope of a RenderContext: a lookup by name searches it right after
-// the scope's map, so names set in the scope hide it and it hides the scopes below
+// the scope's map, so names set in the scope hide it and it hides the scopes below (all of
+// them down to linkBelow, when it has one)
 struct ScopeView
 {
+    // linkBelow of a view that hides no scope
+    static constexpr std::size_t NoLink = static_cast<std::size_t>(-1);
+
     FrameView view;
     // The scope's index among the context's own scopes
     std::size_t scopeIndex = 0;
+    // The static link of a closure's body (docs/design/0038-lexical-scoping-plan.md): once a
+    // lookup has searched the scope and its views, it goes on below scope `linkBelow`, an index
+    // among all the scopes the context sees, passing over the scopes the caller pushed above
+    // the place the closure was defined. NoLink for the others
+    std::size_t linkBelow = NoLink;
 
-    bool operator==(const ScopeView& other) const { return view == other.view && scopeIndex == other.scopeIndex; }
+    bool operator==(const ScopeView& other) const { return view == other.view && scopeIndex == other.scopeIndex && linkBelow == other.linkBelow; }
     bool operator!=(const ScopeView& other) const { return !(*this == other); }
 };
 } // namespace jinja2

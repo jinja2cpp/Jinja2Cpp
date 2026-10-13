@@ -949,6 +949,41 @@ private:
 
 // Makes the nodes of one template while it is parsed. Nodes are made during the parse
 // only; Seal moves them into the template's SealedArena
+namespace detail
+{
+// The kinds whose nodes never read the render context by name nor hand it to anything that
+// may (a callable, a filter, a test, another template): constants, operators, conditionals,
+// text and output. Not attribute access, which calls the "value()" callable of a mapping.
+// Conservative: a kind missing here only costs a macro its fast call
+// (MacroStatement::ReadsSlotsOnly)
+constexpr bool NeedsNoContext(NodeKind kind)
+{
+    switch (kind)
+    {
+    case NodeKind::FullExpr:
+    case NodeKind::ConstantExpr:
+    case NodeKind::ScalarConstantExpr:
+    case NodeKind::TupleExpr:
+    case NodeKind::DictExpr:
+    case NodeKind::UnaryExpr:
+    case NodeKind::BinaryExpr:
+    case NodeKind::InLiteralExpr:
+    case NodeKind::ConstFormatExpr:
+    case NodeKind::CompareExpr:
+    case NodeKind::SliceExpr:
+    case NodeKind::IfExpr:
+    case NodeKind::ComposedBody:
+    case NodeKind::RawText:
+    case NodeKind::ExprRenderer:
+    case NodeKind::IfStmt:
+    case NodeKind::ElseBranchStmt:
+        return true;
+    default:
+        return false;
+    }
+}
+} // namespace detail
+
 class NodeArena : public detail::ArenaAccess<NodeArena>
 {
 public:
@@ -962,6 +997,16 @@ public:
     NodeArena& operator=(const NodeArena&) = delete;
     NodeArena& operator=(NodeArena&&) = delete;
     ~NodeArena() { DestroyNodes(); }
+
+    // Counts the nodes made so far that may read the render context: name references, and
+    // every other kind but the ones detail::NeedsNoContext lists. Two marks taken around a
+    // macro's body tell whether it can read a name otherwise than from a slot
+    struct ContextMarks
+    {
+        std::uint32_t nameRefs = 0;
+        std::uint32_t contextNodes = 0;
+    };
+    [[nodiscard]] ContextMarks Marks() const { return { m_nameRefs, m_contextNodes }; }
 
     template<typename T, typename... Args>
     NodeRef<T> Make(Args&&... args)
@@ -1188,6 +1233,14 @@ private:
         {
             ++m_owners;
         }
+        if constexpr (T::Kind == NodeKind::NameRef)
+        {
+            ++m_nameRefs;
+        }
+        else if constexpr (!detail::NeedsNoContext(T::Kind))
+        {
+            ++m_contextNodes;
+        }
         // Recorded, so that the arena destroys it after the throw
         if constexpr (NodeRefChecks >= 2 && !std::is_base_of_v<ArenaObjectBase, T>)
         {
@@ -1281,6 +1334,10 @@ private:
     detail::OffsetList m_objects;
     // How many of them own something and are destroyed
     std::uint32_t m_owners = 0;
+    // How many name references, and nodes that may reach the context otherwise, were made
+    // (NodeArena::ContextMarks)
+    std::uint32_t m_nameRefs = 0;
+    std::uint32_t m_contextNodes = 0;
     bool m_sealed = false;
     // The symbols of the names, while the tree is parsed: a list in place for the first few,
     // then an open-addressed table by the hash of the name

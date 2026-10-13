@@ -161,8 +161,9 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 
-    // The loop(...) callable of a recursive loop at depth0 `level`
-    static Callable MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level);
+    // The loop(...) callable of a recursive loop at depth0 `level`, whose outermost level
+    // runs at `site`
+    static Callable MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site);
 
     [[nodiscard]] bool IsRecursive() const { return m_isRecursive; }
     [[nodiscard]] bool HasFilter() const { return static_cast<bool>(m_ifExpr); }
@@ -179,10 +180,11 @@ public:
     bool FetchFiltered(ListAccessorEnumeratorPtr& items, InternalValue& item, RenderContext& values, size_t depth, FrameHandle handle, const ArenaView& nodes) const;
 
 private:
-    void RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level);
+    // `site`: where the outermost level of a recursive loop runs; null for that level
+    void RenderLoop(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level, const ClosureSite* site = nullptr);
     // A loop whose names live in a scope of their own: recursive loops, and loops in a
     // recursive one
-    void RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level);
+    void RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level, const ClosureSite* site);
     // A loop whose names live in slots of its unit's frame (0117 P1)
     void RenderLoopInSlots(const InternalValue& loopVal, OutStream& os, RenderContext& values);
     // `outerLoop`: what `loop` is in the filter
@@ -664,10 +666,28 @@ public:
         m_slotNames = names;
         return names;
     }
+    // The tree's marks before the parameters, less what the tags between them and the body
+    // made, and after the body: what the parameters and the body made (NodeArena::Marks). The
+    // statement's own node is the one that may reach the context by itself
+    void SetBodyMarks(NodeArena::ContextMarks before, NodeArena::ContextMarks after)
+    {
+        m_bodyNameRefs = after.nameRefs - before.nameRefs;
+        m_bodyReachesContext = after.contextNodes - before.contextNodes != 1;
+    }
+    // Set by the resolver once every name is placed: whether the body reads names only from
+    // its own arguments' slots and can reach the context in no other way, so that a call
+    // inside another body needs no lookup cache epoch of its own (HomeCall::Run)
+    void SetReadsSlotsOnly(std::uint32_t slotReads) { m_readsSlotsOnly = !m_bodyReachesContext && slotReads == m_bodyNameRefs; }
+    [[nodiscard]] bool ReadsSlotsOnly() const { return m_readsSlotsOnly; }
 
 protected:
+    // What MakeCallable's callable holds; defined in statements.cpp
+    struct CallableBody;
+
     Callable MakeCallable(RenderContext& values) const;
-    void InvokeMacroRenderer(const std::vector<MacroDefault>& definedDefaults, const CallParams& callParams, OutStream& stream, RenderContext& context) const;
+    // Runs the body in `context`, its home (HomeCall), in a scope linked below `link`
+    // (ScopeView::linkBelow)
+    void InvokeMacroRenderer(const std::vector<MacroDefault>& definedDefaults, const CallParams& callParams, OutStream& stream, RenderContext& context, size_t link) const;
     // Adds the attributes that depend on the body to the ones the constructor made
     void CompleteAttributes();
     // The macro's name in messages: none for the caller of a call block
@@ -691,6 +711,10 @@ protected:
     bool m_callerWithoutDefault = false;
     // A default names another argument, so it is evaluated per call after the arguments are bound
     bool m_hasArgDefaults = false;
+    // What the parameters and the body made (SetBodyMarks), and the verdict (SetReadsSlotsOnly)
+    std::uint32_t m_bodyNameRefs = 0;
+    bool m_bodyReachesContext = true;
+    bool m_readsSlotsOnly = false;
     // `macro.name`, `macro.arguments` and the others, complete once the body is parsed
     std::shared_ptr<InternalValueMap> m_attributes;
     UnitLayout m_unitLayout;

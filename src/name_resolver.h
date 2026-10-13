@@ -118,6 +118,8 @@ private:
         // frame: its own names', then its loops'
         UnitId unitId;
         std::uint32_t frameSize = 0;
+        // A macro's: the names its body reads from its arguments' slots
+        std::uint32_t argReads = 0;
     };
     static_assert(std::is_trivially_destructible_v<Frame>);
 
