@@ -979,7 +979,10 @@ TEST(FilterErrors, VerifierLeftovers)
     EXPECT_EQ("2|2|5|-4|2.0", RenderOrError("{{ 1.5|round(None) }}|{{ 2.5|round(None) }}|{{ 5|round(None) }}|{{ -3.5|round(None) }}|{{ 1.5|round }}", {}));
     EXPECT_NE(RenderOrError("{{ 1.5|round(None, 'floor') }}", {}).find("NoneType"), std::string::npos);
     EXPECT_NE(RenderOrError("{{ 1e300|round(None) }}", {}).find("64 bits"), std::string::npos);
-    EXPECT_EQ("0|0.0|5|5.0", RenderOrError("{{ '\0345'|int }}|{{ '\0375'|float }}|{{ '\v5\t'|int }}|{{ '\f5\r'|float }}", {}));
+    // \x1c-\x1f as variables: an octal escape before a digit is MSVC C4125
+    const std::string fileSep = std::string(1, '\x1c') + "5";
+    const std::string unitSep = std::string(1, '\x1f') + "5";
+    EXPECT_EQ("0|0.0|5|5.0", RenderOrError("{{ fs|int }}|{{ us|float }}|{{ '\v5\t'|int }}|{{ '\f5\r'|float }}", { { "fs", fileSep }, { "us", unitSep } }));
 }
 
 TEST(FilterUnicode, PercentAEscapesNonAscii)
