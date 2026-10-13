@@ -562,7 +562,7 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
         formatted = m_constFormat ? m_constFormat->Format(params.posParams.data(), params.posParams.size())
                                   : PythonPercentFormat(format, params.posParams.data(), params.posParams.size());
     }
-    InternalValue result(std::move(formatted));
+    InternalValue result(formatted);
     result.SetMarkup(baseVal.IsMarkup());
     return result;
 }
