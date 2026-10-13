@@ -3,8 +3,6 @@
 
 fuzz.dictsort_int                       accepts     0177 dictsort of a number renders nothing instead of raising AttributeError
 fuzz.first_bool                         accepts     0177 first of a bool renders nothing instead of raising TypeError
-fuzz.format_extra_argument              accepts     0048 format ignores arguments the format string does not use instead of raising TypeError
-fuzz.format_safe_extra_argument         accepts     0048 format on Markup ignores unused arguments instead of raising TypeError
 fuzz.length_int                         accepts     0177 length of a number renders nothing instead of raising TypeError
 fuzz.list_contains_itself               rejects     0049 a list cannot contain itself (lists are values), so l.append(l) fails
 fuzz.list_int                           accepts     0177 list of a number renders nothing instead of raising TypeError

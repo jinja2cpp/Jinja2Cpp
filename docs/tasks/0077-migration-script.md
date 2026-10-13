@@ -25,6 +25,10 @@ later switch of `Result<T>` to `std::expected` (a C++23 floor) is a recompile fo
 Our own tests are the first client: `test/undefined_test.cpp` spells
 `nonstd::make_unexpected`.
 
+Template behaviour changes belong in `MIGRATION.md` too, for example the `format` filter:
+since 0048 it is printf-style only and a string with `{}` placeholders raises "not all
+arguments converted"; such templates move to the `'{}'.format(x)` string method.
+
 `MIGRATION.md` also lists the template syntax 2.0 stops accepting, all of which Jinja2
 rejects too (0094, Ruslan decided 2026-10-12): `{% macro m %}` and `{% call m %}` without
 parentheses (write `m()`), `{'a' = 1}` dict literals (write `{'a': 1}`), and `+}}` (a `+`
