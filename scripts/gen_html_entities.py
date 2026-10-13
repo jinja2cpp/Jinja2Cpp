@@ -39,7 +39,14 @@ def main():
         HELPER,
         "} // namespace jinja2::html\n\n#endif // JINJA2CPP_SRC_HTML_ENTITIES_H\n",
     ]
-    (ROOT / "src" / "html_entities.h").write_text("\n".join(parts), encoding="utf-8")
+    target = ROOT / "src" / "html_entities.h"
+    text = "\n".join(parts)
+    # --check: CI (parity-expectations.yml) fails when the committed header is stale
+    if "--check" in sys.argv[1:]:
+        if target.read_text(encoding="utf-8") != text:
+            sys.exit("%s is stale: regenerate it with %s" % (target.relative_to(ROOT), sys.argv[0]))
+        return
+    target.write_text(text, encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ written into the header), so it matches that Python's str methods. Regenerate wi
     python3 scripts/gen_unicode_case.py && clang-format -i src/unicode_case.h
 """
 import pathlib
+import sys
 import unicodedata
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -154,7 +155,14 @@ def main():
     parts.append(range_table("CaseIgnorable", "Case_Ignorable (cased or not)", ranges(case_ignorable)))
     parts.append(HELPERS)
     parts.append("} // namespace jinja2::unicode\n\n#endif // JINJA2CPP_SRC_UNICODE_CASE_H\n")
-    (ROOT / "src" / "unicode_case.h").write_text("\n".join(parts), encoding="utf-8")
+    target = ROOT / "src" / "unicode_case.h"
+    text = "\n".join(parts)
+    # --check: CI (parity-expectations.yml) fails when the committed header is stale
+    if "--check" in sys.argv[1:]:
+        if target.read_text(encoding="utf-8") != text:
+            sys.exit("%s is stale: regenerate it with %s" % (target.relative_to(ROOT), sys.argv[0]))
+        return
+    target.write_text(text, encoding="utf-8")
 
 
 if __name__ == "__main__":
