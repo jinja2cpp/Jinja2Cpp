@@ -228,7 +228,7 @@ INSTANTIATE_TEST_SUITE_P(Unique, ListIteratorTest, ::testing::Values(
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(Attr, FilterGenericTest, ::testing::Values(
-                            InputOutputPair{"{'key'='itemName', 'value'='itemValue'} | attr('key')", ""},
+                            InputOutputPair{"{'key': 'itemName', 'value': 'itemValue'} | attr('key')", ""},
                             InputOutputPair{"mapValue | attr('intVal')", ""},
                             InputOutputPair{"mapValue | attr('intVal', default='99')", "99"},
                             InputOutputPair{"mapValue | attr('nonexistent', default='99')", "99"},
@@ -289,6 +289,7 @@ INSTANTIATE_TEST_SUITE_P(SelectAttr, ListIteratorTest, ::testing::Values(
                             ));
 
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(PPrint, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"10 | pprint", "10"},
                             InputOutputPair{"10.5 | pprint", "10.5"},
@@ -297,8 +298,9 @@ INSTANTIATE_TEST_SUITE_P(PPrint, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"boolFalseValue | pprint", "false"},
                             InputOutputPair{"boolTrueValue | pprint", "true"},
                             InputOutputPair{"intList | pprint", "[9, 0, 8, 1, 7, 2, 6, 3, 5, 4]"},
-                            InputOutputPair{"{'key'='itemName'} | pprint", "{'key': 'itemName'}"}
+                            InputOutputPair{"{'key': 'itemName'} | pprint", "{'key': 'itemName'}"}
                             ));
+// clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(GroupBy, FilterGroupByTest, ::testing::Values(
@@ -374,13 +376,14 @@ grouper: true
                             ));
 // clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(DictSort, FilterGenericTest, ::testing::Values(
-                            InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
-                            InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort(by='value') | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
-                            InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort(reverse=true) | pprint", "['Value': 'ItemValue', 'key': 'itemName']"},
-                            InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort(reverse=true, by='value') | pprint", "['Value': 'ItemValue', 'key': 'itemName']"},
-                            InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort(case_sensitive=true) | pprint", "['Value': 'ItemValue', 'key': 'itemName']"},
-                            InputOutputPair{"{'key'='itemName', 'Value'='ItemValue'} | dictsort(case_sensitive=true, reverse=true) | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
+                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
+                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(by='value') | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
+                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(reverse=true) | pprint", "['Value': 'ItemValue', 'key': 'itemName']"},
+                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(reverse=true, by='value') | pprint", "['Value': 'ItemValue', 'key': 'itemName']"},
+                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(case_sensitive=true) | pprint", "['Value': 'ItemValue', 'key': 'itemName']"},
+                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(case_sensitive=true, reverse=true) | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
                             InputOutputPair{"simpleMapValue | dictsort | pprint", "['boolValue': true, 'dblVal': 100.5, 'intVal': 10, 'stringVal': 'string100.5']"},
     InputOutputPair{
       "reflectedVal | dictsort | pprint",
@@ -391,6 +394,7 @@ INSTANTIATE_TEST_SUITE_P(DictSort, FilterGenericTest, ::testing::Values(
       "string 0', 'tmpStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
       "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
       "{'strValue': 'Hello World!'}], 'wstrValue': 'test string 0', 'wstrViewValue': 'test string 0']" }));
+// clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(UrlEncode, FilterGenericTest, ::testing::Values(
@@ -445,7 +449,7 @@ INSTANTIATE_TEST_SUITE_P(Convert, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'100' | int(10, base=8) | pprint", "64"},
                             InputOutputPair{"'100' | int(10, base=16) | pprint", "256"},
                             InputOutputPair{"'100' | list | pprint", "['1', '0', '0']"},
-                            InputOutputPair{"{'name'='itemName', 'val'='itemValue'} | list | sort | pprint", "['name', 'val']"}
+                            InputOutputPair{"{'name': 'itemName', 'val': 'itemValue'} | list | sort | pprint", "['name', 'val']"}
                             ));
 // clang-format on
 
@@ -559,12 +563,13 @@ INSTANTIATE_TEST_SUITE_P(Batch, FilterGenericTest, ::testing::Values(
                             ));
 // clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(Format, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello {}!' | format('World') ", "Hello World!"},
                             InputOutputPair{"'{1} {0}!' | format('World', 'Hello') | pprint", "'Hello World!'"},
                             InputOutputPair{"'{}' | format(1024) | pprint", "'1024'"},
                             InputOutputPair{"'{}' | format([1, 'a'])", "[1, 'a']"},
-                            InputOutputPair{"'{}' | format({'a'=1})", "{'a': 1}"},
+                            InputOutputPair{"'{}' | format({'a': 1})", "{'a': 1}"},
                             InputOutputPair{"'{}' | format(stringValue)","rain"},
                             InputOutputPair{"'{}' | format(wstringValue)", "  hello world "},
                             InputOutputPair{"'{:07d}' | format(1024) | pprint", "'0001024'"},
@@ -578,6 +583,7 @@ INSTANTIATE_TEST_SUITE_P(Format, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello {boolean}!' | format(boolean=True)", "Hello true!"},
                             InputOutputPair{"'Hello {empty}!' | format(empty=nonexistent)", "Hello none!"}
                         ));
+// clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(ListSlice, ListSliceTest, ::testing::Values(
@@ -683,7 +689,7 @@ TEST_F(XmlAttr, FixtureValidation)
 
 TEST_F(XmlAttr, SerializeFlatMap)
 {
-    constexpr auto source = "{{ {'foo' = 42, 'bar' = 1.35, 'bool' = true, 'blub:blub' = '<?>'}|xmlattr }}";
+    constexpr auto source = "{{ {'foo': 42, 'bar': 1.35, 'bool': true, 'blub:blub': '<?>'}|xmlattr }}";
     constexpr auto expectedResult = R"(foo="42" bar="1.35" bool="True" blub:blub="&lt;?&gt;")";
 
     PerformBothXmlAttrTests(source, expectedResult, {});
@@ -691,7 +697,7 @@ TEST_F(XmlAttr, SerializeFlatMap)
 
 TEST_F(XmlAttr, SerializeNestedMap)
 {
-    constexpr auto source = "{{ { 'foo' = {'bar' = '\"&<>'}, 'l' = [1, 2, 3], 'blub:blub' = '<?>' }|xmlattr }}";
+    constexpr auto source = "{{ { 'foo': {'bar': '\"&<>'}, 'l': [1, 2, 3], 'blub:blub': '<?>' }|xmlattr }}";
     constexpr auto expectedResult = R"(foo="{&#39;bar&#39;: &#39;&#34;&amp;&lt;&gt;&#39;}" l="[1, 2, 3]" blub:blub="&lt;?&gt;")";
 
     PerformBothXmlAttrTests(source, expectedResult, {});

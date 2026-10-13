@@ -121,7 +121,7 @@ repr look the same.
 | Adjacent strings `'a' 'b'` | ✅ | `string_adjacent_concat` | |
 | List literals, trailing comma | 🟡 parse; print as empty | `list_trailing_comma` | 0012 |
 | Tuple literals `(1, 2)`, `(1,)`, `()` | ✅ | `tuple`, `tuple_single`, `tuple_empty` | |
-| Dict literals `{'a': 1}`, `{key_expr: v}` | 🟡 parse (`{'a'=1}` stays as a C++ extension); print as empty | `dict`, `dict_expression_key`, `dict_nested` | 0012 / 0028 |
+| Dict literals `{'a': 1}`, `{key_expr: v}` | 🟡 parse (`{'a'=1}` is rejected like Jinja2 since 0094); print as empty | `dict`, `dict_expression_key`, `dict_nested` | 0012 / 0028 |
 | Non-string dict keys | 🟡 stored as strings (`1` → `'1'`) | `dict_int_key` | 0036 |
 
 ## Printing values (`output`)

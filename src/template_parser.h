@@ -851,7 +851,7 @@ private:
                 m_lexBuffers = std::make_unique<LexBuffers>();
             }
             TagLexer<CharT, TemplateParser> lexer(*m_template, *this, m_lexBuffers->tokens);
-            const auto endPos = lexer.LexToEnd(m_currentBlockInfo.range.startOffset, end);
+            const auto endPos = lexer.LexToEnd(m_currentBlockInfo.range.startOffset, end, type != RM_ExprEnd);
             if (endPos != string_t::npos)
             {
                 m_currentBlockInfo.preLexed = true;
@@ -1155,7 +1155,9 @@ private:
         // trim_blocks does not apply to expressions
         auto next = StripBlockRight(endPos, endLength, m_currentBlockInfo.type == TextBlockType::Expr ? false : m_settings.trimBlocks);
         auto contentEnd = endPos;
-        if (endPos > m_currentBlockInfo.range.startOffset && ((*m_template)[endPos - 1] == '+' || (*m_template)[endPos - 1] == '-'))
+        // Jinja2 has no `+}}`: before the end of an expression a `+` is the operator
+        auto ctrlChar = endPos > m_currentBlockInfo.range.startOffset ? (*m_template)[endPos - 1] : CharT();
+        if (ctrlChar == '-' || (ctrlChar == '+' && m_currentBlockInfo.type != TextBlockType::Expr))
         {
             --contentEnd;
         }

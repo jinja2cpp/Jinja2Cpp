@@ -202,6 +202,11 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
 
     if (!isConverted)
     {
+        // Python's str.join iterates its argument: a number, a bool or None is a TypeError
+        if (GetIf<int64_t>(&baseVal) || GetIf<double>(&baseVal) || GetIf<bool>(&baseVal) || baseVal.IsNone())
+        {
+            throw std::runtime_error(std::string("'") + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object is not iterable");
+        }
         return InternalValue();
     }
     // Jinja2's make_attrgetter: a dotted path, digit parts as indexes
@@ -440,7 +445,8 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     }
     else
     {
-        return InternalValue();
+        // Jinja2 raises FilterArgumentError
+        throw std::runtime_error(R"(You can only sort by either "key" or "value")");
     }
 
     auto entries = map->GetEntries();
