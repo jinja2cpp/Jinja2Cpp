@@ -1,6 +1,8 @@
 #include "gtest/gtest.h"
 #include "test_tools.h"
 
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
@@ -289,4 +291,24 @@ MULTISTR_TEST(MacroTest, RecursiveCallHidesTheOuterCallsSet, R"({% macro m(n) %}
               R"([A][])")
 {
     params = PrepareTestData();
+}
+
+// A body that hands the context to a filter reads names by lookup: a call of it made inside a
+// loop that cached the loop's names takes its own lookup cache epoch
+TEST(MacroContextTest, ContextFilterInABodyCalledInsideALoop)
+{
+    TemplateEnv env;
+    env.AddFilter("lookup", MakeCallable([](const std::string& name, const GenericMap& context) { return context.GetValueByName(name); }, ArgInfo{ "name" }, ArgInfo{ "*context" }));
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% set g = 'G' %}{% macro m(a) %}{{ a }}{{ a|lookup }}{% endmacro %}{% for g in ['L', 'M'] %}{{ g }}{{ m('g') }};{% endfor %}").has_value());
+    EXPECT_EQ("LgG;MgG;", tpl.RenderAsString({}).value());
+}
+
+// A body that reads only its arguments takes no epoch of its own, called inside a loop that
+// cached names of the same spelling
+TEST(MacroContextTest, ArgumentsOnlyBodyCalledInsideALoop)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% macro m(x, y) %}[{{ x }}{% if y %}{{ y }}{% endif %}]{% endmacro %}{% for x in [1, 2] %}{% set y = 5 %}{{ x }}{{ y }}{{ m(x * 10) }}{{ m(x, y=x) }}{% endfor %}").has_value());
+    EXPECT_EQ("15[10][11]25[20][22]", tpl.RenderAsString({}).value());
 }

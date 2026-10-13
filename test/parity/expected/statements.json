@@ -10483,6 +10483,86 @@
    "output": "7[3]"
   },
   {
+   "id": "statements.macro_args_only_called_in_loop",
+   "template": "{% macro m(a) %}[{{ a }}]{% endmacro %}{% for x in [1, 2] %}{% set a = 9 %}{{ a }}{{ m(x) }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "9[1]9[2]"
+  },
+  {
+   "id": "statements.macro_loop_over_arg_called_in_loop",
+   "template": "{% macro m(xs) %}{% for v in xs %}{{ v }}{{ xs|length }}{% endfor %}{% endmacro %}{% for v in [7] %}{% set xs = [0] %}{{ v }}{{ xs }}{{ m([1, 2]) }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "7[0]1222"
+  },
+  {
    "id": "statements.nested_call_after_set_in_with",
    "template": "{% macro m() %}[{{ y }}]{% endmacro %}{% with %}{% set y = 2 %}{{ y }}{{ m() }}{% endwith %}{{ m() }}",
    "context": {

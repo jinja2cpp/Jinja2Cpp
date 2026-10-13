@@ -661,6 +661,19 @@ public:
         m_slotNames = names;
         return names;
     }
+    // The tree's marks before the parameters, less what the tags between them and the body
+    // made, and after the body: what the parameters and the body made (NodeArena::Marks). The
+    // statement's own node is the one that may reach the context by itself
+    void SetBodyMarks(NodeArena::ContextMarks before, NodeArena::ContextMarks after)
+    {
+        m_bodyNameRefs = after.nameRefs - before.nameRefs;
+        m_bodyReachesContext = after.contextNodes - before.contextNodes != 1;
+    }
+    // Set by the resolver once every name is placed: whether the body reads names only from
+    // its own arguments' slots and can reach the context in no other way, so that a call
+    // inside another body needs no lookup cache epoch of its own (HomeCall::Run)
+    void SetReadsSlotsOnly(std::uint32_t slotReads) { m_readsSlotsOnly = !m_bodyReachesContext && slotReads == m_bodyNameRefs; }
+    [[nodiscard]] bool ReadsSlotsOnly() const { return m_readsSlotsOnly; }
 
 protected:
     // What MakeCallable's callable holds; defined in statements.cpp
@@ -693,6 +706,10 @@ protected:
     bool m_callerWithoutDefault = false;
     // A default names another argument, so it is evaluated per call after the arguments are bound
     bool m_hasArgDefaults = false;
+    // What the parameters and the body made (SetBodyMarks), and the verdict (SetReadsSlotsOnly)
+    std::uint32_t m_bodyNameRefs = 0;
+    bool m_bodyReachesContext = true;
+    bool m_readsSlotsOnly = false;
     // `macro.name`, `macro.arguments` and the others, complete once the body is parsed
     std::shared_ptr<InternalValueMap> m_attributes;
     UnitLayout m_unitLayout;

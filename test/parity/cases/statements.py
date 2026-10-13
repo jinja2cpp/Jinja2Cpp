@@ -273,7 +273,9 @@ CASES = [
     ('macro_in_loop_after_set_reads_root', '{% macro m() %}{{ x }}{% endmacro %}{% for z in [1] %}{% set x = 5 %}{{ x }}{{ m() }}{% endfor %}'),
     ('call_body_hides_macro_set_read_before', '{% macro m1() %}{% set c = 1 %}{{ c }}{{ caller() }}{% endmacro %}{% call m1() %}{{ c }}{% endcall %}'),
     ('macro_set_then_call_root_macro', '{% macro m() %}[{{ x }}]{% endmacro %}{% macro o() %}{% set x = 7 %}{{ x }}{{ m() }}{% endmacro %}{{ o() }}'),
-    ('nested_call_after_set_in_with', '{% macro m() %}[{{ y }}]{% endmacro %}{% with %}{% set y = 2 %}{{ y }}{{ m() }}{% endwith %}{{ m() }}'),
+    ('macro_args_only_called_in_loop', '{% macro m(a) %}[{{ a }}]{% endmacro %}{% for x in [1, 2] %}{% set a = 9 %}{{ a }}{{ m(x) }}{% endfor %}'),
+    ('macro_loop_over_arg_called_in_loop', '{% macro m(xs) %}{% for v in xs %}{{ v }}{{ xs|length }}{% endfor %}{% endmacro %}{% for v in [7] %}{% set xs = [0] %}{{ v }}{{ xs }}{{ m([1, 2]) }}{% endfor %}'),
+    ('nested_call_after_set_in_with','{% macro m() %}[{{ y }}]{% endmacro %}{% with %}{% set y = 2 %}{{ y }}{{ m() }}{% endwith %}{{ m() }}'),
     ('macro_recursion_hides_outer_call_set', "{% macro m(n) %}{% if n %}{% set v = 'A' %}{% endif %}[{{ v }}]{% if n %}{{ m(0) }}{% endif %}{% endmacro %}{{ m(1) }}"),
     # closures kept past the frame that defined them: deliberate divergences (docs/tasks/0165)
     ('caller_escapes_its_loop', '{% set ns = namespace(c=none) %}{% macro m() %}{% set ns.c = caller %}{% endmacro %}{% for i in [1] %}{% call m() %}[{{ i }}]{% endcall %}{% endfor %}{{ ns.c() }}'),

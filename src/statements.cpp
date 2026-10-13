@@ -2025,10 +2025,12 @@ struct MacroStatement::CallableBody
     // The body resolves its names where the macro is defined, not through its caller
     // (docs/design/0038-lexical-scoping-plan.md)
     ClosureSite site;
+    // MacroStatement::ReadsSlotsOnly
+    bool readsSlotsOnly;
 
     void operator()(const CallParams& callParams, OutStream& stream, RenderContext& context) const
     {
-        HomeCall::Run(site, context, *this, callParams, stream);
+        HomeCall::Run(site, context, readsSlotsOnly, *this, callParams, stream);
     }
     // The call on its home
     void operator()(RenderContext& home, size_t link, const CallParams& callParams, OutStream& stream) const
@@ -2058,7 +2060,7 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
     }
 
     // The body escapes as where the macro is defined; the caller decides whether the result is Markup
-    Callable result(Callable::Macro, CallableBody{ this, std::move(definedDefaults), values.Nodes(), values.IsAutoescape(), ClosureSite(values) });
+    Callable result(Callable::Macro, CallableBody{ this, std::move(definedDefaults), values.Nodes(), values.IsAutoescape(), ClosureSite(values), m_readsSlotsOnly });
     result.SetAttributes(m_attributes);
     return result;
 }

@@ -628,6 +628,9 @@ public:
     template<typename NameOf>
     JINJA2CPP_ALWAYS_INLINE LookupResult FindValueCached(const void* key, uint32_t slot, const NameOf& nameOf)
     {
+        // A body called under its caller's epoch reads no name through the cache
+        // (HomeCall::Run)
+        assert(m_noCachedLookups == 0);
         if (m_lookupCache)
         {
             // Epochs are unique per cache, not across caches: a context is used only on the
@@ -1333,6 +1336,10 @@ private:
     bool m_autoescape{};
     LookupCache* m_lookupCache{};
     uint64_t m_epoch{};
+#ifndef NDEBUG
+    // Calls running that must not read the lookup cache (HomeCall::NoCachedLookups)
+    int m_noCachedLookups = 0;
+#endif
     // The only owner of this context's anchor, made when a closure is first defined here: the
     // closures hold weak references to it, and a call locks one for its duration only
     // (docs/design/0038-lexical-scoping-plan.md, section 11). It aliases this context, so
@@ -1660,14 +1667,17 @@ public:
     // the context that defined it, and one through an imported macro's wrapper) only mark the site as running,
     // inline; the others take a HomeCall out of line. The body and the arguments are passed by
     // reference, so that the direct calls make nothing in memory
+    // `readsSlotsOnly`: the body makes no cached lookup by name (MacroStatement::ReadsSlotsOnly)
     template<typename Body, typename... Args>
-    static void Run(const ClosureSite& site, RenderContext& caller, const Body& body, Args&... args)
+    static void Run(const ClosureSite& site, RenderContext& caller, bool readsSlotsOnly, const Body& body, Args&... args)
     {
         if (site.m_state == ClosureSite::TopLevel && site.HasOwner(caller.m_anchor))
         {
-            if (caller.GetScopesCount() == site.m_depth)
+            // Made at the top level, or by a body nothing of which can be a stale cached lookup
+            if (readsSlotsOnly || caller.GetScopesCount() == site.m_depth)
             {
                 const Direct direct(site, caller, ClosureSite::TopLevel);
+                const NoCachedLookups noLookups(caller, readsSlotsOnly);
                 body(caller, static_cast<size_t>(site.m_depth), args...);
                 return;
             }
@@ -1724,6 +1734,36 @@ private:
         const RenderContext& m_caller;
         size_t m_scopes;
         int m_exceptions;
+#endif
+    };
+
+    // Debug: the lookup cache stays unused for the duration of a call (FindValueCached)
+    class NoCachedLookups
+    {
+    public:
+        NoCachedLookups([[maybe_unused]] RenderContext& context, [[maybe_unused]] bool isOn)
+#ifndef NDEBUG
+            : m_context(context)
+            , m_isOn(isOn)
+        {
+            m_context.m_noCachedLookups += m_isOn ? 1 : 0;
+        }
+#else
+        {
+        }
+#endif
+        NoCachedLookups(const NoCachedLookups&) = delete;
+        NoCachedLookups(NoCachedLookups&&) = delete;
+        NoCachedLookups& operator=(const NoCachedLookups&) = delete;
+        NoCachedLookups& operator=(NoCachedLookups&&) = delete;
+#ifndef NDEBUG
+        ~NoCachedLookups() { m_context.m_noCachedLookups -= m_isOn ? 1 : 0; }
+
+    private:
+        RenderContext& m_context;
+        bool m_isOn;
+#else
+        ~NoCachedLookups() = default;
 #endif
     };
 
