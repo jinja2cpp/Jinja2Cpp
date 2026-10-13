@@ -137,12 +137,26 @@ void NameResolver::Resolve(NodeArena& nodes)
         }
     }
 
+    // The names each macro's body reads, itself and not from a frame inside it, from the
+    // slots of its own arguments, which every call binds (MacroStatement::SetReadsSlotsOnly)
     for (const auto& [ref, frameId] : m_uses)
     {
         const auto [slot, unit] = Find(nodes, ref, frameId);
         if (!slot.IsDynamic())
         {
             nodes[ref].SetSlot(slot, unit);
+            auto& frame = m_frames[frameId];
+            if (frame.isMacro && unit == frame.unitId && slot.value < frame.binders.size())
+            {
+                ++frame.argReads;
+            }
+        }
+    }
+    for (const auto& frame : m_frames)
+    {
+        if (frame.isMacro)
+        {
+            nodes.Get<MacroStatement>(frame.node).SetReadsSlotsOnly(frame.argReads);
         }
     }
 

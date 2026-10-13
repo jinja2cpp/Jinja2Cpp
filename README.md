@@ -308,6 +308,24 @@ Thanks to **@martinus** for the fast hash maps implementation.
   the internal `IsEqual`, `TimePoint` and `TimeStamp` are gone. `ApplyGlobals` passes the
   globals as `const ValuesMap&`. New: `TemplateEnv::FromString` (Jinja2 `env.from_string`),
   `AddTest`/`RemoveTest`/`FindTest` for custom tests.
+- Macro bodies, `{% call %}` bodies, a recursive loop's `loop(...)` and `super()` resolve
+  names where they are defined, as in Jinja2, not where they are called: a macro no longer
+  sees its caller's loop variables or `set` names, and a call body sees the names around the
+  `{% call %}`, not the macro's. A macro that read its caller's loop variable should take it
+  as an argument: `{% macro row(item) %}{{ item }}{% endmacro %}{% for item in items %}{{ row(item) }}{% endfor %}`.
+  A macro or call body kept and called after the loop, macro call or include that defined it
+  has ended reads that frame's names as undefined.
+- `jinja2::ValuesMap` keeps insertion order, like a Python dict: it is based on
+  `jinja2::OrderedMap` (`jinja2cpp/utils/ordered_map.h`) instead of `std::unordered_map`.
+  Iteration over a context dict, its repr (`{{ d }}`), `items()`, `first`, `join` and
+  `xmlattr` follow the order the C++ code inserted the keys, the same on every standard
+  library, and `**kwargs` handed to a user callable follow the call order. Dict reprs no
+  longer sort their keys; reflected structs still list theirs sorted. The map keeps the
+  `std::unordered_map` interface except the bucket API, node handles, `hash_function`,
+  `key_eq` and `get_allocator`, and no longer converts to `std::unordered_map<std::string, Value>&`.
+  The library's SOVERSION is now 2.
+- `jinja2::Reflect` accepts `nlohmann::ordered_json` (nlohmann 3.9 and later), whose objects
+  keep document order; `nlohmann::json` objects iterate sorted, as before.
 
 #### Changes and improvements
 - Boost.Regex is no longer a dependency, so external and Conan Boost builds need no compiled

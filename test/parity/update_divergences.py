@@ -54,7 +54,7 @@ def main():
             case_id, kind = m.group("id"), m.group("kind")
             listed.add(case_id)
             seen = outcomes.get(case_id)
-            if seen is None or seen == kind or kind in ("unordered", "crash"):
+            if seen is None or seen == kind or kind in ("platform", "crash"):
                 out.append(line)
                 continue
             edited = True

@@ -113,9 +113,10 @@ TEST(ForLoopErrorTest, PairUnpackCountError)
     EXPECT_NE(result.error().ToString().find("not enough values to unpack (expected 3, got 2)"), std::string::npos);
 }
 
+// clang-format off
 MULTISTR_TEST(ForLoopTest, DISABLED_MapUnpackLoop,
   R"(
-{% for a, b in ({'0'='1', '1'='2', '2'='3'}).items() %}
+{% for a, b in ({'0': '1', '1': '2', '2': '3'}).items() %}
 a[{{a}}] = image[{{b}}];
 {% endfor %}
 )",
@@ -130,6 +131,7 @@ a[2] = image[3];
 
 )"
 )
+// clang-format on
 {
 }
 
@@ -222,14 +224,16 @@ INSTANTIATE_TEST_SUITE_P(RangeParamResolving, RangeForLoopTest, ::testing::Value
         InputOutputPair{"range(start=0, 8, step=2)", "0,2,4,6,"}
         ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(SequencesLoopTest, RangeForLoopTest, ::testing::Values(
         InputOutputPair{"[1, 2, 3]", "1,2,3,"},
         InputOutputPair{"[1, 2, 3] + [4, 5, 6]", "1,2,3,4,5,6,"},
         InputOutputPair{"[1, 2] * 3", "1,2,1,2,1,2,"},
         InputOutputPair{"'123456'", "1,2,3,4,5,6,"},
         InputOutputPair{"'123' + '456'", "1,2,3,4,5,6,"},
-        InputOutputPair{"{'0'='1'}", "0,"}
+        InputOutputPair{"{'0': '1'}", "0,"}
         ));
+// clang-format on
 
 MULTISTR_TEST(ForLoopTest, LoopCycleLoop,
               R"(
@@ -495,29 +499,31 @@ TEST(ForLoopLentItemsTest, KeptByUserCallable)
     }
 }
 
+// clang-format off
 MULTISTR_TEST(ForLoopTest, RecursiveLoop,
               R"(
 {%set items=[
-    {'name'='root1', 'children'=[
-            {'name'='child1_1'},
-            {'name'='child1_2'},
-            {'name'='child1_3'}
+    {'name': 'root1', 'children': [
+            {'name': 'child1_1'},
+            {'name': 'child1_2'},
+            {'name': 'child1_3'}
         ]},
-    {'name'='root2', 'children'=[
-            {'name'='child2_1'},
-            {'name'='child2_2'},
-            {'name'='child2_3'}
+    {'name': 'root2', 'children': [
+            {'name': 'child2_1'},
+            {'name': 'child2_2'},
+            {'name': 'child2_3'}
         ]},
-    {'name'='root3', 'children'=[
-            {'name'='child3_1'},
-            {'name'='child3_2'},
-            {'name'='child3_3'}
+    {'name': 'root3', 'children': [
+            {'name': 'child3_1'},
+            {'name': 'child3_2'},
+            {'name': 'child3_3'}
         ]}
     ] %}
 {% for i in items recursive %}{{i.name}}({{ loop.depth }}-{{ loop.depth0 }}) -> {{loop(i.children)}}{% endfor %}
 )",
               //---------
               "\n\nroot1(1-0) -> child1_1(2-1) -> child1_2(2-1) -> child1_3(2-1) -> root2(1-0) -> child2_1(2-1) -> child2_2(2-1) -> child2_3(2-1) -> root3(1-0) -> child3_1(2-1) -> child3_2(2-1) -> child3_3(2-1) -> ")
+// clang-format on
 {
 }
 

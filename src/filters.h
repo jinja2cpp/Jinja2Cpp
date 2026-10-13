@@ -252,7 +252,7 @@ public:
 
 private:
     FilterParams m_params;
-    // The literal format, parsed; null unless it is a narrow string with a '%'
+    // The literal format, parsed; null unless it is a narrow string
     std::shared_ptr<const CompiledPercentFormat> m_constFormat;
 };
 

@@ -1,8 +1,11 @@
 #include "filters.h"
 #include "function_base.h"
+#include "html_entities.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "render_context.h"
+#include "unicode_case.h"
+#include "undefined.h"
 #include "unicode_tables.h"
 #include "value_visitors.h"
 
@@ -17,7 +20,6 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
-#include <locale>
 #include <optional>
 #include <regex>
 #include <sstream>
@@ -132,10 +134,11 @@ public:
     using String = std::basic_string<CharT>;
     using Range = std::pair<size_t, size_t>;
 
-    TextWrapper(int64_t width, bool breakLongWords, bool breakOnHyphens)
+    TextWrapper(int64_t width, bool breakLongWords, bool breakOnHyphens, bool floatWidth)
         : m_width(width)
         , m_breakLongWords(breakLongWords)
         , m_breakOnHyphens(breakOnHyphens)
+        , m_floatWidth(floatWidth)
     {
     }
 
@@ -356,6 +359,11 @@ private:
         auto& chunk = chunks[next];
         if (m_breakLongWords)
         {
+            // textwrap slices the word with the width; a float width of 1 or more fails there
+            if (m_floatWidth && m_width >= 1)
+            {
+                throw std::runtime_error("slice indices must be integers or None or have an __index__ method");
+            }
             auto end = LongWordCut(chunk, spaceLeft);
             curLine.emplace_back(chunk.first, chunk.first + end);
             chunk.first += end;
@@ -419,13 +427,19 @@ private:
     int64_t m_width;
     bool m_breakLongWords;
     bool m_breakOnHyphens;
+    bool m_floatWidth;
     const std::vector<View>* m_line = nullptr;
 };
 
 template<typename CharT>
-std::basic_string<CharT> WordWrap(std::basic_string_view<CharT> text, int64_t width, bool breakLongWords, const std::basic_string<CharT>& wrapString, bool breakOnHyphens)
+std::basic_string<CharT> WordWrap(std::basic_string_view<CharT> text,
+                                  int64_t width,
+                                  bool breakLongWords,
+                                  const std::basic_string<CharT>& wrapString,
+                                  bool breakOnHyphens,
+                                  bool floatWidth)
 {
-    return TextWrapper<CharT>(width, breakLongWords, breakOnHyphens).Wrap(text, wrapString);
+    return TextWrapper<CharT>(width, breakLongWords, breakOnHyphens, floatWidth).Wrap(text, wrapString);
 }
 
 template<typename CharT>
@@ -948,29 +962,6 @@ bool IsAscii(std::basic_string_view<CharT> str)
     return bits < 0x80;
 }
 
-// One character (code point) as an upper- or lowercase character. Only single-unit
-// characters change: ASCII in UTF-8 strings, the BMP in wide strings.
-template<typename CharT>
-void AppendWithCase(std::basic_string<CharT>& out, std::basic_string_view<CharT> ch, bool upper)
-{
-    if (ch.size() != 1)
-    {
-        out.append(ch.begin(), ch.end());
-    }
-    else if (CodeUnit(ch[0]) < 0x80)
-    {
-        out.push_back(upper ? AsciiWithCase<true>(ch[0]) : AsciiWithCase<false>(ch[0]));
-    }
-    else if (sizeof(CharT) != 1)
-    {
-        out.push_back(upper ? std::toupper(ch[0], std::locale()) : std::tolower(ch[0], std::locale()));
-    }
-    else
-    {
-        out.push_back(ch[0]);
-    }
-}
-
 // A string filter's fn(text) on the text of a string value (docs/tasks/0151); any other value
 // gives an empty string, as when the filters returned TargetString
 template<typename Fn>
@@ -978,36 +969,6 @@ InternalValue ConvertText(const InternalValue& val, Fn&& fn)
 {
     auto result = ApplyStringConverter(val, std::forward<Fn>(fn));
     return result.Kind() == ValueKind::Undefined ? InternalValue(TargetString()) : result;
-}
-
-// Port of Jinja2's do_title: each word (split on runs of -, whitespace, (, {, [ and <) gets
-// an uppercase first character and lowercase others
-template<typename CharT>
-InternalValue TitleCase(std::basic_string_view<CharT> str)
-{
-    if (IsAscii(str))
-    {
-        return InternalValue::MakeText<CharT>(str.size(), [str](boost::span<CharT> chars) {
-            auto out = chars.begin();
-            bool wordStart = true;
-            for (auto ch : str)
-            {
-                ch = wordStart ? AsciiWithCase<true>(ch) : AsciiWithCase<false>(ch);
-                wordStart = ch == '-' || ch == '(' || ch == '{' || ch == '[' || ch == '<' || unicode::IsSpace(CodeUnit(ch));
-                *out++ = ch;
-            }
-        });
-    }
-    std::basic_string<CharT> result;
-    bool wordStart = true;
-    for (auto ch : SplitCodePoints(str))
-    {
-        auto cp = CodePointValue(ch);
-        bool isDelim = cp == '-' || cp == '(' || cp == '{' || cp == '[' || cp == '<' || unicode::IsSpace(cp);
-        AppendWithCase(result, ch, wordStart);
-        wordStart = isDelim;
-    }
-    return InternalValue(result);
 }
 
 // Python's str.strip(chars): without chars, Unicode whitespace. Only the characters at the two
@@ -1093,7 +1054,182 @@ void AppendCodePoint(std::basic_string<CharT>& out, uint32_t cp)
     }
 }
 
-// The code point a numeric character reference stands for, as html.unescape maps it
+// The code points of a string with the characters they came from, so that characters a case
+// mapping leaves alone are copied as they are
+template<typename CharT>
+struct CaseChars
+{
+    explicit CaseChars(std::basic_string_view<CharT> str)
+        : views(SplitCodePoints(str))
+    {
+        cps.reserve(views.size());
+        for (auto view : views)
+        {
+            cps.push_back(CodePointValue(view));
+        }
+    }
+
+    std::vector<std::basic_string_view<CharT>> views;
+    std::vector<uint32_t> cps;
+};
+
+using CaseFn = size_t (*)(uint32_t, uint32_t (&)[3]);
+
+template<typename CharT>
+void AppendMapped(std::basic_string<CharT>& out, const CaseChars<CharT>& chars, size_t idx, CaseFn map)
+{
+    uint32_t mapped[3];
+    auto count = map(chars.cps[idx], mapped);
+    if (count == 1 && mapped[0] == chars.cps[idx])
+    {
+        out.append(chars.views[idx].begin(), chars.views[idx].end());
+        return;
+    }
+    for (size_t n = 0; n != count; ++n)
+    {
+        AppendCodePoint(out, mapped[n]);
+    }
+}
+
+// CPython's handle_capital_sigma: the sigma at idx ends a word when a cased character precedes
+// it and none follows it, skipping case-ignorable ones; the string is cps[begin, end)
+inline bool IsFinalSigma(const std::vector<uint32_t>& cps, size_t begin, size_t end, size_t idx)
+{
+    auto before = idx;
+    while (before > begin && unicode::IsCaseIgnorable(cps[before - 1]))
+    {
+        --before;
+    }
+    if (before == begin || !unicode::IsCased(cps[before - 1]))
+    {
+        return false;
+    }
+    auto after = idx + 1;
+    while (after < end && unicode::IsCaseIgnorable(cps[after]))
+    {
+        ++after;
+    }
+    return after == end || !unicode::IsCased(cps[after]);
+}
+
+// str.lower() of the characters [from, to) of the string cps[begin, to)
+template<typename CharT>
+void AppendLower(std::basic_string<CharT>& out, const CaseChars<CharT>& chars, size_t begin, size_t from, size_t to)
+{
+    for (auto idx = from; idx != to; ++idx)
+    {
+        if (chars.cps[idx] == 0x3A3)
+        {
+            AppendCodePoint(out, IsFinalSigma(chars.cps, begin, to, idx) ? 0x3C2U : 0x3C3U);
+        }
+        else
+        {
+            AppendMapped(out, chars, idx, unicode::ToLower);
+        }
+    }
+}
+
+// The non-ASCII path of MapCase, out of line so that the ASCII path inlines into the
+// string visitor as before 0048 (Render/many_tags)
+template<bool upper, bool capitalize, typename CharT>
+JINJA2CPP_OUTLINE_INLINE InternalValue MapCaseUnicode(std::basic_string_view<CharT> str)
+{
+    std::basic_string<CharT> result;
+    CaseChars<CharT> chars(str);
+    if constexpr (upper)
+    {
+        for (size_t idx = 0; idx != chars.cps.size(); ++idx)
+        {
+            AppendMapped(result, chars, idx, unicode::ToUpper);
+        }
+    }
+    else if constexpr (capitalize)
+    {
+        if (!chars.cps.empty())
+        {
+            AppendMapped(result, chars, 0, unicode::ToTitle);
+            AppendLower(result, chars, 0, 1, chars.cps.size());
+        }
+    }
+    else
+    {
+        AppendLower(result, chars, 0, 0, chars.cps.size());
+    }
+    return InternalValue(result);
+}
+
+// Upper, lower or capitalize (first character titlecase, the rest lower) a string
+template<bool upper, bool capitalize, typename CharT>
+JINJA2CPP_ALWAYS_INLINE InternalValue MapCase(std::basic_string_view<CharT> str)
+{
+    if (IsAscii(str))
+    {
+        return InternalValue::MakeText<CharT>(str.size(), [str](boost::span<CharT> chars) {
+            auto out = chars.begin();
+            auto it = str.begin();
+            if (capitalize && it != str.end())
+            {
+                *out++ = AsciiWithCase<true>(*it++);
+            }
+            std::transform(it, str.end(), out, AsciiWithCase<upper, CharT>);
+        });
+    }
+    return MapCaseUnicode<upper, capitalize>(str);
+}
+
+// The non-ASCII path of TitleCase, out of line like MapCaseUnicode
+template<typename CharT>
+JINJA2CPP_OUTLINE_INLINE InternalValue TitleCaseUnicode(std::basic_string_view<CharT> str)
+{
+    std::basic_string<CharT> result;
+    CaseChars<CharT> chars(str);
+    auto isDelim = [&chars](size_t idx) {
+        auto cp = chars.cps[idx];
+        return cp == '-' || cp == '(' || cp == '{' || cp == '[' || cp == '<' || unicode::IsSpace(cp);
+    };
+    for (size_t idx = 0; idx < chars.cps.size();)
+    {
+        if (isDelim(idx))
+        {
+            result.append(chars.views[idx].begin(), chars.views[idx].end());
+            ++idx;
+            continue;
+        }
+        auto end = idx + 1;
+        while (end != chars.cps.size() && !isDelim(end))
+        {
+            ++end;
+        }
+        AppendMapped(result, chars, idx, unicode::ToUpper);
+        AppendLower(result, chars, idx + 1, idx + 1, end);
+        idx = end;
+    }
+    return InternalValue(result);
+}
+
+// Port of Jinja2's do_title: each word (split on runs of -, whitespace, (, {, [ and <) gets
+// an uppercase first character and lowercase others, item[0].upper() + item[1:].lower()
+template<typename CharT>
+JINJA2CPP_ALWAYS_INLINE InternalValue TitleCase(std::basic_string_view<CharT> str)
+{
+    if (IsAscii(str))
+    {
+        return InternalValue::MakeText<CharT>(str.size(), [str](boost::span<CharT> chars) {
+            auto out = chars.begin();
+            bool wordStart = true;
+            for (auto ch : str)
+            {
+                ch = wordStart ? AsciiWithCase<true>(ch) : AsciiWithCase<false>(ch);
+                wordStart = ch == '-' || ch == '(' || ch == '{' || ch == '[' || ch == '<' || unicode::IsSpace(CodeUnit(ch));
+                *out++ = ch;
+            }
+        });
+    }
+    return TitleCaseUnicode(str);
+}
+
+// The code point a numeric character reference stands for, as html.unescape maps it; 0 for
+// the references it drops (html._invalid_codepoints)
 inline uint32_t CharRefCodePoint(uint64_t value)
 {
     // html._invalid_charrefs: C1 controls are read as Windows-1252
@@ -1108,6 +1244,11 @@ inline uint32_t CharRefCodePoint(uint64_t value)
     if (cp == 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF))
     {
         return 0xFFFD;
+    }
+    // html._invalid_codepoints: controls, noncharacters
+    if (cp < 0x20 ? (cp != 0x09 && cp != 0x0A && cp != 0x0C && cp != 0x0D) : (cp == 0x7F || (cp >= 0xFDD0 && cp <= 0xFDEF) || (cp & 0xFFFE) == 0xFFFE))
+    {
+        return 0;
     }
     return cp;
 }
@@ -1154,60 +1295,80 @@ bool UnescapeNumeric(const std::basic_string<CharT>& str, size_t& pos, std::basi
     {
         ++next;
     }
-    AppendCodePoint(result, CharRefCodePoint(value));
+    if (auto cp = CharRefCodePoint(value))
+    {
+        AppendCodePoint(result, cp);
+    }
     pos = next;
     return true;
 }
 
-// &name; at pos for the common named references; false when the name is not one of them
+// &name at pos (Python's _charref: up to 32 characters other than \t \n \f space < & # ;, then
+// an optional ';'). The whole name is looked up in the HTML5 table, else its longest prefix of
+// two or more characters (the legacy names like "amp" exist without ';'); false when none is
+// one.
 template<typename CharT>
 bool UnescapeNamed(const std::basic_string<CharT>& str, size_t& pos, std::basic_string<CharT>& result)
 {
-    static const std::pair<const char*, uint32_t> named[] = {
-        { "amp", '&' },
-        { "lt", '<' },
-        { "gt", '>' },
-        { "quot", '"' },
-        { "apos", '\'' },
-        { "nbsp", 0xA0 },
-        { "copy", 0xA9 },
-        { "reg", 0xAE },
-        { "raquo", 0xBB },
-        { "laquo", 0xAB },
-        { "hellip", 0x2026 },
-        { "mdash", 0x2014 },
-        { "ndash", 0x2013 },
-        { "euro", 0x20AC },
-        { "trade", 0x2122 },
-        { "middot", 0xB7 },
-        { "times", 0xD7 },
-        { "deg", 0xB0 },
-    };
+    // The ASCII of the name; any other character stands as one placeholder byte
+    std::string name;
+    size_t chars = 0;
     auto next = pos + 1;
-    auto semicolon = str.find(';', next);
-    if (semicolon == std::basic_string<CharT>::npos || semicolon - next > 32)
+    for (; next < str.size(); ++next)
+    {
+        auto unit = CodeUnit(str[next]);
+        if (unit == '\t' || unit == '\n' || unit == '\f' || unit == ' ' || unit == '<' || unit == '&' || unit == '#' || unit == ';')
+        {
+            break;
+        }
+        if (IsCodePointTail(str[next]))
+        {
+            continue;
+        }
+        if (chars == 32)
+        {
+            break;
+        }
+        ++chars;
+        name.push_back(unit < 0x80 ? static_cast<char>(unit) : '\x80');
+    }
+    if (name.empty())
     {
         return false;
     }
-    std::string name;
-    for (auto n = next; n != semicolon; ++n)
+    if (next < str.size() && str[next] == ';')
     {
-        name.push_back(static_cast<unsigned>(str[n]) < 0x80 ? static_cast<char>(str[n]) : '?');
+        name.push_back(';');
+        ++next;
     }
-    for (const auto& [entityName, codePoint] : named)
+    if (const auto* entity = html::FindHtmlEntity(name))
     {
-        if (name == entityName)
+        AppendCodePoint(result, entity->first);
+        if (entity->second != 0)
         {
-            AppendCodePoint(result, codePoint);
-            pos = semicolon + 1;
+            AppendCodePoint(result, entity->second);
+        }
+        pos = next;
+        return true;
+    }
+    for (auto len = name.size() - 1; len >= 2; --len)
+    {
+        if (const auto* entity = html::FindHtmlEntity(std::string_view(name).substr(0, len)))
+        {
+            AppendCodePoint(result, entity->first);
+            if (entity->second != 0)
+            {
+                AppendCodePoint(result, entity->second);
+            }
+            pos += 1 + len;
             return true;
         }
     }
     return false;
 }
 
-// html.unescape for the character references markupsafe's striptags leaves: numeric ones
-// and the common named ones (the full HTML5 table is task 0048)
+// html.unescape, which markupsafe's striptags ends with: numeric references and the HTML5
+// named ones
 template<typename CharT>
 std::basic_string<CharT> HtmlUnescape(const std::basic_string<CharT>& str)
 {
@@ -1294,12 +1455,10 @@ inline std::string UrlQuote(const std::string& str, bool forQuery)
     return result;
 }
 
-// What an argument Jinja2 hands to Python code must be: any number, a number with an
-// integral value (textwrap slices with it) or an int (str.center)
+// What an argument Jinja2 hands to Python code must be: any number or an int (str.center)
 enum class NumberKind
 {
     Any,
-    Whole,
     Int
 };
 
@@ -1310,7 +1469,7 @@ namespace
 int64_t NumericArgument(const InternalValue& val, const char* filter, const char* arg, NumberKind kind)
 {
     const auto* asDouble = GetIf<double>(&val);
-    bool isAcceptedDouble = asDouble != nullptr && (kind == NumberKind::Any || (kind == NumberKind::Whole && std::floor(*asDouble) == *asDouble));
+    bool isAcceptedDouble = asDouble != nullptr && kind == NumberKind::Any;
     bool isNumber = GetIf<int64_t>(&val) != nullptr || GetIf<bool>(&val) != nullptr || isAcceptedDouble;
     if (!isNumber)
     {
@@ -1507,6 +1666,11 @@ InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, Rende
                 truncated = truncated.substr(0, space);
             }
         }
+        // Markup + end escapes end
+        if (baseVal.IsMarkup())
+        {
+            end = EscapeHtml<CharT>(end);
+        }
         return InternalValue::FromText<CharT>({ truncated, end });
     });
 }
@@ -1616,7 +1780,10 @@ TargetString StringConverter::ApplyWordWrap(const InternalValue& baseVal, Render
 {
     return ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
         using CharT = typename decltype(srcStr)::value_type;
-        auto width = NumericArgument(this->GetArgumentValue("width", context), "wordwrap", "width", NumberKind::Whole);
+        // A float width compares like its floor, but textwrap fails slicing a long word with it
+        auto widthVal = this->GetArgumentValue("width", context);
+        const auto* floatWidth = GetIf<double>(&widthVal);
+        auto width = NumericArgument(widthVal, "wordwrap", "width", NumberKind::Any);
         auto breakLongWords = ConvertToBool(this->GetArgumentValue("break_long_words", context));
         auto breakOnHyphens = ConvertToBool(this->GetArgumentValue("break_on_hyphens", context));
         // Jinja2 wraps with the environment's newline_sequence unless wrapstring is given
@@ -1625,46 +1792,11 @@ TargetString StringConverter::ApplyWordWrap(const InternalValue& baseVal, Render
         auto wrapString =
             GetAsSameString(srcStr, this->GetArgumentValue("wrapstring", context)).value_or(std::basic_string<CharT>(newline.begin(), newline.end()));
         // Python raises "invalid width", except for an empty text it returns early
-        if (width <= 0 && !srcStr.empty())
+        if ((floatWidth ? *floatWidth <= 0 : width <= 0) && !srcStr.empty())
         {
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
         }
-        return WordWrap(srcStr, width, breakLongWords, wrapString, breakOnHyphens);
-    });
-}
-
-// One code unit in upper- or lowercase as upper, lower and capitalize map it: ASCII by itself,
-// other wide units through the global locale (letters only)
-template<bool upper, typename CharT>
-CharT UnitWithCase(CharT ch)
-{
-    if constexpr (sizeof(CharT) != 1)
-    {
-        if (CodeUnit(ch) >= 0x80)
-        {
-            std::locale loc;
-            if (!std::isalpha(ch, loc))
-            {
-                return ch;
-            }
-            return upper ? std::toupper(ch, loc) : std::tolower(ch, loc);
-        }
-    }
-    return AsciiWithCase<upper>(ch);
-}
-
-// Upper, lower or capitalize (first unit upper, the rest lower) one code unit at a time
-template<bool upper, bool capitalize, typename CharT>
-InternalValue MapCase(std::basic_string_view<CharT> str)
-{
-    return InternalValue::MakeText<CharT>(str.size(), [str](boost::span<CharT> chars) {
-        auto out = chars.begin();
-        auto it = str.begin();
-        if (capitalize && it != str.end())
-        {
-            *out++ = UnitWithCase<true>(*it++);
-        }
-        std::transform(it, str.end(), out, UnitWithCase<upper, CharT>);
+        return WordWrap(srcStr, width, breakLongWords, wrapString, breakOnHyphens, floatWidth != nullptr);
     });
 }
 
@@ -1697,7 +1829,8 @@ int64_t StringConverter::WordCount(const InternalValue& baseVal)
     return wc;
 }
 
-// Markup's own string methods return Markup; urlize returns Markup under autoescape
+// Markup's own string methods return Markup, as do truncate's slice and concatenation;
+// urlize returns Markup under autoescape
 bool StringConverter::ReturnsMarkup(const InternalValue& baseVal, RenderContext& context) const
 {
     switch (m_mode)
@@ -1708,6 +1841,7 @@ bool StringConverter::ReturnsMarkup(const InternalValue& baseVal, RenderContext&
     case TrimMode:
     case CenterMode:
     case IndentMode:
+    case TruncateMode:
         return baseVal.IsMarkup();
     case UrlizeMode:
         return context.IsAutoescape();
@@ -1751,6 +1885,16 @@ InternalValue StringConverter::Convert(const InternalValue& baseVal, RenderConte
 
 InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
+    if (const auto* undef = GetIf<UndefinedValue>(&baseVal))
+    {
+        // indent appends to the value and wordwrap calls its methods, which Undefined lacks;
+        // truncate takes its len(), which only StrictUndefined refuses
+        if (m_mode == IndentMode || m_mode == WordWrapMode)
+        {
+            CheckUndefinedUse(baseVal, UndefinedUse::Method);
+        }
+        CheckStrictUndefined(*undef);
+    }
     switch (m_mode)
     {
     case SafeMode:

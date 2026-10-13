@@ -7,13 +7,13 @@
 #include "python_format.h"
 #include "render_context.h"
 #include "string_builder.h"
+#include "undefined.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
-
-#include <fmt/args.h>
 
 #include <algorithm>
 #include <cmath>
@@ -40,6 +40,13 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     {
     }
 
+    // A value as pprint prints it: Markup as Markup('...')
+    static std::string Print(const InternalValue& val, const RenderContext* context)
+    {
+        auto text = Apply<PrettyPrinter>(val, context);
+        return val.IsMarkup() && IsStringValue(val) ? "Markup(" + text + ")" : text;
+    }
+
     std::string operator()(const ListRef& list) const
     {
         std::string str;
@@ -58,7 +65,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             {
                 fmt::format_to(os, ", ");
             }
-            fmt::format_to(os, "{}", Apply<PrettyPrinter>(v, m_context));
+            fmt::format_to(os, "{}", Print(v, m_context));
         }
         fmt::format_to(os, "]");
 
@@ -89,7 +96,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             }
 
             fmt::format_to(os, "'{}': ", k);
-            fmt::format_to(os, "{}", Apply<PrettyPrinter>(map.GetValueByName(k), m_context));
+            fmt::format_to(os, "{}", Print(map.GetValueByName(k), m_context));
         }
 
         fmt::format_to(os, "}}");
@@ -103,7 +110,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         auto os = std::back_inserter(str);
 
         fmt::format_to(os, "'{}': ", kwPair.key);
-        fmt::format_to(os, "{}", Apply<PrettyPrinter>(kwPair.value, m_context));
+        fmt::format_to(os, "{}", Print(kwPair.value, m_context));
 
         return str;
     }
@@ -145,7 +152,7 @@ PrettyPrint::PrettyPrint(const FilterParams& params)
 
 InternalValue PrettyPrint::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return Apply<PrettyPrinter>(baseVal, &context);
+    return PrettyPrinter::Print(baseVal, &context);
 }
 
 Serialize::Serialize(const FilterParams& params, const Serialize::Mode mode)
@@ -374,6 +381,11 @@ private:
         {
             Fail();
         }
+        if (const auto* info = GetUndefinedInfo(value))
+        {
+            // json.dumps knows no Undefined; a plain undefined (a host's null) stays null
+            throw std::runtime_error(std::string("Object of type ") + UndefinedClassName(*info) + " is not JSON serializable");
+        }
         if (value.IsNone() || value.IsUndefined())
         {
             m_out += "null";
@@ -450,16 +462,33 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     // Jinja2's do_tojson: json.dumps with sort_keys=True, then htmlsafe_json_dumps escapes
     // <, >, & and ' so the result is safe in HTML and <script> (PythonJsonWriter does both)
     auto indentVal = this->GetArgumentValue("indent", context);
+    // json.dumps encodes a str before it looks at indent, so only other values check it
+    if (!IsEmpty(indentVal) && (IsStringValue(value) || GetAsSameString(std::string(), value)))
+    {
+        indentVal = InternalValue();
+    }
     std::optional<std::string> indent;
     if (auto str = GetAsSameString(std::string(), indentVal))
     {
         indent = *str;
     }
-    else if (!IsEmpty(indentVal))
+    else if (const auto* count = GetIf<int64_t>(&indentVal))
     {
-        const auto spaces = std::max<int64_t>(0, ConvertToInt(indentVal));
+        const auto spaces = std::max<int64_t>(0, *count);
         CheckSequenceSize(static_cast<uint64_t>(spaces), "an indentation");
         indent = std::string(static_cast<size_t>(spaces), ' ');
+    }
+    else if (const auto* flag = GetIf<bool>(&indentVal))
+    {
+        indent = std::string(*flag ? 1 : 0, ' ');
+    }
+    else if (const auto* undefinedInfo = GetUndefinedInfo(indentVal))
+    {
+        ThrowUndefined(*undefinedInfo);
+    }
+    else if (!IsEmpty(indentVal))
+    {
+        throw std::runtime_error("can't multiply sequence by non-int of type '"s + Apply<visitors::PythonTypeNameGetter>(indentVal) + "'");
     }
 
     InternalValue resultVal = PythonJsonWriter(context, std::move(indent)).Write(value);
@@ -468,82 +497,10 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     return resultVal;
 }
 
-namespace
-{
-
-using FormatContext = fmt::format_context;
-using FormatArgument = fmt::basic_format_arg<FormatContext>;
-using FormatDynamicArgsStore = fmt::dynamic_format_arg_store<FormatContext>;
-
-struct FormatArgumentConverter : visitors::BaseVisitor<FormatArgument>
-{
-    using result_t = FormatArgument;
-
-    using BaseVisitor::operator();
-
-    FormatArgumentConverter(const RenderContext* context, FormatDynamicArgsStore& store)
-        : m_context(context)
-        , m_store(store)
-    {
-    }
-
-    FormatArgumentConverter(const RenderContext* context, FormatDynamicArgsStore& store, std::string name)
-        : m_context(context)
-        , m_store(store)
-        , m_name(std::move(name))
-        , m_named(true)
-    {
-    }
-
-    result_t operator()(const ListRef& list) const { return MakeResult(Apply<PrettyPrinter>(InternalValue(list.ToAdapter()), m_context)); }
-
-    result_t operator()(const MapRef& map) const { return MakeResult(Apply<PrettyPrinter>(InternalValue(map.ToAdapter()), m_context)); }
-
-    result_t operator()(const std::string& str) const { return MakeResult(str); }
-
-    result_t operator()(const std::string_view& str) const { return MakeResult(std::string(str.data(), str.size())); }
-
-    result_t operator()(const std::wstring& str) const { return MakeResult(ConvertString<std::string>(str)); }
-
-    result_t operator()(const std::wstring_view& str) const { return MakeResult(ConvertString<std::string>(str)); }
-
-    result_t operator()(double val) const { return MakeResult(val); }
-
-    result_t operator()(int64_t val) const { return MakeResult(val); }
-
-    result_t operator()(bool val) const { return MakeResult(val ? "true"s : "false"s); }
-
-    result_t operator()(EmptyValue) const { return MakeResult("none"s); }
-    result_t operator()(const UndefinedValue&) const { return MakeResult("none"s); }
-
-    result_t operator()(const Callable&) const { return MakeResult("<callable>"s); }
-
-    template<typename T>
-    [[nodiscard]] result_t MakeResult(const T& t) const
-    {
-        if (!m_named)
-        {
-            m_store.push_back(t);
-        }
-        else
-        {
-            m_store.push_back(fmt::arg(m_name.c_str(), t));
-        }
-        return fmt::basic_format_arg<FormatContext>(t);
-    }
-
-    const RenderContext* m_context{};
-    FormatDynamicArgsStore& m_store;
-    const std::string m_name;
-    bool m_named = false;
-};
-
-} // namespace
-
 void StringFormat::SetConstantBase(const InternalValue& base)
 {
     auto format = AsStringView<char>(base);
-    if (format && !base.IsMarkup() && format->find('%') != std::string_view::npos)
+    if (format && !base.IsMarkup())
     {
         m_constFormat = std::make_shared<const CompiledPercentFormat>(std::string(*format));
     }
@@ -551,13 +508,12 @@ void StringFormat::SetConstantBase(const InternalValue& base)
 
 InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    // Jinja2's do_format is printf-style: str(value) % (kwargs or args). A format string
-    // without "%" keeps Jinja2C++'s own {}-style formatting (fmt syntax)
+    // Jinja2's do_format is printf-style: str(value) % (kwargs or args)
     auto* callback = context.GetRendererCallback();
     // A narrow string is used in place; anything else is converted to its text first
     std::string ownedFormat;
     std::string_view format;
-    // A literal format with a '%' was parsed at Load
+    // A literal format was parsed at Load
     if (!m_constFormat)
     {
         auto formatView = AsStringView<char>(baseVal);
@@ -568,65 +524,45 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
         }
         format = *formatView;
     }
-    if (m_constFormat || format.find('%') != std::string_view::npos)
+    // str() of an undefined is empty, and Python's '' % args has an argument left over
+    if (GetUndefinedInfo(baseVal) && !m_params.posParams.empty())
     {
-        if (!m_params.posParams.empty() && !m_params.kwParams.empty())
-        {
-            throw std::runtime_error("format(): can't handle positional and keyword arguments at the same time");
-        }
-        auto params = helpers::EvaluateCallParams(m_params, context);
-        std::string formatted;
-        if (!params.kwParams.empty())
-        {
-            InternalValueMap mapping;
-            for (auto& [name, value] : params.kwParams)
-            {
-                mapping[name] = value;
-            }
-            InternalValue values = CreateMapAdapter(std::move(mapping));
-            // Markup % args escapes the arguments and stays Markup
-            if (baseVal.IsMarkup())
-            {
-                values = EscapeFormatArgs(values, callback);
-            }
-            formatted = m_constFormat ? m_constFormat->Format(values) : PythonPercentFormat(format, values);
-        }
-        else
-        {
-            if (baseVal.IsMarkup())
-            {
-                for (auto& value : params.posParams)
-                {
-                    value = EscapeFormatArg(value, callback);
-                }
-            }
-            formatted = m_constFormat ? m_constFormat->Format(params.posParams.data(), params.posParams.size())
-                                      : PythonPercentFormat(format, params.posParams.data(), params.posParams.size());
-        }
-        InternalValue result(std::move(formatted));
-        result.SetMarkup(baseVal.IsMarkup());
-        return result;
+        throw std::runtime_error("not all arguments converted during string formatting");
     }
-
-    // Format library internally likes using non-owning views to complex arguments.
-    // In order to ensure proper lifetime of values and named args,
-    // helper buffer is created and passed to visitors.
-    FormatDynamicArgsStore store;
-    auto evalArg = [&](auto& expr) {
-        auto val = context.Nodes()[expr].Evaluate(context);
-        return baseVal.IsMarkup() ? EscapeFormatArg(val, callback) : val;
-    };
-    for (auto& arg : m_params.posParams)
+    if (!m_params.posParams.empty() && !m_params.kwParams.empty())
     {
-        Apply<FormatArgumentConverter>(evalArg(arg), &context, store);
+        throw std::runtime_error("format(): can't handle positional and keyword arguments at the same time");
     }
-
-    for (auto& [name, expr] : m_params.kwParams)
+    auto params = helpers::EvaluateCallParams(m_params, context);
+    std::string formatted;
+    if (!params.kwParams.empty())
     {
-        Apply<FormatArgumentConverter>(evalArg(expr), &context, store, name);
+        InternalDict mapping;
+        for (auto& [name, value] : params.kwParams)
+        {
+            mapping[name] = value;
+        }
+        InternalValue values = CreateMapAdapter(std::move(mapping));
+        // Markup % args escapes the arguments and stays Markup
+        if (baseVal.IsMarkup())
+        {
+            values = EscapeFormatArgs(values, callback);
+        }
+        formatted = m_constFormat ? m_constFormat->Format(values) : PythonPercentFormat(format, values);
     }
-
-    InternalValue result(fmt::vformat(format, store));
+    else
+    {
+        if (baseVal.IsMarkup())
+        {
+            for (auto& value : params.posParams)
+            {
+                value = EscapeFormatArg(value, callback);
+            }
+        }
+        formatted = m_constFormat ? m_constFormat->Format(params.posParams.data(), params.posParams.size())
+                                  : PythonPercentFormat(format, params.posParams.data(), params.posParams.size());
+    }
+    InternalValue result(formatted);
     result.SetMarkup(baseVal.IsMarkup());
     return result;
 }

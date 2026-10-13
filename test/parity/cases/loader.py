@@ -25,6 +25,14 @@ SHADOW = {"templates": {**T, "shadow.j2":
 SIB = {"templates": {**T, "sib.j2":
     "{% macro k() %}1{% endmacro %}{% macro a(g) %}[{{ k() }}]{% endmacro %}"
     "{% macro f() %}{% for i in [1, 2] %}{{ k() }}{% endfor %}{% endmacro %}{% set s = 'str' %}{% macro ps() %}{{ s }}{% endmacro %}"}}
+SCOPING = {"templates": {**T,
+    "wrap.j2": "{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "wrapv.j2": "{% set v = 'mod' %}{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "loopm.j2": "{% macro m() %}{% for x in 'ab' %}{{ caller() }}{% endfor %}{% endmacro %}",
+    "apply.j2": "{% macro apply(f) %}<{{ f() }}>{% endmacro %}",
+    "inc_set_x.j2": "{% set x = 'I' %}{{ m() }}",
+    "inc_esc.j2": "{% set v = 'I' %}{% macro m() %}{{ v }}{% endmacro %}{% set ns.m = m %}",
+    "rec.j2": "{{ m(n - 1) }}"}}
 CASES = [
     ("include", "{% include 'hello.j2' %}", L),
     ("include_context", "{% set x = 9 %}{% include 'uses_x.j2' %}", L),
@@ -175,4 +183,14 @@ CASES = [
     ("self_printed", "{% block b %}{% endblock %}[{{ self }}]", L),
     ("self_imported_macro_importer_block", "{% block mb %}MB{% endblock %}{% import 'self_lib.j2' as l %}[{{ l.n() }}]",
      {"templates": {**T, "self_lib.j2": "{% macro n() %}{{ self.mb is defined }}{% endmacro %}"}}),
+    # macro and call bodies resolve names where they are defined (docs/tasks/0165)
+    ("include_cannot_rebind_macro_free_name", "{% macro m() %}{{ x }}{% endmacro %}{% include 'inc_set_x.j2' %}", SCOPING),
+    ("call_block_on_imported_macro_reads_target", "{% from 'wrap.j2' import wrap %}{% for i in [1, 2] %}{% call wrap() %}{{ i }}{% endcall %}{% endfor %}", SCOPING),
+    ("call_body_reads_importer_not_module", "{% from 'wrapv.j2' import wrap %}{% set v = 'main' %}{% call wrap() %}{{ v }}{% endcall %}", SCOPING),
+    ("call_body_of_imported_loop_macro", "{% from 'loopm.j2' import m %}{% for x in [1, 2] %}{% call m() %}{{ x }}{% endcall %}{% endfor %}", SCOPING),
+    ("root_macro_passed_to_imported_macro", "{% from 'apply.j2' import apply %}{% set g = 'G' %}{% macro m() %}{{ g }}{% endmacro %}{{ apply(m) }}", SCOPING),
+    ("super_passed_to_root_macro", "{% extends 'base.j2' %}{% macro m(f) %}[{{ f() }}]{% endmacro %}{% block body %}{{ m(super) }}{% endblock %}", SCOPING),
+    ("macro_recursion_via_include", "{% macro m(n) %}{% if n > 0 %}{% include 'rec.j2' %}{% endif %}{{ n }}{% endmacro %}{{ m(3) }}", SCOPING),
+    # a macro kept past the include that defined it: deliberate divergence
+    ("include_defined_macro_escapes", "{% set ns = namespace(m=none) %}{% include 'inc_esc.j2' %}{{ ns.m() }}", SCOPING),
 ]

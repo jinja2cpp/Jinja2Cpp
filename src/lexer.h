@@ -273,12 +273,16 @@ public:
         return true;
     }
 
-    // Lexes from `begin` up to the first `end` delimiter, or `-`/`+` and the delimiter, that
-    // starts a token outside brackets, as Jinja2 finds the end of a tag. Returns where the
+    // `-` before an end delimiter strips whitespace; `+` keeps it, but only where `plusModifier` allows
+    static bool IsEndModifier(CharT ch, bool plusModifier) { return ch == '-' || (plusModifier && ch == '+'); }
+
+    // Lexes from `begin` up to the first `end` delimiter, or `-` (and, where `plusModifier` is set,
+    // `+`) and the delimiter, that starts a token outside brackets, as Jinja2 finds the end of a
+    // tag; Jinja2 has `+%}` but no `+}}`. Returns where the
     // delimiter itself starts, or npos when the splitter has to find the end by its own scan:
     // after a lexing error or a `;`, and in a tag that runs to the end of the template. Only for
     // an `end` that cannot start inside a token (UsableEnd).
-    size_t LexToEnd(size_t begin, std::basic_string_view<CharT> end)
+    size_t LexToEnd(size_t begin, std::basic_string_view<CharT> end, bool plusModifier)
     {
         m_base = begin;
         const auto size = m_src.size();
@@ -292,7 +296,7 @@ public:
             if (balance == 0)
             {
                 const auto ch = m_src[pos];
-                if ((ch == '-' || ch == '+') && IsAt(pos + 1, end))
+                if (IsEndModifier(ch, plusModifier) && IsAt(pos + 1, end))
                 {
                     PushEof(pos);
                     return pos + 1;

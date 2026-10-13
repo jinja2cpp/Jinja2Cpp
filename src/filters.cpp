@@ -33,6 +33,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -131,13 +132,36 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
     InternalValue result = item;
     for (const auto& part : path)
     {
-        result = Subscript(result, part, &context);
+        // An undefined step has no attributes, unless its policy is Chainable
+        CheckUndefinedUse(result, UndefinedUse::Attribute);
+        auto next = Subscript(result, part, &context);
+        if (next.IsUndefined() && !GetUndefinedInfo(next))
+        {
+            // A missing step knows where it came from, like a missing attribute in an expression
+            next = MakeUndefined(&context, result, part);
+        }
+        result = std::move(next);
         if (result.IsUndefined() && !IsEmpty(defaultVal))
         {
             result = defaultVal;
         }
     }
     return result;
+}
+
+// Jinja2's _filter_test_common for a filter or test name that is not a string: no filter
+// has that name. StrictUndefined already fails when the name is hashed
+[[noreturn]] void ThrowNotACallableName(const char* kind, const InternalValue& name)
+{
+    CheckUndefinedUse(name, UndefinedUse::Operator);
+    std::string message = std::string("No ") + kind + " named ";
+    Apply<visitors::ValueRenderer<char>>(name, message, true);
+    message += '.';
+    if (const auto* info = GetUndefinedInfo(name))
+    {
+        message += " (" + UndefinedMessage(*info) + "; did you forget to quote the callable name?)";
+    }
+    throw std::runtime_error(message);
 }
 
 // Jinja2's make_multi_attrgetter: "a,b.c" sorts by the list [item.a, item.b.c]
@@ -181,11 +205,28 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
     InternalValue attrName = GetArgumentValue("attribute", context);
 
     bool isConverted = false;
-    ListAdapter values = ConvertToList(baseVal, attrName, isConverted, false);
+    ListAdapter values = ConvertToList(baseVal, isConverted, false);
 
     if (!isConverted)
     {
+        // Python's str.join iterates its argument: a number, a bool or None is a TypeError
+        if (GetIf<int64_t>(&baseVal) || GetIf<double>(&baseVal) || GetIf<bool>(&baseVal) || baseVal.IsNone())
+        {
+            throw std::runtime_error(std::string("'") + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object is not iterable");
+        }
         return InternalValue();
+    }
+    // Jinja2's make_attrgetter: a dotted path, digit parts as indexes
+    if (!IsEmpty(attrName))
+    {
+        auto path = AttributePath(attrName);
+        InternalValueList items;
+        ReserveHint(items, values.GetSize().value_or(0));
+        values.ForEach([&](const InternalValue& item) {
+            items.push_back(GetAttributeByPath(item, path, InternalValue(), context));
+            return true;
+        });
+        values = ListAdapter::CreateAdapter(std::move(items));
     }
 
     // Python join converts every item and the delimiter with str(). Under autoescape a
@@ -251,22 +292,40 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
 
     std::vector<InternalValueList> paths = SortKeyPaths(attrName);
 
+    auto isLess = [oper, compType](const InternalValue& key1, const InternalValue& key2, bool& isEqual) {
+        // Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python
+        isEqual = ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, BinaryExpression::LogicalEq, compType));
+        return !isEqual && ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, oper, compType));
+    };
     // Python's sorted() is stable
-    std::stable_sort(values.begin(), values.end(), [&paths, oper, compType, &context](auto& val1, auto& val2) {
-        auto isLess = [oper, compType](const InternalValue& key1, const InternalValue& key2, bool& isEqual) {
-            // Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python
-            isEqual = ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, BinaryExpression::LogicalEq, compType));
-            return !isEqual && ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, oper, compType));
-        };
-        bool isEqual = false;
-        if (paths.empty())
-        {
+    if (paths.empty())
+    {
+        std::stable_sort(values.begin(), values.end(), [&isLess](auto& val1, auto& val2) {
+            bool isEqual = false;
             return isLess(val1, val2, isEqual);
-        }
-        // The key lists compare item by item, like Python lists
-        for (auto& path : paths)
+        });
+        return ListAdapter::CreateAdapter(std::move(values));
+    }
+
+    // sorted(key=...) takes each item's key once, so a key that fails fails for one item too.
+    // The key lists compare item by item, like Python lists
+    const size_t width = paths.size();
+    InternalValueList keys;
+    keys.reserve(values.size() * width);
+    for (const auto& val : values)
+    {
+        for (const auto& path : paths)
         {
-            auto result = isLess(GetAttributeByPath(val1, path, InternalValue(), context), GetAttributeByPath(val2, path, InternalValue(), context), isEqual);
+            keys.push_back(GetAttributeByPath(val, path, InternalValue(), context));
+        }
+    }
+    std::vector<size_t> order(values.size());
+    std::iota(order.begin(), order.end(), size_t{ 0 });
+    std::stable_sort(order.begin(), order.end(), [&](size_t idx1, size_t idx2) {
+        for (size_t n = 0; n != width; ++n)
+        {
+            bool isEqual = false;
+            auto result = isLess(keys[(idx1 * width) + n], keys[(idx2 * width) + n], isEqual);
             if (!isEqual)
             {
                 return result;
@@ -274,7 +333,13 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
         }
         return false;
     });
-
+    InternalValueList sorted;
+    sorted.reserve(values.size());
+    for (auto idx : order)
+    {
+        sorted.push_back(std::move(values[idx]));
+    }
+    values = std::move(sorted);
     return ListAdapter::CreateAdapter(std::move(values));
 }
 
@@ -336,6 +401,7 @@ DictSort::DictSort(const FilterParams& params)
 
 InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
+    CheckUndefinedUse(baseVal, UndefinedUse::Method);
     auto map = AsMap(baseVal);
     if (!map)
     {
@@ -386,7 +452,8 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     }
     else
     {
-        return InternalValue();
+        // Jinja2 raises FilterArgumentError
+        throw std::runtime_error(R"(You can only sort by either "key" or "value")");
     }
 
     auto entries = map->GetEntries();
@@ -592,27 +659,37 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
     }
 
     InternalValue filterName = GetArgumentValue("filter", context);
-    if (IsEmpty(filterName))
+    // A plain undefined (an error path's result) stays lenient
+    if (filterName.IsUndefined() && !GetUndefinedInfo(filterName))
     {
         return InternalValue();
     }
 
-    auto filter = CreateFilter(AsString(filterName), m_mappingParams, context);
-    if (!filter)
+    FilterPtr filter;
+    if (IsStringValue(filterName))
     {
-        return InternalValue();
+        filter = CreateFilter(AsString(filterName), m_mappingParams, context);
+        if (!filter)
+        {
+            return InternalValue();
+        }
     }
 
     bool isConverted = false;
     auto list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
     {
-        return InternalValue();
+        throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object is not iterable");
     }
 
     InternalValueList resultList;
     ReserveHint(resultList, list.GetSize().value_or(0));
     list.ForEach([&](const InternalValue& val) {
+        // Python's map is lazy: a name that is no filter fails at the first item
+        if (!filter)
+        {
+            ThrowNotACallableName("filter", filterName);
+        }
         resultList.push_back(filter->Filter(val, context));
         return true;
     });
@@ -672,7 +749,13 @@ InternalValue WithParent(const InternalValue& baseVal, InternalValue value)
     return value;
 }
 
-InternalValue FirstItem(const ListAdapter& list, const InternalValue& baseVal)
+// Jinja2's first and last of an empty sequence: an undefined that says so when used
+InternalValue NoItem(RenderContext& context, const char* which)
+{
+    return MakeUndefinedWithHint(context, std::string("No ") + which + " item, sequence was empty.");
+}
+
+InternalValue FirstItem(const ListAdapter& list, const InternalValue& baseVal, RenderContext& context)
 {
     const auto& listSize = list.GetSize();
     if (listSize && *listSize > 0)
@@ -684,10 +767,10 @@ InternalValue FirstItem(const ListAdapter& list, const InternalValue& baseVal)
     {
         return WithParent(baseVal, *it);
     }
-    return {};
+    return NoItem(context, "first");
 }
 
-InternalValue LastItem(const ListAdapter& list, const InternalValue& baseVal)
+InternalValue LastItem(const ListAdapter& list, const InternalValue& baseVal, RenderContext& context)
 {
     const auto& listSize = list.GetSize();
     if (listSize && *listSize > 0)
@@ -699,7 +782,7 @@ InternalValue LastItem(const ListAdapter& list, const InternalValue& baseVal)
         result = std::move(item);
         return true;
     });
-    return result ? WithParent(baseVal, std::move(*result)) : InternalValue();
+    return result ? WithParent(baseVal, std::move(*result)) : NoItem(context, "last");
 }
 
 InternalValue Length(const ListAdapter& list)
@@ -786,19 +869,14 @@ InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
     return ListAdapter::CreateAdapter(std::move(resultList));
 }
 
-InternalValue Sum(const ListAdapter& list, const InternalValue& attrName, const InternalValue& start)
+InternalValue Sum(const ListAdapter& list, const InternalValue& attrName, const InternalValue& start, RenderContext& context)
 {
-    ListAdapter subscripted;
-    const ListAdapter* actualList = &list;
-    if (!IsEmpty(attrName))
-    {
-        subscripted = list.ToSubscriptedList(attrName, true);
-        actualList = &subscripted;
-    }
     // Python's sum starts from 0, so a string item raises like `0 + 'h'`
     InternalValue resultVal = IsEmpty(start) ? InternalValue(static_cast<int64_t>(0)) : start;
-    actualList->ForEach([&resultVal](InternalValue&& val) {
-        resultVal = Apply2<visitors::BinaryMathOperation>(resultVal, val, BinaryExpression::Plus);
+    auto path = IsEmpty(attrName) ? InternalValueList() : AttributePath(attrName);
+    list.ForEach([&](InternalValue&& val) {
+        auto item = path.empty() ? std::move(val) : GetAttributeByPath(val, path, InternalValue(), context);
+        resultVal = Apply2<visitors::BinaryMathOperation>(resultVal, item, BinaryExpression::Plus);
         return true;
     });
     return resultVal;
@@ -860,8 +938,9 @@ InternalValue Unique(const ListAdapter& list,
     InternalValueList values;
     std::vector<UniqueItem> items;
     int64_t idx = 0;
+    const auto path = IsEmpty(attrName) ? InternalValueList() : AttributePath(attrName);
     list.ForEach([&](InternalValue&& v) {
-        items.push_back(UniqueItem{ IsEmpty(attrName) ? v : Subscript(v, attrName, &context), idx++ });
+        items.push_back(UniqueItem{ IsEmpty(attrName) ? v : GetAttributeByPath(v, path, InternalValue(), context), idx++ });
         values.push_back(std::move(v));
         return true;
     });
@@ -878,6 +957,20 @@ InternalValue Unique(const ListAdapter& list,
 }
 } // namespace
 
+namespace
+{
+// last, random and reverse index a string, and an item or slice of Markup is Markup (first
+// iterates it, which gives plain characters)
+InternalValue KeepMarkup(const InternalValue& baseVal, InternalValue result)
+{
+    if (baseVal.IsMarkup() && IsStringValue(result))
+    {
+        result.SetMarkup();
+    }
+    return result;
+}
+} // namespace
+
 InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     // Like Python, a string is a sequence of characters and a mapping one of its keys
@@ -886,6 +979,15 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
     if (!isConverted)
     {
+        // Python iterates an undefined as an empty sequence
+        if (baseVal.IsUndefined() && (m_mode == FirstItemMode || m_mode == LastItemMode))
+        {
+            return NoItem(context, m_mode == FirstItemMode ? "first" : "last");
+        }
+        if (baseVal.IsUndefined() && (m_mode == MaxItemMode || m_mode == MinItemMode))
+        {
+            return MakeUndefinedWithHint(context, "No aggregated item, sequence was empty.");
+        }
         return {};
     }
 
@@ -894,38 +996,39 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
 
     BinaryExpression::CompareType compType = ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
-    auto lessComparator = [&attrName, &compType, &context](auto& val1, auto& val2) {
-        if (IsEmpty(attrName))
-        {
-            return CompareForOrder(val1, val2, BinaryExpression::LogicalLt, compType);
-        }
-        return CompareForOrder(Subscript(val1, attrName, &context), Subscript(val2, attrName, &context), BinaryExpression::LogicalLt, compType);
+    const auto attrPath = IsEmpty(attrName) ? InternalValueList() : AttributePath(attrName);
+    // Python's min and max take each item's key once and keep the first extreme item
+    auto extreme = [&](bool isMax) {
+        std::optional<InternalValue> best;
+        InternalValue bestKey;
+        list.ForEach([&](InternalValue&& item) {
+            InternalValue key = attrPath.empty() ? item : GetAttributeByPath(item, attrPath, InternalValue(), context);
+            if (!best || (isMax ? CompareForOrder(bestKey, key, BinaryExpression::LogicalLt, compType) : CompareForOrder(key, bestKey, BinaryExpression::LogicalLt, compType)))
+            {
+                bestKey = std::move(key);
+                best = std::move(item);
+            }
+            return true;
+        });
+        return best ? WithParent(baseVal, std::move(*best)) : MakeUndefinedWithHint(context, "No aggregated item, sequence was empty.");
     };
 
     switch (m_mode)
     {
     case FirstItemMode:
-        return FirstItem(list, baseVal);
+        return FirstItem(list, baseVal, context);
     case LastItemMode:
-        return LastItem(list, baseVal);
+        return KeepMarkup(baseVal, LastItem(list, baseVal, context));
     case LengthMode:
         return Length(list);
     case RandomMode:
-        return RandomItem(list, baseVal);
+        return KeepMarkup(baseVal, RandomItem(list, baseVal));
     case MaxItemMode:
-    {
-        auto e = list.end();
-        auto p = std::max_element(list.begin(), e, lessComparator);
-        return p != e ? WithParent(baseVal, *p) : InternalValue();
-    }
+        return extreme(true);
     case MinItemMode:
-    {
-        auto e = list.end();
-        auto p = std::min_element(list.begin(), e, lessComparator);
-        return p != e ? WithParent(baseVal, *p) : InternalValue();
-    }
+        return extreme(false);
     case ReverseMode:
-        return Reverse(list, baseVal);
+        return KeepMarkup(baseVal, Reverse(list, baseVal));
     case SumItemsMode:
     {
         auto start = GetArgumentValue("start", context);
@@ -934,7 +1037,7 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         {
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
         }
-        return Sum(list, attrName, start);
+        return Sum(list, attrName, start, context);
     }
     case UniqueItemsMode:
         return Unique(list, baseVal, attrName, compType, context);
@@ -969,7 +1072,7 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
     ListAdapter list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
     {
-        return InternalValue();
+        throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object is not iterable");
     }
 
     auto protectedValue = [&baseVal](InternalValue value) {
@@ -1028,7 +1131,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
     auto list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
     {
-        return InternalValue();
+        throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object is not iterable");
     }
 
     auto protectedValue = [&baseVal](InternalValue value) {
@@ -1103,7 +1206,11 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
 
     TesterPtr tester;
 
-    if (!IsEmpty(testerName))
+    // No test was named: a plain undefined is the missing argument. A name that is no test
+    // fails at the first item, as Python's lazy select does
+    const bool isNoName = testerName.IsUndefined() && GetUndefinedInfo(testerName) == nullptr;
+    const bool isBadName = !isNoName && !IsStringValue(testerName);
+    if (IsStringValue(testerName))
     {
         tester = CreateTester(AsString(testerName), m_testingParams, context);
 
@@ -1117,12 +1224,16 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
     auto list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
     {
-        return InternalValue();
+        throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object is not iterable");
     }
 
     InternalValueList resultList;
     ReserveHint(resultList, list.GetSize().value_or(0));
-    auto isSelected = [this, tester, attrName, &context](const InternalValue& val) {
+    auto isSelected = [this, tester, attrName, isBadName, &testerName, &context](const InternalValue& val) {
+        if (isBadName)
+        {
+            ThrowNotACallableName("test", testerName);
+        }
         InternalValue attrVal;
         bool isAttr = !IsEmpty(attrName);
         if (isAttr)
@@ -1183,7 +1294,7 @@ ValueConverter::ValueConverter(const FilterParams& params, ValueConverter::Mode 
     }
     case RoundMode:
     {
-        static const auto args = MakeArgumentsTable({ { "precision"s, false }, { "method"s, false, "common"s } });
+        static const auto args = MakeArgumentsTable({ { "precision"s, false, static_cast<int64_t>(0) }, { "method"s, false, "common"s } });
         ParseParams(args, params);
         break;
     }
@@ -1470,10 +1581,11 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
 namespace
 {
 
-// The text of `str` without surrounding ASCII whitespace
+// The text of `str` without surrounding ASCII whitespace as CPython's Py_ISSPACE knows it: not
+// the \x1c-\x1f separators, which str.isspace() accepts but int() and float() do not
 std::string StripAsciiSpace(const std::string& str)
 {
-    auto isSpace = [](char ch) { return unicode::IsSpace(static_cast<unsigned char>(ch)) && static_cast<unsigned char>(ch) < 0x80; };
+    auto isSpace = [](char ch) { return ch == ' ' || (ch >= '\t' && ch <= '\r'); };
     auto first = std::find_if_not(str.begin(), str.end(), isSpace);
     auto last = std::find_if_not(str.rbegin(), std::string::const_reverse_iterator(first), isSpace).base();
     return std::string(first, last);
@@ -1562,9 +1674,111 @@ bool ReadFloatLiteral(const std::string& text, size_t pos, std::string& digits, 
     return pos == text.size();
 }
 
+// One code point of CPython's _PyUnicode_TransformDecimalAndSpaceToASCII: a Unicode decimal
+// digit becomes its ASCII digit, a Unicode space a blank, and any other non-ASCII character
+// fails the parse
+bool AppendTransformed(std::string& result, uint32_t cp)
+{
+    if (cp < 0x80)
+    {
+        result.push_back(static_cast<char>(cp));
+        return true;
+    }
+    if (unicode::IsSpace(cp))
+    {
+        result.push_back(' ');
+        return true;
+    }
+    // Decimal digits come in runs of ten from the digit zero
+    const auto* it = std::upper_bound(std::begin(unicode::DecimalRanges), std::end(unicode::DecimalRanges), cp, [](uint32_t value, const unicode::CodePointRange& r) { return value < r.first; });
+    if (it == std::begin(unicode::DecimalRanges) || cp > std::prev(it)->last)
+    {
+        return false;
+    }
+    result.push_back(static_cast<char>('0' + ((cp - std::prev(it)->first) % 10)));
+    return true;
+}
+
+// The transform of a UTF-8 text; false when it holds a character int() and float() reject
+bool TransformUtf8(std::string_view str, std::string& result)
+{
+    result.reserve(str.size());
+    for (size_t pos = 0; pos < str.size();)
+    {
+        auto lead = static_cast<unsigned char>(str[pos]);
+        if (lead < 0x80)
+        {
+            result.push_back(str[pos++]);
+            continue;
+        }
+        size_t length = lead >= 0xF0 ? 4 : (lead >= 0xE0 ? 3 : 2);
+        if (lead < 0xC0 || pos + length > str.size())
+        {
+            return false;
+        }
+        uint32_t cp = lead & (0x3FU >> (length - 1));
+        for (size_t n = 1; n < length; ++n)
+        {
+            auto tail = static_cast<unsigned char>(str[pos + n]);
+            if ((tail & 0xC0) != 0x80)
+            {
+                return false;
+            }
+            cp = (cp << 6) | (tail & 0x3F);
+        }
+        pos += length;
+        if (!AppendTransformed(result, cp))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// The same for wchar_t text, UTF-16 where wchar_t has 16 bits
+bool TransformWide(std::wstring_view str, std::string& result)
+{
+    for (size_t pos = 0; pos < str.size(); ++pos)
+    {
+        auto cp = static_cast<uint32_t>(static_cast<std::make_unsigned_t<wchar_t>>(str[pos]));
+        if (sizeof(wchar_t) == 2 && cp >= 0xD800 && cp < 0xDC00 && pos + 1 < str.size())
+        {
+            auto low = static_cast<uint32_t>(static_cast<std::make_unsigned_t<wchar_t>>(str[pos + 1]));
+            if (low >= 0xDC00 && low < 0xE000)
+            {
+                cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+                ++pos;
+            }
+        }
+        if (!AppendTransformed(result, cp))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// The text int() and float() read for a string value, whatever its width: the ASCII text
+// they parse, or nullopt for a value that is no string or has characters they reject
+std::optional<std::string> NumberTextOf(const InternalValue& val)
+{
+    std::string result;
+    if (auto narrow = AsStringView<char>(val))
+    {
+        return TransformUtf8(*narrow, result) ? std::optional<std::string>(std::move(result)) : std::nullopt;
+    }
+    if (auto wide = AsStringView<wchar_t>(val))
+    {
+        return TransformWide(*wide, result) ? std::optional<std::string>(std::move(result)) : std::nullopt;
+    }
+    // A host string reference
+    auto text = GetAsSameString(std::string(), val);
+    return text && TransformUtf8(*text, result) ? std::optional<std::string>(std::move(result)) : std::nullopt;
+}
+
 // Python's float() of a string: surrounding whitespace, an optional sign, decimal digits with
 // single underscores between them, an optional exponent, or inf/infinity/nan in any case.
-// Non-ASCII digits and whitespace are not recognised.
+// The text is ASCII already (NumberTextOf).
 std::optional<double> ParsePythonFloat(const std::string& str)
 {
     std::string text = StripAsciiSpace(str);
@@ -1787,18 +2001,31 @@ double PythonRound(double val, int64_t ndigits)
     }
     // No decimal point, so the locale's radix character does not matter
     auto text = kept + "e" + std::to_string(intDigits - keep);
-    return std::copysign(std::strtod(text.c_str(), nullptr), val);
+    auto rounded = std::strtod(text.c_str(), nullptr);
+    if (std::isinf(rounded))
+    {
+        throw std::runtime_error("rounded value too large to represent");
+    }
+    return std::copysign(rounded, val);
 }
 
-// Python's round(n, ndigits) for an integer: unchanged for ndigits >= 0, else half to even
+// Python's round(n, ndigits) for an integer: unchanged for ndigits >= 0, else half to even.
+// A result beyond int64 raises like any integer overflow
 int64_t PythonRoundInt(int64_t val, int64_t ndigits)
 {
     if (ndigits >= 0)
     {
         return val;
     }
-    if (ndigits < -18)
+    auto magnitude = val < 0 ? 0 - static_cast<uint64_t>(val) : static_cast<uint64_t>(val);
+    // The unit is 10 ** -ndigits; from 10 ** 19 up it exceeds every magnitude doubled, and
+    // the result is 0 up to half a unit and 10 ** 19 (not an int64) beyond it
+    if (ndigits <= -19)
     {
+        if (ndigits == -19 && magnitude > 5000000000000000000ULL)
+        {
+            visitors::ThrowIntegerOverflow();
+        }
         return 0;
     }
     uint64_t unit = 1;
@@ -1806,15 +2033,66 @@ int64_t PythonRoundInt(int64_t val, int64_t ndigits)
     {
         unit *= 10;
     }
-    auto magnitude = val < 0 ? 0 - static_cast<uint64_t>(val) : static_cast<uint64_t>(val);
     auto quotient = magnitude / unit;
     auto remainder = magnitude % unit;
     if (remainder * 2 > unit || (remainder * 2 == unit && quotient % 2 == 1))
     {
         ++quotient;
     }
-    auto result = static_cast<int64_t>(quotient * unit);
-    return val < 0 ? -result : result;
+    // At most magnitude + unit, below 2 ** 64
+    auto rounded = quotient * unit;
+    if (rounded > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + (val < 0 ? 1 : 0))
+    {
+        visitors::ThrowIntegerOverflow();
+    }
+    return val < 0 ? static_cast<int64_t>(0 - rounded) : static_cast<int64_t>(rounded);
+}
+
+// 10 ** precision as the float Python converts it to, correctly rounded; 0 when it underflows
+double PowerOfTen(int64_t precision)
+{
+    auto text = "1e" + std::to_string(std::max<int64_t>(-400, std::min<int64_t>(precision, 400)));
+    // No decimal point, so the locale's radix character does not matter
+    return std::strtod(text.c_str(), nullptr);
+}
+
+// Jinja2's round(value, precision, 'ceil' or 'floor'): func(value * (10 ** precision)) / (10 ** precision)
+double PythonRoundByMethod(double value, bool isInt, int64_t precision, bool isCeil)
+{
+    // An int times 10 ** precision is an int, which the true division brings back to the
+    // value as exactly as a float can hold it
+    if (isInt && precision >= 0)
+    {
+        return value;
+    }
+    if (precision > 308)
+    {
+        throw std::runtime_error("int too large to convert to float");
+    }
+    auto scale = PowerOfTen(precision);
+    auto scaled = value * scale;
+    if (std::isnan(scaled))
+    {
+        throw std::runtime_error("cannot convert float NaN to integer");
+    }
+    if (std::isinf(scaled))
+    {
+        throw std::runtime_error("cannot convert float infinity to integer");
+    }
+    auto whole = isCeil ? std::ceil(scaled) : std::floor(scaled);
+    if (precision < 0)
+    {
+        // The integer is divided by the float 10 ** precision
+        if (scale == 0.0)
+        {
+            throw std::runtime_error("float division by zero");
+        }
+        return (whole / scale) + 0.0;
+    }
+    // Two integers are divided exactly and the quotient rounded once: the digits of the
+    // integer scaled down by the power of ten, read back by strtod
+    auto text = fmt::format("{:.0f}e-{}", whole, precision);
+    return std::strtod(text.c_str(), nullptr) + 0.0;
 }
 
 // Port of Jinja2's do_filesizeformat
@@ -1905,7 +2183,7 @@ InternalValue ValueConverter::FileSizeFormat(const InternalValue& baseVal, Rende
     {
         bytes = *boolVal ? 1.0 : 0.0;
     }
-    else if (auto str = GetAsSameString(std::string(), baseVal))
+    else if (auto str = NumberTextOf(baseVal))
     {
         bytes = ParsePythonFloat(*str);
     }
@@ -1954,7 +2232,7 @@ InternalValue ValueConverter::ToInt(const InternalValue& baseVal, RenderContext&
     {
         result = FloatToInt(*dblVal);
     }
-    else if (auto str = GetAsSameString(std::string(), baseVal))
+    else if (auto str = NumberTextOf(baseVal))
     {
         result = ParsePythonInt(*str, ConvertToInt(GetArgumentValue("base", context)));
         if (!result)
@@ -1984,7 +2262,7 @@ InternalValue ValueConverter::ToFloat(const InternalValue& baseVal, RenderContex
     {
         return *dblVal;
     }
-    if (auto str = GetAsSameString(std::string(), baseVal))
+    if (auto str = NumberTextOf(baseVal))
     {
         if (auto result = ParsePythonFloat(*str))
         {
@@ -2009,6 +2287,30 @@ InternalValue ValueConverter::Abs(const InternalValue& baseVal, RenderContext& c
     return InternalValue();
 }
 
+namespace
+{
+// Python's round(x) of a float: the nearest int, halves to even; integers are int64 (0178)
+InternalValue PythonRoundToInt(double value)
+{
+    if (std::isnan(value))
+    {
+        throw std::runtime_error("cannot convert float NaN to integer");
+    }
+    if (std::isinf(value))
+    {
+        throw std::runtime_error("cannot convert float infinity to integer");
+    }
+    // The default rounding mode rounds halves to even
+    const double rounded = std::nearbyint(value);
+    // -2**63 is exact; 2**63 is the first double beyond int64
+    if (rounded < -9223372036854775808.0 || rounded >= 9223372036854775808.0)
+    {
+        visitors::ThrowIntegerOverflow();
+    }
+    return static_cast<int64_t>(rounded);
+}
+} // namespace
+
 InternalValue ValueConverter::Round(const InternalValue& baseVal, RenderContext& context)
 {
     // Jinja2's do_round: round(value, precision), or math.ceil/floor at that precision
@@ -2018,17 +2320,31 @@ InternalValue ValueConverter::Round(const InternalValue& baseVal, RenderContext&
         throw std::runtime_error("round(): method must be common, ceil or floor");
     }
     auto precVal = GetArgumentValue("precision", context);
-    if (!IsEmpty(precVal) && !GetIf<int64_t>(&precVal) && !GetIf<bool>(&precVal))
+    const bool noPrecision = precVal.Kind() == ValueKind::None;
+    if (!noPrecision && !GetIf<int64_t>(&precVal) && !GetIf<bool>(&precVal))
     {
         throw std::runtime_error("round(): precision must be an integer");
     }
-    auto precision = IsEmpty(precVal) ? 0 : ConvertToInt(precVal);
     auto asInt = PythonIntOf(baseVal);
     const auto* dblVal = GetIf<double>(&baseVal);
     if (!asInt && !dblVal)
     {
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
     }
+    if (noPrecision)
+    {
+        // round(value, None) is round(value): an int, halves to even
+        if (method != "common")
+        {
+            throw std::runtime_error("unsupported operand type(s) for ** or pow(): 'int' and 'NoneType'");
+        }
+        if (asInt)
+        {
+            return *asInt;
+        }
+        return PythonRoundToInt(*dblVal);
+    }
+    auto precision = ConvertToInt(precVal);
     if (method == "common")
     {
         // round() of an int is an int
@@ -2039,15 +2355,7 @@ InternalValue ValueConverter::Round(const InternalValue& baseVal, RenderContext&
         return PythonRound(*dblVal, precision);
     }
     double value = asInt ? static_cast<double>(*asInt) : *dblVal;
-    double scale = std::pow(10.0, static_cast<double>(precision));
-    double scaled = value * scale;
-    // Python raises here: OverflowError for 10**precision or ceil(inf), ZeroDivisionError for a zero scale
-    if (!std::isfinite(scale) || scale == 0.0 || !std::isfinite(scaled))
-    {
-        throw std::runtime_error("round(): value or precision out of range");
-    }
-    // math.ceil/floor return an int, so a negative zero comes back as 0.0
-    return ((method == "ceil" ? std::ceil(scaled) : std::floor(scaled)) / scale) + 0.0;
+    return PythonRoundByMethod(value, asInt.has_value(), precision, method == "ceil");
 }
 
 InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext& context)

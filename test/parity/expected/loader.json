@@ -2676,6 +2676,262 @@
     "self_lib.j2": "{% macro n() %}{{ self.mb is defined }}{% endmacro %}"
    },
    "output": "MB[False]"
+  },
+  {
+   "id": "loader.include_cannot_rebind_macro_free_name",
+   "template": "{% macro m() %}{{ x }}{% endmacro %}{% include 'inc_set_x.j2' %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "hello.j2": "Hello {{ name }}!",
+    "uses_x.j2": "[{{ x }}]",
+    "lib_default.j2": "{% set g = 'lib' %}{% macro m(a=g) %}{{ a }}{% endmacro %}",
+    "macros.j2": "{% macro greet(n) %}hi {{ n }}{% endmacro %}{% macro ctx() %}{{ name }}{% endmacro %}{% set const = 42 %}{% set _private = 1 %}",
+    "base.j2": "<{% block head %}H{% endblock %}|{% block body %}B{% endblock %}>",
+    "child.j2": "{% extends 'base.j2' %}{% block body %}C{% endblock %}",
+    "child_super.j2": "{% extends 'base.j2' %}{% block body %}C+{{ super() }}{% endblock %}",
+    "grandchild.j2": "{% extends 'child_super.j2' %}{% block body %}G+{{ super() }}{% endblock %}",
+    "loop_base.j2": "{% for i in [1, 2] %}{% block item %}{{ i }}{% endblock %}{% endfor %}",
+    "required_base.j2": "{% block r required %}{% endblock %}",
+    "nested_blocks.j2": "{% block outer %}O{% block inner %}I{% endblock %}{% endblock %}",
+    "include_inner.j2": "inner({{ x }})",
+    "outer_include.j2": "outer:{% include 'include_inner.j2' %}",
+    "wrap.j2": "{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "wrapv.j2": "{% set v = 'mod' %}{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "loopm.j2": "{% macro m() %}{% for x in 'ab' %}{{ caller() }}{% endfor %}{% endmacro %}",
+    "apply.j2": "{% macro apply(f) %}<{{ f() }}>{% endmacro %}",
+    "inc_set_x.j2": "{% set x = 'I' %}{{ m() }}",
+    "inc_esc.j2": "{% set v = 'I' %}{% macro m() %}{{ v }}{% endmacro %}{% set ns.m = m %}",
+    "rec.j2": "{{ m(n - 1) }}"
+   },
+   "output": "3"
+  },
+  {
+   "id": "loader.call_block_on_imported_macro_reads_target",
+   "template": "{% from 'wrap.j2' import wrap %}{% for i in [1, 2] %}{% call wrap() %}{{ i }}{% endcall %}{% endfor %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "hello.j2": "Hello {{ name }}!",
+    "uses_x.j2": "[{{ x }}]",
+    "lib_default.j2": "{% set g = 'lib' %}{% macro m(a=g) %}{{ a }}{% endmacro %}",
+    "macros.j2": "{% macro greet(n) %}hi {{ n }}{% endmacro %}{% macro ctx() %}{{ name }}{% endmacro %}{% set const = 42 %}{% set _private = 1 %}",
+    "base.j2": "<{% block head %}H{% endblock %}|{% block body %}B{% endblock %}>",
+    "child.j2": "{% extends 'base.j2' %}{% block body %}C{% endblock %}",
+    "child_super.j2": "{% extends 'base.j2' %}{% block body %}C+{{ super() }}{% endblock %}",
+    "grandchild.j2": "{% extends 'child_super.j2' %}{% block body %}G+{{ super() }}{% endblock %}",
+    "loop_base.j2": "{% for i in [1, 2] %}{% block item %}{{ i }}{% endblock %}{% endfor %}",
+    "required_base.j2": "{% block r required %}{% endblock %}",
+    "nested_blocks.j2": "{% block outer %}O{% block inner %}I{% endblock %}{% endblock %}",
+    "include_inner.j2": "inner({{ x }})",
+    "outer_include.j2": "outer:{% include 'include_inner.j2' %}",
+    "wrap.j2": "{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "wrapv.j2": "{% set v = 'mod' %}{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "loopm.j2": "{% macro m() %}{% for x in 'ab' %}{{ caller() }}{% endfor %}{% endmacro %}",
+    "apply.j2": "{% macro apply(f) %}<{{ f() }}>{% endmacro %}",
+    "inc_set_x.j2": "{% set x = 'I' %}{{ m() }}",
+    "inc_esc.j2": "{% set v = 'I' %}{% macro m() %}{{ v }}{% endmacro %}{% set ns.m = m %}",
+    "rec.j2": "{{ m(n - 1) }}"
+   },
+   "output": "<1><2>"
+  },
+  {
+   "id": "loader.call_body_reads_importer_not_module",
+   "template": "{% from 'wrapv.j2' import wrap %}{% set v = 'main' %}{% call wrap() %}{{ v }}{% endcall %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "hello.j2": "Hello {{ name }}!",
+    "uses_x.j2": "[{{ x }}]",
+    "lib_default.j2": "{% set g = 'lib' %}{% macro m(a=g) %}{{ a }}{% endmacro %}",
+    "macros.j2": "{% macro greet(n) %}hi {{ n }}{% endmacro %}{% macro ctx() %}{{ name }}{% endmacro %}{% set const = 42 %}{% set _private = 1 %}",
+    "base.j2": "<{% block head %}H{% endblock %}|{% block body %}B{% endblock %}>",
+    "child.j2": "{% extends 'base.j2' %}{% block body %}C{% endblock %}",
+    "child_super.j2": "{% extends 'base.j2' %}{% block body %}C+{{ super() }}{% endblock %}",
+    "grandchild.j2": "{% extends 'child_super.j2' %}{% block body %}G+{{ super() }}{% endblock %}",
+    "loop_base.j2": "{% for i in [1, 2] %}{% block item %}{{ i }}{% endblock %}{% endfor %}",
+    "required_base.j2": "{% block r required %}{% endblock %}",
+    "nested_blocks.j2": "{% block outer %}O{% block inner %}I{% endblock %}{% endblock %}",
+    "include_inner.j2": "inner({{ x }})",
+    "outer_include.j2": "outer:{% include 'include_inner.j2' %}",
+    "wrap.j2": "{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "wrapv.j2": "{% set v = 'mod' %}{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "loopm.j2": "{% macro m() %}{% for x in 'ab' %}{{ caller() }}{% endfor %}{% endmacro %}",
+    "apply.j2": "{% macro apply(f) %}<{{ f() }}>{% endmacro %}",
+    "inc_set_x.j2": "{% set x = 'I' %}{{ m() }}",
+    "inc_esc.j2": "{% set v = 'I' %}{% macro m() %}{{ v }}{% endmacro %}{% set ns.m = m %}",
+    "rec.j2": "{{ m(n - 1) }}"
+   },
+   "output": "<main>"
+  },
+  {
+   "id": "loader.call_body_of_imported_loop_macro",
+   "template": "{% from 'loopm.j2' import m %}{% for x in [1, 2] %}{% call m() %}{{ x }}{% endcall %}{% endfor %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "hello.j2": "Hello {{ name }}!",
+    "uses_x.j2": "[{{ x }}]",
+    "lib_default.j2": "{% set g = 'lib' %}{% macro m(a=g) %}{{ a }}{% endmacro %}",
+    "macros.j2": "{% macro greet(n) %}hi {{ n }}{% endmacro %}{% macro ctx() %}{{ name }}{% endmacro %}{% set const = 42 %}{% set _private = 1 %}",
+    "base.j2": "<{% block head %}H{% endblock %}|{% block body %}B{% endblock %}>",
+    "child.j2": "{% extends 'base.j2' %}{% block body %}C{% endblock %}",
+    "child_super.j2": "{% extends 'base.j2' %}{% block body %}C+{{ super() }}{% endblock %}",
+    "grandchild.j2": "{% extends 'child_super.j2' %}{% block body %}G+{{ super() }}{% endblock %}",
+    "loop_base.j2": "{% for i in [1, 2] %}{% block item %}{{ i }}{% endblock %}{% endfor %}",
+    "required_base.j2": "{% block r required %}{% endblock %}",
+    "nested_blocks.j2": "{% block outer %}O{% block inner %}I{% endblock %}{% endblock %}",
+    "include_inner.j2": "inner({{ x }})",
+    "outer_include.j2": "outer:{% include 'include_inner.j2' %}",
+    "wrap.j2": "{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "wrapv.j2": "{% set v = 'mod' %}{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "loopm.j2": "{% macro m() %}{% for x in 'ab' %}{{ caller() }}{% endfor %}{% endmacro %}",
+    "apply.j2": "{% macro apply(f) %}<{{ f() }}>{% endmacro %}",
+    "inc_set_x.j2": "{% set x = 'I' %}{{ m() }}",
+    "inc_esc.j2": "{% set v = 'I' %}{% macro m() %}{{ v }}{% endmacro %}{% set ns.m = m %}",
+    "rec.j2": "{{ m(n - 1) }}"
+   },
+   "output": "1122"
+  },
+  {
+   "id": "loader.root_macro_passed_to_imported_macro",
+   "template": "{% from 'apply.j2' import apply %}{% set g = 'G' %}{% macro m() %}{{ g }}{% endmacro %}{{ apply(m) }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "hello.j2": "Hello {{ name }}!",
+    "uses_x.j2": "[{{ x }}]",
+    "lib_default.j2": "{% set g = 'lib' %}{% macro m(a=g) %}{{ a }}{% endmacro %}",
+    "macros.j2": "{% macro greet(n) %}hi {{ n }}{% endmacro %}{% macro ctx() %}{{ name }}{% endmacro %}{% set const = 42 %}{% set _private = 1 %}",
+    "base.j2": "<{% block head %}H{% endblock %}|{% block body %}B{% endblock %}>",
+    "child.j2": "{% extends 'base.j2' %}{% block body %}C{% endblock %}",
+    "child_super.j2": "{% extends 'base.j2' %}{% block body %}C+{{ super() }}{% endblock %}",
+    "grandchild.j2": "{% extends 'child_super.j2' %}{% block body %}G+{{ super() }}{% endblock %}",
+    "loop_base.j2": "{% for i in [1, 2] %}{% block item %}{{ i }}{% endblock %}{% endfor %}",
+    "required_base.j2": "{% block r required %}{% endblock %}",
+    "nested_blocks.j2": "{% block outer %}O{% block inner %}I{% endblock %}{% endblock %}",
+    "include_inner.j2": "inner({{ x }})",
+    "outer_include.j2": "outer:{% include 'include_inner.j2' %}",
+    "wrap.j2": "{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "wrapv.j2": "{% set v = 'mod' %}{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "loopm.j2": "{% macro m() %}{% for x in 'ab' %}{{ caller() }}{% endfor %}{% endmacro %}",
+    "apply.j2": "{% macro apply(f) %}<{{ f() }}>{% endmacro %}",
+    "inc_set_x.j2": "{% set x = 'I' %}{{ m() }}",
+    "inc_esc.j2": "{% set v = 'I' %}{% macro m() %}{{ v }}{% endmacro %}{% set ns.m = m %}",
+    "rec.j2": "{{ m(n - 1) }}"
+   },
+   "output": "<G>"
+  },
+  {
+   "id": "loader.super_passed_to_root_macro",
+   "template": "{% extends 'base.j2' %}{% macro m(f) %}[{{ f() }}]{% endmacro %}{% block body %}{{ m(super) }}{% endblock %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "hello.j2": "Hello {{ name }}!",
+    "uses_x.j2": "[{{ x }}]",
+    "lib_default.j2": "{% set g = 'lib' %}{% macro m(a=g) %}{{ a }}{% endmacro %}",
+    "macros.j2": "{% macro greet(n) %}hi {{ n }}{% endmacro %}{% macro ctx() %}{{ name }}{% endmacro %}{% set const = 42 %}{% set _private = 1 %}",
+    "base.j2": "<{% block head %}H{% endblock %}|{% block body %}B{% endblock %}>",
+    "child.j2": "{% extends 'base.j2' %}{% block body %}C{% endblock %}",
+    "child_super.j2": "{% extends 'base.j2' %}{% block body %}C+{{ super() }}{% endblock %}",
+    "grandchild.j2": "{% extends 'child_super.j2' %}{% block body %}G+{{ super() }}{% endblock %}",
+    "loop_base.j2": "{% for i in [1, 2] %}{% block item %}{{ i }}{% endblock %}{% endfor %}",
+    "required_base.j2": "{% block r required %}{% endblock %}",
+    "nested_blocks.j2": "{% block outer %}O{% block inner %}I{% endblock %}{% endblock %}",
+    "include_inner.j2": "inner({{ x }})",
+    "outer_include.j2": "outer:{% include 'include_inner.j2' %}",
+    "wrap.j2": "{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "wrapv.j2": "{% set v = 'mod' %}{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "loopm.j2": "{% macro m() %}{% for x in 'ab' %}{{ caller() }}{% endfor %}{% endmacro %}",
+    "apply.j2": "{% macro apply(f) %}<{{ f() }}>{% endmacro %}",
+    "inc_set_x.j2": "{% set x = 'I' %}{{ m() }}",
+    "inc_esc.j2": "{% set v = 'I' %}{% macro m() %}{{ v }}{% endmacro %}{% set ns.m = m %}",
+    "rec.j2": "{{ m(n - 1) }}"
+   },
+   "output": "<H|[B]>"
+  },
+  {
+   "id": "loader.macro_recursion_via_include",
+   "template": "{% macro m(n) %}{% if n > 0 %}{% include 'rec.j2' %}{% endif %}{{ n }}{% endmacro %}{{ m(3) }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "hello.j2": "Hello {{ name }}!",
+    "uses_x.j2": "[{{ x }}]",
+    "lib_default.j2": "{% set g = 'lib' %}{% macro m(a=g) %}{{ a }}{% endmacro %}",
+    "macros.j2": "{% macro greet(n) %}hi {{ n }}{% endmacro %}{% macro ctx() %}{{ name }}{% endmacro %}{% set const = 42 %}{% set _private = 1 %}",
+    "base.j2": "<{% block head %}H{% endblock %}|{% block body %}B{% endblock %}>",
+    "child.j2": "{% extends 'base.j2' %}{% block body %}C{% endblock %}",
+    "child_super.j2": "{% extends 'base.j2' %}{% block body %}C+{{ super() }}{% endblock %}",
+    "grandchild.j2": "{% extends 'child_super.j2' %}{% block body %}G+{{ super() }}{% endblock %}",
+    "loop_base.j2": "{% for i in [1, 2] %}{% block item %}{{ i }}{% endblock %}{% endfor %}",
+    "required_base.j2": "{% block r required %}{% endblock %}",
+    "nested_blocks.j2": "{% block outer %}O{% block inner %}I{% endblock %}{% endblock %}",
+    "include_inner.j2": "inner({{ x }})",
+    "outer_include.j2": "outer:{% include 'include_inner.j2' %}",
+    "wrap.j2": "{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "wrapv.j2": "{% set v = 'mod' %}{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "loopm.j2": "{% macro m() %}{% for x in 'ab' %}{{ caller() }}{% endfor %}{% endmacro %}",
+    "apply.j2": "{% macro apply(f) %}<{{ f() }}>{% endmacro %}",
+    "inc_set_x.j2": "{% set x = 'I' %}{{ m() }}",
+    "inc_esc.j2": "{% set v = 'I' %}{% macro m() %}{{ v }}{% endmacro %}{% set ns.m = m %}",
+    "rec.j2": "{{ m(n - 1) }}"
+   },
+   "output": "0123"
+  },
+  {
+   "id": "loader.include_defined_macro_escapes",
+   "template": "{% set ns = namespace(m=none) %}{% include 'inc_esc.j2' %}{{ ns.m() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "hello.j2": "Hello {{ name }}!",
+    "uses_x.j2": "[{{ x }}]",
+    "lib_default.j2": "{% set g = 'lib' %}{% macro m(a=g) %}{{ a }}{% endmacro %}",
+    "macros.j2": "{% macro greet(n) %}hi {{ n }}{% endmacro %}{% macro ctx() %}{{ name }}{% endmacro %}{% set const = 42 %}{% set _private = 1 %}",
+    "base.j2": "<{% block head %}H{% endblock %}|{% block body %}B{% endblock %}>",
+    "child.j2": "{% extends 'base.j2' %}{% block body %}C{% endblock %}",
+    "child_super.j2": "{% extends 'base.j2' %}{% block body %}C+{{ super() }}{% endblock %}",
+    "grandchild.j2": "{% extends 'child_super.j2' %}{% block body %}G+{{ super() }}{% endblock %}",
+    "loop_base.j2": "{% for i in [1, 2] %}{% block item %}{{ i }}{% endblock %}{% endfor %}",
+    "required_base.j2": "{% block r required %}{% endblock %}",
+    "nested_blocks.j2": "{% block outer %}O{% block inner %}I{% endblock %}{% endblock %}",
+    "include_inner.j2": "inner({{ x }})",
+    "outer_include.j2": "outer:{% include 'include_inner.j2' %}",
+    "wrap.j2": "{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "wrapv.j2": "{% set v = 'mod' %}{% macro wrap() %}<{{ caller() }}>{% endmacro %}",
+    "loopm.j2": "{% macro m() %}{% for x in 'ab' %}{{ caller() }}{% endfor %}{% endmacro %}",
+    "apply.j2": "{% macro apply(f) %}<{{ f() }}>{% endmacro %}",
+    "inc_set_x.j2": "{% set x = 'I' %}{{ m() }}",
+    "inc_esc.j2": "{% set v = 'I' %}{% macro m() %}{{ v }}{% endmacro %}{% set ns.m = m %}",
+    "rec.j2": "{{ m(n - 1) }}"
+   },
+   "output": "I"
   }
  ]
 }

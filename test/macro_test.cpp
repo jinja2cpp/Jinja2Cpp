@@ -1,6 +1,11 @@
 #include "gtest/gtest.h"
 #include "test_tools.h"
 
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
+#include <jinja2cpp/user_callable.h>
+#include <jinja2cpp/value.h>
+
 #include <string>
 
 using namespace jinja2;
@@ -9,7 +14,7 @@ using MacroTest = BasicTemplateRenderer;
 
 MULTISTR_TEST(MacroTest, SimpleMacro,
               R"(
-{% macro test %}
+{% macro test() %}
 Hello World!
 {% endmacro %}
 {{ test() }}{{ test() }}
@@ -136,10 +141,10 @@ kwargs: {'extraValue': 5}
 
 MULTISTR_TEST(MacroTest, SimpleCallMacro,
               R"(
-{% macro test %}
+{% macro test() %}
 Hello World! -> {{ caller() }} <-
 {% endmacro %}
-{% call test %}Message from caller{% endcall %}
+{% call test() %}Message from caller{% endcall %}
 )",
               //-----------------
               R"(
@@ -153,10 +158,10 @@ Hello World! -> Message from caller <-
 
 MULTISTR_TEST(MacroTest, CallWithParamsAndSimpleMacro,
               R"(
-{% macro test %}
+{% macro test() %}
 -> {{ caller('Hello World' | upper) }} <-
 {% endmacro %}
-{% call(message) test %}{{ message }}{% endcall %}
+{% call(message) test() %}{{ message }}{% endcall %}
 )",
               //------------
               R"(
@@ -189,7 +194,7 @@ MULTISTR_TEST(MacroTest, MacroCallVariables,
               R"(
 {% macro invoke() %}
 arguments: {{ caller.arguments | pprint }}{{ caller(1, 2, 3, 4, 6, extraValue=5) }}{% endmacro %}
-{% call (param1, param2, param3='World') invoke %}
+{% call (param1, param2, param3='World') invoke() %}
 varargs: {{ varargs | pprint }}
 kwargs: {{ kwargs | pprint }}
 {% endcall %}
@@ -230,8 +235,8 @@ MULTISTR_TEST(MacroTest, RecursiveMacroKeepsParams, R"({% macro f(n) %}{{ n }}{%
     params = PrepareTestData();
 }
 
-// The call body sees the calling macro's argument and its own (a called macro's argument of
-// the same name hides the first today, 0038)
+// The call body sees the calling macro's argument and its own, where it is defined, not the
+// called macro's (docs/tasks/0165)
 MULTISTR_TEST(MacroTest, CallBodyParamsAndCallerParams, R"({% macro m(p) %}{{ p }}{{ caller(p * 2) }}{{ p }}{% endmacro %}{% macro w(a) %}{% call(x) m(a + 1) %}{{ a }}{{ x }}{% endcall %}{% endmacro %}{{ w(1) }})",
               //--------------
               R"(2142)")
@@ -252,4 +257,58 @@ MULTISTR_TEST(MacroTest, KeywordArgsAndSpecialNames, R"({% macro m(a, b, c=3) %}
               R"(1230012411)")
 {
     params = PrepareTestData();
+}
+
+// Bodies resolve names where they are defined, not through their caller (docs/tasks/0165)
+MULTISTR_TEST(MacroTest, NestedMacroReadsItsDefinitionSite, R"({% macro o(a) %}{% macro i() %}{{ a }}{% endmacro %}{% for a in [9] %}{{ i() }}{% endfor %}{{ i() }}{% endmacro %}{{ o(1) }}{{ o(2) }})",
+              //--------------
+              R"(1122)")
+{
+    params = PrepareTestData();
+}
+
+MULTISTR_TEST(MacroTest, MacroCalledFromAFilterBlock, R"({% set g = 'g' %}{% macro m() %}{{ g }}{% endmacro %}{% for g in ['L'] %}{% filter upper %}{{ m() }}{% endfilter %}{% endfor %})",
+              //--------------
+              R"(G)")
+{
+    params = PrepareTestData();
+}
+
+// A user callable's `*context` is the body's: what the macro sees where it is defined
+MULTISTR_TEST(MacroTest, ContextCallableInABodySeesTheDefinitionSite, R"({% set g = 'G' %}{% macro m() %}{{ lookup(name='g') }}{% endmacro %}{% for g in ['L'] %}{{ m() }}{{ lookup(name='g') }}{% endfor %})",
+              //--------------
+              R"(GL)")
+{
+    params = PrepareTestData();
+    params["lookup"] = jinja2::MakeCallable([](const jinja2::GenericMap& context, const std::string& name) { return context.GetValueByName(name); },
+                                            jinja2::ArgInfo{ "*context" },
+                                            jinja2::ArgInfo{ "name" });
+}
+
+// A recursive call does not see the names the outer call set
+MULTISTR_TEST(MacroTest, RecursiveCallHidesTheOuterCallsSet, R"({% macro m(n) %}{% if n %}{% set v = 'A' %}{% endif %}[{{ v }}]{% if n %}{{ m(0) }}{% endif %}{% endmacro %}{{ m(1) }})",
+              //--------------
+              R"([A][])")
+{
+    params = PrepareTestData();
+}
+
+// A body that hands the context to a filter reads names by lookup: a call of it made inside a
+// loop that cached the loop's names takes its own lookup cache epoch
+TEST(MacroContextTest, ContextFilterInABodyCalledInsideALoop)
+{
+    TemplateEnv env;
+    env.AddFilter("lookup", MakeCallable([](const std::string& name, const GenericMap& context) { return context.GetValueByName(name); }, ArgInfo{ "name" }, ArgInfo{ "*context" }));
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% set g = 'G' %}{% macro m(a) %}{{ a }}{{ a|lookup }}{% endmacro %}{% for g in ['L', 'M'] %}{{ g }}{{ m('g') }};{% endfor %}").has_value());
+    EXPECT_EQ("LgG;MgG;", tpl.RenderAsString({}).value());
+}
+
+// A body that reads only its arguments takes no epoch of its own, called inside a loop that
+// cached names of the same spelling
+TEST(MacroContextTest, ArgumentsOnlyBodyCalledInsideALoop)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% macro m(x, y) %}[{{ x }}{% if y %}{{ y }}{% endif %}]{% endmacro %}{% for x in [1, 2] %}{% set y = 5 %}{{ x }}{{ y }}{{ m(x * 10) }}{{ m(x, y=x) }}{% endfor %}").has_value());
+    EXPECT_EQ("15[10][11]25[20][22]", tpl.RenderAsString({}).value());
 }

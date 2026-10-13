@@ -105,6 +105,14 @@ InternalValue CallRange(const CallParams& params, RenderContext&)
     {
         throw std::runtime_error("range expected at most 3 arguments");
     }
+    // A named undefined is no integer to Python's range (non-integers in general: task 0042)
+    for (const char* name : { "start", "stop", "step" })
+    {
+        if (const auto* info = GetUndefinedInfo(args[name]))
+        {
+            throw std::runtime_error(std::string("'") + UndefinedClassName(*info) + "' object cannot be interpreted as an integer");
+        }
+    }
     int64_t start = ConvertToInt(args["start"]);
     int64_t stop = ConvertToInt(args["stop"]);
     int64_t step = IsEmpty(args["step"]) ? 1 : ConvertToInt(args["step"]);
@@ -174,7 +182,7 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
 // dict(mapping_or_pairs, **kwargs)
 InternalValue CallDict(const CallParams& params, RenderContext&)
 {
-    InternalValueMap result;
+    InternalDict result;
     CollectDictItems(params, "dict", result);
     return CreateMapAdapter(std::move(result));
 }

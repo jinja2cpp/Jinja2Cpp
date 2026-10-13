@@ -403,6 +403,178 @@
    "output": "ab"
   },
   {
+   "id": "statements.ctx_dict_order_for",
+   "template": "{% for k in u %}{{ k }}{% endfor %}|{% for k, v in u.items() %}{{ k }}={{ v }},{% endfor %}",
+   "context": {
+    "u": {
+     "zeta": 1,
+     "alpha": 2,
+     "Mid": 3,
+     "beta": 4
+    },
+    "big": {
+     "q": 0,
+     "w": 1,
+     "e": 2,
+     "r": 3,
+     "t": 4,
+     "y": 5,
+     "u": 6,
+     "i": 7,
+     "o": 8,
+     "p": 9,
+     "a": 10,
+     "s": 11,
+     "d": 12,
+     "f": 13,
+     "g": 14,
+     "h": 15,
+     "j": 16,
+     "k": 17,
+     "l": 18,
+     "z": 19,
+     "x": 20,
+     "c": 21,
+     "v": 22,
+     "b": 23,
+     "n": 24,
+     "m": 25
+    }
+   },
+   "env": {},
+   "templates": {},
+   "output": "zetaalphaMidbeta|zeta=1,alpha=2,Mid=3,beta=4,"
+  },
+  {
+   "id": "statements.ctx_dict_order_repr",
+   "template": "{{ u }}|{{ u.keys() | list }}|{{ u.values() | list }}|{{ {'n': u} }}",
+   "context": {
+    "u": {
+     "zeta": 1,
+     "alpha": 2,
+     "Mid": 3,
+     "beta": 4
+    },
+    "big": {
+     "q": 0,
+     "w": 1,
+     "e": 2,
+     "r": 3,
+     "t": 4,
+     "y": 5,
+     "u": 6,
+     "i": 7,
+     "o": 8,
+     "p": 9,
+     "a": 10,
+     "s": 11,
+     "d": 12,
+     "f": 13,
+     "g": 14,
+     "h": 15,
+     "j": 16,
+     "k": 17,
+     "l": 18,
+     "z": 19,
+     "x": 20,
+     "c": 21,
+     "v": 22,
+     "b": 23,
+     "n": 24,
+     "m": 25
+    }
+   },
+   "env": {},
+   "templates": {},
+   "output": "{'zeta': 1, 'alpha': 2, 'Mid': 3, 'beta': 4}|['zeta', 'alpha', 'Mid', 'beta']|[1, 2, 3, 4]|{'n': {'zeta': 1, 'alpha': 2, 'Mid': 3, 'beta': 4}}"
+  },
+  {
+   "id": "statements.ctx_dict_order_filters",
+   "template": "{{ u | first }}|{{ u | join(',') }}|{{ u | reverse | join(',') }}|{{ u | list | last }}",
+   "context": {
+    "u": {
+     "zeta": 1,
+     "alpha": 2,
+     "Mid": 3,
+     "beta": 4
+    },
+    "big": {
+     "q": 0,
+     "w": 1,
+     "e": 2,
+     "r": 3,
+     "t": 4,
+     "y": 5,
+     "u": 6,
+     "i": 7,
+     "o": 8,
+     "p": 9,
+     "a": 10,
+     "s": 11,
+     "d": 12,
+     "f": 13,
+     "g": 14,
+     "h": 15,
+     "j": 16,
+     "k": 17,
+     "l": 18,
+     "z": 19,
+     "x": 20,
+     "c": 21,
+     "v": 22,
+     "b": 23,
+     "n": 24,
+     "m": 25
+    }
+   },
+   "env": {},
+   "templates": {},
+   "output": "zeta|zeta,alpha,Mid,beta|beta,Mid,alpha,zeta|beta"
+  },
+  {
+   "id": "statements.ctx_dict_order_big",
+   "template": "{% for k in big %}{{ k }}{% endfor %}|{{ big | length }}|{{ big.k }}",
+   "context": {
+    "u": {
+     "zeta": 1,
+     "alpha": 2,
+     "Mid": 3,
+     "beta": 4
+    },
+    "big": {
+     "q": 0,
+     "w": 1,
+     "e": 2,
+     "r": 3,
+     "t": 4,
+     "y": 5,
+     "u": 6,
+     "i": 7,
+     "o": 8,
+     "p": 9,
+     "a": 10,
+     "s": 11,
+     "d": 12,
+     "f": 13,
+     "g": 14,
+     "h": 15,
+     "j": 16,
+     "k": 17,
+     "l": 18,
+     "z": 19,
+     "x": 20,
+     "c": 21,
+     "v": 22,
+     "b": 23,
+     "n": 24,
+     "m": 25
+    }
+   },
+   "env": {},
+   "templates": {},
+   "output": "qwertyuiopasdfghjklzxcvbnm|26|17"
+  },
+  {
    "id": "statements.for_dict_literal_order",
    "template": "{% for k in {'b': 1, 'a': 2, 'C': 3} %}{{ k }}{% endfor %}",
    "context": {
@@ -4157,6 +4329,46 @@
     "type": "TypeError",
     "message": "LoopContext.__call__() missing 1 required positional argument: 'iterable'"
    }
+  },
+  {
+   "id": "statements.loop_recursive_iterable_keyword",
+   "template": "{% for item in tree recursive %}{{ item.n }}({{ loop(iterable=item.c) }}){% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "a(b()c(d()))"
   },
   {
    "id": "statements.loop_recursive_filtered",
@@ -10651,6 +10863,1086 @@
    "env": {},
    "templates": {},
    "output": ""
+  },
+  {
+   "id": "statements.macro_called_from_macro_hides_its_locals",
+   "template": "{% macro m() %}[{{ z }}]{% endmacro %}{% macro o() %}{% set z = 1 %}{{ m() }}{% endmacro %}{{ o() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "statements.macro_sees_global_not_caller_set",
+   "template": "{% set g = 1 %}{% macro m() %}{{ g }}{% endmacro %}{% macro o() %}{% set g = 2 %}{{ m() }}{% endmacro %}{{ o() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "statements.macro_arg_macro_reads_def_site",
+   "template": "{% macro m() %}{{ x }}{% endmacro %}{% macro apply(f) %}{% for x in [9] %}{{ f() }}{% endfor %}{% endmacro %}{% set x = 'T' %}{{ apply(m) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "statements.macro_called_in_with_hides_target",
+   "template": "{% macro m() %}[{{ a }}]{% endmacro %}{% with a = 1 %}{{ m() }}{% endwith %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "statements.macro_in_with_reads_def_site_target",
+   "template": "{% with a = 1 %}{% macro m() %}{{ a }}{% endmacro %}{% with a = 2 %}{{ m() }}{% endwith %}{% endwith %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "statements.macro_root_global_vs_loop_set",
+   "template": "{% set g = 7 %}{% macro m() %}[{{ g }}]{% endmacro %}{% for i in [1] %}{% set g = 8 %}{{ m() }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[7]"
+  },
+  {
+   "id": "statements.macro_reads_context_not_loop_target",
+   "template": "{% macro m() %}{{ x }}{% endmacro %}{% macro o() %}{% for x in [1] %}{{ m() }}{% endfor %}{% endmacro %}{{ o() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "3"
+  },
+  {
+   "id": "statements.call_body_hides_macro_local",
+   "template": "{% macro m() %}{% set z = 'M' %}{{ caller() }}{% endmacro %}{% call m() %}[{{ z }}]{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "statements.call_body_reads_def_site_set",
+   "template": "{% macro m() %}{% set z = 'M' %}{{ caller() }}{% endmacro %}{% set z = 'T' %}{% call m() %}[{{ z }}]{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[T]"
+  },
+  {
+   "id": "statements.call_body_args_and_def_site_target",
+   "template": "{% macro m() %}{{ caller('a') }}{% endmacro %}{% for i in [1, 2] %}{% call(p) m() %}{{ p }}{{ i }}{% endcall %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "a1a2"
+  },
+  {
+   "id": "statements.macro_late_binding_in_loop",
+   "template": "{% set ns = namespace(m=none) %}{% for i in [1, 2] %}{% if loop.first %}{% macro m() %}{{ i }}{% endmacro %}{% set ns.m = m %}{% endif %}{{ ns.m() }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "12"
+  },
+  {
+   "id": "statements.call_in_macro_reads_param",
+   "template": "{% macro w() %}<{{ caller() }}>{% endmacro %}{% macro o(a) %}{% call w() %}{{ a }}{% endcall %}{% endmacro %}{{ o(1) }}{{ o(2) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<1><2>"
+  },
+  {
+   "id": "statements.recursive_loop_via_macro_reads_outer_target",
+   "template": "{% macro m(l, x) %}{{ l(x) }}{% endmacro %}{% for o in ['O'] %}{% for x in [[[]]] recursive %}{{ o }}{% if x %}{{ m(loop, x) }}{% endif %}{% endfor %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "OO"
+  },
+  {
+   "id": "statements.macro_recursion_via_with",
+   "template": "{% macro m(n) %}{% if n > 0 %}{% with k = n - 1 %}{{ m(k) }}{% endwith %}{% endif %}{{ n }}{% endmacro %}{{ m(3) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "0123"
+  },
+  {
+   "id": "statements.macro_body_set_hidden_from_nested_call",
+   "template": "{% macro a() %}{% set c = 1 %}{{ c }}{{ b() }}{% endmacro %}{% macro b() %}{{ c }}{% endmacro %}{% set c = 9 %}{{ a() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "19"
+  },
+  {
+   "id": "statements.macro_in_loop_after_set_reads_root",
+   "template": "{% macro m() %}{{ x }}{% endmacro %}{% for z in [1] %}{% set x = 5 %}{{ x }}{{ m() }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "53"
+  },
+  {
+   "id": "statements.call_body_hides_macro_set_read_before",
+   "template": "{% macro m1() %}{% set c = 1 %}{{ c }}{{ caller() }}{% endmacro %}{% call m1() %}{{ c }}{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "statements.macro_set_then_call_root_macro",
+   "template": "{% macro m() %}[{{ x }}]{% endmacro %}{% macro o() %}{% set x = 7 %}{{ x }}{{ m() }}{% endmacro %}{{ o() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "7[3]"
+  },
+  {
+   "id": "statements.macro_args_only_called_in_loop",
+   "template": "{% macro m(a) %}[{{ a }}]{% endmacro %}{% for x in [1, 2] %}{% set a = 9 %}{{ a }}{{ m(x) }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "9[1]9[2]"
+  },
+  {
+   "id": "statements.macro_loop_over_arg_called_in_loop",
+   "template": "{% macro m(xs) %}{% for v in xs %}{{ v }}{{ xs|length }}{% endfor %}{% endmacro %}{% for v in [7] %}{% set xs = [0] %}{{ v }}{{ xs }}{{ m([1, 2]) }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "7[0]1222"
+  },
+  {
+   "id": "statements.nested_call_after_set_in_with",
+   "template": "{% macro m() %}[{{ y }}]{% endmacro %}{% with %}{% set y = 2 %}{{ y }}{{ m() }}{% endwith %}{{ m() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "2[][]"
+  },
+  {
+   "id": "statements.macro_recursion_hides_outer_call_set",
+   "template": "{% macro m(n) %}{% if n %}{% set v = 'A' %}{% endif %}[{{ v }}]{% if n %}{{ m(0) }}{% endif %}{% endmacro %}{{ m(1) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[A][]"
+  },
+  {
+   "id": "statements.caller_escapes_its_loop",
+   "template": "{% set ns = namespace(c=none) %}{% macro m() %}{% set ns.c = caller %}{% endmacro %}{% for i in [1] %}{% call m() %}[{{ i }}]{% endcall %}{% endfor %}{{ ns.c() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[missing]"
+  },
+  {
+   "id": "statements.macro_escapes_its_loop",
+   "template": "{% set ns = namespace(m=none) %}{% for i in [1, 2] %}{% macro m() %}{{ i }}{% endmacro %}{% set ns.m = m %}{% endfor %}{{ ns.m() }}{{ ns.m() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "missingmissing"
+  },
+  {
+   "id": "statements.nested_macro_escapes_its_call",
+   "template": "{% set ns = namespace(l=[]) %}{% macro o(a) %}{% macro i() %}{{ a }}{% endmacro %}{% set _ = ns.l.append(i) %}{% endmacro %}{{ o(1) }}{{ o(2) }}{% for f in ns.l %}{{ f() }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "12"
+  },
+  {
+   "id": "statements.macro_root_name_set_after_call",
+   "template": "{% macro m() %}[{{ x }}]{% endmacro %}{{ m() }}{% set x = 1 %}{{ m() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[][1]"
+  },
+  {
+   "id": "statements.macro_loop_name_set_after_call",
+   "template": "{% for i in [1] %}{% macro m() %}[{{ x }}]{% endmacro %}{{ m() }}{% set x = 1 %}{{ m() }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[][1]"
   }
  ]
 }

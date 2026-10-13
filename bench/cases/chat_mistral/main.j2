@@ -30,10 +30,7 @@
             {%- for tool in tools %}
                 {%- set tool = tool.function %}
                 {{- '{"type": "function", "function": {' }}
-                {#- Mistral's template iterates tool.items(); a fixed key list keeps the order
-                    while dicts passed from C++ are unordered (docs/tasks/0043) #}
-                {%- for key in ["name", "description", "parameters", "return"] if tool[key] is defined and key != "return" %}
-                    {%- set val = tool[key] %}
+                {%- for key, val in tool.items() if key != "return" %}
                     {%- if val is string %}
                         {{- '"' ~ key ~ '": "' ~ val ~ '"' }}
                     {%- else %}

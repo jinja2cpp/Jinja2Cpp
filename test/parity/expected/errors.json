@@ -592,6 +592,63 @@
    }
   },
   {
+   "id": "errors.loop_recursive_extra_arg",
+   "template": "{% for a in [[1]] recursive %}{{ loop(a, 1) }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "LoopContext.__call__() takes 2 positional arguments but 3 were given"
+   }
+  },
+  {
+   "id": "errors.loop_recursive_unknown_keyword",
+   "template": "{% for a in [[1]] recursive %}{{ loop(var=a) }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "LoopContext.__call__() got an unexpected keyword argument 'var'"
+   }
+  },
+  {
+   "id": "errors.loop_recursive_iterable_twice",
+   "template": "{% for a in [[1]] recursive %}{{ loop(a, iterable=a) }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "LoopContext.__call__() got multiple values for argument 'iterable'"
+   }
+  },
+  {
    "id": "errors.assign_to_literal",
    "template": "{% set 1 = 2 %}",
    "context": {

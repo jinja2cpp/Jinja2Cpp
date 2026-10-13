@@ -465,28 +465,19 @@ from Parser!)";
 
 TEST(BasicTests, TrimSpaces_2)
 {
+    // Jinja2 has `+%}` but no `+}}`: the `+` is the operator, missing its right operand
     std::string source = R"(Hello World {{ ' --' +}}
 from Parser!)";
 
     Template tpl;
     auto parseRes = tpl.Load(source);
-    EXPECT_TRUE(parseRes.has_value());
-    if (!parseRes)
-    {
-        std::cout << parseRes.error() << std::endl;
-        return;
-    }
-
-    std::string result = tpl.RenderAsString(ValuesMap{}).value();
-    std::cout << result << std::endl;
-    std::string expectedResult = R"(Hello World  --
-from Parser!)";
-    EXPECT_STREQ(expectedResult.c_str(), result.c_str());
+    ASSERT_FALSE(parseRes.has_value());
+    EXPECT_EQ(ErrorCode::UnexpectedToken, parseRes.error().GetCode());
 }
 
 TEST(BasicTests, TrimSpaces_3)
 {
-    std::string source = R"(Hello World {{ ' --' +}})";
+    std::string source = R"(Hello World {% if true +%} --{% endif +%})";
 
     Template tpl;
     auto parseRes = tpl.Load(source);

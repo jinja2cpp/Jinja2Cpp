@@ -239,6 +239,9 @@ struct StatementInfo
     std::shared_ptr<TransInfo> trans;
     // The resolver's frame of the body (0117 P1)
     NameResolver::FrameId frame = NameResolver::NoFrame;
+    // A macro's or call block's: the tree's marks before its parameters, less what the tags
+    // between them and its body made (MacroStatement::SetBodyMarks)
+    NodeArena::ContextMarks marks;
 
     static StatementInfo Create(Type type, const Token& tok)
     {
@@ -851,7 +854,7 @@ private:
                 m_lexBuffers = std::make_unique<LexBuffers>();
             }
             TagLexer<CharT, TemplateParser> lexer(*m_template, *this, m_lexBuffers->tokens);
-            const auto endPos = lexer.LexToEnd(m_currentBlockInfo.range.startOffset, end);
+            const auto endPos = lexer.LexToEnd(m_currentBlockInfo.range.startOffset, end, type != RM_ExprEnd);
             if (endPos != string_t::npos)
             {
                 m_currentBlockInfo.preLexed = true;
@@ -1155,7 +1158,9 @@ private:
         // trim_blocks does not apply to expressions
         auto next = StripBlockRight(endPos, endLength, m_currentBlockInfo.type == TextBlockType::Expr ? false : m_settings.trimBlocks);
         auto contentEnd = endPos;
-        if (endPos > m_currentBlockInfo.range.startOffset && ((*m_template)[endPos - 1] == '+' || (*m_template)[endPos - 1] == '-'))
+        // Jinja2 has no `+}}`: before the end of an expression a `+` is the operator
+        auto ctrlChar = endPos > m_currentBlockInfo.range.startOffset ? (*m_template)[endPos - 1] : CharT();
+        if (ctrlChar == '-' || (ctrlChar == '+' && m_currentBlockInfo.type != TextBlockType::Expr))
         {
             --contentEnd;
         }

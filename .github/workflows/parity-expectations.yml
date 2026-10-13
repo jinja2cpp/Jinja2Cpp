@@ -13,7 +13,13 @@ on:
     paths:
       - 'test/parity/**'
       - 'src/unicode_printable.h'
+      - 'src/unicode_tables.h'
+      - 'src/unicode_case.h'
+      - 'src/html_entities.h'
       - 'scripts/gen_unicode_printable.py'
+      - 'scripts/gen_unicode_tables.py'
+      - 'scripts/gen_unicode_case.py'
+      - 'scripts/gen_html_entities.py'
       - '.github/workflows/parity-expectations.yml'
   pull_request:
     branches:
@@ -22,7 +28,13 @@ on:
     paths:
       - 'test/parity/**'
       - 'src/unicode_printable.h'
+      - 'src/unicode_tables.h'
+      - 'src/unicode_case.h'
+      - 'src/html_entities.h'
       - 'scripts/gen_unicode_printable.py'
+      - 'scripts/gen_unicode_tables.py'
+      - 'scripts/gen_unicode_case.py'
+      - 'scripts/gen_html_entities.py'
       - '.github/workflows/parity-expectations.yml'
   workflow_dispatch:
 
@@ -53,3 +65,11 @@ jobs:
     # repr() escaping follows this Python's Unicode database (src/unicode_printable.h)
     - name: Check the printable-character table
       run: python scripts/gen_unicode_printable.py --check src/unicode_printable.h
+
+    # The other generated tables follow this Python too: regex classes and int()/float()
+    # digits (unicode_tables.h), case mapping (unicode_case.h), html.unescape (html_entities.h)
+    - name: Check the generated Unicode and HTML tables
+      run: |
+        python scripts/gen_unicode_tables.py --check
+        python scripts/gen_unicode_case.py --check
+        python scripts/gen_html_entities.py --check
