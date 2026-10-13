@@ -1,8 +1,9 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0159]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/501
 touches: [src/value_visitors.h, src/testers.cpp, src/expression_evaluator.cpp, src/internal_value.cpp]
 ---
 # A dictsort pair still differs from a tuple in `in`, `==`, tests and truthiness

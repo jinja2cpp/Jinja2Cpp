@@ -3,10 +3,7 @@
 
 filters.batch_none                      accepts     0048 batch over None iterates nothing instead of raising TypeError
 filters.case_non_ascii                  output      0048 upper, lower, capitalize and title change ASCII letters only
-filters.dictsort_pair_in                output      0170 a dictsort pair is a KeyValuePair, not a tuple: in does not look into it
-filters.dictsort_pair_equals            output      0170 a dictsort pair is a KeyValuePair, not a tuple: it does not compare equal to a tuple
-filters.dictsort_pair_tests             output      0170 a dictsort pair is a KeyValuePair, not a tuple: is sequence, iterable and mapping answer as for a mapping
-filters.dictsort_pair_truthy            output      0170 a dictsort pair is a KeyValuePair, not a tuple: it is falsy
+filters.dictsort_pair_sameas            output      0176 a dictsort pair has no identity: is sameas is false even for the same value
 filters.format_ascii_repr               output      0048 %a does not ASCII-escape like Python's ascii()
 filters.format_d_big_float              rejects     0048 %d of a float beyond int64 errors instead of printing the integer
 filters.format_without_percent          accepts     0048 format without % uses fmt {} syntax and ignores extra arguments
@@ -14,6 +11,7 @@ filters.int_out_of_range                output      0048 int beyond the int64 ra
 filters.int_unicode_digits              output      0048 int and float parse ASCII digits only
 filters.map_missing_parent              accepts     0048 a dotted attribute path with a missing parent is undefined, not an error
 filters.round_int_overflow              output      0048 round of an int beyond int64 wraps
+filters.sort_tuple_case                 output      0176 sort compares the strings inside tuples case-insensitively
 filters.striptags_named_entities        output      0048 striptags unescapes only a few named entities
 filters.tojson_undefined                accepts     0048 tojson of undefined renders null instead of raising TypeError
 filters.select_single_pass              output      0101 a select/map/reject result can be iterated again; a Python generator is empty the second time
