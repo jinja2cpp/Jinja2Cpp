@@ -7,6 +7,7 @@
 #include "python_format.h"
 #include "render_context.h"
 #include "string_builder.h"
+#include "undefined.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
@@ -381,6 +382,11 @@ private:
         {
             Fail();
         }
+        if (const auto* info = GetUndefinedInfo(value))
+        {
+            // json.dumps knows no Undefined; a plain undefined (a host's null) stays null
+            throw std::runtime_error(std::string("Object of type ") + UndefinedClassName(*info) + " is not JSON serializable");
+        }
         if (value.IsNone() || value.IsUndefined())
         {
             m_out += "null";
@@ -574,6 +580,11 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
             formatView = ownedFormat;
         }
         format = *formatView;
+    }
+    // str() of an undefined is empty, and Python's '' % args has an argument left over
+    if (GetUndefinedInfo(baseVal) && !m_params.posParams.empty())
+    {
+        throw std::runtime_error("not all arguments converted during string formatting");
     }
     if (m_constFormat || format.find('%') != std::string_view::npos)
     {
