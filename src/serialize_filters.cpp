@@ -585,7 +585,7 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
         std::string formatted;
         if (!params.kwParams.empty())
         {
-            InternalValueMap mapping;
+            InternalDict mapping;
             for (auto& [name, value] : params.kwParams)
             {
                 mapping[name] = value;

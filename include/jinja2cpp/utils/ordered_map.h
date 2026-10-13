@@ -1,5 +1,5 @@
-#ifndef JINJA2CPP_SRC_ORDERED_MAP_H
-#define JINJA2CPP_SRC_ORDERED_MAP_H
+#ifndef JINJA2CPP_UTILS_ORDERED_MAP_H
+#define JINJA2CPP_UTILS_ORDERED_MAP_H
 
 #include <algorithm>
 #include <cstddef>
@@ -18,7 +18,8 @@
 namespace jinja2
 {
 
-// A hash map that iterates in insertion order, like a Python dict (docs/tasks/0031).
+// A hash map that iterates in insertion order, like a Python dict (docs/tasks/0031, 0043). It is the base of
+// the public ValuesMap and of the library's own dicts.
 //
 // The entries live in a std::list and, once there are more than a few of them, an unordered
 // index maps each key to its list node; small maps (most dict literals and kwargs) are
@@ -409,4 +410,4 @@ private:
 
 } // namespace jinja2
 
-#endif // JINJA2CPP_SRC_ORDERED_MAP_H
+#endif // JINJA2CPP_UTILS_ORDERED_MAP_H

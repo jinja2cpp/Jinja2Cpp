@@ -1,4 +1,4 @@
-#include "../src/ordered_map.h"
+#include <jinja2cpp/utils/ordered_map.h>
 #include "test_tools.h"
 
 #include <jinja2cpp/string_helpers.h>

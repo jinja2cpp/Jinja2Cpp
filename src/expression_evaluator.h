@@ -5,7 +5,7 @@
 #include "loop_attr.h"
 #include "lookup_result.h"
 #include "node_arena.h"
-#include "ordered_map.h"
+#include <jinja2cpp/utils/ordered_map.h>
 #include "render_context.h"
 #include "slot_frame.h"
 

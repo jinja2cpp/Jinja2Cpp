@@ -125,7 +125,7 @@ def report():
                 case_id, kind, task = line.split()[:3]
                 divergences[case_id] = (kind, task)
     areas = json.loads((HERE / "expected" / "index.json").read_text(encoding="utf-8"))["areas"]
-    kinds = ["output", "rejects", "accepts", "unsupported", "unordered", "crash"]
+    kinds = ["output", "rejects", "accepts", "unsupported", "platform", "crash"]
     print("| area | cases | match | " + " | ".join(kinds) + " | tasks |")
     print("|---|---|---|" + "---|" * len(kinds) + "---|")
     totals = [0] * (len(kinds) + 2)

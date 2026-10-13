@@ -174,7 +174,7 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
 // dict(mapping_or_pairs, **kwargs)
 InternalValue CallDict(const CallParams& params, RenderContext&)
 {
-    InternalValueMap result;
+    InternalDict result;
     CollectDictItems(params, "dict", result);
     return CreateMapAdapter(std::move(result));
 }

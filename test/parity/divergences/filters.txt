@@ -15,6 +15,6 @@ filters.sort_tuple_case                 output      0176 sort compares the strin
 filters.striptags_named_entities        output      0048 striptags unescapes only a few named entities
 filters.tojson_undefined                accepts     0048 tojson of undefined renders null instead of raising TypeError
 filters.select_single_pass              output      0101 a select/map/reject result can be iterated again; a Python generator is empty the second time
-wide.filters.format_ascii_repr          unordered   0035 the wide %a conversion to UTF-8 follows the C locale: lost on Linux, kept on macOS and MSVC
+wide.filters.format_ascii_repr          platform    0035 the wide %a conversion to UTF-8 follows the C locale: lost on Linux, kept on macOS and MSVC
 wide.filters.tojson_escapes             output      0035 non-ASCII text of a wide template is lost converting to UTF-8 (C locale)
 wide.filters.urlencode_more             output      0035 non-ASCII text of a wide template is lost converting to UTF-8 (C locale)

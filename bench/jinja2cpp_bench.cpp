@@ -248,7 +248,7 @@ struct Case
     std::string source;
     std::wstring wsource; // the source of a wide case
     jinja2::ValuesMap params;
-    nlohmann::json data; // what params reflect with --data=reflect
+    nlohmann::ordered_json data; // what params reflect with --data=reflect, in document order
     std::unique_ptr<jinja2::TemplateEnv> env;
     // loaded once, for the multi-threaded benchmarks
     std::unique_ptr<jinja2::Template> shared;
@@ -304,7 +304,7 @@ std::unique_ptr<Case> LoadCase(const fs::path& dir, bool reflect)
     {
         if (reflect && !result->wide)
         {
-            result->data = nlohmann::json::parse(ReadFile(dir / "data.json"));
+            result->data = nlohmann::ordered_json::parse(ReadFile(dir / "data.json"));
             for (const auto& item : result->data.items())
             {
                 result->params.emplace(item.key(), jinja2::Reflect(&item.value()));
