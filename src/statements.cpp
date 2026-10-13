@@ -57,6 +57,18 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
 
 namespace
 {
+// A loop over a value that is not a list: Python iterates an undefined value as empty
+// (StrictUndefined refuses) and fails on anything else (`for x in none`)
+void CheckIterable(const InternalValue& value)
+{
+    if (value.IsUndefined())
+    {
+        CheckUndefinedUse(value, UndefinedUse::Operator);
+        return;
+    }
+    throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(value) + "' object is not iterable");
+}
+
 
 // A target as the tree holds it: its root, then its items
 using TargetNodes = boost::span<const TargetNode>;
@@ -874,6 +886,26 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
 
 void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level)
 {
+    bool isConverted = false;
+    auto loopItems = ConvertToList(loopVal, isConverted, false);
+    if (!isConverted)
+    {
+        CheckIterable(loopVal);
+        if (m_elseBody)
+        {
+            values.Nodes()[m_elseBody].Render(os, values);
+        }
+        return;
+    }
+    // The filter sees the `loop` around this one, found before this one's hides it
+    InternalValue outerLoop;
+    if (m_filterReadsLoop)
+    {
+        const HashedName loopName{ "loop", HashedName::Hash("loop") };
+        const auto found = values.FindValue(loopName);
+        outerLoop = found ? InternalValue(*found) : MakeUndefined(values, "loop");
+    }
+
     auto state = LoopFramePool::Take(m_loopId);
     const LoopFrameReturn frameReturn{ state };
     state->level = level;
@@ -889,25 +921,11 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     }
     *state->loopSlot = MapAdapter(&state->accessor, ValueObjectPtr(state));
 
-    bool isConverted = false;
-    auto loopItems = ConvertToList(loopVal, isConverted, false);
     ListAdapter filteredList;
-    if (!isConverted)
-    {
-        // The `else` body sees the names outside the loop, as in Jinja2
-        values.ExitScope(state->loopScope);
-        state->ReleaseScopeValues();
-        if (m_elseBody)
-        {
-            values.Nodes()[m_elseBody].Render(os, values);
-        }
-        return;
-    }
-
     auto& enumerator = state->enumerator;
     if (m_ifExpr)
     {
-        filteredList = CreateFilteredAdapter(loopItems, values);
+        filteredList = CreateFilteredAdapter(loopItems, values, std::move(outerLoop));
         enumerator = filteredList.GetEnumerator();
     }
     else
@@ -990,6 +1008,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     auto loopItems = ConvertToList(loopVal, isConverted, false);
     if (!isConverted)
     {
+        CheckIterable(loopVal);
         // The `else` body sees the names outside the loop, as in Jinja2
         guard.Unbind();
         if (m_elseBody)
@@ -1022,13 +1041,26 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
         state->listSize = loopItems.GetSize();
     }
     // The next item, filtered in place while the filter is still lazy
-    auto fetchNext = [this, &state, &values, frameSlots](InternalValue& item) {
+    auto fetchNext = [this, &state, &values, frameSlots, slots, names](InternalValue& item) {
         if (!state->lazyFilter || !state->enumerator)
         {
             return state->FetchNext(item);
         }
         state->isAdvancing = true;
-        const bool hasNext = FilterInFrame(**state->enumerator, frameSlots, item, values);
+        bool hasNext = false;
+        if (m_filterReadsLoop)
+        {
+            // As in Jinja2, `loop` in the filter is the one around this loop: this one's
+            // is unbound meanwhile, so a lookup passes over it
+            InternalValue loopObject = std::move(static_cast<InternalValue&>(slots[0]));
+            values.UnbindSlots(slots.first(1), names.first(1));
+            hasNext = FilterInFrame(**state->enumerator, frameSlots, item, values);
+            values.BindSlot(slots[0], names[0].hash, std::move(loopObject));
+        }
+        else
+        {
+            hasNext = FilterInFrame(**state->enumerator, frameSlots, item, values);
+        }
         state->isAdvancing = false;
         return hasNext;
     };
@@ -1141,14 +1173,18 @@ uint64_t ForStatement::NewLoopId()
     return ++lastId;
 }
 
-ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const
+ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values, InternalValue outerLoop) const
 {
     // Like the slotted one below, the filter may run while another template's code does
-    return ListAdapter::CreateAdapter([eo = loopItems.GetEnumerator(), this, &values, nodes = values.Nodes()]() mutable {
+    return ListAdapter::CreateAdapter([eo = loopItems.GetEnumerator(), this, &values, nodes = values.Nodes(), outerLoop = std::move(outerLoop)]() mutable {
         using ResultType = std::optional<InternalValue>;
 
         const ArenaSwitch nodesSwitch(values, nodes);
         auto tempContext = values.EnterScope();
+        if (m_filterReadsLoop)
+        {
+            tempContext["loop"s] = outerLoop;
+        }
         if (!eo.has_value())
         {
             return ResultType();

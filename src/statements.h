@@ -156,6 +156,9 @@ public:
         m_elseBody = renderer;
     }
 
+    // The filter may read `loop`, which there is the loop around this one, as in Jinja2
+    void SetFilterReadsLoop(bool reads) { m_filterReadsLoop = reads; }
+
     void Render(OutStream& os, RenderContext& values) override;
 
     // The loop(...) callable of a recursive loop at depth0 `level`
@@ -182,7 +185,8 @@ private:
     void RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level);
     // A loop whose names live in slots of its unit's frame (0117 P1)
     void RenderLoopInSlots(const InternalValue& loopVal, OutStream& os, RenderContext& values);
-    ListAdapter CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values) const;
+    // `outerLoop`: what `loop` is in the filter
+    ListAdapter CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values, InternalValue outerLoop) const;
     // Moves `items` to the next item the filter keeps and stores it in `item`; false at the
     // end. Runs in the loop's own frame and tree, installed
     bool FilterInFrame(IListAccessorEnumerator& items, boost::span<Slot> frameSlots, InternalValue& item, RenderContext& values) const;
@@ -191,6 +195,7 @@ private:
     NodeRef<Expression> m_value;
     NodeRef<Expression> m_ifExpr;
     bool m_isRecursive{};
+    bool m_filterReadsLoop{};
     NodeRef<IRendererBase> m_mainBody;
     NodeRef<IRendererBase> m_elseBody;
     // Unique for the process, unlike the address: a reused loop frame keeps the names this
