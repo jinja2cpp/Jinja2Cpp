@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (1492 templates rendered by both engines, see
+`test/parity/` (1575 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -16,33 +16,33 @@ Legend: ✅ matches Jinja2 · 🟡 works with differences · ❌ missing or brok
 
 Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 
-| area | cases | match | output | rejects | accepts | unsupported | unordered | crash | tasks |
+| area | cases | match | output | rejects | accepts | unsupported | platform | crash | tasks |
 |---|---|---|---|---|---|---|---|---|---|
-| autoescape | 83 | 77 | 6 | 0 | 0 | 0 | 0 | 0 | 0051 |
+| autoescape | 94 | 92 | 2 | 0 | 0 | 0 | 0 | 0 | 0179, 0182 |
 | custom | 28 | 28 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | errors | 82 | 77 | 0 | 0 | 5 | 0 | 0 | 0 | 0036, 0161, 0169 |
-| filters | 245 | 229 | 11 | 1 | 4 | 0 | 0 | 0 | 0048, 0101, 0170 |
-| fuzz | 12 | 0 | 0 | 2 | 10 | 0 | 0 | 0 | 0094 |
+| filters | 255 | 239 | 9 | 1 | 6 | 0 | 0 | 0 | 0048, 0101, 0176, 0177 |
+| fuzz | 33 | 25 | 0 | 1 | 7 | 0 | 0 | 0 | 0048, 0049, 0177 |
 | globals | 39 | 37 | 1 | 0 | 1 | 0 | 0 | 0 | 0042 |
 | i18n | 53 | 53 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| literals | 68 | 64 | 3 | 1 | 0 | 0 | 0 | 0 | 0015, 0036, 0041, 0043 |
+| literals | 68 | 65 | 2 | 1 | 0 | 0 | 0 | 0 | 0015, 0036, 0041 |
 | loader | 104 | 102 | 2 | 0 | 0 | 0 | 0 | 0 | 0143 |
-| methods | 92 | 86 | 2 | 0 | 0 | 0 | 4 | 0 | 0043, 0049 |
+| methods | 92 | 90 | 2 | 0 | 0 | 0 | 0 | 0 | 0049 |
 | operators | 116 | 113 | 0 | 3 | 0 | 0 | 0 | 0 | 0015 |
 | options | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | output | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | sequences | 43 | 42 | 1 | 0 | 0 | 0 | 0 | 0 | 0037 |
-| statements | 237 | 219 | 9 | 1 | 7 | 0 | 1 | 0 | 0042, 0043, 0091, 0144, 0156, 0165, 0166, 0168 |
+| statements | 263 | 248 | 10 | 0 | 5 | 0 | 0 | 0 | 0042, 0144, 0156, 0165, 0166, 0168, 0175 |
 | subscripts | 39 | 39 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | tests | 40 | 40 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| undefined | 91 | 81 | 1 | 0 | 9 | 0 | 0 | 0 | 0052 |
+| undefined | 106 | 106 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | whitespace | 50 | 49 | 1 | 0 | 0 | 0 | 0 | 0 | 0044 |
-| **total** | **1492** | **1406** | **37** | **8** | **36** | **0** | **5** | **0** | |
+| **total** | **1575** | **1515** | **30** | **6** | **24** | **0** | **0** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
-option C++ lacks. *unordered*: depends on hash order, so it matches on some standard
-libraries and not others. *crash*: skipped because it hits undefined behaviour.
+option C++ lacks. *platform*: depends on the platform (for example the C locale's ASCII
+representation on Windows), so it matches on some systems and not others. *crash*: skipped because it hits undefined behaviour.
 
 Two gaps account for most of the visible damage, because nearly every template prints
 values or calls methods:
@@ -121,7 +121,7 @@ repr look the same.
 | Adjacent strings `'a' 'b'` | ✅ | `string_adjacent_concat` | |
 | List literals, trailing comma | 🟡 parse; print as empty | `list_trailing_comma` | 0012 |
 | Tuple literals `(1, 2)`, `(1,)`, `()` | ✅ | `tuple`, `tuple_single`, `tuple_empty` | |
-| Dict literals `{'a': 1}`, `{key_expr: v}` | 🟡 parse (`{'a'=1}` stays as a C++ extension); print as empty | `dict`, `dict_expression_key`, `dict_nested` | 0012 / 0028 |
+| Dict literals `{'a': 1}`, `{key_expr: v}` | 🟡 parse (`{'a'=1}` is rejected like Jinja2 since 0094); print as empty | `dict`, `dict_expression_key`, `dict_nested` | 0012 / 0028 |
 | Non-string dict keys | 🟡 stored as strings (`1` → `'1'`) | `dict_int_key` | 0036 |
 
 ## Printing values (`output`)

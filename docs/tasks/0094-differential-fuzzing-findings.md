@@ -1,9 +1,9 @@
 ---
-status: open
+status: done
 priority: medium
 area: parity
 depends: [0003]
-touches: [test/parity/cases/fuzz.py, test/parity/divergences/fuzz.txt]
+touches: [test/parity/cases/fuzz.py, test/parity/divergences/fuzz.txt, src/template_parser.h, src/template_parser.cpp, src/expression_parser.cpp, src/lexer.h, src/filters.cpp#Join, src/filters.cpp#DictSort, src/string_converter_filter.cpp#WordWrap, src/statements.cpp#IncludeStatement]
 ---
 # Divergences found by differential fuzzing
 
@@ -40,6 +40,21 @@ existing templates.
 
 **Done when.** `test/parity/divergences/fuzz.txt` is empty, or lists only the leniencies
 kept as documented extensions.
+
+**Resolution (PR link added on merge).** Ruslan decided on 2026-10-12 to reject the three
+leniencies like Jinja2 (2.0 breaks template syntax here; listed for `MIGRATION.md` in 0077).
+Fixed: `{{ 'a' +}}` is a syntax error (`+%}` on statements keeps its meaning), `{% macro m %}`
+and `{% call m %}` require parentheses, `{'a' = 1}` is rejected, `join` of a number, bool or
+None raises TypeError, `dictsort` raises on any `by` but `'key'`/`'value'`, `wordwrap` takes a
+float width and fails, as Python does, only when it has to break a long word with one of 1
+or more, and `include` of a list skips names that are not strings. Unit tests that used the
+old syntax now use Jinja2's. The cases stay in `fuzz.py` (moving them would edit the
+area files of PRs in the same wave). Handed to their owners, still in
+`test/parity/divergences/fuzz.txt`: `for_over_bool` (0091, which fails on every
+non-iterable), `format_extra_argument` and `format_safe_extra_argument` (0048 item 8),
+`list_contains_itself` (0049, cycles), and the same TypeError gap in the other sequence
+filters (0177, filed by the 0052 PR; pinned here too by `fuzz.list_int`, `fuzz.first_bool`,
+`fuzz.sort_none`, `fuzz.length_int` and `fuzz.dictsort_int`).
 
 **Next.** The nightly differential job (`.github/workflows/fuzz.yml`) keeps finding inputs
 like these; its report is the queue for this task.

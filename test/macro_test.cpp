@@ -9,7 +9,7 @@ using MacroTest = BasicTemplateRenderer;
 
 MULTISTR_TEST(MacroTest, SimpleMacro,
               R"(
-{% macro test %}
+{% macro test() %}
 Hello World!
 {% endmacro %}
 {{ test() }}{{ test() }}
@@ -136,10 +136,10 @@ kwargs: {'extraValue': 5}
 
 MULTISTR_TEST(MacroTest, SimpleCallMacro,
               R"(
-{% macro test %}
+{% macro test() %}
 Hello World! -> {{ caller() }} <-
 {% endmacro %}
-{% call test %}Message from caller{% endcall %}
+{% call test() %}Message from caller{% endcall %}
 )",
               //-----------------
               R"(
@@ -153,10 +153,10 @@ Hello World! -> Message from caller <-
 
 MULTISTR_TEST(MacroTest, CallWithParamsAndSimpleMacro,
               R"(
-{% macro test %}
+{% macro test() %}
 -> {{ caller('Hello World' | upper) }} <-
 {% endmacro %}
-{% call(message) test %}{{ message }}{% endcall %}
+{% call(message) test() %}{{ message }}{% endcall %}
 )",
               //------------
               R"(
@@ -189,7 +189,7 @@ MULTISTR_TEST(MacroTest, MacroCallVariables,
               R"(
 {% macro invoke() %}
 arguments: {{ caller.arguments | pprint }}{{ caller(1, 2, 3, 4, 6, extraValue=5) }}{% endmacro %}
-{% call (param1, param2, param3='World') invoke %}
+{% call (param1, param2, param3='World') invoke() %}
 varargs: {{ varargs | pprint }}
 kwargs: {{ kwargs | pprint }}
 {% endcall %}

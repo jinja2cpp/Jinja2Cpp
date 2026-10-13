@@ -52,6 +52,7 @@ enum class UndefinedUse
     Call,       // calling it; every policy refuses
     Arithmetic, // unary - and +, int(), float(); every policy refuses (binary arithmetic fails on its own)
     Operator,   // ==, !=, ~, in, `and`, `or`; only Strict refuses
+    Method,     // what Undefined has no method for: dictsort's items(), indent's +=, wordwrap; every policy refuses
 };
 
 // The undefined result of looking up the missing variable name
@@ -74,6 +75,9 @@ std::string UndefinedMessage(const UndefinedInfo& info);
 // {{ undefined value printed: hint }}
 std::string DebugUndefinedText(const UndefinedInfo& info);
 [[noreturn]] void ThrowUndefined(const UndefinedInfo& info);
+// The Python class of the undefined value, as a TypeError names it: Undefined, StrictUndefined,
+// ChainableUndefined or DebugUndefined
+const char* UndefinedClassName(const UndefinedInfo& info);
 
 // Throws UndefinedError when val is an undefined value with info whose policy refuses use
 inline void CheckUndefinedUse(const InternalValue& val, UndefinedUse use)
@@ -83,7 +87,7 @@ inline void CheckUndefinedUse(const InternalValue& val, UndefinedUse use)
     {
         return;
     }
-    if (info->policy == UndefinedPolicy::Strict || use == UndefinedUse::Call || use == UndefinedUse::Arithmetic || (use == UndefinedUse::Attribute && info->policy != UndefinedPolicy::Chainable))
+    if (info->policy == UndefinedPolicy::Strict || use == UndefinedUse::Call || use == UndefinedUse::Arithmetic || use == UndefinedUse::Method || (use == UndefinedUse::Attribute && info->policy != UndefinedPolicy::Chainable))
     {
         ThrowUndefined(*info);
     }

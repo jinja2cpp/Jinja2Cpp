@@ -436,16 +436,17 @@ INSTANTIATE_TEST_SUITE_P(DotSubscriptionTest, ExpressionSubstitutionTest, ::test
 // clang-format on
 
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(ComplexSubscriptionTest, ExpressionSubstitutionTest, ::testing::Values(
                             InputOutputPair{"mapValue.reflectedList[1]['intValue']",    "1"},
                             InputOutputPair{"mapValue['reflectedList'][1]['intValue']",    "1"},
                             InputOutputPair{"mapValue.reflectedList[1].intValue",    "1"},
-                            InputOutputPair{"{'fieldName'='field', 'fieldValue'=10}.fieldName",    "field"},
-                            InputOutputPair{"{'fieldName'='field', 'fieldValue'=10}['fieldValue']",    "10"},
+                            InputOutputPair{"{'fieldName': 'field', 'fieldValue': 10}.fieldName",    "field"},
+                            InputOutputPair{"{'fieldName': 'field', 'fieldValue': 10}['fieldValue']",    "10"},
                             InputOutputPair{R"( ([
-                                                    {'fieldName'='field1', 'fieldValue'=10},
-                                                    {'fieldName'='field2', 'fieldValue'=11},
-                                                    {'fieldName'='field3', 'fieldValue'=12}
+                                                    {'fieldName': 'field1', 'fieldValue': 10},
+                                                    {'fieldName': 'field2', 'fieldValue': 11},
+                                                    {'fieldName': 'field3', 'fieldValue': 12}
                                                  ] | last).fieldValue)",    "12"},
                             InputOutputPair{"reflectedList[1].intValue",    "1"},
                             InputOutputPair{"(reflectedList[1]).intValue",    "1"},
@@ -458,6 +459,7 @@ INSTANTIATE_TEST_SUITE_P(ComplexSubscriptionTest, ExpressionSubstitutionTest, ::
                             InputOutputPair{"reflectedVal.innerStructList[5].strValue", "Hello World!"},
                             InputOutputPair{"reflectedVal.tmpStructList[5].strValue", "Hello World!"}
                             ));
+// clang-format on
 
 namespace
 {

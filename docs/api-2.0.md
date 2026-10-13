@@ -137,7 +137,7 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | `Value(nullptr)` | *probe:* picks `Value(const char*)` and throws `logic_error` from `std::string(nullptr)` | `Value(std::nullptr_t)` makes `None` | fix (0067) |
 | `Value(ValuesList&&) noexcept`, `Value(ValuesMap&&) noexcept` | allocate, so `bad_alloc` becomes `std::terminate` | drop `noexcept` there | fix |
 | `IsEqual()` next to `operator==` | redundant | keep both; not worth a break | — |
-| `ValuesMap : std::unordered_map` | hash order | ordered map (task 0043) | break, owned by 0043 |
+| `ValuesMap : std::unordered_map` | hash order | ordered map (task 0043) | break, done in 0043 |
 | free `AsString`/`AsWString` overloads for `std::string`, `std::wstring` and the views | encoding conversion; the `std::string` one returns a `const` value, defeating moves | `ToString`/`ToWString` returning `std::string`/`std::wstring` | alias |
 
 ### 3.2 `Template`, `TemplateW` (`template.h`)

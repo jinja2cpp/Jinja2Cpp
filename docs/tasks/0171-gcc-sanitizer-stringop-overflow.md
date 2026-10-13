@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: build
 depends: []
@@ -25,3 +25,5 @@ on the output path (0113). Do not add a pragma or `-Wno-stringop-overflow`.
 
 **Done when** the GCC address+undefined RelWithDebInfo build is warning-free and the
 instruction gate shows no regression; consider adding a GCC job to the sanitizer matrix.
+
+**Done in** [#503](https://github.com/jinja2cpp/Jinja2Cpp/pull/503). `WriteInt` now writes the digits at a byte offset from the buffer start, which GCC can bound; a local `char[20]` plus `memcpy` was measured and cost +3 to +8% on `Render/mitsuhiko_table*` and `for_range`, so it was dropped. g++-13 `-O1/-O2/-O3` with address+undefined is clean. A GCC job in the sanitizer matrix was not added (CI already has `address+undefined (gcc-14)`, which stays green).

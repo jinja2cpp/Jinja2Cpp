@@ -5,7 +5,7 @@
 #include "loop_attr.h"
 #include "lookup_result.h"
 #include "node_arena.h"
-#include "ordered_map.h"
+#include <jinja2cpp/utils/ordered_map.h>
 #include "render_context.h"
 #include "slot_frame.h"
 
@@ -56,6 +56,10 @@ public:
     // The value of a template literal, else null. A virtual, as parse-time dynamic_casts
     // show up in Load
     [[nodiscard]] virtual const InternalValue* GetConstant(const NodeArena& /*nodes*/) const { return nullptr; }
+    // Jinja2's optimizer evaluates it when the template is compiled (as_const): literals and
+    // operators, subscripts and the filters that do not need the context, on such
+    // operands. A `~` chain of these is joined with str(), which drops Markup
+    [[nodiscard]] virtual bool IsFoldable(const NodeArena& /*nodes*/) const { return false; }
     virtual void Render(OutStream& stream, RenderContext& values);
 protected:
     // Only the arena moves a node, when it seals the tree into one buffer
@@ -292,6 +296,7 @@ public:
     LookupResult EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? values.Nodes()[m_expression].EvaluateRef(values) : LookupResult(); }
     [[nodiscard]] bool IsPure(const NodeArena& nodes) const override { return m_expression && !m_tester && nodes[m_expression].IsPure(nodes); }
     [[nodiscard]] const InternalValue* GetConstant(const NodeArena& nodes) const override { return m_expression && !m_tester ? nodes[m_expression].GetConstant(nodes) : nullptr; }
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
     void Render(OutStream& stream, RenderContext& values) override;
 private:
     NodeRef<Expression> m_expression;
@@ -409,6 +414,7 @@ public:
     // Virtual while it owns its indices: LoopAttrExpression derives from it
     virtual ~SubscriptExpression() = default;
     InternalValue Evaluate(RenderContext& values) override;
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
     // x[expr], or x.name when attrName is set: x.name finds Python's methods before the
     // items, x[expr] the items first (Jinja2's getattr and getitem)
     void AddIndex(const NodeArena& nodes, NodeRef<Expression> value, std::string attrName = std::string());
@@ -491,6 +497,7 @@ public:
     // A constant operand is handed to the first filter at Load, which may prepare for it
     FilteredExpression(const NodeArena& nodes, NodeRef<Expression> expression, NodeRef<ExpressionFilter> filter);
     InternalValue Evaluate(RenderContext&) override;
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
 
 private:
     NodeRef<Expression> m_expression;
@@ -514,6 +521,7 @@ public:
     LookupResult EvaluateRef(RenderContext&) override { return LookupResult(m_constant); }
     [[nodiscard]] bool IsPure(const NodeArena& /*nodes*/) const override { return true; }
     [[nodiscard]] const InternalValue* GetConstant(const NodeArena& /*nodes*/) const override { return &m_constant; }
+    [[nodiscard]] bool IsFoldable(const NodeArena& /*nodes*/) const override { return true; }
     [[nodiscard]] const InternalValue& GetValue() const { return m_constant; }
 private:
     InternalValue m_constant;
@@ -579,6 +587,7 @@ public:
     LookupResult EvaluateRef(RenderContext&) override { return LookupResult(m_constant.Get()); }
     [[nodiscard]] bool IsPure(const NodeArena& /*nodes*/) const override { return true; }
     [[nodiscard]] const InternalValue* GetConstant(const NodeArena& /*nodes*/) const override { return &m_constant.Get(); }
+    [[nodiscard]] bool IsFoldable(const NodeArena& /*nodes*/) const override { return true; }
 
 private:
     InlineScalar m_constant;
@@ -604,6 +613,7 @@ public:
     }
 
     InternalValue Evaluate(RenderContext&) override;
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
     [[nodiscard]] ArenaSpan<NodeRef<Expression>> GetItems() const { return m_exprs; }
 private:
     ArenaSpan<NodeRef<Expression>> m_exprs;
@@ -635,6 +645,7 @@ public:
     }
 
     InternalValue Evaluate(RenderContext&) override;
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
 private:
     Items m_exprs;
 };
@@ -660,6 +671,7 @@ public:
         , m_expr(std::move(expr))
     {}
     InternalValue Evaluate(RenderContext&) override;
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override { return nodes[m_expr].IsFoldable(nodes); }
 
 private:
     Operation m_oper;
@@ -699,13 +711,15 @@ public:
     // registered: the test the environment adds under this name (TemplateEnv::AddTest), if any
     static NodeRef<IsExpression> Make(NodeArena& nodes, NodeRef<Expression> value, const std::string& tester, const CallParamsInfo& params, InternalValue registered = InternalValue());
 
-    IsExpression(NodeRef<Expression> value, NodeRef<ITester> tester, bool testInPlace)
+    IsExpression(NodeRef<Expression> value, NodeRef<ITester> tester, bool testInPlace, bool foldable = false)
         : m_value(value)
         , m_tester(tester)
         , m_testInPlace(testInPlace)
+        , m_foldable(foldable)
     {
     }
     InternalValue Evaluate(RenderContext& context) override;
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override { return m_foldable && nodes[m_value].IsFoldable(nodes); }
 
 private:
     NodeRef<Expression> m_value;
@@ -713,6 +727,8 @@ private:
     // A built-in test without arguments runs nothing that could replace the variable it
     // reads, so it can test the variable in place
     bool m_testInPlace = false;
+    // A built-in test on foldable arguments (Expression::IsFoldable)
+    bool m_foldable = false;
 };
 
 class BinaryExpression : public Expression
@@ -769,6 +785,10 @@ public:
     InternalValue EvaluateWithLeft(const InternalValue& leftVal, RenderContext& context);
     // The operator applied to evaluated operands (not `and`/`or`)
     InternalValue Apply(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context) const;
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
+    // A `~` chain Jinja2 folds when the template is compiled joins with str(), never with
+    // markup_join (set on each `~` of the chain, ExpressionParser::ParseBinary)
+    void SetFolded() { m_folded = true; }
 
 protected:
     // Nothing destroys an operation through this base; a plain one owns nothing, so the
@@ -792,6 +812,7 @@ private:
     // of the template contends on (docs/tasks/0149)
     bool m_leftByRef = false;
     bool m_rightByRef = false;
+    bool m_folded = false;
 };
 
 // `x in [1, 2]` with a literal of scalar constants: the items, built once. They are never
@@ -858,6 +879,7 @@ public:
     {
     }
     InternalValue Evaluate(RenderContext&) override;
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
 
 private:
     NodeRef<Expression> m_first;
@@ -885,6 +907,7 @@ public:
     {
     }
     InternalValue Evaluate(RenderContext&) override;
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
 
 private:
     NodeRef<Expression> m_value;
@@ -965,9 +988,10 @@ public:
     static NodeRef<ExpressionFilter> Make(NodeArena& nodes, const std::string& filterName, const CallParamsInfo& params, InternalValue registered = InternalValue());
 
     // argsError: why the call does not fit the filter, empty if it fits
-    ExpressionFilter(NodeRef<IExpressionFilter> filter, ArenaText argsError)
+    ExpressionFilter(NodeRef<IExpressionFilter> filter, ArenaText argsError, bool foldable)
         : m_filter(filter)
         , m_argsError(argsError)
+        , m_foldable(foldable)
     {
     }
 
@@ -978,6 +1002,8 @@ public:
     }
     // Tells the first filter of the chain that its input is always this literal
     void SetConstantBase(const NodeArena& nodes, const InternalValue& base);
+    // Jinja2 folds every filter of the chain on a foldable value (Expression::IsFoldable)
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const { return m_foldable && (!m_parentFilter || nodes[m_parentFilter].IsFoldable(nodes)); }
 
 private:
     NodeRef<IExpressionFilter> m_filter;
@@ -985,6 +1011,8 @@ private:
     // empty when it fits
     ArenaText m_argsError;
     NodeRef<ExpressionFilter> m_parentFilter;
+    // A builtin filter that does not need the context, on foldable arguments
+    bool m_foldable = false;
 };
 
 class IfExpression final : public ArenaNode
@@ -1005,6 +1033,9 @@ public:
 
     bool Evaluate(RenderContext& context);
     InternalValue EvaluateAltValue(RenderContext& context);
+    // `value if test else alt` folds when Jinja2 can fold the test and the branch it picks;
+    // a test that is not a literal needs both branches
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes, NodeRef<Expression> value) const;
     [[nodiscard]] NodeRef<Expression> GetAltValue() const { return m_altValue; }
 
     void SetAltValue(NodeRef<Expression> altValue)

@@ -549,9 +549,11 @@ void CheckListed(const std::string& id, Outcome outcome, const std::string& deta
             ADD_FAILURE() << "new divergence (" << OutcomeName(outcome) << ")\n  " << details;
         return;
     }
-    // Output that depends on hash order may match on one standard library and not another.
-    if (known->second.kind == "unordered" && (outcome == Outcome::Match || outcome == Outcome::Output))
+    // Output that depends on the platform may match on one standard library and not another.
+    if (known->second.kind == "platform" && (outcome == Outcome::Match || outcome == Outcome::Output))
+    {
         return;
+    }
     if (outcome == Outcome::Match)
         ADD_FAILURE() << "case now matches: remove " << id << " from test/parity/divergences/" << AreaOf(id) << ".txt\n  " << details;
     else if (known->second.kind != OutcomeName(outcome))
@@ -627,20 +629,7 @@ TEST_P(ParityWideTest, MatchesNarrow)
     auto narrow = RenderCpp<char>(c, settings);
     auto wide = RenderCpp<wchar_t>(c, settings);
     auto outcome = Classify(c, wide);
-    // std::hash differs for std::string and std::wstring, so hash-ordered output may too:
-    // for those cases compare the characters as a multiset, which still catches lost or
-    // corrupted content.
-    auto known = Divergences().find(narrowId);
-    const bool unordered = known != Divergences().end() && known->second.kind == "unordered";
-    auto sameText = [unordered](std::string a, std::string b) {
-        if (unordered)
-        {
-            std::sort(a.begin(), a.end());
-            std::sort(b.begin(), b.end());
-        }
-        return a == b;
-    };
-    const bool sameAsNarrow = wide.ok == narrow.ok && (!wide.ok || sameText(wide.text, narrow.text));
+    const bool sameAsNarrow = wide.ok == narrow.ok && (!wide.ok || wide.text == narrow.text);
     if (sameAsNarrow)
         outcome = Outcome::Match;
     RecordOutcome(id, OutcomeName(outcome));
@@ -670,7 +659,7 @@ TEST(ParityRegistry, DivergencesNameExistingCases)
     std::set<std::string> ids;
     for (auto& c : LoadCases())
         ids.insert(c.id);
-    static const std::set<std::string> kinds = { "output", "rejects", "accepts", "unsupported", "unordered", "crash" };
+    static const std::set<std::string> kinds = { "output", "rejects", "accepts", "unsupported", "platform", "crash" };
     for (const auto& d : Divergences())
     {
         const auto& id = d.first.compare(0, 5, "wide.") == 0 ? d.first.substr(5) : d.first;

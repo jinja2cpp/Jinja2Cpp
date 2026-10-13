@@ -4,7 +4,7 @@ if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
 
-project(Jinja2Cpp VERSION 1.3.2)
+project(Jinja2Cpp VERSION 2.0.0)
 
 if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
     set(JINJA2CPP_IS_MAIN_PROJECT TRUE)
@@ -324,7 +324,7 @@ endif ()
 
 set_target_properties(${LIB_TARGET_NAME} PROPERTIES
     VERSION ${PROJECT_VERSION}
-    SOVERSION 1
+    SOVERSION 2
 )
 # An installed shared library finds the shared dependencies installed next to it
 if (APPLE)

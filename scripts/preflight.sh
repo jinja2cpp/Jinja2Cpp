@@ -121,8 +121,8 @@ if [ "$perf" = 1 ]; then
     for side in head base; do
       src=$PWD dir=build-preflight-head
       [ $side = base ] && src=$wt dir=build-preflight-base
-      # The base worktree gets a new temporary path every run, which an old cache rejects
-      [ $side = base ] && rm -f "$dir/CMakeCache.txt"
+      # The base worktree is a new temp dir every run, and CMake refuses a cache made for another source
+      [ $side = base ] && rm -rf "${dir:?}"
       cmake -S "$src" -B "$dir" -G Ninja "${init[@]}" -DCMAKE_BUILD_TYPE=Release \
         -DJINJA2CPP_BUILD_BENCHMARKS=ON \
         "-DCMAKE_CXX_FLAGS=-ffile-prefix-map=$src=S -ffile-prefix-map=$PWD/$dir=B" >/dev/null \

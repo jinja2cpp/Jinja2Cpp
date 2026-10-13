@@ -357,7 +357,7 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
     bool result = false;
     CheckUndefinedUse(seq, UndefinedUse::Operator);
     auto seqKind = Apply<ValueKindGetter>(seq);
-    if (seqKind == TestKind::List)
+    if (seqKind == TestKind::List || seqKind == TestKind::KVPair)
     {
         result = IsValueInListValue(baseVal, seq);
     }
@@ -402,7 +402,9 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = valKind == TestKind::Boolean;
         break;
     case IsCallableMode:
-        result = valKind == TestKind::Callable;
+        // Python's Undefined defines __call__ (that fails). A plain undefined may be a host's
+        // null (task 0047), so only a missing name counts
+        result = valKind == TestKind::Callable || GetUndefinedInfo(baseVal) != nullptr;
         break;
     case IsEscapedMode:
         // Python checks for __html__, which only Markup has
@@ -439,10 +441,11 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = valKind == TestKind::String && IsTestName(AsString(baseVal), context);
         break;
     case IsIterableMode:
-        result = valKind == TestKind::List || valKind == TestKind::Map || valKind == TestKind::String;
+        result = valKind == TestKind::List || valKind == TestKind::KVPair || valKind == TestKind::Map || valKind == TestKind::String;
         break;
     case IsMappingMode:
-        result = valKind == TestKind::KVPair || valKind == TestKind::Map;
+        // A dictsort pair is a 2-tuple, not a mapping
+        result = valKind == TestKind::Map;
         break;
     case IsNumberMode:
         // Python's numbers.Number, which bool belongs to
@@ -450,7 +453,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         break;
     case IsSequenceMode:
         // A dict is a sequence in Python (len and __getitem__), a reflected object is not
-        result = valKind == TestKind::List || valKind == TestKind::String;
+        result = valKind == TestKind::List || valKind == TestKind::KVPair || valKind == TestKind::String;
         if (valKind == TestKind::Map)
         {
             auto map = AsMap(baseVal);

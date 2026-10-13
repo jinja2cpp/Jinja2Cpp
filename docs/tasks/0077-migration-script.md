@@ -29,5 +29,10 @@ Template behaviour changes belong in `MIGRATION.md` too, for example the `format
 since 0048 it is printf-style only and a string with `{}` placeholders raises "not all
 arguments converted"; such templates move to the `'{}'.format(x)` string method.
 
+`MIGRATION.md` also lists the template syntax 2.0 stops accepting, all of which Jinja2
+rejects too (0094, Ruslan decided 2026-10-12): `{% macro m %}` and `{% call m %}` without
+parentheses (write `m()`), `{'a' = 1}` dict literals (write `{'a': 1}`), and `+}}` (a `+`
+before the end of an expression is the operator; `+%}` on statements is unchanged).
+
 **Done when.** The script migrates a copy of our own 1.x-style tests to warning-free code,
 in CI.
