@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: open
 priority: low
 area: parity
 depends: [0001]

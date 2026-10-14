@@ -108,17 +108,17 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0034](0034-none-versus-undefined.md) | Tell `None` apart from undefined | parity | high | done |
 | [0035](0035-locale-independent-string-conversion.md) | Convert between narrow and wide strings without the C locale | robustness | medium | open |
 | [0036](0036-non-string-mapping-keys.md) | Mapping keys that are not strings | parity | low | open |
-| [0037](0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups from 0016 | parity | medium | in-progress |
+| [0037](0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups from 0016 | parity | medium | done |
 | [0038](0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | parity | medium | in-progress |
 | [0039](0039-float-values-print-widened.md) | C++ `float` values print with their widened digits | parity | low | open |
 | [0040](0040-parity-shared-files-serialise-merges.md) | Parity PRs collide in shared generated files | process | high | done |
-| [0041](0041-string-literal-escapes.md) | String literal escape sequences | parity | low | in-progress |
+| [0041](0041-string-literal-escapes.md) | String literal escape sequences | parity | low | open |
 | [0042](0042-loop-cycle-magic-number.md) | Global function follow-ups: globals are maps | parity | low | open |
 | [0043](0043-ordered-valuesmap-2-0.md) | Insertion-ordered ValuesMap (2.0.0) | release | medium | done |
 | [0044](0044-lstrip-blocks-leftovers.md) | lstrip_blocks and modifier leftovers | parity | low | open |
 | [0045](0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | parity | low | open |
 | [0047](0047-none-leftovers.md) | None and undefined: what 0034 left behind | parity | medium | done |
-| [0048](0048-filter-behaviour-leftovers.md) | Filter behaviour: what 0019 left behind | parity | low | open |
+| [0048](0048-filter-behaviour-leftovers.md) | Filter behaviour: what 0019 left behind | parity | low | done |
 | [0049](0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | parity | low | open |
 | [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | done |
 | [0051](0051-markup-leftovers.md) | Markup: what 0025 left behind | parity | low | done |
@@ -151,7 +151,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0079](0079-msvc-runtime-shared-override.md) | Warn when `JINJA2CPP_MSVC_RUNTIME_TYPE` is overridden by a shared build | build | low | open |
 | [0080](0080-nodiscard-result-void.md) | `[[nodiscard]]` on `Load` and `Render`, whose only output is an error | api | low | open |
 | [0081](0081-tidy-leftovers.md) | clang-tidy hits left after the batches | style | low | done |
-| [0082](0082-msvc-warning-flags.md) | MSVC never gets the strict warning flags | build | low | in-progress |
+| [0082](0082-msvc-warning-flags.md) | MSVC never gets the strict warning flags | build | low | done |
 | [0083](0083-cxx17-idioms.md) | C++17 idioms clang-tidy does not automate | style | low | done |
 | [0084](0084-dead-value-sources.md) | Delete the dead `src/value.cpp` and `src/value_helpers.h` bodies | style | low | done |
 | [0085](0085-header-include-cleaner.md) | include-cleaner on headers analysed on their own | build | low | done |
@@ -187,7 +187,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0115](0115-user-data-without-conversion.md) | Reading user data builds keys and copies lists | perf | medium | done |
 | [0116](0116-ascii-string-filters.md) | Case-mapping filters go through the Unicode path for ASCII text | perf | low | done |
 | [0117](0117-name-slots.md) | Resolve variable names to slots at Load | perf | high | blocked |
-| [0118](0118-parse-tree-arena.md) | Allocate a template's parse tree from one arena | perf | high | in-progress |
+| [0118](0118-parse-tree-arena.md) | Allocate a template's parse tree from one arena | perf | high | done |
 | [0119](0119-realistic-bench-workloads.md) | Benchmark workloads people actually render | perf | medium | done |
 | [0120](0120-compare-cpp-engines.md) | Compare with other C++ template engines | perf | low | done |
 | [0121](0121-memory-footprint.md) | Track memory per loaded template and per render | perf | low | done |
@@ -199,7 +199,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0127](0127-filter-argument-types.md) | tojson accepts a non-int indent and calls accept a repeated keyword | parity | low | open |
 | [0128](0128-compile-constant-percent-format.md) | Parse a constant `%` format once, at Load | perf | low | done |
 | [0129](0129-nested-context-scope-storage.md) | Every nested render context allocates a scope deque | perf | low | done |
-| [0130](0130-template-footprint.md) | A loaded template keeps 30 times its source | perf | low | in-progress |
+| [0130](0130-template-footprint.md) | A loaded template keeps 30 times its source | perf | low | done |
 | [0131](0131-load-fixed-cost.md) | Load has a fixed cost that inja does not | perf | low | done |
 | [0132](0132-wide-output-path.md) | Rendering to a wide string pays more per fragment than to a narrow one | perf | low | done |
 | [0133](0133-loop-entry-allocations.md) | Each entry into a `for` loop allocates its state anew | perf | medium | done |
@@ -234,7 +234,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0162](0162-ci-compile-cache-and-queue.md) | CI got slow: no compile cache, serial MSVC builds, macOS queue | ci | high | in-progress |
 | [0163](0163-external-deps-package.md) | The external deps modes do not configure, and no CI job builds them | build | low | done |
 | [0164](0164-tiny-template-fixed-costs.md) | Tiny templates: the last places another engine is ahead | perf | low | open |
-| [0165](0165-macro-bodies-run-where-defined.md) | Macro and call bodies run where they were defined | parity | high | open |
+| [0165](0165-macro-bodies-run-where-defined.md) | Macro and call bodies run where they were defined | parity | high | done |
 | [0166](0166-macro-defaults-per-call.md) | Macro defaults evaluated per call | parity | medium | open |
 | [0167](0167-imported-modules-own-their-context.md) | Imported modules own their context; imported macros run in their module | parity | medium | open |
 | [0168](0168-idtracking-frame-entry-binding.md) | Bind a name the frame assigns at frame entry (Jinja2 idtracking) | parity | low | open |
@@ -247,8 +247,15 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0175](0175-recursive-loop-filter-leftovers.md) | Recursive loop filter: the outer `loop` at depth > 0, and the legacy `recursive if` order | parity | low | open |
 | [0176](0176-tuple-identity-and-sort-case.md) | A dictsort pair has no identity, and sort folds case inside tuples | parity | low | open |
 | [0177](0177-filters-on-none.md) | Filters that accept None where Python raises | parity | low | open |
+| [0178](0178-arbitrary-precision-integers.md) | Integers of arbitrary size, as Python's `int` | parity | medium | open |
 | [0179](0179-caller-markup-eval-context.md) | Autoescape has a lexical and a runtime side | parity | low | open |
 | [0180](0180-markup-from-cpp.md) | Markup from C++ | api | low | open |
 | [0181](0181-select-autoescape.md) | Autoescape chosen by template name (`select_autoescape`) | api | low | open |
 | [0182](0182-markup-percent-repr.md) | `%r` and containers in Markup's `%` | parity | low | open |
+| [0183](0183-context-callable-positional-arg.md) | A user callable taking `*context` gets None for a positional argument | api | medium | open |
+| [0184](0184-gcc13-sanitizer-stringop-overflow.md) | The GCC 13 sanitizer build fails with -Wstringop-overflow | build | low | open |
 | [0185](0185-fuzz-oom-below-sequence-cap.md) | The fuzz job fails on lists below the sequence cap | robustness | medium | open |
+| [0186](0186-python-oracle-target.md) | Which Python and Jinja2 the parity oracle targets, and how users choose | parity | medium | open |
+| [0187](0187-generated-data-acquisition.md) | How generated tables and third-party data are acquired (SBOM) | build | low | open |
+| [0188](0188-stored-loop-cycle-follows-loop.md) | A stored `loop.cycle` keeps the position it was read at | parity | low | open |
+| [0189](0189-casefold-non-ascii.md) | Case-insensitive comparison folds only ASCII | parity | low | open |

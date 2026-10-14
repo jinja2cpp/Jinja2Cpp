@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: low
 area: perf
 touches: [src/template_parser.cpp, src/template_parser.h, src/expression_parser.cpp, src/renderer.h, src/statements.h, src/expression_evaluator.h, src/expression_evaluator.cpp, src/function_base.h, src/filters.cpp, src/filters.h, src/testers.cpp, src/testers.h, src/global_functions.cpp]
@@ -90,3 +90,9 @@ Not reduced here.
 `shared_ptr` control blocks and malloc headers (~270 KB on `many_tags`), 16-byte links
 and `std::string` names.
 
+**Closed (2026-10-14, master b040e7e, `bench/count.py`, Release).** `Load/many_tags` retains
+421,232 B (was 1,138,584 B, -63%; 11x its source instead of 29x), under the half-size goal.
+`Load/chat_llama` retains 18,064 B (was 38,424) and `Load/large_static` 42,720 B (was
+53,064). Load instructions fell over the same period (many_tags -44% against 0109). Render fell on
+every case over the same period (2026-10-12 scout: -20..-69% week over week), and the
+`dict_ops` peak is explained above.

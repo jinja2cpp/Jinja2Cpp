@@ -1,5 +1,6 @@
 ---
-status: in-progress
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/508
 priority: high
 area: parity
 depends: []
@@ -53,3 +54,7 @@ another body takes its own lookup cache epoch (its link hides that body's scopes
 names the home's epoch may have cached), unless the Load marked its body as reading only
 its arguments' slots (MacroStatement::ReadsSlotsOnly, conservative: no call, filter, test,
 attribute access, statement other than `if`, nor name outside its arguments).
+
+Done in #508 (merged a6e9573, 2026-10-13): CI green on all 41 checks, Render macros
++0.69% against the post-train master, inside the +0.7% allowance. The lines that still name
+0165 are its `deliberate:` lines, which the umbrella 0038 accepts.
