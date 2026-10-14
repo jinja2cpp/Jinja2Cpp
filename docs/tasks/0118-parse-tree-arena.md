@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: high
 area: perf
 depends: [0109]
@@ -235,3 +235,7 @@ template_parser.*, ordered_map.h, render_context.h):
   both paths; `TemplateKeepsOnlyOwners` rows (blocks and `with` 0, a macro 1).
 - Divergences seen while building 3b, filed as 0155 (`{% from 'm' import a, a as b %}`) and
   0156 (a call block on an undefined name renders nothing).
+
+**Closed (2026-10-14, master b040e7e, `bench/count.py`, Release).** `Load/many_tags` costs
+9,188,458 instructions and 945 allocations per load, against 0109's 16.40M and 9,658: -44.0%
+instructions, past the -30% goal. The sanitizer and fuzz jobs are green on master.

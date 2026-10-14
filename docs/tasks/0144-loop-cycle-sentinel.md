@@ -36,4 +36,5 @@ captures `index0`); Jinja2's bound method follows the loop, so a callable stored
 and called on later ones cycles from the start (`statements.loop_cycle_stored_called_later`,
 listed in `divergences/statements.txt`). Following the loop needs a callable that borrows the
 loop frame, which the frame pool (0133) makes unsafe once the loop ends. `loop.cycle('a', x=1)`
-as a direct call still ignores keyword arguments (`LoopAttrExpression::TryCallCycle`).
+as a direct call still ignores keyword arguments (`LoopAttrExpression::TryCallCycle`). Both are
+filed as 0188.

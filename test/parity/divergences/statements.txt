@@ -5,9 +5,9 @@ statements.macro_default_reassigned_global output    0166 a default that names n
 statements.namespace_is_mapping         output      0042 namespace() is a mapping, not an opaque object
 statements.namespace_iterate            accepts     0042 namespace() is a mapping, not an opaque object
 statements.namespace_print              output      0042 namespace() is a mapping, not an opaque object
-statements.call_block_dict              accepts     0156 Jinja2 cannot join the dict a call block returns (TypeError); Jinja2C++ prints it, intentionally
+statements.call_block_dict              accepts     0156 deliberate: Jinja2 cannot join the dict a call block returns (TypeError); Jinja2C++ prints it
 statements.idtracking_inner_read_before_outer_set output      0168 a name the frame assigns later resolves outward on read; Jinja2 binds it at frame entry
-statements.loop_cycle_stored_called_later output   0144 a stored loop.cycle is bound to the position it was read at, Jinja2's follows the loop
+statements.loop_cycle_stored_called_later output   0188 a stored loop.cycle is bound to the position it was read at, Jinja2's follows the loop
 statements.loop_recursive_after_filter_reject_order accepts 0175 `recursive if c` (the old Jinja2C++ order) is still accepted next to Jinja2's `if c recursive`
 statements.caller_escapes_its_loop     output      0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
 statements.macro_escapes_its_loop      output      0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
