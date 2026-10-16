@@ -7,9 +7,6 @@ statements.loop_recursive_after_filter_reject_order accepts 0175 `recursive if c
 statements.caller_escapes_its_loop     output      0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
 statements.macro_escapes_its_loop      output      0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
 statements.nested_macro_escapes_its_call output    0165 deliberate: a macro that outlives the macro call defining it reads that call's names as undefined
-statements.macro_root_name_set_after_call output   0168 a name the template sets after the call resolves outward on read; Jinja2 binds it at frame entry
-statements.macro_loop_name_set_after_call output   0168 a name the loop body sets after the call resolves outward on read; Jinja2 binds it at frame entry
-statements.default_root_name_set_after_context output 0168 a name the template sets after the call resolves outward on read; Jinja2 binds it at frame entry
 statements.loop_len                     output      0196 len(loop) counts the keys of the loop map, not the items of the loop
 statements.set_unpack_dict_keys        output      0197 tuple assignment from a dict takes the items named like the targets instead of unpacking its keys
 statements.call_block_caller_repr       output      0199 a call block's caller prints as empty; Jinja2 prints <Macro anonymous>
