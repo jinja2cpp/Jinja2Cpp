@@ -74,6 +74,7 @@ INSTANTIATE_TEST_SUITE_P(Slots, NameResolverTest, testing::Values(
     NameResolverCase{ "{% for x in xs %}{% set x = 1 %}{{ x }}{% endfor %}", "x:-" },
     NameResolverCase{ "{% for x in xs %}{{ x }}{% set x = 1 %}{% endfor %}", "x:-" },
     NameResolverCase{ "{% for x in xs %}{% with x = 1 %}{{ x }}{% endwith %}{{ x }}{% endfor %}", "x:- x:1" },
+    NameResolverCase{ "{% for x in xs %}{% filter upper %}{% set x = 1 %}{{ x }}{% endfilter %}{{ x }}{% endfor %}", "x:- x:1" },
     NameResolverCase{ "{% for x in xs %}{{ x }}{% else %}{{ x }}{% endfor %}", "x:1" },
     NameResolverCase{ "{% for x in xs recursive %}{{ x }}{{ loop(x) }}{% endfor %}", "" },
     NameResolverCase{ "{% for x in xs recursive %}{% for y in x %}{{ y }}{% endfor %}{% endfor %}", "" },

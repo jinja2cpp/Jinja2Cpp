@@ -2466,4 +2466,19 @@ void AutoescapeStatement::Render(OutStream& os, RenderContext& values)
     values.Nodes()[m_body].Render(os, values);
     values.ExitScope();
 }
+
+void BindUndefinedStatement::Render(OutStream& /*os*/, RenderContext& values)
+{
+    const auto& nodes = values.Nodes();
+    auto scope = values.GetCurrentScope();
+    for (const auto& name : nodes[m_names])
+    {
+        const auto text = nodes.Text(name.name);
+        auto& value = scope.ForName({ text, name.hash });
+        if (value.IsUndefined())
+        {
+            value = MakeUndefined(values, std::string(text));
+        }
+    }
+}
 } // namespace jinja2

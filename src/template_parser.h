@@ -243,6 +243,12 @@ struct StatementInfo
     // between them and its body made (MacroStatement::SetBodyMarks)
     NodeArena::ContextMarks marks;
 
+    // Whether the body of a statement of `type` is a frame of the resolver of its own
+    static bool OwnsFrame(Type type)
+    {
+        return type == TemplateRoot || type == ForStatement || type == BlockStatement || type == MacroStatement || type == MacroCallStatement || type == WithStatement || type == SetStatement || type == FilterStatement || type == AutoescapeStatement;
+    }
+
     static StatementInfo Create(Type type, const Token& tok)
     {
         StatementInfo result;
@@ -371,6 +377,14 @@ private:
     // The statement's body, as a node
     NodeRef<ComposedRenderer> TakeBody(StatementInfo& info)
     {
+        // The body of a frame starts by binding the names it holds from its entry (0168)
+        if (StatementInfo::OwnsFrame(info.type))
+        {
+            if (const auto binding = m_names.EntryBinding(info.frame, m_nodes))
+            {
+                info.body.insert(info.body.begin(), binding);
+            }
+        }
         auto body = m_nodes.MakeWithItems<ComposedRenderer>(boost::span<const ComposedRenderer::Child>(info.body.data(), info.body.size()));
         info.body.clear();
         return body;
@@ -1401,7 +1415,11 @@ private:
             return MakeUnexpected(std::move(errors));
         }
 
-        const auto& rootBody = statementsStack.front().body;
+        auto& rootBody = statementsStack.front().body;
+        if (const auto binding = m_names.EntryBinding(statementsStack.front().frame, m_nodes))
+        {
+            rootBody.insert(rootBody.begin(), binding);
+        }
         auto& templateRoot = m_nodes[templateRef];
         templateRoot.SetBlocks(m_nodes.MakeSpan(m_root.blocks));
         if (m_root.hasExtends)

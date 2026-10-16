@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/528
 priority: low
 area: parity
 depends: [0165]
@@ -23,3 +24,13 @@ by the name resolver, no runtime cost; 0117 P4's root slots should carry it. Kep
 0038 by decision 3 of its plan.
 
 **Done when.** No divergences line names 0168 and `ctest -R parity` passes.
+
+**Done.** `NameResolver::EntryBinding` finds, when a frame's body ends, the names the frame
+stores first outside a branch, does not read itself before, and a frame inside it reads
+before the store (one read after it runs after the store); the body then starts with a
+`BindUndefinedStatement` that binds them as undefined in the frame's scope. `Resolve` drops
+the names a frame around it reads, stores or binds (Jinja2 aliases those to the outer value,
+which a lookup finds anyway). Block `set`, `filter` and `autoescape` bodies are resolver
+frames now, as their scopes are Jinja2 frames, and a block `set` stores after its body. Load
+costs up to +1.7% instructions on the benchmarks (+2.7% on plain_text, a fixed ~100), Render
+nothing. Left: a block reading the name (0201).

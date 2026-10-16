@@ -159,6 +159,7 @@ public:
     static Callable MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site);
 
     [[nodiscard]] bool IsRecursive() const { return m_isRecursive; }
+    [[nodiscard]] AssignTarget GetTarget() const { return m_target; }
     [[nodiscard]] bool HasFilter() const { return static_cast<bool>(m_ifExpr); }
     // Makes the list of the names the loop binds: `loop`, then its target names in order,
     // each once. Called once, before BindSlots
@@ -287,9 +288,10 @@ public:
     SetStatement& operator=(const SetStatement&) = delete;
     SetStatement& operator=(SetStatement&&) = delete;
 
+    [[nodiscard]] AssignTarget GetTarget() const { return m_target; }
+
 protected:
     ~SetStatement() = default;
-    [[nodiscard]] AssignTarget GetTarget() const { return m_target; }
 
 private:
     const AssignTarget m_target;
@@ -609,6 +611,7 @@ private:
 class MacroStatement : public Statement
 {
 public:
+    [[nodiscard]] ArenaSpan<MacroParam> GetParams() const { return m_params; }
     static constexpr NodeKind Kind = NodeKind::MacroStmt;
     void VisitRefs(detail::RefChecker& refs) const
     {
@@ -901,6 +904,25 @@ public:
 private:
     NodeRef<Expression> m_expr;
     NodeRef<IRendererBase> m_body;
+};
+
+// The names a frame stores later, read before that from a frame inside it: bound as
+// undefined in the frame's scope as the frame starts, so that those reads do not find the
+// value outside, as Jinja2's idtracking binds them (docs/tasks/0168). The first statement of
+// the frame's body; NameResolver decides the names. A name the scope already holds (a parent
+// template shares its child's) is kept
+class BindUndefinedStatement final : public Statement
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::BindUndefinedStmt;
+    void VisitRefs(detail::RefChecker& refs) const { detail::VisitSlotNameRefs(refs, m_names); }
+
+    void SetNames(ArenaSpan<SlotName> names) { m_names = names; }
+
+    void Render(OutStream&, RenderContext&) override;
+
+private:
+    ArenaSpan<SlotName> m_names;
 };
 
 } // namespace jinja2
