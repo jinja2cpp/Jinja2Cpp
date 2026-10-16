@@ -35,3 +35,6 @@ filters and tests among the render parameters and globals when they run; without
 lookup, and `is filter`/`is test` counting such values, are gone. As in Jinja2, output tags
 (`{{ }}`, `trans`) after a top-level `extends` are not checked unless inside a macro, call
 block, set block or block; Jinja2C++ still evaluates that output when it renders (0203).
+Deliberate: with several unknown names the one reported follows the source, where Jinja2
+compiles a filter or set block's body before its header, a call block's body before its
+arguments, and a loop's test and body before its iterable; both reject.

@@ -22,3 +22,10 @@ knows it: TemplateRootInfo::knownExtends) and skip them, and skip the rest once 
 run inside an `if`, instead of writing to a discarding stream.
 
 **Done when.** No line of `test/parity/divergences/` names 0203.
+
+**Also, load-time checks near `extends` (0193 verifier, rare).** A second top-level `extends`
+stops Jinja2's compile of the body (CompilerExit), so unknown names after it outside blocks
+are not reported (`{% extends B %}{% extends B %}{% macro m() %}{{ 1|f }}{% endmacro %}`
+loads in Jinja2, fails in Jinja2C++; it fails at render in both). And Jinja2's i18n turns a
+first `trans` variable that is a call into an assignment it compiles even after a known
+extends (`{% extends B %}{% trans a=m(1|f) %}...` fails to load in Jinja2, loads here).
