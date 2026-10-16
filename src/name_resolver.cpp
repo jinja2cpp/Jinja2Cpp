@@ -202,7 +202,7 @@ NodeRef<BindUndefinedStatement> NameResolver::EntryBinding(FrameId frameId, Node
 // first). One no frame inside reads before the store needs no binding: the body runs in
 // order, so a frame that comes after the store, or a closure defined after it, runs after it.
 // One a block inside reads is left as it is, since the block would see the binding and
-// Jinja2's does not (docs/tasks/0196); so is one stored after an include or import with
+// Jinja2's does not (docs/tasks/0201); so is one stored after an include or import with
 // context inside the frame, which Jinja2 hands the outer value
 void NameResolver::MarkCandidateReads(FrameId frameId, boost::span<EntryCandidate> candidates, const NodeArena& nodes) const
 {

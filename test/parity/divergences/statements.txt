@@ -9,7 +9,7 @@ statements.macro_escapes_its_loop      output      0165 deliberate: a closure ca
 statements.nested_macro_escapes_its_call output    0165 deliberate: a macro that outlives the macro call defining it reads that call's names as undefined
 statements.namespace_unpack             accepts     0191 tuple assignment unpacks a namespace by name instead of raising TypeError
 statements.loop_callable                output      0191 a non-recursive loop object has no call, so it does not test as callable
-statements.idtracking_block_and_macro_read_root_name output 0196 a name a block reads is not bound at the root's entry, so the macro sees the outer value; Jinja2's block reads the context and the macro the root's binding
-statements.loop_else_set_is_local       output      0197 a loop's else body runs in the enclosing scope, so its set leaks; Jinja2 gives it a frame of its own
-statements.idtracking_loop_else_read_before_set output 0197 a loop's else body counts as the enclosing frame, so its read keeps the binding off; Jinja2's reads the binding
-statements.idtracking_block_read_keeps_loop_read_outer output 0196 a name a block reads is not bound at the root's entry, so the loop sees the outer value; Jinja2's loop reads the root's binding
+statements.idtracking_block_and_macro_read_root_name output 0201 a name a block reads is not bound at the root's entry, so the macro sees the outer value; Jinja2's block reads the context and the macro the root's binding
+statements.loop_else_set_is_local       output      0202 a loop's else body runs in the enclosing scope, so its set leaks; Jinja2 gives it a frame of its own
+statements.idtracking_loop_else_read_before_set output 0202 a loop's else body counts as the enclosing frame, so its read keeps the binding off; Jinja2's reads the binding
+statements.idtracking_block_read_keeps_loop_read_outer output 0201 a name a block reads is not bound at the root's entry, so the loop sees the outer value; Jinja2's loop reads the root's binding

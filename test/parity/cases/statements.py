@@ -352,12 +352,12 @@ CASES = [
     ('idtracking_loop_target_stored_later', '{% for x in [5] %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = 7 %}{% endfor %}'),
     ('idtracking_block_reads_context', '{% block b %}{{ x }}{% endblock %}{% set x = 1 %}'),
     ('idtracking_macro_defined_after_inner_call', '{% for i in [1,2] %}{% for j in [1] %}{{ m() }}{% endfor %}{% macro m() %}{{ i }}{% endmacro %}{% endfor %}'),
-    # a block reads the context while a macro reads the root's binding (docs/tasks/0196)
+    # a block reads the context while a macro reads the root's binding (docs/tasks/0201)
     ('idtracking_block_and_macro_read_root_name', '{% macro m() %}[{{ x }}]{% endmacro %}{% block b %}{{ x }}{{ m() }}{% endblock %}{% set x = 1 %}'),
     ('idtracking_macro_special_name_stored_later', '{% macro m() %}{% for j in [1] %}{{ varargs | length }}{% endfor %}{% set varargs = 5 %}{% endmacro %}{{ m(1) }}'),
-    # a loop's else body is a frame of its own (docs/tasks/0197)
+    # a loop's else body is a frame of its own (docs/tasks/0202)
     ('loop_else_set_is_local', '{% for j in e %}{% else %}{% set x = 1 %}{% endfor %}{% for k in [1] %}{{ x }}{% endfor %}'),
     ('idtracking_loop_else_read_before_set', '{% for i in [1] %}{% for j in e %}{% else %}{{ x }}{% endfor %}{% set x = 9 %}{% endfor %}'),
-    # a block read before the store keeps the binding off (docs/tasks/0196)
+    # a block read before the store keeps the binding off (docs/tasks/0201)
     ('idtracking_block_read_keeps_loop_read_outer', '{% block b %}{% for j in [1] %}{{ x }}{% endfor %}{% endblock %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = 1 %}'),
 ]

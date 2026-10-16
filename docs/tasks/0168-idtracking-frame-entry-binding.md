@@ -33,4 +33,4 @@ the names a frame around it reads, stores or binds (Jinja2 aliases those to the 
 which a lookup finds anyway). Block `set`, `filter` and `autoescape` bodies are resolver
 frames now, as their scopes are Jinja2 frames, and a block `set` stores after its body. Load
 costs up to +1.7% instructions on the benchmarks (+2.7% on plain_text, a fixed ~100), Render
-nothing. Left: a block reading the name (0196).
+nothing. Left: a block reading the name (0201).

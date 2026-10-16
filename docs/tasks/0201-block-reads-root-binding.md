@@ -27,4 +27,4 @@ would let both keep it.
 (for example a marker the binding statement sets on the undefined it stores, skipped by the
 lookup a block's scope view makes), then drop the block exception in `EntryBinding`.
 
-**Done when.** No divergences line names 0196.
+**Done when.** No divergences line names 0201.
