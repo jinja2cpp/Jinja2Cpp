@@ -7,6 +7,7 @@
 #include <boost/container/small_vector.hpp>
 #include <boost/core/span.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -70,9 +71,8 @@ public:
         // The same inside a branch (SetInBranch), or a name the frame may hold
         // that Jinja2 does not store (an imported name besides its alias): never bound at entry
         Branch,
-        // A name the frame binds as it starts: a loop target, a macro's argument, a `with`
-        // target (those also hide slots, as a store)
-        Param,
+        // A `with` target: bound as the frame starts (a loop's targets and a macro's arguments
+        // are found on their statements, BindsName)
         Target
     };
     // `name` is set in a scope of `frame`'s statement (`set`, a macro, an import alias), in a
@@ -175,6 +175,22 @@ private:
     static void SetUnitLayout(NodeArena& nodes, NodeRef<IRendererBase> owner, UnitLayout layout);
     [[nodiscard]] bool IsStored(FrameId frame, std::string_view name) const;
     void DoAddStore(FrameId frame, const std::string& name, StoreKind kind);
+    // A name a frame may bind at its entry (EntryBinding)
+    struct EntryCandidate
+    {
+        std::size_t hash = 0;
+        std::string_view name;
+        std::uint32_t readsBefore = 0;
+        // The store's place in m_stores
+        std::uint32_t order = 0;
+        bool isDropped = false;
+        bool isReadInside = false;
+    };
+    struct EntryName;
+    void MarkCandidateReads(FrameId frameId, boost::span<EntryCandidate> candidates, const NodeArena& nodes) const;
+    // Whether `frame` binds `name` as it starts: a loop target, `loop`, a macro's argument
+    [[nodiscard]] bool BindsName(FrameId frame, std::string_view name, const NodeArena& nodes) const;
+    [[nodiscard]] bool IsBoundOutside(FrameId frameId, const EntryName& entry, const NodeArena& nodes) const;
     // Gives each entry binding the names no frame around its own reads or binds
     void ResolveEntryBindings(NodeArena& nodes);
     // The slot `ref` reads, Dynamic when it is looked up by name
@@ -200,8 +216,8 @@ private:
     };
     // Every name expression made in a frame, in parse order
     boost::container::small_vector<std::pair<NodeRef<ValueRefExpression>, FrameId>, 16> m_reads;
-    // The names stored in frames, in parse order
-    std::vector<Store> m_stores;
+    // The names stored in frames, in parse order; most templates store a few
+    boost::container::small_vector<Store, 8> m_stores;
     std::vector<EntryName> m_entryNames;
     FrameId m_current = NoFrame;
     bool m_inBranch = false;

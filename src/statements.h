@@ -159,6 +159,7 @@ public:
     static Callable MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site);
 
     [[nodiscard]] bool IsRecursive() const { return m_isRecursive; }
+    [[nodiscard]] AssignTarget GetTarget() const { return m_target; }
     [[nodiscard]] bool HasFilter() const { return static_cast<bool>(m_ifExpr); }
     // Makes the list of the names the loop binds: `loop`, then its target names in order,
     // each once. Called once, before BindSlots
@@ -287,9 +288,10 @@ public:
     SetStatement& operator=(const SetStatement&) = delete;
     SetStatement& operator=(SetStatement&&) = delete;
 
+    [[nodiscard]] AssignTarget GetTarget() const { return m_target; }
+
 protected:
     ~SetStatement() = default;
-    [[nodiscard]] AssignTarget GetTarget() const { return m_target; }
 
 private:
     const AssignTarget m_target;
@@ -606,6 +608,7 @@ private:
 class MacroStatement : public Statement
 {
 public:
+    [[nodiscard]] ArenaSpan<MacroParam> GetParams() const { return m_params; }
     static constexpr NodeKind Kind = NodeKind::MacroStmt;
     void VisitRefs(detail::RefChecker& refs) const
     {

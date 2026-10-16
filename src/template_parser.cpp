@@ -326,7 +326,6 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ForStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementInfo.frame = m_names.PushFor(outerFrame, renderer, isRecursive);
-    m_names.AddStores(statementInfo.frame, m_nodes[target->target], m_nodes, NameResolver::StoreKind::Param);
     if (filterFrame != NameResolver::NoFrame)
     {
         m_names.LinkFilter(filterFrame, statementInfo.frame);
@@ -706,8 +705,6 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     }
     else if (lexer.EatIfEqual('|'))
     {
-        // A block `set` stores its name before its body, which Jinja2 reads in a frame of its own
-        m_names.AddStores(m_names.Current(), m_nodes[vars], m_nodes);
         const auto expr = exprParser.ParseFilterExpression(lexer);
         if (!expr)
         {
@@ -727,7 +724,6 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         {
             return MakeParseError(ErrorCode::YetUnsupported, operTok, { stmtTok });
         }
-        m_names.AddStores(m_names.Current(), m_nodes[vars], m_nodes);
         auto statementInfo = StatementInfo::Create(
             StatementInfo::SetStatement, stmtTok);
         statementInfo.renderer = m_nodes.Make<SetRawBlockStatement>(
@@ -752,7 +748,12 @@ StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&, Stateme
     }
 
     auto info = PopStatement(statementsInfo);
-    m_nodes.Get<SetBlockStatement>(info.renderer).SetBody(TakeBody(info));
+    auto& statement = m_nodes.Get<SetBlockStatement>(info.renderer);
+    statement.SetBody(TakeBody(info));
+    // Stored once the body has rendered, which may read the name itself
+    const auto& outer = statementsInfo.back();
+    const auto kind = StatementInfo::OwnsFrame(outer.type) ? NameResolver::StoreKind::Store : NameResolver::StoreKind::Branch;
+    m_names.AddStores(outer.frame, m_nodes[statement.GetTarget()], m_nodes, kind);
     statementsInfo.back().body.push_back(info.renderer);
 
     return {};
@@ -898,10 +899,6 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     statementInfo.renderer = renderer;
     statementInfo.marks = marks;
     statementInfo.frame = m_names.PushMacro(outerFrame, renderer);
-    for (const auto& param : result.value())
-    {
-        m_names.AddStore(statementInfo.frame, param.paramName, NameResolver::StoreKind::Param);
-    }
     statementsInfo.push_back(std::move(statementInfo));
 
     return ParseResult();
@@ -1110,10 +1107,6 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     statementInfo.renderer = renderer;
     statementInfo.marks = marks;
     statementInfo.frame = m_names.PushMacro(m_names.Current(), renderer);
-    for (const auto& param : callbackParams)
-    {
-        m_names.AddStore(statementInfo.frame, param.paramName, NameResolver::StoreKind::Param);
-    }
     statementsInfo.push_back(std::move(statementInfo));
 
     return ParseResult();
