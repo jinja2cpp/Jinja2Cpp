@@ -352,7 +352,9 @@ TEST_F(RecursionLimitsTest, SmallThreadStack)
 // A loop nests a value as deep as it iterates (docs/tasks/0093). Destroying such a value
 // recursed once per level and overflowed the stack; walks over it (printing, tojson, pprint,
 // ==) still recurse, but stop with RecursionLimitExceeded like Python's RecursionError.
-TEST_F(RecursionLimitsTest, DeepValues)
+namespace
+{
+void CheckDeepValues(TemplateEnv* env)
 {
     const std::string lists = "{% set ns = namespace(v=[], w=[]) %}{% for i in range(100000) %}{% set ns.v = [ns.v] %}{% set ns.w = [ns.w] %}{% endfor %}";
     const std::string dicts = "{% set ns = namespace(v={}, w={}) %}{% for i in range(100000) %}{% set ns.v = {'a': ns.v} %}{% set ns.w = {'a': ns.w} %}{% endfor %}";
@@ -365,11 +367,10 @@ TEST_F(RecursionLimitsTest, DeepValues)
     };
     for (const auto& [source, expected] : renders)
     {
-        Template tpl(&m_env);
+        Template tpl(env);
         ASSERT_TRUE(tpl.Load(source).has_value()) << source.substr(source.size() - 30);
         auto result = tpl.RenderAsString({});
-        ASSERT_TRUE(result.has_value()) << source.substr(source.size() - 30) << ": " << result.error().ToString();
-        EXPECT_EQ(expected, result.value());
+        EXPECT_EQ(expected, result ? result.value() : result.error().ToString()) << source.substr(source.size() - 30);
     }
     const std::string walks[] = {
         lists + "{{ ns.v }}",
@@ -381,10 +382,38 @@ TEST_F(RecursionLimitsTest, DeepValues)
     };
     for (const auto& source : walks)
     {
-        Template tpl(&m_env);
+        Template tpl(env);
         ASSERT_TRUE(tpl.Load(source).has_value()) << source.substr(source.size() - 30);
         auto result = tpl.RenderAsString({});
-        ASSERT_FALSE(result.has_value()) << source.substr(source.size() - 30);
-        EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode()) << source.substr(source.size() - 30);
+        EXPECT_FALSE(result.has_value()) << source.substr(source.size() - 30);
+        if (!result)
+        {
+            EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode()) << source.substr(source.size() - 30) << ": " << result.error().ToString();
+        }
     }
+}
+
+#if defined(__linux__) || defined(__APPLE__)
+void* CheckDeepValuesOnThread(void* env)
+{
+    CheckDeepValues(static_cast<TemplateEnv*>(env));
+    return nullptr;
+}
+#endif
+} // namespace
+
+TEST_F(RecursionLimitsTest, DeepValues)
+{
+#if defined(__linux__) || defined(__APPLE__)
+    // On a thread of a known stack: a main thread may have a stack deep enough for the walks
+    pthread_attr_t attr;
+    ASSERT_EQ(0, pthread_attr_init(&attr));
+    ASSERT_EQ(0, pthread_attr_setstacksize(&attr, std::size_t{ 4 } * 1024 * 1024));
+    pthread_t thread{};
+    ASSERT_EQ(0, pthread_create(&thread, &attr, CheckDeepValuesOnThread, &m_env));
+    pthread_join(thread, nullptr);
+    pthread_attr_destroy(&attr);
+#else
+    CheckDeepValues(&m_env);
+#endif
 }
