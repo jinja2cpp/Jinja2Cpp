@@ -38,6 +38,68 @@ namespace jinja2
 namespace detail
 {
 
+// Python's a.lower() <=> b.lower(), comparing code points: -1, 0 or 1. The full Unicode
+// mapping (string_converter_filter.cpp); CompareIgnoreCase calls it only for non-ASCII text
+int CompareLowerUnicode(std::string_view left, std::string_view right);
+int CompareLowerUnicode(std::wstring_view left, std::wstring_view right);
+// str.lower() of UTF-8 text with a non-ASCII byte (string_converter_filter.cpp)
+void LowerUtf8Unicode(std::string_view str, std::string& out);
+
+// Sets out to str.lower() of UTF-8 text, whose bytes then order as the code points of the
+// lowered string. ASCII text is lowered inline, into a sized buffer: push_back with the
+// non-ASCII check costs dictsort a third more per key (Render/dict_ops)
+inline void LowerUtf8(std::string_view str, std::string& out)
+{
+    out.resize(str.size());
+    uint32_t bits = 0;
+    for (size_t idx = 0; idx != str.size(); ++idx)
+    {
+        const auto ch = str[idx];
+        bits |= CodeUnit(ch);
+        out[idx] = ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch;
+    }
+    if (bits >= 0x80)
+    {
+        LowerUtf8Unicode(str, out);
+    }
+}
+
+// Case-insensitive three-way comparison as Jinja2's ignore_case does it (str.lower()). An
+// ASCII prefix is compared inline: lowering a code point never looks at the ones after it,
+// so the first ASCII difference decides, and only a non-ASCII unit takes the Unicode path
+template<typename CharT>
+int CompareIgnoreCase(std::basic_string_view<CharT> left, std::basic_string_view<CharT> right)
+{
+    const auto size = std::min(left.size(), right.size());
+    for (size_t idx = 0; idx != size; ++idx)
+    {
+        auto l = CodeUnit(left[idx]);
+        auto r = CodeUnit(right[idx]);
+        if ((l | r) >= 0x80)
+        {
+            return CompareLowerUnicode(left, right);
+        }
+        l += (l >= 'A' && l <= 'Z') ? 'a' - 'A' : 0;
+        r += (r >= 'A' && r <= 'Z') ? 'a' - 'A' : 0;
+        if (l != r)
+        {
+            return l < r ? -1 : 1;
+        }
+    }
+    if (left.size() == right.size())
+    {
+        return 0;
+    }
+    // Every code point lowers to at least one, so the longer string is greater, unless its
+    // next unit is a stray continuation that belongs to the last character (malformed text)
+    const auto next = CodeUnit(left.size() < right.size() ? right[size] : left[size]);
+    if (next >= 0x80)
+    {
+        return CompareLowerUnicode(left, right);
+    }
+    return left.size() < right.size() ? -1 : 1;
+}
+
 template<typename V, size_t N>
 struct RecursiveUnwrapper
 {
@@ -692,10 +754,31 @@ void ValueRendererBase<CharT>::operator()(const ListRef& list) const
 template<typename CharT>
 void ValueRendererBase<CharT>::operator()(const MapRef& map) const
 {
+    // An object prints as Python's repr of it: <Namespace {...}> wraps its attributes, the
+    // rest have the default <module.Class object at 0x...>
+    const char* objectClass = map.GetObjectClass();
+    if (objectClass && !map.IsNamespace())
+    {
+        AppendAscii("<jinja2.utils.");
+        AppendAscii(objectClass);
+        AppendAscii(" object at ");
+        AppendAscii(fmt::format("{}", map.GetIdentity()).c_str());
+        AppendAscii(">");
+        return;
+    }
+    if (objectClass)
+    {
+        AppendAscii("<Namespace ");
+    }
+
     ContainerStack ownContainers;
     auto& containers = m_containers ? *m_containers : ownContainers;
     if (!EnterContainer(map.GetIdentity(), containers, "{...}"))
     {
+        if (objectClass)
+        {
+            AppendAscii(">");
+        }
         return;
     }
 
@@ -718,6 +801,10 @@ void ValueRendererBase<CharT>::operator()(const MapRef& map) const
         RenderRepr(map.GetValueByName(key), &containers);
     }
     AppendAscii("}");
+    if (objectClass)
+    {
+        AppendAscii(">");
+    }
     containers.pop_back();
 }
 
@@ -768,9 +855,10 @@ inline const char* PythonTypeName(const ListRef& list)
 {
     return list.IsTuple() ? "tuple" : "list";
 }
-inline const char* PythonTypeName(const MapRef&)
+inline const char* PythonTypeName(const MapRef& map)
 {
-    return "dict";
+    const char* objectClass = map.GetObjectClass();
+    return objectClass ? objectClass : "dict";
 }
 inline const char* PythonTypeName(const KeyValuePair&)
 {
@@ -1415,25 +1503,6 @@ struct BinaryMathOperation : BaseVisitor<>
         });
     }
 
-    // Python compares code points after lower(). Narrow strings are UTF-8, whose byte order is
-    // the code point order, so bytes compare as unsigned (a signed char sorts 'é' before ' ')
-    template<typename CharT>
-    struct CaseInsensitiveLess
-    {
-        bool operator()(CharT l, CharT r) const
-        {
-            if constexpr (std::is_same_v<CharT, char>)
-            {
-                auto lower = [](char ch) { return static_cast<unsigned char>(ch >= 'A' && ch <= 'Z' ? ch - 'A' + 'a' : ch); };
-                return lower(l) < lower(r);
-            }
-            else
-            {
-                return boost::algorithm::is_iless()(l, r);
-            }
-        }
-    };
-
     template<typename CharT>
     [[nodiscard]] ResultType ProcessStrings(const std::basic_string_view<CharT>& left, const std::basic_string_view<CharT>& right) const
     {
@@ -1445,36 +1514,22 @@ struct BinaryMathOperation : BaseVisitor<>
             result = InternalValue::FromText<CharT>({ left, right });
             break;
         case jinja2::BinaryExpression::LogicalEq:
-            result = m_compType == BinaryExpression::CaseSensitive ? left == right : boost::iequals(left, right);
+            result = m_compType == BinaryExpression::CaseSensitive ? left == right : jinja2::detail::CompareIgnoreCase(left, right) == 0;
             break;
         case jinja2::BinaryExpression::LogicalNe:
-            result = m_compType == BinaryExpression::CaseSensitive ? left != right : !boost::iequals(left, right);
+            result = m_compType == BinaryExpression::CaseSensitive ? left != right : jinja2::detail::CompareIgnoreCase(left, right) != 0;
             break;
         case jinja2::BinaryExpression::LogicalGt:
-            result = m_compType == BinaryExpression::CaseSensitive ? left > right : boost::lexicographical_compare(right, left, CaseInsensitiveLess<CharT>());
+            result = m_compType == BinaryExpression::CaseSensitive ? left > right : jinja2::detail::CompareIgnoreCase(left, right) > 0;
             break;
         case jinja2::BinaryExpression::LogicalLt:
-            result = m_compType == BinaryExpression::CaseSensitive ? left < right : boost::lexicographical_compare(left, right, CaseInsensitiveLess<CharT>());
+            result = m_compType == BinaryExpression::CaseSensitive ? left < right : jinja2::detail::CompareIgnoreCase(left, right) < 0;
             break;
         case jinja2::BinaryExpression::LogicalGe:
-            if (m_compType == BinaryExpression::CaseSensitive)
-            {
-                result = left >= right;
-            }
-            else
-            {
-                result = boost::iequals(left, right) ? true : boost::lexicographical_compare(right, left, CaseInsensitiveLess<CharT>());
-            }
+            result = m_compType == BinaryExpression::CaseSensitive ? left >= right : jinja2::detail::CompareIgnoreCase(left, right) >= 0;
             break;
         case jinja2::BinaryExpression::LogicalLe:
-            if (m_compType == BinaryExpression::CaseSensitive)
-            {
-                result = left <= right;
-            }
-            else
-            {
-                result = boost::iequals(left, right) ? true : boost::lexicographical_compare(left, right, CaseInsensitiveLess<CharT>());
-            }
+            result = m_compType == BinaryExpression::CaseSensitive ? left <= right : jinja2::detail::CompareIgnoreCase(left, right) <= 0;
             break;
         case jinja2::BinaryExpression::DivRemainder:
             result = PercentFormat(left, right);
@@ -1548,12 +1603,14 @@ struct BinaryMathOperation : BaseVisitor<>
             ThrowUnsupported(left, right);
         }
 
-        // Lexicographic, as Python: the first differing item decides, else the length
+        // Lexicographic, as Python: the first differing item decides, else the length.
+        // Case folding (the filters' case_sensitive=false) applies to a top-level string
+        // only, as Jinja2's ignore_case: items inside lists and tuples compare as they are
         auto l = left.begin();
         auto r = right.begin();
         for (; l != left.end() && r != right.end(); ++l, ++r)
         {
-            if (ConvertToBool(Apply2<BinaryMathOperation>(*l, *r, BinaryExpression::LogicalEq, m_compType)))
+            if (ConvertToBool(Apply2<BinaryMathOperation>(*l, *r, BinaryExpression::LogicalEq)))
             {
                 continue;
             }
@@ -1565,7 +1622,7 @@ struct BinaryMathOperation : BaseVisitor<>
             {
                 return true;
             }
-            return Apply2<BinaryMathOperation>(*l, *r, m_oper, m_compType);
+            return Apply2<BinaryMathOperation>(*l, *r, m_oper);
         }
         const bool leftDone = l == left.end();
         const bool rightDone = r == right.end();
@@ -1622,7 +1679,7 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             for (auto& key : left.GetKeys())
             {
-                if (!right.HasValue(key) || !ConvertToBool(Apply2<BinaryMathOperation>(left.GetValueByName(key), right.GetValueByName(key), BinaryExpression::LogicalEq, m_compType)))
+                if (!right.HasValue(key) || !ConvertToBool(Apply2<BinaryMathOperation>(left.GetValueByName(key), right.GetValueByName(key), BinaryExpression::LogicalEq)))
                 {
                     equal = false;
                     break;

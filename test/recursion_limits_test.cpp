@@ -264,7 +264,6 @@ TEST_F(RecursionLimitsTest, HugeSequencesFailFast)
 {
     const std::string templates[] = {
         "{{ range(9223372036854775807, -9223372036854775807, -922375807)|list }}",
-        "{{ range(775807, -92233720368547753372036854775803, -9223758807)|list }}",
         "{{ range(2**26 + 1)|list }}",
         "{{ range(2**40)|map('abs')|list }}",
         "{{ range(2**40)|map(attribute='x')|list }}",
@@ -287,6 +286,15 @@ TEST_F(RecursionLimitsTest, HugeSequencesFailFast)
         ASSERT_FALSE(result.has_value()) << source;
         EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode()) << source;
         EXPECT_NE(std::string::npos, result.error().ToString().find("too long")) << result.error().ToString();
+    }
+    // An integer literal beyond int64 is a float here (docs/tasks/0178), which range()
+    // refuses before computing a length; Python raises OverflowError
+    {
+        Template tpl(&m_env);
+        ASSERT_TRUE(tpl.Load("{{ range(775807, -92233720368547753372036854775803, -9223758807)|list }}").has_value());
+        auto result = tpl.RenderAsString({});
+        ASSERT_FALSE(result.has_value());
+        EXPECT_NE(std::string::npos, result.error().ToString().find("cannot be interpreted as an integer")) << result.error().ToString();
     }
     // Below the limit nothing changes
     Template tpl(&m_env);

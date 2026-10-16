@@ -147,6 +147,11 @@ CASES = [
     ("namespace_print", "{% set ns = namespace(a=1) %}{{ ns }}"),
     ("namespace_is_mapping", "{% set ns = namespace(a=1) %}{{ 'T' if ns is mapping else 'F' }}"),
     ("namespace_iterate", "{% set ns = namespace(a=1) %}{% for k in ns %}{{ k }}{% endfor %}"),
+    ("namespace_in", "{% set ns = namespace(a=1) %}{{ 'a' in ns }}"),
+    ("namespace_print_nested", "{% set ns = namespace(a=1) %}{% set ns.b = namespace(c=[1]) %}{{ ns }}|{{ ns|string }}"),
+    ("namespace_unpack", "{% set a, b = namespace(a=1, b=2) %}{{ a }}{{ b }}"),
+    ("loop_recursive_callable", "{% for i in [1] recursive %}{{ 'T' if loop is callable else 'F' }}{% endfor %}"),
+    ("loop_callable", "{% for i in [1] %}{{ 'T' if loop is callable else 'F' }}{% endfor %}"),
     ("namespace_no_dict_methods", "{% set ns = namespace(a=1) %}{{ ns.get('a') }}"),
     ("set_nested_target", "{% set (a, b), c = [[1, 2], 3] %}{{ a }}{{ b }}{{ c }}"),
     # with
@@ -313,4 +318,17 @@ CASES = [
     # idtracking (docs/tasks/0168): a name the root or loop sets after the call
     ('macro_root_name_set_after_call', '{% macro m() %}[{{ x }}]{% endmacro %}{{ m() }}{% set x = 1 %}{{ m() }}'),
     ('macro_loop_name_set_after_call', '{% for i in [1] %}{% macro m() %}[{{ x }}]{% endmacro %}{{ m() }}{% set x = 1 %}{{ m() }}{% endfor %}'),
+    # every default is evaluated per call, where the macro is defined (docs/tasks/0166)
+    ('default_evaluated_per_call', '{% set ns = namespace(n=0) %}{% macro bump() %}{% set ns.n = ns.n + 1 %}{{ ns.n }}{% endmacro %}{% macro m(a=bump()) %}{{ a }}{% endmacro %}{{ m() }}{{ m() }}{{ m(0) }}{{ m() }}'),
+    ('default_reads_def_site_not_caller_loop', '{% macro m(a=i) %}[{{ a }}]{% endmacro %}{% for i in [1, 2] %}{{ m() }}{% endfor %}'),
+    ('default_in_loop_reads_target', '{% for i in [1, 2] %}{% macro m(a=i) %}{{ a }}{% endmacro %}{{ m() }}{% endfor %}'),
+    ('default_reads_outer_macro_param', '{% macro o(p) %}{% macro i(a=p) %}{{ a }}{% endmacro %}{{ i() }}{% endmacro %}{{ o(1) }}{{ o(2) }}'),
+    ('default_root_name_set_after_call', '{% macro m(a=y) %}[{{ a }}]{% endmacro %}{{ m() }}{% set y = 2 %}{{ m() }}'),
+    ('default_mutable_fresh_per_call', '{% macro m(l=[]) %}{% set _ = l.append(1) %}{{ l }}{% endmacro %}{{ m() }}{{ m() }}'),
+    ('default_error_only_when_used', '{% macro m(a=1 // 0) %}{{ a }}{% endmacro %}ok{{ m(2) }}'),
+    ('default_not_seen_by_body_set', '{% set y = 1 %}{% macro m(a=y) %}{% set y = 5 %}{{ a }}{{ y }}{% endmacro %}{{ m() }}'),
+    ('default_hides_caller_set', '{% macro m(a=z) %}[{{ a }}]{% endmacro %}{% macro o() %}{% set z = 1 %}{{ m() }}{% endmacro %}{{ o() }}'),
+    ('call_block_default_per_call', '{% set ns = namespace(n=0) %}{% macro w() %}{{ caller() }}{{ caller() }}{% endmacro %}{% call(a=ns.n) w() %}{{ a }}{% set ns.n = ns.n + 1 %}{% endcall %}'),
+    # idtracking (docs/tasks/0168): the root sets the default's name after the call
+    ('default_root_name_set_after_context', '{% macro m(a=x) %}[{{ a }}]{% endmacro %}{{ m() }}{% set x = 1 %}{{ m() }}'),
 ]

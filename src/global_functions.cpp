@@ -105,12 +105,18 @@ InternalValue CallRange(const CallParams& params, RenderContext&)
     {
         throw std::runtime_error("range expected at most 3 arguments");
     }
-    // A named undefined is no integer to Python's range (non-integers in general: task 0042)
+    // Python's range takes integers (bool among them) and nothing else; a missing argument
+    // is a plain undefined
     for (const char* name : { "start", "stop", "step" })
     {
-        if (const auto* info = GetUndefinedInfo(args[name]))
+        const auto& arg = args[name];
+        if (const auto* info = GetUndefinedInfo(arg))
         {
             throw std::runtime_error(std::string("'") + UndefinedClassName(*info) + "' object cannot be interpreted as an integer");
+        }
+        if (!arg.IsUndefined() && !GetIf<int64_t>(&arg) && !GetIf<bool>(&arg))
+        {
+            throw std::runtime_error(std::string("'") + Apply<visitors::PythonTypeNameGetter>(arg) + "' object cannot be interpreted as an integer");
         }
     }
     int64_t start = ConvertToInt(args["start"]);
@@ -136,7 +142,13 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
     if (!params.posParams.empty())
     {
         const auto& source = params.posParams.front();
-        if (auto map = AsMap(source))
+        auto map = AsMap(source);
+        // None and an object such as namespace() are not iterable
+        if (source.IsNone() || (map && map->GetObjectClass()))
+        {
+            throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(source) + "' object is not iterable");
+        }
+        if (map)
         {
             for (auto& key : map->GetKeys())
             {
@@ -228,7 +240,7 @@ InternalValue CallCycler(const CallParams& params, RenderContext&)
         state->pos = 0;
         return InternalValue(EmptyValue());
     });
-    return CreateMapAdapter(std::move(cycler));
+    return CreateObjectAdapter(std::move(cycler), "Cycler");
 }
 
 // joiner(sep=', '): a callable that returns '' the first time, then sep
@@ -245,7 +257,7 @@ InternalValue CallJoiner(const CallParams& params, RenderContext&)
         *used = true;
         return InternalValue(std::string());
     });
-    return CreateMapAdapter(std::move(joiner));
+    return CreateObjectAdapter(std::move(joiner), "Joiner");
 }
 
 std::string Capitalize(std::string word)

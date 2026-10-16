@@ -95,6 +95,8 @@ enum class TestKind
     Double,
     List,
     Map,
+    // An object stored as a map (namespace(), cycler()): not a mapping, not iterable
+    Object,
     KVPair,
     Callable,
     Renderer
@@ -138,9 +140,9 @@ struct ValueKindGetter : visitors::BaseVisitor<TestKind>
     {
         return TestKind::List;
     }
-    TestKind operator()(const MapRef&) const
+    TestKind operator()(const MapRef& map) const
     {
-        return TestKind::Map;
+        return map.GetObjectClass() ? TestKind::Object : TestKind::Map;
     }
     TestKind operator()(const KeyValuePair&) const
     {
@@ -200,7 +202,7 @@ bool IsTestName(const std::string& name, RenderContext& context)
 
 // Python's `is`: one object. Scalars have no identity here, so equal values of one
 // kind count as the same object (CPython caches small ints and interns literals);
-// lists and mappings compare by the container they view.
+// lists and mappings compare by the container they view, pairs by their box.
 bool IsSameObject(const InternalValue& left, const InternalValue& right)
 {
     auto kind = Apply<ValueKindGetter>(left);
@@ -225,10 +227,18 @@ bool IsSameObject(const InternalValue& left, const InternalValue& right)
         return leftList && rightList && leftList->GetIdentity() == rightList->GetIdentity();
     }
     case TestKind::Map:
+    case TestKind::Object:
     {
         auto leftMap = AsMap(left);
         auto rightMap = AsMap(right);
         return leftMap && rightMap && leftMap->GetIdentity() == rightMap->GetIdentity();
+    }
+    case TestKind::KVPair:
+    {
+        // A pair lives in a box its copies share: the box is its identity
+        const auto* leftPair = GetIf<KeyValuePair>(&left);
+        const auto* rightPair = GetIf<KeyValuePair>(&right);
+        return leftPair != nullptr && leftPair == rightPair;
     }
     default:
         return false;
@@ -384,7 +394,7 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
             return seqStr.find(substring) != std::string::npos;
         });
     }
-    else if (seqKind == TestKind::Integer || seqKind == TestKind::Double || seqKind == TestKind::Boolean)
+    else if (seqKind == TestKind::Integer || seqKind == TestKind::Double || seqKind == TestKind::Boolean || seqKind == TestKind::Object)
     {
         throw std::runtime_error("argument of type '"s + Apply<visitors::PythonTypeNameGetter>(seq) + "' is not iterable");
     }
@@ -405,6 +415,12 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         // Python's Undefined defines __call__ (that fails). A plain undefined may be a host's
         // null (task 0047), so only a missing name counts
         result = valKind == TestKind::Callable || GetUndefinedInfo(baseVal) != nullptr;
+        if (valKind == TestKind::Map || valKind == TestKind::Object)
+        {
+            // An object stored as a map that defines a call (joiner(), a recursive loop)
+            auto map = AsMap(baseVal);
+            result = map && map->GetAttrPolicy() == MapAttrPolicy::KeysOnly && map->HasValue("operator()");
+        }
         break;
     case IsEscapedMode:
         // Python checks for __html__, which only Markup has
