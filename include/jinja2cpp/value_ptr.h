@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_VALUE_PTR_H
 #define JINJA2CPP_VALUE_PTR_H
 
+#include "jinja2cpp/polymorphic_value/indirect_cxx14.h"
 #include "jinja2cpp/polymorphic_value/polymorphic_cxx14.h"
 
 namespace jinja2::types
@@ -20,5 +21,13 @@ auto MakeValuePtr(Ts&&... ts)
 }
 
 } // namespace jinja2::types
+
+namespace jinja2::detail
+{
+// Owns one heap-allocated T and copies it deeply, as C++26 std::indirect does; T may be
+// incomplete where the wrapper is declared. Holds the recursive alternatives of Value.
+template<typename T>
+using indirect = xyz::indirect<T>;
+} // namespace jinja2::detail
 
 #endif // JINJA2CPP_VALUE_PTR_H

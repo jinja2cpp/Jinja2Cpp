@@ -125,7 +125,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 
     std::string operator()(bool val) const { return val ? "true"s : "false"s; }
 
-    std::string operator()(EmptyValue) const { return "none"s; }
+    std::string operator()(NoneValue) const { return "none"s; }
     std::string operator()(const UndefinedValue&) const { return "Undefined"s; }
 
     std::string operator()(const Callable&) const { return "<callable>"s; }

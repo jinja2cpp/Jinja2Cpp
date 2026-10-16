@@ -81,10 +81,12 @@ Hello World!)")
         auto str1 = args["str1"];
         auto str2 = args["str2"];
 
-        if (str1.isString())
-            return str1.asString() + " " + str2.asString();
+        if (str1.IsString())
+        {
+            return str1.AsString() + " " + str2.AsString();
+        }
 
-        return str1.asWString() + L" " + str2.asWString();
+        return str1.AsWString() + L" " + str2.AsWString();
     };
     uc.argsInfo = {{"str1", true}, {"str2", true}};
     params["test"] = std::move(uc);
@@ -139,7 +141,7 @@ https://google.com?label1label1label1#someTarget)")
             std::ostringstream os;
 
             for (const auto& v : list)
-                os << AsString(v);
+                os << ToString(v);
 
             return os.str();
         },
@@ -273,8 +275,7 @@ TEST_P(UserCallableFilterTest, Test)
                     isFirst = false;
                 else
                     os << delim;
-                os << AsString(v);
-                
+                os << ToString(v);
             }
             return os.str();
         }, ArgInfo{"delim"}, ArgInfo{"*args"});
@@ -450,7 +451,7 @@ TEST(EnvCallablesTest, Finalize)
 {
     Settings settings;
     EXPECT_EQ(Settings(), settings);
-    settings.finalize = UserCallable([](const UserCallableParams& p) { return p["v"].isEmpty() ? Value(std::string("-")) : p["v"]; }, { ArgInfo{ "v" } });
+    settings.finalize = UserCallable([](const UserCallableParams& p) { return p["v"].IsNone() ? Value(std::string("-")) : p["v"]; }, { ArgInfo{ "v" } });
     EXPECT_NE(Settings(), settings);
     EXPECT_EQ(settings, Settings(settings));
 

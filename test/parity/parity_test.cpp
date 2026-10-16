@@ -295,7 +295,7 @@ jinja2::Value ToValue(const Json& j)
 // generate.py. They take the ints and strings of the corpus, narrow or wide.
 std::string StrOf(const jinja2::Value& v)
 {
-    const auto& data = v.data();
+    const auto& data = v.GetData();
     if (const auto* s = std::get_if<std::string>(&data))
         return *s;
     if (const auto* s = std::get_if<std::string_view>(&data))
@@ -306,19 +306,19 @@ std::string StrOf(const jinja2::Value& v)
         return WideToUtf8(std::wstring(s->begin(), s->end()));
     if (const auto* i = std::get_if<int64_t>(&data))
         return std::to_string(*i);
-    return v.isEmpty() ? "None" : "<unsupported>";
+    return v.IsNone() ? "None" : "<unsupported>";
 }
 
 // s in the character type of like
 jinja2::Value StrLike(const jinja2::Value& like, const std::string& s)
 {
-    const bool wide = std::get_if<std::wstring>(&like.data()) != nullptr || std::get_if<std::wstring_view>(&like.data()) != nullptr;
+    const bool wide = std::get_if<std::wstring>(&like.GetData()) != nullptr || std::get_if<std::wstring_view>(&like.GetData()) != nullptr;
     return wide ? jinja2::Value(Utf8ToWide(s)) : jinja2::Value(s);
 }
 
 int64_t IntOf(const jinja2::Value& v)
 {
-    const auto* i = std::get_if<int64_t>(&v.data());
+    const auto* i = std::get_if<int64_t>(&v.GetData());
     if (!i)
         throw std::runtime_error("expected an int");
     return *i;
@@ -348,7 +348,7 @@ const std::map<std::string, jinja2::UserCallable>& CustomTests()
 const std::map<std::string, jinja2::UserCallable>& CustomFinalize()
 {
     static const std::map<std::string, jinja2::UserCallable> finalize = {
-        { "none_to_empty", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return p["v"].isEmpty() ? jinja2::Value(std::string()) : p["v"]; }, { { "v", true } } } },
+        { "none_to_empty", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return p["v"].IsNone() ? jinja2::Value(std::string()) : p["v"]; }, { { "v", true } } } },
         { "brackets", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return StrLike(p["v"], "[" + StrOf(p["v"]) + "]"); }, { { "v", true } } } },
     };
     return finalize;

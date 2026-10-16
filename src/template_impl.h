@@ -121,7 +121,7 @@ inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::Templat
         }
         for (const auto& [name, value] : *snapshot->source)
         {
-            snapshot->values[name] = visit(visitors::InputValueConvertor(false, true), value.data());
+            snapshot->values[name] = visit(visitors::InputValueConvertor(false, true), value.GetData());
         }
         cached = std::move(snapshot);
     }
@@ -326,7 +326,7 @@ public:
             auto& intParams = maps.Params();
 
             auto convertParam = [&intParams](const std::string& name, const Value& value) {
-                intParams[name] = visit(visitors::InputValueConvertor(false, true), value.data());
+                intParams[name] = visit(visitors::InputValueConvertor(false, true), value.GetData());
             };
 
             static const InternalValueMap noGlobals;
@@ -422,7 +422,7 @@ public:
         return normalResult;
     }
 
-    using TplLoadResultType = std::variant<EmptyValue,
+    using TplLoadResultType = std::variant<NoneValue,
                                            nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
                                            nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>;
 
@@ -432,7 +432,7 @@ public:
     {
         if (!m_env)
         {
-            return TplLoadResultType(EmptyValue());
+            return TplLoadResultType(NoneValue());
         }
 
         auto tplWrapper = TemplateLoader<CharT>::Load(fileName, m_env);
@@ -500,7 +500,7 @@ public:
                 errorData.extraParams.push_back(Value(result.error()));
                 return MakeUnexpected(BasicErrorInfo<CharT>(errorData));
             }
-            m_metadata = std::move(std::get<GenericMap>(result.value().data()));
+            m_metadata = std::move(std::get<GenericMap>(result.value().GetData()));
             return m_metadata.value();
         }
         return GenericMap();
@@ -717,7 +717,7 @@ private:
             return std::visit(
                 [&rhs](const auto& l) {
                     using T = std::decay_t<decltype(l)>;
-                    if constexpr (std::is_same_v<T, EmptyValue>)
+                    if constexpr (std::is_same_v<T, NoneValue>)
                     {
                         return true;
                     }

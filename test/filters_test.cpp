@@ -764,7 +764,7 @@ struct TypeReflection<TestValues> : TypeReflected<TestValues>
               } },
             { "none",
               [](const TestValues& /*obj*/) {
-                  return jinja2::EmptyValue();
+                  return jinja2::NoneValue();
               } },
         };
 

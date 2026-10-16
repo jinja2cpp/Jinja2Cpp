@@ -176,7 +176,7 @@ auto ApplyUnwrapped(const InternalValue& val, Fn&& fn)
     const auto& data = InternalValueAccess::Data(val);
     if (const auto* valueRef = std::get_if<ValueRef>(&data))
     {
-        return std::forward<Fn>(fn)(valueRef->get().data(), nullptr);
+        return std::forward<Fn>(fn)(valueRef->get().GetData(), nullptr);
     }
     return std::forward<Fn>(fn)(data, InternalValueAccess::Object(val));
 }
@@ -322,7 +322,7 @@ struct ValueRendererBase
     void operator()(const std::basic_string_view<CharT>& val) const { AppendString(val); }
     void operator()(const std::basic_string<CharT>& val) const { AppendString(val); }
 
-    void operator()(const EmptyValue&) const { AppendAscii("None"); }
+    void operator()(const NoneValue&) const { AppendAscii("None"); }
     // Undefined prints as empty; inside a container, as Python's repr does, as Undefined
     void operator()(const UndefinedValue& val) const
     {
@@ -820,7 +820,7 @@ void ValueRendererBase<CharT>::operator()(const KeyValuePair& pair) const
 }
 
 // Python's name for the type of a value, for error messages
-inline const char* PythonTypeName(const EmptyValue&)
+inline const char* PythonTypeName(const NoneValue&)
 {
     return "NoneType";
 }
@@ -1690,7 +1690,7 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     // None and undefined equal only themselves (undefined == undefined, as in Jinja2); mixed pairs go to Mismatch
-    ResultType operator()(EmptyValue left, EmptyValue right) const
+    ResultType operator()(NoneValue left, NoneValue right) const
     {
         switch (m_oper)
         {
@@ -1767,7 +1767,7 @@ struct BooleanEvaluator : BaseVisitor<bool>
         return val.GetSize() != 0ULL;
     }
 
-    bool operator()(const EmptyValue&) const
+    bool operator()(const NoneValue&) const
     {
         return false;
     }

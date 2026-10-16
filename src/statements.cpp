@@ -1724,7 +1724,7 @@ struct TemplateImplVisitor
         return m_fn(tpl.value());
     }
 
-    Result operator()(EmptyValue) const { return Result(); }
+    Result operator()(NoneValue) const { return Result(); }
 };
 
 template<typename Result, typename Fn, typename Arg>

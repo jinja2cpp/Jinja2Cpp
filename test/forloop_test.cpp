@@ -494,7 +494,7 @@ TEST(ForLoopLentItemsTest, KeptByUserCallable)
             const std::string expected = n % 2 ? "n" + std::to_string(n) + std::to_string(n) + "-" + std::to_string(n + 1) : std::to_string(n) + "-x";
             EXPECT_EQ(expected, reader.RenderAsString(ValuesMap{ { "v", kept[(pass * 301) + static_cast<size_t>(n)] } }).value()) << n;
         }
-        ASSERT_TRUE(kept[(pass * 301) + 300].isList());
+        ASSERT_TRUE(kept[(pass * 301) + 300].IsList());
         EXPECT_EQ("300", length.RenderAsString(ValuesMap{ { "v", kept[(pass * 301) + 300] } }).value());
     }
 }
@@ -680,14 +680,14 @@ TEST(ForLoopFilterOrderTest, FilterSideEffectsRunInPythonOrder)
     std::string log;
     auto f = UserCallable(
         [&log](const UserCallableParams& p) {
-            auto x = p["x"].get<int64_t>();
+            auto x = p["x"].As<int64_t>();
             log += "f" + std::to_string(x) + " ";
             return Value(x % 2 == 1);
         },
         { ArgInfo{ "x" } });
     auto b = UserCallable(
         [&log](const UserCallableParams& p) {
-            log += "b" + std::to_string(p["x"].get<int64_t>()) + " ";
+            log += "b" + std::to_string(p["x"].As<int64_t>()) + " ";
             return Value(std::string());
         },
         { ArgInfo{ "x" } });

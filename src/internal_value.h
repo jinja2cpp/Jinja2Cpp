@@ -193,7 +193,7 @@ class IRendererBase;
 
 // What a missing name, attribute or item evaluates to (Python's Undefined). It is the
 // default alternative, so every lookup miss and error path that returns InternalValue()
-// is undefined, while EmptyValue is Python's None. A named lookup miss carries info
+// is undefined, while NoneValue is Python's None. A named lookup miss carries info
 // (src/undefined.h): what was missing and the undefined policy that decides how its uses
 // fail. Without info (internal error paths) it behaves like Python's default Undefined
 // that is only printed or tested.
@@ -312,7 +312,7 @@ using RendererPtr = std::shared_ptr<IRendererBase>;
 
 using ValueStorage = std::variant<
     UndefinedValue,
-    EmptyValue,
+    NoneValue,
     bool,
     int64_t,
     double,
@@ -868,8 +868,8 @@ public:
     {
     }
 
-    InternalValue(EmptyValue /*val*/) noexcept // NOLINT(google-explicit-constructor)
-        : m_imm(EmptyValue{})
+    InternalValue(NoneValue /*val*/) noexcept // NOLINT(google-explicit-constructor)
+        : m_imm(NoneValue{})
     {
     }
 
@@ -1065,7 +1065,7 @@ public:
     }
 
     [[nodiscard]] bool IsUndefined() const noexcept { return m_imm.index() == detail::IndexOf<UndefinedValue>; }
-    [[nodiscard]] bool IsNone() const noexcept { return m_imm.index() == detail::IndexOf<EmptyValue>; }
+    [[nodiscard]] bool IsNone() const noexcept { return m_imm.index() == detail::IndexOf<NoneValue>; }
 
     [[nodiscard]] bool IsEqual(const InternalValue& other) const;
 

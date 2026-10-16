@@ -66,7 +66,7 @@ inline jinja2::ValuesMap MakeContext()
         { "words", jinja2::ValuesList{ "b", "A", "c" } },
         { "d", jinja2::ValuesMap{ { "b", 2 }, { "a", 1 }, { "C", 3 } } },
         { "e", jinja2::ValuesList{} },
-        { "n", jinja2::EmptyValue{} },
+        { "n", jinja2::NoneValue{} },
         { "t", true },
         { "html", "<b>Tom & \"Jerry\"</b>" },
         { "users", jinja2::ValuesList{ users, jinja2::ValuesMap{ { "name", "alice" }, { "age", 25 }, { "city", "Rome" } } } },

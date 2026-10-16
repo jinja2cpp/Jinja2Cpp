@@ -8,6 +8,7 @@
 #include <jinja2cpp/value_ptr.h>
 
 #include <atomic>
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -25,19 +26,22 @@ JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 
 namespace jinja2
 {
-//! Empty value container
-struct EmptyValue
+//! Python `None`: what a default-constructed \ref Value holds
+struct NoneValue
 {
-    template<typename T>
-    operator T() const { return T{}; } // NOLINT(google-explicit-constructor)
 };
 
-inline bool operator==(const EmptyValue& lhs, const EmptyValue& rhs)
+inline bool operator==(const NoneValue& /*lhs*/, const NoneValue& /*rhs*/) noexcept
 {
-    (void)lhs;
-    (void)rhs;
     return true;
 }
+
+inline bool operator!=(const NoneValue& /*lhs*/, const NoneValue& /*rhs*/) noexcept
+{
+    return false;
+}
+
+using EmptyValue JINJA2CPP_DEPRECATED("jinja2cpp-2: NoneValue") = NoneValue;
 
 class Value;
 
@@ -234,8 +238,9 @@ struct UserCallableArgs;
 struct ParamInfo;
 struct UserCallable;
 
+//! Holds the recursive alternatives of \ref Value (\ref ValuesList, \ref ValuesMap, \ref UserCallable) by value
 template<typename T>
-using RecWrapper = types::ValuePtr<T>;
+using RecWrapper = detail::indirect<T>;
 
 namespace detail
 {
@@ -264,7 +269,7 @@ struct IsStoredAsInt : std::integral_constant<bool, std::is_integral_v<T> && !st
  * Variant-based class which is used for passing values to and from Jinja2C++ template engine. This class store the
  * following types of values:
  *
- *  - EmptyValue. In this case instance of this class threated as 'empty'
+ *  - NoneValue: Python `None`, the default
  *  - Boolean value.
  *  - String value.
  *  - Wide string value
@@ -278,15 +283,15 @@ struct IsStoredAsInt : std::integral_constant<bool, std::is_integral_v<T> && !st
  *  - Generic map of other values (\ref GenericMap)
  *  - User-defined callable (\ref UserCallable)
  *
- *  Exact value can be accessed via std::visit method applied to the result of the Value::data() call or any of
- *  asXXX method (ex. \ref Value::asString). In case of string retrieval it's better to use \ref AsString or \ref
- *  AsWString functions. Thay hide all nececcary transformations between various types of strings (or string views).
+ *  `IsX()` tests what is stored, `AsX()` and `As<T>()` return it (and throw `std::bad_variant_access` when the value
+ *  holds something else), `bool AsX(out)` and `GetIf<T>()` do the same without throwing, and `ToString()` prints the
+ *  value as `{{ value }}` does. \ref jinja2::Visit visits the stored object.
  */
 class Value
 {
 public:
     using ValueData = std::variant<
-        EmptyValue,
+        NoneValue,
         bool,
         std::string,
         std::wstring,
@@ -430,13 +435,13 @@ public:
      *
      * @param list List of values which should be used to initialize \ref Value instance
      */
-    Value(ValuesList&& list) noexcept; // NOLINT(google-explicit-constructor)
+    Value(ValuesList&& list); // NOLINT(google-explicit-constructor)
     /*!
      * \brief Initializing move constructor from the \ref ValuesMap
      *
      * @param map Map of values which should be used to initialize \ref Value instance
      */
-    Value(ValuesMap&& map) noexcept; // NOLINT(google-explicit-constructor)
+    Value(ValuesMap&& map); // NOLINT(google-explicit-constructor)
     /*!
      * \brief Initializing move constructor from the \ref UserCallable
      *
@@ -444,188 +449,301 @@ public:
      */
     Value(UserCallable&& callable); // NOLINT(google-explicit-constructor)
 
+    //! Test Value for holding `None` (\ref NoneValue, the default)
+    [[nodiscard]] bool IsNone() const noexcept { return Holds<NoneValue>(); }
+    //! Test Value for holding `bool`
+    [[nodiscard]] bool IsBool() const noexcept { return Holds<bool>(); }
+    //! Test Value for holding an integer (`int64_t`)
+    [[nodiscard]] bool IsInt() const noexcept { return Holds<int64_t>(); }
+    //! Test Value for holding a floating-point number (`double`)
+    [[nodiscard]] bool IsDouble() const noexcept { return Holds<double>(); }
+    //! Test Value for holding `std::string` (a `std::string_view` does not count)
+    [[nodiscard]] bool IsString() const noexcept { return Holds<std::string>(); }
+    //! Test Value for holding `std::wstring` (a `std::wstring_view` does not count)
+    [[nodiscard]] bool IsWString() const noexcept { return Holds<std::wstring>(); }
+    //! Test Value for holding a list: a \ref ValuesList or a \ref GenericList
+    [[nodiscard]] bool IsList() const noexcept { return Holds<RecWrapper<ValuesList>>() || Holds<GenericList>(); }
+    //! Test Value for holding a map: a \ref ValuesMap or a \ref GenericMap
+    [[nodiscard]] bool IsMap() const noexcept { return Holds<RecWrapper<ValuesMap>>() || Holds<GenericMap>(); }
+    //! Test Value for holding a \ref UserCallable
+    [[nodiscard]] bool IsCallable() const noexcept { return Holds<RecWrapper<UserCallable>>(); }
+
     /*!
-     * \brief Get the non-mutable stored data object
+     * \brief Exact access to the stored value
      *
-     * Returns the stored data object in order to get the typed value from it. For instance:
+     * `AsX()` returns what is stored and throws `std::bad_variant_access` when the value holds something else.
+     * The overload `bool AsX(out) noexcept` stores it in `out` instead and returns whether the value holds that
+     * type: a view for strings, the value for scalars and a pointer for containers, so it never copies:
      * ```c++
-     *  inline std::string AsString(const jinja2::Value& val)
-     *  {
-     *      return std::visit(StringGetter(), val.data());
-     *  }
-     *  ```
-     *
-     * @return Non-mutable stored data object
+     *  std::string_view s;
+     *  if (v.AsString(s))
+     *      use(s);
+     * ```
+     * A view or pointer is valid as long as the \ref Value is not changed; the view and pointer forms are deleted for
+     * a temporary \ref Value, which would leave them dangling.
      */
-    [[nodiscard]] const ValueData& data() const { return m_data; }
-    /*!
-     * \brief Get the mutable stored data object
-     *
-     * Returns the stored data object in order to get the typed value from it. For instance:
-     * ```c++
-     *  inline std::string AsString(Value& val)
-     *  {
-     *      return std::visit(StringGetter(), val.data());
-     *  }
-     *  ```
-     *
-     * @return Mutable stored data object
-     */
-    ValueData& data() { return m_data; }
+    [[nodiscard]] bool AsBool() const { return As<bool>(); }
+    //! Same as \ref AsBool(), without throwing
+    bool AsBool(bool& out) const noexcept { return Load(out); }
+    //! The stored `int64_t`; throws `std::bad_variant_access` for anything else
+    [[nodiscard]] int64_t AsInt() const { return As<int64_t>(); }
+    //! Same as \ref AsInt(), without throwing
+    bool AsInt(int64_t& out) const noexcept { return Load(out); }
+    //! The stored `double`; throws `std::bad_variant_access` for anything else
+    [[nodiscard]] double AsDouble() const { return As<double>(); }
+    //! Same as \ref AsDouble(), without throwing
+    bool AsDouble(double& out) const noexcept { return Load(out); }
+    //! The stored `std::string`; throws `std::bad_variant_access` for anything else
+    [[nodiscard]] const std::string& AsString() const { return As<std::string>(); }
+    //! The stored `std::string`, mutable; throws `std::bad_variant_access` for anything else
+    std::string& AsString() { return As<std::string>(); }
+    //! A view of the stored `std::string`, without throwing or copying
+    bool AsString(std::string_view& out) const& noexcept { return LoadView<std::string>(out); }
+    //! Deleted: the view would outlive the temporary it points into
+    bool AsString(std::string_view& out) && = delete;
+    //! The stored `std::wstring`; throws `std::bad_variant_access` for anything else
+    [[nodiscard]] const std::wstring& AsWString() const { return As<std::wstring>(); }
+    //! The stored `std::wstring`, mutable; throws `std::bad_variant_access` for anything else
+    std::wstring& AsWString() { return As<std::wstring>(); }
+    //! A view of the stored `std::wstring`, without throwing or copying
+    bool AsWString(std::wstring_view& out) const& noexcept { return LoadView<std::wstring>(out); }
+    //! Deleted: the view would outlive the temporary it points into
+    bool AsWString(std::wstring_view& out) && = delete;
+    //! The stored \ref ValuesList (not a \ref GenericList, see \ref ToGenericList); throws `std::bad_variant_access` for anything else
+    [[nodiscard]] const ValuesList& AsList() const { return As<ValuesList>(); }
+    //! The stored \ref ValuesList, mutable; throws `std::bad_variant_access` for anything else
+    ValuesList& AsList() { return As<ValuesList>(); }
+    //! A pointer to the stored \ref ValuesList, without throwing
+    bool AsList(const ValuesList*& out) const& noexcept { return LoadPtr(out); }
+    //! A mutable pointer to the stored \ref ValuesList, without throwing
+    bool AsList(ValuesList*& out) & noexcept { return LoadPtr(out); }
+    //! Deleted: the pointer would outlive the temporary it points into
+    bool AsList(const ValuesList*& out) && = delete;
+    //! The stored \ref ValuesMap (not a \ref GenericMap, see \ref ToGenericMap); throws `std::bad_variant_access` for anything else
+    [[nodiscard]] const ValuesMap& AsMap() const { return As<ValuesMap>(); }
+    //! The stored \ref ValuesMap, mutable; throws `std::bad_variant_access` for anything else
+    ValuesMap& AsMap() { return As<ValuesMap>(); }
+    //! A pointer to the stored \ref ValuesMap, without throwing
+    bool AsMap(const ValuesMap*& out) const& noexcept { return LoadPtr(out); }
+    //! A mutable pointer to the stored \ref ValuesMap, without throwing
+    bool AsMap(ValuesMap*& out) & noexcept { return LoadPtr(out); }
+    //! Deleted: the pointer would outlive the temporary it points into
+    bool AsMap(const ValuesMap*& out) && = delete;
+    //! The stored \ref UserCallable; throws `std::bad_variant_access` for anything else
+    [[nodiscard]] const UserCallable& AsCallable() const { return As<UserCallable>(); }
+    //! The stored \ref UserCallable, mutable; throws `std::bad_variant_access` for anything else
+    UserCallable& AsCallable() { return As<UserCallable>(); }
+    //! A pointer to the stored \ref UserCallable, without throwing
+    bool AsCallable(const UserCallable*& out) const& noexcept { return LoadPtr(out); }
+    //! A mutable pointer to the stored \ref UserCallable, without throwing
+    bool AsCallable(UserCallable*& out) & noexcept { return LoadPtr(out); }
+    //! Deleted: the pointer would outlive the temporary it points into
+    bool AsCallable(const UserCallable*& out) && = delete;
 
-    //! Test Value for containing std::string object
-    [[nodiscard]] bool isString() const
-    {
-        return std::get_if<std::string>(&m_data) != nullptr;
-    }
     /*!
-     * \brief Returns mutable containing std::string object
+     * \brief A \ref GenericList over either list representation
      *
-     * Returns containing std::string object. Appropriate exception is thrown in case non-string containing value
-     *
-     * @return Mutable containing std::string object
+     * For a \ref ValuesList the result refers to the list stored here and is valid as long as this \ref Value is
+     * not changed or destroyed. A value that is not a list gives an empty \ref GenericList (`!IsValid()`).
      */
-    auto& asString()
-    {
-        return std::get<std::string>(m_data);
-    }
-    /*!
-     * \brief Returns non-mutable containing std::string object
-     *
-     * Returns containing std::string object. Appropriate exception is thrown in case of non-string containing value
-     *
-     * @return Non-mutable containing std::string object
-     */
-    [[nodiscard]] auto& asString() const
-    {
-        return std::get<std::string>(m_data);
-    }
+    [[nodiscard]] JINJA2CPP_EXPORT GenericList ToGenericList() const&;
+    //! Same as \ref ToGenericList, for a temporary: the result owns the list
+    [[nodiscard]] JINJA2CPP_EXPORT GenericList ToGenericList() &&;
+    //! A \ref GenericMap over either map representation, empty for a non-map; see \ref ToGenericList
+    [[nodiscard]] JINJA2CPP_EXPORT GenericMap ToGenericMap() const&;
+    //! Same as \ref ToGenericMap, for a temporary: the result owns the map
+    [[nodiscard]] JINJA2CPP_EXPORT GenericMap ToGenericMap() &&;
 
-    //! Test Value for containing std::wstring object
-    [[nodiscard]] bool isWString() const
-    {
-        return std::get_if<std::wstring>(&m_data) != nullptr;
-    }
     /*!
-     * \brief Returns mutable containing std::wstring object
+     * \brief Exact access by type, as `std::get`
      *
-     * Returns containing std::wstring object. Appropriate exception is thrown in case of non-wstring containing value
-     *
-     * @return Mutable containing std::wstring object
+     * `T` is one of the alternatives of \ref ValueData, or \ref ValuesList, \ref ValuesMap or \ref UserCallable
+     * (the alternative \ref RecWrapper holds). Throws `std::bad_variant_access` when the value holds something else.
      */
-    auto& asWString()
-    {
-        return std::get<std::wstring>(m_data);
-    }
-    /*!
-     * \brief Returns non-mutable containing std::wstring object
-     *
-     * Returns containing std::wstring object. Appropriate exception is thrown in case of non-wstring containing value
-     *
-     * @return Non-mutable containing std::wstring object
-     */
-    [[nodiscard]] auto& asWString() const
-    {
-        return std::get<std::wstring>(m_data);
-    }
-
-    //! Test Value for containing jinja2::ValuesList object
-    [[nodiscard]] bool isList() const
-    {
-        return std::get_if<RecWrapper<ValuesList>>(&m_data) != nullptr || std::get_if<GenericList>(&m_data) != nullptr;
-    }
-    /*!
-     * \brief Returns mutable containing jinja2::ValuesList object
-     *
-     * Returns containing jinja2::ValuesList object. Appropriate exception is thrown in case of non-Valueslist containing value
-     *
-     * @return Mutable containing jinja2::ValuesList object
-     */
-    auto& asList()
-    {
-        return *std::get<RecWrapper<ValuesList>>(m_data);
-    }
-    /*!
-     * \brief Returns non-mutable containing jinja2::ValuesList object
-     *
-     * Returns containing jinja2::ValuesList object. Appropriate exception is thrown in case of non-Valueslist containing value
-     *
-     * @return Non-mutable containing jinja2::ValuesList object
-     */
-    [[nodiscard]] auto& asList() const
-    {
-        return *std::get<RecWrapper<ValuesList>>(m_data);
-    }
-    //! Test Value for containing jinja2::ValuesMap object
-    [[nodiscard]] bool isMap() const
-    {
-        return std::get_if<RecWrapper<ValuesMap>>(&m_data) != nullptr || std::get_if<GenericMap>(&m_data) != nullptr;
-    }
-    /*!
-     * \brief Returns mutable containing jinja2::ValuesMap object
-     *
-     * Returns containing jinja2::ValuesMap object. Appropriate exception is thrown in case of non-ValuesMap containing value
-     *
-     * @return Mutable containing jinja2::ValuesMap object
-     */
-    auto& asMap()
-    {
-        return *std::get<RecWrapper<ValuesMap>>(m_data);
-    }
-    /*!
-     * \brief Returns non-mutable containing jinja2::ValuesMap object
-     *
-     * Returns containing jinja2::ValuesMap object. Appropriate exception is thrown in case of non-ValuesMap containing value
-     *
-     * @return Non-mutable containing jinja2::ValuesMap object
-     */
-    [[nodiscard]] auto& asMap() const
-    {
-        return *std::get<RecWrapper<ValuesMap>>(m_data);
-    }
-
     template<typename T>
-    auto get()
+    [[nodiscard]] const T& As() const
     {
-        return std::get<T>(m_data);
+        if constexpr (IsWrapped<T>::value)
+        {
+            return *std::get<RecWrapper<T>>(m_data);
+        }
+        else
+        {
+            return std::get<T>(m_data);
+        }
     }
-
+    //! Mutable \ref As
     template<typename T>
-    [[nodiscard]] auto get() const
+    T& As()
     {
-        return std::get<T>(m_data);
+        if constexpr (IsWrapped<T>::value)
+        {
+            return *std::get<RecWrapper<T>>(m_data);
+        }
+        else
+        {
+            return std::get<T>(m_data);
+        }
     }
-
+    //! A pointer to the stored `T`, or `nullptr`, as `std::get_if`; `T` as for \ref As
     template<typename T>
-    auto getPtr()
+    [[nodiscard]] const T* GetIf() const noexcept
     {
-        return std::get_if<T>(&m_data); // m_data.index() == ValueData::template index_of<T>() ? &m_data.get<T>() : nullptr;
+        if constexpr (IsWrapped<T>::value)
+        {
+            // A moved-from wrapper holds nothing: report it as absent rather than dereference it
+            const auto* wrapper = std::get_if<RecWrapper<T>>(&m_data);
+            return wrapper && !wrapper->valueless_after_move() ? &**wrapper : nullptr;
+        }
+        else
+        {
+            return std::get_if<T>(&m_data);
+        }
     }
-
+    //! Mutable \ref GetIf
     template<typename T>
-    auto getPtr() const
+    T* GetIf() noexcept
     {
-        return std::get_if<T>(&m_data); // m_data.index() == ValueData::template index_of<T>() ? &m_data.get<T>() : nullptr;
+        if constexpr (IsWrapped<T>::value)
+        {
+            auto* wrapper = std::get_if<RecWrapper<T>>(&m_data);
+            return wrapper && !wrapper->valueless_after_move() ? &**wrapper : nullptr;
+        }
+        else
+        {
+            return std::get_if<T>(&m_data);
+        }
     }
 
-    //! Test Value for emptyness
-    [[nodiscard]] bool isEmpty() const
-    {
-        return std::get_if<EmptyValue>(&m_data) != nullptr;
-    }
+    /*!
+     * \brief The stored variant
+     *
+     * Its container alternatives are \ref RecWrapper; \ref jinja2::Visit visits the unwrapped objects instead.
+     */
+    [[nodiscard]] const ValueData& GetData() const noexcept { return m_data; }
+    //! Mutable \ref GetData
+    ValueData& GetData() noexcept { return m_data; }
+
+    /*!
+     * \brief The value as `{{ value }}` prints it, Python `str()`
+     *
+     * `5`, `1.5`, `True`, `None`, `[1, 'a']`, `{'k': 2}`; a string prints as itself, converted to the narrow
+     * encoding when it is wide (with the C library's current locale, as the narrow template does; text that does
+     * not convert prints as nothing). A callable prints as nothing.
+     */
+    [[nodiscard]] JINJA2CPP_EXPORT std::string ToString() const;
+    //! Same as \ref ToString(), appended to `out`: reuses its capacity
+    JINJA2CPP_EXPORT void ToString(std::string& out) const;
+    //! Same as \ref ToString(), in the wide encoding
+    [[nodiscard]] JINJA2CPP_EXPORT std::wstring ToWString() const;
+    //! Same as \ref ToWString(), appended to `out`
+    JINJA2CPP_EXPORT void ToWString(std::wstring& out) const;
+    /*!
+     * \brief Same as \ref ToString(), written to `[first, last)` as `std::to_chars` does
+     *
+     * Returns the end of the written text and `std::errc()`, or `last` and `std::errc::value_too_large` when the
+     * text does not fit (the buffer then holds an unspecified prefix of it). Writes no terminating zero.
+     */
+    JINJA2CPP_EXPORT std::to_chars_result ToChars(char* first, char* last) const noexcept;
 
     [[nodiscard]] bool IsEqual(const Value& rhs) const;
 
+    // 1.x names, kept as one-line forwards until 3.0 (docs/api-2.0.md 5.1)
+
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: GetData")
+    [[nodiscard]] const ValueData& data() const { return m_data; }
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: GetData")
+    ValueData& data() { return m_data; }
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: IsString")
+    [[nodiscard]] bool isString() const { return IsString(); }
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: AsString")
+    auto& asString() { return AsString(); }
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: AsString")
+    [[nodiscard]] auto& asString() const { return AsString(); }
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: IsWString")
+    [[nodiscard]] bool isWString() const { return IsWString(); }
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: AsWString")
+    auto& asWString() { return AsWString(); }
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: AsWString")
+    [[nodiscard]] auto& asWString() const { return AsWString(); }
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: IsList")
+    [[nodiscard]] bool isList() const { return IsList(); }
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: AsList")
+    auto& asList() { return AsList(); }
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: AsList")
+    [[nodiscard]] auto& asList() const { return AsList(); }
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: IsMap")
+    [[nodiscard]] bool isMap() const { return IsMap(); }
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: AsMap")
+    auto& asMap() { return AsMap(); }
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: AsMap")
+    [[nodiscard]] auto& asMap() const { return AsMap(); }
+    //! Returns a copy, as in 1.x; \ref As returns a reference
+    template<typename T>
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: As")
+    auto get() { return std::get<T>(m_data); }
+    template<typename T>
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: As")
+    [[nodiscard]] auto get() const { return std::get<T>(m_data); }
+    template<typename T>
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: GetIf")
+    auto getPtr() { return std::get_if<T>(&m_data); }
+    template<typename T>
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: GetIf")
+    auto getPtr() const { return std::get_if<T>(&m_data); }
+    JINJA2CPP_DEPRECATED("jinja2cpp-2: IsNone")
+    [[nodiscard]] bool isEmpty() const { return IsNone(); }
+
 private:
+    // ValuesList, ValuesMap and UserCallable are stored in a RecWrapper; As and GetIf unwrap it
+    template<typename T>
+    struct IsWrapped : std::integral_constant<bool, AnyOf<T, ValuesList, ValuesMap, UserCallable>::value>
+    {
+    };
+
+    template<typename T>
+    [[nodiscard]] bool Holds() const noexcept
+    {
+        return std::holds_alternative<T>(m_data);
+    }
+    template<typename T>
+    bool Load(T& out) const noexcept
+    {
+        const auto* p = std::get_if<T>(&m_data);
+        if (p)
+        {
+            out = *p;
+        }
+        return p != nullptr;
+    }
+    template<typename S>
+    bool LoadView(std::basic_string_view<typename S::value_type>& out) const noexcept
+    {
+        const auto* p = std::get_if<S>(&m_data);
+        if (p)
+        {
+            out = *p;
+        }
+        return p != nullptr;
+    }
+    template<typename T>
+    bool LoadPtr(const T*& out) const noexcept
+    {
+        out = GetIf<T>();
+        return out != nullptr;
+    }
+    template<typename T>
+    bool LoadPtr(T*& out) noexcept
+    {
+        out = GetIf<T>();
+        return out != nullptr;
+    }
+
     ValueData m_data;
 };
 
 JINJA2CPP_EXPORT bool operator==(const Value& lhs, const Value& rhs);
 JINJA2CPP_EXPORT bool operator!=(const Value& lhs, const Value& rhs);
-bool operator==(const types::ValuePtr<Value>& lhs, const types::ValuePtr<Value>& rhs);
-bool operator!=(const types::ValuePtr<Value>& lhs, const types::ValuePtr<Value>& rhs);
-bool operator==(const types::ValuePtr<std::vector<Value>>& lhs, const types::ValuePtr<std::vector<Value>>& rhs);
-bool operator!=(const types::ValuePtr<std::vector<Value>>& lhs, const types::ValuePtr<std::vector<Value>>& rhs);
 
 /*!
  * \brief Simple map of values, keyed by name
@@ -639,8 +757,6 @@ struct ValuesMap : OrderedMap<std::string, Value>
     using OrderedMap::OrderedMap;
 };
 
-bool operator==(const types::ValuePtr<ValuesMap>& lhs, const types::ValuePtr<ValuesMap>& rhs);
-bool operator!=(const types::ValuePtr<ValuesMap>& lhs, const types::ValuePtr<ValuesMap>& rhs);
 
 /*!
  * \brief Information about user-callable parameters passed from Jinja2 call context
@@ -748,10 +864,10 @@ struct ArgInfoT : public ArgInfo
  *      auto str1 = params["str1"];
  *      auto str2 = params["str2"];
  *
- *      if (str1.isString())
- *          return str1.asString() + " " + str2.asString();
+ *      if (str1.IsString())
+ *          return str1.AsString() + " " + str2.AsString();
  *
- *      return str1.asWString() + L" " + str2.asWString();
+ *      return str1.AsWString() + L" " + str2.AsWString();
  *  };
  *  uc.argsInfo = {{"str1", true}, {"str2", true}};
  *  params["test"] = std::move(uc);
@@ -778,7 +894,7 @@ struct JINJA2CPP_EXPORT UserCallable
 {
     //! Type of the functional object which handles the call
     using Function = std::function<Value(const UserCallableParams&)>;
-    using UserCallableFunctionPtr [[deprecated("jinja2cpp-2: use UserCallable::Function")]] = Function;
+    using UserCallableFunctionPtr JINJA2CPP_DEPRECATED("jinja2cpp-2: UserCallable::Function") = Function;
 
     UserCallable()
         : m_counter(++m_gen) {}
@@ -839,17 +955,15 @@ private:
 
 bool operator==(const UserCallable& lhs, const UserCallable& rhs);
 bool operator!=(const UserCallable& lhs, const UserCallable& rhs);
-bool operator==(const types::ValuePtr<UserCallable>& lhs, const types::ValuePtr<UserCallable>& rhs);
-bool operator!=(const types::ValuePtr<UserCallable>& lhs, const types::ValuePtr<UserCallable>& rhs);
 
 
 inline Value::Value(const UserCallable& callable)
-    : m_data(types::ValuePtr<UserCallable>(xyz::in_place_type_t<UserCallable>{}, callable))
+    : m_data(RecWrapper<UserCallable>(xyz::in_place_t{}, callable))
 {
 }
 
 inline Value::Value(UserCallable&& callable)
-    : m_data(types::ValuePtr<UserCallable>(std::move(callable)))
+    : m_data(RecWrapper<UserCallable>(xyz::in_place_t{}, std::move(callable)))
 {
 }
 
@@ -975,24 +1089,131 @@ inline Value& Value::operator=(Value&& val) noexcept
     return *this;
 }
 inline Value::Value(const ValuesMap& map)
-    : m_data(types::ValuePtr<ValuesMap>(types::in_place_type_t<ValuesMap>{}, map))
+    : m_data(RecWrapper<ValuesMap>(xyz::in_place_t{}, map))
 {
 }
 inline Value::Value(const ValuesList& list)
-    : m_data(types::ValuePtr<ValuesList>(types::in_place_type_t<ValuesList>{}, list))
+    : m_data(RecWrapper<ValuesList>(xyz::in_place_t{}, list))
 {
 }
-inline Value::Value(ValuesList&& list) noexcept
-    : m_data(types::ValuePtr<ValuesList>(std::move(list)))
+inline Value::Value(ValuesList&& list)
+    : m_data(RecWrapper<ValuesList>(xyz::in_place_t{}, std::move(list)))
 {
 }
-inline Value::Value(ValuesMap&& map) noexcept
-    : m_data(types::ValuePtr<ValuesMap>(std::move(map)))
+inline Value::Value(ValuesMap&& map)
+    : m_data(RecWrapper<ValuesMap>(xyz::in_place_t{}, std::move(map)))
 {
+}
+
+//! Same as \ref Value::ToString(): the value as `{{ value }}` prints it
+inline std::string ToString(const Value& val)
+{
+    return val.ToString();
+}
+
+//! Same as \ref Value::ToWString()
+inline std::wstring ToWString(const Value& val)
+{
+    return val.ToWString();
+}
+
+//! Same as `ToString(Value(val))` for a number or `bool`: exact, so a literal 0 never looks like a null string
+template<typename T, std::enable_if_t<std::is_arithmetic_v<T> && !detail::IsCharType<T>::value>* = nullptr>
+std::string ToString(T val)
+{
+    return Value(val).ToString();
+}
+
+//! Same as `ToWString(Value(val))` for a number or `bool`
+template<typename T, std::enable_if_t<std::is_arithmetic_v<T> && !detail::IsCharType<T>::value>* = nullptr>
+std::wstring ToWString(T val)
+{
+    return Value(val).ToWString();
+}
+
+//! `None`, as `{{ none }}` prints
+inline std::string ToString(std::nullptr_t /*val*/)
+{
+    return "None";
+}
+
+//! `None`, as `{{ none }}` prints
+inline std::wstring ToWString(std::nullptr_t /*val*/)
+{
+    return L"None";
+}
+
+namespace detail
+{
+template<typename T>
+struct IsRecWrapper : std::false_type
+{
+};
+
+template<typename T>
+struct IsRecWrapper<RecWrapper<T>> : std::true_type
+{
+};
+
+template<typename Fn, typename Data>
+decltype(auto) VisitUnwrapped(Fn&& fn, Data& data)
+{
+    // std::visit calls the lambda once, so fn is forwarded once
+    return std::visit(
+        [&fn](auto& alternative) -> decltype(auto) {
+            if constexpr (IsRecWrapper<std::remove_const_t<std::remove_reference_t<decltype(alternative)>>>::value)
+            {
+                return std::forward<Fn>(fn)(*alternative);
+            }
+            else
+            {
+                return std::forward<Fn>(fn)(alternative);
+            }
+        },
+        data);
+}
+} // namespace detail
+
+/*!
+ * \brief Calls `fn` with the object stored in `val`, as `std::visit` does
+ *
+ * Containers and callables come unwrapped: `fn` receives a \ref ValuesList, \ref ValuesMap or \ref UserCallable,
+ * never a \ref RecWrapper. Every call of `fn` must return the same type.
+ */
+template<typename Fn>
+decltype(auto) Visit(Fn&& fn, const Value& val)
+{
+    return detail::VisitUnwrapped(std::forward<Fn>(fn), val.GetData());
+}
+
+//! Mutable \ref Visit: `fn` receives non-const references
+template<typename Fn>
+decltype(auto) Visit(Fn&& fn, Value& val)
+{
+    return detail::VisitUnwrapped(std::forward<Fn>(fn), val.GetData());
 }
 
 } // namespace jinja2
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
+
+#if (__cplusplus >= 202002L || (defined(_MSVC_LANG) && _MSVC_LANG >= 202002L)) && __has_include(<format>)
+#include <format>
+#endif
+
+#ifdef __cpp_lib_format
+//! Formats a \ref jinja2::Value as `{{ value }}` prints it; takes the string format spec (`{:>10}`)
+template<>
+struct std::formatter<jinja2::Value, char> : std::formatter<std::string_view, char>
+{
+    template<typename FormatContext>
+    auto format(const jinja2::Value& val, FormatContext& ctx) const
+    {
+        std::string text;
+        val.ToString(text);
+        return std::formatter<std::string_view, char>::format(text, ctx);
+    }
+};
+#endif
 
 #endif // JINJA2CPP_VALUE_H

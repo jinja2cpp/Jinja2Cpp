@@ -129,7 +129,7 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | `get<T>()` | returns **by value**: `v.get<std::string>()` copies | `As<T>()` returning a reference | alias (old one keeps copying) |
 | `getPtr<T>()` | `camelBack` | `GetIf<T>()` | alias |
 | free `AsString(const Value&)`, `AsWString(const Value&)` | lenient conversion under the word the members use for exact access; returns `""` for non-strings | member and free `ToString()`/`ToWString()`, printing as `{{ v }}` does | alias (keeps returning `""`) |
-| no way to print a `Value` without allocating | | `v.ToString(std::string& out)` appends to the caller's buffer (no allocation once it has capacity); `v.ToChars(first, last)` writes into a fixed buffer and returns `std::to_chars_result`, as `std::to_chars`; `std::formatter<jinja2::Value>` for `std::format_to`/`format_to_n` where the standard library has `<format>`. All four go through one internal output sink, so they cannot print differently | add |
+| no way to print a `Value` without allocating | | `v.ToString(std::string& out)` appends to the caller's buffer (no allocation once it has capacity); `v.ToChars(first, last)` writes into a fixed buffer and returns `std::to_chars_result`, as `std::to_chars`; `std::formatter<jinja2::Value>` for `std::format_to`/`format_to_n` where the standard library has `<format>`. All four go through one internal output sink, so they cannot print differently. *As built (0072):* scalars, None and narrow strings print with no allocation; wide strings, containers and (for `ToChars`) text past the small-string buffer still allocate inside the renderer | add |
 | `data()` | `camelBack`; the variant alternatives expose `RecWrapper<T>` = vendored `xyz::polymorphic<T>` to every visitor | `GetData()`; add `jinja2::Visit(fn, value)` that unwraps `RecWrapper` as `ParamUnwrapper` already does internally | alias + add |
 | no `IsBool`, `IsInt`, `IsDouble`, `IsCallable` and getters | incomplete family; users go through `data()` | add them | add |
 | `EmptyValue` | since 0034 it means Python `None`; it also has `template<class T> operator T()`, an implicit conversion to *anything* | `NoneValue`; drop the catch-all conversion | alias (`using EmptyValue [[deprecated]] = NoneValue`); the conversion is a break, check `src/` users first |
@@ -253,7 +253,7 @@ public:
                               int64_t, double, RecWrapper<ValuesList>, RecWrapper<ValuesMap>,
                               GenericList, GenericMap, RecWrapper<UserCallable>>;
 
-    Value() noexcept;
+    Value();
     Value(std::nullptr_t) noexcept;                         // None
     template<class I, std::enable_if_t<detail::IsStoredAsInt<I>::value>* = nullptr>
     Value(I val) noexcept : m_data(static_cast<int64_t>(val)) {}

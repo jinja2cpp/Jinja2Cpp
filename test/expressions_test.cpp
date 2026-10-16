@@ -209,8 +209,8 @@ TEST(ExpressionTest, MutatingMethodsKeepCallerData)
     ASSERT_TRUE(tpl.Load(source));
     for (int pass = 0; pass != 2; ++pass)
         EXPECT_EQ("[1, 2, 3, 4]|3|[1, 2]", tpl.RenderAsString(params).value());
-    EXPECT_EQ(3U, params["l"].asList().size());
-    EXPECT_EQ(2U, params["d"].asMap().size());
+    EXPECT_EQ(3U, params["l"].AsList().size());
+    EXPECT_EQ(2U, params["d"].AsMap().size());
 }
 
 TEST(ExpressionTest, MethodsOnReflectedValues)
@@ -262,8 +262,8 @@ TEST(ExpressionTest, MissingKeyOfUserMap)
         auto fromLiteral = literal.RenderAsString(ValuesMap{});
         ASSERT_FALSE(fromLiteral.has_value());
         EXPECT_EQ(fromLiteral.error().GetCode(), fromUser.error().GetCode());
-        EXPECT_EQ("'dict object' has no attribute 'nokey'", fromUser.error().GetExtraParams()[0].get<std::string>());
-        EXPECT_EQ(fromLiteral.error().GetExtraParams()[0].get<std::string>(), fromUser.error().GetExtraParams()[0].get<std::string>());
+        EXPECT_EQ("'dict object' has no attribute 'nokey'", fromUser.error().GetExtraParams()[0].As<std::string>());
+        EXPECT_EQ(fromLiteral.error().GetExtraParams()[0].As<std::string>(), fromUser.error().GetExtraParams()[0].As<std::string>());
     }
 }
 

@@ -550,7 +550,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
         value = MakeConstant(m_nodes, InternalValue(false));
         break;
     case Token::None:
-        value = MakeConstant(m_nodes, InternalValue(EmptyValue()));
+        value = MakeConstant(m_nodes, InternalValue(NoneValue()));
         break;
     case '(':
     case '[':

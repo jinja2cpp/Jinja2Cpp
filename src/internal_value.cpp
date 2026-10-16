@@ -1013,11 +1013,11 @@ InternalValue LendGenericItem(const std::shared_ptr<const void>& owner, Value&& 
     if (owner)
     {
         // An invalid container stays invalid: a wrapper's provider would hand out a null accessor
-        if (auto* list = std::get_if<GenericList>(&item.data()); list && list->IsValid())
+        if (auto* list = std::get_if<GenericList>(&item.GetData()); list && list->IsValid())
         {
             return Value2IntValue(Value(GenericList([owner, nested = std::move(*list)]() { return nested.GetAccessor(); })));
         }
-        if (auto* map = std::get_if<GenericMap>(&item.data()); map && map->GetAccessor())
+        if (auto* map = std::get_if<GenericMap>(&item.GetData()); map && map->GetAccessor())
         {
             return Value2IntValue(Value(GenericMap([owner, nested = std::move(*map)]() { return nested.GetAccessor(); })));
         }
@@ -1127,15 +1127,15 @@ MapAdapter LendNestedMap(std::shared_ptr<ValuesMap> map);
 template<typename T>
 InternalValue LendOwnedItem(const std::shared_ptr<T>& owner, const Value& item)
 {
-    if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&item.data()))
+    if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&item.GetData()))
     {
         return InternalValue(LendNestedList(std::shared_ptr<ValuesList>(owner, const_cast<ValuesList*>(&**list))));
     }
-    if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&item.data()))
+    if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&item.GetData()))
     {
         return InternalValue(LendNestedMap(std::shared_ptr<ValuesMap>(owner, const_cast<ValuesMap*>(&**map))));
     }
-    return visit(visitors::InputValueConvertor(true, false), item.data());
+    return visit(visitors::InputValueConvertor(true, false), item.GetData());
 }
 
 // Borrows the item when the caller owns the storage for the whole render (ByRef)
@@ -1149,11 +1149,11 @@ InternalValue LendItem([[maybe_unused]] const Holder<T>& holder, const Value& it
     else
     {
         // Scalars, the usual items of user data, skip the convertor's visit
-        if (const auto* s = std::get_if<std::string>(&item.data()))
+        if (const auto* s = std::get_if<std::string>(&item.GetData()))
         {
             return InternalValue(TargetStringView(std::string_view(*s)));
         }
-        if (const auto* i = std::get_if<int64_t>(&item.data()))
+        if (const auto* i = std::get_if<int64_t>(&item.GetData()))
         {
             return InternalValue(*i);
         }
@@ -1186,19 +1186,19 @@ public:
         if constexpr (std::is_same_v<Holder<ValuesList>, ByRef<ValuesList>>)
         {
             // LendItem's scalars first, as there: a map is the less common item
-            if (const auto* s = std::get_if<std::string>(&item.data()))
+            if (const auto* s = std::get_if<std::string>(&item.GetData()))
             {
                 return InternalValue(TargetStringView(std::string_view(*s)));
             }
-            if (const auto* i = std::get_if<int64_t>(&item.data()))
+            if (const auto* i = std::get_if<int64_t>(&item.GetData()))
             {
                 return InternalValue(*i);
             }
-            if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&item.data()))
+            if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&item.GetData()))
             {
                 return LendNested(static_cast<size_t>(idx), **list);
             }
-            if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&item.data()))
+            if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&item.GetData()))
             {
                 return LendNested(static_cast<size_t>(idx), **map);
             }
@@ -1733,13 +1733,13 @@ private:
 
 InternalValue Value2IntValue(const Value& val)
 {
-    return std::visit(visitors::InputValueConvertor(false, true), val.data());
+    return std::visit(visitors::InputValueConvertor(false, true), val.GetData());
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved): the convertor moves out of val.data()
 InternalValue Value2IntValue(Value&& val)
 {
-    return std::visit(visitors::InputValueConvertor(true, false), val.data());
+    return std::visit(visitors::InputValueConvertor(true, false), val.GetData());
 }
 
 template<template<typename> class Holder>
@@ -1764,10 +1764,10 @@ public:
         {
             return InternalValue();
         }
-        if (val->isEmpty())
+        if (val->IsNone())
         {
             const auto* accessor = m_values.Get().GetAccessor();
-            return accessor && accessor->EmptyIsNone() ? InternalValue(EmptyValue{}) : InternalValue();
+            return accessor && accessor->EmptyIsNone() ? InternalValue(NoneValue{}) : InternalValue();
         }
 
         return LendGenericItem(GenericOwner(m_values), std::move(*val));
@@ -1968,7 +1968,7 @@ struct OutputValueConvertor
     using result_t = Value;
 
     result_t operator()(const UndefinedValue&) const { return result_t(); }
-    result_t operator()(const EmptyValue&) const { return result_t(); }
+    result_t operator()(const NoneValue&) const { return result_t(); }
     result_t operator()(const MapRef& adapter) const { return result_t(adapter.CreateGenericMap()); }
     result_t operator()(const ListRef& adapter) const { return result_t(adapter.CreateGenericList()); }
     result_t operator()(const ValueRef& ref) const { return ref.get(); }

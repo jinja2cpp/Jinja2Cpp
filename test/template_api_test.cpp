@@ -80,7 +80,7 @@ TEST(TemplateApiTest, RenderWithGenericMapContext)
     data.intValue = 10;
     data.strValue = "hello";
     auto reflected = Reflect(data);
-    const auto& context = reflected.get<GenericMap>();
+    const auto& context = reflected.As<GenericMap>();
 
     Template tpl;
     ASSERT_TRUE(!!tpl.Load("{{ intValue }} {{ strValue }} {{ missing is undefined }}"));
@@ -107,7 +107,7 @@ TEST(TemplateApiTest, GenericMapContextSeesEnvironmentGlobals)
 
     Template tpl(&env);
     ASSERT_TRUE(!!tpl.Load("{{ greeting }} {{ intValue }}"));
-    EXPECT_EQ("hi 7", tpl.RenderAsString(reflected.get<GenericMap>()).value());
+    EXPECT_EQ("hi 7", tpl.RenderAsString(reflected.As<GenericMap>()).value());
 }
 
 // The globals are converted once per change and kept between renders (docs/tasks/0139)
@@ -256,12 +256,12 @@ TEST(TemplateApiTest, MetadataStaysValidAcrossCalls)
     ASSERT_TRUE(!!first);
     ASSERT_TRUE(!!second);
     // The first map must still be readable after the second call
-    EXPECT_EQ("first", AsString(first.value()["name"]));
-    EXPECT_EQ(std::optional<size_t>(2), first.value()["list"].get<GenericList>().GetSize());
-    EXPECT_EQ("first", AsString(second.value()["name"]));
+    EXPECT_EQ("first", ToString(first.value()["name"]));
+    EXPECT_EQ(std::optional<size_t>(2), first.value()["list"].As<GenericList>().GetSize());
+    EXPECT_EQ("first", ToString(second.value()["name"]));
 
     ASSERT_TRUE(!!tpl.Load(R"({% meta %}{"name": "second"}{% endmeta %}y)"));
-    EXPECT_EQ("second", AsString(tpl.GetMetadata().value()["name"]));
+    EXPECT_EQ("second", ToString(tpl.GetMetadata().value()["name"]));
 }
 
 // Several threads render one template (and the templates it includes and extends) at
