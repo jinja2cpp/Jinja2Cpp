@@ -890,12 +890,12 @@ InternalValue DictCreator::Evaluate(RenderContext& context)
     return CreateMapAdapter(std::move(result));
 }
 
-NodeRef<ExpressionFilter> ExpressionFilter::Make(NodeArena& nodes, const std::string& filterName, const CallParamsInfo& params, InternalValue registered)
+NodeRef<ExpressionFilter> ExpressionFilter::Make(NodeArena& nodes, const std::string& filterName, const CallParamsInfo& params, InternalValue registered, bool* unknown)
 {
     // Filters added to the environment take precedence over the builtins, as in Jinja2's env.filters
     const auto filter = GetIf<Callable>(&registered)
                             ? nodes.MakeObject<IExpressionFilter, filters::UserDefinedFilter>(filterName, params, std::move(registered))
-                            : CreateFilter(nodes, filterName, params);
+                            : CreateFilter(nodes, filterName, params, unknown);
     ArenaText argsError;
     if (auto error = nodes[filter].GetArgumentsError(); !error.empty())
     {
@@ -953,7 +953,7 @@ InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderCon
     return nodes[m_filter].Filter(baseVal, context);
 }
 
-NodeRef<IsExpression> IsExpression::Make(NodeArena& nodes, NodeRef<Expression> value, const std::string& tester, const CallParamsInfo& params, InternalValue registered)
+NodeRef<IsExpression> IsExpression::Make(NodeArena& nodes, NodeRef<Expression> value, const std::string& tester, const CallParamsInfo& params, InternalValue registered, bool* unknown)
 {
     if (GetIf<Callable>(&registered))
     {
@@ -971,7 +971,7 @@ NodeRef<IsExpression> IsExpression::Make(NodeArena& nodes, NodeRef<Expression> v
     {
         foldable = foldable && nodes[arg].IsFoldable(nodes);
     }
-    const auto test = CreateTester(nodes, tester, params);
+    const auto test = CreateTester(nodes, tester, params, unknown);
     return nodes.Make<IsExpression>(value, test, testInPlace, foldable);
 }
 

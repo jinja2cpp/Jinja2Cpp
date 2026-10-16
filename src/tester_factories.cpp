@@ -124,11 +124,15 @@ TesterPtr CreateTester(std::string testerName, const CallParamsInfo& params)
     return std::make_shared<testers::UserDefinedTester>(std::move(testerName), params);
 }
 
-NodeRef<IsExpression::ITester> CreateTester(NodeArena& nodes, const std::string& testerName, const CallParamsInfo& params)
+NodeRef<IsExpression::ITester> CreateTester(NodeArena& nodes, const std::string& testerName, const CallParamsInfo& params, bool* unknown)
 {
     if (const auto* entry = FindBuiltinTester(testerName))
     {
         return entry->make(nodes, params);
+    }
+    if (unknown)
+    {
+        *unknown = true;
     }
     return nodes.MakeObject<ITester, testers::UserDefinedTester>(testerName, params);
 }

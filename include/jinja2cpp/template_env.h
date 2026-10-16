@@ -98,6 +98,12 @@ struct Settings
     //! was loaded with. With `EveryUse` and `cacheSize = 0` every use parses the file again and the copies are freed when
     //! the render ends, not after each use
     TemplateLookup templateLookup = TemplateLookup::OncePerRender;
+    //! Lets a \ref UserCallable passed in the render parameters or the globals be used as a filter or a test (`{{ x|fn }}`,
+    //! `x is fn`, `map('fn')`), as in Jinja2C++ 1.x. By default, as in Jinja2, a filter or test is one built in or added
+    //! with \ref TemplateEnv::AddFilter or \ref TemplateEnv::AddTest, and a name that is neither fails \ref Template::Load
+    //! (ErrorCode::UnknownFilter, ErrorCode::UnknownTest) unless it is inside an `if`, where it fails when it runs.
+    //! With this flag such names are looked up when they run instead
+    bool userCallablesAsFilters = false;
 };
 
 //! Field by field; two unset \ref Settings::finalize callables are equal

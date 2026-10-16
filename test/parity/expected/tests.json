@@ -1128,6 +1128,56 @@
    }
   },
   {
+   "id": "tests.unknown_test_in_uncalled_macro",
+   "template": "{% macro m() %}{{ x is nonexistent }}{% endmacro %}ok",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateAssertionError",
+    "message": "No test named 'nonexistent'."
+   }
+  },
+  {
+   "id": "tests.unknown_test_in_unused_branch",
+   "template": "{% if false %}{{ x is nonexistent }}{% endif %}ok",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "ok"
+  },
+  {
    "id": "tests.print_test_result",
    "template": "{{ x is odd }}",
    "context": {

@@ -93,10 +93,11 @@ InternalValue ParseAdjacentStrings(LexScanner& lexer, InternalValue value, std::
     return value;
 }
 
-ExpressionParser::ExpressionParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names)
+ExpressionParser::ExpressionParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names, UnknownCallables& unknown)
     : m_env(env)
     , m_nodes(nodes)
     , m_names(names)
+    , m_unknown(unknown)
 {
     if (settings.finalize.callable)
     {
@@ -154,10 +155,12 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
         return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
     }
     LexScanner::StateSaver saver(lexer);
+    const auto unknownMark = m_unknown.Mark();
 
     auto value = ParseBinary(lexer, Precedence::Or);
     if (!value)
     {
+        m_unknown.DeferSince(unknownMark);
         return MakeUnexpected(value.error());
     }
 
@@ -165,6 +168,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
     if (includeIfPart && lexer.EatIfEqual(Keyword::If))
     {
         auto ifExpr = ParseIfExpression(lexer);
+        // Jinja2 checks the filters and tests of an inline if, its value among them, when they run
+        m_unknown.DeferSince(unknownMark);
         if (!ifExpr)
         {
             return MakeUnexpected(ifExpr.error());
@@ -722,7 +727,12 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
     NodeRef<Expression> result;
     try
     {
-        result = IsExpression::Make(m_nodes, valueRef, name, params, FindRegisteredTester(name));
+        bool unknown = false;
+        result = IsExpression::Make(m_nodes, valueRef, name, params, FindRegisteredTester(name), &unknown);
+        if (unknown)
+        {
+            m_unknown.Add(nameTok, true);
+        }
     }
     catch (const std::runtime_error&)
     {
@@ -1186,7 +1196,12 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
                 return MakeUnexpected(params.error());
             }
 
-            auto filter = ExpressionFilter::Make(m_nodes, name, *params, FindRegisteredFilter(name));
+            bool unknown = false;
+            auto filter = ExpressionFilter::Make(m_nodes, name, *params, FindRegisteredFilter(name), &unknown);
+            if (unknown)
+            {
+                m_unknown.Add(tok, false);
+            }
             if (result && !AddOperator())
             {
                 return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);

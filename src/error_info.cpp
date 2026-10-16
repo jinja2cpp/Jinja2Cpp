@@ -165,6 +165,12 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const BasicErrorInfo<Char
     case ErrorCode::RecursionLimitExceeded:
         fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("Maximum recursion depth exceeded").GetValue<CharT>());
         break;
+    case ErrorCode::UnknownFilter:
+        fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("No filter named '{}'.").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
+        break;
+    case ErrorCode::UnknownTest:
+        fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("No test named '{}'.").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
+        break;
     case ErrorCode::YetUnsupported:
         fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("This feature has not been supported yet").GetValue<CharT>());
         break;

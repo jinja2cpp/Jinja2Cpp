@@ -54,15 +54,15 @@ bool operator==(const Settings& lhs, const Settings& rhs)
     // Structured bindings name every field: a field added to Settings or Settings::Extensions stops this compiling
     // until it is compared here too
     const auto& [lTrim, lLstrip, lCacheSize, lAutoReload, lExt, lMetaType, lKeepNl, lNlSeq, lVarStart, lVarEnd, lBlockStart, lBlockEnd, lCommentStart,
-                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lUndefined, lLookup] = lhs;
+                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lUndefined, lLookup, lCallablesAsFilters] = lhs;
     const auto& [rTrim, rLstrip, rCacheSize, rAutoReload, rExt, rMetaType, rKeepNl, rNlSeq, rVarStart, rVarEnd, rBlockStart, rBlockEnd, rCommentStart,
-                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rUndefined, rLookup] = rhs;
+                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rUndefined, rLookup, rCallablesAsFilters] = rhs;
     const auto& [lDo, lLoopControls, lI18n] = lExt;
     const auto& [rDo, rLoopControls, rI18n] = rExt;
 
     // The flags and numbers first, then the strings
-    if (std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lKeepNl, lAutoescape, lUndefined, lLookup)
-        != std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rKeepNl, rAutoescape, rUndefined, rLookup))
+    if (std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lKeepNl, lAutoescape, lUndefined, lLookup, lCallablesAsFilters)
+        != std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rKeepNl, rAutoescape, rUndefined, rLookup, rCallablesAsFilters))
     {
         return false;
     }

@@ -709,7 +709,13 @@ public:
 
     // The test is made first: an arena makes one object at a time.
     // registered: the test the environment adds under this name (TemplateEnv::AddTest), if any
-    static NodeRef<IsExpression> Make(NodeArena& nodes, NodeRef<Expression> value, const std::string& tester, const CallParamsInfo& params, InternalValue registered = InternalValue());
+    // unknown: set when the name is neither registered nor a built-in test
+    static NodeRef<IsExpression> Make(NodeArena& nodes,
+                                      NodeRef<Expression> value,
+                                      const std::string& tester,
+                                      const CallParamsInfo& params,
+                                      InternalValue registered = InternalValue(),
+                                      bool* unknown = nullptr);
 
     IsExpression(NodeRef<Expression> value, NodeRef<ITester> tester, bool testInPlace, bool foldable = false)
         : m_value(value)
@@ -985,7 +991,8 @@ public:
     };
     // The filter is made first: an arena makes one object at a time.
     // registered: the filter the environment adds under this name (TemplateEnv::AddFilter), if any
-    static NodeRef<ExpressionFilter> Make(NodeArena& nodes, const std::string& filterName, const CallParamsInfo& params, InternalValue registered = InternalValue());
+    // unknown: set when the name is neither registered nor a built-in filter
+    static NodeRef<ExpressionFilter> Make(NodeArena& nodes, const std::string& filterName, const CallParamsInfo& params, InternalValue registered = InternalValue(), bool* unknown = nullptr);
 
     // argsError: why the call does not fit the filter, empty if it fits
     ExpressionFilter(NodeRef<IExpressionFilter> filter, ArenaText argsError, bool foldable)

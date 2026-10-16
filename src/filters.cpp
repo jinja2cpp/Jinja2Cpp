@@ -2530,15 +2530,29 @@ UserDefinedFilter::UserDefinedFilter(std::string filterName, const FilterParams&
     ParseParams(args, params, ExtraArgs::Reject, &m_callParams);
 }
 
+namespace
+{
+[[noreturn]] void ThrowUnknownFilter(const std::string& name)
+{
+    throw std::runtime_error("No filter named '" + name + "' found.");
+}
+} // namespace
+
 InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     const Callable* callable = GetIf<Callable>(&m_callable);
     if (!callable)
     {
+        // Neither built in nor added to the environment: Jinja2 has checked the name at load
+        // unless it is in an `if`. Settings::userCallablesAsFilters looks it up among the values
+        if (!context.UserCallablesAsFilters())
+        {
+            ThrowUnknownFilter(m_filterName);
+        }
         const auto filterVal = context.FindValue(m_filterName);
         if (!filterVal)
         {
-            throw std::runtime_error("Can't find filter '" + m_filterName + "'");
+            ThrowUnknownFilter(m_filterName);
         }
         callable = GetIf<Callable>(&*filterVal);
     }

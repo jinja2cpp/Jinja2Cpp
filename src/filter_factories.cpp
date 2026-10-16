@@ -139,11 +139,15 @@ FilterPtr CreateFilter(std::string_view filterName, const CallParamsInfo& params
     return std::make_shared<filters::UserDefinedFilter>(std::string(filterName), params);
 }
 
-NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& nodes, std::string_view filterName, const CallParamsInfo& params)
+NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& nodes, std::string_view filterName, const CallParamsInfo& params, bool* unknown)
 {
     if (const auto* entry = FindBuiltinFilter(filterName))
     {
         return entry->make(nodes, params);
+    }
+    if (unknown)
+    {
+        *unknown = true;
     }
     return nodes.MakeObject<IExpressionFilter, filters::UserDefinedFilter>(std::string(filterName), params);
 }

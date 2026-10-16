@@ -50,6 +50,9 @@ CASES = [
     ("test_precedence_and", "{{ 'T' if x is odd and y is float else 'F' }}"),
     ("test_on_filter", "{{ 'T' if s|upper is upper else 'F' }}"),
     ("unknown_test", "{{ x is nonexistent }}"),
+    # a load error as for filters (docs/tasks/0193), deferred in an `if`
+    ("unknown_test_in_uncalled_macro", "{% macro m() %}{{ x is nonexistent }}{% endmacro %}ok"),
+    ("unknown_test_in_unused_branch", "{% if false %}{{ x is nonexistent }}{% endif %}ok"),
     ("print_test_result", "{{ x is odd }}"),
     ("select_with_test", "{{ [1, 2, 3, 4]|select('even')|list }}"),
     ("is_not_with_parens", "{{ 'T' if 4 is not divisibleby(3) else 'F' }}"),
