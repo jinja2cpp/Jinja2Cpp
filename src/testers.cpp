@@ -200,7 +200,7 @@ bool IsTestName(const std::string& name, RenderContext& context)
 
 // Python's `is`: one object. Scalars have no identity here, so equal values of one
 // kind count as the same object (CPython caches small ints and interns literals);
-// lists and mappings compare by the container they view.
+// lists and mappings compare by the container they view, pairs by their box.
 bool IsSameObject(const InternalValue& left, const InternalValue& right)
 {
     auto kind = Apply<ValueKindGetter>(left);
@@ -229,6 +229,13 @@ bool IsSameObject(const InternalValue& left, const InternalValue& right)
         auto leftMap = AsMap(left);
         auto rightMap = AsMap(right);
         return leftMap && rightMap && leftMap->GetIdentity() == rightMap->GetIdentity();
+    }
+    case TestKind::KVPair:
+    {
+        // A pair lives in a box its copies share: the box is its identity
+        const auto* leftPair = GetIf<KeyValuePair>(&left);
+        const auto* rightPair = GetIf<KeyValuePair>(&right);
+        return leftPair != nullptr && leftPair == rightPair;
     }
     default:
         return false;
