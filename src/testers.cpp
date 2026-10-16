@@ -317,7 +317,7 @@ bool IsValueInListValue(const InternalValue& baseVal, const InternalValue& seq)
     ListAdapter converted;
     if (!list)
     {
-        converted = ConvertToList(seq, InternalValue(), isConverted);
+        converted = ConvertToList(seq, isConverted);
         if (!isConverted)
         {
             return false;

@@ -148,7 +148,6 @@ INSTANTIATE_TEST_SUITE_P(Default, FilterGenericTest, ::testing::Values(
 INSTANTIATE_TEST_SUITE_P(First, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4] | first", "1"},
                             InputOutputPair{"(1, 2, 3, 4) | first", "1"},
-                            InputOutputPair{"intValue | first", ""},
                             InputOutputPair{"intList | first", "9"},
                             InputOutputPair{"stringValue | list | first", "r"},
                             InputOutputPair{"reflectedIntVector | first", "9"}
@@ -157,7 +156,6 @@ INSTANTIATE_TEST_SUITE_P(First, FilterGenericTest, ::testing::Values(
 INSTANTIATE_TEST_SUITE_P(Last, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4] | last", "4"},
                             InputOutputPair{"(1, 2, 3, 4) | last", "4"},
-                            InputOutputPair{"intValue | last", ""},
                             InputOutputPair{"intList | last", "4"},
                             InputOutputPair{"stringValue | list | last", "n"},
                             InputOutputPair{"reflectedIntVector | last", "4"}
@@ -166,7 +164,6 @@ INSTANTIATE_TEST_SUITE_P(Last, FilterGenericTest, ::testing::Values(
 INSTANTIATE_TEST_SUITE_P(Length, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4, 5] | length", "5"},
                             InputOutputPair{"(1, 2, 3, 4, 5, 6) | length", "6"},
-                            InputOutputPair{"intValue | length", ""},
                             InputOutputPair{"intList | length", "10"},
                             InputOutputPair{"stringValue | list | length", "4"},
                             InputOutputPair{"reflectedIntVector | length", "10"}
@@ -175,7 +172,6 @@ INSTANTIATE_TEST_SUITE_P(Length, FilterGenericTest, ::testing::Values(
 INSTANTIATE_TEST_SUITE_P(Min, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4, 5] | min", "1"},
                             InputOutputPair{"(1, 2, 3, 4, 5, 6) | min", "1"},
-                            InputOutputPair{"intValue | min", ""},
                             InputOutputPair{"intList | min", "0"},
                             InputOutputPair{"stringValue | list | min", "a"},
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | min", "str1"},
@@ -186,7 +182,6 @@ INSTANTIATE_TEST_SUITE_P(Min, FilterGenericTest, ::testing::Values(
 INSTANTIATE_TEST_SUITE_P(Max, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4, 5] | max", "5"},
                             InputOutputPair{"(1, 2, 3, 4, 5, 6) | max", "6"},
-                            InputOutputPair{"intValue | max", ""},
                             InputOutputPair{"intList | max", "9"},
                             InputOutputPair{"stringValue | list | max", "r"},
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | max", "Str6"},
@@ -204,7 +199,6 @@ INSTANTIATE_TEST_SUITE_P(Reverse, ListIteratorTest, ::testing::Values(
 INSTANTIATE_TEST_SUITE_P(Sum, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4, 5] | sum",   "15"},
                             InputOutputPair{"[] | sum(start=15)",      "15"},
-                            InputOutputPair{"intValue | sum",          ""},
                             InputOutputPair{"intList | sum(start=10)", "55"}
                             ));
 // clang-format on
@@ -923,6 +917,34 @@ ValuesMap UsersParams()
     return ValuesMap{ { "users", ValuesList{ ValuesMap{ { "name", "a" } }, ValuesMap{ { "name", "b" }, { "addr", ValuesMap{ { "zip", "1" } } } } } } };
 }
 } // namespace
+
+// Task 0177: filters that iterate, take len() of or call methods on their input refuse
+// None, bools and numbers with Python's message; an undefined stays lenient
+TEST(FilterErrors, NonIterableInputLikePython)
+{
+    EXPECT_EQ("Exception: 'NoneType' object is not iterable\n", RenderError("{{ none|first }}"));
+    EXPECT_EQ("Exception: 'bool' object is not iterable\n", RenderError("{{ true|first }}"));
+    EXPECT_EQ("Exception: 'int' object is not reversible\n", RenderError("{{ 5|last }}"));
+    EXPECT_EQ("Exception: object of type 'int' has no len()\n", RenderError("{{ 5|length }}"));
+    EXPECT_EQ("Exception: object of type 'int' has no len()\n", RenderError("{{ 5|count }}"));
+    EXPECT_EQ("Exception: object of type 'NoneType' has no len()\n", RenderError("{{ none|random }}"));
+    EXPECT_EQ("Exception: argument must be iterable\n", RenderError("{{ 5|reverse }}"));
+    EXPECT_EQ("Exception: 'int' object is not iterable\n", RenderError("{{ 5|sum }}"));
+    EXPECT_EQ("Exception: 'int' object is not iterable\n", RenderError("{{ 5|min }}"));
+    EXPECT_EQ("Exception: 'float' object is not iterable\n", RenderError("{{ 1.5|max }}"));
+    EXPECT_EQ("Exception: 'NoneType' object is not iterable\n", RenderError("{{ none|sort }}"));
+    EXPECT_EQ("Exception: 'int' object is not iterable\n", RenderError("{{ 5|list }}"));
+    EXPECT_EQ("Exception: 'int' object is not iterable\n", RenderError("{{ 5|groupby('a') }}"));
+    EXPECT_EQ("Exception: 'int' object is not iterable\n", RenderError("{{ 5|map(attribute='a')|list }}"));
+    EXPECT_EQ("Exception: 'NoneType' object has no attribute 'items'\n", RenderError("{{ none|dictsort }}"));
+    EXPECT_EQ("Exception: 'int' object has no attribute 'items'\n", RenderError("{{ 5|dictsort }}"));
+    EXPECT_EQ("Exception: 'list' object has no attribute 'items'\n", RenderError("{{ [1]|dictsort }}"));
+    EXPECT_EQ("Exception: 'str' object has no attribute 'items'\n", RenderError("{{ 'ab'|dictsort }}"));
+    EXPECT_EQ("Exception: unsupported operand type(s) for +=: 'NoneType' and 'str'\n", RenderError("{{ none|indent }}"));
+    EXPECT_EQ("Exception: unsupported operand type(s) for +=: 'int' and 'str'\n", RenderError("{{ 5|indent }}"));
+    EXPECT_EQ("Exception: 'list' object has no attribute 'splitlines'\n", RenderError("{{ [1]|indent }}"));
+    EXPECT_EQ("|0|[]", RenderError("{{ nope|first }}|{{ nope|length }}|{{ nope|list }}"));
+}
 
 // Task 0048: filters raise where Python does (item 10 and the format and round leftovers)
 TEST(FilterErrors, TypeErrorsLikePython)
