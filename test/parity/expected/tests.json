@@ -674,6 +674,249 @@
    }
   },
   {
+   "id": "tests.sameas_extra_arg",
+   "template": "{{ 1 is sameas(1, 2) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_sameas() takes 2 positional arguments but 3 were given"
+   }
+  },
+  {
+   "id": "tests.divisibleby_arity",
+   "template": "{{ 6 is divisibleby() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_divisibleby() missing 1 required positional argument: 'num'"
+   }
+  },
+  {
+   "id": "tests.divisibleby_extra_arg",
+   "template": "{{ 6 is divisibleby(3, 2) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_divisibleby() takes 2 positional arguments but 3 were given"
+   }
+  },
+  {
+   "id": "tests.in_arity",
+   "template": "{{ 1 is in() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_in() missing 1 required positional argument: 'seq'"
+   }
+  },
+  {
+   "id": "tests.in_extra_arg",
+   "template": "{{ 1 is in([1], [2]) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_in() takes 2 positional arguments but 3 were given"
+   }
+  },
+  {
+   "id": "tests.eq_arity",
+   "template": "{{ 1 is eq }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "eq expected 2 arguments, got 1"
+   }
+  },
+  {
+   "id": "tests.eq_extra_arg",
+   "template": "{{ 1 is eq(1, 2) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "eq expected 2 arguments, got 3"
+   }
+  },
+  {
+   "id": "tests.odd_extra_arg",
+   "template": "{{ 1 is odd(1) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_odd() takes 1 positional argument but 2 were given"
+   }
+  },
+  {
+   "id": "tests.defined_extra_arg",
+   "template": "{{ 1 is defined(1) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_defined() takes 1 positional argument but 2 were given"
+   }
+  },
+  {
    "id": "tests.sameas_computed_list",
    "template": "{% set a = range(3) %}{% set b = a %}{{ 'T' if a is sameas b else 'F' }}{{ 'T' if range(3) is sameas range(3) else 'F' }}",
    "context": {

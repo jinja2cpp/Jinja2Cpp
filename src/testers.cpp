@@ -403,6 +403,11 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
 
 bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
 {
+    // divisibleby, in and sameas take exactly one argument, as in Jinja2
+    if (const auto& error = GetArgumentsError(); !error.empty())
+    {
+        throw std::runtime_error(error);
+    }
     bool result = false;
     auto valKind = Apply<ValueKindGetter>(baseVal);
 

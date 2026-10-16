@@ -31,6 +31,16 @@ CASES = [
     ("sameas_container", "{% set a = [1] %}{% set b = a %}{{ 'T' if b is sameas a else 'F' }}{{ 'T' if a is sameas [1] else 'F' }}{{ 'T' if l is sameas l else 'F' }}"),
     # A copy of a computed list (range, map) is the same object, as a Python name is
     ("sameas_arity", "{{ 1 is sameas() }}"),
+    ("sameas_extra_arg", "{{ 1 is sameas(1, 2) }}"),
+    ("divisibleby_arity", "{{ 6 is divisibleby() }}"),
+    ("divisibleby_extra_arg", "{{ 6 is divisibleby(3, 2) }}"),
+    ("in_arity", "{{ 1 is in() }}"),
+    ("in_extra_arg", "{{ 1 is in([1], [2]) }}"),
+    # The other tests do not check their arguments yet (0200)
+    ("eq_arity", "{{ 1 is eq }}"),
+    ("eq_extra_arg", "{{ 1 is eq(1, 2) }}"),
+    ("odd_extra_arg", "{{ 1 is odd(1) }}"),
+    ("defined_extra_arg", "{{ 1 is defined(1) }}"),
     ("sameas_computed_list", "{% set a = range(3) %}{% set b = a %}{{ 'T' if a is sameas b else 'F' }}{{ 'T' if range(3) is sameas range(3) else 'F' }}"),
     ("sameas_generator_copy", "{% set a = [1, 2, 3]|select('odd') %}{% set b = a %}{{ 'T' if a is sameas b else 'F' }}"),
     ("sequence", "{{ 'T' if l is sequence else 'F' }}{{ 'T' if s is sequence else 'F' }}{{ 'T' if x is sequence else 'F' }}"),

@@ -51,7 +51,10 @@ MODULES2 = {"templates": {**T,
     "mselfb.j2": "{% set v = 'mod' %}{% macro n(s) %}{{ s.b() }}{% endmacro %}",
     "pbase.j2": "{% block x %}BX{% endblock %}{% block y %}BY{% endblock %}",
     "mext.j2": "{% extends 'pbase.j2' %}{% block y %}{{ super() }}C{% endblock %}{% macro f() %}F{{ self.x() }}{% endmacro %}",
-    "msup.j2": "{% extends 'pbase.j2' %}{% block y %}{{ super() }}C{% endblock %}{% macro f() %}F{{ self.y() }}{% endmacro %}"}}
+    "msup.j2": "{% extends 'pbase.j2' %}{% block y %}{{ super() }}C{% endblock %}{% macro f() %}F{{ self.y() }}{% endmacro %}",
+    "pbasen.j2": "{% set pv = 'P' %}{% set w = 'pw' %}{% block x %}BX{{ w }}{% endblock %}{% macro pm() %}PM{% endmacro %}",
+    "mextn.j2": "{% extends 'pbasen.j2' %}{% set w = 'cw' %}{% macro f() %}F{{ self.x() }}{% endmacro %}",
+    "mst.j2": "{% block b %}MB[{{ v }}]{% endblock %}{% set v = 'mv' %}{% macro st(ns) %}{% set ns.s = self %}{% endmacro %}"}}
 CASES = [
     ("include", "{% include 'hello.j2' %}", L),
     ("include_context", "{% set x = 9 %}{% include 'uses_x.j2' %}", L),
@@ -234,4 +237,10 @@ CASES = [
     ("importer_block_via_self_in_imported_macro", "{% set v = 'main' %}{% block b %}[{{ v }}]{% endblock %}{% import 'mselfb.j2' as l %}{{ l.n(self) }}", MODULES2),
     ("extending_module_self_parent_block", "{% import 'mext.j2' as l %}{{ l.f() }}", MODULES2),
     ("extending_module_self_super_block", "{% import 'msup.j2' as l %}{{ l.f() }}", MODULES2),
+    ("extending_module_exports_parent_names", "{% import 'mextn.j2' as l %}{{ l.pv }}|{{ l.w }}|{{ l.pm() }}|{{ l.f() }}", MODULES2),
+    ("importer_block_via_self_sees_later_set", "{% set v = 'main' %}{% block b %}[{{ v }}]{% endblock %}{% import 'mselfb.j2' as l %}{{ l.n(self) }}{% set v = 'late' %}{{ l.n(self) }}", MODULES2),
+    ("self_block_ignores_loop_and_with_names", "{% set v = 'main' %}{% block b %}[{{ v }}]{% endblock %}{% for v in [1] %}{{ self.b() }}{% endfor %}{% with v = 3 %}{{ self.b() }}{% endwith %}", MODULES2),
+    ("self_block_call_with_args", "{% block b %}B{% endblock %}{{ self.b(1) }}", MODULES2),
+    ("module_self_stashed_called_by_importer", "{% set ns = namespace(s=none) %}{% import 'mst.j2' as l %}{{ l.st(ns) }}{{ ns.s.b() }}", MODULES2),
+    ("self_taken_in_with_called_after", "{% set v = 'main' %}{% set ns = namespace(s=none) %}{% block b %}[{{ v }}]{% endblock %}{% with x = 1 %}{% set ns.s = self %}{% endwith %}{{ ns.s.b() }}", MODULES2),
 ]

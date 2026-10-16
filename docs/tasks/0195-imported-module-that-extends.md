@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0167]
@@ -23,3 +23,9 @@ rendering the parent's output (an import drops output anyway, but the parent's t
 `set`s should not reach the module's names: check Jinja2 on that before choosing).
 
 **Done when** both corpus cases match and their divergence lines are gone.
+
+**Done** in #525. `ImportedModule::Render` renders the module through
+`TemplateRenderer::RenderAsModule`, which puts the module's blocks on the module's own stack;
+its `extends` then pushes the parent chain's blocks there too. As in Jinja2 the parent's top
+level runs in the module's context, so its `set`s and macros are exported and override the
+child's (`loader.extending_module_exports_parent_names`: `P|pw|PM|FBXpw`).

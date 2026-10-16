@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0167]
@@ -23,3 +23,10 @@ run the block through `HomeCall`, as macro bodies do (0165), so the block resolv
 where it is defined. Keep the frame search for blocks overridden by a child template.
 
 **Done when** the corpus case matches and its divergence line is gone.
+
+**Done** in #525. Each `self` holds a `ClosureSite` of its template's top-level scope, taken
+on the context that owns that scope (`RenderContext::FindSelf` walks up from a `with` or block
+context, which `self` outlives); a call renders the block on a child of that home linked at the
+top level, as `super()` does, and keeps the frame search for the blocks. Pinned by
+`loader.importer_block_via_self_in_imported_macro`, `importer_block_via_self_sees_later_set`,
+`self_block_ignores_loop_and_with_names` and `self_taken_in_with_called_after`.
