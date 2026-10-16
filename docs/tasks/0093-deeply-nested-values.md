@@ -5,7 +5,7 @@ area: robustness
 depends: [0003]
 touches: [src/internal_value.h, src/internal_value.cpp, src/generic_adapters.h]
 shares: [src/value_visitors.h, src/serialize_filters.cpp]
-pr: TBD
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/529
 ---
 # Deeply nested values overflow the stack when they are destroyed or printed
 
