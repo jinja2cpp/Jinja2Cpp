@@ -34,6 +34,7 @@ now follows Jinja2's attribute paths); delete it with this task's PR.
 **Done.** `first`, `last`, `length`/`count`, `random`, `reverse`, `sum`, `min`, `max`,
 `sort`, `list`, `groupby`, `map(attribute=)` and `join` raise Python's TypeError text for
 None, bools, numbers and callables (`IsNotIterable` in `src/filters.cpp`); `dictsort`
-raises the AttributeError for any non-mapping and `indent` for any non-string. Undefined
-inputs keep their policy. The 4-argument `ConvertToList` had one more caller
+raises the AttributeError for any non-mapping and `indent` for any non-string. `map`, `select`
+and `reject` keep Jinja2's `if value:` guard: a falsy input (None, False, 0) gives an empty
+result, a truthy one raises. Undefined inputs keep their policy. The 4-argument `ConvertToList` had one more caller
 (`testers.cpp`, with an empty subscript) and went with `ToSubscriptedList`, its only user.
