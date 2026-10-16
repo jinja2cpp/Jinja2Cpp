@@ -237,8 +237,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0165](0165-macro-bodies-run-where-defined.md) | Macro and call bodies run where they were defined | parity | high | done |
 | [0166](0166-macro-defaults-per-call.md) | Macro defaults evaluated per call | parity | medium | done |
 | [0167](0167-imported-modules-own-their-context.md) | Imported modules own their context; imported macros run in their module | parity | medium | done |
-| [0168](0168-idtracking-frame-entry-binding.md) | Bind a name the frame assigns at frame entry (Jinja2 idtracking) | parity | low | open |
-| [0169](0169-caller-without-call-block.md) | `caller()` without a call block raises | parity | low | open |
+| [0168](0168-idtracking-frame-entry-binding.md) | Bind a name the frame assigns at frame entry (Jinja2 idtracking) | parity | low | done |
+| [0169](0169-caller-without-call-block.md) | `caller()` without a call block raises | parity | low | done |
 | [0170](0170-dictsort-pair-tuple-semantics.md) | A dictsort pair still differs from a tuple in `in`, `==`, tests and truthiness | parity | low | done |
 | [0171](0171-gcc-sanitizer-stringop-overflow.md) | The GCC address+undefined build fails in `OutStream::WriteInt` | build | medium | done |
 | [0172](0172-value-unsigned-overflow.md) | Unsigned values above `INT64_MAX` wrap to negative | robustness | low | open |
@@ -268,4 +268,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0196](0196-loop-len-and-iter.md) | `loop` as a sized iterable | parity | low | open |
 | [0197](0197-objects-left-as-mappings.md) | Objects and dicts still read as maps of names in a few places | parity | low | open |
 | [0198](0198-self-block-call-leftovers.md) | Calls through `self` that still differ from Jinja2 | parity | low | open |
+| [0199](0199-call-block-leftovers.md) | Call block leftovers | parity | low | open |
 | [0200](0200-tester-arity.md) | Every built-in test checks its arguments | parity | low | open |
+| [0201](0201-block-reads-root-binding.md) | A block reads the context, not the root's entry binding | parity | low | open |
+| [0202](0202-loop-else-body-frame.md) | A loop's `else` body is a frame of its own | parity | low | open |

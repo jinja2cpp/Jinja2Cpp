@@ -1,6 +1,7 @@
 #include "name_resolver.h"
 
 #include "expression_evaluator.h"
+#include "internal_value.h"
 #include "node_arena.h"
 #include "renderer.h"
 #include "slot_frame.h"
@@ -9,9 +10,12 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
+#include <vector>
 
 namespace jinja2
 {
@@ -34,6 +38,8 @@ NameResolver::FrameId NameResolver::Push(FrameId parent, Kind kind)
     frame.unit = unit;
     frame.isDynamicRegion = isDynamicRegion;
     frame.mayBind = mayBind;
+    frame.firstRead = static_cast<std::uint32_t>(m_reads.size());
+    frame.firstStore = static_cast<std::uint32_t>(m_stores.size());
     return id;
 }
 
@@ -41,6 +47,8 @@ NameResolver::FrameId NameResolver::PushUnit(FrameId parent, NodeRef<IRendererBa
 {
     const auto id = Push(parent, Kind::Unit);
     m_frames[id].node = owner;
+    // The template's own body has no frame around it; any other unit that is not a macro is a block
+    m_frames[id].isBlock = parent != NoFrame;
     return id;
 }
 
@@ -92,25 +100,232 @@ NameResolver::FrameId NameResolver::PushDynamic(FrameId parent)
     return id;
 }
 
-void NameResolver::DoAddStore(FrameId frame, const std::string& name)
+void NameResolver::DoAddStore(FrameId frame, const std::string& name, StoreKind kind)
 {
     m_frames[frame].hasStores = true;
-    m_stores.emplace_back(frame, name);
+    m_stores.push_back(Store{ frame, kind, static_cast<std::uint32_t>(m_reads.size()), name });
 }
 
-void NameResolver::AddStores(FrameId frame, boost::span<const TargetNode> target, const NodeArena& nodes)
+void NameResolver::AddStores(FrameId frame, boost::span<const TargetNode> target, const NodeArena& nodes, StoreKind kind)
 {
     for (const auto& node : target)
     {
         if (node.IsPlainName())
         {
-            AddStore(frame, std::string(nodes.Text(node.name)));
+            AddStore(frame, std::string(nodes.Text(node.name)), kind);
         }
+    }
+}
+
+namespace
+{
+// Whether frame `inner` is `outer` or inside it, and whether the way out passes a block,
+// which sees the frames around it through the context only
+template<typename Frames>
+std::pair<bool, bool> IsInside(const Frames& frames, std::uint32_t inner, std::uint32_t outer, std::uint32_t none)
+{
+    bool viaBlock = false;
+    for (auto id = inner; id != none; id = frames[id].parent)
+    {
+        if (id == outer)
+        {
+            return { true, viaBlock };
+        }
+        viaBlock = viaBlock || frames[id].isBlock;
+    }
+    return { false, false };
+}
+} // namespace
+
+NodeRef<BindUndefinedStatement> NameResolver::EntryBinding(FrameId frameId, NodeArena& nodes)
+{
+    const auto& frame = m_frames[frameId];
+    // A name needs a store in the frame and a read in a frame inside it
+    if (frame.firstStore == m_stores.size() || m_frames.size() == std::size_t{ frameId } + 1)
+    {
+        return {};
+    }
+    // The names the frame stores, first store first: those it stores first outside a branch
+    // are the candidates. A name the frame binds as it starts or stores first in a branch is
+    // never one: Jinja2 resolves it outward
+    boost::container::small_vector<EntryCandidate, 8> stores;
+    bool hasCandidate = false;
+    for (auto idx = static_cast<std::size_t>(frame.firstStore); idx < m_stores.size(); ++idx)
+    {
+        const auto& store = m_stores[idx];
+        if (store.frame == frameId)
+        {
+            const bool isCandidate = store.kind == StoreKind::Store;
+            stores.push_back(EntryCandidate{ HashedName::Hash(store.name), store.name, store.readsBefore, static_cast<std::uint32_t>(idx), !isCandidate, false });
+            hasCandidate = hasCandidate || isCandidate;
+        }
+    }
+    if (!hasCandidate)
+    {
+        return {};
+    }
+    std::sort(stores.begin(), stores.end(), [](const EntryCandidate& lhs, const EntryCandidate& rhs) { return std::tie(lhs.hash, lhs.order) < std::tie(rhs.hash, rhs.order); });
+    boost::container::small_vector<EntryCandidate, 4> candidates;
+    for (auto pos = stores.begin(); pos != stores.end(); ++pos)
+    {
+        auto run = pos;
+        while (run != stores.begin() && std::prev(run)->hash == pos->hash)
+        {
+            --run;
+        }
+        const auto isFirst = std::none_of(run, pos, [pos](const EntryCandidate& earlier) { return earlier.name == pos->name; });
+        if (isFirst && !pos->isDropped && !BindsName(frameId, pos->name, nodes))
+        {
+            candidates.push_back(*pos);
+        }
+    }
+    MarkCandidateReads(frameId, candidates, nodes);
+
+    const auto before = m_entryNames.size();
+    for (const auto& candidate : candidates)
+    {
+        if (!candidate.isDropped && candidate.isReadInside)
+        {
+            m_entryNames.push_back(EntryName{ frameId, candidate.hash, std::string(candidate.name) });
+        }
+    }
+    if (m_entryNames.size() == before)
+    {
+        return {};
+    }
+    const auto statement = nodes.Make<BindUndefinedStatement>();
+    m_frames[frameId].entry = statement;
+    return statement;
+}
+
+// A candidate the frame reads before its store is resolved outward there (Jinja2 loads it
+// first). One no frame inside reads before the store needs no binding: the body runs in
+// order, so a frame that comes after the store, or a closure defined after it, runs after it.
+// One a block inside reads is left as it is, since the block would see the binding and
+// Jinja2's does not (docs/tasks/0201); so is one stored after an include or import with
+// context inside the frame, which Jinja2 hands the outer value
+void NameResolver::MarkCandidateReads(FrameId frameId, boost::span<EntryCandidate> candidates, const NodeArena& nodes) const
+{
+    std::uint32_t lastStore = 0;
+    for (const auto& candidate : candidates)
+    {
+        lastStore = std::max(lastStore, candidate.readsBefore);
+    }
+    for (const auto& read : m_contextReads)
+    {
+        if (IsInside(m_frames, read.frame, frameId, NoFrame).first)
+        {
+            for (auto& candidate : candidates)
+            {
+                candidate.isDropped = candidate.isDropped || candidate.order >= read.storesBefore;
+            }
+        }
+    }
+    const auto byHash = [](const EntryCandidate& candidate, std::size_t hash) { return candidate.hash < hash; };
+    for (auto idx = m_frames[frameId].firstRead; idx < lastStore; ++idx)
+    {
+        const auto& [ref, readFrame] = m_reads[idx];
+        const auto name = nodes[ref].GetHashedName(nodes);
+        for (auto* pos = std::lower_bound(candidates.begin(), candidates.end(), name.hash, byHash); pos != candidates.end() && pos->hash == name.hash; ++pos)
+        {
+            auto& candidate = *pos;
+            if (candidate.isDropped || idx >= candidate.readsBefore || candidate.name != name.name)
+            {
+                continue;
+            }
+            if (readFrame == frameId)
+            {
+                candidate.isDropped = true;
+                continue;
+            }
+            const auto [isInside, viaBlock] = IsInside(m_frames, readFrame, frameId, NoFrame);
+            candidate.isDropped = isInside && viaBlock;
+            candidate.isReadInside = candidate.isReadInside || isInside;
+        }
+    }
+}
+
+bool NameResolver::BindsName(FrameId frameId, std::string_view name, const NodeArena& nodes) const
+{
+    const auto& frame = m_frames[frameId];
+    if (frame.kind == Kind::For)
+    {
+        const auto target = nodes[nodes.Get<ForStatement>(frame.node).GetTarget()];
+        return name == "loop" || std::any_of(target.begin(), target.end(), [name, &nodes](const TargetNode& node) { return node.IsPlainName() && nodes.Text(node.name) == name; });
+    }
+    if (frame.isMacro)
+    {
+        const auto params = nodes[nodes.Get<MacroStatement>(frame.node).GetParams()];
+        return name == "caller" || name == "varargs" || name == "kwargs" || std::any_of(params.begin(), params.end(), [name, &nodes](const MacroParam& param) { return nodes.Text(param.name) == name; });
+    }
+    return false;
+}
+
+// Whether a frame around `frameId`, up to a block, reads, stores or binds `entry`: Jinja2
+// aliases the frame's name to that outer one, which a lookup finds anyway
+bool NameResolver::IsBoundOutside(FrameId frameId, const EntryName& entry, const NodeArena& nodes) const
+{
+    // A block sees no frame around it
+    if (m_frames[frameId].isBlock)
+    {
+        return false;
+    }
+    for (auto outer = m_frames[frameId].parent; outer != NoFrame; outer = m_frames[outer].parent)
+    {
+        const auto& frame = m_frames[outer];
+        const auto isStore = [outer, &entry](const Store& store) { return store.frame == outer && store.name == entry.name; };
+        if (std::any_of(m_stores.begin() + frame.firstStore, m_stores.end(), isStore) || BindsName(outer, entry.name, nodes))
+        {
+            return true;
+        }
+        const auto isRead = [outer, &entry, &nodes](const std::pair<NodeRef<ValueRefExpression>, FrameId>& read) {
+            if (read.second != outer)
+            {
+                return false;
+            }
+            const auto name = nodes[read.first].GetHashedName(nodes);
+            return name.hash == entry.hash && name.name == entry.name;
+        };
+        if (std::any_of(m_reads.begin() + frame.firstRead, m_reads.end(), isRead))
+        {
+            return true;
+        }
+        // A block sees no frame around it
+        if (frame.isBlock)
+        {
+            return false;
+        }
+    }
+    return false;
+}
+
+void NameResolver::ResolveEntryBindings(NodeArena& nodes)
+{
+    std::vector<SlotName> names;
+    for (auto first = m_entryNames.begin(); first != m_entryNames.end();)
+    {
+        const auto frameId = first->frame;
+        const auto last = std::find_if(first, m_entryNames.end(), [frameId](const EntryName& entry) { return entry.frame != frameId; });
+        names.clear();
+        for (auto entry = first; entry != last; ++entry)
+        {
+            if (!IsBoundOutside(frameId, *entry, nodes))
+            {
+                names.push_back(SlotName{ nodes.MakeText(entry->name), entry->hash });
+            }
+        }
+        nodes[m_frames[frameId].entry].SetNames(nodes.MakeSpan(boost::span<const SlotName>(names.data(), names.size())));
+        first = last;
     }
 }
 
 void NameResolver::Resolve(NodeArena& nodes)
 {
+    if (!m_entryNames.empty())
+    {
+        ResolveEntryBindings(nodes);
+    }
+
     // Without a macro or a loop that binds slots every name is a lookup, and no unit needs a
     // frame
     if (!m_hasSlots)
@@ -234,7 +449,8 @@ void NameResolver::SetUnitLayout(NodeArena& nodes, NodeRef<IRendererBase> owner,
 
 bool NameResolver::IsStored(FrameId frame, std::string_view name) const
 {
-    return m_frames[frame].hasStores && std::any_of(m_stores.begin(), m_stores.end(), [frame, name](const auto& store) { return store.first == frame && store.second == name; });
+    const auto& stores = m_frames[frame];
+    return stores.hasStores && std::any_of(m_stores.begin() + stores.firstStore, m_stores.end(), [frame, name](const Store& store) { return store.frame == frame && store.name == name; });
 }
 
 // From the frame the name is read in out to its unit: a store of the name on the way makes

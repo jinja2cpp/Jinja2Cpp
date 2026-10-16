@@ -2,14 +2,17 @@
 # Format and kinds: test/parity/README.md.
 
 statements.call_block_dict              accepts     0156 deliberate: Jinja2 cannot join the dict a call block returns (TypeError); Jinja2C++ prints it
-statements.idtracking_inner_read_before_outer_set output      0168 a name the frame assigns later resolves outward on read; Jinja2 binds it at frame entry
 statements.loop_cycle_stored_called_later output   0188 a stored loop.cycle is bound to the position it was read at, Jinja2's follows the loop
 statements.loop_recursive_after_filter_reject_order accepts 0175 `recursive if c` (the old Jinja2C++ order) is still accepted next to Jinja2's `if c recursive`
 statements.caller_escapes_its_loop     output      0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
 statements.macro_escapes_its_loop      output      0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
 statements.nested_macro_escapes_its_call output    0165 deliberate: a macro that outlives the macro call defining it reads that call's names as undefined
-statements.macro_root_name_set_after_call output   0168 a name the template sets after the call resolves outward on read; Jinja2 binds it at frame entry
-statements.macro_loop_name_set_after_call output   0168 a name the loop body sets after the call resolves outward on read; Jinja2 binds it at frame entry
-statements.default_root_name_set_after_context output 0168 a name the template sets after the call resolves outward on read; Jinja2 binds it at frame entry
 statements.loop_len                     output      0196 len(loop) counts the keys of the loop map, not the items of the loop
 statements.set_unpack_dict_keys        output      0197 tuple assignment from a dict takes the items named like the targets instead of unpacking its keys
+statements.call_block_caller_repr       output      0199 a call block's caller prints as empty; Jinja2 prints <Macro anonymous>
+statements.call_block_explicit_caller_repeated accepts 0199 a call block whose call passes caller= loads; Jinja2 raises SyntaxError: keyword argument repeated
+statements.call_block_dotted_callee     rejects     0199 a call block cannot call an attribute (`call ns.m()`); Jinja2 accepts any call expression
+statements.idtracking_block_and_macro_read_root_name output 0201 a name a block reads is not bound at the root's entry, so the macro sees the outer value; Jinja2's block reads the context and the macro the root's binding
+statements.loop_else_set_is_local       output      0202 a loop's else body runs in the enclosing scope, so its set leaks; Jinja2 gives it a frame of its own
+statements.idtracking_loop_else_read_before_set output 0202 a loop's else body counts as the enclosing frame, so its read keeps the binding off; Jinja2's reads the binding
+statements.idtracking_block_read_keeps_loop_read_outer output 0201 a name a block reads is not bound at the root's entry, so the loop sees the outer value; Jinja2's loop reads the root's binding
