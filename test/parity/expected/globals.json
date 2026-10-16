@@ -341,6 +341,122 @@
     "type": "UndefinedError",
     "message": "'no_such_function' is undefined"
    }
+  },
+  {
+   "id": "globals.range_string_argument",
+   "template": "{{ range('3')|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'str' object cannot be interpreted as an integer"
+   }
+  },
+  {
+   "id": "globals.range_none_step",
+   "template": "{{ range(1, 5, none)|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'NoneType' object cannot be interpreted as an integer"
+   }
+  },
+  {
+   "id": "globals.range_bool_argument",
+   "template": "{{ range(true)|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[0]"
+  },
+  {
+   "id": "globals.objects_not_iterable",
+   "template": "{{ 'T' if cycler(1) is iterable else 'F' }}{{ 'T' if joiner() is iterable else 'F' }}{{ 'T' if joiner() is mapping else 'F' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "FFF"
+  },
+  {
+   "id": "globals.cycler_iterate",
+   "template": "{% for x in cycler(1, 2) %}{{ x }}{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'Cycler' object is not iterable"
+   }
+  },
+  {
+   "id": "globals.cycler_list",
+   "template": "{{ cycler(1, 2)|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'Cycler' object is not iterable"
+   }
+  },
+  {
+   "id": "globals.objects_callable",
+   "template": "{{ 'T' if joiner() is callable else 'F' }}{{ 'T' if cycler(1) is callable else 'F' }}{{ 'T' if namespace() is callable else 'F' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "TFF"
+  },
+  {
+   "id": "globals.dict_none",
+   "template": "{{ dict(none) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'NoneType' object is not iterable"
+   }
+  },
+  {
+   "id": "globals.dict_of_namespace",
+   "template": "{{ dict(namespace(a=1)) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'Namespace' object is not iterable"
+   }
+  },
+  {
+   "id": "globals.cycler_length",
+   "template": "{{ cycler(1)|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'Cycler' has no len()"
+   }
+  },
+  {
+   "id": "globals.cycler_sameas",
+   "template": "{% set c = cycler(1) %}{{ 'T' if c is sameas c else 'F' }}{{ 'T' if c is sameas cycler(1) else 'F' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "TF"
   }
  ]
 }

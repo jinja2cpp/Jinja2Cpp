@@ -692,10 +692,31 @@ void ValueRendererBase<CharT>::operator()(const ListRef& list) const
 template<typename CharT>
 void ValueRendererBase<CharT>::operator()(const MapRef& map) const
 {
+    // An object prints as Python's repr of it: <Namespace {...}> wraps its attributes, the
+    // rest have the default <module.Class object at 0x...>
+    const char* objectClass = map.GetObjectClass();
+    if (objectClass && !map.IsNamespace())
+    {
+        AppendAscii("<jinja2.utils.");
+        AppendAscii(objectClass);
+        AppendAscii(" object at ");
+        AppendAscii(fmt::format("{}", map.GetIdentity()).c_str());
+        AppendAscii(">");
+        return;
+    }
+    if (objectClass)
+    {
+        AppendAscii("<Namespace ");
+    }
+
     ContainerStack ownContainers;
     auto& containers = m_containers ? *m_containers : ownContainers;
     if (!EnterContainer(map.GetIdentity(), containers, "{...}"))
     {
+        if (objectClass)
+        {
+            AppendAscii(">");
+        }
         return;
     }
 
@@ -718,6 +739,10 @@ void ValueRendererBase<CharT>::operator()(const MapRef& map) const
         RenderRepr(map.GetValueByName(key), &containers);
     }
     AppendAscii("}");
+    if (objectClass)
+    {
+        AppendAscii(">");
+    }
     containers.pop_back();
 }
 
@@ -768,9 +793,10 @@ inline const char* PythonTypeName(const ListRef& list)
 {
     return list.IsTuple() ? "tuple" : "list";
 }
-inline const char* PythonTypeName(const MapRef&)
+inline const char* PythonTypeName(const MapRef& map)
 {
-    return "dict";
+    const char* objectClass = map.GetObjectClass();
+    return objectClass ? objectClass : "dict";
 }
 inline const char* PythonTypeName(const KeyValuePair&)
 {

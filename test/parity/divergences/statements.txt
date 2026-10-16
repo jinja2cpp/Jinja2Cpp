@@ -2,9 +2,6 @@
 # Format and kinds: test/parity/README.md.
 
 statements.macro_default_reassigned_global output    0166 a default that names no argument is evaluated at definition time
-statements.namespace_is_mapping         output      0042 namespace() is a mapping, not an opaque object
-statements.namespace_iterate            accepts     0042 namespace() is a mapping, not an opaque object
-statements.namespace_print              output      0042 namespace() is a mapping, not an opaque object
 statements.call_block_dict              accepts     0156 deliberate: Jinja2 cannot join the dict a call block returns (TypeError); Jinja2C++ prints it
 statements.idtracking_inner_read_before_outer_set output      0168 a name the frame assigns later resolves outward on read; Jinja2 binds it at frame entry
 statements.loop_cycle_stored_called_later output   0188 a stored loop.cycle is bound to the position it was read at, Jinja2's follows the loop

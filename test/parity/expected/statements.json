@@ -5629,6 +5629,90 @@
    }
   },
   {
+   "id": "statements.namespace_in",
+   "template": "{% set ns = namespace(a=1) %}{{ 'a' in ns }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'Namespace' is not iterable"
+   }
+  },
+  {
+   "id": "statements.namespace_print_nested",
+   "template": "{% set ns = namespace(a=1) %}{% set ns.b = namespace(c=[1]) %}{% set ns.d = ns %}{{ ns }}|{{ ns|string }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<Namespace {'a': 1, 'b': <Namespace {'c': [1]}>, 'd': <Namespace {...}>}>|<Namespace {'a': 1, 'b': <Namespace {'c': [1]}>, 'd': <Namespace {...}>}>"
+  },
+  {
    "id": "statements.namespace_no_dict_methods",
    "template": "{% set ns = namespace(a=1) %}{{ ns.get('a') }}",
    "context": {

@@ -147,6 +147,8 @@ CASES = [
     ("namespace_print", "{% set ns = namespace(a=1) %}{{ ns }}"),
     ("namespace_is_mapping", "{% set ns = namespace(a=1) %}{{ 'T' if ns is mapping else 'F' }}"),
     ("namespace_iterate", "{% set ns = namespace(a=1) %}{% for k in ns %}{{ k }}{% endfor %}"),
+    ("namespace_in", "{% set ns = namespace(a=1) %}{{ 'a' in ns }}"),
+    ("namespace_print_nested", "{% set ns = namespace(a=1) %}{% set ns.b = namespace(c=[1]) %}{% set ns.d = ns %}{{ ns }}|{{ ns|string }}"),
     ("namespace_no_dict_methods", "{% set ns = namespace(a=1) %}{{ ns.get('a') }}"),
     ("set_nested_target", "{% set (a, b), c = [[1, 2], 3] %}{{ a }}{{ b }}{{ c }}"),
     # with

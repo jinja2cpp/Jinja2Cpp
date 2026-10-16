@@ -1,5 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the globals area (cases/globals.py).
 # Format and kinds: test/parity/README.md.
 
-globals.cycler_not_mapping              output      0042 cycler and joiner objects are MapAdapters, so they test as mappings
-globals.range_float_argument            accepts     0042 range() converts non-integer arguments instead of raising TypeError
+globals.cycler_length                   accepts     0177 sequence filters render empty for a value that is not iterable (a cycler) instead of raising TypeError

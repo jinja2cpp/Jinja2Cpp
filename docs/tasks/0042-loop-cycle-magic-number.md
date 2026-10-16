@@ -1,9 +1,9 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0030]
-touches: [src/global_functions.cpp]
+touches: [src/global_functions.cpp, src/internal_value.h#IMapAccessor, src/testers.cpp, src/value_visitors.h#ValueRendererBase]
 ---
 # Global function follow-ups: globals are maps
 
@@ -27,3 +27,12 @@ and the cycle bench check. What is left here are the global objects that are map
 
 **Done when.** No line of `test/parity/divergences/` names 0042 (`globals.range_float_argument`,
 `globals.cycler_not_mapping` and the `statements.namespace_*` lines).
+
+**Done (PR #TBD).** An `IMapAccessor` can name the Python class of the object it stores
+(`GetObjectClass()`): `namespace()` is `Namespace`, `cycler()` and `joiner()` are `Cycler` and
+`Joiner` (`CreateObjectAdapter`). Such an object keeps its attributes but is no mapping, is not
+iterable (`for`, `list`, `in`, `dict(obj)` raise TypeError) and prints as Python's repr:
+`<Namespace {...}>` and `<jinja2.utils.Cycler object at 0x...>`. `joiner()` (and a recursive
+`loop`) now test as callable. `range()` raises TypeError for anything but an integer or bool,
+`dict(none)` and `namespace(none)` raise. Left to 0177: sequence filters (`cycler(1)|length`)
+still render empty for an object, pinned by `globals.cycler_length`.
