@@ -2229,9 +2229,11 @@ void BindSpecialMacroArgs(const MacroArgBinder& binder, bool catchKwargs, bool c
     const SpecialSlots slots(binder.params.size(), binder.catchCaller, catchKwargs);
     if (binder.catchCaller)
     {
-        // Jinja2: a macro called without a call block gets a caller that fails when called
+        // Jinja2: a macro called without a call block, or with caller=None, gets a caller that
+        // fails when called
         auto p = kwParams.find(callerName.name);
-        bind(slots.caller, callerName, p != kwParams.end() ? p->second : MakeUndefinedWithHint(context, "No caller defined"));
+        const bool hasCaller = p != kwParams.end() && !p->second.IsNone();
+        bind(slots.caller, callerName, hasCaller ? p->second : MakeUndefinedWithHint(context, "No caller defined"));
     }
     if (catchKwargs)
     {
