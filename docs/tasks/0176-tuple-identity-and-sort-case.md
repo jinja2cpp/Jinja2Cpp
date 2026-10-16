@@ -1,9 +1,9 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0170]
-touches: [src/testers.cpp, src/filters.cpp]
+touches: [src/testers.cpp, src/value_visitors.h]
 ---
 # A dictsort pair has no identity, and sort folds case inside tuples
 
@@ -22,3 +22,8 @@ key, apply case folding only to string items, not recursively into lists and tup
 
 **Done when** the corpus cases `filters.dictsort_pair_sameas` and `filters.sort_tuple_case`
 match and their lines in `test/parity/divergences/filters.txt` are deleted.
+
+**Done.** `IsSameObject` compares a pair's box. The case folding moved out of the nested
+comparisons: `BinaryMathOperation` compares list, tuple and dict items case-sensitively, so
+`sort`, `min`, `max`, `unique`, `groupby` and `dictsort` all fold only a top-level string, as
+Jinja2's `ignore_case` does. Pinned by `filters.min_max_tuple_case` and `filters.groupby_tuple_case`.

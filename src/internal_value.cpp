@@ -819,7 +819,8 @@ struct ListConverter : public visitors::BaseVisitor<std::optional<ListAdapter>>
     }
     result_t operator()(const MapRef& map) const
     {
-        if (strictConvertion)
+        // An object such as namespace() is not iterable
+        if (strictConvertion || map.GetObjectClass())
         {
             return result_t();
         }
@@ -1773,10 +1774,31 @@ public:
 
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysOnly; }
     [[nodiscard]] bool IsNamespace() const override { return true; }
+    [[nodiscard]] const char* GetObjectClass() const override { return "Namespace"; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
+};
+
+// An object of a Python class whose attributes are kept as a map (cycler(), joiner())
+class ObjectMapAdapter : public InternalValueMapAdapter<ByVal, true>
+{
+public:
+    ObjectMapAdapter(InternalValueMap&& values, const char* className)
+        : InternalValueMapAdapter(std::move(values))
+        , m_className(className)
+    {
+    }
+
+    [[nodiscard]] const char* GetObjectClass() const override { return m_className; }
+    [[nodiscard]] GenericMap CreateGenericMap() const override
+    {
+        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
+    }
+
+private:
+    const char* m_className;
 };
 
 InternalValue Value2IntValue(const Value& val)
@@ -1974,6 +1996,11 @@ MapAdapter CreateMapAdapter(InternalDict&& values)
 MapAdapter CreateNamespaceAdapter(InternalDict&& values)
 {
     return MapAdapter(MakeRef<NamespaceAdapter>(std::move(values)));
+}
+
+MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className)
+{
+    return MapAdapter(MakeRef<ObjectMapAdapter>(std::move(values), className));
 }
 
 MapAdapter CreateMapAdapter(const InternalValueMap* values)

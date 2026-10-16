@@ -464,11 +464,7 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
         SortItem item{ &entry, std::string() };
         if (lowerKeys)
         {
-            const auto& key = entry.key;
-            item.sortKey.reserve(key.size());
-            std::transform(key.begin(), key.end(), std::back_inserter(item.sortKey), [](char ch) {
-                return ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch;
-            });
+            detail::LowerUtf8(entry.key, item.sortKey);
         }
         tempVector.push_back(std::move(item));
     }
@@ -1552,6 +1548,10 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         if (m_params.mode != ValueConverter::ToListMode)
         {
             return InternalValue();
+        }
+        if (const char* objectClass = val.GetObjectClass())
+        {
+            throw std::runtime_error("'"s + objectClass + "' object is not iterable");
         }
 
         auto keys = val.GetKeys();

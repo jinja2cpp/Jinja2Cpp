@@ -77,3 +77,41 @@ that made them shows spend per merged PR and red pushes per PR against the figur
 shows up as a re-asked question or a repeated mistake, which memory quality, not model
 choice, then has to fix. Preflight will catch less as CI grows checks it does not mirror;
 keep it in step with `.github/workflows/`.
+
+## Re-measure 2026-10-16
+
+Same method as above, over the 37 project sessions created after PR #447 merged
+(2026-10-10 17:47) and before 2026-10-16 08:09, plus the two standing threads that
+predate it. Totals are the newest `result` event's cumulative cost at list prices.
+
+| | Baseline (25 sessions, to 10-10) | Now (37 sessions, 10-10 to 10-16) |
+|---|---:|---:|
+| Spend | $1,137 | $536 (Opus $382, Sonnet $149, Fable $5) |
+| Mean / median per session | $45.5 / n.a. | $14.5 / $8.9 |
+| Cache write+read share | 86% | about 80% (fitted; the events carry no per-token prices) |
+| Spend in threads over 75M cache-read tokens | 74% (4 threads) | 26% (2 threads: 0038 plan $85.7, performance track $54.0) |
+| Merge steward | $176 (all Opus) | $218.7: +$42.7, all Sonnet; its Opus line is unchanged at $175.7 |
+| Remaining clang-tidy thread | $149 | $169.4 (+$20.3, idle since 10-12) |
+| Mechanical threads (ccache, status cleanup, 0082, 0156) | $32 (3 threads) | $9.6 (4 threads, $1.7-3.4 each, Sonnet) |
+
+Verdict: the rules work. Spend per session fell by two thirds, the steward stopped
+accruing Opus, mechanical threads cost a few dollars, and the long-thread share dropped
+from three quarters to a quarter. Caveats: the window is six days against ten, the
+cohort is mostly finished one-task threads, and the six sessions started on 10-16 are
+excluded.
+
+What the rules did not stop:
+- The 0038 plan thread ran 22 hours across plan, review and implementation and cost
+  $85.7 (109M Opus cache-read tokens, 6.5M cache-write); alone it is 16% of the window.
+  Nothing rotated it at plan approval, and the rule depends on the thread or the
+  coordinator noticing. The brief for any multi-phase task should say "rotate at plan
+  approval" and the coordinator should start the implementation thread then.
+- Three ended threads made their last request at 318k-347k context (0002, 0051, 0094).
+  The field is only present on some events, so this is a lower bound.
+- Verifier and implementer Sonnet subagents ran inside most Opus threads (28% of window
+  spend is Sonnet); the roles table needs no change.
+
+Done: PR #512 adds the rotation at plan approval to CLAUDE.md "Batching work".
+
+Next measurement: after the 2.0 chain (0072, 0166, 0167) merges, compare its threads
+against the 0038 plan thread to see whether rotation at plan approval held.

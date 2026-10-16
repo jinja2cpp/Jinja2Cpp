@@ -147,6 +147,11 @@ CASES = [
     ("namespace_print", "{% set ns = namespace(a=1) %}{{ ns }}"),
     ("namespace_is_mapping", "{% set ns = namespace(a=1) %}{{ 'T' if ns is mapping else 'F' }}"),
     ("namespace_iterate", "{% set ns = namespace(a=1) %}{% for k in ns %}{{ k }}{% endfor %}"),
+    ("namespace_in", "{% set ns = namespace(a=1) %}{{ 'a' in ns }}"),
+    ("namespace_print_nested", "{% set ns = namespace(a=1) %}{% set ns.b = namespace(c=[1]) %}{{ ns }}|{{ ns|string }}"),
+    ("namespace_unpack", "{% set a, b = namespace(a=1, b=2) %}{{ a }}{{ b }}"),
+    ("loop_recursive_callable", "{% for i in [1] recursive %}{{ 'T' if loop is callable else 'F' }}{% endfor %}"),
+    ("loop_callable", "{% for i in [1] %}{{ 'T' if loop is callable else 'F' }}{% endfor %}"),
     ("namespace_no_dict_methods", "{% set ns = namespace(a=1) %}{{ ns.get('a') }}"),
     ("set_nested_target", "{% set (a, b), c = [[1, 2], 3] %}{{ a }}{{ b }}{{ c }}"),
     # with
