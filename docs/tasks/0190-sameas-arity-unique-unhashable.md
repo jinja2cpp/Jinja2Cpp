@@ -25,3 +25,8 @@ arguments; in `Unique`, raise for list and map keys (tuples of hashable items st
 `attribute=`. Ranges, tuples of hashable items and namespace objects stay allowed.
 Corpus: `tests.{sameas,divisibleby,in}_{arity,extra_arg}`, `filters.unique_unhashable*`,
 `filters.unique_hashable_tuple_range`.
+Host maps (reflected structs, JSON objects) count as hashable objects, so `unique` keeps
+deduplicating them as before. Known leftovers, rare enough to leave: a lazy sequence as an
+item (`[[1, 2]|select('odd')]|unique`) is a plain list here and raises, where Python hashes
+the generator; and `unique` raises when it is called, Python only when it is iterated
+(`{% set u = [[1]]|unique %}` renders in Python). The other tests' arity is 0200.

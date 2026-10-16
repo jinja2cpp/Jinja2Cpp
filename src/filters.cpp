@@ -934,7 +934,8 @@ struct UniqueItem
 };
 
 // The type Python's hash() rejects in a value, if any: a list or a dict, also inside a
-// tuple. A range hashes, and so does an object stored as a map (namespace(), cycler())
+// tuple. A range hashes, and so does an object stored as a map (namespace(), cycler()) or
+// a host object (a reflected struct, which Python would hold as an object, or a JSON object)
 struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
 {
     using visitors::BaseVisitor<const char*>::operator();
@@ -956,7 +957,10 @@ struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
         });
         return result;
     }
-    const char* operator()(const MapRef& map) const { return map.GetObjectClass() ? nullptr : "dict"; }
+    const char* operator()(const MapRef& map) const
+    {
+        return map.GetObjectClass() || map.GetAttrPolicy() == MapAttrPolicy::KeysFirst ? nullptr : "dict";
+    }
     const char* operator()(const KeyValuePair& pair) const { return Apply<UnhashableTypeGetter>(pair.value); }
 };
 

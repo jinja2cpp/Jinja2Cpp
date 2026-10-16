@@ -1,3 +1,7 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the tests area (cases/tests.py).
 # Format and kinds: test/parity/README.md.
 
+tests.eq_arity                          accepts     0200 comparison tests accept a missing argument instead of raising TypeError
+tests.eq_extra_arg                      accepts     0200 comparison tests accept extra arguments instead of raising TypeError
+tests.odd_extra_arg                     accepts     0200 argument-less tests accept arguments instead of raising TypeError
+tests.defined_extra_arg                 accepts     0200 argument-less tests accept arguments instead of raising TypeError
