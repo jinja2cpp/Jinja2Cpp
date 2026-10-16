@@ -360,6 +360,8 @@ TEST_F(RecursionLimitsTest, DeepValues)
     const std::pair<std::string, std::string> renders[] = {
         { lists + "{{ ns.v|length }} {{ ns.v == ns.v + [] }} {{ ns.v != ns.v + [] }} {{ ns.v < ns.v + [] }} {{ ns.v <= ns.v + [] }}", "1 True False False True" },
         { dicts + "{{ ns.v|length }} {{ ns.v == {'a': ns.v.a} }}", "1 True" },
+        // tojson used to stop at 1000 levels; Python prints 5000
+        { "{% set ns = namespace(v=[]) %}{% for i in range(1500) %}{% set ns.v = [ns.v] %}{% endfor %}{{ ns.v|tojson|length }}", "3002" },
     };
     for (const auto& [source, expected] : renders)
     {
