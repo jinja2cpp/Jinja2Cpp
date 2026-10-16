@@ -846,7 +846,7 @@ TEST(NodeArenaTest, EveryNodeClassHasItsOwnKind)
         ExpressionFilter, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, FinalizedExpressionRenderer, TemplateRenderer,
         ForStatement, IfStatement, ElseBranchStatement, SetLineStatement, SetRawBlockStatement, SetFilteredBlockStatement, BlockStatement,
         ExtendsStatement, IncludeStatement, ImportStatement, MacroStatement, MacroCallStatement, DoStatement, TransStatement,
-        LoopControlStatement, WithStatement, FilterStatement, AutoescapeStatement, ExpressionFilter::IExpressionFilter, IsExpression::ITester>();
+        LoopControlStatement, WithStatement, FilterStatement, AutoescapeStatement, BindUndefinedStatement, ExpressionFilter::IExpressionFilter, IsExpression::ITester>();
     EXPECT_EQ(0, mismatches);
 }
 

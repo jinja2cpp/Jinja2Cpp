@@ -900,6 +900,25 @@ private:
     NodeRef<IRendererBase> m_body;
 };
 
+// The names a frame stores later, read before that from a frame inside it: bound as
+// undefined in the frame's scope as the frame starts, so that those reads do not find the
+// value outside, as Jinja2's idtracking binds them (docs/tasks/0168). The first statement of
+// the frame's body; NameResolver decides the names. A name the scope already holds (a parent
+// template shares its child's) is kept
+class BindUndefinedStatement final : public Statement
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::BindUndefinedStmt;
+    void VisitRefs(detail::RefChecker& refs) const { detail::VisitSlotNameRefs(refs, m_names); }
+
+    void SetNames(ArenaSpan<SlotName> names) { m_names = names; }
+
+    void Render(OutStream&, RenderContext&) override;
+
+private:
+    ArenaSpan<SlotName> m_names;
+};
+
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_STATEMENTS_H

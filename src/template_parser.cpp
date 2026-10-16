@@ -43,6 +43,8 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     // opens is in that frame too unless the statement makes one of its own
     const auto outerFrame = statementsInfo.empty() ? NameResolver::NoFrame : statementsInfo.back().frame;
     m_names.SetCurrent(outerFrame);
+    // A statement that does not open a frame of its own puts the ones inside it in a branch
+    m_names.SetInBranch(!statementsInfo.empty() && !StatementInfo::OwnsFrame(statementsInfo.back().type));
 
     auto keyword = tok.keyword;
     // Jinja2: required blocks can only contain comments or whitespace
@@ -324,6 +326,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ForStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementInfo.frame = m_names.PushFor(outerFrame, renderer, isRecursive);
+    m_names.AddStores(statementInfo.frame, m_nodes[target->target], m_nodes, NameResolver::StoreKind::Param);
     if (filterFrame != NameResolver::NoFrame)
     {
         m_names.LinkFilter(filterFrame, statementInfo.frame);
@@ -687,7 +690,6 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         return MakeParseError(ErrorCode::UnexpectedToken, targetTok);
     }
     const auto vars = target->target;
-    m_names.AddStores(m_names.Current(), m_nodes[vars], m_nodes);
 
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
     if (lexer.EatIfEqual('='))
@@ -697,11 +699,15 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         {
             return MakeUnexpected(expr.error());
         }
+        // Stored once the value is read, which may read the name itself
+        m_names.AddStores(m_names.Current(), m_nodes[vars], m_nodes);
         statementsInfo.back().body.emplace_back(
             m_nodes.Make<SetLineStatement>(vars, *expr));
     }
     else if (lexer.EatIfEqual('|'))
     {
+        // A block `set` stores its name before its body, which Jinja2 reads in a frame of its own
+        m_names.AddStores(m_names.Current(), m_nodes[vars], m_nodes);
         const auto expr = exprParser.ParseFilterExpression(lexer);
         if (!expr)
         {
@@ -711,6 +717,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
             StatementInfo::SetStatement, stmtTok);
         statementInfo.renderer = m_nodes.Make<SetFilteredBlockStatement>(
             vars, *expr);
+        statementInfo.frame = m_names.PushWith(m_names.Current());
         statementsInfo.push_back(std::move(statementInfo));
     }
     else
@@ -720,10 +727,12 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         {
             return MakeParseError(ErrorCode::YetUnsupported, operTok, { stmtTok });
         }
+        m_names.AddStores(m_names.Current(), m_nodes[vars], m_nodes);
         auto statementInfo = StatementInfo::Create(
             StatementInfo::SetStatement, stmtTok);
         statementInfo.renderer = m_nodes.Make<SetRawBlockStatement>(
             vars);
+        statementInfo.frame = m_names.PushWith(m_names.Current());
         statementsInfo.push_back(std::move(statementInfo));
     }
 
@@ -889,6 +898,10 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     statementInfo.renderer = renderer;
     statementInfo.marks = marks;
     statementInfo.frame = m_names.PushMacro(outerFrame, renderer);
+    for (const auto& param : result.value())
+    {
+        m_names.AddStore(statementInfo.frame, param.paramName, NameResolver::StoreKind::Param);
+    }
     statementsInfo.push_back(std::move(statementInfo));
 
     return ParseResult();
@@ -1097,6 +1110,10 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     statementInfo.renderer = renderer;
     statementInfo.marks = marks;
     statementInfo.frame = m_names.PushMacro(m_names.Current(), renderer);
+    for (const auto& param : callbackParams)
+    {
+        m_names.AddStore(statementInfo.frame, param.paramName, NameResolver::StoreKind::Param);
+    }
     statementsInfo.push_back(std::move(statementInfo));
 
     return ParseResult();
@@ -1404,8 +1421,12 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     names.reserve(mappedNames.size());
     for (const auto& nameInfo : mappedNames)
     {
-        m_names.AddStore(m_names.Current(), nameInfo.first);
+        // Jinja2 stores the alias only; the imported name still hides a slot of its own
         m_names.AddStore(m_names.Current(), nameInfo.second);
+        if (nameInfo.first != nameInfo.second)
+        {
+            m_names.AddStore(m_names.Current(), nameInfo.first, NameResolver::StoreKind::Branch);
+        }
         names.push_back(ImportName{ m_nodes.MakeText(nameInfo.first), HashedName::Hash(nameInfo.first), m_nodes.MakeText(nameInfo.second), HashedName::Hash(nameInfo.second) });
     }
     m_nodes[renderer].SetNamesToImport(m_nodes.MakeSpan(names));
@@ -1473,7 +1494,7 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
     statementInfo.frame = m_names.PushWith(m_names.Current());
     for (const auto& var : vars)
     {
-        m_names.AddStore(statementInfo.frame, std::string(m_nodes.Text(var.name)));
+        m_names.AddStore(statementInfo.frame, std::string(m_nodes.Text(var.name)), NameResolver::StoreKind::Target);
     }
     auto renderer = m_nodes.Make<WithStatement>();
     m_nodes[renderer].SetScopeVars(m_nodes.MakeSpan(vars));
@@ -1517,6 +1538,7 @@ StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, S
     auto statementInfo = StatementInfo::Create(
         StatementInfo::FilterStatement, stmtTok);
     statementInfo.renderer = std::move(renderer);
+    statementInfo.frame = m_names.PushWith(m_names.Current());
     statementsInfo.push_back(std::move(statementInfo));
 
     return {};
@@ -1555,6 +1577,7 @@ StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexe
     auto renderer = m_nodes.Make<AutoescapeStatement>(*valueExpr);
     auto statementInfo = StatementInfo::Create(StatementInfo::AutoescapeStatement, stmtTok);
     statementInfo.renderer = std::move(renderer);
+    statementInfo.frame = m_names.PushWith(m_names.Current());
     statementsInfo.push_back(std::move(statementInfo));
 
     return {};

@@ -16,6 +16,7 @@
 
 namespace jinja2
 {
+class BindUndefinedStatement;
 class ForStatement;
 class IRendererBase;
 class MacroStatement;
@@ -29,6 +30,13 @@ struct TargetNode;
 // arguments' slots and each loop its slots in its unit's frame, and each name expression read
 // inside the macro or loop that binds it, with no store of the name in between, the slot of
 // that binding. Every other name stays a lookup by name.
+//
+// It also finds the names a frame binds at its entry, as Jinja2's idtracking does
+// (docs/tasks/0168): a name the frame stores, outside every branch, and does not read itself
+// before that store is the frame's own from the start, so a frame inside it that reads the
+// name before the store sees it undefined, not the value outside. A frame's body starts with a
+// BindUndefinedStatement for those names (EntryBinding); Resolve drops the ones a frame around
+// it reads or binds, which Jinja2 aliases to the outer value.
 class NameResolver
 {
 public:
@@ -47,34 +55,62 @@ public:
     // own while the filter looks ahead; `loop` is not bound there
     FrameId PushFilter(FrameId parent, bool isRecursive);
     void LinkFilter(FrameId filter, FrameId loop);
-    // The body of `with`; its targets are stores
+    // The body of `with`, whose targets are stores, or another body run in a scope of its own
+    // (a block `set`, `filter`, `autoescape`)
     FrameId PushWith(FrameId parent);
     // Expressions evaluated where no frame of the template is known (macro defaults)
     FrameId PushDynamic(FrameId parent);
     [[nodiscard]] FrameId Parent(FrameId frame) const { return m_frames[frame].parent; }
 
-    // `name` is set in a scope of `frame`'s statement (`set`, a macro, an import alias). Only
-    // a frame where names may resolve to slots keeps it: everywhere else names are lookups
-    void AddStore(FrameId frame, const std::string& name)
+    // How a frame comes to hold a name
+    enum class StoreKind : std::uint8_t
     {
-        if (frame != NoFrame && m_frames[frame].mayBind)
+        // `set`, a macro, an import alias, in the frame's own body
+        Store,
+        // The same inside a branch (SetInBranch), or a name the frame may hold
+        // that Jinja2 does not store (an imported name besides its alias): never bound at entry
+        Branch,
+        // A name the frame binds as it starts: a loop target, a macro's argument, a `with`
+        // target (those also hide slots, as a store)
+        Param,
+        Target
+    };
+    // `name` is set in a scope of `frame`'s statement (`set`, a macro, an import alias), in a
+    // branch of the body when the parser says so (SetInBranch)
+    void AddStore(FrameId frame, const std::string& name) { AddStore(frame, name, m_inBranch ? StoreKind::Branch : StoreKind::Store); }
+    void AddStore(FrameId frame, const std::string& name, StoreKind kind)
+    {
+        if (frame != NoFrame)
         {
-            DoAddStore(frame, name);
+            DoAddStore(frame, name, kind);
         }
     }
     // The names a `set` or `with` target stores; namespace attributes store none
-    void AddStores(FrameId frame, boost::span<const TargetNode> target, const NodeArena& nodes);
+    void AddStores(FrameId frame, boost::span<const TargetNode> target, const NodeArena& nodes, StoreKind kind);
+    void AddStores(FrameId frame, boost::span<const TargetNode> target, const NodeArena& nodes) { AddStores(frame, target, nodes, m_inBranch ? StoreKind::Branch : StoreKind::Store); }
 
     [[nodiscard]] FrameId Current() const { return m_current; }
     void SetCurrent(FrameId frame) { m_current = frame; }
+    // The statements parsed next are in a branch of the current frame's body (`if`, `elif`,
+    // `else`, a loop's `else`)
+    void SetInBranch(bool inBranch) { m_inBranch = inBranch; }
     // A name expression made in the current frame
     void AddUse(NodeRef<ValueRefExpression> ref)
     {
-        if (m_current != NoFrame && m_frames[m_current].mayBind)
+        if (m_current == NoFrame)
+        {
+            return;
+        }
+        m_reads.emplace_back(ref, m_current);
+        if (m_frames[m_current].mayBind)
         {
             m_uses.emplace_back(ref, m_current);
         }
     }
+    // Called when the body of `frame` (a template, block, macro, call block, loop or `with`)
+    // ends: the statement that binds the names the frame holds from its entry, to put first in
+    // the body, or none
+    NodeRef<BindUndefinedStatement> EntryBinding(FrameId frame, NodeArena& nodes);
 
     // Assigns the slots; called once, after a parse without errors
     void Resolve(NodeArena& nodes);
@@ -120,6 +156,14 @@ private:
         std::uint32_t frameSize = 0;
         // A macro's: the names its body reads from its arguments' slots
         std::uint32_t argReads = 0;
+        // The reads and stores made from the frame's start on (m_reads, m_stores)
+        std::uint32_t firstRead = 0;
+        std::uint32_t firstStore = 0;
+        // A Unit frame of a block: it sees the names of the frames around it through the
+        // context only, as a Jinja2 block does
+        bool isBlock = false;
+        // The statement that binds names at the frame's entry (EntryBinding)
+        NodeRef<BindUndefinedStatement> entry;
     };
     static_assert(std::is_trivially_destructible_v<Frame>);
 
@@ -130,16 +174,37 @@ private:
     static void PlaceMacroArgs(NodeArena& nodes, Frame& frame);
     static void SetUnitLayout(NodeArena& nodes, NodeRef<IRendererBase> owner, UnitLayout layout);
     [[nodiscard]] bool IsStored(FrameId frame, std::string_view name) const;
-    void DoAddStore(FrameId frame, const std::string& name);
+    void DoAddStore(FrameId frame, const std::string& name, StoreKind kind);
+    // Gives each entry binding the names no frame around its own reads or binds
+    void ResolveEntryBindings(NodeArena& nodes);
     // The slot `ref` reads, Dynamic when it is looked up by name
     [[nodiscard]] std::pair<SlotIndex, UnitId> Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frame) const;
 
     // Inline room for a template with a few loops, so that most parses allocate nothing here
     boost::container::small_vector<Frame, 8> m_frames;
     boost::container::small_vector<std::pair<NodeRef<ValueRefExpression>, FrameId>, 16> m_uses;
-    // The names stored in frames where names may resolve to slots, and their frames
-    std::vector<std::pair<FrameId, std::string>> m_stores;
+    struct Store
+    {
+        FrameId frame = NoFrame;
+        StoreKind kind = StoreKind::Store;
+        // The reads made before the store (m_reads)
+        std::uint32_t readsBefore = 0;
+        std::string name;
+    };
+    // A name a frame binds at its entry, unless a frame around it reads or binds it
+    struct EntryName
+    {
+        FrameId frame = NoFrame;
+        std::size_t hash = 0;
+        std::string name;
+    };
+    // Every name expression made in a frame, in parse order
+    boost::container::small_vector<std::pair<NodeRef<ValueRefExpression>, FrameId>, 16> m_reads;
+    // The names stored in frames, in parse order
+    std::vector<Store> m_stores;
+    std::vector<EntryName> m_entryNames;
     FrameId m_current = NoFrame;
+    bool m_inBranch = false;
     bool m_hasSlots = false;
 };
 } // namespace jinja2

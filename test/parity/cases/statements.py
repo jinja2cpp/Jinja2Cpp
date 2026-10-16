@@ -333,4 +333,25 @@ CASES = [
     ('call_block_default_per_call', '{% set ns = namespace(n=0) %}{% macro w() %}{{ caller() }}{{ caller() }}{% endmacro %}{% call(a=ns.n) w() %}{{ a }}{% set ns.n = ns.n + 1 %}{% endcall %}'),
     # idtracking (docs/tasks/0168): the root sets the default's name after the call
     ('default_root_name_set_after_context', '{% macro m(a=x) %}[{{ a }}]{% endmacro %}{{ m() }}{% set x = 1 %}{{ m() }}'),
+    # idtracking (docs/tasks/0168): which reads see the frame's own binding of a name it stores later
+    ('idtracking_with_body_read_before_set', '{% for i in [1,2] %}{% with %}{{ x }}{% endwith %}{% set x = i %}{% endfor %}'),
+    ('idtracking_set_block_body_read_before_set', '{% for i in [1,2] %}{% set y %}{{ x }}{% endset %}{{ y }}{% set x = i %}{% endfor %}'),
+    ('idtracking_filter_body_read_before_set', '{% for i in [1,2] %}{% filter upper %}{{ x }}{% endfilter %}{% set x = i %}{% endfor %}'),
+    ('idtracking_set_block_reads_own_name', '{% set x %}{{ x }}{% endset %}[{{ x }}]'),
+    ('idtracking_macro_body_loop_read_before_set', '{% macro m() %}{% for i in [1] %}[{{ x }}]{% endfor %}{% set x = 1 %}{{ x }}{% endmacro %}{{ m() }}'),
+    ('idtracking_call_body_loop_read_before_set', '{% macro w() %}{{ caller() }}{% endmacro %}{% call w() %}{% for i in [1] %}[{{ x }}]{% endfor %}{% set x = 1 %}{% endcall %}'),
+    ('idtracking_tuple_set_binds_each_name', '{% for i in [1,2] %}{% for j in [1] %}{{ x }}{{ y }}{% endfor %}{% set x, y = i, i %}{% endfor %}'),
+    ('idtracking_bound_name_is_not_defined', "{% for i in [1,2] %}{% for j in [1] %}{{ 'T' if x is defined else 'F' }}{% endfor %}{% set x = i %}{% endfor %}"),
+    # ... and which still resolve outward: a store in a branch or a scope of its own, a read
+    # of the name by the frame first or by a frame around it, a name the frame binds itself
+    ('idtracking_if_store_reads_outer', '{% for i in [1,2] %}{% for j in [1] %}{{ x }}{% endfor %}{% if i %}{% set x = i %}{% else %}{% set x = 0 %}{% endif %}{% endfor %}'),
+    ('idtracking_autoescape_store_reads_outer', '{% for i in [1,2] %}{% for j in [1] %}{{ x }}{% endfor %}{% autoescape true %}{% set x = i %}{% endautoescape %}{% endfor %}'),
+    ('idtracking_frame_reads_first', '{% for i in [1,2] %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = x %}{% endfor %}'),
+    ('idtracking_outer_frame_reads_later', '{% for i in [1,2] %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = i %}{% endfor %}{{ x }}'),
+    ('idtracking_root_reads_before_macro_call', '{% macro m() %}[{{ x }}]{% endmacro %}{{ x }}{{ m() }}{% set x = 1 %}{{ m() }}'),
+    ('idtracking_loop_target_stored_later', '{% for x in [5] %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = 7 %}{% endfor %}'),
+    ('idtracking_block_reads_context', '{% block b %}{{ x }}{% endblock %}{% set x = 1 %}'),
+    ('idtracking_macro_defined_after_inner_call', '{% for i in [1,2] %}{% for j in [1] %}{{ m() }}{% endfor %}{% macro m() %}{{ i }}{% endmacro %}{% endfor %}'),
+    # a block reads the context while a macro reads the root's binding (docs/tasks/0196)
+    ('idtracking_block_and_macro_read_root_name', '{% macro m() %}[{{ x }}]{% endmacro %}{% block b %}{{ x }}{{ m() }}{% endblock %}{% set x = 1 %}'),
 ]

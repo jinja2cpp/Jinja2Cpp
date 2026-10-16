@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0165]
@@ -23,3 +23,11 @@ by the name resolver, no runtime cost; 0117 P4's root slots should carry it. Kep
 0038 by decision 3 of its plan.
 
 **Done when.** No divergences line names 0168 and `ctest -R parity` passes.
+
+**Done.** `NameResolver::EntryBinding` finds, when a frame's body ends, the names the frame
+stores first outside a branch, does not read itself before, and a frame inside it reads; the
+body then starts with a `BindUndefinedStatement` that binds them as undefined in the frame's
+scope. `Resolve` drops the names a frame around it reads, stores or binds (Jinja2 aliases
+those to the outer value, which a lookup finds anyway). Block `set`, `filter` and
+`autoescape` bodies are resolver frames now, as their scopes are Jinja2 frames. Load cost
+only: a frame with no such name gets no statement. Left: a block reading the name (0196).
