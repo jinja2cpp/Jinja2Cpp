@@ -674,6 +674,141 @@
    }
   },
   {
+   "id": "tests.sameas_extra_arg",
+   "template": "{{ 1 is sameas(1, 2) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_sameas() takes 2 positional arguments but 3 were given"
+   }
+  },
+  {
+   "id": "tests.divisibleby_arity",
+   "template": "{{ 6 is divisibleby() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_divisibleby() missing 1 required positional argument: 'num'"
+   }
+  },
+  {
+   "id": "tests.divisibleby_extra_arg",
+   "template": "{{ 6 is divisibleby(3, 2) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_divisibleby() takes 2 positional arguments but 3 were given"
+   }
+  },
+  {
+   "id": "tests.in_arity",
+   "template": "{{ 1 is in() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_in() missing 1 required positional argument: 'seq'"
+   }
+  },
+  {
+   "id": "tests.in_extra_arg",
+   "template": "{{ 1 is in([1], [2]) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_in() takes 2 positional arguments but 3 were given"
+   }
+  },
+  {
    "id": "tests.sameas_computed_list",
    "template": "{% set a = range(3) %}{% set b = a %}{{ 'T' if a is sameas b else 'F' }}{{ 'T' if range(3) is sameas range(3) else 'F' }}",
    "context": {

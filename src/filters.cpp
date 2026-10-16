@@ -933,6 +933,33 @@ struct UniqueItem
     int64_t idx;
 };
 
+// The type Python's hash() rejects in a value, if any: a list or a dict, also inside a
+// tuple. A range hashes, and so does an object stored as a map (namespace(), cycler())
+struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
+{
+    using visitors::BaseVisitor<const char*>::operator();
+
+    const char* operator()(const ListRef& list) const
+    {
+        if (list.GetRangeInfo())
+        {
+            return nullptr;
+        }
+        if (!list.IsTuple())
+        {
+            return "list";
+        }
+        const char* result = nullptr;
+        list.ForEach([&result](InternalValue&& item) {
+            result = Apply<UnhashableTypeGetter>(item);
+            return result == nullptr;
+        });
+        return result;
+    }
+    const char* operator()(const MapRef& map) const { return map.GetObjectClass() ? nullptr : "dict"; }
+    const char* operator()(const KeyValuePair& pair) const { return Apply<UnhashableTypeGetter>(pair.value); }
+};
+
 // Drops repeated keys, keeping the first of each in its original position
 void DropDuplicates(std::vector<UniqueItem>& items, BinaryExpression::CompareType compType)
 {
@@ -990,6 +1017,14 @@ InternalValue Unique(const ListAdapter& list,
         return true;
     });
 
+    // Jinja2 keeps a set of the keys it saw
+    for (const auto& item : items)
+    {
+        if (const char* type = Apply<UnhashableTypeGetter>(item.val))
+        {
+            throw std::runtime_error("unhashable type: '"s + type + "'");
+        }
+    }
     DropDuplicates(items, compType);
 
     InternalValueList resultList;

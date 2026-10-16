@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 touches: [src/testers.cpp, src/filters.cpp]
@@ -18,3 +18,10 @@ arguments; in `Unique`, raise for list and map keys (tuples of hashable items st
 
 **Done when** `tests.sameas_arity` and `filters.unique_unhashable` match and their lines in
 `test/parity/divergences/` are deleted.
+
+**Done.** `divisibleby`, `in` and `sameas` raise the argument error they already recorded
+(missing or extra argument), as Jinja2's `test_*()` signatures do; `unique` raises
+`unhashable type` for a list or dict key, also inside a tuple or a dictsort pair, and with
+`attribute=`. Ranges, tuples of hashable items and namespace objects stay allowed.
+Corpus: `tests.{sameas,divisibleby,in}_{arity,extra_arg}`, `filters.unique_unhashable*`,
+`filters.unique_hashable_tuple_range`.
