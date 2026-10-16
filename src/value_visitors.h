@@ -1548,12 +1548,14 @@ struct BinaryMathOperation : BaseVisitor<>
             ThrowUnsupported(left, right);
         }
 
-        // Lexicographic, as Python: the first differing item decides, else the length
+        // Lexicographic, as Python: the first differing item decides, else the length.
+        // Case folding (the filters' case_sensitive=false) applies to a top-level string
+        // only, as Jinja2's ignore_case: items inside lists and tuples compare as they are
         auto l = left.begin();
         auto r = right.begin();
         for (; l != left.end() && r != right.end(); ++l, ++r)
         {
-            if (ConvertToBool(Apply2<BinaryMathOperation>(*l, *r, BinaryExpression::LogicalEq, m_compType)))
+            if (ConvertToBool(Apply2<BinaryMathOperation>(*l, *r, BinaryExpression::LogicalEq)))
             {
                 continue;
             }
@@ -1565,7 +1567,7 @@ struct BinaryMathOperation : BaseVisitor<>
             {
                 return true;
             }
-            return Apply2<BinaryMathOperation>(*l, *r, m_oper, m_compType);
+            return Apply2<BinaryMathOperation>(*l, *r, m_oper);
         }
         const bool leftDone = l == left.end();
         const bool rightDone = r == right.end();
@@ -1622,7 +1624,7 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             for (auto& key : left.GetKeys())
             {
-                if (!right.HasValue(key) || !ConvertToBool(Apply2<BinaryMathOperation>(left.GetValueByName(key), right.GetValueByName(key), BinaryExpression::LogicalEq, m_compType)))
+                if (!right.HasValue(key) || !ConvertToBool(Apply2<BinaryMathOperation>(left.GetValueByName(key), right.GetValueByName(key), BinaryExpression::LogicalEq)))
                 {
                     equal = false;
                     break;

@@ -124,6 +124,8 @@ CASES = [
     ("sort_reverse", "{% for i in l|sort(reverse=true) %}{{ i }},{% endfor %}"),
     ("sort_case", "{{ words|sort|join(',') }}|{{ words|sort(case_sensitive=true)|join(',') }}"),
     ("sort_tuple_case", "{% for k, v in [('B', 2), ('a', 3)]|sort %}{{ k }},{% endfor %}"),
+    ("min_max_tuple_case", "{{ ([('a',), ('B',)]|min)[0] }}{{ ([('a',), ('B',)]|max)[0] }}"),
+    ("groupby_tuple_case", "{% for k, v in [{'k': ('B',)}, {'k': ('a',)}]|groupby('k') %}{{ k[0] }}={{ v|length }};{% endfor %}"),
     ("sort_attribute", "{{ users|sort(attribute='age')|map(attribute='name')|join(',') }}"),
     ("sort_mixed_numbers", "{% for i in [2, 1.5, 1]|sort %}{{ i }},{% endfor %}"),
     ("sort_equal_dicts", "{{ [{'a': 1}, {'a': 1}]|sort|length }}"),
