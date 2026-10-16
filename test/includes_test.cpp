@@ -82,10 +82,10 @@ TEST_F(IncludeTest, TestMissingIncludesError1)
     EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, error.GetCode());
     const auto& extraParams = error.GetExtraParams();
     ASSERT_EQ(1ULL, extraParams.size());
-    const auto* filesList = std::get_if<jinja2::GenericList>(&extraParams[0].data());
+    const auto* filesList = std::get_if<jinja2::GenericList>(&extraParams[0].GetData());
     EXPECT_NE(nullptr, filesList);
     EXPECT_EQ(1ULL, filesList->GetSize().value());
-    EXPECT_EQ("missing", (*filesList->begin()).asString());
+    EXPECT_EQ("missing", (*filesList->begin()).AsString());
 }
 
 TEST_F(IncludeTest, TestMissingInnerIncludesError)
@@ -102,10 +102,10 @@ TEST_F(IncludeTest, TestMissingInnerIncludesError)
   EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, error.GetCode());
   const auto& extraParams = error.GetExtraParams();
   ASSERT_EQ(1ULL, extraParams.size());
-  const auto* filesList = std::get_if<jinja2::GenericList>(&extraParams[0].data());
+  const auto* filesList = std::get_if<jinja2::GenericList>(&extraParams[0].GetData());
   EXPECT_NE(nullptr, filesList);
   EXPECT_EQ(1ULL, filesList->GetSize().value());
-  EXPECT_EQ("missing", (*filesList->begin()).asString());
+  EXPECT_EQ("missing", (*filesList->begin()).AsString());
 }
 
 TEST_F(IncludeTest, TestMissingIncludesError2)
@@ -122,12 +122,12 @@ TEST_F(IncludeTest, TestMissingIncludesError2)
     EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, error.GetCode());
     const auto& extraParams = error.GetExtraParams();
     ASSERT_EQ(1ULL, extraParams.size());
-    const auto* filesList = std::get_if<jinja2::GenericList>(&extraParams[0].data());
+    const auto* filesList = std::get_if<jinja2::GenericList>(&extraParams[0].GetData());
     EXPECT_NE(nullptr, filesList);
     EXPECT_EQ(2ULL, filesList->GetSize().value());
     auto params_iter = filesList->begin();
-    EXPECT_EQ("missing", (*params_iter++).asString());
-    EXPECT_EQ("missing2", (*params_iter++).asString());
+    EXPECT_EQ("missing", (*params_iter++).AsString());
+    EXPECT_EQ("missing2", (*params_iter++).AsString());
 }
 
 TEST_F(IncludeTest, TestContextIncludeWithOverrides)

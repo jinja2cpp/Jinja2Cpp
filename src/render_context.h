@@ -73,7 +73,7 @@ struct IRendererCallback : IComparable
     // escaped or written without rendering it first
     [[nodiscard]] virtual bool IsWideTarget() const = 0;
     virtual OutStream GetStreamOnString(TargetString& str) = 0;
-    using LoadTemplateResult = std::variant<EmptyValue,
+    using LoadTemplateResult = std::variant<NoneValue,
                                             nonstd::expected<std::shared_ptr<TemplateImpl<char>>, ErrorInfo>,
                                             nonstd::expected<std::shared_ptr<TemplateImpl<wchar_t>>, ErrorInfoW>>;
     // The template `include`, `extends` or `import` names. A render resolves each name once and keeps the result

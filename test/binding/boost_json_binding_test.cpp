@@ -207,7 +207,7 @@ MULTISTR_TEST(BoostJsonTest, EmbeddedNulReflection, R"({{ json.string | tojson }
 TEST(BoostJsonAccessorTest, FindAndContains)
 {
     auto value = jinja2::Reflect(boost::json::parse(R"({"present": 5, "nothing": null})"));
-    const auto& map = value.get<jinja2::GenericMap>();
+    const auto& map = value.As<jinja2::GenericMap>();
     EXPECT_TRUE(map.HasValue("present"));
     EXPECT_TRUE(map.HasValue("nothing"));
     EXPECT_FALSE(map.HasValue("absent"));
@@ -216,5 +216,5 @@ TEST(BoostJsonAccessorTest, FindAndContains)
     EXPECT_FALSE(map.Find("absent").has_value());
     // The 1.x lookup still answers through the 2.0 one
     EXPECT_TRUE(map.GetAccessor()->HasValue("present"));
-    EXPECT_TRUE(map.GetAccessor()->GetValueByName("absent").isEmpty());
+    EXPECT_TRUE(map.GetAccessor()->GetValueByName("absent").IsNone());
 }

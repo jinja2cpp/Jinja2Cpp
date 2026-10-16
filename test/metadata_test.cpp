@@ -98,11 +98,11 @@ TEST(MetadataTest, Metadata_JsonData_Narrow)
     auto& metadata = metadataValue.value();
     EXPECT_TRUE(metadata.HasValue("stringValue"));
     EXPECT_TRUE(metadata.HasValue("subobject"));
-    EXPECT_EQ("Hello!", AsString(metadata["stringValue"]));
+    EXPECT_EQ("Hello!", ToString(metadata["stringValue"]));
     auto subobjectVal = metadata["subobject"];
-    const auto& subobject = subobjectVal.get<GenericMap>();
-    EXPECT_EQ(10, subobject["intValue"].get<int64_t>());
-    EXPECT_EQ(5, subobject["array"].get<GenericList>().GetSize().value());
+    const auto& subobject = subobjectVal.As<GenericMap>();
+    EXPECT_EQ(10, subobject["intValue"].As<int64_t>());
+    EXPECT_EQ(5, subobject["array"].As<GenericList>().GetSize().value());
 
     auto metadataRaw = tpl.GetMetadataRaw().value();
     EXPECT_FALSE(metadataRaw.metadata.empty());
@@ -136,11 +136,11 @@ TEST(MetadataTest, Metadata_JsonData_Wide)
     auto& metadata = metadataValue.value();
     EXPECT_TRUE(metadata.HasValue("stringValue"));
     EXPECT_TRUE(metadata.HasValue("subobject"));
-    EXPECT_EQ("Hello!", AsString(metadata["stringValue"]));
+    EXPECT_EQ("Hello!", ToString(metadata["stringValue"]));
     auto subobjectVal = metadata["subobject"];
-    const auto& subobject = subobjectVal.get<GenericMap>();
-    EXPECT_EQ(10, subobject["intValue"].get<int64_t>());
-    EXPECT_EQ(5, subobject["array"].get<GenericList>().GetSize().value());
+    const auto& subobject = subobjectVal.As<GenericMap>();
+    EXPECT_EQ(10, subobject["intValue"].As<int64_t>());
+    EXPECT_EQ(5, subobject["array"].As<GenericList>().GetSize().value());
 
     auto metadataRaw = tpl.GetMetadataRaw().value();
     EXPECT_FALSE(metadataRaw.metadata.empty());

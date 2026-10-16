@@ -224,7 +224,7 @@ void OutStream::WriteValueTo(const InternalValue& val)
     {
         if (const auto* ref = GetIf<ValueRef>(&val))
         {
-            const auto& refData = ref->get().data();
+            const auto& refData = ref->get().GetData();
             using RefData = std::decay_t<decltype(refData)>;
             switch (refData.index())
             {

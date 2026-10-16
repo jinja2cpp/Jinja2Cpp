@@ -152,104 +152,75 @@ Dst ConvertString(const Src& from)
 }
 
 /*!
- * \brief Gets std::string from std::string
+ * \brief Narrow copy of a string of either character type
  *
- * Helper method for use in template context which gets std::string from the other possible string objects (std::string in this case)
- *
- * @param str Source string
- * @return Copy of the source string
+ * A wide string is converted with the C library's current locale (`wcsrtombs`); the result is empty when it cannot
+ * be converted.
  */
-inline std::string AsString(const std::string& str)
+inline std::string ToString(std::string_view str)
 {
-    return str;
+    return std::string(str);
 }
-/*!
- * \brief Gets std::string from std::wstring
- *
- * Helper method for use in template context which gets std::string from the other possible string objects (std::wstring in this case)
- * Conversion wchar_t -> char is performing
- *
- * @param str Source string
- * @return Converted source string
- */
-inline std::string AsString(const std::wstring& str)
+//! \copydoc ToString(std::string_view)
+inline std::string ToString(std::wstring_view str)
 {
     return ConvertString<std::string>(str);
 }
-/*!
- * \brief Gets std::string from std::string_view
- *
- * Helper method for use in template context which gets std::string from the other possible string objects (std::string_view in this case)
- *
- * @param str Source string
- * @return Copy of the source string
- */
-inline std::string AsString(const std::string_view& str)
-{
-    return std::string(str.begin(), str.end());
-}
-/*!
- * \brief Gets std::string from std::wstring_view
- *
- * Helper method for use in template context which gets std::string from the other possible string objects (std::wstring_view in this case)
- * Conversion wchar_t -> char is performing
- *
- * @param str Source string
- * @return Converted source string
- */
-inline std::string AsString(const std::wstring_view& str)
-{
-    return ConvertString<std::string>(str);
-}
-/*!
- * \brief Gets std::wstring from std::wstring
- *
- * Helper method for use in template context which gets std::wstring from the other possible string objects (std::wstring in this case)
- *
- * @param str Source string
- * @return Copy of the source string
- */
-inline std::wstring AsWString(const std::wstring& str)
+//! \copydoc ToString(std::string_view)
+inline std::string ToString(const std::string& str)
 {
     return str;
 }
+//! \copydoc ToString(std::string_view)
+inline std::string ToString(const std::wstring& str)
+{
+    return ConvertString<std::string>(str);
+}
+//! \copydoc ToString(std::string_view)
+inline std::string ToString(const char* str)
+{
+    return std::string(str);
+}
+//! \copydoc ToString(std::string_view)
+inline std::string ToString(const wchar_t* str)
+{
+    return ConvertString<std::string>(std::wstring_view(str));
+}
+
 /*!
- * \brief Gets std::wstring from std::string
+ * \brief Wide copy of a string of either character type
  *
- * Helper method for use in template context which gets std::wstring from the other possible string objects (std::string in this case)
- * Conversion char -> wchar_t is performing
- *
- * @param str Source string
- * @return Converted source string
+ * A narrow string is converted with the C library's current locale (`mbsrtowcs`); the result is empty when it
+ * cannot be converted.
  */
-inline std::wstring AsWString(const std::string& str)
+inline std::wstring ToWString(std::wstring_view str)
+{
+    return std::wstring(str);
+}
+//! \copydoc ToWString(std::wstring_view)
+inline std::wstring ToWString(std::string_view str)
 {
     return ConvertString<std::wstring>(str);
 }
-/*!
- * \brief Gets std::wstring from std::wstring_view
- *
- * Helper method for use in template context which gets std::wstring from the other possible string objects (std::wstring_view in this case)
- *
- * @param str Source string
- * @return Copy of the source string
- */
-inline std::wstring AsWString(const std::wstring_view& str)
+//! \copydoc ToWString(std::wstring_view)
+inline std::wstring ToWString(const std::wstring& str)
 {
-    return std::wstring(str.begin(), str.end());
+    return str;
 }
-/*!
- * \brief Gets std::wstring from std::string_view
- *
- * Helper method for use in template context which gets std::wstring from the other possible string objects (std::string_view in this case)
- * Conversion char -> wchar_t is performing
- *
- * @param str Source string
- * @return Converted source string
- */
-inline std::wstring AsWString(const std::string_view& str)
+//! \copydoc ToWString(std::wstring_view)
+inline std::wstring ToWString(const std::string& str)
 {
     return ConvertString<std::wstring>(str);
+}
+//! \copydoc ToWString(std::wstring_view)
+inline std::wstring ToWString(const wchar_t* str)
+{
+    return std::wstring(str);
+}
+//! \copydoc ToWString(std::wstring_view)
+inline std::wstring ToWString(const char* str)
+{
+    return ConvertString<std::wstring>(std::string_view(str));
 }
 
 namespace detail
@@ -259,12 +230,12 @@ struct StringGetter
     template<typename CharT>
     std::string operator()(const std::basic_string<CharT>& str) const
     {
-        return AsString(str);
+        return ToString(str);
     }
     template<typename CharT>
     std::string operator()(const std::basic_string_view<CharT>& str) const
     {
-        return AsString(str);
+        return ToString(str);
     }
 
     template<typename T>
@@ -279,12 +250,12 @@ struct WStringGetter
     template<typename CharT>
     std::wstring operator()(const std::basic_string<CharT>& str) const
     {
-        return AsWString(str);
+        return ToWString(str);
     }
     template<typename CharT>
     std::wstring operator()(const std::basic_string_view<CharT>& str) const
     {
-        return AsWString(str);
+        return ToWString(str);
     }
 
     template<typename T>
@@ -294,34 +265,31 @@ struct WStringGetter
     }
 };
 } // namespace detail
-/*!
- * \brief Gets std::string from the arbitrary \ref Value
- *
- * Helper method for use in template context which gets std::string from the other possible string objects (Value in this case).
- * Conversion wchar_t -> char is performing if needed. In case of non-string object actually stored in the \ref Value
- * empty string is returned.
- *
- * @param val Source string
- * @return Extracted or empty string
- */
-inline std::string AsString(const Value& val)
-{
-    return std::visit(detail::StringGetter(), val.data());
-}
-/*!
- * \brief Gets std::wstring from the arbitrary \ref Value
- *
- * Helper method for use in template context which gets std::wstring from the other possible string objects (Value in this case).
- * Conversion char -> wchar_t is performing if needed. In case of non-string object actually stored in the \ref Value
- * empty string is returned.
- *
- * @param val Source string
- * @return Extracted or empty string
- */
-inline std::wstring AsWString(const Value& val)
-{
-    return std::visit(detail::WStringGetter(), val.data());
-}
+
+// 1.x names, kept as one-line forwards until 3.0 (docs/api-2.0.md 5.1)
+
+JINJA2CPP_DEPRECATED("jinja2cpp-2: ToString")
+inline std::string AsString(const std::string& str) { return ToString(str); }
+JINJA2CPP_DEPRECATED("jinja2cpp-2: ToString")
+inline std::string AsString(const std::wstring& str) { return ToString(str); }
+JINJA2CPP_DEPRECATED("jinja2cpp-2: ToString")
+inline std::string AsString(const std::string_view& str) { return ToString(str); }
+JINJA2CPP_DEPRECATED("jinja2cpp-2: ToString")
+inline std::string AsString(const std::wstring_view& str) { return ToString(str); }
+JINJA2CPP_DEPRECATED("jinja2cpp-2: ToWString")
+inline std::wstring AsWString(const std::wstring& str) { return ToWString(str); }
+JINJA2CPP_DEPRECATED("jinja2cpp-2: ToWString")
+inline std::wstring AsWString(const std::string& str) { return ToWString(str); }
+JINJA2CPP_DEPRECATED("jinja2cpp-2: ToWString")
+inline std::wstring AsWString(const std::wstring_view& str) { return ToWString(str); }
+JINJA2CPP_DEPRECATED("jinja2cpp-2: ToWString")
+inline std::wstring AsWString(const std::string_view& str) { return ToWString(str); }
+//! The stored string, converted if needed, or an empty string for any other value, as in 1.x; \ref ToString prints every value
+JINJA2CPP_DEPRECATED("jinja2cpp-2: ToString")
+inline std::string AsString(const Value& val) { return std::visit(detail::StringGetter(), val.GetData()); }
+//! The stored string, converted if needed, or an empty string for any other value, as in 1.x; \ref ToWString prints every value
+JINJA2CPP_DEPRECATED("jinja2cpp-2: ToWString")
+inline std::wstring AsWString(const Value& val) { return std::visit(detail::WStringGetter(), val.GetData()); }
 } // namespace jinja2
 
 #endif // JINJA2CPP_STRING_HELPERS_H

@@ -190,7 +190,7 @@ using ErrorInfoW = BasicErrorInfo<wchar_t>;
 
 // 1.x names, kept until 3.0 (docs/api-2.0.md, 5.1)
 template<typename CharT>
-using ErrorInfoTpl [[deprecated("jinja2cpp-2: use BasicErrorInfo")]] = BasicErrorInfo<CharT>;
+using ErrorInfoTpl JINJA2CPP_DEPRECATED("jinja2cpp-2: BasicErrorInfo") = BasicErrorInfo<CharT>;
 
 JINJA2CPP_EXPORT std::ostream& operator<<(std::ostream& os, const ErrorInfo& res);
 JINJA2CPP_EXPORT std::wostream& operator<<(std::wostream& os, const ErrorInfoW& res);

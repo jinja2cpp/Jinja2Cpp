@@ -22,6 +22,15 @@
 #define JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
 #endif
 
+// Marks a 1.x name kept as a forward to its 2.0 replacement, removed in 3.0. The message
+// starts with "jinja2cpp-2: " and names the replacement, which the migration script reads.
+// Define JINJA2CPP_NO_DEPRECATION_WARNINGS to upgrade now and migrate later.
+#ifdef JINJA2CPP_NO_DEPRECATION_WARNINGS
+#define JINJA2CPP_DEPRECATED(msg)
+#else
+#define JINJA2CPP_DEPRECATED(msg) [[deprecated(msg)]]
+#endif
+
 #ifdef JINJA2CPP_BUILD_AS_SHARED
 #define JINJA2CPP_EXPORT JINJA2_DECLSPEC(dllexport)
 #define JINJA2CPP_SHARED_LIB

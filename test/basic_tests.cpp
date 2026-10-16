@@ -2,18 +2,25 @@
 #include "test_tools.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/generic_list_iterator.h>
+#include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/reflected_value.h>
+#include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <thread>
+#include <system_error>
 #include <type_traits>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -917,10 +924,10 @@ template<typename T>
 void ExpectStoredAsInt(T val, const char* name)
 {
     const Value v(val);
-    ASSERT_TRUE(std::holds_alternative<int64_t>(v.data())) << name << ": index " << v.data().index();
-    EXPECT_EQ(5, std::get<int64_t>(v.data())) << name;
+    ASSERT_TRUE(std::holds_alternative<int64_t>(v.GetData())) << name << ": index " << v.GetData().index();
+    EXPECT_EQ(5, std::get<int64_t>(v.GetData())) << name;
     const Value assigned = val;
-    EXPECT_TRUE(std::holds_alternative<int64_t>(assigned.data())) << name;
+    EXPECT_TRUE(std::holds_alternative<int64_t>(assigned.GetData())) << name;
 }
 } // namespace
 
@@ -954,11 +961,11 @@ TEST(BasicTests, ValueFromIntegralTypesStoresInt)
     const unsigned lvalue = 5;
     ExpectStoredAsInt<const unsigned&>(lvalue, "const unsigned&");
 
-    EXPECT_TRUE(std::holds_alternative<bool>(Value(true).data()));
-    EXPECT_TRUE(std::holds_alternative<double>(Value(1.5f).data()));
-    EXPECT_TRUE(std::holds_alternative<double>(Value(1.5).data()));
-    EXPECT_TRUE(std::holds_alternative<double>(Value(1.5L).data()));
-    EXPECT_TRUE(std::holds_alternative<int64_t>(Reflect(5LL).data()));
+    EXPECT_TRUE(std::holds_alternative<bool>(Value(true).GetData()));
+    EXPECT_TRUE(std::holds_alternative<double>(Value(1.5f).GetData()));
+    EXPECT_TRUE(std::holds_alternative<double>(Value(1.5).GetData()));
+    EXPECT_TRUE(std::holds_alternative<double>(Value(1.5L).GetData()));
+    EXPECT_TRUE(std::holds_alternative<int64_t>(Reflect(5LL).GetData()));
 
     Template tpl;
     ASSERT_TRUE(tpl.Load("{{ u }} {{ s }} {{ u + 1 }} {{ n is none }}"));
@@ -967,7 +974,267 @@ TEST(BasicTests, ValueFromIntegralTypesStoresInt)
 
 TEST(BasicTests, ValueFromNullptrIsNone)
 {
-    EXPECT_TRUE(Value(nullptr).isEmpty());
+    EXPECT_TRUE(Value(nullptr).IsNone());
     const Value v = nullptr;
-    EXPECT_TRUE(v.isEmpty());
+    EXPECT_TRUE(v.IsNone());
 }
+
+// The 2.0 Value accessors (task 0072, docs/api-2.0.md section 2)
+TEST(ValueApiTest, PredicatesNameTheStoredType)
+{
+    EXPECT_TRUE(Value().IsNone());
+    EXPECT_TRUE(Value(true).IsBool());
+    EXPECT_TRUE(Value(5).IsInt());
+    EXPECT_TRUE(Value(1.5).IsDouble());
+    EXPECT_TRUE(Value("s").IsString());
+    EXPECT_TRUE(Value(L"s").IsWString());
+    EXPECT_TRUE(Value(ValuesList{ 1 }).IsList());
+    EXPECT_TRUE(Value(Reflect(std::vector<int>{ 1 })).IsList());
+    EXPECT_TRUE(Value(ValuesMap{ { "k", 1 } }).IsMap());
+    EXPECT_TRUE(Value(UserCallable()).IsCallable());
+
+    EXPECT_FALSE(Value(5).IsDouble());
+    EXPECT_FALSE(Value(true).IsInt());
+    EXPECT_FALSE(Value(std::string_view("s")).IsString());
+    EXPECT_FALSE(Value(1.5).IsNone());
+}
+
+TEST(ValueApiTest, AsReturnsReferencesAndThrowsOnOtherTypes)
+{
+    Value str("text");
+    EXPECT_EQ("text", str.AsString());
+    str.AsString() += "!";
+    EXPECT_EQ("text!", str.As<std::string>());
+    EXPECT_EQ(&str.AsString(), &str.As<std::string>());
+    EXPECT_THROW((void)str.AsInt(), std::bad_variant_access);
+    EXPECT_THROW((void)Value(5).AsString(), std::bad_variant_access);
+
+    EXPECT_EQ(5, Value(5).AsInt());
+    EXPECT_EQ(1.5, Value(1.5).AsDouble());
+    EXPECT_TRUE(Value(true).AsBool());
+    EXPECT_EQ(L"w", Value(L"w").AsWString());
+
+    Value list(ValuesList{ 1, 2 });
+    list.AsList().push_back(3);
+    EXPECT_EQ(3U, list.As<ValuesList>().size());
+    EXPECT_EQ(&list.AsList(), &list.As<ValuesList>());
+    // AsList is the ValuesList alternative only; a GenericList is reached through ToGenericList
+    EXPECT_THROW((void)Value(Reflect(std::vector<int>{ 1 })).AsList(), std::bad_variant_access);
+
+    Value map(ValuesMap{ { "k", 1 } });
+    map.AsMap()["n"] = 2;
+    EXPECT_EQ(2U, map.AsMap().size());
+
+    UserCallable uc([](const UserCallableParams&) { return Value(7); }, {});
+    const Value callable(uc);
+    EXPECT_EQ(7, callable.AsCallable().callable(UserCallableParams{}).AsInt());
+}
+
+TEST(ValueApiTest, NonThrowingAccessFillsOutOnlyOnMatch)
+{
+    const Value str("text");
+    std::string_view view;
+    ASSERT_TRUE(str.AsString(view));
+    EXPECT_EQ("text", view);
+    EXPECT_EQ(str.AsString().data(), view.data()); // no copy
+
+    int64_t num = -1;
+    EXPECT_FALSE(str.AsInt(num));
+    EXPECT_EQ(-1, num);
+    EXPECT_TRUE(Value(5).AsInt(num));
+    EXPECT_EQ(5, num);
+
+    double dbl = 0;
+    EXPECT_TRUE(Value(2.5).AsDouble(dbl));
+    EXPECT_EQ(2.5, dbl);
+    bool flag = false;
+    EXPECT_TRUE(Value(true).AsBool(flag));
+    EXPECT_TRUE(flag);
+    EXPECT_FALSE(Value(1).AsBool(flag));
+
+    std::wstring_view wview;
+    EXPECT_TRUE(Value(L"w").AsWString(wview));
+    EXPECT_EQ(L"w", wview);
+    EXPECT_FALSE(str.AsWString(wview));
+    // A stored view is not a string: AsString(out) agrees with IsString
+    EXPECT_FALSE(Value(std::string_view("v")).AsString(view));
+
+    Value list(ValuesList{ 1 });
+    const ValuesList* constList = nullptr;
+    ASSERT_TRUE(std::as_const(list).AsList(constList));
+    EXPECT_EQ(1U, constList->size());
+    ValuesList* mutableList = nullptr;
+    ASSERT_TRUE(list.AsList(mutableList));
+    mutableList->push_back(2);
+    EXPECT_EQ(2U, list.AsList().size());
+    EXPECT_FALSE(str.AsList(constList));
+    EXPECT_EQ(nullptr, constList);
+
+    const ValuesMap* map = nullptr;
+    EXPECT_TRUE(Value(ValuesMap{}).AsMap(map));
+    EXPECT_FALSE(list.AsMap(map));
+    const UserCallable* callable = nullptr;
+    EXPECT_TRUE(Value(UserCallable()).AsCallable(callable));
+    EXPECT_FALSE(str.AsCallable(callable));
+
+    static_assert(noexcept(str.AsString(view)));
+    static_assert(noexcept(str.AsList(constList)));
+    static_assert(noexcept(str.GetIf<std::string>()));
+}
+
+TEST(ValueApiTest, GetIfUnwrapsContainers)
+{
+    Value list(ValuesList{ 1 });
+    ASSERT_NE(nullptr, list.GetIf<ValuesList>());
+    EXPECT_EQ(&list.AsList(), list.GetIf<ValuesList>());
+    // The stored alternative itself is reachable too
+    EXPECT_NE(nullptr, list.GetIf<RecWrapper<ValuesList>>());
+    EXPECT_EQ(nullptr, list.GetIf<ValuesMap>());
+    EXPECT_EQ(nullptr, list.GetIf<std::string>());
+    EXPECT_NE(nullptr, Value("s").GetIf<std::string>());
+    EXPECT_NE(nullptr, std::as_const(list).GetIf<ValuesList>());
+    EXPECT_NE(nullptr, Value(UserCallable()).GetIf<UserCallable>());
+}
+
+TEST(ValueApiTest, ToGenericViewsCoverBothRepresentations)
+{
+    const Value list(ValuesList{ 1, "a" });
+    const GenericList fromValues = list.ToGenericList();
+    ASSERT_TRUE(fromValues.IsValid());
+    ASSERT_EQ(2U, fromValues.GetSize().value());
+    EXPECT_EQ(1, fromValues.begin()->AsInt());
+    EXPECT_EQ(2U, Value(Reflect(std::vector<int>{ 1, 2 })).ToGenericList().GetSize().value());
+    EXPECT_FALSE(Value(5).ToGenericList().IsValid());
+
+    const Value map(ValuesMap{ { "k", 2 } });
+    const GenericMap fromMap = map.ToGenericMap();
+    ASSERT_NE(nullptr, fromMap.GetAccessor());
+    EXPECT_EQ(2, fromMap.GetValueByName("k").AsInt());
+    EXPECT_EQ(nullptr, Value(5).ToGenericMap().GetAccessor());
+}
+
+TEST(ValueApiTest, VisitUnwrapsContainers)
+{
+    auto kind = [](const auto& item) -> std::string {
+        using T = std::decay_t<decltype(item)>;
+        if constexpr (std::is_same_v<T, ValuesList>)
+        {
+            return "list of " + std::to_string(item.size());
+        }
+        else if constexpr (std::is_same_v<T, ValuesMap>)
+        {
+            return "map";
+        }
+        else if constexpr (std::is_same_v<T, UserCallable>)
+        {
+            return "callable";
+        }
+        else if constexpr (std::is_same_v<T, int64_t>)
+        {
+            return "int";
+        }
+        else
+        {
+            return "other";
+        }
+    };
+    EXPECT_EQ("list of 2", Visit(kind, Value(ValuesList{ 1, 2 })));
+    EXPECT_EQ("map", Visit(kind, Value(ValuesMap{})));
+    EXPECT_EQ("callable", Visit(kind, Value(UserCallable())));
+    EXPECT_EQ("int", Visit(kind, Value(5)));
+
+    Value list(ValuesList{ 1 });
+    Visit(
+        [](auto& item) {
+            if constexpr (std::is_same_v<std::decay_t<decltype(item)>, ValuesList>)
+            {
+                item.push_back(2);
+            }
+        },
+        list);
+    EXPECT_EQ(2U, list.AsList().size());
+}
+
+// ToString prints as {{ value }} does, Python str() (decision 3b)
+TEST(ValueApiTest, ToStringPrintsAsTheTemplateDoes)
+{
+    const ValuesList values{ 5,
+                             1.5,
+                             true,
+                             Value(),
+                             "text",
+                             L"wide",
+                             ValuesList{ 1, "a", Value(), 2.0 },
+                             ValuesMap{ { "k", 2 }, { "a", ValuesList{ true } } },
+                             Reflect(std::vector<int>{ 1, 2 }),
+                             1e100,
+                             -0.0 };
+    const std::vector<std::string> expected{ "5", "1.5", "True", "None", "text", "wide", "[1, 'a', None, 2.0]",
+                                             "{'k': 2, 'a': [True]}", "[1, 2]", "1e+100", "-0.0" };
+    ASSERT_EQ(expected.size(), values.size());
+    for (size_t idx = 0; idx < values.size(); ++idx)
+    {
+        const Value& val = values[idx];
+        EXPECT_EQ(expected[idx], val.ToString()) << idx;
+        EXPECT_EQ(expected[idx], ToString(val)) << idx;
+        EXPECT_EQ(ConvertString<std::wstring>(expected[idx]), val.ToWString()) << idx;
+        EXPECT_EQ(ConvertString<std::wstring>(expected[idx]), ToWString(val)) << idx;
+
+        Template tpl;
+        ASSERT_TRUE(tpl.Load("{{ v }}"));
+        EXPECT_EQ(tpl.RenderAsString({ { "v", val } }).value(), val.ToString()) << idx;
+    }
+    EXPECT_EQ("5", ToString(5));
+    EXPECT_EQ("", Value(UserCallable()).ToString());
+}
+
+TEST(ValueApiTest, ToStringAppendsAndToCharsFillsABuffer)
+{
+    std::string out = "n=";
+    Value(42).ToString(out);
+    Value(ValuesList{ 1 }).ToString(out);
+    EXPECT_EQ("n=42[1]", out);
+    std::wstring wout = L"n=";
+    Value(42).ToWString(wout);
+    EXPECT_EQ(L"n=42", wout);
+
+    char buf[8];
+    auto res = Value(12345).ToChars(std::begin(buf), std::end(buf));
+    EXPECT_EQ(std::errc(), res.ec);
+    EXPECT_EQ("12345", std::string(buf, res.ptr));
+
+    res = Value("too long for eight").ToChars(std::begin(buf), std::end(buf));
+    EXPECT_EQ(std::errc::value_too_large, res.ec);
+    EXPECT_EQ(std::end(buf), res.ptr);
+
+    res = Value("12345678").ToChars(std::begin(buf), std::end(buf));
+    EXPECT_EQ(std::errc(), res.ec);
+    EXPECT_EQ(std::end(buf), res.ptr);
+    const Value none;
+    static_assert(noexcept(none.ToChars(nullptr, nullptr)));
+}
+
+#ifdef __cpp_lib_format
+TEST(ValueApiTest, FormatterPrintsAsToString)
+{
+    EXPECT_EQ("5 [1, 'a'] None", std::format("{} {} {}", Value(5), Value(ValuesList{ 1, "a" }), Value()));
+    EXPECT_EQ("   True", std::format("{:>7}", Value(true)));
+}
+#endif
+
+TEST(ValueApiTest, StringConversionsBetweenEncodings)
+{
+    EXPECT_EQ("abc", ToString(std::wstring(L"abc")));
+    EXPECT_EQ("abc", ToString(std::wstring_view(L"abc")));
+    EXPECT_EQ("abc", ToString(std::string("abc")));
+    EXPECT_EQ("abc", ToString("abc"));
+    EXPECT_EQ("abc", ToString(L"abc"));
+    EXPECT_EQ(L"abc", ToWString(std::string("abc")));
+    EXPECT_EQ(L"abc", ToWString(std::string_view("abc")));
+    EXPECT_EQ(L"abc", ToWString("abc"));
+    EXPECT_EQ(L"abc", ToWString(L"abc"));
+}
+
+static_assert(std::is_same_v<std::variant_alternative_t<0, Value::ValueData>, NoneValue>);
+static_assert(!std::is_convertible_v<NoneValue, int>);
+static_assert(!std::is_nothrow_constructible_v<Value, ValuesList&&>);

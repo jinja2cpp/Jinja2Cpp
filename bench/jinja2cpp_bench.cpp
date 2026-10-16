@@ -203,7 +203,7 @@ jinja2::Value ToValue(const nlohmann::ordered_json& j, bool wide)
     switch (j.type())
     {
     case nlohmann::json::value_t::null:
-        return jinja2::Value(jinja2::EmptyValue());
+        return jinja2::Value(jinja2::NoneValue());
     case nlohmann::json::value_t::boolean:
         return jinja2::Value(j.get<bool>());
     case nlohmann::json::value_t::number_integer:
@@ -214,7 +214,7 @@ jinja2::Value ToValue(const nlohmann::ordered_json& j, bool wide)
     case nlohmann::json::value_t::string:
         if (wide)
         {
-            return jinja2::Value(jinja2::AsWString(j.get<std::string>()));
+            return jinja2::Value(jinja2::ToWString(j.get<std::string>()));
         }
         return jinja2::Value(j.get<std::string>());
     case nlohmann::json::value_t::array:
@@ -298,7 +298,7 @@ std::unique_ptr<Case> LoadCase(const fs::path& dir, bool reflect)
     }
     if (result->wide)
     {
-        result->wsource = jinja2::AsWString(result->source);
+        result->wsource = jinja2::ToWString(result->source);
     }
     if (fs::exists(dir / "data.json"))
     {
@@ -328,7 +328,7 @@ std::unique_ptr<Case> LoadCase(const fs::path& dir, bool reflect)
         {
             if (result->wide)
             {
-                memFs->AddFile(path.filename().string(), jinja2::AsWString(ReadFile(path)));
+                memFs->AddFile(path.filename().string(), jinja2::ToWString(ReadFile(path)));
             }
             else
             {
@@ -349,7 +349,7 @@ void BenchLoad(benchmark::State& state, const Case* c)
         auto res = tpl.Load(SourceOf<CharT>(*c), c->name);
         if (!res)
         {
-            state.SkipWithError(jinja2::AsString(res.error().ToString()));
+            state.SkipWithError(jinja2::ToString(res.error().ToString()));
             break;
         }
         benchmark::DoNotOptimize(tpl);
@@ -364,7 +364,7 @@ void BenchRender(benchmark::State& state, const Case* c)
     auto loaded = tpl.Load(SourceOf<CharT>(*c), c->name);
     if (!loaded)
     {
-        state.SkipWithError(jinja2::AsString(loaded.error().ToString()));
+        state.SkipWithError(jinja2::ToString(loaded.error().ToString()));
         return;
     }
     size_t outSize = 0;
@@ -373,7 +373,7 @@ void BenchRender(benchmark::State& state, const Case* c)
         auto res = tpl.RenderAsString(c->params);
         if (!res)
         {
-            state.SkipWithError(jinja2::AsString(res.error().ToString()));
+            state.SkipWithError(jinja2::ToString(res.error().ToString()));
             break;
         }
         outSize = res.value().size();
@@ -391,7 +391,7 @@ void BenchRenderShared(benchmark::State& state, Case* c)
         auto res = SharedOf<CharT>(*c)->RenderAsString(c->params);
         if (!res)
         {
-            state.SkipWithError(jinja2::AsString(res.error().ToString()));
+            state.SkipWithError(jinja2::ToString(res.error().ToString()));
             break;
         }
         benchmark::DoNotOptimize(res);
@@ -589,16 +589,16 @@ bool RenderToUtf8(const Case& c, std::ostream& out, std::string& error)
     auto loaded = tpl.Load(SourceOf<CharT>(c), c.name);
     if (!loaded)
     {
-        error = jinja2::AsString(loaded.error().ToString());
+        error = jinja2::ToString(loaded.error().ToString());
         return false;
     }
     auto res = tpl.RenderAsString(c.params);
     if (!res)
     {
-        error = jinja2::AsString(res.error().ToString());
+        error = jinja2::ToString(res.error().ToString());
         return false;
     }
-    out << jinja2::AsString(res.value());
+    out << jinja2::ToString(res.value());
     return true;
 }
 

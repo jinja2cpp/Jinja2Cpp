@@ -42,10 +42,10 @@ struct ArgPromoter
 };
 
 template<>
-struct ArgPromoter<EmptyValue, void>
+struct ArgPromoter<NoneValue, void>
 {
 public:
-    ArgPromoter(const EmptyValue*) {} // NOLINT(google-explicit-constructor)
+    ArgPromoter(const NoneValue*) {} // NOLINT(google-explicit-constructor)
 
     template<typename T>
     operator T() // NOLINT(google-explicit-constructor)
@@ -232,14 +232,14 @@ template<typename Fn, typename... ArgDescr>
 Value InvokeUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&&... ad)
 {
     auto invoker = UCInvoker<Fn>(fn, params);
-    return std::visit(ParamUnwrapper<UCInvoker<Fn>>(&invoker), GetParamValue(params, ad).data()...);
+    return std::visit(ParamUnwrapper<UCInvoker<Fn>>(&invoker), GetParamValue(params, ad).GetData()...);
 }
 
 template<typename T>
 struct TypedParam
 {
     using decayed_t = std::decay_t<T>;
-    std::variant<EmptyValue, decayed_t, const decayed_t*> data;
+    std::variant<NoneValue, decayed_t, const decayed_t*> data;
 
     [[nodiscard]] bool HasValue() const { return data.index() != 0; }
     [[nodiscard]] T GetValue() const
@@ -283,12 +283,12 @@ struct TypedParamUnwrapper
 
         // `value` is the type-trait convention, so it keeps its standard-library name
         // NOLINTNEXTLINE(readability-identifier-naming)
-        static constexpr bool value = !std::is_same_v<decayed_u, EmptyValue> && sizeof(PromotedType(std::declval<U>())) == sizeof(int);
+        static constexpr bool value = !std::is_same_v<decayed_u, NoneValue> && sizeof(PromotedType(std::declval<U>())) == sizeof(int);
     };
 
     void operator()(const ValueType& val) const { param->SetPointer(&val); }
 
-    void operator()(const EmptyValue&) const { param->SetValue(ValueType()); }
+    void operator()(const NoneValue&) const { param->SetValue(ValueType()); }
 
     template<typename U>
     auto operator()(const U& v) -> std::enable_if_t<PromoteTester<U>::value && !std::is_same_v<std::decay_t<U>, ValueType>>
@@ -315,7 +315,7 @@ template<typename Fn, typename... ArgDescr>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): fn is called through a reference, ad only read
 Value InvokeTypedUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&&... ad)
 {
-    auto typedParams = std::make_tuple(TypedUnwrapParam<typename std::decay_t<ArgDescr>::type>(GetParamValue(params, ad).data())...);
+    auto typedParams = std::make_tuple(TypedUnwrapParam<typename std::decay_t<ArgDescr>::type>(GetParamValue(params, ad).GetData())...);
     return std::apply(
         [&fn](auto&... args) {
             bool hasValue = (true && ... && args.HasValue());

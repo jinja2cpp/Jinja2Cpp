@@ -235,7 +235,7 @@ TEST(ContainersApiTest, GenericMapIteration)
 
     std::string out;
     for (const auto& [key, value] : map)
-        out += key + "=" + std::to_string(value.get<int64_t>()) + ";";
+        out += key + "=" + std::to_string(value.As<int64_t>()) + ";";
     EXPECT_EQ("a=1;b=2;c=3;", out);
 
     auto it = map.cbegin();
@@ -252,7 +252,7 @@ TEST(ContainersApiTest, GenericMapOfReflectedStruct)
     TestStruct obj;
     obj.intValue = 7;
     auto value = Reflect(obj);
-    auto map = value.get<GenericMap>();
+    auto map = value.As<GenericMap>();
 
     size_t count = 0;
     for (const auto& item : map)
@@ -263,8 +263,8 @@ TEST(ContainersApiTest, GenericMapOfReflectedStruct)
     EXPECT_EQ(map.GetSize(), count);
 
     // An unknown field is an empty value, as IMapItemAccessor documents, not an exception
-    EXPECT_TRUE(map.GetValueByName("noSuchField").isEmpty());
-    EXPECT_EQ(7, map.GetValueByName("intValue").get<int64_t>());
+    EXPECT_TRUE(map.GetValueByName("noSuchField").IsNone());
+    EXPECT_EQ(7, map.GetValueByName("intValue").As<int64_t>());
 }
 
 TEST(ContainersApiTest, DefaultConstructedGenericMap)
@@ -285,7 +285,7 @@ TEST(ContainersApiTest, GenericListIterator)
     GenericList list = MakeGenericList(items.begin(), items.end());
     int64_t sum = 0;
     for (auto it = list.cbegin(); it != list.cend(); ++it)
-        sum += it->get<int64_t>();
+        sum += it->As<int64_t>();
     EXPECT_EQ(6, sum);
     EXPECT_EQ(nullptr, GenericList().GetAccessor());
 }
@@ -375,7 +375,7 @@ TEST(ContainersApiTest, GeneratedListIsComparedByIdentity)
 
 TEST(ContainersApiTest, ReflectEveryArithmeticType)
 {
-    auto asInt = [](const Value& v) { return std::get<int64_t>(v.data()); };
+    auto asInt = [](const Value& v) { return std::get<int64_t>(v.GetData()); };
     EXPECT_EQ(5, asInt(Reflect(5LL)));
     EXPECT_EQ(5, asInt(Reflect(5ULL)));
     EXPECT_EQ(5, asInt(Reflect(5L)));
@@ -389,11 +389,11 @@ TEST(ContainersApiTest, ReflectEveryArithmeticType)
     EXPECT_EQ(6, asInt(Reflect(named)));
     EXPECT_EQ(6, asInt(Reflect(&named)));
 
-    EXPECT_EQ(1.5, std::get<double>(Reflect(1.5F).data()));
-    EXPECT_EQ(1.5, std::get<double>(Reflect(1.5L).data()));
-    EXPECT_TRUE(std::get<bool>(Reflect(true).data()));
+    EXPECT_EQ(1.5, std::get<double>(Reflect(1.5F).GetData()));
+    EXPECT_EQ(1.5, std::get<double>(Reflect(1.5L).GetData()));
+    EXPECT_TRUE(std::get<bool>(Reflect(true).GetData()));
     const bool constTrue = true;
-    EXPECT_TRUE(std::get<bool>(Reflect(constTrue).data()));
+    EXPECT_TRUE(std::get<bool>(Reflect(constTrue).GetData()));
 
     auto shared = std::make_shared<std::vector<int>>(std::vector<int>{ 7, 8 });
     EXPECT_EQ("7,8", Render("{{ l | join(',') }}", { { "l", Reflect(shared) } }));
@@ -423,7 +423,7 @@ TEST(ContainersApiTest, ArgInfoConstants)
 
     static_assert(std::is_same_v<UserCallable::Function, std::function<Value(const UserCallableParams&)>>);
     UserCallable::Function fn = [](const UserCallableParams& params) -> Value {
-        return static_cast<int64_t>(params.extraPosArgs.asList().size());
+        return static_cast<int64_t>(params.extraPosArgs.AsList().size());
     };
     UserCallable count(fn, { ArgInfo{ ArgInfo::VarArgs } });
     EXPECT_EQ("3", Render("{{ count(1, 2, 3) }}", { { "count", count } }));
@@ -432,7 +432,7 @@ TEST(ContainersApiTest, ArgInfoConstants)
         [](const ValuesMap& kwargs) {
             int64_t sum = 0;
             for (const auto& item : kwargs)
-                sum += item.second.get<int64_t>();
+                sum += item.second.As<int64_t>();
             return sum;
         },
         ArgInfo{ ArgInfo::VarKwArgs });
@@ -480,10 +480,10 @@ TEST(ContainersApiTest, CloneOfUnstartedEnumeratorSeesAllItems)
         ASSERT_TRUE(enumerator->MoveNext());
         ASSERT_TRUE(enumerator->MoveNext());
         auto midClone = enumerator->Clone();
-        EXPECT_EQ(2, midClone->GetCurrent().get<int64_t>());
+        EXPECT_EQ(2, midClone->GetCurrent().As<int64_t>());
         midClone->Reset();
         ASSERT_TRUE(midClone->MoveNext());
-        EXPECT_EQ(1, midClone->GetCurrent().get<int64_t>());
+        EXPECT_EQ(1, midClone->GetCurrent().As<int64_t>());
     }
 }
 
@@ -522,7 +522,7 @@ TEST(ContainersApiTest, MapLookupThroughThe1xBridge)
     EXPECT_FALSE(base.Contains(std::string(40, 'x')));
     GenericMap map([&accessor]() { return &accessor; });
     EXPECT_EQ(Value(int64_t{ 1 }), map["a"]);
-    EXPECT_TRUE(map.GetValueByName("missing").isEmpty());
+    EXPECT_TRUE(map.GetValueByName("missing").IsNone());
 }
 
 TEST(ContainersApiTest, MapWithFindOnly)
@@ -543,12 +543,12 @@ TEST(ContainersApiTest, MapWithFindOnly)
     // The 1.x lookup is still callable on such an accessor
     EXPECT_TRUE(base.HasValue("a"));
     EXPECT_EQ(Value(int64_t{ 2 }), base.GetValueByName(str));
-    EXPECT_TRUE(base.GetValueByName("b").isEmpty());
+    EXPECT_TRUE(base.GetValueByName("b").IsNone());
 
     int64_t sum = 0;
     for (const auto& [key, value] : map)
     {
-        sum += value.get<int64_t>();
+        sum += value.As<int64_t>();
     }
     EXPECT_EQ(3, sum);
 

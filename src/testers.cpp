@@ -108,7 +108,7 @@ struct ValueKindGetter : visitors::BaseVisitor<TestKind>
     {
         return TestKind::Undefined;
     }
-    TestKind operator()(const EmptyValue&) const
+    TestKind operator()(const NoneValue&) const
     {
         return TestKind::Empty;
     }

@@ -312,7 +312,7 @@ using RendererPtr = std::shared_ptr<IRendererBase>;
 
 using ValueStorage = std::variant<
     UndefinedValue,
-    EmptyValue,
+    NoneValue,
     bool,
     int64_t,
     double,
@@ -864,7 +864,7 @@ public:
     {
     }
 
-    InternalValue(EmptyValue /*val*/) noexcept // NOLINT(google-explicit-constructor)
+    InternalValue(NoneValue /*val*/) noexcept // NOLINT(google-explicit-constructor)
         : m_imm(EmptyValue{})
     {
     }
@@ -1061,7 +1061,7 @@ public:
     }
 
     [[nodiscard]] bool IsUndefined() const noexcept { return m_imm.index() == detail::IndexOf<UndefinedValue>; }
-    [[nodiscard]] bool IsNone() const noexcept { return m_imm.index() == detail::IndexOf<EmptyValue>; }
+    [[nodiscard]] bool IsNone() const noexcept { return m_imm.index() == detail::IndexOf<NoneValue>; }
 
     [[nodiscard]] bool IsEqual(const InternalValue& other) const;
 

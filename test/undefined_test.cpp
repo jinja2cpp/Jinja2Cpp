@@ -28,7 +28,7 @@ nonstd::expected<std::basic_string<CharT>, BasicErrorInfo<CharT>> RenderWithPoli
 std::string Render(const std::string& source, UndefinedPolicy policy = UndefinedPolicy::Default)
 {
     auto result = RenderWithPolicy(source, policy);
-    return result ? result.value() : "error: " + result.error().GetExtraParams()[0].get<std::string>();
+    return result ? result.value() : "error: " + result.error().GetExtraParams()[0].As<std::string>();
 }
 } // namespace
 

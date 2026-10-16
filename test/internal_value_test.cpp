@@ -57,8 +57,8 @@ TEST(InternalValueLayoutTest, CallableKeepsBuiltStringArguments)
     Template tpl;
     ASSERT_TRUE(tpl.Load("{{ keep('a' * 20 ~ 'b') }}").has_value());
     ASSERT_TRUE(tpl.RenderAsString({ { "keep", keep } }).has_value());
-    ASSERT_TRUE(kept.isString());
-    EXPECT_EQ(std::string(20, 'a') + "b", kept.asString());
+    ASSERT_TRUE(kept.IsString());
+    EXPECT_EQ(std::string(20, 'a') + "b", kept.AsString());
 }
 
 // Internal functions are not exported from a shared library
@@ -167,14 +167,14 @@ TEST(InternalValueLayoutTest, ValuesOfOwnedStringsCopyTheText)
     for (size_t size : { size_t{ 3 }, size_t{ 30 } })
     {
         Value owned = IntValue2Value(InternalValue(std::string(size, 'o')));
-        ASSERT_TRUE(owned.isString()) << size;
-        EXPECT_EQ(std::string(size, 'o'), owned.asString());
+        ASSERT_TRUE(owned.IsString()) << size;
+        EXPECT_EQ(std::string(size, 'o'), owned.AsString());
         Value wide = IntValue2Value(InternalValue(std::wstring(size, L'o')));
-        ASSERT_TRUE(wide.isWString()) << size;
-        EXPECT_EQ(std::wstring(size, L'o'), wide.asWString());
+        ASSERT_TRUE(wide.IsWString()) << size;
+        EXPECT_EQ(std::wstring(size, L'o'), wide.AsWString());
     }
     const std::string host(30, 'h');
-    EXPECT_TRUE(std::holds_alternative<std::string_view>(IntValue2Value(InternalValue(std::string_view(host))).data()));
+    EXPECT_TRUE(std::holds_alternative<std::string_view>(IntValue2Value(InternalValue(std::string_view(host))).GetData()));
 }
 
 TEST(InternalValueLayoutTest, ParentDataKeepsTheValueItWasTakenFrom)
