@@ -59,5 +59,10 @@ CASES = [
     ("namespace_pprint", "{{ namespace(a=1)|pprint }}"),
     ("cycler_tojson", "{{ cycler(1)|tojson }}"),
     ("joiner_length", "{{ joiner()|length }}"),
+    ("dict_update_namespace", "{% set d = {} %}{{ d.update(namespace(a=1)) }}"),
+    ("percent_format_namespace", "{{ '%(a)s' % namespace(a=1) }}"),
+    ("percent_format_object_arg", "{{ '[%s]' % (namespace(a=1),) }}{{ '[%s]' % namespace(a=1) }}"),
+    ("cycler_truncate", "{{ cycler(1, 2)|truncate }}"),
+    ("namespace_urlencode", "{{ namespace(a=1)|urlencode }}"),
     ("objects_inequality", "{% set c = cycler(1) %}{{ 'T' if c != c else 'F' }}{{ 'T' if namespace(a=1) != namespace(a=1) else 'F' }}"),
 ]

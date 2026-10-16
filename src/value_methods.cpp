@@ -1991,7 +1991,8 @@ void CollectPairUpdates(const InternalValue& other, DictUpdates& updates)
 // The key-value pairs of the positional argument of d.update, a mapping or an iterable of pairs
 void CollectPositionalUpdates(const InternalValue& other, DictUpdates& updates)
 {
-    if (auto otherMap = AsMap(other))
+    // An object such as namespace() is no mapping, and not iterable either
+    if (auto otherMap = AsMap(other); otherMap && !otherMap->GetObjectClass())
     {
         for (auto& key : KeysOf(*otherMap))
         {

@@ -5921,6 +5921,46 @@
    "output": "F"
   },
   {
+   "id": "statements.set_unpack_dict_keys",
+   "template": "{% set a, b = {'x': 1, 'y': 2} %}{{ a }}{{ b }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "xy"
+  },
+  {
    "id": "statements.loop_len",
    "template": "{% for i in [1, 2] %}{{ loop|length }}{% endfor %}",
    "context": {

@@ -12,3 +12,4 @@ statements.macro_root_name_set_after_call output   0168 a name the template sets
 statements.macro_loop_name_set_after_call output   0168 a name the loop body sets after the call resolves outward on read; Jinja2 binds it at frame entry
 statements.default_root_name_set_after_context output 0168 a name the template sets after the call resolves outward on read; Jinja2 binds it at frame entry
 statements.loop_len                     output      0196 len(loop) counts the keys of the loop map, not the items of the loop
+statements.set_unpack_dict_keys        output      0197 tuple assignment from a dict takes the items named like the targets instead of unpacking its keys

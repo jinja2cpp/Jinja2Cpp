@@ -1,3 +1,5 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the globals area (cases/globals.py).
 # Format and kinds: test/parity/README.md.
 
+globals.cycler_truncate                 accepts     0197 truncate renders an object (a cycler) as empty instead of raising TypeError
+globals.namespace_urlencode             output      0197 urlencode encodes the attributes of a namespace instead of quoting its repr
