@@ -4,6 +4,3 @@
 loader.self_block_ignores_top_level_set output      0143 a block's `self` is the template's even after a top-level `set self`; Jinja2C++ lets the block see the set name
 loader.self_printed                   output      0143 `self` prints as a dict of block callables, Jinja2 prints <TemplateReference None>
 loader.include_defined_macro_escapes   output      0165 deliberate: a macro that outlives the include defining it loses the include's names
-loader.importer_block_via_self_in_imported_macro output 0194 a block called through `self` reads its caller's names, Jinja2 its own template's
-loader.extending_module_self_parent_block rejects 0195 an imported module's `self` lacks the blocks of the template it extends
-loader.extending_module_self_super_block rejects 0195 super() in an imported module's block finds no parent block

@@ -485,6 +485,9 @@ public:
     // Renders the template as the parent of the one rendering now: its blocks go below
     // the child's on the child's `stack`
     void RenderAsParent(OutStream& os, RenderContext& values, BlocksStack& stack);
+    // Renders the template as an imported module, whose blocks, and those of the templates
+    // it extends, go on `stack`, the module's own (its `self`)
+    void RenderAsModule(OutStream& os, RenderContext& values, BlocksStack& stack);
     // Adds this template's blocks below the ones already on `stack`; `nodes` is its tree
     void PushBlocks(IRendererCallback& callback, const ArenaView& nodes, BlocksStack& stack) const;
 
