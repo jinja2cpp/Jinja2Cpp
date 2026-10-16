@@ -464,7 +464,7 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
         SortItem item{ &entry, std::string() };
         if (lowerKeys)
         {
-            item.sortKey = detail::LowerUtf8(entry.key);
+            detail::LowerUtf8(entry.key, item.sortKey);
         }
         tempVector.push_back(std::move(item));
     }

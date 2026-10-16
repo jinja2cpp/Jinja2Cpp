@@ -1997,14 +1997,8 @@ int CompareLower(std::basic_string_view<CharT> left, std::basic_string_view<Char
 }
 } // namespace
 
-std::string LowerUtf8(std::string_view str)
+std::string LowerUtf8Unicode(std::string_view str)
 {
-    if (filters::IsAscii(str))
-    {
-        std::string result(str);
-        std::transform(result.begin(), result.end(), result.begin(), [](char ch) { return ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch; });
-        return result;
-    }
     std::string result;
     const filters::CaseChars<char> chars(str);
     filters::AppendLower(result, chars, 0, 0, chars.cps.size());

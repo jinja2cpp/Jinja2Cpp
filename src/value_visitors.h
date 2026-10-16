@@ -42,8 +42,25 @@ namespace detail
 // mapping (string_converter_filter.cpp); CompareIgnoreCase calls it only for non-ASCII text
 int CompareLowerUnicode(std::string_view left, std::string_view right);
 int CompareLowerUnicode(std::wstring_view left, std::wstring_view right);
-// str.lower() of UTF-8 text; its bytes order as the code points of the lowered string
-std::string LowerUtf8(std::string_view str);
+// str.lower() of UTF-8 text with a non-ASCII byte (string_converter_filter.cpp)
+std::string LowerUtf8Unicode(std::string_view str);
+
+// Appends str.lower() of UTF-8 text to an empty out, whose bytes then order as the code
+// points of the lowered string. ASCII text is lowered inline, as it was before 0189
+inline void LowerUtf8(std::string_view str, std::string& out)
+{
+    uint32_t bits = 0;
+    out.reserve(str.size());
+    for (auto ch : str)
+    {
+        bits |= CodeUnit(ch);
+        out.push_back(ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch);
+    }
+    if (bits >= 0x80)
+    {
+        out = LowerUtf8Unicode(str);
+    }
+}
 
 // Case-insensitive three-way comparison as Jinja2's ignore_case does it (str.lower()). An
 // ASCII prefix is compared inline: lowering a code point never looks at the ones after it,
