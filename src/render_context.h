@@ -1440,9 +1440,14 @@ class ClosureSite
 {
 public:
     ClosureSite() = default;
-    // The site of a closure defined now in `context`, which sees the scopes `context` sees.
-    // Defined with TemplateFrame in statements.cpp
-    explicit ClosureSite(RenderContext& context);
+    // The site of a closure defined now in `context`, which sees the scopes `context` sees
+    explicit ClosureSite(RenderContext& context)
+        : ClosureSite(context, context.GetScopesCount())
+    {
+    }
+    // The site of a closure defined in `context` that sees its first `depth` scopes (a
+    // template's top level, for `self`). Defined with TemplateFrame in statements.cpp
+    ClosureSite(RenderContext& context, size_t depth);
 
     // Where a call made from `caller` runs:
     // 1. the home is the caller when it is the defining context (no lock), else the defining

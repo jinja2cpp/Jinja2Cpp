@@ -1495,16 +1495,18 @@ private:
 
 // `self` for the blocks of `stack`: a callable per block. A call renders the block in the
 // template `self` came from while that template runs (the importer, for `self` passed to an
-// imported macro), else in the template running then. The stack is only compared, never read,
+// imported macro), else in the template running then. The block sees the names of the
+// template's top level, `site`, wherever it is called from, as a block function sees its
+// template's context in Jinja2 (docs/tasks/0194). The stack is only compared, never read,
 // since `self` may outlive it
-InternalValue MakeTemplateSelf(const BlocksStack& stack)
+InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site)
 {
     InternalValueMap self;
     for (const auto& block : stack.blocks)
     {
         // `self` may outlive the stack and the trees its names are in
         std::string name(block.first);
-        self[name] = MakeWrapped(Callable(Callable::Macro, [name, owner = &stack](const CallParams&, OutStream& stream, RenderContext& context) {
+        self[name] = MakeWrapped(Callable(Callable::Macro, [name, owner = &stack, site](const CallParams&, OutStream& stream, RenderContext& context) {
             auto* curFrame = context.GetTemplateFrame();
             if (!curFrame || !curFrame->blocks)
             {
@@ -1519,7 +1521,8 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack)
                     break;
                 }
             }
-            RenderContext blockContext(context, frame->baseDepth);
+            const auto home = site.Resolve(context);
+            RenderContext blockContext(*home.context, home.link);
             blockContext.SetTemplateFrame(frame);
             RenderBlockAt(*frame->blocks, name, 0, stream, blockContext);
         }));
@@ -1542,15 +1545,21 @@ LookupResult RenderContext::FindSelf(const std::string& name)
     }
     if (!frame->self)
     {
-        frame->self = MakeTemplateSelf(*frame->blocks);
+        // The context whose scopes the template's top level set, which may run below this one
+        // (a `with` or a block): `self` outlives those
+        auto* home = this;
+        while (home->m_parentDepth >= frame->baseDepth && home->m_parent)
+        {
+            home = home->m_parent;
+        }
+        frame->self = MakeTemplateSelf(*frame->blocks, ClosureSite(*home, frame->baseDepth));
     }
     return LookupResult(*frame->self);
 }
 
-ClosureSite::ClosureSite(RenderContext& context)
+ClosureSite::ClosureSite(RenderContext& context, size_t depth)
     : m_home(context.Anchor())
 {
-    const size_t depth = context.GetScopesCount();
     m_depth = static_cast<uint32_t>(depth);
     m_serial = context.SerialBelow(depth);
     // A template's top-level scope lives as long as the context it runs in
@@ -1668,6 +1677,12 @@ void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values, Bloc
     // The parent shares the child's top-level scope, but a `self` the child set there is not
     // the parent's: in Jinja2 `self` is a local of each template's root function
     values.GetCurrentScope().Erase("self");
+    PushBlocks(*values.GetRendererCallback(), values.Nodes(), stack);
+    RenderBody(os, values, &stack);
+}
+
+void TemplateRenderer::RenderAsModule(OutStream& os, RenderContext& values, BlocksStack& stack)
+{
     PushBlocks(*values.GetRendererCallback(), values.Nodes(), stack);
     RenderBody(os, values, &stack);
 }
@@ -1889,14 +1904,15 @@ template<typename Tpl>
 void ImportedModule::Render(const Tpl& tpl)
 {
     auto& callback = *m_context.GetRendererCallback();
-    // The module's macros run in its template, whose blocks their `self` has
-    tpl.Nodes()[tpl.GetRenderer()].PushBlocks(callback, tpl.Nodes(), m_blocks);
+    // The module's macros run in its template, whose blocks their `self` has: its own and,
+    // once its top level has run, those of the templates it extends
     m_frame.blocks = &m_blocks;
     m_frame.baseDepth = m_context.GetScopesCount();
     m_context.SetTemplateFrame(&m_frame);
     m_context.SetNodes(tpl.Nodes());
-    // Only the names the template defines are imported, its output is dropped
-    RenderToString(&callback, [this, &tpl](OutStream& stream) { m_context.Nodes()[tpl.GetRenderer()].Render(stream, m_context); });
+    // Only the names the template, and the ones it extends, define are imported, as in
+    // Jinja2; its output is dropped
+    RenderToString(&callback, [this, &tpl](OutStream& stream) { m_context.Nodes()[tpl.GetRenderer()].RenderAsModule(stream, m_context, m_blocks); });
 }
 
 void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
