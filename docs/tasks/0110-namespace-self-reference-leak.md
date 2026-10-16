@@ -31,3 +31,12 @@ must not recurse forever either; Python prints `<Namespace {'a': <Namespace {...
 
 **Done when.** The input above is in `fuzz/regressions/` and replays clean under
 LeakSanitizer, and a parity case covers the self-referencing namespace.
+
+**Also found by the 0042 verifier (filed as 0192, folded in here 2026-10-16).**
+`{% set ns = namespace(a=1) %}{% set ns.d = ns %}{{ ns }}` leaks 296 bytes in 4 allocations
+on master after 0042, which made namespaces objects. A dict that contains itself
+(`{% set d = {} %}{% do d.update(x=d) %}`) and a list that appends itself are probably the
+same cycle. The sanitizer job runs the parity suite with `detect_leaks=1`, so a corpus case
+would turn CI red until this is fixed; pin it with the fix. A unit test that stores a
+namespace, a dict and a list in themselves, run under the sanitizer configuration, is part
+of Done when.

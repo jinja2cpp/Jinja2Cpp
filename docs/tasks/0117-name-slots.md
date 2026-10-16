@@ -1,5 +1,5 @@
 ---
-status: blocked
+status: open
 priority: high
 area: perf
 depends: [0038]
@@ -81,3 +81,8 @@ context, includes or `globals`. Scopes become small arrays for the resolved part
 
 **Blocked (2026-10-12).** P3 was measured and declined; what remains is P4 (root slots, closure
 capture), which needs the lexical macro scoping of 0038 first. No thread works on it until 0038 lands.
+
+**Unblocked (2026-10-16).** 0038 is done (0165-0167). The perf track re-measured on master
+72e7e8e: name lookup is now 10.7% of `Render/many_tags`, 6.4% of `macros` and 2.2% of
+`chat_mistral`, so P4 can gain at most about 8% on many_tags. Whether to start it is on
+Ruslan's decision card in the Performance track; P4 needs its own architect plan first.

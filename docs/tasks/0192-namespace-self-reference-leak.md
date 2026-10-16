@@ -1,5 +1,5 @@
 ---
-status: open
+status: dropped
 priority: low
 area: robustness
 touches: [src/internal_value.cpp#NamespaceAdapter]
@@ -22,3 +22,7 @@ Measure first: a render-scoped registry of shared containers costs an allocation
 
 **Done when.** A unit test that stores a namespace, a dict and a list in themselves runs
 clean under the sanitizer configuration.
+
+**Dropped (2026-10-16): duplicate of 0110**, which the fuzzing track filed on 2026-10-04 for the
+same cycle (`{% set ns.a = ns %}`). Its findings (dict and list cycles, the LeakSanitizer
+figures from the 0042 verifier) are carried into 0110.
