@@ -432,7 +432,7 @@ public:
     {
         if (!m_env)
         {
-            return TplLoadResultType(EmptyValue());
+            return TplLoadResultType(NoneValue());
         }
 
         auto tplWrapper = TemplateLoader<CharT>::Load(fileName, m_env);

@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: release
 depends: [0071, 0067, 0043]
@@ -35,3 +35,21 @@ shares: [src/, test/]
 **Done when.** The new API is in, every deprecated alias is covered by
 `test/v1_names_test.cpp` (built with deprecation warnings off), and `src/`/`test/` build
 without deprecation warnings.
+
+**Status (task 0072 PR).** Done as proposed, with these details:
+- `IsString()`/`AsString(std::string_view&)` match the `std::string` alternative only (a stored `std::string_view`
+  is not a string), so the predicate and the non-throwing accessor always agree; likewise for wide strings.
+- `As<T>()`/`GetIf<T>()` take `ValuesList`, `ValuesMap` and `UserCallable` and unwrap the `RecWrapper`; the
+  wrapped alternative itself still works with `GetIf<RecWrapper<T>>()`.
+- Every printing form goes through one function in `src/value.cpp` that lends the value to `RenderValue`, the
+  renderer `{{ v }}` uses. `ToChars` renders into a local string first, so text longer than the small-string
+  buffer allocates once; it is `noexcept` and reports `bad_alloc` as `std::errc::not_enough_memory`.
+- `std::formatter<jinja2::Value>` is defined where `__cpp_lib_format` is (it reuses the `string_view` spec).
+- The vendored `indirect_cxx14.h` (jbcoe/value_types 57f2e7a) has two local changes, marked in the file: the
+  `in_place_t` constructor and the converting assignment test their cheap condition first, because Clang
+  otherwise asks whether the incomplete `ValuesMap` is constructible while `Value::ValueData` is declared.
+- `UserCallable::UserCallableFunctionPtr` and `ErrorInfoTpl` now use `JINJA2CPP_DEPRECATED` too, so
+  `JINJA2CPP_NO_DEPRECATION_WARNINGS` silences every 1.x name.
+- GCC does not warn on a deprecated alias used in a functional cast (`EmptyValue()`); Clang does. Check
+  alias renames with a Clang build.
+

@@ -1815,7 +1815,7 @@ public:
         if (val->IsNone())
         {
             const auto* accessor = m_values.Get().GetAccessor();
-            return accessor && accessor->EmptyIsNone() ? InternalValue(EmptyValue{}) : InternalValue();
+            return accessor && accessor->EmptyIsNone() ? InternalValue(NoneValue{}) : InternalValue();
         }
 
         return LendGenericItem(GenericOwner(m_values), std::move(*val));

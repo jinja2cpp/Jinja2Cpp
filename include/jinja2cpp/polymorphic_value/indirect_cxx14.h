@@ -164,13 +164,19 @@ class indirect : private detail::empty_base_optimization<A> {
     p_ = construct_from(alloc_base::get(), std::forward<Us>(us)...);
   }
 
-  template <class... Us,
-            typename std::enable_if<std::is_constructible<T, Us&&...>::value,
-                                    int>::type = 0,
+  // Local change (task 0072): the tag is deduced and tested first, so that
+  // overload resolution for a copy or move (std::variant's traits ask while
+  // the Value variant is declared) never asks whether an incomplete T is
+  // constructible; Clang reports that as a hard error.
+  template <class Tag, class... Us,
+            typename std::enable_if<
+                std::conjunction<std::is_same<Tag, xyz::in_place_t>,
+                                 std::is_constructible<T, Us&&...>>::value,
+                int>::type = 0,
             class AA = A,
             typename std::enable_if<std::is_default_constructible<AA>::value,
                                     int>::type = 0>
-  explicit indirect(xyz::in_place_t, Us&&... us)
+  explicit indirect(Tag, Us&&... us)
       : indirect(std::allocator_arg, A(), xyz::in_place_t{},
                  std::forward<Us>(us)...) {}
 
@@ -304,11 +310,16 @@ class indirect : private detail::empty_base_optimization<A> {
     return *this;
   }
 
-  template <class U, typename std::enable_if<
-                         (std::is_constructible<T, U>::value &&
-                          std::is_assignable<T&, U>::value &&
-                          !std::is_same<std::remove_cv_t<U>, indirect>::value),
-                         int>::type = 0>
+  // Local change (task 0072): the indirect test comes first, for the reason
+  // given at the in_place_t constructor.
+  template <class U,
+            typename std::enable_if<
+                std::conjunction<
+                    std::negation<std::is_same<
+                        std::remove_cv_t<std::remove_reference_t<U>>, indirect>>,
+                    std::is_constructible<T, U>,
+                    std::is_assignable<T&, U>>::value,
+                int>::type = 0>
   constexpr indirect& operator=(U&& u) {
     if (valueless_after_move()) {
       p_ = construct_from(get_allocator(), std::forward<U>(u));

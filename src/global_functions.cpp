@@ -226,7 +226,7 @@ InternalValue CallCycler(const CallParams& params, RenderContext&)
     });
     cycler["reset"] = MakeFunction([state](const CallParams&, RenderContext&) {
         state->pos = 0;
-        return InternalValue(EmptyValue());
+        return InternalValue(NoneValue());
     });
     return CreateMapAdapter(std::move(cycler));
 }
