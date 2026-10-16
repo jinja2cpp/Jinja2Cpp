@@ -54,7 +54,25 @@ namespace jinja2
 template<typename CharT>
 class TemplateImpl;
 
-struct TemplateFrame;
+struct BlocksStack;
+class TemplateRenderer;
+class ImportedModule;
+
+// One template's code running, in an inheritance chain: Jinja2's root render function
+struct TemplateFrame
+{
+    const BlocksStack* blocks = nullptr;
+    // Set by `extends`; from then on this template's top-level output is dropped
+    TemplateNode<TemplateRenderer> parent;
+    // Scopes visible to the template's top level, and so to unscoped blocks
+    size_t baseDepth = 0;
+    // The template's `self`, made when a name first asks for it (docs/tasks/0139)
+    std::optional<InternalValue> self;
+    // The frame this one was entered from (an importer, for a macro it imported); only
+    // compared, so that `self` finds the template it came from
+    TemplateFrame* outer = nullptr;
+};
+
 
 // A `break` or `continue` on its way to the loop it belongs to: set by the statement, it
 // stops the bodies that enclose it until the loop takes it
@@ -98,6 +116,8 @@ struct IRendererCallback : IComparable
 
     // The templates this render runs, for the handles that link to their nodes (0118 P4b)
     virtual TemplateSlots& Templates() = 0;
+    // Keeps `module`, made by an `import`, until the render ends (docs/tasks/0167)
+    virtual ImportedModule& AddModule(std::unique_ptr<ImportedModule> module) = 0;
 };
 
 // The slots where names were last found (docs/tasks/0100 idea 7). An entry holds the slot
@@ -413,12 +433,10 @@ public:
         , m_externalScope(other.m_externalScope)
         , m_globalScope(other.m_globalScope)
         , m_builtinScope(other.m_builtinScope)
-        , m_boundScope(other.m_boundScope)
         , m_templateFrame(other.m_templateFrame)
         , m_nodes(other.m_nodes)
         , m_parent(other.m_parent)
         , m_parentDepth(other.m_parentDepth)
-        , m_boundDepth(other.m_boundDepth)
         , m_scopes(other.m_scopes)
         , m_frame(other.m_frame)
         , m_views(other.m_views)
@@ -461,18 +479,16 @@ public:
         , m_externalScope(other.m_externalScope)
         , m_globalScope(other.m_globalScope)
         , m_builtinScope(other.m_builtinScope)
-        , m_boundScope(other.m_boundScope)
         , m_templateFrame(other.m_templateFrame)
         , m_nodes(other.m_nodes)
         , m_parent(&other)
         , m_parentDepth(std::min(depth, other.GetScopesCount()))
-        , m_boundDepth(std::min(other.m_boundDepth, m_parentDepth))
         , m_frame(other.m_frame)
         , m_inheritsViews(other.m_inheritsViews || !other.m_views.empty())
         , m_autoescape(other.m_autoescape)
         , m_lookupCache(other.m_lookupCache)
     {
-        m_fullWalk = m_boundScope != nullptr || m_inheritsViews;
+        m_fullWalk = m_inheritsViews;
         // Skip the parents whose own scopes are all hidden, so chains stay short
         while (m_parent->m_parent && m_parentDepth <= m_parent->m_parentDepth)
         {
@@ -522,7 +538,7 @@ public:
     }
 
     // An empty scope changes no lookup until a name is added to it
-    ScopeRef EnterScope()
+    JINJA2CPP_ALWAYS_INLINE ScopeRef EnterScope()
     {
         if (m_spareScope)
         {
@@ -607,12 +623,7 @@ public:
         CheckPrefix();
         if (m_fullWalk)
         {
-            // Frame views without a bound module are the common case, walked almost as fast
-            if (!m_boundScope)
-            {
-                return FindValueWithViews(ToHashedName(val));
-            }
-            return FindValueFull(ToHashedName(val));
+            return FindValueWithViews(ToHashedName(val));
         }
         const auto* p = FindEntry(val);
         return p ? LookupResult(p->second) : LookupResult();
@@ -661,7 +672,7 @@ public:
     // written. The external and global scopes are copies made for this render, so writing
     // to them never changes the caller's data; the global scope is kept for the next render
     // on the thread, so its renderer is told (docs/tasks/0139). The built-in scope is shared
-    // and never written. A name of the bound module is not writable.
+    // and never written.
     MutableLookupResult FindForWrite(const std::string& name)
     {
         MutableLookupResult result;
@@ -669,10 +680,6 @@ public:
         const bool isFound = VisitScopes(
             *this,
             [&](InternalValueMap* scope, size_t /*depth*/) {
-                if (!scope)
-                {
-                    return m_boundScope->find(name) != m_boundScope->end();
-                }
                 auto valP = scope->find(name);
                 if (valP == scope->end())
                 {
@@ -722,12 +729,35 @@ public:
     {
         return CurrentScopeRef();
     }
-    // Moves the names out of the current scope, leaving it empty
-    InternalValueMap TakeCurrentScope()
+    // Adds to `names` each name this context sees in its scopes, frame views and external
+    // scope (not the global and built-in ones, which every context shares), with the value a
+    // lookup here finds: what a module imported "with context" sees (docs/tasks/0167; Jinja2's
+    // get_all() and the importer's locals). A shallow copy: a namespace changed later is seen
+    void CollectVisibleNames(InternalValueMap& names) const
     {
-        NewEpoch();
-        CurrentBuckets() = 0;
-        return std::move(*m_currentScope);
+        VisitScopes(
+            *this,
+            [&names](const InternalValueMap* scope, size_t /*depth*/) {
+                for (const auto& [name, value] : *scope)
+                {
+                    names.emplace(name, value);
+                }
+                return false;
+            },
+            [&names](const FrameView& view, size_t /*depth*/) {
+                for (size_t idx = 0; idx != view.names.size(); ++idx)
+                {
+                    if (view.slots[idx].IsBound())
+                    {
+                        names.emplace(std::string(view.nodes.Text(view.names[idx].name)), static_cast<const InternalValue&>(view.slots[idx]));
+                    }
+                }
+                return false;
+            });
+        for (const auto& [name, value] : *m_externalScope)
+        {
+            names.emplace(name, value);
+        }
     }
     // The scopes this context sees, its parents' included
     [[nodiscard]] size_t GetScopesCount() const
@@ -759,15 +789,22 @@ public:
     {
         if (!includeCurrentContext)
         {
-            RenderContext result(m_emptyScope, *m_globalScope, m_rendererCallback, m_builtinScope);
-            result.m_templateFrame = m_templateFrame;
-            result.m_nodes = m_nodes;
-            result.m_autoescape = m_autoescape;
-            result.SetLookupCache(m_lookupCache);
-            return result;
+            return CloneWith(m_emptyScope);
         }
 
         return { *this, GetScopesCount() };
+    }
+    // A context of its own, which sees `external` and the global names: an imported module's
+    // (docs/tasks/0167). It refers to `external`, which must outlive it, and to nothing else
+    // of this context but what the render keeps
+    [[nodiscard]] RenderContext CloneWith(const InternalValueMap& external) const
+    {
+        RenderContext result(external, *m_globalScope, m_rendererCallback, m_builtinScope);
+        result.m_templateFrame = m_templateFrame;
+        result.m_nodes = m_nodes;
+        result.m_autoescape = m_autoescape;
+        result.SetLookupCache(m_lookupCache);
+        return result;
     }
 
     // The template whose code is running: its blocks and the parent set by `extends`
@@ -792,16 +829,6 @@ public:
     {
         std::swap(autoescape, m_autoescape);
         return autoescape;
-    }
-
-    // Makes the names of the module `scope` visible to the imported macro about to be called
-    // in this context: below the scopes the macro enters, above the ones it was called in
-    void BindScope(InternalValueMap* scope)
-    {
-        m_boundScope = scope;
-        m_boundDepth = GetScopesCount();
-        m_fullWalk = true;
-        NewEpoch();
     }
 
     // The slots of the unit running here (docs/design/0117-name-slots-plan.md)
@@ -895,15 +922,11 @@ public:
         {
             return false;
         }
-        if (!IsEqual(m_boundScope, other.m_boundScope))
-        {
-            return false;
-        }
         if (m_emptyScope != other.m_emptyScope)
         {
             return false;
         }
-        if (m_parent != other.m_parent || m_parentDepth != other.m_parentDepth || m_boundDepth != other.m_boundDepth)
+        if (m_parent != other.m_parent || m_parentDepth != other.m_parentDepth)
         {
             return false;
         }
@@ -1014,8 +1037,7 @@ private:
         auto p = map.find(name);
         return p != map.end() ? &*p : nullptr;
     }
-    // The innermost of the scopes this context sees from index `minDepth` up that has `name`;
-    // the bound module is not one of them
+    // The innermost of the scopes this context sees from index `minDepth` up that has `name`
     [[nodiscard]] LookupResult FindInScopesFrom(const std::string& name, size_t minDepth) const
     {
         LookupResult result;
@@ -1023,10 +1045,6 @@ private:
         VisitScopes(
             *this,
             [&](const InternalValueMap* scope, size_t depth) {
-                if (!scope)
-                {
-                    return false;
-                }
                 if (depth < minDepth)
                 {
                     return true;
@@ -1068,17 +1086,15 @@ private:
         }
         return nullptr;
     }
-    // Calls `onMap` with each scope `ctx` sees, innermost first, and with null where the bound
-    // module scope goes, and `onView` with the views of each scope right after its map, until
-    // one returns true; returns whether one did. Both also get the scope's index among the
-    // scopes `ctx` sees
+    // Calls `onMap` with each scope `ctx` sees, innermost first, and `onView` with the views of
+    // each scope right after its map, until one returns true; returns whether one did. Both
+    // also get the scope's index among the scopes `ctx` sees
     // A closure body's link (ScopeView::linkBelow) passes over the scopes between its own and
     // the place the closure was defined
     template<typename Context, typename OnMap, typename OnView>
     static bool VisitScopes(Context& ctx, const OnMap& onMap, const OnView& onView)
     {
         ctx.CheckPrefix();
-        bool isBoundSeen = !ctx.m_boundScope;
         size_t limit = ctx.GetScopesCount();
         for (auto* cur = &ctx; cur; cur = cur->m_parent)
         {
@@ -1087,14 +1103,6 @@ private:
             for (size_t idx = cur->VisibleScopesCount(limit); idx != 0; --idx)
             {
                 const size_t depth = cur->m_parentDepth + idx - 1;
-                if (!isBoundSeen && depth < ctx.m_boundDepth)
-                {
-                    isBoundSeen = true;
-                    if (onMap(nullptr, depth))
-                    {
-                        return true;
-                    }
-                }
                 if (onMap(&cur->m_scopes[idx - 1], depth))
                 {
                     return true;
@@ -1129,7 +1137,7 @@ private:
             }
             limit = std::min(limit, cur->m_parentDepth);
         }
-        return !isBoundSeen && onMap(nullptr, size_t{ 0 });
+        return false;
     }
     // The index of the bound slot of `view` named `name`; the size of the view when none is
     template<typename Name>
@@ -1145,51 +1153,10 @@ private:
         }
         return view.names.size();
     }
-    // FindValue for the contexts the inlined walk does not cover: inside an imported macro
-    // its own scopes come first, then its module, then the scopes it was called in
-    // (docs/tasks/0038; 0117 P0), and the slots of frame views are searched with the scopes
-    // they belong to. Out of line, so that the common path stays short; `val` is taken by
-    // value for the same reason as in FindInDeepScopes
-    [[nodiscard]] JINJA2CPP_NOINLINE_INLINE LookupResult FindValueFull(HashedName val) const
-    {
-        LookupResult result;
-        if (VisitScopes(
-                *this,
-                [&](const InternalValueMap* scope, size_t /*depth*/) {
-                    const auto* p = FindIn(scope ? *scope : *m_boundScope, val);
-                    if (p)
-                    {
-                        result = LookupResult(p->second);
-                    }
-                    return p != nullptr;
-                },
-                [&](const FrameView& view, size_t /*depth*/) {
-                    const auto idx = FindInView(view, val);
-                    if (idx == view.names.size())
-                    {
-                        return false;
-                    }
-                    result = LookupResult(view.slots[idx]);
-                    return true;
-                }))
-        {
-            return result;
-        }
-        const InternalValueMap* map = m_externalScope;
-        for (int idx = 0; map; ++idx)
-        {
-            const auto* p = FindIn(*map, val);
-            if (p)
-            {
-                return LookupResult(p->second);
-            }
-            map = idx == 0 ? m_globalScope : (idx == 1 ? m_builtinScope : nullptr);
-        }
-        return {};
-    }
-    // FindValue for a context that sees frame views and no bound module: each scope with the
-    // views attached to it, innermost first, through the parents, then the external, global
-    // and built-in scopes
+    // FindValue for a context that sees frame views: each scope with the views attached to it,
+    // innermost first, through the parents, then the external, global and built-in scopes.
+    // Out of line, so that the common path stays short; `val` is taken by value for the same
+    // reason as in FindInDeepScopes
     [[nodiscard]] JINJA2CPP_NOINLINE_INLINE LookupResult FindValueWithViews(HashedName val) const
     {
         size_t count = m_scopes.size();
@@ -1263,7 +1230,7 @@ private:
     ScopeRef CurrentScopeRef() { return { *this, m_scopes.back(), CurrentBuckets() }; }
     uint32_t& CurrentBuckets() { return m_scopes.Buckets(m_scopes.size() - 1); }
     void UpdateCurrentScope() { m_currentScope = m_scopes.empty() ? nullptr : &m_scopes.back(); }
-    void UpdateFullWalk() { m_fullWalk = m_boundScope != nullptr || m_inheritsViews || !m_views.empty(); }
+    void UpdateFullWalk() { m_fullWalk = m_inheritsViews || !m_views.empty(); }
     static HashedName ToHashedName(const HashedName& name) { return name; }
     static HashedName ToHashedName(const std::string& name) { return { name, HashedName::Hash(name) }; }
 
@@ -1308,7 +1275,6 @@ private:
     const InternalValueMap* m_externalScope{};
     const InternalValueMap* m_globalScope{};
     const InternalValueMap* m_builtinScope{};
-    const InternalValueMap* m_boundScope{};
     TemplateFrame* m_templateFrame{};
     ArenaView m_nodes;
     InternalValueMap m_emptyScope;
@@ -1317,14 +1283,11 @@ private:
     // its own; null for a context that copies no scopes
     RenderContext* m_parent{};
     size_t m_parentDepth{};
-    // How many of the scopes this context sees lie below m_boundScope: the scopes above it
-    // belong to the imported macro and are searched before it
-    size_t m_boundDepth{};
     ScopeStack m_scopes;
     SlotFrame m_frame;
     // The frame views attached to this context's scopes, by scope index
     boost::container::small_vector<ScopeView, 3> m_views;
-    // Whether lookups take FindValueFull: there is a bound module or a frame view in sight
+    // Whether lookups take FindValueWithViews: there is a frame view in sight
     bool m_fullWalk = false;
     // Whether a parent this context sees scopes of has frame views. Set once, when the
     // context is made: while this context is alive the parent pushes and pops views only
@@ -1479,10 +1442,9 @@ public:
     // 3. alive, but that scope has ended (a closure kept past its loop or macro call): the
     //    body links to the template's root, else to what the context sees of its parents,
     //    so that the names of the ended frame read as undefined;
-    // 4. ended (the include, `with`, block or module defining it is over): the body runs on
-    //    the caller with every scope hidden, seeing the params, globals and built-ins only;
-    //    called through an imported macro's wrapper (a caller with a bound module), it sees
-    //    what the wrapper sees, as before 0038 (until docs/tasks/0167)
+    // 4. ended (the include, `with` or block defining it is over): the body runs on the
+    //    caller with every scope hidden, seeing the params, globals and built-ins only. An
+    //    imported module's context lives as long as the render (docs/tasks/0167)
     [[nodiscard]] ClosureHome Resolve(RenderContext& caller) const
     {
         ClosureHome home;
@@ -1533,11 +1495,8 @@ private:
     {
         ClosureHome home;
         home.context = &caller;
-        if (!caller.m_boundScope)
-        {
-            home.link = 0;
-            home.epoch = ClosureHome::Epoch::Fresh;
-        }
+        home.link = 0;
+        home.epoch = ClosureHome::Epoch::Fresh;
         return home;
     }
     // The epoch of the closure's own cached lookups in `home`, its defining context, whose
@@ -1592,6 +1551,8 @@ struct HomeCallSaved
     // cached lookups during the call
     uint64_t bodyEpoch = 0;
     TemplateFrame* templateFrame = nullptr;
+    // The frame the body runs in when its template is not its caller's (HomeCall::Enter)
+    std::optional<TemplateFrame> callFrame;
     LoopControl loopControl = LoopControl::None;
     bool autoescape = false;
 };
@@ -1620,16 +1581,7 @@ public:
         // another call of itself
         if (isFresh || m_state != ClosureSite::TopLevel || caller.GetScopesCount() != site.m_depth || !site.HasOwner(caller.m_anchor))
         {
-            // A macro of a module that has ended, called through its import wrapper, sees
-            // what the wrapper sees, as before 0038 (ClosureSite::Resolve, rule 4)
-            if (caller.m_boundScope && site.m_home.expired())
-            {
-                m_link = ScopeView::NoLink;
-            }
-            else
-            {
-                Enter(isFresh);
-            }
+            Enter(isFresh);
         }
         site.m_state = static_cast<uint8_t>(m_state | ClosureSite::Active);
 #ifndef NDEBUG
@@ -1664,8 +1616,7 @@ public:
 
     // Runs `body(home, link, args...)` as a HomeCall would. The calls that switch nothing (the
     // common one, of a closure defined at its template's top level made at the top level of
-    // the context that defined it, and one through an imported macro's wrapper) only mark the site as running,
-    // inline; the others take a HomeCall out of line. The body and the arguments are passed by
+    // the context that defined it) only mark the site as running, inline; the others take a HomeCall out of line. The body and the arguments are passed by
     // reference, so that the direct calls make nothing in memory
     // `readsSlotsOnly`: the body makes no cached lookup by name (MacroStatement::ReadsSlotsOnly)
     template<typename Body, typename... Args>
@@ -1687,12 +1638,6 @@ public:
             const Direct direct(site, caller, ClosureSite::TopLevel);
             const ClosureEpoch epoch(site, caller);
             body(caller, static_cast<size_t>(site.m_depth), args...);
-            return;
-        }
-        if (caller.m_boundScope && site.m_home.expired())
-        {
-            const Direct direct(site, caller, site.m_state);
-            body(caller, ScopeView::NoLink, args...);
             return;
         }
         RunSwitched(site, caller, body, args...);
@@ -1810,6 +1755,7 @@ private:
 
     JINJA2CPP_NOINLINE_INLINE void Enter(bool isFresh)
     {
+        const auto* caller = m_context;
         auto home = m_site.Resolve(*m_context);
         if (isFresh || (m_state & ClosureSite::Active) != 0)
         {
@@ -1827,6 +1773,16 @@ private:
         saved.scopes = context.m_scopes.size();
         saved.epoch = context.m_epoch;
         saved.templateFrame = context.m_templateFrame;
+        // A body of another template than its caller's (an imported macro) runs in a frame of
+        // its template entered from the caller's, so that `self` the caller passes still finds
+        // the caller's template (MakeTemplateSelf). One per call: the caller's frames may lead
+        // back to the template's own
+        if (context.m_templateFrame && context.m_templateFrame != caller->m_templateFrame)
+        {
+            auto& frame = saved.callFrame.emplace(*context.m_templateFrame);
+            frame.outer = caller->m_templateFrame;
+            context.m_templateFrame = &frame;
+        }
         saved.loopControl = context.TakeLoopControl();
         saved.autoescape = context.m_autoescape;
         if (context.m_lookupCache)

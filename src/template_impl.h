@@ -648,6 +648,7 @@ private:
         }
 
         TemplateSlots& Templates() override { return Loaded().templates; }
+        ImportedModule& AddModule(std::unique_ptr<ImportedModule> module) override { return *Loaded().modules.emplace_back(std::move(module)); }
 
         [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
@@ -735,6 +736,8 @@ private:
             // What each `include` of a constant name loaded (FindLoadedBy). A render has few
             // such statements, so a list beats hashing
             std::vector<std::pair<const void*, const LoadTemplateResult*>> bySite;
+            // The modules the render imported, freed before the trees their macros run in
+            std::vector<std::unique_ptr<ImportedModule>> modules;
         };
         // Made on the first lookup or handle, so a render that loads nothing does not pay for it
         LoadedTemplates& Loaded() const

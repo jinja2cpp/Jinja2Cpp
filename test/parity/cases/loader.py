@@ -33,6 +33,18 @@ SCOPING = {"templates": {**T,
     "inc_set_x.j2": "{% set x = 'I' %}{{ m() }}",
     "inc_esc.j2": "{% set v = 'I' %}{% macro m() %}{{ v }}{% endmacro %}{% set ns.m = m %}",
     "rec.j2": "{{ m(n - 1) }}"}}
+# Imported modules own their context (docs/tasks/0167)
+MODULES = {"templates": {**T,
+    "mx.j2": "{% macro mx() %}[{{ x }}]{% endmacro %}",
+    "mg.j2": "{% macro m() %}[{{ g }}]{% endmacro %}",
+    "mv.j2": "{% set v = 'V' %}{% macro show() %}{{ v }}{% endmacro %}",
+    "apply.j2": "{% macro apply(f) %}<{{ f() }}>{% endmacro %}",
+    "mns.j2": "{% macro m() %}[{{ ns.a }}]{% endmacro %}",
+    "mi.j2": "{% macro m() %}[{{ i }}]{% endmacro %}",
+    "seen.j2": "{% set seen = x %}{% macro m() %}{{ seen }}{{ x }}{% endmacro %}",
+    "lvl.j2": "{% set y = x * 10 %}{% macro m() %}{{ y }}{% endmacro %}",
+    "msib.j2": "{% macro k() %}H{% endmacro %}{% macro a() %}{{ k() }}{% endmacro %}{% set r = a() %}",
+    "self_store.j2": "{% set ns = namespace(f=none) %}{% macro m() %}M{% endmacro %}{% set ns.f = m %}{% macro call_it() %}{{ ns.f() }}{% endmacro %}"}}
 CASES = [
     ("include", "{% include 'hello.j2' %}", L),
     ("include_context", "{% set x = 9 %}{% include 'uses_x.j2' %}", L),
@@ -193,4 +205,21 @@ CASES = [
     ("macro_recursion_via_include", "{% macro m(n) %}{% if n > 0 %}{% include 'rec.j2' %}{% endif %}{{ n }}{% endmacro %}{{ m(3) }}", SCOPING),
     # a macro kept past the include that defined it: deliberate divergence
     ("include_defined_macro_escapes", "{% set ns = namespace(m=none) %}{% include 'inc_esc.j2' %}{{ ns.m() }}", SCOPING),
+    # imported modules own their context (docs/tasks/0167): with context, a snapshot of the
+    # importer's names at import time
+    ("import_with_context_ignores_call_site", "{% from 'mx.j2' import mx with context %}{% for x in [1, 2] %}{{ mx() }}{% endfor %}", MODULES),
+    ("import_with_context_snapshot", "{% set g = 1 %}{% import 'mg.j2' as l with context %}{% set g = 2 %}{{ l.m() }}", MODULES),
+    ("import_with_context_set_after_import", "{% import 'mg.j2' as l with context %}{% set g = 2 %}{{ l.m() }}", MODULES),
+    ("import_with_context_namespace_mutated", "{% set ns = namespace(a=1) %}{% import 'mns.j2' as l with context %}{% set ns.a = 2 %}{{ l.m() }}", MODULES),
+    ("import_with_context_namespace_reset", "{% set ns = namespace(a=1) %}{% import 'mns.j2' as l with context %}{% set ns = namespace(a=3) %}{{ l.m() }}", MODULES),
+    ("import_with_context_loop_target", "{% for i in [1, 2] %}{% import 'mi.j2' as l with context %}{{ l.m() }}{% endfor %}", MODULES),
+    ("import_with_context_module_level_reads", "{% set x = 5 %}{% import 'seen.j2' as l with context %}{% set x = 6 %}{{ l.m() }}{{ l.seen }}", MODULES),
+    ("import_in_loop_with_context", "{% for x in [1, 2] %}{% import 'lvl.j2' as l with context %}{{ l.m() }}{% endfor %}", MODULES),
+    ("from_import_twice_with_context", "{% set x = 1 %}{% from 'lvl.j2' import m as a with context %}{% set x = 2 %}{% from 'lvl.j2' import m as b with context %}{{ a() }}{{ b() }}", MODULES),
+    ("import_in_macro_with_context", "{% macro o(x) %}{% from 'mx.j2' import mx with context %}{{ mx() }}{% endmacro %}{{ o(7) }}", MODULES),
+    ("imported_macro_passed_to_imported_macro", "{% from 'apply.j2' import apply %}{% from 'mv.j2' import show %}{{ apply(show) }}", MODULES),
+    ("imported_macro_outlives_import_scope", "{% set ns = namespace(f=none) %}{% macro load() %}{% from 'mv.j2' import show %}{% set ns.f = show %}{% endmacro %}{{ load() }}{{ ns.f() }}", MODULES),
+    ("imported_macro_calls_sibling", "{% from 'msib.j2' import a %}{{ a() }}", MODULES),
+    ("module_level_set_from_macro", "{% import 'msib.j2' as l %}{{ l.r }}", MODULES),
+    ("module_stores_own_export", "{% import 'self_store.j2' as l %}{{ l.call_it() }}{{ l.ns.f() }}", MODULES),
 ]
