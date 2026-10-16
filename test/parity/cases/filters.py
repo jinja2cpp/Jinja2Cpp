@@ -181,6 +181,9 @@ CASES = [
     ("filter_kwargs_only", "{{ l|join(d=',') }}"),
     ("unknown_filter", "{{ x|nonexistent }}"),
     ("unknown_filter_unused_branch", "{% if false %}{{ x|nonexistent }}{% endif %}ok"),
+    # an unknown filter in code that never runs is still a load error in Jinja2 (docs/tasks/0190)
+    ("unknown_filter_in_uncalled_macro", "{% macro m() %}{{ x|nonexistent }}{% endmacro %}ok"),
+    ("unknown_filter_in_unused_default", "{% macro m(a=x|nonexistent) %}{{ a }}{% endmacro %}{{ m(1) }}"),
     ("filters_on_bool", "{{ true|int }}|{{ true|abs }}|{{ false|lower }}"),
     # equal items that cannot be ordered (task 0015)
     ("sort_equal_unorderable", "{{ [{'a': 1}, {'a': 1}]|sort|length }}|{{ [n, n]|sort|length }}"),

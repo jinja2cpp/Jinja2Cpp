@@ -12,3 +12,5 @@ filters.select_single_pass              output      0101 deliberate: a select/ma
 wide.filters.format_ascii_repr          platform    0035 the wide %a conversion to UTF-8 follows the C locale: lost on Linux, kept on macOS and MSVC
 wide.filters.tojson_escapes             output      0035 non-ASCII text of a wide template is lost converting to UTF-8 (C locale)
 wide.filters.urlencode_more             output      0035 non-ASCII text of a wide template is lost converting to UTF-8 (C locale)
+filters.unknown_filter_in_uncalled_macro accepts   0190 an unknown filter is reported when it runs, Jinja2 reports it when the template loads
+filters.unknown_filter_in_unused_default accepts   0190 an unknown filter is reported when it runs, Jinja2 reports it when the template loads
