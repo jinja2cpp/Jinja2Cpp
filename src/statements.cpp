@@ -1903,12 +1903,27 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
         return;
     }
 
+    // Without context the module sees nothing of the importer, so the render's imports of the
+    // template share it, as in Jinja2: its namespaces count across them
+    if (!m_withContext)
+    {
+        if (const auto* shared = callback.FindModule(tpl))
+        {
+            ImportNames(values, nodes, shared->Names());
+            return;
+        }
+    }
     // Owned by the render, so that its macros find their names wherever they are called
     auto& module = callback.AddModule(std::make_unique<ImportedModule>(values, m_withContext));
     VisitTemplateImpl<bool>(tpl, true, [&module](const auto& tplPtr) {
         module.Render(*tplPtr);
         return true;
     });
+    // Shared once complete: a module that imports itself recurses, as in Jinja2
+    if (!m_withContext)
+    {
+        callback.ShareModule(tpl, module);
+    }
     ImportNames(values, nodes, module.Names());
 }
 
@@ -1989,7 +2004,9 @@ MacroStatement::MacroStatement(NodeArena& nodes, std::string_view name, const Ma
     m_params = nodes.MakeSpan(arenaParams);
 
     (*m_attributes)["name"s] = name.empty() ? InternalValue() : InternalValue(std::string(name));
-    (*m_attributes)["arguments"s] = ListAdapter::CreateAdapter(std::move(arguments));
+    auto argumentNames = ListAdapter::CreateAdapter(std::move(arguments));
+    argumentNames.MarkAsTuple();
+    (*m_attributes)["arguments"s] = std::move(argumentNames);
 }
 
 struct MacroStatement::CallableBody

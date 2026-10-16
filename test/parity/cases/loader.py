@@ -45,6 +45,13 @@ MODULES = {"templates": {**T,
     "lvl.j2": "{% set y = x * 10 %}{% macro m() %}{{ y }}{% endmacro %}",
     "msib.j2": "{% macro k() %}H{% endmacro %}{% macro a() %}{{ k() }}{% endmacro %}{% set r = a() %}",
     "self_store.j2": "{% set ns = namespace(f=none) %}{% macro m() %}M{% endmacro %}{% set ns.f = m %}{% macro call_it() %}{{ ns.f() }}{% endmacro %}"}}
+MODULES2 = {"templates": {**T,
+    "cnt.j2": "{% set ns = namespace(n=0) %}{% macro inc() %}{% set ns.n = ns.n + 1 %}{{ ns.n }}{% endmacro %}",
+    "mloop.j2": "{% macro m() %}[{{ loop is defined }}]{% endmacro %}",
+    "mselfb.j2": "{% set v = 'mod' %}{% macro n(s) %}{{ s.b() }}{% endmacro %}",
+    "pbase.j2": "{% block x %}BX{% endblock %}{% block y %}BY{% endblock %}",
+    "mext.j2": "{% extends 'pbase.j2' %}{% block y %}{{ super() }}C{% endblock %}{% macro f() %}F{{ self.x() }}{% endmacro %}",
+    "msup.j2": "{% extends 'pbase.j2' %}{% block y %}{{ super() }}C{% endblock %}{% macro f() %}F{{ self.y() }}{% endmacro %}"}}
 CASES = [
     ("include", "{% include 'hello.j2' %}", L),
     ("include_context", "{% set x = 9 %}{% include 'uses_x.j2' %}", L),
@@ -222,4 +229,9 @@ CASES = [
     ("imported_macro_calls_sibling", "{% from 'msib.j2' import a %}{{ a() }}", MODULES),
     ("module_level_set_from_macro", "{% import 'msib.j2' as l %}{{ l.r }}", MODULES),
     ("module_stores_own_export", "{% import 'self_store.j2' as l %}{{ l.call_it() }}{{ l.ns.f() }}", MODULES),
+    ("import_twice_without_context_shares_module", "{% import 'cnt.j2' as a %}{% import 'cnt.j2' as b %}{{ a.inc() }}{{ a.inc() }}{{ b.inc() }}", MODULES2),
+    ("import_with_context_hides_loop", "{% for i in [1, 2] %}{% import 'mloop.j2' as l with context %}{{ l.m() }}{% endfor %}", MODULES2),
+    ("importer_block_via_self_in_imported_macro", "{% set v = 'main' %}{% block b %}[{{ v }}]{% endblock %}{% import 'mselfb.j2' as l %}{{ l.n(self) }}", MODULES2),
+    ("extending_module_self_parent_block", "{% import 'mext.j2' as l %}{{ l.f() }}", MODULES2),
+    ("extending_module_self_super_block", "{% import 'msup.j2' as l %}{{ l.f() }}", MODULES2),
 ]

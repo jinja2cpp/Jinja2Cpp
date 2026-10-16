@@ -649,6 +649,17 @@ private:
 
         TemplateSlots& Templates() override { return Loaded().templates; }
         ImportedModule& AddModule(std::unique_ptr<ImportedModule> module) override { return *Loaded().modules.emplace_back(std::move(module)); }
+        void ShareModule(const LoadTemplateResult& tpl, ImportedModule& module) override { Loaded().sharedModules.emplace_back(&tpl, &module); }
+        [[nodiscard]] ImportedModule* FindModule(const LoadTemplateResult& tpl) const override
+        {
+            if (!m_loaded)
+            {
+                return nullptr;
+            }
+            const auto& shared = m_loaded->sharedModules;
+            auto p = std::find_if(shared.begin(), shared.end(), [&tpl](const auto& entry) { return entry.first == &tpl; });
+            return p != shared.end() ? p->second : nullptr;
+        }
 
         [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
@@ -738,6 +749,9 @@ private:
             std::vector<std::pair<const void*, const LoadTemplateResult*>> bySite;
             // The modules the render imported, freed before the trees their macros run in
             std::vector<std::unique_ptr<ImportedModule>> modules;
+            // The modules imported without context, by the template they were made from. A
+            // render imports few templates, so a list beats hashing
+            std::vector<std::pair<const LoadTemplateResult*, ImportedModule*>> sharedModules;
         };
         // Made on the first lookup or handle, so a render that loads nothing does not pay for it
         LoadedTemplates& Loaded() const

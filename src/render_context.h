@@ -118,6 +118,11 @@ struct IRendererCallback : IComparable
     virtual TemplateSlots& Templates() = 0;
     // Keeps `module`, made by an `import`, until the render ends (docs/tasks/0167)
     virtual ImportedModule& AddModule(std::unique_ptr<ImportedModule> module) = 0;
+    // Lets the render's later imports of `tpl` without context share `module`, one of the
+    // render's that rendered `tpl` to its end, as Jinja2 shares it (FindModule)
+    virtual void ShareModule(const LoadTemplateResult& tpl, ImportedModule& module) = 0;
+    // The module of `tpl` imported without context earlier in this render; null when none
+    [[nodiscard]] virtual ImportedModule* FindModule(const LoadTemplateResult& tpl) const = 0;
 };
 
 // The slots where names were last found (docs/tasks/0100 idea 7). An entry holds the slot
@@ -732,7 +737,8 @@ public:
     // Adds to `names` each name this context sees in its scopes, frame views and external
     // scope (not the global and built-in ones, which every context shares), with the value a
     // lookup here finds: what a module imported "with context" sees (docs/tasks/0167; Jinja2's
-    // get_all() and the importer's locals). A shallow copy: a namespace changed later is seen
+    // get_all() and the importer's locals, which leave out `loop`). A shallow copy: a namespace
+    // changed later is seen
     void CollectVisibleNames(InternalValueMap& names) const
     {
         VisitScopes(
@@ -740,14 +746,17 @@ public:
             [&names](const InternalValueMap* scope, size_t /*depth*/) {
                 for (const auto& [name, value] : *scope)
                 {
-                    names.emplace(name, value);
+                    if (name != "loop")
+                    {
+                        names.emplace(name, value);
+                    }
                 }
                 return false;
             },
             [&names](const FrameView& view, size_t /*depth*/) {
                 for (size_t idx = 0; idx != view.names.size(); ++idx)
                 {
-                    if (view.slots[idx].IsBound())
+                    if (view.slots[idx].IsBound() && view.nodes.Text(view.names[idx].name) != "loop")
                     {
                         names.emplace(std::string(view.nodes.Text(view.names[idx].name)), static_cast<const InternalValue&>(view.slots[idx]));
                     }
@@ -1616,8 +1625,9 @@ public:
 
     // Runs `body(home, link, args...)` as a HomeCall would. The calls that switch nothing (the
     // common one, of a closure defined at its template's top level made at the top level of
-    // the context that defined it) only mark the site as running, inline; the others take a HomeCall out of line. The body and the arguments are passed by
-    // reference, so that the direct calls make nothing in memory
+    // the context that defined it) only mark the site as running, inline; the others take a
+    // HomeCall out of line. The body and the arguments are passed by reference, so that the
+    // direct calls make nothing in memory
     // `readsSlotsOnly`: the body makes no cached lookup by name (MacroStatement::ReadsSlotsOnly)
     template<typename Body, typename... Args>
     static void Run(const ClosureSite& site, RenderContext& caller, bool readsSlotsOnly, const Body& body, Args&... args)

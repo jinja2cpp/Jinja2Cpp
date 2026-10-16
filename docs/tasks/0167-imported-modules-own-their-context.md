@@ -30,5 +30,14 @@ section 10 point 6 (namespace mutated after import is seen, a re-`set` is not) p
 `ctest -R parity` passes; perf: html_autoescape and config_file improve, nothing else
 outside ±0.5%.
 
-**Next.** Modules imported in a loop live to the end of the render; if that ever matters,
-free them per pass.
+**As built.** Imports of one template without context share one module per render, as in
+Jinja2 (`loader.import_twice_without_context_shares_module`); Jinja2 also keeps that module
+across renders of the environment, which Jinja2C++ does not: each render makes its own.
+A with-context import makes a module of its own each time, as in Jinja2, and the importer's
+names are copied once per import, leaving out `loop`.
+
+**Next.** Modules live to the end of the render: a with-context import inside a loop keeps
+one module, and one O(visible names) snapshot, per pass (the 0167 verifier measured it
+growing linearly). If that ever matters, free a pass's modules when no export of theirs
+escaped. Gaps found on the way: 0194 (a block called through `self` reads its caller's
+names), 0195 (an imported module that extends a parent).
