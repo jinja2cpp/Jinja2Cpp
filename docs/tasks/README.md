@@ -109,7 +109,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0035](0035-locale-independent-string-conversion.md) | Convert between narrow and wide strings without the C locale | robustness | medium | open |
 | [0036](0036-non-string-mapping-keys.md) | Mapping keys that are not strings | parity | low | open |
 | [0037](0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups from 0016 | parity | medium | done |
-| [0038](0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | parity | medium | in-progress |
+| [0038](0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | parity | medium | done |
 | [0039](0039-float-values-print-widened.md) | C++ `float` values print with their widened digits | parity | low | open |
 | [0040](0040-parity-shared-files-serialise-merges.md) | Parity PRs collide in shared generated files | process | high | done |
 | [0041](0041-string-literal-escapes.md) | String literal escape sequences | parity | low | open |
@@ -141,7 +141,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0069](0069-public-header-defects.md) | Defects in the public headers | robustness | medium | done |
 | [0070](0070-cxx23-floor.md) | Drop C++14: C++17 floor, C++23 supported | standards | high | done |
 | [0071](0071-drop-nonstd.md) | Replace optional-lite, variant-lite and string-view-lite with `std::`; pin expected-lite | standards | high | done |
-| [0072](0072-value-api-2-0.md) | 2.0 API: `Value` accessors and `ToString` | release | high | open |
+| [0072](0072-value-api-2-0.md) | 2.0 API: `Value` accessors and `ToString` | release | high | done |
 | [0073](0073-template-api-2-0.md) | 2.0 API: `BasicTemplate<CharT>` | release | medium | done |
 | [0074](0074-template-env-api-2-0.md) | 2.0 API: `TemplateEnv` pimpl and `Settings` | release | medium | done |
 | [0075](0075-containers-reflection-api-2-0.md) | 2.0 API: containers, reflection, errors | release | medium | done |
@@ -186,7 +186,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0114](0114-reuse-fmt-for-formatting.md) | Lean on fmt for string building: `format`, `%`, numbers, concatenation | perf | medium | done |
 | [0115](0115-user-data-without-conversion.md) | Reading user data builds keys and copies lists | perf | medium | done |
 | [0116](0116-ascii-string-filters.md) | Case-mapping filters go through the Unicode path for ASCII text | perf | low | done |
-| [0117](0117-name-slots.md) | Resolve variable names to slots at Load | perf | high | blocked |
+| [0117](0117-name-slots.md) | Resolve variable names to slots at Load | perf | high | open |
 | [0118](0118-parse-tree-arena.md) | Allocate a template's parse tree from one arena | perf | high | done |
 | [0119](0119-realistic-bench-workloads.md) | Benchmark workloads people actually render | perf | medium | done |
 | [0120](0120-compare-cpp-engines.md) | Compare with other C++ template engines | perf | low | done |
@@ -226,7 +226,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0154](0154-per-item-loop-costs.md) | What each item of a loop over user data costs that Tera does not pay | perf | medium | done |
 | [0155](0155-from-import-same-name-twice.md) | `from ... import` of one name under two names | parity | low | done |
 | [0156](0156-call-block-on-non-macro.md) | A call block on an undefined name or a non-callable value | parity | low | done |
-| [0157](0157-agent-cost-and-models.md) | Agent spend goes to re-reading long threads, not to the model that runs them | agents | medium | in-progress |
+| [0157](0157-agent-cost-and-models.md) | Agent spend goes to re-reading long threads, not to the model that runs them | agents | medium | done |
 | [0158](0158-lookup-epoch-per-name.md) | A new name in a scope invalidates every cached lookup | perf | low | done |
 | [0159](0159-dictsort-pair-subscript.md) | The pairs of dictsort read as 2-tuples | parity | low | done |
 | [0160](0160-robin-hood-per-render-tables.md) | Per-render robin_hood tables the bench used to hide | perf | medium | done |
@@ -236,7 +236,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0164](0164-tiny-template-fixed-costs.md) | Tiny templates: the last places another engine is ahead | perf | low | open |
 | [0165](0165-macro-bodies-run-where-defined.md) | Macro and call bodies run where they were defined | parity | high | done |
 | [0166](0166-macro-defaults-per-call.md) | Macro defaults evaluated per call | parity | medium | done |
-| [0167](0167-imported-modules-own-their-context.md) | Imported modules own their context; imported macros run in their module | parity | medium | open |
+| [0167](0167-imported-modules-own-their-context.md) | Imported modules own their context; imported macros run in their module | parity | medium | done |
 | [0168](0168-idtracking-frame-entry-binding.md) | Bind a name the frame assigns at frame entry (Jinja2 idtracking) | parity | low | open |
 | [0169](0169-caller-without-call-block.md) | `caller()` without a call block raises | parity | low | open |
 | [0170](0170-dictsort-pair-tuple-semantics.md) | A dictsort pair still differs from a tuple in `in`, `==`, tests and truthiness | parity | low | done |
@@ -246,7 +246,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0174](0174-msvc-c4702-suppression.md) | `/wd4702` hides unreachable code in project code on MSVC | build | low | open |
 | [0175](0175-recursive-loop-filter-leftovers.md) | Recursive loop filter: the outer `loop` at depth > 0, and the legacy `recursive if` order | parity | low | open |
 | [0176](0176-tuple-identity-and-sort-case.md) | A dictsort pair has no identity, and sort folds case inside tuples | parity | low | done |
-| [0177](0177-filters-on-none.md) | Filters that accept None where Python raises | parity | low | open |
+| [0177](0177-filters-on-none.md) | Filters that accept None where Python raises | parity | low | done |
 | [0178](0178-arbitrary-precision-integers.md) | Integers of arbitrary size, as Python's `int` | parity | medium | open |
 | [0179](0179-caller-markup-eval-context.md) | Autoescape has a lexical and a runtime side | parity | low | open |
 | [0180](0180-markup-from-cpp.md) | Markup from C++ | api | low | open |
@@ -261,5 +261,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0189](0189-casefold-non-ascii.md) | Case-insensitive comparison folds only ASCII | parity | low | done |
 | [0190](0190-sameas-arity-unique-unhashable.md) | `sameas` takes any number of arguments, `unique` takes unhashable items | parity | low | open |
 | [0191](0191-objects-still-act-as-mappings.md) | namespace, cycler and joiner still act as mappings in a few places | parity | low | open |
-| [0192](0192-namespace-self-reference-leak.md) | A namespace that holds itself leaks | robustness | low | open |
+| [0192](0192-namespace-self-reference-leak.md) | A namespace that holds itself leaks | robustness | low | dropped |
 | [0193](0193-unknown-filter-at-load.md) | An unknown filter is a load error | parity | low | open |
+| [0194](0194-self-block-runs-in-its-template.md) | A block called through `self` runs in its own template | parity | low | open |
+| [0195](0195-imported-module-that-extends.md) | An imported module that extends a parent | parity | low | open |

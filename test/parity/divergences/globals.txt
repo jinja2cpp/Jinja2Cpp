@@ -1,7 +1,7 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the globals area (cases/globals.py).
 # Format and kinds: test/parity/README.md.
 
-globals.cycler_length                   accepts     0177 sequence filters render empty for a value that is not iterable (a cycler) instead of raising TypeError
+globals.cycler_length                   accepts     0191 sequence filters render empty for a value that is not iterable (a cycler) instead of raising TypeError
 globals.objects_equality                output      0191 cycler and namespace compare as maps (by items, not identity) and an empty namespace is falsy
 globals.namespace_tojson                accepts     0191 tojson serialises a namespace as a dict instead of raising TypeError
 globals.objects_attributes              output      0191 joiner has no sep attribute and the attr filter does not read namespace attributes

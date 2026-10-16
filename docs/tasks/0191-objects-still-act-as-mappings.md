@@ -25,7 +25,9 @@ The 0042 verifier found places that still treat them as the maps they are stored
 - A non-recursive `loop` is callable in Python (it raises when called) but not here
   (`statements.loop_callable`). `loop is mapping` is true here, false in Python.
 
-Sequence filters over an object (`cycler(1)|length`, `|first`) are 0177.
+- Sequence filters over an object: `cycler(1)|length` renders where Python raises
+  TypeError (`globals.cycler_length`). This was 0177's case, but 0177 closed without it, so
+  it moved here on 2026-10-16.
 
 **Approach.** Check `GetObjectClass()` at each site: tojson/pprint/items/dictsort/xmlattr,
 `AssignTo`, `BinaryMathOperation` on two maps (identity for objects), `ConvertToBool`.
