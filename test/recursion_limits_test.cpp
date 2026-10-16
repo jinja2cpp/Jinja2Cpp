@@ -258,12 +258,14 @@ TEST_F(RecursionLimitsTest, StackUseIsBounded)
 
 // range() reports its length without storing items, so a list built from a huge one asked
 // for terabytes up front and ASan aborted (fuzz finding, docs/tasks/0097). Sequences longer
-// than 2^31 now fail the render at once. Python raises MemoryError for most of these; it
+// than 2^26 now fail the render at once. Python raises MemoryError for most of these; it
 // keeps a sliced range lazy and rejects range + list and range * n with TypeError.
 TEST_F(RecursionLimitsTest, HugeSequencesFailFast)
 {
     const std::string templates[] = {
         "{{ range(9223372036854775807, -9223372036854775807, -922375807)|list }}",
+        "{{ range(775807, -92233720368547753372036854775803, -9223758807)|list }}",
+        "{{ range(2**26 + 1)|list }}",
         "{{ range(2**40)|map('abs')|list }}",
         "{{ range(2**40)|map(attribute='x')|list }}",
         "{{ range(2**40)|select('odd')|list }}",

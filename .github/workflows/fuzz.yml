@@ -1,10 +1,14 @@
 name: fuzz
 
-# libFuzzer with ASan and UBSan over the targets in fuzz/ (docs/tasks/0003, fuzz/README.md).
-# Pull requests that touch the engine: 5 minutes per target, starting from the corpus the
-# nightly run kept; a crash fails the job and its reproducer is uploaded. Nightly on master:
-# an hour per target, the minimized corpus saved to the Actions cache for the next runs, and
-# the differential check against Python Jinja2 over the render corpus (report only).
+# libFuzzer with ASan and UBSan over the targets in fuzz/ (docs/tasks/0003, fuzz/README.md),
+# in two modes (docs/tasks/0185):
+# - Pull requests that touch the engine replay the corpus the nightly run kept, plus the
+#   seeds, once per input and generate nothing new, so the verdict depends only on the
+#   change: a known input that now crashes fails the job and is uploaded.
+# - Nightly on master (and on demand on any branch) the fuzzer generates new inputs from that
+#   corpus for an hour per target; the minimized corpus is saved to the Actions cache for the
+#   next runs, and the differential check against Python Jinja2 runs over the render corpus
+#   (report only). A crash it finds fails that run, not a pull request.
 # Timeouts and out-of-memory inputs are reported, not failed: Jinja2C++ has no sandbox
 # limits, so a template may ask for unbounded work (range(10**9)).
 
@@ -39,7 +43,7 @@ jobs:
   fuzz:
     name: fuzz ${{ matrix.target }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 45 || 90 }}
 
     strategy:
       fail-fast: false
@@ -47,7 +51,8 @@ jobs:
         target: [parse, render, render_wide]
 
     env:
-      FUZZ_SECONDS: ${{ github.event_name == 'schedule' && '3600' || inputs.seconds || '300' }}
+      FUZZ_MODE: ${{ github.event_name == 'pull_request' && 'replay' || 'generate' }}
+      FUZZ_SECONDS: ${{ github.event_name == 'schedule' && '3600' || inputs.seconds || '600' }}
       # Keep the corpus only from runs on master, so pull requests never feed it
       SAVE_CORPUS: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/master' }}
 
@@ -87,7 +92,14 @@ jobs:
     - name: Add seeds
       run: python3 fuzz/make_corpus.py corpus
 
+    - name: Replay corpus
+      if: env.FUZZ_MODE == 'replay'
+      run: |
+        python3 fuzz/replay_corpus.py build/fuzz/jinja2cpp_fuzz_${{ matrix.target }} corpus \
+          --artifacts artifacts --log fuzz.log --summary "$GITHUB_STEP_SUMMARY"
+
     - name: Fuzz
+      if: env.FUZZ_MODE == 'generate'
       shell: bash
       run: |
         mkdir -p artifacts
