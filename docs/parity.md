@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (1654 templates rendered by both engines, see
+`test/parity/` (1679 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -21,23 +21,23 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | autoescape | 94 | 92 | 2 | 0 | 0 | 0 | 0 | 0 | 0179, 0182 |
 | custom | 28 | 28 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | errors | 85 | 80 | 0 | 0 | 5 | 0 | 0 | 0 | 0036, 0161, 0169 |
-| filters | 260 | 251 | 2 | 1 | 6 | 0 | 0 | 0 | 0101, 0177, 0178, 0190, 0193 |
-| fuzz | 33 | 27 | 0 | 1 | 5 | 0 | 0 | 0 | 0049, 0177 |
-| globals | 53 | 49 | 2 | 0 | 2 | 0 | 0 | 0 | 0177, 0191 |
+| filters | 261 | 255 | 2 | 1 | 3 | 0 | 0 | 0 | 0101, 0178, 0190, 0193 |
+| fuzz | 33 | 32 | 0 | 1 | 0 | 0 | 0 | 0 | 0049 |
+| globals | 54 | 50 | 2 | 0 | 2 | 0 | 0 | 0 | 0191 |
 | i18n | 53 | 53 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | literals | 68 | 65 | 2 | 1 | 0 | 0 | 0 | 0 | 0015, 0036, 0041 |
-| loader | 112 | 109 | 3 | 0 | 0 | 0 | 0 | 0 | 0143, 0165 |
+| loader | 132 | 126 | 4 | 2 | 0 | 0 | 0 | 0 | 0143, 0165, 0194, 0195 |
 | methods | 92 | 90 | 2 | 0 | 0 | 0 | 0 | 0 | 0049 |
 | operators | 116 | 113 | 0 | 3 | 0 | 0 | 0 | 0 | 0015 |
 | options | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| output | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
+| output | 36 | 36 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | sequences | 47 | 47 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| statements | 307 | 295 | 9 | 0 | 3 | 0 | 0 | 0 | 0156, 0165, 0168, 0175, 0188, 0191 |
+| statements | 309 | 297 | 9 | 0 | 3 | 0 | 0 | 0 | 0156, 0165, 0168, 0175, 0188, 0191 |
 | subscripts | 39 | 39 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | tests | 41 | 40 | 0 | 0 | 1 | 0 | 0 | 0 | 0190 |
 | undefined | 106 | 106 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | whitespace | 50 | 49 | 1 | 0 | 0 | 0 | 0 | 0 | 0044 |
-| **total** | **1654** | **1603** | **23** | **6** | **22** | **0** | **0** | **0** | |
+| **total** | **1679** | **1633** | **24** | **8** | **14** | **0** | **0** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -391,7 +391,7 @@ error is compared, not the message or the line.
 | `jinja2.meta.find_undeclared_variables` | none (`GetMetadata` reads a C++-specific `meta` block) | ❌ | |
 | Sandbox | ➖ no Python object access to sandbox | ➖ | |
 | Async rendering | ➖ | ➖ | |
-| Wide strings | `TemplateW`; the corpus runs every case through it too (`ParityWide`), with narrow/wide conversion still locale-dependent | 🟡 | 0035 |
+| Wide strings | `TemplateW`; the corpus runs every case through it too (`ParityWide`), with narrow/wide conversion by a built-in UTF-8 codec, independent of the C locale | ✅ | 0035 |
 | Error position (file, line, column) | `ErrorInfo` | ✅ messages differ from Jinja2 | |
 
 ## Keeping this map current

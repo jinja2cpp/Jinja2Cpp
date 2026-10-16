@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: robustness
 touches: [include/jinja2cpp/string_helpers.h]
@@ -32,7 +32,7 @@ values through `Template`, with no `setlocale` call, and gets the text back; the
 suite can pass narrow context values to the wide run (test/parity/parity_test.cpp,
 `RenderCpp`) with no new `wide.` divergences.
 
-**Outcome.** `ConvertString` (and `ToString`/`ToWString`) now use a built-in UTF-8 <->
+**Done** in #523. `ConvertString` (and `ToString`/`ToWString`) now use a built-in UTF-8 <->
 UTF-16/UTF-32 codec in string_helpers.h. Ill-formed UTF-8 becomes one U+FFFD per maximal
 subpart, as Python's `decode('utf-8', 'replace')`; a lone surrogate or out-of-range
 `wchar_t` becomes U+FFFD. The parity suite's wide run now passes narrow (UTF-8) context
