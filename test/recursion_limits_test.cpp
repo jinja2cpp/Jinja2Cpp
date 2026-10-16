@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <string>
+#include <utility>
 
 #if defined(__linux__) || defined(__APPLE__)
 #include <pthread.h>
@@ -347,3 +348,41 @@ TEST_F(RecursionLimitsTest, SmallThreadStack)
     }
 }
 #endif
+
+// A loop nests a value as deep as it iterates (docs/tasks/0093). Destroying such a value
+// recursed once per level and overflowed the stack; walks over it (printing, tojson, pprint,
+// ==) still recurse, but stop with RecursionLimitExceeded like Python's RecursionError.
+TEST_F(RecursionLimitsTest, DeepValues)
+{
+    const std::string lists = "{% set ns = namespace(v=[], w=[]) %}{% for i in range(100000) %}{% set ns.v = [ns.v] %}{% set ns.w = [ns.w] %}{% endfor %}";
+    const std::string dicts = "{% set ns = namespace(v={}, w={}) %}{% for i in range(100000) %}{% set ns.v = {'a': ns.v} %}{% set ns.w = {'a': ns.w} %}{% endfor %}";
+    // Python compares an item with itself as equal without looking into it
+    const std::pair<std::string, std::string> renders[] = {
+        { lists + "{{ ns.v|length }} {{ ns.v == ns.v + [] }} {{ ns.v != ns.v + [] }} {{ ns.v < ns.v + [] }} {{ ns.v <= ns.v + [] }}", "1 True False False True" },
+        { dicts + "{{ ns.v|length }} {{ ns.v == {'a': ns.v.a} }}", "1 True" },
+    };
+    for (const auto& [source, expected] : renders)
+    {
+        Template tpl(&m_env);
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source.substr(source.size() - 30);
+        auto result = tpl.RenderAsString({});
+        ASSERT_TRUE(result.has_value()) << source.substr(source.size() - 30) << ": " << result.error().ToString();
+        EXPECT_EQ(expected, result.value());
+    }
+    const std::string walks[] = {
+        lists + "{{ ns.v }}",
+        lists + "{{ ns.v|tojson }}",
+        lists + "{{ ns.v|pprint }}",
+        lists + "{{ ns.v < ns.w }}",
+        dicts + "{{ ns.v }}",
+        dicts + "{{ ns.v == ns.w }}",
+    };
+    for (const auto& source : walks)
+    {
+        Template tpl(&m_env);
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source.substr(source.size() - 30);
+        auto result = tpl.RenderAsString({});
+        ASSERT_FALSE(result.has_value()) << source.substr(source.size() - 30);
+        EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode()) << source.substr(source.size() - 30);
+    }
+}
