@@ -31,7 +31,7 @@ the value is neither undefined nor of the expected kind. Check the unit tables
 (`src/internal_value.h`, `src/internal_value.cpp`) lost its last caller in 0052 (`join`
 now follows Jinja2's attribute paths); delete it with this task's PR.
 
-**Done.** `first`, `last`, `length`/`count`, `random`, `reverse`, `sum`, `min`, `max`,
+**Done** in #519. `first`, `last`, `length`/`count`, `random`, `reverse`, `sum`, `min`, `max`,
 `sort`, `list`, `groupby`, `map(attribute=)` and `join` raise Python's TypeError text for
 None, bools, numbers and callables (`IsNotIterable` in `src/filters.cpp`); `dictsort`
 raises the AttributeError for any non-mapping and `indent` for any non-string. `map`, `select`
