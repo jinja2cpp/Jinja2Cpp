@@ -11,6 +11,7 @@ Python Jinja2.
 | `fuzz_parse.cpp` | `jinja2cpp_fuzz_parse`: `Template::Load` only, as a reload over a good template that must still render when the input is rejected |
 | `fuzz_render.cpp` | `jinja2cpp_fuzz_render`: load and render, with includes, imports and extends of support templates and of the input itself |
 | `fuzz_render_wide.cpp` | `jinja2cpp_fuzz_render_wide`: the same through `TemplateW` (input decoded as UTF-8) |
+| `replay_corpus.py` | Runs a libFuzzer target once over a corpus, carrying on past timeouts and crashes (the pull-request mode) |
 | `replay_main.cpp` | `jinja2cpp_fuzz_replay`: runs all targets over files without libFuzzer (any compiler); `--json` prints render outcomes |
 | `regressions/` | One input per crash ever found; ctest `jinja2cpp_fuzz_regressions` replays them in every CI build |
 | `make_corpus.py` | Seed corpus: parity cases, unit-test template literals, `test/test_data`, `regressions/` |
@@ -61,7 +62,20 @@ skipped. A divergence worth keeping becomes a parity case (`test/parity/cases/`)
 
 ## Continuous fuzzing
 
-`.github/workflows/fuzz.yml` runs every target for 5 minutes on pull requests that touch the
-engine, and for an hour every night on master, where it also keeps the corpus in the
-Actions cache and runs the differential check (report only). A crash fails the job and its
-reproducer is uploaded as an artifact.
+`.github/workflows/fuzz.yml` runs in two modes (docs/tasks/0185):
+
+- **Replay**, on pull requests that touch the engine: each target runs once over every
+  input of the corpus the nightly run kept, plus the seeds (`replay_corpus.py`), and
+  generates nothing new. The same corpus gives the same verdict, so the job fails only
+  when the change makes a known input crash or leak; that input is uploaded as an artifact.
+- **Generate**, every night on master and on demand (`workflow_dispatch`, any branch): the
+  fuzzer mutates the corpus for an hour per target, keeps the minimized corpus in the
+  Actions cache for the next runs, and runs the differential check (report only). A crash
+  it finds fails that run and uploads its reproducer; fix it or file it as a task, and add
+  the input to `regressions/`, which every build replays.
+
+Replay the corpus locally the way a pull request does:
+
+```bash
+python3 fuzz/replay_corpus.py build-fuzz/fuzz/jinja2cpp_fuzz_render corpus/render
+```

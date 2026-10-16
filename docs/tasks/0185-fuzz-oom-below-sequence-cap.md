@@ -1,9 +1,9 @@
 ---
-status: open
+status: done
 priority: medium
 area: robustness
 depends: [0097]
-touches: [src/internal_value.h#MaxSequenceSize, .github/workflows/fuzz.yml]
+touches: [src/internal_value.h#MaxSequenceSize, .github/workflows/fuzz.yml, fuzz/replay_corpus.py]
 ---
 # The fuzz job fails on lists below the sequence cap
 
@@ -22,3 +22,10 @@ opt-in `Settings` limits and set a low one in the fuzz targets. Add the input ab
 
 **Done when.** The input above fails the render with the "too long" error instead of
 allocating, and it replays in `jinja2cpp_fuzz_regressions`.
+
+**Resolution.** `MaxSequenceSize` is now 2^26, so the input above fails with "too long" and
+replays from `fuzz/regressions/range-list-below-old-cap.j2`. Ruslan also split the fuzz
+workflow in two (2026-10-16): pull requests replay the kept corpus once per input with no
+new generation (`fuzz/replay_corpus.py`), so a PR goes red only when its change crashes a
+known input; generation runs nightly and on demand, where a new finding fails that run
+instead of an unrelated PR. The opt-in limits in 0097 are still open.

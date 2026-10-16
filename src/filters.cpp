@@ -164,6 +164,28 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
     throw std::runtime_error(message);
 }
 
+// Jinja2's filters iterate their input: None, a bool, a number or a callable is not
+// iterable. An undefined is left to the caller, which follows its undefined policy
+bool IsNotIterable(const InternalValue& val)
+{
+    switch (val.Kind())
+    {
+    case ValueKind::None:
+    case ValueKind::Bool:
+    case ValueKind::Int:
+    case ValueKind::Double:
+    case ValueKind::Callable:
+        return true;
+    default:
+        return false;
+    }
+}
+
+[[noreturn]] void ThrowNotIterable(const InternalValue& val)
+{
+    throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(val) + "' object is not iterable");
+}
+
 // Jinja2's make_multi_attrgetter: "a,b.c" sorts by the list [item.a, item.b.c]
 std::vector<InternalValueList> SortKeyPaths(const InternalValue& attrName)
 {
@@ -209,10 +231,10 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
 
     if (!isConverted)
     {
-        // Python's str.join iterates its argument: a number, a bool or None is a TypeError
-        if (GetIf<int64_t>(&baseVal) || GetIf<double>(&baseVal) || GetIf<bool>(&baseVal) || baseVal.IsNone())
+        // Python's str.join iterates its argument
+        if (IsNotIterable(baseVal))
         {
-            throw std::runtime_error(std::string("'") + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object is not iterable");
+            ThrowNotIterable(baseVal);
         }
         return InternalValue();
     }
@@ -283,6 +305,10 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     ListAdapter origValues = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
     {
+        if (IsNotIterable(baseVal))
+        {
+            ThrowNotIterable(baseVal);
+        }
         return InternalValue();
     }
     InternalValueList values = origValues.ToValueList();
@@ -405,6 +431,11 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     auto map = AsMap(baseVal);
     if (!map)
     {
+        // Python calls value.items(), which only a mapping has
+        if (!baseVal.IsUndefined())
+        {
+            throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object has no attribute 'items'");
+        }
         return InternalValue();
     }
 
@@ -464,11 +495,7 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
         SortItem item{ &entry, std::string() };
         if (lowerKeys)
         {
-            const auto& key = entry.key;
-            item.sortKey.reserve(key.size());
-            std::transform(key.begin(), key.end(), std::back_inserter(item.sortKey), [](char ch) {
-                return ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch;
-            });
+            detail::LowerUtf8(entry.key, item.sortKey);
         }
         tempVector.push_back(std::move(item));
     }
@@ -511,6 +538,10 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
 
     if (!isConverted)
     {
+        if (IsNotIterable(baseVal))
+        {
+            ThrowNotIterable(baseVal);
+        }
         return InternalValue();
     }
 
@@ -643,6 +674,15 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         auto list = ConvertToList(baseVal, isConverted, false);
         if (!isConverted)
         {
+            if (IsNotIterable(baseVal))
+            {
+                // Jinja2 starts with `if value:`, so None, False and 0 give nothing
+                if (!ConvertToBool(baseVal))
+                {
+                    return ListAdapter::CreateAdapter(InternalValueList());
+                }
+                ThrowNotIterable(baseVal);
+            }
             return InternalValue();
         }
 
@@ -679,7 +719,12 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
     auto list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
     {
-        throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object is not iterable");
+        // Jinja2 starts with `if value:`, so None, False and 0 give nothing
+        if (!ConvertToBool(baseVal))
+        {
+            return ListAdapter::CreateAdapter(InternalValueList());
+        }
+        ThrowNotIterable(baseVal);
     }
 
     InternalValueList resultList;
@@ -988,6 +1033,23 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         {
             return MakeUndefinedWithHint(context, "No aggregated item, sequence was empty.");
         }
+        if (IsNotIterable(baseVal))
+        {
+            // length and random take len(), last reverses and reverse falls back to list()
+            const std::string typeName = Apply<visitors::PythonTypeNameGetter>(baseVal);
+            switch (m_mode)
+            {
+            case LengthMode:
+            case RandomMode:
+                throw std::runtime_error("object of type '" + typeName + "' has no len()");
+            case LastItemMode:
+                throw std::runtime_error("'" + typeName + "' object is not reversible");
+            case ReverseMode:
+                throw std::runtime_error("argument must be iterable");
+            default:
+                ThrowNotIterable(baseVal);
+            }
+        }
         return {};
     }
 
@@ -1072,7 +1134,7 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
     ListAdapter list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
     {
-        throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object is not iterable");
+        ThrowNotIterable(baseVal);
     }
 
     auto protectedValue = [&baseVal](InternalValue value) {
@@ -1131,7 +1193,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
     auto list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
     {
-        throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object is not iterable");
+        ThrowNotIterable(baseVal);
     }
 
     auto protectedValue = [&baseVal](InternalValue value) {
@@ -1224,7 +1286,12 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
     auto list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
     {
-        throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object is not iterable");
+        // Jinja2 starts with `if value:`, so None, False and 0 give nothing
+        if (!ConvertToBool(baseVal))
+        {
+            return ListAdapter::CreateAdapter(InternalValueList());
+        }
+        ThrowNotIterable(baseVal);
     }
 
     InternalValueList resultList;
@@ -1552,6 +1619,10 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         if (m_params.mode != ValueConverter::ToListMode)
         {
             return InternalValue();
+        }
+        if (const char* objectClass = val.GetObjectClass())
+        {
+            throw std::runtime_error("'"s + objectClass + "' object is not iterable");
         }
 
         auto keys = val.GetKeys();
@@ -2383,6 +2454,10 @@ InternalValue ValueConverter::Filter(const InternalValue& baseVal, RenderContext
         {
             bool isConverted = false;
             return ListAdapter(ConvertToList(baseVal, isConverted));
+        }
+        if (IsNotIterable(baseVal))
+        {
+            ThrowNotIterable(baseVal);
         }
         break;
     }

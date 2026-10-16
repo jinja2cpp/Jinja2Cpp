@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -1895,6 +1896,17 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         }
         CheckStrictUndefined(*undef);
     }
+    else if (m_mode == IndentMode && !IsStringValue(baseVal))
+    {
+        // indent appends "\n" to its value before any str() call: only a string takes it,
+        // and a list that does has no splitlines()
+        const std::string typeName = Apply<visitors::PythonTypeNameGetter>(baseVal);
+        if (baseVal.Kind() == ValueKind::List)
+        {
+            throw std::runtime_error("'" + typeName + "' object has no attribute 'splitlines'");
+        }
+        throw std::runtime_error("unsupported operand type(s) for +=: '" + typeName + "' and 'str'");
+    }
     switch (m_mode)
     {
     case SafeMode:
@@ -1958,3 +1970,59 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
 }
 
 } // namespace jinja2::filters
+
+namespace jinja2::detail
+{
+namespace
+{
+// The code points of str.lower(), final sigma included
+template<typename CharT>
+std::vector<uint32_t> LowerCodePoints(std::basic_string_view<CharT> str)
+{
+    const filters::CaseChars<CharT> chars(str);
+    std::vector<uint32_t> result;
+    result.reserve(chars.cps.size());
+    for (size_t idx = 0; idx != chars.cps.size(); ++idx)
+    {
+        if (chars.cps[idx] == 0x3A3)
+        {
+            result.push_back(filters::IsFinalSigma(chars.cps, 0, chars.cps.size(), idx) ? 0x3C2U : 0x3C3U);
+            continue;
+        }
+        uint32_t mapped[3];
+        const auto count = unicode::ToLower(chars.cps[idx], mapped);
+        result.insert(result.end(), std::begin(mapped), std::begin(mapped) + static_cast<std::ptrdiff_t>(count));
+    }
+    return result;
+}
+
+template<typename CharT>
+int CompareLower(std::basic_string_view<CharT> left, std::basic_string_view<CharT> right)
+{
+    const auto l = LowerCodePoints(left);
+    const auto r = LowerCodePoints(right);
+    if (l == r)
+    {
+        return 0;
+    }
+    return std::lexicographical_compare(l.begin(), l.end(), r.begin(), r.end()) ? -1 : 1;
+}
+} // namespace
+
+void LowerUtf8Unicode(std::string_view str, std::string& out)
+{
+    out.clear();
+    const filters::CaseChars<char> chars(str);
+    filters::AppendLower(out, chars, 0, 0, chars.cps.size());
+}
+
+int CompareLowerUnicode(std::string_view left, std::string_view right)
+{
+    return CompareLower(left, right);
+}
+
+int CompareLowerUnicode(std::wstring_view left, std::wstring_view right)
+{
+    return CompareLower(left, right);
+}
+} // namespace jinja2::detail

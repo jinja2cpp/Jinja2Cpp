@@ -1,10 +1,6 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the statements area (cases/statements.py).
 # Format and kinds: test/parity/README.md.
 
-statements.macro_default_reassigned_global output    0166 a default that names no argument is evaluated at definition time
-statements.namespace_is_mapping         output      0042 namespace() is a mapping, not an opaque object
-statements.namespace_iterate            accepts     0042 namespace() is a mapping, not an opaque object
-statements.namespace_print              output      0042 namespace() is a mapping, not an opaque object
 statements.call_block_dict              accepts     0156 deliberate: Jinja2 cannot join the dict a call block returns (TypeError); Jinja2C++ prints it
 statements.idtracking_inner_read_before_outer_set output      0168 a name the frame assigns later resolves outward on read; Jinja2 binds it at frame entry
 statements.loop_cycle_stored_called_later output   0188 a stored loop.cycle is bound to the position it was read at, Jinja2's follows the loop
@@ -14,3 +10,6 @@ statements.macro_escapes_its_loop      output      0165 deliberate: a closure ca
 statements.nested_macro_escapes_its_call output    0165 deliberate: a macro that outlives the macro call defining it reads that call's names as undefined
 statements.macro_root_name_set_after_call output   0168 a name the template sets after the call resolves outward on read; Jinja2 binds it at frame entry
 statements.macro_loop_name_set_after_call output   0168 a name the loop body sets after the call resolves outward on read; Jinja2 binds it at frame entry
+statements.namespace_unpack             accepts     0191 tuple assignment unpacks a namespace by name instead of raising TypeError
+statements.loop_callable                output      0191 a non-recursive loop object has no call, so it does not test as callable
+statements.default_root_name_set_after_context output 0168 a name the template sets after the call resolves outward on read; Jinja2 binds it at frame entry

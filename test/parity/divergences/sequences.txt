@@ -1,4 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the sequences area (cases/sequences.py).
 # Format and kinds: test/parity/README.md.
 
-sequences.casefold_non_ascii           output      0189 case-insensitive compare folds only ASCII, Python's lower() folds every letter
+wide.sequences.casefold_dictsort        output      0035 non-ASCII dict literal keys of a wide template are lost converting to UTF-8 (C locale)

@@ -1753,11 +1753,9 @@ void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
     });
 }
 
-// Renders `tpl` for `include` or `import`. `exportNames`: copy the names the template sets at
-// its top level into the caller's current scope. Import collects a module this way; include
-// must not leak them
+// Renders `tpl` for `include`: the names it sets stay its own
 template<typename CharT>
-void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, bool exportNames, OutStream& os, RenderContext& values)
+void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values)
 {
     RenderContext innerContext = values.Clone(withContext);
     if (withContext)
@@ -1767,18 +1765,6 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, bo
 
     innerContext.SetNodes(tpl.Nodes());
     innerContext.Nodes()[tpl.GetRenderer()].Render(os, innerContext);
-    if (withContext && exportNames)
-    {
-        auto innerScope = innerContext.TakeCurrentScope();
-        auto scope = values.GetCurrentScope();
-        for (auto& [name, value] : innerScope)
-        {
-            if (name != "self")
-            {
-                scope[name] = std::move(value);
-            }
-        }
-    }
 }
 
 void IncludeStatement::Render(OutStream& os, RenderContext& values)
@@ -1787,7 +1773,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
         try
         {
             return VisitTemplateImpl<bool>(tpl, true, [this, &values, &os](const auto& tplPtr) {
-                RenderIncludedTemplate(*tplPtr, m_withContext, false, os, values);
+                RenderIncludedTemplate(*tplPtr, m_withContext, os, values);
                 return true;
             });
         }
@@ -1868,56 +1854,39 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     }
 }
 
-class ImportedMacroRenderer final : public IRendererBase
+namespace
 {
-public:
-    // The render keeps the module's template alive, and with it the statements behind the
-    // imported macros, even when the environment does not cache the template
-    ImportedMacroRenderer(InternalValueMap&& map, bool withContext, BlocksStack&& moduleBlocks)
-        : m_importedContext(std::move(map))
-        , m_withContext(withContext)
-        , m_moduleBlocks(std::move(moduleBlocks))
+// The names an imported module sees: what `importer` sees now, with `withContext`
+InternalValueMap ImporterNames(const RenderContext& importer, bool withContext)
+{
+    InternalValueMap names;
+    if (withContext)
     {
+        importer.CollectVisibleNames(names);
     }
+    return names;
+}
+} // namespace
 
-    void Render(OutStream& /*os*/, RenderContext& /*values*/) override {}
+ImportedModule::ImportedModule(const RenderContext& importer, bool withContext)
+    : m_importerNames(ImporterNames(importer, withContext))
+    , m_context(importer.CloneWith(m_importerNames))
+{
+}
 
-    void InvokeMacro(const Callable& callable, const CallParams& params, OutStream& stream, RenderContext& context)
-    {
-        auto ctx = context.Clone(m_withContext);
-        ctx.BindScope(&m_importedContext);
-        // The macro runs in the template that defines it: its `self` is that template
-        TemplateFrame frame;
-        frame.blocks = &m_moduleBlocks;
-        frame.baseDepth = ctx.GetScopesCount();
-        const TemplateFrameGuard frameGuard(ctx, &frame);
-        callable.GetStatementCallable()(params, stream, ctx);
-    }
-
-    static void InvokeMacro(const std::string& contextName, const Callable& callable, const CallParams& params, OutStream& stream, RenderContext& context)
-    {
-        const auto contextVal = context.FindValue(contextName);
-        if (!contextVal)
-        {
-            return;
-        }
-
-        const auto* rendererPtr = GetIf<RendererPtr>(&*contextVal);
-        if (!rendererPtr)
-        {
-            return;
-        }
-
-        auto* renderer = static_cast<ImportedMacroRenderer*>(rendererPtr->get());
-        renderer->InvokeMacro(callable, params, stream, context);
-    }
-
-private:
-    InternalValueMap m_importedContext;
-    bool m_withContext{};
-    // The blocks of the module
-    BlocksStack m_moduleBlocks;
-};
+template<typename Tpl>
+void ImportedModule::Render(const Tpl& tpl)
+{
+    auto& callback = *m_context.GetRendererCallback();
+    // The module's macros run in its template, whose blocks their `self` has
+    tpl.Nodes()[tpl.GetRenderer()].PushBlocks(callback, tpl.Nodes(), m_blocks);
+    m_frame.blocks = &m_blocks;
+    m_frame.baseDepth = m_context.GetScopesCount();
+    m_context.SetTemplateFrame(&m_frame);
+    m_context.SetNodes(tpl.Nodes());
+    // Only the names the template defines are imported, its output is dropped
+    RenderToString(&callback, [this, &tpl](OutStream& stream) { m_context.Nodes()[tpl.GetRenderer()].Render(stream, m_context); });
+}
 
 void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
@@ -1926,99 +1895,80 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     auto name = nodes[m_nameExpr].Evaluate(values);
 
     // Resolved on every render: the name may change between renders or loop iterations
-    const auto& tpl = values.GetRendererCallback()->LoadTemplate(name);
+    auto& callback = *values.GetRendererCallback();
+    const auto& tpl = callback.LoadTemplate(name);
     // Throws if the template failed to load
     if (!VisitTemplateImpl<bool>(tpl, true, [](const auto& /*tplPtr*/) { return true; }))
     {
         return;
     }
 
-    std::string scopeName;
+    // Without context the module sees nothing of the importer, so the render's imports of the
+    // template share it, as in Jinja2: its namespaces count across them
+    if (!m_withContext)
     {
-        TargetString tsScopeName = values.GetRendererCallback()->GetAsTargetString(name);
-        scopeName = "$$_imported_" + GetAsSameString(scopeName, tsScopeName).value_or(std::string());
+        if (const auto* shared = callback.FindModule(tpl))
+        {
+            ImportNames(values, nodes, shared->Names());
+            return;
+        }
     }
-
-    RenderContext newContext = values.Clone(m_withContext);
-    newContext.EnterScope();
-    // Only the names the template defines are imported, its output is dropped
-    RenderToString(values.GetRendererCallback(), [&](OutStream& stream) {
-        VisitTemplateImpl<bool>(tpl, true, [&](const auto& tplPtr) {
-            RenderIncludedTemplate(*tplPtr, true, true, stream, newContext);
-            return true;
-        });
-    });
-    InternalValueMap importedScope = newContext.TakeCurrentScope();
-
-    BlocksStack moduleBlocks;
-    auto& callback = *values.GetRendererCallback();
-    VisitTemplateImpl<bool>(tpl, true, [&moduleBlocks, &callback](const auto& tplPtr) {
-        tplPtr->Nodes()[tplPtr->GetRenderer()].PushBlocks(callback, tplPtr->Nodes(), moduleBlocks);
+    // Owned by the render, so that its macros find their names wherever they are called
+    auto& module = callback.AddModule(std::make_unique<ImportedModule>(values, m_withContext));
+    VisitTemplateImpl<bool>(tpl, true, [&module](const auto& tplPtr) {
+        module.Render(*tplPtr);
         return true;
     });
-
-    ImportNames(values, nodes, importedScope, scopeName);
-    values.GetCurrentScope()[scopeName] =
-        std::static_pointer_cast<IRendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext, std::move(moduleBlocks)));
+    // Shared once complete: a module that imports itself recurses, as in Jinja2
+    if (!m_withContext)
+    {
+        callback.ShareModule(tpl, module);
+    }
+    ImportNames(values, nodes, module.Names());
 }
 
 namespace
 {
-// What importing `value` gives: a macro wrapped to run in its module, any other value as it
-// is; none for another callable
-std::optional<InternalValue> ImportedValue(const InternalValue& value, const std::string& scopeName)
+// Whether importing `value` gives it: a macro, which runs in its module wherever it is called
+// (ClosureSite), and any value but another callable
+bool IsImported(const InternalValue& value)
 {
     const auto* callable = GetIf<Callable>(&value);
     if (!callable)
     {
-        return value;
+        return true;
     }
-    if (callable->GetKind() != Callable::Macro)
-    {
-        return std::nullopt;
-    }
-    auto attributes = callable->GetAttributes();
-    Callable wrapper(Callable::Macro, [fn = *callable, scopeName](const CallParams& params, OutStream& stream, RenderContext& context) {
-        ImportedMacroRenderer::InvokeMacro(scopeName, fn, params, stream, context);
-    });
-    wrapper.SetAttributes(std::move(attributes));
-    return InternalValue(std::move(wrapper));
+    return callable->GetKind() == Callable::Macro;
 }
 } // namespace
 
-// Copies: the module keeps every name, which its own macros read through the bound scope
-void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes, const InternalValueMap& importedScope, const std::string& scopeName) const
+// Copies: the module keeps every name, which its own macros read in its context
+void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes, const InternalValueMap& moduleNames) const
 {
     if (m_namespace.empty())
     {
         auto scope = values.GetCurrentScope();
         for (const auto& name : nodes[m_namesToImport])
         {
-            const auto p = importedScope.find(HashedName{ nodes.Text(name.name), name.nameHash });
-            if (p == importedScope.end())
+            const auto p = moduleNames.find(HashedName{ nodes.Text(name.name), name.nameHash });
+            if (p == moduleNames.end() || p->first == "self" || !IsImported(p->second))
             {
                 continue;
             }
-            if (auto imported = ImportedValue(p->second, scopeName))
-            {
-                scope.ForName({ nodes.Text(name.alias), name.aliasHash }) = std::move(*imported);
-            }
+            scope.ForName({ nodes.Text(name.alias), name.aliasHash }) = p->second;
         }
         return;
     }
 
     InternalValueMap importedNs;
-    for (const auto& [name, value] : importedScope)
+    for (const auto& [name, value] : moduleNames)
     {
         // Jinja2 exports no name that starts with an underline
-        if (name.empty() || name[0] == '_')
+        if (name.empty() || name[0] == '_' || name == "self" || !IsImported(value))
         {
             continue;
         }
-        if (auto imported = ImportedValue(value, scopeName))
-        {
-            importedNs[name] = std::move(*imported);
-        }
+        importedNs[name] = value;
     }
     values.GetCurrentScope().ForName({ nodes.Text(m_namespace), m_namespaceHash }) = CreateMapAdapter(std::move(importedNs));
 }
@@ -2054,13 +2004,14 @@ MacroStatement::MacroStatement(NodeArena& nodes, std::string_view name, const Ma
     m_params = nodes.MakeSpan(arenaParams);
 
     (*m_attributes)["name"s] = name.empty() ? InternalValue() : InternalValue(std::string(name));
-    (*m_attributes)["arguments"s] = ListAdapter::CreateAdapter(std::move(arguments));
+    auto argumentNames = ListAdapter::CreateAdapter(std::move(arguments));
+    argumentNames.MarkAsTuple();
+    (*m_attributes)["arguments"s] = std::move(argumentNames);
 }
 
 struct MacroStatement::CallableBody
 {
     const MacroStatement* macro;
-    std::vector<MacroDefault> defaults;
     ArenaView nodes;
     bool autoescape;
     // The body resolves its names where the macro is defined, not through its caller
@@ -2079,29 +2030,15 @@ struct MacroStatement::CallableBody
         // A macro called from another template (imported, or passed as `caller`) runs in its own tree
         const ArenaSwitch nodesSwitch(home, nodes);
         AutoescapeGuard autoescapeGuard(home, autoescape);
-        macro->InvokeMacroRenderer(defaults, callParams, stream, home, link);
+        macro->InvokeMacroRenderer(callParams, stream, home, link);
     }
 };
 
 Callable MacroStatement::MakeCallable(RenderContext& values) const
 {
-    // A copy of the view: evaluating a default may switch the context's
-    const auto nodes = values.Nodes();
-    const auto params = nodes[m_params];
-    std::vector<MacroDefault> definedDefaults(params.size());
-    for (std::size_t idx = 0; idx < params.size(); ++idx)
-    {
-        const auto& p = params[idx];
-        if (p.defaultValue && !p.defaultRefersToArgs)
-        {
-            auto& defaultValue = definedDefaults[idx];
-            defaultValue.value = nodes[p.defaultValue].Evaluate(values);
-            defaultValue.isMutable = methods::IsMutable(defaultValue.value);
-        }
-    }
-
-    // The body escapes as where the macro is defined; the caller decides whether the result is Markup
-    Callable result(Callable::Macro, CallableBody{ this, std::move(definedDefaults), values.Nodes(), values.IsAutoescape(), ClosureSite(values), m_readsSlotsOnly });
+    // The body escapes as where the macro is defined; the caller decides whether the result is
+    // Markup. The defaults are evaluated by each call (BindMacroDefaults)
+    Callable result(Callable::Macro, CallableBody{ this, values.Nodes(), values.IsAutoescape(), ClosureSite(values), m_readsSlotsOnly });
     result.SetAttributes(m_attributes);
     return result;
 }
@@ -2318,43 +2255,24 @@ void BindSpecialMacroArgs(const MacroArgBinder& binder, bool catchKwargs, bool c
     }
 }
 
-// Binds the defaults of the arguments that were not provided
+// Binds the defaults of the arguments that were not provided. Jinja2 evaluates every default
+// on each call, in the body's scope where the macro is defined (0038 plan, section 4.3), so a
+// default sees the names there as they are now, and `acc=[]` is a new list each time
 template<typename Bind>
-void BindMacroDefaults(const MacroArgBinder& binder, const std::vector<MacroDefault>& definedDefaults, RenderContext& context, const Bind& bind)
+void BindMacroDefaults(const MacroArgBinder& binder, RenderContext& context, const Bind& bind)
 {
     for (std::size_t idx = 0; idx < binder.params.size(); ++idx)
     {
         const auto& p = binder.params[idx];
-        if (!p.defaultValue || binder.IsProvided(idx))
-        {
-            continue;
-        }
-
-        if (p.defaultRefersToArgs)
+        if (p.defaultValue && !binder.IsProvided(idx))
         {
             bind(idx, binder.Name(idx), binder.nodes[p.defaultValue].Evaluate(context));
-            continue;
         }
-        // Jinja2 evaluates defaults on every call, so acc=[] is a new list each time; the
-        // template's lists and dicts are shared, so the stored one is copied
-        const auto& defaultValue = definedDefaults[idx];
-        if (defaultValue.isMutable)
-        {
-            bind(idx, binder.Name(idx), methods::CopyContainer(defaultValue.value));
-            continue;
-        }
-        bind(idx, binder.Name(idx), defaultValue.value);
     }
 }
 
 template<typename Bind>
-void BindMacroCall(const MacroArgBinder& binder,
-                   bool catchKwargs,
-                   bool catchVarargs,
-                   bool hasArgDefaults,
-                   const std::vector<MacroDefault>& definedDefaults,
-                   RenderContext& context,
-                   const Bind& bind)
+void BindMacroCall(const MacroArgBinder& binder, bool catchKwargs, bool catchVarargs, bool hasArgDefaults, RenderContext& context, const Bind& bind)
 {
     // Missing arguments and the special ones are bound before the defaults are evaluated, so
     // a default sees them and never an outer variable named like a later argument. When no
@@ -2365,16 +2283,12 @@ void BindMacroCall(const MacroArgBinder& binder,
     {
         BindSpecialMacroArgs(binder, catchKwargs, catchVarargs, bind);
     }
-    BindMacroDefaults(binder, definedDefaults, context, bind);
+    BindMacroDefaults(binder, context, bind);
 }
 } // namespace
 
 // Binds the call arguments the way Jinja2's Macro.__call__ does
-void MacroStatement::InvokeMacroRenderer(const std::vector<MacroDefault>& definedDefaults,
-                                         const CallParams& callParams,
-                                         OutStream& stream,
-                                         RenderContext& context,
-                                         size_t link) const
+void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream& stream, RenderContext& context, size_t link) const
 {
     const RenderDepthGuard depthGuard;
 
@@ -2402,7 +2316,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<MacroDefault>& define
         {
             context.PushFrameView({}, link);
         }
-        BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, definedDefaults, context, [&scope](std::size_t /*slot*/, const HashedName& name, auto&& value) {
+        BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, context, [&scope](std::size_t /*slot*/, const HashedName& name, auto&& value) {
             scope.ForName(name) = std::forward<decltype(value)>(value);
         });
         context.Nodes()[m_mainBody].Render(stream, context);
@@ -2420,7 +2334,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<MacroDefault>& define
     const auto slots = context.Frame().slots.first(names.size());
     SlotsGuard guard(context, slots, names);
     context.PushFrameView({ slots, names, context.Nodes() }, link);
-    BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, definedDefaults, context, [&context, slots, names](std::size_t slot, const HashedName& /*name*/, auto&& value) {
+    BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, context, [&context, slots, names](std::size_t slot, const HashedName& /*name*/, auto&& value) {
         context.BindSlot(slots[slot], names[slot].hash, std::forward<decltype(value)>(value));
     });
     context.Nodes()[m_mainBody].Render(stream, context);

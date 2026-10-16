@@ -5629,6 +5629,214 @@
    }
   },
   {
+   "id": "statements.namespace_in",
+   "template": "{% set ns = namespace(a=1) %}{{ 'a' in ns }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'Namespace' is not iterable"
+   }
+  },
+  {
+   "id": "statements.namespace_print_nested",
+   "template": "{% set ns = namespace(a=1) %}{% set ns.b = namespace(c=[1]) %}{{ ns }}|{{ ns|string }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<Namespace {'a': 1, 'b': <Namespace {'c': [1]}>}>|<Namespace {'a': 1, 'b': <Namespace {'c': [1]}>}>"
+  },
+  {
+   "id": "statements.namespace_unpack",
+   "template": "{% set a, b = namespace(a=1, b=2) %}{{ a }}{{ b }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "cannot unpack non-iterable Namespace object"
+   }
+  },
+  {
+   "id": "statements.loop_recursive_callable",
+   "template": "{% for i in [1] recursive %}{{ 'T' if loop is callable else 'F' }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "statements.loop_callable",
+   "template": "{% for i in [1] %}{{ 'T' if loop is callable else 'F' }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
    "id": "statements.namespace_no_dict_methods",
    "template": "{% set ns = namespace(a=1) %}{{ ns.get('a') }}",
    "context": {
@@ -7931,6 +8139,86 @@
     "type": "TypeError",
     "message": "macro None takes not more than 1 argument(s)"
    }
+  },
+  {
+   "id": "statements.macro_arguments_tuple",
+   "template": "{% macro m(a, b=1) %}{% endmacro %}{% macro n(a) %}{% endmacro %}{% macro z() %}{% endmacro %}{{ m.arguments }}{{ n.arguments }}{{ z.arguments }}{{ m.arguments is sequence }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "('a', 'b')('a',)()True"
+  },
+  {
+   "id": "statements.caller_arguments_tuple",
+   "template": "{% macro m() %}{{ caller.arguments }}{% endmacro %}{% call(a, b=a) m() %}{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "('a', 'b')"
   },
   {
    "id": "statements.caller_attributes",
@@ -11907,6 +12195,446 @@
   {
    "id": "statements.macro_loop_name_set_after_call",
    "template": "{% for i in [1] %}{% macro m() %}[{{ x }}]{% endmacro %}{{ m() }}{% set x = 1 %}{{ m() }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[][1]"
+  },
+  {
+   "id": "statements.default_evaluated_per_call",
+   "template": "{% set ns = namespace(n=0) %}{% macro bump() %}{% set ns.n = ns.n + 1 %}{{ ns.n }}{% endmacro %}{% macro m(a=bump()) %}{{ a }}{% endmacro %}{{ m() }}{{ m() }}{{ m(0) }}{{ m() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1203"
+  },
+  {
+   "id": "statements.default_reads_def_site_not_caller_loop",
+   "template": "{% macro m(a=i) %}[{{ a }}]{% endmacro %}{% for i in [1, 2] %}{{ m() }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[][]"
+  },
+  {
+   "id": "statements.default_in_loop_reads_target",
+   "template": "{% for i in [1, 2] %}{% macro m(a=i) %}{{ a }}{% endmacro %}{{ m() }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "12"
+  },
+  {
+   "id": "statements.default_reads_outer_macro_param",
+   "template": "{% macro o(p) %}{% macro i(a=p) %}{{ a }}{% endmacro %}{{ i() }}{% endmacro %}{{ o(1) }}{{ o(2) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "12"
+  },
+  {
+   "id": "statements.default_root_name_set_after_call",
+   "template": "{% macro m(a=y) %}[{{ a }}]{% endmacro %}{{ m() }}{% set y = 2 %}{{ m() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[][2]"
+  },
+  {
+   "id": "statements.default_mutable_fresh_per_call",
+   "template": "{% macro m(l=[]) %}{% set _ = l.append(1) %}{{ l }}{% endmacro %}{{ m() }}{{ m() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1][1]"
+  },
+  {
+   "id": "statements.default_error_only_when_used",
+   "template": "{% macro m(a=1 // 0) %}{{ a }}{% endmacro %}ok{{ m(2) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "ok2"
+  },
+  {
+   "id": "statements.default_not_seen_by_body_set",
+   "template": "{% set y = 1 %}{% macro m(a=y) %}{% set y = 5 %}{{ a }}{{ y }}{% endmacro %}{{ m() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "15"
+  },
+  {
+   "id": "statements.default_hides_caller_set",
+   "template": "{% macro m(a=z) %}[{{ a }}]{% endmacro %}{% macro o() %}{% set z = 1 %}{{ m() }}{% endmacro %}{{ o() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "statements.call_block_default_per_call",
+   "template": "{% set ns = namespace(n=0) %}{% macro w() %}{{ caller() }}{{ caller() }}{% endmacro %}{% call(a=ns.n) w() %}{{ a }}{% set ns.n = ns.n + 1 %}{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "01"
+  },
+  {
+   "id": "statements.default_root_name_set_after_context",
+   "template": "{% macro m(a=x) %}[{{ a }}]{% endmacro %}{{ m() }}{% set x = 1 %}{{ m() }}",
    "context": {
     "l": [
      3,
