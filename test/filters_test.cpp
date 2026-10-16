@@ -145,6 +145,7 @@ INSTANTIATE_TEST_SUITE_P(Default, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello World!'|default('the string was empty', true)", "Hello World!"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(First, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"[1, 2, 3, 4] | first", "1"},
                             InputOutputPair{"(1, 2, 3, 4) | first", "1"},
@@ -188,6 +189,7 @@ INSTANTIATE_TEST_SUITE_P(Max, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | max(true)", "str5"},
                             InputOutputPair{"('str1', 'str2', 'str3', 'str4', 'str5', 'Str6') | max(case_sensitive=true)", "str5"}
                             ));
+// clang-format on
 
 INSTANTIATE_TEST_SUITE_P(Reverse, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"['str1', 'str2', 'str3'] | reverse", "str3, str2, str1"},
