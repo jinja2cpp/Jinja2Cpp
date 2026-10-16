@@ -49,5 +49,8 @@ CASES = [
     ("dict_none", "{{ dict(none) }}"),
     ("dict_of_namespace", "{{ dict(namespace(a=1)) }}"),
     ("cycler_length", "{{ cycler(1)|length }}"),
+    ("objects_equality", "{% set c = cycler(1) %}{{ 'T' if c == c else 'F' }}{{ 'T' if namespace(a=1) == namespace(a=1) else 'F' }}{{ 'T' if namespace() else 'F' }}"),
+    ("namespace_tojson", "{{ namespace(a=1)|tojson }}"),
+    ("objects_attributes", "{{ joiner('-').sep }}|{{ namespace(a=1)|attr('a') }}"),
     ("cycler_sameas", "{% set c = cycler(1) %}{{ 'T' if c is sameas c else 'F' }}{{ 'T' if c is sameas cycler(1) else 'F' }}"),
 ]

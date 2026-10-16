@@ -35,4 +35,4 @@ iterable (`for`, `list`, `in`, `dict(obj)` raise TypeError) and prints as Python
 `<Namespace {...}>` and `<jinja2.utils.Cycler object at 0x...>`. `joiner()` (and a recursive
 `loop`) now test as callable. `range()` raises TypeError for anything but an integer or bool,
 `dict(none)` and `namespace(none)` raise. Left to 0177: sequence filters (`cycler(1)|length`)
-still render empty for an object, pinned by `globals.cycler_length`.
+still render empty for an object, pinned by `globals.cycler_length`. Other places that still treat the objects as maps are 0191; a namespace holding itself leaks (0192).

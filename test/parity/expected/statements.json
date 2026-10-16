@@ -5674,7 +5674,7 @@
   },
   {
    "id": "statements.namespace_print_nested",
-   "template": "{% set ns = namespace(a=1) %}{% set ns.b = namespace(c=[1]) %}{% set ns.d = ns %}{{ ns }}|{{ ns|string }}",
+   "template": "{% set ns = namespace(a=1) %}{% set ns.b = namespace(c=[1]) %}{{ ns }}|{{ ns|string }}",
    "context": {
     "l": [
      3,
@@ -5710,7 +5710,131 @@
    },
    "env": {},
    "templates": {},
-   "output": "<Namespace {'a': 1, 'b': <Namespace {'c': [1]}>, 'd': <Namespace {...}>}>|<Namespace {'a': 1, 'b': <Namespace {'c': [1]}>, 'd': <Namespace {...}>}>"
+   "output": "<Namespace {'a': 1, 'b': <Namespace {'c': [1]}>}>|<Namespace {'a': 1, 'b': <Namespace {'c': [1]}>}>"
+  },
+  {
+   "id": "statements.namespace_unpack",
+   "template": "{% set a, b = namespace(a=1, b=2) %}{{ a }}{{ b }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "cannot unpack non-iterable Namespace object"
+   }
+  },
+  {
+   "id": "statements.loop_recursive_callable",
+   "template": "{% for i in [1] recursive %}{{ 'T' if loop is callable else 'F' }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
+   "id": "statements.loop_callable",
+   "template": "{% for i in [1] %}{{ 'T' if loop is callable else 'F' }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
   },
   {
    "id": "statements.namespace_no_dict_methods",

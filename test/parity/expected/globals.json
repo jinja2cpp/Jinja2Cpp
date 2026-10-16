@@ -451,6 +451,34 @@
    }
   },
   {
+   "id": "globals.objects_equality",
+   "template": "{% set c = cycler(1) %}{{ 'T' if c == c else 'F' }}{{ 'T' if namespace(a=1) == namespace(a=1) else 'F' }}{{ 'T' if namespace() else 'F' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "TFT"
+  },
+  {
+   "id": "globals.namespace_tojson",
+   "template": "{{ namespace(a=1)|tojson }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Object of type Namespace is not JSON serializable"
+   }
+  },
+  {
+   "id": "globals.objects_attributes",
+   "template": "{{ joiner('-').sep }}|{{ namespace(a=1)|attr('a') }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "-|1"
+  },
+  {
    "id": "globals.cycler_sameas",
    "template": "{% set c = cycler(1) %}{{ 'T' if c is sameas c else 'F' }}{{ 'T' if c is sameas cycler(1) else 'F' }}",
    "context": {},
