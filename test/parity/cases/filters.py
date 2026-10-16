@@ -155,6 +155,7 @@ CASES = [
     ("truncate_leeway", "{{ 'abcdefghij'|truncate(8) }}|{{ 'abcdefghij'|truncate(8, leeway=0) }}"),
     ("truncate_short", "{{ 'short'|truncate(20) }}"),
     ("unique", "{% for i in dup|unique %}{{ i }},{% endfor %}"),
+    ("unique_unhashable", "{{ [['a'], ['A']]|unique|list|length }}"),
     ("unique_case", "{{ ['a', 'A', 'b']|unique|join(',') }}"),
     ("unique_attribute", "{{ users|unique(attribute='age')|map(attribute='name')|join(',') }}"),
     ("upper", "{{ s|upper }}"),
