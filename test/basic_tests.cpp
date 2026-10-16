@@ -1112,6 +1112,24 @@ TEST(ValueApiTest, ToGenericViewsCoverBothRepresentations)
     ASSERT_NE(nullptr, fromMap.GetAccessor());
     EXPECT_EQ(2, fromMap.GetValueByName("k").AsInt());
     EXPECT_EQ(nullptr, Value(5).ToGenericMap().GetAccessor());
+
+    // From a temporary the view owns the container
+    const GenericList owned = Value(ValuesList{ 1, 2, 3 }).ToGenericList();
+    EXPECT_EQ(3U, owned.GetSize().value());
+    EXPECT_EQ("[1, 2, 3]", Value(owned).ToString());
+    const GenericMap ownedMap = Value(ValuesMap{ { "a", 1 } }).ToGenericMap();
+    EXPECT_EQ(1, ownedMap.GetValueByName("a").AsInt());
+}
+
+TEST(ValueApiTest, MovedFromContainerIsAbsent)
+{
+    Value list(ValuesList{ 1 });
+    const Value moved(std::move(list));
+    EXPECT_EQ(1U, moved.AsList().size());
+    // NOLINTNEXTLINE(bugprone-use-after-move,clang-analyzer-cplusplus.Move): the moved-from state is the test
+    EXPECT_EQ(nullptr, list.GetIf<ValuesList>());
+    const ValuesList* out = nullptr;
+    EXPECT_FALSE(list.AsList(out)); // NOLINT(bugprone-use-after-move,clang-analyzer-cplusplus.Move)
 }
 
 TEST(ValueApiTest, VisitUnwrapsContainers)
@@ -1169,9 +1187,12 @@ TEST(ValueApiTest, ToStringPrintsAsTheTemplateDoes)
                              ValuesMap{ { "k", 2 }, { "a", ValuesList{ true } } },
                              Reflect(std::vector<int>{ 1, 2 }),
                              1e100,
-                             -0.0 };
+                             -0.0,
+                             Value(ValuesMap{ { "a b", 1 }, { "", ValuesList{ L"w" } } }).ToGenericMap(),
+                             ValuesList{} };
     const std::vector<std::string> expected{ "5", "1.5", "True", "None", "text", "wide", "[1, 'a', None, 2.0]",
-                                             "{'k': 2, 'a': [True]}", "[1, 2]", "1e+100", "-0.0" };
+                                             "{'k': 2, 'a': [True]}", "[1, 2]", "1e+100", "-0.0",
+                                             "{'a b': 1, '': ['w']}", "[]" };
     ASSERT_EQ(expected.size(), values.size());
     for (size_t idx = 0; idx < values.size(); ++idx)
     {
@@ -1186,6 +1207,8 @@ TEST(ValueApiTest, ToStringPrintsAsTheTemplateDoes)
         EXPECT_EQ(tpl.RenderAsString({ { "v", val } }).value(), val.ToString()) << idx;
     }
     EXPECT_EQ("5", ToString(5));
+    EXPECT_EQ("0", ToString(0)); // a number, not a null pointer, with string_helpers.h included
+    EXPECT_EQ("None", ToString(nullptr));
     EXPECT_EQ("", Value(UserCallable()).ToString());
 }
 

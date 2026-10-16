@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <string>
 #include <system_error>
+#include <utility>
 #include <variant>
 
 namespace jinja2
@@ -25,7 +26,7 @@ void AppendText(const Value& val, std::basic_string<CharT>& out)
 }
 } // namespace
 
-GenericList Value::ToGenericList() const
+GenericList Value::ToGenericList() const&
 {
     if (const auto* list = GetIf<GenericList>())
     {
@@ -38,7 +39,7 @@ GenericList Value::ToGenericList() const
     return {};
 }
 
-GenericMap Value::ToGenericMap() const
+GenericMap Value::ToGenericMap() const&
 {
     if (const auto* map = GetIf<GenericMap>())
     {
@@ -49,6 +50,24 @@ GenericMap Value::ToGenericMap() const
         return CreateMapAdapter(*map).CreateGenericMap();
     }
     return {};
+}
+
+GenericList Value::ToGenericList() &&
+{
+    if (auto* list = GetIf<ValuesList>())
+    {
+        return ListAdapter::CreateAdapter(std::move(*list)).CreateGenericList();
+    }
+    return std::as_const(*this).ToGenericList();
+}
+
+GenericMap Value::ToGenericMap() &&
+{
+    if (auto* map = GetIf<ValuesMap>())
+    {
+        return CreateMapAdapter(std::move(*map)).CreateGenericMap();
+    }
+    return std::as_const(*this).ToGenericMap();
 }
 
 std::string Value::ToString() const

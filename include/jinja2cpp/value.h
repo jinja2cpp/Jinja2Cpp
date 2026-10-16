@@ -535,9 +535,13 @@ public:
      * For a \ref ValuesList the result refers to the list stored here and is valid as long as this \ref Value is
      * not changed or destroyed. A value that is not a list gives an empty \ref GenericList (`!IsValid()`).
      */
-    [[nodiscard]] JINJA2CPP_EXPORT GenericList ToGenericList() const;
+    [[nodiscard]] JINJA2CPP_EXPORT GenericList ToGenericList() const&;
+    //! Same as \ref ToGenericList, for a temporary: the result owns the list
+    [[nodiscard]] JINJA2CPP_EXPORT GenericList ToGenericList() &&;
     //! A \ref GenericMap over either map representation, empty for a non-map; see \ref ToGenericList
-    [[nodiscard]] JINJA2CPP_EXPORT GenericMap ToGenericMap() const;
+    [[nodiscard]] JINJA2CPP_EXPORT GenericMap ToGenericMap() const&;
+    //! Same as \ref ToGenericMap, for a temporary: the result owns the map
+    [[nodiscard]] JINJA2CPP_EXPORT GenericMap ToGenericMap() &&;
 
     /*!
      * \brief Exact access by type, as `std::get`
@@ -576,8 +580,9 @@ public:
     {
         if constexpr (IsWrapped<T>::value)
         {
+            // A moved-from wrapper holds nothing: report it as absent rather than dereference it
             const auto* wrapper = std::get_if<RecWrapper<T>>(&m_data);
-            return wrapper ? &**wrapper : nullptr;
+            return wrapper && !wrapper->valueless_after_move() ? &**wrapper : nullptr;
         }
         else
         {
@@ -591,7 +596,7 @@ public:
         if constexpr (IsWrapped<T>::value)
         {
             auto* wrapper = std::get_if<RecWrapper<T>>(&m_data);
-            return wrapper ? &**wrapper : nullptr;
+            return wrapper && !wrapper->valueless_after_move() ? &**wrapper : nullptr;
         }
         else
         {
@@ -612,7 +617,8 @@ public:
      * \brief The value as `{{ value }}` prints it, Python `str()`
      *
      * `5`, `1.5`, `True`, `None`, `[1, 'a']`, `{'k': 2}`; a string prints as itself, converted to the narrow
-     * encoding when it is wide. A callable prints as nothing.
+     * encoding when it is wide (with the C library's current locale, as the narrow template does; text that does
+     * not convert prints as nothing). A callable prints as nothing.
      */
     [[nodiscard]] JINJA2CPP_EXPORT std::string ToString() const;
     //! Same as \ref ToString(), appended to `out`: reuses its capacity
@@ -1098,6 +1104,32 @@ inline std::string ToString(const Value& val)
 inline std::wstring ToWString(const Value& val)
 {
     return val.ToWString();
+}
+
+//! Same as `ToString(Value(val))` for a number or `bool`: exact, so a literal 0 never looks like a null string
+template<typename T, std::enable_if_t<std::is_arithmetic_v<T> && !detail::IsCharType<T>::value>* = nullptr>
+std::string ToString(T val)
+{
+    return Value(val).ToString();
+}
+
+//! Same as `ToWString(Value(val))` for a number or `bool`
+template<typename T, std::enable_if_t<std::is_arithmetic_v<T> && !detail::IsCharType<T>::value>* = nullptr>
+std::wstring ToWString(T val)
+{
+    return Value(val).ToWString();
+}
+
+//! `None`, as `{{ none }}` prints
+inline std::string ToString(std::nullptr_t /*val*/)
+{
+    return "None";
+}
+
+//! `None`, as `{{ none }}` prints
+inline std::wstring ToWString(std::nullptr_t /*val*/)
+{
+    return L"None";
 }
 
 namespace detail
