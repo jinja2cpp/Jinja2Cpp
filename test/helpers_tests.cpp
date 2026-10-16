@@ -8,14 +8,15 @@
 #include "../src/value_visitors.h"
 
 #include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/template.h>
 
-#include <clocale>
 #include <cstddef>
 #include <cstdint>
 #include <new>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
 #include <vector>
 
 using namespace jinja2;
@@ -82,22 +83,75 @@ TEST(Helpers, ConvertStringReadsOnlyTheView)
     EXPECT_EQ(L"abc", ConvertString<std::wstring>(narrow));
 }
 
-// The conversion follows the C locale; with a UTF-8 one, multibyte output must not be
-// cut to the length of the wide source
-TEST(Helpers, ConvertStringMultibyte)
+// Narrow strings are UTF-8 and wide ones UTF-16/UTF-32 whatever the C locale; the test
+// binary never calls setlocale, so it runs in the "C" locale (docs/tasks/0035)
+TEST(Helpers, ConvertStringUnicodeWithoutLocale)
 {
-    const std::string saved = std::setlocale(LC_CTYPE, nullptr);
-    if (!std::setlocale(LC_CTYPE, "C.UTF-8") && !std::setlocale(LC_CTYPE, "en_US.UTF-8") && !std::setlocale(LC_CTYPE, ".UTF-8"))
+    const std::string utf8("\x41\xC3\xA9\xE2\x98\x83\0\xF0\x9F\x98\x80\xC3\xA9", 13);
+    const std::wstring wide(L"A\u00E9\u2603\0\U0001F600\u00E9", sizeof(wchar_t) == 2 ? 7 : 6);
+    EXPECT_EQ(utf8, ConvertString<std::string>(wide));
+    EXPECT_EQ(wide, ConvertString<std::wstring>(utf8));
+    EXPECT_EQ(utf8, ToString(ToWString(utf8)));
+}
+
+// Each ill-formed UTF-8 sequence becomes one U+FFFD per maximal subpart, as in Python's
+// bytes.decode('utf-8', 'replace'); the rest of the string converts
+TEST(Helpers, ConvertStringReplacesMalformedUtf8)
+{
+    const std::pair<std::string, std::wstring> cases[] = {
+        { "a\x80-", L"a\uFFFD-" },                           // stray continuation byte
+        { "a\xC3", L"a\uFFFD" },                             // truncated at the end
+        { "\xE2\x98x", L"\uFFFDx" },                         // truncated three-byte sequence: one U+FFFD
+        { "\xC0\xAF", L"\uFFFD\uFFFD" },                     // overlong lead
+        { "\xE0\x80\x80", L"\uFFFD\uFFFD\uFFFD" },           // overlong three-byte form
+        { "\xED\xA0\x80", L"\uFFFD\uFFFD\uFFFD" },           // encoded surrogate
+        { "\xF4\x90\x80\x80", L"\uFFFD\uFFFD\uFFFD\uFFFD" }, // above U+10FFFF
+        { "\xF5\xFF", L"\uFFFD\uFFFD" },                     // bytes that never occur
+        { "\xF0\x9F\x98\xC3\xA9", L"\uFFFD\u00E9" },
+    };
+    for (const auto& [narrow, expected] : cases)
     {
-        GTEST_SKIP() << "no UTF-8 locale available";
+        EXPECT_EQ(expected, ConvertString<std::wstring>(narrow)) << narrow;
     }
-    const std::string utf8("\xC3\xA9\xE2\x98\x83\0\xC3\xA9", 8);
-    const std::wstring wide(L"\u00E9\u2603\0\u00E9", 4);
-    const auto narrowed = ConvertString<std::string>(wide);
-    const auto widened = ConvertString<std::wstring>(utf8);
-    std::setlocale(LC_CTYPE, saved.c_str());
-    EXPECT_EQ(utf8, narrowed);
-    EXPECT_EQ(wide, widened);
+}
+
+// A lone surrogate, or a wchar_t value outside Unicode, becomes U+FFFD in UTF-8
+TEST(Helpers, ConvertStringReplacesMalformedWide)
+{
+    std::wstring wide{ L'a', static_cast<wchar_t>(0xD800), L'-', static_cast<wchar_t>(0xDC00) };
+    if constexpr (sizeof(wchar_t) == 4)
+    {
+        for (const uint32_t unit : { 0x110000u, 0xFFFFFFFFu })
+        {
+            wide.push_back(static_cast<wchar_t>(unit));
+        }
+        EXPECT_EQ("a\xEF\xBF\xBD-\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD", ConvertString<std::string>(wide));
+    }
+    else
+    {
+        EXPECT_EQ("a\xEF\xBF\xBD-\xEF\xBF\xBD", ConvertString<std::string>(wide));
+    }
+}
+
+// Values of the other width render with their text, in the "C" locale (docs/tasks/0035)
+TEST(Helpers, RendersValuesOfTheOtherWidth)
+{
+    const std::string expected = "h\xC3\xA9llo w\xC3\xB6rld|11|h\xC3\xA9ll\xE2\x80\xA6|{'\xC3\xA9': '\xD0\xB6'}";
+    const std::string tpl = "{{ u }}|{{ u|length }}|{{ u|truncate(5, true, '\xE2\x80\xA6') }}|{{ d }}";
+
+    TemplateW wideTpl;
+    ASSERT_TRUE(wideTpl.Load(ConvertString<std::wstring>(tpl)));
+    const ValuesMap narrowValues{ { "u", std::string("h\xC3\xA9llo w\xC3\xB6rld") }, { "d", ValuesMap{ { "\xC3\xA9", std::string("\xD0\xB6") } } } };
+    const auto wideOut = wideTpl.RenderAsString(narrowValues);
+    ASSERT_TRUE(wideOut);
+    EXPECT_EQ(expected, ConvertString<std::string>(wideOut.value()));
+
+    Template narrowTpl;
+    ASSERT_TRUE(narrowTpl.Load(tpl));
+    const ValuesMap wideValues{ { "u", std::wstring(L"h\u00E9llo w\u00F6rld") }, { "d", ValuesMap{ { "\xC3\xA9", std::wstring(L"\u0436") } } } };
+    const auto narrowOut = narrowTpl.RenderAsString(wideValues);
+    ASSERT_TRUE(narrowOut);
+    EXPECT_EQ(expected, narrowOut.value());
 }
 
 // Scope lookups compare names in words up to 16 bytes (docs/tasks/0100)

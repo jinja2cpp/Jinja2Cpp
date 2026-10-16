@@ -43,10 +43,10 @@ differs by standard library or locale. Kind `crash` skips a case that would brin
 
 ### The wide-string run
 
-`ParityWide/*` renders every case a second time through `TemplateW`: the template, the
-loader files and the context strings are converted from UTF-8 to `wchar_t` by the suite
-itself (not by `jinja2::ConvertString`, which depends on the C locale, task 0035), and the
-output back to UTF-8. It is held to the narrow result, so a narrow divergence is listed
+`ParityWide/*` renders every case a second time through `TemplateW`: the template and the
+loader files are converted from UTF-8 to `wchar_t` by the suite itself (not by
+`jinja2::ConvertString`, the conversion under test), and the output back to UTF-8. Context
+strings stay narrow UTF-8, so every case also renders narrow values in a wide template. It is held to the narrow result, so a narrow divergence is listed
 once: a wide case diverges only when its result differs from the narrow one and does not
 match Python either. Such a case is listed as `wide.<id>`, with its kind relative to
 Python, and follows the same rules as narrow lines (including `crash`). Cases with an

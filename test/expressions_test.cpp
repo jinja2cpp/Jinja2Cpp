@@ -601,7 +601,7 @@ TEST(ExpressionsTest, LongNumberLiteralsDoNotOverflow)
 namespace
 {
 // UTF-8 to wchar_t text (UTF-16 or UTF-32 by the size of wchar_t), so one table of narrow
-// expectations checks wide templates too; ConvertString reads non-ASCII in the C locale
+// expectations checks wide templates too
 std::wstring Utf8ToWide(const std::string& utf8)
 {
     std::wstring result;

@@ -4,7 +4,7 @@
 #include "config.h"
 #include "value.h"
 
-#include <cwchar>
+#include <cstddef>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -26,103 +26,168 @@ struct StringConverter<Src, Src>
     }
 };
 
-// The C conversion functions stop at a NUL and need a NUL-terminated source. Convert the
-// source one NUL-free segment at a time, from a terminated copy, and keep each NUL.
-template<typename DstChar, typename SrcChar, typename SegmentConverter>
-std::basic_string<DstChar> ConvertBySegments(std::basic_string_view<SrcChar> from, SegmentConverter convertSegment)
+// std::string holds UTF-8 and std::wstring UTF-32, or UTF-16 where wchar_t is 16 bits wide.
+// The codec below does not depend on the C locale. Each malformed sequence becomes U+FFFD:
+// in UTF-8 one per maximal subpart of an ill-formed sequence, as Python's
+// bytes.decode('utf-8', 'replace') does; in wide text each lone surrogate or value outside
+// the Unicode range.
+constexpr char32_t ReplacementChar = 0xFFFD;
+
+inline void AppendUtf8(std::string& out, char32_t cp)
 {
-    std::basic_string<DstChar> result;
-    std::basic_string<SrcChar> segment;
-    for (;;)
+    if (cp < 0x80)
     {
-        const auto nul = from.find(SrcChar());
-        segment.assign(from.substr(0, nul));
-        if (!segment.empty() && !convertSegment(segment.c_str(), segment.size(), result))
-        {
-            return {};
-        }
-        if (nul == std::basic_string_view<SrcChar>::npos)
-        {
-            return result;
-        }
-        result.push_back(DstChar());
-        from.remove_prefix(nul + 1);
+        out.push_back(static_cast<char>(cp));
     }
+    else if (cp < 0x800)
+    {
+        const char bytes[] = { static_cast<char>(0xC0 | (cp >> 6)), static_cast<char>(0x80 | (cp & 0x3F)) };
+        out.append(bytes, sizeof(bytes));
+    }
+    else if (cp < 0x10000)
+    {
+        const char bytes[] = { static_cast<char>(0xE0 | (cp >> 12)), static_cast<char>(0x80 | ((cp >> 6) & 0x3F)), static_cast<char>(0x80 | (cp & 0x3F)) };
+        out.append(bytes, sizeof(bytes));
+    }
+    else
+    {
+        const char bytes[] = { static_cast<char>(0xF0 | (cp >> 18)),
+                               static_cast<char>(0x80 | ((cp >> 12) & 0x3F)),
+                               static_cast<char>(0x80 | ((cp >> 6) & 0x3F)),
+                               static_cast<char>(0x80 | (cp & 0x3F)) };
+        out.append(bytes, sizeof(bytes));
+    }
+}
+
+inline void AppendWide(std::wstring& out, char32_t cp)
+{
+    if constexpr (sizeof(wchar_t) == 2)
+    {
+        if (cp >= 0x10000)
+        {
+            cp -= 0x10000;
+            out.push_back(static_cast<wchar_t>(0xD800 + (cp >> 10)));
+            out.push_back(static_cast<wchar_t>(0xDC00 + (cp & 0x3FF)));
+            return;
+        }
+    }
+    out.push_back(static_cast<wchar_t>(cp));
+}
+
+// Decodes the code point at the start of a non-empty str and returns the bytes it takes;
+// an ill-formed sequence yields U+FFFD and the length of its maximal subpart (at least 1)
+inline std::size_t DecodeUtf8(std::string_view str, char32_t& cp)
+{
+    const auto lead = static_cast<unsigned char>(str[0]);
+    if (lead < 0x80)
+    {
+        cp = lead;
+        return 1;
+    }
+    std::size_t len = 0;
+    unsigned char low = 0x80; // the range of the second byte (Unicode table 3-7)
+    unsigned char high = 0xBF;
+    if (lead >= 0xC2 && lead <= 0xDF)
+    {
+        len = 2;
+    }
+    else if (lead >= 0xE0 && lead <= 0xEF)
+    {
+        len = 3;
+        low = lead == 0xE0 ? 0xA0 : 0x80;
+        high = lead == 0xED ? 0x9F : 0xBF;
+    }
+    else if (lead >= 0xF0 && lead <= 0xF4)
+    {
+        len = 4;
+        low = lead == 0xF0 ? 0x90 : 0x80;
+        high = lead == 0xF4 ? 0x8F : 0xBF;
+    }
+    else
+    {
+        cp = ReplacementChar;
+        return 1;
+    }
+    char32_t result = lead & (0x7F >> len);
+    for (std::size_t n = 1; n != len; ++n)
+    {
+        if (n == str.size())
+        {
+            cp = ReplacementChar;
+            return n;
+        }
+        const auto next = static_cast<unsigned char>(str[n]);
+        if (next < low || next > high)
+        {
+            cp = ReplacementChar;
+            return n;
+        }
+        low = 0x80;
+        high = 0xBF;
+        result = (result << 6) | (next & 0x3F);
+    }
+    cp = result;
+    return len;
+}
+
+// Decodes the code point at the start of a non-empty str and returns the units it takes
+inline std::size_t DecodeWide(std::wstring_view str, char32_t& cp)
+{
+    const auto unit = static_cast<char32_t>(static_cast<std::make_unsigned_t<wchar_t>>(str[0]));
+    if constexpr (sizeof(wchar_t) == 2)
+    {
+        if (unit >= 0xD800 && unit <= 0xDBFF && str.size() > 1)
+        {
+            const auto next = static_cast<char32_t>(static_cast<std::make_unsigned_t<wchar_t>>(str[1]));
+            if (next >= 0xDC00 && next <= 0xDFFF)
+            {
+                cp = 0x10000 + ((unit - 0xD800) << 10) + (next - 0xDC00);
+                return 2;
+            }
+        }
+    }
+    cp = unit > 0x10FFFF || (unit >= 0xD800 && unit <= 0xDFFF) ? ReplacementChar : unit;
+    return 1;
 }
 
 template<>
 struct StringConverter<std::wstring, std::string>
 {
-    static std::string DoConvert(const std::wstring_view& from)
+    static std::string DoConvert(std::wstring_view from)
     {
-        return ConvertBySegments<char>(from, [](const wchar_t* src, std::size_t srcSize, std::string& out) {
-            std::mbstate_t state = std::mbstate_t();
-            const auto* srcPtr = src;
-            std::size_t destBytes = 0;
-            const auto pos = out.size();
-#ifndef _MSC_VER
-            (void)srcSize;
-            destBytes = std::wcsrtombs(nullptr, &srcPtr, 0, &state);
-            if (destBytes == static_cast<std::size_t>(-1))
-            {
-                return false;
-            }
-            out.resize(pos + destBytes + 1);
-            srcPtr = src;
-            state = std::mbstate_t();
-            std::wcsrtombs(&out[pos], &srcPtr, destBytes + 1, &state);
-            out.resize(pos + destBytes);
-#else
-            if (wcsrtombs_s(&destBytes, nullptr, 0, &srcPtr, srcSize, &state) != 0)
-            {
-                return false;
-            }
-            out.resize(pos + destBytes);
-            srcPtr = src;
-            state = std::mbstate_t();
-            wcsrtombs_s(&destBytes, &out[pos], destBytes, &srcPtr, destBytes, &state);
-            out.resize(pos + destBytes - 1);
-#endif
-            return true;
-        });
+        std::string result;
+        result.reserve(from.size());
+        while (!from.empty())
+        {
+            char32_t cp = 0;
+            from.remove_prefix(DecodeWide(from, cp));
+            AppendUtf8(result, cp);
+        }
+        return result;
     }
 };
 
 template<>
 struct StringConverter<std::string, std::wstring>
 {
-    static std::wstring DoConvert(const std::string_view& from)
+    static std::wstring DoConvert(std::string_view from)
     {
-        return ConvertBySegments<wchar_t>(from, [](const char* src, std::size_t srcSize, std::wstring& out) {
-            std::mbstate_t state = std::mbstate_t();
-            const auto* srcPtr = src;
-            std::size_t destChars = 0;
-            const auto pos = out.size();
-#ifndef _MSC_VER
-            (void)srcSize;
-            destChars = std::mbsrtowcs(nullptr, &srcPtr, 0, &state);
-            if (destChars == static_cast<std::size_t>(-1))
+        std::wstring result;
+        result.reserve(from.size());
+        while (!from.empty())
+        {
+            const auto lead = static_cast<unsigned char>(from[0]);
+            if (lead < 0x80)
             {
-                return false;
+                result.push_back(static_cast<wchar_t>(lead));
+                from.remove_prefix(1);
+                continue;
             }
-            out.resize(pos + destChars + 1);
-            srcPtr = src;
-            state = std::mbstate_t();
-            std::mbsrtowcs(&out[pos], &srcPtr, destChars + 1, &state);
-            out.resize(pos + destChars);
-#else
-            if (mbsrtowcs_s(&destChars, nullptr, 0, &srcPtr, srcSize, &state) != 0)
-            {
-                return false;
-            }
-            out.resize(pos + destChars);
-            srcPtr = src;
-            state = std::mbstate_t();
-            mbsrtowcs_s(&destChars, &out[pos], destChars, &srcPtr, destChars, &state);
-            out.resize(pos + destChars - 1);
-#endif
-            return true;
-        });
+            char32_t cp = 0;
+            from.remove_prefix(DecodeUtf8(from, cp));
+            AppendWide(result, cp);
+        }
+        return result;
     }
 };
 
@@ -138,6 +203,10 @@ struct StringConverter<std::basic_string_view<CharT>, T> : public StringConverte
  *
  * Converts string or string views to string objects with possible char conversion (char -> wchar_t or wchar_t -> char).
  * This function should be used when exact type of string is needed.
+ *
+ * Narrow strings are UTF-8; wide strings are UTF-32, or UTF-16 where `wchar_t` is 16 bits wide (Windows). The
+ * conversion does not depend on the C locale. A malformed sequence becomes U+FFFD (the replacement character), as
+ * Python's `decode('utf-8', 'replace')` does; the rest of the string converts as usual.
  *
  * @tparam Dst Destination string type. Mandatory. Can be std::string or std::wstring
  * @tparam Src Source string type. Auto detected. Can be either std::basic_string<CharT> or std::string_view<CharT>
@@ -155,8 +224,7 @@ Dst ConvertString(const Src& from)
 /*!
  * \brief Narrow copy of a string of either character type
  *
- * A wide string is converted with the C library's current locale (`wcsrtombs`); the result is empty when it cannot
- * be converted.
+ * A wide string is converted to UTF-8 as \ref ConvertString does.
  */
 inline std::string ToString(std::string_view str)
 {
@@ -191,8 +259,7 @@ inline std::string ToString(const wchar_t* str)
 /*!
  * \brief Wide copy of a string of either character type
  *
- * A narrow string is converted with the C library's current locale (`mbsrtowcs`); the result is empty when it
- * cannot be converted.
+ * A narrow string is read as UTF-8 as \ref ConvertString does.
  */
 inline std::wstring ToWString(std::wstring_view str)
 {

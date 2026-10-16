@@ -110,9 +110,8 @@ TEST(GlobalFunctionsTest, ExtremeArguments)
     EXPECT_EQ(".", Render("{{ lipsum(1, False, -9223372036854775807, 2) }}"));
 }
 
-// A two-character string is a pair; characters are code points, not UTF-8 bytes. Narrow only:
-// the parity corpus cannot hold this case, because a wide key goes through the
-// locale-dependent ConvertString (task 0035) and the wide result differs by platform.
+// A two-character string is a pair; characters are code points, not UTF-8 bytes (the corpus
+// case globals.dict_from_unicode_string_pairs checks the wide path too)
 TEST(GlobalFunctionsTest, DictFromUnicodeStringPairs)
 {
     EXPECT_EQ("{'\xC3\xA9': '\xE4\xB8\xAD'}|\xE4\xB8\xAD"
