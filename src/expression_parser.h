@@ -78,7 +78,7 @@ public:
                 continue;
             }
             in->unit = unit;
-            *out++ = std::move(*in);
+            *out++ = *in;
         }
         m_names.erase(out, m_names.end());
     }
