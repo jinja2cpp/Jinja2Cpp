@@ -111,5 +111,7 @@ What the rules did not stop:
 - Verifier and implementer Sonnet subagents ran inside most Opus threads (28% of window
   spend is Sonnet); the roles table needs no change.
 
+Done: PR #512 adds the rotation at plan approval to CLAUDE.md "Batching work".
+
 Next measurement: after the 2.0 chain (0072, 0166, 0167) merges, compare its threads
 against the 0038 plan thread to see whether rotation at plan approval held.
