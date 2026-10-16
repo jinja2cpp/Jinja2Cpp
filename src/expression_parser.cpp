@@ -2,7 +2,6 @@
 
 #include "error_handling.h"
 #include "expression_evaluator.h"
-#include "filters.h"
 #include "internal_value.h"
 #include "lexer.h"
 #include "loop_attr.h"
@@ -11,7 +10,6 @@
 #include "node_arena.h"
 #include "recursion_guard.h"
 #include "renderer.h"
-#include "testers.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
@@ -729,12 +727,12 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
     NodeRef<Expression> result;
     try
     {
-        auto registered = FindRegisteredTester(name);
-        if (!GetIf<Callable>(&registered) && !IsBuiltinTester(name))
+        bool unknown = false;
+        result = IsExpression::Make(m_nodes, valueRef, name, params, FindRegisteredTester(name), &unknown);
+        if (unknown)
         {
             m_unknown.Add(nameTok, true);
         }
-        result = IsExpression::Make(m_nodes, valueRef, name, params, std::move(registered));
     }
     catch (const std::runtime_error&)
     {
@@ -1198,12 +1196,12 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
                 return MakeUnexpected(params.error());
             }
 
-            auto registered = FindRegisteredFilter(name);
-            if (!GetIf<Callable>(&registered) && !IsBuiltinFilter(name))
+            bool unknown = false;
+            auto filter = ExpressionFilter::Make(m_nodes, name, *params, FindRegisteredFilter(name), &unknown);
+            if (unknown)
             {
                 m_unknown.Add(tok, false);
             }
-            auto filter = ExpressionFilter::Make(m_nodes, name, *params, std::move(registered));
             if (result && !AddOperator())
             {
                 return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);

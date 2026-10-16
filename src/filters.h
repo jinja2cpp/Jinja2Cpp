@@ -19,12 +19,11 @@ using FilterParams = CallParamsInfo;
 
 extern FilterPtr CreateFilter(std::string_view filterName, const CallParamsInfo& params);
 // The same in the arena of the template that names the filter
-extern NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& nodes, std::string_view filterName, const CallParamsInfo& params);
+// A name that is no built-in filter makes a UserDefinedFilter and sets `*unknown`
+extern NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& nodes, std::string_view filterName, const CallParamsInfo& params, bool* unknown = nullptr);
 // For filters named at render time (`map('name')`): a filter added to the environment of the
 // template comes first, as in Jinja2's env.filters
 extern FilterPtr CreateFilter(const std::string& filterName, const CallParamsInfo& params, RenderContext& context);
-// Whether `filterName` is one of the built-in filters
-bool IsBuiltinFilter(std::string_view filterName);
 
 namespace filters
 {

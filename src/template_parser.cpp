@@ -301,7 +301,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         filterFrame = m_names.PushFilter(outerFrame, isRecursive || EndsWithRecursive(lexer));
         m_names.SetCurrent(filterFrame);
         // A frame of its own to Jinja2, even in an `if`
-        DeferredCheckGuard checked(m_unknown, false);
+        CheckGuard checked(m_unknown, UnknownCallables::Check::Now);
         auto parsedExpr = exprPraser.ParseFullExpression(lexer);
         m_names.SetCurrent(outerFrame);
         if (!parsedExpr)
@@ -573,7 +573,7 @@ StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, State
     const auto& pivotTok = lexer.PeekNextToken();
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     // Jinja2 checks the filters and tests of the condition when they run, as those of the branches
-    DeferredCheckGuard deferred(m_unknown, true);
+    CheckGuard deferred(m_unknown, UnknownCallables::Check::Deferred);
     auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
     {
@@ -707,7 +707,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     else if (lexer.EatIfEqual('|'))
     {
         // The filters of a set block are in its frame, which Jinja2 checks even in an `if`
-        DeferredCheckGuard checked(m_unknown, false);
+        CheckGuard checked(m_unknown, UnknownCallables::Check::Now);
         const auto expr = exprParser.ParseFilterExpression(lexer);
         if (!expr)
         {
@@ -938,7 +938,7 @@ nonstd::expected<MacroParamsInfo, ParseError> StatementsParser::ParseMacroParams
         return items;
     }
     // The defaults are in the macro's frame, which Jinja2 checks even in an `if`
-    DeferredCheckGuard checked(m_unknown, false);
+    CheckGuard checked(m_unknown, UnknownCallables::Check::Now);
 
     std::vector<MacroDefaultTokens> defaultTokens;
 
@@ -1516,7 +1516,7 @@ StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, S
 {
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     // The filters of a filter block are in its frame, which Jinja2 checks even in an `if`
-    DeferredCheckGuard checked(m_unknown, false);
+    CheckGuard checked(m_unknown, UnknownCallables::Check::Now);
     auto filterExpr = exprParser.ParseFilterExpression(lexer);
     if (!filterExpr)
     {
@@ -1557,7 +1557,7 @@ StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexe
 {
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     // Jinja2 checks the value of `autoescape` even in an `if`
-    DeferredCheckGuard checked(m_unknown, false);
+    CheckGuard checked(m_unknown, UnknownCallables::Check::Now);
     auto valueExpr = exprParser.ParseFullExpression(lexer);
     if (!valueExpr)
     {

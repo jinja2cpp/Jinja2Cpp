@@ -18,7 +18,8 @@ using TesterParams = CallParamsInfo;
 
 extern TesterPtr CreateTester(std::string testerName, const CallParamsInfo& params);
 // The same in the arena of the template that names the test
-extern NodeRef<IsExpression::ITester> CreateTester(NodeArena& nodes, const std::string& testerName, const CallParamsInfo& params);
+// A name that is no built-in test makes a UserDefinedTester and sets `*unknown`
+extern NodeRef<IsExpression::ITester> CreateTester(NodeArena& nodes, const std::string& testerName, const CallParamsInfo& params, bool* unknown = nullptr);
 // For tests named at render time (`select('name')`): a test added to the environment of the
 // template comes first, as in Jinja2's env.tests
 extern TesterPtr CreateTester(std::string testerName, const CallParamsInfo& params, RenderContext& context);

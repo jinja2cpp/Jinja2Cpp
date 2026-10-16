@@ -1475,8 +1475,12 @@ private:
             return;
         }
         m_names.SetCurrent(statementsStack.back().frame);
-        SetUnknownCallablesPlace(statementsStack);
+        const auto unknownMark = m_unknown.Mark();
         auto parseResult = InvokeParser<NodeRef<IRendererBase>, ExpressionParser>(block);
+        if (m_unknown.Mark() != unknownMark)
+        {
+            PlaceUnknownCallables(statementsStack, statementsStack.size(), unknownMark);
+        }
         if (parseResult)
         {
             statementsStack.back().body.push_back(*parseResult);
@@ -1490,8 +1494,14 @@ private:
     // False when parsing has to stop here
     bool FineParseStatement(const TextBlockInfo& block, StatementInfoList& statementsStack, std::vector<ParseError>& errors)
     {
-        SetUnknownCallablesPlace(statementsStack);
+        const auto unknownMark = m_unknown.Mark();
+        const auto depth = statementsStack.size();
         auto parseResult = InvokeParser<void, StatementsParser>(block, statementsStack);
+        if (m_unknown.Mark() != unknownMark)
+        {
+            // A statement opens its body after its expressions: they are where it starts
+            PlaceUnknownCallables(statementsStack, std::min(depth, statementsStack.size()), unknownMark);
+        }
         if (!parseResult)
         {
             errors.push_back(parseResult.error());
@@ -1504,16 +1514,17 @@ private:
         return true;
     }
 
-    // Where the expressions of the next tag are, for UnknownCallables: Jinja2 defers the check in
-    // an `if` statement, its tests and branches, up to the next statement that makes a frame of
-    // its own (a loop and its `else`, a macro, a call block, a block, `with`, a filter or set block,
-    // `autoescape`)
-    void SetUnknownCallablesPlace(const StatementInfoList& statementsStack)
+    // Places the unknown names a tag added since `mark`, inside the first `depth` statements of the
+    // stack: Jinja2 defers the check in an `if` statement, its tests and branches, up to the next
+    // statement that makes a frame of its own (a loop and its `else`, a macro, a call block, a
+    // block, `with`, a filter or set block, `autoescape`)
+    void PlaceUnknownCallables(const StatementInfoList& statementsStack, std::size_t depth, std::size_t mark)
     {
         bool deferred = false;
         bool placed = false;
         std::size_t unit = 0;
-        for (auto p = statementsStack.rbegin(); p != statementsStack.rend(); ++p)
+        const auto end = statementsStack.rend();
+        for (auto p = std::prev(end, static_cast<std::ptrdiff_t>(depth)); p != end; ++p)
         {
             if (!placed)
             {
@@ -1527,7 +1538,7 @@ private:
                 {
                     // An `elif` or `else` of an `if`, or the `else` of a loop
                     auto head = p;
-                    while (head->type == StatementInfo::ElseIfStatement && std::next(head) != statementsStack.rend())
+                    while (head->type == StatementInfo::ElseIfStatement && std::next(head) != end)
                     {
                         ++head;
                     }
@@ -1549,7 +1560,7 @@ private:
                 break;
             }
         }
-        m_unknown.SetPlace(deferred, unit);
+        m_unknown.Place(mark, deferred, unit);
     }
 
     // Whether the template ends inside `{{`, `{%` or `{#`. Jinja2 drops a `{#` (or `{#-`, `{#+`)
