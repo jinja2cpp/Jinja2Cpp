@@ -78,6 +78,12 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     {
         CheckStack();
         std::string str;
+        if (map.GetObjectClass())
+        {
+            // An object (namespace(), cycler(), joiner()) prints as its repr
+            visitors::ValueRenderer<char>(str, true)(map);
+            return str;
+        }
         auto os = std::back_inserter(str);
 
         fmt::format_to(os, "{{");
@@ -429,6 +435,11 @@ private:
         }
         else if (auto map = AsMap(value))
         {
+            if (const char* objectClass = map->GetObjectClass())
+            {
+                // namespace(), cycler() and joiner() are objects, which json.dumps rejects
+                throw std::runtime_error("Object of type "s + objectClass + " is not JSON serializable");
+            }
             // sort_keys: Python orders str keys by code point, which is UTF-8 byte order
             auto keys = map->GetKeys();
             std::sort(keys.begin(), keys.end());
@@ -575,7 +586,8 @@ XmlAttrFilter::XmlAttrFilter(const FilterParams& params)
 InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     auto map = AsMap(baseVal);
-    if (!map)
+    // An object such as namespace() has no items()
+    if (!map || map->GetObjectClass())
     {
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
     }

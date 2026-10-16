@@ -788,7 +788,7 @@ TEST_F(XmlAttr, SerializeMapWithStringViewsAndNoneSerializebleValues)
 // Case filters at the edges of the ASCII letter ranges and around non-ASCII text: ASCII letters
 // change, other characters stay as they are (0048), and title splits words on Unicode
 // whitespace too. Wide sources are written out: the shared fixture widens templates byte by
-// byte, and ConvertString depends on the C locale.
+// byte.
 TEST(CaseFilters, AsciiAndNonAsciiText)
 {
     const std::pair<std::string, std::string> cases[] = {

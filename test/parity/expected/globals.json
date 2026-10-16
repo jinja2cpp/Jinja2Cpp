@@ -203,6 +203,14 @@
    "output": "{'a': 'b', 'c': 'd'}|q2"
   },
   {
+   "id": "globals.dict_from_unicode_string_pairs",
+   "template": "{% set d = dict(['é中']) %}{{ d }}|{{ d['é'] }}{{ d|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'é': '中'}|中1"
+  },
+  {
    "id": "globals.dict_bad_pair",
    "template": "{{ dict(['abc']) }}",
    "context": {},
@@ -485,6 +493,134 @@
    "env": {},
    "templates": {},
    "output": "TF"
+  },
+  {
+   "id": "globals.namespace_items",
+   "template": "{{ namespace(a=1)|items|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Can only get item pairs from a mapping."
+   }
+  },
+  {
+   "id": "globals.namespace_dictsort",
+   "template": "{{ namespace(a=1)|dictsort }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "items"
+   }
+  },
+  {
+   "id": "globals.namespace_xmlattr",
+   "template": "{{ namespace(a=1)|xmlattr }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "items"
+   }
+  },
+  {
+   "id": "globals.namespace_pprint",
+   "template": "{{ namespace(a=1)|pprint }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<Namespace {'a': 1}>"
+  },
+  {
+   "id": "globals.cycler_tojson",
+   "template": "{{ cycler(1)|tojson }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Object of type Cycler is not JSON serializable"
+   }
+  },
+  {
+   "id": "globals.joiner_length",
+   "template": "{{ joiner()|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'Joiner' has no len()"
+   }
+  },
+  {
+   "id": "globals.dict_update_namespace",
+   "template": "{% set d = {} %}{{ d.update(namespace(a=1)) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'Namespace' object is not iterable"
+   }
+  },
+  {
+   "id": "globals.percent_format_namespace",
+   "template": "{{ '%(a)s' % namespace(a=1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "format requires a mapping"
+   }
+  },
+  {
+   "id": "globals.percent_format_object_arg",
+   "template": "{{ '[%s]' % (namespace(a=1),) }}{{ '[%s]' % namespace(a=1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[<Namespace {'a': 1}>][<Namespace {'a': 1}>]"
+  },
+  {
+   "id": "globals.cycler_truncate",
+   "template": "{{ cycler(1, 2)|truncate }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'Cycler' has no len()"
+   }
+  },
+  {
+   "id": "globals.namespace_urlencode",
+   "template": "{{ namespace(a=1)|urlencode }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "%3CNamespace%20%7B%27a%27%3A%201%7D%3E"
+  },
+  {
+   "id": "globals.objects_inequality",
+   "template": "{% set c = cycler(1) %}{{ 'T' if c != c else 'F' }}{{ 'T' if namespace(a=1) != namespace(a=1) else 'F' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "FT"
   }
  ]
 }

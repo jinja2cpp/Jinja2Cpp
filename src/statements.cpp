@@ -148,7 +148,13 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
     const std::size_t count = root.count;
     // The items of a tuple of names are the nodes after it
     const bool allNames = root.size == count + 1 && std::all_of(target.begin() + 1, target.end(), [](const TargetNode& t) { return t.IsPlainName(); });
-    if (allNames && AsMap(value))
+    const auto map = AsMap(value);
+    // An object (namespace(), cycler(), joiner()) is neither a mapping nor iterable
+    if (map && map->GetObjectClass())
+    {
+        throw std::runtime_error("cannot unpack non-iterable "s + map->GetObjectClass() + " object");
+    }
+    if (allNames && map)
     {
         for (const auto& t : target.subspan(1))
         {
@@ -564,8 +570,6 @@ private:
         case Property::NextItem:
             m_state->Peek();
             return !m_state->isLast;
-        case Property::Call:
-            return m_state->recursiveStatement != nullptr;
         default:
             return true;
         }
@@ -609,6 +613,13 @@ private:
             }
             return MakeLoopChanged(state.lastChanged);
         case Property::Call:
+            if (!state.recursiveStatement)
+            {
+                // A loop without the recursive marker is callable in Jinja2, which then refuses
+                return Callable(Callable::GlobalFunc, [](const CallParams&, RenderContext&) -> InternalValue {
+                    throw std::runtime_error("The loop must have the 'recursive' marker to be called recursively.");
+                });
+            }
             return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.recursiveNodes, state.level, state.recursiveSite);
         case Property::None:
             break;

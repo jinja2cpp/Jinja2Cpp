@@ -628,8 +628,8 @@ public:
      * \brief The value as `{{ value }}` prints it, Python `str()`
      *
      * `5`, `1.5`, `True`, `None`, `[1, 'a']`, `{'k': 2}`; a string prints as itself, converted to the narrow
-     * encoding when it is wide (with the C library's current locale, as the narrow template does; text that does
-     * not convert prints as nothing). A callable prints as nothing.
+     * encoding when it is wide (UTF-8, as \ref ConvertString converts it: a lone surrogate or out-of-range unit
+     * becomes U+FFFD). A callable prints as nothing.
      */
     [[nodiscard]] JINJA2CPP_EXPORT std::string ToString() const;
     //! Same as \ref ToString(), appended to `out`: reuses its capacity

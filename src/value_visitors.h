@@ -1683,9 +1683,11 @@ struct BinaryMathOperation : BaseVisitor<>
             return Mismatch(left, right);
         }
 
-        // As for lists: a dict equals itself, and nested ones recurse once per level
+        // An object (namespace(), cycler(), joiner()) equals only itself, as Python objects
+        // without __eq__ do; a dict equals itself without its items being compared, and nested
+        // ones recurse once per level
         const bool same = left.GetIdentity() == right.GetIdentity();
-        bool equal = same || left.GetSize() == right.GetSize();
+        bool equal = same || (!left.GetObjectClass() && !right.GetObjectClass() && left.GetSize() == right.GetSize());
         if (equal && !same)
         {
             CheckStack();
@@ -1769,9 +1771,10 @@ struct BooleanEvaluator : BaseVisitor<bool>
         return !str.empty();
     }
 
+    // An object (namespace(), cycler(), joiner()) is truthy, as Python objects without __bool__ are
     bool operator()(const MapRef& val) const
     {
-        return val.GetSize() != 0ULL;
+        return val.GetObjectClass() != nullptr || val.GetSize() != 0ULL;
     }
 
     bool operator()(const ListRef& val) const

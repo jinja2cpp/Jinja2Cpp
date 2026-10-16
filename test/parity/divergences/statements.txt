@@ -10,6 +10,6 @@ statements.macro_escapes_its_loop      output      0165 deliberate: a closure ca
 statements.nested_macro_escapes_its_call output    0165 deliberate: a macro that outlives the macro call defining it reads that call's names as undefined
 statements.macro_root_name_set_after_call output   0168 a name the template sets after the call resolves outward on read; Jinja2 binds it at frame entry
 statements.macro_loop_name_set_after_call output   0168 a name the loop body sets after the call resolves outward on read; Jinja2 binds it at frame entry
-statements.namespace_unpack             accepts     0191 tuple assignment unpacks a namespace by name instead of raising TypeError
-statements.loop_callable                output      0191 a non-recursive loop object has no call, so it does not test as callable
 statements.default_root_name_set_after_context output 0168 a name the template sets after the call resolves outward on read; Jinja2 binds it at frame entry
+statements.loop_len                     output      0196 len(loop) counts the keys of the loop map, not the items of the loop
+statements.set_unpack_dict_keys        output      0197 tuple assignment from a dict takes the items named like the targets instead of unpacking its keys

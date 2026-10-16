@@ -106,7 +106,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0032](0032-custom-filters-and-tests.md) | Register custom filters and tests | parity | medium | done |
 | [0033](0033-wide-string-parity.md) | Run the corpus through the wide-string API | parity | low | done |
 | [0034](0034-none-versus-undefined.md) | Tell `None` apart from undefined | parity | high | done |
-| [0035](0035-locale-independent-string-conversion.md) | Convert between narrow and wide strings without the C locale | robustness | medium | open |
+| [0035](0035-locale-independent-string-conversion.md) | Convert between narrow and wide strings without the C locale | robustness | medium | done |
 | [0036](0036-non-string-mapping-keys.md) | Mapping keys that are not strings | parity | low | open |
 | [0037](0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups from 0016 | parity | medium | done |
 | [0038](0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | parity | medium | done |
@@ -260,8 +260,10 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0188](0188-stored-loop-cycle-follows-loop.md) | A stored `loop.cycle` keeps the position it was read at | parity | low | open |
 | [0189](0189-casefold-non-ascii.md) | Case-insensitive comparison folds only ASCII | parity | low | done |
 | [0190](0190-sameas-arity-unique-unhashable.md) | `sameas` takes any number of arguments, `unique` takes unhashable items | parity | low | open |
-| [0191](0191-objects-still-act-as-mappings.md) | namespace, cycler and joiner still act as mappings in a few places | parity | low | open |
+| [0191](0191-objects-still-act-as-mappings.md) | namespace, cycler and joiner still act as mappings in a few places | parity | low | done |
 | [0192](0192-namespace-self-reference-leak.md) | A namespace that holds itself leaks | robustness | low | dropped |
 | [0193](0193-unknown-filter-at-load.md) | An unknown filter is a load error | parity | low | open |
 | [0194](0194-self-block-runs-in-its-template.md) | A block called through `self` runs in its own template | parity | low | open |
 | [0195](0195-imported-module-that-extends.md) | An imported module that extends a parent | parity | low | open |
+| [0196](0196-loop-len-and-iter.md) | `loop` as a sized iterable | parity | low | open |
+| [0197](0197-objects-left-as-mappings.md) | Objects and dicts still read as maps of names in a few places | parity | low | open |

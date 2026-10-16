@@ -323,6 +323,46 @@
    "output": "héllo"
   },
   {
+   "id": "output.unicode_var_filters",
+   "template": "{{ u|length }}|{{ u|truncate(3, true, '…', 0) }}|{{ {u: u} }}|{{ u|list|join(',') }}",
+   "context": {
+    "n": null,
+    "t": true,
+    "f": false,
+    "i": 7,
+    "fl": 2.5,
+    "fw": 3.0,
+    "s": "text",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "nested": {
+     "k": [
+      1,
+      {
+       "x": null
+      }
+     ]
+    },
+    "strs": [
+     "a",
+     "b'c",
+     "d\"e"
+    ],
+    "u": "héllo"
+   },
+   "env": {},
+   "templates": {},
+   "output": "5|hé…|{'héllo': 'héllo'}|h,é,l,l,o"
+  },
+  {
    "id": "output.list_var",
    "template": "{{ l }}",
    "context": {
