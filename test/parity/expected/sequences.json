@@ -423,6 +423,86 @@
    "output": "éé|1"
   },
   {
+   "id": "sequences.casefold_sort",
+   "template": "{{ ['b', 'K', 'a', 'j']|sort|join(',') }}|{{ ['éb', 'Éa']|sort|join(',') }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "m": {
+     "b": 1,
+     "a": 2
+    },
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "output": "a,b,j,K|Éa,éb"
+  },
+  {
+   "id": "sequences.casefold_dictsort",
+   "template": "{{ {'Éb': 1, 'éa': 2}|dictsort|map('first')|join(',') }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "m": {
+     "b": 1,
+     "a": 2
+    },
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "output": "éa,Éb"
+  },
+  {
+   "id": "sequences.casefold_multi_code_point",
+   "template": "{{ ['ß', 'SS']|min }}|{{ ['İ', 'i']|unique|list|length }}{{ ['İ', 'i']|min }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "m": {
+     "b": 1,
+     "a": 2
+    },
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "output": "SS|2i"
+  },
+  {
+   "id": "sequences.casefold_final_sigma",
+   "template": "{{ ['ΑΣ', 'ας']|unique|list|length }}{{ ['ΑΣ', 'ασ']|unique|list|length }}",
+   "context": {
+    "s": "hello",
+    "u": "héllo wörld",
+    "e": "",
+    "cab": "cabca",
+    "text": "A long-winded sentence about well-known hyphen-separated words",
+    "para": "first paragraph is here\n\nsecond one\r\nthird",
+    "m": {
+     "b": 1,
+     "a": 2
+    },
+    "breaks": "hello worldagain\u001cend nbsp here"
+   },
+   "env": {},
+   "templates": {},
+   "output": "12"
+  },
+  {
    "id": "sequences.sum_string",
    "template": "{{ s|sum }}",
    "context": {

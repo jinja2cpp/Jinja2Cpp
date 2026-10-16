@@ -38,6 +38,39 @@ namespace jinja2
 namespace detail
 {
 
+// Python's a.lower() <=> b.lower(), comparing code points: -1, 0 or 1. The full Unicode
+// mapping (string_converter_filter.cpp); CompareIgnoreCase calls it only for non-ASCII text
+int CompareLowerUnicode(std::string_view left, std::string_view right);
+int CompareLowerUnicode(std::wstring_view left, std::wstring_view right);
+// str.lower() of UTF-8 text; its bytes order as the code points of the lowered string
+std::string LowerUtf8(std::string_view str);
+
+// Case-insensitive three-way comparison as Jinja2's ignore_case does it (str.lower()). An
+// ASCII prefix is compared inline: lowering a code point never looks at the ones after it,
+// so the first ASCII difference decides, and only a non-ASCII unit takes the Unicode path
+template<typename CharT>
+int CompareIgnoreCase(std::basic_string_view<CharT> left, std::basic_string_view<CharT> right)
+{
+    const auto size = std::min(left.size(), right.size());
+    for (size_t idx = 0; idx != size; ++idx)
+    {
+        auto l = CodeUnit(left[idx]);
+        auto r = CodeUnit(right[idx]);
+        if ((l | r) >= 0x80)
+        {
+            return CompareLowerUnicode(left, right);
+        }
+        l += (l >= 'A' && l <= 'Z') ? 'a' - 'A' : 0;
+        r += (r >= 'A' && r <= 'Z') ? 'a' - 'A' : 0;
+        if (l != r)
+        {
+            return l < r ? -1 : 1;
+        }
+    }
+    // Every code point lowers to at least one, so the longer string is greater
+    return left.size() == right.size() ? 0 : left.size() < right.size() ? -1 : 1;
+}
+
 template<typename V, size_t N>
 struct RecursiveUnwrapper
 {
@@ -1415,25 +1448,6 @@ struct BinaryMathOperation : BaseVisitor<>
         });
     }
 
-    // Python compares code points after lower(). Narrow strings are UTF-8, whose byte order is
-    // the code point order, so bytes compare as unsigned (a signed char sorts 'é' before ' ')
-    template<typename CharT>
-    struct CaseInsensitiveLess
-    {
-        bool operator()(CharT l, CharT r) const
-        {
-            if constexpr (std::is_same_v<CharT, char>)
-            {
-                auto lower = [](char ch) { return static_cast<unsigned char>(ch >= 'A' && ch <= 'Z' ? ch - 'A' + 'a' : ch); };
-                return lower(l) < lower(r);
-            }
-            else
-            {
-                return boost::algorithm::is_iless()(l, r);
-            }
-        }
-    };
-
     template<typename CharT>
     [[nodiscard]] ResultType ProcessStrings(const std::basic_string_view<CharT>& left, const std::basic_string_view<CharT>& right) const
     {
@@ -1445,36 +1459,22 @@ struct BinaryMathOperation : BaseVisitor<>
             result = InternalValue::FromText<CharT>({ left, right });
             break;
         case jinja2::BinaryExpression::LogicalEq:
-            result = m_compType == BinaryExpression::CaseSensitive ? left == right : boost::iequals(left, right);
+            result = m_compType == BinaryExpression::CaseSensitive ? left == right : jinja2::detail::CompareIgnoreCase(left, right) == 0;
             break;
         case jinja2::BinaryExpression::LogicalNe:
-            result = m_compType == BinaryExpression::CaseSensitive ? left != right : !boost::iequals(left, right);
+            result = m_compType == BinaryExpression::CaseSensitive ? left != right : jinja2::detail::CompareIgnoreCase(left, right) != 0;
             break;
         case jinja2::BinaryExpression::LogicalGt:
-            result = m_compType == BinaryExpression::CaseSensitive ? left > right : boost::lexicographical_compare(right, left, CaseInsensitiveLess<CharT>());
+            result = m_compType == BinaryExpression::CaseSensitive ? left > right : jinja2::detail::CompareIgnoreCase(left, right) > 0;
             break;
         case jinja2::BinaryExpression::LogicalLt:
-            result = m_compType == BinaryExpression::CaseSensitive ? left < right : boost::lexicographical_compare(left, right, CaseInsensitiveLess<CharT>());
+            result = m_compType == BinaryExpression::CaseSensitive ? left < right : jinja2::detail::CompareIgnoreCase(left, right) < 0;
             break;
         case jinja2::BinaryExpression::LogicalGe:
-            if (m_compType == BinaryExpression::CaseSensitive)
-            {
-                result = left >= right;
-            }
-            else
-            {
-                result = boost::iequals(left, right) ? true : boost::lexicographical_compare(right, left, CaseInsensitiveLess<CharT>());
-            }
+            result = m_compType == BinaryExpression::CaseSensitive ? left >= right : jinja2::detail::CompareIgnoreCase(left, right) >= 0;
             break;
         case jinja2::BinaryExpression::LogicalLe:
-            if (m_compType == BinaryExpression::CaseSensitive)
-            {
-                result = left <= right;
-            }
-            else
-            {
-                result = boost::iequals(left, right) ? true : boost::lexicographical_compare(left, right, CaseInsensitiveLess<CharT>());
-            }
+            result = m_compType == BinaryExpression::CaseSensitive ? left <= right : jinja2::detail::CompareIgnoreCase(left, right) <= 0;
             break;
         case jinja2::BinaryExpression::DivRemainder:
             result = PercentFormat(left, right);
