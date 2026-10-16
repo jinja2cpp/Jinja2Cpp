@@ -5,13 +5,15 @@
 #include "gtest/gtest.h"
 
 #include <jinja2cpp/error_info.h>
-#include <jinja2cpp/make_generic_list.h>
+#include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/value.h>
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -35,7 +37,7 @@ TEST(V1NamesTest, ValuePredicatesAndAccessors)
     Value list(ValuesList{ 1 });
     EXPECT_TRUE(list.isList());
     EXPECT_TRUE(Value(Reflect(std::vector<int>{ 1 })).isList());
-    list.asList().push_back(2);
+    list.asList().emplace_back(2);
     EXPECT_EQ(2U, std::as_const(list).asList().size());
 
     Value map(ValuesMap{ { "k", 1 } });

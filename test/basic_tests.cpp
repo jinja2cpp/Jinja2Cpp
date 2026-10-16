@@ -2,8 +2,8 @@
 #include "test_tools.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/generic_list_iterator.h>
-#include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
@@ -17,6 +17,7 @@
 #include <iostream>
 #include <iterator>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <system_error>
 #include <type_traits>
@@ -1015,7 +1016,7 @@ TEST(ValueApiTest, AsReturnsReferencesAndThrowsOnOtherTypes)
     EXPECT_EQ(L"w", Value(L"w").AsWString());
 
     Value list(ValuesList{ 1, 2 });
-    list.AsList().push_back(3);
+    list.AsList().emplace_back(3);
     EXPECT_EQ(3U, list.As<ValuesList>().size());
     EXPECT_EQ(&list.AsList(), &list.As<ValuesList>());
     // AsList is the ValuesList alternative only; a GenericList is reached through ToGenericList
@@ -1065,7 +1066,7 @@ TEST(ValueApiTest, NonThrowingAccessFillsOutOnlyOnMatch)
     EXPECT_EQ(1U, constList->size());
     ValuesList* mutableList = nullptr;
     ASSERT_TRUE(list.AsList(mutableList));
-    mutableList->push_back(2);
+    mutableList->emplace_back(2);
     EXPECT_EQ(2U, list.AsList().size());
     EXPECT_FALSE(str.AsList(constList));
     EXPECT_EQ(nullptr, constList);
@@ -1148,7 +1149,7 @@ TEST(ValueApiTest, VisitUnwrapsContainers)
         [](auto& item) {
             if constexpr (std::is_same_v<std::decay_t<decltype(item)>, ValuesList>)
             {
-                item.push_back(2);
+                item.emplace_back(2);
             }
         },
         list);

@@ -1113,17 +1113,18 @@ struct IsRecWrapper<RecWrapper<T>> : std::true_type
 };
 
 template<typename Fn, typename Data>
-decltype(auto) VisitUnwrapped(Fn& fn, Data& data)
+decltype(auto) VisitUnwrapped(Fn&& fn, Data& data)
 {
+    // std::visit calls the lambda once, so fn is forwarded once
     return std::visit(
         [&fn](auto& alternative) -> decltype(auto) {
             if constexpr (IsRecWrapper<std::remove_const_t<std::remove_reference_t<decltype(alternative)>>>::value)
             {
-                return fn(*alternative);
+                return std::forward<Fn>(fn)(*alternative);
             }
             else
             {
-                return fn(alternative);
+                return std::forward<Fn>(fn)(alternative);
             }
         },
         data);
@@ -1139,14 +1140,14 @@ decltype(auto) VisitUnwrapped(Fn& fn, Data& data)
 template<typename Fn>
 decltype(auto) Visit(Fn&& fn, const Value& val)
 {
-    return detail::VisitUnwrapped(fn, val.GetData());
+    return detail::VisitUnwrapped(std::forward<Fn>(fn), val.GetData());
 }
 
 //! Mutable \ref Visit: `fn` receives non-const references
 template<typename Fn>
 decltype(auto) Visit(Fn&& fn, Value& val)
 {
-    return detail::VisitUnwrapped(fn, val.GetData());
+    return detail::VisitUnwrapped(std::forward<Fn>(fn), val.GetData());
 }
 
 } // namespace jinja2

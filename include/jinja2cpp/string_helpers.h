@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_STRING_HELPERS_H
 #define JINJA2CPP_STRING_HELPERS_H
 
+#include "config.h"
 #include "value.h"
 
 #include <cwchar>
