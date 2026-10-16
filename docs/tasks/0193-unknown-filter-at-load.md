@@ -21,4 +21,4 @@ filters, and keep Jinja2's deferral for code under a constant-false `if`. User f
 added to the environment after the template loads need a decision (Jinja2 binds at
 compile time too). Tests have the same gap (0017's "Left over").
 
-**Done when.** No line of `test/parity/divergences/` names 0190.
+**Done when.** No line of `test/parity/divergences/` names 0193.
