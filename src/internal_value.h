@@ -339,8 +339,9 @@ using InternalValueList = std::vector<InternalValue>;
 // The most items a list, or characters a string, may hold when an operation builds it in
 // one go. range() reports up to 2^64 items without storing them, and reserving that many
 // asks for terabytes, which ASan aborts on (docs/tasks/0097). Python fails such a list with
-// MemoryError; Jinja2C++ reports it before allocating.
-constexpr size_t MaxSequenceSize = size_t{ 1 } << 31;
+// MemoryError; Jinja2C++ reports it before allocating. 2^26 list items take 2 GB, which is
+// what the fuzz jobs' memory limit allows in one allocation (docs/tasks/0185).
+constexpr size_t MaxSequenceSize = size_t{ 1 } << 26;
 
 // Throws when an operation is about to build a sequence longer than MaxSequenceSize
 inline void CheckSequenceSize(uint64_t size, const char* what)
@@ -504,6 +505,9 @@ struct IMapAccessor : ValueObject
     [[nodiscard]] virtual MapAttrPolicy GetAttrPolicy() const { return MapAttrPolicy::KeysOnly; }
     // A namespace() object, the only one `set obj.attr = ...` can change
     [[nodiscard]] virtual bool IsNamespace() const { return false; }
+    // The Python class of an object stored as a map (namespace(), cycler(), joiner()); null
+    // for a mapping. Such an object is neither a mapping nor iterable, and prints as itself
+    [[nodiscard]] virtual const char* GetObjectClass() const { return nullptr; }
     // A for loop's `loop` object puts the attribute `attr` in `value` and returns true when
     // it can be read without the generic lookup (`loop.index`, 0117 P1); others return false
     virtual bool GetLoopAttr(LoopAttr /*attr*/, InternalValue& /*value*/) const { return false; }
@@ -697,6 +701,7 @@ public:
     [[nodiscard]] InternalDict* GetMutableItems() const { return m_accessor ? m_accessor->GetMutableItems() : nullptr; }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const { return m_accessor ? m_accessor->GetAttrPolicy() : MapAttrPolicy::KeysOnly; }
     [[nodiscard]] bool IsNamespace() const { return m_accessor != nullptr && m_accessor->IsNamespace(); }
+    [[nodiscard]] const char* GetObjectClass() const { return m_accessor ? m_accessor->GetObjectClass() : nullptr; }
     // NOLINTNEXTLINE(modernize-use-nodiscard): see IMapAccessor::SetValue
     bool SetValue(std::string name, const InternalValue& val) const { return m_accessor != nullptr && m_accessor->SetValue(std::move(name), val); }
     [[nodiscard]] bool ShouldExtendLifetime() const { return m_accessor != nullptr && m_accessor->ShouldExtendLifetime(); }
@@ -744,6 +749,7 @@ public:
     [[nodiscard]] InternalDict* GetMutableItems() const { return Ref().GetMutableItems(); }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const { return Ref().GetAttrPolicy(); }
     [[nodiscard]] bool IsNamespace() const { return Ref().IsNamespace(); }
+    [[nodiscard]] const char* GetObjectClass() const { return Ref().GetObjectClass(); }
     // NOLINTNEXTLINE(modernize-use-nodiscard): see IMapAccessor::SetValue
     bool SetValue(std::string name, const InternalValue& val) const { return Ref().SetValue(std::move(name), val); }
     [[nodiscard]] bool ShouldExtendLifetime() const { return Ref().ShouldExtendLifetime(); }
@@ -1289,6 +1295,9 @@ MapAdapter CreateMapAdapter(InternalValueMap&& values);
 MapAdapter CreateMapAdapter(InternalDict&& values);
 // Jinja2's namespace(): a shared mapping whose attributes `set ns.attr = ...` assigns
 MapAdapter CreateNamespaceAdapter(InternalDict&& values);
+// An object of the Python class `className` (a string literal) whose attributes are `values`:
+// cycler() and joiner()
+MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className);
 MapAdapter CreateMapAdapter(const InternalValueMap* values);
 // Shares the map: the adapter keeps it alive (a loop object kept past its loop)
 MapAdapter CreateMapAdapter(std::shared_ptr<InternalValueMap> values);

@@ -120,3 +120,19 @@ TEST(GlobalFunctionsTest, DictFromUnicodeStringPairs)
               Render("{% set d = dict(['\xC3\xA9\xE4\xB8\xAD']) %}{{ d }}|{{ d['\xC3\xA9'] }}{{ d|length }}"));
     EXPECT_NE(std::string::npos, Render("{{ dict(['\xC3\xA9\xE4\xB8\xADx']) }}").find("error"));
 }
+
+// cycler() and joiner() print as Python's default object repr; the address differs per object,
+// so the parity corpus cannot hold these cases
+TEST(GlobalFunctionsTest, ObjectsPrintAsObjects)
+{
+    auto cycler = Render("{{ cycler(1) }}");
+    EXPECT_EQ(0u, cycler.find("<jinja2.utils.Cycler object at 0x")) << cycler;
+    EXPECT_EQ('>', cycler.back()) << cycler;
+    auto joiner = Render("{{ joiner() }}");
+    EXPECT_EQ(0u, joiner.find("<jinja2.utils.Joiner object at 0x")) << joiner;
+    // one object prints the same each time
+    auto twice = Render("{% set c = cycler(1) %}{{ c }}|{{ c }}");
+    auto bar = twice.find('|');
+    ASSERT_NE(std::string::npos, bar) << twice;
+    EXPECT_EQ(twice.substr(0, bar), twice.substr(bar + 1));
+}

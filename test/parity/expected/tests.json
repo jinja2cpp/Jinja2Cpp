@@ -647,6 +647,33 @@
    "output": "TFT"
   },
   {
+   "id": "tests.sameas_arity",
+   "template": "{{ 1 is sameas() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_sameas() missing 1 required positional argument: 'other'"
+   }
+  },
+  {
    "id": "tests.sameas_computed_list",
    "template": "{% set a = range(3) %}{% set b = a %}{{ 'T' if a is sameas b else 'F' }}{{ 'T' if range(3) is sameas range(3) else 'F' }}",
    "context": {
