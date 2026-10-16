@@ -43,22 +43,24 @@ namespace detail
 int CompareLowerUnicode(std::string_view left, std::string_view right);
 int CompareLowerUnicode(std::wstring_view left, std::wstring_view right);
 // str.lower() of UTF-8 text with a non-ASCII byte (string_converter_filter.cpp)
-std::string LowerUtf8Unicode(std::string_view str);
+void LowerUtf8Unicode(std::string_view str, std::string& out);
 
-// Appends str.lower() of UTF-8 text to an empty out, whose bytes then order as the code
-// points of the lowered string. ASCII text is lowered inline, as it was before 0189
+// Sets out to str.lower() of UTF-8 text, whose bytes then order as the code points of the
+// lowered string. ASCII text is lowered inline, into a sized buffer: push_back with the
+// non-ASCII check costs dictsort a third more per key (Render/dict_ops)
 inline void LowerUtf8(std::string_view str, std::string& out)
 {
+    out.resize(str.size());
     uint32_t bits = 0;
-    out.reserve(str.size());
-    for (auto ch : str)
+    for (size_t idx = 0; idx != str.size(); ++idx)
     {
+        const auto ch = str[idx];
         bits |= CodeUnit(ch);
-        out.push_back(ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch);
+        out[idx] = ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch;
     }
     if (bits >= 0x80)
     {
-        out = LowerUtf8Unicode(str);
+        LowerUtf8Unicode(str, out);
     }
 }
 

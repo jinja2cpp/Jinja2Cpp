@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -1997,12 +1998,11 @@ int CompareLower(std::basic_string_view<CharT> left, std::basic_string_view<Char
 }
 } // namespace
 
-std::string LowerUtf8Unicode(std::string_view str)
+void LowerUtf8Unicode(std::string_view str, std::string& out)
 {
-    std::string result;
+    out.clear();
     const filters::CaseChars<char> chars(str);
-    filters::AppendLower(result, chars, 0, 0, chars.cps.size());
-    return result;
+    filters::AppendLower(out, chars, 0, 0, chars.cps.size());
 }
 
 int CompareLowerUnicode(std::string_view left, std::string_view right)
