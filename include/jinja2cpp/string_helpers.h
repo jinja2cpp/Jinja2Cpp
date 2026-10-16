@@ -94,14 +94,14 @@ inline std::size_t DecodeUtf8(std::string_view str, char32_t& cp)
     else if (lead >= 0xE0 && lead <= 0xEF)
     {
         len = 3;
-        low = lead == 0xE0 ? 0xA0 : 0x80;
-        high = lead == 0xED ? 0x9F : 0xBF;
+        low = static_cast<unsigned char>(lead == 0xE0 ? 0xA0 : 0x80);
+        high = static_cast<unsigned char>(lead == 0xED ? 0x9F : 0xBF);
     }
     else if (lead >= 0xF0 && lead <= 0xF4)
     {
         len = 4;
-        low = lead == 0xF0 ? 0x90 : 0x80;
-        high = lead == 0xF4 ? 0x8F : 0xBF;
+        low = static_cast<unsigned char>(lead == 0xF0 ? 0x90 : 0x80);
+        high = static_cast<unsigned char>(lead == 0xF4 ? 0x8F : 0xBF);
     }
     else
     {
