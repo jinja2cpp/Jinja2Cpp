@@ -68,7 +68,11 @@ int CompareIgnoreCase(std::basic_string_view<CharT> left, std::basic_string_view
         }
     }
     // Every code point lowers to at least one, so the longer string is greater
-    return left.size() == right.size() ? 0 : left.size() < right.size() ? -1 : 1;
+    if (left.size() == right.size())
+    {
+        return 0;
+    }
+    return left.size() < right.size() ? -1 : 1;
 }
 
 template<typename V, size_t N>

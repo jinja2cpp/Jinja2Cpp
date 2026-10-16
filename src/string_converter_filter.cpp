@@ -1989,7 +1989,11 @@ int CompareLower(std::basic_string_view<CharT> left, std::basic_string_view<Char
 {
     const auto l = LowerCodePoints(left);
     const auto r = LowerCodePoints(right);
-    return l == r ? 0 : std::lexicographical_compare(l.begin(), l.end(), r.begin(), r.end()) ? -1 : 1;
+    if (l == r)
+    {
+        return 0;
+    }
+    return std::lexicographical_compare(l.begin(), l.end(), r.begin(), r.end()) ? -1 : 1;
 }
 } // namespace
 
