@@ -680,6 +680,11 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         {
             if (IsNotIterable(baseVal))
             {
+                // Jinja2 starts with `if value:`, so None, False and 0 give nothing
+                if (!ConvertToBool(baseVal))
+                {
+                    return ListAdapter::CreateAdapter(InternalValueList());
+                }
                 ThrowNotIterable(baseVal);
             }
             return InternalValue();
@@ -718,6 +723,11 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
     auto list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
     {
+        // Jinja2 starts with `if value:`, so None, False and 0 give nothing
+        if (!ConvertToBool(baseVal))
+        {
+            return ListAdapter::CreateAdapter(InternalValueList());
+        }
         ThrowNotIterable(baseVal);
     }
 
@@ -1280,6 +1290,11 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
     auto list = ConvertToList(baseVal, isConverted, false);
     if (!isConverted)
     {
+        // Jinja2 starts with `if value:`, so None, False and 0 give nothing
+        if (!ConvertToBool(baseVal))
+        {
+            return ListAdapter::CreateAdapter(InternalValueList());
+        }
         ThrowNotIterable(baseVal);
     }
 

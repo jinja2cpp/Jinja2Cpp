@@ -946,6 +946,11 @@ TEST(FilterErrors, NonIterableInputLikePython)
     EXPECT_EQ("Exception: unsupported operand type(s) for +=: 'int' and 'str'\n", RenderError("{{ 5|indent }}"));
     EXPECT_EQ("Exception: 'list' object has no attribute 'splitlines'\n", RenderError("{{ [1]|indent }}"));
     EXPECT_EQ("|0|[]", RenderError("{{ nope|first }}|{{ nope|length }}|{{ nope|list }}"));
+    // map, select and reject start with `if value:`: a falsy input is an empty result
+    EXPECT_EQ("[]|[]|[]|[]|[]|[]", RenderError("{{ none|map(attribute='a')|list }}|{{ false|map(attribute='a')|list }}|{{ 0|map('upper')|list }}|"
+                                               "{{ 0.0|select('odd')|list }}|{{ none|reject('odd')|list }}|{{ none|selectattr('a')|list }}"));
+    EXPECT_EQ("Exception: 'bool' object is not iterable\n", RenderError("{{ true|map(attribute='a')|list }}"));
+    EXPECT_EQ("Exception: 'int' object is not iterable\n", RenderError("{{ 5|select('odd')|list }}"));
 }
 
 // Task 0048: filters raise where Python does (item 10 and the format and round leftovers)
