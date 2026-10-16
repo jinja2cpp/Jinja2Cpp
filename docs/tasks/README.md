@@ -113,7 +113,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0039](0039-float-values-print-widened.md) | C++ `float` values print with their widened digits | parity | low | open |
 | [0040](0040-parity-shared-files-serialise-merges.md) | Parity PRs collide in shared generated files | process | high | done |
 | [0041](0041-string-literal-escapes.md) | String literal escape sequences | parity | low | open |
-| [0042](0042-loop-cycle-magic-number.md) | Global function follow-ups: globals are maps | parity | low | open |
+| [0042](0042-loop-cycle-magic-number.md) | Global function follow-ups: globals are maps | parity | low | done |
 | [0043](0043-ordered-valuesmap-2-0.md) | Insertion-ordered ValuesMap (2.0.0) | release | medium | done |
 | [0044](0044-lstrip-blocks-leftovers.md) | lstrip_blocks and modifier leftovers | parity | low | open |
 | [0045](0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | parity | low | open |
@@ -235,7 +235,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0163](0163-external-deps-package.md) | The external deps modes do not configure, and no CI job builds them | build | low | done |
 | [0164](0164-tiny-template-fixed-costs.md) | Tiny templates: the last places another engine is ahead | perf | low | open |
 | [0165](0165-macro-bodies-run-where-defined.md) | Macro and call bodies run where they were defined | parity | high | done |
-| [0166](0166-macro-defaults-per-call.md) | Macro defaults evaluated per call | parity | medium | open |
+| [0166](0166-macro-defaults-per-call.md) | Macro defaults evaluated per call | parity | medium | done |
 | [0167](0167-imported-modules-own-their-context.md) | Imported modules own their context; imported macros run in their module | parity | medium | open |
 | [0168](0168-idtracking-frame-entry-binding.md) | Bind a name the frame assigns at frame entry (Jinja2 idtracking) | parity | low | open |
 | [0169](0169-caller-without-call-block.md) | `caller()` without a call block raises | parity | low | open |
@@ -245,7 +245,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0173](0173-pprint-python-repr.md) | `pprint` prints JSON-style scalars | parity | low | open |
 | [0174](0174-msvc-c4702-suppression.md) | `/wd4702` hides unreachable code in project code on MSVC | build | low | open |
 | [0175](0175-recursive-loop-filter-leftovers.md) | Recursive loop filter: the outer `loop` at depth > 0, and the legacy `recursive if` order | parity | low | open |
-| [0176](0176-tuple-identity-and-sort-case.md) | A dictsort pair has no identity, and sort folds case inside tuples | parity | low | open |
+| [0176](0176-tuple-identity-and-sort-case.md) | A dictsort pair has no identity, and sort folds case inside tuples | parity | low | done |
 | [0177](0177-filters-on-none.md) | Filters that accept None where Python raises | parity | low | open |
 | [0178](0178-arbitrary-precision-integers.md) | Integers of arbitrary size, as Python's `int` | parity | medium | open |
 | [0179](0179-caller-markup-eval-context.md) | Autoescape has a lexical and a runtime side | parity | low | open |
@@ -254,8 +254,12 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0182](0182-markup-percent-repr.md) | `%r` and containers in Markup's `%` | parity | low | open |
 | [0183](0183-context-callable-positional-arg.md) | A user callable taking `*context` gets None for a positional argument | api | medium | open |
 | [0184](0184-gcc13-sanitizer-stringop-overflow.md) | The GCC 13 sanitizer build fails with -Wstringop-overflow | build | low | open |
-| [0185](0185-fuzz-oom-below-sequence-cap.md) | The fuzz job fails on lists below the sequence cap | robustness | medium | open |
+| [0185](0185-fuzz-oom-below-sequence-cap.md) | The fuzz job fails on lists below the sequence cap | robustness | medium | done |
 | [0186](0186-python-oracle-target.md) | Which Python and Jinja2 the parity oracle targets, and how users choose | parity | medium | open |
 | [0187](0187-generated-data-acquisition.md) | How generated tables and third-party data are acquired (SBOM) | build | low | open |
 | [0188](0188-stored-loop-cycle-follows-loop.md) | A stored `loop.cycle` keeps the position it was read at | parity | low | open |
-| [0189](0189-casefold-non-ascii.md) | Case-insensitive comparison folds only ASCII | parity | low | open |
+| [0189](0189-casefold-non-ascii.md) | Case-insensitive comparison folds only ASCII | parity | low | done |
+| [0190](0190-sameas-arity-unique-unhashable.md) | `sameas` takes any number of arguments, `unique` takes unhashable items | parity | low | open |
+| [0191](0191-objects-still-act-as-mappings.md) | namespace, cycler and joiner still act as mappings in a few places | parity | low | open |
+| [0192](0192-namespace-self-reference-leak.md) | A namespace that holds itself leaks | robustness | low | open |
+| [0193](0193-unknown-filter-at-load.md) | An unknown filter is a load error | parity | low | open |
