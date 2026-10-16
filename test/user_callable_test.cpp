@@ -283,7 +283,20 @@ TEST_P(UserCallableFilterTest, Test)
         return testValue == pattern;
         }, ArgInfo{"testVal"}, ArgInfo{"pattern"});
 
-    PerformBothTests(source, testParam.result, params);
+    // Values used as filters and tests need Settings::userCallablesAsFilters (docs/tasks/0193)
+    TemplateEnv env;
+    env.GetSettings().userCallablesAsFilters = true;
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load(source).has_value()) << source;
+    EXPECT_EQ(testParam.result, tpl.RenderAsString(params).value()) << source;
+    TemplateW tplW(&env);
+    ASSERT_TRUE(tplW.Load(ConvertString<std::wstring>(source)).has_value()) << source;
+    EXPECT_EQ(ConvertString<std::wstring>(testParam.result), tplW.RenderAsString(params).value()) << source;
+
+    // Without it they are unknown: a load error, or a render error where Jinja2 defers the check
+    Template plain;
+    auto loaded = plain.Load(source);
+    EXPECT_TRUE(!loaded || !plain.RenderAsString(params)) << source;
 }
 
 INSTANTIATE_TEST_SUITE_P(BoolParamConvert, UserCallableParamConvertTest, ::testing::Values(
@@ -430,12 +443,21 @@ TEST(EnvCallablesTest, FiltersAndTestsBindWhenTheTemplateIsLoaded)
     EXPECT_FALSE(env.FindFilter("tag"));
     EXPECT_FALSE(env.FindTest("short"));
     // Loaded templates keep the filters and tests they were loaded with, as in Jinja2; `is filter`
-    // and `is test` look the name up when they run (the global 'tag' still counts as a filter)
-    EXPECT_EQ("<a> True False True False", tpl.RenderAsString({}).value());
+    // and `is test` look the name up when they run
+    EXPECT_EQ("<a> True False False False", tpl.RenderAsString({}).value());
 
+    // The global is no filter (docs/tasks/0193)...
     Template other(&env);
-    ASSERT_TRUE(other.Load("{{ 'a'|tag }}").has_value());
-    EXPECT_EQ("global a", other.RenderAsString({}).value());
+    auto loaded = other.Load("{{ 'a'|tag }}");
+    ASSERT_FALSE(loaded.has_value());
+    EXPECT_EQ(ErrorCode::UnknownFilter, loaded.error().GetCode());
+    EXPECT_EQ("noname.j2tpl:1:8: error: No filter named 'tag'.\n{{ 'a'|tag }}\n    ---^-------", loaded.error().ToString());
+
+    // ... unless Settings::userCallablesAsFilters looks such names up when they run
+    env.GetSettings().userCallablesAsFilters = true;
+    Template legacy(&env);
+    ASSERT_TRUE(legacy.Load("{{ 'a'|tag }}").has_value());
+    EXPECT_EQ("global a", legacy.RenderAsString({}).value());
 }
 
 TEST(EnvCallablesTest, WideTemplate)

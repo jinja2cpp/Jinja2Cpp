@@ -26,9 +26,7 @@ The `none` test landed with 0034 (#313).
 **Done when.** No line of `test/parity/divergences/` names task 0017, and `ctest -R parity` passes.
 
 **Outcome.** All 39 Jinja2 tests exist; `x is odd and y is float` now matches. Left over:
-- An unknown test is a render-time error ("No test named 'x'."), not a load-time one,
-  because tests registered as user callables are only known once the template renders. A
-  branch never taken therefore never fails, as in Jinja2.
+- ~~An unknown test is a render-time error, not a load-time one.~~ Load-time since 0193.
 - `escaped` is always false until strings carry a markup flag (0025 owns
   `tests.escaped` and `autoescape.escaped_test`).
 - `sameas` compares scalars by kind and value (CPython caches small ints and interns

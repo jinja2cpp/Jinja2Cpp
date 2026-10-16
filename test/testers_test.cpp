@@ -1,6 +1,8 @@
 #include "test_tools.h"
 
+#include <jinja2cpp/error_info.h>
 #include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
@@ -430,8 +432,19 @@ INSTANTIATE_TEST_SUITE_P(EscapedTest, TestersGenericTest, ::testing::Values(
 
 TEST(TestersTest, UnknownTestIsAnError)
 {
-    // Jinja2 fails at compile time; Jinja2C++ resolves user testers at render time
-    for (std::string source : { "{{ 1 is nonexistent }}", "{{ [1, 2]|select('nonexistent')|list }}", "{{ 1 is intValue }}" })
+    // Jinja2 fails at compile time, outside an `if` (docs/tasks/0193)
+    for (std::string source : { "{{ 1 is nonexistent }}", "{{ 1 is intValue }}", "{% macro m() %}{{ 1 is nonexistent }}{% endmacro %}" })
+    {
+        Template tpl;
+        auto loaded = tpl.Load(source);
+        ASSERT_FALSE(loaded) << source;
+        EXPECT_EQ(ErrorCode::UnknownTest, loaded.error().GetCode()) << source;
+        EXPECT_EQ("noname.j2tpl:1:", loaded.error().ToString().substr(0, 15)) << source;
+        EXPECT_NE(std::string::npos, loaded.error().ToString().find("No test named '")) << source << ": " << loaded.error().ToString();
+    }
+
+    // A test named when it runs, and one in an `if`, fail when they run
+    for (std::string source : { "{{ [1, 2]|select('nonexistent')|list }}", "{% if true %}{{ 1 is nonexistent }}{% endif %}" })
     {
         Template tpl;
         ASSERT_TRUE(tpl.Load(source)) << source;
@@ -449,9 +462,19 @@ TEST(TestersTest, UserCallablesCountAsTestsAndFilters)
 {
     ValuesMap params{ { "mytest", MakeCallable([](const std::string& val) { return val.empty(); }, ArgInfo{ "val" }) } };
 
-    Template tpl;
+    // Only with Settings::userCallablesAsFilters; by default, as in Jinja2, a value is no test
+    TemplateEnv env;
+    env.GetSettings().userCallablesAsFilters = true;
+    Template tpl(&env);
     ASSERT_TRUE(tpl.Load("{{ 'T' if 'mytest' is test else 'F' }}{{ 'T' if 'mytest' is filter else 'F' }}{{ 'T' if '' is mytest else 'F' }}"));
     EXPECT_EQ("TTT", tpl.RenderAsString(params).value());
+
+    Template plain;
+    ASSERT_TRUE(plain.Load("{{ 'T' if 'mytest' is test else 'F' }}{{ 'T' if 'mytest' is filter else 'F' }}"));
+    EXPECT_EQ("FF", plain.RenderAsString(params).value());
+    auto loaded = plain.Load("{{ '' is mytest }}");
+    ASSERT_FALSE(loaded);
+    EXPECT_EQ(ErrorCode::UnknownTest, loaded.error().GetCode());
 }
 
 TEST(TestersTest, StartsWithWithoutArgument)

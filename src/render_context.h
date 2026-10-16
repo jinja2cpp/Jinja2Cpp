@@ -791,6 +791,9 @@ public:
     {
         return m_rendererCallback ? m_rendererCallback->GetEnv() : nullptr;
     }
+    // Settings::userCallablesAsFilters of the template: whether a name that is no filter or test
+    // of the template may be a callable among the values
+    [[nodiscard]] bool UserCallablesAsFilters() const { return m_rendererCallback ? m_rendererCallback->GetSettings().userCallablesAsFilters : false; }
     // A context for a nested render: with `includeCurrentContext` it sees all of this
     // context's names (see the constructor above for how long it may live), otherwise only
     // the global ones

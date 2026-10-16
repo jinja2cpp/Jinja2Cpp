@@ -262,7 +262,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0190](0190-sameas-arity-unique-unhashable.md) | `sameas` takes any number of arguments, `unique` takes unhashable items | parity | low | done |
 | [0191](0191-objects-still-act-as-mappings.md) | namespace, cycler and joiner still act as mappings in a few places | parity | low | done |
 | [0192](0192-namespace-self-reference-leak.md) | A namespace that holds itself leaks | robustness | low | dropped |
-| [0193](0193-unknown-filter-at-load.md) | An unknown filter is a load error | parity | low | open |
+| [0193](0193-unknown-filter-at-load.md) | An unknown filter is a load error | parity | low | done |
 | [0194](0194-self-block-runs-in-its-template.md) | A block called through `self` runs in its own template | parity | low | done |
 | [0195](0195-imported-module-that-extends.md) | An imported module that extends a parent | parity | low | done |
 | [0196](0196-loop-len-and-iter.md) | `loop` as a sized iterable | parity | low | open |
@@ -272,3 +272,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0200](0200-tester-arity.md) | Every built-in test checks its arguments | parity | low | open |
 | [0201](0201-block-reads-root-binding.md) | A block reads the context, not the root's entry binding | parity | low | open |
 | [0202](0202-loop-else-body-frame.md) | A loop's `else` body is a frame of its own | parity | low | open |
+| [0203](0203-output-after-extends-not-evaluated.md) | Output after a top-level extends is not evaluated | parity | low | open |
