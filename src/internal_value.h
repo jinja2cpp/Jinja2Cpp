@@ -537,7 +537,6 @@ public:
     }
     [[nodiscard]] InternalValue GetValueByIndex(int64_t idx) const;
     [[nodiscard]] bool ShouldExtendLifetime() const { return m_accessor != nullptr && m_accessor->ShouldExtendLifetime(); }
-    [[nodiscard]] ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const;
     [[nodiscard]] InternalValueList ToValueList() const;
     // Passes the items to fn in order until it returns false, without an iterator
     void ForEach(IListAccessor::ItemVisitor fn) const;
@@ -646,7 +645,6 @@ public:
     [[nodiscard]] std::optional<size_t> GetSize() const { return Ref().GetSize(); }
     [[nodiscard]] InternalValue GetValueByIndex(int64_t idx) const;
     [[nodiscard]] bool ShouldExtendLifetime() const { return Ref().ShouldExtendLifetime(); }
-    [[nodiscard]] ListAdapter ToSubscriptedList(const InternalValue& subscript, bool asRef = false) const;
     [[nodiscard]] InternalValueList ToValueList() const;
     // Passes the items to fn in order until it returns false, without an iterator
     void ForEach(IListAccessor::ItemVisitor fn) const { Ref().ForEach(fn); }
@@ -1672,7 +1670,6 @@ InternalValue Subscript(const InternalValue& val, const std::string& subscript, 
 InternalValue Slice(const InternalValue& val, const InternalValue& start, const InternalValue& stop, const InternalValue& step);
 std::string AsString(const InternalValue& val);
 ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool strictConversion = true);
-ListAdapter ConvertToList(const InternalValue& val, const InternalValue& subscipt, bool& isConverted, bool strictConversion = true);
 
 // Containers of values (lists, call arguments, slots) move them when they grow only if the
 // move cannot throw; otherwise they copy every item (docs/tasks/0140)

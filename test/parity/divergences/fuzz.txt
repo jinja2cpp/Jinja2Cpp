@@ -1,9 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the fuzz area (cases/fuzz.py).
 # Format and kinds: test/parity/README.md.
 
-fuzz.dictsort_int                       accepts     0177 dictsort of a number renders nothing instead of raising AttributeError
-fuzz.first_bool                         accepts     0177 first of a bool renders nothing instead of raising TypeError
-fuzz.length_int                         accepts     0177 length of a number renders nothing instead of raising TypeError
 fuzz.list_contains_itself               rejects     0049 a list cannot contain itself (lists are values), so l.append(l) fails
-fuzz.list_int                           accepts     0177 list of a number renders nothing instead of raising TypeError
-fuzz.sort_none                          accepts     0177 sort of None renders nothing instead of raising TypeError

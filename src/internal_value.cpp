@@ -880,29 +880,6 @@ ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool stri
     return *result;
 }
 
-ListAdapter ConvertToList(const InternalValue& val, const InternalValue& subscipt, bool& isConverted, bool strictConversion)
-{
-    if (auto list = AsList(val))
-    {
-        isConverted = true;
-        return IsEmpty(subscipt) ? list->ToAdapter() : list->ToAdapter().ToSubscriptedList(subscipt, false);
-    }
-    auto result = Apply<ListConverter>(val, strictConversion);
-    if (!result)
-    {
-        isConverted = false;
-        return ListAdapter();
-    }
-    isConverted = true;
-
-    if (IsEmpty(subscipt))
-    {
-        return std::move(*result);
-    }
-
-    return result->ToSubscriptedList(subscipt, false);
-}
-
 template<typename T>
 class ByRef
 {
@@ -1515,53 +1492,6 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
     };
 
     return ListAdapter(MakeRef<Adapter>(RangeInfo{ start, stop, step }));
-}
-
-template<typename Holder>
-auto CreateIndexedSubscribedList(Holder&& holder, const InternalValue& subscript, size_t size)
-{
-    return ListAdapter::CreateAdapter(
-        size, [h = std::forward<Holder>(holder), subscript](size_t idx) -> InternalValue { return Subscript(h.Get().GetValueByIndex(static_cast<int64_t>(idx)), subscript, nullptr); });
-}
-
-template<typename Holder>
-auto CreateGenericSubscribedList(Holder&& holder, const InternalValue& subscript)
-{
-    return ListAdapter::CreateAdapter([h = std::forward<Holder>(holder), e = std::optional<ListAccessorEnumeratorPtr>(), isFirst = true, isLast = false, subscript]() mutable {
-        using ResultType = std::optional<InternalValue>;
-        if (isFirst)
-        {
-            e = h.Get().GetEnumerator();
-            isFirst = false;
-        }
-        // Advance before every item, not only the first: the source is walked once
-        if (isLast || !(*e)->MoveNext())
-        {
-            isLast = true;
-            return ResultType();
-        }
-
-        return ResultType(Subscript((*e)->GetCurrent(), subscript, nullptr));
-    });
-}
-
-ListAdapter ListRef::ToSubscriptedList(const InternalValue& subscript, bool asRef) const
-{
-    auto listSize = GetSize();
-    if (asRef)
-    {
-        ListRef ref = *this;
-        const ByVal<ListRef> holder(std::move(ref)); // NOLINT(performance-move-const-arg): ByVal takes T&&
-        return listSize ? CreateIndexedSubscribedList(holder, subscript, *listSize) : CreateGenericSubscribedList(holder, subscript);
-    }
-
-    BySharedVal<ListAdapter> holder(ToAdapter());
-    return listSize ? CreateIndexedSubscribedList(std::move(holder), subscript, *listSize) : CreateGenericSubscribedList(std::move(holder), subscript);
-}
-
-ListAdapter ListAdapter::ToSubscriptedList(const InternalValue& subscript, bool asRef) const
-{
-    return Ref().ToSubscriptedList(subscript, asRef);
 }
 
 InternalValueList ListRef::ToValueList() const

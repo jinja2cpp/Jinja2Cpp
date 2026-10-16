@@ -1896,6 +1896,17 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         }
         CheckStrictUndefined(*undef);
     }
+    else if (m_mode == IndentMode && !IsStringValue(baseVal))
+    {
+        // indent appends "\n" to its value before any str() call: only a string takes it,
+        // and a list that does has no splitlines()
+        const std::string typeName = Apply<visitors::PythonTypeNameGetter>(baseVal);
+        if (baseVal.Kind() == ValueKind::List)
+        {
+            throw std::runtime_error("'" + typeName + "' object has no attribute 'splitlines'");
+        }
+        throw std::runtime_error("unsupported operand type(s) for +=: '" + typeName + "' and 'str'");
+    }
     switch (m_mode)
     {
     case SafeMode:
