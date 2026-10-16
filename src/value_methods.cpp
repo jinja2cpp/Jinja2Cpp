@@ -2299,29 +2299,6 @@ bool IsMutable(const InternalValue& value)
     return false;
 }
 
-InternalValue CopyContainer(const InternalValue& value)
-{
-    if (auto list = AsList(value))
-    {
-        auto copy = ListAdapter::CreateAdapter(list->ToValueList());
-        if (list->IsTuple())
-        {
-            copy.MarkAsTuple();
-        }
-        return copy;
-    }
-    if (auto map = AsMap(value))
-    {
-        InternalDict items;
-        for (auto& key : KeysOf(*map))
-        {
-            items[key] = map->GetValueByName(key);
-        }
-        return CreateMapAdapter(std::move(items));
-    }
-    return value;
-}
-
 InternalValue MakeMutable(const InternalValue& value)
 {
     if (IsMutable(value))

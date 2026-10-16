@@ -2060,7 +2060,6 @@ MacroStatement::MacroStatement(NodeArena& nodes, std::string_view name, const Ma
 struct MacroStatement::CallableBody
 {
     const MacroStatement* macro;
-    std::vector<MacroDefault> defaults;
     ArenaView nodes;
     bool autoescape;
     // The body resolves its names where the macro is defined, not through its caller
@@ -2079,29 +2078,15 @@ struct MacroStatement::CallableBody
         // A macro called from another template (imported, or passed as `caller`) runs in its own tree
         const ArenaSwitch nodesSwitch(home, nodes);
         AutoescapeGuard autoescapeGuard(home, autoescape);
-        macro->InvokeMacroRenderer(defaults, callParams, stream, home, link);
+        macro->InvokeMacroRenderer(callParams, stream, home, link);
     }
 };
 
 Callable MacroStatement::MakeCallable(RenderContext& values) const
 {
-    // A copy of the view: evaluating a default may switch the context's
-    const auto nodes = values.Nodes();
-    const auto params = nodes[m_params];
-    std::vector<MacroDefault> definedDefaults(params.size());
-    for (std::size_t idx = 0; idx < params.size(); ++idx)
-    {
-        const auto& p = params[idx];
-        if (p.defaultValue && !p.defaultRefersToArgs)
-        {
-            auto& defaultValue = definedDefaults[idx];
-            defaultValue.value = nodes[p.defaultValue].Evaluate(values);
-            defaultValue.isMutable = methods::IsMutable(defaultValue.value);
-        }
-    }
-
-    // The body escapes as where the macro is defined; the caller decides whether the result is Markup
-    Callable result(Callable::Macro, CallableBody{ this, std::move(definedDefaults), values.Nodes(), values.IsAutoescape(), ClosureSite(values), m_readsSlotsOnly });
+    // The body escapes as where the macro is defined; the caller decides whether the result is
+    // Markup. The defaults are evaluated by each call (BindMacroDefaults)
+    Callable result(Callable::Macro, CallableBody{ this, values.Nodes(), values.IsAutoescape(), ClosureSite(values), m_readsSlotsOnly });
     result.SetAttributes(m_attributes);
     return result;
 }
@@ -2318,43 +2303,24 @@ void BindSpecialMacroArgs(const MacroArgBinder& binder, bool catchKwargs, bool c
     }
 }
 
-// Binds the defaults of the arguments that were not provided
+// Binds the defaults of the arguments that were not provided. Jinja2 evaluates every default
+// on each call, in the body's scope where the macro is defined (0038 plan, section 4.3), so a
+// default sees the names there as they are now, and `acc=[]` is a new list each time
 template<typename Bind>
-void BindMacroDefaults(const MacroArgBinder& binder, const std::vector<MacroDefault>& definedDefaults, RenderContext& context, const Bind& bind)
+void BindMacroDefaults(const MacroArgBinder& binder, RenderContext& context, const Bind& bind)
 {
     for (std::size_t idx = 0; idx < binder.params.size(); ++idx)
     {
         const auto& p = binder.params[idx];
-        if (!p.defaultValue || binder.IsProvided(idx))
-        {
-            continue;
-        }
-
-        if (p.defaultRefersToArgs)
+        if (p.defaultValue && !binder.IsProvided(idx))
         {
             bind(idx, binder.Name(idx), binder.nodes[p.defaultValue].Evaluate(context));
-            continue;
         }
-        // Jinja2 evaluates defaults on every call, so acc=[] is a new list each time; the
-        // template's lists and dicts are shared, so the stored one is copied
-        const auto& defaultValue = definedDefaults[idx];
-        if (defaultValue.isMutable)
-        {
-            bind(idx, binder.Name(idx), methods::CopyContainer(defaultValue.value));
-            continue;
-        }
-        bind(idx, binder.Name(idx), defaultValue.value);
     }
 }
 
 template<typename Bind>
-void BindMacroCall(const MacroArgBinder& binder,
-                   bool catchKwargs,
-                   bool catchVarargs,
-                   bool hasArgDefaults,
-                   const std::vector<MacroDefault>& definedDefaults,
-                   RenderContext& context,
-                   const Bind& bind)
+void BindMacroCall(const MacroArgBinder& binder, bool catchKwargs, bool catchVarargs, bool hasArgDefaults, RenderContext& context, const Bind& bind)
 {
     // Missing arguments and the special ones are bound before the defaults are evaluated, so
     // a default sees them and never an outer variable named like a later argument. When no
@@ -2365,16 +2331,12 @@ void BindMacroCall(const MacroArgBinder& binder,
     {
         BindSpecialMacroArgs(binder, catchKwargs, catchVarargs, bind);
     }
-    BindMacroDefaults(binder, definedDefaults, context, bind);
+    BindMacroDefaults(binder, context, bind);
 }
 } // namespace
 
 // Binds the call arguments the way Jinja2's Macro.__call__ does
-void MacroStatement::InvokeMacroRenderer(const std::vector<MacroDefault>& definedDefaults,
-                                         const CallParams& callParams,
-                                         OutStream& stream,
-                                         RenderContext& context,
-                                         size_t link) const
+void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream& stream, RenderContext& context, size_t link) const
 {
     const RenderDepthGuard depthGuard;
 
@@ -2402,7 +2364,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<MacroDefault>& define
         {
             context.PushFrameView({}, link);
         }
-        BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, definedDefaults, context, [&scope](std::size_t /*slot*/, const HashedName& name, auto&& value) {
+        BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, context, [&scope](std::size_t /*slot*/, const HashedName& name, auto&& value) {
             scope.ForName(name) = std::forward<decltype(value)>(value);
         });
         context.Nodes()[m_mainBody].Render(stream, context);
@@ -2420,7 +2382,7 @@ void MacroStatement::InvokeMacroRenderer(const std::vector<MacroDefault>& define
     const auto slots = context.Frame().slots.first(names.size());
     SlotsGuard guard(context, slots, names);
     context.PushFrameView({ slots, names, context.Nodes() }, link);
-    BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, definedDefaults, context, [&context, slots, names](std::size_t slot, const HashedName& /*name*/, auto&& value) {
+    BindMacroCall(binder, catchKwargs, catchVarargs, m_hasArgDefaults, context, [&context, slots, names](std::size_t slot, const HashedName& /*name*/, auto&& value) {
         context.BindSlot(slots[slot], names[slot].hash, std::forward<decltype(value)>(value));
     });
     context.Nodes()[m_mainBody].Render(stream, context);

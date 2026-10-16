@@ -44,8 +44,8 @@ struct MacroParamInfo
 {
     std::string paramName;
     NodeRef<Expression> defaultValue;
-    // The default names an argument of the macro, so it is evaluated per call in the
-    // macro scope; other defaults are evaluated where the macro is defined
+    // The default names an argument of the macro, so the missing arguments are bound as
+    // undefined before any default is evaluated (BindMacroCall)
     bool defaultRefersToArgs = false;
 };
 
@@ -58,13 +58,6 @@ struct MacroParam
     std::size_t hash = 0;
     NodeRef<Expression> defaultValue;
     bool defaultRefersToArgs = false;
-};
-
-// A default a macro evaluates where it is defined, and whether each call gets a copy of it
-struct MacroDefault
-{
-    InternalValue value;
-    bool isMutable = false;
 };
 
 // A name `from ... import` takes, and the name it gets: `name as alias`
@@ -687,7 +680,7 @@ protected:
     Callable MakeCallable(RenderContext& values) const;
     // Runs the body in `context`, its home (HomeCall), in a scope linked below `link`
     // (ScopeView::linkBelow)
-    void InvokeMacroRenderer(const std::vector<MacroDefault>& definedDefaults, const CallParams& callParams, OutStream& stream, RenderContext& context, size_t link) const;
+    void InvokeMacroRenderer(const CallParams& callParams, OutStream& stream, RenderContext& context, size_t link) const;
     // Adds the attributes that depend on the body to the ones the constructor made
     void CompleteAttributes();
     // The macro's name in messages: none for the caller of a call block
@@ -709,7 +702,7 @@ protected:
     unsigned m_caughtNames = 0;
     // A `caller` argument without a default
     bool m_callerWithoutDefault = false;
-    // A default names another argument, so it is evaluated per call after the arguments are bound
+    // A default names another argument, so the missing arguments are bound as undefined first
     bool m_hasArgDefaults = false;
     // What the parameters and the body made (SetBodyMarks), and the verdict (SetReadsSlotsOnly)
     std::uint32_t m_bodyNameRefs = 0;
