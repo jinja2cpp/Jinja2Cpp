@@ -53,4 +53,11 @@ CASES = [
     ("namespace_tojson", "{{ namespace(a=1)|tojson }}"),
     ("objects_attributes", "{{ joiner('-').sep }}|{{ namespace(a=1)|attr('a') }}"),
     ("cycler_sameas", "{% set c = cycler(1) %}{{ 'T' if c is sameas c else 'F' }}{{ 'T' if c is sameas cycler(1) else 'F' }}"),
+    ("namespace_items", "{{ namespace(a=1)|items|list }}"),
+    ("namespace_dictsort", "{{ namespace(a=1)|dictsort }}"),
+    ("namespace_xmlattr", "{{ namespace(a=1)|xmlattr }}"),
+    ("namespace_pprint", "{{ namespace(a=1)|pprint }}"),
+    ("cycler_tojson", "{{ cycler(1)|tojson }}"),
+    ("joiner_length", "{{ joiner()|length }}"),
+    ("objects_inequality", "{% set c = cycler(1) %}{{ 'T' if c != c else 'F' }}{{ 'T' if namespace(a=1) != namespace(a=1) else 'F' }}"),
 ]

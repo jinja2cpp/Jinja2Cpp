@@ -152,6 +152,9 @@ CASES = [
     ("namespace_unpack", "{% set a, b = namespace(a=1, b=2) %}{{ a }}{{ b }}"),
     ("loop_recursive_callable", "{% for i in [1] recursive %}{{ 'T' if loop is callable else 'F' }}{% endfor %}"),
     ("loop_callable", "{% for i in [1] %}{{ 'T' if loop is callable else 'F' }}{% endfor %}"),
+    ("loop_call_not_recursive", "{% for i in [1] %}{{ loop([2]) }}{% endfor %}"),
+    ("loop_not_mapping", "{% for i in [1] %}{{ 'T' if loop is mapping else 'F' }}{% endfor %}"),
+    ("loop_len", "{% for i in [1, 2] %}{{ loop|length }}{% endfor %}"),
     ("namespace_no_dict_methods", "{% set ns = namespace(a=1) %}{{ ns.get('a') }}"),
     ("set_nested_target", "{% set (a, b), c = [[1, 2], 3] %}{{ a }}{{ b }}{{ c }}"),
     # with

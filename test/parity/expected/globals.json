@@ -485,6 +485,82 @@
    "env": {},
    "templates": {},
    "output": "TF"
+  },
+  {
+   "id": "globals.namespace_items",
+   "template": "{{ namespace(a=1)|items|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Can only get item pairs from a mapping."
+   }
+  },
+  {
+   "id": "globals.namespace_dictsort",
+   "template": "{{ namespace(a=1)|dictsort }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "items"
+   }
+  },
+  {
+   "id": "globals.namespace_xmlattr",
+   "template": "{{ namespace(a=1)|xmlattr }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "items"
+   }
+  },
+  {
+   "id": "globals.namespace_pprint",
+   "template": "{{ namespace(a=1)|pprint }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<Namespace {'a': 1}>"
+  },
+  {
+   "id": "globals.cycler_tojson",
+   "template": "{{ cycler(1)|tojson }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Object of type Cycler is not JSON serializable"
+   }
+  },
+  {
+   "id": "globals.joiner_length",
+   "template": "{{ joiner()|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'Joiner' has no len()"
+   }
+  },
+  {
+   "id": "globals.objects_inequality",
+   "template": "{% set c = cycler(1) %}{{ 'T' if c != c else 'F' }}{{ 'T' if namespace(a=1) != namespace(a=1) else 'F' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "FT"
   }
  ]
 }

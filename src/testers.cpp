@@ -460,8 +460,9 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         result = valKind == TestKind::List || valKind == TestKind::KVPair || valKind == TestKind::Map || valKind == TestKind::String;
         break;
     case IsMappingMode:
-        // A dictsort pair is a 2-tuple, not a mapping
-        result = valKind == TestKind::Map;
+        // A dictsort pair is a 2-tuple, not a mapping, and neither is an object stored as a
+        // map (loop, an imported template)
+        result = valKind == TestKind::Map && AsMap(baseVal)->GetAttrPolicy() != MapAttrPolicy::KeysOnly;
         break;
     case IsNumberMode:
         // Python's numbers.Number, which bool belongs to
