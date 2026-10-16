@@ -293,6 +293,23 @@ MULTISTR_TEST(MacroTest, RecursiveCallHidesTheOuterCallsSet, R"({% macro m(n) %}
     params = PrepareTestData();
 }
 
+// Every default is evaluated by each call (docs/tasks/0166): a list default is a new list
+// each time, even one the template folds to a constant or builds from a name
+MULTISTR_TEST(MacroTest, MutableDefaultIsFreshPerCall, R"({% macro m(l=[], k=[x]) %}{% set _ = l.append(1) %}{% set _ = k.append(2) %}{{ l }}{{ k }}{% endmacro %}{% set x = 0 %}{{ m() }}{{ m() }})",
+              //--------------
+              R"([1][0, 2][1][0, 2])")
+{
+    params = PrepareTestData();
+}
+
+// A default that calls a macro runs once per call that needs it, and never at definition
+MULTISTR_TEST(MacroTest, DefaultCallingAMacroRunsPerCall, R"({% set ns = namespace(n=0) %}{% macro bump() %}{% set ns.n = ns.n + 1 %}{{ ns.n }}{% endmacro %}{% macro m(a=bump()) %}{{ a }}{% endmacro %}{{ ns.n }}{{ m() }}{{ m('x') }}{{ m() }}{{ ns.n }})",
+              //--------------
+              R"(01x22)")
+{
+    params = PrepareTestData();
+}
+
 // A body that hands the context to a filter reads names by lookup: a call of it made inside a
 // loop that cached the loop's names takes its own lookup cache epoch
 TEST(MacroContextTest, ContextFilterInABodyCalledInsideALoop)
