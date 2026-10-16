@@ -950,7 +950,7 @@ struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
             return "list";
         }
         const char* result = nullptr;
-        list.ForEach([&result](InternalValue&& item) {
+        list.ForEach([&result](const InternalValue& item) {
             result = Apply<UnhashableTypeGetter>(item);
             return result == nullptr;
         });
