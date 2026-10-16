@@ -338,4 +338,8 @@ CASES = [
     ("caller_missing_strict", "{% macro m() %}[{{ caller }}]{% endmacro %}{{ m() }}", {"env": {"undefined": "strict"}}),
     ("caller_passed_as_keyword", "{% macro c() %}C{% endmacro %}{% macro m() %}[{{ caller() }}]{% endmacro %}{{ m(caller=c) }}"),
     ("caller_passed_as_none", "{% macro m() %}[{{ caller }}]{{ caller is defined }}{% endmacro %}{{ m(caller=none) }}"),
+    # Call block leftovers (docs/tasks/0199)
+    ("call_block_caller_repr", "{% macro m() %}{{ caller }}{% endmacro %}{% call m() %}x{% endcall %}"),
+    ("call_block_explicit_caller_repeated", "{% macro c() %}{% endmacro %}{% macro m() %}{{ caller() }}{% endmacro %}{% call m(caller=c) %}x{% endcall %}"),
+    ("call_block_dotted_callee", "{% macro m() %}[{{ caller() }}]{% endmacro %}{% set ns = {'m': m} %}{% call ns.m() %}x{% endcall %}"),
 ]
