@@ -203,6 +203,12 @@ CASES = [
     ("unknown_filter_block_filter_in_unused_branch", "{% if false %}{% filter nonexistent %}a{% endfilter %}{% endif %}ok"),
     ("unknown_filter_set_block_in_unused_branch", "{% if false %}{% set y | nonexistent %}a{% endset %}{% endif %}ok"),
     ("unknown_filter_in_if_in_macro", "{% macro m() %}{% if false %}{{ x|nonexistent }}{% endif %}{% endmacro %}ok"),
+    # after a top-level extends Jinja2 compiles no output of the body, except in macros, call and set blocks and blocks
+    ("unknown_filter_output_after_extends", "{% extends 'a' %}{{ x|nonexistent }}{% for i in l %}{{ i|nonexistent }}{% endfor %}", {"templates": {"a": "A"}}),
+    ("unknown_filter_output_before_extends", "{{ x|nonexistent }}{% extends 'a' %}", {"templates": {"a": "A"}}),
+    ("unknown_filter_output_after_extends_in_if", "{% if true %}{% extends 'a' %}{% endif %}{{ x|nonexistent }}", {"templates": {"a": "A"}}),
+    ("unknown_filter_macro_after_extends", "{% extends 'a' %}{% macro m() %}{{ x|nonexistent }}{% endmacro %}", {"templates": {"a": "A"}}),
+    ("unknown_filter_set_block_after_extends", "{% extends 'a' %}{% for i in l %}{% set y %}{{ x|nonexistent }}{% endset %}{% endfor %}", {"templates": {"a": "A"}}),
     ("filters_on_bool", "{{ true|int }}|{{ true|abs }}|{{ false|lower }}"),
     # equal items that cannot be ordered (task 0015)
     ("sort_equal_unorderable", "{{ [{'a': 1}, {'a': 1}]|sort|length }}|{{ [n, n]|sort|length }}"),

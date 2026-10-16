@@ -32,4 +32,6 @@ first left as `ErrorCode::UnknownFilter` or `UnknownTest`, root body before bloc
 compiles them. Tests are covered too (0017's left over). Ruslan chose (2026-10-16) Jinja2's
 behaviour by default plus `Settings::userCallablesAsFilters`, which keeps 1.x's lookup of
 filters and tests among the render parameters and globals when they run; without it that
-lookup, and `is filter`/`is test` counting such values, are gone.
+lookup, and `is filter`/`is test` counting such values, are gone. As in Jinja2, output tags
+(`{{ }}`, `trans`) after a top-level `extends` are not checked unless inside a macro, call
+block, set block or block; Jinja2C++ still evaluates that output when it renders (0203).

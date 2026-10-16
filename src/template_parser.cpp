@@ -856,6 +856,10 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
     auto renderer = m_nodes.Make<ExtendsStatement>(*expr);
     statementsInfo.back().body.emplace_back(renderer);
     m_root.hasExtends = true;
+    if (statementsInfo.size() == 1)
+    {
+        m_root.knownExtends = true;
+    }
 
     return ParseResult();
 }

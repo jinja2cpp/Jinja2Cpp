@@ -262,6 +262,9 @@ struct TemplateRootInfo
 {
     boost::container::small_vector<NodeRef<BlockStatement>, 4> blocks;
     bool hasExtends = false;
+    // An `extends` at the top level, outside any `if`: Jinja2 compiles no output of the
+    // template's body after it (has_known_extends)
+    bool knownExtends = false;
 
     // False if a block of this name is defined already. Most templates define few blocks,
     // whose names are compared one by one; past those, the names go to a set, so that a
@@ -1479,7 +1482,7 @@ private:
         auto parseResult = InvokeParser<NodeRef<IRendererBase>, ExpressionParser>(block);
         if (m_unknown.Mark() != unknownMark)
         {
-            PlaceUnknownCallables(statementsStack, statementsStack.size(), unknownMark);
+            PlaceUnknownCallables(statementsStack, statementsStack.size(), unknownMark, true);
         }
         if (parseResult)
         {
@@ -1500,7 +1503,8 @@ private:
         if (m_unknown.Mark() != unknownMark)
         {
             // A statement opens its body after its expressions: they are where it starts
-            PlaceUnknownCallables(statementsStack, std::min(depth, statementsStack.size()), unknownMark);
+            const bool isTrans = statementsStack.size() > depth && statementsStack.back().type == StatementInfo::TransStatement;
+            PlaceUnknownCallables(statementsStack, std::min(depth, statementsStack.size()), unknownMark, isTrans);
         }
         if (!parseResult)
         {
@@ -1517,15 +1521,29 @@ private:
     // Places the unknown names a tag added since `mark`, inside the first `depth` statements of the
     // stack: Jinja2 defers the check in an `if` statement, its tests and branches, up to the next
     // statement that makes a frame of its own (a loop and its `else`, a macro, a call block, a
-    // block, `with`, a filter or set block, `autoescape`)
-    void PlaceUnknownCallables(const StatementInfoList& statementsStack, std::size_t depth, std::size_t mark)
+    // block, `with`, a filter or set block, `autoescape`). An output tag (`{{ }}`, `trans`) after
+    // a known `extends` is not compiled at all, unless it is in a macro, call block, set block or
+    // block, whose output Jinja2 compiles
+    void PlaceUnknownCallables(const StatementInfoList& statementsStack, std::size_t depth, std::size_t mark, bool isOutput)
     {
         bool deferred = false;
         bool placed = false;
+        bool compiled = !isOutput || !m_root.knownExtends;
         std::size_t unit = 0;
         const auto end = statementsStack.rend();
         for (auto p = std::prev(end, static_cast<std::ptrdiff_t>(depth)); p != end; ++p)
         {
+            switch (p->type)
+            {
+            case StatementInfo::MacroStatement:
+            case StatementInfo::MacroCallStatement:
+            case StatementInfo::SetStatement:
+            case StatementInfo::BlockStatement:
+                compiled = true;
+                break;
+            default:
+                break;
+            }
             if (!placed)
             {
                 switch (p->type)
@@ -1559,6 +1577,11 @@ private:
                 unit = p->token.range.startOffset + 1;
                 break;
             }
+        }
+        if (!compiled)
+        {
+            m_unknown.DeferSince(mark);
+            return;
         }
         m_unknown.Place(mark, deferred, unit);
     }

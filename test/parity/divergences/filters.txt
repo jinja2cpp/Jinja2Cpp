@@ -8,3 +8,4 @@ wide.filters.format_ascii_repr          platform    0035 the wide %a conversion 
 wide.filters.tojson_escapes             output      0035 non-ASCII text of a wide template is lost converting to UTF-8 (C locale)
 wide.filters.urlencode_more             output      0035 non-ASCII text of a wide template is lost converting to UTF-8 (C locale)
 filters.unique_unhashable               accepts     0190 unique accepts unhashable items (lists, dicts) instead of raising TypeError
+filters.unknown_filter_output_after_extends rejects   0203 output after a top-level extends is evaluated and discarded; Jinja2 does not compile it
