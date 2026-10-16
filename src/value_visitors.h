@@ -1761,7 +1761,7 @@ struct BooleanEvaluator : BaseVisitor<bool>
     // An object (namespace(), cycler(), joiner()) is truthy, as Python objects without __bool__ are
     bool operator()(const MapRef& val) const
     {
-        return val.GetObjectClass() || val.GetSize() != 0ULL;
+        return val.GetObjectClass() != nullptr || val.GetSize() != 0ULL;
     }
 
     bool operator()(const ListRef& val) const

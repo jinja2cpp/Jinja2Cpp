@@ -180,7 +180,7 @@ bool IsNotIterable(const InternalValue& val)
     {
         // An object such as cycler() is stored as a map but is not iterable
         auto map = AsMap(val);
-        return map && map->GetObjectClass();
+        return map && map->GetObjectClass() != nullptr;
     }
     default:
         return false;
