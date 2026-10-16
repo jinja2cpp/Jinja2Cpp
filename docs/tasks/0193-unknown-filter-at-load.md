@@ -1,9 +1,9 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: []
-touches: [src/template_parser.cpp, src/expression_parser.cpp]
+touches: [src/template_parser.cpp, src/template_parser.h, src/expression_parser.cpp, src/expression_parser.h]
 shares: [test/parity/divergences/filters.txt]
 ---
 # An unknown filter is a load error
@@ -22,3 +22,14 @@ added to the environment after the template loads need a decision (Jinja2 binds 
 compile time too). Tests have the same gap (0017's "Left over").
 
 **Done when.** No line of `test/parity/divergences/` names 0193.
+
+**Done.** The parsers report each name that is neither built in nor added to the
+environment; the template parser drops those Jinja2 defers (an `if` statement, its tests and
+branches, and an inline if, up to the next statement with a frame of its own: a loop, its
+filter and its `else`, a macro and its defaults, a call block's parameters, a block, `with`
+bodies, filter and set blocks, `autoescape`), and once the template has parsed reports the
+first left as `ErrorCode::UnknownFilter` or `UnknownTest`, root body before blocks, as Jinja2
+compiles them. Tests are covered too (0017's left over). Ruslan chose (2026-10-16) Jinja2's
+behaviour by default plus `Settings::userCallablesAsFilters`, which keeps 1.x's lookup of
+filters and tests among the render parameters and globals when they run; without it that
+lookup, and `is filter`/`is test` counting such values, are gone.

@@ -280,7 +280,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, tok2, Token::In, ',');
     }
 
-    ExpressionParser exprPraser(m_settings, m_env, m_nodes, m_names);
+    ExpressionParser exprPraser(m_settings, m_env, m_nodes, m_names, m_unknown);
     auto valueExpr = exprPraser.ParseTupleOrExpression(lexer, false);
     if (!valueExpr)
     {
@@ -300,6 +300,8 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         const auto filterStart = lexer.GetState();
         filterFrame = m_names.PushFilter(outerFrame, isRecursive || EndsWithRecursive(lexer));
         m_names.SetCurrent(filterFrame);
+        // A frame of its own to Jinja2, even in an `if`
+        DeferredCheckGuard checked(m_unknown, false);
         auto parsedExpr = exprPraser.ParseFullExpression(lexer);
         m_names.SetCurrent(outerFrame);
         if (!parsedExpr)
@@ -569,7 +571,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
 StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     const auto& pivotTok = lexer.PeekNextToken();
-    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    // Jinja2 checks the filters and tests of the condition when they run, as those of the branches
+    DeferredCheckGuard deferred(m_unknown, true);
     auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
     {
@@ -620,7 +624,7 @@ StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, Sta
     }
 
     const auto& pivotTok = lexer.PeekNextToken();
-    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
     if (!valueExpr)
     {
@@ -689,7 +693,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     const auto vars = target->target;
     m_names.AddStores(m_names.Current(), m_nodes[vars], m_nodes);
 
-    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     if (lexer.EatIfEqual('='))
     {
         const auto expr = exprParser.ParseTupleOrExpression(lexer);
@@ -702,6 +706,8 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     }
     else if (lexer.EatIfEqual('|'))
     {
+        // The filters of a set block are in its frame, which Jinja2 checks even in an `if`
+        DeferredCheckGuard checked(m_unknown, false);
         const auto expr = exprParser.ParseFilterExpression(lexer);
         if (!expr)
         {
@@ -840,7 +846,7 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
         }
     }
 
-    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -931,6 +937,8 @@ nonstd::expected<MacroParamsInfo, ParseError> StatementsParser::ParseMacroParams
     {
         return items;
     }
+    // The defaults are in the macro's frame, which Jinja2 checks even in an `if`
+    DeferredCheckGuard checked(m_unknown, false);
 
     std::vector<MacroDefaultTokens> defaultTokens;
 
@@ -958,7 +966,7 @@ nonstd::expected<MacroParamsInfo, ParseError> StatementsParser::ParseMacroParams
     };
     const RestoreFrame restoreFrame(m_names, outerFrame);
 
-    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     do
     {
         Token name = lexer.NextToken();
@@ -1081,7 +1089,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
         return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::LBracket);
     }
     const auto beforeCall = m_nodes.Marks();
-    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     auto result = exprParser.ParseCallParams(lexer);
     if (!result)
     {
@@ -1138,7 +1146,7 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
 
     // auto operTok = lexer.NextToken();
     NodeRef<Expression> valueExpr;
-    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1215,7 +1223,7 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
     }
 
     NodeRef<Expression> valueExpr;
-    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1331,7 +1339,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     }
 
     NodeRef<Expression> valueExpr;
-    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1418,7 +1426,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
 StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
 {
     NodeRef<Expression> valueExpr;
-    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     auto expr = exprParser.ParseFullExpression(lexer);
     if (!expr)
     {
@@ -1436,7 +1444,7 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
 {
     std::vector<NamedExpr> vars;
 
-    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     while (lexer.PeekNextToken() == Token::Identifier)
     {
         auto nameTok = lexer.NextToken();
@@ -1506,7 +1514,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer
 
 StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    // The filters of a filter block are in its frame, which Jinja2 checks even in an `if`
+    DeferredCheckGuard checked(m_unknown, false);
     auto filterExpr = exprParser.ParseFilterExpression(lexer);
     if (!filterExpr)
     {
@@ -1545,7 +1555,9 @@ StatementsParser::ParseResult StatementsParser::ParseEndFilter(LexScanner&, Stat
 
 StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
-    ExpressionParser exprParser(m_settings, nullptr, m_nodes, m_names);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    // Jinja2 checks the value of `autoescape` even in an `if`
+    DeferredCheckGuard checked(m_unknown, false);
     auto valueExpr = exprParser.ParseFullExpression(lexer);
     if (!valueExpr)
     {
@@ -1591,7 +1603,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
     }
 
     // The parameters, as Jinja2's InternationalizationExtension.parse reads them
-    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     while (lexer.PeekNextToken() != Token::Eof)
     {
         if (!trans->variables.empty() && !lexer.EatIfEqual(','))
@@ -1818,7 +1830,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
         params.kwParams[name] = slot;
     }
 
-    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     auto call = m_nodes.Make<CallExpression>(m_nodes, ValueRefExpression::Make(m_nodes, fnName), std::move(params));
     auto output = MakeExpressionRenderer(m_nodes, call, exprParser.GetFinalize());
     std::vector<NodeRef<Expression>> values;

@@ -315,11 +315,12 @@ public:
     using ParseResult = nonstd::expected<void, ParseError>;
 
     // A parser lives for one tag; the settings and the arena outlive it
-    StatementsParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names, TemplateRootInfo& root)
+    StatementsParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names, UnknownCallables& unknown, TemplateRootInfo& root)
         : m_settings(settings)
         , m_env(env)
         , m_nodes(nodes)
         , m_names(names)
+        , m_unknown(unknown)
         , m_root(root)
     {
     }
@@ -380,6 +381,7 @@ private:
     TemplateEnv* m_env;
     NodeArena& m_nodes;
     NameResolver& m_names;
+    UnknownCallables& m_unknown;
     TemplateRootInfo& m_root;
 };
 
@@ -389,7 +391,7 @@ class TransVariableParser
 public:
     using ParseResult = nonstd::expected<std::string, ParseError>;
 
-    TransVariableParser(const Settings&, TemplateEnv*, NodeArena&, NameResolver&) {}
+    TransVariableParser(const Settings&, TemplateEnv*, NodeArena&, NameResolver&, UnknownCallables&) {}
 
     static ParseResult Parse(LexScanner& lexer)
     {
@@ -434,6 +436,7 @@ public:
         , m_env(env)
         , m_nodes(nodes)
         , m_delims(setts.GetDelimiters<CharT>())
+        , m_unknown(setts.settings.userCallablesAsFilters)
         , m_metadataType(setts.settings.defaultMetadataType)
     {
     }
@@ -460,6 +463,11 @@ public:
         if (!fineResult)
         {
             return ParseErrorsToErrorInfo(fineResult.error());
+        }
+        // Jinja2 checks the names of filters and tests when it compiles, after a parse without errors
+        if (const auto* unknown = m_unknown.First())
+        {
+            return ParseErrorsToErrorInfo(std::vector<ParseError>{ ParseError(unknown->isTest ? ErrorCode::UnknownTest : ErrorCode::UnknownFilter, unknown->token) });
         }
         m_names.Resolve(m_nodes);
 
@@ -1467,6 +1475,7 @@ private:
             return;
         }
         m_names.SetCurrent(statementsStack.back().frame);
+        SetUnknownCallablesPlace(statementsStack);
         auto parseResult = InvokeParser<NodeRef<IRendererBase>, ExpressionParser>(block);
         if (parseResult)
         {
@@ -1481,6 +1490,7 @@ private:
     // False when parsing has to stop here
     bool FineParseStatement(const TextBlockInfo& block, StatementInfoList& statementsStack, std::vector<ParseError>& errors)
     {
+        SetUnknownCallablesPlace(statementsStack);
         auto parseResult = InvokeParser<void, StatementsParser>(block, statementsStack);
         if (!parseResult)
         {
@@ -1492,6 +1502,54 @@ private:
             }
         }
         return true;
+    }
+
+    // Where the expressions of the next tag are, for UnknownCallables: Jinja2 defers the check in
+    // an `if` statement, its tests and branches, up to the next statement that makes a frame of
+    // its own (a loop and its `else`, a macro, a call block, a block, `with`, a filter or set block,
+    // `autoescape`)
+    void SetUnknownCallablesPlace(const StatementInfoList& statementsStack)
+    {
+        bool deferred = false;
+        bool placed = false;
+        std::size_t unit = 0;
+        for (auto p = statementsStack.rbegin(); p != statementsStack.rend(); ++p)
+        {
+            if (!placed)
+            {
+                switch (p->type)
+                {
+                case StatementInfo::IfStatement:
+                    deferred = true;
+                    placed = true;
+                    break;
+                case StatementInfo::ElseIfStatement:
+                {
+                    // An `elif` or `else` of an `if`, or the `else` of a loop
+                    auto head = p;
+                    while (head->type == StatementInfo::ElseIfStatement && std::next(head) != statementsStack.rend())
+                    {
+                        ++head;
+                    }
+                    deferred = head->type == StatementInfo::IfStatement;
+                    placed = true;
+                    break;
+                }
+                case StatementInfo::ExtendsStatement:
+                case StatementInfo::TransStatement:
+                    break;
+                default:
+                    placed = true;
+                    break;
+                }
+            }
+            if (p->type == StatementInfo::BlockStatement)
+            {
+                unit = p->token.range.startOffset + 1;
+                break;
+            }
+        }
+        m_unknown.SetPlace(deferred, unit);
     }
 
     // Whether the template ends inside `{{`, `{%` or `{#`. Jinja2 drops a `{#` (or `{#-`, `{#+`)
@@ -1606,11 +1664,11 @@ private:
     {
         if constexpr (std::is_same_v<P, StatementsParser>)
         {
-            return P(m_settings, m_env, m_nodes, m_names, m_root);
+            return P(m_settings, m_env, m_nodes, m_names, m_unknown, m_root);
         }
         else
         {
-            return P(m_settings, m_env, m_nodes, m_names);
+            return P(m_settings, m_env, m_nodes, m_names, m_unknown);
         }
     }
 
@@ -2055,6 +2113,7 @@ private:
     bool m_varEndLexable = TagLexer<CharT, TemplateParser>::UsableEnd(m_delims.varEnd);
     bool m_blockEndLexable = TagLexer<CharT, TemplateParser>::UsableEnd(m_delims.blockEnd);
     NameResolver m_names;
+    UnknownCallables m_unknown;
     TextBlockInfo m_currentBlockInfo = {};
     bool m_hasMetaBlock = false;
     mutable bool m_unbalancedBrackets = false;

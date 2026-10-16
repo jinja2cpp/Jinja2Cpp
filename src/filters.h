@@ -23,6 +23,8 @@ extern NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& node
 // For filters named at render time (`map('name')`): a filter added to the environment of the
 // template comes first, as in Jinja2's env.filters
 extern FilterPtr CreateFilter(const std::string& filterName, const CallParamsInfo& params, RenderContext& context);
+// Whether `filterName` is one of the built-in filters
+bool IsBuiltinFilter(std::string_view filterName);
 
 namespace filters
 {

@@ -164,6 +164,10 @@ namespace
 // `name` resolves to a callable the user registered, which filters and tests fall back to
 bool IsUserCallableName(const std::string& name, RenderContext& context)
 {
+    if (!context.UserCallablesAsFilters())
+    {
+        return false;
+    }
     const auto value = context.FindValue(name);
     if (!value)
     {
@@ -519,16 +523,16 @@ UserDefinedTester::UserDefinedTester(std::string testerName, const TesterParams&
 bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& context)
 {
     const Callable* callable = GetIf<Callable>(&m_callable);
-    if (!callable)
+    if (!callable && context.UserCallablesAsFilters())
     {
         const auto testerVal = context.FindValue(m_testerName);
         callable = testerVal ? GetIf<Callable>(&*testerVal) : nullptr;
     }
-    // Jinja2 rejects an unknown test when compiling; tests registered as user callables
-    // are only known at render time, so the error is raised here
+    // Neither built in nor added to the environment: Jinja2 has checked the name at load
+    // unless it is in an `if`. Settings::userCallablesAsFilters looks it up among the values
     if (!callable || callable->GetKind() != Callable::UserCallable)
     {
-        throw std::runtime_error("No test named '" + m_testerName + "'.");
+        throw std::runtime_error("No test named '" + m_testerName + "' found.");
     }
 
     CallParams tmpCallParams = helpers::EvaluateCallParams(m_callParams, context);

@@ -13,19 +13,105 @@
 
 #include <nonstd/expected.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace jinja2
 {
+// Jinja2 rejects a filter or test it does not know when it compiles the template, except in
+// an `if` statement or an inline if, which leave the check to the call (Frame.soft_frame in
+// jinja2/compiler.py). The expression parsers of one template report each unknown name here;
+// the template parser tells it where Jinja2 defers, and once the template has parsed without
+// a syntax error reports the first name left
+class UnknownCallables
+{
+public:
+    struct Name
+    {
+        Token token;
+        bool isTest = false;
+        // Where Jinja2 compiles the name: 0 in the template's body, else 1 + the offset of the
+        // innermost block. Blocks compile after the body, in the order they start
+        std::size_t unit = 0;
+    };
+
+    // Settings::userCallablesAsFilters: names are looked up when they run, none is reported
+    explicit UnknownCallables(bool lookUpWhenRun)
+        : m_lookUpWhenRun(lookUpWhenRun)
+    {
+    }
+
+    // Where the expressions parsed next are: whether Jinja2 defers their check, and their unit
+    void SetPlace(bool deferred, std::size_t unit)
+    {
+        m_deferred = deferred;
+        m_unit = unit;
+    }
+    [[nodiscard]] bool IsDeferred() const { return m_deferred; }
+    void SetDeferred(bool deferred) { m_deferred = deferred; }
+
+    void Add(const Token& token, bool isTest)
+    {
+        if (!m_deferred && !m_lookUpWhenRun)
+        {
+            m_names.push_back(Name{ token, isTest, m_unit });
+        }
+    }
+    [[nodiscard]] std::size_t Mark() const { return m_names.size(); }
+    // The names added since `mark` are not checked: they are in an inline if, or in an
+    // expression the parser gave up
+    void DeferSince(std::size_t mark) { m_names.resize(mark); }
+
+    // The name Jinja2 reports, null if none
+    [[nodiscard]] const Name* First() const
+    {
+        const Name* first = nullptr;
+        for (const auto& name : m_names)
+        {
+            if (!first || name.unit < first->unit)
+            {
+                first = &name;
+            }
+        }
+        return first;
+    }
+
+private:
+    std::vector<Name> m_names;
+    std::size_t m_unit = 0;
+    bool m_deferred = false;
+    bool m_lookUpWhenRun = false;
+};
+
+// Overrides where Jinja2 defers the check for the expressions of one part of a statement
+class DeferredCheckGuard
+{
+public:
+    DeferredCheckGuard(UnknownCallables& unknown, bool deferred)
+        : m_unknown(unknown)
+        , m_saved(unknown.IsDeferred())
+    {
+        m_unknown.SetDeferred(deferred);
+    }
+    ~DeferredCheckGuard() { m_unknown.SetDeferred(m_saved); }
+    DeferredCheckGuard(const DeferredCheckGuard&) = delete;
+    DeferredCheckGuard& operator=(const DeferredCheckGuard&) = delete;
+
+private:
+    UnknownCallables& m_unknown;
+    bool m_saved;
+};
+
 class ExpressionParser
 {
 public:
     template<typename T>
     using ParseResult = nonstd::expected<T, ParseError>;
 
-    // The nodes go to `nodes`, which outlives the parser
-    ExpressionParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names);
+    // The nodes go to `nodes`, which outlives the parser; unknown filters and tests to `unknown`
+    ExpressionParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names, UnknownCallables& unknown);
     ParseResult<NodeRef<IRendererBase>> Parse(LexScanner& lexer);
     // Before each of several top-level expressions of one statement (with bindings, macro
     // defaults): their operators do not add up
@@ -89,6 +175,7 @@ private:
     NodeArena& m_nodes;
     // Told of each name expression, for slots (0117 P1)
     NameResolver& m_names;
+    UnknownCallables& m_unknown;
     // Settings::finalize as a callable; undefined if it is not set
     InternalValue m_finalize;
     // Nesting level of the expression being parsed, bounded by MaxExpressionDepth

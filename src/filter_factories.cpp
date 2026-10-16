@@ -130,6 +130,11 @@ const FilterEntry* FindBuiltinFilter(std::string_view filterName)
 }
 } // namespace
 
+bool IsBuiltinFilter(std::string_view filterName)
+{
+    return FindBuiltinFilter(filterName) != nullptr;
+}
+
 FilterPtr CreateFilter(std::string_view filterName, const CallParamsInfo& params)
 {
     if (const auto* entry = FindBuiltinFilter(filterName))

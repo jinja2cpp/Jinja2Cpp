@@ -34,6 +34,8 @@ enum class ErrorCode
     MetadataParseError = 10,       //!< Template metadata (`{% meta %}` block) could not be parsed. ExtraParams[0] contains the parser message
     UndefinedError = 11,           //!< An undefined value was used in a way its policy (Settings::undefinedPolicy) forbids. ExtraParams[0] contains the message
     RecursionLimitExceeded = 12,   //!< Expressions nest, or macros, includes or recursive loops recurse, deeper than Jinja2C++ allows (Python's RecursionError)
+    UnknownFilter = 13,            //!< The template names a filter that is neither built in nor added to the environment (Jinja2's TemplateAssertionError). ExtraParams[0] contains the name
+    UnknownTest = 14,              //!< The template names a test that is neither built in nor added to the environment (Jinja2's TemplateAssertionError). ExtraParams[0] contains the name
     ExpectedStringLiteral = 1001,  //!< String literal expected
     ExpectedIdentifier = 1002,     //!< Identifier expected
     ExpectedSquareBracket = 1003,  //!< ']' expected

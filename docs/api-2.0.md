@@ -409,6 +409,15 @@ the result now gets a compiler warning (`-Wunused-result`, MSVC C4834), an error
 `Template::Load` and `Render`, which return only an error, are not marked yet
 (docs/tasks/0080).
 
+### 5.6 Unknown filters and tests fail at load (release note)
+
+As in Jinja2, a filter or test is one built in or added with `TemplateEnv::AddFilter` or
+`AddTest`. A template that names any other fails `Template::Load` with
+`ErrorCode::UnknownFilter` or `UnknownTest` ("No filter named 'x'."), unless the name is
+inside an `if` statement or an inline if, where it fails when it runs (docs/tasks/0193).
+1.x let a `UserCallable` passed in the render parameters or the globals act as a filter or
+test, found when it ran; `Settings::userCallablesAsFilters = true` keeps that behaviour.
+
 ## 6. Release options
 
 | Option | What ships | Users get | Cost |
