@@ -23,3 +23,8 @@ cheap as today; keep `boost::iequals` callers in step. Measure `Render/filters` 
 
 **Done when.** `sequences.casefold_non_ascii` matches, its line in
 `test/parity/divergences/sequences.txt` is deleted, and the bench cases move by under 0.5%.
+
+**Done** in #516. `detail::CompareIgnoreCase` compares an ASCII prefix inline and passes
+the whole comparison to the 0048 tables at the first non-ASCII unit; dictsort keys use
+`detail::LowerUtf8`. Pinned by `sequences.casefold_*`; Render/dict_ops -0.2%, Render/filters
+-2.7%. Wide dict-literal keys stay with 0035 (`wide.sequences.casefold_dictsort`).
