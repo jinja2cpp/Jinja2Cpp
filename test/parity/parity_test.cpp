@@ -173,8 +173,8 @@ const std::map<std::string, Divergence>& Divergences()
 }
 
 // UTF-8 <-> wchar_t (UTF-32, or UTF-16 where wchar_t is 16 bits) for the wide suite. The
-// harness does not use jinja2::ConvertString: that goes through the C locale, which drops
-// every non-ASCII string unless the process sets a UTF-8 locale.
+// harness converts templates and output itself rather than with jinja2::ConvertString, so
+// the conversion under test is not also the one that prepares the case.
 std::wstring Utf8ToWide(const std::string& from)
 {
     std::wstring result;
@@ -256,8 +256,8 @@ std::string ToUtf8(const std::wstring& from)
     return WideToUtf8(from);
 }
 
-// Strings are converted from UTF-8 to CharT, so the wide path gets wide context values.
-template<typename CharT>
+// Strings stay UTF-8 in both runs, so the wide run renders narrow context values in a wide
+// template and exercises jinja2::ConvertString (docs/tasks/0035).
 jinja2::Value ToValue(const Json& j)
 {
     switch (j.type())
@@ -270,19 +270,19 @@ jinja2::Value ToValue(const Json& j)
     case Json::value_t::number_float:
         return j.get<double>();
     case Json::value_t::string:
-        return FromUtf8<CharT>(j.get<std::string>());
+        return j.get<std::string>();
     case Json::value_t::array:
     {
         jinja2::ValuesList list;
         for (const auto& item : j)
-            list.push_back(ToValue<CharT>(item));
+            list.push_back(ToValue(item));
         return jinja2::Value(std::move(list));
     }
     case Json::value_t::object:
     {
         jinja2::ValuesMap map;
         for (auto it = j.begin(); it != j.end(); ++it)
-            map[it.key()] = ToValue<CharT>(it.value());
+            map[it.key()] = ToValue(it.value());
         return jinja2::Value(std::move(map));
     }
     default:
@@ -473,7 +473,7 @@ Result RenderCpp(const Json& c, const jinja2::Settings& settings)
 
     jinja2::ValuesMap params;
     for (auto it = c["context"].begin(); it != c["context"].end(); ++it)
-        params[it.key()] = ToValue<CharT>(it.value());
+        params[it.key()] = ToValue(it.value());
 
     try
     {

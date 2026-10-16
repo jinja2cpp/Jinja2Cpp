@@ -79,8 +79,7 @@ TEST(AutoescapeTest, EscapesWideTemplates)
 }
 
 // Strings of the template's width are escaped from their own text, others after rendering
-// them (docs/tasks/0126): every representation and width escapes alike. The values are ASCII:
-// a non-ASCII one does not convert between widths in the C locale (docs/tasks/0035)
+// them (docs/tasks/0126): every representation and width escapes alike
 TEST(AutoescapeTest, EscapesEveryStringKind)
 {
     const std::string longText(5000, '<');

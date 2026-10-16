@@ -203,6 +203,14 @@
    "output": "{'a': 'b', 'c': 'd'}|q2"
   },
   {
+   "id": "globals.dict_from_unicode_string_pairs",
+   "template": "{% set d = dict(['é中']) %}{{ d }}|{{ d['é'] }}{{ d|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'é': '中'}|中1"
+  },
+  {
    "id": "globals.dict_bad_pair",
    "template": "{{ dict(['abc']) }}",
    "context": {},

@@ -11,6 +11,7 @@ CASES = [
     ("float_whole_var", "{{ fw }}"),
     ("string_var", "{{ s }}"),
     ("unicode_var", "{{ u }}"),
+    ("unicode_var_filters", "{{ u|length }}|{{ u|truncate(3, true, '…', 0) }}|{{ {u: u} }}|{{ u|list|join(',') }}"),
     ("list_var", "{{ l }}"),
     ("list_empty_var", "{{ e }}"),
     ("dict_var", "{{ d }}"),
