@@ -479,7 +479,8 @@ public:
      *  if (v.AsString(s))
      *      use(s);
      * ```
-     * A view or pointer is valid as long as the \ref Value is not changed.
+     * A view or pointer is valid as long as the \ref Value is not changed; the view and pointer forms are deleted for
+     * a temporary \ref Value, which would leave them dangling.
      */
     [[nodiscard]] bool AsBool() const { return As<bool>(); }
     //! Same as \ref AsBool(), without throwing
@@ -497,37 +498,47 @@ public:
     //! The stored `std::string`, mutable; throws `std::bad_variant_access` for anything else
     std::string& AsString() { return As<std::string>(); }
     //! A view of the stored `std::string`, without throwing or copying
-    bool AsString(std::string_view& out) const noexcept { return LoadView<std::string>(out); }
+    bool AsString(std::string_view& out) const& noexcept { return LoadView<std::string>(out); }
+    //! Deleted: the view would outlive the temporary it points into
+    bool AsString(std::string_view& out) && = delete;
     //! The stored `std::wstring`; throws `std::bad_variant_access` for anything else
     [[nodiscard]] const std::wstring& AsWString() const { return As<std::wstring>(); }
     //! The stored `std::wstring`, mutable; throws `std::bad_variant_access` for anything else
     std::wstring& AsWString() { return As<std::wstring>(); }
     //! A view of the stored `std::wstring`, without throwing or copying
-    bool AsWString(std::wstring_view& out) const noexcept { return LoadView<std::wstring>(out); }
+    bool AsWString(std::wstring_view& out) const& noexcept { return LoadView<std::wstring>(out); }
+    //! Deleted: the view would outlive the temporary it points into
+    bool AsWString(std::wstring_view& out) && = delete;
     //! The stored \ref ValuesList (not a \ref GenericList, see \ref ToGenericList); throws `std::bad_variant_access` for anything else
     [[nodiscard]] const ValuesList& AsList() const { return As<ValuesList>(); }
     //! The stored \ref ValuesList, mutable; throws `std::bad_variant_access` for anything else
     ValuesList& AsList() { return As<ValuesList>(); }
     //! A pointer to the stored \ref ValuesList, without throwing
-    bool AsList(const ValuesList*& out) const noexcept { return LoadPtr(out); }
+    bool AsList(const ValuesList*& out) const& noexcept { return LoadPtr(out); }
     //! A mutable pointer to the stored \ref ValuesList, without throwing
-    bool AsList(ValuesList*& out) noexcept { return LoadPtr(out); }
+    bool AsList(ValuesList*& out) & noexcept { return LoadPtr(out); }
+    //! Deleted: the pointer would outlive the temporary it points into
+    bool AsList(const ValuesList*& out) && = delete;
     //! The stored \ref ValuesMap (not a \ref GenericMap, see \ref ToGenericMap); throws `std::bad_variant_access` for anything else
     [[nodiscard]] const ValuesMap& AsMap() const { return As<ValuesMap>(); }
     //! The stored \ref ValuesMap, mutable; throws `std::bad_variant_access` for anything else
     ValuesMap& AsMap() { return As<ValuesMap>(); }
     //! A pointer to the stored \ref ValuesMap, without throwing
-    bool AsMap(const ValuesMap*& out) const noexcept { return LoadPtr(out); }
+    bool AsMap(const ValuesMap*& out) const& noexcept { return LoadPtr(out); }
     //! A mutable pointer to the stored \ref ValuesMap, without throwing
-    bool AsMap(ValuesMap*& out) noexcept { return LoadPtr(out); }
+    bool AsMap(ValuesMap*& out) & noexcept { return LoadPtr(out); }
+    //! Deleted: the pointer would outlive the temporary it points into
+    bool AsMap(const ValuesMap*& out) && = delete;
     //! The stored \ref UserCallable; throws `std::bad_variant_access` for anything else
     [[nodiscard]] const UserCallable& AsCallable() const { return As<UserCallable>(); }
     //! The stored \ref UserCallable, mutable; throws `std::bad_variant_access` for anything else
     UserCallable& AsCallable() { return As<UserCallable>(); }
     //! A pointer to the stored \ref UserCallable, without throwing
-    bool AsCallable(const UserCallable*& out) const noexcept { return LoadPtr(out); }
+    bool AsCallable(const UserCallable*& out) const& noexcept { return LoadPtr(out); }
     //! A mutable pointer to the stored \ref UserCallable, without throwing
-    bool AsCallable(UserCallable*& out) noexcept { return LoadPtr(out); }
+    bool AsCallable(UserCallable*& out) & noexcept { return LoadPtr(out); }
+    //! Deleted: the pointer would outlive the temporary it points into
+    bool AsCallable(const UserCallable*& out) && = delete;
 
     /*!
      * \brief A \ref GenericList over either list representation

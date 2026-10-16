@@ -39,6 +39,8 @@ without deprecation warnings.
 **Status (task 0072 PR).** Done as proposed, with these details:
 - `IsString()`/`AsString(std::string_view&)` match the `std::string` alternative only (a stored `std::string_view`
   is not a string), so the predicate and the non-throwing accessor always agree; likewise for wide strings.
+- The view and pointer forms of `AsX(out)` are deleted for an rvalue `Value` (`Value(L"w").AsWString(view)` does
+  not compile): the out-parameter would dangle. MSVC Debug caught a test doing exactly that.
 - `As<T>()`/`GetIf<T>()` take `ValuesList`, `ValuesMap` and `UserCallable` and unwrap the `RecWrapper`; the
   wrapped alternative itself still works with `GetIf<RecWrapper<T>>()`.
 - Every printing form goes through one function in `src/value.cpp` that lends the value to `RenderValue`, the

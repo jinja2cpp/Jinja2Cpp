@@ -1031,6 +1031,32 @@ TEST(ValueApiTest, AsReturnsReferencesAndThrowsOnOtherTypes)
     EXPECT_EQ(7, callable.AsCallable().callable(UserCallableParams{}).AsInt());
 }
 
+// Out-parameters that point into the value refuse a temporary, which would leave them dangling
+namespace
+{
+template<typename V, typename = void>
+struct CanViewString : std::false_type
+{
+};
+template<typename V>
+struct CanViewString<V, std::void_t<decltype(std::declval<V>().AsString(std::declval<std::string_view&>()))>> : std::true_type
+{
+};
+template<typename V, typename = void>
+struct CanPointToList : std::false_type
+{
+};
+template<typename V>
+struct CanPointToList<V, std::void_t<decltype(std::declval<V>().AsList(std::declval<const ValuesList*&>()))>> : std::true_type
+{
+};
+} // namespace
+static_assert(CanViewString<const Value&>::value);
+static_assert(CanViewString<Value&>::value);
+static_assert(!CanViewString<Value>::value);
+static_assert(CanPointToList<const Value&>::value);
+static_assert(!CanPointToList<Value>::value);
+
 TEST(ValueApiTest, NonThrowingAccessFillsOutOnlyOnMatch)
 {
     const Value str("text");
@@ -1053,12 +1079,14 @@ TEST(ValueApiTest, NonThrowingAccessFillsOutOnlyOnMatch)
     EXPECT_TRUE(flag);
     EXPECT_FALSE(Value(1).AsBool(flag));
 
+    const Value wide(L"w");
     std::wstring_view wview;
-    EXPECT_TRUE(Value(L"w").AsWString(wview));
+    EXPECT_TRUE(wide.AsWString(wview));
     EXPECT_EQ(L"w", wview);
     EXPECT_FALSE(str.AsWString(wview));
     // A stored view is not a string: AsString(out) agrees with IsString
-    EXPECT_FALSE(Value(std::string_view("v")).AsString(view));
+    const Value storedView(std::string_view("v"));
+    EXPECT_FALSE(storedView.AsString(view));
 
     Value list(ValuesList{ 1 });
     const ValuesList* constList = nullptr;
@@ -1072,10 +1100,12 @@ TEST(ValueApiTest, NonThrowingAccessFillsOutOnlyOnMatch)
     EXPECT_EQ(nullptr, constList);
 
     const ValuesMap* map = nullptr;
-    EXPECT_TRUE(Value(ValuesMap{}).AsMap(map));
+    const Value emptyMap(ValuesMap{});
+    EXPECT_TRUE(emptyMap.AsMap(map));
     EXPECT_FALSE(list.AsMap(map));
     const UserCallable* callable = nullptr;
-    EXPECT_TRUE(Value(UserCallable()).AsCallable(callable));
+    const Value uc(UserCallable{});
+    EXPECT_TRUE(uc.AsCallable(callable));
     EXPECT_FALSE(str.AsCallable(callable));
 
     static_assert(noexcept(str.AsString(view)));
