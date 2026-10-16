@@ -2219,7 +2219,7 @@ void BindMacroArgs(const MacroArgBinder& binder, bool hasArgDefaults, const Rend
 
 // Binds caller, kwargs and varargs for a macro that uses them
 template<typename Bind>
-void BindSpecialMacroArgs(const MacroArgBinder& binder, bool catchKwargs, bool catchVarargs, const Bind& bind)
+void BindSpecialMacroArgs(const MacroArgBinder& binder, bool catchKwargs, bool catchVarargs, const RenderContext& context, const Bind& bind)
 {
     static const HashedName callerName{ "caller", HashedName::Hash("caller") };
     static const HashedName kwargsName{ "kwargs", HashedName::Hash("kwargs") };
@@ -2229,8 +2229,9 @@ void BindSpecialMacroArgs(const MacroArgBinder& binder, bool catchKwargs, bool c
     const SpecialSlots slots(binder.params.size(), binder.catchCaller, catchKwargs);
     if (binder.catchCaller)
     {
+        // Jinja2: a macro called without a call block gets a caller that fails when called
         auto p = kwParams.find(callerName.name);
-        bind(slots.caller, callerName, p != kwParams.end() ? p->second : InternalValue());
+        bind(slots.caller, callerName, p != kwParams.end() ? p->second : MakeUndefinedWithHint(context, "No caller defined"));
     }
     if (catchKwargs)
     {
@@ -2281,7 +2282,7 @@ void BindMacroCall(const MacroArgBinder& binder, bool catchKwargs, bool catchVar
     BindMacroArgs(binder, hasArgDefaults, context, bind);
     if (binder.catchCaller || catchKwargs || catchVarargs)
     {
-        BindSpecialMacroArgs(binder, catchKwargs, catchVarargs, bind);
+        BindSpecialMacroArgs(binder, catchKwargs, catchVarargs, context, bind);
     }
     BindMacroDefaults(binder, context, bind);
 }
