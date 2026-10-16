@@ -24,7 +24,7 @@ where it is defined. Keep the frame search for blocks overridden by a child temp
 
 **Done when** the corpus case matches and its divergence line is gone.
 
-**Done** in #523. Each `self` holds a `ClosureSite` of its template's top-level scope, taken
+**Done** in #525. Each `self` holds a `ClosureSite` of its template's top-level scope, taken
 on the context that owns that scope (`RenderContext::FindSelf` walks up from a `with` or block
 context, which `self` outlives); a call renders the block on a child of that home linked at the
 top level, as `super()` does, and keeps the frame search for the blocks. Pinned by

@@ -24,7 +24,7 @@ rendering the parent's output (an import drops output anyway, but the parent's t
 
 **Done when** both corpus cases match and their divergence lines are gone.
 
-**Done** in #523. `ImportedModule::Render` renders the module through
+**Done** in #525. `ImportedModule::Render` renders the module through
 `TemplateRenderer::RenderAsModule`, which puts the module's blocks on the module's own stack;
 its `extends` then pushes the parent chain's blocks there too. As in Jinja2 the parent's top
 level runs in the module's context, so its `set`s and macros are exported and override the
