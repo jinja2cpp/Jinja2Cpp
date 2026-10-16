@@ -4,5 +4,3 @@
 errors.dict_unhashable_key              accepts     0036 unhashable dict keys are accepted (keys are stringified)
 errors.float_second_exponent            accepts     0161 a decimal literal takes a second exponent: 1e1e-1 lexes as one number
 errors.semicolon_in_tag                 accepts     0161 a ; ends the tokens of a tag and the rest is ignored
-errors.caller_without_call_block        accepts     0169 caller() in a macro called without a call block renders nothing
-errors.call_body_reads_own_missing_caller accepts     0169 a call body's caller() reaches the enclosing macro's caller instead of failing

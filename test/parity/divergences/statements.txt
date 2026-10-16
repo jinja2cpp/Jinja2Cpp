@@ -13,3 +13,6 @@ statements.macro_loop_name_set_after_call output   0168 a name the loop body set
 statements.default_root_name_set_after_context output 0168 a name the template sets after the call resolves outward on read; Jinja2 binds it at frame entry
 statements.loop_len                     output      0196 len(loop) counts the keys of the loop map, not the items of the loop
 statements.set_unpack_dict_keys        output      0197 tuple assignment from a dict takes the items named like the targets instead of unpacking its keys
+statements.call_block_caller_repr       output      0199 a call block's caller prints as empty; Jinja2 prints <Macro anonymous>
+statements.call_block_explicit_caller_repeated accepts 0199 a call block whose call passes caller= loads; Jinja2 raises SyntaxError: keyword argument repeated
+statements.call_block_dotted_callee     rejects     0199 a call block cannot call an attribute (`call ns.m()`); Jinja2 accepts any call expression
