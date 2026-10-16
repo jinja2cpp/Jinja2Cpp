@@ -1753,11 +1753,9 @@ void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
     });
 }
 
-// Renders `tpl` for `include` or `import`. `exportNames`: copy the names the template sets at
-// its top level into the caller's current scope. Import collects a module this way; include
-// must not leak them
+// Renders `tpl` for `include`: the names it sets stay its own
 template<typename CharT>
-void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, bool exportNames, OutStream& os, RenderContext& values)
+void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values)
 {
     RenderContext innerContext = values.Clone(withContext);
     if (withContext)
@@ -1767,18 +1765,6 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, bo
 
     innerContext.SetNodes(tpl.Nodes());
     innerContext.Nodes()[tpl.GetRenderer()].Render(os, innerContext);
-    if (withContext && exportNames)
-    {
-        auto innerScope = innerContext.TakeCurrentScope();
-        auto scope = values.GetCurrentScope();
-        for (auto& [name, value] : innerScope)
-        {
-            if (name != "self")
-            {
-                scope[name] = std::move(value);
-            }
-        }
-    }
 }
 
 void IncludeStatement::Render(OutStream& os, RenderContext& values)
@@ -1787,7 +1773,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
         try
         {
             return VisitTemplateImpl<bool>(tpl, true, [this, &values, &os](const auto& tplPtr) {
-                RenderIncludedTemplate(*tplPtr, m_withContext, false, os, values);
+                RenderIncludedTemplate(*tplPtr, m_withContext, os, values);
                 return true;
             });
         }
@@ -1868,56 +1854,39 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     }
 }
 
-class ImportedMacroRenderer final : public IRendererBase
+namespace
 {
-public:
-    // The render keeps the module's template alive, and with it the statements behind the
-    // imported macros, even when the environment does not cache the template
-    ImportedMacroRenderer(InternalValueMap&& map, bool withContext, BlocksStack&& moduleBlocks)
-        : m_importedContext(std::move(map))
-        , m_withContext(withContext)
-        , m_moduleBlocks(std::move(moduleBlocks))
+// The names an imported module sees: what `importer` sees now, with `withContext`
+InternalValueMap ImporterNames(const RenderContext& importer, bool withContext)
+{
+    InternalValueMap names;
+    if (withContext)
     {
+        importer.CollectVisibleNames(names);
     }
+    return names;
+}
+} // namespace
 
-    void Render(OutStream& /*os*/, RenderContext& /*values*/) override {}
+ImportedModule::ImportedModule(const RenderContext& importer, bool withContext)
+    : m_importerNames(ImporterNames(importer, withContext))
+    , m_context(importer.CloneWith(m_importerNames))
+{
+}
 
-    void InvokeMacro(const Callable& callable, const CallParams& params, OutStream& stream, RenderContext& context)
-    {
-        auto ctx = context.Clone(m_withContext);
-        ctx.BindScope(&m_importedContext);
-        // The macro runs in the template that defines it: its `self` is that template
-        TemplateFrame frame;
-        frame.blocks = &m_moduleBlocks;
-        frame.baseDepth = ctx.GetScopesCount();
-        const TemplateFrameGuard frameGuard(ctx, &frame);
-        callable.GetStatementCallable()(params, stream, ctx);
-    }
-
-    static void InvokeMacro(const std::string& contextName, const Callable& callable, const CallParams& params, OutStream& stream, RenderContext& context)
-    {
-        const auto contextVal = context.FindValue(contextName);
-        if (!contextVal)
-        {
-            return;
-        }
-
-        const auto* rendererPtr = GetIf<RendererPtr>(&*contextVal);
-        if (!rendererPtr)
-        {
-            return;
-        }
-
-        auto* renderer = static_cast<ImportedMacroRenderer*>(rendererPtr->get());
-        renderer->InvokeMacro(callable, params, stream, context);
-    }
-
-private:
-    InternalValueMap m_importedContext;
-    bool m_withContext{};
-    // The blocks of the module
-    BlocksStack m_moduleBlocks;
-};
+template<typename Tpl>
+void ImportedModule::Render(const Tpl& tpl)
+{
+    auto& callback = *m_context.GetRendererCallback();
+    // The module's macros run in its template, whose blocks their `self` has
+    tpl.Nodes()[tpl.GetRenderer()].PushBlocks(callback, tpl.Nodes(), m_blocks);
+    m_frame.blocks = &m_blocks;
+    m_frame.baseDepth = m_context.GetScopesCount();
+    m_context.SetTemplateFrame(&m_frame);
+    m_context.SetNodes(tpl.Nodes());
+    // Only the names the template defines are imported, its output is dropped
+    RenderToString(&callback, [this, &tpl](OutStream& stream) { m_context.Nodes()[tpl.GetRenderer()].Render(stream, m_context); });
+}
 
 void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
@@ -1926,99 +1895,80 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     auto name = nodes[m_nameExpr].Evaluate(values);
 
     // Resolved on every render: the name may change between renders or loop iterations
-    const auto& tpl = values.GetRendererCallback()->LoadTemplate(name);
+    auto& callback = *values.GetRendererCallback();
+    const auto& tpl = callback.LoadTemplate(name);
     // Throws if the template failed to load
     if (!VisitTemplateImpl<bool>(tpl, true, [](const auto& /*tplPtr*/) { return true; }))
     {
         return;
     }
 
-    std::string scopeName;
+    // Without context the module sees nothing of the importer, so the render's imports of the
+    // template share it, as in Jinja2: its namespaces count across them
+    if (!m_withContext)
     {
-        TargetString tsScopeName = values.GetRendererCallback()->GetAsTargetString(name);
-        scopeName = "$$_imported_" + GetAsSameString(scopeName, tsScopeName).value_or(std::string());
+        if (const auto* shared = callback.FindModule(tpl))
+        {
+            ImportNames(values, nodes, shared->Names());
+            return;
+        }
     }
-
-    RenderContext newContext = values.Clone(m_withContext);
-    newContext.EnterScope();
-    // Only the names the template defines are imported, its output is dropped
-    RenderToString(values.GetRendererCallback(), [&](OutStream& stream) {
-        VisitTemplateImpl<bool>(tpl, true, [&](const auto& tplPtr) {
-            RenderIncludedTemplate(*tplPtr, true, true, stream, newContext);
-            return true;
-        });
-    });
-    InternalValueMap importedScope = newContext.TakeCurrentScope();
-
-    BlocksStack moduleBlocks;
-    auto& callback = *values.GetRendererCallback();
-    VisitTemplateImpl<bool>(tpl, true, [&moduleBlocks, &callback](const auto& tplPtr) {
-        tplPtr->Nodes()[tplPtr->GetRenderer()].PushBlocks(callback, tplPtr->Nodes(), moduleBlocks);
+    // Owned by the render, so that its macros find their names wherever they are called
+    auto& module = callback.AddModule(std::make_unique<ImportedModule>(values, m_withContext));
+    VisitTemplateImpl<bool>(tpl, true, [&module](const auto& tplPtr) {
+        module.Render(*tplPtr);
         return true;
     });
-
-    ImportNames(values, nodes, importedScope, scopeName);
-    values.GetCurrentScope()[scopeName] =
-        std::static_pointer_cast<IRendererBase>(std::make_shared<ImportedMacroRenderer>(std::move(importedScope), m_withContext, std::move(moduleBlocks)));
+    // Shared once complete: a module that imports itself recurses, as in Jinja2
+    if (!m_withContext)
+    {
+        callback.ShareModule(tpl, module);
+    }
+    ImportNames(values, nodes, module.Names());
 }
 
 namespace
 {
-// What importing `value` gives: a macro wrapped to run in its module, any other value as it
-// is; none for another callable
-std::optional<InternalValue> ImportedValue(const InternalValue& value, const std::string& scopeName)
+// Whether importing `value` gives it: a macro, which runs in its module wherever it is called
+// (ClosureSite), and any value but another callable
+bool IsImported(const InternalValue& value)
 {
     const auto* callable = GetIf<Callable>(&value);
     if (!callable)
     {
-        return value;
+        return true;
     }
-    if (callable->GetKind() != Callable::Macro)
-    {
-        return std::nullopt;
-    }
-    auto attributes = callable->GetAttributes();
-    Callable wrapper(Callable::Macro, [fn = *callable, scopeName](const CallParams& params, OutStream& stream, RenderContext& context) {
-        ImportedMacroRenderer::InvokeMacro(scopeName, fn, params, stream, context);
-    });
-    wrapper.SetAttributes(std::move(attributes));
-    return InternalValue(std::move(wrapper));
+    return callable->GetKind() == Callable::Macro;
 }
 } // namespace
 
-// Copies: the module keeps every name, which its own macros read through the bound scope
-void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes, const InternalValueMap& importedScope, const std::string& scopeName) const
+// Copies: the module keeps every name, which its own macros read in its context
+void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes, const InternalValueMap& moduleNames) const
 {
     if (m_namespace.empty())
     {
         auto scope = values.GetCurrentScope();
         for (const auto& name : nodes[m_namesToImport])
         {
-            const auto p = importedScope.find(HashedName{ nodes.Text(name.name), name.nameHash });
-            if (p == importedScope.end())
+            const auto p = moduleNames.find(HashedName{ nodes.Text(name.name), name.nameHash });
+            if (p == moduleNames.end() || p->first == "self" || !IsImported(p->second))
             {
                 continue;
             }
-            if (auto imported = ImportedValue(p->second, scopeName))
-            {
-                scope.ForName({ nodes.Text(name.alias), name.aliasHash }) = std::move(*imported);
-            }
+            scope.ForName({ nodes.Text(name.alias), name.aliasHash }) = p->second;
         }
         return;
     }
 
     InternalValueMap importedNs;
-    for (const auto& [name, value] : importedScope)
+    for (const auto& [name, value] : moduleNames)
     {
         // Jinja2 exports no name that starts with an underline
-        if (name.empty() || name[0] == '_')
+        if (name.empty() || name[0] == '_' || name == "self" || !IsImported(value))
         {
             continue;
         }
-        if (auto imported = ImportedValue(value, scopeName))
-        {
-            importedNs[name] = std::move(*imported);
-        }
+        importedNs[name] = value;
     }
     values.GetCurrentScope().ForName({ nodes.Text(m_namespace), m_namespaceHash }) = CreateMapAdapter(std::move(importedNs));
 }
@@ -2054,7 +2004,9 @@ MacroStatement::MacroStatement(NodeArena& nodes, std::string_view name, const Ma
     m_params = nodes.MakeSpan(arenaParams);
 
     (*m_attributes)["name"s] = name.empty() ? InternalValue() : InternalValue(std::string(name));
-    (*m_attributes)["arguments"s] = ListAdapter::CreateAdapter(std::move(arguments));
+    auto argumentNames = ListAdapter::CreateAdapter(std::move(arguments));
+    argumentNames.MarkAsTuple();
+    (*m_attributes)["arguments"s] = std::move(argumentNames);
 }
 
 struct MacroStatement::CallableBody

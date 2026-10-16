@@ -460,21 +460,6 @@ struct BlocksStack
     std::unordered_map<std::string_view, std::vector<Entry>> blocks;
 };
 
-// One template's code running, in an inheritance chain: Jinja2's root render function
-struct TemplateFrame
-{
-    const BlocksStack* blocks = nullptr;
-    // Set by `extends`; from then on this template's top-level output is dropped
-    TemplateNode<TemplateRenderer> parent;
-    // Scopes visible to the template's top level, and so to unscoped blocks
-    size_t baseDepth = 0;
-    // The template's `self`, made when a name first asks for it (docs/tasks/0139)
-    std::optional<InternalValue> self;
-    // The frame this one was entered from (an importer, for a macro it imported); only
-    // compared, so that `self` finds the template it came from
-    TemplateFrame* outer = nullptr;
-};
-
 // The root of a parsed template
 class TemplateRenderer final : public IRendererBase
 {
@@ -511,6 +496,37 @@ private:
     ArenaSpan<NodeRef<BlockStatement>> m_blocks;
     bool m_hasExtends = false;
     UnitLayout m_unitLayout;
+};
+
+// A module an `import` made: the context its template's top level rendered into, where its
+// macros run wherever they are called (docs/tasks/0167). The render owns it until it ends
+// (IRendererCallback::AddModule). Its exports are plain closures, which hold its context
+// weakly (ClosureSite), so no export keeps it alive and no cycle can form
+class ImportedModule
+{
+public:
+    // With `withContext` the module sees a snapshot of the names `importer` sees now, as
+    // Jinja2 does: a name set later is not seen, a namespace changed in place is
+    ImportedModule(const RenderContext& importer, bool withContext);
+    ImportedModule(const ImportedModule&) = delete;
+    ImportedModule(ImportedModule&&) = delete;
+    ImportedModule& operator=(const ImportedModule&) = delete;
+    ImportedModule& operator=(ImportedModule&&) = delete;
+    ~ImportedModule() = default;
+
+    // Renders the template `tpl` (a TemplateImpl) into the module's context, dropping its output
+    template<typename Tpl>
+    void Render(const Tpl& tpl);
+    // The names the module's top level set
+    [[nodiscard]] const InternalValueMap& Names() const { return m_context.GetCurrentScope(); }
+
+private:
+    // The importer's names, the external scope of the module's context
+    InternalValueMap m_importerNames;
+    BlocksStack m_blocks;
+    // The module's template, for its macros' `self`
+    TemplateFrame m_frame;
+    RenderContext m_context;
 };
 
 class IncludeStatement final : public Statement
@@ -577,7 +593,7 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
-    void ImportNames(RenderContext& values, const ArenaView& nodes, const InternalValueMap& importedScope, const std::string& scopeName) const;
+    void ImportNames(RenderContext& values, const ArenaView& nodes, const InternalValueMap& moduleNames) const;
 
     bool m_withContext{};
     NodeRef<Expression> m_nameExpr;

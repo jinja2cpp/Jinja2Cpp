@@ -8141,6 +8141,86 @@
    }
   },
   {
+   "id": "statements.macro_arguments_tuple",
+   "template": "{% macro m(a, b=1) %}{% endmacro %}{% macro n(a) %}{% endmacro %}{% macro z() %}{% endmacro %}{{ m.arguments }}{{ n.arguments }}{{ z.arguments }}{{ m.arguments is sequence }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "('a', 'b')('a',)()True"
+  },
+  {
+   "id": "statements.caller_arguments_tuple",
+   "template": "{% macro m() %}{{ caller.arguments }}{% endmacro %}{% call(a, b=a) m() %}{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "('a', 'b')"
+  },
+  {
    "id": "statements.caller_attributes",
    "template": "{% macro m() %}{{ caller.arguments|join(',') }}:{{ caller(1) }}{% endmacro %}{% call(a, b=a) m() %}{{ a }}{{ b }}{% endcall %}",
    "context": {

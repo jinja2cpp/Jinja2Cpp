@@ -211,6 +211,8 @@ CASES = [
     ("call_block_joiner", "{% set j = joiner(',') %}{% call j() %}x{% endcall %}"),
     ("caller_not_used", "{% macro m() %}x{% endmacro %}{% call m() %}y{% endcall %}"),
     ("caller_too_many_args", "{% macro m() %}{{ caller(1, 2) }}{% endmacro %}{% call(a) m() %}{{ a }}{% endcall %}"),
+    ("macro_arguments_tuple", "{% macro m(a, b=1) %}{% endmacro %}{% macro n(a) %}{% endmacro %}{% macro z() %}{% endmacro %}{{ m.arguments }}{{ n.arguments }}{{ z.arguments }}{{ m.arguments is sequence }}"),
+    ("caller_arguments_tuple", "{% macro m() %}{{ caller.arguments }}{% endmacro %}{% call(a, b=a) m() %}{% endcall %}"),
     ("caller_attributes", "{% macro m() %}{{ caller.arguments|join(',') }}:{{ caller(1) }}{% endmacro %}{% call(a, b=a) m() %}{{ a }}{{ b }}{% endcall %}"),
     ("caller_not_inherited", "{% macro n() %}{{ 'T' if caller is defined else 'F' }}{% endmacro %}{% macro m() %}{{ caller() }}{{ n() }}{% endmacro %}{% call m() %}y{% endcall %}"),
     # filter / raw / do / misc
