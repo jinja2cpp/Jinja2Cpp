@@ -187,7 +187,9 @@ thread's age: cache reads and writes were 86% of measured spend, and four long-l
 threads 74% of it (docs/tasks/0157). A thread that finishes a phase of a multi-phase
 task, or whose context passes about 300k tokens, writes its handoff to project memory
 (state, open PRs, decisions, traps), resolves, and the coordinator starts a fresh thread
-for the next phase. Standing threads (merge steward, tracks) rotate the same way once
+for the next phase. A multi-phase task also rotates at plan approval: the architect's
+plan and Ruslan's decision are the handoff, and the coordinator starts the implementation
+thread then (the 0038 plan thread ran 22 hours for $86, docs/tasks/0157). Standing threads (merge steward, tracks) rotate the same way once
 per wave or week. Mechanical threads (clang-tidy batches, index or docs syncs, bench
 re-measures, CI tweaks) and the merge steward run on Sonnet; behaviour and perf work
 stays on Opus.
