@@ -28,7 +28,7 @@ and the cycle bench check. What is left here are the global objects that are map
 **Done when.** No line of `test/parity/divergences/` names 0042 (`globals.range_float_argument`,
 `globals.cycler_not_mapping` and the `statements.namespace_*` lines).
 
-**Done (PR #TBD).** An `IMapAccessor` can name the Python class of the object it stores
+**Done (PR #515).** An `IMapAccessor` can name the Python class of the object it stores
 (`GetObjectClass()`): `namespace()` is `Namespace`, `cycler()` and `joiner()` are `Cycler` and
 `Joiner` (`CreateObjectAdapter`). Such an object keeps its attributes but is no mapping, is not
 iterable (`for`, `list`, `in`, `dict(obj)` raise TypeError) and prints as Python's repr:
