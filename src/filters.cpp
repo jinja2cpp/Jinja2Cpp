@@ -1553,6 +1553,10 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         {
             return InternalValue();
         }
+        if (const char* objectClass = val.GetObjectClass())
+        {
+            throw std::runtime_error("'"s + objectClass + "' object is not iterable");
+        }
 
         auto keys = val.GetKeys();
         auto numKeys = keys.size();
