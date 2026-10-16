@@ -83,7 +83,6 @@ jobs:
       shell: cmd
       env:
         INPUT_BUILD_CONFIG: ${{ matrix.build-config }}
-        GTEST_BRIEF: 1
       run: |
         cd .build
-        ctest -C %INPUT_BUILD_CONFIG% --output-on-failure
+        ctest -C %INPUT_BUILD_CONFIG% -V
