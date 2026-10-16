@@ -1686,11 +1686,11 @@ struct BinaryMathOperation : BaseVisitor<>
         // An object (namespace(), cycler(), joiner()) equals only itself, as Python objects
         // without __eq__ do; a dict equals itself without its items being compared, and nested
         // ones recurse once per level
-        const bool same = left.GetIdentity() == right.GetIdentity();
-        bool equal = same || (!left.GetObjectClass() && !right.GetObjectClass() && left.GetSize() == right.GetSize());
-        if (equal && !same)
+        bool equal = left.GetIdentity() == right.GetIdentity();
+        if (!equal && !left.GetObjectClass() && !right.GetObjectClass() && left.GetSize() == right.GetSize())
         {
             CheckStack();
+            equal = true;
             for (auto& key : left.GetKeys())
             {
                 if (!right.HasValue(key) || !ConvertToBool(Apply2<BinaryMathOperation>(left.GetValueByName(key), right.GetValueByName(key), BinaryExpression::LogicalEq)))
