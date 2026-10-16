@@ -86,10 +86,16 @@ int CompareIgnoreCase(std::basic_string_view<CharT> left, std::basic_string_view
             return l < r ? -1 : 1;
         }
     }
-    // Every code point lowers to at least one, so the longer string is greater
     if (left.size() == right.size())
     {
         return 0;
+    }
+    // Every code point lowers to at least one, so the longer string is greater, unless its
+    // next unit is a stray continuation that belongs to the last character (malformed text)
+    const auto next = CodeUnit(left.size() < right.size() ? right[size] : left[size]);
+    if (next >= 0x80)
+    {
+        return CompareLowerUnicode(left, right);
     }
     return left.size() < right.size() ? -1 : 1;
 }

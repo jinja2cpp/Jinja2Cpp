@@ -26,7 +26,7 @@ CASES = [
     ("sort_utf8", "{{ u|sort|join }}|{{ u|sort(case_sensitive=true)|join }}"),
     ("min_max_utf8", "[{{ u|min }}][{{ u|max }}]"),
     ("casefold_non_ascii", "{{ ['é', 'É']|min }}{{ ['é', 'É']|max }}|{{ ['É', 'é']|unique|list|length }}"),
-    ("casefold_sort", "{{ ['b', '\u212a', 'a', 'j']|sort|join(',') }}|{{ ['éb', 'Éa']|sort|join(',') }}"),
+    ("casefold_sort", "{{ ['b', '\u212a', 'a', 'j']|sort|join(',') }}|{{ ['éb', 'Éa']|sort|join(',') }}|{{ ['aÉ', 'ae', 'AÉB']|sort(reverse=true)|join(',') }}|{{ ['é', 'Éa', 'e']|max }}"),
     ("casefold_dictsort", "{{ {'Éb': 1, 'éa': 2}|dictsort|map('first')|join(',') }}"),
     ("casefold_multi_code_point", "{{ ['ß', 'SS']|min }}|{{ ['İ', 'i']|unique|list|length }}{{ ['İ', 'i']|min }}"),
     ("casefold_final_sigma", "{{ ['ΑΣ', 'ας']|unique|list|length }}{{ ['ΑΣ', 'ασ']|unique|list|length }}"),

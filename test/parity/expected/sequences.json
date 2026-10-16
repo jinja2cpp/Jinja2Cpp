@@ -424,7 +424,7 @@
   },
   {
    "id": "sequences.casefold_sort",
-   "template": "{{ ['b', 'K', 'a', 'j']|sort|join(',') }}|{{ ['éb', 'Éa']|sort|join(',') }}",
+   "template": "{{ ['b', 'K', 'a', 'j']|sort|join(',') }}|{{ ['éb', 'Éa']|sort|join(',') }}|{{ ['aÉ', 'ae', 'AÉB']|sort(reverse=true)|join(',') }}|{{ ['é', 'Éa', 'e']|max }}",
    "context": {
     "s": "hello",
     "u": "héllo wörld",
@@ -440,7 +440,7 @@
    },
    "env": {},
    "templates": {},
-   "output": "a,b,j,K|Éa,éb"
+   "output": "a,b,j,K|Éa,éb|AÉB,aÉ,ae|Éa"
   },
   {
    "id": "sequences.casefold_dictsort",
