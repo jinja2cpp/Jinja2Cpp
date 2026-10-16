@@ -339,8 +339,9 @@ using InternalValueList = std::vector<InternalValue>;
 // The most items a list, or characters a string, may hold when an operation builds it in
 // one go. range() reports up to 2^64 items without storing them, and reserving that many
 // asks for terabytes, which ASan aborts on (docs/tasks/0097). Python fails such a list with
-// MemoryError; Jinja2C++ reports it before allocating.
-constexpr size_t MaxSequenceSize = size_t{ 1 } << 31;
+// MemoryError; Jinja2C++ reports it before allocating. 2^26 list items take 2 GB, which is
+// what the fuzz jobs' memory limit allows in one allocation (docs/tasks/0185).
+constexpr size_t MaxSequenceSize = size_t{ 1 } << 26;
 
 // Throws when an operation is about to build a sequence longer than MaxSequenceSize
 inline void CheckSequenceSize(uint64_t size, const char* what)
