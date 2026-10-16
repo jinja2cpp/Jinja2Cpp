@@ -234,4 +234,10 @@ CASES = [
     ("importer_block_via_self_in_imported_macro", "{% set v = 'main' %}{% block b %}[{{ v }}]{% endblock %}{% import 'mselfb.j2' as l %}{{ l.n(self) }}", MODULES2),
     ("extending_module_self_parent_block", "{% import 'mext.j2' as l %}{{ l.f() }}", MODULES2),
     ("extending_module_self_super_block", "{% import 'msup.j2' as l %}{{ l.f() }}", MODULES2),
+    # idtracking (docs/tasks/0168): an include or import with context before the store sees the
+    # outer value, not the frame's binding; an import alias is bound like a set
+    ("idtracking_include_before_set", "{% include 'uses_x.j2' %}{% set x = 1 %}{% for j in [1] %}{{ x }}{% endfor %}", L),
+    ("idtracking_include_in_loop_before_set", "{% for i in [1, 2] %}{% include 'uses_x.j2' %}{% set x = i %}{% for j in [1] %}{{ x }}{% endfor %}{% endfor %}", L),
+    ("idtracking_import_with_context_before_set", "{% import 'macros.j2' as m with context %}{{ m.ctx() }}{% set name = 'b' %}{% for j in [1] %}{{ name }}{% endfor %}", L),
+    ("idtracking_from_import_alias_binds", "{% for i in [1] %}{% for j in [1] %}[{{ x }}]{% endfor %}{% from 'macros.j2' import greet as x %}{% endfor %}", L),
 ]

@@ -202,7 +202,8 @@ NodeRef<BindUndefinedStatement> NameResolver::EntryBinding(FrameId frameId, Node
 // first). One no frame inside reads before the store needs no binding: the body runs in
 // order, so a frame that comes after the store, or a closure defined after it, runs after it.
 // One a block inside reads is left as it is, since the block would see the binding and
-// Jinja2's does not (docs/tasks/0196)
+// Jinja2's does not (docs/tasks/0196); so is one stored after an include or import with
+// context inside the frame, which Jinja2 hands the outer value
 void NameResolver::MarkCandidateReads(FrameId frameId, boost::span<EntryCandidate> candidates, const NodeArena& nodes) const
 {
     std::uint32_t lastStore = 0;
@@ -210,12 +211,22 @@ void NameResolver::MarkCandidateReads(FrameId frameId, boost::span<EntryCandidat
     {
         lastStore = std::max(lastStore, candidate.readsBefore);
     }
+    for (const auto& read : m_contextReads)
+    {
+        if (IsInside(m_frames, read.frame, frameId, NoFrame).first)
+        {
+            for (auto& candidate : candidates)
+            {
+                candidate.isDropped = candidate.isDropped || candidate.order >= read.storesBefore;
+            }
+        }
+    }
     const auto byHash = [](const EntryCandidate& candidate, std::size_t hash) { return candidate.hash < hash; };
     for (auto idx = m_frames[frameId].firstRead; idx < lastStore; ++idx)
     {
         const auto& [ref, readFrame] = m_reads[idx];
         const auto name = nodes[ref].GetHashedName(nodes);
-        for (auto pos = std::lower_bound(candidates.begin(), candidates.end(), name.hash, byHash); pos != candidates.end() && pos->hash == name.hash; ++pos)
+        for (auto* pos = std::lower_bound(candidates.begin(), candidates.end(), name.hash, byHash); pos != candidates.end() && pos->hash == name.hash; ++pos)
         {
             auto& candidate = *pos;
             if (candidate.isDropped || idx >= candidate.readsBefore || candidate.name != name.name)
@@ -245,7 +256,7 @@ bool NameResolver::BindsName(FrameId frameId, std::string_view name, const NodeA
     if (frame.isMacro)
     {
         const auto params = nodes[nodes.Get<MacroStatement>(frame.node).GetParams()];
-        return std::any_of(params.begin(), params.end(), [name, &nodes](const MacroParam& param) { return nodes.Text(param.name) == name; });
+        return name == "caller" || name == "varargs" || name == "kwargs" || std::any_of(params.begin(), params.end(), [name, &nodes](const MacroParam& param) { return nodes.Text(param.name) == name; });
     }
     return false;
 }

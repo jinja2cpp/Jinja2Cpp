@@ -1211,6 +1211,10 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
     }
 
     auto renderer = m_nodes.Make<IncludeStatement>(isIgnoreMissing, isWithContext);
+    if (isWithContext)
+    {
+        m_names.AddContextRead();
+    }
     m_nodes[renderer].SetIncludeNamesExpr(valueExpr, m_nodes[valueExpr].GetConstant(m_nodes) != nullptr);
     statementsInfo.back().body.emplace_back(renderer);
 
@@ -1272,6 +1276,10 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
     }
 
     auto renderer = m_nodes.Make<ImportStatement>(isWithContext);
+    if (isWithContext)
+    {
+        m_names.AddContextRead();
+    }
     m_nodes[renderer].SetImportNameExpr(valueExpr);
     const auto namespaceName = lexer.GetAsString(name);
     m_names.AddStore(m_names.Current(), namespaceName);
@@ -1407,6 +1415,10 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     }
 
     auto renderer = m_nodes.Make<ImportStatement>(isWithContext);
+    if (isWithContext)
+    {
+        m_names.AddContextRead();
+    }
     m_nodes[renderer].SetImportNameExpr(valueExpr);
 
     // Every `name as alias` pair is kept in source order; a name imported twice binds both aliases

@@ -107,6 +107,16 @@ public:
             m_uses.emplace_back(ref, m_current);
         }
     }
+    // An `include` or `import` with context in the current frame: it reads every name of the
+    // frames around it from their scopes, which Jinja2 hands it only once stored. A frame
+    // binds no name at entry that it stores after one
+    void AddContextRead()
+    {
+        if (m_current != NoFrame)
+        {
+            m_contextReads.push_back(ContextRead{ m_current, static_cast<std::uint32_t>(m_stores.size()) });
+        }
+    }
     // Called when the body of `frame` (a template, block, macro, call block, loop or `with`)
     // ends: the statement that binds the names the frame holds from its entry, to put first in
     // the body, or none
@@ -219,6 +229,13 @@ private:
     // The names stored in frames, in parse order; most templates store a few
     boost::container::small_vector<Store, 8> m_stores;
     std::vector<EntryName> m_entryNames;
+    struct ContextRead
+    {
+        FrameId frame = NoFrame;
+        // The stores made before it (m_stores)
+        std::uint32_t storesBefore = 0;
+    };
+    std::vector<ContextRead> m_contextReads;
     FrameId m_current = NoFrame;
     bool m_inBranch = false;
     bool m_hasSlots = false;
