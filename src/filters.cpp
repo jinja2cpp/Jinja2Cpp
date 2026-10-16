@@ -176,6 +176,12 @@ bool IsNotIterable(const InternalValue& val)
     case ValueKind::Double:
     case ValueKind::Callable:
         return true;
+    case ValueKind::Map:
+    {
+        // An object such as cycler() is stored as a map but is not iterable
+        auto map = AsMap(val);
+        return map && map->GetObjectClass() != nullptr;
+    }
     default:
         return false;
     }
@@ -380,9 +386,9 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     const auto attrNameVal = GetArgumentValue("name", context);
     CheckUndefinedUse(baseVal, UndefinedUse::Attribute);
     // Python's attr reads attributes only: the items of a dict are not attributes, the fields
-    // of a reflected object are
+    // of a reflected object and of an object such as namespace() are
     auto map = AsMap(baseVal);
-    if (map && !map->HasAttributes())
+    if (map && !map->HasAttributes() && !map->GetObjectClass())
     {
         return GetArgumentValue("default", context);
     }
@@ -429,7 +435,7 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
 {
     CheckUndefinedUse(baseVal, UndefinedUse::Method);
     auto map = AsMap(baseVal);
-    if (!map)
+    if (!map || map->GetObjectClass())
     {
         // Python calls value.items(), which only a mapping has
         if (!baseVal.IsUndefined())
@@ -2274,7 +2280,7 @@ InternalValue ValueConverter::Items(const InternalValue& baseVal, RenderContext&
         return ListAdapter::CreateAdapter(InternalValueList());
     }
     auto map = AsMap(baseVal);
-    if (!map)
+    if (!map || map->GetObjectClass())
     {
         context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
     }

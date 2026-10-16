@@ -249,6 +249,7 @@ InternalValue CallJoiner(const CallParams& params, RenderContext&)
     auto args = ParseArgs({ { "sep", false, ", "s } }, params, "joiner");
     auto used = std::make_shared<bool>(false);
     InternalValueMap joiner;
+    joiner["sep"] = args["sep"];
     joiner["operator()"] = MakeFunction([used, sep = args["sep"]](const CallParams&, RenderContext&) {
         if (*used)
         {

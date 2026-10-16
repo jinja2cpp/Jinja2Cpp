@@ -1674,8 +1674,9 @@ struct BinaryMathOperation : BaseVisitor<>
             return Mismatch(left, right);
         }
 
-        bool equal = left.GetSize() == right.GetSize();
-        if (equal)
+        // An object (namespace(), cycler(), joiner()) equals only itself, as Python objects without __eq__ do
+        bool equal = left.GetObjectClass() || right.GetObjectClass() ? left.GetIdentity() == right.GetIdentity() : left.GetSize() == right.GetSize();
+        if (equal && !left.GetObjectClass())
         {
             for (auto& key : left.GetKeys())
             {
@@ -1757,9 +1758,10 @@ struct BooleanEvaluator : BaseVisitor<bool>
         return !str.empty();
     }
 
+    // An object (namespace(), cycler(), joiner()) is truthy, as Python objects without __bool__ are
     bool operator()(const MapRef& val) const
     {
-        return val.GetSize() != 0ULL;
+        return val.GetObjectClass() != nullptr || val.GetSize() != 0ULL;
     }
 
     bool operator()(const ListRef& val) const

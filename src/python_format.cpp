@@ -462,6 +462,11 @@ public:
     explicit Formatter(const InternalValue& values)
         : m_map(AsMap(values))
     {
+        // An object such as namespace() is one argument, not a mapping of them
+        if (m_map && m_map->GetObjectClass())
+        {
+            m_map.reset();
+        }
         auto list = AsList(values);
         if (list && list->IsTuple())
         {
