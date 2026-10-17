@@ -248,7 +248,7 @@ struct StatementInfo
     {
         // One test of a mask, not a chain of compares: it runs for every statement (docs/tasks/0204)
         constexpr unsigned mask = (1U << TemplateRoot) | (1U << ForStatement) | (1U << BlockStatement) | (1U << MacroStatement) | (1U << MacroCallStatement) | (1U << WithStatement)
-            | (1U << SetStatement) | (1U << FilterStatement) | (1U << AutoescapeStatement);
+                                  | (1U << SetStatement) | (1U << FilterStatement) | (1U << AutoescapeStatement);
         return ((mask >> type) & 1U) != 0;
     }
 
