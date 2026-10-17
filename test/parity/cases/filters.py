@@ -304,4 +304,6 @@ CASES = [
     ("tojson_undefined", "{{ nope|tojson }}"),
     ("batch_none", "{% for b in none|batch(2) %}x{% endfor %}"),
     ("map_missing_parent", "{{ users|map(attribute='addr.zip')|list|length }}"),
+    # map passes extra arguments on to the filter, which must check them (0206)
+    ("map_filter_extra_arg", "{{ ['a']|map('upper', 1)|list }}"),
 ]

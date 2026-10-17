@@ -2,6 +2,7 @@
 # Format and kinds: test/parity/README.md.
 
 filters.int_out_of_range                output      0178 integers are 64-bit; int beyond int64 falls back to the default
+filters.map_filter_extra_arg            accepts     0206 map drops extra arguments for a filter that takes none instead of raising TypeError
 filters.round_int_overflow              rejects     0178 integers are 64-bit and overflow raises instead of growing
 filters.select_single_pass              output      0101 deliberate: a select/map/reject result can be iterated again; a Python generator is empty the second time
 filters.unknown_filter_output_after_extends rejects   0203 output after a top-level extends is evaluated and discarded; Jinja2 does not compile it

@@ -2,6 +2,8 @@
 CASES = [
     ("range_stop", "{% for i in range(4) %}{{ i }},{% endfor %}"),
     ("range_start_stop", "{% for i in range(2, 5) %}{{ i }},{% endfor %}"),
+    # range takes no keyword arguments (0206)
+    ("range_keyword_arg", "{{ range(stop=2)|list }}"),
     ("range_step", "{% for i in range(1, 10, 3) %}{{ i }},{% endfor %}"),
     ("range_negative_step", "{% for i in range(5, 0, -2) %}{{ i }},{% endfor %}"),
     ("range_empty", "[{% for i in range(0) %}{{ i }},{% endfor %}]"),

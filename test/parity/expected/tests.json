@@ -1025,6 +1025,29 @@
    }
   },
   {
+   "id": "tests.select_unread_extra_arg",
+   "template": "{% set r = [1, 2]|select('odd', 1) %}ok",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "ok"
+  },
+  {
    "id": "tests.sameas_computed_list",
    "template": "{% set a = range(3) %}{% set b = a %}{{ 'T' if a is sameas b else 'F' }}{{ 'T' if range(3) is sameas range(3) else 'F' }}",
    "context": {

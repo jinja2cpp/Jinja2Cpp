@@ -45,6 +45,8 @@ CASES = [
     ("lower_keyword_arg", "{{ 'a' is lower(x=1) }}"),
     ("select_test_extra_arg", "{{ [1, 2]|select('odd', 1)|list }}"),
     ("rejectattr_test_extra_arg", "{{ [{'a': 1}]|rejectattr('a', 'none', 1)|list }}"),
+    # select is lazy in Python: a result nobody reads never runs the test (0206)
+    ("select_unread_extra_arg", "{% set r = [1, 2]|select('odd', 1) %}ok"),
     ("sameas_computed_list", "{% set a = range(3) %}{% set b = a %}{{ 'T' if a is sameas b else 'F' }}{{ 'T' if range(3) is sameas range(3) else 'F' }}"),
     ("sameas_generator_copy", "{% set a = [1, 2, 3]|select('odd') %}{% set b = a %}{{ 'T' if a is sameas b else 'F' }}"),
     ("sequence", "{{ 'T' if l is sequence else 'F' }}{{ 'T' if s is sequence else 'F' }}{{ 'T' if x is sequence else 'F' }}"),
