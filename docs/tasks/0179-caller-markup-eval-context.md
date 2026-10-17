@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0165]
@@ -40,3 +40,14 @@ which 0165 (lexical scoping of macro bodies) owns.
 **Done when.** `autoescape.env_on_caller_markup_call_site` matches and its line is gone
 from `test/parity/divergences/autoescape.txt`; add corpus cases for a macro result and a
 `pass_eval_context` filter inside a macro called under `{% autoescape false %}`.
+
+**Done** (PR to be linked): `RenderContext` keeps the output setting (`IsOutputAutoescape`,
+for `{{ }}`, `~`, `{% filter %}`, the filter input of `{% set x | f %}` and `loop(...)`
+results) apart from the runtime one (`IsAutoescape`, for macro, `caller()`, `self.b()`,
+`{% set %}` block and `pass_eval_context` filter results). A macro or block body sets only
+the output one. The runtime setting is one per Jinja2 Context: contexts carry an
+EvalContext id, new for a template render and an include, and a macro body whose caller
+shares its home's id runs with the caller's runtime setting (`HomeCall`). `{{ m() }}`
+writes a macro's output straight to the stream except where the output escapes and the
+runtime setting is off. A non-constant `{% autoescape %}` (Jinja2's volatile EvalContext)
+is left to 0210.

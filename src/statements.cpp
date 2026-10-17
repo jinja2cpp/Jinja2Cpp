@@ -1421,7 +1421,9 @@ void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
     {
         return;
     }
-    // Jinja2 wraps the filtered value: Markup(str(result)) under autoescape
+    // The filter takes the body as Markup under autoescape where the block is written, and
+    // Jinja2 wraps the filtered value: Markup(str(result)) under autoescape at run time
+    body.SetMarkup(values.IsOutputAutoescape());
     auto result = values.Nodes()[m_expr].Evaluate(body, values);
     if (values.IsAutoescape())
     {
@@ -1677,8 +1679,10 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     {
         scope["super"] = std::move(*parentBlock);
     }
-    // A block body escapes as its template does, whatever `{% autoescape %}` surrounds it
-    AutoescapeGuard autoescapeGuard(values, TemplateAutoescape(values));
+    // A block body escapes its output as its template does, whatever `{% autoescape %}`
+    // surrounds it; the runtime setting stays the caller's, as Jinja2's derived context
+    // shares its EvalContext
+    OutputAutoescapeGuard autoescapeGuard(values, TemplateAutoescape(values));
     values.Nodes()[m_mainBody].Render(os, values);
     values.ExitScope();
     values.SetSelfDepth(prevSelfDepth);
@@ -1825,6 +1829,8 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
     RenderContext innerContext = values.Clone(withContext);
     if (withContext)
     {
+        // Jinja2 renders it in a new Context, with an EvalContext of its own
+        innerContext.NewEvalContext();
         innerContext.PassOverEntryBindings();
         innerContext.EnterScope();
     }
@@ -2103,16 +2109,18 @@ struct MacroStatement::CallableBody
     {
         // A macro called from another template (imported, or passed as `caller`) runs in its own tree
         const ArenaSwitch nodesSwitch(home, nodes);
-        AutoescapeGuard autoescapeGuard(home, autoescape);
+        OutputAutoescapeGuard autoescapeGuard(home, autoescape);
         macro->InvokeMacroRenderer(callParams, stream, home, link);
     }
 };
 
 Callable MacroStatement::MakeCallable(RenderContext& values) const
 {
-    // The body escapes as where the macro is defined; the caller decides whether the result is
-    // Markup. The defaults are evaluated by each call (BindMacroDefaults)
-    Callable result(Callable::Macro, CallableBody{ this, values.Nodes(), values.IsAutoescape(), ClosureSite(values), m_readsSlotsOnly });
+    // The body escapes its output as where the macro is defined; the runtime setting where it
+    // is called decides whether its results are Markup, its own and those of `caller()` and
+    // `join` in it (RenderContext::IsAutoescape). The defaults are evaluated by each call
+    // (BindMacroDefaults)
+    Callable result(Callable::Macro, CallableBody{ this, values.Nodes(), values.IsOutputAutoescape(), ClosureSite(values), m_readsSlotsOnly });
     result.SetAttributes(m_attributes);
     return result;
 }
@@ -2493,9 +2501,10 @@ void FilterStatement::Render(OutStream& os, RenderContext& values)
     {
         return;
     }
-    // The body is Markup under autoescape; the filtered output is written as is
+    // The body is Markup under autoescape where the block is written; the filtered output is
+    // written as is
     InternalValue body(std::move(arg));
-    body.SetMarkup(values.IsAutoescape());
+    body.SetMarkup(values.IsOutputAutoescape());
     const auto result = values.Nodes()[m_expr].Evaluate(body, values);
     os.WriteValue(result);
 }

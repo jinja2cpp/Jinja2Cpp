@@ -253,7 +253,7 @@ void WriteEscaped(OutStream& stream, const InternalValue& val, IRendererCallback
 // What `{{ val }}` writes: escaped when autoescape is on and the value is not Markup
 inline void WriteOutput(OutStream& stream, const InternalValue& val, RenderContext& context)
 {
-    if (!context.IsAutoescape() || val.IsMarkup())
+    if (!context.IsOutputAutoescape() || val.IsMarkup())
     {
         stream.WriteValue(val);
         return;

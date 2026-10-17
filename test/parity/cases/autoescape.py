@@ -102,4 +102,22 @@ CASES = [
     ("markup_methods_escape", "{{ ('<i> a<b'|safe).split() }}|{{ ('<i>'|safe).partition('i') }}|{{ ('<i>'|safe).join(['<x>', 1]) }}|{{ ('ab'|safe).ljust(4, '&') }}|{{ ('a'|safe).replace('a', '<'|safe) }}|{{ ('<i>'|safe).find('i') }}"),
     ("markup_method_format", "{{ ('{0}{x}'|safe).format('<a>', x='<b>') }}|{{ ('{0:>5}'|safe).format('<') }}|{{ ('{0[a]}'|safe).format({'a': '<'}) }}|{{ ('{}'|safe).format('<'|safe) }}|{{ ('{!r}'|safe).format('<') }}|{{ ('{}'|safe).format(1.5) }}"),
     ("markup_repr_nested", "{{ [['<i>'|safe]] }}|{{ {'a': \"it's\"|safe} }}|{{ '%r'|format('<i>'|safe) }}|{{ '<i>'|safe|pprint }}"),
+    # A macro body escapes its output as where it is defined, but its Markup results are decided
+    # by the runtime setting where it is called (docs/tasks/0179)
+    ("env_on_macro_result_in_macro_call_site", "{% macro i() %}<{{ html }}>{% endmacro %}{% macro o() %}[{{ i() }}]{% endmacro %}{% autoescape false %}{{ o() }}{% endautoescape %}|{{ o() }}", AE),
+    ("env_on_join_in_macro_call_site", "{% macro j() %}{{ 'T' if l|join(','|safe) is escaped else 'F' }}{{ html }}{% endmacro %}{% autoescape false %}{{ j() }}{% endautoescape %}|{{ j() }}", AE),
+    ("env_on_set_block_in_macro_call_site", "{% macro j() %}{% set x %}<i>{% endset %}{{ 'T' if x is escaped else 'F' }}{{ x }}{% filter upper %}<u>{% endfilter %}{% endmacro %}{% autoescape false %}{{ j() }}{% endautoescape %}|{{ j() }}", AE),
+    ("env_off_caller_markup_call_site", "{% macro w() %}{{ 'T' if caller() is escaped else 'F' }}{{ 'T' if l|join(','|safe) is escaped else 'F' }}{% endmacro %}{% autoescape true %}{% call w() %}<{% endcall %}{% endautoescape %}|{% call w() %}<{% endcall %}"),
+    ("env_on_caller_call_site_nested_context", "{% macro w() %}[{{ caller() }}]{% endmacro %}{% filter upper %}{% autoescape false %}{% call w() %}<{{ html }}>{% endcall %}{% endautoescape %}{% endfilter %}|{% with %}{% autoescape false %}{% call w() %}<{% endcall %}{% endautoescape %}{% endwith %}", AE),
+    ("env_on_block_runtime_setting", "{% autoescape false %}{% block b %}{% set x %}<i>{% endset %}{{ 'T' if x is escaped else 'F' }}{{ html }}{{ 'T' if l|join(','|safe) is escaped else 'F' }}{% endblock %}{% endautoescape %}", AE),
+    ("env_on_loop_recursion_in_macro_call_site", "{% macro m() %}{% for i in [[]] recursive %}{{ 'T' if loop(i) is escaped else 'F' }}{% endfor %}{% endmacro %}{% autoescape false %}{{ m() }}{% endautoescape %}", AE),
+    ("env_on_imported_macro_call_site", "{% from 'lib.j2' import w with context %}{% autoescape false %}{% call w() %}<{% endcall %}{% endautoescape %}",
+     {"env": {"autoescape": True}, "templates": {"lib.j2": "{% macro w() %}[{{ 'T' if caller() is escaped else 'F' }}{{ 'T' if l|join(','|safe) is escaped else 'F' }}]{% endmacro %}"}}),
+    ("env_on_macro_in_include_call_site", "{% macro m() %}({{ 'T' if caller() is escaped else 'F' }}){% endmacro %}{% autoescape false %}{% include 'inc.j2' %}{% endautoescape %}|{% include 'inc.j2' %}",
+     {"env": {"autoescape": True}, "templates": {"inc.j2": "{{ 'T' if l|join(','|safe) is escaped else 'F' }}{% call m() %}<{% endcall %}"}}),
+    ("env_on_set_filtered_block_in_macro_call_site", "{% macro j() %}{% set x | replace('a', '<') %}a{% endset %}{{ 'T' if x is escaped else 'F' }}{{ x }}{% endmacro %}{% autoescape false %}{{ j() }}{% endautoescape %}|{{ j() }}", AE),
+    # `{% autoescape %}` with a value known only at run time makes the code it encloses read the
+    # runtime setting for its output too (Jinja2's volatile EvalContext)
+    ("volatile_macro_output", "{% autoescape on %}{% macro m() %}{{ '<' }}{% endmacro %}{% autoescape false %}{{ m() }}{% endautoescape %}{% endautoescape %}", {"ctx": {"on": True}}),
+    ("volatile_concat", "{% autoescape on %}{{ '<' ~ '<'|safe }}{% endautoescape %}", {"ctx": {"on": True}}),
 ]
