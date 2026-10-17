@@ -3,6 +3,7 @@ status: done
 priority: low
 area: parity
 depends: [0047]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/554
 touches: [src/serialize_filters.cpp#PrettyPrinter, test/filters_test.cpp]
 ---
 # `pprint` prints JSON-style scalars

@@ -2,6 +2,7 @@
 status: done
 priority: low
 area: parity
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/554
 touches: [src/value_visitors.h, src/internal_value.h]
 ---
 # A macro or a callable is not equal to itself
