@@ -1,5 +1,6 @@
 ---
 status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/552
 priority: low
 area: parity
 touches: [src/filters.cpp, src/global_functions.cpp, src/testers.cpp]
@@ -26,7 +27,7 @@ generator or should become a deliberate divergence like 0101.
 **Done when** the three corpus cases match (or the `select` one is marked deliberate) and
 their lines in `test/parity/divergences/` are deleted.
 
-**Resolution.** PR (link below). map reports the named filter's argument error at the
+**Resolution.** PR #552. map reports the named filter's argument error at the
 first item; range rejects keyword arguments; the comparison tests reject keyword
 arguments. `select` stays eager: `tests.select_unread_extra_arg` is now a deliberate
 divergence under 0101, the same model as `filters.select_single_pass`.

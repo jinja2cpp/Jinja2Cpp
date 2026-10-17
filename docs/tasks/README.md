@@ -266,7 +266,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0194](0194-self-block-runs-in-its-template.md) | A block called through `self` runs in its own template | parity | low | done |
 | [0195](0195-imported-module-that-extends.md) | An imported module that extends a parent | parity | low | done |
 | [0196](0196-loop-len-and-iter.md) | `loop` as a sized iterable | parity | low | open |
-| [0197](0197-objects-left-as-mappings.md) | Objects and dicts still read as maps of names in a few places | parity | low | open |
+| [0197](0197-objects-left-as-mappings.md) | Objects and dicts still read as maps of names in a few places | parity | low | done |
 | [0198](0198-self-block-call-leftovers.md) | Calls through `self` that still differ from Jinja2 | parity | low | done |
 | [0199](0199-call-block-leftovers.md) | Call block leftovers | parity | low | done |
 | [0200](0200-tester-arity.md) | Every built-in test checks its arguments | parity | low | done |
@@ -275,6 +275,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0203](0203-output-after-extends-not-evaluated.md) | Output after a top-level extends is not evaluated | parity | low | open |
 | [0204](0204-deep-value-check-render-cost.md) | Render cost of the deep-value stack checks and trashcan release (0093) | perf | low | open |
 | [0205](0205-load-drift-0168-0193.md) | Load drift after trains 11 and 12 | perf | medium | done |
-| [0206](0206-call-argument-leftovers.md) | Argument checks that 0200 left over | parity | low | open |
+| [0206](0206-call-argument-leftovers.md) | Argument checks that 0200 left over | parity | low | done |
 | [0207](0207-self-frame-leftovers.md) | `self` cases left after 0143 and 0198 | parity | low | open |
 | [0208](0208-macro-value-gaps.md) | Macros as values | parity | low | open |
+| [0212](0212-objects-as-keys-and-through-callables.md) | Objects as dict keys and through user callables | parity | low | open |
