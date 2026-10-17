@@ -35,6 +35,9 @@ CASES = [
     ("strings_repr_escapes", "{{ v }}", {"ctx": {"v": ["a\nb\tc", "back\\slash", "it's \"q\"", "\x01"]}}),
     ("strings_repr_unicode", "{{ v }}", {"ctx": {"v": ["a\u0085b\u00a0c\u2028d\ufeff", "\u00e9\U0001F600", "\U0001FAE8"]}}),
     ("nested_scalars_repr", "{{ v }}", {"ctx": {"v": {"k": [1.0, True, None, "s"]}}}),
+    # Printed whole, not cut off at some depth (0093)
+    ("nested_list_repr_deep", "{% set ns = namespace(v=[]) %}{% for i in range(300) %}{% set ns.v = [ns.v] %}{% endfor %}{{ ns.v }}"),
+    ("nested_dict_repr_deep", "{% set ns = namespace(v={}) %}{% for i in range(300) %}{% set ns.v = {'k': ns.v} %}{% endfor %}{{ ns.v }}"),
     ("dictsort_items_repr", "{{ d|dictsort }}"),
     ("varargs_single_tuple", "{% macro m() %}{{ varargs }}{% endmacro %}{{ m(1) }}|{{ m() }}"),
     ("text_passthrough", "plain {text} % # text"),

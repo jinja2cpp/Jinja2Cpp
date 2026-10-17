@@ -40,6 +40,9 @@ CASES = [
     ("eq_string_int", "{{ 'T' if '1' == 1 else 'F' }}"),
     ("eq_list", "{{ 'T' if [1, 2] == [1, 2] else 'F' }}"),
     ("eq_dict", "{{ {'a': 1} == {'a': 1} }}"),
+    # Python compares a list or dict with itself as equal without comparing its items (0093)
+    ("eq_same_list_nan", "{% set n = ('nan' if x else '')|float %}{% set l = [n] %}{{ l == l }}|{{ l != l }}|{{ l <= l }}|{{ [l] == [l] }}"),
+    ("eq_same_dict_nan", "{% set d = {'a': ('nan' if x else '')|float} %}{{ d == d }}|{{ {'k': d} == {'k': d} }}"),
     ("eq_none", "{{ 'T' if n == none else 'F' }}"),
     ("ne", "{{ 'T' if 1 != 2 else 'F' }}"),
     ("lt_gt", "{{ 'T' if 1 < 2 else 'F' }}{{ 'T' if 2 > 1 else 'F' }}{{ 'T' if 2 <= 2 else 'F' }}{{ 'T' if 3 >= 4 else 'F' }}"),

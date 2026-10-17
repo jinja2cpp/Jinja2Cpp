@@ -13,7 +13,6 @@
 #include <boost/iterator/iterator_facade.hpp>
 #include <boost/core/span.hpp>
 #include <boost/smart_ptr/intrusive_ptr.hpp>
-#include <boost/smart_ptr/intrusive_ref_counter.hpp>
 #include <boost/unordered_map.hpp>
 #include <fmt/core.h>
 
@@ -40,6 +39,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <functional>
 #include <initializer_list>
 #include <vector>
@@ -77,22 +77,51 @@ private:
     T* m_ptr;
 };
 
+class ValueObject;
+
+namespace detail
+{
+// Deletes an object whose last reference went. A value nested as deep as a loop iterates
+// would otherwise be deleted by as many nested destructors and overflow the stack
+// (docs/tasks/0093): past a fixed depth the object waits on a per-thread list, which the
+// outermost deletion empties in a loop, as CPython's "trashcan" does.
+// Exported: intrusive_ptr_release calls it from code outside a shared library.
+JINJA2CPP_EXPORT void DestroyValueObject(const ValueObject* obj) noexcept;
+} // namespace detail
+
 // The base of every object a value owns: a long string, a list or map accessor, a pair, a
 // callable, the info of an undefined value. Values share such objects through one
 // boost::intrusive_ptr (docs/tasks/0140), so the rest of a value is trivially copyable and
 // copying it is a memcpy plus, for an owning value, one reference count increment. The
 // objects are immutable once shared, apart from state their classes mark mutable; the count
 // is atomic, as templates and their constants are shared by concurrent renders.
-class ValueObject : public boost::intrusive_ref_counter<ValueObject, boost::thread_safe_counter>
+class ValueObject
 {
 public:
     ValueObject() = default;
-    // A copy is a new object: intrusive_ref_counter starts its count at zero
-    ValueObject(const ValueObject&) = default;
-    ValueObject(ValueObject&&) = default;
-    ValueObject& operator=(const ValueObject&) = default;
-    ValueObject& operator=(ValueObject&&) = default;
+    // A copy is a new object: its count starts at zero
+    ValueObject(const ValueObject& other) noexcept
+        : m_flags(other.m_flags)
+    {
+    }
+    ValueObject(ValueObject&& other) noexcept
+        : m_flags(other.m_flags)
+    {
+    }
+    ValueObject& operator=(const ValueObject& other) noexcept
+    {
+        m_flags = other.m_flags;
+        return *this;
+    }
+    ValueObject& operator=(ValueObject&& other) noexcept
+    {
+        m_flags = other.m_flags;
+        return *this;
+    }
     virtual ~ValueObject() = default;
+
+    // NOLINTNEXTLINE(readability-identifier-naming): the name boost::intrusive_ref_counter uses
+    [[nodiscard]] unsigned use_count() const noexcept { return m_refCount.load(std::memory_order_acquire); }
 
     // An object with state of its own that each copy of the value must not share (a
     // generator's iteration): copying the value clones it (IListAccessor::Clone)
@@ -101,6 +130,18 @@ public:
     // value it was taken from alive
     [[nodiscard]] bool IsAnchor() const noexcept { return (m_flags & AnchorFlag) != 0; }
 
+    // boost::intrusive_ptr's hooks
+    // NOLINTNEXTLINE(readability-identifier-naming)
+    friend void intrusive_ptr_add_ref(const ValueObject* obj) noexcept { obj->m_refCount.fetch_add(1, std::memory_order_relaxed); }
+    // NOLINTNEXTLINE(readability-identifier-naming)
+    friend void intrusive_ptr_release(const ValueObject* obj) noexcept
+    {
+        if (obj->m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1)
+        {
+            detail::DestroyValueObject(obj);
+        }
+    }
+
 protected:
     void SetClonesOnCopy(bool clones = true) noexcept { m_flags = clones ? static_cast<uint8_t>(m_flags | CloneFlag) : static_cast<uint8_t>(m_flags & ~CloneFlag); }
     void SetAnchor() noexcept { m_flags |= AnchorFlag; }
@@ -108,6 +149,7 @@ protected:
 private:
     static constexpr uint8_t CloneFlag = 1;
     static constexpr uint8_t AnchorFlag = 2;
+    mutable std::atomic<unsigned> m_refCount{ 0 };
     uint8_t m_flags = 0;
 };
 
