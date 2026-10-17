@@ -269,6 +269,10 @@ CASES = [
     ("loop_iter_list", "{% for x in [1, 2, 3] %}{{ loop|list }};{% endfor %}"),
     ("loop_iter_for", "{% for x in [1, 2, 3] %}{% for y in loop %}{{ y[0] }}{% endfor %};{% endfor %}"),
     ("loop_dictsort", "{% for x in [1] %}{{ loop|dictsort }}{% endfor %}"),
+    ("loop_pprint", "{% for x in [1, 2] %}{{ loop|pprint }}|{{ loop.cycle|string }};{% endfor %}"),
+    # Argument unpacking in calls (0212)
+    ("call_star_args", "{{ range(*[1, 3])|list }}"),
+    ("call_star_kwargs", "{% macro m(a, b) %}{{ a }}{{ b }}{% endmacro %}{{ m(**{'a': 1, 'b': 2}) }}"),
     # Loop names in slots (0117 P1): each pins what the Load-time resolver must keep
     ('for_target_shadowed_by_body_set', '{% for x in [1,2] %}{{ x }}{% set x = x * 10 %}{{ x }}{% endfor %}'),
     ('for_nested_same_target', "{% for x in 'ab' %}{{ x }}{% for x in [1,2] %}{{ x }}{% endfor %}{% endfor %}"),

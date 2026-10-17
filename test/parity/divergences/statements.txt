@@ -12,3 +12,6 @@ statements.macro_equals_itself         output      0208 a macro is not equal to 
 statements.loop_iter_list               output      0211 iterating loop yields its attribute names; Jinja2 takes the rest of the loop as (item, loop) pairs
 statements.loop_iter_for                output      0211 iterating loop yields its attribute names; Jinja2 takes the rest of the loop as (item, loop) pairs
 statements.loop_dictsort                accepts     0211 dictsort reads the loop's attributes as a mapping; Jinja2's LoopContext has no items()
+statements.loop_pprint                  output      0211 pprint prints the loop's attribute map and loop.cycle|string nothing; Jinja2 prints <LoopContext 1/2> and the bound method
+statements.call_star_args               rejects     0212 *args in a call is a Load error; Jinja2 unpacks it into positional arguments
+statements.call_star_kwargs             rejects     0212 **kwargs in a call is a Load error; Jinja2 unpacks it into keyword arguments
