@@ -1522,26 +1522,26 @@ void CheckBlockCallParams(const CallParams& params)
 // the context of its top level is the template's (a module's, for `self` a module's macro
 // stored), else in the template running then. The block sees the names of the template's top
 // level, `site`, wherever it is called from, as a block function sees its template's context
-// in Jinja2 (docs/tasks/0194). The stack is only compared, never read, since `self` may
-// outlive it
+// in Jinja2 (docs/tasks/0194). Once the stack has ended, the call renders the blocks it held
+// (SelfBlocks), seeing the names `site` still has
 InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName)
 {
     InternalValueMap self;
+    if (!stack.blocks.empty() && !stack.self)
+    {
+        stack.self = std::make_shared<SelfBlocks>(&stack);
+    }
     for (const auto& block : stack.blocks)
     {
         // `self` may outlive the stack and the trees its names are in
         std::string blockName(block.first);
-        self[blockName] = MakeWrapped(Callable(Callable::Macro, [name = blockName, owner = &stack, site](const CallParams& params, OutStream& stream, RenderContext& context) {
+        self[blockName] = MakeWrapped(Callable(Callable::Macro, [name = blockName, owner = stack.self, site, templateName](const CallParams& params, OutStream& stream, RenderContext& context) {
             CheckBlockCallParams(params);
             auto* curFrame = context.GetTemplateFrame();
-            if (!curFrame || !curFrame->blocks)
+            TemplateFrame* frame = nullptr;
+            for (auto* f = curFrame; f && owner->live; f = f->outer)
             {
-                return;
-            }
-            auto* frame = curFrame;
-            for (auto* f = curFrame; f; f = f->outer)
-            {
-                if (f->blocks == owner)
+                if (f->blocks == owner->live)
                 {
                     frame = f;
                     break;
@@ -1549,14 +1549,33 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
             }
             const auto home = site.Resolve(context);
             // A frame of a context that is alive is in place: its guard restores the one before
-            if (frame->blocks != owner)
+            if (!frame && owner->live)
             {
-                if (auto* homeFrame = home.context->GetTemplateFrame(); homeFrame && homeFrame->blocks == owner)
+                if (auto* homeFrame = home.context->GetTemplateFrame(); homeFrame && homeFrame->blocks == owner->live)
                 {
                     frame = homeFrame;
                 }
             }
             RenderContext blockContext(*home.context, home.link);
+            // The template has ended (an include that stored `self`): its blocks, in a frame
+            // of their own
+            TemplateFrame endedFrame;
+            if (!frame && owner->ended)
+            {
+                endedFrame.blocks = &*owner->ended;
+                endedFrame.baseDepth = home.link;
+                endedFrame.name = templateName;
+                endedFrame.outer = curFrame;
+                frame = &endedFrame;
+            }
+            if (!frame)
+            {
+                if (!curFrame || !curFrame->blocks)
+                {
+                    return;
+                }
+                frame = curFrame;
+            }
             blockContext.SetTemplateFrame(frame);
             RenderBlockAt(*frame->blocks, name, 0, stream, blockContext);
         }));
@@ -1578,18 +1597,47 @@ LookupResult RenderContext::FindSelf(const std::string& name)
     {
         return value;
     }
-    if (!frame->self)
-    {
-        // The context whose scopes the template's top level set, which may run below this one
-        // (a `with` or a block): `self` outlives those
+    // The context whose scopes the template's top level set, or a scoped block saw, which may
+    // run below this one (a `with` or a block): `self` outlives those
+    const auto makeSelf = [this, frame](size_t depth) {
         auto* home = this;
-        while (home->m_parentDepth >= frame->baseDepth && home->m_parent)
+        while (home->m_parentDepth >= depth && home->m_parent)
         {
             home = home->m_parent;
         }
-        frame->self = MakeTemplateSelf(*frame->blocks, ClosureSite(*home, frame->baseDepth), frame->name);
+        return MakeTemplateSelf(*frame->blocks, ClosureSite(*home, depth), frame->name);
+    };
+    // In a block that sees more than the template's top level (a scoped one in a loop, or one
+    // such a block's `self` renders), `self` passes on what it sees: Jinja2's TemplateReference
+    // of the block's derived context. One per block call, kept by its context
+    if (m_selfDepth > frame->baseDepth + 1)
+    {
+        const size_t depth = m_selfDepth - 1;
+        auto* block = this;
+        while (block->m_parentDepth > depth && block->m_parent)
+        {
+            block = block->m_parent;
+        }
+        if (!block->m_blockSelf)
+        {
+            block->m_blockSelf = std::make_unique<InternalValue>(makeSelf(depth));
+        }
+        return LookupResult(*block->m_blockSelf);
+    }
+    if (!frame->self)
+    {
+        frame->self = makeSelf(frame->baseDepth);
     }
     return LookupResult(*frame->self);
+}
+
+BlocksStack::~BlocksStack()
+{
+    if (self)
+    {
+        self->live = nullptr;
+        self->ended.emplace().blocks = std::move(blocks);
+    }
 }
 
 ClosureSite::ClosureSite(RenderContext& context, size_t depth)
@@ -2019,7 +2067,7 @@ void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes,
         for (const auto& name : nodes[m_namesToImport])
         {
             const auto p = moduleNames.find(HashedName{ nodes.Text(name.name), name.nameHash });
-            if (p == moduleNames.end() || p->first == "self" || !IsImported(p->second))
+            if (p == moduleNames.end() || !IsImported(p->second))
             {
                 continue;
             }
@@ -2032,7 +2080,7 @@ void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes,
     for (const auto& [name, value] : moduleNames)
     {
         // Jinja2 exports no name that starts with an underline
-        if (name.empty() || name[0] == '_' || name == "self" || !IsImported(value))
+        if (name.empty() || name[0] == '_' || !IsImported(value))
         {
             continue;
         }

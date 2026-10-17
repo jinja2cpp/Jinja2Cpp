@@ -485,6 +485,12 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         break;
     case IsIterableMode:
         result = valKind == TestKind::List || valKind == TestKind::KVPair || valKind == TestKind::Map || valKind == TestKind::String;
+        // Of the objects, only `self` is: Jinja2's TemplateReference has __getitem__
+        if (valKind == TestKind::Object)
+        {
+            auto map = AsMap(baseVal);
+            result = map && std::string_view(map->GetObjectClass()) == "TemplateReference";
+        }
         break;
     case IsMappingMode:
         // A dictsort pair is a 2-tuple, not a mapping, and neither is an object stored as a

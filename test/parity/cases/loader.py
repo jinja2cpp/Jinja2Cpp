@@ -55,6 +55,10 @@ MODULES2 = {"templates": {**T,
     "pbasen.j2": "{% set pv = 'P' %}{% set w = 'pw' %}{% block x %}BX{{ w }}{% endblock %}{% macro pm() %}PM{% endmacro %}",
     "mextn.j2": "{% extends 'pbasen.j2' %}{% set w = 'cw' %}{% macro f() %}F{{ self.x() }}{% endmacro %}",
     "mst.j2": "{% block b %}MB[{{ v }}]{% endblock %}{% set v = 'mv' %}{% macro st(ns) %}{% set ns.s = self %}{% endmacro %}"}}
+INC_SELF = {"templates": {**T, "inc_self.j2": "{% block b %}IB{% endblock %}{% set ns.s = self %}",
+                    "inc_selfx.j2": "{% set x = 1 %}{% block b %}[{{ x }}{{ name }}]{% endblock %}{% set ns.s = self %}",
+                    "other_self.j2": "{% block b %}OT{% endblock %}{{ ns.s.b() }}", "mset.j2": "{% set self = 5 %}"}}
+
 CASES = [
     ("include", "{% include 'hello.j2' %}", L),
     ("include_context", "{% set x = 9 %}{% include 'uses_x.j2' %}", L),
@@ -255,6 +259,21 @@ CASES = [
      {"templates": {**T, "inc_self.j2": "{% block b %}IB{% endblock %}{% set ns.s = self %}"}}),
     ("self_scoped_block_calls_scoped_block_in_loop", "{% for v in [1, 2] %}{% block b scoped %}{{ v }}:{{ self.c() }}{% endblock %}{% endfor %}{% block c scoped %}<{{ v }}>{% endblock %}", L),
     ("module_set_self_exported", "{% import 'mset.j2' as l %}{{ l.self }}", {"templates": {**T, "mset.j2": "{% set self = 5 %}"}}),
+    # docs/tasks/0207: a stored include `self` keeps the include's blocks, in another include
+    # too; a scoped block's `self` passes on the names it sees, to scoped and unscoped blocks
+    ("self_of_ended_include_in_other_include", "{% set ns = namespace(s=none) %}{% include 'inc_self.j2' %}{% include 'other_self.j2' %}", INC_SELF),
+    ("self_of_ended_include_in_loop", "{% set ns = namespace(s=none) %}{% for i in [1, 2] %}{% include 'inc_self.j2' %}{% endfor %}{{ ns.s.b() }}", INC_SELF),
+    ("self_of_ended_include_reads_names", "{% set ns = namespace(s=none) %}{% include 'inc_selfx.j2' %}{{ ns.s.b() }}", INC_SELF),
+    ("module_set_self_from_import", "{% from 'mset.j2' import self %}{{ self }}", INC_SELF),
+    ("self_scoped_block_calls_unscoped_block_in_loop", "{% set v = 9 %}{% for v in [1, 2] %}{% block b scoped %}{{ v }}:{{ self.c() }}{% endblock %}{% endfor %}{% block c %}<{{ v }}>{% endblock %}", L),
+    ("self_unscoped_block_in_loop_calls_scoped_block", "{% for v in [1, 2] %}{% block b %}{{ v }}:{{ self.c() }}{% endblock %}{% endfor %}{% block c scoped %}<{{ v }}>{% endblock %}", L),
+    ("self_scoped_block_inner_loop_not_passed", "{% for v in [1, 2] %}{% block b scoped %}{% for w in [3] %}{{ self.c() }}{% endfor %}{% endblock %}{% endfor %}{% block c scoped %}<{{ v }}{{ w }}>{% endblock %}", L),
+    ("self_scoped_block_set_not_passed", "{% for v in [1, 2] %}{% block b scoped %}{% set v = 7 %}{{ self.c() }}{% endblock %}{% endfor %}{% block c scoped %}<{{ v }}>{% endblock %}", L),
+    ("self_scoped_block_macro_calls_block", "{% for v in [1] %}{% block b scoped %}{% macro m() %}{{ self.c() }}{% endmacro %}{{ m() }}{% endblock %}{% endfor %}{% block c scoped %}<{{ v }}>{% endblock %}", L),
+    ("self_is_iterable", "{{ 'T' if self is iterable else 'F' }}", L),
+    ("self_block_with_self_reads_top_level", "{% set self = 1 %}{% block b %}{% with self = 4 %}{% endwith %}{{ 'T' if self is number else 'F' }}{% endblock %}", L),
+    ("self_block_for_self_reads_top_level", "{% set self = 1 %}{% block b %}{% for self in [4] %}{% endfor %}{{ 'T' if self is number else 'F' }}{% endblock %}", L),
+    ("self_scoped_block_chain_passes_names", "{% for v in [1, 2] %}{% block b scoped %}{{ self.c() }}{% endblock %}{% endfor %}{% block c scoped %}<{{ v }}{{ self.d() }}>{% endblock %}{% block d %}({{ v }}){% endblock %}", L),
     ("self_taken_in_with_called_after", "{% set v = 'main' %}{% set ns = namespace(s=none) %}{% block b %}[{{ v }}]{% endblock %}{% with x = 1 %}{% set ns.s = self %}{% endwith %}{{ ns.s.b() }}", MODULES2),
     # idtracking (docs/tasks/0168): an include or import with context before the store sees the
     # outer value, not the frame's binding; an import alias is bound like a set
