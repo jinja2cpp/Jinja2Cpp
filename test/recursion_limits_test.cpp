@@ -354,10 +354,26 @@ TEST_F(RecursionLimitsTest, SmallThreadStack)
 // ==) still recurse, but stop with RecursionLimitExceeded like Python's RecursionError.
 namespace
 {
+#ifdef __SANITIZE_THREAD__
+#define JINJA2CPP_TEST_TSAN 1
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#define JINJA2CPP_TEST_TSAN 1
+#endif
+#endif
+#ifdef JINJA2CPP_TEST_TSAN
+// TSan's frames still overflow the thread below this depth. Deeper, the access history of
+// the whole run makes LLVM 18's TSan reset its traces, which fails its own CHECK
+// (trace_part_recycle) and corrupts memory on the CI runners
+constexpr char DeepLevels[] = "20000";
+#else
+constexpr char DeepLevels[] = "100000";
+#endif
+
 void CheckDeepValues(TemplateEnv* env)
 {
-    const std::string lists = "{% set ns = namespace(v=[], w=[]) %}{% for i in range(100000) %}{% set ns.v = [ns.v] %}{% set ns.w = [ns.w] %}{% endfor %}";
-    const std::string dicts = "{% set ns = namespace(v={}, w={}) %}{% for i in range(100000) %}{% set ns.v = {'a': ns.v} %}{% set ns.w = {'a': ns.w} %}{% endfor %}";
+    const std::string lists = "{% set ns = namespace(v=[], w=[]) %}{% for i in range(" + std::string(DeepLevels) + ") %}{% set ns.v = [ns.v] %}{% set ns.w = [ns.w] %}{% endfor %}";
+    const std::string dicts = "{% set ns = namespace(v={}, w={}) %}{% for i in range(" + std::string(DeepLevels) + ") %}{% set ns.v = {'a': ns.v} %}{% set ns.w = {'a': ns.w} %}{% endfor %}";
     // Python compares an item with itself as equal without looking into it
     const std::pair<std::string, std::string> renders[] = {
         { lists + "{{ ns.v|length }} {{ ns.v == ns.v + [] }} {{ ns.v != ns.v + [] }} {{ ns.v < ns.v + [] }} {{ ns.v <= ns.v + [] }}", "1 True False False True" },
