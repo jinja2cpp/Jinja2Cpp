@@ -31,6 +31,11 @@ Comparator::Comparator(const TesterParams& params, BinaryExpression::Operation o
 {
     static const auto args = MakeArgumentsTable({ { "b", true } });
     ParseParams(args, params);
+    // Python's operator.eq and friends take their arguments by position only
+    if (!params.kwParams.empty())
+    {
+        SetArgumentsError("takes no keyword arguments");
+    }
 }
 
 namespace

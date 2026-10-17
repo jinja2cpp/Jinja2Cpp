@@ -91,9 +91,27 @@ std::string KeyToString(const InternalValue& key)
     return result;
 }
 
-// range([start,] stop[, step]); unlike Python, the arguments can also be passed by name
+// Python's range and randrange take integers (bool among them) and nothing else; a plain
+// undefined is a missing argument, left to the caller
+void CheckIntegerArgument(const InternalValue& arg)
+{
+    if (const auto* info = GetUndefinedInfo(arg))
+    {
+        throw std::runtime_error(std::string("'") + UndefinedClassName(*info) + "' object cannot be interpreted as an integer");
+    }
+    if (!arg.IsUndefined() && !GetIf<int64_t>(&arg) && !GetIf<bool>(&arg))
+    {
+        throw std::runtime_error(std::string("'") + Apply<visitors::PythonTypeNameGetter>(arg) + "' object cannot be interpreted as an integer");
+    }
+}
+
+// range([start,] stop[, step])
 InternalValue CallRange(const CallParams& params, RenderContext&)
 {
+    if (!params.kwParams.empty())
+    {
+        throw std::runtime_error("range() takes no keyword arguments");
+    }
     // Unlike Python, a call without stop renders empty instead of failing (forloop_test)
     bool isSucceeded = true;
     auto args = helpers::ParseCallParams({ { "start" }, { "stop", true }, { "step" } }, params, isSucceeded);
@@ -105,19 +123,10 @@ InternalValue CallRange(const CallParams& params, RenderContext&)
     {
         throw std::runtime_error("range expected at most 3 arguments");
     }
-    // Python's range takes integers (bool among them) and nothing else; a missing argument
-    // is a plain undefined
+    // A missing argument is a plain undefined
     for (const char* name : { "start", "stop", "step" })
     {
-        const auto& arg = args[name];
-        if (const auto* info = GetUndefinedInfo(arg))
-        {
-            throw std::runtime_error(std::string("'") + UndefinedClassName(*info) + "' object cannot be interpreted as an integer");
-        }
-        if (!arg.IsUndefined() && !GetIf<int64_t>(&arg) && !GetIf<bool>(&arg))
-        {
-            throw std::runtime_error(std::string("'") + Apply<visitors::PythonTypeNameGetter>(arg) + "' object cannot be interpreted as an integer");
-        }
+        CheckIntegerArgument(args[name]);
     }
     int64_t start = ConvertToInt(args["start"]);
     int64_t stop = ConvertToInt(args["stop"]);
@@ -207,6 +216,19 @@ InternalValue CallNamespace(const CallParams& params, RenderContext&)
     return CreateNamespaceAdapter(std::move(result));
 }
 
+// A method that takes no arguments but self, such as Joiner.__call__
+void CheckNoArguments(const CallParams& params, const char* method)
+{
+    if (!params.posParams.empty())
+    {
+        throw std::runtime_error(std::string(method) + "() takes 1 positional argument but " + std::to_string(params.posParams.size() + 1) + " were given");
+    }
+    if (!params.kwParams.empty())
+    {
+        throw std::runtime_error(std::string(method) + "() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+    }
+}
+
 // cycler(*items): next(), reset(), current, items, pos
 InternalValue CallCycler(const CallParams& params, RenderContext&)
 {
@@ -231,12 +253,14 @@ InternalValue CallCycler(const CallParams& params, RenderContext&)
     cycler["items"] = ListAdapter::CreateAdapter(InternalValueList(state->items)).MarkAsTuple();
     cycler["pos"] = MakeDynamicProperty([state](const CallParams&, RenderContext&) { return InternalValue(static_cast<int64_t>(state->pos)); });
     cycler["current"] = MakeDynamicProperty([state](const CallParams&, RenderContext&) { return state->items[state->pos]; });
-    cycler["next"] = MakeFunction([state](const CallParams&, RenderContext&) {
+    cycler["next"] = MakeFunction([state](const CallParams& callParams, RenderContext&) {
+        CheckNoArguments(callParams, "Cycler.next");
         auto result = state->items[state->pos];
         state->pos = (state->pos + 1) % state->items.size();
         return result;
     });
-    cycler["reset"] = MakeFunction([state](const CallParams&, RenderContext&) {
+    cycler["reset"] = MakeFunction([state](const CallParams& callParams, RenderContext&) {
+        CheckNoArguments(callParams, "Cycler.reset");
         state->pos = 0;
         return InternalValue(NoneValue());
     });
@@ -250,7 +274,8 @@ InternalValue CallJoiner(const CallParams& params, RenderContext&)
     auto used = std::make_shared<bool>(false);
     InternalValueMap joiner;
     joiner["sep"] = args["sep"];
-    joiner["operator()"] = MakeFunction([used, sep = args["sep"]](const CallParams&, RenderContext&) {
+    joiner["operator()"] = MakeFunction([used, sep = args["sep"]](const CallParams& callParams, RenderContext&) {
+        CheckNoArguments(callParams, "Joiner.__call__");
         if (*used)
         {
             return sep;
@@ -347,7 +372,14 @@ InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
     auto args = ParseArgs({ { "n", false, static_cast<int64_t>(5) }, { "html", false, true }, { "min", false, static_cast<int64_t>(20) }, { "max", false, static_cast<int64_t>(100) } },
                           params,
                           "lipsum");
+    // n goes to range(), min and max to randrange() once a paragraph is made
+    CheckIntegerArgument(args["n"]);
     auto count = ConvertToInt(args["n"]);
+    if (count > 0)
+    {
+        CheckIntegerArgument(args["min"]);
+        CheckIntegerArgument(args["max"]);
+    }
     bool html = ConvertToBool(args["html"]);
     auto minWords = ConvertToInt(args["min"]);
     auto maxWords = ConvertToInt(args["max"]);

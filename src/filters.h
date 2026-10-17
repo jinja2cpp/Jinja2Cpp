@@ -225,6 +225,7 @@ private:
     static InternalValue ApplyUrlEncode(const InternalValue& baseVal, RenderContext& context);
     InternalValue ApplyReplace(const InternalValue& baseVal, RenderContext& context);
     InternalValue ApplyTruncate(const InternalValue& baseVal, RenderContext& context);
+    InternalValue TruncateNonString(const InternalValue& baseVal, RenderContext& context);
     TargetString ApplyIndent(const InternalValue& baseVal, RenderContext& context);
     TargetString ApplyUrlize(const InternalValue& baseVal, RenderContext& context);
     TargetString ApplyCenter(const InternalValue& baseVal, RenderContext& context);

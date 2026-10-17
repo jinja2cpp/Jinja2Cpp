@@ -68,4 +68,11 @@ CASES = [
     ("cycler_truncate", "{{ cycler(1, 2)|truncate }}"),
     ("namespace_urlencode", "{{ namespace(a=1)|urlencode }}"),
     ("objects_inequality", "{% set c = cycler(1) %}{{ 'T' if c != c else 'F' }}{{ 'T' if namespace(a=1) != namespace(a=1) else 'F' }}"),
+    # the objects' methods and lipsum check their arguments (0197)
+    ("joiner_call_positional_arg", "{{ joiner('a')('x') }}"),
+    ("joiner_call_keyword_arg", "{{ joiner('a')(sep='x') }}"),
+    ("cycler_next_arg", "{{ cycler(1).next(1) }}"),
+    ("lipsum_object_arg", "{{ lipsum(namespace()) }}"),
+    # an object can be a dict key: Python hashes it by identity (0210)
+    ("object_dict_key", "{{ {namespace(): 1} }}"),
 ]

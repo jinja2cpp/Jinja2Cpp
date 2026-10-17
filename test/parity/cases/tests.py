@@ -62,4 +62,6 @@ CASES = [
     ("print_test_result", "{{ x is odd }}"),
     ("select_with_test", "{{ [1, 2, 3, 4]|select('even')|list }}"),
     ("is_not_with_parens", "{{ 'T' if 4 is not divisibleby(3) else 'F' }}"),
+    # operator.eq and friends take no keyword arguments (0206)
+    ("comparison_keyword_arg", "{{ 'T' if 1 is eq(b=1) else 'F' }}"),
 ]

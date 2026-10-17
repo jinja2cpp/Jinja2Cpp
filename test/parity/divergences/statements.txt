@@ -8,6 +8,5 @@ statements.caller_escapes_its_loop     output      0165 deliberate: a closure ca
 statements.macro_escapes_its_loop      output      0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
 statements.nested_macro_escapes_its_call output    0165 deliberate: a macro that outlives the macro call defining it reads that call's names as undefined
 statements.loop_len                     output      0196 len(loop) counts the keys of the loop map, not the items of the loop
-statements.set_unpack_dict_keys        output      0197 tuple assignment from a dict takes the items named like the targets instead of unpacking its keys
 statements.macro_pprint                output      0208 pprint of a macro prints <callable>; Jinja2 prints its repr <Macro 'm'>
 statements.macro_equals_itself         output      0208 a macro is not equal to itself, so unique keeps both copies; Jinja2 compares macros by identity
