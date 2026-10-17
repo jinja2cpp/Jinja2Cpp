@@ -64,8 +64,7 @@ lastName: lastName)")
 }
 
 // A reflected object, which Python could not unpack, gives its fields by name
-MULTISTR_TEST(SetTest, TupleAssignmentFromReflectedTest,
-              R"({% set strValue, intValue = obj %}{{strValue}}:{{intValue}})",
+MULTISTR_TEST(SetTest, TupleAssignmentFromReflectedTest, R"({% set strValue, intValue = obj %}{{strValue}}:{{intValue}})",
               //--------------
               R"(Hi:7)")
 {
@@ -73,7 +72,7 @@ MULTISTR_TEST(SetTest, TupleAssignmentFromReflectedTest,
     obj.intValue = 7;
     obj.strValue = "Hi";
     params = {
-        {"obj", Reflect(obj)},
+        { "obj", Reflect(obj) },
     };
 }
 
