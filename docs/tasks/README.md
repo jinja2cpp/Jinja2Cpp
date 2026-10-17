@@ -162,7 +162,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0090](0090-drop-boost-regex.md) | Boost.Regex and `JINJA2CPP_USE_REGEX` are dead weight after 0086 | build | medium | done |
 | [0091](0091-for-loop-edge-parity.md) | `for` loop corners that still differ from Jinja2 | parity | low | done |
 | [0092](0092-extended-warning-set.md) | Enforce a warning set beyond `-Wall` | build | medium | done |
-| [0093](0093-deeply-nested-values.md) | Deeply nested values overflow the stack when they are destroyed or printed | robustness | medium | open |
+| [0093](0093-deeply-nested-values.md) | Deeply nested values overflow the stack when they are destroyed or printed | robustness | medium | done |
 | [0094](0094-differential-fuzzing-findings.md) | Divergences found by differential fuzzing | parity | medium | done |
 | [0095](0095-structure-aware-fuzzing.md) | Structure-aware fuzzing: mutate templates, not bytes | robustness | medium | open |
 | [0096](0096-continuous-fuzzing-service.md) | Continuous fuzzing on ClusterFuzzLite or OSS-Fuzz | ci | low | open |
