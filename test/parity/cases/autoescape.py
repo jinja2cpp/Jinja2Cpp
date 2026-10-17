@@ -105,6 +105,8 @@ CASES = [
     ("markup_format_repr", "{{ ('%r|%s'|safe)|format('<', '<') }}|{{ ('%(a)r'|safe)|format(a='<') }}"),
     ("markup_percent_c", "{{ ('%c'|safe) % 65 }}"),
     ("markup_percent_x", "{{ ('%x'|safe) % 255 }}"),
+    ("markup_percent_star", "{{ ('%*d'|safe) % (5, 3) }}"),
+    ("markup_percent_list_arg", "[{{ ('x'|safe) % [1, 2] }}|{{ ('x%%'|safe) % [] }}]"),
     ("markup_percent_d_of_string", "{{ ('%d|%.1f'|safe) % ('5', '1.5') }}"),
     ("env_off_concat_markup", "{% set a = '<i>'|safe %}{{ a ~ '<u>' }}|{{ (a ~ '<u>') is escaped }}"),
     ("markup_truncate_end", "{{ ('<i>abcdefgh ijklmnop qrs'|safe)|truncate(9,false,'<<') }}|{{ ('<i>abcdefgh ijklmnop qrs'|safe)|truncate(9,true,'<') }}|{{ '<i>'|safe|random is escaped }}"),

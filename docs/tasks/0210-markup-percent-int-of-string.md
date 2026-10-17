@@ -15,7 +15,7 @@ a string that `int()` or `float()` parses (`autoescape.markup_percent_d_of_strin
 {{ ('%d|%.1f'|safe) % ('5', '1.5') }}
 ```
 
-Jinja2 gives `5|1.5`; Jinja2C++ raises "%d format: a real number is required, not str", as
+Jinja2 gives `5|1.5`, and `('%d'|safe)|format('5')` gives `5` too; Jinja2C++ raises "%d format: a real number is required, not str", as
 Python does for a plain str format. 0182 left it: the conversion needs Python's `int()` and
 `float()` string parsing (whitespace, underscores, Unicode digits, `inf`/`nan`), which
 `python_format.cpp` does not have.

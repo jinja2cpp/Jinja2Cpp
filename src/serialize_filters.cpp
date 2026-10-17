@@ -555,11 +555,11 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
         }
         InternalValue values = CreateMapAdapter(std::move(mapping));
         // Markup % args escapes what the arguments convert to and stays Markup
-        formatted = m_constFormat ? m_constFormat->Format(values, markup) : PythonPercentFormat(format, values, markup);
+        formatted = m_constFormat ? m_constFormat->Format(values) : PythonPercentFormat(format, values, markup);
     }
     else
     {
-        formatted = m_constFormat ? m_constFormat->Format(params.posParams.data(), params.posParams.size(), markup)
+        formatted = m_constFormat ? m_constFormat->Format(params.posParams.data(), params.posParams.size())
                                   : PythonPercentFormat(format, params.posParams.data(), params.posParams.size(), markup);
     }
     InternalValue result(formatted);

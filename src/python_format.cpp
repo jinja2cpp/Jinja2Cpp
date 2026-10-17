@@ -490,8 +490,9 @@ public:
             m_args = &values;
             m_count = 1;
         }
-        // A mapping is used by key, so it is never "not all arguments converted"
-        m_isMapping = m_map.has_value();
+        // A mapping is used by key, so it is never "not all arguments converted"; nor is a
+        // list, which Python's PyMapping_Check takes for one too
+        m_isMapping = m_map.has_value() || (list && !list->IsTuple());
     }
 
     Formatter(const InternalValue* args, size_t count, bool markup)
@@ -560,6 +561,11 @@ private:
     int64_t StarArg()
     {
         const auto& val = NextArg();
+        // markupsafe's helper wraps the '*' argument too, and it is not an int
+        if (m_markup)
+        {
+            throw std::runtime_error("* wants int");
+        }
         // Clamped like a literal width, so a huge or INT64_MIN star neither allocates nor overflows on negation
         if (const auto* i = GetIf<int64_t>(&val))
         {
@@ -848,14 +854,14 @@ CompiledPercentFormat::CompiledPercentFormat(std::string format)
     ParsePercentFormat(m_format, [this](const PercentDirective& directive) { m_pieces.push_back(directive); });
 }
 
-std::string CompiledPercentFormat::Format(const InternalValue& values, bool markup) const
+std::string CompiledPercentFormat::Format(const InternalValue& values) const
 {
-    return Formatter(values, markup).Run(m_format, m_pieces);
+    return Formatter(values, false).Run(m_format, m_pieces);
 }
 
-std::string CompiledPercentFormat::Format(const InternalValue* args, size_t count, bool markup) const
+std::string CompiledPercentFormat::Format(const InternalValue* args, size_t count) const
 {
-    return Formatter(args, count, markup).Run(m_format, m_pieces);
+    return Formatter(args, count, false).Run(m_format, m_pieces);
 }
 
 } // namespace jinja2

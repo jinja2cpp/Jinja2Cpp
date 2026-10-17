@@ -307,6 +307,7 @@ CASES = [
     ("format_positional_then_key", "{{ '%s %(a)s'|format(a=1) }}"),
     ("format_key_twice", "{{ '%(a)s %(a)05.1f %(b)r'|format(a=1, b='x') }}"),
     # a lone surrogate cannot be written to expected/ as UTF-8, so the case compares it
+    ("format_list_arg_unused", "[{{ 'x' % [1, 2] }}|{{ ' ' % l }}|{{ '%s' % [1] }}]"),
     ("format_c_surrogate", "{{ '%c'|format(55296)|length }}|{{ 'T' if '%c'|format(55296) == '\\ud800' else 'F' }}|{{ '%c'|format(56320)|length }}"),
     ("format_without_percent", "{{ 'x'|format(1) }}"),
     ("int_unicode_digits", "{{ '١٢'|int }}|{{ '１２'|float }}"),

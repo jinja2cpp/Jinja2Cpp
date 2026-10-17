@@ -1569,6 +1569,40 @@
    }
   },
   {
+   "id": "autoescape.markup_percent_star",
+   "template": "{{ ('%*d'|safe) % (5, 3) }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "* wants int"
+   }
+  },
+  {
+   "id": "autoescape.markup_percent_list_arg",
+   "template": "[{{ ('x'|safe) % [1, 2] }}|{{ ('x%%'|safe) % [] }}]",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[x|x%]"
+  },
+  {
    "id": "autoescape.markup_percent_d_of_string",
    "template": "{{ ('%d|%.1f'|safe) % ('5', '1.5') }}",
    "context": {

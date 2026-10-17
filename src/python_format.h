@@ -69,9 +69,9 @@ class CompiledPercentFormat
 public:
     explicit CompiledPercentFormat(std::string format);
 
-    // The same as PythonPercentFormat(format, ...)
-    [[nodiscard]] std::string Format(const InternalValue& values, bool markup = false) const;
-    [[nodiscard]] std::string Format(const InternalValue* args, size_t count, bool markup = false) const;
+    // The same as PythonPercentFormat(format, ...); a Markup format is never parsed ahead
+    [[nodiscard]] std::string Format(const InternalValue& values) const;
+    [[nodiscard]] std::string Format(const InternalValue* args, size_t count) const;
 
 private:
     std::string m_format;
