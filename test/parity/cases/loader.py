@@ -249,7 +249,7 @@ CASES = [
     ("self_block_call_with_kwargs", "{% block b %}B{% endblock %}{{ self.b(k=1) }}", MODULES2),
     ("module_self_stashed_called_by_importer", "{% set ns = namespace(s=none) %}{% import 'mst.j2' as l %}{{ l.st(ns) }}{{ ns.s.b() }}", MODULES2),
     ("module_self_stashed_importer_has_block", "{% set ns = namespace(s=none) %}{% from 'mst.j2' import st %}{% block b %}B{% endblock %}{{ st(ns) }}{{ ns.s.b() }}", MODULES2),
-    # Left for docs/tasks/0206: `self` of an ended include, a scoped block's view of the loop
+    # Left for docs/tasks/0207: `self` of an ended include, a scoped block's view of the loop
     # through `self`, a module's top-level `set self`
     ("self_of_ended_include", "{% set ns = namespace(s=none) %}{% block b %}OB{% endblock %}{% include 'inc_self.j2' %}{{ ns.s.b() }}",
      {"templates": {**T, "inc_self.j2": "{% block b %}IB{% endblock %}{% set ns.s = self %}"}}),

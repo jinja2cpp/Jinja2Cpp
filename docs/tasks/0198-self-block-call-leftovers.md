@@ -34,4 +34,4 @@ added to know whether the home is still running.
 chain renders in the frame its home context runs, when that frame is the template's: a
 module's `self` stored by its macro renders the module's block. `{% for self in ... %}`
 matches since 0143. An ended include's `self` and a scoped block's loop locals seen through
-`self` are left in 0206.
+`self` are left in 0207.

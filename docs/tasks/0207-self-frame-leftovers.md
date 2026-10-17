@@ -38,4 +38,4 @@ the same lifetime; for scoped blocks, let the block callable link to the caller'
 the caller is a scoped block of the same template. The export: drop the `self` exclusion
 when the module's own top level set the name.
 
-**Done when** no line of `test/parity/divergences/` names 0206.
+**Done when** no line of `test/parity/divergences/` names 0207.

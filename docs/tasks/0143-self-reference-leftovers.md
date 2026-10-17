@@ -51,4 +51,4 @@ raised by `BlockStatement::RenderBody`), so a top-level `set self` no longer rea
 `extends` chain, the module's in an imported macro), is no mapping, and still subscripts.
 Of the unpinned cases, the escaped module `self`, `self` passed to an imported macro and
 `self.b(1, 2, x=3)` now match; `{% call l.m() %}` does not parse (0199), and a module's
-top-level `set self` is not exported (0206). The env-globals note above moved to 0206.
+top-level `set self` is not exported (0207). The env-globals note above moved to 0207.

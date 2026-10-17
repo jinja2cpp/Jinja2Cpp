@@ -2,6 +2,6 @@
 # Format and kinds: test/parity/README.md.
 
 loader.include_defined_macro_escapes   output      0165 deliberate: a macro that outlives the include defining it loses the include's names
-loader.self_of_ended_include          output      0206 `self` stored by an include that has ended renders the caller's block of that name
-loader.self_scoped_block_calls_scoped_block_in_loop output 0206 a scoped block called through `self` from a scoped block in a loop does not see the loop variable
-loader.module_set_self_exported       output      0206 a module's top-level `set self` is not exported
+loader.self_of_ended_include          output      0207 `self` stored by an include that has ended renders the caller's block of that name
+loader.self_scoped_block_calls_scoped_block_in_loop output 0207 a scoped block called through `self` from a scoped block in a loop does not see the loop variable
+loader.module_set_self_exported       output      0207 a module's top-level `set self` is not exported
