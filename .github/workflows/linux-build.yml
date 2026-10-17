@@ -222,6 +222,19 @@ jobs:
     - name: Test
       run: ctest --test-dir .build --output-on-failure --timeout 1200
 
+    # TEMPORARY diagnostics for the TSan crash at exit on PR #529; removed before merge
+    - name: Diagnose TSan exit crash
+      if: failure() && matrix.sanitizer == 'thread'
+      run: |
+        uname -a; cat /proc/sys/vm/mmap_rnd_bits; ulimit -a
+        sudo apt-get install -y -qq gdb > /dev/null || true
+        for f in '-Parity*:RecursionLimitsTest.DeepValues' 'RecursionLimitsTest.*' '-Parity*'; do
+          echo "=== filter $f"
+          timeout 600 .build/jinja2cpp_tests --gtest_brief=1 "--gtest_filter=$f" 2>&1 | tail -8; echo "status ${PIPESTATUS[0]}"
+        done
+        TSAN_OPTIONS=handle_segv=0 timeout 900 gdb -q -batch -ex run -ex bt -ex 'info registers rip rsp' -ex 'x/8i $pc' -ex 'thread apply all bt 5' \
+          --args .build/jinja2cpp_tests --gtest_brief=1 '--gtest_filter=-Parity*' 2>&1 | tail -80
+
   coverage:
     name: Coverage (gcc-14)
     runs-on: ubuntu-24.04
