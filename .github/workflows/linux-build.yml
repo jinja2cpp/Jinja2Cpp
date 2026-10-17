@@ -226,7 +226,8 @@ jobs:
     - name: Diagnose TSan exit crash
       if: failure() && matrix.sanitizer == 'thread'
       run: |
-        uname -a; cat /proc/sys/vm/mmap_rnd_bits; ulimit -a
+        set +e
+        uname -a; sysctl vm.mmap_rnd_bits; ulimit -a
         sudo apt-get install -y -qq gdb > /dev/null || true
         for f in '-Parity*:RecursionLimitsTest.DeepValues' 'RecursionLimitsTest.*' '-Parity*'; do
           echo "=== filter $f"
