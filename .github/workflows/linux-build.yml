@@ -189,6 +189,8 @@ jobs:
       ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1
       UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
       TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+      # Only failures in the log: a full run under ctest --output-on-failure outgrows the log tail
+      GTEST_BRIEF: 1
 
     steps:
     - uses: actions/checkout@v4
