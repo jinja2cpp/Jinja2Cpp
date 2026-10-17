@@ -749,24 +749,20 @@ public:
     void VisitRefs(detail::RefChecker& refs) const // NOLINT(bugprone-derived-method-shadowing-base-method)
     {
         MacroStatement::VisitRefs(refs);
-        refs(m_macroName);
-        m_callParams.VisitRefs(refs);
+        refs(m_call);
     }
 
-    MacroCallStatement(NodeArena& nodes, std::string_view macroName, const CallParamsInfo& callParams, const MacroParamsInfo& callbackParams)
+    // The call after `call`: the block's caller is passed to it as one more keyword argument
+    MacroCallStatement(NodeArena& nodes, NodeRef<CallExpression> call, const MacroParamsInfo& callbackParams)
         : MacroStatement(nodes, std::string_view(), callbackParams)
-        , m_macroName(nodes.MakeText(macroName))
-        , m_macroNameHash(HashedName::Hash(macroName))
-        , m_callParams(ArenaCallParams::Make(nodes, callParams))
+        , m_call(call)
     {
     }
 
     void Render(OutStream& os, RenderContext& values) override;
 
 private:
-    ArenaText m_macroName;
-    std::size_t m_macroNameHash = 0;
-    ArenaCallParams m_callParams;
+    NodeRef<CallExpression> m_call;
 };
 
 class DoStatement final : public Statement

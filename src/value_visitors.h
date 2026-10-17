@@ -346,7 +346,7 @@ struct ValueRendererBase
     void operator()(const GenericList& list) const { RenderConverted(list); }
     void operator()(const GenericMap& map) const { RenderConverted(map); }
     void operator()(const ValueRef&) const {}
-    void operator()(const Callable&) const {}
+    void operator()(const Callable& val) const;
     void operator()(const UserCallable&) const {}
     void operator()(const std::shared_ptr<IRendererBase>&) const {}
     template<typename T>
@@ -684,6 +684,27 @@ void RenderValue(const InternalValue& val, std::basic_string<CharT>& os, bool as
     {
         os.push_back(CharT(')'));
     }
+}
+
+// A macro prints as Python's Macro: <Macro 'name'>, or <Macro anonymous> for a call block's
+// caller. Other callables print nothing: Python's repr of a function names its address
+template<typename CharT>
+void ValueRendererBase<CharT>::operator()(const Callable& val) const
+{
+    const auto& attributes = val.GetAttributes();
+    if (val.GetKind() != Callable::Macro || !attributes)
+    {
+        return;
+    }
+    const auto name = attributes->find("name");
+    if (name == attributes->end() || !IsStringValue(name->second))
+    {
+        AppendAscii("<Macro anonymous>");
+        return;
+    }
+    AppendAscii("<Macro ");
+    RenderRepr(name->second, m_containers);
+    AppendAscii(">");
 }
 
 template<typename CharT>

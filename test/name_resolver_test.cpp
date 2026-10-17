@@ -80,7 +80,7 @@ INSTANTIATE_TEST_SUITE_P(Slots, NameResolverTest, testing::Values(
     NameResolverCase{ "{% for x in xs recursive %}{% for y in x %}{{ y }}{% endfor %}{% endfor %}", "" },
     NameResolverCase{ "{% for x in xs %}{% macro m(a=x) %}{{ a }}{{ x }}{% endmacro %}{{ m() }}{% endfor %}", "a:0 x:- m:-" },
     NameResolverCase{ "{% macro m(a) %}{% for x in a %}{{ x }}{{ a }}{% endfor %}{% endmacro %}", "a:0 x:2 a:0" },
-    NameResolverCase{ "{% for x in xs %}{% call m() %}{{ x }}{% endcall %}{% endfor %}", "x:-" },
+    NameResolverCase{ "{% for x in xs %}{% call m() %}{{ x }}{% endcall %}{% endfor %}", "m:- x:-" },
     NameResolverCase{ "{% for x in xs %}{% block b %}{{ x }}{% endblock %}{% endfor %}", "" },
     NameResolverCase{ "{% for x in xs %}{% set ns.x = 1 %}{{ x }}{% endfor %}", "x:1" },
     NameResolverCase{ "{% for (a, (b, c)) in xs %}{{ a }}{{ b }}{{ c }}{% endfor %}", "a:1 b:2 c:3" },

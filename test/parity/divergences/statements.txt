@@ -9,9 +9,6 @@ statements.macro_escapes_its_loop      output      0165 deliberate: a closure ca
 statements.nested_macro_escapes_its_call output    0165 deliberate: a macro that outlives the macro call defining it reads that call's names as undefined
 statements.loop_len                     output      0196 len(loop) counts the keys of the loop map, not the items of the loop
 statements.set_unpack_dict_keys        output      0197 tuple assignment from a dict takes the items named like the targets instead of unpacking its keys
-statements.call_block_caller_repr       output      0199 a call block's caller prints as empty; Jinja2 prints <Macro anonymous>
-statements.call_block_explicit_caller_repeated accepts 0199 a call block whose call passes caller= loads; Jinja2 raises SyntaxError: keyword argument repeated
-statements.call_block_dotted_callee     rejects     0199 a call block cannot call an attribute (`call ns.m()`); Jinja2 accepts any call expression
 statements.idtracking_block_and_macro_read_root_name output 0201 a name a block reads is not bound at the root's entry, so the macro sees the outer value; Jinja2's block reads the context and the macro the root's binding
 statements.loop_else_set_is_local       output      0202 a loop's else body runs in the enclosing scope, so its set leaks; Jinja2 gives it a frame of its own
 statements.idtracking_loop_else_read_before_set output 0202 a loop's else body counts as the enclosing frame, so its read keeps the binding off; Jinja2's reads the binding

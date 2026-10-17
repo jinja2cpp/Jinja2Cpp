@@ -2036,7 +2036,7 @@ MacroStatement::MacroStatement(NodeArena& nodes, ArenaText name, const MacroPara
     m_params = nodes.MakeSpan(arenaParams);
 
     const auto nameText = nodes.Text(name);
-    (*m_attributes)["name"s] = nameText.empty() ? InternalValue() : InternalValue(std::string(nameText));
+    (*m_attributes)["name"s] = nameText.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(nameText));
     auto argumentNames = ListAdapter::CreateAdapter(std::move(arguments));
     argumentNames.MarkAsTuple();
     (*m_attributes)["arguments"s] = std::move(argumentNames);
@@ -2382,23 +2382,17 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
 
 void MacroCallStatement::Render(OutStream& os, RenderContext& values)
 {
-    const auto macroVal = values.FindValue(HashedName{ values.Nodes().Text(m_macroName), m_macroNameHash });
-    if (!macroVal)
-    {
-        // Calling a name that does not exist is an UndefinedError under every policy
-        CheckUndefinedUse(MakeUndefined(values, std::string(values.Nodes().Text(m_macroName))), UndefinedUse::Call);
-        return;
-    }
-
-    const auto& fnVal = *macroVal;
+    const auto& call = values.Nodes()[m_call];
+    const auto fnVal = values.Nodes()[call.GetValueRef()].Evaluate(values);
     const auto* callable = GetIf<Callable>(&fnVal);
     if (!callable)
     {
+        // Calling a name that does not exist is an UndefinedError under every policy
         CheckUndefinedUse(fnVal, UndefinedUse::Call);
         throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(fnVal) + "' object is not callable");
     }
 
-    auto callParams = helpers::EvaluateCallParams(m_callParams, values);
+    auto callParams = helpers::EvaluateCallParams(call.GetParams(), values);
     callParams.kwParams["caller"s] = MakeCallable(values);
     if (callable->GetType() == Callable::Type::Expression)
     {
