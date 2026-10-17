@@ -479,8 +479,12 @@ TEST(TestersTest, UserCallablesCountAsTestsAndFilters)
 
 TEST(TestersTest, StartsWithWithoutArgument)
 {
-    // The missing argument used to be a null node, dereferenced on the first item
+    // The missing argument used to be a null node, dereferenced on the first item; it is an
+    // argument error now, as for every test (0200)
     Template tpl;
-    ASSERT_TRUE(tpl.Load("{{ ['a', 'b'] | select('startsWith') | join(',') }}|{{ 'a' is startsWith }}"));
-    EXPECT_EQ("a,b|True", tpl.RenderAsString(ValuesMap{}).value());
+    ASSERT_TRUE(tpl.Load("{{ ['a', 'b'] | select('startsWith') | join(',') }}"));
+    EXPECT_FALSE(tpl.RenderAsString(ValuesMap{}).has_value());
+    Template tpl2;
+    ASSERT_TRUE(tpl2.Load("{{ 'a' is startsWith }}"));
+    EXPECT_FALSE(tpl2.RenderAsString(ValuesMap{}).has_value());
 }

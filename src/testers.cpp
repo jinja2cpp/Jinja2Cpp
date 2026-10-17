@@ -33,8 +33,21 @@ Comparator::Comparator(const TesterParams& params, BinaryExpression::Operation o
     ParseParams(args, params);
 }
 
+namespace
+{
+// Out of line, so that the tests that fit their call pay only the check
+[[noreturn]] JINJA2CPP_NOINLINE_INLINE void ThrowArgumentsError(const std::string& error)
+{
+    throw std::runtime_error(error);
+}
+} // namespace
+
 bool Comparator::Test(const InternalValue& baseVal, RenderContext& context)
 {
+    if (const auto& error = GetArgumentsError(); !error.empty())
+    {
+        ThrowArgumentsError(error);
+    }
     auto b = GetArgumentValue("b", context);
 
     auto cmpRes = Apply2<visitors::BinaryMathOperation>(baseVal, b, m_op);
@@ -49,7 +62,10 @@ StartsWith::StartsWith(const TesterParams& params)
 
 bool StartsWith::Test(const InternalValue& baseVal, RenderContext& context)
 {
-    // Without the argument the prefix is empty (it used to dereference a null node)
+    if (const auto& error = GetArgumentsError(); !error.empty())
+    {
+        ThrowArgumentsError(error);
+    }
     InternalValue val = GetArgumentValue("str", context);
     std::string baseStr = AsString(baseVal);
     std::string str = AsString(val);
@@ -80,6 +96,8 @@ ValueTester::ValueTester(const TesterParams& params, ValueTester::Mode mode)
         break;
     }
     default:
+        // The other tests take no argument beyond the tested value
+        ParseParams(NoArguments(), params);
         break;
     }
 }
@@ -407,10 +425,10 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
 
 bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
 {
-    // divisibleby, in and sameas take exactly one argument, as in Jinja2
+    // divisibleby, in and sameas take exactly one argument, the others none, as in Jinja2
     if (const auto& error = GetArgumentsError(); !error.empty())
     {
-        throw std::runtime_error(error);
+        ThrowArgumentsError(error);
     }
     bool result = false;
     auto valKind = Apply<ValueKindGetter>(baseVal);

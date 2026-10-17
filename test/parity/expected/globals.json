@@ -19,6 +19,18 @@
    "output": "2,3,4,"
   },
   {
+   "id": "globals.range_keyword_arg",
+   "template": "{{ range(stop=2)|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "range() takes no keyword arguments"
+   }
+  },
+  {
    "id": "globals.range_step",
    "template": "{% for i in range(1, 10, 3) %}{{ i }},{% endfor %}",
    "context": {},

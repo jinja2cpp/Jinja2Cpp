@@ -86,6 +86,13 @@ CASES = [
     ("call_after_bad_subscript", "{{ x[8( }}"),
     ("semicolon_in_tag", "{{ x ; 1 }}"),
     ("float_second_exponent", "{{ 1e1e-1 }}"),
+    # A repeated keyword argument is a SyntaxError (0127)
+    ("repeated_kwarg_filter", "{{ l|tojson(indent=1, indent=2) }}"),
+    ("repeated_kwarg_trim", "{{ s|trim(chars='a', chars='b') }}"),
+    ("repeated_kwarg_call", "{{ range(stop=1, stop=2) }}"),
+    ("repeated_kwarg_call_block", "{% macro m(a) %}{% endmacro %}{% call m(a=1, a=2) %}{% endcall %}"),
+    ("repeated_kwarg_test", "{{ x is divisibleby(num=1, num=2) }}"),
+    ("repeated_kwarg_unreached", "{% if false %}{{ f(a=1, a=2) }}{% endif %}"),
     # caller() outside a call block raises "No caller defined" (docs/tasks/0169)
     ("caller_without_call_block", "{% macro m() %}[{{ caller() }}]{% endmacro %}{{ m() }}"),
     ("call_body_reads_own_missing_caller", "{% macro inner() %}<{{ caller() }}>{% endmacro %}{% macro m() %}{% call inner() %}{{ caller() }}{% endcall %}{% endmacro %}{% call m() %}x{% endcall %}"),
