@@ -274,3 +274,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0202](0202-loop-else-body-frame.md) | A loop's `else` body is a frame of its own | parity | low | open |
 | [0203](0203-output-after-extends-not-evaluated.md) | Output after a top-level extends is not evaluated | parity | low | open |
 | [0204](0204-deep-value-check-render-cost.md) | Render cost of the deep-value stack checks and trashcan release (0093) | perf | low | open |
+| [0205](0205-load-drift-0168-0193.md) | Load drift after trains 11 and 12 | perf | medium | done |
