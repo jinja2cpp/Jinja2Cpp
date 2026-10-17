@@ -1687,17 +1687,17 @@ void TemplateRenderer::PushBlocks(IRendererCallback& callback, const ArenaView& 
     }
 }
 
-void TemplateRenderer::Render(OutStream& os, RenderContext& values)
+void TemplateRenderer::RenderNamed(OutStream& os, RenderContext& values, std::string_view name)
 {
     // Most included templates define no blocks and extend nothing: their stack stays empty
     if (m_blocks.empty() && !m_hasExtends)
     {
-        RenderBody(os, values, nullptr, values.Nodes().Text(m_name));
+        RenderBody(os, values, nullptr, name);
         return;
     }
     BlocksStack stack;
     PushBlocks(*values.GetRendererCallback(), values.Nodes(), stack);
-    RenderBody(os, values, &stack, values.Nodes().Text(m_name));
+    RenderBody(os, values, &stack, name);
 }
 
 void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values, BlocksStack& stack, std::string_view childName)
@@ -1709,10 +1709,10 @@ void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values, Bloc
     RenderBody(os, values, &stack, childName);
 }
 
-void TemplateRenderer::RenderAsModule(OutStream& os, RenderContext& values, BlocksStack& stack)
+void TemplateRenderer::RenderAsModule(OutStream& os, RenderContext& values, BlocksStack& stack, std::string_view name)
 {
     PushBlocks(*values.GetRendererCallback(), values.Nodes(), stack);
-    RenderBody(os, values, &stack, values.Nodes().Text(m_name));
+    RenderBody(os, values, &stack, name);
 }
 
 void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name)
@@ -1819,7 +1819,7 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
     }
 
     innerContext.SetNodes(tpl.Nodes());
-    innerContext.Nodes()[tpl.GetRenderer()].Render(os, innerContext);
+    innerContext.Nodes()[tpl.GetRenderer()].RenderNamed(os, innerContext, tpl.SelfName());
 }
 
 void IncludeStatement::Render(OutStream& os, RenderContext& values)
@@ -1937,12 +1937,12 @@ void ImportedModule::Render(const Tpl& tpl)
     // once its top level has run, those of the templates it extends
     m_frame.blocks = &m_blocks;
     m_frame.baseDepth = m_context.GetScopesCount();
-    m_frame.name = tpl.Nodes().Text(tpl.Nodes()[tpl.GetRenderer()].GetName());
+    m_frame.name = tpl.SelfName();
     m_context.SetTemplateFrame(&m_frame);
     m_context.SetNodes(tpl.Nodes());
     // Only the names the template, and the ones it extends, define are imported, as in
     // Jinja2; its output is dropped
-    RenderToString(&callback, [this, &tpl](OutStream& stream) { m_context.Nodes()[tpl.GetRenderer()].RenderAsModule(stream, m_context, m_blocks); });
+    RenderToString(&callback, [this, &tpl](OutStream& stream) { m_context.Nodes()[tpl.GetRenderer()].RenderAsModule(stream, m_context, m_blocks, tpl.SelfName()); });
 }
 
 void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
