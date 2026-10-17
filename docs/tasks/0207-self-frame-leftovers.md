@@ -46,4 +46,4 @@ blocks; a scoped block that sees more than the top level gets a `self` of what i
 by the block call's context; `self` and `super()` stored past an include render its ended
 blocks (a stored `super` read a dead stack before); modules export a top-level `self`; `self is iterable`. The
 include's names are not kept (pinned as deliberate under 0165, as for macros), nor are the loop names of a scoped block whose `self` outlives it (same); the nested
-`self` store and the globals item moved to 0209.
+`self` store and the globals item moved to 0211.

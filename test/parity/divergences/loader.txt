@@ -3,6 +3,6 @@
 
 loader.include_defined_macro_escapes   output      0165 deliberate: a macro that outlives the include defining it loses the include's names
 loader.self_of_ended_include_reads_names output   0165 deliberate: a `self` kept past its include renders the include's blocks without the include's names, as a macro does
-loader.self_block_with_self_reads_top_level output 0209 a block that stores `self` in a `with` still declares its own `self`; Jinja2 reads the top-level one
-loader.self_block_for_self_reads_top_level output  0209 a block that loops over `self` still declares its own `self`; Jinja2 reads the top-level one
+loader.self_block_with_self_reads_top_level output 0211 a block that stores `self` in a `with` still declares its own `self`; Jinja2 reads the top-level one
+loader.self_block_for_self_reads_top_level output  0211 a block that loops over `self` still declares its own `self`; Jinja2 reads the top-level one
 loader.self_of_ended_scoped_block_loses_loop output 0165 deliberate: a `self` kept past its scoped block loses the loop variable, as a macro kept past its loop does

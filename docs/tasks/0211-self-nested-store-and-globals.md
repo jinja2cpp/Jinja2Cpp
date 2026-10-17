@@ -39,4 +39,4 @@ sees the change, and the outer render sees the inner one's.
 block's own depth and reads the template's top level. The globals item needs a decision on
 whether a render may change environment globals at all; it is likely to stay deliberate.
 
-**Done when** no line of `test/parity/divergences/` names 0209.
+**Done when** no line of `test/parity/divergences/` names 0211.
