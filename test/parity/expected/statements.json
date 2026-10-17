@@ -9829,6 +9829,90 @@
    "output": "axayax|bxbybx|"
   },
   {
+   "id": "statements.loop_cycle_stored_filtered_break",
+   "template": "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3] if 10 // (3 - x) %}{% set ns.c = loop.cycle %}{{ x }}{% break %}{% endfor %}{{ ns.c('a', 'b') }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "1a"
+  },
+  {
+   "id": "statements.loop_cycle_stored_in_looped_namespace",
+   "template": "{% set ns = namespace(c=none) %}{% for x in [ns] %}{% set ns.c = loop.cycle %}{% endfor %}{{ ns.c('a', 'b') }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "a"
+  },
+  {
    "id": "statements.loop_cycle_keyword_arg",
    "template": "{% for x in [1, 2] %}{{ loop.cycle('a', x=1) }}{% endfor %}",
    "context": {

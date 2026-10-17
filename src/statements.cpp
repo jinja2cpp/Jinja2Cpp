@@ -247,6 +247,10 @@ struct LoopState : ValueObject
     ClosureSite recursiveSite;
     // The arguments of the last loop.changed() call, made on first use
     std::shared_ptr<std::optional<InternalValueList>> lastChanged;
+    // index0 for the callables loop.cycle made, kept up to date once one is made. They
+    // share this, not the state: a loop object kept past the loop collects the rest of a
+    // filtered loop, which a callable that cycles needs not
+    std::shared_ptr<size_t> cyclePosition;
     // Whether the item after the current one is fetched, isLast telling if there is one
     bool isPeeked = false;
     // A filtered loop over slots fetches its next item lazily, as Jinja2's LoopContext:
@@ -263,6 +267,15 @@ struct LoopState : ValueObject
     ArenaView lazyNodes;
 
     InternalValue& Item(size_t idx) { return items[idx % items.size()]; }
+
+    void SetIndex(size_t idx)
+    {
+        index0 = idx;
+        if (cyclePosition)
+        {
+            *cyclePosition = idx;
+        }
+    }
 
     // Fetches the item after the current one, if not done yet
     void Peek()
@@ -335,6 +348,7 @@ struct LoopState : ValueObject
         recursiveStatement = nullptr;
         recursiveNodes = ArenaView();
         lastChanged = nullptr;
+        cyclePosition = nullptr;
         isPeeked = false;
         lazyFilter = nullptr;
         lazyContext = nullptr;
@@ -427,11 +441,11 @@ Callable MakeLoopChanged(const std::shared_ptr<std::optional<InternalValueList>>
     });
 }
 // loop.cycle(*values): the value at the loop's position when it is called, as Jinja2's
-// bound method, so a callable stored on one item cycles with the loop on later ones. It
-// shares the state, which keeps its last position once the loop is over
-Callable MakeLoopCycle(boost::intrusive_ptr<const LoopState> state)
+// bound method, so a callable stored on one item cycles with the loop on later ones, and
+// from its last position once the loop is over
+Callable MakeLoopCycle(std::shared_ptr<const size_t> position)
 {
-    return Callable(Callable::GlobalFunc, [state = std::move(state)](const CallParams& params, RenderContext&) -> InternalValue {
+    return Callable(Callable::GlobalFunc, [position = std::move(position)](const CallParams& params, RenderContext&) -> InternalValue {
         if (!params.kwParams.empty())
         {
             throw std::runtime_error("LoopContext.cycle() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
@@ -441,7 +455,7 @@ Callable MakeLoopCycle(boost::intrusive_ptr<const LoopState> state)
         {
             throw std::runtime_error("no items for cycling given");
         }
-        return args[state->index0 % args.size()];
+        return args[*position % args.size()];
     });
 }
 
@@ -606,7 +620,11 @@ private:
             state.Peek();
             return state.Item(state.index0 + 1);
         case Property::Cycle:
-            return MakeLoopCycle(boost::intrusive_ptr<const LoopState>(m_state));
+            if (!state.cyclePosition)
+            {
+                state.cyclePosition = std::make_shared<size_t>(state.index0);
+            }
+            return MakeLoopCycle(state.cyclePosition);
         case Property::Changed:
             if (!state.lastChanged)
             {
@@ -1005,7 +1023,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     const auto target = values.Nodes()[m_target];
     for (size_t itemIdx = 0; hasItem; ++itemIdx)
     {
-        state->index0 = itemIdx;
+        state->SetIndex(itemIdx);
         state->isAdvancing = true;
         state->isLast = !(*enumerator)->MoveNext();
         state->isAdvancing = false;
@@ -1137,7 +1155,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     const auto rootHash = root.hash;
     for (size_t itemIdx = 0; hasItem; ++itemIdx)
     {
-        state->index0 = itemIdx;
+        state->SetIndex(itemIdx);
         // An unfiltered loop, or one whose rest is collected, fetches the next item first
         state->isPeeked = state->lazyFilter == nullptr;
         if (state->isPeeked)

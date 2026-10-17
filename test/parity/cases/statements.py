@@ -255,6 +255,8 @@ CASES = [
     # A stored loop.cycle follows the loop and keeps its last position after it (0188)
     ("loop_cycle_stored_after_loop", "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3] %}{% set ns.c = loop.cycle %}{% endfor %}{{ ns.c('a', 'b', 'c') }}"),
     ("loop_cycle_stored_in_nested_loop", "{% set ns = namespace(c=none) %}{% for x in [1, 2] %}{% set ns.c = loop.cycle %}{% for y in [1, 2, 3] %}{{ ns.c('a', 'b') }}{{ loop.cycle('x', 'y') }}{% endfor %}|{% endfor %}"),
+    ("loop_cycle_stored_filtered_break", "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3] if 10 // (3 - x) %}{% set ns.c = loop.cycle %}{{ x }}{% break %}{% endfor %}{{ ns.c('a', 'b') }}", LC),
+    ("loop_cycle_stored_in_looped_namespace", "{% set ns = namespace(c=none) %}{% for x in [ns] %}{% set ns.c = loop.cycle %}{% endfor %}{{ ns.c('a', 'b') }}"),
     ("loop_cycle_keyword_arg", "{% for x in [1, 2] %}{{ loop.cycle('a', x=1) }}{% endfor %}"),
     ("loop_cycle_stored_keyword_arg", "{% for x in [1, 2] %}{% set c = loop.cycle %}{{ c('a', x=1) }}{% endfor %}"),
     # The loop object is sized and prints as Jinja2's LoopContext (0196)
