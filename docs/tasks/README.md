@@ -244,7 +244,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0172](0172-value-unsigned-overflow.md) | Unsigned values above `INT64_MAX` wrap to negative | robustness | low | open |
 | [0173](0173-pprint-python-repr.md) | `pprint` prints JSON-style scalars | parity | low | open |
 | [0174](0174-msvc-c4702-suppression.md) | `/wd4702` hides unreachable code in project code on MSVC | build | low | open |
-| [0175](0175-recursive-loop-filter-leftovers.md) | Recursive loop filter: the outer `loop` at depth > 0, and the legacy `recursive if` order | parity | low | open |
+| [0175](0175-recursive-loop-filter-leftovers.md) | Recursive loop filter: the outer `loop` at depth > 0, and the legacy `recursive if` order | parity | low | done |
 | [0176](0176-tuple-identity-and-sort-case.md) | A dictsort pair has no identity, and sort folds case inside tuples | parity | low | done |
 | [0177](0177-filters-on-none.md) | Filters that accept None where Python raises | parity | low | done |
 | [0178](0178-arbitrary-precision-integers.md) | Integers of arbitrary size, as Python's `int` | parity | medium | open |
@@ -278,3 +278,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0206](0206-call-argument-leftovers.md) | Argument checks that 0200 left over | parity | low | open |
 | [0207](0207-self-frame-leftovers.md) | `self` cases left after 0143 and 0198 | parity | low | open |
 | [0208](0208-macro-value-gaps.md) | Macros as values | parity | low | open |
+| [0209](0209-include-sees-loop.md) | A template included in a loop sees `loop` | parity | low | open |
