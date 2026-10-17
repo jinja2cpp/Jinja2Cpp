@@ -263,7 +263,7 @@ CASES = [
     ("loop_repr", "{% for x in [1, 2] %}{{ loop }}|{{ loop|string }}|{{ [loop] }};{% endfor %}"),
     ("loop_repr_recursive", "{% for x in [[1], 2] recursive %}{{ loop }}{% if x is iterable %}{{ loop(x) }}{% endif %}{% endfor %}"),
     ("loop_iterable", "{% for x in [1] %}{{ 'T' if loop is iterable else 'F' }}{{ 'T' if loop is sequence else 'F' }}{% endfor %}"),
-    # Iterating the loop object takes the rest of the loop's items (0209)
+    # Iterating the loop object takes the rest of the loop's items (0211)
     ("loop_iter_list", "{% for x in [1, 2, 3] %}{{ loop|list }};{% endfor %}"),
     ("loop_iter_for", "{% for x in [1, 2, 3] %}{% for y in loop %}{{ y[0] }}{% endfor %};{% endfor %}"),
     ("loop_dictsort", "{% for x in [1] %}{{ loop|dictsort }}{% endfor %}"),

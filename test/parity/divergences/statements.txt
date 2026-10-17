@@ -9,6 +9,6 @@ statements.nested_macro_escapes_its_call output    0165 deliberate: a macro that
 statements.set_unpack_dict_keys        output      0197 tuple assignment from a dict takes the items named like the targets instead of unpacking its keys
 statements.macro_pprint                output      0208 pprint of a macro prints <callable>; Jinja2 prints its repr <Macro 'm'>
 statements.macro_equals_itself         output      0208 a macro is not equal to itself, so unique keeps both copies; Jinja2 compares macros by identity
-statements.loop_iter_list               output      0209 iterating loop yields its attribute names; Jinja2 takes the rest of the loop as (item, loop) pairs
-statements.loop_iter_for                output      0209 iterating loop yields its attribute names; Jinja2 takes the rest of the loop as (item, loop) pairs
-statements.loop_dictsort                accepts     0209 dictsort reads the loop's attributes as a mapping; Jinja2's LoopContext has no items()
+statements.loop_iter_list               output      0211 iterating loop yields its attribute names; Jinja2 takes the rest of the loop as (item, loop) pairs
+statements.loop_iter_for                output      0211 iterating loop yields its attribute names; Jinja2 takes the rest of the loop as (item, loop) pairs
+statements.loop_dictsort                accepts     0211 dictsort reads the loop's attributes as a mapping; Jinja2's LoopContext has no items()
