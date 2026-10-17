@@ -858,7 +858,7 @@ public:
         result.m_nodes = m_nodes;
         // A new Context in Jinja2, whose EvalContext starts from the environment's setting
         // wherever the import or include is
-        result.m_autoescape = m_rendererCallback && m_rendererCallback->GetSettings().autoescape;
+        result.m_autoescape = m_rendererCallback ? m_rendererCallback->GetSettings().autoescape : false;
         result.m_outputAutoescape = result.m_autoescape;
         result.SetLookupCache(m_lookupCache);
         return result;
