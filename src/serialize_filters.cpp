@@ -56,7 +56,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 
         // A tuple prints as Python's: (a, b), and (a,) with one item
         const bool isTuple = list.IsTuple();
-        fmt::format_to(os, isTuple ? "(" : "[");
+        str += isTuple ? "(" : "[";
         size_t count = 0;
 
         for (const auto& v : list)
@@ -67,7 +67,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             }
             fmt::format_to(os, "{}", Print(v, m_context));
         }
-        fmt::format_to(os, isTuple ? (count == 1 ? ",)" : ")") : "]");
+        str += isTuple ? (count == 1 ? ",)" : ")") : "]";
 
         return str;
     }
@@ -153,15 +153,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         return str.empty() ? "<callable>"s : str;
     }
 
-    std::string operator()(double val) const
-    {
-        std::string str;
-        auto os = std::back_inserter(str);
-
-        fmt::format_to(os, "{:.8g}", val);
-
-        return str;
-    }
+    // Python's float repr: the shortest round-trip form, 1.0 rather than 1
+    std::string operator()(double val) const { return Repr(val); }
 
     std::string operator()(int64_t val) const { return fmt::format("{}", val); }
 

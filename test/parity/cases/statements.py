@@ -366,6 +366,8 @@ CASES = [
     ("macro_dunder_call", "{% macro m() %}x{% endmacro %}{{ m.__call__() }}"),
     ("call_block_callee_without_caller", "{% call range(2) %}x{% endcall %}"),
     ("call_block_block_reference", "{% block b %}B{% endblock %}{% call self.b() %}x{% endcall %}"),
+    ("block_reference_new_each_read", "{% block b %}{{ 'T' if self.b == self.b else 'F' }}{% endblock %}"),
+    ("loop_method_equals_itself", "{% for i in [1] %}{{ 'T' if loop.cycle == loop.cycle else 'F' }}{% endfor %}"),
     # idtracking (docs/tasks/0168): which reads see the frame's own binding of a name it stores later
     ('idtracking_with_body_read_before_set', '{% for i in [1,2] %}{% with %}{{ x }}{% endwith %}{% set x = i %}{% endfor %}'),
     ('idtracking_set_block_body_read_before_set', '{% for i in [1,2] %}{% set y %}{{ x }}{% endset %}{{ y }}{% set x = i %}{% endfor %}'),

@@ -103,6 +103,7 @@ CASES = [
     ("pprint_none_bools", "{{ none|pprint }}|{{ true|pprint }}|{{ [none, true, false]|pprint }}|{{ {'a': none}|pprint }}"),
     ("pprint_string_repr", "{{ \"it's\"|pprint }}|{{ 'a\\nb'|pprint }}"),
     ("pprint_wraps_long", "{{ range(30)|list|pprint }}"),
+    ("pprint_python_types", "{{ 1.0|pprint }}|{{ {1: 2}|pprint }}|{{ range(3)|pprint }}"),
     ("reject", "{% for i in l|reject('odd') %}{{ i }},{% endfor %}"),
     ("rejectattr", "{{ users|rejectattr('age', 'gt', 26)|map(attribute='name')|join(',') }}"),
     ("rejectattr_truthy", "{{ users|rejectattr('city')|map(attribute='name')|join(',') }}"),

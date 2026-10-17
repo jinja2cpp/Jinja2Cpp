@@ -332,11 +332,13 @@ INSTANTIATE_TEST_SUITE_P(Int64ParamConvert, UserCallableParamConvertTest, ::test
                             InputOutputPair{"Int64Fn(10.123)", "10"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(DoubleParamConvert, UserCallableParamConvertTest, ::testing::Values(
-                            InputOutputPair{"DoubleFn()",                   "0"},
-                            InputOutputPair{"DoubleFn(10)", "10"},
+                            InputOutputPair{"DoubleFn()",                   "0.0"},
+                            InputOutputPair{"DoubleFn(10)", "10.0"},
                             InputOutputPair{"DoubleFn(10.123)", "10.123"}
                             ));
+// clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(VarArgsParamsConvert, UserCallableParamConvertTest, ::testing::Values(
@@ -417,7 +419,7 @@ INSTANTIATE_TEST_SUITE_P(MapParamConvert, UserCallableParamConvertTest, ::testin
                             InputOutputPair{"GMapFn(simpleMapValue) | dictsort",
                                             "[('boolValue', True), ('dblVal', 100.5), ('intVal', 10), ('stringVal', 'string100.5')]"},
                             InputOutputPair{"GMapFn(reflectedVal) | dictsort",
-                                            "[('basicCallable', <callable>), ('boolValue', False), ('dblValue', 0), ('getInnerStruct', <callable>), ('getInnerStructValue', <callable>), ('innerStruct', {'strValue': 'Hello World!'}), "
+                                            "[('basicCallable', <callable>), ('boolValue', False), ('dblValue', 0.0), ('getInnerStruct', <callable>), ('getInnerStructValue', <callable>), ('innerStruct', {'strValue': 'Hello World!'}), "
                                             "('innerStructList', [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "

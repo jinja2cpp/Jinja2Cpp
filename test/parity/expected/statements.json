@@ -13917,6 +13917,86 @@
    }
   },
   {
+   "id": "statements.block_reference_new_each_read",
+   "template": "{% block b %}{{ 'T' if self.b == self.b else 'F' }}{% endblock %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "F"
+  },
+  {
+   "id": "statements.loop_method_equals_itself",
+   "template": "{% for i in [1] %}{{ 'T' if loop.cycle == loop.cycle else 'F' }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
    "id": "statements.idtracking_with_body_read_before_set",
    "template": "{% for i in [1,2] %}{% with %}{{ x }}{% endwith %}{% set x = i %}{% endfor %}",
    "context": {

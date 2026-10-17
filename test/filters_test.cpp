@@ -328,19 +328,19 @@ grouper: 4
 )"
                                 },
                             InputOutputPair{"testData | groupby('dblValue')", R"(
-grouper: 0
+grouper: 0.0
     {'intValue': 0, 'dblValue': 0.0, 'boolValue': False, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
     {'intValue': 0, 'dblValue': 0.0, 'boolValue': True, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
 grouper: 0.5
     {'intValue': 1, 'dblValue': 0.5, 'boolValue': False, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
     {'intValue': 1, 'dblValue': 0.5, 'boolValue': True, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
-grouper: 1
+grouper: 1.0
     {'intValue': 2, 'dblValue': 1.0, 'boolValue': False, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
     {'intValue': 2, 'dblValue': 1.0, 'boolValue': True, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
 grouper: 1.5
     {'intValue': 3, 'dblValue': 1.5, 'boolValue': False, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
     {'intValue': 3, 'dblValue': 1.5, 'boolValue': True, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
-grouper: 2
+grouper: 2.0
     {'intValue': 4, 'dblValue': 2.0, 'boolValue': False, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
     {'intValue': 4, 'dblValue': 2.0, 'boolValue': True, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
 )"
@@ -392,7 +392,7 @@ INSTANTIATE_TEST_SUITE_P(DictSort, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"simpleMapValue | dictsort | pprint", "[('boolValue', True), ('dblVal', 100.5), ('intVal', 10), ('stringVal', 'string100.5')]"},
     InputOutputPair{
       "reflectedVal | dictsort | pprint",
-      "[('basicCallable', <callable>), ('boolValue', False), ('dblValue', 0), ('getInnerStruct', <callable>), ('getInnerStructValue', <callable>), ('innerStruct', "
+      "[('basicCallable', <callable>), ('boolValue', False), ('dblValue', 0.0), ('getInnerStruct', <callable>), ('getInnerStructValue', <callable>), ('innerStruct', "
       "{'strValue': 'Hello World!'}), ('innerStructList', [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
       "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
       "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}]), ('intEvenValue', 0), ('intValue', 0), ('strValue', 'test string 0'), ('strViewValue', 'test "

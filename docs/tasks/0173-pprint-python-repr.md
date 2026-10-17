@@ -17,4 +17,4 @@ the old text are updated.
 
 **Resolution.** `pprint` prints Python's repr on one line: `None`, `True`/`False`, tuples as
 `(a, b)` and `(a,)`, dictsort pairs as `('k', v)`, strings and dict keys with Python's quoting
-and escapes, macros as `<Macro 'm'>`. Wrapping at width 80 is 0210.
+and escapes, floats as Python's repr (`1.0`), macros as `<Macro 'm'>`. Wrapping at width 80 is 0215.
