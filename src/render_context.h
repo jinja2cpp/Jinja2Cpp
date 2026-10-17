@@ -68,6 +68,10 @@ struct TemplateFrame
     size_t baseDepth = 0;
     // The template's `self`, made when a name first asks for it (docs/tasks/0139)
     std::optional<InternalValue> self;
+    // The name `self` prints (Jinja2's context name): the template's own, the first of an
+    // inheritance chain's for its parents; empty for a template loaded from a string. In the
+    // tree of that template, which the render keeps
+    std::string_view name;
     // The frame this one was entered from (an importer, for a macro it imported); only
     // compared, so that `self` finds the template it came from
     TemplateFrame* outer = nullptr;
@@ -442,6 +446,7 @@ public:
         , m_nodes(other.m_nodes)
         , m_parent(other.m_parent)
         , m_parentDepth(other.m_parentDepth)
+        , m_selfDepth(other.m_selfDepth)
         , m_scopes(other.m_scopes)
         , m_frame(other.m_frame)
         , m_views(other.m_views)
@@ -488,6 +493,7 @@ public:
         , m_nodes(other.m_nodes)
         , m_parent(&other)
         , m_parentDepth(std::min(depth, other.GetScopesCount()))
+        , m_selfDepth(std::min(other.m_selfDepth, m_parentDepth))
         , m_frame(other.m_frame)
         , m_inheritsViews(other.m_inheritsViews || !other.m_views.empty())
         , m_autoescape(other.m_autoescape)
@@ -671,6 +677,14 @@ public:
     // wins, else the template itself, made on first use (Jinja2's TemplateReference). Defined
     // with TemplateFrame in statements.cpp
     LookupResult FindSelf(const std::string& name);
+    // A block body sets `self` only in its own scopes, from `depth` up: in Jinja2 every block
+    // function declares `self`, which hides the template's top-level `set self`. Returns the
+    // depth it replaces
+    size_t SetSelfDepth(size_t depth)
+    {
+        std::swap(depth, m_selfDepth);
+        return depth;
+    }
 
     // Where the variable `name` is stored, so that a list or dict the template changes in
     // place can be stored back (docs/tasks/0020); none when it is not found or cannot be
@@ -1295,6 +1309,8 @@ private:
     // its own; null for a context that copies no scopes
     RenderContext* m_parent{};
     size_t m_parentDepth{};
+    // The scopes below it do not set `self` (SetSelfDepth)
+    size_t m_selfDepth{};
     ScopeStack m_scopes;
     SlotFrame m_frame;
     // The frame views attached to this context's scopes, by scope index

@@ -1493,20 +1493,37 @@ private:
     TemplateFrame* m_prevFrame;
 };
 
-// `self` for the blocks of `stack`: a callable per block. A call renders the block in the
-// template `self` came from while that template runs (the importer, for `self` passed to an
-// imported macro), else in the template running then. The block sees the names of the
-// template's top level, `site`, wherever it is called from, as a block function sees its
-// template's context in Jinja2 (docs/tasks/0194). The stack is only compared, never read,
-// since `self` may outlive it
-InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site)
+// Jinja2's BlockReference.__call__ takes no arguments
+void CheckBlockCallParams(const CallParams& params)
+{
+    // Python reports a keyword argument first
+    if (!params.kwParams.empty())
+    {
+        throw std::runtime_error("BlockReference.__call__() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+    }
+    if (!params.posParams.empty())
+    {
+        throw std::runtime_error("BlockReference.__call__() takes 1 positional argument but " + std::to_string(params.posParams.size() + 1) + " were given");
+    }
+}
+
+// `self` for the blocks of `stack`, Jinja2's TemplateReference printed with the context's
+// `name`: a callable per block. A call renders the block in the template `self` came from
+// while that template runs (the importer, for `self` passed to an imported macro), or while
+// the context of its top level is the template's (a module's, for `self` a module's macro
+// stored), else in the template running then. The block sees the names of the template's top
+// level, `site`, wherever it is called from, as a block function sees its template's context
+// in Jinja2 (docs/tasks/0194). The stack is only compared, never read, since `self` may
+// outlive it
+InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName)
 {
     InternalValueMap self;
     for (const auto& block : stack.blocks)
     {
         // `self` may outlive the stack and the trees its names are in
-        std::string name(block.first);
-        self[name] = MakeWrapped(Callable(Callable::Macro, [name, owner = &stack, site](const CallParams&, OutStream& stream, RenderContext& context) {
+        std::string blockName(block.first);
+        self[blockName] = MakeWrapped(Callable(Callable::Macro, [name = blockName, owner = &stack, site](const CallParams& params, OutStream& stream, RenderContext& context) {
+            CheckBlockCallParams(params);
             auto* curFrame = context.GetTemplateFrame();
             if (!curFrame || !curFrame->blocks)
             {
@@ -1522,12 +1539,20 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
                 }
             }
             const auto home = site.Resolve(context);
+            // A frame of a context that is alive is in place: its guard restores the one before
+            if (frame->blocks != owner)
+            {
+                if (auto* homeFrame = home.context->GetTemplateFrame(); homeFrame && homeFrame->blocks == owner)
+                {
+                    frame = homeFrame;
+                }
+            }
             RenderContext blockContext(*home.context, home.link);
             blockContext.SetTemplateFrame(frame);
             RenderBlockAt(*frame->blocks, name, 0, stream, blockContext);
         }));
     }
-    return CreateMapAdapter(std::move(self));
+    return CreateObjectAdapter(std::move(self), "TemplateReference", templateName.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(templateName)));
 }
 } // namespace
 
@@ -1538,8 +1563,9 @@ LookupResult RenderContext::FindSelf(const std::string& name)
     {
         return FindValue(name);
     }
-    // The template's base scope is its own: a `set self` at its top level wins
-    if (const auto value = FindInScopesFrom(name, frame->baseDepth - 1))
+    // The template's base scope is its own: a `set self` at its top level wins, except in a
+    // block, which sets `self` from its own scope up
+    if (const auto value = FindInScopesFrom(name, std::max(frame->baseDepth - 1, m_selfDepth)))
     {
         return value;
     }
@@ -1552,7 +1578,7 @@ LookupResult RenderContext::FindSelf(const std::string& name)
         {
             home = home->m_parent;
         }
-        frame->self = MakeTemplateSelf(*frame->blocks, ClosureSite(*home, frame->baseDepth));
+        frame->self = MakeTemplateSelf(*frame->blocks, ClosureSite(*home, frame->baseDepth), frame->name);
     }
     return LookupResult(*frame->self);
 }
@@ -1635,6 +1661,7 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
             });
         }
     }
+    const size_t prevSelfDepth = values.SetSelfDepth(values.GetScopesCount());
     auto scope = values.EnterScope();
     if (parentBlock)
     {
@@ -1644,6 +1671,7 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     AutoescapeGuard autoescapeGuard(values, TemplateAutoescape(values));
     values.Nodes()[m_mainBody].Render(os, values);
     values.ExitScope();
+    values.SetSelfDepth(prevSelfDepth);
 }
 
 void TemplateRenderer::PushBlocks(IRendererCallback& callback, const ArenaView& nodes, BlocksStack& stack) const
@@ -1659,35 +1687,35 @@ void TemplateRenderer::PushBlocks(IRendererCallback& callback, const ArenaView& 
     }
 }
 
-void TemplateRenderer::Render(OutStream& os, RenderContext& values)
+void TemplateRenderer::RenderNamed(OutStream& os, RenderContext& values, std::string_view name)
 {
     // Most included templates define no blocks and extend nothing: their stack stays empty
     if (m_blocks.empty() && !m_hasExtends)
     {
-        RenderBody(os, values, nullptr);
+        RenderBody(os, values, nullptr, name);
         return;
     }
     BlocksStack stack;
     PushBlocks(*values.GetRendererCallback(), values.Nodes(), stack);
-    RenderBody(os, values, &stack);
+    RenderBody(os, values, &stack, name);
 }
 
-void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values, BlocksStack& stack)
+void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values, BlocksStack& stack, std::string_view childName)
 {
     // The parent shares the child's top-level scope, but a `self` the child set there is not
     // the parent's: in Jinja2 `self` is a local of each template's root function
     values.GetCurrentScope().Erase("self");
     PushBlocks(*values.GetRendererCallback(), values.Nodes(), stack);
-    RenderBody(os, values, &stack);
+    RenderBody(os, values, &stack, childName);
 }
 
-void TemplateRenderer::RenderAsModule(OutStream& os, RenderContext& values, BlocksStack& stack)
+void TemplateRenderer::RenderAsModule(OutStream& os, RenderContext& values, BlocksStack& stack, std::string_view name)
 {
     PushBlocks(*values.GetRendererCallback(), values.Nodes(), stack);
-    RenderBody(os, values, &stack);
+    RenderBody(os, values, &stack, name);
 }
 
-void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack)
+void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name)
 {
     // Nothing adds to the stack of a template that extends nothing, so those share one
     static const BlocksStack noBlocks{};
@@ -1699,6 +1727,7 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     TemplateFrame frame;
     frame.blocks = stack ? stack : &noBlocks;
     frame.baseDepth = values.GetScopesCount();
+    frame.name = name;
     TemplateFrameGuard frameGuard(values, &frame);
 
     if (!m_hasExtends)
@@ -1717,7 +1746,7 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
         const ArenaSwitch nodesSwitch(values, parent.nodes);
         // A template that extends another has a stack of its own
         assert(stack);
-        parent.node.RenderAsParent(os, values, *stack);
+        parent.node.RenderAsParent(os, values, *stack, name);
     }
 }
 
@@ -1790,7 +1819,7 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
     }
 
     innerContext.SetNodes(tpl.Nodes());
-    innerContext.Nodes()[tpl.GetRenderer()].Render(os, innerContext);
+    innerContext.Nodes()[tpl.GetRenderer()].RenderNamed(os, innerContext, tpl.SelfName());
 }
 
 void IncludeStatement::Render(OutStream& os, RenderContext& values)
@@ -1908,11 +1937,12 @@ void ImportedModule::Render(const Tpl& tpl)
     // once its top level has run, those of the templates it extends
     m_frame.blocks = &m_blocks;
     m_frame.baseDepth = m_context.GetScopesCount();
+    m_frame.name = tpl.SelfName();
     m_context.SetTemplateFrame(&m_frame);
     m_context.SetNodes(tpl.Nodes());
     // Only the names the template, and the ones it extends, define are imported, as in
     // Jinja2; its output is dropped
-    RenderToString(&callback, [this, &tpl](OutStream& stream) { m_context.Nodes()[tpl.GetRenderer()].RenderAsModule(stream, m_context, m_blocks); });
+    RenderToString(&callback, [this, &tpl](OutStream& stream) { m_context.Nodes()[tpl.GetRenderer()].RenderAsModule(stream, m_context, m_blocks, tpl.SelfName()); });
 }
 
 void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)

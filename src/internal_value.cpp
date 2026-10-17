@@ -1775,17 +1775,19 @@ public:
     }
 };
 
-// An object of a Python class whose attributes are kept as a map (cycler(), joiner())
+// An object of a Python class whose attributes are kept as a map (cycler(), joiner(), `self`)
 class ObjectMapAdapter : public InternalValueMapAdapter<ByVal, true>
 {
 public:
-    ObjectMapAdapter(InternalValueMap&& values, const char* className)
+    ObjectMapAdapter(InternalValueMap&& values, const char* className, std::optional<InternalValue> reprArgument = {})
         : InternalValueMapAdapter(std::move(values))
         , m_className(className)
+        , m_reprArgument(std::move(reprArgument))
     {
     }
 
     [[nodiscard]] const char* GetObjectClass() const override { return m_className; }
+    [[nodiscard]] const InternalValue* GetReprArgument() const override { return m_reprArgument ? &*m_reprArgument : nullptr; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
@@ -1793,6 +1795,7 @@ public:
 
 private:
     const char* m_className;
+    std::optional<InternalValue> m_reprArgument;
 };
 
 InternalValue Value2IntValue(const Value& val)
@@ -1995,6 +1998,11 @@ MapAdapter CreateNamespaceAdapter(InternalDict&& values)
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className)
 {
     return MapAdapter(MakeRef<ObjectMapAdapter>(std::move(values), className));
+}
+
+MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className, InternalValue reprArgument)
+{
+    return MapAdapter(MakeRef<ObjectMapAdapter>(std::move(values), className, std::move(reprArgument)));
 }
 
 MapAdapter CreateMapAdapter(const InternalValueMap* values)

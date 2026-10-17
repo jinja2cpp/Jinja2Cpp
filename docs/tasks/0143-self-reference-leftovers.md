@@ -1,8 +1,9 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 touches: [src/statements.cpp, src/render_context.h]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/541
 ---
 # `self` leftovers after 0139
 
@@ -41,3 +42,13 @@ change, and the outer render sees the inner one's.
 raises to the block's own scope; give the `self` map adapter a Python repr of its own.
 
 **Done when.** Both cases leave `test/parity/divergences/loader.txt`.
+
+**Outcome.** A block body sets `self` only in its own scopes (`RenderContext::SetSelfDepth`,
+raised by `BlockStatement::RenderBody`), so a top-level `set self` no longer reaches it, in
+`with`, loops, macros defined in the block or nested blocks either. `self` is a
+`TemplateReference` object that prints with the name of the template rendering
+(`<TemplateReference None>` for one loaded without a name, the child's name across an
+`extends` chain, the module's in an imported macro), is no mapping, and still subscripts.
+Of the unpinned cases, the escaped module `self`, `self` passed to an imported macro and
+`self.b(1, 2, x=3)` now match; `{% call l.m() %}` does not parse (0199), and a module's
+top-level `set self` is not exported (0207). The env-globals note above moved to 0207.

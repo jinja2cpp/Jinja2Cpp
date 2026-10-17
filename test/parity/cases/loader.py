@@ -199,10 +199,15 @@ CASES = [
      {"templates": {**T, "sib.j2": "{% macro inner() %}x{% endmacro %}{% macro outer() %}{{ inner() }}{% endmacro %}"}}),
     ("from_import_module_macro_calls_sibling", "{% from 'sib.j2' import outer %}{{ outer() }}",
      {"templates": {**T, "sib.j2": "{% macro inner() %}x{% endmacro %}{% macro outer() %}{{ inner() }}{% endmacro %}"}}),
-    # Left for docs/tasks/0143: a block's `self` is the template even after a top-level
-    # `set self`, and `self` prints as Jinja2's TemplateReference
+    # docs/tasks/0143: a block's `self` is the template even after a top-level `set self`, and
+    # `self` prints as Jinja2's TemplateReference, with the name of the template rendering
     ("self_block_ignores_top_level_set", "{% set self = 1 %}{% block b %}{{ self is number }}{% endblock %}", L),
+    ("self_block_ignores_top_level_set_nested", "{% set self = 1 %}{% block b %}{% with %}{{ self is number }}{% endwith %}{% for x in [1] %}{{ self is number }}{% endfor %}{% macro m() %}{{ self is number }}{% endmacro %}{{ m() }}{% block c %}{{ self is number }}{% endblock %}{% endblock %}", L),
     ("self_printed", "{% block b %}{% endblock %}[{{ self }}]", L),
+    ("self_printed_named", "{% include 'self_named.j2' %}{% include 'self_named_child.j2' %}{% import 'self_named_lib.j2' as l %}{{ l.m() }}",
+     {"templates": {**T, "self_named.j2": "[{{ self }}]", "self_named_child.j2": "{% extends 'self_named.j2' %}",
+                    "self_named_lib.j2": "{% macro m() %}<{{ self }}>{% endmacro %}"}}),
+    ("self_is_an_object", "{% block b %}B{% endblock %}{{ self is mapping }}|{{ self['b']() }}|{{ [self] }}", L),
     ("self_imported_macro_importer_block", "{% block mb %}MB{% endblock %}{% import 'self_lib.j2' as l %}[{{ l.n() }}]",
      {"templates": {**T, "self_lib.j2": "{% macro n() %}{{ self.mb is defined }}{% endmacro %}"}}),
     # macro and call bodies resolve names where they are defined (docs/tasks/0165)
@@ -241,7 +246,15 @@ CASES = [
     ("importer_block_via_self_sees_later_set", "{% set v = 'main' %}{% block b %}[{{ v }}]{% endblock %}{% import 'mselfb.j2' as l %}{{ l.n(self) }}{% set v = 'late' %}{{ l.n(self) }}", MODULES2),
     ("self_block_ignores_loop_and_with_names", "{% set v = 'main' %}{% block b %}[{{ v }}]{% endblock %}{% for v in [1] %}{{ self.b() }}{% endfor %}{% with v = 3 %}{{ self.b() }}{% endwith %}", MODULES2),
     ("self_block_call_with_args", "{% block b %}B{% endblock %}{{ self.b(1) }}", MODULES2),
+    ("self_block_call_with_kwargs", "{% block b %}B{% endblock %}{{ self.b(k=1) }}", MODULES2),
     ("module_self_stashed_called_by_importer", "{% set ns = namespace(s=none) %}{% import 'mst.j2' as l %}{{ l.st(ns) }}{{ ns.s.b() }}", MODULES2),
+    ("module_self_stashed_importer_has_block", "{% set ns = namespace(s=none) %}{% from 'mst.j2' import st %}{% block b %}B{% endblock %}{{ st(ns) }}{{ ns.s.b() }}", MODULES2),
+    # Left for docs/tasks/0207: `self` of an ended include, a scoped block's view of the loop
+    # through `self`, a module's top-level `set self`
+    ("self_of_ended_include", "{% set ns = namespace(s=none) %}{% block b %}OB{% endblock %}{% include 'inc_self.j2' %}{{ ns.s.b() }}",
+     {"templates": {**T, "inc_self.j2": "{% block b %}IB{% endblock %}{% set ns.s = self %}"}}),
+    ("self_scoped_block_calls_scoped_block_in_loop", "{% for v in [1, 2] %}{% block b scoped %}{{ v }}:{{ self.c() }}{% endblock %}{% endfor %}{% block c scoped %}<{{ v }}>{% endblock %}", L),
+    ("module_set_self_exported", "{% import 'mset.j2' as l %}{{ l.self }}", {"templates": {**T, "mset.j2": "{% set self = 5 %}"}}),
     ("self_taken_in_with_called_after", "{% set v = 'main' %}{% set ns = namespace(s=none) %}{% block b %}[{{ v }}]{% endblock %}{% with x = 1 %}{% set ns.s = self %}{% endwith %}{{ ns.s.b() }}", MODULES2),
     # idtracking (docs/tasks/0168): an include or import with context before the store sees the
     # outer value, not the frame's binding; an import alias is bound like a set
