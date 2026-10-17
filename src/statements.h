@@ -637,6 +637,8 @@ public:
 
     // The name and the arguments go to the tree; a call block's caller has no name
     MacroStatement(NodeArena& nodes, std::string_view name, const MacroParamsInfo& params);
+    // `name` is text of `nodes` already
+    MacroStatement(NodeArena& nodes, ArenaText name, const MacroParamsInfo& params);
     MacroStatement(const MacroStatement&) = delete;
     // For the arena, which moves the nodes when it seals the tree
     MacroStatement(MacroStatement&&) = default;
@@ -752,7 +754,7 @@ public:
     }
 
     MacroCallStatement(NodeArena& nodes, std::string_view macroName, const CallParamsInfo& callParams, const MacroParamsInfo& callbackParams)
-        : MacroStatement(nodes, {}, callbackParams)
+        : MacroStatement(nodes, std::string_view(), callbackParams)
         , m_macroName(nodes.MakeText(macroName))
         , m_macroNameHash(HashedName::Hash(macroName))
         , m_callParams(ArenaCallParams::Make(nodes, callParams))

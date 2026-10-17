@@ -35,6 +35,17 @@
 namespace jinja2
 {
 
+NodeRef<ComposedRenderer> StatementsParser::TakeFrameBody(StatementInfo& info)
+{
+    if (const auto binding = m_names.EntryBinding(info.frame, m_nodes))
+    {
+        info.body.insert(info.body.begin(), binding);
+    }
+    auto body = m_nodes.MakeWithItems<ComposedRenderer>(boost::span<const ComposedRenderer::Child>(info.body.data(), info.body.size()));
+    info.body.clear();
+    return body;
+}
+
 StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, StatementInfoList& statementsInfo)
 {
     const auto& tok = lexer.NextToken();
@@ -891,7 +902,9 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     // The parameters' defaults count with the body
     const auto marks = m_nodes.Marks();
     const auto outerFrame = m_names.Current();
-    m_names.AddStore(outerFrame, macroName);
+    // In the arena now: the resolver keeps a view of the name
+    const auto nameText = m_nodes.MakeText(macroName);
+    m_names.AddStore(outerFrame, m_nodes.Text(nameText));
 
     // Jinja2 requires the parameter list, even an empty one
     if (!lexer.EatIfEqual('('))
@@ -904,7 +917,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
         return MakeUnexpected(result.error());
     }
 
-    auto renderer = m_nodes.Make<MacroStatement>(m_nodes, macroName, result.value());
+    auto renderer = m_nodes.Make<MacroStatement>(m_nodes, nameText, result.value());
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementInfo.marks = marks;
@@ -1294,8 +1307,9 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
     }
     m_nodes[renderer].SetImportNameExpr(valueExpr);
     const auto namespaceName = lexer.GetAsString(name);
-    m_names.AddStore(m_names.Current(), namespaceName);
-    m_nodes[renderer].SetNamespace(m_nodes.MakeText(namespaceName), HashedName::Hash(namespaceName));
+    const auto namespaceText = m_nodes.MakeText(namespaceName);
+    m_names.AddStore(m_names.Current(), m_nodes.Text(namespaceText));
+    m_nodes[renderer].SetNamespace(namespaceText, HashedName::Hash(namespaceName));
     statementsInfo.back().body.emplace_back(renderer);
 
     return ParseResult();
@@ -1438,13 +1452,13 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     names.reserve(mappedNames.size());
     for (const auto& nameInfo : mappedNames)
     {
+        const auto& name = names.emplace_back(ImportName{ m_nodes.MakeText(nameInfo.first), HashedName::Hash(nameInfo.first), m_nodes.MakeText(nameInfo.second), HashedName::Hash(nameInfo.second) });
         // Jinja2 stores the alias only; the imported name still hides a slot of its own
-        m_names.AddStore(m_names.Current(), nameInfo.second);
+        m_names.AddStore(m_names.Current(), m_nodes.Text(name.alias));
         if (nameInfo.first != nameInfo.second)
         {
-            m_names.AddStore(m_names.Current(), nameInfo.first, NameResolver::StoreKind::Branch);
+            m_names.AddStore(m_names.Current(), m_nodes.Text(name.name), NameResolver::StoreKind::Branch);
         }
-        names.push_back(ImportName{ m_nodes.MakeText(nameInfo.first), HashedName::Hash(nameInfo.first), m_nodes.MakeText(nameInfo.second), HashedName::Hash(nameInfo.second) });
     }
     m_nodes[renderer].SetNamesToImport(m_nodes.MakeSpan(names));
 
@@ -1511,7 +1525,7 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
     statementInfo.frame = m_names.PushWith(m_names.Current());
     for (const auto& var : vars)
     {
-        m_names.AddStore(statementInfo.frame, std::string(m_nodes.Text(var.name)), NameResolver::StoreKind::Target);
+        m_names.AddStore(statementInfo.frame, m_nodes.Text(var.name), NameResolver::StoreKind::Target);
     }
     auto renderer = m_nodes.Make<WithStatement>();
     m_nodes[renderer].SetScopeVars(m_nodes.MakeSpan(vars));

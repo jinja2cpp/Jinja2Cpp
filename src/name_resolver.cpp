@@ -100,7 +100,7 @@ NameResolver::FrameId NameResolver::PushDynamic(FrameId parent)
     return id;
 }
 
-void NameResolver::DoAddStore(FrameId frame, const std::string& name, StoreKind kind)
+void NameResolver::DoAddStore(FrameId frame, std::string_view name, StoreKind kind)
 {
     m_frames[frame].hasStores = true;
     m_stores.push_back(Store{ frame, kind, static_cast<std::uint32_t>(m_reads.size()), name });
@@ -112,7 +112,7 @@ void NameResolver::AddStores(FrameId frame, boost::span<const TargetNode> target
     {
         if (node.IsPlainName())
         {
-            AddStore(frame, std::string(nodes.Text(node.name)), kind);
+            AddStore(frame, nodes.Text(node.name), kind);
         }
     }
 }
@@ -137,11 +137,15 @@ std::pair<bool, bool> IsInside(const Frames& frames, std::uint32_t inner, std::u
 }
 } // namespace
 
-NodeRef<BindUndefinedStatement> NameResolver::EntryBinding(FrameId frameId, NodeArena& nodes)
+NodeRef<BindUndefinedStatement> NameResolver::MakeEntryBinding(FrameId frameId, NodeArena& nodes)
 {
     const auto& frame = m_frames[frameId];
-    // A name needs a store in the frame and a read in a frame inside it
-    if (frame.firstStore == m_stores.size() || m_frames.size() == std::size_t{ frameId } + 1)
+    // Frames are numbered as they start, so every frame after this one is inside it, and a
+    // read inside comes at or after the first of them starts. A store with no read before it
+    // from there on has nothing to bind; most frames have only such stores (docs/tasks/0205)
+    const auto innerReads = m_frames[std::size_t{ frameId } + 1].firstRead;
+    const auto mayBeReadInside = [frameId, innerReads](const Store& store) { return store.frame == frameId && store.kind == StoreKind::Store && store.readsBefore > innerReads; };
+    if (std::none_of(m_stores.begin() + frame.firstStore, m_stores.end(), mayBeReadInside))
     {
         return {};
     }
@@ -319,20 +323,10 @@ void NameResolver::ResolveEntryBindings(NodeArena& nodes)
     }
 }
 
-void NameResolver::Resolve(NodeArena& nodes)
+// Only with a macro or a loop that binds slots: without one every name is a lookup, and no
+// unit needs a frame
+void NameResolver::ResolveSlots(NodeArena& nodes)
 {
-    if (!m_entryNames.empty())
-    {
-        ResolveEntryBindings(nodes);
-    }
-
-    // Without a macro or a loop that binds slots every name is a lookup, and no unit needs a
-    // frame
-    if (!m_hasSlots)
-    {
-        return;
-    }
-
     // The units, numbered in parse order, with their arguments' slots, and the slot ranges of
     // their loops: a unit comes before the frames inside it
     std::uint16_t unitCount = 0;
