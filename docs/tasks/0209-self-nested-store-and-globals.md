@@ -19,6 +19,15 @@ Left by 0207.
   the context, where the template's top-level `set` put 1. Jinja2C++ always gives a block its
   own `self` (RenderContext::SetSelfDepth).
 
+Found by the 0207 verifier, not pinned:
+- A `self` taken at the top level of a template that extends another lacks the parent-only
+  blocks (`{% extends 'p.j2' %}{% set x = self %}{% block b %}{{ x.c() }}{% endblock %}` with
+  `c` only in `p.j2` fails; Jinja2 renders it): it is made before RenderAsParent pushes the
+  parent's blocks. An ended include that extends has the same gap.
+- A module that extends and sets `self` (`{% extends 'p.j2' %}{% set self = 5 %}`) exports
+  nothing for `m.self`; Jinja2 exports 5. RenderAsParent erases `self` from the shared scope.
+- `cycler()` is iterable in Jinja2 (`__iter__`); `cycler() is iterable` is False here.
+
 Carried from 0143 and 0207, not pinned (no corpus option for env globals): a global the
 template changes in place (`g.append(1)`) is changed for the rest of the render only; Jinja2
 changes the global object itself, for every later render too. A render started inside it (a

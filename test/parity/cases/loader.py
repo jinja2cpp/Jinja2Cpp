@@ -57,7 +57,11 @@ MODULES2 = {"templates": {**T,
     "mst.j2": "{% block b %}MB[{{ v }}]{% endblock %}{% set v = 'mv' %}{% macro st(ns) %}{% set ns.s = self %}{% endmacro %}"}}
 INC_SELF = {"templates": {**T, "inc_self.j2": "{% block b %}IB{% endblock %}{% set ns.s = self %}",
                     "inc_selfx.j2": "{% set x = 1 %}{% block b %}[{{ x }}{{ name }}]{% endblock %}{% set ns.s = self %}",
-                    "other_self.j2": "{% block b %}OT{% endblock %}{{ ns.s.b() }}", "mset.j2": "{% set self = 5 %}"}}
+                    "other_self.j2": "{% block b %}OT{% endblock %}{{ ns.s.b() }}", "mset.j2": "{% set self = 5 %}",
+                    "e_self.j2": "{% block b %}[{{ self.c() }}]{% endblock %}{% block c %}C{% endblock %}{% set ns.s = self %}",
+                    "e_par.j2": "{% block b %}P{% endblock %}{% block c %}PC{% endblock %}",
+                    "e_sup.j2": "{% extends 'e_par.j2' %}{% block b %}C{{ super() }}{{ self.c() }}{% endblock %}{% set ns.s = self %}",
+                    "e_supstore.j2": "{% extends 'e_par.j2' %}{% block b %}{% set ns.sup = super %}C{% endblock %}"}}
 
 CASES = [
     ("include", "{% include 'hello.j2' %}", L),
@@ -264,6 +268,10 @@ CASES = [
     ("self_of_ended_include_in_other_include", "{% set ns = namespace(s=none) %}{% include 'inc_self.j2' %}{% include 'other_self.j2' %}", INC_SELF),
     ("self_of_ended_include_in_loop", "{% set ns = namespace(s=none) %}{% for i in [1, 2] %}{% include 'inc_self.j2' %}{% endfor %}{{ ns.s.b() }}", INC_SELF),
     ("self_of_ended_include_reads_names", "{% set ns = namespace(s=none) %}{% include 'inc_selfx.j2' %}{{ ns.s.b() }}", INC_SELF),
+    ("self_of_ended_include_block_uses_self", "{% set ns = namespace(s=none) %}{% include 'e_self.j2' %}<{{ ns.s.b() }}>", INC_SELF),
+    ("self_of_ended_include_super", "{% set ns = namespace(s=none) %}{% include 'e_sup.j2' %}<{{ ns.s.b() }}>", INC_SELF),
+    ("super_stored_past_include", "{% set ns = namespace(s=none, sup=none) %}{% include 'e_supstore.j2' %}[{{ ns.sup() }}]", INC_SELF),
+    ("self_of_ended_scoped_block_loses_loop", "{% set ns = namespace(s=none) %}{% for v in [1, 2, 3] %}{% block b scoped %}{% set ns.s = self %}{% endblock %}{% endfor %}{{ ns.s.c() }}{% block c scoped %}<{{ v }}>{% endblock %}", L),
     ("module_set_self_from_import", "{% from 'mset.j2' import self %}{{ self }}", INC_SELF),
     ("self_scoped_block_calls_unscoped_block_in_loop", "{% set v = 9 %}{% for v in [1, 2] %}{% block b scoped %}{{ v }}:{{ self.c() }}{% endblock %}{% endfor %}{% block c %}<{{ v }}>{% endblock %}", L),
     ("self_unscoped_block_in_loop_calls_scoped_block", "{% for v in [1, 2] %}{% block b %}{{ v }}:{{ self.c() }}{% endblock %}{% endfor %}{% block c scoped %}<{{ v }}>{% endblock %}", L),

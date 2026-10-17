@@ -1566,6 +1566,8 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
                 endedFrame.baseDepth = home.link;
                 endedFrame.name = templateName;
                 endedFrame.outer = curFrame;
+                // Its scopes have ended too: a `self` in the block renders the ended blocks
+                endedFrame.self = MakeTemplateSelf(*owner->ended, ClosureSite(), templateName);
                 frame = &endedFrame;
             }
             if (!frame)
@@ -1587,13 +1589,14 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
 LookupResult RenderContext::FindSelf(const std::string& name)
 {
     auto* frame = m_templateFrame;
-    if (!frame || !frame->blocks || frame->baseDepth == 0)
+    // A frame with no scopes of its own is an ended template's, whose `self` is made with it
+    if (!frame || !frame->blocks || (frame->baseDepth == 0 && !frame->self))
     {
         return FindValue(name);
     }
     // The template's base scope is its own: a `set self` at its top level wins, except in a
     // block, which sets `self` from its own scope up
-    if (const auto value = FindInScopesFrom(name, std::max(frame->baseDepth - 1, m_selfDepth)))
+    if (const auto value = FindInScopesFrom(name, frame->baseDepth == 0 ? m_selfDepth : std::max(frame->baseDepth - 1, m_selfDepth)))
     {
         return value;
     }
@@ -1698,18 +1701,24 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     std::optional<Callable> parentBlock;
     if (frame && frame->blocks)
     {
-        auto* stack = frame->blocks;
+        const auto* stack = frame->blocks;
         // In the block's tree, which the render keeps as long as the block
         const auto name = GetName(values.Nodes());
         auto p = stack->blocks.find(name);
         if (p != stack->blocks.end() && depth + 1 < p->second.size())
         {
+            // super() may outlive the stack (stored past an include): it renders what the
+            // stack held then, as `self` does
+            if (!stack->self)
+            {
+                stack->self = std::make_shared<SelfBlocks>(stack);
+            }
             // The parent block sees the scopes below this block's, wherever super() is called
             // from (a macro the block passes it to): a context on them in the block's own
-            parentBlock.emplace(Callable::Macro, [stack, name, depth, site = ClosureSite(values)](const CallParams&, OutStream& stream, RenderContext& context) {
+            parentBlock.emplace(Callable::Macro, [owner = stack->self, name, depth, site = ClosureSite(values)](const CallParams&, OutStream& stream, RenderContext& context) {
                 const auto home = site.Resolve(context);
                 RenderContext superContext(*home.context, home.link);
-                RenderBlockAt(*stack, name, depth + 1, stream, superContext);
+                RenderBlockAt(owner->live ? *owner->live : *owner->ended, name, depth + 1, stream, superContext);
             });
         }
         else
