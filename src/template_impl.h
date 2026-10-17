@@ -252,6 +252,8 @@ public:
 
     // The root of the tree, resolved through Nodes()
     [[nodiscard]] NodeRef<TemplateRenderer> GetRenderer() const { return m_renderer; }
+    // The name `self` prints: the one the template was loaded with, empty (None) without one
+    [[nodiscard]] std::string_view SelfName() const { return m_isNamed ? std::string_view(m_templateName) : std::string_view(); }
     [[nodiscard]] const ArenaView& Nodes() const { return m_nodes.View(); }
     auto GetTemplateName() const {};
 
@@ -263,7 +265,8 @@ public:
         auto source = std::make_unique<std::basic_string<CharT>>(std::move(tpl));
         NormalizeTemplateNewlines(*source, m_settings->settings.keepTrailingNewline);
         using namespace std::string_literals;
-        std::string name = tplName.empty() ? "noname.j2tpl"s : std::move(tplName);
+        const bool isNamed = !tplName.empty();
+        std::string name = isNamed ? std::move(tplName) : "noname.j2tpl"s;
         NodeArena nodes;
         TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name, nodes);
 
@@ -296,6 +299,7 @@ public:
         m_metadataInfo = parser.GetMetadataInfo();
         // Last: the parser refers to the name
         m_templateName = std::move(name);
+        m_isNamed = isNamed;
         m_metadata.reset();
         return std::optional<BasicErrorInfo<CharT>>();
     }
@@ -364,7 +368,7 @@ public:
             const auto hint = m_outputSizeHint.value.load(std::memory_order_relaxed);
             os.reserve(start + hint);
             OutStream outStream(os);
-            m_nodes[m_renderer].Render(outStream, context);
+            m_nodes[m_renderer].RenderNamed(outStream, context, SelfName());
             outStream.Flush();
             context.TakeTopScope(maps.TopScope());
             // Stored only when the output outgrows the hint or needs less than half of it, so
@@ -778,6 +782,7 @@ private:
     // Text the tree points to besides the source (newline_sequence copies), if any
     std::unique_ptr<std::forward_list<std::basic_string<CharT>>> m_convertedTexts;
     std::string m_templateName;
+    bool m_isNamed = false;
     // Owns the tree
     SealedArena m_nodes;
     NodeRef<TemplateRenderer> m_renderer;

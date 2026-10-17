@@ -196,7 +196,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0124](0124-escapers-scan-spans.md) | `tojson`, HTML escaping and `trim` walk strings one character at a time | perf | medium | done |
 | [0125](0125-reflected-nested-items-outlive-owner.md) | Nested items of a reflected value a callable returns outlive their owner | robustness | high | done |
 | [0126](0126-escape-from-value-view.md) | Autoescape renders each value to a string before escaping it | perf | low | done |
-| [0127](0127-filter-argument-types.md) | tojson accepts a non-int indent and calls accept a repeated keyword | parity | low | open |
+| [0127](0127-filter-argument-types.md) | tojson accepts a non-int indent and calls accept a repeated keyword | parity | low | done |
 | [0128](0128-compile-constant-percent-format.md) | Parse a constant `%` format once, at Load | perf | low | done |
 | [0129](0129-nested-context-scope-storage.md) | Every nested render context allocates a scope deque | perf | low | done |
 | [0130](0130-template-footprint.md) | A loaded template keeps 30 times its source | perf | low | done |
@@ -212,7 +212,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0140](0140-internal-value-size.md) | `InternalValue` is 72 bytes | perf | medium | done |
 | [0141](0141-switch-dispatch.md) | Every node visit is a virtual call | perf | low | done |
 | [0142](0142-single-pass-scanner.md) | Load scans the source twice | perf | low | done |
-| [0143](0143-self-reference-leftovers.md) | `self` leftovers after 0139 | parity | low | open |
+| [0143](0143-self-reference-leftovers.md) | `self` leftovers after 0139 | parity | low | done |
 | [0144](0144-loop-cycle-sentinel.md) | `loop.cycle` is the integer 2 | parity | medium | done |
 | [0145](0145-callable-identity-equality.md) | A macro or a callable is not equal to itself | parity | low | open |
 | [0146](0146-load-settings-fast-path.md) | Load compares the whole Settings on every template | perf | medium | done |
@@ -267,11 +267,13 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0195](0195-imported-module-that-extends.md) | An imported module that extends a parent | parity | low | done |
 | [0196](0196-loop-len-and-iter.md) | `loop` as a sized iterable | parity | low | open |
 | [0197](0197-objects-left-as-mappings.md) | Objects and dicts still read as maps of names in a few places | parity | low | open |
-| [0198](0198-self-block-call-leftovers.md) | Calls through `self` that still differ from Jinja2 | parity | low | open |
+| [0198](0198-self-block-call-leftovers.md) | Calls through `self` that still differ from Jinja2 | parity | low | done |
 | [0199](0199-call-block-leftovers.md) | Call block leftovers | parity | low | open |
-| [0200](0200-tester-arity.md) | Every built-in test checks its arguments | parity | low | open |
+| [0200](0200-tester-arity.md) | Every built-in test checks its arguments | parity | low | done |
 | [0201](0201-block-reads-root-binding.md) | A block reads the context, not the root's entry binding | parity | low | open |
 | [0202](0202-loop-else-body-frame.md) | A loop's `else` body is a frame of its own | parity | low | open |
 | [0203](0203-output-after-extends-not-evaluated.md) | Output after a top-level extends is not evaluated | parity | low | open |
 | [0204](0204-deep-value-check-render-cost.md) | Render cost of the deep-value stack checks and trashcan release (0093) | perf | low | open |
 | [0205](0205-load-drift-0168-0193.md) | Load drift after trains 11 and 12 | perf | medium | done |
+| [0206](0206-call-argument-leftovers.md) | Argument checks that 0200 left over | parity | low | open |
+| [0207](0207-self-frame-leftovers.md) | `self` cases left after 0143 and 0198 | parity | low | open |

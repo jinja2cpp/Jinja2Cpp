@@ -759,6 +759,15 @@ void ValueRendererBase<CharT>::operator()(const MapRef& map) const
     // An object prints as Python's repr of it: <Namespace {...}> wraps its attributes, the
     // rest have the default <module.Class object at 0x...>
     const char* objectClass = map.GetObjectClass();
+    if (const auto* reprArgument = objectClass ? map.GetReprArgument() : nullptr)
+    {
+        AppendAscii("<");
+        AppendAscii(objectClass);
+        AppendAscii(" ");
+        RenderRepr(*reprArgument, m_containers);
+        AppendAscii(">");
+        return;
+    }
     if (objectClass && !map.IsNamespace())
     {
         AppendAscii("<jinja2.utils.");

@@ -478,7 +478,8 @@ Result RenderCpp(const Json& c, const jinja2::Settings& settings)
     try
     {
         Tpl tpl(&env);
-        auto loaded = tpl.Load(FromUtf8<CharT>(c["template"].get<std::string>()), "parity");
+        // Unnamed, as Jinja2's from_string: `self` prints the name (<TemplateReference None>)
+        auto loaded = tpl.Load(FromUtf8<CharT>(c["template"].get<std::string>()));
         if (!loaded)
             return { false, "load: " + ToUtf8(loaded.error().ToString()) };
         auto rendered = tpl.RenderAsString(params);

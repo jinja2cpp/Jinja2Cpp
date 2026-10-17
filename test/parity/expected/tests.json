@@ -863,6 +863,33 @@
    }
   },
   {
+   "id": "tests.ge_arity",
+   "template": "{{ 1 is ge() }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "ge expected 2 arguments, got 1"
+   }
+  },
+  {
    "id": "tests.odd_extra_arg",
    "template": "{{ 1 is odd(1) }}",
    "context": {
@@ -915,6 +942,110 @@
     "type": "TypeError",
     "message": "test_defined() takes 1 positional argument but 2 were given"
    }
+  },
+  {
+   "id": "tests.lower_keyword_arg",
+   "template": "{{ 'a' is lower(x=1) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_lower() got an unexpected keyword argument 'x'"
+   }
+  },
+  {
+   "id": "tests.select_test_extra_arg",
+   "template": "{{ [1, 2]|select('odd', 1)|list }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_odd() takes 1 positional argument but 2 were given"
+   }
+  },
+  {
+   "id": "tests.rejectattr_test_extra_arg",
+   "template": "{{ [{'a': 1}]|rejectattr('a', 'none', 1)|list }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_none() takes 1 positional argument but 2 were given"
+   }
+  },
+  {
+   "id": "tests.select_unread_extra_arg",
+   "template": "{% set r = [1, 2]|select('odd', 1) %}ok",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "ok"
   },
   {
    "id": "tests.sameas_computed_list",
