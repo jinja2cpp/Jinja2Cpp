@@ -21,7 +21,7 @@ Found while verifying 0169 (PR #526). All three predate it.
 
 **Done when.** No divergences line names 0199 and `ctest -R parity` passes.
 
-**Done** in the PR for this task: a macro prints as `<Macro 'm'>` (a caller as
+**Done** in PR #544: a macro prints as `<Macro 'm'>` (a caller as
 `<Macro anonymous>`, its `name` is None), `{% call m(caller=...) %}` is a load error, and
 `call` takes any call expression (`ns.m()`, `l[0]()`), rejecting a non-call as Jinja2's
 "expected call" does. Other callables (globals, methods) still print nothing: Python's repr
