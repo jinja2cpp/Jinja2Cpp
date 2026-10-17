@@ -1,9 +1,11 @@
 ---
-status: open
+status: done
 priority: medium
 area: robustness
 depends: [0003]
 touches: [src/internal_value.h, src/internal_value.cpp, src/generic_adapters.h]
+shares: [src/value_visitors.h, src/serialize_filters.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/529
 ---
 # Deeply nested values overflow the stack when they are destroyed or printed
 
@@ -34,3 +36,24 @@ deallocations to a loop, and raises RecursionError when printing them.
 
 **Done when.** The template above with 100000 levels renders `ok` under ASan, printing
 the value fails with `RecursionLimitExceeded`, and the input sits in `fuzz/regressions/`.
+
+**Done.** Destruction: `ValueObject` keeps its own reference count instead of
+`boost::intrusive_ref_counter`, and its last release calls `detail::DestroyValueObject`,
+which deletes up to 64 nested objects directly and puts deeper ones on a per-thread list
+that the outermost deletion empties in a loop. The list is a plain struct with a `malloc`ed
+buffer, freed when it empties, so it needs no thread_local destructor. 100000 nested lists
+or dicts render `ok` (`fuzz/regressions/deep-nested-value.j2`, `RecursionLimitsTest.DeepValues`).
+
+Walks: printing (`ValueRendererBase`, which also no longer cuts nesting off at 256 levels
+with `[...]`), `pprint`, `tojson` (which failed with `InvalidValueType` past 1000 levels;
+Python prints 5000) and list and dict comparison call `CheckStack()` per level and end in
+`RecursionLimitExceeded`. Comparison first checks identity, as Python's does for items: a
+list or dict equals itself without its items being compared (`[nan] == [nan]` through one
+variable is `True`), which also keeps `ns.v == ns.v + []` shallow. `length` and lazy filter
+chains (`ns.v = ns.v|select`, `|reverse`, `|map`, slices) needed nothing: 100000 levels of
+each render. Corpus: `operators.eq_same_list_nan`, `operators.eq_same_dict_nan`,
+`output.nested_list_repr_deep`, `output.nested_dict_repr_deep`.
+
+Left as is: Python also treats one float object as equal to itself, so `[n] == [n]` with
+`n` NaN is `True` there; Jinja2C++ stores numbers inline, without an identity, and prints
+`False`. Not worth boxing numbers for.

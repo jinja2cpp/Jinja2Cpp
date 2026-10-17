@@ -1,0 +1,1 @@
+{% set ns = namespace(v=[]) %}{% for i in range(100000) %}{% set ns.v = [ns.v] %}{% endfor %}ok

@@ -5,6 +5,7 @@
 #include "markup.h"
 #include "out_stream.h" // IWYU pragma: keep (GetStreamOnString returns an OutStream by value)
 #include "python_format.h"
+#include "recursion_guard.h"
 #include "render_context.h"
 #include "string_builder.h"
 #include "undefined.h"
@@ -49,6 +50,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 
     std::string operator()(const ListRef& list) const
     {
+        CheckStack();
         std::string str;
         auto os = std::back_inserter(str);
 
@@ -74,6 +76,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 
     std::string operator()(const MapRef& map) const
     {
+        CheckStack();
         std::string str;
         if (map.GetObjectClass())
         {
@@ -383,10 +386,8 @@ private:
 
     void WriteValue(const InternalValue& value, size_t level)
     {
-        if (++m_depth > 1000)
-        {
-            Fail();
-        }
+        // Python's json.dumps raises RecursionError on values nested deeper than its stack
+        CheckStack();
         if (const auto* info = GetUndefinedInfo(value))
         {
             // json.dumps knows no Undefined; a plain undefined (a host's null) stays null
@@ -452,13 +453,11 @@ private:
         {
             Fail();
         }
-        --m_depth;
     }
 
     RenderContext& m_context;
     std::optional<std::string> m_indent;
     StringBuilder<char> m_out;
-    size_t m_depth = 0;
 };
 
 } // namespace

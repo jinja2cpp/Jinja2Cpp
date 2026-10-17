@@ -855,6 +855,50 @@
    "output": "True"
   },
   {
+   "id": "operators.eq_same_list_nan",
+   "template": "{% set n = ('nan' if x else '')|float %}{% set l = [n] %}{{ l == l }}|{{ l != l }}|{{ l <= l }}|{{ [l] == [l] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|False|True|True"
+  },
+  {
+   "id": "operators.eq_same_dict_nan",
+   "template": "{% set d = {'a': ('nan' if x else '')|float} %}{{ d == d }}|{{ {'k': d} == {'k': d} }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|True"
+  },
+  {
    "id": "operators.eq_none",
    "template": "{{ 'T' if n == none else 'F' }}",
    "context": {

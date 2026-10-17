@@ -15,6 +15,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -29,6 +30,69 @@
 
 namespace jinja2
 {
+
+namespace detail
+{
+namespace
+{
+// Nested deletions past this depth wait on the thread's pending list. A level is an
+// object's destructor and its container's: some hundred bytes of stack, more under ASan
+constexpr unsigned MaxNestedDestroy = 64;
+
+// The objects waiting to be deleted. Trivially destructible, so values that other
+// thread_local objects release when the thread ends still find it
+struct PendingDestroy
+{
+    unsigned depth;
+    std::size_t size;
+    std::size_t capacity;
+    const ValueObject** items;
+};
+thread_local PendingDestroy t_pendingDestroy{};
+
+// False when the list cannot grow: the caller deletes the object at once
+bool DeferDestroy(PendingDestroy& pending, const ValueObject* obj) noexcept
+{
+    if (pending.size == pending.capacity)
+    {
+        const std::size_t capacity = pending.capacity == 0 ? 256 : pending.capacity * 2;
+        // NOLINTNEXTLINE(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory): no destructor, see PendingDestroy
+        void* items = std::realloc(static_cast<void*>(pending.items), capacity * sizeof(*pending.items));
+        if (!items)
+        {
+            return false;
+        }
+        pending.items = static_cast<const ValueObject**>(items);
+        pending.capacity = capacity;
+    }
+    pending.items[pending.size++] = obj; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    return true;
+}
+} // namespace
+
+void DestroyValueObject(const ValueObject* obj) noexcept
+{
+    auto& pending = t_pendingDestroy;
+    if (pending.depth >= MaxNestedDestroy && DeferDestroy(pending, obj))
+    {
+        return;
+    }
+    ++pending.depth;
+    delete obj; // NOLINT(cppcoreguidelines-owning-memory): its last reference went
+    if (pending.depth == 1 && pending.items)
+    {
+        // Each of these may defer more of its own
+        while (pending.size != 0)
+        {
+            delete pending.items[--pending.size]; // NOLINT(cppcoreguidelines-owning-memory,cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        }
+        std::free(static_cast<void*>(pending.items)); // NOLINT(cppcoreguidelines-no-malloc,cppcoreguidelines-owning-memory)
+        pending.items = nullptr;
+        pending.capacity = 0;
+    }
+    --pending.depth;
+}
+} // namespace detail
 
 namespace
 {

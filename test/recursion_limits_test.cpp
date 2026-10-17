@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <string>
+#include <utility>
 
 #if defined(__linux__) || defined(__APPLE__)
 #include <pthread.h>
@@ -347,3 +348,120 @@ TEST_F(RecursionLimitsTest, SmallThreadStack)
     }
 }
 #endif
+
+// A loop nests a value as deep as it iterates (docs/tasks/0093). Destroying such a value
+// recursed once per level and overflowed the stack; walks over it (printing, tojson, pprint,
+// ==) still recurse, but stop with RecursionLimitExceeded like Python's RecursionError.
+namespace
+{
+#ifdef __SANITIZE_THREAD__
+#define JINJA2CPP_TEST_TSAN 1
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#define JINJA2CPP_TEST_TSAN 1
+#endif
+#endif
+#ifdef JINJA2CPP_TEST_TSAN
+// Deep enough to overflow the walks' thread under TSan too. Deeper, the access history of
+// the whole run makes LLVM 18's TSan reset its traces, which fails its own CHECK
+// (trace_part_recycle) and corrupts memory on the CI runners
+constexpr char DeepLevels[] = "20000";
+#else
+constexpr char DeepLevels[] = "100000";
+#endif
+
+std::string DeepLists()
+{
+    return "{% set ns = namespace(v=[], w=[]) %}{% for i in range(" + std::string(DeepLevels) + ") %}{% set ns.v = [ns.v] %}{% set ns.w = [ns.w] %}{% endfor %}";
+}
+
+std::string DeepDicts()
+{
+    return "{% set ns = namespace(v={}, w={}) %}{% for i in range(" + std::string(DeepLevels) + ") %}{% set ns.v = {'a': ns.v} %}{% set ns.w = {'a': ns.w} %}{% endfor %}";
+}
+
+void RenderDeepValues(TemplateEnv* env)
+{
+    const std::string lists = DeepLists();
+    const std::string dicts = DeepDicts();
+    // Python compares an item with itself as equal without looking into it
+    const std::pair<std::string, std::string> renders[] = {
+        { lists + "{{ ns.v|length }} {{ ns.v == ns.v + [] }} {{ ns.v != ns.v + [] }} {{ ns.v < ns.v + [] }} {{ ns.v <= ns.v + [] }}", "1 True False False True" },
+        { dicts + "{{ ns.v|length }} {{ ns.v == {'a': ns.v.a} }}", "1 True" },
+        // tojson used to stop at 1000 levels; Python prints 5000
+        { "{% set ns = namespace(v=[]) %}{% for i in range(1500) %}{% set ns.v = [ns.v] %}{% endfor %}{{ ns.v|tojson|length }}", "3002" },
+    };
+    for (const auto& [source, expected] : renders)
+    {
+        Template tpl(env);
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source.substr(source.size() - 30);
+        auto result = tpl.RenderAsString({});
+        EXPECT_EQ(expected, result ? result.value() : result.error().ToString()) << source.substr(source.size() - 30);
+    }
+}
+
+void WalkDeepValues(TemplateEnv* env)
+{
+    const std::string lists = DeepLists();
+    const std::string dicts = DeepDicts();
+    const std::string walks[] = {
+        lists + "{{ ns.v }}",
+        lists + "{{ ns.v|tojson }}",
+        lists + "{{ ns.v|pprint }}",
+        lists + "{{ ns.v < ns.w }}",
+        dicts + "{{ ns.v }}",
+        dicts + "{{ ns.v == ns.w }}",
+    };
+    for (const auto& source : walks)
+    {
+        Template tpl(env);
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source.substr(source.size() - 30);
+        auto result = tpl.RenderAsString({});
+        EXPECT_FALSE(result.has_value()) << source.substr(source.size() - 30);
+        if (!result)
+        {
+            EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode()) << source.substr(source.size() - 30) << ": " << result.error().ToString();
+        }
+    }
+}
+
+#if defined(__linux__) || defined(__APPLE__)
+struct DeepValuesJob
+{
+    void (*check)(TemplateEnv*);
+    TemplateEnv* env;
+};
+
+void* RunDeepValuesJob(void* job)
+{
+    auto* deep = static_cast<DeepValuesJob*>(job);
+    deep->check(deep->env);
+    return nullptr;
+}
+
+// On a thread of a known stack: a main thread may have a stack deep enough for the walks
+void RunOnThread(std::size_t stackSize, void (*check)(TemplateEnv*), TemplateEnv* env)
+{
+    pthread_attr_t attr;
+    ASSERT_EQ(0, pthread_attr_init(&attr));
+    ASSERT_EQ(0, pthread_attr_setstacksize(&attr, stackSize));
+    DeepValuesJob job{ check, env };
+    pthread_t thread{};
+    ASSERT_EQ(0, pthread_create(&thread, &attr, RunDeepValuesJob, &job));
+    pthread_join(thread, nullptr);
+    pthread_attr_destroy(&attr);
+}
+#endif
+} // namespace
+
+TEST_F(RecursionLimitsTest, DeepValues)
+{
+#if defined(__linux__) || defined(__APPLE__)
+    // The renders need room for 1500 levels of tojson; the walks a stack their depth surely overflows
+    RunOnThread(std::size_t{ 4 } * 1024 * 1024, RenderDeepValues, &m_env);
+    RunOnThread(std::size_t{ 1024 } * 1024, WalkDeepValues, &m_env);
+#else
+    RenderDeepValues(&m_env);
+    WalkDeepValues(&m_env);
+#endif
+}

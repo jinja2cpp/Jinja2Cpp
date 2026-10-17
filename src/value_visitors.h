@@ -4,6 +4,7 @@
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "make_unexpected.h"
+#include "recursion_guard.h"
 #include "undefined.h"
 #include "unicode_printable.h"
 
@@ -298,9 +299,9 @@ template<typename CharT>
 struct ValueRendererBase
 {
     // Containers being printed, outermost first: a container that contains itself prints
-    // as [...] or {...}, as in Python, and nesting deeper than this prints as ... too
+    // as [...] or {...}, as in Python. Nesting deeper than the stack allows fails with
+    // RecursionLimitError, as Python's repr raises RecursionError (docs/tasks/0093)
     using ContainerStack = std::vector<const void*>;
-    static constexpr size_t MaxReprDepth = 256;
 
     ValueRendererBase(std::basic_string<CharT>& os, bool asRepr, ContainerStack* containers)
         : m_os(&os)
@@ -701,7 +702,8 @@ void ValueRendererBase<CharT>::RenderConverted(const T& val) const
 template<typename CharT>
 bool ValueRendererBase<CharT>::EnterContainer(const void* id, ContainerStack& containers, const char* placeholder) const
 {
-    if (containers.size() >= MaxReprDepth || std::find(containers.begin(), containers.end(), id) != containers.end())
+    CheckStack();
+    if (std::find(containers.begin(), containers.end(), id) != containers.end())
     {
         AppendAscii(placeholder);
         return false;
@@ -1602,6 +1604,13 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             ThrowUnsupported(left, right);
         }
+        // Python compares an item with itself as equal without looking into it; nested lists
+        // recurse once per level, so a deep one stops with RecursionLimitError
+        if (left.GetIdentity() == right.GetIdentity())
+        {
+            return FromCompare(0);
+        }
+        CheckStack();
 
         // Lexicographic, as Python: the first differing item decides, else the length.
         // Case folding (the filters' case_sensitive=false) applies to a top-level string
@@ -1674,10 +1683,14 @@ struct BinaryMathOperation : BaseVisitor<>
             return Mismatch(left, right);
         }
 
-        // An object (namespace(), cycler(), joiner()) equals only itself, as Python objects without __eq__ do
-        bool equal = left.GetObjectClass() || right.GetObjectClass() ? left.GetIdentity() == right.GetIdentity() : left.GetSize() == right.GetSize();
-        if (equal && !left.GetObjectClass())
+        // An object (namespace(), cycler(), joiner()) equals only itself, as Python objects
+        // without __eq__ do; a dict equals itself without its items being compared, and nested
+        // ones recurse once per level
+        bool equal = left.GetIdentity() == right.GetIdentity();
+        if (!equal && !left.GetObjectClass() && !right.GetObjectClass() && left.GetSize() == right.GetSize())
         {
+            CheckStack();
+            equal = true;
             for (auto& key : left.GetKeys())
             {
                 if (!right.HasValue(key) || !ConvertToBool(Apply2<BinaryMathOperation>(left.GetValueByName(key), right.GetValueByName(key), BinaryExpression::LogicalEq)))
