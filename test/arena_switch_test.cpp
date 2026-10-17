@@ -57,7 +57,7 @@ TEST_F(ArenaSwitchTest, FilteredLoopMeasuredInAnImportedMacro)
     EXPECT_EQ("333", Render(R"({% from "measurer" import len %}{% for x in [1,2,3,4,5] if x is odd %}{{ len(loop) }}{% endfor %})"));
     // A recursive loop keeps its names in scopes, not slots. Jinja2 rejects a filtered
     // recursive loop (divergence 0091), and Jinja2C++ takes `recursive` before `if`
-    EXPECT_EQ("333", Render(R"({% from "measurer" import len %}{% for x in [1,2,3,4,5] recursive if x % 2 %}{{ len(loop) }}{% endfor %})"));
+    EXPECT_EQ("333", Render(R"({% from "measurer" import len %}{% for x in [1,2,3,4,5] if x % 2 recursive %}{{ len(loop) }}{% endfor %})"));
 }
 
 TEST_F(ArenaSwitchTest, MacroCalledFromAnInclude)

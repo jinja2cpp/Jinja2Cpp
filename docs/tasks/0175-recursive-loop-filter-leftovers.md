@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0165]
@@ -29,3 +29,9 @@ shares: [test/parity/divergences/statements.txt]
 
 **Done when.** Both lines are gone from the statements allow-list, or the second one is
 kept as a deliberate divergence with that decision noted in docs/parity.md.
+
+**Outcome.** The filter-sees-outer-loop line was already gone (0165). `recursive` is now
+accepted only after the filter, as in Jinja2 (`for x in l if c recursive`); the legacy
+`recursive if c` is a parse error, a 2.0 breaking change (`test/arena_switch_test.cpp`
+moved to the new order). The include item is pinned as
+`statements.loop_not_visible_in_include` and filed as 0209.

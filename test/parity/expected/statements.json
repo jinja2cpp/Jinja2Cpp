@@ -4825,6 +4825,48 @@
    }
   },
   {
+   "id": "statements.loop_not_visible_in_include",
+   "template": "{% for x in [1, 2] %}{% include 't' %}|{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t": "{{ loop is defined }}{{ x }}"
+   },
+   "output": "False1|False2|"
+  },
+  {
    "id": "statements.set_loop_in_loop_else",
    "template": "{% for x in [] %}{% else %}{% set loop = 1 %}{{ loop }}{% endfor %}",
    "context": {
