@@ -2,7 +2,7 @@
 status: open
 priority: low
 area: parity
-touches: [src/statements_parser.cpp, src/template_parser.h, test/parity/divergences/errors.txt]
+touches: [src/template_parser.cpp, src/template_parser.h, test/parity/divergences/errors.txt]
 ---
 # An `if` test with a conditional expression, and an unclosed raw block at the end
 
