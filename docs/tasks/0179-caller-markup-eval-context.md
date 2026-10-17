@@ -41,7 +41,7 @@ which 0165 (lexical scoping of macro bodies) owns.
 from `test/parity/divergences/autoescape.txt`; add corpus cases for a macro result and a
 `pass_eval_context` filter inside a macro called under `{% autoescape false %}`.
 
-**Done** (PR to be linked): `RenderContext` keeps the output setting (`IsOutputAutoescape`,
+**Done** in #556: `RenderContext` keeps the output setting (`IsOutputAutoescape`,
 for `{{ }}`, `~`, `{% filter %}`, the filter input of `{% set x | f %}` and `loop(...)`
 results) apart from the runtime one (`IsAutoescape`, for macro, `caller()`, `self.b()`,
 `{% set %}` block and `pass_eval_context` filter results). A macro or block body sets only

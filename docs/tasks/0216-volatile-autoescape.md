@@ -7,7 +7,7 @@ shares: [src/statements.cpp, src/expression_evaluator.cpp, src/markup.h]
 ---
 # `{% autoescape %}` with a runtime value (volatile EvalContext)
 
-Found by 0179. When the value of `{% autoescape x %}` is not a constant, Jinja2 marks the
+Found by 0179 (#556). When the value of `{% autoescape x %}` is not a constant, Jinja2 marks the
 enclosed code's EvalContext volatile at compile time: `{{ }}` output (and `{% filter %}`
 bodies, macro and loop results) then read the runtime setting, `context.eval_ctx.autoescape`,
 instead of the setting where the code is written. Jinja2C++ evaluates the value and treats
