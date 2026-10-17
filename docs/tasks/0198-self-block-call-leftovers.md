@@ -1,10 +1,11 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0194]
 touches: [src/statements.cpp#MakeTemplateSelf]
 shares: [test/parity/divergences/loader.txt]
+pr: TBD
 ---
 # Calls through `self` that still differ from Jinja2
 
@@ -27,3 +28,10 @@ an ended include's blocks would need the stack kept alive), using the `ClosureSi
 added to know whether the home is still running.
 
 **Done when** no line of `test/parity/divergences/` names 0198.
+
+**Outcome.** A call through `self` checks its arguments as `BlockReference.__call__`
+(keyword first, as Python reports). A `self` whose template is not on the caller's frame
+chain renders in the frame its home context runs, when that frame is the template's: a
+module's `self` stored by its macro renders the module's block. `{% for self in ... %}`
+matches since 0143. An ended include's `self` and a scoped block's loop locals seen through
+`self` are left in 0206.

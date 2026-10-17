@@ -263,7 +263,8 @@ public:
         auto source = std::make_unique<std::basic_string<CharT>>(std::move(tpl));
         NormalizeTemplateNewlines(*source, m_settings->settings.keepTrailingNewline);
         using namespace std::string_literals;
-        std::string name = tplName.empty() ? "noname.j2tpl"s : std::move(tplName);
+        const bool isNamed = !tplName.empty();
+        std::string name = isNamed ? std::move(tplName) : "noname.j2tpl"s;
         NodeArena nodes;
         TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name, nodes);
 
@@ -274,6 +275,12 @@ public:
         }
 
         parser.ReleaseParseState();
+        // The name `self` prints, None (empty) for a template loaded without one
+        if (isNamed)
+        {
+            const auto nameText = nodes.MakeText(name);
+            nodes[*parseResult].SetName(nameText);
+        }
         // The checks of the tree's handles (NodeRefChecks) fail only on a bug in the parser:
         // the template that was loaded before stays
         try

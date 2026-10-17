@@ -471,6 +471,7 @@ public:
     {
         refs(m_body);
         refs(m_blocks);
+        refs(m_name);
     }
 
     TemplateRenderer() = default;
@@ -481,12 +482,16 @@ public:
     void SetHasExtends() { m_hasExtends = true; }
     // The slots a render of the body takes (0117 P1)
     void SetUnitLayout(UnitLayout layout) { m_unitLayout = layout; }
+    // The name the template was loaded with, empty for one loaded from a string
+    void SetName(ArenaText name) { m_name = name; }
+    [[nodiscard]] ArenaText GetName() const { return m_name; }
 
     // Renders the template on its own (for Template::Render, include and import)
     void Render(OutStream& os, RenderContext& values) override;
     // Renders the template as the parent of the one rendering now: its blocks go below
-    // the child's on the child's `stack`
-    void RenderAsParent(OutStream& os, RenderContext& values, BlocksStack& stack);
+    // the child's on the child's `stack`; `childName` is the name of the first template
+    // of the chain, which `self` prints in every template of it, as in Jinja2
+    void RenderAsParent(OutStream& os, RenderContext& values, BlocksStack& stack, std::string_view childName);
     // Renders the template as an imported module, whose blocks, and those of the templates
     // it extends, go on `stack`, the module's own (its `self`)
     void RenderAsModule(OutStream& os, RenderContext& values, BlocksStack& stack);
@@ -495,10 +500,12 @@ public:
 
 private:
     // `stack` is null for a template that defines no blocks and extends nothing
-    void RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack);
+    // `name` is the one `self` prints (TemplateFrame::name)
+    void RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name);
 
     NodeRef<ComposedRenderer> m_body;
     ArenaSpan<NodeRef<BlockStatement>> m_blocks;
+    ArenaText m_name;
     bool m_hasExtends = false;
     UnitLayout m_unitLayout;
 };
