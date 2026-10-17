@@ -246,7 +246,7 @@ struct StatementInfo
     // Whether the body of a statement of `type` is a frame of the resolver of its own
     static bool OwnsFrame(Type type)
     {
-        // One test of a mask, not a chain of compares: it runs for every statement (docs/tasks/0204)
+        // One test of a mask, not a chain of compares: it runs for every statement (docs/tasks/0205)
         constexpr unsigned mask = (1U << TemplateRoot) | (1U << ForStatement) | (1U << BlockStatement) | (1U << MacroStatement) | (1U << MacroCallStatement) | (1U << WithStatement)
                                   | (1U << SetStatement) | (1U << FilterStatement) | (1U << AutoescapeStatement);
         return ((mask >> type) & 1U) != 0;
@@ -385,7 +385,7 @@ private:
     NodeRef<ComposedRenderer> TakeBody(StatementInfo& info)
     {
         // The body of a frame starts by binding the names it holds from its entry (0168). Few
-        // frames may bind one, and the rest stays inline (docs/tasks/0204)
+        // frames may bind one, and the rest stays inline (docs/tasks/0205)
         if (StatementInfo::OwnsFrame(info.type) && m_names.MayBindAtEntry(info.frame))
         {
             return TakeFrameBody(info);

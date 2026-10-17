@@ -77,7 +77,7 @@ public:
     };
     // `name` is set in a scope of `frame`'s statement (`set`, a macro, an import alias), in a
     // branch of the body when the parser says so (SetInBranch). The resolver keeps the view:
-    // `name` is text of the arena, which outlives it (docs/tasks/0204)
+    // `name` is text of the arena, which outlives it (docs/tasks/0205)
     void AddStore(FrameId frame, std::string_view name) { AddStore(frame, name, m_inBranch ? StoreKind::Branch : StoreKind::Store); }
     void AddStore(FrameId frame, std::string_view name, StoreKind kind)
     {
@@ -124,7 +124,7 @@ public:
     NodeRef<BindUndefinedStatement> EntryBinding(FrameId frame, NodeArena& nodes) { return MayBindAtEntry(frame) ? MakeEntryBinding(frame, nodes) : NodeRef<BindUndefinedStatement>(); }
     // False when EntryBinding of `frame` surely finds none: a name needs a store in the frame
     // and a read in a frame inside it. Most frames have neither, and the check stays inline,
-    // as the call costs more than it (docs/tasks/0204)
+    // as the call costs more than it (docs/tasks/0205)
     [[nodiscard]] bool MayBindAtEntry(FrameId frame) const { return m_frames[frame].firstStore != m_stores.size() && m_frames.size() != std::size_t{ frame } + 1; }
 
     // Assigns the slots; called once, after a parse without errors. A template with no entry
@@ -246,7 +246,7 @@ private:
     };
     // Every name expression made in a frame, in parse order
     // Inline room for a page of expressions, then doubling: most templates read fewer names, and
-    // a long one reads thousands (docs/tasks/0204)
+    // a long one reads thousands (docs/tasks/0205)
     boost::container::small_vector<std::pair<NodeRef<ValueRefExpression>, FrameId>, 64, void, Doubling> m_reads;
     // The names stored in frames, in parse order; most templates store a few
     boost::container::small_vector<Store, 8, void, Doubling> m_stores;

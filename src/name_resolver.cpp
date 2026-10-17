@@ -142,7 +142,7 @@ NodeRef<BindUndefinedStatement> NameResolver::MakeEntryBinding(FrameId frameId, 
     const auto& frame = m_frames[frameId];
     // Frames are numbered as they start, so every frame after this one is inside it, and a
     // read inside comes at or after the first of them starts. A store with no read before it
-    // from there on has nothing to bind; most frames have only such stores (docs/tasks/0204)
+    // from there on has nothing to bind; most frames have only such stores (docs/tasks/0205)
     const auto innerReads = m_frames[std::size_t{ frameId } + 1].firstRead;
     const auto mayBeReadInside = [frameId, innerReads](const Store& store) { return store.frame == frameId && store.kind == StoreKind::Store && store.readsBefore > innerReads; };
     if (std::none_of(m_stores.begin() + frame.firstStore, m_stores.end(), mayBeReadInside))
