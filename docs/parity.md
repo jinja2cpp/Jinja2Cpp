@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (1796 templates rendered by both engines, see
+`test/parity/` (1808 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -32,12 +32,12 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | options | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | output | 38 | 38 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | sequences | 47 | 47 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| statements | 341 | 326 | 11 | 1 | 3 | 0 | 0 | 0 | 0156, 0165, 0175, 0188, 0196, 0197, 0199, 0201, 0202 |
+| statements | 353 | 342 | 7 | 1 | 3 | 0 | 0 | 0 | 0156, 0165, 0175, 0188, 0196, 0197, 0199 |
 | subscripts | 39 | 39 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | tests | 57 | 56 | 0 | 1 | 0 | 0 | 0 | 0 | 0206 |
 | undefined | 106 | 106 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | whitespace | 50 | 49 | 1 | 0 | 0 | 0 | 0 | 0 | 0044 |
-| **total** | **1796** | **1753** | **25** | **9** | **9** | **0** | **0** | **0** | |
+| **total** | **1808** | **1769** | **21** | **9** | **9** | **0** | **0** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment

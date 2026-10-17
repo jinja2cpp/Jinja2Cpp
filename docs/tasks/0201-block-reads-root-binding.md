@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/542
 priority: low
 area: parity
 depends: [0168]
@@ -28,3 +29,22 @@ would let both keep it.
 lookup a block's scope view makes), then drop the block exception in `EntryBinding`.
 
 **Done when.** No divergences line names 0201.
+
+**Done.** `BindUndefinedStatement` marks the undefined it binds (`UndefinedValue::atEntry`)
+and flags its context. A block's context (`RenderBlockAt`), and an include's with context,
+call `RenderContext::PassOverEntryBindings`: when a binding was made, their lookups take the
+slow path and pass over marked values in the scopes below the context's own, reaching the
+value outside; an import with context leaves them out of the names it copies
+(`CollectVisibleNames`). The resolver no longer drops a name a block reads, nor one stored
+after an include or import with context (`AddContextRead` is gone); a read in a block does
+not count as a read inside. Cases: `statements.idtracking_block_macro_reads_context`,
+`idtracking_scoped_block_passes_over_binding`,
+`idtracking_child_block_passes_over_parent_binding`,
+`idtracking_include_before_store_keeps_binding`, `idtracking_import_before_store_keeps_binding`.
+The mark carries the low bits of the name's hash, so a copy stored under another name
+(`{% with a = x %}` before the root stores `x`) is not passed over; a copy stored back under
+the same name in a frame inside (`{% set x = x %}` in a loop, then a scoped block reading `x`)
+still is, where Jinja2 sees Undefined: accepted, as no realistic template does it. Further
+cases: `idtracking_block_loop_then_reads_context`, `idtracking_block_macro_in_loop_then_after`,
+`idtracking_block_changes_list_in_place`, `idtracking_scoped_block_reads_copy_of_binding`,
+`idtracking_include_loop_then_reads_context`.

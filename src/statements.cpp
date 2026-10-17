@@ -934,6 +934,14 @@ void ForStatement::RenderLoop(const InternalValue& loopVal, OutStream& os, Rende
     RenderLoopInScopes(loopVal, os, values, level, site);
 }
 
+// The `else` body runs in a scope of its own, as in Jinja2 (docs/tasks/0202)
+void ForStatement::RenderElse(OutStream& os, RenderContext& values)
+{
+    values.EnterScope();
+    values.Nodes()[m_elseBody].Render(os, values);
+    values.ExitScope();
+}
+
 void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level, const ClosureSite* site)
 {
     bool isConverted = false;
@@ -943,7 +951,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         CheckIterable(loopVal);
         if (m_elseBody)
         {
-            values.Nodes()[m_elseBody].Render(os, values);
+            RenderElse(os, values);
         }
         return;
     }
@@ -1040,7 +1048,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     state->ReleaseScopeValues();
     if (!loopRendered && m_elseBody)
     {
-        values.Nodes()[m_elseBody].Render(os, values);
+        RenderElse(os, values);
     }
 }
 
@@ -1065,7 +1073,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
         guard.Unbind();
         if (m_elseBody)
         {
-            values.Nodes()[m_elseBody].Render(os, values);
+            RenderElse(os, values);
         }
         return;
     }
@@ -1194,7 +1202,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     values.ExitScope(state->bodyScope);
     if (!loopRendered && m_elseBody)
     {
-        values.Nodes()[m_elseBody].Render(os, values);
+        RenderElse(os, values);
     }
 }
 
@@ -1440,6 +1448,7 @@ void RenderBlockAt(const BlocksStack& stack, std::string_view name, size_t depth
         return;
     }
     const auto block = blockContext.GetRendererCallback()->Templates().Resolve(p->second[depth]);
+    blockContext.PassOverEntryBindings();
     const ArenaSwitch nodesSwitch(blockContext, block.nodes);
     block.node.RenderBody(os, blockContext, depth);
 }
@@ -1607,6 +1616,7 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
     if (!frame || !frame->blocks)
     {
         RenderContext innerContext = values.Clone(true);
+        innerContext.PassOverEntryBindings();
         innerContext.EnterScope();
         const UnitCall unitCall(innerContext, m_unitLayout);
         values.Nodes()[m_mainBody].Render(os, innerContext);
@@ -1815,6 +1825,7 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
     RenderContext innerContext = values.Clone(withContext);
     if (withContext)
     {
+        innerContext.PassOverEntryBindings();
         innerContext.EnterScope();
     }
 
@@ -2506,6 +2517,11 @@ void AutoescapeStatement::Render(OutStream& os, RenderContext& values)
 void BindUndefinedStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
     const auto& nodes = values.Nodes();
+    if (nodes[m_names].empty())
+    {
+        return;
+    }
+    values.SetHasEntryBindings();
     auto scope = values.GetCurrentScope();
     for (const auto& name : nodes[m_names])
     {
@@ -2514,6 +2530,9 @@ void BindUndefinedStatement::Render(OutStream& /*os*/, RenderContext& values)
         if (value.IsUndefined())
         {
             value = MakeUndefined(values, std::string(text));
+            auto* undefined = GetIf<UndefinedValue>(&value);
+            undefined->atEntry = true;
+            undefined->entryHash = static_cast<std::uint32_t>(name.hash);
         }
     }
 }
