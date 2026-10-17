@@ -268,6 +268,16 @@ struct LoopState : ValueObject
 
     InternalValue& Item(size_t idx) { return items[idx % items.size()]; }
 
+    // The cell loop.cycle callables read the position from, made on first use
+    std::shared_ptr<size_t> CyclePosition()
+    {
+        if (!cyclePosition)
+        {
+            cyclePosition = std::make_shared<size_t>(index0);
+        }
+        return cyclePosition;
+    }
+
     void SetIndex(size_t idx)
     {
         index0 = idx;
@@ -442,10 +452,11 @@ Callable MakeLoopChanged(const std::shared_ptr<std::optional<InternalValueList>>
 }
 // loop.cycle(*values): the value at the loop's position when it is called, as Jinja2's
 // bound method, so a callable stored on one item cycles with the loop on later ones, and
-// from its last position once the loop is over
-Callable MakeLoopCycle(std::shared_ptr<const size_t> position)
+// from its last position once the loop is over. Out of line, which keeps the attribute
+// lookups that inline LoopAccessor::GetProperty small (Render/for_loop_vars)
+JINJA2CPP_NOINLINE_INLINE Callable MakeLoopCycle(LoopState& state)
 {
-    return Callable(Callable::GlobalFunc, [position = std::move(position)](const CallParams& params, RenderContext&) -> InternalValue {
+    return Callable(Callable::GlobalFunc, [position = std::shared_ptr<const size_t>(state.CyclePosition())](const CallParams& params, RenderContext&) -> InternalValue {
         if (!params.kwParams.empty())
         {
             throw std::runtime_error("LoopContext.cycle() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
@@ -620,11 +631,7 @@ private:
             state.Peek();
             return state.Item(state.index0 + 1);
         case Property::Cycle:
-            if (!state.cyclePosition)
-            {
-                state.cyclePosition = std::make_shared<size_t>(state.index0);
-            }
-            return MakeLoopCycle(state.cyclePosition);
+            return MakeLoopCycle(state);
         case Property::Changed:
             if (!state.lastChanged)
             {
