@@ -181,6 +181,7 @@ private:
     void RenderLoopInScopes(const InternalValue& loopVal, OutStream& os, RenderContext& values, int level, const ClosureSite* site);
     // A loop whose names live in slots of its unit's frame (0117 P1)
     void RenderLoopInSlots(const InternalValue& loopVal, OutStream& os, RenderContext& values);
+    void RenderElse(OutStream& os, RenderContext& values);
     // `outerLoop`: what `loop` is in the filter
     ListAdapter CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values, InternalValue outerLoop) const;
     // Moves `items` to the next item the filter keeps and stores it in `item`; false at the

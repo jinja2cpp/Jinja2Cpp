@@ -395,6 +395,12 @@ private:
         return body;
     }
     NodeRef<ComposedRenderer> TakeFrameBody(StatementInfo& info);
+    // Whether the innermost open statement is a loop's `else`, whose body is a frame of its own
+    static bool IsLoopElse(const StatementInfoList& statementsInfo)
+    {
+        const auto size = statementsInfo.size();
+        return size > 1 && statementsInfo[size - 1].type == StatementInfo::ElseIfStatement && statementsInfo[size - 2].type == StatementInfo::ForStatement;
+    }
 
     const Settings& m_settings;
     TemplateEnv* m_env;
