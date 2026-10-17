@@ -52,5 +52,9 @@ CASES = [
     ("lstrip_expression_trailing_space", "{{ 1 }}  ", {"env": LB}),
     ("lstrip_between_tags", "{% if true %}x{% endif %} {% if true %}y{% endif %}", {"env": LB}),
     ("minus_strips_unicode_space", "{{ 'a' -}}\u00a0\u2003b"),
+    ("minus_left_strips_unicode_space", "a\u3000\u2028\x85 {%- if true %}x{% endif %}"),
+    ("minus_strips_separator_controls", "{{ 'a' -}}\x1c\x1f\u205fb"),
+    ("minus_keeps_zero_width_space", "{{ 'a' -}}\u200b\ufeffb"),
+    ("lstrip_blocks_unicode_space", "a\n\u00a0\u3000{% if true %}x{% endif %}", {"env": LB}),
     ("raw_minus_and_trim_blocks", "{% raw -%}  \n\n x{% endraw %}\n\ny", {"env": TB}),
 ]

@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 touches: [src/lexer.h, test/parity/cases/errors.py, test/parity/divergences/errors.txt]
@@ -22,3 +22,7 @@ the literal at an `e` once it has an exponent. Delete the two lines from
 `test/parity/divergences/errors.txt`.
 
 **Done when** both cases match Python and the corpus is otherwise unchanged.
+
+**Done.** `;` is an unexpected character in `TagLexer::ScanToken` and a decimal literal stops at
+a second `e`, so `EndsInExponent` and the `Semicolon` scan result are gone. Corpus cases
+`float_second_exponent_close`, `semicolon_in_block`, `semicolon_at_tag_end` added.

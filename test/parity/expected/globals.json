@@ -633,6 +633,70 @@
    "env": {},
    "templates": {},
    "output": "FT"
+  },
+  {
+   "id": "globals.joiner_call_positional_arg",
+   "template": "{{ joiner('a')('x') }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Joiner.__call__() takes 1 positional argument but 2 were given"
+   }
+  },
+  {
+   "id": "globals.joiner_call_keyword_arg",
+   "template": "{{ joiner('a')(sep='x') }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Joiner.__call__() got an unexpected keyword argument 'sep'"
+   }
+  },
+  {
+   "id": "globals.cycler_next_arg",
+   "template": "{{ cycler(1).next(1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Cycler.next() takes 1 positional argument but 2 were given"
+   }
+  },
+  {
+   "id": "globals.lipsum_object_arg",
+   "template": "{{ lipsum(namespace()) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'Namespace' object cannot be interpreted as an integer"
+   }
+  },
+  {
+   "id": "globals.lipsum_no_paragraphs",
+   "template": "[{{ lipsum(0, min=200) }}]",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "globals.object_dict_key",
+   "template": "{{ {namespace(): 1} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{<Namespace {}>: 1}"
   }
  ]
 }

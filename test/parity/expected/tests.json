@@ -1376,6 +1376,33 @@
    "env": {},
    "templates": {},
    "output": "T"
+  },
+  {
+   "id": "tests.comparison_keyword_arg",
+   "template": "{{ 'T' if 1 is eq(b=1) else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "_operator.eq() takes no keyword arguments"
+   }
   }
  ]
 }

@@ -3,6 +3,7 @@
 
 #include "gtest/gtest.h"
 
+#include "jinja2cpp/reflected_value.h"
 #include "jinja2cpp/template.h"
 
 #include "test_tools.h"
@@ -51,14 +52,28 @@ lastName: {{lastName}}
               //--------------
               R"(
 
-firtsName: John
-lastName: Dow)")
+firtsName: firstName
+lastName: lastName)")
 {
+    // A dict unpacks its keys, as in Python
     params = {
         {"emploee", ValuesMap{
              {"firstName", "John"},
              {"lastName", "Dow"}
          }},
+    };
+}
+
+// A reflected object, which Python could not unpack, gives its fields by name
+MULTISTR_TEST(SetTest, TupleAssignmentFromReflectedTest, R"({% set strValue, intValue = obj %}{{strValue}}:{{intValue}})",
+              //--------------
+              R"(Hi:7)")
+{
+    TestStruct obj;
+    obj.intValue = 7;
+    obj.strValue = "Hi";
+    params = {
+        { "obj", Reflect(obj) },
     };
 }
 
