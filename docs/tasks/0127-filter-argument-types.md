@@ -19,7 +19,7 @@ repeated keyword in call/filter argument parsing. Add corpus cases for both.
 
 **Done when.** The four templates above error as in Python, with corpus cases pinning them.
 
-**Done** (PR TBD). The non-int indent already raised (since 0124); `tojson_indent_float` and
+**Done** (PR #540). The non-int indent already raised (since 0124); `tojson_indent_float` and
 `tojson_indent_list` pin it. A repeated keyword in a call, filter or test argument list is
 now a parse error (`UnexpectedToken` at the repeated name), pinned by the `repeated_kwarg_*`
 cases in `errors.py`. Deliberate divergence: Python raises only when it emits the call, so
