@@ -250,6 +250,9 @@ struct UndefinedValue
     // block, or a template included or imported with context, passes over it to the value
     // outside, as Jinja2 hands those only the names already stored (docs/tasks/0201)
     bool atEntry = false;
+    // The low bits of the hash of the name it is bound to, so that a copy stored under another
+    // name, which Jinja2 sees undefined, is not passed over
+    std::uint32_t entryHash = 0;
 };
 
 inline bool operator==(const UndefinedValue&, const UndefinedValue&)

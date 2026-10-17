@@ -703,9 +703,10 @@ public:
         const auto hashed = ToHashedName(name);
         const bool isFound = VisitScopes(
             *this,
-            [&](InternalValueMap* scope, size_t /*depth*/) {
+            [&](InternalValueMap* scope, size_t depth) {
                 auto valP = scope->find(name);
-                if (valP == scope->end())
+                // A block passes over a name bound at entry (PassOverEntryBindings)
+                if (valP == scope->end() || (depth < m_entryPassDepth && IsEntryBinding(valP->second, hashed.hash)))
                 {
                     return false;
                 }
@@ -766,7 +767,7 @@ public:
                 for (const auto& [name, value] : *scope)
                 {
                     // Jinja2 hands an import a name bound at entry only once stored (docs/tasks/0201)
-                    if (name != "loop" && !IsEntryBinding(value))
+                    if (name != "loop" && !IsEntryBinding(value, HashedName::Hash(name)))
                     {
                         names.emplace(name, value);
                     }
@@ -1229,7 +1230,7 @@ private:
         size_t views = m_views.size();
         for (size_t idx = count; idx != 0; --idx)
         {
-            if (const auto* p = FindIn(m_scopes[idx - 1], val); p && !(m_parentDepth + idx <= entryPassDepth && IsEntryBinding(p->second)))
+            if (const auto* p = FindIn(m_scopes[idx - 1], val); p && (m_parentDepth + idx > entryPassDepth || !IsEntryBinding(p->second, val.hash)))
             {
                 return LookupResult(p->second);
             }
@@ -1256,10 +1257,12 @@ private:
         }
         return {};
     }
-    static bool IsEntryBinding(const InternalValue& value)
+    // Whether `value`, found under the name with hash `hash`, is the undefined a frame bound
+    // to that name at its entry
+    static bool IsEntryBinding(const InternalValue& value, std::size_t hash)
     {
         const auto* undefined = GetIf<UndefinedValue>(&value);
-        return undefined && undefined->atEntry;
+        return undefined != nullptr && undefined->atEntry && undefined->entryHash == static_cast<std::uint32_t>(hash);
     }
     // The scopes a child sees of its parent are still there (see the constructor): the
     // parent pushes and pops only above them
@@ -1268,7 +1271,7 @@ private:
     ScopeRef CurrentScopeRef() { return { *this, m_scopes.back(), CurrentBuckets() }; }
     uint32_t& CurrentBuckets() { return m_scopes.Buckets(m_scopes.size() - 1); }
     void UpdateCurrentScope() { m_currentScope = m_scopes.empty() ? nullptr : &m_scopes.back(); }
-    void UpdateFullWalk() { m_fullWalk = m_inheritsViews || !m_views.empty(); }
+    void UpdateFullWalk() { m_fullWalk = m_inheritsViews || m_entryPassDepth != 0 || !m_views.empty(); }
     static HashedName ToHashedName(const HashedName& name) { return name; }
     static HashedName ToHashedName(const std::string& name) { return { name, HashedName::Hash(name) }; }
 

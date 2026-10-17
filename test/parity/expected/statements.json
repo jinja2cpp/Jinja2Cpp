@@ -14093,6 +14093,183 @@
    "output": "[3]"
   },
   {
+   "id": "statements.idtracking_block_loop_then_reads_context",
+   "template": "{% block b %}{% for i in l %}{{ i }}{% endfor %}{{ x }}{% endblock %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = 1 %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "3123"
+  },
+  {
+   "id": "statements.idtracking_block_macro_in_loop_then_after",
+   "template": "{% block b %}{% macro m() %}{{ x }}{% endmacro %}{% for i in l %}{{ m() }}{% endfor %}{{ m() }}{% endblock %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = 1 %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "3333"
+  },
+  {
+   "id": "statements.idtracking_block_changes_list_in_place",
+   "template": "{% block b %}{% do l.append(4) %}{{ l }}{% endblock %}{% for k in [1] %}[{% for j in l %}{{ j }}{% endfor %}]{% endfor %}{% set l = [9] %}{{ l }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[3, 1, 2, 4][][9]"
+  },
+  {
+   "id": "statements.idtracking_scoped_block_reads_copy_of_binding",
+   "template": "{% for i in [1] %}{% with a = x %}{% block b scoped %}[{{ a }}]{% endblock %}{% endwith %}{% endfor %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = 1 %}",
+   "context": {
+    "x": 3,
+    "a": 7
+   },
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "statements.idtracking_include_loop_then_reads_context",
+   "template": "{% include 'inc' %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = 1 %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "inc": "{% for i in l %}{{ i }}{% endfor %}{{ x }}"
+   },
+   "output": "3123"
+  },
+  {
    "id": "statements.idtracking_include_before_store_keeps_binding",
    "template": "{% include 'inc' %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = 1 %}",
    "context": {

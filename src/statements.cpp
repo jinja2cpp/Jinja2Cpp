@@ -2500,7 +2500,9 @@ void BindUndefinedStatement::Render(OutStream& /*os*/, RenderContext& values)
         if (value.IsUndefined())
         {
             value = MakeUndefined(values, std::string(text));
-            GetIf<UndefinedValue>(&value)->atEntry = true;
+            auto* undefined = GetIf<UndefinedValue>(&value);
+            undefined->atEntry = true;
+            undefined->entryHash = static_cast<std::uint32_t>(name.hash);
         }
     }
 }

@@ -40,7 +40,10 @@ not count as a read inside. Cases: `statements.idtracking_block_macro_reads_cont
 `idtracking_scoped_block_passes_over_binding`,
 `idtracking_child_block_passes_over_parent_binding`,
 `idtracking_include_before_store_keeps_binding`, `idtracking_import_before_store_keeps_binding`.
-Accepted residue: a copy of a marked value keeps the mark, so a frame inside that stores it
-under another name (`{% set y = x %}` in a loop, before the root stores `x`) and a scoped
-block or include there that reads `y` reaches an outer `y`, where Jinja2 sees Undefined.
-Clearing the mark on every assignment costs more than a case that needs an outer `y` too.
+The mark carries the low bits of the name's hash, so a copy stored under another name
+(`{% with a = x %}` before the root stores `x`) is not passed over; a copy stored back under
+the same name in a frame inside (`{% set x = x %}` in a loop, then a scoped block reading `x`)
+still is, where Jinja2 sees Undefined: accepted, as no realistic template does it. Further
+cases: `idtracking_block_loop_then_reads_context`, `idtracking_block_macro_in_loop_then_after`,
+`idtracking_block_changes_list_in_place`, `idtracking_scoped_block_reads_copy_of_binding`,
+`idtracking_include_loop_then_reads_context`.
