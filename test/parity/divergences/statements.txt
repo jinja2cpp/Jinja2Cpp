@@ -13,3 +13,5 @@ statements.idtracking_block_and_macro_read_root_name output 0201 a name a block 
 statements.loop_else_set_is_local       output      0202 a loop's else body runs in the enclosing scope, so its set leaks; Jinja2 gives it a frame of its own
 statements.idtracking_loop_else_read_before_set output 0202 a loop's else body counts as the enclosing frame, so its read keeps the binding off; Jinja2's reads the binding
 statements.idtracking_block_read_keeps_loop_read_outer output 0201 a name a block reads is not bound at the root's entry, so the loop sees the outer value; Jinja2's loop reads the root's binding
+statements.macro_pprint                output      0208 pprint of a macro prints <callable>; Jinja2 prints its repr <Macro 'm'>
+statements.macro_equals_itself         output      0208 a macro is not equal to itself, so unique keeps both copies; Jinja2 compares macros by identity

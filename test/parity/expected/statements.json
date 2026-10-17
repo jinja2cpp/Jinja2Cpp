@@ -13461,6 +13461,86 @@
    "output": "Fx"
   },
   {
+   "id": "statements.macro_pprint",
+   "template": "{% macro m() %}{% endmacro %}{{ m|pprint }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<Macro 'm'>"
+  },
+  {
+   "id": "statements.macro_equals_itself",
+   "template": "{% macro m() %}{% endmacro %}{{ 'T' if m == m else 'F' }}|{{ [m, m]|unique|list|length }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|1"
+  },
+  {
    "id": "statements.idtracking_with_body_read_before_set",
    "template": "{% for i in [1,2] %}{% with %}{{ x }}{% endwith %}{% set x = i %}{% endfor %}",
    "context": {
