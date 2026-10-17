@@ -379,11 +379,22 @@ Attribute::Attribute(const FilterParams& params)
 {
     static const auto args = MakeArgumentsTable({ { "name", true }, { "default", false } });
     ParseParams(args, params);
+    // default is a Jinja2C++ extension that Python's do_attr(obj, name) lacks: it can only be
+    // passed by name
+    if (params.posParams.size() > 1)
+    {
+        SetArgumentsError("got " + std::to_string(params.posParams.size() - 1) + " more positional argument(s) than it takes");
+    }
 }
 
 InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& context)
 {
     const auto attrNameVal = GetArgumentValue("name", context);
+    if (!IsStringValue(attrNameVal))
+    {
+        const auto* info = GetUndefinedInfo(attrNameVal);
+        throw std::runtime_error("attribute name must be string, not '" + (info ? std::string(UndefinedClassName(*info)) : Apply<visitors::PythonTypeNameGetter>(attrNameVal)) + "'");
+    }
     CheckUndefinedUse(baseVal, UndefinedUse::Attribute);
     // Python's attr reads attributes only: the items of a dict are not attributes, the fields
     // of a reflected object and of an object such as namespace() are
@@ -740,6 +751,11 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         if (!filter)
         {
             ThrowNotACallableName("filter", filterName);
+        }
+        // The extra arguments go to the filter, which checks them when it is called
+        if (auto error = filter->GetArgumentsError(); !error.empty())
+        {
+            throw std::runtime_error(AsString(filterName) + "() " + error);
         }
         resultList.push_back(filter->Filter(val, context));
         return true;

@@ -119,9 +119,9 @@ struct SlotSink
 
 // Python's assignment to a target: a name takes the value; a tuple `a, (b, c)` iterates
 // the value, which must yield exactly as many items as the tuple has targets, and assigns
-// them in turn. A mapping assigned to a tuple of names is the exception: Jinja2C++ has
-// always taken its values by name (`set first, last = person`), where Python would
-// assign its keys
+// them in turn, so a dict gives its keys. A host object (a reflected struct or another
+// user-provided map, which Python could not unpack) is the exception: a tuple of names
+// takes its values by name (`set first, last = person`), as Jinja2C++ always has
 template<typename Sink>
 void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext& values)
 {
@@ -154,7 +154,7 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
     {
         throw std::runtime_error("cannot unpack non-iterable "s + map->GetObjectClass() + " object");
     }
-    if (allNames && map)
+    if (allNames && map && map->HasAttributes())
     {
         for (const auto& t : target.subspan(1))
         {

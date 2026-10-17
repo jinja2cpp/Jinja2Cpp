@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/552
 priority: low
 area: parity
 depends: [0191]
@@ -29,3 +30,10 @@ verifier found more sites that still read them as maps, all as on master before 
   `{"a": 1}`), because Value has no object kind.
 
 **Done when.** No line of `test/parity/divergences/` names 0197.
+
+**Resolution.** PR #552. truncate and urlencode treat an object as Python does;
+`set a, b = dict` unpacks the keys, while a host object (a reflected struct or another
+user-provided map, which Python could not unpack) keeps the by-name extension; lipsum
+checks that its arguments are integers; attr takes one positional argument, a string
+(`default=` stays a keyword-only Jinja2C++ extension); joiner's call and cycler's methods
+reject arguments. Object dict keys and objects through user callables moved to 0212.

@@ -316,4 +316,13 @@ CASES = [
     ("map_missing_parent", "{{ users|map(attribute='addr.zip')|list|length }}"),
     # map passes extra arguments on to the filter, which must check them (0206)
     ("map_filter_extra_arg", "{{ ['a']|map('upper', 1)|list }}"),
+    # attr(obj, name): one positional argument, a string (0197)
+    ("attr_extra_positional_arg", "{% set ns = namespace(a=1) %}{{ ns|attr('a', 'b') }}"),
+    ("attr_name_not_string", "{% set ns = namespace(a=1) %}{{ ns|attr(1) }}"),
+    # truncate takes len() of any value: a short list comes back as itself (0197)
+    ("truncate_short_list", "{% for i in [1, 2]|truncate %}{{ i }},{% endfor %}"),
+    ("truncate_long_list", "{{ range(300)|list|truncate(10) }}"),
+    ("truncate_int", "{{ 5|truncate }}"),
+    ("truncate_undefined_checks_length", "{{ missing|truncate(1, leeway=0) }}"),
+    ("truncate_end_not_string", "{{ 'abc'|truncate(1, leeway=0, end=1) }}"),
 ]

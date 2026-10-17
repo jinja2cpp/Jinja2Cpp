@@ -1547,10 +1547,12 @@ StringConverter::StringConverter(const FilterParams& params, StringConverter::Mo
 
 InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, RenderContext& context)
 {
-    // A mapping or a sequence of pairs is a query string, anything else is quoted as str()
+    // A mapping or a sequence of pairs is a query string, anything else (an object such as
+    // namespace() too) is quoted as str()
     auto* callback = context.GetRendererCallback();
     auto asText = [callback](const InternalValue& val) { return IsStringValue(val) ? AsString(val) : AsString(InternalValue(callback->GetAsTargetString(val))); };
-    if (IsStringValue(baseVal) || (baseVal.Kind() != ValueKind::Map && baseVal.Kind() != ValueKind::List))
+    const auto objectMap = AsMap(baseVal);
+    if (IsStringValue(baseVal) || (baseVal.Kind() != ValueKind::Map && baseVal.Kind() != ValueKind::List) || (objectMap && objectMap->GetObjectClass()))
     {
         return InternalValue(UrlQuote(asText(baseVal), false));
     }
@@ -1631,6 +1633,16 @@ InternalValue StringConverter::ApplyReplace(const InternalValue& baseVal, Render
 
 InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, RenderContext& context)
 {
+    // Jinja2 asserts length >= len(end) first, so end must have a length
+    const auto endVal = GetArgumentValue("end", context);
+    if (!IsStringValue(endVal) && !endVal.IsUndefined())
+    {
+        throw std::runtime_error("object of type '"s + Apply<visitors::PythonTypeNameGetter>(endVal) + "' has no len()");
+    }
+    if (!IsStringValue(baseVal))
+    {
+        return TruncateNonString(baseVal, context);
+    }
     return ConvertText(baseVal, [this, &baseVal, &context](auto srcStr) {
         using CharT = typename decltype(srcStr)::value_type;
         using String = std::basic_string<CharT>;
@@ -1674,6 +1686,60 @@ InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, Rende
         }
         return InternalValue::FromText<CharT>({ truncated, end });
     });
+}
+
+// Jinja2's do_truncate on a value that is not a string: it takes len(), so only a list or a
+// dict can pass, and one no longer than length + leeway comes back as itself. A longer one
+// fails where the string code meets it (s[:n].rsplit(), s[:n] + end)
+InternalValue StringConverter::TruncateNonString(const InternalValue& baseVal, RenderContext& context)
+{
+    auto leewayVal = GetArgumentValue("leeway", context);
+    auto length = NumericArgument(GetArgumentValue("length", context), "truncate", "length", NumberKind::Any);
+    auto leeway = IsEmpty(leewayVal) ? 5 : NumericArgument(leewayVal, "truncate", "leeway", NumberKind::Any);
+    int64_t endLength = 0;
+    ApplyStringConverter(GetArgumentValue("end", context), [&endLength](auto endStr) -> TargetString {
+        endLength = CodePointCount(std::basic_string(endStr));
+        return {};
+    });
+    if (length < endLength || leeway < 0)
+    {
+        throw std::runtime_error("truncate(): expected length >= len(end) and leeway >= 0");
+    }
+
+    // An undefined is empty, as Jinja2's Undefined.__len__ says
+    std::optional<size_t> size;
+    auto map = AsMap(baseVal);
+    if (baseVal.IsUndefined())
+    {
+        size = 0;
+    }
+    else if (map && !map->GetObjectClass())
+    {
+        size = map->GetSize();
+    }
+    else if (auto list = AsList(baseVal))
+    {
+        size = list->GetSize();
+    }
+    if (!size)
+    {
+        throw std::runtime_error("object of type '"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' has no len()");
+    }
+    if (static_cast<int64_t>(*size) - length <= leeway)
+    {
+        return baseVal;
+    }
+    if (map)
+    {
+        // A dict slice is a missing key
+        throw std::runtime_error("slice(None, " + std::to_string(length - endLength) + ", None)");
+    }
+    const std::string typeName = Apply<visitors::PythonTypeNameGetter>(baseVal);
+    if (ConvertToBool(GetArgumentValue("killwords", context)))
+    {
+        throw std::runtime_error("can only concatenate " + typeName + " (not \"str\") to " + typeName);
+    }
+    throw std::runtime_error("'" + typeName + "' object has no attribute 'rsplit'");
 }
 
 TargetString StringConverter::ApplyIndent(const InternalValue& baseVal, RenderContext& context)
