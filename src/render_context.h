@@ -1340,6 +1340,9 @@ private:
     size_t m_parentDepth{};
     // The scopes below it do not set `self` (SetSelfDepth)
     size_t m_selfDepth{};
+    // The `self` of the block call this context runs, when it sees more than its template's
+    // top level (FindSelf); not copied
+    std::unique_ptr<InternalValue> m_blockSelf;
     ScopeStack m_scopes;
     SlotFrame m_frame;
     // The frame views attached to this context's scopes, by scope index

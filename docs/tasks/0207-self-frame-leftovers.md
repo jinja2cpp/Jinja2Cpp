@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0198]
@@ -39,3 +39,11 @@ the caller is a scoped block of the same template. The export: drop the `self` e
 when the module's own top level set the name.
 
 **Done when** no line of `test/parity/divergences/` names 0207.
+
+**Status.** Done in the 0207 PR: a stack hands its blocks to the `self` made of them when it
+ends (BlocksStack::self, SelfBlocks), so a stored include `self` renders the include's
+blocks; a scoped block that sees more than the top level gets a `self` of what it sees, kept
+by the block call's context; `self` and `super()` stored past an include render its ended
+blocks (a stored `super` read a dead stack before); modules export a top-level `self`; `self is iterable`. The
+include's names are not kept (pinned as deliberate under 0165, as for macros), nor are the loop names of a scoped block whose `self` outlives it (same); the nested
+`self` store and the globals item moved to 0211.

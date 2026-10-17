@@ -451,6 +451,8 @@ private:
 
 class TemplateRenderer;
 
+struct SelfBlocks;
+
 // Blocks of one template rendering, by name, the most derived first (Jinja2's
 // context.blocks). A parent template appends its blocks when it is extended
 struct BlocksStack
@@ -458,9 +460,35 @@ struct BlocksStack
     // A block, in the template that defines it. The render keeps that template alive
     using Entry = TemplateNode<BlockStatement>;
 
+    BlocksStack() = default;
+    BlocksStack(const BlocksStack&) = delete;
+    BlocksStack(BlocksStack&&) = delete;
+    BlocksStack& operator=(const BlocksStack&) = delete;
+    BlocksStack& operator=(BlocksStack&&) = delete;
+    // Hands the blocks to the `self` made of them, if any, which may outlive the stack
+    ~BlocksStack();
+
     // The names are the blocks' own, in the trees the render keeps alive: a stack must not
     // outlive the render that made it, and what may (`self`) copies them
     std::unordered_map<std::string_view, std::vector<Entry>> blocks;
+    // What `self` made of these blocks renders, made with the first one (MakeTemplateSelf)
+    mutable std::shared_ptr<SelfBlocks> self;
+};
+
+// The blocks a template's `self` renders (docs/tasks/0207): the stack while the template
+// runs, then what the stack held, so that a `self` stored by an include renders the
+// include's blocks once it has ended, as in Jinja2, where `self` keeps the include's context
+struct SelfBlocks
+{
+    explicit SelfBlocks(const BlocksStack* stack)
+        : live(stack)
+    {
+    }
+
+    // The stack, until it ends; only compared then, to find the frames of its template
+    const BlocksStack* live;
+    // Its blocks once it has ended
+    std::optional<BlocksStack> ended;
 };
 
 // The root of a parsed template
