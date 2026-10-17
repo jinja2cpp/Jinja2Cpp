@@ -1587,6 +1587,112 @@
    }
   },
   {
+   "id": "errors.float_second_exponent_close",
+   "template": "{{ 1e1e-}}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got 'e'"
+   }
+  },
+  {
+   "id": "errors.semicolon_in_block",
+   "template": "{% set x = 1; %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of statement block', got ';'"
+   }
+  },
+  {
+   "id": "errors.semicolon_at_tag_end",
+   "template": "{{ 1; }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of print statement', got ';'"
+   }
+  },
+  {
+   "id": "errors.if_test_conditional_expression",
+   "template": "{% if 1 if x else 2 %}a{% endif %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of statement block', got 'if'"
+   }
+  },
+  {
+   "id": "errors.raw_unclosed_at_end",
+   "template": "{% raw %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "output": ""
+  },
+  {
+   "id": "errors.raw_unclosed_minus_space",
+   "template": "{%- raw -%} ",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "output": ""
+  },
+  {
    "id": "errors.repeated_kwarg_filter",
    "template": "{{ l|tojson(indent=1, indent=2) }}",
    "context": {
