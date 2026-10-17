@@ -35,4 +35,4 @@ verifier found more sites that still read them as maps, all as on master before 
 user-provided map, which Python could not unpack) keeps the by-name extension; lipsum
 checks that its arguments are integers; attr takes one positional argument, a string
 (`default=` stays a keyword-only Jinja2C++ extension); joiner's call and cycler's methods
-reject arguments. Object dict keys and objects through user callables moved to 0210.
+reject arguments. Object dict keys and objects through user callables moved to 0212.
