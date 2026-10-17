@@ -1063,6 +1063,13 @@ InternalValue KeepMarkup(const InternalValue& baseVal, InternalValue result)
 
 InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderContext& context)
 {
+    // len(loop) is the length of the loop, as Jinja2's LoopContext.__len__, not the
+    // number of its attributes
+    InternalValue loopLength;
+    if (const auto loop = m_mode == LengthMode ? AsMap(baseVal) : std::nullopt; loop && loop->GetLoopAttr(LoopAttr::Length, loopLength))
+    {
+        return loopLength;
+    }
     // Like Python, a string is a sequence of characters and a mapping one of its keys
     bool isConverted = false;
     ListAdapter list = ConvertToList(baseVal, isConverted, false);

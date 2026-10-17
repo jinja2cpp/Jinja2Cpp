@@ -252,6 +252,21 @@ CASES = [
     ("call_int_with_int_loop", "{% set loop = 1 %}{% set f = 2 %}{{ f('a') }}"),
     ("loop_cycle_as_value", "{% for x in [1, 2] %}{% set c = loop.cycle %}{{ c('a', 'b') }}{% endfor %}"),
     ("loop_cycle_stored_called_later", "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3] %}{% if ns.c is none %}{% set ns.c = loop.cycle %}{% endif %}{{ ns.c('a', 'b', 'c') }}{% endfor %}"),
+    # A stored loop.cycle follows the loop and keeps its last position after it (0188)
+    ("loop_cycle_stored_after_loop", "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3] %}{% set ns.c = loop.cycle %}{% endfor %}{{ ns.c('a', 'b', 'c') }}"),
+    ("loop_cycle_stored_in_nested_loop", "{% set ns = namespace(c=none) %}{% for x in [1, 2] %}{% set ns.c = loop.cycle %}{% for y in [1, 2, 3] %}{{ ns.c('a', 'b') }}{{ loop.cycle('x', 'y') }}{% endfor %}|{% endfor %}"),
+    ("loop_cycle_keyword_arg", "{% for x in [1, 2] %}{{ loop.cycle('a', x=1) }}{% endfor %}"),
+    ("loop_cycle_stored_keyword_arg", "{% for x in [1, 2] %}{% set c = loop.cycle %}{{ c('a', x=1) }}{% endfor %}"),
+    # The loop object is sized and prints as Jinja2's LoopContext (0196)
+    ("loop_len_filtered", "{% for x in [1, 2, 3] if x > 1 %}{{ loop|length }}{{ loop|count }}{% endfor %}"),
+    ("loop_len_kept_past_loop", "{% set ns = namespace(l=none) %}{% for x in [1, 2, 3] %}{% set ns.l = loop %}{% endfor %}{{ ns.l|length }}"),
+    ("loop_repr", "{% for x in [1, 2] %}{{ loop }}|{{ loop|string }}|{{ [loop] }};{% endfor %}"),
+    ("loop_repr_recursive", "{% for x in [[1], 2] recursive %}{{ loop }}{% if x is iterable %}{{ loop(x) }}{% endif %}{% endfor %}"),
+    ("loop_iterable", "{% for x in [1] %}{{ 'T' if loop is iterable else 'F' }}{{ 'T' if loop is sequence else 'F' }}{% endfor %}"),
+    # Iterating the loop object takes the rest of the loop's items (0209)
+    ("loop_iter_list", "{% for x in [1, 2, 3] %}{{ loop|list }};{% endfor %}"),
+    ("loop_iter_for", "{% for x in [1, 2, 3] %}{% for y in loop %}{{ y[0] }}{% endfor %};{% endfor %}"),
+    ("loop_dictsort", "{% for x in [1] %}{{ loop|dictsort }}{% endfor %}"),
     # Loop names in slots (0117 P1): each pins what the Load-time resolver must keep
     ('for_target_shadowed_by_body_set', '{% for x in [1,2] %}{{ x }}{% set x = x * 10 %}{{ x }}{% endfor %}'),
     ('for_nested_same_target', "{% for x in 'ab' %}{{ x }}{% for x in [1,2] %}{{ x }}{% endfor %}{% endfor %}"),

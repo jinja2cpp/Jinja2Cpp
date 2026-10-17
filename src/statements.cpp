@@ -426,21 +426,22 @@ Callable MakeLoopChanged(const std::shared_ptr<std::optional<InternalValueList>>
         return true;
     });
 }
-// loop.cycle(*values): the value at the loop's current position, as of the read
-Callable MakeLoopCycle(int64_t index0)
+// loop.cycle(*values): the value at the loop's position when it is called, as Jinja2's
+// bound method, so a callable stored on one item cycles with the loop on later ones. It
+// shares the state, which keeps its last position once the loop is over
+Callable MakeLoopCycle(boost::intrusive_ptr<const LoopState> state)
 {
-    return Callable(Callable::GlobalFunc, [index0](const CallParams& params, RenderContext&) -> InternalValue {
+    return Callable(Callable::GlobalFunc, [state = std::move(state)](const CallParams& params, RenderContext&) -> InternalValue {
         if (!params.kwParams.empty())
         {
-            throw std::runtime_error("cycle() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+            throw std::runtime_error("LoopContext.cycle() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
         }
         const auto& args = params.posParams;
         if (args.empty())
         {
-            throw std::runtime_error("loop.cycle() expects at least one positional argument");
+            throw std::runtime_error("no items for cycling given");
         }
-        // Unsigned on purpose, as in the direct call
-        return args[static_cast<size_t>(index0) % args.size()];
+        return args[state->index0 % args.size()];
     });
 }
 
@@ -605,7 +606,7 @@ private:
             state.Peek();
             return state.Item(state.index0 + 1);
         case Property::Cycle:
-            return MakeLoopCycle(static_cast<int64_t>(state.index0));
+            return MakeLoopCycle(boost::intrusive_ptr<const LoopState>(m_state));
         case Property::Changed:
             if (!state.lastChanged)
             {

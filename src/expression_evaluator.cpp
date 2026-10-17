@@ -355,7 +355,7 @@ InternalValue LoopAttrExpression::Evaluate(RenderContext& values)
     return SubscriptExpression::Evaluate(values);
 }
 
-bool LoopAttrExpression::TryCallCycle(RenderContext& values, ArenaSpan<NodeRef<Expression>> params, InternalValue& result) const
+bool LoopAttrExpression::TryCallCycle(RenderContext& values, const ArenaCallParams& params, InternalValue& result) const
 {
     if (m_attr != LoopAttr::Cycle || m_subscriptExprs.size() != 1)
     {
@@ -368,12 +368,16 @@ bool LoopAttrExpression::TryCallCycle(RenderContext& values, ArenaSpan<NodeRef<E
     {
         return false;
     }
-    // As loop.cycle(...) called on a loop found by name
+    // As loop.cycle(...) called on a loop found by name (MakeLoopCycle)
     const auto nodes = values.Nodes();
-    const auto items = nodes[params];
+    if (!params.kwParams.empty())
+    {
+        throw std::runtime_error("LoopContext.cycle() got an unexpected keyword argument '" + std::string(nodes.Text(nodes[params.kwParams][0].name)) + "'");
+    }
+    const auto items = nodes[params.posParams];
     if (items.empty())
     {
-        throw std::runtime_error("loop.cycle() expects at least one positional argument");
+        throw std::runtime_error("no items for cycling given");
     }
     const auto idx = static_cast<size_t>(Apply<visitors::IntegerEvaluator>(index0)) % items.size();
     result = nodes[items[idx]].Evaluate(values);
@@ -1040,7 +1044,7 @@ InternalValue DictionaryCreator::Evaluate(RenderContext& context)
 bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result, InternalValue& callee)
 {
     const auto nodes = values.Nodes();
-    if (const auto loopAttr = nodes.As<LoopAttrExpression>(m_valueRef); loopAttr && nodes[loopAttr].TryCallCycle(values, m_params.posParams, result))
+    if (const auto loopAttr = nodes.As<LoopAttrExpression>(m_valueRef); loopAttr && nodes[loopAttr].TryCallCycle(values, m_params, result))
     {
         return true;
     }
