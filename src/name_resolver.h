@@ -77,8 +77,8 @@ public:
     };
     // `name` is set in a scope of `frame`'s statement (`set`, a macro, an import alias), in a
     // branch of the body when the parser says so (SetInBranch)
-    void AddStore(FrameId frame, const std::string& name) { AddStore(frame, name, m_inBranch ? StoreKind::Branch : StoreKind::Store); }
-    void AddStore(FrameId frame, const std::string& name, StoreKind kind)
+    void AddStore(FrameId frame, std::string_view name) { AddStore(frame, name, m_inBranch ? StoreKind::Branch : StoreKind::Store); }
+    void AddStore(FrameId frame, std::string_view name, StoreKind kind)
     {
         if (frame != NoFrame)
         {
@@ -120,10 +120,25 @@ public:
     // Called when the body of `frame` (a template, block, macro, call block, loop or `with`)
     // ends: the statement that binds the names the frame holds from its entry, to put first in
     // the body, or none
-    NodeRef<BindUndefinedStatement> EntryBinding(FrameId frame, NodeArena& nodes);
+    NodeRef<BindUndefinedStatement> EntryBinding(FrameId frame, NodeArena& nodes) { return MayBindAtEntry(frame) ? MakeEntryBinding(frame, nodes) : NodeRef<BindUndefinedStatement>(); }
+    // False when EntryBinding of `frame` surely finds none: a name needs a store in the frame
+    // and a read in a frame inside it. Most frames have neither, and the check stays inline,
+    // as the call costs more than it (docs/tasks/0204)
+    [[nodiscard]] bool MayBindAtEntry(FrameId frame) const { return m_frames[frame].firstStore != m_stores.size() && m_frames.size() != std::size_t{ frame } + 1; }
 
-    // Assigns the slots; called once, after a parse without errors
-    void Resolve(NodeArena& nodes);
+    // Assigns the slots; called once, after a parse without errors. A template with no entry
+    // binding and no macro or loop that binds slots has nothing to resolve
+    void Resolve(NodeArena& nodes)
+    {
+        if (!m_entryNames.empty())
+        {
+            ResolveEntryBindings(nodes);
+        }
+        if (m_hasSlots)
+        {
+            ResolveSlots(nodes);
+        }
+    }
     // The name expressions made where a slot may be bound, in parse order (for the tests)
     [[nodiscard]] boost::span<const std::pair<NodeRef<ValueRefExpression>, FrameId>> Uses() const { return m_uses; }
 
@@ -184,7 +199,7 @@ private:
     static void PlaceMacroArgs(NodeArena& nodes, Frame& frame);
     static void SetUnitLayout(NodeArena& nodes, NodeRef<IRendererBase> owner, UnitLayout layout);
     [[nodiscard]] bool IsStored(FrameId frame, std::string_view name) const;
-    void DoAddStore(FrameId frame, const std::string& name, StoreKind kind);
+    void DoAddStore(FrameId frame, std::string_view name, StoreKind kind);
     // A name a frame may bind at its entry (EntryBinding)
     struct EntryCandidate
     {
@@ -203,14 +218,25 @@ private:
     [[nodiscard]] bool IsBoundOutside(FrameId frameId, const EntryName& entry, const NodeArena& nodes) const;
     // Gives each entry binding the names no frame around its own reads or binds
     void ResolveEntryBindings(NodeArena& nodes);
+    NodeRef<BindUndefinedStatement> MakeEntryBinding(FrameId frameId, NodeArena& nodes);
+    void ResolveSlots(NodeArena& nodes);
     // The slot `ref` reads, Dynamic when it is looked up by name
     [[nodiscard]] std::pair<SlotIndex, UnitId> Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frame) const;
 
+    using Doubling = boost::container::small_vector_options_t<boost::container::growth_factor<boost::container::growth_factor_100>>;
     // Inline room for a template with a few loops, so that most parses allocate nothing here
     boost::container::small_vector<Frame, 8> m_frames;
     boost::container::small_vector<std::pair<NodeRef<ValueRefExpression>, FrameId>, 16> m_uses;
     struct Store
     {
+        Store(FrameId frame_, StoreKind kind_, std::uint32_t readsBefore_, std::string_view name_)
+            : frame(frame_)
+            , kind(kind_)
+            , readsBefore(readsBefore_)
+            , name(name_)
+        {
+        }
+
         FrameId frame = NoFrame;
         StoreKind kind = StoreKind::Store;
         // The reads made before the store (m_reads)
@@ -225,9 +251,11 @@ private:
         std::string name;
     };
     // Every name expression made in a frame, in parse order
-    boost::container::small_vector<std::pair<NodeRef<ValueRefExpression>, FrameId>, 16> m_reads;
+    // Inline room for a page of expressions, then doubling: most templates read fewer names, and
+    // a long one reads thousands (docs/tasks/0204)
+    boost::container::small_vector<std::pair<NodeRef<ValueRefExpression>, FrameId>, 64, void, Doubling> m_reads;
     // The names stored in frames, in parse order; most templates store a few
-    boost::container::small_vector<Store, 8> m_stores;
+    boost::container::small_vector<Store, 8, void, Doubling> m_stores;
     std::vector<EntryName> m_entryNames;
     struct ContextRead
     {
@@ -235,7 +263,8 @@ private:
         // The stores made before it (m_stores)
         std::uint32_t storesBefore = 0;
     };
-    std::vector<ContextRead> m_contextReads;
+    // Inline room for a few, so that a template with an `include` allocates nothing here
+    boost::container::small_vector<ContextRead, 4> m_contextReads;
     FrameId m_current = NoFrame;
     bool m_inBranch = false;
     bool m_hasSlots = false;

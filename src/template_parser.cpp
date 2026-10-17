@@ -35,6 +35,17 @@
 namespace jinja2
 {
 
+NodeRef<ComposedRenderer> StatementsParser::TakeFrameBody(StatementInfo& info)
+{
+    if (const auto binding = m_names.EntryBinding(info.frame, m_nodes))
+    {
+        info.body.insert(info.body.begin(), binding);
+    }
+    auto body = m_nodes.MakeWithItems<ComposedRenderer>(boost::span<const ComposedRenderer::Child>(info.body.data(), info.body.size()));
+    info.body.clear();
+    return body;
+}
+
 StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, StatementInfoList& statementsInfo)
 {
     const auto& tok = lexer.NextToken();
@@ -1511,7 +1522,7 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
     statementInfo.frame = m_names.PushWith(m_names.Current());
     for (const auto& var : vars)
     {
-        m_names.AddStore(statementInfo.frame, std::string(m_nodes.Text(var.name)), NameResolver::StoreKind::Target);
+        m_names.AddStore(statementInfo.frame, m_nodes.Text(var.name), NameResolver::StoreKind::Target);
     }
     auto renderer = m_nodes.Make<WithStatement>();
     m_nodes[renderer].SetScopeVars(m_nodes.MakeSpan(vars));

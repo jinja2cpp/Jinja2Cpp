@@ -246,7 +246,10 @@ struct StatementInfo
     // Whether the body of a statement of `type` is a frame of the resolver of its own
     static bool OwnsFrame(Type type)
     {
-        return type == TemplateRoot || type == ForStatement || type == BlockStatement || type == MacroStatement || type == MacroCallStatement || type == WithStatement || type == SetStatement || type == FilterStatement || type == AutoescapeStatement;
+        // One test of a mask, not a chain of compares: it runs for every statement (docs/tasks/0204)
+        constexpr unsigned mask = (1U << TemplateRoot) | (1U << ForStatement) | (1U << BlockStatement) | (1U << MacroStatement) | (1U << MacroCallStatement) | (1U << WithStatement)
+            | (1U << SetStatement) | (1U << FilterStatement) | (1U << AutoescapeStatement);
+        return ((mask >> type) & 1U) != 0;
     }
 
     static StatementInfo Create(Type type, const Token& tok)
@@ -381,18 +384,17 @@ private:
     // The statement's body, as a node
     NodeRef<ComposedRenderer> TakeBody(StatementInfo& info)
     {
-        // The body of a frame starts by binding the names it holds from its entry (0168)
-        if (StatementInfo::OwnsFrame(info.type))
+        // The body of a frame starts by binding the names it holds from its entry (0168). Few
+        // frames may bind one, and the rest stays inline (docs/tasks/0204)
+        if (StatementInfo::OwnsFrame(info.type) && m_names.MayBindAtEntry(info.frame))
         {
-            if (const auto binding = m_names.EntryBinding(info.frame, m_nodes))
-            {
-                info.body.insert(info.body.begin(), binding);
-            }
+            return TakeFrameBody(info);
         }
         auto body = m_nodes.MakeWithItems<ComposedRenderer>(boost::span<const ComposedRenderer::Child>(info.body.data(), info.body.size()));
         info.body.clear();
         return body;
     }
+    NodeRef<ComposedRenderer> TakeFrameBody(StatementInfo& info);
 
     const Settings& m_settings;
     TemplateEnv* m_env;
@@ -463,9 +465,10 @@ public:
         // closes, so the tree is built while the source is read (docs/tasks/0142)
         auto templateRenderer = m_nodes.Make<TemplateRenderer>();
         StatementInfoList statementsStack;
-        StatementInfo root = StatementInfo::Create(StatementInfo::TemplateRoot, Token());
+        // Made in place: moving a StatementInfo in costs more than the rest of a small Load
+        auto& root = statementsStack.emplace_back();
+        root.type = StatementInfo::TemplateRoot;
         root.frame = m_names.PushUnit(NameResolver::NoFrame, templateRenderer);
-        statementsStack.push_back(std::move(root));
         m_openStatements = &statementsStack;
         auto roughResult = DoRoughParsing();
         m_openStatements = nullptr;

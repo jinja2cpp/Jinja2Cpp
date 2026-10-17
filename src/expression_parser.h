@@ -61,12 +61,17 @@ public:
         if (m_check != Check::Deferred && !m_lookUpWhenRun)
         {
             m_names.push_back(Name{ token, isTest, m_check, 0 });
+            m_count = m_names.size();
         }
     }
-    [[nodiscard]] std::size_t Mark() const { return m_names.size(); }
+    [[nodiscard]] std::size_t Mark() const { return m_count; }
     // The names added since `mark` are not checked: they are in an inline if, or in an
     // expression the parser gave up
-    void DeferSince(std::size_t mark) { m_names.resize(mark); }
+    void DeferSince(std::size_t mark)
+    {
+        m_names.resize(mark);
+        m_count = mark;
+    }
     // The tag that added the names since `mark` is where Jinja2 defers the check or not, in `unit`
     void Place(std::size_t mark, bool deferred, std::size_t unit)
     {
@@ -81,6 +86,7 @@ public:
             *out++ = *in;
         }
         m_names.erase(out, m_names.end());
+        m_count = m_names.size();
     }
 
     // The name Jinja2 reports, null if none
@@ -99,6 +105,9 @@ public:
 
 private:
     std::vector<Name> m_names;
+    // m_names.size(), which every expression reads twice: a load, not a division by sizeof(Name)
+    // (docs/tasks/0204)
+    std::size_t m_count = 0;
     Check m_check = Check::AsTag;
     bool m_lookUpWhenRun = false;
 };
