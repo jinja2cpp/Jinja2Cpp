@@ -36,11 +36,15 @@ CASES = [
     ("divisibleby_extra_arg", "{{ 6 is divisibleby(3, 2) }}"),
     ("in_arity", "{{ 1 is in() }}"),
     ("in_extra_arg", "{{ 1 is in([1], [2]) }}"),
-    # The other tests do not check their arguments yet (0200)
+    # Every test checks its arguments (0200)
     ("eq_arity", "{{ 1 is eq }}"),
     ("eq_extra_arg", "{{ 1 is eq(1, 2) }}"),
+    ("ge_arity", "{{ 1 is ge() }}"),
     ("odd_extra_arg", "{{ 1 is odd(1) }}"),
     ("defined_extra_arg", "{{ 1 is defined(1) }}"),
+    ("lower_keyword_arg", "{{ 'a' is lower(x=1) }}"),
+    ("select_test_extra_arg", "{{ [1, 2]|select('odd', 1)|list }}"),
+    ("rejectattr_test_extra_arg", "{{ [{'a': 1}]|rejectattr('a', 'none', 1)|list }}"),
     ("sameas_computed_list", "{% set a = range(3) %}{% set b = a %}{{ 'T' if a is sameas b else 'F' }}{{ 'T' if range(3) is sameas range(3) else 'F' }}"),
     ("sameas_generator_copy", "{% set a = [1, 2, 3]|select('odd') %}{% set b = a %}{{ 'T' if a is sameas b else 'F' }}"),
     ("sequence", "{{ 'T' if l is sequence else 'F' }}{{ 'T' if s is sequence else 'F' }}{{ 'T' if x is sequence else 'F' }}"),

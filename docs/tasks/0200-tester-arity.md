@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 touches: [src/testers.cpp]
@@ -22,3 +22,10 @@ name (`select`, `reject`, `selectattr`, `rejectattr`); have the argument-less mo
 **Done when** `tests.eq_arity`, `tests.eq_extra_arg`, `tests.odd_extra_arg` and
 `tests.defined_extra_arg` match and their lines in `test/parity/divergences/tests.txt` are
 deleted.
+
+**Done** (PR TBD). Comparator and `startingwith` raise the recorded argument error when the
+test runs, and the argument-less `ValueTester` modes parse their call against an empty table,
+so `1 is odd(1)` and `select('odd', 1)` raise. Checked in each `Test`, which covers `is` and
+the tests that `select`, `reject`, `selectattr` and `rejectattr` name. Left over: the
+comparison tests still take their argument by keyword (`1 is eq(b=1)`), which Python's
+`operator.eq` refuses; nothing in the corpus pins it.

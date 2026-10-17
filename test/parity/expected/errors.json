@@ -1587,6 +1587,120 @@
    }
   },
   {
+   "id": "errors.repeated_kwarg_filter",
+   "template": "{{ l|tojson(indent=1, indent=2) }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "keyword argument repeated: indent (<template>, line 18)"
+   }
+  },
+  {
+   "id": "errors.repeated_kwarg_trim",
+   "template": "{{ s|trim(chars='a', chars='b') }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "keyword argument repeated: chars (<template>, line 18)"
+   }
+  },
+  {
+   "id": "errors.repeated_kwarg_call",
+   "template": "{{ range(stop=1, stop=2) }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "keyword argument repeated: stop (<template>, line 12)"
+   }
+  },
+  {
+   "id": "errors.repeated_kwarg_call_block",
+   "template": "{% macro m(a) %}{% endmacro %}{% call m(a=1, a=2) %}{% endcall %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "keyword argument repeated: a (<template>, line 25)"
+   }
+  },
+  {
+   "id": "errors.repeated_kwarg_test",
+   "template": "{{ x is divisibleby(num=1, num=2) }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "keyword argument repeated: num (<template>, line 18)"
+   }
+  },
+  {
+   "id": "errors.repeated_kwarg_unreached",
+   "template": "{% if false %}{{ f(a=1, a=2) }}{% endif %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "keyword argument repeated: a (<template>, line 14)"
+   }
+  },
+  {
    "id": "errors.caller_without_call_block",
    "template": "{% macro m() %}[{{ caller() }}]{% endmacro %}{{ m() }}",
    "context": {

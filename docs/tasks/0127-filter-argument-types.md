@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 touches: [src/serialize_filters.cpp#Serialize, src/expression_parser.cpp]
@@ -18,3 +18,10 @@ corpus yet.
 repeated keyword in call/filter argument parsing. Add corpus cases for both.
 
 **Done when.** The four templates above error as in Python, with corpus cases pinning them.
+
+**Done** (PR TBD). The non-int indent already raised (since 0124); `tojson_indent_float` and
+`tojson_indent_list` pin it. A repeated keyword in a call, filter or test argument list is
+now a parse error (`UnexpectedToken` at the repeated name), pinned by the `repeated_kwarg_*`
+cases in `errors.py`. Deliberate divergence: Python raises only when it emits the call, so
+a filter or test it folds on literals (`1|tojson(indent=1, indent=2)`) renders there; we
+reject it as well.

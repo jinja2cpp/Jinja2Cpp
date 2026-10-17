@@ -275,6 +275,9 @@ CASES = [
     ("tojson_numbers", "{{ [1.5, 1e20, -0.0, 1, 2.0]|tojson }}"),
     ("tojson_nested_indent", "{{ {'b': [], 'a': {}, 'c': [1, {'d': none}]}|tojson(indent=1) }}"),
     ("tojson_indent_zero_string", "{{ [1, 2]|tojson(indent=0) }}|{{ [1]|tojson(indent='--') }}"),
+    # Only an int, a str or None is an indent (0127)
+    ("tojson_indent_float", "{{ [1]|tojson(indent=1.5) }}"),
+    ("tojson_indent_list", "{{ [1]|tojson(indent=[1]) }}"),
     ("tojson_tuple_items", "{{ (1, 'a')|tojson }}|{{ {'a': 1}|items|list|tojson }}"),
     ("truncate_edges", "{{ 'foo bar baz qux'|truncate(9) }}|{{ 'foo bar baz qux'|truncate(11, true, leeway=0) }}|{{ 'foo bar baz qux'|truncate(6, true) }}|{{ 'ééééééééééé'|truncate(5, leeway=0) }}"),
     ("truncate_bad_length", "{{ 'abc'|truncate(1) }}"),

@@ -920,6 +920,11 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
         if (tok == Token::Identifier && lexer.PeekNextToken() == '=')
         {
             paramName = lexer.GetAsString(tok);
+            // Jinja2: "keyword argument repeated"
+            if (result.kwParams.count(paramName))
+            {
+                return MakeParseError(ErrorCode::UnexpectedToken, tok);
+            }
             lexer.EatToken();
         }
         else
