@@ -218,8 +218,9 @@ jobs:
     - name: Build
       run: cmake --build .build --parallel
 
+    # A hang under a sanitizer prints the stuck test's output instead of running to the 6 h job limit
     - name: Test
-      run: ctest --test-dir .build --output-on-failure
+      run: ctest --test-dir .build --output-on-failure --timeout 1200
 
   coverage:
     name: Coverage (gcc-14)
