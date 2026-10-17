@@ -1048,6 +1048,27 @@
    "output": "<a>&lt;b&gt;"
   },
   {
+   "id": "i18n.gettext_autoescape_repr",
+   "template": "{{ _('%(v)r|%(w)s', v='<b>', w=[1, '<']) }}",
+   "context": {
+    "x": 3,
+    "one": 1,
+    "l": [
+     1,
+     2
+    ],
+    "s": "<b>"
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ],
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&#39;&lt;b&gt;&#39;|[1, &#39;&lt;&#39;]"
+  },
+  {
    "id": "i18n.gettext_shadowed",
    "template": "{% set _ = 1 %}{{ _ }}",
    "context": {

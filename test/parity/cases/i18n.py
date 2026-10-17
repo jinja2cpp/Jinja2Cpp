@@ -55,6 +55,7 @@ CASES = [
     ("gettext_missing_variable", "{{ _('a %(b)s') }}", {"env": I18N}),
     ("gettext_without_message", "{{ gettext() }}", {"env": I18N}),
     ("gettext_autoescape", "{{ _('<a>%(v)s', v='<b>') }}", {"env": {"extensions": ["i18n"], "autoescape": True}}),
+    ("gettext_autoescape_repr", "{{ _('%(v)r|%(w)s', v='<b>', w=[1, '<']) }}", {"env": {"extensions": ["i18n"], "autoescape": True}}),
     ("gettext_shadowed", "{% set _ = 1 %}{{ _ }}", {"env": I18N}),
     ("gettext_alias_resolves_gettext", "{% macro gettext(a) %}M{{ a }}{% endmacro %}{{ _('a') }}|{% trans %}b{% endtrans %}", {"env": I18N}),
     ("gettext_non_string_message", "{{ _(x) }}", {"env": I18N}),

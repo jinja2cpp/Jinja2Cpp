@@ -6,3 +6,4 @@ filters.map_filter_extra_arg            accepts     0206 map drops extra argumen
 filters.round_int_overflow              rejects     0178 integers are 64-bit and overflow raises instead of growing
 filters.select_single_pass              output      0101 deliberate: a select/map/reject result can be iterated again; a Python generator is empty the second time
 filters.unknown_filter_output_after_extends rejects   0203 output after a top-level extends is evaluated and discarded; Jinja2 does not compile it
+wide.filters.format_c_surrogate         output      0106 deliberate: % formats in UTF-8, where a lone surrogate from %c cannot survive the conversion back to a wide string
