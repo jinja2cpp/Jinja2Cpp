@@ -1515,7 +1515,7 @@ void CheckBlockCallParams(const CallParams& params)
 // level, `site`, wherever it is called from, as a block function sees its template's context
 // in Jinja2 (docs/tasks/0194). The stack is only compared, never read, since `self` may
 // outlive it
-InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view name)
+InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName)
 {
     InternalValueMap self;
     for (const auto& block : stack.blocks)
@@ -1552,7 +1552,7 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
             RenderBlockAt(*frame->blocks, name, 0, stream, blockContext);
         }));
     }
-    return CreateObjectAdapter(std::move(self), "TemplateReference", name.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(name)));
+    return CreateObjectAdapter(std::move(self), "TemplateReference", templateName.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(templateName)));
 }
 } // namespace
 

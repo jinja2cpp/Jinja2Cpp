@@ -19,6 +19,13 @@ shares: [test/parity/divergences/loader.txt]
 - `loader.module_set_self_exported`: a module whose top level does `{% set self = 5 %}`
   exports nothing for `l.self`; Jinja2 exports 5 (the import skips the name `self`).
 
+Not pinned, found by the 0143/0198 verifier:
+- `{% set self = 1 %}{% block b %}{% with self = 4 %}{% endwith %}{{ self is number }}{% endblock %}`
+  (or `{% for self in [4] %}` in the block) gives False; Jinja2 gives True: a block that
+  stores `self` in a nested scope does not declare its own, so its top level resolves `self`
+  from the context.
+- `self is iterable` is False; Jinja2's TemplateReference has `__getitem__`, so True.
+
 Carried from 0143, not pinned (no corpus option for env globals): a global the template
 changes in place (`g.append(1)`) is changed for the rest of the render only; Jinja2 changes
 the global object itself, for every later render too. A render started inside it (a user
