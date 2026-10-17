@@ -331,7 +331,8 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     {
         isRecursive = true;
     }
-    if (lexer.PeekNextToken() != Token::Eof)
+
+    if (!ifExpr && lexer.PeekNextToken() != Token::Eof)
     {
         const auto& tok1 = lexer.PeekNextToken();
         return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, Token::If, Token::Recursive, Token::Eof);
