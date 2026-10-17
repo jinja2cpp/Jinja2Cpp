@@ -175,7 +175,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0103](0103-load-allocations.md) | Loading a tag-heavy template allocates about 115 times per tag | perf | medium | done |
 | [0104](0104-fixed-costs-per-render.md) | Fixed allocations per render and per macro call | perf | medium | done |
 | [0105](0105-include-per-render.md) | `include` and `extends` go through the environment's locked cache on every render | perf | medium | done |
-| [0106](0106-percent-format-divergences.md) | `%`-format divergences from Python | parity | low | open |
+| [0106](0106-percent-format-divergences.md) | `%`-format divergences from Python | parity | low | done |
 | [0107](0107-string-filter-divergences.md) | String filter divergences found by the 0061 differential | parity | low | open |
 | [0108](0108-include-context-copy.md) | `include` copies every scope of the caller | perf | medium | done |
 | [0109](0109-load-costs-round-2.md) | Load costs after 0103: filter construction, wrappers, the lexer | perf | low | done |
@@ -251,7 +251,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0179](0179-caller-markup-eval-context.md) | Autoescape has a lexical and a runtime side | parity | low | open |
 | [0180](0180-markup-from-cpp.md) | Markup from C++ | api | low | open |
 | [0181](0181-select-autoescape.md) | Autoescape chosen by template name (`select_autoescape`) | api | low | open |
-| [0182](0182-markup-percent-repr.md) | `%r` and containers in Markup's `%` | parity | low | open |
+| [0182](0182-markup-percent-repr.md) | `%r` and containers in Markup's `%` | parity | low | done |
 | [0183](0183-context-callable-positional-arg.md) | A user callable taking `*context` gets None for a positional argument | api | medium | open |
 | [0184](0184-gcc13-sanitizer-stringop-overflow.md) | The GCC 13 sanitizer build fails with -Wstringop-overflow | build | low | open |
 | [0185](0185-fuzz-oom-below-sequence-cap.md) | The fuzz job fails on lists below the sequence cap | robustness | medium | done |
@@ -279,3 +279,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0207](0207-self-frame-leftovers.md) | `self` cases left after 0143 and 0198 | parity | low | open |
 | [0208](0208-macro-value-gaps.md) | Macros as values | parity | low | open |
 | [0209](0209-include-sees-loop.md) | A template included in a loop sees `loop` | parity | low | open |
+| [0210](0210-markup-percent-int-of-string.md) | `%d` and `%f` of a string in Markup's `%` | parity | low | open |
