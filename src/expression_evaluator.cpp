@@ -621,7 +621,7 @@ namespace
 {
 // str % values is Python's printf-style formatting; the result keeps the string's width.
 // Empty when the left operand is not a string
-std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
+std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, const InternalValue& rightVal)
 {
     bool isWide = false;
     bool isString = ApplyStringConverter(leftVal, [&isWide](auto str) {
@@ -633,16 +633,11 @@ std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, co
         return std::nullopt;
     }
 
-    // Markup % args escapes the arguments and stays Markup
-    InternalValue escapedArgs;
-    if (leftVal.IsMarkup())
-    {
-        escapedArgs = EscapeFormatArgs(rightVal, context.GetRendererCallback());
-    }
-    const auto& values = leftVal.IsMarkup() ? escapedArgs : rightVal;
+    // Markup % args escapes what the arguments convert to and stays Markup
+    bool markup = leftVal.IsMarkup();
     auto narrow = AsStringView<char>(leftVal);
-    auto formatted = narrow ? PythonPercentFormat(*narrow, values)
-                            : PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }), values);
+    auto formatted = narrow ? PythonPercentFormat(*narrow, rightVal, markup)
+                            : PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }), rightVal, markup);
     InternalValue formattedVal = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted));
     formattedVal.SetMarkup(leftVal.IsMarkup());
     return formattedVal;
@@ -728,7 +723,7 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
 
     if (m_oper == DivRemainder)
     {
-        if (auto formatted = ApplyPercentFormat(leftVal, rightVal, context))
+        if (auto formatted = ApplyPercentFormat(leftVal, rightVal))
         {
             return std::move(*formatted);
         }

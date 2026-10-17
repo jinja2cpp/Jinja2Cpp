@@ -299,6 +299,16 @@ CASES = [
     ("round_int_overflow", "{{ 9223372036854775807|round(-1) }}|{{ 12345678901234567890|round(-19) }}"),
     ("format_d_big_float", "{{ '%d'|format(1e30) }}"),
     ("format_ascii_repr", "{{ '%a'|format('\\u00e9') }}"),
+    # task 0106: leftovers of the 0061 Directive split
+    ("format_repr_non_ascii", "{{ '%r|%a|%r'|format('h\u00e9llo', 'h\u00e9llo', ['\u00e9']) }}"),
+    ("format_dict_insertion_order", "{{ '%s'|format({'b': 1, 'a': 2}) }}|{{ '%s' % ({'b': 1, 'a': 2},) }}"),
+    ("format_key_then_star", "{{ '%(a)*d'|format(a=1) }}"),
+    ("format_key_then_positional", "{{ '%(a)s %s'|format(a=1) }}"),
+    ("format_positional_then_key", "{{ '%s %(a)s'|format(a=1) }}"),
+    ("format_key_twice", "{{ '%(a)s %(a)05.1f %(b)r'|format(a=1, b='x') }}"),
+    # a lone surrogate cannot be written to expected/ as UTF-8, so the case compares it
+    ("format_list_arg_unused", "[{{ 'x' % [1, 2] }}|{{ ' ' % l }}|{{ '%s' % [1] }}]"),
+    ("format_c_surrogate", "{{ '%c'|format(55296)|length }}|{{ 'T' if '%c'|format(55296) == '\\ud800' else 'F' }}|{{ '%c'|format(56320)|length }}"),
     ("format_without_percent", "{{ 'x'|format(1) }}"),
     ("int_unicode_digits", "{{ '١٢'|int }}|{{ '１２'|float }}"),
     ("tojson_undefined", "{{ nope|tojson }}"),

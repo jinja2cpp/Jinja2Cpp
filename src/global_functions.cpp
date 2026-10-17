@@ -429,7 +429,6 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
         variables.try_emplace("num", params.posParams[argsCount - 1]);
     }
 
-    auto* callback = context.GetRendererCallback();
     bool isWide = false;
     bool isString = ApplyStringConverter(translated, [&isWide](auto str) {
         isWide = sizeof(str[0]) != sizeof(char);
@@ -441,11 +440,7 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
     }
 
     InternalValue values = CreateMapAdapter(std::move(variables));
-    if (context.IsAutoescape())
-    {
-        values = EscapeFormatArgs(values, callback);
-    }
-    auto formatted = PythonPercentFormat(ApplyStringConverter(translated, [](auto str) { return ConvertString<std::string>(str); }), values);
+    auto formatted = PythonPercentFormat(ApplyStringConverter(translated, [](auto str) { return ConvertString<std::string>(str); }), values, context.IsAutoescape());
     InternalValue result = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted));
     result.SetMarkup(context.IsAutoescape());
     return result;

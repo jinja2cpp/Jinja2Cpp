@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: []
@@ -28,3 +28,8 @@ by `%d`/`%f` alone, as markupsafe's helper does.
 
 **Done when.** `autoescape.markup_percent_repr` matches and its line is gone from
 `test/parity/divergences/autoescape.txt`.
+
+**Outcome.** `PythonPercentFormat` takes a `markup` flag and escapes the text of `%s`, `%r`
+and `%a` (not the `str()` of a Markup argument) before precision and width; `%c`, `%x`,
+`%X` and `%o` raise as they do on the helper. `EscapeFormatArgs` is gone. Corpus cases
+`autoescape.markup_*` and `i18n.gettext_autoescape_repr`; `%d`/`%f` of a string left to 0210.

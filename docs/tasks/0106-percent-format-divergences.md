@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: []
@@ -27,3 +27,9 @@ in `test/parity/divergences/`.
 
 **Done when** each case is in the corpus and either matches Python or is listed as a
 deliberate divergence.
+
+**Outcome.** Cases `filters.format_*` (0106 block). `%d` of 1e30 and `%r`/`%a` of non-ASCII
+already matched; dict order matches since 0043. A "(key)" now leaves only its value as the
+argument, used once, so the mapping-plus-positional formats raise as in Python. `%c` of a
+lone surrogate matches narrow; the wide run is listed (`wide.filters.format_c_surrogate`):
+`%` formats in UTF-8 and the surrogate becomes U+FFFD on the way back to a wide string.
