@@ -15,6 +15,7 @@
 #include "render_context.h"
 #include "renderer.h"
 #include "statements.h"
+#include "unicode_tables.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
@@ -1242,10 +1243,9 @@ private:
 
         if (doTotalStrip)
         {
-            auto locale = std::locale();
-            while (newPos < m_template->size() && std::isspace((*m_template)[newPos], locale))
+            while (const auto len = SpaceLengthAt(newPos))
             {
-                ++newPos;
+                newPos += len;
             }
         }
         else if (trimBlocks && newPos < m_template->size() && (*m_template)[newPos] == '\n')
@@ -1277,14 +1277,14 @@ private:
             return endOffset;
         }
 
-        auto locale = std::locale();
         auto& tpl = *m_template;
         auto originalOffset = endOffset;
         bool sameLine = true;
-        for (; endOffset != currentBlockInfo.range.startOffset && endOffset > 0; --endOffset)
+        for (size_t len = 0; endOffset != currentBlockInfo.range.startOffset && endOffset > 0; endOffset -= len)
         {
             auto ch = tpl[endOffset - 1];
-            if (!std::isspace(ch, locale))
+            len = SpaceLengthBefore(endOffset, currentBlockInfo.range.startOffset);
+            if (!len)
             {
                 if (!sameLine)
                 {
@@ -1308,6 +1308,70 @@ private:
             return originalOffset;
         }
         return endOffset;
+    }
+
+    // The length of the whitespace character at `pos` (Python's \s, Unicode included), or 0
+    [[nodiscard]] size_t SpaceLengthAt(size_t pos) const
+    {
+        const auto& tpl = *m_template;
+        if (pos >= tpl.size())
+        {
+            return 0;
+        }
+        const auto unit = static_cast<std::make_unsigned_t<CharT>>(tpl[pos]);
+        if constexpr (sizeof(CharT) == 1)
+        {
+            if (unit >= 0x80)
+            {
+                const size_t len = unit >= 0xF0 ? 4 : (unit >= 0xE0 ? 3 : 2);
+                return pos + len <= tpl.size() && unicode::IsSpace(DecodeUtf8(pos, len)) ? len : 0;
+            }
+        }
+        return unicode::IsSpace(unit) ? 1 : 0;
+    }
+
+    // The length of the whitespace character that ends at `pos`, not reaching back before `begin`, or 0
+    [[nodiscard]] size_t SpaceLengthBefore(size_t pos, size_t begin) const
+    {
+        const auto& tpl = *m_template;
+        const auto unit = static_cast<std::make_unsigned_t<CharT>>(tpl[pos - 1]);
+        if constexpr (sizeof(CharT) == 1)
+        {
+            if (unit >= 0x80)
+            {
+                // Back over the continuation bytes to the lead byte
+                size_t start = pos - 1;
+                while (start != begin && pos - start < 4 && (static_cast<unsigned char>(tpl[start]) & 0xC0) == 0x80)
+                {
+                    --start;
+                }
+                return SpaceLengthAt(start) == pos - start ? pos - start : 0;
+            }
+        }
+        return unicode::IsSpace(unit) ? 1 : 0;
+    }
+
+    // The code point of the UTF-8 sequence of `len` bytes at `pos`, or 0 (no space) when the
+    // sequence is not well formed
+    [[nodiscard]] uint32_t DecodeUtf8(size_t pos, size_t len) const
+    {
+        const auto& tpl = *m_template;
+        if (static_cast<unsigned char>(tpl[pos]) < 0xC2)
+        {
+            return 0;
+        }
+        uint32_t cp = static_cast<unsigned char>(tpl[pos]) & (0x7F >> len);
+        for (size_t idx = 1; idx != len; ++idx)
+        {
+            const auto unit = static_cast<unsigned char>(tpl[pos + idx]);
+            if ((unit & 0xC0) != 0x80)
+            {
+                return 0;
+            }
+            cp = (cp << 6) | (unit & 0x3F);
+        }
+        // Overlong forms: three bytes start at U+0800, four at U+10000
+        return cp >= (len == 3 ? 0x800U : (len == 4 ? 0x10000U : 0x80U)) ? cp : 0;
     }
 
     // Out of line: rarely needed, and inlined into its one caller it would keep MakeRawTextRenderer

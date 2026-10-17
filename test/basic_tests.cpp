@@ -451,6 +451,26 @@ from Parser!)";
     EXPECT_STREQ(expectedResult.c_str(), result.c_str());
 }
 
+// `-` strips Python's \s, Unicode spaces included (0044); a byte sequence that is not
+// well-formed UTF-8 is no space, even where its bits would decode to one
+TEST(BasicTests, StripSpaces_MinusUnicodeAndMalformedUtf8)
+{
+    auto render = [](const std::string& source) {
+        Template tpl;
+        EXPECT_TRUE(tpl.Load(source));
+        return tpl.RenderAsString(ValuesMap{}).value();
+    };
+    EXPECT_EQ("ab", render("{{ 'a' -}}\xC2\xA0\xE3\x80\x80\xE2\x80\xA8\x1F" "b"));
+    EXPECT_EQ("ab", render("a\xC2\x85\xE1\x9A\x80 {{- 'b' }}"));
+    EXPECT_EQ("a\xC0\xA0" "b", render("{{ 'a' -}}\xC0\xA0" "b"));
+    EXPECT_EQ("a\xE0\x82\x85" "b", render("{{ 'a' -}}\xE0\x82\x85" "b"));
+    EXPECT_EQ("a\x82\x85" "b", render("{{ 'a' -}}\x82\x85" "b"));
+    EXPECT_EQ("a\xA0" "b", render("a\xA0{{- 'b' }}"));
+    EXPECT_EQ("a\x80" "b", render("a\x80\xC2\xA0 {{- 'b' }}"));
+    EXPECT_EQ("a\xC2\x80\xA0" "b", render("a\xC2\x80\xA0{{- 'b' }}"));
+    EXPECT_EQ("a\xE2\x80", render("{{ 'a' -}}\xE2\x80"));
+}
+
 TEST(BasicTests, TrimSpaces_1)
 {
     std::string source = R"(Hello World {{ ' --' -}}

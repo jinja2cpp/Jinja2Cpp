@@ -230,8 +230,7 @@ public:
         m_tokens.clear();
     }
 
-    // Lexes [begin, end) as a whole; false on a lexing error. A `;` ends the tokens (an end of
-    // block token stands for it), though the rest of the range must still lex.
+    // Lexes [begin, end) as a whole; false on a lexing error
     bool LexRange(size_t begin, size_t end)
     {
         // A tag whose start modifier is also the first character of its end delimiter, as in
@@ -241,35 +240,14 @@ public:
             return false;
         }
         m_base = begin;
-        bool stopped = false;
-        for (size_t pos = SkipWhitespace(begin, end); pos != end; pos = SkipWhitespace(pos, end))
+        for (size_t pos = SkipWhitespace(begin, end); pos != end; pos = SkipWhitespace(m_next, end))
         {
-            Token tok;
-            switch (ScanToken(pos, end, tok))
+            if (!ScanToken(pos, end, m_tokens.emplace_back()))
             {
-            case Scan::Error:
                 return false;
-            case Scan::Semicolon:
-                if (!stopped)
-                {
-                    tok.type = Token::Eof;
-                    m_tokens.push_back(tok);
-                    stopped = true;
-                }
-                break;
-            case Scan::Token:
-                if (!stopped)
-                {
-                    m_tokens.push_back(tok);
-                }
-                break;
             }
-            pos = m_next;
         }
-        if (!stopped)
-        {
-            PushEof(end);
-        }
+        PushEof(end);
         return true;
     }
 
@@ -280,7 +258,7 @@ public:
     // `+`) and the delimiter, that starts a token outside brackets, as Jinja2 finds the end of a
     // tag; Jinja2 has `+%}` but no `+}}`. Returns where the
     // delimiter itself starts, or npos when the splitter has to find the end by its own scan:
-    // after a lexing error or a `;`, and in a tag that runs to the end of the template. Only for
+    // after a lexing error, and in a tag that runs to the end of the template. Only for
     // an `end` that cannot start inside a token (UsableEnd).
     size_t LexToEnd(size_t begin, std::basic_string_view<CharT> end, bool plusModifier)
     {
@@ -308,7 +286,7 @@ public:
                 }
             }
             auto& tok = m_tokens.emplace_back();
-            if (ScanToken(pos, size, tok) != Scan::Token || EndsInExponent(tok))
+            if (!ScanToken(pos, size, tok))
             {
                 return std::basic_string_view<CharT>::npos;
             }
@@ -357,14 +335,6 @@ public:
 private:
     using traits = lexertk::details::lexer_traits<CharT>;
 
-    enum class Scan
-    {
-        Token,
-        Error,
-        // `;`, which ends the tokens of a tag
-        Semicolon,
-    };
-
     [[nodiscard]] size_t SkipWhitespace(size_t pos, size_t end) const
     {
         while (pos != end && traits::is_whitespace(m_src[pos]))
@@ -398,9 +368,9 @@ private:
         eof.range = { pos, pos };
     }
 
-    // The token that starts at `pos` (not whitespace), lexed up to `end` at most. m_next gets
-    // where the next one may start.
-    Scan ScanToken(size_t pos, size_t end, Token& tok)
+    // The token that starts at `pos` (not whitespace), lexed up to `end` at most; false on a
+    // lexing error. m_next gets where the next one may start.
+    bool ScanToken(size_t pos, size_t end, Token& tok)
     {
         const auto ch = m_src[pos];
         if (traits::is_operator_char(ch))
@@ -415,7 +385,7 @@ private:
                 ++last;
             }
             SetSymbol(pos, last, tok);
-            return Scan::Token;
+            return true;
         }
         if (ch == '.')
         {
@@ -430,10 +400,10 @@ private:
         {
             return ScanString(pos, end, tok);
         }
-        return Scan::Error;
+        return false;
     }
 
-    Scan ScanOperator(size_t pos, size_t end, Token& tok)
+    bool ScanOperator(size_t pos, size_t end, Token& tok)
     {
         const auto c0 = m_src[pos];
         tok.range = { pos, pos + 1 };
@@ -495,22 +465,23 @@ private:
             {
                 tok.type = type;
                 tok.range.endOffset = m_next = pos + 2;
-                return Scan::Token;
+                return true;
             }
         }
+        // Jinja2 has no `;` operator: an unexpected character, as below
         if (c0 == ';')
         {
-            return Scan::Semicolon;
+            return false;
         }
         if (c0 == '&')
         {
             // A name to the parser, which rejects it
             SetSymbol(pos, pos + 1, tok);
-            return Scan::Token;
+            return true;
         }
         // One-character operators are their character
         tok.type = static_cast<Token::Type>(c0); // NOLINT(clang-analyzer-optin.core.EnumCastOutOfRange)
-        return Scan::Token;
+        return true;
     }
 
     void SetSymbol(size_t pos, size_t last, Token& tok)
@@ -540,7 +511,7 @@ private:
     [[nodiscard]] bool IsDigitAt(size_t pos, size_t end) const { return pos < end && traits::is_digit(m_src[pos]); }
 
     // A numeric literal as Python writes it: 123, 1.5, 1e3, 1.5E-3, 1_000, 0x1F, 0o17, 0b101
-    Scan ScanNumber(size_t begin, size_t end, Token& tok)
+    bool ScanNumber(size_t begin, size_t end, Token& tok)
     {
         if (m_src[begin] == '0' && begin + 1 != end)
         {
@@ -559,7 +530,7 @@ private:
             const auto step = DecimalStep(begin, pos, end, state);
             if (step == Step::Error)
             {
-                return Scan::Error;
+                return false;
             }
             if (step == Step::Stop)
             {
@@ -571,10 +542,10 @@ private:
         // 0_1), except 0, 00 and 0_0
         if ((state.exponent && !state.exponentDigit) || (!state.dot && !state.exponent && m_src[begin] == '0' && !IsZeroInteger(begin, pos)))
         {
-            return Scan::Error;
+            return false;
         }
         SetNumber(begin, pos, tok);
-        return Scan::Token;
+        return true;
     }
 
     // What a decimal literal has met so far
@@ -608,7 +579,8 @@ private:
             state.dot = true;
             return Step::Consume;
         }
-        if ((ch == 'e' || ch == 'E') && !state.afterDot)
+        // As in Jinja2, a literal has one exponent: 1e1e-1 is 1e1 e - 1
+        if ((ch == 'e' || ch == 'E') && !state.afterDot && !state.exponent)
         {
             if (pos + 1 == end || (m_src[pos + 1] != '+' && m_src[pos + 1] != '-' && !traits::is_digit(m_src[pos + 1])))
             {
@@ -680,7 +652,7 @@ private:
 
     // 0x1F, 0o17, 0b101, with single underscores before digits (0x_ff, 0b1_0). Like Python, the
     // number stops at the first character that is not a digit of its radix: 0x1for x is 0x1f or x
-    Scan ScanRadixNumber(size_t begin, size_t end, int radix, Token& tok)
+    bool ScanRadixNumber(size_t begin, size_t end, int radix, Token& tok)
     {
         bool digitFound = false;
         auto pos = begin + 2;
@@ -698,10 +670,10 @@ private:
         }
         if (!digitFound)
         {
-            return Scan::Error;
+            return false;
         }
         SetNumber(begin, pos, tok);
-        return Scan::Token;
+        return true;
     }
 
     void SetNumber(size_t begin, size_t last, Token& tok)
@@ -712,12 +684,12 @@ private:
     }
 
     // A string literal: the token's range is its text between the quotes
-    Scan ScanString(size_t pos, size_t end, Token& tok)
+    bool ScanString(size_t pos, size_t end, Token& tok)
     {
         const auto quote = m_src[pos];
         if (end - pos < 2)
         {
-            return Scan::Error;
+            return false;
         }
         auto cur = pos + 1;
         bool escaped = false;
@@ -738,25 +710,12 @@ private:
         }
         if (cur == end)
         {
-            return Scan::Error;
+            return false;
         }
         tok.type = Token::String;
         tok.range = { pos + 1, cur };
         m_next = cur + 1;
-        return Scan::Token;
-    }
-
-    // A decimal literal that ends in `e`, as in 1e1e-: lexed up to the end of the tag only, it
-    // would end in the `e` and be an error, since the `-` after it is the end's modifier
-    [[nodiscard]] bool EndsInExponent(const Token& tok) const
-    {
-        if (tok.type != Token::FloatNum)
-        {
-            return false;
-        }
-        const auto last = m_src[tok.range.endOffset - 1];
-        const bool radix = tok.range.size() > 1 && m_src[tok.range.startOffset] == '0' && GetRadix(m_src[tok.range.startOffset + 1]) != 0;
-        return !radix && (last == 'e' || last == 'E');
+        return true;
     }
 
     // The tokens after which LexToEnd makes sure the tag has an end at all

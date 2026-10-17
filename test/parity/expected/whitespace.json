@@ -466,6 +466,40 @@
    "output": "ab"
   },
   {
+   "id": "whitespace.minus_left_strips_unicode_space",
+   "template": "a　  {%- if true %}x{% endif %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "ax"
+  },
+  {
+   "id": "whitespace.minus_strips_separator_controls",
+   "template": "{{ 'a' -}}\u001c\u001f b",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "ab"
+  },
+  {
+   "id": "whitespace.minus_keeps_zero_width_space",
+   "template": "{{ 'a' -}}​﻿b",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "a​﻿b"
+  },
+  {
+   "id": "whitespace.lstrip_blocks_unicode_space",
+   "template": "a\n 　{% if true %}x{% endif %}",
+   "context": {},
+   "env": {
+    "lstrip_blocks": true
+   },
+   "templates": {},
+   "output": "a\nx"
+  },
+  {
    "id": "whitespace.raw_minus_and_trim_blocks",
    "template": "{% raw -%}  \n\n x{% endraw %}\n\ny",
    "context": {},

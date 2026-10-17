@@ -86,6 +86,9 @@ CASES = [
     ("call_after_bad_subscript", "{{ x[8( }}"),
     ("semicolon_in_tag", "{{ x ; 1 }}"),
     ("float_second_exponent", "{{ 1e1e-1 }}"),
+    ("float_second_exponent_close", "{{ 1e1e-}}"),
+    ("semicolon_in_block", "{% set x = 1; %}"),
+    ("semicolon_at_tag_end", "{{ 1; }}"),
     # A repeated keyword argument is a SyntaxError (0127)
     ("repeated_kwarg_filter", "{{ l|tojson(indent=1, indent=2) }}"),
     ("repeated_kwarg_trim", "{{ s|trim(chars='a', chars='b') }}"),

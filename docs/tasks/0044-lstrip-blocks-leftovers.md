@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0024]
@@ -32,3 +32,7 @@ Reject `+` before the `%}` of `raw`.
 **Progress.** PR #316 (task 0028, which rewrote the splitter) fixed the trailing-whitespace,
 between-tags and `{% raw +%}` items. Only the Unicode whitespace item
 (`minus_strips_unicode_space`) remains.
+That item is done too: `-` stripping and `lstrip_blocks` test whitespace as Python's `\s`
+(`unicode::IsSpace`, UTF-8 decoded for narrow templates, malformed sequences are no space),
+with corpus cases for left and right `-`, `\x1c`-`\x1f`, zero-width characters and
+`lstrip_blocks`.
