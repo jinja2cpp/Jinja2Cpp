@@ -128,6 +128,7 @@ CASES = [
     ("for_filter_sees_outer_loop_in_recursive", "{% for y in [1] %}{% for x in tree recursive %}{% for z in [5, 6] if loop.first %}{{ z }}{% endfor %}{{ loop(x.c) }}{% endfor %}{% endfor %}"),
     ("loop_recursive_filter_sees_outer_loop", "{% for y in [7] %}{% for x in tree + tree if loop.first recursive %}{{ x.n }}{{ loop(x.c) }}{% endfor %}{% endfor %}"),
     ("loop_recursive_after_filter_reject_order", "{% for x in tree recursive if x.n %}{{ x.n }}{% endfor %}"),
+    ("loop_not_visible_in_include", "{% for x in [1, 2] %}{% include 't' %}|{% endfor %}", {"templates": {"t": "{{ loop is defined }}{{ x }}"}}),
     ("set_loop_in_loop_else", "{% for x in [] %}{% else %}{% set loop = 1 %}{{ loop }}{% endfor %}"),
     ("set_loop_in_macro_in_loop", "{% for x in [1] %}{% macro m() %}{% set loop = 1 %}{{ loop }}{% endmacro %}{{ m() }}{% endfor %}"),
     ("set_loop_tuple_in_loop", "{% for x in [1] %}{% set a, loop = 1, 2 %}{% endfor %}"),

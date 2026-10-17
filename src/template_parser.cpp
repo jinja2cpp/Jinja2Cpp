@@ -302,8 +302,8 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         return MakeUnexpected(valueExpr.error());
     }
 
-    // Jinja2 takes `recursive` after the filter; Jinja2C++ has always taken it before
-    bool isRecursive = lexer.EatIfEqual(Keyword::Recursive);
+    // Jinja2 takes `recursive` after the filter only: `for x in l if c recursive`
+    bool isRecursive = false;
     const auto outerFrame = m_names.Current();
     auto filterFrame = NameResolver::NoFrame;
     NodeRef<Expression> ifExpr;
@@ -313,7 +313,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         // The recursive flag after the filter is not known yet: the filter's frame is a
         // dynamic region either way when the loop is recursive, so look ahead for it
         const auto filterStart = lexer.GetState();
-        filterFrame = m_names.PushFilter(outerFrame, isRecursive || EndsWithRecursive(lexer));
+        filterFrame = m_names.PushFilter(outerFrame, EndsWithRecursive(lexer));
         m_names.SetCurrent(filterFrame);
         // A frame of its own to Jinja2, even in an `if`
         CheckGuard checked(m_unknown, UnknownCallables::Check::Now);
@@ -325,12 +325,13 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
         }
         ifExpr = *parsedExpr;
         filterReadsLoop = ReadsName(lexer, filterStart, "loop");
-        if (!isRecursive)
-        {
-            isRecursive = lexer.EatIfEqual(Keyword::Recursive);
-        }
+        isRecursive = lexer.EatIfEqual(Keyword::Recursive);
     }
-    else if (lexer.PeekNextToken() != Token::Eof)
+    else if (lexer.EatIfEqual(Keyword::Recursive))
+    {
+        isRecursive = true;
+    }
+    if (lexer.PeekNextToken() != Token::Eof)
     {
         const auto& tok1 = lexer.PeekNextToken();
         return MakeParseErrorTL(ErrorCode::ExpectedToken, tok1, Token::If, Token::Recursive, Token::Eof);
