@@ -203,49 +203,6 @@ inline InternalValue MakeMarkup(const InternalValue& val, IRendererCallback* cal
     return result;
 }
 
-// An argument of Markup's `%` and format() (markupsafe's _MarkupEscapeHelper): numbers,
-// bools and None stay as they are, anything else becomes the escaped str() of it
-inline InternalValue EscapeFormatArg(const InternalValue& val, IRendererCallback* callback)
-{
-    switch (val.Kind())
-    {
-    case ValueKind::Undefined:
-    case ValueKind::None:
-    case ValueKind::Int:
-    case ValueKind::Double:
-    case ValueKind::Bool:
-        return val;
-    default:
-        return MarkupEscape(val, callback);
-    }
-}
-
-// The right operand of Markup's `%`: a tuple's items and a mapping's values are escaped
-// one by one, any other value as a whole
-inline InternalValue EscapeFormatArgs(const InternalValue& args, IRendererCallback* callback)
-{
-    auto list = AsList(args);
-    if (list && list->IsTuple())
-    {
-        InternalValueList items;
-        for (const auto& item : *list)
-        {
-            items.push_back(EscapeFormatArg(item, callback));
-        }
-        return ListAdapter::CreateAdapter(std::move(items)).MarkAsTuple();
-    }
-    if (auto map = AsMap(args))
-    {
-        InternalDict items;
-        for (auto& key : map->GetKeys())
-        {
-            items[key] = EscapeFormatArg(map->GetValueByName(key), callback);
-        }
-        return CreateMapAdapter(std::move(items));
-    }
-    return EscapeFormatArg(args, callback);
-}
-
 // Writes the escaped str() of a value that is not Markup. A short narrow string is escaped
 // straight into the stream, with no string in between (docs/tasks/0126).
 void WriteEscaped(OutStream& stream, const InternalValue& val, IRendererCallback* callback);

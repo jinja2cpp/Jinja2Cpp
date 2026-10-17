@@ -544,6 +544,7 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
         throw std::runtime_error("format(): can't handle positional and keyword arguments at the same time");
     }
     auto params = helpers::EvaluateCallParams(m_params, context);
+    bool markup = baseVal.IsMarkup();
     std::string formatted;
     if (!params.kwParams.empty())
     {
@@ -553,24 +554,13 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
             mapping[name] = value;
         }
         InternalValue values = CreateMapAdapter(std::move(mapping));
-        // Markup % args escapes the arguments and stays Markup
-        if (baseVal.IsMarkup())
-        {
-            values = EscapeFormatArgs(values, callback);
-        }
-        formatted = m_constFormat ? m_constFormat->Format(values) : PythonPercentFormat(format, values);
+        // Markup % args escapes what the arguments convert to and stays Markup
+        formatted = m_constFormat ? m_constFormat->Format(values, markup) : PythonPercentFormat(format, values, markup);
     }
     else
     {
-        if (baseVal.IsMarkup())
-        {
-            for (auto& value : params.posParams)
-            {
-                value = EscapeFormatArg(value, callback);
-            }
-        }
-        formatted = m_constFormat ? m_constFormat->Format(params.posParams.data(), params.posParams.size())
-                                  : PythonPercentFormat(format, params.posParams.data(), params.posParams.size());
+        formatted = m_constFormat ? m_constFormat->Format(params.posParams.data(), params.posParams.size(), markup)
+                                  : PythonPercentFormat(format, params.posParams.data(), params.posParams.size(), markup);
     }
     InternalValue result(formatted);
     result.SetMarkup(baseVal.IsMarkup());

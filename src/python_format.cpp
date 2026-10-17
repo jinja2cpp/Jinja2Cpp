@@ -1,6 +1,7 @@
 #include "python_format.h"
 
 #include "internal_value.h"
+#include "markup.h"
 #include "value_visitors.h"
 
 #include <fmt/format.h>
@@ -459,8 +460,9 @@ void ParsePercentFormat(std::string_view format, const Sink& sink)
 class Formatter
 {
 public:
-    explicit Formatter(const InternalValue& values)
+    Formatter(const InternalValue& values, bool markup)
         : m_map(AsMap(values))
+        , m_markup(markup)
     {
         // An object such as namespace() is one argument, not a mapping of them
         if (m_map && m_map->GetObjectClass())
@@ -492,9 +494,10 @@ public:
         m_isMapping = m_map.has_value();
     }
 
-    Formatter(const InternalValue* args, size_t count)
+    Formatter(const InternalValue* args, size_t count, bool markup)
         : m_args(args)
         , m_count(count)
+        , m_markup(markup)
     {
     }
 
@@ -530,8 +533,15 @@ private:
     // The reference stays valid until the next call
     const InternalValue& NextArg()
     {
+        // After "(key)" the mapping value is the only argument left, and only once, as in
+        // Python: "%(a)*d" and "%(a)s %s" run out of arguments
         if (m_keyed)
         {
+            if (m_keyedUsed)
+            {
+                throw std::runtime_error("not enough arguments for format string");
+            }
+            m_keyedUsed = true;
             return m_keyedValue;
         }
         if (m_next >= m_count)
@@ -576,6 +586,7 @@ private:
         }
         m_keyedValue = m_map->GetValueByName(key);
         m_keyed = true;
+        m_keyedUsed = false;
     }
 
     // The steps run in the order Python takes them, so that the first error is the same
@@ -590,7 +601,6 @@ private:
         {
             throw std::runtime_error("incomplete format");
         }
-        m_keyed = false;
         if (directive.hasKey)
         {
             if (directive.error == PercentDirective::Error::IncompleteKey)
@@ -636,14 +646,21 @@ private:
         case 's':
         case 'r':
         case 'a':
-            ConvertText(out, arg, conversion, spec);
+            ConvertText(out, arg, conversion, spec, m_markup);
+            break;
+        case 'x':
+        case 'X':
+        case 'o':
+            // markupsafe's helper has __int__ but no __index__, which these need
+            if (m_markup)
+            {
+                throw std::runtime_error(fmt::format("%{} format: an integer is required, not _MarkupEscapeHelper", conversion));
+            }
+            ConvertInteger(out, arg, conversion, spec);
             break;
         case 'd':
         case 'i':
         case 'u':
-        case 'x':
-        case 'X':
-        case 'o':
             ConvertInteger(out, arg, conversion, spec);
             break;
         case 'e':
@@ -655,13 +672,20 @@ private:
             ConvertFloat(out, arg, conversion, spec);
             break;
         case 'c':
+            // markupsafe's helper is neither an int nor a one-character string
+            if (m_markup)
+            {
+                throw std::runtime_error("%c requires int or char");
+            }
             ConvertChar(out, arg, spec);
             break;
         default:
             throw std::runtime_error(fmt::format("unsupported format character '{}' (0x{:x}) at index {}", conversion, static_cast<unsigned char>(conversion), directive.index));
         }
     }
-    static void ConvertText(std::string& out, const InternalValue& arg, char conversion, const Spec& spec)
+    // With `escape` (a Markup format) the text is escaped before precision cuts it, except
+    // the str() of a Markup argument
+    static void ConvertText(std::string& out, const InternalValue& arg, char conversion, const Spec& spec, bool escape)
     {
         // str() of a narrow string is the string itself, so it is not copied
         std::string owned;
@@ -673,6 +697,11 @@ private:
             {
                 owned = AsciiEscape(owned);
             }
+            view = owned;
+        }
+        if (escape && (conversion != 's' || !arg.IsMarkup()))
+        {
+            owned = EscapeHtml(*view);
             view = owned;
         }
         auto text = *view;
@@ -794,20 +823,23 @@ private:
     InternalValueList m_owned;
     InternalValue m_listItem;
     size_t m_next = 0;
+    // Set by the first "(key)", for the rest of the format
     bool m_keyed = false;
+    bool m_keyedUsed = false;
     InternalValue m_keyedValue;
+    bool m_markup = false;
 };
 
 } // namespace
 
-std::string PythonPercentFormat(std::string_view format, const InternalValue& values)
+std::string PythonPercentFormat(std::string_view format, const InternalValue& values, bool markup)
 {
-    return Formatter(values).Run(format);
+    return Formatter(values, markup).Run(format);
 }
 
-std::string PythonPercentFormat(std::string_view format, const InternalValue* args, size_t count)
+std::string PythonPercentFormat(std::string_view format, const InternalValue* args, size_t count, bool markup)
 {
-    return Formatter(args, count).Run(format);
+    return Formatter(args, count, markup).Run(format);
 }
 
 CompiledPercentFormat::CompiledPercentFormat(std::string format)
@@ -816,14 +848,14 @@ CompiledPercentFormat::CompiledPercentFormat(std::string format)
     ParsePercentFormat(m_format, [this](const PercentDirective& directive) { m_pieces.push_back(directive); });
 }
 
-std::string CompiledPercentFormat::Format(const InternalValue& values) const
+std::string CompiledPercentFormat::Format(const InternalValue& values, bool markup) const
 {
-    return Formatter(values).Run(m_format, m_pieces);
+    return Formatter(values, markup).Run(m_format, m_pieces);
 }
 
-std::string CompiledPercentFormat::Format(const InternalValue* args, size_t count) const
+std::string CompiledPercentFormat::Format(const InternalValue* args, size_t count, bool markup) const
 {
-    return Formatter(args, count).Run(m_format, m_pieces);
+    return Formatter(args, count, markup).Run(m_format, m_pieces);
 }
 
 } // namespace jinja2

@@ -17,11 +17,14 @@ namespace jinja2
 // what Python's right operand is: a tuple (a list marked as tuple) of positional arguments, a
 // mapping for "%(name)s", or any other single value. Throws std::runtime_error with Python's
 // message where Python raises.
-std::string PythonPercentFormat(std::string_view format, const InternalValue& values);
+// With `markup` the format is Markup and each argument is seen through markupsafe's
+// _MarkupEscapeHelper: %s, %r and %a write the escaped str(), repr() or ascii() of the
+// argument itself (a Markup argument's str() as it is), before precision and width apply.
+std::string PythonPercentFormat(std::string_view format, const InternalValue& values, bool markup = false);
 
 // The same with positional arguments given as an array, as if they were a tuple: format()
 // passes its evaluated arguments here without building a list for them
-std::string PythonPercentFormat(std::string_view format, const InternalValue* args, size_t count);
+std::string PythonPercentFormat(std::string_view format, const InternalValue* args, size_t count, bool markup = false);
 
 // One piece of a parsed format: literal text (a range of the format string) followed by a
 // conversion, if any. A piece that ends the format in an error carries the error, which is
@@ -67,8 +70,8 @@ public:
     explicit CompiledPercentFormat(std::string format);
 
     // The same as PythonPercentFormat(format, ...)
-    [[nodiscard]] std::string Format(const InternalValue& values) const;
-    [[nodiscard]] std::string Format(const InternalValue* args, size_t count) const;
+    [[nodiscard]] std::string Format(const InternalValue& values, bool markup = false) const;
+    [[nodiscard]] std::string Format(const InternalValue* args, size_t count, bool markup = false) const;
 
 private:
     std::string m_format;
