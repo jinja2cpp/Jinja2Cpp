@@ -276,7 +276,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0204](0204-deep-value-check-render-cost.md) | Render cost of the deep-value stack checks and trashcan release (0093) | perf | low | open |
 | [0205](0205-load-drift-0168-0193.md) | Load drift after trains 11 and 12 | perf | medium | done |
 | [0206](0206-call-argument-leftovers.md) | Argument checks that 0200 left over | parity | low | open |
-| [0207](0207-self-frame-leftovers.md) | `self` cases left after 0143 and 0198 | parity | low | open |
+| [0207](0207-self-frame-leftovers.md) | `self` cases left after 0143 and 0198 | parity | low | done |
 | [0208](0208-macro-value-gaps.md) | Macros as values | parity | low | open |
 | [0209](0209-include-sees-loop.md) | A template included in a loop sees `loop` | parity | low | open |
 | [0210](0210-markup-percent-int-of-string.md) | `%d` and `%f` of a string in Markup's `%` | parity | low | open |
+| [0211](0211-self-nested-store-and-globals.md) | `self` stored in a nested scope of a block; globals changed in place | parity | low | open |
