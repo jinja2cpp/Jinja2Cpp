@@ -54,8 +54,9 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
     // opens is in that frame too unless the statement makes one of its own
     const auto outerFrame = statementsInfo.empty() ? NameResolver::NoFrame : statementsInfo.back().frame;
     m_names.SetCurrent(outerFrame);
-    // A statement that does not open a frame of its own puts the ones inside it in a branch
-    m_names.SetInBranch(!statementsInfo.empty() && !StatementInfo::OwnsFrame(statementsInfo.back().type));
+    // A statement that does not open a frame of its own puts the ones inside it in a branch;
+    // a loop's `else` has one (docs/tasks/0202)
+    m_names.SetInBranch(!statementsInfo.empty() && !StatementInfo::OwnsFrame(statementsInfo.back().type) && !IsLoopElse(statementsInfo));
 
     auto keyword = tok.keyword;
     // Jinja2: required blocks can only contain comments or whitespace
@@ -559,7 +560,8 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     if (statementsInfo.back().type == StatementInfo::ElseIfStatement)
     {
         auto elseInfo = PopStatement(statementsInfo);
-        m_nodes.Get<ElseBranchStatement>(elseInfo.renderer).SetMainBody(TakeBody(elseInfo));
+        // The body of a frame of its own (ParseElse)
+        m_nodes.Get<ElseBranchStatement>(elseInfo.renderer).SetMainBody(m_names.MayBindAtEntry(elseInfo.frame) ? TakeFrameBody(elseInfo) : TakeBody(elseInfo));
         elseRenderer = elseInfo.renderer;
     }
 
@@ -622,8 +624,9 @@ StatementsParser::ParseResult StatementsParser::ParseElse(LexScanner& /*lexer*/,
     auto renderer = m_nodes.Make<ElseBranchStatement>(NodeRef<Expression>());
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ElseIfStatement, stmtTok);
     statementInfo.renderer = renderer;
-    // A loop's `else` body is outside the loop
-    statementInfo.frame = prev.type == StatementInfo::ForStatement ? m_names.Parent(prev.frame) : prev.frame;
+    // A loop's `else` body is outside the loop, in a frame of its own, as in Jinja2
+    // (docs/tasks/0202)
+    statementInfo.frame = prev.type == StatementInfo::ForStatement ? m_names.PushWith(m_names.Parent(prev.frame)) : prev.frame;
     statementsInfo.push_back(std::move(statementInfo));
     return ParseResult();
 }
@@ -1236,10 +1239,6 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
     }
 
     auto renderer = m_nodes.Make<IncludeStatement>(isIgnoreMissing, isWithContext);
-    if (isWithContext)
-    {
-        m_names.AddContextRead();
-    }
     m_nodes[renderer].SetIncludeNamesExpr(valueExpr, m_nodes[valueExpr].GetConstant(m_nodes) != nullptr);
     statementsInfo.back().body.emplace_back(renderer);
 
@@ -1301,10 +1300,6 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
     }
 
     auto renderer = m_nodes.Make<ImportStatement>(isWithContext);
-    if (isWithContext)
-    {
-        m_names.AddContextRead();
-    }
     m_nodes[renderer].SetImportNameExpr(valueExpr);
     const auto namespaceName = lexer.GetAsString(name);
     const auto namespaceText = m_nodes.MakeText(namespaceName);
@@ -1441,10 +1436,6 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     }
 
     auto renderer = m_nodes.Make<ImportStatement>(isWithContext);
-    if (isWithContext)
-    {
-        m_names.AddContextRead();
-    }
     m_nodes[renderer].SetImportNameExpr(valueExpr);
 
     // Every `name as alias` pair is kept in source order; a name imported twice binds both aliases

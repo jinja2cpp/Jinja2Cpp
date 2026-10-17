@@ -246,6 +246,10 @@ struct UndefinedValue
     const UndefinedInfo* info = nullptr;
     // Set only in a Slot that holds no value (slot_frame.h)
     bool unbound = false;
+    // Bound by a frame as it starts, for a name it stores later (BindUndefinedStatement): a
+    // block, or a template included or imported with context, passes over it to the value
+    // outside, as Jinja2 hands those only the names already stored (docs/tasks/0201)
+    bool atEntry = false;
 };
 
 inline bool operator==(const UndefinedValue&, const UndefinedValue&)

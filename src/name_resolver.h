@@ -37,7 +37,8 @@ struct TargetNode;
 // before that store is the frame's own from the start, so a frame inside it that reads the
 // name before the store sees it undefined, not the value outside. A frame's body starts with a
 // BindUndefinedStatement for those names (EntryBinding); Resolve drops the ones a frame around
-// it reads or binds, which Jinja2 aliases to the outer value.
+// it reads or binds, which Jinja2 aliases to the outer value. A block, and a template included
+// or imported with context, pass over those bindings at render (docs/tasks/0201).
 class NameResolver
 {
 public:
@@ -106,16 +107,6 @@ public:
         if (m_frames[m_current].mayBind)
         {
             m_uses.emplace_back(ref, m_current);
-        }
-    }
-    // An `include` or `import` with context in the current frame: it reads every name of the
-    // frames around it from their scopes, which Jinja2 hands it only once stored. A frame
-    // binds no name at entry that it stores after one
-    void AddContextRead()
-    {
-        if (m_current != NoFrame)
-        {
-            m_contextReads.push_back(ContextRead{ m_current, static_cast<std::uint32_t>(m_stores.size()) });
         }
     }
     // Called when the body of `frame` (a template, block, macro, call block, loop or `with`)
@@ -251,14 +242,6 @@ private:
     // The names stored in frames, in parse order; most templates store a few
     boost::container::small_vector<Store, 8, void, Doubling> m_stores;
     std::vector<EntryName> m_entryNames;
-    struct ContextRead
-    {
-        FrameId frame = NoFrame;
-        // The stores made before it (m_stores)
-        std::uint32_t storesBefore = 0;
-    };
-    // Inline room for a few, so that a template with an `include` allocates nothing here
-    boost::container::small_vector<ContextRead, 4> m_contextReads;
     FrameId m_current = NoFrame;
     bool m_inBranch = false;
     bool m_hasSlots = false;

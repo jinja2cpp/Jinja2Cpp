@@ -373,4 +373,15 @@ CASES = [
     ('idtracking_loop_else_read_before_set', '{% for i in [1] %}{% for j in e %}{% else %}{{ x }}{% endfor %}{% set x = 9 %}{% endfor %}'),
     # a block read before the store keeps the binding off (docs/tasks/0201)
     ('idtracking_block_read_keeps_loop_read_outer', '{% block b %}{% for j in [1] %}{{ x }}{% endfor %}{% endblock %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = 1 %}'),
+    ('idtracking_block_macro_reads_context', '{% block b %}{% macro n() %}({{ x }}){% endmacro %}{{ n() }}{% endblock %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = 1 %}'),
+    ('idtracking_scoped_block_passes_over_binding', '{% for k in [1] %}{% block b scoped %}{{ x }}{% endblock %}{% endfor %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = 1 %}'),
+    ('idtracking_child_block_passes_over_parent_binding', "{% extends 'base' %}{% block b %}[{{ x }}]{% endblock %}",
+     {"templates": {"base": "{% block b %}{% endblock %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = 1 %}"}}),
+    # an include or import with context gets the outer value, and the binding stays (docs/tasks/0201)
+    ('idtracking_include_before_store_keeps_binding', "{% include 'inc' %}{% for j in [1] %}{{ x }}{% endfor %}{% set x = 1 %}", {"templates": {"inc": "<{{ x }}>"}}),
+    ('idtracking_import_before_store_keeps_binding', "{% from 'm' import f with context %}{{ f() }}{% for j in [1] %}{{ x }}{% endfor %}{% set x = 1 %}",
+     {"templates": {"m": "{% macro f() %}<{{ x }}>{% endmacro %}"}}),
+    # the else frame binds at entry, and its set hides a loop target outside only there (docs/tasks/0202)
+    ('idtracking_loop_else_binds_at_entry', '{% for i in e %}{% else %}{% for k in [1] %}{{ x }}{% endfor %}{% set x = 1 %}{% endfor %}'),
+    ('loop_else_set_keeps_outer_target', '{% for x in [1] %}{% for j in e %}{% else %}{% set x = 2 %}{{ x }}{% endfor %}{{ x }}{% endfor %}'),
 ]

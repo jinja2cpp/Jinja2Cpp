@@ -447,6 +447,8 @@ public:
         , m_views(other.m_views)
         , m_fullWalk(other.m_fullWalk)
         , m_inheritsViews(other.m_inheritsViews)
+        , m_hasEntryBindings(other.m_hasEntryBindings)
+        , m_entryPassDepth(other.m_entryPassDepth)
         , m_autoescape(other.m_autoescape)
         , m_lookupCache(other.m_lookupCache)
     {
@@ -490,10 +492,12 @@ public:
         , m_parentDepth(std::min(depth, other.GetScopesCount()))
         , m_frame(other.m_frame)
         , m_inheritsViews(other.m_inheritsViews || !other.m_views.empty())
+        , m_hasEntryBindings(other.m_hasEntryBindings)
+        , m_entryPassDepth(other.m_entryPassDepth)
         , m_autoescape(other.m_autoescape)
         , m_lookupCache(other.m_lookupCache)
     {
-        m_fullWalk = m_inheritsViews;
+        m_fullWalk = m_inheritsViews || m_entryPassDepth != 0;
         // Skip the parents whose own scopes are all hidden, so chains stay short
         while (m_parent->m_parent && m_parentDepth <= m_parent->m_parentDepth)
         {
@@ -501,6 +505,21 @@ public:
         }
         NewEpoch();
         EnterScope();
+    }
+
+    // A frame bound names at its entry in a scope of this context (BindUndefinedStatement)
+    void SetHasEntryBindings() { m_hasEntryBindings = true; }
+    // Called on a context just made from another one for a block, or for a template included
+    // with context: its lookups pass over the names the frames it sees of the other bound at
+    // their entry, which Jinja2 hands a block or an include only once stored (docs/tasks/0201).
+    // They take FindValueWithViews then; a render that binds no name at entry pays nothing
+    void PassOverEntryBindings()
+    {
+        if (m_hasEntryBindings && m_parentDepth > m_entryPassDepth)
+        {
+            m_entryPassDepth = m_parentDepth;
+            m_fullWalk = true;
+        }
     }
 
     // Lookups in this context and the ones copied from it are cached in `cache`
@@ -746,7 +765,8 @@ public:
             [&names](const InternalValueMap* scope, size_t /*depth*/) {
                 for (const auto& [name, value] : *scope)
                 {
-                    if (name != "loop")
+                    // Jinja2 hands an import a name bound at entry only once stored (docs/tasks/0201)
+                    if (name != "loop" && !IsEntryBinding(value))
                     {
                         names.emplace(name, value);
                     }
@@ -1176,7 +1196,7 @@ private:
         for (const auto* ctx = this; ctx;)
         {
             size_t link = ScopeView::NoLink;
-            if (const auto result = ctx->FindInScopesWithViews(count, val, link))
+            if (const auto result = ctx->FindInScopesWithViews(count, val, link, m_entryPassDepth))
             {
                 return result;
             }
@@ -1201,14 +1221,15 @@ private:
         return p ? LookupResult(p->second) : LookupResult();
     }
     // The innermost of the `count` innermost scopes of this context, and the views attached to
-    // them, that has `val`. Stops at a closure body's link, which it stores in `link`
-    [[nodiscard]] LookupResult FindInScopesWithViews(size_t count, const HashedName& val, size_t& link) const
+    // them, that has `val`. Stops at a closure body's link, which it stores in `link`. Passes
+    // over a name bound at entry in a scope below `entryPassDepth` (PassOverEntryBindings)
+    [[nodiscard]] LookupResult FindInScopesWithViews(size_t count, const HashedName& val, size_t& link, size_t entryPassDepth) const
     {
         // The views of the scopes a child does not see are passed over
         size_t views = m_views.size();
         for (size_t idx = count; idx != 0; --idx)
         {
-            if (const auto* p = FindIn(m_scopes[idx - 1], val))
+            if (const auto* p = FindIn(m_scopes[idx - 1], val); p && !(m_parentDepth + idx <= entryPassDepth && IsEntryBinding(p->second)))
             {
                 return LookupResult(p->second);
             }
@@ -1234,6 +1255,11 @@ private:
             }
         }
         return {};
+    }
+    static bool IsEntryBinding(const InternalValue& value)
+    {
+        const auto* undefined = GetIf<UndefinedValue>(&value);
+        return undefined && undefined->atEntry;
     }
     // The scopes a child sees of its parent are still there (see the constructor): the
     // parent pushes and pops only above them
@@ -1305,6 +1331,11 @@ private:
     // context is made: while this context is alive the parent pushes and pops views only
     // above the scopes this one sees (see the constructor), which it never searches
     bool m_inheritsViews = false;
+    // A scope of this context, or of one it was made from, holds names bound at entry
+    bool m_hasEntryBindings = false;
+    // Lookups pass over the names bound at entry in the scopes below this depth
+    // (PassOverEntryBindings)
+    size_t m_entryPassDepth = 0;
     static constexpr size_t MaxSpareScopeMask = 63;
     // A scope left empty, kept for the next EnterScope; copies do not take it
     std::optional<InternalValueMap> m_spareScope;

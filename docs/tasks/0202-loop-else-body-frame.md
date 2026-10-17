@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0168]
@@ -23,3 +23,8 @@ with `e=[]` prints `3` (Jinja2 nothing): `statements.loop_else_set_is_local` and
 names read after it stay right once the store no longer leaks.
 
 **Done when.** No divergences line names 0202.
+
+**Done.** `ParseElse` gives a loop's `else` a `With` frame under the loop's parent; its
+statements are not in a branch (`IsLoopElse`), so it binds names at entry like any frame,
+and `ForStatement::RenderElse` runs the body in a scope of its own. Cases:
+`statements.idtracking_loop_else_binds_at_entry`, `loop_else_set_keeps_outer_target`.

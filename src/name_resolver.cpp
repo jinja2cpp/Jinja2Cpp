@@ -205,25 +205,15 @@ NodeRef<BindUndefinedStatement> NameResolver::MakeEntryBinding(FrameId frameId, 
 // A candidate the frame reads before its store is resolved outward there (Jinja2 loads it
 // first). One no frame inside reads before the store needs no binding: the body runs in
 // order, so a frame that comes after the store, or a closure defined after it, runs after it.
-// One a block inside reads is left as it is, since the block would see the binding and
-// Jinja2's does not (docs/tasks/0201); so is one stored after an include or import with
-// context inside the frame, which Jinja2 hands the outer value
+// A read in a block inside does not count: the block reads the context, passing over the
+// binding at render (RenderContext::PassOverEntryBindings), as does an include or import with
+// context (docs/tasks/0201)
 void NameResolver::MarkCandidateReads(FrameId frameId, boost::span<EntryCandidate> candidates, const NodeArena& nodes) const
 {
     std::uint32_t lastStore = 0;
     for (const auto& candidate : candidates)
     {
         lastStore = std::max(lastStore, candidate.readsBefore);
-    }
-    for (const auto& read : m_contextReads)
-    {
-        if (IsInside(m_frames, read.frame, frameId, NoFrame).first)
-        {
-            for (auto& candidate : candidates)
-            {
-                candidate.isDropped = candidate.isDropped || candidate.order >= read.storesBefore;
-            }
-        }
     }
     const auto byHash = [](const EntryCandidate& candidate, std::size_t hash) { return candidate.hash < hash; };
     for (auto idx = m_frames[frameId].firstRead; idx < lastStore; ++idx)
@@ -243,8 +233,7 @@ void NameResolver::MarkCandidateReads(FrameId frameId, boost::span<EntryCandidat
                 continue;
             }
             const auto [isInside, viaBlock] = IsInside(m_frames, readFrame, frameId, NoFrame);
-            candidate.isDropped = isInside && viaBlock;
-            candidate.isReadInside = candidate.isReadInside || isInside;
+            candidate.isReadInside = candidate.isReadInside || (isInside && !viaBlock);
         }
     }
 }
