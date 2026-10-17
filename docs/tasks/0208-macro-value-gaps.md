@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 touches: [src/value_visitors.h, src/filters.cpp]
@@ -21,3 +21,7 @@ of a macro as a value still differ from Jinja2 3.1.6:
   ignore their arguments in general (`{{ self.b(1) }}`), which belongs with 0198.
 
 **Done when.** No divergences line names 0208 and `ctest -R parity` passes.
+
+**Resolution.** Identity equality and `pprint` of macros landed with 0145 and 0173. The
+rest (`truncate`, `xmlattr`, `__call__`) moved to 0209; the call-block `caller` cases now match
+or are the deliberate 0156 line.

@@ -27,7 +27,7 @@ MULTISTR_TEST(NlohmannJsonTest, BasicTypesReflection, R"(
 {{ json.string | pprint }}
 )",
               R"(
-true
+True
 100500
 100500100500100
 100.5
@@ -55,14 +55,14 @@ MULTISTR_TEST(NlohmannJsonTest, BasicValuesReflection, R"(
 {{ empty_val | pprint }}
 )",
               R"(
-true
+True
 100500
 100500100500100
 100.5
 'Hello World!'
 [1, 2, 3, 4]
 {'message': 'Hello World from Parser!', 'message2': 'Hello World from Parser-123!'}
-none)")
+None)")
 {
     nlohmann::json values = {
         {"bool", true},
@@ -148,7 +148,7 @@ MULTISTR_TEST(NlohmannJsonTest, ParsedTypesReflection, R"(
 {{ json.array | sort | pprint }}
 )",
               R"(
-true
+True
 100500
 100500100500100
 100.5

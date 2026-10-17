@@ -262,6 +262,12 @@ bool IsSameObject(const InternalValue& left, const InternalValue& right)
         const auto* rightPair = GetIf<KeyValuePair>(&right);
         return leftPair != nullptr && leftPair == rightPair;
     }
+    case TestKind::Callable:
+    {
+        const auto* leftCallable = GetIf<Callable>(&left);
+        const auto* rightCallable = GetIf<Callable>(&right);
+        return leftCallable != nullptr && rightCallable != nullptr && leftCallable->IsSame(*rightCallable);
+    }
     default:
         return false;
     }

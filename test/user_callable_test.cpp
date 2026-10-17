@@ -66,6 +66,20 @@ Hello World!)")
     params["test_wide"] = std::move(ucWide);
 }
 
+// Python compares functions by identity (docs/tasks/0145); a copy of a UserCallable is the same function
+MULTISTR_TEST(UserCallableTest, CallableEqualsItself, R"({% set a = f %}{{ f == f }} {{ f != f }} {{ f == g }} {{ f != g }} {{ f == copy }} {{ a == f }} {{ f in [g, f] }} {{ f is sameas f }} {{ f is sameas g }} {{ [f, g, f, copy]|unique|list|length }} {{ f == 'f' }})",
+              //------------
+              R"(True False False True True True True True False 2 False)")
+{
+    jinja2::UserCallable f;
+    f.callable = [](auto&) -> jinja2::Value { return "f"; };
+    jinja2::UserCallable g;
+    g.callable = [](auto&) -> jinja2::Value { return "f"; };
+    params["copy"] = f;
+    params["f"] = std::move(f);
+    params["g"] = std::move(g);
+}
+
 MULTISTR_TEST(UserCallableTest, SimpleUserCallableWithParams1,
               R"(
 {{ test('Hello', 'World!') }}
@@ -299,10 +313,12 @@ TEST_P(UserCallableFilterTest, Test)
     EXPECT_TRUE(!loaded || !plain.RenderAsString(params)) << source;
 }
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(BoolParamConvert, UserCallableParamConvertTest, ::testing::Values(
-                            InputOutputPair{"BoolFn()",                   "false"},
-                            InputOutputPair{"BoolFn(true)", "true"}
+                            InputOutputPair{"BoolFn()",                   "False"},
+                            InputOutputPair{"BoolFn(true)", "True"}
                             ));
+// clang-format on
 
 INSTANTIATE_TEST_SUITE_P(IntParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"IntFn()",                   "0"},
@@ -322,19 +338,23 @@ INSTANTIATE_TEST_SUITE_P(DoubleParamConvert, UserCallableParamConvertTest, ::tes
                             InputOutputPair{"DoubleFn(10.123)", "10.123"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(VarArgsParamsConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"VarArgsFn()",                   "[]"},
-                            InputOutputPair{"VarArgsFn(10, 'abc', false)", "[10, 'abc', false]"},
+                            InputOutputPair{"VarArgsFn(10, 'abc', false)", "[10, 'abc', False]"},
                             InputOutputPair{"VarArgsFn(10.123, (1, 2, 3), arg=1)", "[10.123, [1, 2, 3]]"}
                             ));
+// clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(VarKwArgsParamsConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"VarKwArgsFn()",                   "{}"},
                             InputOutputPair{"VarKwArgsFn(arg1=10, arg2='abc', arg3=false) | dictsort",
-                                            "['arg1': 10, 'arg2': 'abc', 'arg3': false]"},
+                                            "[('arg1', 10), ('arg2', 'abc'), ('arg3', False)]"},
                             InputOutputPair{"VarKwArgsFn(arg1=10.123, arg2=(1, 2, 3), 1) | dictsort",
-                                            "['arg1': 10.123, 'arg2': [1, 2, 3]]"}
+                                            "[('arg1', 10.123), ('arg2', [1, 2, 3])]"}
                             ));
+// clang-format on
 
 // **kwargs keep the call order (docs/tasks/0043)
 INSTANTIATE_TEST_SUITE_P(VarKwArgsOrder, UserCallableParamConvertTest, ::testing::Values(InputOutputPair{ "VarKwArgsFn(z=1, a=2, m=3) | list", "['z', 'a', 'm']" }));
@@ -395,19 +415,19 @@ INSTANTIATE_TEST_SUITE_P(MapParamConvert, UserCallableParamConvertTest, ::testin
                             InputOutputPair{"GMapFn()",                   "{}"},
                             InputOutputPair{"GMapFn({'key': 10})",         "{'key': 10}"},
                             InputOutputPair{"GMapFn(simpleMapValue) | dictsort",
-                                            "['boolValue': true, 'dblVal': 100.5, 'intVal': 10, 'stringVal': 'string100.5']"},
+                                            "[('boolValue', True), ('dblVal', 100.5), ('intVal', 10), ('stringVal', 'string100.5')]"},
                             InputOutputPair{"GMapFn(reflectedVal) | dictsort",
-                                            "['basicCallable': <callable>, 'boolValue': false, 'dblValue': 0, 'getInnerStruct': <callable>, 'getInnerStructValue': <callable>, 'innerStruct': {'strValue': 'Hello World!'}, "
-                                            "'innerStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+                                            "[('basicCallable', <callable>), ('boolValue', False), ('dblValue', 0), ('getInnerStruct', <callable>), ('getInnerStructValue', <callable>), ('innerStruct', {'strValue': 'Hello World!'}), "
+                                            "('innerStructList', [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], 'intEvenValue': 0, 'intValue': 0, "
-                                     "'strValue': 'test string 0', 'strViewValue': 'test string 0', 'tmpStructList': [{'strValue': 'Hello World!'}, "
+                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}]), ('intEvenValue', 0), ('intValue', 0), "
+                                     "('strValue', 'test string 0'), ('strViewValue', 'test string 0'), ('tmpStructList', [{'strValue': 'Hello World!'}, "
                                      "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], "
-                                     "'wstrValue': 'test string 0', 'wstrViewValue': 'test string 0']" },
-                    InputOutputPair{"GMapFn(reflectedVal.innerStruct) | dictsort", "['strValue': 'Hello World!']"}
+                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}]), "
+                                     "('wstrValue', 'test string 0'), ('wstrViewValue', 'test string 0')]" },
+                    InputOutputPair{"GMapFn(reflectedVal.innerStruct) | dictsort", "[('strValue', 'Hello World!')]"}
                             ));
 // clang-format on
 

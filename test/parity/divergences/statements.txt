@@ -9,5 +9,6 @@ statements.macro_escapes_its_loop      output      0165 deliberate: a closure ca
 statements.nested_macro_escapes_its_call output    0165 deliberate: a macro that outlives the macro call defining it reads that call's names as undefined
 statements.loop_len                     output      0196 len(loop) counts the keys of the loop map, not the items of the loop
 statements.set_unpack_dict_keys        output      0197 tuple assignment from a dict takes the items named like the targets instead of unpacking its keys
-statements.macro_pprint                output      0208 pprint of a macro prints <callable>; Jinja2 prints its repr <Macro 'm'>
-statements.macro_equals_itself         output      0208 a macro is not equal to itself, so unique keeps both copies; Jinja2 compares macros by identity
+statements.macro_dunder_call            rejects     0209 a macro has no __call__ attribute
+statements.macro_truncate_rejected      accepts     0209 truncate of a macro renders '' instead of raising TypeError (no len())
+statements.macro_xmlattr                output      0209 xmlattr prints nothing for a macro value; Jinja2 prints its escaped repr

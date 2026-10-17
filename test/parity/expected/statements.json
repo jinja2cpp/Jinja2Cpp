@@ -13541,6 +13541,382 @@
    "output": "T|1"
   },
   {
+   "id": "statements.macro_equality_identity",
+   "template": "{% macro m() %}{% endmacro %}{% macro n() %}{% endmacro %}{% set a = m %}{{ 'T' if m == n else 'F' }}{{ 'T' if m != m else 'F' }}{{ 'T' if m != n else 'F' }}{{ 'T' if a == m else 'F' }}{{ 'T' if m in [n, m] else 'F' }}{{ 'T' if m is sameas a else 'F' }}|{{ [m, n, m]|unique|list|length }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "FFTTTT|2"
+  },
+  {
+   "id": "statements.macro_equality_per_definition",
+   "template": "{% set ms = [] %}{% for i in [1, 2] %}{% macro m() %}{% endmacro %}{% set _ = ms.append(m) %}{% endfor %}{{ 'T' if ms[0] == ms[1] else 'F' }}{{ 'T' if ms[0] == ms[0] else 'F' }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "FT"
+  },
+  {
+   "id": "statements.macro_ordering_rejected",
+   "template": "{% macro m() %}{% endmacro %}{{ m < m }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'Macro' and 'Macro'"
+   }
+  },
+  {
+   "id": "statements.macro_pprint_nested",
+   "template": "{% macro m() %}{% endmacro %}{{ {'k': m}|pprint }}|{{ (m, m)|pprint }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "{'k': <Macro 'm'>}|(<Macro 'm'>, <Macro 'm'>)"
+  },
+  {
+   "id": "statements.macro_truncate_rejected",
+   "template": "{% macro m() %}x{% endmacro %}{{ m|truncate(4) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'Macro' has no len()"
+   }
+  },
+  {
+   "id": "statements.macro_xmlattr",
+   "template": "{% macro m() %}x{% endmacro %}{{ dict(a=m)|xmlattr }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": " a=\"&lt;Macro &#39;m&#39;&gt;\""
+  },
+  {
+   "id": "statements.macro_dunder_call",
+   "template": "{% macro m() %}x{% endmacro %}{{ m.__call__() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "x"
+  },
+  {
+   "id": "statements.call_block_callee_without_caller",
+   "template": "{% call range(2) %}x{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "range() takes no keyword arguments"
+   }
+  },
+  {
+   "id": "statements.call_block_block_reference",
+   "template": "{% block b %}B{% endblock %}{% call self.b() %}x{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "BlockReference.__call__() got an unexpected keyword argument 'caller'"
+   }
+  },
+  {
    "id": "statements.idtracking_with_body_read_before_set",
    "template": "{% for i in [1,2] %}{% with %}{{ x }}{% endwith %}{% set x = i %}{% endfor %}",
    "context": {

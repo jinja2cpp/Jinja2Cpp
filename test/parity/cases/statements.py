@@ -357,6 +357,15 @@ CASES = [
     # Macros as values (docs/tasks/0208)
     ("macro_pprint", "{% macro m() %}{% endmacro %}{{ m|pprint }}"),
     ("macro_equals_itself", "{% macro m() %}{% endmacro %}{{ 'T' if m == m else 'F' }}|{{ [m, m]|unique|list|length }}"),
+    ("macro_equality_identity", "{% macro m() %}{% endmacro %}{% macro n() %}{% endmacro %}{% set a = m %}{{ 'T' if m == n else 'F' }}{{ 'T' if m != m else 'F' }}{{ 'T' if m != n else 'F' }}{{ 'T' if a == m else 'F' }}{{ 'T' if m in [n, m] else 'F' }}{{ 'T' if m is sameas a else 'F' }}|{{ [m, n, m]|unique|list|length }}"),
+    ("macro_equality_per_definition", "{% set ms = [] %}{% for i in [1, 2] %}{% macro m() %}{% endmacro %}{% set _ = ms.append(m) %}{% endfor %}{{ 'T' if ms[0] == ms[1] else 'F' }}{{ 'T' if ms[0] == ms[0] else 'F' }}"),
+    ("macro_ordering_rejected", "{% macro m() %}{% endmacro %}{{ m < m }}"),
+    ("macro_pprint_nested", "{% macro m() %}{% endmacro %}{{ {'k': m}|pprint }}|{{ (m, m)|pprint }}"),
+    ("macro_truncate_rejected", "{% macro m() %}x{% endmacro %}{{ m|truncate(4) }}"),
+    ("macro_xmlattr", "{% macro m() %}x{% endmacro %}{{ dict(a=m)|xmlattr }}"),
+    ("macro_dunder_call", "{% macro m() %}x{% endmacro %}{{ m.__call__() }}"),
+    ("call_block_callee_without_caller", "{% call range(2) %}x{% endcall %}"),
+    ("call_block_block_reference", "{% block b %}B{% endblock %}{% call self.b() %}x{% endcall %}"),
     # idtracking (docs/tasks/0168): which reads see the frame's own binding of a name it stores later
     ('idtracking_with_body_read_before_set', '{% for i in [1,2] %}{% with %}{{ x }}{% endwith %}{% set x = i %}{% endfor %}'),
     ('idtracking_set_block_body_read_before_set', '{% for i in [1,2] %}{% set y %}{{ x }}{% endset %}{{ y }}{% set x = i %}{% endfor %}'),

@@ -499,6 +499,14 @@
    "output": "-|1"
   },
   {
+   "id": "globals.functions_equal_themselves",
+   "template": "{{ 'T' if range == range else 'F' }}{{ 'T' if lipsum == lipsum else 'F' }}{{ 'T' if range != dict else 'F' }}{{ 'T' if range is sameas range else 'F' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "TTTT"
+  },
+  {
    "id": "globals.cycler_sameas",
    "template": "{% set c = cycler(1) %}{{ 'T' if c is sameas c else 'F' }}{{ 'T' if c is sameas cycler(1) else 'F' }}",
    "context": {},

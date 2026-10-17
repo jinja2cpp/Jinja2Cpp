@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0047]
@@ -14,3 +14,7 @@ edits them together with the printer.
 
 **Done when.** `pprint` of `none` and of bools matches Python, and the unit rows that encode
 the old text are updated.
+
+**Resolution.** `pprint` prints Python's repr on one line: `None`, `True`/`False`, tuples as
+`(a, b)` and `(a,)`, dictsort pairs as `('k', v)`, strings and dict keys with Python's quoting
+and escapes, macros as `<Macro 'm'>`. Wrapping at width 80 is 0210.

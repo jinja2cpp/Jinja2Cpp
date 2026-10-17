@@ -1760,6 +1760,17 @@ struct BinaryMathOperation : BaseVisitor<>
         }
     }
 
+    // Functions and macros equal only themselves
+    ResultType operator()(const Callable& left, const Callable& right) const
+    {
+        if (m_oper != BinaryExpression::LogicalEq && m_oper != BinaryExpression::LogicalNe)
+        {
+            return Mismatch(left, right);
+        }
+        const bool same = left.IsSame(right);
+        return m_oper == BinaryExpression::LogicalEq ? same : !same;
+    }
+
     template<typename L, typename R>
     ResultType operator()(const L& left, const R& right) const
     {

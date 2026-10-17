@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 touches: [src/value_visitors.h, src/internal_value.h]
@@ -20,3 +20,10 @@ identity token when it is made (the 0118 P4 escape handle of a macro is a natura
 
 **Done when.** Corpus cases `expressions.macro_equals_itself` and
 `expressions.user_callable_equals_itself` match Python.
+
+**Resolution.** `Callable::IsSame` compares the shared function of the copies, and for a user
+callable the identity of the `jinja2::UserCallable` it was converted from (a copy of it is the
+same function). `==`, `!=`, `in`, `unique` and `sameas` use it; ordering raises TypeError as in
+Python. The user-callable case is a unit test (`UserCallableTest.CallableEqualsItself`): the
+corpus cannot pass a host function; macros and globals are `statements.macro_equality_*` and
+`globals.functions_equal_themselves`.

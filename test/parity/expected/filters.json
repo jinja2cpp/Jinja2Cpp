@@ -6047,6 +6047,204 @@
    "output": "{'C': 3, 'a': 2, 'b': 1}"
   },
   {
+   "id": "filters.pprint_none_bools",
+   "template": "{{ none|pprint }}|{{ true|pprint }}|{{ [none, true, false]|pprint }}|{{ {'a': none}|pprint }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "None|True|[None, True, False]|{'a': None}"
+  },
+  {
+   "id": "filters.pprint_string_repr",
+   "template": "{{ \"it's\"|pprint }}|{{ 'a\\nb'|pprint }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "\"it's\"|'a\\nb'"
+  },
+  {
+   "id": "filters.pprint_wraps_long",
+   "template": "{{ range(30)|list|pprint }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[0,\n 1,\n 2,\n 3,\n 4,\n 5,\n 6,\n 7,\n 8,\n 9,\n 10,\n 11,\n 12,\n 13,\n 14,\n 15,\n 16,\n 17,\n 18,\n 19,\n 20,\n 21,\n 22,\n 23,\n 24,\n 25,\n 26,\n 27,\n 28,\n 29]"
+  },
+  {
    "id": "filters.reject",
    "template": "{% for i in l|reject('odd') %}{{ i }},{% endfor %}",
    "context": {
