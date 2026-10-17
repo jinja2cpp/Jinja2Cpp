@@ -424,8 +424,9 @@ public:
         , m_externalScope(&extValues)
         , m_globalScope(&globalValues)
         , m_builtinScope(builtins)
-        , m_evalContext(NewEvalContextId())
     {
+        // A render's top context keeps EvalContext id 0, with no atomic count in every
+        // render: the other ids are counted from 1
         assert(topScope.empty());
         // A map that never had a table has nothing to lend
         if (topScope.mask() != 0)
