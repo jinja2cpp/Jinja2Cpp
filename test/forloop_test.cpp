@@ -206,12 +206,14 @@ TEST_P(RangeForLoopTest, IntegersRangeLoop)
     PerformBothTests(source, testParam.result, {});
 }
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(RangeParamResolving, RangeForLoopTest, ::testing::Values(
         InputOutputPair{"range(3)", "0,1,2,"},
         InputOutputPair{"range(1, 4)", "1,2,3,"},
         InputOutputPair{"range(0, 8, 2)", "0,2,4,6,"},
         InputOutputPair{"range(6, -2, -2)", "6,4,2,0,"}
         ));
+// clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(SequencesLoopTest, RangeForLoopTest, ::testing::Values(
