@@ -5,7 +5,7 @@ area: parity
 depends: [0194]
 touches: [src/statements.cpp#MakeTemplateSelf]
 shares: [test/parity/divergences/loader.txt]
-pr: TBD
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/541
 ---
 # Calls through `self` that still differ from Jinja2
 
