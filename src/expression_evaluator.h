@@ -943,6 +943,7 @@ public:
     void Render(OutStream& stream, RenderContext& values) override;
 
     [[nodiscard]] NodeRef<Expression> GetValueRef() const { return m_valueRef; }
+    [[nodiscard]] const ArenaCallParams& GetParams() const { return m_params; }
     // Calls fnVal with arguments already evaluated, as a call written in the template would
     static InternalValue CallValue(RenderContext& values, InternalValue fnVal, const CallParams& params);
 private:

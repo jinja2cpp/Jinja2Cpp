@@ -26,6 +26,7 @@
 #include <iterator>
 #include <list>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -1079,6 +1080,38 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
     return ParseResult();
 }
 
+namespace
+{
+// The `caller=` keyword of the outermost call in [first, last): the last call at bracket depth 0
+// takes the arguments, `caller` among them at depth 1
+std::optional<Token> FindCallerKeyword(const LexScanner& lexer, TokensList::const_iterator first, TokensList::const_iterator last)
+{
+    std::optional<Token> found;
+    int depth = 0;
+    for (auto it = first; it != last; ++it)
+    {
+        const Token& tok = *it;
+        if (tok == '(' || tok == '[' || tok == '{')
+        {
+            if (depth == 0)
+            {
+                found.reset();
+            }
+            ++depth;
+        }
+        else if (tok == ')' || tok == ']' || tok == '}')
+        {
+            --depth;
+        }
+        else if (depth == 1 && tok == Token::Identifier && lexer.GetAsView(tok) == "caller" && std::next(it) != last && *std::next(it) == '=')
+        {
+            found = tok;
+        }
+    }
+    return found;
+}
+} // namespace
+
 StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     if (statementsInfo.empty())
@@ -1101,36 +1134,39 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
         callbackParams = std::move(result.value());
     }
 
-    Token nextTok = lexer.NextToken();
-    if (nextTok != Token::Identifier)
-    {
-        const Token& tok = nextTok;
-        Token tok1;
-        tok1.type = Token::Identifier;
-
-        return MakeParseError(ErrorCode::UnexpectedToken, tok, { tok1 });
-    }
-
-    std::string macroName = lexer.GetAsString(nextTok);
-
-    // Jinja2 expects a call here: `{% call m %}` is an error
-    if (!lexer.EatIfEqual('('))
-    {
-        return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::LBracket);
-    }
+    // Jinja2 takes any call expression: m(), ns.m(), l[0](), m()()
+    const Token exprTok = lexer.PeekNextToken();
+    const auto exprBegin = lexer.GetState().m_cur;
     const auto beforeCall = m_nodes.Marks();
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
-    auto result = exprParser.ParseCallParams(lexer);
-    if (!result)
+    auto expr = exprParser.ParseFullExpression(lexer);
+    if (!expr)
     {
-        return MakeUnexpected(result.error());
+        return MakeUnexpected(expr.error());
     }
-    CallParamsInfo callParams = std::move(result.value());
+    const auto call = m_nodes.As<CallExpression>(*expr);
+    if (!call)
+    {
+        // `{% call m %}`, `{% call m()|f %}`: Jinja2's "expected call"
+        if (exprTok == Token::Identifier)
+        {
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), Token::LBracket);
+        }
+        return MakeParseError(ErrorCode::UnexpectedToken, exprTok);
+    }
+    // The call block passes `caller` itself: Python rejects the repeated keyword at compile time
+    for (const auto& param : m_nodes[m_nodes.Get<CallExpression>(call).GetParams().kwParams])
+    {
+        if (m_nodes.Text(param.name) == "caller")
+        {
+            return MakeParseError(ErrorCode::UnexpectedToken, FindCallerKeyword(lexer, exprBegin, lexer.GetState().m_cur).value_or(exprTok));
+        }
+    }
     const auto afterCall = m_nodes.Marks();
     marks.nameRefs += afterCall.nameRefs - beforeCall.nameRefs;
     marks.contextNodes += afterCall.contextNodes - beforeCall.contextNodes;
 
-    auto renderer = m_nodes.Make<MacroCallStatement>(m_nodes, macroName, callParams, callbackParams);
+    auto renderer = m_nodes.Make<MacroCallStatement>(m_nodes, call, callbackParams);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroCallStatement, stmtTok);
     statementInfo.renderer = renderer;
     statementInfo.marks = marks;
