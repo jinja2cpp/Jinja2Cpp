@@ -268,7 +268,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0196](0196-loop-len-and-iter.md) | `loop` as a sized iterable | parity | low | open |
 | [0197](0197-objects-left-as-mappings.md) | Objects and dicts still read as maps of names in a few places | parity | low | open |
 | [0198](0198-self-block-call-leftovers.md) | Calls through `self` that still differ from Jinja2 | parity | low | done |
-| [0199](0199-call-block-leftovers.md) | Call block leftovers | parity | low | open |
+| [0199](0199-call-block-leftovers.md) | Call block leftovers | parity | low | done |
 | [0200](0200-tester-arity.md) | Every built-in test checks its arguments | parity | low | done |
 | [0201](0201-block-reads-root-binding.md) | A block reads the context, not the root's entry binding | parity | low | done |
 | [0202](0202-loop-else-body-frame.md) | A loop's `else` body is a frame of its own | parity | low | done |
@@ -277,3 +277,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0205](0205-load-drift-0168-0193.md) | Load drift after trains 11 and 12 | perf | medium | done |
 | [0206](0206-call-argument-leftovers.md) | Argument checks that 0200 left over | parity | low | open |
 | [0207](0207-self-frame-leftovers.md) | `self` cases left after 0143 and 0198 | parity | low | open |
+| [0208](0208-macro-value-gaps.md) | Macros as values | parity | low | open |
