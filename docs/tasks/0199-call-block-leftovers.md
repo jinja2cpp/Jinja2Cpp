@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 touches: [src/template_parser.cpp#CallStatement, src/value_visitors.h]
@@ -20,3 +20,9 @@ Found while verifying 0169 (PR #526). All three predate it.
    (`statements.call_block_dotted_callee`).
 
 **Done when.** No divergences line names 0199 and `ctest -R parity` passes.
+
+**Done** in PR #544: a macro prints as `<Macro 'm'>` (a caller as
+`<Macro anonymous>`, its `name` is None), `{% call m(caller=...) %}` is a load error, and
+`call` takes any call expression (`ns.m()`, `l[0]()`), rejecting a non-call as Jinja2's
+"expected call" does. Other callables (globals, methods) still print nothing: Python's repr
+of a function names its address, so there is nothing stable to match.

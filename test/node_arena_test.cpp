@@ -110,7 +110,8 @@ TEST(NodeArenaTest, DowncastToAClassWithSubclasses)
 {
     NodeArena nodes;
     NodeRef<IRendererBase> macro = nodes.Make<MacroStatement>(nodes, "m", MacroParamsInfo());
-    NodeRef<IRendererBase> call = nodes.Make<MacroCallStatement>(nodes, "m", CallParamsInfo(), MacroParamsInfo());
+    const NodeRef<CallExpression> callExpr = nodes.Make<CallExpression>(nodes, ValueRefExpression::Make(nodes, "m"), CallParamsInfo());
+    NodeRef<IRendererBase> call = nodes.Make<MacroCallStatement>(nodes, callExpr, MacroParamsInfo());
     TargetNode target;
     target.name = nodes.MakeText("x");
     target.hash = HashedName::Hash("x");
