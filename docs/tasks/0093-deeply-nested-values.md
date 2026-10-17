@@ -57,3 +57,6 @@ each render. Corpus: `operators.eq_same_list_nan`, `operators.eq_same_dict_nan`,
 Left as is: Python also treats one float object as equal to itself, so `[n] == [n]` with
 `n` NaN is `True` there; Jinja2C++ stores numbers inline, without an identity, and prints
 `False`. Not worth boxing numbers for.
+
+Follow-up: train 13's counts put Render/chat_* up to +1.34% and strings at +1.05%, on the
+cases that render through `tojson` or the value printer. That cost is task 0204.
