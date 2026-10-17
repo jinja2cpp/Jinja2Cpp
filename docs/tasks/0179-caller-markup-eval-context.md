@@ -46,8 +46,10 @@ for `{{ }}`, `~`, `{% filter %}`, the filter input of `{% set x | f %}` and `loo
 results) apart from the runtime one (`IsAutoescape`, for macro, `caller()`, `self.b()`,
 `{% set %}` block and `pass_eval_context` filter results). A macro or block body sets only
 the output one. The runtime setting is one per Jinja2 Context: contexts carry an
-EvalContext id, new for a template render and an include, and a macro body whose caller
+EvalContext id, new for an import and an include (whose contexts start from the
+environment's setting, wherever the import is), and a macro body whose caller
 shares its home's id runs with the caller's runtime setting (`HomeCall`). `{{ m() }}`
 writes a macro's output straight to the stream except where the output escapes and the
-runtime setting is off. A non-constant `{% autoescape %}` (Jinja2's volatile EvalContext)
+runtime setting is off. A recursive loop's levels escape, and `loop(...)` returns Markup,
+by the setting where the loop is written, wherever `loop(...)` is called. A non-constant `{% autoescape %}` (Jinja2's volatile EvalContext)
 is left to 0210.

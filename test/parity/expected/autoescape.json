@@ -1725,6 +1725,95 @@
    "env": {},
    "templates": {},
    "output": "&lt;&lt;"
+  },
+  {
+   "id": "autoescape.env_on_import_in_autoescape_block",
+   "template": "{% autoescape false %}{% import 'lib.j2' as z %}{{ z.z() }}{% from 'lib.j2' import z as y %}{{ y() }}{% endautoescape %}|{% import 'lib.j2' as z2 %}{{ z2.z() }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {
+    "lib.j2": "{% macro z() %}{{ 'T' if l|join(','|safe) is escaped else 'F' }}{{ '<'|e ~ html ~ ('<'|safe) }}{% endmacro %}"
+   },
+   "output": "T&lt;<T&lt;<|T&lt;<"
+  },
+  {
+   "id": "autoescape.env_off_import_in_autoescape_block",
+   "template": "{% autoescape true %}{% import 'lib.j2' as z %}{{ z.z() }}{% endautoescape %}|{% import 'lib.j2' as z2 %}{{ z2.z() }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {
+    "lib.j2": "{% macro z() %}{{ 'T' if l|join(','|safe) is escaped else 'F' }}{{ html }}{% endmacro %}"
+   },
+   "output": "F|F"
+  },
+  {
+   "id": "autoescape.env_on_output_setting_in_macro_call_site",
+   "template": "{% macro m() %}{{ html ~ ('<'|safe) }}|{% filter e %}<{% endfilter %}|{% set x | e %}<{% endset %}{{ x }}|{% macro inner() %}{{ html }}{% endmacro %}{{ inner() }}{% endmacro %}{% autoescape false %}{{ m() }}{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;<|<|<|&amp;lt;b&amp;gt;&amp;amp;&amp;#39;&amp;#34;&amp;lt;/b&amp;gt;"
+  },
+  {
+   "id": "autoescape.env_on_loop_recursion_in_autoescape_block",
+   "template": "{% for i in [[[]]] recursive %}{% autoescape false %}{% set r = loop(i) %}{{ 'T' if r is escaped else 'F' }}{{ loop(i) }}{% endautoescape %}{{ html }}|{% endfor %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "TT&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;|&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;|"
+  },
+  {
+   "id": "autoescape.env_on_includer_macro_in_include_call_site",
+   "template": "{% macro m0() %}{% macro i() %}{% if caller %}{% endif %}{% endmacro %}{{ 'T' if i() is escaped else 'F' }}{% endmacro %}{% autoescape false %}{% include 'inc.j2' %}{% endautoescape %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {
+    "inc.j2": "{% call m0() %}{% endcall %}"
+   },
+   "output": "F"
   }
  ]
 }

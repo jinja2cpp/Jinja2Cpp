@@ -1222,10 +1222,9 @@ InternalValue InvokeCallable(RenderContext& values, const Callable& callable, co
 
     TargetString resultStr =
         RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { callable.GetStatementCallable()(callParams, stream, values); });
-    // A macro returns Markup when autoescape is on where it is called, at run time; a
-    // recursive loop(...) when it is on where the loop is written
+    // A macro returns Markup when autoescape is on where it is called, at run time
     InternalValue result(std::move(resultStr));
-    result.SetMarkup(callable.GetKind() == Callable::Macro ? values.IsAutoescape() : values.IsOutputAutoescape());
+    result.SetMarkup(values.IsAutoescape());
     return result;
 }
 } // namespace

@@ -156,7 +156,7 @@ public:
 
     // The loop(...) callable of a recursive loop at depth0 `level`, whose outermost level
     // runs at `site`
-    static Callable MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site);
+    static Callable MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site, bool autoescape);
 
     [[nodiscard]] bool IsRecursive() const { return m_isRecursive; }
     [[nodiscard]] AssignTarget GetTarget() const { return m_target; }

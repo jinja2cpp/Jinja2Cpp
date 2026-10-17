@@ -856,8 +856,10 @@ public:
         RenderContext result(external, *m_globalScope, m_rendererCallback, m_builtinScope);
         result.m_templateFrame = m_templateFrame;
         result.m_nodes = m_nodes;
-        result.m_autoescape = m_autoescape;
-        result.m_outputAutoescape = m_outputAutoescape;
+        // A new Context in Jinja2, whose EvalContext starts from the environment's setting
+        // wherever the import or include is
+        result.m_autoescape = m_rendererCallback && m_rendererCallback->GetSettings().autoescape;
+        result.m_outputAutoescape = result.m_autoescape;
         result.SetLookupCache(m_lookupCache);
         return result;
     }

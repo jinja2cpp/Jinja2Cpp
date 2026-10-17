@@ -120,4 +120,12 @@ CASES = [
     # runtime setting for its output too (Jinja2's volatile EvalContext)
     ("volatile_macro_output", "{% autoescape on %}{% macro m() %}{{ '<' }}{% endmacro %}{% autoescape false %}{{ m() }}{% endautoescape %}{% endautoescape %}", {"ctx": {"on": True}}),
     ("volatile_concat", "{% autoescape on %}{{ '<' ~ '<'|safe }}{% endautoescape %}", {"ctx": {"on": True}}),
+    ("env_on_import_in_autoescape_block", "{% autoescape false %}{% import 'lib.j2' as z %}{{ z.z() }}{% from 'lib.j2' import z as y %}{{ y() }}{% endautoescape %}|{% import 'lib.j2' as z2 %}{{ z2.z() }}",
+     {"env": {"autoescape": True}, "templates": {"lib.j2": "{% macro z() %}{{ 'T' if l|join(','|safe) is escaped else 'F' }}{{ '<'|e ~ html ~ ('<'|safe) }}{% endmacro %}"}}),
+    ("env_off_import_in_autoescape_block", "{% autoescape true %}{% import 'lib.j2' as z %}{{ z.z() }}{% endautoescape %}|{% import 'lib.j2' as z2 %}{{ z2.z() }}",
+     {"templates": {"lib.j2": "{% macro z() %}{{ 'T' if l|join(','|safe) is escaped else 'F' }}{{ html }}{% endmacro %}"}}),
+    ("env_on_output_setting_in_macro_call_site", "{% macro m() %}{{ html ~ ('<'|safe) }}|{% filter e %}<{% endfilter %}|{% set x | e %}<{% endset %}{{ x }}|{% macro inner() %}{{ html }}{% endmacro %}{{ inner() }}{% endmacro %}{% autoescape false %}{{ m() }}{% endautoescape %}", AE),
+    ("env_on_loop_recursion_in_autoescape_block", "{% for i in [[[]]] recursive %}{% autoescape false %}{% set r = loop(i) %}{{ 'T' if r is escaped else 'F' }}{{ loop(i) }}{% endautoescape %}{{ html }}|{% endfor %}", AE),
+    ("env_on_includer_macro_in_include_call_site", "{% macro m0() %}{% macro i() %}{% if caller %}{% endif %}{% endmacro %}{{ 'T' if i() is escaped else 'F' }}{% endmacro %}{% autoescape false %}{% include 'inc.j2' %}{% endautoescape %}",
+     {"env": {"autoescape": True}, "templates": {"inc.j2": "{% call m0() %}{% endcall %}"}}),
 ]

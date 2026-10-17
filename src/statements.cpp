@@ -245,6 +245,9 @@ struct LoopState : ValueObject
     ArenaView recursiveNodes;
     // Where its outermost level runs, and so every level (MakeLoopRecursion)
     ClosureSite recursiveSite;
+    // The output autoescape setting where the recursive loop is written: its levels escape
+    // by it, and their results are Markup by it, wherever loop(...) is called
+    bool recursiveAutoescape = false;
     // The arguments of the last loop.changed() call, made on first use
     std::shared_ptr<std::optional<InternalValueList>> lastChanged;
     // Whether the item after the current one is fetched, isLast telling if there is one
@@ -620,7 +623,7 @@ private:
                     throw std::runtime_error("The loop must have the 'recursive' marker to be called recursively.");
                 });
             }
-            return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.recursiveNodes, state.level, state.recursiveSite);
+            return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.recursiveNodes, state.level, state.recursiveSite, state.recursiveAutoescape);
         case Property::None:
             break;
         }
@@ -868,9 +871,9 @@ private:
 };
 } // namespace
 
-Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site)
+Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site, bool autoescape)
 {
-    return Callable(Callable::GlobalFunc, [statement, nodes, level, site](const CallParams& params, OutStream& stream, RenderContext& context) {
+    return Callable(Callable::GlobalFunc, [statement, nodes, level, site, autoescape](const CallParams& params, RenderContext& context) -> InternalValue {
         // As Python's LoopContext.__call__(iterable)
         for (const auto& kwParam : params.kwParams)
         {
@@ -897,7 +900,9 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaVie
         auto var = parsedParams["iterable"];
         if (IsEmpty(var))
         {
-            return;
+            InternalValue empty(RenderToString(context.GetRendererCallback(), [](OutStream&) {}));
+            empty.SetMarkup(autoescape);
+            return empty;
         }
 
         const RenderDepthGuard depthGuard;
@@ -908,17 +913,21 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaVie
         auto& home = homeCall.Context();
         const ArenaSwitch nodesSwitch(home, nodes);
         const bool isLinked = homeCall.HidesScopes(home.GetScopesCount());
+        const OutputAutoescapeGuard autoescapeGuard(home, autoescape);
         home.EnterScope();
         if (isLinked)
         {
             home.PushFrameView({}, homeCall.Link());
         }
-        statement->RenderLoop(var, stream, home, level + 1, &site);
+        // Jinja2's loop(...) returns Markup by the setting the loop is compiled under
+        InternalValue result(RenderToString(home.GetRendererCallback(), [&](OutStream& stream) { statement->RenderLoop(var, stream, home, level + 1, &site); }));
+        result.SetMarkup(autoescape);
         if (isLinked)
         {
             home.PopFrameView();
         }
         home.ExitScope();
+        return result;
     });
 }
 
@@ -973,6 +982,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         state->recursiveNodes = values.Nodes();
         // loop(...) runs every level where the outermost one runs (ClosureSite)
         state->recursiveSite = site ? *site : ClosureSite(values);
+        state->recursiveAutoescape = values.IsOutputAutoescape();
     }
     auto context = values.EnterScope(std::move(state->loopScope));
     if (!state->loopSlot)
