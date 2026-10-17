@@ -313,4 +313,6 @@ CASES = [
     ("truncate_short_list", "{% for i in [1, 2]|truncate %}{{ i }},{% endfor %}"),
     ("truncate_long_list", "{{ range(300)|list|truncate(10) }}"),
     ("truncate_int", "{{ 5|truncate }}"),
+    ("truncate_undefined_checks_length", "{{ missing|truncate(1, leeway=0) }}"),
+    ("truncate_end_not_string", "{{ 'abc'|truncate(1, leeway=0, end=1) }}"),
 ]

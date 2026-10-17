@@ -1633,7 +1633,13 @@ InternalValue StringConverter::ApplyReplace(const InternalValue& baseVal, Render
 
 InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, RenderContext& context)
 {
-    if (!IsStringValue(baseVal) && baseVal.Kind() != ValueKind::Undefined)
+    // Jinja2 asserts length >= len(end) first, so end must have a length
+    const auto endVal = GetArgumentValue("end", context);
+    if (!IsStringValue(endVal) && !endVal.IsUndefined())
+    {
+        throw std::runtime_error("object of type '"s + Apply<visitors::PythonTypeNameGetter>(endVal) + "' has no len()");
+    }
+    if (!IsStringValue(baseVal))
     {
         return TruncateNonString(baseVal, context);
     }
@@ -1700,9 +1706,14 @@ InternalValue StringConverter::TruncateNonString(const InternalValue& baseVal, R
         throw std::runtime_error("truncate(): expected length >= len(end) and leeway >= 0");
     }
 
+    // An undefined is empty, as Jinja2's Undefined.__len__ says
     std::optional<size_t> size;
     auto map = AsMap(baseVal);
-    if (map && !map->GetObjectClass())
+    if (baseVal.IsUndefined())
+    {
+        size = 0;
+    }
+    else if (map && !map->GetObjectClass())
     {
         size = map->GetSize();
     }

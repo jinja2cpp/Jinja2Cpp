@@ -383,7 +383,7 @@ InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
     bool html = ConvertToBool(args["html"]);
     auto minWords = ConvertToInt(args["min"]);
     auto maxWords = ConvertToInt(args["max"]);
-    if (minWords >= maxWords)
+    if (count > 0 && minWords >= maxWords)
     {
         throw std::runtime_error("lipsum(): empty range for the number of words");
     }

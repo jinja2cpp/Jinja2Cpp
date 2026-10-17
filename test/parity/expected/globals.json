@@ -683,6 +683,14 @@
    }
   },
   {
+   "id": "globals.lipsum_no_paragraphs",
+   "template": "[{{ lipsum(0, min=200) }}]",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
    "id": "globals.object_dict_key",
    "template": "{{ {namespace(): 1} }}",
    "context": {},

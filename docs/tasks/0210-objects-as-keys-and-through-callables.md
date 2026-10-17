@@ -16,6 +16,10 @@ kind:
 - An object passed through a user callable comes back as a plain map: `ident(c) == c` is
   false and `ident(namespace(a=1))|tojson` is `{"a": 1}`, because the public `Value` has no
   object kind (no corpus case: the corpus has no user callables that return their argument).
+- A JSON-bound object (boost/nlohmann/rapid bindings) is a GenericMap like a reflected
+  struct, so `{% set x, y = j %}` keeps 0197's by-name extension for host objects and
+  takes the values, where Python unpacks the keys of the dict it would be. Telling the two
+  apart needs a flag on the public `IMapItemAccessor` (found by the 0197 verifier).
 
 **Proposal.** Either give non-string keys a representation (a key that keeps the
 InternalValue alongside its printed form), or reject an object key with a TypeError as a
@@ -24,4 +28,5 @@ object it was converted from, so that converting back restores it; this is a pub
 question for the 2.0 Value design (0072).
 
 **Done when** `globals.object_dict_key` matches or is marked deliberate, and an object
-returned from a user callable compares equal to the one passed in.
+returned from a user callable compares equal to the one passed in, and a JSON object
+unpacks its keys.

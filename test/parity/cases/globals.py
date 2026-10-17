@@ -73,6 +73,7 @@ CASES = [
     ("joiner_call_keyword_arg", "{{ joiner('a')(sep='x') }}"),
     ("cycler_next_arg", "{{ cycler(1).next(1) }}"),
     ("lipsum_object_arg", "{{ lipsum(namespace()) }}"),
+    ("lipsum_no_paragraphs", "[{{ lipsum(0, min=200) }}]"),
     # an object can be a dict key: Python hashes it by identity (0210)
     ("object_dict_key", "{{ {namespace(): 1} }}"),
 ]
