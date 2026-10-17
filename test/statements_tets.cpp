@@ -3,6 +3,7 @@
 
 #include "gtest/gtest.h"
 
+#include "jinja2cpp/reflected_value.h"
 #include "jinja2cpp/template.h"
 
 #include "test_tools.h"
