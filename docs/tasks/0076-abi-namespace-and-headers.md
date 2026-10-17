@@ -1,6 +1,6 @@
 ---
 status: open
-priority: medium
+priority: high
 area: release
 depends: [0072, 0073, 0074, 0075, 0043]
 touches: [include/, CMakeLists.txt, cmake/public/]
@@ -18,3 +18,12 @@ namespace lines, so it runs alone after the four API tasks.
 
 **Done when.** `nm` shows `jinja2::v2::` symbols, a test forward-declares through `fwd.h`,
 and the library reports 2.0.0 / SOVERSION 2.
+
+**Release gate (0212).** SOVERSION 2 and project version 2.0.0 are already set;
+they do not replace the remaining inline namespace/header work. Add a negative
+link check showing that a consumer built against one major version's headers
+cannot silently link to the other major version's library. Exercise both static
+and shared artifacts where supported. Publish the agreed source-compatibility and
+SOVERSION policy, including Settings layout changes, rather than implying every
+future 2.x build is binary-compatible. Settle the API-shaping decisions listed in
+0212 before the final namespace/header freeze.

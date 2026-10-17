@@ -1,11 +1,16 @@
 ---
 status: open
-priority: low
+priority: high
 area: robustness
 depends: [0067]
 touches: [include/jinja2cpp/value.h#Value-constructors, include/jinja2cpp/reflected_value.h, test/basic_tests.cpp]
 ---
 # Unsigned values above `INT64_MAX` wrap to negative
+
+**Release impact (0212).** This is silent corruption of host-provided data and a
+decision about the public value model being frozen for 2.0. Resolve it independently
+of 0178's full arbitrary-precision integer proposal. A supported failure contract
+is preferable to silently wrapping or introducing undocumented precision loss.
 
 **Problem.** Since 0067, `Value` and `Reflect` store every integral type as `int64_t` with
 `static_cast`. A `uint64_t`/`size_t` above `INT64_MAX` wraps: `Value(ULLONG_MAX)` renders
