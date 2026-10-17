@@ -76,7 +76,8 @@ public:
         Target
     };
     // `name` is set in a scope of `frame`'s statement (`set`, a macro, an import alias), in a
-    // branch of the body when the parser says so (SetInBranch)
+    // branch of the body when the parser says so (SetInBranch). The resolver keeps the view:
+    // `name` is text of the arena, which outlives it (docs/tasks/0204)
     void AddStore(FrameId frame, std::string_view name) { AddStore(frame, name, m_inBranch ? StoreKind::Branch : StoreKind::Store); }
     void AddStore(FrameId frame, std::string_view name, StoreKind kind)
     {
@@ -229,19 +230,12 @@ private:
     boost::container::small_vector<std::pair<NodeRef<ValueRefExpression>, FrameId>, 16> m_uses;
     struct Store
     {
-        Store(FrameId frame_, StoreKind kind_, std::uint32_t readsBefore_, std::string_view name_)
-            : frame(frame_)
-            , kind(kind_)
-            , readsBefore(readsBefore_)
-            , name(name_)
-        {
-        }
-
         FrameId frame = NoFrame;
         StoreKind kind = StoreKind::Store;
         // The reads made before the store (m_reads)
         std::uint32_t readsBefore = 0;
-        std::string name;
+        // Text of the arena
+        std::string_view name;
     };
     // A name a frame binds at its entry, unless a frame around it reads or binds it
     struct EntryName

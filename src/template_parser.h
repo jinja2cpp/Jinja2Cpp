@@ -382,10 +382,10 @@ private:
         return info;
     }
     // The statement's body, as a node
-    NodeRef<ComposedRenderer> TakeBody(StatementInfo& info)
+    JINJA2CPP_ALWAYS_INLINE NodeRef<ComposedRenderer> TakeBody(StatementInfo& info)
     {
         // The body of a frame starts by binding the names it holds from its entry (0168). Few
-        // frames may bind one, and the rest stays inline (docs/tasks/0204)
+        // frames may bind one, and the rest stays inline in each caller, as before 0168 (docs/tasks/0204)
         if (StatementInfo::OwnsFrame(info.type) && m_names.MayBindAtEntry(info.frame))
         {
             return TakeFrameBody(info);

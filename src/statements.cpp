@@ -2001,8 +2001,13 @@ void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes,
 }
 
 MacroStatement::MacroStatement(NodeArena& nodes, std::string_view name, const MacroParamsInfo& params)
-    : m_name(nodes.MakeText(name))
-    , m_nameHash(HashedName::Hash(name))
+    : MacroStatement(nodes, nodes.MakeText(name), params)
+{
+}
+
+MacroStatement::MacroStatement(NodeArena& nodes, ArenaText name, const MacroParamsInfo& params)
+    : m_name(name)
+    , m_nameHash(HashedName::Hash(nodes.Text(name)))
     , m_attributes(std::make_shared<InternalValueMap>())
 {
     boost::container::small_vector<MacroParam, 8> arenaParams;
@@ -2030,7 +2035,8 @@ MacroStatement::MacroStatement(NodeArena& nodes, std::string_view name, const Ma
     }
     m_params = nodes.MakeSpan(arenaParams);
 
-    (*m_attributes)["name"s] = name.empty() ? InternalValue() : InternalValue(std::string(name));
+    const auto nameText = nodes.Text(name);
+    (*m_attributes)["name"s] = nameText.empty() ? InternalValue() : InternalValue(std::string(nameText));
     auto argumentNames = ListAdapter::CreateAdapter(std::move(arguments));
     argumentNames.MarkAsTuple();
     (*m_attributes)["arguments"s] = std::move(argumentNames);
