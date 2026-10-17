@@ -259,8 +259,9 @@ public:
     // tag; Jinja2 has `+%}` but no `+}}`. Returns where the
     // delimiter itself starts, or npos when the splitter has to find the end by its own scan:
     // after a lexing error, and in a tag that runs to the end of the template. Only for
-    // an `end` that cannot start inside a token (UsableEnd).
-    size_t LexToEnd(size_t begin, std::basic_string_view<CharT> end, bool plusModifier)
+    // an `end` that cannot start inside a token (UsableEnd). Out of line, so that ScanToken is
+    // inlined into its loop rather than LexToEnd into the parser (4-5% of Load).
+    JINJA2CPP_OUTLINE_INLINE size_t LexToEnd(size_t begin, std::basic_string_view<CharT> end, bool plusModifier)
     {
         m_base = begin;
         const auto size = m_src.size();
