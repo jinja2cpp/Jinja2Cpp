@@ -52,4 +52,4 @@ shares its home's id runs with the caller's runtime setting (`HomeCall`). `{{ m(
 writes a macro's output straight to the stream except where the output escapes and the
 runtime setting is off. A recursive loop's levels escape, and `loop(...)` returns Markup,
 by the setting where the loop is written, wherever `loop(...)` is called. A non-constant `{% autoescape %}` (Jinja2's volatile EvalContext)
-is left to 0210.
+is left to 0216.
