@@ -3,6 +3,7 @@
 
 #include "expression_evaluator.h"
 #include "internal_value.h"
+#include "loop_attr.h"
 #include "make_unexpected.h"
 #include "recursion_guard.h"
 #include "undefined.h"

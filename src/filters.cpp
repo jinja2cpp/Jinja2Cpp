@@ -3,6 +3,7 @@
 #include "expression_evaluator.h"
 #include "function_base.h"
 #include "internal_value.h"
+#include "loop_attr.h"
 #include "markup.h"
 #include "out_stream.h" // IWYU pragma: keep (GetStreamOnString returns an OutStream by value)
 #include "render_context.h"
