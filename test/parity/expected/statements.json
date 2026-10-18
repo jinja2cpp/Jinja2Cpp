@@ -16040,6 +16040,86 @@
    "env": {},
    "templates": {},
    "output": "21"
+  },
+  {
+   "id": "statements.for_dict_int_keys",
+   "template": "{% for k in {1: 'a', 2: 'b'} %}{{ k + 1 }}{% endfor %}|{% for k, v in {2: 'a'}.items() %}{{ k }}{{ v }}{% endfor %}|{% for k, v in {20: 'x', 10: 'y'}|dictsort %}{{ k }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "23|2a|1020"
+  },
+  {
+   "id": "statements.for_dict_tuple_key_unpack",
+   "template": "{% for k, v in {(1, 2): 'a'}.items() %}{{ k[0] }}{{ k[1] }}{{ v }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "12a"
   }
  ]
 }

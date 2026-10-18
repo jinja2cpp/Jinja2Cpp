@@ -123,4 +123,7 @@ CASES = [
     ("precedence_compare_operands", "{{ 'T' if x + 1 == 2 * 2 > x - 1 else 'F' }}|{{ 'T' if x - 3 not in l and 2 in l else 'F' }}"),
     ("precedence_unary_filter", "{{ -x|abs + 1 }}|{{ - - x }}|{{ 2 ** -x|abs }}"),
     ("not_after_binary_operator", "{{ x + not z }}"),
+    ('in_dict_non_string_key', "{{ 'T' if 1 in {1: 'a'} else 'F' }}|{{ 'T' if '1' in {1: 'a'} else 'F' }}|{{ 'T' if 1.0 in {1: 'a'} else 'F' }}|{{ 'T' if (1, 2) in {(1, 2): 'a'} else 'F' }}|{{ 'T' if none in {none: 'a'} else 'F' }}"),
+    ('eq_dict_non_string_keys', "{{ 'T' if {1: 'a'} == {1.0: 'a'} else 'F' }}|{{ 'T' if {1: 'a'} == {'1': 'a'} else 'F' }}|{{ 'T' if {(1, 2): 3} == {(1.0, 2): 3} else 'F' }}"),
+    ('not_in_dict_non_string_key', "{{ 'T' if 2 not in {1: 'a'} else 'F' }}|{{ 'T' if True in {1: 'a'} else 'F' }}"),
 ]

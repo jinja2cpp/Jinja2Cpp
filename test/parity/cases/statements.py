@@ -435,4 +435,6 @@ CASES = [
     # the else frame binds at entry, and its set hides a loop target outside only there (docs/tasks/0202)
     ('idtracking_loop_else_binds_at_entry', '{% for i in e %}{% else %}{% for k in [1] %}{{ x }}{% endfor %}{% set x = 1 %}{% endfor %}'),
     ('loop_else_set_keeps_outer_target', '{% for x in [1] %}{% for j in e %}{% else %}{% set x = 2 %}{{ x }}{% endfor %}{{ x }}{% endfor %}'),
+    ('for_dict_int_keys', "{% for k in {1: 'a', 2: 'b'} %}{{ k + 1 }}{% endfor %}|{% for k, v in {2: 'a'}.items() %}{{ k }}{{ v }}{% endfor %}|{% for k, v in {20: 'x', 10: 'y'}|dictsort %}{{ k }}{% endfor %}"),
+    ('for_dict_tuple_key_unpack', "{% for k, v in {(1, 2): 'a'}.items() %}{{ k[0] }}{{ k[1] }}{{ v }}{% endfor %}"),
 ]

@@ -705,6 +705,42 @@
    "env": {},
    "templates": {},
    "output": "{<Namespace {}>: 1}"
+  },
+  {
+   "id": "globals.dict_from_non_string_pairs",
+   "template": "{{ dict([(1, 'a'), ((1, 2), 'b')]) }}|{{ dict({1: 'a'}, b=2) }}|{{ namespace({1: 2}) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{1: 'a', (1, 2): 'b'}|{1: 'a', 'b': 2}|<Namespace {1: 2}>"
+  },
+  {
+   "id": "globals.dict_unhashable_pair_key",
+   "template": "{{ dict([([1], 2)]) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "globals.dict_merge_equal_numeric_keys",
+   "template": "{{ dict([(1, 'a'), (1.0, 'b'), (True, 'c')]) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{1: 'c'}"
+  },
+  {
+   "id": "globals.namespace_non_string_subscript",
+   "template": "{% set ns = namespace(a=1) %}[{{ ns[1] }}][{{ ns.a }}]",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[][1]"
   }
  ]
 }

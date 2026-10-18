@@ -1,4 +1,5 @@
 #include "../src/internal_value.h"
+#include "../src/template_dict.h"
 #include "../src/value_visitors.h"
 
 #include "gtest/gtest.h"
@@ -9,12 +10,15 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
 #include <variant>
+#include <vector>
 
 using namespace jinja2;
 
@@ -224,5 +228,153 @@ TEST(InternalValueLayoutTest, CopiesOfAGeneratorIterateApart)
         EXPECT_EQ(0, first(copy));
         EXPECT_EQ(anchored, copy.ShouldExtendLifetime());
     }
+}
+
+// Dict keys follow Python's equality (docs/tasks/0036): the token is the same for keys that are
+// one key
+TEST(TemplateDictTest, KeyTokensFollowPythonEquality)
+{
+    const auto token = [](const InternalValue& key) { return MakeDictKey(key); };
+    const auto tuple = [](InternalValueList items) { return InternalValue(ListAdapter::CreateAdapter(std::move(items)).MarkAsTuple()); };
+    const InternalValue one(int64_t{ 1 });
+
+    ASSERT_TRUE(token(one));
+    EXPECT_EQ(token(one), token(InternalValue(1.0)));
+    EXPECT_EQ(token(one), token(InternalValue(true)));
+    EXPECT_NE(token(one), token(InternalValue(1.5)));
+    EXPECT_NE(token(one), token(InternalValue(int64_t{ 2 })));
+    EXPECT_EQ(token(InternalValue(int64_t{ 0 })), token(InternalValue(-0.0)));
+    EXPECT_EQ(token(InternalValue(false)), token(InternalValue(0.0)));
+    // A float beyond int64 is still a float
+    EXPECT_NE(token(InternalValue(9223372036854775808.0)), token(InternalValue(std::numeric_limits<int64_t>::max())));
+
+    EXPECT_EQ(token(tuple({ one, InternalValue(2.0) })), token(tuple({ InternalValue(1.0), InternalValue(int64_t{ 2 }) })));
+    EXPECT_NE(token(tuple({ one, InternalValue(int64_t{ 2 }) })), token(tuple({ InternalValue(int64_t{ 2 }), one })));
+    // (1, 2) is not the nested ((1), 2) nor the longer (1, 2, 3)
+    EXPECT_NE(token(tuple({ one, InternalValue(int64_t{ 2 }) })), token(tuple({ one, InternalValue(int64_t{ 2 }), one })));
+    EXPECT_EQ(token(tuple({ tuple({ one }), InternalValue(std::string("a")) })), token(tuple({ tuple({ InternalValue(1.0) }), InternalValue(std::wstring(L"a")) })));
+
+    EXPECT_EQ(token(InternalValue(std::string("a"))), token(InternalValue(std::wstring(L"a"))));
+    EXPECT_EQ(std::string("a"), *token(InternalValue(std::string("a"))));
+    // A string that spells the token of the integer 1 is another key
+    EXPECT_NE(token(one), token(InternalValue(*token(one))));
+    EXPECT_NE(token(InternalValue(NoneValue{})), token(InternalValue(std::string("N"))));
+
+    const auto range = [](int64_t start, int64_t stop, int64_t step) { return InternalValue(ListAdapter::CreateRange(start, stop, step)); };
+    // Equal ranges are equal keys: range(0, 3, 2) and range(0, 4, 2) are both [0, 2]
+    EXPECT_EQ(token(range(0, 3, 2)), token(range(0, 4, 2)));
+    EXPECT_EQ(token(range(5, 5, 1)), token(range(0, 0, 3)));
+    EXPECT_NE(token(range(0, 3, 1)), token(range(0, 4, 2)));
+}
+
+TEST(TemplateDictTest, UnhashableKeys)
+{
+    const char* type = nullptr;
+    const InternalValue list(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(int64_t{ 1 }) }));
+    EXPECT_FALSE(MakeDictKey(list, &type));
+    EXPECT_STREQ("list", type);
+
+    const InternalValue tupleWithList(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(int64_t{ 1 }), list }).MarkAsTuple());
+    type = nullptr;
+    EXPECT_FALSE(MakeDictKey(tupleWithList, &type));
+    EXPECT_STREQ("list", type);
+
+    const InternalValue dict(CreateMapAdapter(TemplateDict()));
+    type = nullptr;
+    EXPECT_FALSE(MakeDictKey(dict, &type));
+    EXPECT_STREQ("dict", type);
+
+    TemplateDict target;
+    EXPECT_THROW(target.Set(list, InternalValue(int64_t{ 1 })), std::runtime_error);
+    EXPECT_TRUE(target.empty());
+    EXPECT_EQ(target.end(), target.Find(list));
+}
+
+TEST(TemplateDictTest, FirstKeyAndPositionKeptLastValueWins)
+{
+    TemplateDict dict;
+    dict.Set(InternalValue(int64_t{ 1 }), InternalValue(std::string("a")));
+    dict.Set(InternalValue(std::string("x")), InternalValue(std::string("b")));
+    dict.Set(InternalValue(1.0), InternalValue(std::string("c")));
+    dict.Set(InternalValue(true), InternalValue(std::string("d")));
+
+    ASSERT_EQ(2U, dict.size());
+    EXPECT_TRUE(dict.HasKeyValues());
+    auto first = dict.begin();
+    EXPECT_EQ(ValueKind::Int, dict.KeyOf(first->first).Kind());
+    EXPECT_EQ("d", AsString(first->second));
+    EXPECT_EQ(ValueKind::String, dict.KeyOf(std::next(first)->first).Kind());
+
+    auto found = dict.Find(InternalValue(1.0));
+    ASSERT_NE(dict.end(), found);
+    EXPECT_EQ("d", AsString(found->second));
+    dict.Erase(found);
+    EXPECT_FALSE(dict.HasKeyValues());
+    EXPECT_EQ(1U, dict.size());
+
+    // A copy has keys of its own
+    dict.Set(InternalValue(2.5), InternalValue(int64_t{ 1 }));
+    TemplateDict copy(dict);
+    copy.Set(InternalValue(2.5), InternalValue(int64_t{ 2 }));
+    copy.Set(InternalValue(3.5), InternalValue(int64_t{ 3 }));
+    EXPECT_EQ(2U, dict.size());
+    EXPECT_EQ(3U, copy.size());
+    const auto key = dict.KeyOf(dict.Find(InternalValue(2.5))->first);
+    ASSERT_NE(nullptr, GetIf<double>(&key));
+    EXPECT_EQ(2.5, *GetIf<double>(&key));
+    EXPECT_FALSE(dict == copy);
+}
+
+TEST(TemplateDictTest, StringKeysStartingWithTheMarkAreEscaped)
+{
+    TemplateDict dict;
+    const std::string odd = std::string(1, DictKeyMark) + "n12345678";
+    dict.SetString(odd, InternalValue(int64_t{ 7 }));
+    dict.Set(InternalValue(int64_t{ 1 }), InternalValue(int64_t{ 8 }));
+
+    ASSERT_EQ(2U, dict.size());
+    ASSERT_NE(dict.end(), dict.FindString(odd));
+    EXPECT_EQ(7, ConvertToInt(dict.FindString(odd)->second));
+    ASSERT_NE(dict.end(), dict.Find(InternalValue(odd)));
+    // Read back as the string it was
+    EXPECT_EQ(odd, AsString(dict.KeyOf(dict.begin()->first)));
+    EXPECT_EQ(ValueKind::Int, dict.KeyOf(std::next(dict.begin())->first).Kind());
+}
+
+TEST(TemplateDictTest, PublicMapSpellsKeys)
+{
+    TemplateDict dict;
+    dict.Set(InternalValue(int64_t{ 1 }), InternalValue(std::string("x")));
+    dict.SetString("b", InternalValue(int64_t{ 2 }));
+    dict.Set(InternalValue(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(int64_t{ 1 }), InternalValue(int64_t{ 2 }) }).MarkAsTuple()), InternalValue(int64_t{ 3 }));
+    dict.Set(InternalValue(std::string("1")), InternalValue(std::string("y")));
+
+    const auto map = CreateMapAdapter(std::move(dict));
+    const auto value = IntValue2Value(InternalValue(map));
+    const auto generic = value.ToGenericMap();
+    ASSERT_NE(nullptr, generic.GetAccessor());
+    // Later value wins at the position of the first spelling
+    EXPECT_EQ((std::vector<std::string>{ "1", "b", "(1, 2)" }), generic.GetKeys());
+    EXPECT_EQ("y", generic.GetValueByName("1").ToString());
+    EXPECT_EQ(3U, generic.GetSize());
+    // A copy: later changes of the template's dict do not reach it
+    map.GetMutableItems()->SetString("c", InternalValue(int64_t{ 4 }));
+    EXPECT_EQ(3U, generic.GetSize());
+
+    // A dict of string keys stays a live view
+    TemplateDict strings;
+    strings.SetString("a", InternalValue(int64_t{ 1 }));
+    const auto stringMap = CreateMapAdapter(std::move(strings));
+    const auto stringGeneric = IntValue2Value(InternalValue(stringMap)).ToGenericMap();
+    EXPECT_EQ(1U, stringGeneric.GetSize());
+    stringMap.GetMutableItems()->SetString("b", InternalValue(int64_t{ 2 }));
+    EXPECT_EQ(2U, stringGeneric.GetSize());
+}
+
+TEST(TemplateDictTest, DictsCompareAsPythonDicts)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ {1: 'a', (1, 2): 'b'} == {(1.0, 2): 'b', True: 'a'} }}|{{ {1: 'a'} == {'1': 'a'} }}|{{ 1 in {True: 0} }}").has_value());
+    EXPECT_EQ("True|False|True", tpl.RenderAsString({}).value());
 }
 #endif

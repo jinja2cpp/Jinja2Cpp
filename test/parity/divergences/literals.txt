@@ -1,6 +1,5 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the literals area (cases/literals.py).
 # Format and kinds: test/parity/README.md.
 
-literals.dict_int_key                   output      0036 mapping keys are strings; an integer key cannot be looked up by integer
 literals.int_big                        output      0015 deliberate: integers are 64-bit; a literal beyond int64 becomes a float (docs/parity.md)
 literals.string_escape_named            rejects     0041 \N{name} needs the Unicode name table; it is rejected as malformed (documented divergence)

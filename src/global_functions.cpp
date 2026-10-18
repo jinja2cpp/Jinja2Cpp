@@ -2,6 +2,7 @@
 #include "internal_value.h"
 #include "markup.h"
 #include "python_format.h"
+#include "template_dict.h"
 #include "undefined.h"
 #include "value_visitors.h"
 
@@ -78,19 +79,6 @@ ParsedArguments ParseArgs(const std::initializer_list<ArgumentInfo>& argsInfo, c
     return args;
 }
 
-std::string KeyToString(const InternalValue& key)
-{
-    if (IsStringValue(key))
-    {
-        return AsString(key);
-    }
-
-    // Mapping keys are strings (task 0036): store other keys by their printed form
-    std::string result;
-    Apply<visitors::ValueRenderer<char>>(key, result);
-    return result;
-}
-
 // Python's range and randrange take integers (bool among them) and nothing else; a plain
 // undefined is a missing argument, left to the caller
 void CheckIntegerArgument(const InternalValue& arg)
@@ -140,8 +128,7 @@ InternalValue CallRange(const CallParams& params, RenderContext&)
 }
 
 // The items of dict(mapping_or_pairs, **kwargs), into `result`
-template<typename Map>
-void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
+void CollectDictItems(const CallParams& params, const char* fnName, TemplateDict& result)
 {
     if (params.posParams.size() > 1)
     {
@@ -161,7 +148,7 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
         {
             for (auto& [key, value] : map->GetEntries())
             {
-                result[KeyToString(key)] = std::move(value);
+                result.Set(key, std::move(value));
             }
         }
         else if (auto list = AsList(source))
@@ -170,7 +157,7 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
             {
                 if (const auto* pair = GetIf<KeyValuePair>(&item))
                 {
-                    result[KeyToString(pair->key)] = pair->value;
+                    result.Set(pair->key, pair->value);
                     continue;
                 }
                 // Any iterable of two items is a pair, a two-character string included
@@ -185,7 +172,7 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
                 {
                     throw std::runtime_error("dictionary update sequence element has wrong length; 2 is required");
                 }
-                result[KeyToString(pair[0])] = pair[1];
+                result.Set(pair[0], pair[1]);
             }
         }
         else if (!IsEmpty(source))
@@ -196,14 +183,14 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
 
     for (const auto& [name, value] : params.kwParams)
     {
-        result[name] = value;
+        result.SetString(name, value);
     }
 }
 
 // dict(mapping_or_pairs, **kwargs)
 InternalValue CallDict(const CallParams& params, RenderContext&)
 {
-    InternalDict result;
+    TemplateDict result;
     CollectDictItems(params, "dict", result);
     return CreateMapAdapter(std::move(result));
 }
@@ -211,7 +198,7 @@ InternalValue CallDict(const CallParams& params, RenderContext&)
 // namespace(mapping_or_pairs, **kwargs): takes its arguments as dict() does
 InternalValue CallNamespace(const CallParams& params, RenderContext&)
 {
-    InternalDict result;
+    TemplateDict result;
     CollectDictItems(params, "namespace", result);
     return CreateNamespaceAdapter(std::move(result));
 }

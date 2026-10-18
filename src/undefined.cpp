@@ -66,7 +66,7 @@ InternalValue MakeUndefined(const RenderContext* context, const InternalValue& o
     // A key a host map has but reads as undefined (a JSON null or an empty reflected field,
     // task 0047) is not missing: it stays a plain undefined, which fails no use
     auto map = AsMap(obj);
-    if (map && IsStringValue(key) && map->HasValue(AsString(key)))
+    if (map && (IsStringValue(key) ? map->HasValue(AsString(key)) : map->FindItem(key).has_value()))
     {
         return InternalValue();
     }

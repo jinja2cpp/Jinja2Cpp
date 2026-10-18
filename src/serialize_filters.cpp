@@ -42,10 +42,39 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     {
     }
 
+    // pprint's _safe_key: `a < b` when Python can order the two keys, else by the name of
+    // their types (str(type)), so that {1: 'a', 'b': 2} prints with the int first. Two keys
+    // of one type that cannot be ordered (None and None) stay where they are, as Python
+    // compares their ids
+    static bool SafeKeyLess(const InternalValue& left, const InternalValue& right)
+    {
+        const auto isNumber = [](const InternalValue& val) {
+            return val.Kind() == ValueKind::Int || val.Kind() == ValueKind::Double || val.Kind() == ValueKind::Bool;
+        };
+        const auto isSequence = [](const InternalValue& val) { return val.Kind() == ValueKind::List || val.Kind() == ValueKind::KeyValuePair; };
+        if ((isNumber(left) && isNumber(right)) || (IsStringValue(left) && IsStringValue(right)) || (isSequence(left) && isSequence(right)))
+        {
+            try
+            {
+                return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
+            }
+            catch (const std::runtime_error&)
+            {
+                // Tuples with items Python cannot order: ordered by type like the rest
+            }
+        }
+        return std::strcmp(Apply<visitors::PythonTypeNameGetter>(left), Apply<visitors::PythonTypeNameGetter>(right)) < 0;
+    }
+
     // The entries in the order pprint prints them: by key. String keys sort by code point,
-    // which is UTF-8 byte order; the keys of a mapping are all strings so far
+    // which is UTF-8 byte order
     static void SortEntriesByKey(std::vector<KeyValuePair>& entries)
     {
+        if (!std::all_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return IsStringValue(entry.key); }))
+        {
+            std::stable_sort(entries.begin(), entries.end(), [](const KeyValuePair& left, const KeyValuePair& right) { return SafeKeyLess(left.key, right.key); });
+            return;
+        }
         std::vector<std::pair<std::string, size_t>> order;
         order.reserve(entries.size());
         for (size_t idx = 0; idx != entries.size(); ++idx)
@@ -435,18 +464,7 @@ private:
         }
         else if (const auto* d = GetIf<double>(&value))
         {
-            if (std::isnan(*d))
-            {
-                m_out += "NaN";
-            }
-            else if (std::isinf(*d))
-            {
-                m_out += *d < 0 ? "-Infinity" : "Infinity";
-            }
-            else
-            {
-                m_out += visitors::PythonFloatText(*d).View();
-            }
+            m_out += JsonFloatText(*d);
         }
         else if (auto str = GetAsSameString(std::string(), value))
         {
@@ -472,11 +490,18 @@ private:
             auto entries = map->GetEntries();
             std::vector<std::pair<std::string, size_t>> order;
             order.reserve(entries.size());
-            for (size_t idx = 0; idx != entries.size(); ++idx)
+            if (std::all_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return IsStringValue(entry.key); }))
             {
-                order.emplace_back(AsString(entries[idx].key), idx);
+                for (size_t idx = 0; idx != entries.size(); ++idx)
+                {
+                    order.emplace_back(AsString(entries[idx].key), idx);
+                }
+                std::sort(order.begin(), order.end());
             }
-            std::sort(order.begin(), order.end());
+            else
+            {
+                OrderNonStringKeys(entries, order);
+            }
             WriteContainer('{', '}', order, level, [this, &entries, level](const std::pair<std::string, size_t>& item) {
                 WriteString(item.first);
                 m_out += ": ";
@@ -487,6 +512,75 @@ private:
         {
             Fail();
         }
+    }
+
+    // How json.dumps writes a float, also as a key
+    static std::string JsonFloatText(double val)
+    {
+        if (std::isnan(val))
+        {
+            return "NaN";
+        }
+        if (std::isinf(val))
+        {
+            return val < 0 ? "-Infinity" : "Infinity";
+        }
+        return std::string(visitors::PythonFloatText(val).View());
+    }
+
+    // Python's `a < b` for two keys that json.dumps accepts: numbers (bool included) order
+    // among themselves, strings among themselves, and anything else is a TypeError
+    static bool KeyLess(const InternalValue& left, const InternalValue& right)
+    {
+        const bool leftString = IsStringValue(left);
+        const bool rightString = IsStringValue(right);
+        if (leftString && rightString)
+        {
+            return AsString(left) < AsString(right);
+        }
+        if (leftString || rightString || left.IsNone() || right.IsNone())
+        {
+            throw std::runtime_error("'<' not supported between instances of '"s + Apply<visitors::PythonTypeNameGetter>(left) + "' and '" + Apply<visitors::PythonTypeNameGetter>(right) + "'");
+        }
+        return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
+    }
+
+    // The keys of a mapping with a key that is not a string, in sort_keys order, with the JSON
+    // spelling of each: 1 is "1", 2.5 is "2.5", True is "true" and None is "null". A tuple or
+    // an object is no JSON key; keys of types Python cannot compare (a str and an int) are a TypeError
+    static void OrderNonStringKeys(const std::vector<KeyValuePair>& entries, std::vector<std::pair<std::string, size_t>>& order)
+    {
+        for (size_t idx = 0; idx != entries.size(); ++idx)
+        {
+            const auto& key = entries[idx].key;
+            std::string text;
+            if (const auto* i = GetIf<int64_t>(&key))
+            {
+                text = std::to_string(*i);
+            }
+            else if (const auto* b = GetIf<bool>(&key))
+            {
+                text = *b ? "true" : "false";
+            }
+            else if (const auto* d = GetIf<double>(&key))
+            {
+                text = JsonFloatText(*d);
+            }
+            else if (key.IsNone())
+            {
+                text = "null";
+            }
+            else if (IsStringValue(key))
+            {
+                text = AsString(key);
+            }
+            else
+            {
+                throw std::runtime_error("keys must be str, int, float, bool or None, not "s + Apply<visitors::PythonTypeNameGetter>(key));
+            }
+            order.emplace_back(std::move(text), idx);
+        }
+        std::stable_sort(order.begin(), order.end(), [&entries](const auto& left, const auto& right) { return KeyLess(entries[left.second].key, entries[right.second].key); });
     }
 
     RenderContext& m_context;
@@ -626,6 +720,11 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
         if (IsEmpty(value) || GetIf<Callable>(&value))
         {
             continue;
+        }
+        // Jinja2 searches the key for whitespace with a regular expression, which only takes text
+        if (!IsStringValue(keyValue))
+        {
+            throw std::runtime_error("expected string or bytes-like object, got '"s + Apply<visitors::PythonTypeNameGetter>(keyValue) + "'");
         }
         const auto key = AsString(keyValue);
         // Jinja2 rejects keys with whitespace, "/", ">" or "="
