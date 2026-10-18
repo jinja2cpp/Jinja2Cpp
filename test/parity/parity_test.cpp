@@ -420,6 +420,11 @@ std::string ApplyEnv(const Json& env, jinja2::Settings& settings)
         {
             settings.autoescape = val.get<bool>();
         }
+        else if (key == "autoescape" && val.is_array())
+        {
+            // Jinja2's select_autoescape of these extensions
+            settings.autoescapeSelector = jinja2::SelectAutoescape(val.get<std::vector<std::string>>());
+        }
         else if (key == "extensions")
         {
             auto missing = ApplyExtensions(val, settings);

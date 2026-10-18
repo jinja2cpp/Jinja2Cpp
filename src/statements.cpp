@@ -1477,12 +1477,6 @@ void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
 
 namespace
 {
-bool TemplateAutoescape(RenderContext& values)
-{
-    auto* callback = values.GetRendererCallback();
-    return callback != nullptr && callback->GetSettings().autoescape;
-}
-
 // Renders the block at `depth` of the stack for `name` in `blockContext`, the context
 // Jinja2 passes to a block function
 void RenderBlockAt(const BlocksStack& stack, std::string_view name, size_t depth, OutStream& os, RenderContext& blockContext)
@@ -1779,10 +1773,10 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     {
         scope["super"] = std::move(*parentBlock);
     }
-    // A block body escapes its output as its template does, whatever `{% autoescape %}`
-    // surrounds it; the runtime setting stays the caller's, as Jinja2's derived context
-    // shares its EvalContext
-    OutputAutoescapeGuard autoescapeGuard(values, TemplateAutoescape(values));
+    // A block body escapes its output as the template it is written in does, whatever
+    // `{% autoescape %}` surrounds it; the runtime setting stays the caller's, as Jinja2's
+    // derived context shares its EvalContext
+    OutputAutoescapeGuard autoescapeGuard(values, m_autoescape);
     values.Nodes()[m_mainBody].Render(os, values);
     values.ExitScope();
     values.SetSelfDepth(prevSelfDepth);
@@ -1820,7 +1814,7 @@ void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values, Bloc
     // the parent's: in Jinja2 `self` is a local of each template's root function
     values.GetCurrentScope().Erase("self");
     PushBlocks(*values.GetRendererCallback(), values.Nodes(), stack);
-    RenderBody(os, values, &stack, childName);
+    RenderBody(os, values, &stack, childName, true);
 }
 
 void TemplateRenderer::RenderAsModule(OutStream& os, RenderContext& values, BlocksStack& stack, std::string_view name)
@@ -1829,15 +1823,18 @@ void TemplateRenderer::RenderAsModule(OutStream& os, RenderContext& values, Bloc
     RenderBody(os, values, &stack, name);
 }
 
-void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name)
+void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name, bool asParent)
 {
     // Nothing adds to the stack of a template that extends nothing, so those share one
     static const BlocksStack noBlocks{};
 
     const RenderDepthGuard depthGuard;
     const UnitCall unitCall(values, m_unitLayout);
-    // Included, imported and parent templates use the environment's autoescape setting
-    AutoescapeGuard autoescapeGuard(values, TemplateAutoescape(values));
+    // A template escapes its output by its own setting (Settings::autoescapeSelector). An
+    // included or imported one runs in a context of its own, whose runtime setting is the
+    // template's too; a parent runs in its child's and keeps the child's runtime setting, as
+    // Jinja2's EvalContext belongs to the context
+    AutoescapeGuard autoescapeGuard(values, asParent ? values.IsAutoescape() : m_autoescape, m_autoescape);
     TemplateFrame frame;
     frame.blocks = stack ? stack : &noBlocks;
     frame.baseDepth = values.GetScopesCount();
@@ -2057,6 +2054,11 @@ void ImportedModule::Render(const Tpl& tpl)
     m_frame.name = tpl.SelfName();
     m_context.SetTemplateFrame(&m_frame);
     m_context.SetNodes(tpl.Nodes());
+    // The module's context is its template's: its macros run with the template's runtime
+    // autoescape setting wherever they are called
+    const bool autoescape = m_context.Nodes()[tpl.GetRenderer()].IsAutoescape();
+    m_context.SetAutoescape(autoescape);
+    m_context.SetOutputAutoescape(autoescape);
     // Only the names the template, and the ones it extends, define are imported, as in
     // Jinja2; its output is dropped
     RenderToString(&callback, [this, &tpl](OutStream& stream) { m_context.Nodes()[tpl.GetRenderer()].RenderAsModule(stream, m_context, m_blocks, tpl.SelfName()); });

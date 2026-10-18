@@ -270,6 +270,25 @@ public:
         std::string name = isNamed ? std::move(tplName) : "noname.j2tpl"s;
         NodeArena nodes;
         TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name, nodes);
+        if (const auto& selector = m_settings->settings.autoescapeSelector)
+        {
+            // Jinja2 passes None for a template from a string. A selector that throws fails
+            // the Load, which reports errors rather than throwing
+            try
+            {
+                parser.SetAutoescape(selector(isNamed ? name : std::string()));
+            }
+            catch (const std::exception& ex)
+            {
+                typename BasicErrorInfo<CharT>::Data errorData;
+                errorData.code = ErrorCode::UnexpectedException;
+                errorData.srcLoc.col = 1;
+                errorData.srcLoc.line = 1;
+                errorData.srcLoc.fileName = name;
+                errorData.extraParams.push_back(Value(std::string(ex.what())));
+                return BasicErrorInfo<CharT>(errorData);
+            }
+        }
 
         auto parseResult = parser.Parse();
         if (!parseResult)
@@ -528,7 +547,8 @@ public:
         {
             return false;
         }
-        // The same source, settings and environment parse to the same tree
+        // The same source, settings and environment parse to the same tree (but for the
+        // autoescape setting an autoescapeSelector chooses by name)
         const bool sameSource = m_template && other.m_template ? *m_template == *other.m_template : m_template == other.m_template;
         if (!sameSource)
         {

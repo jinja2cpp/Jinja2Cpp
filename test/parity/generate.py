@@ -69,6 +69,8 @@ def make_env(options, templates):
     kwargs["undefined"] = UNDEFINED[options.get("undefined", "default")]
     if "finalize" in options:
         kwargs["finalize"] = FINALIZE[options["finalize"]]
+    if isinstance(options.get("autoescape"), list):
+        kwargs["autoescape"] = jinja2.select_autoescape(options["autoescape"])
     env = jinja2.Environment(loader=jinja2.DictLoader(templates), **kwargs)
     env.filters.update({name: FILTERS[name] for name in options.get("filters", [])})
     env.tests.update({name: TESTS[name] for name in options.get("tests", [])})
