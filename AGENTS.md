@@ -14,11 +14,14 @@ Review, the pre-push verifier). It covers both automatic and explicitly requeste
 reviews. Review the proposed changes without editing files, committing fixes or
 posting additional messages unless that work was requested. Review automation is
 enabled separately in Codex/GitHub settings; these files provide instructions, not
-review triggers. The rules that matter most, in case REVIEW.md is not read:
+review triggers, and they do not choose the reviewer's model or reasoning effort:
+that belongs to the invoking runtime or product settings. The rules that matter most,
+in case REVIEW.md is not read:
 
-- Template text and data may be untrusted. Any input reachable crash, abort, stack
-  overflow, unbounded allocation or output, path escape from a loader root, or
-  autoescape bypass is P0/P1.
+- Template text and data may be untrusted. Memory corruption or an autoescape bypass
+  reachable from template text is P0; a reachable crash, abort, stack overflow or
+  allocation that bypasses the `MaxSequenceSize` cap is P1. Flag changes that make
+  loader name handling more permissive (task 0224).
 - Lifetimes are this project's worst defect class (tasks 0112, 0115, 0125, 0134):
   flag any view, lent item, generator item or reflected item used after the statement,
   frame, render or reload that owned it, and escaping callables without a keep-alive.
@@ -65,7 +68,7 @@ Useful configurations (see `.github/workflows/` for the actual CI matrix):
 For current Conan dependency-mode builds, use Conan 2:
 
 ```bash
-conan profile detect --force   # once per machine; Conan 2 has no default profile
+conan profile detect   # only if `conan profile list` has no default profile
 conan install . -of .conan --build=missing -s compiler.cppstd=17 -s build_type=Release
 cmake -S . -B build-conan -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_TOOLCHAIN_FILE=.conan/conan_toolchain.cmake \

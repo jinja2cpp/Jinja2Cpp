@@ -17,7 +17,8 @@ are what this codebase has actually got wrong.
   configuration. Check the claim first: a minimal reproducer, the pinned Python
   oracle, an existing test, or a precise code path. Say whether a finding was
   reproduced or reasoned. If an essential assumption cannot be checked, ask a focused
-  question instead of presenting speculation as a bug.
+  question where your output format allows one; otherwise omit the claim rather than
+  presenting speculation as a bug.
 - A known backlog item (`docs/tasks/`) is context, not a finding on every PR. A new
   TODO or known gap the change leaves behind without a task file is a finding.
 - Review without changing tracked files, regenerating fixtures, committing fixes or
@@ -31,14 +32,19 @@ are what this codebase has actually got wrong.
   in an error `Result`, never an abort, stack overflow or uncaught exception. New
   recursion in the parser, evaluator or value methods (including cycle checks) goes
   through `src/recursion_guard.h` and reports `RecursionLimitExceeded`.
-- **Template-controlled sizes are bounded.** A loop, allocation or output whose size
-  comes from template text or data (`range`, `*` repetition, center/indent/format
-  widths, join over generators, string growth) respects the configured limits and the
-  task 0250 error contract. Size arithmetic is checked before the allocation, and
-  integer conversions follow task 0172.
-- **Error contract (task 0250).** Load and Render report failures through `Result`;
-  only `bad_alloc` for genuine out-of-memory escapes. Exceptions from user callables
-  are wrapped, never propagated raw. A `noexcept` function must not reach a throw.
+- **Template-controlled sizes are bounded.** A sequence or string whose size comes
+  from template text or data (`range`, `*` repetition, center/indent/format widths,
+  join over generators) goes through the existing hard cap (`MaxSequenceSize` and
+  its check in `src/internal_value.h`), with the size arithmetic checked before the
+  allocation and integer conversions following task 0172. Configurable limits are
+  still open (task 0097): a missing per-render budget is not a finding, but a new
+  path that bypasses the existing cap is.
+- **Errors reach the caller as a `Result`.** Today Load and Render catch
+  `std::exception` at the API boundary and report it (`src/template_impl.h`); a change
+  must not let an exception escape that boundary or crash instead. Exceptions from user
+  callables are reported, never propagated raw, and a `noexcept` function must not
+  reach a throw. Task 0250 refines the contract (typed codes, which exceptions may
+  escape); until its phases land, follow the code, not the task text.
 - **Lifetimes.** The worst historical class (0112, 0115, 0125, 0134). Trace the owner
   of every `string_view`, lent item, generator item, reflected nested item, container
   returned by a callable, arena node (`NodeRef`) and stored macro/self/super callable.
@@ -47,10 +53,10 @@ are what this codebase has actually got wrong.
   exception paths, failed reloads, cache eviction, includes/imports, inheritance and
   templates outliving their environment. Check mutation of a container during its
   own traversal and iterator invalidation from callbacks.
-- **Loaders.** Template names follow Python Jinja2's rules (no `..` segments, no
-  absolute paths escaping the root). Inspect symlinks and platform path rules against
-  the documented policy. A root-folder parameter alone is not confinement, and no
-  full sandbox exists. No new file access outside the FileSystem handlers.
+- **Loaders.** The loader trust boundary is still being settled (task 0224). Do not
+  assume a root folder confines template names, and flag a change that makes name
+  handling more permissive or adds file access outside the FileSystem handlers. Once
+  0224 lands, its policy is the rule.
 - **Autoescape.** Follow Markup through values, macros, caller blocks, filters,
   concatenation, imports and C++ callable conversions. Markup + str escapes the str;
   `tojson` escapes `<`, `>`, `&` and `'` like Python; double escaping is a bug too.
@@ -82,11 +88,13 @@ are what this codebase has actually got wrong.
 
 ## Performance
 
-- **Evidence or silence.** A performance claim, or a regression finding, needs
-  `bench/count.py` instruction counts on named workloads (the preflight gate is +3%
-  per benchmark). Cloud wall time is noise. Do not suggest micro-optimisations
-  without numbers.
-- **Hot path budget.** On the per-node render and evaluation path, flag a new heap
+- **Measured claims need counts.** A claimed speedup, or a claimed regression of a
+  stated size, needs `bench/count.py` instruction counts on named workloads (the
+  preflight gate is +3% per benchmark). Cloud wall time is noise. Do not suggest
+  optimisations outside the hot-path list below without numbers.
+- **Hot path budget.** These constructs are findings by inspection alone, without
+  counts, because each has cost measurable time before. On the per-node render and
+  evaluation path, flag a new heap
   allocation, a copy of `std::string` or `InternalValue` where a lent value would do,
   a new virtual call or `shared_ptr` refcount per element, an exception used for
   control flow, or a by-name lookup where a name slot exists (0117).
@@ -148,7 +156,7 @@ are what this codebase has actually got wrong.
 - Formatting that `.clang-format` or the changed-line format check owns.
 - Unfinished roadmap work unrelated to the diff.
 - Differences already on a divergence allow-list.
-- Micro-optimisations without instruction counts.
+- Micro-optimisations without instruction counts, other than the hot-path list.
 - Requests for more comments, or tests for pure refactors already covered.
 - Platform matrices for documentation-only changes.
 - Hypothetical failures contradicted by an invariant, a check or a test.
@@ -156,11 +164,13 @@ are what this codebase has actually got wrong.
 ## Severity
 
 Severity describes impact, not the backlog label. Order findings by severity and do
-not fill a quota; if nothing actionable is found, say so and name what could not be
-verified. A clean review is not a guarantee, and no automatic review merges a PR.
+not fill a quota. Where your output format allows a summary, say when nothing
+actionable was found and name what could not be verified. A clean review is not a
+guarantee, and no automatic review merges a PR.
 
 | Impact | Codex | Claude Code Review |
 |---|---|---|
-| Crash, memory unsafety, escape bypass or path escape reachable from template text; silent wrong output in common use; build or package break | P0/P1 | red (blocking) |
+| Memory corruption (use-after-free, overflow) or an autoescape bypass reachable from template text or data with default settings | P0 | red (blocking) |
+| Crash, abort or unbounded allocation reachable from template text; silent wrong output in common use; build or package break on a supported configuration | P1 | red (blocking) |
 | Material defect in a supported, identifiable scenario | P2 | red when the scenario is supported, else yellow |
 | Minor improvement | P3 | yellow (nit) |

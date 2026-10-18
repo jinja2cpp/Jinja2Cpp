@@ -86,6 +86,33 @@ In the PR description (the body, not a comment, so it can be collected; trains t
 note which roles ran, how many verifier rounds it took and how many pushes went red in
 CI, with the cause of each red push.
 
+## External review (Codex)
+
+Codex (`chatgpt-codex-connector[bot]`) reviews PRs against REVIEW.md. Codex settings
+start it automatically only when a PR is opened for review or marked ready, and our
+PRs open as drafts, so owner threads ask for it explicitly:
+
+- When a PR is green and before telling the merge steward it is final, its owner
+  thread comments `@codex review` once and waits for the result (a 👍 reaction or a
+  review). Scope: changes in `src/`, `include/`, `test/`, `cmake/`, `thirdparty/`,
+  `CMakeLists.txt`, `.github/workflows/` or the agent instructions (AGENTS.md,
+  CLAUDE.md, REVIEW.md, `.claude/`). Skip docs-only and task-only PRs, bench
+  re-measures, mechanical clang-tidy batches and merge-steward train PRs. Add
+  `@codex security review` when the diff touches the lexer, parsers, evaluator,
+  loaders or escaping.
+- Re-request only after a substantive change (new logic, not nit fixes), at most
+  twice per PR.
+- Triage: P0/P1 are blocking like a red-circle finding (fix, or reply with the traced
+  reason it is wrong); P2 is a claim to verify like any bot finding; P3 is optional
+  (one-line reply). Reply on each thread and resolve the ones you fixed.
+- Add `Codex: N findings, M fixed, K declined` next to the verifier line in the PR
+  body.
+- The merge steward checks before stacking a train that each in-scope PR has a Codex
+  result with no unanswered P0/P1 thread. If Codex never answered, the PR still goes
+  in and the gap is noted in the train PR, so a Codex outage never blocks merges.
+- Codex model and effort are set in Codex's own settings, not here; Claude role
+  frontmatter does not affect them.
+
 ## Batching work
 
 Parallelism comes at three levels; pick the outermost one that fits.
