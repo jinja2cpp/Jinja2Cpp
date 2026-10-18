@@ -210,9 +210,6 @@ private:
     // Operators chained on the current path (a + b + c, x|f|g, a.b.c, - - x), bounded by
     // Settings::Limits::maxExpressionOperators
     unsigned m_operators = 0;
-    // The two limits; UINT_MAX for one that is 0 (the stack check only)
-    unsigned m_maxDepth;
-    unsigned m_maxOperators;
 };
 
 } // namespace jinja2

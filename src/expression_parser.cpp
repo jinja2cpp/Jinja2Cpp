@@ -98,8 +98,6 @@ ExpressionParser::ExpressionParser(const Settings& settings, TemplateEnv* env, N
     , m_nodes(nodes)
     , m_names(names)
     , m_unknown(unknown)
-    , m_maxDepth(LimitOrNone(settings.limits.maxExpressionDepth))
-    , m_maxOperators(LimitOrNone(settings.limits.maxExpressionOperators))
 {
     if (settings.finalize.callable)
     {
@@ -144,7 +142,7 @@ ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(Le
 
 bool ExpressionParser::AddOperator()
 {
-    return ++m_operators <= m_maxOperators && !StackNearlyExhausted();
+    return ++m_operators <= detail::t_parseLimits.maxExpressionOperators && !StackNearlyExhausted();
 }
 
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullExpression(LexScanner& lexer, bool includeIfPart)
@@ -152,7 +150,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
     // Every nested expression (brackets, call arguments, subscripts, filter arguments, the
     // else branch of a conditional) starts here
     DepthGuard depthGuard(m_depth);
-    if (depthGuard.Exceeds(m_maxDepth) || StackNearlyExhausted())
+    if (depthGuard.Exceeds(detail::t_parseLimits.maxExpressionDepth) || StackNearlyExhausted())
     {
         return MakeParseError(ErrorCode::RecursionLimitExceeded, lexer.PeekNextToken());
     }
@@ -343,7 +341,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
         {
             left = std::move(right);
         }
-        else if (!chain.AfterRight(m_maxOperators))
+        else if (!chain.AfterRight(detail::t_parseLimits.maxExpressionOperators))
         {
             left = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }

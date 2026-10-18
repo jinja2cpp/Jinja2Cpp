@@ -2211,7 +2211,6 @@ struct UserCallableBody
 
     InternalValue operator()(const CallParams& params, RenderContext& context) const
     {
-        CountStep();
         auto ucParams = PrepareUserCallableParams(params, context, argsInfo);
         auto result = Value2IntValue(val.callable(ucParams));
         AfterHostCall();

@@ -89,11 +89,6 @@ public:
     // Appends the buffered output to the target string
     void Flush();
 
-    // Fails the render (Settings::Limits::maxOutputSize) when the target string would grow
-    // past `maxSize` characters. Checked as output reaches the target, so the target never
-    // holds more and the output still in the buffer is not counted until then
-    void LimitTargetSize(size_t maxSize) { m_maxTargetSize = maxSize; }
-
 private:
     // The buffer holds this many characters of the target's type: a wide stream gets as
     // many characters as a narrow one, so it flushes as often (docs/tasks/0132)
@@ -150,8 +145,6 @@ private:
     }
     void FlushBuffer();
     void AppendToTarget(const void* ptr, size_t bytes);
-    // Throws ResourceLimitError when `length` more characters would take the target past its limit
-    void CheckTargetSize(size_t length) const;
     template<typename CharT>
     void WriteValueTo(const InternalValue& val);
 
@@ -165,7 +158,6 @@ private:
     alignas(wchar_t) unsigned char m_buffer[BufferLength * sizeof(wchar_t)];
     unsigned char* m_cur = m_buffer;
     unsigned char* m_end = m_buffer + BufferLength;
-    size_t m_maxTargetSize = SIZE_MAX;
 };
 
 // Renders into a new string with `render(OutStream&)` and returns it

@@ -283,6 +283,7 @@ public:
         NodeArena nodes;
         TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name, nodes);
 
+        const ParseLimitsScope parseLimits(m_settings->settings.limits);
         auto parseResult = parser.Parse();
         if (!parseResult)
         {
@@ -338,7 +339,7 @@ public:
         try
         {
             // Before anything the render does, the conversion of the params included
-            const RenderLimitsScope limitsScope(m_settings->settings.limits);
+            const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr);
             // The tables of the params and the top scope are lent by the thread's workspace and
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;
@@ -383,12 +384,16 @@ public:
             const auto hint = m_outputSizeHint.value.load(std::memory_order_relaxed);
             os.reserve(start + hint);
             OutStream outStream(os);
-            if (const auto maxOutput = m_settings->settings.limits.maxOutputSize; maxOutput != 0)
+            if (m_settings->hasRenderLimits)
             {
-                outStream.LimitTargetSize(maxOutput < SIZE_MAX - start ? start + static_cast<size_t>(maxOutput) : SIZE_MAX - 1);
+                LimitRenderOutput(os, start);
             }
             m_nodes[m_renderer].RenderNamed(outStream, context, SelfName());
             outStream.Flush();
+            if (m_settings->hasRenderLimits)
+            {
+                CheckRenderOutput();
+            }
             context.TakeTopScope(maps.TopScope());
             // Stored only when the output outgrows the hint or needs less than half of it, so
             // that renders of a steady size store nothing: every core rendering the template

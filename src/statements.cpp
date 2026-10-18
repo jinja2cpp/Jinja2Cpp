@@ -1328,8 +1328,6 @@ bool ForStatement::FilterInFrame(IListAccessorEnumerator& items, boost::span<Slo
     bool isFound = false;
     while (items.MoveNext())
     {
-        // The items it skips render no body, so each is a step of its own
-        CountStep();
         // A plain name, the common case, takes the item into its slot and gives it back when
         // it is kept, without a copy
         if (rootSlot)

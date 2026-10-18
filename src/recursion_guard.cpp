@@ -1,9 +1,14 @@
 #include "recursion_guard.h"
 
+#include <jinja2cpp/template_env.h>
+
+#include <algorithm>
+
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -100,6 +105,10 @@ bool StackNearlyExhaustedSlow(std::uintptr_t frame)
         const bool known = bounds.high - bounds.low > StackReserve;
         stack.low = known ? bounds.low : 0;
         stack.limit = known ? bounds.low + StackReserve : 0;
+        if (!t_renderLimits.active)
+        {
+            stack.renderLimit = stack.limit;
+        }
     }
     // A frame below the stack runs on one of its own (a fiber, a coroutine): no check
     return frame >= stack.low && frame < stack.limit;
@@ -132,12 +141,14 @@ void Refill(RenderLimits& limits)
 void PollDeadline()
 {
     const auto& limits = t_renderLimits;
-    if (limits.hasDeadline && std::chrono::steady_clock::now() > limits.deadline)
+    if (limits.hasDeadline && std::chrono::steady_clock::now().time_since_epoch().count() > limits.deadline)
     {
         ThrowLimit("maxRenderTime", "the render took longer than its time limit");
     }
 }
 
+namespace
+{
 void StepsSlow()
 {
     auto& limits = t_renderLimits;
@@ -153,12 +164,46 @@ void StepsSlow()
     PollDeadline();
     Refill(limits);
 }
+} // namespace
+
+void CheckStackSlow(std::uintptr_t frame)
+{
+    if (t_renderLimits.active)
+    {
+        if (--t_renderLimits.stepsLeft == 0)
+        {
+            StepsSlow();
+        }
+        if (t_renderLimits.output)
+        {
+            CheckRenderOutput();
+        }
+    }
+    if (StackNearlyExhaustedSlow(frame))
+    {
+        throw RecursionLimitError();
+    }
+}
+
+void InstallRenderLimits(const RenderLimits& limits)
+{
+    t_renderLimits = limits;
+    auto& stack = t_threadStack;
+    stack.renderLimit = limits.active ? UINTPTR_MAX : stack.limit;
+}
 } // namespace detail
 
-RenderLimitsScope::RenderLimitsScope(const Settings::Limits& limits)
-    : m_saved(detail::t_renderLimits)
+void RenderLimitsScope::Install(const Settings::Limits* limitsOrNone)
 {
+    m_saved = detail::t_renderLimits;
     detail::RenderLimits state;
+    if (!limitsOrNone)
+    {
+        detail::InstallRenderLimits(state);
+        return;
+    }
+    const auto& limits = *limitsOrNone;
+    state.active = true;
     state.maxSteps = limits.maxRenderSteps;
     if (limits.maxSequenceSize != 0)
     {
@@ -168,6 +213,11 @@ RenderLimitsScope::RenderLimitsScope(const Settings::Limits& limits)
     {
         state.maxRange = limits.maxRange;
     }
+    if (limits.maxOutputSize != 0)
+    {
+        // Made an end by LimitRenderOutput
+        state.maxOutputEnd = limits.maxOutputSize < SIZE_MAX ? static_cast<std::size_t>(limits.maxOutputSize) : SIZE_MAX - 1;
+    }
     if (limits.maxTemplateLoads != 0)
     {
         state.loadsLeft = limits.maxTemplateLoads;
@@ -176,32 +226,43 @@ RenderLimitsScope::RenderLimitsScope(const Settings::Limits& limits)
     if (limits.maxRenderTime.count() > 0)
     {
         state.hasDeadline = true;
-        state.deadline = std::chrono::steady_clock::now() + limits.maxRenderTime;
+        const auto deadline = std::chrono::steady_clock::now() + limits.maxRenderTime;
+        state.deadline = deadline.time_since_epoch().count();
     }
     detail::Refill(state);
-    detail::t_renderLimits = state;
+    detail::InstallRenderLimits(state);
 }
 
-void CountTemplateLoad()
+void CheckRenderOutput()
 {
-    auto& limits = detail::t_renderLimits;
+    const auto& limits = detail::t_renderLimits;
+    if (!limits.output)
+    {
+        return;
+    }
+    const auto size = limits.wideOutput ? static_cast<const std::wstring*>(limits.output)->size() : static_cast<const std::string*>(limits.output)->size();
+    if (size > limits.maxOutputEnd)
+    {
+        detail::ThrowLimit("maxOutputSize", "the render wrote more characters than its output limit allows");
+    }
+}
+
+namespace detail
+{
+void CountTemplateLoadSlow()
+{
+    auto& limits = t_renderLimits;
     if (limits.loadsLeft == 0)
     {
-        detail::ThrowLimit("maxTemplateLoads", "the render loaded more templates than its limit allows");
+        ThrowLimit("maxTemplateLoads", "the render loaded more templates than its limit allows");
     }
-    if (limits.loadsLeft != UINT32_MAX)
-    {
-        --limits.loadsLeft;
-    }
+    --limits.loadsLeft;
 }
 
-void CheckRangeSize(std::uint64_t size)
+void ThrowRangeTooLong(std::uint64_t size)
 {
-    const auto limit = detail::t_renderLimits.maxRange;
-    if (size > limit)
-    {
-        detail::ThrowLimit("maxRange", "range() of " + std::to_string(size) + " items is longer than " + std::to_string(limit));
-    }
+    ThrowLimit("maxRange", "range() of " + std::to_string(size) + " items is longer than " + std::to_string(t_renderLimits.maxRange));
 }
+} // namespace detail
 
 } // namespace jinja2

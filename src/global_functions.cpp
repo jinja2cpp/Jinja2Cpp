@@ -141,11 +141,11 @@ InternalValue CallRange(const CallParams& params, RenderContext&)
     uint64_t length = 0;
     if (step > 0 && start < stop)
     {
-        length = (span(start, stop) - 1) / static_cast<uint64_t>(step) + 1;
+        length = ((span(start, stop) - 1) / static_cast<uint64_t>(step)) + 1;
     }
     else if (step < 0 && start > stop)
     {
-        length = (span(stop, start) - 1) / (0 - static_cast<uint64_t>(step)) + 1;
+        length = ((span(stop, start) - 1) / (0 - static_cast<uint64_t>(step))) + 1;
     }
     CheckRangeSize(length);
 

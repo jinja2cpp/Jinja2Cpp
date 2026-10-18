@@ -172,7 +172,7 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
         const auto openBlocks = std::count_if(statementsInfo.begin(), statementsInfo.end(), [](const StatementInfo& info) {
             return info.type != StatementInfo::ElseIfStatement;
         });
-        if (static_cast<std::size_t>(openBlocks) > LimitOrNone(m_settings.limits.maxBlockNesting))
+        if (static_cast<std::size_t>(openBlocks) > detail::t_parseLimits.maxBlockNesting)
         {
             return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }
@@ -323,6 +323,15 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
             return MakeUnexpected(parsedExpr.error());
         }
         ifExpr = *parsedExpr;
+        if (HasRenderLimits(m_settings.limits))
+        {
+            // The items the filter skips render no body, and a plain name or constant checks
+            // nothing: the wrapper's check counts each item as a render step
+            // (Settings::Limits::maxRenderSteps). A template without limits does without it
+            auto evaluator = m_nodes.Make<FullExpressionEvaluator>();
+            m_nodes[evaluator].SetExpression(ifExpr);
+            ifExpr = evaluator;
+        }
         filterReadsLoop = ReadsName(lexer, filterStart, "loop");
         isRecursive = lexer.EatIfEqual(Keyword::Recursive);
     }
@@ -359,10 +368,9 @@ class AssignTargetParser
 public:
     using Result = nonstd::expected<void, ParseError>;
 
-    AssignTargetParser(LexScanner& lexer, NodeArena& nodes, unsigned maxDepth)
+    AssignTargetParser(LexScanner& lexer, NodeArena& nodes)
         : m_lexer(lexer)
         , m_nodes(nodes)
-        , m_maxDepth(maxDepth)
     {
     }
 
@@ -383,7 +391,7 @@ private:
     Result ParseTarget(bool withNamespace, bool inParens)
     {
         DepthGuard depthGuard(m_depth);
-        if (depthGuard.Exceeds(m_maxDepth) || StackNearlyExhausted())
+        if (depthGuard.Exceeds(detail::t_parseLimits.maxExpressionDepth) || StackNearlyExhausted())
         {
             return MakeParseError(ErrorCode::RecursionLimitExceeded, m_lexer.PeekNextToken());
         }
@@ -507,7 +515,6 @@ private:
     boost::container::small_vector<TargetNode, 4> m_targets;
     boost::container::small_vector<HashedName, 4> m_names;
     unsigned m_depth = 0;
-    unsigned m_maxDepth;
     bool m_givePlaces = false;
     bool m_namesLoop = false;
 };
@@ -518,7 +525,7 @@ private:
 // attributes (`ns.attr`)
 nonstd::expected<ParsedTarget, ParseError> StatementsParser::ParseAssignTarget(LexScanner& lexer, bool withNamespace)
 {
-    return AssignTargetParser(lexer, m_nodes, LimitOrNone(m_settings.limits.maxExpressionDepth)).Parse(withNamespace);
+    return AssignTargetParser(lexer, m_nodes).Parse(withNamespace);
 }
 
 // `break` and `continue` belong to the innermost loop of the same function: a macro, call

@@ -12,6 +12,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -45,8 +46,8 @@ std::string Repeat(const std::string& part, std::size_t count)
     return result;
 }
 
-const std::string DoublingMacro = "{% macro f(n) %}{% if n %}{{ f(n - 1) }}{{ f(n - 1) }}{% endif %}{% endmacro %}{{ f(40) }}";
-const std::string MacroDepth = "{% macro f(n) %}{% if n %}{{ f(n - 1) }}{% endif %}{% endmacro %}";
+constexpr const char* DoublingMacro = "{% macro f(n) %}{% if n %}{{ f(n - 1) }}{{ f(n - 1) }}{% endif %}{% endmacro %}{{ f(40) }}";
+constexpr const char* MacroDepth = "{% macro f(n) %}{% if n %}{{ f(n - 1) }}{% endif %}{% endmacro %}";
 
 std::vector<LimitCase> Cases()
 {
@@ -73,13 +74,13 @@ std::vector<LimitCase> Cases()
         { "StepsMacro", DoublingMacro, [](auto& l) { l.maxRenderSteps = 100000; }, "maxRenderSteps" },
         { "StepsLoop", "{% for i in range(1000000) %}{% endfor %}", [](auto& l) { l.maxRenderSteps = 100000; }, "maxRenderSteps" },
         { "StepsLoopFilter", "{% for i in range(1000000) if false %}{% endfor %}", [](auto& l) { l.maxRenderSteps = 100000; }, "maxRenderSteps" },
-        // The template, its body and ten iterations
-        { "StepsAt", "{% for i in range(10) %}{% endfor %}", [](auto& l) { l.maxRenderSteps = 12; }, "" },
-        { "StepsOneOver", "{% for i in range(10) %}{% endfor %}", [](auto& l) { l.maxRenderSteps = 11; }, "maxRenderSteps" },
+        // The template, its body, the call of range() and ten iterations
+        { "StepsAt", "{% for i in range(10) %}{% endfor %}", [](auto& l) { l.maxRenderSteps = 13; }, "" },
+        { "StepsOneOver", "{% for i in range(10) %}{% endfor %}", [](auto& l) { l.maxRenderSteps = 12; }, "maxRenderSteps" },
         // The template and nine calls
-        { "RenderDepthOver", MacroDepth + "{{ f(9) }}", [](auto& l) { l.maxRenderDepth = 10; }, "RecursionLimitExceeded" },
-        { "RenderDepthAt", MacroDepth + "{{ f(8) }}", [](auto& l) { l.maxRenderDepth = 10; }, "" },
-        { "RenderDepthStackOnly", MacroDepth + "{{ f(400) }}", [](auto& l) { l.maxRenderDepth = 0; }, "" },
+        { "RenderDepthOver", std::string(MacroDepth) + "{{ f(9) }}", [](auto& l) { l.maxRenderDepth = 10; }, "RecursionLimitExceeded" },
+        { "RenderDepthAt", std::string(MacroDepth) + "{{ f(8) }}", [](auto& l) { l.maxRenderDepth = 10; }, "" },
+        { "RenderDepthStackOnly", std::string(MacroDepth) + "{{ f(400) }}", [](auto& l) { l.maxRenderDepth = 0; }, "" },
         { "ExpressionDepthOver", "{{ ((((1)))) }}", [](auto& l) { l.maxExpressionDepth = 4; }, "RecursionLimitExceeded", true },
         { "ExpressionDepthAt", "{{ (((1))) }}", [](auto& l) { l.maxExpressionDepth = 4; }, "" },
         { "TargetDepthOver", "{% for (((a))) in [1] %}{% endfor %}", [](auto& l) { l.maxExpressionDepth = 3; }, "RecursionLimitExceeded", true },
@@ -136,10 +137,16 @@ TEST_P(LimitsTest, Enforced)
     const auto error = LoadAndRender(m_env, param.source, failedAtLoad);
     if (param.field.empty())
     {
-        EXPECT_FALSE(error.has_value()) << (error ? ErrorToString(*error) : std::string());
+        if (error)
+        {
+            ADD_FAILURE() << ErrorToString(*error);
+        }
         return;
     }
-    ASSERT_TRUE(error.has_value());
+    if (!error)
+    {
+        FAIL() << "no error";
+    }
     EXPECT_EQ(param.atLoad, failedAtLoad);
     if (param.field == "RecursionLimitExceeded")
     {
@@ -160,8 +167,10 @@ TEST_P(LimitsTest, DefaultsRender)
         return;
     }
     bool failedAtLoad = false;
-    const auto error = LoadAndRender(m_env, param.source, failedAtLoad);
-    EXPECT_FALSE(error.has_value()) << ErrorToString(*error);
+    if (const auto error = LoadAndRender(m_env, param.source, failedAtLoad))
+    {
+        ADD_FAILURE() << ErrorToString(*error);
+    }
 }
 
 INSTANTIATE_TEST_SUITE_P(Limits, LimitsTest, ::testing::ValuesIn(Cases()), [](const auto& p) { return p.param.name; });
@@ -240,10 +249,10 @@ TEST_F(LimitsEnvTest, HostCallableIsNotInterrupted)
     m_env.SetSettings(settings);
     int returned = 0;
     ValuesMap params{ { "sleep", MakeCallable([&returned] {
-                           std::this_thread::sleep_for(std::chrono::milliseconds(150));
-                           ++returned;
-                           return Value(std::string("slept"));
-                       }) } };
+                            std::this_thread::sleep_for(std::chrono::milliseconds(150));
+                            ++returned;
+                            return Value(std::string("slept"));
+                        }) } };
     Template tpl(&m_env);
     ASSERT_TRUE(tpl.Load("{{ sleep() }}{{ sleep() }}").has_value());
     auto result = tpl.RenderAsString(params);

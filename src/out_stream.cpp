@@ -1,7 +1,6 @@
 #include "out_stream.h"
 
 #include "internal_value.h"
-#include "recursion_guard.h"
 #include "value_visitors.h"
 
 #include <cstddef>
@@ -31,21 +30,8 @@ void OutStream::FlushBuffer()
     }
 }
 
-void OutStream::CheckTargetSize(size_t length) const
-{
-    const size_t size = m_charSize == 1 ? static_cast<std::string*>(m_target)->size() : static_cast<std::wstring*>(m_target)->size();
-    if (length > m_maxTargetSize || size > m_maxTargetSize - length)
-    {
-        throw ResourceLimitError("maxOutputSize", "the render wrote more characters than its output limit allows");
-    }
-}
-
 void OutStream::AppendToTarget(const void* ptr, size_t bytes)
 {
-    if (m_maxTargetSize != SIZE_MAX)
-    {
-        CheckTargetSize(bytes / m_charSize);
-    }
     if (m_charSize == 1)
     {
         static_cast<std::string*>(m_target)->append(static_cast<const char*>(ptr), bytes);
@@ -82,10 +68,6 @@ void OutStream::WriteLong(const void* ptr, size_t length)
     if (m_charSize == 1)
     {
         auto& str = *static_cast<std::string*>(m_target);
-        if (m_maxTargetSize != SIZE_MAX)
-        {
-            CheckTargetSize(static_cast<size_t>(m_cur - m_buffer) + length);
-        }
         if (m_cur != m_buffer)
         {
             str.append(reinterpret_cast<const char*>(m_buffer), static_cast<size_t>(m_cur - m_buffer));

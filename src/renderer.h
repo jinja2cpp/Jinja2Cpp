@@ -62,10 +62,8 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override
     {
-        // Every statement body: nested blocks recurse through here, and each loop iteration is
-        // one, so it is the render's step (Settings::Limits::maxRenderSteps)
+        // Every statement body: nested blocks recurse through here
         CheckStack();
-        CountStep();
         const auto& nodes = values.Nodes();
         for (auto r : Children())
         {
