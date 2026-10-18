@@ -446,9 +446,10 @@ if (JINJA2CPP_BUILD_TESTS)
             CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
             CXX_STANDARD_REQUIRED ON)
     target_compile_definitions(jinja2cpp_alloc_tests PRIVATE ${_bindings_define})
-    add_test(NAME jinja2cpp_alloc_tests COMMAND jinja2cpp_alloc_tests)
     # Differential corpus against Python Jinja2, see test/parity/README.md
     add_test(NAME jinja2cpp_parity COMMAND jinja2cpp_tests --gtest_filter=Parity*)
+    # After the parity run, whose output would push this one out of the CI log tail
+    add_test(NAME jinja2cpp_alloc_tests COMMAND jinja2cpp_alloc_tests)
 
     if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
         set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
