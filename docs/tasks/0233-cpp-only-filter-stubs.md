@@ -31,4 +31,4 @@ migration notes (0077) say which.
 `escapecpp` and `toyaml` render the output documented in `docs/cpp-only-filters.md`, with
 rows in `test/filters_test.cpp`; `toxml` is removed and fails Load with `UnknownFilter`
 (corpus case `filters.unknown_filter_toxml`). Release note: `docs/api-2.0.md` 5.7, for
-0077's `MIGRATION.md`.
+0077's `MIGRATION.md`. PR #581.

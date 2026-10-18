@@ -192,6 +192,25 @@ Serialize::Serialize(const FilterParams& params, const Serialize::Mode mode)
 namespace
 {
 
+// The code point of one character as SplitCodePoints splits UTF-8: the lead byte keeps 5, 4 or
+// 3 bits by its own value, so malformed text (an ASCII lead or a long run of continuation
+// bytes) gives some value rather than an out-of-range shift
+uint32_t Utf8CharValue(std::string_view ch)
+{
+    const auto lead = static_cast<unsigned char>(ch[0]);
+    if (lead < 0x80 || ch.size() == 1)
+    {
+        return lead;
+    }
+    uint32_t cp = lead & (lead >= 0xF0 ? 0x07U : lead >= 0xE0 ? 0x0FU
+                                                              : 0x1FU);
+    for (size_t n = 1; n < ch.size(); ++n)
+    {
+        cp = (cp << 6) | (static_cast<unsigned char>(ch[n]) & 0x3FU);
+    }
+    return cp;
+}
+
 // Python's json.dumps(value, sort_keys=True, indent=indent) with the default ensure_ascii, as
 // Jinja2's htmlsafe_json_dumps escapes it: <, >, & and ' become \u escapes. Outside strings
 // those characters can only come from the indent, which is escaped once up front.
@@ -314,16 +333,7 @@ private:
 
     void WriteChar(std::string_view ch)
     {
-        // The lead byte keeps 7, 5, 4 or 3 bits for 1 to 4 byte sequences
-        uint32_t cp = static_cast<unsigned char>(ch[0]);
-        if (ch.size() > 1)
-        {
-            cp &= 0x7FU >> ch.size();
-        }
-        for (size_t n = 1; n < ch.size(); ++n)
-        {
-            cp = (cp << 6) | (static_cast<unsigned char>(ch[n]) & 0x3F);
-        }
+        const auto cp = Utf8CharValue(ch);
         switch (cp)
         {
         case '"':
@@ -479,6 +489,10 @@ private:
 class YamlWriter
 {
 public:
+    // Key bytes past which a key is written explicit: quoting expands a byte to at most four
+    // (\xHH), so 255 bytes and the quotes stay within the 1024 characters of an implicit key
+    static constexpr size_t MaxImplicitKey = 255;
+
     explicit YamlWriter(RenderContext& context)
         : m_context(context)
     {
@@ -511,16 +525,7 @@ private:
                 ++end;
             }
             const auto ch = str.substr(pos, end - pos);
-            uint32_t cp = static_cast<unsigned char>(ch[0]);
-            if (ch.size() > 1)
-            {
-                cp &= 0x7FU >> ch.size();
-            }
-            for (size_t n = 1; n < ch.size(); ++n)
-            {
-                cp = (cp << 6) | (static_cast<unsigned char>(ch[n]) & 0x3F);
-            }
-            fn(cp, ch);
+            fn(Utf8CharValue(ch), ch);
             pos = end;
         }
     }
@@ -533,10 +538,10 @@ private:
         {
             return false;
         }
-        static const char* const words[] = { "y", "n", "yes", "no", "on", "off", "true", "false", "null" };
-        for (const auto* word : words)
+        static const std::string_view words[] = { "y", "n", "yes", "no", "on", "off", "true", "false", "null" };
+        for (const auto word : words)
         {
-            if (str.size() == std::strlen(word) && std::equal(str.begin(), str.end(), word, [](char l, char r) { return (l | 0x20) == r; }))
+            if (std::equal(str.begin(), str.end(), word.begin(), word.end(), [](char l, char r) { return (l | 0x20) == r; }))
             {
                 return false;
             }
@@ -793,7 +798,18 @@ private:
                 NewLine(indent);
             }
             isFirst = false;
-            WriteString(key);
+            if (key.size() > MaxImplicitKey)
+            {
+                // YAML limits an implicit key to 1024 characters; a longer one is "? key" with
+                // the value on a ": " line of its own
+                m_out += "? ";
+                WriteString(key);
+                NewLine(indent);
+            }
+            else
+            {
+                WriteString(key);
+            }
             m_out.push_back(':');
             WriteNode(map.GetValueByName(key), indent + 2, Position::MappingValue);
         }

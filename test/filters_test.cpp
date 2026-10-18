@@ -1095,6 +1095,14 @@ TEST(CppOnlyFilters, UnicodeControlsAndErrors)
     EXPECT_EQ("a\\001b\\177\\0331|\303\251", RenderOrError("{{ s|escapecpp }}|{{ '\303\251'|escapecpp }}", { { "s", controls } }));
     EXPECT_EQ("- \346\227\245\346\234\254\n- \"\\x01\\e\\0\"\n- \"\\u2028\"\n- .nan\n- -.inf", RenderOrError("{{ ['\346\227\245\346\234\254', s, '\342\200\250', 'nan'|float, '-inf'|float]|toyaml }}", { { "s", std::string("\x01\x1b\0", 3) } }));
     EXPECT_NE(RenderOrError("{{ namespace(a=1)|toyaml }}", {}).find("not YAML serializable"), std::string::npos);
+    EXPECT_NE(RenderOrError("{{ {'a': missing}|toyaml }}", {}).find("Object of type Undefined is not YAML serializable"), std::string::npos);
+    // Malformed UTF-8: a long run of continuation bytes was an out-of-range shift (UBSan)
+    const std::string tails = std::string("a") + std::string(40, '\x80');
+    EXPECT_EQ(tails + "|\"a\"", RenderOrError("{{ s|toyaml }}|{{ s|tojson }}", { { "s", tails } }));
+    // Lazy sequences are iterated once; a key over 255 bytes is an explicit "? key"
+    EXPECT_EQ("- 0\n- 2|r:\n  - 0\n  - 1", RenderOrError("{{ range(0, 3, 2)|toyaml }}|{{ {'r': range(2)}|toyaml }}", {}));
+    const std::string longKey(300, 'k');
+    EXPECT_EQ("? " + longKey + "\n: 1\n" + "short:\n  - ? " + longKey + "\n    :\n      - 2", RenderOrError("{{ {k: 1, 'short': [{k: [2]}]}|toyaml }}", { { "k", longKey } }));
 
     Template tpl;
     auto loaded = tpl.Load("{{ {'a': 1}|toxml }}");

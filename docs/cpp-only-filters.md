@@ -52,7 +52,7 @@ const char* text = "{{ message|escapecpp }}";
 A YAML document that YAML 1.1 and 1.2 loaders (PyYAML, yaml-cpp, ...) read back as the same
 data, with no trailing newline:
 
-- `none` (and a plain undefined) is `null`, booleans `true`/`false`, integers in decimal,
+- `none` is `null`, booleans `true`/`false`, integers in decimal,
   floats in Python's shortest form with a `.` always present (`1.0e+20`), `.nan`, `.inf`
   and `-.inf`.
 - A mapping is `key: value` lines in the mapping's order; a list is `- item` lines; a
@@ -64,7 +64,10 @@ data, with no trailing newline:
   digits, spaces and `-.()+`, does not end with a space and is not a null or boolean word
   (`y`, `n`, `yes`, `no`, `on`, `off`, `true`, `false`, `null`, in any case). Any other
   string is double-quoted with YAML escapes (`\"`, `\\`, `\n`, `\t`, `\xHH`, `\uHHHH`, ...).
-- `namespace()`, `cycler()`, `joiner()`, macros and strict undefined values raise an error.
+- A key longer than 255 bytes is written as an explicit `? key` with its value on a `:`
+  line below, since YAML limits an implicit key to 1024 characters.
+- Undefined values, `namespace()`, `cycler()`, `joiner()` and macros raise an error
+  ("Object of type Undefined is not YAML serializable"), as `tojson` does.
 
 ```
 {{ {'name': 'demo', 'ports': [80, 443], 'tls': {'enabled': true}}|toyaml }}
