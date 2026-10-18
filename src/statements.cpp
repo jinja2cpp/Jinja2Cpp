@@ -611,7 +611,8 @@ private:
         }
     }
 
-    [[nodiscard]] InternalValue GetProperty(Property prop) const
+    // Forced inline: each attribute lookup uses one property, which inlining folds the switch to
+    [[nodiscard]] JINJA2CPP_ALWAYS_INLINE InternalValue GetProperty(Property prop) const
     {
         auto& state = *m_state;
         switch (prop)

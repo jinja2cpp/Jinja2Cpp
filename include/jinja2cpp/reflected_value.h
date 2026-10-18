@@ -2,6 +2,7 @@
 #define JINJA2CPP_REFLECTED_VALUE_H
 
 #include <jinja2cpp/fwd.h> // IWYU pragma: export
+#include "markup.h"
 #include "value.h"
 
 #include <jinja2cpp/generic_list.h>
@@ -632,6 +633,14 @@ struct Reflector<std::basic_string<CharT>>
     {
         return Value(*str);
     }
+};
+
+// A Markup stays Markup: Markup is not a std::basic_string, so it has its own specialisation
+template<typename CharT>
+struct Reflector<BasicMarkup<CharT>>
+{
+    static auto Create(BasicMarkup<CharT> str) { return Value(std::move(str)); }
+    static auto CreateFromPtr(const BasicMarkup<CharT>* str) { return Value(*str); }
 };
 
 template<typename CharT>

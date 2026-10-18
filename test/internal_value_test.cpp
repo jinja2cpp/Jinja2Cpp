@@ -3,6 +3,7 @@
 
 #include "gtest/gtest.h"
 
+#include <jinja2cpp/markup.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
@@ -225,4 +226,45 @@ TEST(InternalValueLayoutTest, CopiesOfAGeneratorIterateApart)
         EXPECT_EQ(anchored, copy.ShouldExtendLifetime());
     }
 }
-#endif
+
+namespace
+{
+// What Value2IntValue makes of a host value: a view of its text, or a copy
+InternalValue ToInternal(const Value& val, bool byValue)
+{
+    return std::visit(visitors::InputValueConvertor(byValue, !byValue), val.GetData());
+}
+} // namespace
+
+// A Markup of the host keeps its flag through InternalValue and back (docs/tasks/0180)
+TEST(InternalValueLayoutTest, HostMarkupRoundTrips)
+{
+    for (const size_t size : { std::size_t{ 3 }, std::size_t{ 15 }, std::size_t{ 16 }, std::size_t{ 200 } })
+    {
+        const std::string text(size, '<');
+        const Value markup{ Markup(text) };
+        const Value wmarkup{ WMarkup(std::wstring(size, L'<')) };
+
+        // Lent as a view of the host text, and converted by value
+        for (const auto& internal : { ToInternal(markup, false), ToInternal(Value(markup), true) })
+        {
+            EXPECT_TRUE(internal.IsMarkup()) << size;
+            const Value back = IntValue2Value(internal);
+            EXPECT_TRUE(back.IsMarkup()) << size;
+            EXPECT_EQ(text, back.AsString());
+        }
+        EXPECT_TRUE(IntValue2Value(ToInternal(wmarkup, false)).IsWMarkup()) << size;
+
+        // A plain string stays plain (a view of host text stays a view)
+        const Value plain{ text };
+        EXPECT_FALSE(ToInternal(plain, false).IsMarkup()) << size;
+        EXPECT_FALSE(IntValue2Value(ToInternal(plain, false)).IsMarkup()) << size;
+        EXPECT_FALSE(IntValue2Value(ToInternal(Value(plain), true)).IsMarkup()) << size;
+
+        // A template-built Markup (safe filter output, owned text) becomes a Markup value
+        EXPECT_TRUE(IntValue2Value(InternalValue(std::string(text)).SetMarkup()).IsMarkup()) << size;
+        EXPECT_FALSE(IntValue2Value(InternalValue(std::string(text))).IsMarkup()) << size;
+        EXPECT_TRUE(IntValue2Value(InternalValue(std::string_view(text)).SetMarkup()).IsMarkup()) << size;
+    }
+}
+#endif // JINJA2CPP_LINK_AS_SHARED
