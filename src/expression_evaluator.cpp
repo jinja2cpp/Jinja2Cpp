@@ -18,7 +18,6 @@
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/value.h>
 
-#include <boost/algorithm/string/join.hpp>
 #include <boost/container/small_vector.hpp>
 #include <algorithm>
 
