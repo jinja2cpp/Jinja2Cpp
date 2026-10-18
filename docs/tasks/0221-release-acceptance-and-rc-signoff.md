@@ -49,3 +49,5 @@ in progress until the decisions are recorded and an RC commit is signed off.
 On 2026-10-18 the GitHub issues, external PRs, milestones 1.2/1.3 and the website were
 scouted against the backlog; findings filed as 0233-0245 and folded into the gates.
 Ruslan decided D3 (pluggable big-integer backend, recorded in 0178).
+Later on 2026-10-18 Ruslan set the scope rule: 2.0 takes every open task by default, and
+only a postponed list with reasons stays out (docs/release-2.0.md sections 2 and 5, gate G0).
