@@ -214,7 +214,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0142](0142-single-pass-scanner.md) | Load scans the source twice | perf | low | done |
 | [0143](0143-self-reference-leftovers.md) | `self` leftovers after 0139 | parity | low | done |
 | [0144](0144-loop-cycle-sentinel.md) | `loop.cycle` is the integer 2 | parity | medium | done |
-| [0145](0145-callable-identity-equality.md) | A macro or a callable is not equal to itself | parity | low | open |
+| [0145](0145-callable-identity-equality.md) | A macro or a callable is not equal to itself | parity | low | done |
 | [0146](0146-load-settings-fast-path.md) | Load compares the whole Settings on every template | perf | medium | done |
 | [0147](0147-macro-call-residual-cost.md) | What a macro call still costs after its arguments moved to slots | perf | low | done |
 | [0148](0148-single-use-names-skip-cache.md) | Skip the lookup cache for names that are read once per render | perf | low | done |
@@ -242,13 +242,13 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0170](0170-dictsort-pair-tuple-semantics.md) | A dictsort pair still differs from a tuple in `in`, `==`, tests and truthiness | parity | low | done |
 | [0171](0171-gcc-sanitizer-stringop-overflow.md) | The GCC address+undefined build fails in `OutStream::WriteInt` | build | medium | done |
 | [0172](0172-value-unsigned-overflow.md) | Unsigned values above `INT64_MAX` wrap to negative | robustness | low | open |
-| [0173](0173-pprint-python-repr.md) | `pprint` prints JSON-style scalars | parity | low | open |
+| [0173](0173-pprint-python-repr.md) | `pprint` prints JSON-style scalars | parity | low | done |
 | [0174](0174-msvc-c4702-suppression.md) | `/wd4702` hides unreachable code in project code on MSVC | build | low | open |
 | [0175](0175-recursive-loop-filter-leftovers.md) | Recursive loop filter: the outer `loop` at depth > 0, and the legacy `recursive if` order | parity | low | done |
 | [0176](0176-tuple-identity-and-sort-case.md) | A dictsort pair has no identity, and sort folds case inside tuples | parity | low | done |
 | [0177](0177-filters-on-none.md) | Filters that accept None where Python raises | parity | low | done |
 | [0178](0178-arbitrary-precision-integers.md) | Integers of arbitrary size, as Python's `int` | parity | medium | open |
-| [0179](0179-caller-markup-eval-context.md) | Autoescape has a lexical and a runtime side | parity | low | open |
+| [0179](0179-caller-markup-eval-context.md) | Autoescape has a lexical and a runtime side | parity | low | done |
 | [0180](0180-markup-from-cpp.md) | Markup from C++ | api | low | open |
 | [0181](0181-select-autoescape.md) | Autoescape chosen by template name (`select_autoescape`) | api | low | open |
 | [0182](0182-markup-percent-repr.md) | `%r` and containers in Markup's `%` | parity | low | done |
@@ -257,7 +257,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0185](0185-fuzz-oom-below-sequence-cap.md) | The fuzz job fails on lists below the sequence cap | robustness | medium | done |
 | [0186](0186-python-oracle-target.md) | Which Python and Jinja2 the parity oracle targets, and how users choose | parity | medium | open |
 | [0187](0187-generated-data-acquisition.md) | How generated tables and third-party data are acquired (SBOM) | build | low | open |
-| [0188](0188-stored-loop-cycle-follows-loop.md) | A stored `loop.cycle` keeps the position it was read at | parity | low | open |
+| [0188](0188-stored-loop-cycle-follows-loop.md) | A stored `loop.cycle` keeps the position it was read at | parity | low | done |
 | [0189](0189-casefold-non-ascii.md) | Case-insensitive comparison folds only ASCII | parity | low | done |
 | [0190](0190-sameas-arity-unique-unhashable.md) | `sameas` takes any number of arguments, `unique` takes unhashable items | parity | low | done |
 | [0191](0191-objects-still-act-as-mappings.md) | namespace, cycler and joiner still act as mappings in a few places | parity | low | done |
@@ -265,7 +265,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0193](0193-unknown-filter-at-load.md) | An unknown filter is a load error | parity | low | done |
 | [0194](0194-self-block-runs-in-its-template.md) | A block called through `self` runs in its own template | parity | low | done |
 | [0195](0195-imported-module-that-extends.md) | An imported module that extends a parent | parity | low | done |
-| [0196](0196-loop-len-and-iter.md) | `loop` as a sized iterable | parity | low | open |
+| [0196](0196-loop-len-and-iter.md) | `loop` as a sized iterable | parity | low | done |
 | [0197](0197-objects-left-as-mappings.md) | Objects and dicts still read as maps of names in a few places | parity | low | done |
 | [0198](0198-self-block-call-leftovers.md) | Calls through `self` that still differ from Jinja2 | parity | low | done |
 | [0199](0199-call-block-leftovers.md) | Call block leftovers | parity | low | done |
@@ -277,9 +277,14 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0205](0205-load-drift-0168-0193.md) | Load drift after trains 11 and 12 | perf | medium | done |
 | [0206](0206-call-argument-leftovers.md) | Argument checks that 0200 left over | parity | low | done |
 | [0207](0207-self-frame-leftovers.md) | `self` cases left after 0143 and 0198 | parity | low | done |
-| [0208](0208-macro-value-gaps.md) | Macros as values | parity | low | open |
+| [0208](0208-macro-value-gaps.md) | Macros as values | parity | low | done |
 | [0209](0209-include-sees-loop.md) | A template included in a loop sees `loop` | parity | low | open |
 | [0210](0210-markup-percent-int-of-string.md) | `%d` and `%f` of a string in Markup's `%` | parity | low | open |
 | [0211](0211-self-nested-store-and-globals.md) | `self` stored in a nested scope of a block; globals changed in place | parity | low | open |
 | [0212](0212-objects-as-keys-and-through-callables.md) | Objects as dict keys and through user callables | parity | low | open |
 | [0213](0213-if-condexpr-and-unclosed-raw.md) | An `if` test with a conditional expression, and an unclosed raw block at the end | parity | low | open |
+| [0214](0214-macro-value-leftovers.md) | Macros and methods as values: what 0208 and 0145 left over | parity | low | open |
+| [0215](0215-pprint-width.md) | `pprint` does not wrap at Python's width, and other repr gaps | parity | low | open |
+| [0216](0216-volatile-autoescape.md) | `{% autoescape %}` with a runtime value (volatile EvalContext) | parity | low | open |
+| [0219](0219-loop-iteration.md) | Iterating `loop` takes the rest of the loop | parity | low | open |
+| [0220](0220-call-argument-unpacking.md) | `f(*args, **kwargs)` in calls | parity | medium | open |
