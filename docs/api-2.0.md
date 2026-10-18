@@ -103,12 +103,76 @@ beside it, and the free function becomes `ToString()`.
 the renderer. The deprecated free `AsString` keeps returning `""` for non-strings, so no
 existing call changes meaning.
 
-Errors: the API reports failures through `Result<T>` (`expected<T, ErrorInfo>`), not
-exceptions. The only throwing calls are `Value::AsX()`/`As<T>()` (documented) and
-`Result::value()`. `jinja2::Result<T>` is the only public spelling of the type (decided by
-Ruslan 2026-10-02): no public signature names `nonstd::expected` or `std::expected`, so the
-backing library can change (to `std::expected` once the floor is C++23) without touching
-user code that spells `Result`.
+`jinja2::Result<T>` is the only public spelling of the result type (decided by Ruslan
+2026-10-02): no public signature names `nonstd::expected` or `std::expected`, so the backing
+library can change (to `std::expected` once the floor is C++23) without touching user code that
+spells `Result`. How errors travel is §2.1.
+
+### 2.1 Errors and exceptions (task 0250, decided by Ruslan 2026-10-18)
+
+The engine throws internally; the public boundary converts. Plan and alternatives:
+docs/design/0250-error-contract-plan.md. Implementation: 0253 (types and boundary), 0254 (render
+locations), 0255 (engine runtime errors).
+
+**Rules.**
+1. `Load*`, `Render*`, `GetMetadata*` and `TemplateEnv::LoadTemplate*` report every failure
+   through `Result<T>`: template errors, exceptions from host callables, reflectors, accessors
+   and filesystem handlers, and throws of non-`std::exception` types.
+2. **Only `std::bad_alloc` escapes them**, and only as "the system is out of memory". Every
+   limit (`Settings::Limits`, 0262; the built-in caps; `std::length_error`) and every budget a
+   host enforces is `ErrorCode::ResourceLimitExceeded` in the `Result`; a host allocator or
+   memory resource reports a spent budget by throwing `jinja2::Exception{ResourceLimitExceeded}`,
+   which does not derive from `bad_alloc`. A failed Load keeps the previous template; a failed
+   Render leaves `Template` and `TemplateEnv` unchanged. These calls are not marked `noexcept`
+   (that would turn `bad_alloc` into `std::terminate`); the guarantee is documented and tested
+   by allocation-failure injection.
+3. What a caller-supplied stream received before a failure is unspecified. Exceptions from a
+   host stream whose exception mask the host enabled propagate.
+4. Outside Load/Render, calls that run host code (`GenericList`/`GenericMap` access from the
+   host, `ToString` of a reflected container) let the host's exceptions through unchanged.
+5. **Every other throwing call has a non-throwing sibling** (`bool X(out) noexcept`, §2):
+
+   | Throws | Non-throwing sibling |
+   |---|---|
+   | `Value::AsX()`, `As<T>()`: `std::bad_variant_access` | `bool AsX(out) noexcept`, `GetIf<T>()` |
+   | `Value(I)`, `Reflect`, JSON bindings for an integer outside int64: `jinja2::Exception{IntegerOutOfRange}` | `static bool Value::TryFrom(I, Value& out) noexcept` |
+   | `OrderedMap::at`: `std::out_of_range` | `find` |
+   | `Result::value()`: `jinja2::BadResultAccess<CharT>` | `has_value()`, `operator*` |
+
+6. `noexcept`: `Value` moves, `IsX`, `bool AsX(out)`, `GetIf`, `ToChars`, `Value(nullptr)`,
+   `Value(I)` for every `I` that fits int64, `Value(F)`; `BasicErrorInfo` copy, move and
+   getters; `OrderedMap` moves, iterators, `size`, `empty`, `clear`, `swap`; destructors.
+   Host-supplied destructors, `IComparable::IsEqual` and filesystem-handler destructors must
+   not throw.
+7. C++ exceptions are required: building without them is an `#error` in `config.h`.
+8. A render error carries a specific `ErrorCode`, the `file:line:col` of the innermost
+   statement or `{{ }}` tag that was running (in the template that owns it), a caret line in
+   `GetLocationDescr()`, and `GetException()`: the original `std::exception_ptr`, set if and
+   only if the failure began as an exception the engine did not raise.
+
+**Types.**
+- `jinja2::Exception : std::runtime_error` (`exception.h`, in `fwd.h` and `jinja2cpp.h`) with
+  `ErrorCode Code() const noexcept` and the C++ origin (`__builtin_FILE()`/`__builtin_LINE()`
+  default arguments; no `std::source_location`, so C++17 and C++20 builds share one layout).
+  Thrown by our headers for host-data errors and by hosts to report a specific code, which then
+  passes through the render boundary with its location.
+- `BasicErrorInfo` is one pointer to an immutable shared payload (code, locations, parameters,
+  description, `exception_ptr`): copies share it. The payload's exception object lives in the
+  module that threw it; an `ErrorInfo` must not outlive that module.
+- `ErrorCode` is a `std::error_code` enum: `jinja2::error_category()`, so
+  `std::error_code ec = ErrorCode::TemplateNotFound;` works and compares equal to
+  `std::errc::no_such_file_or_directory`.
+- New codes, appended: 15 `UserCallableException` (anything thrown out of a `UserCallable`,
+  filter, test, finalize or gettext callable), 16 `IntegerOutOfRange` (host integer outside
+  int64; int64 overflow in template arithmetic), 17 `TemplateRuntimeError` (the template's own
+  operation failed: Python's `TypeError`, `ValueError`, ...), 18 `ResourceLimitExceeded`
+  (`extraParams[1]` names the limit). `UnexpectedException` (1) now means "an exception the
+  engine did not raise and could not attribute", with location and `GetException()`.
+
+**Against Python.** Same: syntax, undefined and not-found errors keep their codes, with
+location; `MemoryError` propagates as `bad_alloc` does. Different: errors arrive as `Result`,
+not raised; host exceptions are wrapped, not propagated (`std::rethrow_exception(e.GetException())`
+restores Python's behaviour); Python's runtime exception classes share one code.
 
 ## 3. Inventory
 
