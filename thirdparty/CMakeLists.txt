@@ -87,6 +87,8 @@ if(JINJA2CPP_BUILD_TESTS)
                 set (gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
             endif ()
         endif ()
+        # The test framework is not part of the package (sbom/components.json)
+        set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
         set(JINJA2CPP_GTEST_TAG "v1.18.0")
         # only the internal deps mode includes FetchContent itself
         include(FetchContent)
