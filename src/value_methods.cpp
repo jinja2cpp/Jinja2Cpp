@@ -1643,65 +1643,86 @@ InternalValueList& MutableItems(const InternalValue& self)
 // and before (index 0) it went through a value the cycle collector cannot follow
 using VisitedStorage = std::array<std::unordered_set<const void*>, 2>;
 
-// Whether `val` reaches the storage `target` through a bound method's receiver or the value
-// of a key-value pair, which CycleCollector does not follow
-bool ReachesThroughOpaque(const InternalValue& val, const void* target, bool viaOpaque, VisitedStorage& visited)
+// The receiver a bound method holds, or null
+const InternalValue* BoundReceiver(const Callable& callable)
 {
-    const void* storage = nullptr;
-    if (auto list = AsList(val))
+    const auto& attrs = callable.GetAttributes();
+    if (!attrs)
     {
-        storage = list->GetMutableItems();
+        return nullptr;
     }
-    else if (auto map = AsMap(val))
-    {
-        storage = map->GetMutableItems();
-    }
-    else if (const auto* callable = GetIf<Callable>(&val))
-    {
-        const auto& attrs = callable->GetAttributes();
-        if (!attrs)
-        {
-            return false;
-        }
-        auto p = attrs->find("__self__");
-        return p != attrs->end() && ReachesThroughOpaque(p->second, target, true, visited);
-    }
-    else if (const auto* pair = GetIf<KeyValuePair>(&val))
-    {
-        return ReachesThroughOpaque(pair->value, target, true, visited);
-    }
+    auto p = attrs->find("__self__");
+    return p != attrs->end() ? &p->second : nullptr;
+}
+
+// A value the walk has still to look at, and whether its path went through a value the cycle
+// collector cannot follow
+struct PendingValue
+{
+    const InternalValue* value;
+    bool viaOpaque;
+};
+
+// Queues the items of `items`, the storage of a list or dict the template owns, unless the
+// walk has seen it on a path of the same kind; true when it is `target` on an opaque path
+template<typename Items, typename Fn>
+bool QueueItems(Items* items, const void* target, bool viaOpaque, VisitedStorage& visited, const Fn& queue)
+{
     // Only containers the template owns can hold one another
-    if (!storage)
+    if (!items)
     {
         return false;
     }
-    if (storage == target)
+    if (items == target)
     {
         return viaOpaque;
     }
-    if (!visited[viaOpaque ? 1 : 0].insert(storage).second)
+    if (visited[viaOpaque ? 1 : 0].insert(items).second)
     {
-        return false;
-    }
-    if (auto list = AsList(val))
-    {
-        for (auto& item : *list->GetMutableItems())
+        for (auto& item : *items)
         {
-            if (ReachesThroughOpaque(item, target, viaOpaque, visited))
+            queue(item, viaOpaque);
+        }
+    }
+    return false;
+}
+
+// Whether `root` reaches the storage `target` through a bound method's receiver or the value
+// of a key-value pair, which CycleCollector does not follow. Iterative, so that values nested
+// deeper than the thread stack allows are walked too; each list or dict is visited at most
+// twice (once per kind of path), so the walk is linear in the size of the stored value.
+bool ReachesThroughOpaque(const InternalValue& root, const void* target)
+{
+    VisitedStorage visited;
+    // Items stay where they are while the walk runs: nothing changes a container under it
+    std::vector<PendingValue> pending{ { &root, false } };
+    const auto queueValue = [&pending](const InternalValue& item, bool viaOpaque) { pending.push_back({ &item, viaOpaque }); };
+    const auto queuePairValue = [&pending](const auto& item, bool viaOpaque) { pending.push_back({ &item.second, viaOpaque }); };
+    while (!pending.empty())
+    {
+        const auto [val, viaOpaque] = pending.back();
+        pending.pop_back();
+        bool found = false;
+        if (auto list = AsList(*val))
+        {
+            found = QueueItems(list->GetMutableItems(), target, viaOpaque, visited, queueValue);
+        }
+        else if (auto map = AsMap(*val))
+        {
+            found = QueueItems(map->GetMutableItems(), target, viaOpaque, visited, queuePairValue);
+        }
+        else if (const auto* callable = GetIf<Callable>(val))
+        {
+            if (const auto* receiver = BoundReceiver(*callable))
             {
-                return true;
+                pending.push_back({ receiver, true });
             }
         }
-        return false;
-    }
-    auto map = AsMap(val);
-    if (!map)
-    {
-        return false;
-    }
-    for (auto& [key, value] : *map->GetMutableItems())
-    {
-        if (ReachesThroughOpaque(value, target, viaOpaque, visited))
+        else if (const auto* pair = GetIf<KeyValuePair>(val))
+        {
+            pending.push_back({ &pair->value, true });
+        }
+        if (found)
         {
             return true;
         }
@@ -2263,8 +2284,7 @@ void NoteContainerStore(const InternalValue& container, const void* storage, con
     {
         return;
     }
-    VisitedStorage visited;
-    if (ReachesThroughOpaque(item, storage, false, visited))
+    if (ReachesThroughOpaque(item, storage))
     {
         Raise("a list or dict cannot contain itself through a bound method or a key-value pair");
     }
