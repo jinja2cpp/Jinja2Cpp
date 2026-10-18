@@ -3,3 +3,4 @@
 
 methods.context_alias                   output      0049 an alias of a context list taken before it is changed keeps the old list
 methods.operand_changed_by_call         output      0049 the left operand is the context list as it was before the call changed it
+methods.list_contains_its_bound_method  rejects     0049 a cycle through a bound method is refused: the render's cycle collector cannot follow it

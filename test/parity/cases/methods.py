@@ -76,6 +76,11 @@ CASES = [
     ("list_accumulate", "{% set x = [] %}{% for i in range(3) %}{% do x.append(i) %}{% endfor %}{{ x }}", {"env": {"extensions": ["do"]}}),
     ("list_alias", "{% set a = [1] %}{% set b = a %}{% do b.append(2) %}{{ a }}", {"env": {"extensions": ["do"]}}),
     ("list_append_in_with", "{% set x = [] %}{% with %}{% do x.append(1) %}{% endwith %}{{ x }}", {"env": {"extensions": ["do"]}}),
+    # Containers that contain themselves: freed when the render ends (0110)
+    ("list_contains_itself", "{% set l = [1] %}{% do l.append(l) %}{{ l }}|{{ l|length }}|{{ l[1][1][0] }}", {"env": {"extensions": ["do"]}}),
+    ("list_contains_itself_in_tuple", "{% set l = [1] %}{% do l.append((l,)) %}{{ l }}", {"env": {"extensions": ["do"]}}),
+    ("dict_contains_itself", "{% set d = {} %}{% do d.update(x=d) %}{% do d.setdefault('y', [d]) %}{{ d }}", {"env": {"extensions": ["do"]}}),
+    ("list_contains_its_bound_method", "{% set l = [] %}{% do l.append(l.append) %}{{ l|length }}", {"env": {"extensions": ["do"]}}),
     ("list_append_in_macro", "{% macro add(acc) %}{% do acc.append(1) %}{% endmacro %}{% set x = [] %}{{ add(x) }}{{ x }}", {"env": {"extensions": ["do"]}}),
     ("list_pop_in_loop", "{% set x = [3, 1, 2] %}{% for i in x %}{% do x.pop() %}{{ i }}{% endfor %}", {"env": {"extensions": ["do"]}}),
     # The left operand is the list itself, printed after the right operand changed it
