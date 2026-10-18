@@ -181,9 +181,11 @@ private:
 #ifdef _MSC_VER
 #define JINJA2CPP_COLD_INLINE __declspec(noinline) inline
 #define JINJA2CPP_OUTLINE_INLINE __declspec(noinline) inline
+#define JINJA2CPP_HOT_INLINE __forceinline
 #else
 #define JINJA2CPP_COLD_INLINE __attribute__((noinline, cold)) inline
 #define JINJA2CPP_OUTLINE_INLINE __attribute__((noinline)) inline
+#define JINJA2CPP_HOT_INLINE inline __attribute__((always_inline))
 #endif
 
 // Holds a value whose type is incomplete where InternalValue is declared (a pair or a

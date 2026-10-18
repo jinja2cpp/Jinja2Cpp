@@ -1812,6 +1812,11 @@ InternalValue Value2IntValue(Value&& val)
     return std::visit(visitors::InputValueConvertor(true, false), val.GetData());
 }
 
+InternalValue detail::ConvertValueRef(const ValueRef& ref)
+{
+    return Value2IntValue(ref.get());
+}
+
 template<template<typename> class Holder>
 class GenericMapAdapter : public MapAccessorImpl<GenericMapAdapter<Holder>>
 {

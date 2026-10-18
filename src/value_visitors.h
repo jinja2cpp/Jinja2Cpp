@@ -41,6 +41,9 @@ namespace jinja2
 namespace detail
 {
 
+// The value a host Value seen through a ValueRef converts to, lending its text (internal_value.cpp)
+InternalValue ConvertValueRef(const ValueRef& ref);
+
 // Python's a.lower() <=> b.lower(), comparing code points: -1, 0 or 1. The full Unicode
 // mapping (string_converter_filter.cpp); CompareIgnoreCase calls it only for non-ASCII text
 int CompareLowerUnicode(std::string_view left, std::string_view right);
@@ -147,12 +150,6 @@ struct RecursiveUnwrapper
     }
     static ListRef UnwrapRecursive(const ListHandle& arg, const ValueObject* owner) noexcept { return ListRef(arg.accessor, owner, arg.isTuple); }
     static MapRef UnwrapRecursive(const MapHandle& arg, const ValueObject* owner) noexcept { return MapRef(arg.accessor, owner); }
-    // A host Markup is visited as its text: the visitors know strings, not the Value's string subclass
-    template<typename CharT>
-    static const std::basic_string<CharT>& UnwrapRecursive(const BasicMarkup<CharT>& arg, const ValueObject* /*owner*/) noexcept
-    {
-        return arg;
-    }
     template<typename T>
     static const T& UnwrapRecursive(const BoxHandle<T>& arg, const ValueObject* /*owner*/) noexcept
     {
@@ -177,17 +174,19 @@ private:
     }
 };
 
-// Calls fn with what val holds and the object that owns it; a host value is visited as what
-// it holds
-template<typename Fn>
-auto ApplyUnwrapped(const InternalValue& val, Fn&& fn)
+// A host value seen through a ValueRef is visited as the value it converts to, by a second
+// call on the converted value. Visiting the Value's own variant in place would instantiate
+// every visitor for its alternatives too, and Apply2 for their products: each new Value
+// alternative then grows every unit that applies a visitor, past GCC's inlining budget
+// (docs/tasks/0180)
+inline bool IsValueRef(const InternalValue& val) noexcept
 {
-    const auto& data = InternalValueAccess::Data(val);
-    if (const auto* valueRef = std::get_if<ValueRef>(&data))
-    {
-        return std::forward<Fn>(fn)(valueRef->get().GetData(), nullptr);
-    }
-    return std::forward<Fn>(fn)(data, InternalValueAccess::Object(val));
+    return std::holds_alternative<ValueRef>(InternalValueAccess::Data(val));
+}
+JINJA2CPP_COLD_INLINE InternalValue ResolveValueRef(const InternalValue& val)
+{
+    const auto* ref = std::get_if<ValueRef>(&InternalValueAccess::Data(val));
+    return ref ? ConvertValueRef(*ref) : val;
 }
 } // namespace detail
 
@@ -195,22 +194,27 @@ template<typename V, typename... Args>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): args construct a visitor per alternative
 auto Apply(const InternalValue& val, Args&&... args)
 {
-    return detail::ApplyUnwrapped(val, [&args...](auto& data, const ValueObject* owner) {
+    if (!detail::IsValueRef(val))
+    {
         auto v = V(args...);
-        return std::visit(detail::RecursiveUnwrapper<V, 1>(&v, { owner }), data);
-    });
+        return std::visit(detail::RecursiveUnwrapper<V, 1>(&v, { detail::InternalValueAccess::Object(val) }), detail::InternalValueAccess::Data(val));
+    }
+    return Apply<V>(detail::ResolveValueRef(val), args...);
 }
 
 template<typename V, typename... Args>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): args construct a visitor per alternative
 auto Apply2(const InternalValue& val1, const InternalValue& val2, Args&&... args)
 {
-    return detail::ApplyUnwrapped(val1, [&val2, &args...](auto& uwVal1, const ValueObject* owner1) {
-        return detail::ApplyUnwrapped(val2, [&uwVal1, owner1, &args...](auto& uwVal2, const ValueObject* owner2) {
-            auto v = V(args...);
-            return std::visit(detail::RecursiveUnwrapper<V, 2>(&v, { owner1, owner2 }), uwVal1, uwVal2);
-        });
-    });
+    if (!detail::IsValueRef(val1) && !detail::IsValueRef(val2))
+    {
+        using detail::InternalValueAccess;
+        auto v = V(args...);
+        return std::visit(detail::RecursiveUnwrapper<V, 2>(&v, { InternalValueAccess::Object(val1), InternalValueAccess::Object(val2) }),
+                          InternalValueAccess::Data(val1),
+                          InternalValueAccess::Data(val2));
+    }
+    return Apply2<V>(detail::ResolveValueRef(val1), detail::ResolveValueRef(val2), args...);
 }
 
 bool ConvertToBool(const InternalValue& val);
@@ -1393,7 +1397,10 @@ struct BinaryMathOperation : BaseVisitor<>
         return rem;
     }
 
-    ResultType operator()(int64_t left, int64_t right) const
+    ResultType operator()(int64_t left, int64_t right) const { return ApplyToInts(left, right); }
+
+    // The int64_t overload, forced inline into ApplyToNumbers (the fast path of every binary operator)
+    JINJA2CPP_HOT_INLINE ResultType ApplyToInts(int64_t left, int64_t right) const
     {
         int64_t result = 0;
         switch (m_oper)
@@ -2062,9 +2069,18 @@ inline auto VisitNumber(const InternalValue& value, Fn&& fn)
 }
 
 // An arithmetic operator or comparison on two numbers (IsNumber): the overload of
-// BinaryMathOperation that Apply2 would pick, called without its two variant dispatches
-inline InternalValue ApplyToNumbers(const InternalValue& left, const InternalValue& right, BinaryExpression::Operation oper)
+// BinaryMathOperation that Apply2 would pick, called without its two variant dispatches.
+// Two integers, the common case, are forced inline with no lambda between: GCC otherwise
+// leaves the integer operation out of line in BinaryExpression::Apply (+3.5%
+// Render/expressions, docs/tasks/0180)
+JINJA2CPP_HOT_INLINE InternalValue ApplyToNumbers(const InternalValue& left, const InternalValue& right, BinaryExpression::Operation oper)
 {
+    const auto* leftInt = GetIf<int64_t>(&left);
+    const auto* rightInt = GetIf<int64_t>(&right);
+    if (leftInt && rightInt)
+    {
+        return visitors::BinaryMathOperation(oper).ApplyToInts(*leftInt, *rightInt);
+    }
     return VisitNumber(left, [&](auto leftNum) {
         return VisitNumber(right, [&](auto rightNum) { return visitors::BinaryMathOperation(oper)(leftNum, rightNum); });
     });
