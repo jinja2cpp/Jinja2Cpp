@@ -20,7 +20,7 @@ include and import today (`TemplateAutoescape` in `src/statements.cpp`).
 **Done when.** A loader-based unit test renders an `.html` and a `.txt` template from one
 environment with `select_autoescape`-like settings and gets escaped and unescaped output.
 
-**Done** (PR TBD). `Settings::autoescapeSelector` (an `AutoescapeSelector`: a callable of the
+**Done** (PR #586). `Settings::autoescapeSelector` (an `AutoescapeSelector`: a callable of the
 template name, compared by identity) and `SelectAutoescape(...)`. The name is the one the
 template was loaded with, empty for an unnamed string template (Jinja2's None). Each template
 records its setting when it loads; its top level and blocks escape by it, included and
