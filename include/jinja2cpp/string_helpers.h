@@ -2,6 +2,7 @@
 #define JINJA2CPP_STRING_HELPERS_H
 
 #include "config.h"
+#include "markup.h"
 #include "value.h"
 
 #include <cstddef>
