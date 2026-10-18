@@ -38,9 +38,22 @@ std::atomic<long> g_countdown{ -1 };
 // The countdown last armed, for the crash report below
 std::atomic<long> g_armed{ -1 };
 
+// MSVC's checked iterators (_ITERATOR_DEBUG_LEVEL above 0) give every container a heap proxy, made
+// in noexcept constructors such as basic_string(), so failing one ends in std::terminate. A
+// debugging aid of the standard library, not the engine's: those allocations are never failed.
+bool Injectable([[maybe_unused]] std::size_t size)
+{
+#if defined(_MSC_VER) && defined(_ITERATOR_DEBUG_LEVEL) && _ITERATOR_DEBUG_LEVEL != 0
+    return size != sizeof(std::_Container_proxy);
+#else
+    return true;
+#endif
+}
+
 void* Allocate(std::size_t size)
 {
-    if (g_countdown.load(std::memory_order_relaxed) >= 0 && g_countdown.fetch_sub(1, std::memory_order_relaxed) == 0)
+    if (g_countdown.load(std::memory_order_relaxed) >= 0 && Injectable(size)
+        && g_countdown.fetch_sub(1, std::memory_order_relaxed) == 0)
     {
         throw std::bad_alloc();
     }
