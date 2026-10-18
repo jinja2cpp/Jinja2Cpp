@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: agents
 touches: [scripts/task_index.py, scripts/task_batches.py]

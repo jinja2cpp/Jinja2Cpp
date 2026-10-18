@@ -61,7 +61,7 @@ jobs:
       run: python3 scripts/sbom.py --check --validate
 
   task-index:
-    name: task index (warning only)
+    name: task index (stale index warns, duplicate numbers fail)
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4

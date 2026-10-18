@@ -10,6 +10,8 @@ functions, an appended table row or settings field); git merges those, so overla
 there are listed but do not keep tasks apart. A task with neither key is treated as
 touching everything and runs alone.
 
+Refuses to plan while two task files share a number.
+
 Usage: scripts/task_batches.py [--all] [--json] [--area AREA]
   --all        include tasks whose status is done or dropped
   --json       machine-readable output
@@ -124,6 +126,14 @@ def overlap_paths(a, b, files):
     return []
 
 
+def duplicates():
+    """Task numbers used by more than one file: {number: [file names]}."""
+    by_number = {}
+    for path in sorted(TASKS.glob("[0-9][0-9][0-9][0-9]-*.md")):
+        by_number.setdefault(path.name[:4], []).append(path.name)
+    return {n: names for n, names in by_number.items() if len(names) > 1}
+
+
 def load(include_all):
     tasks = []
     for path in sorted(TASKS.glob("[0-9][0-9][0-9][0-9]-*.md")):
@@ -196,6 +206,11 @@ def fits(task, wave, clash):
 
 
 def main(argv):
+    dupes = duplicates()
+    if dupes:
+        for number, names in dupes.items():
+            print(f"error: task number {number} is used by {', '.join(names)}", file=sys.stderr)
+        sys.exit("task numbers must be unique; renumber one file per number before planning")
     include_all, as_json = "--all" in argv, "--json" in argv
     areas = {argv[i + 1] for i, a in enumerate(argv[:-1]) if a == "--area"}
     files = subprocess.run(["git", "-C", str(ROOT), "ls-files"], capture_output=True,
