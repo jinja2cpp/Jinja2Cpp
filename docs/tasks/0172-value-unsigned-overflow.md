@@ -25,7 +25,7 @@ the evaluator; would belong with 0072/0140). Needs a decision before implementin
 **Done when.** `Value(ULLONG_MAX)` and `Reflect(uint64_t(-1))` either render the Python
 value or fail loudly, with a test row in `test/basic_tests.cpp`.
 
-**Resolution** (PR TBD). Fail loudly, as 0221/#564 D1 recommends: `Value`'s integral
+**Resolution** (PR #573). Fail loudly, as 0221/#564 D1 recommends: `Value`'s integral
 constructor and the integral `Reflector` go through `detail::ToStoredInt`, which throws
 `std::overflow_error` for a value outside the `int64_t` range. The constructor stays
 `noexcept` for every type that always fits (`noexcept(!detail::CanExceedInt64<I>)`). The
