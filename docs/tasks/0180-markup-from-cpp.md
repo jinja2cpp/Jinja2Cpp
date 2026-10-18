@@ -23,8 +23,13 @@ The parity corpus cannot pin it: its context comes from JSON.
 
 ## Design (architect plan, 2026-10-18)
 
-`template<class CharT> class BasicMarkup : public std::basic_string<CharT>` in
-`include/jinja2cpp/markup.h`, all constructors explicit; `Markup` and `WMarkup` are appended to
+`template<class CharT> class BasicMarkup` in `include/jinja2cpp/markup.h`: an immutable
+wrapper that owns its text (`m_text`), like Python's `markupsafe.Markup` is an immutable `str`.
+All constructors are explicit, and it offers only reads (`str()`, implicit conversion to
+`const std::basic_string&` and `std::basic_string_view`, `size`/`data`, const iterators,
+comparisons). The plan first derived it from `std::basic_string`; that was dropped in
+07febc52 because inherited mutators (`+=`, `append`, binding to `std::string&`) let host code
+change the text and keep the safe mark, an autoescape bypass. `Markup` and `WMarkup` are appended to
 `Value::ValueData` as alternatives 13 and 14, so `sizeof(Value)` does not change (a
 `static_assert` in `value.h` and a test pin it). Rejected: a flag next to the variant
 (`Value` grows to 48 bytes, and the flag is lost on copies of `GetData()`).
@@ -38,7 +43,11 @@ The parity corpus cannot pin it: its context comes from JSON.
   `UserCallableParams` keep the flag.
 - **Equality** on the host side is structural: `Value(Markup("a")) != Value("a")`. Templates keep
   Python's text comparison.
-- Operations on a Markup (`+`, `substr`) return plain strings: no Markup arithmetic.
+- **Immutability on `Value`.** Mutable access to a Markup's text (`AsString()`,
+  `As<std::string>()`, `GetIf<std::string>()` on a non-const `Value`) first demotes the value
+  to a plain string, as any change to a Python Markup gives a `str`; const reads keep it Markup.
+- No Markup arithmetic: `BasicMarkup` has no `+` or `substr`; work on `str()`, which gives a
+  plain string.
 
 ## Next
 
