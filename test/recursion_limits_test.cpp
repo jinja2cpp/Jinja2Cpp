@@ -17,6 +17,14 @@
 #include <pthread.h>
 #endif
 
+#ifdef __SANITIZE_THREAD__
+#define JINJA2CPP_TEST_TSAN 1
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#define JINJA2CPP_TEST_TSAN 1
+#endif
+#endif
+
 using namespace jinja2;
 
 namespace
@@ -117,7 +125,15 @@ TEST_F(RecursionLimitsTest, DeepTupleKeyRendersOrIsRenderError)
 {
     // A dict key is hashed through its nested tuples, as deep as the template made them. The
     // stack an optimised build needs for that depth may fit: then the key works as in Python
-    const std::string build = "{% set ns = namespace(t=(1,)) %}{% for i in range(20000) %}{% set ns.t = (ns.t,) %}{% endfor %}";
+#ifdef JINJA2CPP_TEST_TSAN
+    // TSan records every call on a fixed-size shadow stack, which this walk overruns from
+    // about 16000 levels, before the real stack runs low: __tsan_func_entry then writes past
+    // it and the run crashes inside TSan. ASan and the plain builds take the full depth
+    constexpr char depth[] = "10000";
+#else
+    constexpr char depth[] = "20000";
+#endif
+    const std::string build = std::string("{% set ns = namespace(t=(1,)) %}{% for i in range(") + depth + ") %}{% set ns.t = (ns.t,) %}{% endfor %}";
     const std::pair<std::string, std::string> cases[] = {
         { "{{ {ns.t: 1}|length }}", "1" },
         { "{{ ns.t in {1: 1} }}", "False" },
@@ -380,13 +396,6 @@ TEST_F(RecursionLimitsTest, SmallThreadStack)
 // ==) still recurse, but stop with RecursionLimitExceeded like Python's RecursionError.
 namespace
 {
-#ifdef __SANITIZE_THREAD__
-#define JINJA2CPP_TEST_TSAN 1
-#elif defined(__has_feature)
-#if __has_feature(thread_sanitizer)
-#define JINJA2CPP_TEST_TSAN 1
-#endif
-#endif
 #ifdef JINJA2CPP_TEST_TSAN
 // Deep enough to overflow the walks' thread under TSan too. Deeper, the access history of
 // the whole run makes LLVM 18's TSan reset its traces, which fails its own CHECK
