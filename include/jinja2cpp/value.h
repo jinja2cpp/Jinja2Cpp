@@ -1145,14 +1145,15 @@ inline std::wstring ToWString(const Value& val)
     return val.ToWString();
 }
 
-//! Same as `ToString(Value(val))` for a number or `bool`: exact, so a literal 0 never looks like a null string
+//! Same as `ToString(Value(val))` for a number or `bool`: exact, so a literal 0 never looks like a null string;
+//! throws `std::overflow_error` for an integer outside the `int64_t` range, as \ref Value does
 template<typename T, std::enable_if_t<std::is_arithmetic_v<T> && !detail::IsCharType<T>::value>* = nullptr>
 std::string ToString(T val)
 {
     return Value(val).ToString();
 }
 
-//! Same as `ToWString(Value(val))` for a number or `bool`
+//! Same as `ToWString(Value(val))` for a number or `bool`; throws `std::overflow_error` as \ref ToString(T) does
 template<typename T, std::enable_if_t<std::is_arithmetic_v<T> && !detail::IsCharType<T>::value>* = nullptr>
 std::wstring ToWString(T val)
 {
