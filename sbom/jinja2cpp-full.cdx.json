@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:72bed5e7-e5a2-5adb-b4f2-2f29de8487f6",
+  "serialNumber": "urn:uuid:1be86713-1a2a-5b9d-9de9-a1503ad9c7f3",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -1309,7 +1309,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "7a2621518fd6c20b0832928ae1f735c027f7feb146365c64f8b420d70219fae8"
+          "content": "1db6cd776ccc6e0c83889be9d52eccd67384e8b695b8e9a58ed6e5267aa7b09f"
         }
       ],
       "licenses": [
@@ -1368,7 +1368,7 @@
         },
         {
           "name": "jinja2cpp:file",
-          "value": "src/robin_hood.h sha256:7a2621518fd6c20b0832928ae1f735c027f7feb146365c64f8b420d70219fae8"
+          "value": "src/robin_hood.h sha256:1db6cd776ccc6e0c83889be9d52eccd67384e8b695b8e9a58ed6e5267aa7b09f"
         }
       ]
     },

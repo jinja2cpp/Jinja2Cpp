@@ -18,16 +18,8 @@ namespace jinja2::detail
 template<typename CharT>
 BasicErrorInfo<CharT> CurrentExceptionToError(const std::string& fileName)
 {
-    auto make = [&fileName](ErrorCode code, const char* message) {
-        typename BasicErrorInfo<CharT>::Data errorData;
-        errorData.code = code;
-        errorData.srcLoc.fileName = fileName;
-        errorData.srcLoc.line = 1;
-        errorData.srcLoc.col = 1;
-        errorData.extraParams.emplace_back(std::string(message));
-        errorData.exception = std::current_exception();
-        return BasicErrorInfo<CharT>(std::move(errorData));
-    };
+    ErrorCode code = ErrorCode::UnexpectedException;
+    const char* message = "unknown exception";
     try
     {
         throw;
@@ -38,21 +30,31 @@ BasicErrorInfo<CharT> CurrentExceptionToError(const std::string& fileName)
     }
     catch (const Exception& ex)
     {
-        return make(ex.Code(), ex.what());
+        code = ex.Code();
+        message = ex.what();
     }
     catch (const std::length_error& ex)
     {
         // A string or container would outgrow its maximum size: a limit, not the system running out of memory
-        return make(ErrorCode::ResourceLimitExceeded, ex.what());
+        code = ErrorCode::ResourceLimitExceeded;
+        message = ex.what();
     }
     catch (const std::exception& ex)
     {
-        return make(ErrorCode::UnexpectedException, ex.what());
+        message = ex.what();
     }
-    catch (...)
+    catch (...) // NOLINT(bugprone-empty-catch): the defaults above describe it
     {
-        return make(ErrorCode::UnexpectedException, "unknown exception");
     }
+    // Still in the caller's handler: the exception, and with it `message`, is alive
+    typename BasicErrorInfo<CharT>::Data errorData;
+    errorData.code = code;
+    errorData.srcLoc.fileName = fileName;
+    errorData.srcLoc.line = 1;
+    errorData.srcLoc.col = 1;
+    errorData.extraParams.emplace_back(std::string(message));
+    errorData.exception = std::current_exception();
+    return BasicErrorInfo<CharT>(std::move(errorData));
 }
 } // namespace jinja2::detail
 

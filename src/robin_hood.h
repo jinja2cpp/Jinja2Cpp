@@ -47,8 +47,8 @@
 // Third local change (0253): a table stays valid when an allocation or a key or value
 // constructor throws (test/allocation_failure_test.cpp): inserts give back the spot they
 // prepared (abandonPreparedSpot), emplace destroys its node when no spot can be made,
-// initData allocates before it changes the table, and a copy that fails part way destroys
-// what it copied
+// initData allocates before it changes the table, a failed rehash keeps the hash multiplier,
+// and a copy that fails part way destroys what it copied
 
 #include <algorithm>
 #include <cstdlib>
@@ -2557,8 +2557,15 @@ private:
             // we have to resize, even though there would still be plenty of space left!
             // Try to rehash instead. Delete freed memory so we don't steadyily increase mem in case
             // we have to rehash a few times
+            // Jinja2C++ (0253): a failed rehash keeps the multiplier the keys are placed by
+            auto const oldHashMultiplier = mHashMultiplier;
             nextHashMultiplier();
-            rehashPowerOfTwo(mMask + 1, true);
+            try {
+                rehashPowerOfTwo(mMask + 1, true);
+            } catch (...) {
+                mHashMultiplier = oldHashMultiplier;
+                throw;
+            }
         } else {
             // we've reached the capacity of the map, so the hash seems to work nice. Keep using it.
             rehashPowerOfTwo((mMask + 1) * 2, false);

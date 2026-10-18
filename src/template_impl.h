@@ -478,7 +478,13 @@ public:
         }
     }
 
-    nonstd::expected<MetadataInfo<CharT>, BasicErrorInfo<CharT>> GetMetadataRaw() const { return m_metadataInfo; }
+    nonstd::expected<MetadataInfo<CharT>, BasicErrorInfo<CharT>> GetMetadataRaw() const
+    {
+        // Copied before it goes into the expected, whose converting constructor is noexcept:
+        // std::bad_alloc must reach the caller, not std::terminate
+        MetadataInfo<CharT> info = m_metadataInfo;
+        return info;
+    }
 
     bool operator==(const TemplateImpl<CharT>& other) const
     {
@@ -518,7 +524,9 @@ private:
     {
         if (m_metadata)
         {
-            return m_metadata.value();
+            // Copied first: expected's converting constructor is noexcept (see GetMetadataRaw)
+            GenericMap metadata = m_metadata.value();
+            return metadata;
         }
 
         auto& metadataString = m_metadataInfo.metadata;
@@ -551,7 +559,9 @@ private:
                 return MakeUnexpected(BasicErrorInfo<CharT>(errorData));
             }
             m_metadata = std::move(std::get<GenericMap>(result.value().GetData()));
-            return m_metadata.value();
+            // Copied first: expected's converting constructor is noexcept (see GetMetadataRaw)
+            GenericMap metadata = m_metadata.value();
+            return metadata;
         }
         return GenericMap();
     }

@@ -4,7 +4,7 @@
 // ASan, it also checks that the unwinding leaks nothing.
 //
 // A separate executable: the replacement would hide the sanitizers' own operator new from every other test. With a
-// Windows DLL build the library keeps its CRT's operator new and the injection reaches only the test's allocations.
+// Windows DLL build the library keeps its CRT's operator new, so the tests skip there.
 
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
@@ -110,6 +110,13 @@ struct Injection
 
 constexpr long maxAllocations = 100000;
 
+// A Windows DLL allocates with its own CRT's operator new, which the replacement above does not reach
+#if defined(_WIN32) && defined(JINJA2CPP_LINK_AS_SHARED)
+#define JINJA2CPP_SKIP_UNREACHED_INJECTION() GTEST_SKIP() << "the library's allocations do not reach the replaced operator new"
+#else
+#define JINJA2CPP_SKIP_UNREACHED_INJECTION() static_cast<void>(0)
+#endif
+
 // Runs f on a new thread, so that the engine's per-thread pools and caches start cold and their
 // first allocations are reached too
 template<typename F>
@@ -152,6 +159,7 @@ protected:
 
 TEST_P(AllocationFailureTest, LoadSucceedsOrThrowsBadAlloc)
 {
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
     const auto& param = GetParam();
     long n = 0;
     for (; n < maxAllocations; ++n)
@@ -196,6 +204,7 @@ TEST_P(AllocationFailureTest, LoadSucceedsOrThrowsBadAlloc)
 
 TEST_P(AllocationFailureTest, RenderSucceedsOrThrowsBadAlloc)
 {
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
     const auto& param = GetParam();
     Template tpl(&m_env);
     ASSERT_TRUE(tpl.Load(param.source).has_value()) << param.source;
@@ -226,6 +235,47 @@ TEST_P(AllocationFailureTest, RenderSucceedsOrThrowsBadAlloc)
         auto again = tpl.RenderAsString(params);
         ASSERT_TRUE(again.has_value()) << "after allocation " << n << " failed: " << again.error().ToString();
         EXPECT_EQ(param.expected, again.value()) << "after allocation " << n << " failed";
+        if (!fired)
+        {
+            break;
+        }
+    }
+    RecordProperty("allocations", static_cast<int>(n));
+    EXPECT_LT(0, n) << "no allocation reached the injection";
+    EXPECT_LT(n, maxAllocations);
+}
+
+TEST_F(AllocationFailureTest, MetadataSucceedsOrThrowsBadAlloc)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    const std::string source = R"({% meta %}{"title": "Report", "tags": ["a", "b"]}{% endmeta %}x)";
+    long n = 0;
+    for (; n < maxAllocations; ++n)
+    {
+        Template tpl(&m_env);
+        ASSERT_TRUE(tpl.Load(source).has_value());
+        bool threw = false;
+        bool fired = false;
+        Result<GenericMap> metadata;
+        OnFreshThread([&] {
+            Injection injection(n);
+            try
+            {
+                metadata = tpl.GetMetadata();
+            }
+            catch (const std::bad_alloc&)
+            {
+                threw = true;
+            }
+            fired = Injection::Fired();
+        });
+        if (!threw)
+        {
+            ASSERT_TRUE(metadata.has_value()) << "allocation " << n << " failed: " << metadata.error().ToString();
+        }
+        auto again = tpl.GetMetadata();
+        ASSERT_TRUE(again.has_value()) << "after allocation " << n << " failed: " << again.error().ToString();
+        EXPECT_TRUE(again.value().HasValue("title"));
         if (!fired)
         {
             break;
