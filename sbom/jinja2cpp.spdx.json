@@ -1,0 +1,740 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "jinja2cpp-2.0.0-library",
+  "creationInfo": {
+    "created": "2026-10-18T00:00:00Z",
+    "creators": [
+      "Tool: scripts/sbom.py",
+      "Organization: Jinja2C++ project"
+    ]
+  },
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Package-jinja2cpp",
+      "name": "jinja2cpp",
+      "versionInfo": "2.0.0",
+      "supplier": "Organization: Jinja2C++ project",
+      "downloadLocation": "git+https://github.com/jinja2cpp/Jinja2Cpp@2.0.0",
+      "filesAnalyzed": false,
+      "homepage": "https://github.com/jinja2cpp/Jinja2Cpp",
+      "licenseConcluded": "MPL-2.0",
+      "licenseDeclared": "MPL-2.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/jinja2cpp/jinja2cpp@2.0.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-expected-lite",
+      "name": "expected-lite",
+      "versionInfo": "0.10.0",
+      "supplier": "Organization: Martin Moene (nonstd-lite)",
+      "downloadLocation": "https://github.com/nonstd-lite/expected-lite/archive/refs/tags/v0.10.0.tar.gz",
+      "filesAnalyzed": false,
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "cfe082e4ffedeeedac47763504102646a39c080599c7c1fe99299d6a1f99af92"
+        }
+      ],
+      "homepage": "https://github.com/nonstd-lite/expected-lite",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/nonstd-lite/expected-lite@v0.10.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: mandatory; phases: build,consumer-build; exposure: public-api; delivery: fetched; selected-by: always; used-for: nonstd::expected behind jinja2::Result<T> in every Load/Render signature (include/jinja2cpp/template.h, template_env.h); make_unexpected in parsers and bindings; why: C++17 has no std::expected; the 2.0 API returns Result<T> (docs/api-2.0.md decision 4), and Clang 18 + libstdc++ at C++23 ships <expected> without std::expected; lighten: Keep until a C++23 floor. Header-only and small; could be vendored into include/ so consumers need nothing extra, at the cost of an ODR clash with a consumer's own expected-lite of another version; conan: expected-lite/0.9.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-fmt",
+      "name": "fmt",
+      "versionInfo": "12.2.0",
+      "supplier": "Organization: Victor Zverovich and fmt contributors",
+      "downloadLocation": "https://github.com/fmtlib/fmt/archive/refs/tags/12.2.0.tar.gz",
+      "filesAnalyzed": false,
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "8b852bb5aa6e7d8564f9e81394055395dd1d1936d38dfd3a17792a02bebd7af0"
+        }
+      ],
+      "homepage": "https://github.com/fmtlib/fmt",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "MIT",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/fmtlib/fmt@12.2.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: mandatory; phases: build,consumer-link; exposure: link; delivery: fetched; selected-by: always; used-for: Python str.format / format filter and %-formatting (src/python_format.cpp, serialize_filters.cpp, value_methods.cpp), number-to-string, wide-string formatting (fmt/xchar.h), error messages (error_info.cpp), the string builder's memory_buffer; why: Python's format-spec mini-language with runtime format strings, precision-as-argument and wchar_t output; std::format is C++20 and the floor is C++17; lighten: Keep. Could be built header-only (FMT_HEADER_ONLY) to remove the link-time dependency of static consumers, at a compile-time cost; replace with std::format only at a C++20 floor (wide output and runtime specs still need checking); conan: fmt/12.2.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost",
+      "name": "boost",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "https://github.com/boostorg/boost/releases/download/boost-1.92.0/boost-1.92.0-cmake.tar.xz",
+      "filesAnalyzed": false,
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "9bed76128d4e46755dbe818487788c6fceb6f72b378f4daa49b7e1e600d9088d"
+        }
+      ],
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/boost@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: mandatory; phases: build,consumer-link; exposure: link; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: See the boost-* sub-components: 9 libraries are used directly; internal mode pulls 51 and installs all of them (56 MB of headers, 4 static libraries); why: Historically the portability layer for pre-C++17 (any, optional, variant, filesystem, string algorithms); today mostly small utilities that C++17 lacks (span, small_vector, intrusive_ptr, move-only any) plus Boost.JSON as the default metadata parser; lighten: The largest weight by far and the main target. Every directly used piece has a small replacement (see sub-components); a Boost-free core is feasible without behaviour change (docs/tasks/0230); conan: boost/1.91.0; transitive-libraries: algorithm,align,any,array,assert,atomic,bind,compat,concept_check,config,container,container_hash,conversion,core,describe,detail,endian,exception,filesystem,function,function_types,fusion,headers,integer,intrusive,io,iterator,json,lexical_cast,move,mp11,mpl,numeric,optional,predef,preprocessor,range,regex,scope,smart_ptr,system,throw_exception,tuple,type_index,type_traits,typeof,unordered,utility,variant,variant2,winapi"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost-core",
+      "name": "boost-core",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/core@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: boost::span over node arrays, arguments and slots (about 57 uses in 14 src/ files: node_arena.h, statements.cpp, render_context.h); null_deleter.hpp is included by statements.cpp but unused; why: std::span is C++20; lighten: Replace with a 50-line internal span (or std::span behind a C++20 switch); drop the null_deleter include"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost-container",
+      "name": "boost-container",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/container@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: mandatory; phases: build,consumer-link; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: small_vector in parsers, evaluator, name resolver and render context (about 27 uses in 10 src/ files); boost_container.a is linked because Boost.JSON needs it; why: Inline-storage vector that avoids heap allocations on hot paths (perf track 0117/0118); lighten: Header-only use; replaceable by an internal small_vector, but it is perf-sensitive, so measure with bench/ (Cachegrind gate) before swapping"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost-smart-ptr",
+      "name": "boost-smart_ptr",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/smart_ptr@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: intrusive_ptr for InternalValue's shared payloads and the render workspace (internal_value.h, render_workspace.h; about 26 uses); why: One pointer wide with the count inside the object, which the 32-byte InternalValue layout (0140) relies on; std::shared_ptr is two pointers; lighten: Replace with an internal intrusive_ptr (about 60 lines)"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost-any",
+      "name": "boost-any",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/any@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: boost::anys::unique_any holds the parsed JSON metadata document of whichever JSON backend is compiled in (template_impl.h:801, binding/*_parser.h); boost::any_cast in rapid_json_parser.h; why: Move-only type erasure; std::any requires copyable payloads; lighten: Replace with std::unique_ptr to a small polymorphic holder, or drop when metadata parsing gets one fixed parser"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost-iterator",
+      "name": "boost-iterator",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/iterator@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: iterator_facade for one internal iterator (internal_value.h:1250); why: Less boilerplate for a conforming iterator; lighten: Write the iterator by hand (about 40 lines)"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost-filesystem",
+      "name": "boost-filesystem",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/filesystem@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: mandatory; phases: build,consumer-link,runtime; exposure: link; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: path joining and last_write_time in RealFileSystem (src/filesystem_handler.cpp:131-170); compiled library plus boost_atomic; why: Pre-C++17 history; nothing Boost-specific is used; lighten: Replace with std::filesystem (C++17): removes two compiled libraries; check the file_time_type to time_t conversion and old toolchains needing -lstdc++fs"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost-algorithm",
+      "name": "boost-algorithm",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/algorithm@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: replace_all/replace_first and is_alnum in string_converter_filter.cpp, all()+is_space in template_parser.h; trim_all.hpp and join.hpp are included but unused; why: Convenience string helpers; lighten: Replace with a few lines of std::string code; drop the unused includes"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost-predef",
+      "name": "boost-predef",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/predef@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: BOOST_ENDIAN_BIG_BYTE to pick RapidJSON's UTF-16/32 encoding (rapid_json_parser.h:29), included from template_impl.h; why: Byte order detection before C++20 std::endian; lighten: Replace with a compiler-macro check (__BYTE_ORDER__ / _WIN32)"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost-json",
+      "name": "boost-json",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/json@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: alternative; phases: build,consumer-link,runtime; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=boost (the default); used-for: Parses {% meta %} JSON metadata for Template::GetMetadata (template_impl.h:484-498, binding/boost_json_parser.h); the opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value; why: One of three interchangeable JSON backends; the default because Boost is already required; lighten: The heaviest backend (boost_json.a + boost_container.a, about 4.8 MB in a Debug build) for a niche feature (template metadata). An internal minimal JSON reader, or nlohmann as default, would remove both libraries; the adapter headers stay opt-in"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost-unordered",
+      "name": "boost-unordered",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/unordered@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: redundant; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: Included by internal_value.h:16, nothing uses it (maps are robin_hood); why: Left over; lighten: Drop the include"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost-conversion",
+      "name": "boost-conversion",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/conversion@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: redundant; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: Included by template_parser.cpp:19, no boost cast is used; why: Left over; lighten: Drop the include"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost-lexical-cast",
+      "name": "boost-lexical_cast",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/lexical_cast@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: redundant; phases: build; exposure: none; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: Requested in BOOST_INCLUDE_LIBRARIES, JINJA2CPP_PRIVATE_LIBS (Boost::lexical_cast), the installed config's COMPONENTS and the external-mode find_package; no source includes it; why: Left over; lighten: Remove from the CMake lists (docs/tasks/0229)"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost-numeric-conversion",
+      "name": "boost-numeric_conversion",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/numeric_conversion@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: redundant; phases: build; exposure: none; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: Requested by the CMake lists like lexical_cast; no source includes it; why: Left over; lighten: Remove from the CMake lists (docs/tasks/0229)"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost-variant",
+      "name": "boost-variant",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/variant@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: redundant; phases: build; exposure: none; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: Requested by the CMake lists (and -Wno-error flags on boost_variant); std::variant is used everywhere since 0071; why: Left over; lighten: Remove from the CMake lists (docs/tasks/0229)"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-boost-optional",
+      "name": "boost-optional",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/optional@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: redundant; phases: build; exposure: none; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: Requested by BOOST_INCLUDE_LIBRARIES and the conan-build find_package; std::optional is used since 0071; why: Left over; lighten: Remove from the CMake lists (docs/tasks/0229)"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-nlohmann-json",
+      "name": "nlohmann_json",
+      "versionInfo": "3.12.0",
+      "supplier": "Organization: Niels Lohmann",
+      "downloadLocation": "https://github.com/nlohmann/json/archive/refs/tags/v3.12.0.tar.gz",
+      "filesAnalyzed": false,
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "4b92eb0c06d10683f7447ce9406cb97cd4b453be18d7279320f7b2f025c10187"
+        }
+      ],
+      "homepage": "https://github.com/nlohmann/json",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "MIT",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/nlohmann/json@v3.12.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: alternative; phases: build,test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=nlohmann; also fetched whenever JINJA2CPP_BUILD_TESTS is ON (tests, parity corpus and bench read JSON with it); also-roles: test; used-for: Metadata parser when selected (binding/nlohmann_json_parser.h); opt-in adapter include/jinja2cpp/binding/nlohmann_json.h; test data (tojson, metadata, parity corpus) and bench case files; why: Header-only JSON backend alternative; the test suite's JSON reader; lighten: Header-only, no link cost. The cheapest default backend if Boost.JSON goes; conan: nlohmann_json/3.12.0"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-rapidjson",
+      "name": "RapidJSON",
+      "versionInfo": "24b5e7a8b27f42fa16b96fc70aade9106cf7102f",
+      "supplier": "Organization: Tencent",
+      "downloadLocation": "https://github.com/Tencent/rapidjson/archive/24b5e7a8b27f42fa16b96fc70aade9106cf7102f.tar.gz",
+      "filesAnalyzed": false,
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "2d2601a82d2d3b7e143a3c8d43ef616671391034bc46891a9816b79cf2d3e7a8"
+        }
+      ],
+      "homepage": "https://github.com/Tencent/rapidjson",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "MIT",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/Tencent/rapidjson@24b5e7a8b27f42fa16b96fc70aade9106cf7102f"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: alternative; phases: build; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=rapid; used-for: Metadata parser when selected (binding/rapid_json_parser.h); opt-in adapter include/jinja2cpp/binding/rapid_json.h; why: Third JSON backend alternative for users who already carry RapidJSON; lighten: Header-only. Patched locally, and the conan-build mode takes an unpatched ConanCenter snapshot; upstream has had no release since 2016. A candidate to retire as a built-in backend while keeping the adapter header; conan: rapidjson/cci.20250205"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-robin-hood-hashing",
+      "name": "robin-hood-hashing",
+      "versionInfo": "3.11.5",
+      "supplier": "Organization: Martin Ankerl",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "89a5929b4cb887f70000f312ca8aae0e9de10c5f5f04b52e0e6e005bef800f98"
+        }
+      ],
+      "homepage": "https://github.com/martinus/robin-hood-hashing",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "MIT",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/martinus/robin-hood-hashing@3.11.5"
+        }
+      ],
+      "primaryPackagePurpose": "SOURCE",
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: vendored; selected-by: always; used-for: InternalValueMap and scope tables (internal_value.h:1345, render_context.h), robin_hood::hash_bytes; why: Flat open-addressing map, measurably faster than std::unordered_map on the render paths; lighten: Upstream is archived and recommends its successor ankerl::unordered_dense (MIT); boost::unordered_flat_map is the other candidate while Boost stays. Not a size issue, a maintenance one (docs/tasks/0231); modified: try_emplace_transparent added (0118 P5b-3b); allocation through ::operator new/delete (0154); documented at src/robin_hood.h:41-50; file: src/robin_hood.h sha256:89a5929b4cb887f70000f312ca8aae0e9de10c5f5f04b52e0e6e005bef800f98"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-lexertk",
+      "name": "lexertk",
+      "supplier": "Organization: Arash Partow",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "5325613ea9f7aa41e269b9bb416b6b1e4ba21cbc97fcf52f1e3117535c13f81c"
+        }
+      ],
+      "homepage": "https://www.partow.net/programming/lexertk/index.html",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "MIT",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/lexertk?download_url=https://www.partow.net/programming/lexertk/index.html"
+        }
+      ],
+      "primaryPackagePurpose": "SOURCE",
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: vendored; selected-by: always; used-for: Expression tokenizer behind src/lexer.h, renderer.h and template_parser.h; why: Ready-made C-like tokenizer the expression parser was built on; lighten: Small and internal; keep. Long term it is effectively forked code and could be absorbed as project code with its notice kept; modified: Modified by Flex Ferrum (2018), changes not recorded (src/lexertk.h:6); upstream version not recorded; file: src/lexertk.h sha256:5325613ea9f7aa41e269b9bb416b6b1e4ba21cbc97fcf52f1e3117535c13f81c"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-value-types",
+      "name": "value_types",
+      "versionInfo": "57f2e7a",
+      "supplier": "Organization: The Value Types Authors (jbcoe)",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://github.com/jbcoe/value_types",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "MIT",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/jbcoe/value_types@57f2e7a"
+        }
+      ],
+      "primaryPackagePurpose": "SOURCE",
+      "comment": "role: mandatory; phases: build,consumer-build; exposure: public-api; delivery: vendored; selected-by: always; used-for: xyz::polymorphic and xyz::indirect behind jinja2::types (value_ptr.h), used by Value, GenericList and GenericMap; why: Value-semantic owning pointers for the public value model; standardised as std::indirect/std::polymorphic in C++26; lighten: Keep (header-only, installed). Switch to std:: at a C++26 floor; modified: indirect: Clang incomplete-type fix (0edc34d); polymorphic: default constructor constrained on the allocator for MSVC std::variant (0071); polymorphic_cxx14.h records no upstream revision; file: include/jinja2cpp/polymorphic_value/indirect_cxx14.h sha256:5feea68a8a6a91f99743a99cdcf077dfef6a55d8256e63a2d56bfbb820fdac6d; file: include/jinja2cpp/polymorphic_value/polymorphic_cxx14.h sha256:0208577d0f465f2e346c58890fccaceaf025ea7a568ad0de1d1debd6849ca4ea"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-unicode-data",
+      "name": "Unicode Character Database (via Python unicodedata)",
+      "versionInfo": "15.0.0",
+      "supplier": "Organization: Unicode, Inc.",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.unicode.org/Public/15.0.0/ucd/",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "Unicode-3.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/unicode-ucd@15.0.0"
+        }
+      ],
+      "primaryPackagePurpose": "FILE",
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: generated; selected-by: always; used-for: Code-point tables for str.isprintable/isalpha/..., upper/lower/title/casefold, int() digit handling; why: Python-identical string predicates and case mapping without ICU; lighten: Data only, no dependency at build time (Python is needed only to regenerate). Acquisition decision is still open in docs/tasks/0187 and 0186; file: src/unicode_printable.h sha256:bb7537033f18a1847f7cdb89bb19bcdee61f8afe6fd0d24891ab6967bccb38dc; file: src/unicode_tables.h sha256:5d3160113753deb6394ff66d867522a1c0303da0bfcc83bafaa027cfbbe3b96b; file: src/unicode_case.h sha256:5e7881179bb8cedcc76abef282540138f317cda02286077ced320d06640ce3c3; generator: scripts/gen_unicode_printable.py; generator: scripts/gen_unicode_tables.py; generator: scripts/gen_unicode_case.py"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-html-entities",
+      "name": "HTML5 named character references (via Python html.entities)",
+      "versionInfo": "python-3.12",
+      "supplier": "Organization: Python Software Foundation (table from the WHATWG HTML standard)",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "83c2e14ba7b52dfd5befbba8f3bca85e0f8bbaf5696cc647c8372602ebc5ed1e"
+        }
+      ],
+      "homepage": "https://docs.python.org/3.12/library/html.entities.html",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "PSF-2.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/python-html-entities@3.12"
+        }
+      ],
+      "primaryPackagePurpose": "FILE",
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: generated; selected-by: always; used-for: Entity table for MarkupSafe-compatible unescape/striptags; why: Same entity set as Python's html.unescape; lighten: Data only; keep; file: src/html_entities.h sha256:83c2e14ba7b52dfd5befbba8f3bca85e0f8bbaf5696cc647c8372602ebc5ed1e; generator: scripts/gen_html_entities.py"
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-jinja2cpp",
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Package-expected-lite"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-jinja2cpp",
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Package-fmt"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-jinja2cpp",
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Package-boost"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-core"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-container"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-smart-ptr"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-any"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-iterator"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-filesystem"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-algorithm"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-predef"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-json"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-unordered"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-conversion"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-lexical-cast"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-numeric-conversion"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-variant"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-optional"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-nlohmann-json",
+      "relationshipType": "OPTIONAL_DEPENDENCY_OF",
+      "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-rapidjson",
+      "relationshipType": "OPTIONAL_DEPENDENCY_OF",
+      "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-jinja2cpp",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-robin-hood-hashing"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-jinja2cpp",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-lexertk"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-jinja2cpp",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-value-types"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-jinja2cpp",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-unicode-data"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-jinja2cpp",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-html-entities"
+    }
+  ],
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-library-b0ed8cd53d055a08"
+}

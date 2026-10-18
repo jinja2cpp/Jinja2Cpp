@@ -139,6 +139,9 @@ Jinja2C++ has several external dependencies:
 -  `nonstd::expected-lite` [https://github.com/martinmoene/expected-lite](https://github.com/martinmoene/expected-lite)
 -  `fmtlib::fmt` [https://github.com/fmtlib/fmt](https://github.com/fmtlib/fmt)
 
+Why each dependency is needed, which are optional, and the CycloneDX and SPDX SBOMs installed with
+the package: [docs/dependencies.md](docs/dependencies.md).
+
 Examples of build scripts and different build configurations could be found here: [https://github.com/jinja2cpp/examples-build](https://github.com/jinja2cpp/examples-build)
 
 In simplest case to compile Jinja2C++ you need:

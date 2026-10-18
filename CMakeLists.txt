@@ -498,6 +498,15 @@ if(JINJA2CPP_INSTALL)
             ${CMAKE_INSTALL_LIBDIR}/pkgconfig
     )
 
+    # The library SBOM, generated from sbom/components.json by scripts/sbom.py (docs/tasks/0187)
+    install(
+        FILES
+            sbom/jinja2cpp.cdx.json
+            sbom/jinja2cpp.spdx.json
+        DESTINATION
+            ${CMAKE_INSTALL_DOCDIR}/sbom
+    )
+
     install(
         EXPORT
             InstallTargets

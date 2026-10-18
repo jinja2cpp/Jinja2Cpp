@@ -45,6 +45,21 @@ jobs:
         fi
         echo "Changed lines are clang-format clean."
 
+  sbom:
+    name: SBOM in sync with the build
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+
+    # sbom/components.json is the inventory; the generated CycloneDX and SPDX files must
+    # match it, and every fetched source, Conan and pip requirement, GitHub Action, Boost
+    # header and vendored file must be listed in it (docs/tasks/0187)
+    - name: Install SBOM validators
+      run: python3 -m pip install --break-system-packages "cyclonedx-python-lib[json-validation]==11.12.0" "spdx-tools==0.8.5"
+
+    - name: Check and validate the SBOM
+      run: python3 scripts/sbom.py --check --validate
+
   task-index:
     name: task index (warning only)
     runs-on: ubuntu-24.04

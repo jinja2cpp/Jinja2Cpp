@@ -1,8 +1,8 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: build
-touches: [scripts/gen_unicode_printable.py, scripts/gen_unicode_tables.py, scripts/gen_unicode_case.py, scripts/gen_html_entities.py, thirdparty/internal_deps.cmake]
+touches: [scripts/gen_unicode_printable.py, scripts/gen_unicode_tables.py, scripts/gen_unicode_case.py, scripts/gen_html_entities.py, thirdparty/internal_deps.cmake, sbom/, scripts/sbom.py]
 ---
 # How generated tables and third-party data are acquired (SBOM)
 
@@ -30,3 +30,18 @@ in CI. Decide together with 0186.
 
 **Done when.** A manifest lists every embedded or fetched component with version and
 licence, installs ship an SBOM generated from it, and the table-source decision is recorded.
+
+**Progress (2026-10-18, PR #PRNUM).** The manifest and the SBOM are in place:
+`sbom/components.json` lists every fetched, vendored, generated and tooling component
+with version, licence, pin or hash and a role/phase/exposure/delivery classification;
+`scripts/sbom.py` emits CycloneDX 1.6 and SPDX 2.3 from it (library and full profiles),
+`--check` in the format-check job fails on stale output, pin drift or an unlisted
+dependency, and the library profile is installed to `share/doc/Jinja2Cpp/sbom/`. The
+audit and the case for dropping each dependency are in docs/dependencies.md; its
+findings are filed as 0229 (unused Boost pieces), 0230 (Boost-free core), 0231
+(robin_hood successor) and 0232 (pin drift), and licence notices stay with 0226.
+Generated headers do not yet write their source into the manifest; the manifest records
+the source and the generators' `--check` keeps the tables honest.
+
+Still open: the table-source decision above (with 0186), and an SBOM that describes one
+configuration (deps mode and JSON backend) instead of all of them at once.

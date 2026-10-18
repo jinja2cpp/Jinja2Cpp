@@ -1,0 +1,1714 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:b438a3ce-57eb-55f7-99c3-1fb9d8ce6bf5",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-10-18T00:00:00Z",
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "name": "scripts/sbom.py"
+        }
+      ]
+    },
+    "component": {
+      "type": "library",
+      "bom-ref": "jinja2cpp",
+      "name": "jinja2cpp",
+      "version": "2.0.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MPL-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:github/jinja2cpp/jinja2cpp@2.0.0",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/jinja2cpp/Jinja2Cpp"
+        }
+      ]
+    },
+    "properties": [
+      {
+        "name": "jinja2cpp:profile",
+        "value": "library"
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "expected-lite",
+      "name": "expected-lite",
+      "version": "0.10.0",
+      "supplier": {
+        "name": "Martin Moene (nonstd-lite)"
+      },
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "cfe082e4ffedeeedac47763504102646a39c080599c7c1fe99299d6a1f99af92"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSL-1.0"
+          }
+        }
+      ],
+      "purl": "pkg:github/nonstd-lite/expected-lite@v0.10.0",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/nonstd-lite/expected-lite"
+        },
+        {
+          "type": "distribution",
+          "url": "https://github.com/nonstd-lite/expected-lite/archive/refs/tags/v0.10.0.tar.gz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "mandatory"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "build,consumer-build"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "public-api"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "fetched"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "always"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "nonstd::expected behind jinja2::Result<T> in every Load/Render signature (include/jinja2cpp/template.h, template_env.h); make_unexpected in parsers and bindings"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "C++17 has no std::expected; the 2.0 API returns Result<T> (docs/api-2.0.md decision 4), and Clang 18 + libstdc++ at C++23 ships <expected> without std::expected"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Keep until a C++23 floor. Header-only and small; could be vendored into include/ so consumers need nothing extra, at the cost of an ODR clash with a consumer's own expected-lite of another version"
+        },
+        {
+          "name": "jinja2cpp:conan",
+          "value": "expected-lite/0.9.0"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "fmt",
+      "name": "fmt",
+      "version": "12.2.0",
+      "supplier": {
+        "name": "Victor Zverovich and fmt contributors"
+      },
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "8b852bb5aa6e7d8564f9e81394055395dd1d1936d38dfd3a17792a02bebd7af0"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:github/fmtlib/fmt@12.2.0",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/fmtlib/fmt"
+        },
+        {
+          "type": "distribution",
+          "url": "https://github.com/fmtlib/fmt/archive/refs/tags/12.2.0.tar.gz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "mandatory"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "build,consumer-link"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "link"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "fetched"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "always"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "Python str.format / format filter and %-formatting (src/python_format.cpp, serialize_filters.cpp, value_methods.cpp), number-to-string, wide-string formatting (fmt/xchar.h), error messages (error_info.cpp), the string builder's memory_buffer"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "Python's format-spec mini-language with runtime format strings, precision-as-argument and wchar_t output; std::format is C++20 and the floor is C++17"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Keep. Could be built header-only (FMT_HEADER_ONLY) to remove the link-time dependency of static consumers, at a compile-time cost; replace with std::format only at a C++20 floor (wide output and runtime specs still need checking)"
+        },
+        {
+          "name": "jinja2cpp:conan",
+          "value": "fmt/12.2.0"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "boost",
+      "name": "boost",
+      "version": "1.92.0",
+      "supplier": {
+        "name": "Boost.org"
+      },
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9bed76128d4e46755dbe818487788c6fceb6f72b378f4daa49b7e1e600d9088d"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSL-1.0"
+          }
+        }
+      ],
+      "purl": "pkg:github/boostorg/boost@boost-1.92.0",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://www.boost.org"
+        },
+        {
+          "type": "distribution",
+          "url": "https://github.com/boostorg/boost/releases/download/boost-1.92.0/boost-1.92.0-cmake.tar.xz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "mandatory"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "build,consumer-link"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "link"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "fetched"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "See the boost-* sub-components: 9 libraries are used directly; internal mode pulls 51 and installs all of them (56 MB of headers, 4 static libraries)"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "Historically the portability layer for pre-C++17 (any, optional, variant, filesystem, string algorithms); today mostly small utilities that C++17 lacks (span, small_vector, intrusive_ptr, move-only any) plus Boost.JSON as the default metadata parser"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "The largest weight by far and the main target. Every directly used piece has a small replacement (see sub-components); a Boost-free core is feasible without behaviour change (docs/tasks/0230)"
+        },
+        {
+          "name": "jinja2cpp:conan",
+          "value": "boost/1.91.0"
+        },
+        {
+          "name": "jinja2cpp:transitive-libraries",
+          "value": "algorithm,align,any,array,assert,atomic,bind,compat,concept_check,config,container,container_hash,conversion,core,describe,detail,endian,exception,filesystem,function,function_types,fusion,headers,integer,intrusive,io,iterator,json,lexical_cast,move,mp11,mpl,numeric,optional,predef,preprocessor,range,regex,scope,smart_ptr,system,throw_exception,tuple,type_index,type_traits,typeof,unordered,utility,variant,variant2,winapi"
+        }
+      ],
+      "components": [
+        {
+          "type": "library",
+          "bom-ref": "boost-core",
+          "name": "boost-core",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "required",
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/core@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "mandatory"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "internal"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "boost::span over node arrays, arguments and slots (about 57 uses in 14 src/ files: node_arena.h, statements.cpp, render_context.h); null_deleter.hpp is included by statements.cpp but unused"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "std::span is C++20"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "Replace with a 50-line internal span (or std::span behind a C++20 switch); drop the null_deleter include"
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "bom-ref": "boost-container",
+          "name": "boost-container",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "required",
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/container@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "mandatory"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build,consumer-link"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "internal"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "small_vector in parsers, evaluator, name resolver and render context (about 27 uses in 10 src/ files); boost_container.a is linked because Boost.JSON needs it"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "Inline-storage vector that avoids heap allocations on hot paths (perf track 0117/0118)"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "Header-only use; replaceable by an internal small_vector, but it is perf-sensitive, so measure with bench/ (Cachegrind gate) before swapping"
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "bom-ref": "boost-smart_ptr",
+          "name": "boost-smart_ptr",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "required",
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/smart_ptr@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "mandatory"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "internal"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "intrusive_ptr for InternalValue's shared payloads and the render workspace (internal_value.h, render_workspace.h; about 26 uses)"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "One pointer wide with the count inside the object, which the 32-byte InternalValue layout (0140) relies on; std::shared_ptr is two pointers"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "Replace with an internal intrusive_ptr (about 60 lines)"
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "bom-ref": "boost-any",
+          "name": "boost-any",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "required",
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/any@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "mandatory"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "internal"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "boost::anys::unique_any holds the parsed JSON metadata document of whichever JSON backend is compiled in (template_impl.h:801, binding/*_parser.h); boost::any_cast in rapid_json_parser.h"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "Move-only type erasure; std::any requires copyable payloads"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "Replace with std::unique_ptr to a small polymorphic holder, or drop when metadata parsing gets one fixed parser"
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "bom-ref": "boost-iterator",
+          "name": "boost-iterator",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "required",
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/iterator@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "mandatory"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "internal"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "iterator_facade for one internal iterator (internal_value.h:1250)"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "Less boilerplate for a conforming iterator"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "Write the iterator by hand (about 40 lines)"
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "bom-ref": "boost-filesystem",
+          "name": "boost-filesystem",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "required",
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/filesystem@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "mandatory"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build,consumer-link,runtime"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "link"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "path joining and last_write_time in RealFileSystem (src/filesystem_handler.cpp:131-170); compiled library plus boost_atomic"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "Pre-C++17 history; nothing Boost-specific is used"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "Replace with std::filesystem (C++17): removes two compiled libraries; check the file_time_type to time_t conversion and old toolchains needing -lstdc++fs"
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "bom-ref": "boost-algorithm",
+          "name": "boost-algorithm",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "required",
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/algorithm@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "mandatory"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "internal"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "replace_all/replace_first and is_alnum in string_converter_filter.cpp, all()+is_space in template_parser.h; trim_all.hpp and join.hpp are included but unused"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "Convenience string helpers"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "Replace with a few lines of std::string code; drop the unused includes"
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "bom-ref": "boost-predef",
+          "name": "boost-predef",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "required",
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/predef@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "mandatory"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "internal"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "BOOST_ENDIAN_BIG_BYTE to pick RapidJSON's UTF-16/32 encoding (rapid_json_parser.h:29), included from template_impl.h"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "Byte order detection before C++20 std::endian"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "Replace with a compiler-macro check (__BYTE_ORDER__ / _WIN32)"
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "bom-ref": "boost-json",
+          "name": "boost-json",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "optional",
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/json@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "alternative"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build,consumer-link,runtime"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "public-optional"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "JINJA2CPP_WITH_JSON_BINDINGS=boost (the default)"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "Parses {% meta %} JSON metadata for Template::GetMetadata (template_impl.h:484-498, binding/boost_json_parser.h); the opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "One of three interchangeable JSON backends; the default because Boost is already required"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "The heaviest backend (boost_json.a + boost_container.a, about 4.8 MB in a Debug build) for a niche feature (template metadata). An internal minimal JSON reader, or nlohmann as default, would remove both libraries; the adapter headers stay opt-in"
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "bom-ref": "boost-unordered",
+          "name": "boost-unordered",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "excluded",
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/unordered@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "redundant"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "internal"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "Included by internal_value.h:16, nothing uses it (maps are robin_hood)"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "Left over"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "Drop the include"
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "bom-ref": "boost-conversion",
+          "name": "boost-conversion",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "excluded",
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/conversion@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "redundant"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "internal"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "Included by template_parser.cpp:19, no boost cast is used"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "Left over"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "Drop the include"
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "bom-ref": "boost-lexical_cast",
+          "name": "boost-lexical_cast",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "excluded",
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/lexical_cast@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "redundant"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "none"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "Requested in BOOST_INCLUDE_LIBRARIES, JINJA2CPP_PRIVATE_LIBS (Boost::lexical_cast), the installed config's COMPONENTS and the external-mode find_package; no source includes it"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "Left over"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "Remove from the CMake lists (docs/tasks/0229)"
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "bom-ref": "boost-numeric_conversion",
+          "name": "boost-numeric_conversion",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "excluded",
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/numeric_conversion@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "redundant"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "none"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "Requested by the CMake lists like lexical_cast; no source includes it"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "Left over"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "Remove from the CMake lists (docs/tasks/0229)"
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "bom-ref": "boost-variant",
+          "name": "boost-variant",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "excluded",
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/variant@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "redundant"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "none"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "Requested by the CMake lists (and -Wno-error flags on boost_variant); std::variant is used everywhere since 0071"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "Left over"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "Remove from the CMake lists (docs/tasks/0229)"
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "bom-ref": "boost-optional",
+          "name": "boost-optional",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "excluded",
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/optional@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "redundant"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "none"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "Requested by BOOST_INCLUDE_LIBRARIES and the conan-build find_package; std::optional is used since 0071"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "Left over"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "Remove from the CMake lists (docs/tasks/0229)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "nlohmann-json",
+      "name": "nlohmann_json",
+      "version": "3.12.0",
+      "supplier": {
+        "name": "Niels Lohmann"
+      },
+      "scope": "optional",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "4b92eb0c06d10683f7447ce9406cb97cd4b453be18d7279320f7b2f025c10187"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:github/nlohmann/json@v3.12.0",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/nlohmann/json"
+        },
+        {
+          "type": "distribution",
+          "url": "https://github.com/nlohmann/json/archive/refs/tags/v3.12.0.tar.gz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "alternative"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "build,test"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "public-optional"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "fetched"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "JINJA2CPP_WITH_JSON_BINDINGS=nlohmann; also fetched whenever JINJA2CPP_BUILD_TESTS is ON (tests, parity corpus and bench read JSON with it)"
+        },
+        {
+          "name": "jinja2cpp:also-roles",
+          "value": "test"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "Metadata parser when selected (binding/nlohmann_json_parser.h); opt-in adapter include/jinja2cpp/binding/nlohmann_json.h; test data (tojson, metadata, parity corpus) and bench case files"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "Header-only JSON backend alternative; the test suite's JSON reader"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Header-only, no link cost. The cheapest default backend if Boost.JSON goes"
+        },
+        {
+          "name": "jinja2cpp:conan",
+          "value": "nlohmann_json/3.12.0"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "rapidjson",
+      "name": "RapidJSON",
+      "version": "24b5e7a8b27f42fa16b96fc70aade9106cf7102f",
+      "supplier": {
+        "name": "Tencent"
+      },
+      "scope": "optional",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "2d2601a82d2d3b7e143a3c8d43ef616671391034bc46891a9816b79cf2d3e7a8"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:github/Tencent/rapidjson@24b5e7a8b27f42fa16b96fc70aade9106cf7102f",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/Tencent/rapidjson"
+        },
+        {
+          "type": "distribution",
+          "url": "https://github.com/Tencent/rapidjson/archive/24b5e7a8b27f42fa16b96fc70aade9106cf7102f.tar.gz"
+        }
+      ],
+      "pedigree": {
+        "patches": [
+          {
+            "type": "unofficial",
+            "diff": {
+              "url": "cmake/patches/rapid_json_improvements.patch"
+            }
+          },
+          {
+            "type": "unofficial",
+            "diff": {
+              "url": "cmake/patches/0001-fix-custom_command-error.patch"
+            }
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "alternative"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "build"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "public-optional"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "fetched"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "JINJA2CPP_WITH_JSON_BINDINGS=rapid"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "Metadata parser when selected (binding/rapid_json_parser.h); opt-in adapter include/jinja2cpp/binding/rapid_json.h"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "Third JSON backend alternative for users who already carry RapidJSON"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Header-only. Patched locally, and the conan-build mode takes an unpatched ConanCenter snapshot; upstream has had no release since 2016. A candidate to retire as a built-in backend while keeping the adapter header"
+        },
+        {
+          "name": "jinja2cpp:conan",
+          "value": "rapidjson/cci.20250205"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "robin-hood-hashing",
+      "name": "robin-hood-hashing",
+      "version": "3.11.5",
+      "supplier": {
+        "name": "Martin Ankerl"
+      },
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "89a5929b4cb887f70000f312ca8aae0e9de10c5f5f04b52e0e6e005bef800f98"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:github/martinus/robin-hood-hashing@3.11.5",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/martinus/robin-hood-hashing"
+        }
+      ],
+      "pedigree": {
+        "notes": "try_emplace_transparent added (0118 P5b-3b); allocation through ::operator new/delete (0154); documented at src/robin_hood.h:41-50"
+      },
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "mandatory"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "build"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "internal"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "vendored"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "always"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "InternalValueMap and scope tables (internal_value.h:1345, render_context.h), robin_hood::hash_bytes"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "Flat open-addressing map, measurably faster than std::unordered_map on the render paths"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Upstream is archived and recommends its successor ankerl::unordered_dense (MIT); boost::unordered_flat_map is the other candidate while Boost stays. Not a size issue, a maintenance one (docs/tasks/0231)"
+        },
+        {
+          "name": "jinja2cpp:modified",
+          "value": "try_emplace_transparent added (0118 P5b-3b); allocation through ::operator new/delete (0154); documented at src/robin_hood.h:41-50"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "src/robin_hood.h sha256:89a5929b4cb887f70000f312ca8aae0e9de10c5f5f04b52e0e6e005bef800f98"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "lexertk",
+      "name": "lexertk",
+      "supplier": {
+        "name": "Arash Partow"
+      },
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "5325613ea9f7aa41e269b9bb416b6b1e4ba21cbc97fcf52f1e3117535c13f81c"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:generic/lexertk?download_url=https://www.partow.net/programming/lexertk/index.html",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://www.partow.net/programming/lexertk/index.html"
+        }
+      ],
+      "pedigree": {
+        "notes": "Modified by Flex Ferrum (2018), changes not recorded (src/lexertk.h:6); upstream version not recorded"
+      },
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "mandatory"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "build"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "internal"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "vendored"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "always"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "Expression tokenizer behind src/lexer.h, renderer.h and template_parser.h"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "Ready-made C-like tokenizer the expression parser was built on"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Small and internal; keep. Long term it is effectively forked code and could be absorbed as project code with its notice kept"
+        },
+        {
+          "name": "jinja2cpp:modified",
+          "value": "Modified by Flex Ferrum (2018), changes not recorded (src/lexertk.h:6); upstream version not recorded"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "src/lexertk.h sha256:5325613ea9f7aa41e269b9bb416b6b1e4ba21cbc97fcf52f1e3117535c13f81c"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "value-types",
+      "name": "value_types",
+      "version": "57f2e7a",
+      "supplier": {
+        "name": "The Value Types Authors (jbcoe)"
+      },
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:github/jbcoe/value_types@57f2e7a",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/jbcoe/value_types"
+        }
+      ],
+      "pedigree": {
+        "notes": "indirect: Clang incomplete-type fix (0edc34d); polymorphic: default constructor constrained on the allocator for MSVC std::variant (0071); polymorphic_cxx14.h records no upstream revision"
+      },
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "mandatory"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "build,consumer-build"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "public-api"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "vendored"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "always"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "xyz::polymorphic and xyz::indirect behind jinja2::types (value_ptr.h), used by Value, GenericList and GenericMap"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "Value-semantic owning pointers for the public value model; standardised as std::indirect/std::polymorphic in C++26"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Keep (header-only, installed). Switch to std:: at a C++26 floor"
+        },
+        {
+          "name": "jinja2cpp:modified",
+          "value": "indirect: Clang incomplete-type fix (0edc34d); polymorphic: default constructor constrained on the allocator for MSVC std::variant (0071); polymorphic_cxx14.h records no upstream revision"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "include/jinja2cpp/polymorphic_value/indirect_cxx14.h sha256:5feea68a8a6a91f99743a99cdcf077dfef6a55d8256e63a2d56bfbb820fdac6d"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "include/jinja2cpp/polymorphic_value/polymorphic_cxx14.h sha256:0208577d0f465f2e346c58890fccaceaf025ea7a568ad0de1d1debd6849ca4ea"
+        }
+      ]
+    },
+    {
+      "type": "data",
+      "bom-ref": "unicode-data",
+      "name": "Unicode Character Database (via Python unicodedata)",
+      "version": "15.0.0",
+      "supplier": {
+        "name": "Unicode, Inc."
+      },
+      "scope": "required",
+      "licenses": [
+        {
+          "license": {
+            "id": "Unicode-3.0"
+          }
+        }
+      ],
+      "purl": "pkg:generic/unicode-ucd@15.0.0",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://www.unicode.org/Public/15.0.0/ucd/"
+        }
+      ],
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "mandatory"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "build"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "internal"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "generated"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "always"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "Code-point tables for str.isprintable/isalpha/..., upper/lower/title/casefold, int() digit handling"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "Python-identical string predicates and case mapping without ICU"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Data only, no dependency at build time (Python is needed only to regenerate). Acquisition decision is still open in docs/tasks/0187 and 0186"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "src/unicode_printable.h sha256:bb7537033f18a1847f7cdb89bb19bcdee61f8afe6fd0d24891ab6967bccb38dc"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "src/unicode_tables.h sha256:5d3160113753deb6394ff66d867522a1c0303da0bfcc83bafaa027cfbbe3b96b"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "src/unicode_case.h sha256:5e7881179bb8cedcc76abef282540138f317cda02286077ced320d06640ce3c3"
+        },
+        {
+          "name": "jinja2cpp:generator",
+          "value": "scripts/gen_unicode_printable.py"
+        },
+        {
+          "name": "jinja2cpp:generator",
+          "value": "scripts/gen_unicode_tables.py"
+        },
+        {
+          "name": "jinja2cpp:generator",
+          "value": "scripts/gen_unicode_case.py"
+        }
+      ]
+    },
+    {
+      "type": "data",
+      "bom-ref": "html-entities",
+      "name": "HTML5 named character references (via Python html.entities)",
+      "version": "python-3.12",
+      "supplier": {
+        "name": "Python Software Foundation (table from the WHATWG HTML standard)"
+      },
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "83c2e14ba7b52dfd5befbba8f3bca85e0f8bbaf5696cc647c8372602ebc5ed1e"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "PSF-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:generic/python-html-entities@3.12",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://docs.python.org/3.12/library/html.entities.html"
+        }
+      ],
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "mandatory"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "build"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "internal"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "generated"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "always"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "Entity table for MarkupSafe-compatible unescape/striptags"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "Same entity set as Python's html.unescape"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Data only; keep"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "src/html_entities.h sha256:83c2e14ba7b52dfd5befbba8f3bca85e0f8bbaf5696cc647c8372602ebc5ed1e"
+        },
+        {
+          "name": "jinja2cpp:generator",
+          "value": "scripts/gen_html_entities.py"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "jinja2cpp",
+      "dependsOn": [
+        "expected-lite",
+        "fmt",
+        "boost",
+        "nlohmann-json",
+        "rapidjson",
+        "robin-hood-hashing",
+        "lexertk",
+        "value-types",
+        "unicode-data",
+        "html-entities"
+      ]
+    },
+    {
+      "ref": "boost",
+      "dependsOn": [
+        "boost-core",
+        "boost-container",
+        "boost-smart_ptr",
+        "boost-any",
+        "boost-iterator",
+        "boost-filesystem",
+        "boost-algorithm",
+        "boost-predef",
+        "boost-json",
+        "boost-unordered",
+        "boost-conversion",
+        "boost-lexical_cast",
+        "boost-numeric_conversion",
+        "boost-variant",
+        "boost-optional"
+      ]
+    }
+  ]
+}
