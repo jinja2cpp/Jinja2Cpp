@@ -145,8 +145,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0073](0073-template-api-2-0.md) | 2.0 API: `BasicTemplate<CharT>` | release | medium | done |
 | [0074](0074-template-env-api-2-0.md) | 2.0 API: `TemplateEnv` pimpl and `Settings` | release | medium | done |
 | [0075](0075-containers-reflection-api-2-0.md) | 2.0 API: containers, reflection, errors | release | medium | done |
-| [0076](0076-abi-namespace-and-headers.md) | 2.0: inline ABI namespace, header layout, version | release | medium | open |
-| [0077](0077-migration-script.md) | 2.0 migration script and notes | release | medium | open |
+| [0076](0076-abi-namespace-and-headers.md) | 2.0: inline ABI namespace, header layout, version | release | high | open |
+| [0077](0077-migration-script.md) | 2.0 migration script and notes | release | high | open |
 | [0078](0078-nix-toolchains.md) | Pinned toolchains from Nix for the tool and bleeding-edge rows | ci | low | open |
 | [0079](0079-msvc-runtime-shared-override.md) | Warn when `JINJA2CPP_MSVC_RUNTIME_TYPE` is overridden by a shared build | build | low | open |
 | [0080](0080-nodiscard-result-void.md) | `[[nodiscard]]` on `Load` and `Render`, whose only output is an error | api | low | open |
@@ -179,7 +179,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0107](0107-string-filter-divergences.md) | String filter divergences found by the 0061 differential | parity | low | open |
 | [0108](0108-include-context-copy.md) | `include` copies every scope of the caller | perf | medium | done |
 | [0109](0109-load-costs-round-2.md) | Load costs after 0103: filter construction, wrappers, the lexer | perf | low | done |
-| [0110](0110-namespace-self-reference-leak.md) | A namespace that holds itself leaks | evaluator | medium | open |
+| [0110](0110-namespace-self-reference-leak.md) | A namespace that holds itself leaks | evaluator | high | open |
 | [0111](0111-sum-attribute-generated-list-hang.md) | `sum(attribute=...)` never returns on a generated list | robustness | medium | done |
 | [0112](0112-generated-item-string-view-lifetime.md) | Strings from generator items outlive the item under autoescape `join` | robustness | medium | done |
 | [0113](0113-output-writer.md) | Output: one virtual call and one append per fragment | perf | medium | done |
@@ -241,7 +241,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0169](0169-caller-without-call-block.md) | `caller()` without a call block raises | parity | low | done |
 | [0170](0170-dictsort-pair-tuple-semantics.md) | A dictsort pair still differs from a tuple in `in`, `==`, tests and truthiness | parity | low | done |
 | [0171](0171-gcc-sanitizer-stringop-overflow.md) | The GCC address+undefined build fails in `OutStream::WriteInt` | build | medium | done |
-| [0172](0172-value-unsigned-overflow.md) | Unsigned values above `INT64_MAX` wrap to negative | robustness | low | open |
+| [0172](0172-value-unsigned-overflow.md) | Unsigned values above `INT64_MAX` wrap to negative | robustness | high | open |
 | [0173](0173-pprint-python-repr.md) | `pprint` prints JSON-style scalars | parity | low | done |
 | [0174](0174-msvc-c4702-suppression.md) | `/wd4702` hides unreachable code in project code on MSVC | build | low | open |
 | [0175](0175-recursive-loop-filter-leftovers.md) | Recursive loop filter: the outer `loop` at depth > 0, and the legacy `recursive if` order | parity | low | done |
@@ -252,7 +252,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0180](0180-markup-from-cpp.md) | Markup from C++ | api | low | open |
 | [0181](0181-select-autoescape.md) | Autoescape chosen by template name (`select_autoescape`) | api | low | open |
 | [0182](0182-markup-percent-repr.md) | `%r` and containers in Markup's `%` | parity | low | done |
-| [0183](0183-context-callable-positional-arg.md) | A user callable taking `*context` gets None for a positional argument | api | medium | open |
+| [0183](0183-context-callable-positional-arg.md) | A user callable taking `*context` gets None for a positional argument | api | high | open |
 | [0184](0184-gcc13-sanitizer-stringop-overflow.md) | The GCC 13 sanitizer build fails with -Wstringop-overflow | build | low | open |
 | [0185](0185-fuzz-oom-below-sequence-cap.md) | The fuzz job fails on lists below the sequence cap | robustness | medium | done |
 | [0186](0186-python-oracle-target.md) | Which Python and Jinja2 the parity oracle targets, and how users choose | parity | medium | open |
@@ -288,3 +288,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0216](0216-volatile-autoescape.md) | `{% autoescape %}` with a runtime value (volatile EvalContext) | parity | low | open |
 | [0219](0219-loop-iteration.md) | Iterating `loop` takes the rest of the loop | parity | low | open |
 | [0220](0220-call-argument-unpacking.md) | `f(*args, **kwargs)` in calls | parity | medium | open |
+| [0221](0221-release-acceptance-and-rc-signoff.md) | Define 2.0 release gates and release-candidate signoff | release | high | open |
+| [0222](0222-downstream-1x-migration-trial.md) | Prove a downstream upgrade from 1.3.2 to 2.0 | release | high | open |
+| [0223](0223-embedding-lifecycle-integration-tests.md) | Test embedding behavior across lifetime, cache and callback boundaries | robustness | high | open |
+| [0224](0224-template-trust-and-loader-boundary.md) | Define the template trust model and filesystem-loader boundary | robustness | high | open |
+| [0225](0225-release-artifact-consumer-gate.md) | Validate the release source artifact from a clean downstream consumer | release | high | open |
+| [0226](0226-license-metadata-and-distribution.md) | Reconcile package license metadata and ship required notices | release | high | open |
+| [0227](0227-supported-docs-and-example-surface.md) | Choose and verify the documentation and examples supported for 2.0 | release | high | open |
+| [0228](0228-task-number-uniqueness.md) | Two task files can share a number | agents | medium | open |
