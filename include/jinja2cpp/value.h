@@ -641,7 +641,7 @@ public:
      */
     JINJA2CPP_EXPORT std::to_chars_result ToChars(char* first, char* last) const noexcept;
 
-    [[nodiscard]] bool IsEqual(const Value& rhs) const;
+    [[nodiscard]] JINJA2CPP_EXPORT bool IsEqual(const Value& rhs) const;
 
     // 1.x names, kept as one-line forwards until 3.0 (docs/api-2.0.md 5.1)
 
@@ -948,8 +948,8 @@ private:
     uint64_t m_counter{};
 };
 
-bool operator==(const UserCallable& lhs, const UserCallable& rhs);
-bool operator!=(const UserCallable& lhs, const UserCallable& rhs);
+JINJA2CPP_EXPORT bool operator==(const UserCallable& lhs, const UserCallable& rhs);
+JINJA2CPP_EXPORT bool operator!=(const UserCallable& lhs, const UserCallable& rhs);
 
 
 inline Value::Value(const UserCallable& callable)

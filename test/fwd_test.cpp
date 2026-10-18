@@ -58,3 +58,16 @@ TEST(FwdTest, DeclaredThroughFwdHeaderUsedThroughUmbrella)
     const auto out = fwd_test::Describe(jinja2::Reflect(fwd_test::Local{ 42 }), &tpl, env, { { "name", "fwd" } }, { 1, 2 });
     EXPECT_EQ("42 fwd 1,2", out.AsString());
 }
+
+// Public functions defined in the library must be exported: a shared build hides the rest
+// (-fvisibility=hidden), and UserCallable's inline copy assignment calls operator==
+TEST(FwdTest, PublicComparisonsLinkAgainstSharedLibrary)
+{
+    EXPECT_TRUE(jinja2::Value(1).IsEqual(jinja2::Value(1)));
+
+    jinja2::UserCallable first;
+    jinja2::UserCallable second;
+    second = first;
+    EXPECT_TRUE(first == second);
+    EXPECT_FALSE(first != second);
+}
