@@ -15,19 +15,28 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <csignal>
 #include <cstddef>
+#include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <memory>
 #include <utility>
 #include <new>
 #include <string>
 #include <thread>
+#if defined(_MSC_VER) && defined(__cpp_lib_stacktrace)
+#include <iostream>
+#include <stacktrace>
+#endif
 
 // NOLINTBEGIN(cppcoreguidelines-no-malloc): the replaced global allocation functions sit on malloc and free
 namespace
 {
 // The number of allocations still to succeed before one fails; negative when no failure is armed
 std::atomic<long> g_countdown{ -1 };
+// The countdown last armed, for the crash report below
+std::atomic<long> g_armed{ -1 };
 
 void* Allocate(std::size_t size)
 {
@@ -100,7 +109,11 @@ using namespace jinja2;
 // Fails the allocation after `succeed` more have succeeded, until disarmed
 struct Injection
 {
-    explicit Injection(long succeed) { g_countdown.store(succeed, std::memory_order_relaxed); }
+    explicit Injection(long succeed)
+    {
+        g_armed.store(succeed, std::memory_order_relaxed);
+        g_countdown.store(succeed, std::memory_order_relaxed);
+    }
     ~Injection() { g_countdown.store(-1, std::memory_order_relaxed); }
     Injection(const Injection&) = delete;
     Injection& operator=(const Injection&) = delete;
@@ -109,6 +122,34 @@ struct Injection
 };
 
 constexpr long maxAllocations = 100000;
+
+// A failure that ends the process (std::terminate, an abort, an access violation) prints no gtest
+// result, so say which allocation was failing, with a stack where the library offers one (MSVC at
+// C++23): the injected failures can only be traced on the platform that crashes
+void ReportCrash(const char* what)
+{
+    g_countdown.store(-1, std::memory_order_relaxed);
+    std::fprintf(stderr, "%s with allocation %ld failing\n", what, g_armed.load(std::memory_order_relaxed));
+#if defined(_MSC_VER) && defined(__cpp_lib_stacktrace)
+    std::cerr << std::stacktrace::current() << std::endl;
+#endif
+    std::fflush(stderr);
+}
+
+void InstallCrashReport()
+{
+    std::set_terminate([] {
+        ReportCrash("std::terminate");
+        std::abort();
+    });
+    for (const int sig : { SIGSEGV, SIGABRT })
+    {
+        std::signal(sig, [](int signal) {
+            ReportCrash(signal == SIGSEGV ? "SIGSEGV" : "SIGABRT");
+            std::_Exit(3);
+        });
+    }
+}
 
 // A Windows DLL allocates with its own CRT's operator new, which the replacement above does not reach
 #if defined(_WIN32) && defined(JINJA2CPP_LINK_AS_SHARED)
@@ -122,6 +163,7 @@ constexpr long maxAllocations = 100000;
 template<typename F>
 void OnFreshThread(F&& f)
 {
+    InstallCrashReport();
     std::thread thread(std::forward<F>(f));
     thread.join();
 }
