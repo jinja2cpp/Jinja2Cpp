@@ -999,28 +999,63 @@ static_assert(std::is_nothrow_constructible_v<Value, int64_t>);
 static_assert(std::is_nothrow_constructible_v<Value, uint32_t>);
 static_assert(!std::is_nothrow_constructible_v<Value, uint64_t>);
 
-// An unsigned value above INT64_MAX throws instead of wrapping to a negative int64_t (task 0172)
-TEST(BasicTests, ValueFromUnsignedAboveInt64MaxThrows)
+// An unsigned value above INT64_MAX is stored as a BigInt instead of wrapping (task 0172, 0269)
+TEST(BasicTests, ValueFromUnsignedAboveInt64MaxIsBigInt)
 {
     constexpr auto int64Max = std::numeric_limits<int64_t>::max();
     constexpr auto above = static_cast<uint64_t>(int64Max) + 1;
 
+    EXPECT_TRUE(Value(int64Max).IsInt());
     EXPECT_EQ(int64Max, Value(static_cast<uint64_t>(int64Max)).AsInt());
     EXPECT_EQ(int64Max, Reflect(static_cast<uint64_t>(int64Max)).AsInt());
-    EXPECT_THROW(Value{ std::numeric_limits<unsigned long long>::max() }, std::overflow_error);
-    EXPECT_THROW(Value{ above }, std::overflow_error);
-    EXPECT_THROW(Value{ static_cast<size_t>(-1) }, std::overflow_error);
-    EXPECT_THROW(Reflect(static_cast<uint64_t>(-1)), std::overflow_error);
-    const uint64_t big = above;
-    EXPECT_THROW(Reflect(&big), std::overflow_error);
 
-    // A lazily reflected item fails the render loudly
+    const Value max{ std::numeric_limits<unsigned long long>::max() };
+    EXPECT_TRUE(max.IsBigInt());
+    EXPECT_FALSE(max.IsInt());
+    EXPECT_EQ("18446744073709551615", max.AsBigInt().ToString());
+    EXPECT_EQ("18446744073709551615", max.ToString());
+    EXPECT_EQ(L"18446744073709551615", max.ToWString());
+    EXPECT_EQ("9223372036854775808", Value{ above }.ToString());
+    EXPECT_EQ("18446744073709551615", Value{ static_cast<size_t>(-1) }.ToString());
+    EXPECT_EQ("18446744073709551615", Reflect(static_cast<uint64_t>(-1)).AsBigInt().ToString());
+    const uint64_t big = above;
+    EXPECT_EQ("9223372036854775808", Reflect(&big).AsBigInt().ToString());
+
+    char buffer[32] = {};
+    const auto [end, ec] = max.ToChars(std::begin(buffer), std::end(buffer));
+    EXPECT_EQ(std::errc(), ec);
+    EXPECT_EQ("18446744073709551615", std::string_view(buffer, static_cast<size_t>(end - buffer)));
+
+    const BigInt* out = nullptr;
+    EXPECT_TRUE(max.AsBigInt(out));
+    ASSERT_NE(nullptr, out);
+    EXPECT_EQ(BigInt(std::numeric_limits<uint64_t>::max()), *out);
+    EXPECT_EQ(out, max.GetIf<BigInt>());
+    const Value five(5);
+    EXPECT_FALSE(five.AsBigInt(out));
+    EXPECT_EQ(nullptr, out);
+    EXPECT_THROW((void)Value(5).AsBigInt(), std::bad_variant_access);
+    int64_t asInt = 0;
+    EXPECT_FALSE(max.AsInt(asInt));
+
+    // Equal by value; an int64_t and a BigInt are different alternatives, as an int and a double are
+    BigInt parsed;
+    ASSERT_TRUE(BigInt::TryParse("18446744073709551615", parsed));
+    EXPECT_EQ(max, Value(parsed));
+    EXPECT_NE(max, Value(Value{ above }));
+    EXPECT_NE(Value(5), Value(BigInt(5)));
+
+    // Until templates hold big integers (task 0270), one that enters a template fails the render loudly
     Template tpl;
     ASSERT_TRUE(tpl.Load("{{ items[0] }}"));
     const auto result = tpl.RenderAsString({ { "items", Reflect(std::vector<uint64_t>{ above }) } });
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode());
     EXPECT_EQ("9223372036854775807", tpl.RenderAsString({ { "items", Reflect(std::vector<uint64_t>{ static_cast<uint64_t>(int64Max) }) } }).value());
+    ASSERT_TRUE(tpl.Load("{{ n }}"));
+    const auto direct = tpl.RenderAsString({ { "n", max } });
+    ASSERT_FALSE(direct.has_value());
+    EXPECT_EQ(ErrorCode::UnexpectedException, direct.error().GetCode());
 }
 
 TEST(BasicTests, ValueFromNullptrIsNone)
@@ -1043,7 +1078,9 @@ TEST(ValueApiTest, PredicatesNameTheStoredType)
     EXPECT_TRUE(Value(Reflect(std::vector<int>{ 1 })).IsList());
     EXPECT_TRUE(Value(ValuesMap{ { "k", 1 } }).IsMap());
     EXPECT_TRUE(Value(UserCallable()).IsCallable());
+    EXPECT_TRUE(Value(BigInt(5)).IsBigInt());
 
+    EXPECT_FALSE(Value(5).IsBigInt());
     EXPECT_FALSE(Value(5).IsDouble());
     EXPECT_FALSE(Value(true).IsInt());
     EXPECT_FALSE(Value(std::string_view("s")).IsString());
@@ -1232,11 +1269,16 @@ TEST(ValueApiTest, VisitUnwrapsContainers)
         {
             return "int";
         }
+        else if constexpr (std::is_same_v<T, BigInt>)
+        {
+            return "big " + item.ToString();
+        }
         else
         {
             return "other";
         }
     };
+    EXPECT_EQ("big 18446744073709551615", Visit(kind, Value(std::numeric_limits<uint64_t>::max())));
     EXPECT_EQ("list of 2", Visit(kind, Value(ValuesList{ 1, 2 })));
     EXPECT_EQ("map", Visit(kind, Value(ValuesMap{})));
     EXPECT_EQ("callable", Visit(kind, Value(UserCallable())));

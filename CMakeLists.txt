@@ -369,6 +369,7 @@ if (JINJA2CPP_BUILD_TESTS)
     set(JINJA2CPP_TEST_SOURCES
         test/autoescape_test.cpp
         test/basic_tests.cpp
+        test/big_int_test.cpp
         test/containers_api_test.cpp
         test/errors_test.cpp
         test/expressions_test.cpp

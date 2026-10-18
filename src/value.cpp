@@ -21,6 +21,13 @@ namespace
 template<typename CharT>
 void AppendText(const Value& val, std::basic_string<CharT>& out)
 {
+    // A template cannot hold a big integer yet (docs/tasks/0270), but its text is all {{ value }} prints
+    if (const auto* big = val.GetIf<BigInt>())
+    {
+        const auto& digits = big->ToString();
+        out.append(digits.begin(), digits.end());
+        return;
+    }
     const InternalValue internal = std::visit(visitors::InputValueConvertor(false, true), val.GetData());
     visitors::RenderValue(internal, out, false);
 }

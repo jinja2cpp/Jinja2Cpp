@@ -144,6 +144,12 @@ struct RecursiveUnwrapper
     {
         return arg.View();
     }
+    // A host Value read in place may hold an integer outside int64, which templates cannot
+    // hold yet (docs/tasks/0270): it fails loudly, so no visitor meets one
+    [[noreturn]] static NoneValue UnwrapRecursive(const BigInt& arg, const ValueObject* /*owner*/)
+    {
+        throw std::overflow_error("integer " + arg.ToString() + " does not fit in 64 bits");
+    }
     static ListRef UnwrapRecursive(const ListHandle& arg, const ValueObject* owner) noexcept { return ListRef(arg.accessor, owner, arg.isTuple); }
     static MapRef UnwrapRecursive(const MapHandle& arg, const ValueObject* owner) noexcept { return MapRef(arg.accessor, owner); }
     template<typename T>
@@ -631,6 +637,12 @@ struct InputValueConvertor
     result_t operator()(double val) const
     {
         return result_t(InternalValue(val));
+    }
+
+    // Integers outside int64 enter templates with docs/tasks/0270; until then they fail loudly
+    [[noreturn]] result_t operator()(const BigInt& val) const
+    {
+        throw std::overflow_error("integer " + val.ToString() + " does not fit in 64 bits");
     }
 
     template<typename T>

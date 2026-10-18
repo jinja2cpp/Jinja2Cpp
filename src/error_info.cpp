@@ -101,6 +101,8 @@ struct ValueRenderer
 
     void operator()(const jinja2::UserCallable& /*val*/) const {}
 
+    void operator()(const jinja2::BigInt& val) const { this->operator()(val.ToString()); }
+
     template<typename T>
     void operator()(const T& val) const
     {

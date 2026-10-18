@@ -174,7 +174,7 @@ struct NLohmannJsonReflector
             result = val.template get<int64_t>();
             break;
         case nlohmann::detail::value_t::number_unsigned:
-            result = detail::ToStoredInt(val.template get<uint64_t>());
+            result = Value(val.template get<uint64_t>());
             break;
         case nlohmann::detail::value_t::number_float:
             result = val.template get<double>();
@@ -210,7 +210,7 @@ struct NLohmannJsonReflector
             result = val->template get<int64_t>();
             break;
         case nlohmann::detail::value_t::number_unsigned:
-            result = detail::ToStoredInt(val->template get<uint64_t>());
+            result = Value(val->template get<uint64_t>());
             break;
         case nlohmann::detail::value_t::number_float:
             result = val->template get<double>();
