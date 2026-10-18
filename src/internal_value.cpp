@@ -2022,6 +2022,21 @@ private:
     Holder<GenericMap> m_values;
 };
 
+// A key of user data as LendItem lends its string items: a view while the data outlives the
+// render, so reading entries copies no key text (Render/dict_ops)
+template<template<typename> class Holder, typename T>
+InternalValue LendKey([[maybe_unused]] const Holder<T>& holder, const std::string& key)
+{
+    if constexpr (std::is_same_v<Holder<T>, ByRef<T>>)
+    {
+        return InternalValue(TargetStringView(std::string_view(key)));
+    }
+    else
+    {
+        return InternalValue(key);
+    }
+}
+
 template<template<typename> class Holder>
 class ValuesMapAdapter : public MapAccessorImpl<ValuesMapAdapter<Holder>>
 {
@@ -2064,7 +2079,7 @@ public:
 
         for (const auto& [key, value] : m_values.Get())
         {
-            result.push_back(KeyValuePair{ InternalValue(key), LendItem(m_values, value) });
+            result.push_back(KeyValuePair{ LendKey(m_values, key), LendItem(m_values, value) });
         }
 
         return result;

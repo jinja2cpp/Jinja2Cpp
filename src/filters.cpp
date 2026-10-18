@@ -468,10 +468,8 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     struct SortItem
     {
         KeyValuePair* pair;
-        // The key as UTF-8 text (lowered unless case-sensitive) when every key is a string
+        // The lowered key when case-insensitive and every key is a string
         std::string sortKey;
-        // The key otherwise; Python lowers only a str key, not the elements of a tuple
-        InternalValue sortValue;
     };
     bool (*comparator)(const SortItem& left, const SortItem& right) = nullptr;
     bool lowerKeys = false;
@@ -484,15 +482,22 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     {
         sortByKey = true;
         lowerKeys = !ConvertToBool(isCsVal);
-        keysAreStrings = std::all_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return IsStringValue(entry.key); });
-        if (keysAreStrings)
+        // Narrow text, as map keys are UTF-8 (a template dict converts wide keys)
+        keysAreStrings = std::all_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return AsStringView<char>(entry.key).has_value(); });
+        if (keysAreStrings && lowerKeys)
         {
             comparator = [](const SortItem& left, const SortItem& right) { return left.sortKey < right.sortKey; };
         }
+        else if (keysAreStrings)
+        {
+            comparator = [](const SortItem& left, const SortItem& right) { return *AsStringView<char>(left.pair->key) < *AsStringView<char>(right.pair->key); };
+        }
         else
         {
+            // Python lowers only str keys, and a str key next to a key of another type
+            // fails the comparison either way, so other keys compare as they are
             comparator = [](const SortItem& left, const SortItem& right) {
-                return CompareForOrder(left.sortValue, right.sortValue, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive);
+                return CompareForOrder(left.pair->key, right.pair->key, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive);
             };
         }
     }
@@ -521,30 +526,10 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     tempVector.reserve(entries.size());
     for (auto& entry : entries)
     {
-        SortItem item{ &entry, std::string(), InternalValue() };
-        if (sortByKey && keysAreStrings)
+        SortItem item{ &entry, std::string() };
+        if (sortByKey && keysAreStrings && lowerKeys)
         {
-            const auto text = AsString(entry.key);
-            if (lowerKeys)
-            {
-                detail::LowerUtf8(text, item.sortKey);
-            }
-            else
-            {
-                item.sortKey = text;
-            }
-        }
-        else if (sortByKey)
-        {
-            if (lowerKeys && IsStringValue(entry.key))
-            {
-                detail::LowerUtf8(AsString(entry.key), item.sortKey);
-                item.sortValue = InternalValue(item.sortKey);
-            }
-            else
-            {
-                item.sortValue = entry.key;
-            }
+            detail::LowerUtf8(*AsStringView<char>(entry.key), item.sortKey);
         }
         tempVector.push_back(std::move(item));
     }
