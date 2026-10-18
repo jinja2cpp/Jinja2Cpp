@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: high
 area: release
 touches: [docs/release-2.0.md]
@@ -41,3 +41,8 @@ runs and records the exact candidate commit for validation.
 
 **Next.** Use the gates to choose the stabilization queue and RC signoff; close the
 linked implementation tasks independently.
+
+**Progress.** docs/release-2.0.md has the gates (G1-G10), owners, accepted limitations,
+compatibility promises, RC procedure and the decision list D1-D14 for Ruslan, including
+the 0178/0230 conflict (D3). #556 is confirmed to have closed 0179. The task stays
+in progress until the decisions are recorded and an RC commit is signed off.
