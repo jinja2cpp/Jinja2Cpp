@@ -1,7 +1,7 @@
 #ifndef JINJA2CPP_MARKUP_H
 #define JINJA2CPP_MARKUP_H
 
-#include <ostream>
+#include <iosfwd>
 #include <string>
 #include <string_view>
 #include <utility>
