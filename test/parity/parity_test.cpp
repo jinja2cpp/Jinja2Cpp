@@ -317,7 +317,7 @@ std::string StrOf(const jinja2::Value& v)
 // s in the character type of like
 jinja2::Value StrLike(const jinja2::Value& like, const std::string& s)
 {
-    const bool wide = std::get_if<std::wstring>(&like.GetData()) != nullptr || std::get_if<std::wstring_view>(&like.GetData()) != nullptr;
+    const bool wide = like.IsWString() || std::get_if<std::wstring_view>(&like.GetData()) != nullptr;
     return wide ? jinja2::Value(Utf8ToWide(s)) : jinja2::Value(s);
 }
 

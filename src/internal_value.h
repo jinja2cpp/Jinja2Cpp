@@ -988,7 +988,9 @@ public:
         std::visit([this](auto view) { InitView(view); }, val);
     }
 
-    InternalValue(ValueRef val) noexcept // NOLINT(google-explicit-constructor)
+    // Explicit: a direct-initialised InternalValue(value) of a host Value would otherwise make
+    // a ValueRef through ReferenceWrapper's implicit constructor (nothing makes one, 0278)
+    explicit InternalValue(ValueRef val) noexcept
         : m_imm(val)
     {
     }

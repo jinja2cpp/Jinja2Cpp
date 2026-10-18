@@ -26,3 +26,10 @@ option possible without making it required.
 **Done when.** `Escape("<a&'\">")` equals `Markup("&lt;a&amp;&#39;&#34;&gt;")`, a Markup
 argument is returned as is, and a table in `test/` pins both against Python's
 `markupsafe.escape`. Documented in docs/api-2.0.md section 3.1.
+
+**Also (found by the 0180 verifier).** A typed `MakeCallable` parameter of type `Markup`
+(`ArgInfoT<Markup>`) can never be filled: `ParamUnwrapper` hands a Markup argument over as
+its base `std::string`, and there is no implicit string-to-Markup conversion. Either let a
+`Markup` parameter take a Markup argument (and reject or escape a plain string, as
+`markupsafe.escape` would), or document that callables needing the flag take
+`UserCallableParams`.

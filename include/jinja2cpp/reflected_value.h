@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_REFLECTED_VALUE_H
 #define JINJA2CPP_REFLECTED_VALUE_H
 
+#include "markup.h"
 #include "value.h"
 
 #include <jinja2cpp/generic_list.h>
@@ -631,6 +632,14 @@ struct Reflector<std::basic_string<CharT>>
     {
         return Value(*str);
     }
+};
+
+// A Markup stays Markup: the std::basic_string specialisation does not match a derived class
+template<typename CharT>
+struct Reflector<BasicMarkup<CharT>>
+{
+    static auto Create(BasicMarkup<CharT> str) { return Value(std::move(str)); }
+    static auto CreateFromPtr(const BasicMarkup<CharT>* str) { return Value(*str); }
 };
 
 template<typename CharT>

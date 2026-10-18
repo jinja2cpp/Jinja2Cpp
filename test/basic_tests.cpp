@@ -1226,6 +1226,18 @@ TEST(ValueApiTest, VisitUnwrapsContainers)
 }
 
 // Markup is a string that a template does not escape (docs/tasks/0180); is-a: the string accessors accept it
+TEST(ValueApiTest, ReflectedMarkupStaysMarkup)
+{
+    EXPECT_TRUE(jinja2::Reflect(Markup("<b>")).IsMarkup());
+    EXPECT_TRUE(jinja2::Reflect(WMarkup(L"<b>")).IsWMarkup());
+    const Markup field("<i>");
+    EXPECT_TRUE(jinja2::Reflect(&field).IsMarkup());
+    const Value list = jinja2::Reflect(std::vector<Markup>{ Markup("<u>") });
+    ASSERT_TRUE(list.IsList());
+    const GenericList items = list.ToGenericList();
+    EXPECT_TRUE((*items.begin()).IsMarkup());
+}
+
 TEST(ValueApiTest, MarkupIsAStringTheTemplateDoesNotEscape)
 {
     static_assert(sizeof(Value) == sizeof(detail::ValueDataBeforeMarkup), "adding Markup must not grow Value");
