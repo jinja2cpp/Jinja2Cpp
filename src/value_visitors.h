@@ -41,9 +41,6 @@ namespace jinja2
 namespace detail
 {
 
-// The value a host Value seen through a ValueRef converts to, lending its text (internal_value.cpp)
-InternalValue ConvertValueRef(const ValueRef& ref);
-
 // Python's a.lower() <=> b.lower(), comparing code points: -1, 0 or 1. The full Unicode
 // mapping (string_converter_filter.cpp); CompareIgnoreCase calls it only for non-ASCII text
 int CompareLowerUnicode(std::string_view left, std::string_view right);
@@ -174,47 +171,30 @@ private:
     }
 };
 
-// A host value seen through a ValueRef is visited as the value it converts to, by a second
-// call on the converted value. Visiting the Value's own variant in place would instantiate
-// every visitor for its alternatives too, and Apply2 for their products: each new Value
-// alternative then grows every unit that applies a visitor, past GCC's inlining budget
-// (docs/tasks/0180)
-inline bool IsValueRef(const InternalValue& val) noexcept
-{
-    return std::holds_alternative<ValueRef>(InternalValueAccess::Data(val));
-}
-JINJA2CPP_COLD_INLINE InternalValue ResolveValueRef(const InternalValue& val)
-{
-    const auto* ref = std::get_if<ValueRef>(&InternalValueAccess::Data(val));
-    return ref ? ConvertValueRef(*ref) : val;
-}
 } // namespace detail
 
+// What a value holds is visited in place. A ValueRef (a host Value seen by reference, which
+// nothing makes today) reaches the visitor as itself; visiting the Value's own variant
+// instead instantiated every visitor for its alternatives too, and Apply2 for their
+// products, which grew every unit that applies a visitor past GCC's inlining budget once
+// Markup joined the Value (docs/tasks/0180)
 template<typename V, typename... Args>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): args construct a visitor per alternative
 auto Apply(const InternalValue& val, Args&&... args)
 {
-    if (!detail::IsValueRef(val))
-    {
-        auto v = V(args...);
-        return std::visit(detail::RecursiveUnwrapper<V, 1>(&v, { detail::InternalValueAccess::Object(val) }), detail::InternalValueAccess::Data(val));
-    }
-    return Apply<V>(detail::ResolveValueRef(val), args...);
+    auto v = V(args...);
+    return std::visit(detail::RecursiveUnwrapper<V, 1>(&v, { detail::InternalValueAccess::Object(val) }), detail::InternalValueAccess::Data(val));
 }
 
 template<typename V, typename... Args>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): args construct a visitor per alternative
 auto Apply2(const InternalValue& val1, const InternalValue& val2, Args&&... args)
 {
-    if (!detail::IsValueRef(val1) && !detail::IsValueRef(val2))
-    {
-        using detail::InternalValueAccess;
-        auto v = V(args...);
-        return std::visit(detail::RecursiveUnwrapper<V, 2>(&v, { InternalValueAccess::Object(val1), InternalValueAccess::Object(val2) }),
-                          InternalValueAccess::Data(val1),
-                          InternalValueAccess::Data(val2));
-    }
-    return Apply2<V>(detail::ResolveValueRef(val1), detail::ResolveValueRef(val2), args...);
+    using detail::InternalValueAccess;
+    auto v = V(args...);
+    return std::visit(detail::RecursiveUnwrapper<V, 2>(&v, { InternalValueAccess::Object(val1), InternalValueAccess::Object(val2) }),
+                      InternalValueAccess::Data(val1),
+                      InternalValueAccess::Data(val2));
 }
 
 bool ConvertToBool(const InternalValue& val);

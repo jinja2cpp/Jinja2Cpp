@@ -226,7 +226,6 @@ TEST(InternalValueLayoutTest, CopiesOfAGeneratorIterateApart)
         EXPECT_EQ(anchored, copy.ShouldExtendLifetime());
     }
 }
-#endif
 
 namespace
 {
@@ -268,3 +267,4 @@ TEST(InternalValueLayoutTest, HostMarkupRoundTrips)
         EXPECT_TRUE(IntValue2Value(InternalValue(std::string_view(text)).SetMarkup()).IsMarkup()) << size;
     }
 }
+#endif // JINJA2CPP_LINK_AS_SHARED
