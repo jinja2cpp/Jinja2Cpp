@@ -393,6 +393,7 @@ public:
             if (m_settings->hasRenderLimits)
             {
                 CheckRenderOutput();
+                detail::PollDeadline();
             }
             context.TakeTopScope(maps.TopScope());
             // Stored only when the output outgrows the hint or needs less than half of it, so

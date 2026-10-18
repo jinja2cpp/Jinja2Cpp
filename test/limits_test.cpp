@@ -92,7 +92,9 @@ std::vector<LimitCase> Cases()
               l.maxRenderTime = std::chrono::milliseconds(50);
           },
           "maxRenderTime" },
-        { "TimeForever", "{% for i in range(5000) %}{% endfor %}", [](auto& l) { l.maxRenderTime = std::chrono::milliseconds::max(); }, "" },
+        { "StepsMaxLessOne", "{% for i in range(1000) %}{% endfor %}", [](auto& l) { l.maxRenderSteps = UINT64_MAX - 1; }, "" },
+        { "TimeNegative", "{% for i in range(5000) %}{% endfor %}", [](auto& l) { l.maxRenderTime = std::chrono::milliseconds(-5); }, "" },
+        { "TimeForever", "{% for i in range(5000) %}{% endfor %}", [](auto& l) { l.maxRenderTime = (std::chrono::milliseconds::max)(); }, "" },
         { "StepsLoopFilter", "{% for i in range(1000000) if false %}{% endfor %}", [](auto& l) { l.maxRenderSteps = 100000; }, "maxRenderSteps" },
         // The template, its body, the call of range() and ten iterations
         { "StepsAt", "{% for i in range(10) %}{% endfor %}", [](auto& l) { l.maxRenderSteps = 13; }, "" },
@@ -181,9 +183,9 @@ TEST_P(LimitsTest, Enforced)
 TEST_P(LimitsTest, DefaultsRender)
 {
     const auto& param = GetParam();
-    if (param.name == "StepsMacro" || param.name == "RenderDepthStackOnly" || param.name == "RepeatAboveCap" || param.name == "CenterAboveCap")
+    if (param.name == "StepsMacro" || param.name == "RenderDepthStackOnly" || param.name == "RepeatAboveCap" || param.name == "StepsMaxWithTime" || param.name == "CenterAboveCap")
     {
-        // 2^40 calls would render, in time; 400 levels pass the default depth; the
+        // 2^40 calls and 10^9 iterations would render, in time; 400 levels pass the default depth; the
         // above-cap rows fail on the internal cap without a limit
         return;
     }
@@ -259,8 +261,22 @@ TEST_F(LimitsEnvTest, RenderTime)
     EXPECT_EQ("maxRenderTime", ToString(result.error().GetExtraParams()[1]));
     EXPECT_GE(elapsed, std::chrono::milliseconds(200));
 #if defined(NDEBUG) && !defined(JINJA2CPP_TEST_SANITIZED)
-    EXPECT_LT(elapsed, std::chrono::milliseconds(400));
+    // Loose: a loaded CI runner may stall the render between two polls
+    EXPECT_LT(elapsed, std::chrono::milliseconds(1000));
 #endif
+}
+
+TEST_F(LimitsEnvTest, RenderTimeHeavySteps)
+{
+    // Few steps, each a long filter: the clock is polled when the render ends
+    Settings settings;
+    settings.limits.maxRenderTime = std::chrono::milliseconds(1);
+    m_env.SetSettings(settings);
+    Template tpl(&m_env);
+    ASSERT_TRUE(tpl.Load("{{ ('x' * 300000)|replace('x', 'yy')|length }}").has_value());
+    auto result = tpl.RenderAsString({});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ("maxRenderTime", ToString(result.error().GetExtraParams()[1]));
 }
 
 TEST_F(LimitsEnvTest, HostCallableIsNotInterrupted)

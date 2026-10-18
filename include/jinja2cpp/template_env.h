@@ -132,8 +132,9 @@ struct Settings
         //! `if` looks at, a level of \ref maxRenderDepth (the template itself, a macro call) or the evaluation of an
         //! operator, call or filter. An approximate unit, which may change between releases; 0 is no limit
         std::uint64_t maxRenderSteps = 0;
-        //! Time one Render may take, checked every 1024 steps and after each host callable returns (a callable is
-        //! not interrupted); 0, a negative time or one past the clock's range is no limit
+        //! Time one Render may take, checked every 16 steps, after each host callable returns and when the render
+        //! ends. Nothing is interrupted, so one step (a filter over a long string, a host callable) may overrun it;
+        //! 0, a negative time or one past the clock's range is no limit
         std::chrono::milliseconds maxRenderTime{ 0 };
         //! Nesting of the template, macro and caller() calls, super(), recursive loops, included, imported and parent
         //! templates (Python fails at about 250 macro calls). The depth limits stop at the thread's stack too; 0

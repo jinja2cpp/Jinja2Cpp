@@ -116,8 +116,8 @@ bool StackNearlyExhaustedSlow(std::uintptr_t frame)
 
 namespace
 {
-// Steps between two polls of the clock
-constexpr std::uint64_t StepsPerPoll = 1024;
+// Steps between two polls of the clock: few, as one step may be a long filter
+constexpr std::uint64_t StepsPerPoll = 16;
 
 // Starts the next countdown: to the end of the step budget, or to the next clock poll
 void Refill(RenderLimits& limits)
@@ -159,7 +159,7 @@ void StepsSlow()
         limits.chunk = 0;
         limits.stepsLeft = 1;
         limits.stepsTaken = limits.maxSteps + 1;
-        ThrowLimit("maxRenderSteps", "the render took more than " + std::to_string(limits.maxSteps) + " steps");
+        ThrowLimit("maxRenderSteps", "the render took more than " + std::to_string(limits.maxSteps) + " step(s)");
     }
     PollDeadline();
     Refill(limits);
