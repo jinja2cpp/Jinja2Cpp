@@ -128,10 +128,8 @@ if (NOT DEFINED JINJA2_PRIVATE_LIBS_INT)
     set(JINJA2CPP_PRIVATE_LIBS ${JINJA2CPP_PRIVATE_LIBS}
         Boost::algorithm
         Boost::any
+        Boost::container
         Boost::filesystem
-        Boost::lexical_cast
-        Boost::numeric_conversion
-        Boost::variant
         fmt
     )
 else ()
