@@ -403,11 +403,13 @@ allocates `Settings`. Parity work adds options regularly, so the alternative (fr
 Functions whose result is the point of the call carry `[[nodiscard]]` (docs/tasks/0059):
 the `const` accessors and queries of the public headers (`Value::isString`, `asString`,
 `get`, `IsEqual`, `RenderAsString`, `GetMetadata`, the error accessors, about 110 in all)
-and `TemplateEnv::LoadTemplate` and `FromString`. Code that calls one of them and drops
-the result now gets a compiler warning (`-Wunused-result`, MSVC C4834), an error under
-`-Werror`. Use the result, or cast it to `void` where dropping it is intended.
-`Template::Load` and `Render`, which return only an error, are not marked yet
-(docs/tasks/0080).
+and `TemplateEnv::LoadTemplate` and `FromString`, and `Template::Load`, `LoadFromFile`
+and `Render` (both `Template` and `TemplateW`), whose result is the only report of a parse
+or render error (docs/tasks/0080). Code that calls one of them and drops the result now
+gets a compiler warning (`-Wunused-result`, MSVC C4834), an error under `-Werror`. The
+common case is a bare `tpl.Load(source);` as 1.x examples wrote it: check the result
+(`if (auto r = tpl.Load(source); !r) { /* r.error() */ }`), or cast it to `void` where
+dropping it is intended.
 
 ### 5.6 Unknown filters and tests fail at load (release note)
 

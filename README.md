@@ -42,7 +42,8 @@ std::string source = R"(
 )";
 
 Template tpl;
-tpl.Load(source);
+if (auto loaded = tpl.Load(source); !loaded)
+    std::cerr << loaded.error() << std::endl;
 
 std::string result = tpl.RenderAsString({}).value();
 ```
@@ -73,8 +74,12 @@ jinja2::Template tpl;
 2.  Populate it with template:
 
 ```c++
-tpl.Load("{{ 'Hello World' }}!!!");
+auto loaded = tpl.Load("{{ 'Hello World' }}!!!");
 ```
+
+`Load` and `Render` return a `jinja2::Result` that holds the error when they fail, and
+they are `[[nodiscard]]`: check the result (`if (!loaded) std::cerr << loaded.error();`)
+rather than drop it.
 
 3.  Render the template:
 

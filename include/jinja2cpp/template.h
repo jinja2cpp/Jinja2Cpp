@@ -62,7 +62,8 @@ struct MetadataInfo
  * Basic usage:
  * ```c++
  * jinja2::Template tpl;
- * tpl.Load("Hello {{ name }}!");
+ * if (!tpl.Load("Hello {{ name }}!"))
+ *     return; // the result holds the parse error
  * std::string result = tpl.RenderAsString({{"name", "World"}}).value();
  * ```
  *
@@ -110,7 +111,7 @@ public:
      *
      * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
-    Result<void, CharT> Load(StringViewType source, std::string name = {});
+    [[nodiscard]] Result<void, CharT> Load(StringViewType source, std::string name = {});
     /*!
      * \brief Load template from the stream
      *
@@ -122,7 +123,7 @@ public:
      *
      * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
-    Result<void, CharT> Load(std::basic_istream<CharT>& stream, std::string name = {});
+    [[nodiscard]] Result<void, CharT> Load(std::basic_istream<CharT>& stream, std::string name = {});
     /*!
      * \brief Load template from the specified file
      *
@@ -133,7 +134,7 @@ public:
      *
      * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
-    Result<void, CharT> LoadFromFile(const std::string& fileName);
+    [[nodiscard]] Result<void, CharT> LoadFromFile(const std::string& fileName);
 
     /*!
      * \brief Render previously loaded template to the stream
@@ -145,7 +146,7 @@ public:
      *
      * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
-    Result<void, CharT> Render(std::basic_ostream<CharT>& os, const ValuesMap& params) const;
+    [[nodiscard]] Result<void, CharT> Render(std::basic_ostream<CharT>& os, const ValuesMap& params) const;
     /*!
      * \brief Render previously loaded template to the stream, taking params from a generic map
      *
@@ -153,7 +154,7 @@ public:
      * object (anything \ref Reflect turns into a \ref GenericMap).
      */
     template<typename Map, std::enable_if_t<std::is_same_v<Map, GenericMap>, int> = 0>
-    Result<void, CharT> Render(std::basic_ostream<CharT>& os, const Map& params) const
+    [[nodiscard]] Result<void, CharT> Render(std::basic_ostream<CharT>& os, const Map& params) const
     {
         return RenderGeneric(os, params);
     }
@@ -201,7 +202,7 @@ public:
 private:
     // Out of line, so that the GenericMap overloads (templates only to keep `RenderAsString({})`
     // unambiguous) are still compiled into the library.
-    Result<void, CharT> RenderGeneric(std::basic_ostream<CharT>& os, const GenericMap& params) const;
+    [[nodiscard]] Result<void, CharT> RenderGeneric(std::basic_ostream<CharT>& os, const GenericMap& params) const;
     [[nodiscard]] Result<StringType, CharT> RenderAsStringGeneric(const GenericMap& params) const;
 
     std::shared_ptr<ITemplateImpl> m_impl;
