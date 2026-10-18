@@ -72,11 +72,12 @@ tag; **A** = accepted for 2.0, tracked, does not block.
 | G9 Performance | The benchmark workflow passes against the previous master (no regression past its gate). No further gains required | — | perf track | B | `benchmark.yml` run on the candidate |
 | G10 Inventory | `scripts/sbom.py --check` and `scripts/task_index.py --check` pass; the dependency inventory matches what the release installs | [0187](tasks/0187-generated-data-acquisition.md) (SBOM stays there) | merge steward | B | format-check job |
 | G11 Tracker | Every open GitHub issue names an open task or is closed with a pointer to its fix; milestones 1.2 and 1.3 closed; external PRs #284, #199, #197 resolved | [0234](tasks/0234-github-tracker-cleanup.md) | unassigned | B | issue list on the RC date |
+| G12 Hash map successor | Vendored `robin_hood.h` (upstream archived) replaced by the successor the perf track picks, with its two local additions ported; no regression past the Cachegrind gate; `sbom/components.json` matches | [0231](tasks/0231-robin-hood-successor.md) | perf track | B (Ruslan 2026-10-18) | bench/ and Cachegrind gate results on the switch PR |
 
 Dependency order: G1 → G4 (0077 → 0222); 0226 → 0225; 0227 alongside 0077. G2, G3 and
 G5's 0226 can start now. 0230 (Boost-free core) goes before G5's validation where it can,
 so that 0226, 0225 and 0006 validate the package once (D17). Website: 0239 → 0240 →
-0241, 0242.
+0241, 0242. 0231 lands before the freeze, as it changes hot containers.
 
 ## 4. Compatibility promises
 
