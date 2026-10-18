@@ -1173,9 +1173,22 @@ static_assert(sizeof(Value) == sizeof(Value::ValueData), "Value must be its vari
 static_assert(sizeof(Markup) == sizeof(std::string) && sizeof(WMarkup) == sizeof(std::wstring), "Markup adds no data to the string");
 namespace detail
 {
-inline constexpr std::size_t kWideStringSize = sizeof(std::wstring);
+// Value's variant as it was before Markup joined it (docs/tasks/0180)
+using ValueDataBeforeMarkup = std::variant<NoneValue,
+                                           bool,
+                                           std::string,
+                                           std::wstring,
+                                           std::string_view,
+                                           std::wstring_view,
+                                           int64_t,
+                                           double,
+                                           RecWrapper<ValuesList>,
+                                           RecWrapper<ValuesMap>,
+                                           GenericList,
+                                           GenericMap,
+                                           RecWrapper<UserCallable>>;
 } // namespace detail
-static_assert(sizeof(Value) <= detail::kWideStringSize + alignof(std::max_align_t), "Value grew past a wide string plus its variant index");
+static_assert(sizeof(Value) == sizeof(detail::ValueDataBeforeMarkup), "Markup must not make Value larger");
 
 inline Value::Value() = default;
 inline Value::Value(const Value& val) = default;

@@ -1228,7 +1228,7 @@ TEST(ValueApiTest, VisitUnwrapsContainers)
 // Markup is a string that a template does not escape (docs/tasks/0180); is-a: the string accessors accept it
 TEST(ValueApiTest, MarkupIsAStringTheTemplateDoesNotEscape)
 {
-    static_assert(sizeof(Value) <= detail::kWideStringSize + alignof(std::max_align_t), "adding Markup must not grow Value");
+    static_assert(sizeof(Value) == sizeof(detail::ValueDataBeforeMarkup), "adding Markup must not grow Value");
 
     Value markup{ Markup("<b>") };
     Value plain{ "<b>" };
