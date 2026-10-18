@@ -4,6 +4,7 @@
 #include <charconv>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -16,8 +17,7 @@ namespace detail
 {
 //! Integral types a \ref BigInt is made from: all except `bool` and the character types, as for \ref Value
 template<typename T>
-inline constexpr bool IsBigIntSource = std::is_integral_v<T> && !std::is_same_v<T, bool> && !std::is_same_v<T, char> && !std::is_same_v<T, wchar_t> &&
-                                       !std::is_same_v<T, char16_t> && !std::is_same_v<T, char32_t>
+inline constexpr bool IsBigIntSource = std::is_integral_v<T> && !std::is_same_v<T, bool> && !std::is_same_v<T, char> && !std::is_same_v<T, wchar_t> && !std::is_same_v<T, char16_t> && !std::is_same_v<T, char32_t>
 #ifdef __cpp_char8_t
                                        && !std::is_same_v<T, char8_t>
 #endif
@@ -50,7 +50,7 @@ public:
         Unsigned magnitude = negative ? static_cast<Unsigned>(Unsigned(0) - static_cast<Unsigned>(value)) : static_cast<Unsigned>(value);
         // 40 digits hold any 128-bit value
         char buffer[48];
-        char* end = buffer + sizeof(buffer);
+        char* end = std::end(buffer);
         char* begin = end;
         do
         {
