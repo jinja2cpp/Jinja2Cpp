@@ -74,10 +74,99 @@ const char* OutcomeName(Outcome o)
 
 struct Divergence
 {
-    std::string kind; // an OutcomeName, or "crash" for cases that must not run
+    std::string kind;      // an OutcomeName, or "crash" for cases that must not run
+    std::string condition; // the kind's "@<feature>" or "@no<feature>" suffix; empty = always
     std::string task;
     std::string reason;
 };
+
+// Optional features that change what a case renders (docs/design/0178-big-integer-plan.md,
+// section 8). A kind with "@no<feature>" lists a divergence of builds without the feature:
+// builds with it must match. "@<feature>" is the reverse.
+const std::set<std::string>& KnownFeatures()
+{
+    static const std::set<std::string> features = { "bigint" };
+    return features;
+}
+
+// The features of this build, recorded in the JINJA2CPP_PARITY_RESULTS header.
+// "bigint" joins once the suite's default env has an arithmetic backend (tasks 0271, 0272).
+const std::set<std::string>& BuildFeatures()
+{
+    static const std::set<std::string> features;
+    return features;
+}
+
+// The feature a condition names, and whether it is negated ("@nobigint").
+std::string ConditionFeature(const std::string& condition, bool& negated)
+{
+    auto name = condition.substr(1);
+    negated = name.compare(0, 2, "no") == 0 && KnownFeatures().count(name.substr(2)) != 0;
+    return negated ? name.substr(2) : name;
+}
+
+// Whether a divergence line applies to a build with the given features.
+bool Applies(const Divergence& d, const std::set<std::string>& features)
+{
+    if (d.condition.empty())
+    {
+        return true;
+    }
+    bool negated = false;
+    const bool has = features.count(ConditionFeature(d.condition, negated)) != 0;
+    return negated ? !has : has;
+}
+
+// Reads one allow-list line into id and d; false for blank and comment lines.
+bool ParseDivergence(const std::string& line, std::string& id, Divergence& d)
+{
+    std::istringstream ls(line);
+    if (!(ls >> id) || id[0] == '#')
+    {
+        return false;
+    }
+    ls >> d.kind >> d.task;
+    std::getline(ls >> std::ws, d.reason);
+    const auto at = d.kind.find('@');
+    if (at != std::string::npos)
+    {
+        d.condition = d.kind.substr(at);
+        d.kind.resize(at);
+    }
+    return true;
+}
+
+// What is wrong with a parsed line, or an empty string.
+std::string DivergenceProblem(const Divergence& d)
+{
+    static const std::set<std::string> kinds = { "output", "rejects", "accepts", "unsupported", "platform", "crash" };
+    if (!kinds.count(d.kind))
+    {
+        return "unknown kind '" + d.kind + "'";
+    }
+    if (d.task.empty())
+    {
+        return "task is required";
+    }
+    if (d.reason.empty())
+    {
+        return "reason is required";
+    }
+    if (d.condition.empty())
+    {
+        return {};
+    }
+    if (d.kind == "platform")
+    {
+        return "kind platform takes no condition";
+    }
+    bool negated = false;
+    if (KnownFeatures().count(ConditionFeature(d.condition, negated)) == 0)
+    {
+        return "unknown condition '" + d.condition + "'";
+    }
+    return {};
+}
 
 struct ParityCase
 {
@@ -152,13 +241,12 @@ const std::map<std::string, Divergence>& Divergences()
             {
                 if (!line.empty() && line.back() == '\r') // checkouts with CRLF line endings
                     line.pop_back();
-                std::istringstream ls(line);
                 std::string id;
                 Divergence d;
-                if (!(ls >> id) || id[0] == '#')
+                if (!ParseDivergence(line, id, d))
+                {
                     continue;
-                ls >> d.kind >> d.task;
-                std::getline(ls >> std::ws, d.reason);
+                }
                 if (AreaOf(id) != area)
                 {
                     DivergenceProblems().push_back(std::string(id).append(" is listed in divergences/").append(area).append(".txt, not ").append(AreaOf(id)).append(".txt"));
@@ -513,7 +601,12 @@ void RecordOutcome(const std::string& id, const char* outcome)
 #endif
         if (!path || !*path)
             return nullptr;
-        return std::make_unique<std::ofstream>(path, std::ios::binary | std::ios::app);
+        auto file = std::make_unique<std::ofstream>(path, std::ios::binary | std::ios::app);
+        *file << "# features:";
+        for (const auto& feature : BuildFeatures())
+            *file << ' ' << feature;
+        *file << std::endl;
+        return file;
     }();
     if (out)
         *out << id << ' ' << outcome << std::endl;
@@ -543,36 +636,53 @@ std::string Details(const Json& c, const std::string& cppText)
     return details.str();
 }
 
-// Checks an outcome against the allow-list entry for id (if any), with the same rules for
-// the narrow and the wide suite.
+// Why an outcome breaks the allow-list entry d (null when id is not listed) in a build with
+// the given features, or an empty string. The same rules hold for the narrow and the wide suite.
+std::string ListingProblem(const std::string& id, const Divergence* d, Outcome outcome, const std::set<std::string>& features)
+{
+    if (d && !Applies(*d, features))
+    {
+        if (outcome == Outcome::Match)
+        {
+            return {};
+        }
+        return "new divergence (" + std::string(OutcomeName(outcome)) + "): " + id + " is listed as '" + d->kind + d->condition + "', which does not hold in this build, so it must match";
+    }
+    if (!d)
+    {
+        return outcome == Outcome::Match ? std::string() : "new divergence (" + std::string(OutcomeName(outcome)) + ")";
+    }
+    // Output that depends on the platform may match on one standard library and not another.
+    if (d->kind == "platform" && (outcome == Outcome::Match || outcome == Outcome::Output))
+    {
+        return {};
+    }
+    if (outcome == Outcome::Match)
+        return "case now matches: remove " + id + " from test/parity/divergences/" + AreaOf(id) + ".txt";
+    if (d->kind != OutcomeName(outcome))
+    {
+        return "divergence changed from '" + d->kind + "' to '" + OutcomeName(outcome) + "': update " + id + " in test/parity/divergences/" + AreaOf(id) + ".txt";
+    }
+    return {};
+}
+
 void CheckListed(const std::string& id, Outcome outcome, const std::string& details)
 {
     const auto& divergences = Divergences();
     auto known = divergences.find(id);
-    if (known == divergences.end())
+    auto problem = ListingProblem(id, known == divergences.end() ? nullptr : &known->second, outcome, BuildFeatures());
+    if (!problem.empty())
     {
-        if (outcome != Outcome::Match)
-            ADD_FAILURE() << "new divergence (" << OutcomeName(outcome) << ")\n  " << details;
-        return;
+        ADD_FAILURE() << problem << "\n  " << details;
     }
-    // Output that depends on the platform may match on one standard library and not another.
-    if (known->second.kind == "platform" && (outcome == Outcome::Match || outcome == Outcome::Output))
-    {
-        return;
-    }
-    if (outcome == Outcome::Match)
-        ADD_FAILURE() << "case now matches: remove " << id << " from test/parity/divergences/" << AreaOf(id) << ".txt\n  " << details;
-    else if (known->second.kind != OutcomeName(outcome))
-        ADD_FAILURE() << "divergence changed from '" << known->second.kind << "' to '" << OutcomeName(outcome)
-                      << "': update " << id << " in test/parity/divergences/" << AreaOf(id) << ".txt\n  " << details;
 }
 
-// The allow-list entry when divergences/ marks id as a crash, so it must not run.
+// The allow-list entry when divergences/ marks id as a crash in this build, so it must not run.
 const Divergence* ListedCrash(const std::string& id)
 {
     const auto& divergences = Divergences();
     auto known = divergences.find(id);
-    return known != divergences.end() && known->second.kind == "crash" ? &known->second : nullptr;
+    return known != divergences.end() && known->second.kind == "crash" && Applies(known->second, BuildFeatures()) ? &known->second : nullptr;
 }
 
 class ParityTest : public ::testing::TestWithParam<ParityCase>
@@ -665,14 +775,66 @@ TEST(ParityRegistry, DivergencesNameExistingCases)
     std::set<std::string> ids;
     for (auto& c : LoadCases())
         ids.insert(c.id);
-    static const std::set<std::string> kinds = { "output", "rejects", "accepts", "unsupported", "platform", "crash" };
     for (const auto& d : Divergences())
     {
         const auto& id = d.first.compare(0, 5, "wide.") == 0 ? d.first.substr(5) : d.first;
         EXPECT_TRUE(ids.count(id)) << "divergences/ names unknown case " << d.first;
-        EXPECT_TRUE(kinds.count(d.second.kind)) << d.first << ": unknown kind " << d.second.kind;
-        EXPECT_FALSE(d.second.reason.empty()) << d.first << ": reason is required";
+        EXPECT_EQ(DivergenceProblem(d.second), "") << d.first;
     }
+}
+
+// Allow-list lines with and without a build condition, and what each outcome means for them.
+TEST(ParityRegistry, BuildConditions)
+{
+    struct Row
+    {
+        const char* line;
+        const char* problem; // from DivergenceProblem
+        bool appliesWithout; // to a build without "bigint"
+        bool appliesWith;    // to a build with it
+    };
+    const Row rows[] = {
+        { "operators.a rejects 0015 int64 overflow", "", true, true },
+        { "operators.a rejects@nobigint 0178 needs a backend", "", true, false },
+        { "operators.a output@bigint 0178 differs with a backend", "", false, true },
+        { "operators.a crash@nobigint 0178 traps without a backend", "", true, false },
+        { "operators.a rejects@nofloat128 0178 no such feature", "unknown condition '@nofloat128'", false, false },
+        { "operators.a rejects@ 0178 empty condition", "unknown condition '@'", false, false },
+        { "operators.a platform@nobigint 0178 platform takes none", "kind platform takes no condition", true, false },
+        { "operators.a @nobigint 0178 kind missing", "unknown kind ''", true, false },
+        { "operators.a", "unknown kind ''", true, true },
+        { "operators.a rejects", "task is required", true, true },
+        { "operators.a rejects 0178", "reason is required", true, true },
+    };
+    const std::set<std::string> without;
+    const std::set<std::string> with = { "bigint" };
+    for (const auto& row : rows)
+    {
+        std::string id;
+        Divergence d;
+        ASSERT_TRUE(ParseDivergence(row.line, id, d)) << row.line;
+        EXPECT_EQ(id, "operators.a");
+        EXPECT_EQ(DivergenceProblem(d), row.problem) << row.line;
+        EXPECT_EQ(Applies(d, without), row.appliesWithout) << row.line;
+        EXPECT_EQ(Applies(d, with), row.appliesWith) << row.line;
+    }
+    std::string id;
+    Divergence d;
+    EXPECT_FALSE(ParseDivergence("# operators.a rejects 0178 comment", id, d));
+    EXPECT_FALSE(ParseDivergence("   ", id, d));
+
+    // A conditional line holds the case to its kind where the condition holds, and to a
+    // match elsewhere.
+    ASSERT_TRUE(ParseDivergence("operators.a rejects@nobigint 0178 needs a backend", id, d));
+    EXPECT_EQ(ListingProblem(id, &d, Outcome::Rejects, without), "");
+    EXPECT_EQ(ListingProblem(id, &d, Outcome::Match, without), "case now matches: remove operators.a from test/parity/divergences/operators.txt");
+    EXPECT_EQ(ListingProblem(id, &d, Outcome::Output, without),
+              "divergence changed from 'rejects' to 'output': update operators.a in test/parity/divergences/operators.txt");
+    EXPECT_EQ(ListingProblem(id, &d, Outcome::Match, with), "");
+    EXPECT_EQ(ListingProblem(id, &d, Outcome::Rejects, with),
+              "new divergence (rejects): operators.a is listed as 'rejects@nobigint', which does not hold in this build, so it must match");
+    EXPECT_EQ(ListingProblem(id, nullptr, Outcome::Rejects, with), "new divergence (rejects)");
+    EXPECT_EQ(ListingProblem(id, nullptr, Outcome::Match, without), "");
 }
 
 TEST(ParityRegistry, DivergencesAreWellFormed)
