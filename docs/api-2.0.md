@@ -306,6 +306,45 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | no umbrella or forward header | users include five headers; inline namespace (5.3) breaks user forward declarations | `jinja2cpp/jinja2cpp.h`, `jinja2cpp/fwd.h` | add |
 | `error_handler.h` | see 3.4 | remove | break |
 
+### 3.9 Memory and allocation
+
+Decided by Ruslan 2026-10-18 (task 0252; plan in
+[design/0252-memory-contract-plan.md](design/0252-memory-contract-plan.md)). The error side is
+section 2.1 (0250).
+
+- **No allocator parameters in 2.0.** No entry point takes a `memory_resource`, and `Value`,
+  `ValuesList` and `ValuesMap` stay on `std::allocator`. A Load upstream would cover about 1 of
+  ~958 Load allocations (the parse-tree arena allocates its own blocks), a per-render resource
+  is escaped by values that outlive the render, a pmr string would grow `Value` from 40 to 48 B
+  against the 0140 work, and Apple's libc++ ships `std::pmr` only from macOS 14 / iOS 17. If a
+  hook comes in 2.x, it is an additive `TemplateEnv` method taking `std::pmr::memory_resource&`
+  (never Boost's pmr: 0230). Host data enters without copies through `string_view`,
+  `Reflect(const T&)` and generic accessors (0115).
+- **Out of memory.** `std::bad_alloc` propagates out of the call that hit it, and means only
+  that the system is out of memory (2.1). A spent budget is `ResourceLimitExceeded`: the
+  library's limits (0262), the arena's size cap at Load, and a host budget signalled by throwing
+  `jinja2::Exception{ResourceLimitExceeded}` from a callable, a sink or the host's allocator. A
+  failed Load keeps the previous template; a failed render leaves `Template`, `TemplateEnv`
+  and the thread caches usable. Until [0256](tasks/0256-survive-allocation-failure.md) lands,
+  some allocation failures crash (arena block bookkeeping, vendored robin_hood).
+- **Caller-owned output** ([0257](tasks/0257-render-to-string-and-sink.md)):
+  - `RenderTo(StringType& out, params)` appends; on any failure `out` is truncated back to its
+    size at entry;
+  - `RenderTo(BasicOutputSink<CharT>& sink, params)` streams; chunks already written stay
+    written. `BasicOutputSink` has one virtual `Write(basic_string_view<CharT>)`, frozen for 2.x;
+    its exceptions are host exceptions under 2.1;
+  - header-only `ContainerSink<C>` appends to any container with `append(first, last)`
+    (`std::string`, `fmt::basic_memory_buffer`, `std::vector`, `small_vector`). No fmt type
+    appears in a signature: fmt stays a private dependency;
+  - `Render(ostream&)` stays all-or-nothing: the stream receives output only on success.
+  These are overloads rather than an options struct, so every later target is ABI-additive.
+- **Thread caches.** Renders on a thread reuse slot frames, loop frames, parameter tables, the
+  last environment's converted globals and buffers. `bool ReleaseThreadCaches() noexcept`
+  ([0275](tasks/0275-release-thread-caches.md)) frees them on the calling thread and returns
+  `false`, freeing nothing, while a render runs there. No caller-passed workspace.
+- **User-facing text:** README "Memory and threads" and Doxygen notes
+  ([0276](tasks/0276-memory-contract-docs.md)).
+
 ## 4. The 2.0 `Value`, in code
 
 The shape of the largest change, to judge the result rather than the rows:
@@ -549,6 +588,10 @@ Recommend A now, C only if someone asks.
 6. **`Value(char)`**: delete it (force the user to say `Value(int64_t('c'))` or
    `Value(std::string(1, 'c'))`), or store a one-letter string? *Decided: delete.*
    Today it silently stores `true`.
+7. **Memory contract** (0252, 3.9). *Decided by Ruslan 2026-10-18 (all as recommended):*
+   R1 no allocator parameters in 2.0; R2 `bad_alloc` only for system OOM, budgets are
+   `ResourceLimitExceeded`; R3 `Render(ostream&)` stays all-or-nothing; R4 output targets as
+   `RenderTo` overloads (string, sink) plus the header-only `ContainerSink`.
 
 ## 8. Work breakdown
 
@@ -607,3 +650,8 @@ Defects found during the survey that are worth fixing regardless of the 2.0 desi
   closer to the standard spelling (`tl` adds a non-standard `map`). Users write
   `jinja2::Result<T>`, so the backing library is swappable later; the next swap is to
   `std::expected` once the floor reaches C++23.
+- **Allocator-aware API in 2.0** (0252): a `memory_resource` for Load or Render, pmr
+  `Value`/containers, a caller-passed render workspace, a per-render byte budget, an
+  `OutOfMemory` error code, `RenderTo(fmt::memory_buffer&)` and an options struct for output
+  targets. Reasons in [design/0252-memory-contract-plan.md](design/0252-memory-contract-plan.md)
+  section 9.
