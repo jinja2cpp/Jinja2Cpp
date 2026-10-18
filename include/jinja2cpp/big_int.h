@@ -46,7 +46,7 @@ public:
         // Digits are taken in a type no narrower than 64 bits, so that no step narrows through int
         using Unsigned = std::conditional_t<(sizeof(I) > sizeof(uint64_t)), std::make_unsigned_t<I>, uint64_t>;
         bool negative = false;
-        Unsigned magnitude = static_cast<Unsigned>(value);
+        auto magnitude = static_cast<Unsigned>(value);
         if constexpr (std::is_signed_v<I>)
         {
             negative = value < 0;
