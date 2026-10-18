@@ -37,6 +37,8 @@ rejected alternatives: docs/design/0250-error-contract-plan.md (§3a, §3b, §9)
 - `LoadFromFile` of a missing file returns `FileNotFound` (it returned success).
 - `ToChars` returns `not_enough_memory` only for `bad_alloc`, `invalid_argument` otherwise.
 - `noexcept` on the `BasicErrorInfo` getters.
+- REVIEW.md: its Security rule describes today's catch-all error boundary and defers to 0250;
+  rewrite it to the contract each phase lands (0254 and 0255 update it again).
 
 **Tests.** errors_test.cpp `ErrorContractTest`: a callable throwing `int` gives 1 with the
 exception kept; throwing `std::bad_alloc` propagates; throwing `jinja2::Exception{UndefinedError}`

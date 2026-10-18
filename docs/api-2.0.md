@@ -320,7 +320,8 @@ public:
     Value();
     Value(std::nullptr_t) noexcept;                         // None
     template<class I, std::enable_if_t<detail::IsStoredAsInt<I>::value>* = nullptr>
-    Value(I val) noexcept : m_data(static_cast<int64_t>(val)) {}
+    Value(I val) noexcept(!detail::CanExceedInt64<I>)       // above INT64_MAX: std::overflow_error (0172)
+        : m_data(detail::ToStoredInt(val)) {}
     Value(char) = delete;                                   // number or one-letter string? say which
     // ... string, double, list, map, callable constructors as today
 

@@ -179,7 +179,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0107](0107-string-filter-divergences.md) | String filter divergences found by the 0061 differential | parity | low | open |
 | [0108](0108-include-context-copy.md) | `include` copies every scope of the caller | perf | medium | done |
 | [0109](0109-load-costs-round-2.md) | Load costs after 0103: filter construction, wrappers, the lexer | perf | low | done |
-| [0110](0110-namespace-self-reference-leak.md) | A namespace that holds itself leaks | evaluator | high | open |
+| [0110](0110-namespace-self-reference-leak.md) | A namespace that holds itself leaks | evaluator | high | done |
 | [0111](0111-sum-attribute-generated-list-hang.md) | `sum(attribute=...)` never returns on a generated list | robustness | medium | done |
 | [0112](0112-generated-item-string-view-lifetime.md) | Strings from generator items outlive the item under autoescape `join` | robustness | medium | done |
 | [0113](0113-output-writer.md) | Output: one virtual call and one append per fragment | perf | medium | done |
@@ -241,7 +241,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0169](0169-caller-without-call-block.md) | `caller()` without a call block raises | parity | low | done |
 | [0170](0170-dictsort-pair-tuple-semantics.md) | A dictsort pair still differs from a tuple in `in`, `==`, tests and truthiness | parity | low | done |
 | [0171](0171-gcc-sanitizer-stringop-overflow.md) | The GCC address+undefined build fails in `OutStream::WriteInt` | build | medium | done |
-| [0172](0172-value-unsigned-overflow.md) | Unsigned values above `INT64_MAX` wrap to negative | robustness | high | open |
+| [0172](0172-value-unsigned-overflow.md) | Unsigned values above `INT64_MAX` wrap to negative | robustness | high | done |
 | [0173](0173-pprint-python-repr.md) | `pprint` prints JSON-style scalars | parity | low | done |
 | [0174](0174-msvc-c4702-suppression.md) | `/wd4702` hides unreachable code in project code on MSVC | build | low | open |
 | [0175](0175-recursive-loop-filter-leftovers.md) | Recursive loop filter: the outer `loop` at depth > 0, and the legacy `recursive if` order | parity | low | done |
@@ -252,7 +252,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0180](0180-markup-from-cpp.md) | Markup from C++ | api | low | open |
 | [0181](0181-select-autoescape.md) | Autoescape chosen by template name (`select_autoescape`) | api | low | open |
 | [0182](0182-markup-percent-repr.md) | `%r` and containers in Markup's `%` | parity | low | done |
-| [0183](0183-context-callable-positional-arg.md) | A user callable taking `*context` gets None for a positional argument | api | high | open |
+| [0183](0183-context-callable-positional-arg.md) | A user callable taking `*context` gets None for a positional argument | api | high | done |
 | [0184](0184-gcc13-sanitizer-stringop-overflow.md) | The GCC 13 sanitizer build fails with -Wstringop-overflow | build | low | open |
 | [0185](0185-fuzz-oom-below-sequence-cap.md) | The fuzz job fails on lists below the sequence cap | robustness | medium | done |
 | [0186](0186-python-oracle-target.md) | Which Python and Jinja2 the parity oracle targets, and how users choose | parity | medium | open |
@@ -316,11 +316,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0246](0246-public-comparison-report.md) | A user-facing benchmark and feature-parity comparison with rival engines | docs | high | open |
 | [0247](0247-rival-benchmark-coverage.md) | Cover the rival engines' own benchmark cases, then close the gaps | perf | high | open |
 | [0248](0248-python-drop-in-replacement.md) | Jinja2C++ as a drop-in replacement for Python Jinja2 in common cases | api | medium | open |
+| [0249](0249-implicit-conversion-sanitizer.md) | Run the sanitizer CI with `-fsanitize=implicit-conversion` | robustness | medium | open |
+| [0250](0250-public-api-error-contract.md) | One error contract for the 2.0 public API | api | high | open |
+| [0251](0251-cycles-through-opaque-objects.md) | Reference cycles through objects the cycle collector cannot follow leak | evaluator | low | open |
 | [0252](0252-public-api-allocator-contract.md) | Allocator and memory contract for the 2.0 public API | api | high | open |
-| [0262](0262-settings-limits.md) | `Settings::Limits`: one place for every limit a template can hit | api | high | open |
-| [0263](0263-per-operation-size-checks.md) | Every growth operation checks its size before allocating | robustness | high | open |
-| [0264](0264-template-cache-bound.md) | The template cache ignores its size, and `MemoryFileSystem` writes in a const path | robustness | medium | open |
-| [0265](0265-hardening-by-default.md) | Build hardening on by default; invariant checks that fail the render, not the process | build | medium | open |
-| [0266](0266-confined-filesystem.md) | `ConfinedFileSystem`: a loader that never leaves its root | api | medium | open |
-| [0267](0267-untrusted-mode-fuzzing.md) | Fuzz targets for templates written by untrusted users | robustness | high | open |
-| [0268](0268-untrusted-mode-followups.md) | Untrusted mode: additive follow-ups after the freeze | api | low | open |
+| [0258](0258-positional-and-keyword-same-arg.md) | A call that gives one argument both positionally and by keyword is accepted | api | low | open |

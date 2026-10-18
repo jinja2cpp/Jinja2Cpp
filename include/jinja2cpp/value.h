@@ -13,8 +13,10 @@
 #include <cstdint>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -261,6 +263,29 @@ template<typename T>
 struct IsStoredAsInt : std::integral_constant<bool, std::is_integral_v<T> && !std::is_same_v<T, bool> && !IsCharType<T>::value>
 {
 };
+
+//! Integral types with values outside the `int64_t` range \ref Value stores: `uint64_t`, `size_t` and wider
+template<typename T>
+inline constexpr bool CanExceedInt64 = std::numeric_limits<T>::digits > std::numeric_limits<int64_t>::digits;
+
+//! Converts an integral value to the stored `int64_t`; throws `std::overflow_error` for a value outside its range
+template<typename T>
+constexpr int64_t ToStoredInt(T val) noexcept(!CanExceedInt64<T>)
+{
+    if constexpr (CanExceedInt64<T>)
+    {
+        bool fits = val <= static_cast<T>(std::numeric_limits<int64_t>::max());
+        if constexpr (std::is_signed_v<T>)
+        {
+            fits = fits && val >= static_cast<T>(std::numeric_limits<int64_t>::min());
+        }
+        if (!fits)
+        {
+            throw std::overflow_error("jinja2cpp::Value: integer value is out of the int64_t range");
+        }
+    }
+    return static_cast<int64_t>(val);
+}
 } // namespace detail
 
 /*!
@@ -390,11 +415,14 @@ public:
     /*!
      * \brief Initializing constructor from any integral value except `bool` and characters: stores `int64_t`
      *
+     * A value outside the `int64_t` range (a `uint64_t` or `size_t` above `INT64_MAX`) throws `std::overflow_error`
+     * rather than wrapping; only types that can hold such values may throw.
+     *
      * @param val Integer value which should be used to initialize \ref Value instance
      */
     template<typename I, std::enable_if_t<detail::IsStoredAsInt<I>::value>* = nullptr>
-    Value(I val) noexcept // NOLINT(google-explicit-constructor)
-        : m_data(static_cast<int64_t>(val))
+    Value(I val) noexcept(!detail::CanExceedInt64<I>) // NOLINT(google-explicit-constructor)
+        : m_data(detail::ToStoredInt(val))
     {
     }
     /*!
@@ -1117,14 +1145,15 @@ inline std::wstring ToWString(const Value& val)
     return val.ToWString();
 }
 
-//! Same as `ToString(Value(val))` for a number or `bool`: exact, so a literal 0 never looks like a null string
+//! Same as `ToString(Value(val))` for a number or `bool`: exact, so a literal 0 never looks like a null string;
+//! throws `std::overflow_error` for an integer outside the `int64_t` range, as \ref Value does
 template<typename T, std::enable_if_t<std::is_arithmetic_v<T> && !detail::IsCharType<T>::value>* = nullptr>
 std::string ToString(T val)
 {
     return Value(val).ToString();
 }
 
-//! Same as `ToWString(Value(val))` for a number or `bool`
+//! Same as `ToWString(Value(val))` for a number or `bool`; throws `std::overflow_error` as \ref ToString(T) does
 template<typename T, std::enable_if_t<std::is_arithmetic_v<T> && !detail::IsCharType<T>::value>* = nullptr>
 std::wstring ToWString(T val)
 {
