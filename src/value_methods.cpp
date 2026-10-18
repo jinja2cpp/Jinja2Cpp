@@ -1696,8 +1696,15 @@ bool ReachesThroughOpaque(const InternalValue& root, const void* target)
     VisitedStorage visited;
     // Items stay where they are while the walk runs: nothing changes a container under it
     std::vector<PendingValue> pending{ { &root, false } };
-    const auto queueValue = [&pending](const InternalValue& item, bool viaOpaque) { pending.push_back({ &item, viaOpaque }); };
-    const auto queuePairValue = [&pending](const auto& item, bool viaOpaque) { pending.push_back({ &item.second, viaOpaque }); };
+    // Only values that can hold a container are queued: a wide flat list costs no work list
+    const auto queueValue = [&pending](const InternalValue& item, bool viaOpaque) {
+        const auto kind = item.Kind();
+        if (kind == ValueKind::List || kind == ValueKind::Map || kind == ValueKind::Callable || kind == ValueKind::KeyValuePair)
+        {
+            pending.push_back({ &item, viaOpaque });
+        }
+    };
+    const auto queuePairValue = [&queueValue](const auto& item, bool viaOpaque) { queueValue(item.second, viaOpaque); };
     while (!pending.empty())
     {
         const auto [val, viaOpaque] = pending.back();
