@@ -288,7 +288,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0216](0216-volatile-autoescape.md) | `{% autoescape %}` with a runtime value (volatile EvalContext) | parity | low | open |
 | [0219](0219-loop-iteration.md) | Iterating `loop` takes the rest of the loop | parity | low | open |
 | [0220](0220-call-argument-unpacking.md) | `f(*args, **kwargs)` in calls | parity | medium | open |
-| [0221](0221-release-acceptance-and-rc-signoff.md) | Define 2.0 release gates and release-candidate signoff | release | high | open |
+| [0221](0221-release-acceptance-and-rc-signoff.md) | Define 2.0 release gates and release-candidate signoff | release | high | in-progress |
 | [0222](0222-downstream-1x-migration-trial.md) | Prove a downstream upgrade from 1.3.2 to 2.0 | release | high | open |
 | [0223](0223-embedding-lifecycle-integration-tests.md) | Test embedding behavior across lifetime, cache and callback boundaries | robustness | high | open |
 | [0224](0224-template-trust-and-loader-boundary.md) | Define the template trust model and filesystem-loader boundary | robustness | high | open |
