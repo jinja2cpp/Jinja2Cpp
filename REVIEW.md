@@ -93,10 +93,12 @@ are what this codebase has actually got wrong.
   wall time is noise. Do not suggest optimisations outside the hot-path list below
   without numbers.
 - **The bar is tighter than preflight.** Preflight fails at +3%, but a performance PR
-  merges only on the performance track's verdict: Load at most +0.5%
-  and Render within ±0.5% per benchmark, read from CI's "instruction counts vs base"
-  job; anything beyond that is a named exception for the merge steward. A +2% Load
-  regression is a finding. I1 cache misses are layout noise and are not gated. That
+  merges only on the performance track's verdict, read from CI's "instruction counts
+  vs base" job: a regression above +0.5% on any Load or Render benchmark is a named
+  exception for the merge steward, while the intended improvements are the point. A
+  +2% Load regression is a finding. The job does not gate I1 cache misses (mostly
+  layout noise), but limits a phase plan sets on them still apply
+  (`docs/design/perf-design-overview.md`, `docs/design/0038-lexical-scoping-plan.md`). That
   job compares against the PR's base at its last push, so on a stale base the delta
   may come from master; compare against current master (as the steward's train run
   does) before calling it the PR's regression.
