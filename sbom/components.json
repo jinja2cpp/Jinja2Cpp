@@ -308,7 +308,7 @@
       "purl": "pkg:github/martinus/robin-hood-hashing@3.11.5",
       "delivery": "vendored",
       "files": ["src/robin_hood.h"],
-      "modified": "try_emplace_transparent added (0118 P5b-3b); allocation through ::operator new/delete (0154); documented at src/robin_hood.h:41-50",
+      "modified": "try_emplace_transparent added (0118 P5b-3b); allocation through ::operator new/delete (0154); exception safety of inserts, growth and copies (0253); documented at src/robin_hood.h:41-51",
       "role": "mandatory",
       "phases": ["build"],
       "exposure": "internal",

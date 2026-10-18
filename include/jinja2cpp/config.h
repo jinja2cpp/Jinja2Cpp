@@ -5,17 +5,23 @@
 // JINJA2CPP_VERSION_STRING; generated from project(VERSION) by CMake
 #include "jinja2cpp/version.h" // IWYU pragma: export
 
+// Jinja2C++ reports errors through exceptions internally and in a few documented calls
+// (docs/api-2.0.md, 2.1): building without them is not supported
+#if !defined(__cpp_exceptions) && !defined(__EXCEPTIONS) && !defined(_CPPUNWIND)
+#error "Jinja2C++ requires C++ exceptions"
+#endif
+
 #ifdef _WIN32
 #define JINJA2_DECLSPEC(S) __declspec(S)
 #else
 #define JINJA2_DECLSPEC(S)
 #endif
 
-// MSVC warns (C4251) about exported classes holding standard library members. The
+// MSVC warns (C4251, C4275) about exported classes holding or deriving from standard library types. The
 // library's headers silence it between these two macros only, so the warning stays
 // on for the rest of the user's translation unit.
 #ifdef _MSC_VER
-#define JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN __pragma(warning(push)) __pragma(warning(disable : 4251))
+#define JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN __pragma(warning(push)) __pragma(warning(disable : 4251 4275))
 #define JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END __pragma(warning(pop))
 #else
 #define JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN

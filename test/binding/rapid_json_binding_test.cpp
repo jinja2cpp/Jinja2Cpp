@@ -151,7 +151,7 @@ TEST(RapidJsonUnsignedTest, UnsignedAboveInt64MaxFails)
     jinja2::ValuesMap params{ { "json", jinja2::Reflect(doc) } };
     const auto result = tpl.RenderAsString(params);
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(jinja2::ErrorCode::UnexpectedException, result.error().GetCode());
+    EXPECT_EQ(jinja2::ErrorCode::IntegerOutOfRange, result.error().GetCode());
     ASSERT_TRUE(tpl.Load("{{ json.max }}"));
     EXPECT_EQ("9223372036854775807", tpl.RenderAsString(params).value());
 }

@@ -37,6 +37,9 @@ template<typename U, typename CharT = char>
 using Result = nonstd::expected<U, BasicErrorInfo<CharT>>;
 template<typename U>
 using ResultW = Result<U, wchar_t>;
+//! What `Result::value()` throws on an error; the spelling survives a switch of Result to std::expected
+template<typename CharT = char>
+using BadResultAccess = nonstd::bad_expected_access<BasicErrorInfo<CharT>>;
 
 /*!
  * \brief Raw contents of the {% meta %} tag

@@ -1266,8 +1266,11 @@ private:
         if (size > m_left)
         {
             const std::size_t blockSize = std::max(m_nextBlock, size);
+            // The block is listed only once its storage exists: a failed allocation must not
+            // leave a block without storage for DestroyNodes to walk
+            std::unique_ptr<std::byte[]> storage(new std::byte[blockSize]);
             auto& block = m_blocks.emplace_back();
-            block.owned.reset(new std::byte[blockSize]);
+            block.owned = std::move(storage);
             block.data = block.owned.get();
             block.start = m_used;
             m_nextBlock = std::min(blockSize * 2, MaxBlockSize);

@@ -1007,19 +1007,19 @@ TEST(BasicTests, ValueFromUnsignedAboveInt64MaxThrows)
 
     EXPECT_EQ(int64Max, Value(static_cast<uint64_t>(int64Max)).AsInt());
     EXPECT_EQ(int64Max, Reflect(static_cast<uint64_t>(int64Max)).AsInt());
-    EXPECT_THROW(Value{ std::numeric_limits<unsigned long long>::max() }, std::overflow_error);
-    EXPECT_THROW(Value{ above }, std::overflow_error);
-    EXPECT_THROW(Value{ static_cast<size_t>(-1) }, std::overflow_error);
-    EXPECT_THROW(Reflect(static_cast<uint64_t>(-1)), std::overflow_error);
+    EXPECT_THROW(Value{ std::numeric_limits<unsigned long long>::max() }, jinja2::Exception);
+    EXPECT_THROW(Value{ above }, jinja2::Exception);
+    EXPECT_THROW(Value{ static_cast<size_t>(-1) }, jinja2::Exception);
+    EXPECT_THROW(Reflect(static_cast<uint64_t>(-1)), jinja2::Exception);
     const uint64_t big = above;
-    EXPECT_THROW(Reflect(&big), std::overflow_error);
+    EXPECT_THROW(Reflect(&big), jinja2::Exception);
 
     // A lazily reflected item fails the render loudly
     Template tpl;
     ASSERT_TRUE(tpl.Load("{{ items[0] }}"));
     const auto result = tpl.RenderAsString({ { "items", Reflect(std::vector<uint64_t>{ above }) } });
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode());
+    EXPECT_EQ(ErrorCode::IntegerOutOfRange, result.error().GetCode());
     EXPECT_EQ("9223372036854775807", tpl.RenderAsString({ { "items", Reflect(std::vector<uint64_t>{ static_cast<uint64_t>(int64Max) }) } }).value());
 }
 

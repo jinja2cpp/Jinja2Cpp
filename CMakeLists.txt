@@ -434,6 +434,15 @@ if (JINJA2CPP_BUILD_TESTS)
     add_dependencies(jinja2cpp_tests CopyTestData)
 
     add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests --gtest_filter=-Parity*)
+
+    # Replaces the global operator new, so it cannot share the main test binary (docs/tasks/0253)
+    add_executable(jinja2cpp_alloc_tests test/allocation_failure_test.cpp)
+    target_compile_options(jinja2cpp_alloc_tests PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
+    target_link_libraries(jinja2cpp_alloc_tests gtest gtest_main ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
+    set_target_properties(jinja2cpp_alloc_tests PROPERTIES
+            CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
+            CXX_STANDARD_REQUIRED ON)
+    add_test(NAME jinja2cpp_alloc_tests COMMAND jinja2cpp_alloc_tests)
     # Differential corpus against Python Jinja2, see test/parity/README.md
     add_test(NAME jinja2cpp_parity COMMAND jinja2cpp_tests --gtest_filter=Parity*)
 

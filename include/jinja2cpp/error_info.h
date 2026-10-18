@@ -2,10 +2,14 @@
 #define JINJA2CPP_ERROR_INFO_H
 
 #include "config.h"
+#include "exception.h" // IWYU pragma: export
 #include "value.h"
 
+#include <atomic>
+#include <exception>
 #include <iostream>
 #include <string>
+#include <system_error>
 #include <type_traits> // IWYU pragma: keep (public header: user code may rely on it)
 #include <vector>
 
@@ -22,7 +26,7 @@ namespace jinja2
 enum class ErrorCode
 {
     Unspecified = 0,               //!< Error is unspecified
-    UnexpectedException = 1,       //!< Generic exception occurred during template parsing or execution. ExtraParams[0] contains `what()` string of the exception
+    UnexpectedException = 1,       //!< An exception the engine did not raise and could not attribute. ExtraParams[0] contains `what()` string of the exception, GetException() the exception
     YetUnsupported = 2,            //!< Feature of the jinja2 specification which yet not supported
     FileNotFound = 3,              //!< Requested file was not found. ExtraParams[0] contains name of the file
     ExtensionDisabled = 4,         //!< Particular jinja2 extension disabled in the settings
@@ -36,6 +40,10 @@ enum class ErrorCode
     RecursionLimitExceeded = 12,   //!< Expressions nest, or macros, includes or recursive loops recurse, deeper than Jinja2C++ allows (Python's RecursionError)
     UnknownFilter = 13,            //!< The template names a filter that is neither built in nor added to the environment (Jinja2's TemplateAssertionError). ExtraParams[0] contains the name
     UnknownTest = 14,              //!< The template names a test that is neither built in nor added to the environment (Jinja2's TemplateAssertionError). ExtraParams[0] contains the name
+    UserCallableException = 15,    //!< A user callable (context or global value, filter, test, finalize, gettext) threw. ExtraParams[0] contains `what()`, GetException() the exception
+    IntegerOutOfRange = 16,        //!< An integer is outside the `int64_t` range: host data (Value, Reflect, JSON bindings) or template arithmetic. ExtraParams[0] contains the message
+    TemplateRuntimeError = 17,     //!< An operation of the template failed (Python's TypeError, ValueError, ...). ExtraParams[0] contains the message
+    ResourceLimitExceeded = 18,    //!< A size or depth limit, or a host's budget, was exceeded. ExtraParams[0] contains the message, ExtraParams[1] (when present) the limit's name
     ExpectedStringLiteral = 1001,  //!< String literal expected
     ExpectedIdentifier = 1002,     //!< Identifier expected
     ExpectedSquareBracket = 1003,  //!< ']' expected
@@ -59,6 +67,16 @@ enum class ErrorCode
     UnexpectedMetaBegin = 1021,    //!< Unexpected meta block begin {% meta %}
     UnexpectedMetaEnd = 1022,      //!< Unexpected meta block end {% endmeta %}
 };
+
+//! The `std::error_category` of \ref ErrorCode: `std::error_code ec = ErrorCode::TemplateNotFound;` compares equal to
+//! `std::errc::no_such_file_or_directory`
+JINJA2CPP_EXPORT const std::error_category& error_category() noexcept; // NOLINT(readability-identifier-naming): spelled as std::generic_category
+
+//! Makes a `std::error_code` of the \ref error_category(); found by argument-dependent lookup
+inline std::error_code make_error_code(ErrorCode code) noexcept // NOLINT(readability-identifier-naming): the name std::error_code looks up
+{
+    return { static_cast<int>(code), error_category() };
+}
 
 /*!
  * \brief Information about the source location of the error
@@ -99,60 +117,71 @@ public:
         std::vector<SourceLocation> relatedLocs;
         std::vector<Value> extraParams;
         std::basic_string<CharT> locationDescr;
+        //! The exception the error began as, when the engine did not raise it (docs/api-2.0.md, 2.1)
+        std::exception_ptr exception;
     };
 
     //! Default constructor
-    BasicErrorInfo() = default;
+    BasicErrorInfo() noexcept = default;
     //! Initializing constructor from error description
     explicit BasicErrorInfo(Data data)
-        : m_errorData(std::move(data))
+        : m_payload(new Payload(std::move(data)))
     {}
 
-    //! Copy constructor
-    BasicErrorInfo(const BasicErrorInfo<CharT>&) = default;
+    //! Copy constructor: the copy shares the description
+    BasicErrorInfo(const BasicErrorInfo<CharT>& other) noexcept
+        : m_payload(other.m_payload)
+    {
+        if (m_payload)
+        {
+            m_payload->refs.fetch_add(1, std::memory_order_relaxed);
+        }
+    }
     //! Move constructor
-    BasicErrorInfo(BasicErrorInfo<CharT>&& val) noexcept
-        : m_errorData(std::move(val.m_errorData))
-    {}
+    BasicErrorInfo(BasicErrorInfo<CharT>&& other) noexcept
+        : m_payload(other.m_payload)
+    {
+        other.m_payload = nullptr;
+    }
 
     //! Destructor
-    ~BasicErrorInfo() noexcept = default;
+    ~BasicErrorInfo() noexcept
+    {
+        if (m_payload && m_payload->refs.fetch_sub(1, std::memory_order_acq_rel) == 1)
+        {
+            delete m_payload;
+        }
+    }
 
     //! Copy-assignment operator
-    BasicErrorInfo& operator=(const BasicErrorInfo<CharT>&) = default;
-    //! Move-assignment operator
-    BasicErrorInfo& operator=(BasicErrorInfo<CharT>&& val) noexcept
+    BasicErrorInfo& operator=(const BasicErrorInfo<CharT>& other) noexcept
     {
-        if (this == &val)
-        {
-            return *this;
-        }
-
-        std::swap(m_errorData.code, val.m_errorData.code);
-        std::swap(m_errorData.srcLoc, val.m_errorData.srcLoc);
-        std::swap(m_errorData.relatedLocs, val.m_errorData.relatedLocs);
-        std::swap(m_errorData.extraParams, val.m_errorData.extraParams);
-        std::swap(m_errorData.locationDescr, val.m_errorData.locationDescr);
-
+        BasicErrorInfo(other).Swap(*this);
+        return *this;
+    }
+    //! Move-assignment operator
+    BasicErrorInfo& operator=(BasicErrorInfo<CharT>&& other) noexcept
+    {
+        BasicErrorInfo(std::move(other)).Swap(*this);
         return *this;
     }
 
     //! Return code of the error
-    [[nodiscard]] ErrorCode GetCode() const
+    [[nodiscard]] ErrorCode GetCode() const noexcept
     {
-        return m_errorData.code;
+        return m_payload ? m_payload->data.code : ErrorCode::Unspecified;
     }
 
     //! Return error location in the template file
-    [[nodiscard]] auto& GetErrorLocation() const
+    [[nodiscard]] const SourceLocation& GetErrorLocation() const noexcept
     {
-        return m_errorData.srcLoc;
+        return GetData().srcLoc;
     }
 
     //! Return locations, related to the main error location
-    [[nodiscard]] auto& GetRelatedLocations() const
+    [[nodiscard]] const std::vector<SourceLocation>& GetRelatedLocations() const noexcept
     {
-        return m_errorData.relatedLocs;
+        return GetData().relatedLocs;
     }
 
     /*!
@@ -166,9 +195,9 @@ public:
      *
      * @return Location description
      */
-    [[nodiscard]] const std::basic_string<CharT>& GetLocationDescr() const
+    [[nodiscard]] const std::basic_string<CharT>& GetLocationDescr() const noexcept
     {
-        return m_errorData.locationDescr;
+        return GetData().locationDescr;
     }
 
     /*!
@@ -178,13 +207,49 @@ public:
      *
      * @return Vector with extra error params
      */
-    [[nodiscard]] auto& GetExtraParams() const { return m_errorData.extraParams; }
+    [[nodiscard]] const std::vector<Value>& GetExtraParams() const noexcept { return GetData().extraParams; }
+
+    /*!
+     * \brief Return the exception the error began as
+     *
+     * Set if and only if the failure began as an exception the engine did not raise: one thrown by a user callable,
+     * reflector, accessor or filesystem handler. `std::rethrow_exception(error.GetException())` raises it again, as
+     * Python Jinja2 would. Copies of the error share the exception object, which lives in the module that threw it:
+     * the error must not outlive that module.
+     *
+     * @return The exception, or a null `std::exception_ptr`
+     */
+    [[nodiscard]] const std::exception_ptr& GetException() const noexcept { return GetData().exception; }
 
     //! Convert error to the detailed string representation
     JINJA2CPP_EXPORT [[nodiscard]] std::basic_string<CharT> ToString() const;
 
 private:
-    Data m_errorData;
+    // One immutable description, shared by the copies: an error is one pointer wide and copies without allocating
+    struct Payload
+    {
+        explicit Payload(Data d)
+            : data(std::move(d))
+        {
+        }
+        std::atomic<long> refs{ 1 };
+        const Data data;
+    };
+
+    [[nodiscard]] const Data& GetData() const noexcept
+    {
+        static const Data empty;
+        return m_payload ? m_payload->data : empty;
+    }
+
+    void Swap(BasicErrorInfo<CharT>& other) noexcept
+    {
+        auto* payload = m_payload;
+        m_payload = other.m_payload;
+        other.m_payload = payload;
+    }
+
+    Payload* m_payload = nullptr;
 };
 
 using ErrorInfo = BasicErrorInfo<char>;
@@ -197,6 +262,14 @@ using ErrorInfoTpl JINJA2CPP_DEPRECATED("jinja2cpp-2: BasicErrorInfo") = BasicEr
 JINJA2CPP_EXPORT std::ostream& operator<<(std::ostream& os, const ErrorInfo& res);
 JINJA2CPP_EXPORT std::wostream& operator<<(std::wostream& os, const ErrorInfoW& res);
 } // namespace jinja2
+
+namespace std
+{
+template<>
+struct is_error_code_enum<jinja2::ErrorCode> : true_type
+{
+};
+} // namespace std
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
 

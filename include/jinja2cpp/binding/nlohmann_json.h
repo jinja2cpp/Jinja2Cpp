@@ -174,6 +174,7 @@ struct NLohmannJsonReflector
             result = val.template get<int64_t>();
             break;
         case nlohmann::detail::value_t::number_unsigned:
+            // Above INT64_MAX throws jinja2::Exception{ErrorCode::IntegerOutOfRange}
             result = detail::ToStoredInt(val.template get<uint64_t>());
             break;
         case nlohmann::detail::value_t::number_float:

@@ -285,7 +285,7 @@ TEST_F(RecursionLimitsTest, HugeSequencesFailFast)
         ASSERT_TRUE(tpl.Load(source).has_value()) << source;
         auto result = tpl.RenderAsString({});
         ASSERT_FALSE(result.has_value()) << source;
-        EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode()) << source;
+        EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode()) << source;
         EXPECT_NE(std::string::npos, result.error().ToString().find("too long")) << result.error().ToString();
     }
     // An integer literal beyond int64 is a float here (docs/tasks/0178), which range()

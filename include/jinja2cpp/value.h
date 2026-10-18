@@ -268,9 +268,12 @@ struct IsStoredAsInt : std::integral_constant<bool, std::is_integral_v<T> && !st
 template<typename T>
 inline constexpr bool CanExceedInt64 = std::numeric_limits<T>::digits > std::numeric_limits<int64_t>::digits;
 
-//! Converts an integral value to the stored `int64_t`; throws `std::overflow_error` for a value outside its range
+//! Throws `jinja2::Exception{ErrorCode::IntegerOutOfRange}` (exception.h); out of line, so that callers keep only a call
+[[noreturn]] JINJA2CPP_EXPORT void ThrowIntegerOutOfRange();
+
+//! Whether an integral value fits the stored `int64_t`
 template<typename T>
-constexpr int64_t ToStoredInt(T val) noexcept(!CanExceedInt64<T>)
+constexpr bool FitsStoredInt(T val) noexcept
 {
     if constexpr (CanExceedInt64<T>)
     {
@@ -279,9 +282,25 @@ constexpr int64_t ToStoredInt(T val) noexcept(!CanExceedInt64<T>)
         {
             fits = fits && val >= static_cast<T>(std::numeric_limits<int64_t>::min());
         }
-        if (!fits)
+        return fits;
+    }
+    else
+    {
+        static_cast<void>(val);
+        return true;
+    }
+}
+
+//! Converts an integral value to the stored `int64_t`; throws `jinja2::Exception{ErrorCode::IntegerOutOfRange}` for a
+//! value outside its range
+template<typename T>
+constexpr int64_t ToStoredInt(T val) noexcept(!CanExceedInt64<T>)
+{
+    if constexpr (CanExceedInt64<T>)
+    {
+        if (!FitsStoredInt(val))
         {
-            throw std::overflow_error("jinja2cpp::Value: integer value is out of the int64_t range");
+            ThrowIntegerOutOfRange();
         }
     }
     return static_cast<int64_t>(val);
@@ -415,8 +434,9 @@ public:
     /*!
      * \brief Initializing constructor from any integral value except `bool` and characters: stores `int64_t`
      *
-     * A value outside the `int64_t` range (a `uint64_t` or `size_t` above `INT64_MAX`) throws `std::overflow_error`
-     * rather than wrapping; only types that can hold such values may throw.
+     * A value outside the `int64_t` range (a `uint64_t` or `size_t` above `INT64_MAX`) throws
+     * `jinja2::Exception{ErrorCode::IntegerOutOfRange}` (a `std::runtime_error`) rather than wrapping; only types that
+     * can hold such values may throw. \ref TryFrom is the non-throwing alternative.
      *
      * @param val Integer value which should be used to initialize \ref Value instance
      */
@@ -424,6 +444,26 @@ public:
     Value(I val) noexcept(!detail::CanExceedInt64<I>) // NOLINT(google-explicit-constructor)
         : m_data(detail::ToStoredInt(val))
     {
+    }
+    /*!
+     * \brief Non-throwing alternative to the integral constructor
+     *
+     * Stores `val` into `out` and returns `true` if it fits the stored `int64_t`; otherwise returns `false` and leaves
+     * `out` unchanged.
+     *
+     * @param val Integer value which should be stored
+     * @param out \ref Value which receives it
+     * @return Whether `val` was stored
+     */
+    template<typename I, std::enable_if_t<detail::IsStoredAsInt<I>::value>* = nullptr>
+    [[nodiscard]] static bool TryFrom(I val, Value& out) noexcept
+    {
+        if (!detail::FitsStoredInt(val))
+        {
+            return false;
+        }
+        out = Value(static_cast<int64_t>(val));
+        return true;
     }
     /*!
      * \brief Construction from a character is deleted: say `Value(int64_t('c'))` or `Value(std::string(1, 'c'))`
@@ -1146,14 +1186,14 @@ inline std::wstring ToWString(const Value& val)
 }
 
 //! Same as `ToString(Value(val))` for a number or `bool`: exact, so a literal 0 never looks like a null string;
-//! throws `std::overflow_error` for an integer outside the `int64_t` range, as \ref Value does
+//! throws `jinja2::Exception{ErrorCode::IntegerOutOfRange}` for an integer outside the `int64_t` range, as \ref Value does
 template<typename T, std::enable_if_t<std::is_arithmetic_v<T> && !detail::IsCharType<T>::value>* = nullptr>
 std::string ToString(T val)
 {
     return Value(val).ToString();
 }
 
-//! Same as `ToWString(Value(val))` for a number or `bool`; throws `std::overflow_error` as \ref ToString(T) does
+//! Same as `ToWString(Value(val))` for a number or `bool`; throws as \ref ToString(T) does
 template<typename T, std::enable_if_t<std::is_arithmetic_v<T> && !detail::IsCharType<T>::value>* = nullptr>
 std::wstring ToWString(T val)
 {

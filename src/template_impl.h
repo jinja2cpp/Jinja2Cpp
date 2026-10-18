@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_TEMPLATE_IMPL_H
 #define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
+#include "error_boundary.h"
 #include "internal_value.h"
 #include "load_settings.h"
 #include "make_unexpected.h"
@@ -167,9 +168,11 @@ struct ErrorConverter<BasicErrorInfo<CharT1>, BasicErrorInfo<CharT2>>
         errorData.code = srcError.GetCode();
         errorData.srcLoc = srcError.GetErrorLocation();
         errorData.locationDescr = ConvertString<std::basic_string<CharT1>>(srcError.GetLocationDescr());
+        errorData.relatedLocs = srcError.GetRelatedLocations();
         errorData.extraParams = srcError.GetExtraParams();
+        errorData.exception = srcError.GetException();
 
-        return BasicErrorInfo<CharT1>(errorData);
+        return BasicErrorInfo<CharT1>(std::move(errorData));
     }
 };
 
@@ -268,35 +271,36 @@ public:
         const bool isNamed = !tplName.empty();
         std::string name = isNamed ? std::move(tplName) : "noname.j2tpl"s;
         NodeArena nodes;
-        TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name, nodes);
-
-        auto parseResult = parser.Parse();
-        if (!parseResult)
-        {
-            return parseResult.error()[0];
-        }
-
-        parser.ReleaseParseState();
-        // The checks of the tree's handles (NodeRefChecks) fail only on a bug in the parser:
-        // the template that was loaded before stays
+        // Whatever parsing throws, except std::bad_alloc, becomes the error: the template that was loaded before stays.
+        // The checks of the tree's handles (NodeRefChecks) in Seal fail only on a bug in the parser.
         try
         {
-            m_nodes = nodes.Seal(*parseResult);
+            TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name, nodes);
+
+            auto parseResult = parser.Parse();
+            if (!parseResult)
+            {
+                return parseResult.error()[0];
+            }
+
+            parser.ReleaseParseState();
+            auto sealed = nodes.Seal(*parseResult);
+            auto convertedTexts = parser.TakeConvertedTexts();
+            auto metadataInfo = parser.GetMetadataInfo();
+            m_nodes = std::move(sealed);
+            m_renderer = *parseResult;
+            m_convertedTexts = std::move(convertedTexts);
+            m_metadataInfo = std::move(metadataInfo);
         }
-        catch (const InvalidNodeRef& ex)
+        catch (const BasicErrorInfo<CharT>& error)
         {
-            typename BasicErrorInfo<CharT>::Data errorData;
-            errorData.code = ErrorCode::UnexpectedException;
-            errorData.srcLoc.col = 1;
-            errorData.srcLoc.line = 1;
-            errorData.srcLoc.fileName = name;
-            errorData.extraParams.push_back(Value(std::string(ex.what())));
-            return BasicErrorInfo<CharT>(errorData);
+            return error;
         }
-        m_renderer = *parseResult;
+        catch (...)
+        {
+            return detail::CurrentExceptionToError<CharT>(name);
+        }
         m_template = std::move(source);
-        m_convertedTexts = parser.TakeConvertedTexts();
-        m_metadataInfo = parser.GetMetadataInfo();
         // Last: the parser refers to the name
         m_templateName = std::move(name);
         m_isNamed = isNamed;
@@ -411,16 +415,10 @@ public:
 
             return BasicErrorInfo<CharT>(errorData);
         }
-        catch (const std::exception& ex)
+        catch (...)
         {
-            typename BasicErrorInfo<CharT>::Data errorData;
-            errorData.code = ErrorCode::UnexpectedException;
-            errorData.srcLoc.col = 1;
-            errorData.srcLoc.line = 1;
-            errorData.srcLoc.fileName = m_templateName;
-            errorData.extraParams.push_back(Value(std::string(ex.what())));
-
-            return BasicErrorInfo<CharT>(errorData);
+            // Host exceptions, and the engine's own still reported as standard exceptions; std::bad_alloc goes on
+            return detail::CurrentExceptionToError<CharT>(m_templateName);
         }
 
         return normalResult;
@@ -470,6 +468,54 @@ public:
         // The JSON document is parsed once and kept in the template: the returned maps may refer to
         // it (the RapidJSON binding does), so it must outlive every map handed out
         std::scoped_lock lock(m_metadataMutex);
+        try
+        {
+            return ParseMetadata();
+        }
+        catch (...)
+        {
+            return MakeUnexpected(detail::CurrentExceptionToError<CharT>(m_templateName));
+        }
+    }
+
+    nonstd::expected<MetadataInfo<CharT>, BasicErrorInfo<CharT>> GetMetadataRaw() const { return m_metadataInfo; }
+
+    bool operator==(const TemplateImpl<CharT>& other) const
+    {
+        if (m_env && other.m_env)
+        {
+            if (*m_env != *other.m_env)
+            {
+                return false;
+            }
+        }
+        if (m_settings->settings != other.m_settings->settings)
+        {
+            return false;
+        }
+        // The same source, settings and environment parse to the same tree
+        const bool sameSource = m_template && other.m_template ? *m_template == *other.m_template : m_template == other.m_template;
+        if (!sameSource)
+        {
+            return false;
+        }
+        if (m_metadata != other.m_metadata)
+        {
+            return false;
+        }
+        // m_metadataJson - only for persistence purposes
+        //if (m_metadataJson != other.m_metadataJson)
+        //    return false;
+        if (m_metadataInfo != other.m_metadataInfo)
+        {
+            return false;
+        }
+        return true;
+    }
+private:
+    // GetMetadata with m_metadataMutex held
+    nonstd::expected<GenericMap, BasicErrorInfo<CharT>> ParseMetadata() const
+    {
         if (m_metadata)
         {
             return m_metadata.value();
@@ -510,41 +556,6 @@ public:
         return GenericMap();
     }
 
-    nonstd::expected<MetadataInfo<CharT>, BasicErrorInfo<CharT>> GetMetadataRaw() const { return m_metadataInfo; }
-
-    bool operator==(const TemplateImpl<CharT>& other) const
-    {
-        if (m_env && other.m_env)
-        {
-            if (*m_env != *other.m_env)
-            {
-                return false;
-            }
-        }
-        if (m_settings->settings != other.m_settings->settings)
-        {
-            return false;
-        }
-        // The same source, settings and environment parse to the same tree
-        const bool sameSource = m_template && other.m_template ? *m_template == *other.m_template : m_template == other.m_template;
-        if (!sameSource)
-        {
-            return false;
-        }
-        if (m_metadata != other.m_metadata)
-        {
-            return false;
-        }
-        // m_metadataJson - only for persistence purposes
-        //if (m_metadataJson != other.m_metadataJson)
-        //    return false;
-        if (m_metadataInfo != other.m_metadataInfo)
-        {
-            return false;
-        }
-        return true;
-    }
-private:
     [[noreturn]] void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) const
     {
         typename BasicErrorInfo<CharT>::Data errorData;
