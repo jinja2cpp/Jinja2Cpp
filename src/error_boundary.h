@@ -1,6 +1,8 @@
 #ifndef JINJA2CPP_SRC_ERROR_BOUNDARY_H
 #define JINJA2CPP_SRC_ERROR_BOUNDARY_H
 
+#include "resource_limit.h"
+
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/exception.h>
 
@@ -12,14 +14,16 @@
 
 namespace jinja2::detail
 {
-// The error a public Load or Render boundary returns for the exception being handled, one the
-// engine did not raise (docs/api-2.0.md, 2.1): its code, its what() and the exception itself.
+// The error a public Load or Render boundary returns for the exception being handled (docs/api-2.0.md,
+// 2.1): its code, its what() and, when the engine did not raise it, the exception itself.
 // Call it from a catch handler only. std::bad_alloc goes on unchanged, before anything allocates.
 template<typename CharT>
 BasicErrorInfo<CharT> CurrentExceptionToError(const std::string& fileName)
 {
     ErrorCode code = ErrorCode::UnexpectedException;
     const char* message = "unknown exception";
+    // Kept only for an exception raised outside the engine (docs/api-2.0.md, 2.1)
+    bool fromOutside = true;
     try
     {
         throw;
@@ -32,6 +36,12 @@ BasicErrorInfo<CharT> CurrentExceptionToError(const std::string& fileName)
     {
         code = ex.Code();
         message = ex.what();
+    }
+    catch (const ResourceLimitError& ex)
+    {
+        code = ErrorCode::ResourceLimitExceeded;
+        message = ex.what();
+        fromOutside = false;
     }
     catch (const std::length_error& ex)
     {
@@ -53,7 +63,10 @@ BasicErrorInfo<CharT> CurrentExceptionToError(const std::string& fileName)
     errorData.srcLoc.line = 1;
     errorData.srcLoc.col = 1;
     errorData.extraParams.emplace_back(std::string(message));
-    errorData.exception = std::current_exception();
+    if (fromOutside)
+    {
+        errorData.exception = std::current_exception();
+    }
     return BasicErrorInfo<CharT>(std::move(errorData));
 }
 } // namespace jinja2::detail

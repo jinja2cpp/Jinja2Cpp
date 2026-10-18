@@ -1,6 +1,8 @@
 #ifndef JINJA2CPP_SRC_NODE_ARENA_H
 #define JINJA2CPP_SRC_NODE_ARENA_H
 
+#include "resource_limit.h"
+
 #include <boost/container/small_vector.hpp>
 #include <boost/core/span.hpp>
 
@@ -1047,7 +1049,7 @@ public:
         static_assert(sizeof(T) % alignof(Item) == 0, "the items are aligned right after the node");
         if (items.size() > (std::numeric_limits<std::uint32_t>::max() - sizeof(T)) / sizeof(Item))
         {
-            throw std::length_error("a template list too long");
+            throw ResourceLimitError("a template list too long");
         }
         const auto ref = MakeSized<T>(sizeof(T) + items.size_bytes(), static_cast<std::uint32_t>(items.size()));
         // Right after the node: one past it, in the same allocation
@@ -1068,7 +1070,7 @@ public:
         static_assert(alignof(T) <= Alignment, "the arena aligns lists to 8 bytes");
         if (items.size() > std::numeric_limits<std::uint32_t>::max() / sizeof(T))
         {
-            throw std::length_error("a template list too long");
+            throw ResourceLimitError("a template list too long");
         }
         std::uint32_t offset = 0;
         T* data = static_cast<T*>(Allocate(items.size_bytes(), offset));
@@ -1112,7 +1114,7 @@ public:
 
         if (name.size() > std::numeric_limits<std::uint32_t>::max())
         {
-            throw std::length_error("a template list too long");
+            throw ResourceLimitError("a template list too long");
         }
         std::uint32_t offset = 0;
         // Blocks stay where they are until the tree is sealed, so the entry keeps the pointer
@@ -1261,7 +1263,7 @@ private:
         size = (size + Alignment - 1) & ~(Alignment - 1);
         if (size > std::numeric_limits<std::uint32_t>::max() - m_used)
         {
-            throw std::length_error("a template too large for its arena");
+            throw ResourceLimitError("a template too large for its arena");
         }
         if (size > m_left)
         {

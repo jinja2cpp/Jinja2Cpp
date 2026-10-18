@@ -287,6 +287,8 @@ TEST_F(RecursionLimitsTest, HugeSequencesFailFast)
         ASSERT_FALSE(result.has_value()) << source;
         EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode()) << source;
         EXPECT_NE(std::string::npos, result.error().ToString().find("too long")) << result.error().ToString();
+        // The engine's own limit: no exception to hand back (docs/api-2.0.md, 2.1)
+        EXPECT_FALSE(result.error().GetException()) << source;
     }
     // An integer literal beyond int64 is a float here (docs/tasks/0178), which range()
     // refuses before computing a length; Python raises OverflowError

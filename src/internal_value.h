@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_INTERNAL_VALUE_H
 
 #include "loop_attr.h"
+#include "resource_limit.h"
 
 #include <jinja2cpp/config.h>
 #include <jinja2cpp/generic_list.h>
@@ -396,7 +397,7 @@ inline void CheckSequenceSize(uint64_t size, const char* what)
 {
     if (size > MaxSequenceSize)
     {
-        throw std::length_error(std::string(what) + " of length " + std::to_string(size) + " is too long");
+        throw ResourceLimitError(std::string(what) + " of length " + std::to_string(size) + " is too long");
     }
 }
 

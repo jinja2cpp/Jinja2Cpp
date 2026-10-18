@@ -39,12 +39,20 @@ are what this codebase has actually got wrong.
   allocation and integer conversions following task 0172. Configurable limits are
   still open (task 0097): a missing per-render budget is not a finding, but a new
   path that bypasses the existing cap is.
-- **Errors reach the caller as a `Result`.** Today Load and Render catch
-  `std::exception` at the API boundary and report it (`src/template_impl.h`); a change
-  must not let an exception escape that boundary or crash instead. Exceptions from user
-  callables are reported, never propagated raw, and a `noexcept` function must not
-  reach a throw. Task 0250 refines the contract (typed codes, which exceptions may
-  escape); until its phases land, follow the code, not the task text.
+- **Errors reach the caller as a `Result`.** Load, Render, `GetMetadata*` and
+  `TemplateEnv::LoadTemplate*` return every failure in `Result`; only `std::bad_alloc`
+  escapes, meaning the system is out of memory (docs/api-2.0.md 2.1, task 0253). The
+  boundary is `detail::CurrentExceptionToError` (`src/error_boundary.h`): a host
+  `jinja2::Exception` keeps its code, any other exception becomes `UnexpectedException`,
+  and `GetException()` holds the original only when the exception came from outside the
+  engine. An engine limit throws `ResourceLimitError` (`src/resource_limit.h`, code 18,
+  no exception kept), not a bare `std::length_error`. Flag a catch that swallows
+  `std::bad_alloc` (a `catch (std::exception&)` or `catch (...)` that does not rethrow it),
+  a `noexcept` function or destructor that can allocate or throw, a value returned into
+  expected-lite's `noexcept` converting constructor without a local copy, and code that
+  leaves an arena, table or template unusable when an allocation fails
+  (`jinja2cpp_alloc_tests` exercises Load and Render with each allocation failing).
+  Engine errors still reported as standard exceptions get their own codes in 0255.
 - **Lifetimes.** The worst historical class (0112, 0115, 0125, 0134). Trace the owner
   of every `string_view`, lent item, generator item, reflected nested item, container
   returned by a callable, arena node (`NodeRef`) and stored macro/self/super callable.

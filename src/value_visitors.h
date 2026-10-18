@@ -6,6 +6,7 @@
 #include "loop_attr.h"
 #include "make_unexpected.h"
 #include "recursion_guard.h"
+#include "resource_limit.h"
 #include "undefined.h"
 #include "unicode_printable.h"
 
@@ -1533,7 +1534,7 @@ struct BinaryMathOperation : BaseVisitor<>
         }
         if (static_cast<uint64_t>(count) > MaxSequenceSize / text.size())
         {
-            throw std::length_error("repeated string is too long");
+            throw ResourceLimitError("repeated string is too long");
         }
         return InternalValue::MakeText<CharT>(text.size() * static_cast<size_t>(count), [text, count](boost::span<CharT> chars) {
             auto out = chars.begin();
@@ -1703,7 +1704,7 @@ struct BinaryMathOperation : BaseVisitor<>
         const auto size = values.size();
         if (size != 0 && count > 0 && static_cast<uint64_t>(count) > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) / size)
         {
-            throw std::length_error("repeated list is too long");
+            throw ResourceLimitError("repeated list is too long");
         }
         const auto listSize = size * static_cast<size_t>(count > 0 ? count : 0);
         auto result = ListAdapter::CreateAdapter(listSize, [size, values = std::move(values)](size_t idx) { return values[idx % size]; });

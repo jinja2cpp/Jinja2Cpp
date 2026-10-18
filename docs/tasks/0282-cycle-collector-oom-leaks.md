@@ -2,7 +2,7 @@
 status: open
 priority: low
 area: robustness
-depends: [0110, 0256]
+depends: [0110]
 touches: [src/cycle_collector.cpp, src/cycle_collector.h, test/allocation_failure_test.cpp]
 ---
 # Reference cycles leak when an allocation fails during a render
