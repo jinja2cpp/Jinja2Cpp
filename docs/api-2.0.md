@@ -255,7 +255,9 @@ section 2.1 (0250).
   `jinja2::Exception{ResourceLimitExceeded}` from a callable, a sink or the host's allocator. A
   failed Load keeps the previous template; a failed render leaves `Template`, `TemplateEnv`
   and the thread caches usable. Until [0256](tasks/0256-survive-allocation-failure.md) lands,
-  some allocation failures crash (arena block bookkeeping, vendored robin_hood).
+  some allocation failures crash (arena block bookkeeping, vendored robin_hood; fixed by
+  #597). With the nlohmann JSON binding, OOM inside `nlohmann::json`'s destructor terminates
+  the process (0279).
 - **Caller-owned output** ([0257](tasks/0257-render-to-string-and-sink.md)):
   - `RenderTo(StringType& out, params)` appends; on any failure `out` is truncated back to its
     size at entry;
