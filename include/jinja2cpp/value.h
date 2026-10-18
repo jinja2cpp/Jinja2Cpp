@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_VALUE_H
 #define JINJA2CPP_VALUE_H
 
+#include <jinja2cpp/fwd.h> // IWYU pragma: export
 #include <jinja2cpp/config.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/utils/i_comparable.h>
@@ -44,8 +45,6 @@ inline bool operator!=(const NoneValue& /*lhs*/, const NoneValue& /*rhs*/) noexc
 }
 
 using EmptyValue JINJA2CPP_DEPRECATED("jinja2cpp-2: NoneValue") = NoneValue;
-
-class Value;
 
 /*!
  * \brief Interface to the generic dictionary type which maps string to some value
@@ -235,10 +234,6 @@ JINJA2CPP_EXPORT bool operator==(const GenericMap& lhs, const GenericMap& rhs);
 JINJA2CPP_EXPORT bool operator!=(const GenericMap& lhs, const GenericMap& rhs);
 
 using ValuesList = std::vector<Value>;
-struct ValuesMap;
-struct UserCallableArgs;
-struct ParamInfo;
-struct UserCallable;
 
 //! Holds the recursive alternatives of \ref Value (\ref ValuesList, \ref ValuesMap, \ref UserCallable) by value
 template<typename T>
@@ -674,7 +669,7 @@ public:
      */
     JINJA2CPP_EXPORT std::to_chars_result ToChars(char* first, char* last) const noexcept;
 
-    [[nodiscard]] bool IsEqual(const Value& rhs) const;
+    [[nodiscard]] JINJA2CPP_EXPORT bool IsEqual(const Value& rhs) const;
 
     // 1.x names, kept as one-line forwards until 3.0 (docs/api-2.0.md 5.1)
 
@@ -981,17 +976,17 @@ private:
     uint64_t m_counter{};
 };
 
-bool operator==(const UserCallable& lhs, const UserCallable& rhs);
-bool operator!=(const UserCallable& lhs, const UserCallable& rhs);
+JINJA2CPP_EXPORT bool operator==(const UserCallable& lhs, const UserCallable& rhs);
+JINJA2CPP_EXPORT bool operator!=(const UserCallable& lhs, const UserCallable& rhs);
 
 
 inline Value::Value(const UserCallable& callable)
-    : m_data(RecWrapper<UserCallable>(xyz::in_place_t{}, callable))
+    : m_data(RecWrapper<UserCallable>(detail::in_place_t{}, callable))
 {
 }
 
 inline Value::Value(UserCallable&& callable)
-    : m_data(RecWrapper<UserCallable>(xyz::in_place_t{}, std::move(callable)))
+    : m_data(RecWrapper<UserCallable>(detail::in_place_t{}, std::move(callable)))
 {
 }
 
@@ -1117,19 +1112,19 @@ inline Value& Value::operator=(Value&& val) noexcept
     return *this;
 }
 inline Value::Value(const ValuesMap& map)
-    : m_data(RecWrapper<ValuesMap>(xyz::in_place_t{}, map))
+    : m_data(RecWrapper<ValuesMap>(detail::in_place_t{}, map))
 {
 }
 inline Value::Value(const ValuesList& list)
-    : m_data(RecWrapper<ValuesList>(xyz::in_place_t{}, list))
+    : m_data(RecWrapper<ValuesList>(detail::in_place_t{}, list))
 {
 }
 inline Value::Value(ValuesList&& list)
-    : m_data(RecWrapper<ValuesList>(xyz::in_place_t{}, std::move(list)))
+    : m_data(RecWrapper<ValuesList>(detail::in_place_t{}, std::move(list)))
 {
 }
 inline Value::Value(ValuesMap&& map)
-    : m_data(RecWrapper<ValuesMap>(xyz::in_place_t{}, std::move(map)))
+    : m_data(RecWrapper<ValuesMap>(detail::in_place_t{}, std::move(map)))
 {
 }
 

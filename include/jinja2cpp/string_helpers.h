@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_STRING_HELPERS_H
 #define JINJA2CPP_STRING_HELPERS_H
 
+#include "fwd.h" // IWYU pragma: export
 #include "config.h"
 #include "value.h"
 

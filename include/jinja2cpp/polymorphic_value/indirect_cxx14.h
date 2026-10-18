@@ -18,8 +18,8 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ==============================================================================*/
 
-#ifndef XYZ_INDIRECT_H
-#define XYZ_INDIRECT_H
+#ifndef JINJA2CPP_XYZ_INDIRECT_H
+#define JINJA2CPP_XYZ_INDIRECT_H
 
 #include <cassert>
 #include <initializer_list>
@@ -30,16 +30,22 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // Local change: upstream includes "feature_check.h" here for
 // XYZ_HAS_TEMPLATE_ARGUMENT_DEDUCTION; the C++17 floor always has it, and this
 // copy stays a single header. Vendored from jbcoe/value_types 57f2e7a (task 0072).
+// Local change (task 0076): namespace xyz moved into jinja2::detail and the
+// XYZ_ macros renamed JINJA2CPP_XYZ_, so a user's own copy of value_types
+// neither shadows this one through the shared include guards nor collides
+// with it at link time.
 
+namespace jinja2 {
+namespace detail {
 namespace xyz {
-#ifndef XYZ_IN_PLACE_DEFINED
-#define XYZ_IN_PLACE_DEFINED
+#ifndef JINJA2CPP_XYZ_IN_PLACE_DEFINED
+#define JINJA2CPP_XYZ_IN_PLACE_DEFINED
 
 struct in_place_t {};
-#endif  // XYZ_IN_PLACE_DEFINED
+#endif  // JINJA2CPP_XYZ_IN_PLACE_DEFINED
 
-#ifndef XYZ_UNREACHABLE_DEFINED
-#define XYZ_UNREACHABLE_DEFINED
+#ifndef JINJA2CPP_XYZ_UNREACHABLE_DEFINED
+#define JINJA2CPP_XYZ_UNREACHABLE_DEFINED
 
 [[noreturn]] inline void unreachable() {  // LCOV_EXCL_LINE
 #if (__cpp_lib_unreachable >= 202202L)
@@ -50,10 +56,10 @@ struct in_place_t {};
   __builtin_unreachable();  // LCOV_EXCL_LINE
 #endif
 }
-#endif  // XYZ_UNREACHABLE_DEFINED
+#endif  // JINJA2CPP_XYZ_UNREACHABLE_DEFINED
 
-#ifndef XYZ_EMPTY_BASE_DEFINED
-#define XYZ_EMPTY_BASE_DEFINED
+#ifndef JINJA2CPP_XYZ_EMPTY_BASE_DEFINED
+#define JINJA2CPP_XYZ_EMPTY_BASE_DEFINED
 
 // This is a helper class to allow empty base class optimization.
 // This implementation is duplicated in compatibility/polymorphic_cxx14.h.
@@ -93,7 +99,7 @@ class empty_base_optimization<T, true> : private T {
   const T& get() const noexcept { return *this; }
 };
 }  // namespace detail
-#endif  // XYZ_EMPTY_BASE_DEFINED
+#endif  // JINJA2CPP_XYZ_EMPTY_BASE_DEFINED
 
 template <class T, class A>
 class indirect;
@@ -609,15 +615,17 @@ indirect(std::allocator_arg_t, Alloc, Value) -> indirect<
     Value, typename std::allocator_traits<Alloc>::template rebind_alloc<Value>>;
 
 }  // namespace xyz
+}  // namespace detail
+}  // namespace jinja2
 
 template <class T, class Alloc>
-struct std::hash<xyz::indirect<T, Alloc>> {
-  std::size_t operator()(const xyz::indirect<T, Alloc>& key) const {
+struct std::hash<jinja2::detail::xyz::indirect<T, Alloc>> {
+  std::size_t operator()(const jinja2::detail::xyz::indirect<T, Alloc>& key) const {
     if (key.valueless_after_move()) {
       return static_cast<std::size_t>(-1);  // Implementation defined value.
     }
-    return std::hash<typename xyz::indirect<T, Alloc>::value_type>{}(*key);
+    return std::hash<typename jinja2::detail::xyz::indirect<T, Alloc>::value_type>{}(*key);
   }
 };
 
-#endif  // XYZ_INDIRECT_H
+#endif  // JINJA2CPP_XYZ_INDIRECT_H

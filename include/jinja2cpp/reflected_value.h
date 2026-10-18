@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_REFLECTED_VALUE_H
 #define JINJA2CPP_REFLECTED_VALUE_H
 
+#include <jinja2cpp/fwd.h> // IWYU pragma: export
 #include "value.h"
 
 #include <jinja2cpp/generic_list.h>
@@ -79,7 +80,7 @@ namespace detail
  * `detail::Reflector` keeps working, still takes precedence over the library's reflector for the same type, and can
  * still delegate to one (`detail::Reflector<std::string>::Create(...)`). New code specialises \ref jinja2::Reflector.
  */
-template<typename T, typename Tag = void>
+template<typename T, typename Tag>
 struct Reflector;
 } // namespace detail
 
@@ -104,7 +105,7 @@ struct Reflector;
  *
  * @tparam T Type to reflect
  */
-template<typename T, typename Tag = void>
+template<typename T, typename Tag>
 struct Reflector : detail::Reflector<T, Tag>
 {
 };
@@ -125,7 +126,7 @@ struct TypeReflected : TypeReflectedImpl<T, true>
 
 
 
-template<typename T, typename = void>
+template<typename T, typename>
 struct TypeReflection : TypeReflectedImpl<T, false>
 {
 };

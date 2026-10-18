@@ -45,7 +45,7 @@ source and committed), `system` (found on the machine), `ci` (GitHub Actions).
 | Boost | 1.92.0 | BSL-1.0 | mandatory | link | fetched | the nine libraries below | Yes, piece by piece (docs/tasks/0230) |
 | robin-hood-hashing | 3.11.5, modified | MIT | mandatory | internal | vendored | flat hash map for values and scopes, faster than `std::unordered_map` here | Keep the idea; upstream is archived (docs/tasks/0231) |
 | lexertk | unrecorded, modified | MIT | mandatory | internal | vendored | expression tokenizer | Keep; effectively forked code |
-| value_types | 57f2e7a, modified | MIT | mandatory | public-api | vendored | `xyz::polymorphic`/`indirect` behind `jinja2::types` (Value, GenericList) | Keep; `std::` at C++26 |
+| value_types | 57f2e7a, modified | MIT | mandatory | public-api | vendored | `polymorphic`/`indirect` in `jinja2::detail::xyz`, behind `jinja2::types` (Value, GenericList) | Keep; `std::` at C++26 |
 | Unicode tables | UCD 15.0.0 via Python 3.12 | Unicode-3.0 | mandatory | internal | generated | Python-identical `isprintable`, case mapping, digits without ICU | Data only; acquisition decision open in 0187/0186 |
 | HTML entities | Python 3.12 `html.entities` | PSF-2.0 | mandatory | internal | generated | MarkupSafe-compatible unescape | Data only; keep |
 | Boost.JSON | 1.92.0 | BSL-1.0 | alternative (default) | public-optional | fetched | parses `{% meta %}` JSON for `GetMetadata` | Yes: the heaviest backend for a niche feature |

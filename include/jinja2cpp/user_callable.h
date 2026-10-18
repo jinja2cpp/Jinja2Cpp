@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_USER_CALLABLE_H
 #define JINJA2CPP_USER_CALLABLE_H
 
+#include "fwd.h" // IWYU pragma: export
 #include "string_helpers.h"
 #include "value.h"
 
