@@ -159,9 +159,9 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
         }
         if (map)
         {
-            for (auto& key : map->GetKeys())
+            for (auto& [key, value] : map->GetEntries())
             {
-                result[key] = map->GetValueByName(key);
+                result[KeyToString(key)] = std::move(value);
             }
         }
         else if (auto list = AsList(source))
@@ -170,7 +170,7 @@ void CollectDictItems(const CallParams& params, const char* fnName, Map& result)
             {
                 if (const auto* pair = GetIf<KeyValuePair>(&item))
                 {
-                    result[pair->key] = pair->value;
+                    result[KeyToString(pair->key)] = pair->value;
                     continue;
                 }
                 // Any iterable of two items is a pair, a two-character string included

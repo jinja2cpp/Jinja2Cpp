@@ -825,21 +825,20 @@ void ValueRendererBase<CharT>::operator()(const MapRef& map) const
 
     // Python prints dicts in their own order: ValuesMap and InternalDict keep insertion order, reflected
     // structs report sorted keys
-    auto keys = map.GetKeys();
+    auto entries = map.GetEntries();
 
-    ValueRenderer<CharT> keyRenderer(*m_os, true);
     AppendAscii("{");
     bool isFirst = true;
-    for (auto& key : keys)
+    for (auto& [key, value] : entries)
     {
         if (!isFirst)
         {
             AppendAscii(", ");
         }
         isFirst = false;
-        keyRenderer(key);
+        RenderRepr(key, &containers);
         AppendAscii(": ");
-        RenderRepr(map.GetValueByName(key), &containers);
+        RenderRepr(value, &containers);
     }
     AppendAscii("}");
     if (objectClass)
@@ -854,7 +853,7 @@ void ValueRendererBase<CharT>::operator()(const KeyValuePair& pair) const
 {
     // dict items are (key, value) tuples in Python
     AppendAscii("(");
-    ValueRenderer<CharT>(*m_os, true)(pair.key);
+    RenderRepr(pair.key, m_containers);
     AppendAscii(", ");
     RenderRepr(pair.value, m_containers);
     AppendAscii(")");
@@ -1730,9 +1729,10 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             CheckStack();
             equal = true;
-            for (auto& key : left.GetKeys())
+            for (auto& [key, value] : left.GetEntries())
             {
-                if (!right.HasValue(key) || !ConvertToBool(Apply2<BinaryMathOperation>(left.GetValueByName(key), right.GetValueByName(key), BinaryExpression::LogicalEq)))
+                const auto other = right.FindItem(key);
+                if (!other || !ConvertToBool(Apply2<BinaryMathOperation>(value, *other, BinaryExpression::LogicalEq)))
                 {
                     equal = false;
                     break;

@@ -1875,31 +1875,10 @@ InternalDict& MutableDict(const InternalValue& self)
     return *items;
 }
 
-// The keys in iteration order: insertion order for the dicts the template owns
-std::vector<std::string> KeysOf(const MapRef& map)
-{
-    if (auto* items = map.GetMutableItems())
-    {
-        std::vector<std::string> keys;
-        keys.reserve(items->size());
-        for (auto& [key, value] : *items)
-        {
-            keys.push_back(key);
-        }
-        return keys;
-    }
-    return map.GetKeys();
-}
-
 InternalValue DictKeys(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "keys", 0, 0);
-    InternalValueList result;
-    for (auto& key : KeysOf(MapOf(self)))
-    {
-        result.emplace_back(key);
-    }
-    return ListAdapter::CreateAdapter(std::move(result));
+    return ListAdapter::CreateAdapter(MapOf(self).GetKeyValues());
 }
 
 InternalValue DictValues(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -1907,9 +1886,9 @@ InternalValue DictValues(const InternalValue& self, const CallParams& params, Re
     CheckArgs(params, "values", 0, 0);
     const auto& map = MapOf(self);
     InternalValueList result;
-    for (auto& key : KeysOf(map))
+    for (auto& entry : map.GetEntries())
     {
-        result.push_back(map.GetValueByName(key));
+        result.push_back(std::move(entry.value));
     }
     InternalValue list = ListAdapter::CreateAdapter(std::move(result));
     if (self.ShouldExtendLifetime())
@@ -1924,9 +1903,9 @@ InternalValue DictItems(const InternalValue& self, const CallParams& params, Ren
     CheckArgs(params, "items", 0, 0);
     const auto& map = MapOf(self);
     InternalValueList result;
-    for (auto& key : KeysOf(map))
+    for (auto& entry : map.GetEntries())
     {
-        result.push_back(MakeTuple({ InternalValue(key), map.GetValueByName(key) }));
+        result.push_back(MakeTuple({ std::move(entry.key), std::move(entry.value) }));
     }
     InternalValue list = ListAdapter::CreateAdapter(std::move(result));
     if (self.ShouldExtendLifetime())
@@ -1994,9 +1973,9 @@ void CollectPositionalUpdates(const InternalValue& other, DictUpdates& updates)
     // An object such as namespace() is no mapping, and not iterable either
     if (auto otherMap = AsMap(other); otherMap && !otherMap->GetObjectClass())
     {
-        for (auto& key : KeysOf(*otherMap))
+        for (auto& entry : otherMap->GetEntries())
         {
-            updates.emplace_back(key, otherMap->GetValueByName(key));
+            updates.emplace_back(KeyString(entry.key), std::move(entry.value));
         }
     }
     else
@@ -2071,9 +2050,9 @@ InternalValue DictCopy(const InternalValue& self, const CallParams& params, Rend
     CheckArgs(params, "copy", 0, 0);
     const auto& map = MapOf(self);
     InternalDict result;
-    for (auto& key : KeysOf(map))
+    for (auto& entry : map.GetEntries())
     {
-        result[key] = map.GetValueByName(key);
+        result[KeyString(entry.key)] = std::move(entry.value);
     }
     return CreateMapAdapter(std::move(result));
 }
@@ -2327,14 +2306,13 @@ InternalValue MakeMutable(const InternalValue& value)
     if (auto map = AsMap(value))
     {
         InternalDict items;
-        for (auto& key : map->GetKeys())
+        for (auto& [key, item] : map->GetEntries())
         {
-            auto item = map->GetValueByName(key);
             if (extendLifetime)
             {
                 item.SetParentData(value);
             }
-            items[key] = std::move(item);
+            items[KeyString(key)] = std::move(item);
         }
         return CreateMapAdapter(std::move(items));
     }

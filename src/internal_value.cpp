@@ -890,9 +890,9 @@ struct ListConverter : public visitors::BaseVisitor<std::optional<ListAdapter>>
         }
 
         InternalValueList list;
-        for (auto& k : map.GetKeys())
+        for (auto& k : map.GetKeyValues())
         {
-            list.emplace_back(TargetString(k));
+            list.emplace_back(std::move(k));
         }
 
         return ListAdapter::CreateAdapter(std::move(list));
@@ -1662,10 +1662,37 @@ std::vector<KeyValuePair> IMapAccessor::GetEntries() const
     for (auto& key : keys)
     {
         auto value = GetItem(key);
-        result.push_back(KeyValuePair{ std::move(key), std::move(value) });
+        result.push_back(KeyValuePair{ InternalValue(key), std::move(value) });
     }
 
     return result;
+}
+
+InternalValueList IMapAccessor::GetKeyValues() const
+{
+    InternalValueList result;
+    auto keys = GetKeys();
+    result.reserve(keys.size());
+    for (auto& key : keys)
+    {
+        result.emplace_back(key);
+    }
+
+    return result;
+}
+
+std::optional<InternalValue> IMapAccessor::FindItem(const InternalValue& key) const
+{
+    if (IsStringValue(key))
+    {
+        const auto name = AsString(key);
+        if (HasValue(name))
+        {
+            return GetItem(name);
+        }
+    }
+
+    return std::nullopt;
 }
 
 template<template<typename> class Holder, bool canModify, typename Map = InternalValueMap>
@@ -1710,7 +1737,7 @@ public:
 
         for (const auto& [key, value] : m_values.Get())
         {
-            result.push_back(KeyValuePair{ key, value });
+            result.push_back(KeyValuePair{ InternalValue(key), value });
         }
 
         return result;
@@ -1903,7 +1930,7 @@ public:
 
         for (const auto& [key, value] : m_values.Get())
         {
-            result.push_back(KeyValuePair{ key, LendItem(m_values, value) });
+            result.push_back(KeyValuePair{ InternalValue(key), LendItem(m_values, value) });
         }
 
         return result;
@@ -2044,7 +2071,7 @@ struct OutputValueConvertor
     result_t operator()(const MapRef& adapter) const { return result_t(adapter.CreateGenericMap()); }
     result_t operator()(const ListRef& adapter) const { return result_t(adapter.CreateGenericList()); }
     result_t operator()(const ValueRef& ref) const { return ref.get(); }
-    result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }
+    result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", IntValue2Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }
     result_t operator()(const Callable&) const { return result_t(); }
     result_t operator()(const UserCallable&) const { return result_t(); }
     result_t operator()(const std::shared_ptr<IRendererBase>&) const { return result_t(); }

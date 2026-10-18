@@ -467,21 +467,32 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     struct SortItem
     {
         KeyValuePair* pair;
+        // The key as UTF-8 text (lowered unless case-sensitive) when every key is a string
         std::string sortKey;
+        // The key otherwise; Python lowers only a str key, not the elements of a tuple
+        InternalValue sortValue;
     };
     bool (*comparator)(const SortItem& left, const SortItem& right) = nullptr;
     bool lowerKeys = false;
+    bool sortByKey = false;
+    bool keysAreStrings = true;
+
+    auto entries = map->GetEntries();
 
     if (AsString(byVal) == "key") // Sort by key
     {
+        sortByKey = true;
         lowerKeys = !ConvertToBool(isCsVal);
-        if (lowerKeys)
+        keysAreStrings = std::all_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return IsStringValue(entry.key); });
+        if (keysAreStrings)
         {
             comparator = [](const SortItem& left, const SortItem& right) { return left.sortKey < right.sortKey; };
         }
         else
         {
-            comparator = [](const SortItem& left, const SortItem& right) { return left.pair->key < right.pair->key; };
+            comparator = [](const SortItem& left, const SortItem& right) {
+                return CompareForOrder(left.sortValue, right.sortValue, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive);
+            };
         }
     }
     else if (AsString(byVal) == "value")
@@ -505,15 +516,34 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
         throw std::runtime_error(R"(You can only sort by either "key" or "value")");
     }
 
-    auto entries = map->GetEntries();
     std::vector<SortItem> tempVector;
     tempVector.reserve(entries.size());
     for (auto& entry : entries)
     {
-        SortItem item{ &entry, std::string() };
-        if (lowerKeys)
+        SortItem item{ &entry, std::string(), InternalValue() };
+        if (sortByKey && keysAreStrings)
         {
-            detail::LowerUtf8(entry.key, item.sortKey);
+            const auto text = AsString(entry.key);
+            if (lowerKeys)
+            {
+                detail::LowerUtf8(text, item.sortKey);
+            }
+            else
+            {
+                item.sortKey = text;
+            }
+        }
+        else if (sortByKey)
+        {
+            if (lowerKeys && IsStringValue(entry.key))
+            {
+                detail::LowerUtf8(AsString(entry.key), item.sortKey);
+                item.sortValue = InternalValue(item.sortKey);
+            }
+            else
+            {
+                item.sortValue = entry.key;
+            }
         }
         tempVector.push_back(std::move(item));
     }
@@ -1680,7 +1710,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             return InternalValue();
         }
 
-        return ListAdapter::CreateAdapter(InternalValueList{ InternalValue(val.key), val.value });
+        return ListAdapter::CreateAdapter(InternalValueList{ val.key, val.value });
     }
 
     InternalValue operator()(const MapRef& val) const
@@ -1694,9 +1724,9 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             throw std::runtime_error("'"s + objectClass + "' object is not iterable");
         }
 
-        auto keys = val.GetKeys();
+        auto keys = val.GetKeyValues();
         auto numKeys = keys.size();
-        return ListAdapter::CreateAdapter(numKeys, [values = std::move(keys)](size_t idx) { return InternalValue(values[idx]); });
+        return ListAdapter::CreateAdapter(numKeys, [values = std::move(keys)](size_t idx) { return values[idx]; });
     }
 
     template<typename T>
@@ -2350,7 +2380,7 @@ InternalValue ValueConverter::Items(const InternalValue& baseVal, RenderContext&
     InternalValueList items;
     for (auto& [key, value] : map->GetEntries())
     {
-        items.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(std::move(key)), std::move(value) }).MarkAsTuple());
+        items.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ std::move(key), std::move(value) }).MarkAsTuple());
     }
     InternalValue result = ListAdapter::CreateAdapter(std::move(items));
     if (baseVal.ShouldExtendLifetime())

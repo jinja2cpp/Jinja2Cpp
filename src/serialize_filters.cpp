@@ -27,6 +27,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 using namespace std::string_literals;
 
@@ -39,6 +40,26 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     explicit PrettyPrinter(const RenderContext* context)
         : m_context(context)
     {
+    }
+
+    // The entries in the order pprint prints them: by key. String keys sort by code point,
+    // which is UTF-8 byte order; the keys of a mapping are all strings so far
+    static void SortEntriesByKey(std::vector<KeyValuePair>& entries)
+    {
+        std::vector<std::pair<std::string, size_t>> order;
+        order.reserve(entries.size());
+        for (size_t idx = 0; idx != entries.size(); ++idx)
+        {
+            order.emplace_back(AsString(entries[idx].key), idx);
+        }
+        std::sort(order.begin(), order.end());
+        std::vector<KeyValuePair> sorted;
+        sorted.reserve(entries.size());
+        for (const auto& item : order)
+        {
+            sorted.push_back(std::move(entries[item.second]));
+        }
+        entries = std::move(sorted);
     }
 
     // A value as pprint prints it: Markup as Markup('...')
@@ -87,11 +108,11 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         fmt::format_to(os, "{{");
 
         // Python's pprint sorts dict keys; UTF-8 byte order is code point order
-        auto keys = map.GetKeys();
-        std::sort(keys.begin(), keys.end());
+        auto entries = map.GetEntries();
+        SortEntriesByKey(entries);
 
         bool isFirst = true;
-        for (auto& k : keys)
+        for (auto& entry : entries)
         {
             if (isFirst)
             {
@@ -102,8 +123,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
                 fmt::format_to(os, ", ");
             }
 
-            fmt::format_to(os, "{}: ", Repr(k));
-            fmt::format_to(os, "{}", Print(map.GetValueByName(k), m_context));
+            fmt::format_to(os, "{}: ", Print(entry.key, m_context));
+            fmt::format_to(os, "{}", Print(entry.value, m_context));
         }
 
         fmt::format_to(os, "}}");
@@ -117,7 +138,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         std::string str;
         auto os = std::back_inserter(str);
 
-        fmt::format_to(os, "({}, ", Repr(kwPair.key));
+        fmt::format_to(os, "({}, ", Print(kwPair.key, m_context));
         fmt::format_to(os, "{})", Print(kwPair.value, m_context));
 
         return str;
@@ -433,7 +454,7 @@ private:
         }
         else if (const auto* pair = GetIf<KeyValuePair>(&value))
         {
-            InternalValueList items{ InternalValue(pair->key), pair->value };
+            InternalValueList items{ pair->key, pair->value };
             WriteContainer('[', ']', items, level, [this, level](const InternalValue& item) { WriteValue(item, level + 1); });
         }
         else if (auto list = AsList(value))
@@ -448,12 +469,18 @@ private:
                 throw std::runtime_error("Object of type "s + objectClass + " is not JSON serializable");
             }
             // sort_keys: Python orders str keys by code point, which is UTF-8 byte order
-            auto keys = map->GetKeys();
-            std::sort(keys.begin(), keys.end());
-            WriteContainer('{', '}', keys, level, [this, map, level](const std::string& key) {
-                WriteString(key);
+            auto entries = map->GetEntries();
+            std::vector<std::pair<std::string, size_t>> order;
+            order.reserve(entries.size());
+            for (size_t idx = 0; idx != entries.size(); ++idx)
+            {
+                order.emplace_back(AsString(entries[idx].key), idx);
+            }
+            std::sort(order.begin(), order.end());
+            WriteContainer('{', '}', order, level, [this, &entries, level](const std::pair<std::string, size_t>& item) {
+                WriteString(item.first);
                 m_out += ": ";
-                WriteValue(map->GetValueByName(key), level + 1);
+                WriteValue(entries[item.second].value, level + 1);
             });
         }
         else
@@ -594,13 +621,13 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     // Port of Jinja2's do_xmlattr: key="escaped str(value)" in the mapping's order, None and
     // undefined values left out (and callables, which have no str() here)
     std::string result;
-    for (auto& key : map->GetKeys())
+    for (auto& [keyValue, value] : map->GetEntries())
     {
-        auto value = map->GetValueByName(key);
         if (IsEmpty(value) || GetIf<Callable>(&value))
         {
             continue;
         }
+        const auto key = AsString(keyValue);
         // Jinja2 rejects keys with whitespace, "/", ">" or "="
         if (std::any_of(key.begin(), key.end(), [](char ch) { return std::strchr(" \t\n\r\f\v/>=", ch) != nullptr && ch != 0; }))
         {
