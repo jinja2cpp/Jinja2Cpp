@@ -256,7 +256,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0184](0184-gcc13-sanitizer-stringop-overflow.md) | The GCC 13 sanitizer build fails with -Wstringop-overflow | build | low | open |
 | [0185](0185-fuzz-oom-below-sequence-cap.md) | The fuzz job fails on lists below the sequence cap | robustness | medium | done |
 | [0186](0186-python-oracle-target.md) | Which Python and Jinja2 the parity oracle targets, and how users choose | parity | medium | open |
-| [0187](0187-generated-data-acquisition.md) | How generated tables and third-party data are acquired (SBOM) | build | low | open |
+| [0187](0187-generated-data-acquisition.md) | How generated tables and third-party data are acquired (SBOM) | build | low | in-progress |
 | [0188](0188-stored-loop-cycle-follows-loop.md) | A stored `loop.cycle` keeps the position it was read at | parity | low | done |
 | [0189](0189-casefold-non-ascii.md) | Case-insensitive comparison folds only ASCII | parity | low | done |
 | [0190](0190-sameas-arity-unique-unhashable.md) | `sameas` takes any number of arguments, `unique` takes unhashable items | parity | low | done |
@@ -296,3 +296,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0226](0226-license-metadata-and-distribution.md) | Reconcile package license metadata and ship required notices | release | high | open |
 | [0227](0227-supported-docs-and-example-surface.md) | Choose and verify the documentation and examples supported for 2.0 | release | high | open |
 | [0228](0228-task-number-uniqueness.md) | Two task files can share a number | agents | medium | open |
+| [0229](0229-unused-boost-components.md) | Drop the Boost libraries and includes nothing uses | build | low | open |
+| [0230](0230-boost-free-core.md) | A Boost-free core | build | medium | open |
+| [0231](0231-robin-hood-successor.md) | robin_hood's upstream is archived | perf | low | open |
+| [0232](0232-dependency-pin-drift.md) | Dependency pins disagree across modes and some are mutable | build | low | open |
