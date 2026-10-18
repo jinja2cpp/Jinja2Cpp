@@ -24,7 +24,6 @@
 #include <jinja2cpp/value.h>
 
 #include <boost/container/small_vector.hpp>
-#include <boost/core/null_deleter.hpp>
 #include <boost/core/span.hpp>
 
 #include <algorithm>

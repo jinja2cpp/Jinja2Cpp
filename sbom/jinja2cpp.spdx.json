@@ -110,7 +110,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: mandatory; phases: build,consumer-link; exposure: link; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: See the boost-* sub-components: 9 libraries are used directly; internal mode pulls 51 and installs all of them (56 MB of headers, 4 static libraries); why: Historically the portability layer for pre-C++17 (any, optional, variant, filesystem, string algorithms); today mostly small utilities that C++17 lacks (span, small_vector, intrusive_ptr, move-only any) plus Boost.JSON as the default metadata parser; lighten: The largest weight by far and the main target. Every directly used piece has a small replacement (see sub-components); a Boost-free core is feasible without behaviour change (docs/tasks/0230); conan: boost/1.91.0; transitive-libraries: algorithm,align,any,array,assert,atomic,bind,compat,concept_check,config,container,container_hash,conversion,core,describe,detail,endian,exception,filesystem,function,function_types,fusion,headers,integer,intrusive,io,iterator,json,lexical_cast,move,mp11,mpl,numeric,optional,predef,preprocessor,range,regex,scope,smart_ptr,system,throw_exception,tuple,type_index,type_traits,typeof,unordered,utility,variant,variant2,winapi"
+      "comment": "role: mandatory; phases: build,consumer-link; exposure: link; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: See the boost-* sub-components: 9 libraries are used directly; internal mode pulls 47 and installs all of them (56 MB of headers, 4 static libraries); why: Historically the portability layer for pre-C++17 (any, optional, variant, filesystem, string algorithms); today mostly small utilities that C++17 lacks (span, small_vector, intrusive_ptr, move-only any) plus Boost.JSON as the default metadata parser; lighten: The largest weight by far and the main target. Every directly used piece has a small replacement (see sub-components); a Boost-free core is feasible without behaviour change (docs/tasks/0230); conan: boost/1.91.0; transitive-libraries: algorithm,align,any,array,assert,atomic,bind,compat,concept_check,config,container,container_hash,conversion,core,describe,detail,endian,exception,filesystem,function,function_types,fusion,headers,intrusive,io,iterator,json,move,mp11,mpl,optional,predef,preprocessor,range,regex,scope,smart_ptr,system,throw_exception,tuple,type_index,type_traits,typeof,unordered,utility,variant2,winapi"
     },
     {
       "SPDXID": "SPDXRef-Package-boost-core",
@@ -131,7 +131,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: boost::span over node arrays, arguments and slots (about 57 uses in 14 src/ files: node_arena.h, statements.cpp, render_context.h); null_deleter.hpp is included by statements.cpp but unused; why: std::span is C++20; lighten: Replace with a 50-line internal span (or std::span behind a C++20 switch); drop the null_deleter include"
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: boost::span over node arrays, arguments and slots (about 57 uses in 14 src/ files: node_arena.h, statements.cpp, render_context.h); why: std::span is C++20; lighten: Replace with a 50-line internal span (or std::span behind a C++20 switch)"
     },
     {
       "SPDXID": "SPDXRef-Package-boost-container",
@@ -152,7 +152,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: mandatory; phases: build,consumer-link; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: small_vector in parsers, evaluator, name resolver and render context (about 27 uses in 10 src/ files); boost_container.a is linked because Boost.JSON needs it; why: Inline-storage vector that avoids heap allocations on hot paths (perf track 0117/0118); lighten: Header-only use; replaceable by an internal small_vector, but it is perf-sensitive, so measure with bench/ (Cachegrind gate) before swapping"
+      "comment": "role: mandatory; phases: build,consumer-link; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: small_vector in parsers, evaluator, name resolver and render context (about 27 uses in 10 src/ files); header-only use, but the internal modes build and link boost_container.a (named explicitly since lexical_cast stopped pulling it in); why: Inline-storage vector that avoids heap allocations on hot paths (perf track 0117/0118); lighten: Header-only use; replaceable by an internal small_vector, but it is perf-sensitive, so measure with bench/ (Cachegrind gate) before swapping"
     },
     {
       "SPDXID": "SPDXRef-Package-boost-smart-ptr",
@@ -257,7 +257,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: replace_all/replace_first and is_alnum in string_converter_filter.cpp, all()+is_space in template_parser.h; trim_all.hpp and join.hpp are included but unused; why: Convenience string helpers; lighten: Replace with a few lines of std::string code; drop the unused includes"
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: replace_all/replace_first and is_alnum in string_converter_filter.cpp, all()+is_space in template_parser.h; why: Convenience string helpers; lighten: Replace with a few lines of std::string code"
     },
     {
       "SPDXID": "SPDXRef-Package-boost-predef",
@@ -300,132 +300,6 @@
       ],
       "primaryPackagePurpose": "LIBRARY",
       "comment": "role: alternative; phases: build,consumer-link,runtime; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=boost (the default); used-for: Parses {% meta %} JSON metadata for Template::GetMetadata (template_impl.h:484-498, binding/boost_json_parser.h); the opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value; why: One of three interchangeable JSON backends; the default because Boost is already required; lighten: The heaviest backend (boost_json.a + boost_container.a, about 4.8 MB in a Debug build) for a niche feature (template metadata). An internal minimal JSON reader, or nlohmann as default, would remove both libraries; the adapter headers stay opt-in"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-boost-unordered",
-      "name": "boost-unordered",
-      "versionInfo": "1.92.0",
-      "supplier": "Organization: Boost.org",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "homepage": "https://www.boost.org",
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "BSL-1.0",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:github/boostorg/unordered@boost-1.92.0"
-        }
-      ],
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: redundant; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: Included by internal_value.h:16, nothing uses it (maps are robin_hood); why: Left over; lighten: Drop the include"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-boost-conversion",
-      "name": "boost-conversion",
-      "versionInfo": "1.92.0",
-      "supplier": "Organization: Boost.org",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "homepage": "https://www.boost.org",
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "BSL-1.0",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:github/boostorg/conversion@boost-1.92.0"
-        }
-      ],
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: redundant; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: Included by template_parser.cpp:19, no boost cast is used; why: Left over; lighten: Drop the include"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-boost-lexical-cast",
-      "name": "boost-lexical_cast",
-      "versionInfo": "1.92.0",
-      "supplier": "Organization: Boost.org",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "homepage": "https://www.boost.org",
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "BSL-1.0",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:github/boostorg/lexical_cast@boost-1.92.0"
-        }
-      ],
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: redundant; phases: build; exposure: none; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: Requested in BOOST_INCLUDE_LIBRARIES, JINJA2CPP_PRIVATE_LIBS (Boost::lexical_cast), the installed config's COMPONENTS and the external-mode find_package; no source includes it; why: Left over; lighten: Remove from the CMake lists (docs/tasks/0229)"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-boost-numeric-conversion",
-      "name": "boost-numeric_conversion",
-      "versionInfo": "1.92.0",
-      "supplier": "Organization: Boost.org",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "homepage": "https://www.boost.org",
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "BSL-1.0",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:github/boostorg/numeric_conversion@boost-1.92.0"
-        }
-      ],
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: redundant; phases: build; exposure: none; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: Requested by the CMake lists like lexical_cast; no source includes it; why: Left over; lighten: Remove from the CMake lists (docs/tasks/0229)"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-boost-variant",
-      "name": "boost-variant",
-      "versionInfo": "1.92.0",
-      "supplier": "Organization: Boost.org",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "homepage": "https://www.boost.org",
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "BSL-1.0",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:github/boostorg/variant@boost-1.92.0"
-        }
-      ],
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: redundant; phases: build; exposure: none; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: Requested by the CMake lists (and -Wno-error flags on boost_variant); std::variant is used everywhere since 0071; why: Left over; lighten: Remove from the CMake lists (docs/tasks/0229)"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-boost-optional",
-      "name": "boost-optional",
-      "versionInfo": "1.92.0",
-      "supplier": "Organization: Boost.org",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "homepage": "https://www.boost.org",
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "BSL-1.0",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:github/boostorg/optional@boost-1.92.0"
-        }
-      ],
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: redundant; phases: build; exposure: none; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: Requested by BOOST_INCLUDE_LIBRARIES and the conan-build find_package; std::optional is used since 0071; why: Left over; lighten: Remove from the CMake lists (docs/tasks/0229)"
     },
     {
       "SPDXID": "SPDXRef-Package-nlohmann-json",
@@ -671,36 +545,6 @@
       "relatedSpdxElement": "SPDXRef-Package-boost-json"
     },
     {
-      "spdxElementId": "SPDXRef-Package-boost",
-      "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-Package-boost-unordered"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-boost",
-      "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-Package-boost-conversion"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-boost",
-      "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-Package-boost-lexical-cast"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-boost",
-      "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-Package-boost-numeric-conversion"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-boost",
-      "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-Package-boost-variant"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-boost",
-      "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-Package-boost-optional"
-    },
-    {
       "spdxElementId": "SPDXRef-Package-nlohmann-json",
       "relationshipType": "OPTIONAL_DEPENDENCY_OF",
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
@@ -736,5 +580,5 @@
       "relatedSpdxElement": "SPDXRef-Package-html-entities"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-library-dffec926f80e9a85"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-library-7152e5f27e7bbf6e"
 }

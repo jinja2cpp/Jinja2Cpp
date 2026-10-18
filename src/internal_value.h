@@ -13,7 +13,6 @@
 #include <boost/iterator/iterator_facade.hpp>
 #include <boost/core/span.hpp>
 #include <boost/smart_ptr/intrusive_ptr.hpp>
-#include <boost/unordered_map.hpp>
 #include <fmt/core.h>
 
 #include <cstddef>

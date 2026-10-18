@@ -11,8 +11,8 @@
 
 #include <jinja2cpp/error_info.h>
 
+#include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/algorithm/string/trim_all.hpp>
 
 #include <algorithm>
 #include <cctype>
