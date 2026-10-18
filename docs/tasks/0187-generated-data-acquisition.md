@@ -31,7 +31,7 @@ in CI. Decide together with 0186.
 **Done when.** A manifest lists every embedded or fetched component with version and
 licence, installs ship an SBOM generated from it, and the table-source decision is recorded.
 
-**Progress (2026-10-18, PR #PRNUM).** The manifest and the SBOM are in place:
+**Progress (2026-10-18, PR #561).** The manifest and the SBOM are in place:
 `sbom/components.json` lists every fetched, vendored, generated and tooling component
 with version, licence, pin or hash and a role/phase/exposure/delivery classification;
 `scripts/sbom.py` emits CycloneDX 1.6 and SPDX 2.3 from it (library and full profiles),
