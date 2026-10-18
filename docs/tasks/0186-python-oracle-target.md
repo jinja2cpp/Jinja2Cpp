@@ -31,3 +31,8 @@ tables from pinned Unicode data files instead of from Python itself is recorded 
 
 **Done when.** The policy is written down in `docs/parity.md`, one place names the target
 pair and every pin follows it, and a bump is a documented one-PR procedure.
+
+**Release decision (Ruslan 2026-10-18, D7 in docs/release-2.0.md).** 2.0 ships one pinned
+pair (Python 3.12 + Jinja2 3.1.6) as the default. Ruslan wants a separate design pass on CMake
+machinery that lets a build target a Jinja2 version other than the bundled one; that is the
+open half of this task.

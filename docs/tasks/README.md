@@ -164,7 +164,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0092](0092-extended-warning-set.md) | Enforce a warning set beyond `-Wall` | build | medium | done |
 | [0093](0093-deeply-nested-values.md) | Deeply nested values overflow the stack when they are destroyed or printed | robustness | medium | done |
 | [0094](0094-differential-fuzzing-findings.md) | Divergences found by differential fuzzing | parity | medium | done |
-| [0095](0095-structure-aware-fuzzing.md) | Structure-aware fuzzing: mutate templates, not bytes | robustness | medium | open |
+| [0095](0095-structure-aware-fuzzing.md) | Structure-aware fuzzing: mutate templates, not bytes | robustness | high | open |
 | [0096](0096-continuous-fuzzing-service.md) | Continuous fuzzing on ClusterFuzzLite or OSS-Fuzz | ci | low | open |
 | [0097](0097-resource-limits.md) | Templates can ask for unbounded time and memory | robustness | medium | open |
 | [0098](0098-configurable-recursion-limits.md) | Configurable recursion limits, closer to Python's | api | low | open |
@@ -296,7 +296,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0226](0226-license-metadata-and-distribution.md) | Reconcile package license metadata and ship required notices | release | high | open |
 | [0227](0227-supported-docs-and-example-surface.md) | Choose and verify the documentation and examples supported for 2.0 | release | high | open |
 | [0228](0228-task-number-uniqueness.md) | Two task files can share a number | agents | medium | done |
-| [0229](0229-unused-boost-components.md) | Drop the Boost libraries and includes nothing uses | build | low | open |
+| [0229](0229-unused-boost-components.md) | Drop the Boost libraries and includes nothing uses | build | low | done |
 | [0230](0230-boost-free-core.md) | A Boost-free core | build | medium | open |
 | [0231](0231-robin-hood-successor.md) | robin_hood's upstream is archived | perf | high | open |
 | [0232](0232-dependency-pin-drift.md) | Dependency pins disagree across modes and some are mutable | build | low | open |
@@ -316,3 +316,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0246](0246-public-comparison-report.md) | A user-facing benchmark and feature-parity comparison with rival engines | docs | high | open |
 | [0247](0247-rival-benchmark-coverage.md) | Cover the rival engines' own benchmark cases, then close the gaps | perf | high | open |
 | [0248](0248-python-drop-in-replacement.md) | Jinja2C++ as a drop-in replacement for Python Jinja2 in common cases | api | medium | open |
+| [0252](0252-public-api-allocator-contract.md) | Allocator and memory contract for the 2.0 public API | api | high | open |

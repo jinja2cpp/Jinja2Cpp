@@ -55,7 +55,7 @@ source and committed), `system` (found on the machine), `ci` (GitHub Actions).
 ### Boost, library by library
 
 Boost is the weight. Internal mode fetches the whole 1.92.0 CMake archive, configures
-51 Boost libraries (the transitive closure of what CMake asks for) and installs all of
+47 Boost libraries (the transitive closure of what CMake asks for) and installs all of
 them: 56 MB of headers and four static libraries (`boost_filesystem`, `boost_json`,
 `boost_container`, `boost_atomic`) next to `libjinja2cpp`. What the code actually
 includes is small:
@@ -72,12 +72,12 @@ includes is small:
 | predef (endian) | RapidJSON's UTF-16/32 choice | compiler macros | trivial |
 | json | the default metadata backend | nlohmann (header-only) or an internal reader | small, behind the existing backend switch |
 
-Redundant today: `lexical_cast`, `numeric_conversion`, `variant` and `optional` are still
-requested by the CMake lists and the installed config, though no source includes them
-(`std::variant`/`std::optional` replaced them in 0071), and the includes of
-`boost/unordered_map.hpp`, `boost/cast.hpp`, `boost/core/null_deleter.hpp`,
-`algorithm/string/trim_all.hpp` and `algorithm/string/join.hpp` are dead
-(docs/tasks/0229).
+`lexical_cast`, `numeric_conversion`, `variant` and `optional` are no longer requested
+(nothing includes them since 0071), and the dead includes of `boost/unordered_map.hpp`,
+`boost/cast.hpp`, `boost/core/null_deleter.hpp`, `algorithm/string/trim_all.hpp` and
+`algorithm/string/join.hpp` are gone (docs/tasks/0229). `container` is now requested by
+name: `lexical_cast` used to pull it in, and `small_vector` needs it. `optional` and the
+other leaf libraries still arrive as dependencies of `algorithm`, `any` and `json`.
 
 ## Tests, benchmarks and tooling
 

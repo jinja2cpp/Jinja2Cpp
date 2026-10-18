@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:54885b6a-ab31-54cc-bff8-adb752f9fb2e",
+  "serialNumber": "urn:uuid:11349e2e-8f15-5505-bdfe-c51fdcc762fb",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -241,7 +241,7 @@
         },
         {
           "name": "jinja2cpp:used-for",
-          "value": "See the boost-* sub-components: 9 libraries are used directly; internal mode pulls 51 and installs all of them (56 MB of headers, 4 static libraries)"
+          "value": "See the boost-* sub-components: 9 libraries are used directly; internal mode pulls 47 and installs all of them (56 MB of headers, 4 static libraries)"
         },
         {
           "name": "jinja2cpp:why",
@@ -257,7 +257,7 @@
         },
         {
           "name": "jinja2cpp:transitive-libraries",
-          "value": "algorithm,align,any,array,assert,atomic,bind,compat,concept_check,config,container,container_hash,conversion,core,describe,detail,endian,exception,filesystem,function,function_types,fusion,headers,integer,intrusive,io,iterator,json,lexical_cast,move,mp11,mpl,numeric,optional,predef,preprocessor,range,regex,scope,smart_ptr,system,throw_exception,tuple,type_index,type_traits,typeof,unordered,utility,variant,variant2,winapi"
+          "value": "algorithm,align,any,array,assert,atomic,bind,compat,concept_check,config,container,container_hash,conversion,core,describe,detail,endian,exception,filesystem,function,function_types,fusion,headers,intrusive,io,iterator,json,move,mp11,mpl,optional,predef,preprocessor,range,regex,scope,smart_ptr,system,throw_exception,tuple,type_index,type_traits,typeof,unordered,utility,variant2,winapi"
         }
       ],
       "components": [
@@ -307,7 +307,7 @@
             },
             {
               "name": "jinja2cpp:used-for",
-              "value": "boost::span over node arrays, arguments and slots (about 57 uses in 14 src/ files: node_arena.h, statements.cpp, render_context.h); null_deleter.hpp is included by statements.cpp but unused"
+              "value": "boost::span over node arrays, arguments and slots (about 57 uses in 14 src/ files: node_arena.h, statements.cpp, render_context.h)"
             },
             {
               "name": "jinja2cpp:why",
@@ -315,7 +315,7 @@
             },
             {
               "name": "jinja2cpp:lighten",
-              "value": "Replace with a 50-line internal span (or std::span behind a C++20 switch); drop the null_deleter include"
+              "value": "Replace with a 50-line internal span (or std::span behind a C++20 switch)"
             }
           ]
         },
@@ -365,7 +365,7 @@
             },
             {
               "name": "jinja2cpp:used-for",
-              "value": "small_vector in parsers, evaluator, name resolver and render context (about 27 uses in 10 src/ files); boost_container.a is linked because Boost.JSON needs it"
+              "value": "small_vector in parsers, evaluator, name resolver and render context (about 27 uses in 10 src/ files); header-only use, but the internal modes build and link boost_container.a (named explicitly since lexical_cast stopped pulling it in)"
             },
             {
               "name": "jinja2cpp:why",
@@ -655,7 +655,7 @@
             },
             {
               "name": "jinja2cpp:used-for",
-              "value": "replace_all/replace_first and is_alnum in string_converter_filter.cpp, all()+is_space in template_parser.h; trim_all.hpp and join.hpp are included but unused"
+              "value": "replace_all/replace_first and is_alnum in string_converter_filter.cpp, all()+is_space in template_parser.h"
             },
             {
               "name": "jinja2cpp:why",
@@ -663,7 +663,7 @@
             },
             {
               "name": "jinja2cpp:lighten",
-              "value": "Replace with a few lines of std::string code; drop the unused includes"
+              "value": "Replace with a few lines of std::string code"
             }
           ]
         },
@@ -780,354 +780,6 @@
             {
               "name": "jinja2cpp:lighten",
               "value": "The heaviest backend (boost_json.a + boost_container.a, about 4.8 MB in a Debug build) for a niche feature (template metadata). An internal minimal JSON reader, or nlohmann as default, would remove both libraries; the adapter headers stay opt-in"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "bom-ref": "boost-unordered",
-          "name": "boost-unordered",
-          "version": "1.92.0",
-          "supplier": {
-            "name": "Boost.org"
-          },
-          "scope": "excluded",
-          "licenses": [
-            {
-              "license": {
-                "id": "BSL-1.0"
-              }
-            }
-          ],
-          "purl": "pkg:github/boostorg/unordered@boost-1.92.0",
-          "externalReferences": [
-            {
-              "type": "website",
-              "url": "https://www.boost.org"
-            }
-          ],
-          "properties": [
-            {
-              "name": "jinja2cpp:role",
-              "value": "redundant"
-            },
-            {
-              "name": "jinja2cpp:phases",
-              "value": "build"
-            },
-            {
-              "name": "jinja2cpp:exposure",
-              "value": "internal"
-            },
-            {
-              "name": "jinja2cpp:delivery",
-              "value": "fetched"
-            },
-            {
-              "name": "jinja2cpp:selected-by",
-              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
-            },
-            {
-              "name": "jinja2cpp:used-for",
-              "value": "Included by internal_value.h:16, nothing uses it (maps are robin_hood)"
-            },
-            {
-              "name": "jinja2cpp:why",
-              "value": "Left over"
-            },
-            {
-              "name": "jinja2cpp:lighten",
-              "value": "Drop the include"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "bom-ref": "boost-conversion",
-          "name": "boost-conversion",
-          "version": "1.92.0",
-          "supplier": {
-            "name": "Boost.org"
-          },
-          "scope": "excluded",
-          "licenses": [
-            {
-              "license": {
-                "id": "BSL-1.0"
-              }
-            }
-          ],
-          "purl": "pkg:github/boostorg/conversion@boost-1.92.0",
-          "externalReferences": [
-            {
-              "type": "website",
-              "url": "https://www.boost.org"
-            }
-          ],
-          "properties": [
-            {
-              "name": "jinja2cpp:role",
-              "value": "redundant"
-            },
-            {
-              "name": "jinja2cpp:phases",
-              "value": "build"
-            },
-            {
-              "name": "jinja2cpp:exposure",
-              "value": "internal"
-            },
-            {
-              "name": "jinja2cpp:delivery",
-              "value": "fetched"
-            },
-            {
-              "name": "jinja2cpp:selected-by",
-              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
-            },
-            {
-              "name": "jinja2cpp:used-for",
-              "value": "Included by template_parser.cpp:19, no boost cast is used"
-            },
-            {
-              "name": "jinja2cpp:why",
-              "value": "Left over"
-            },
-            {
-              "name": "jinja2cpp:lighten",
-              "value": "Drop the include"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "bom-ref": "boost-lexical_cast",
-          "name": "boost-lexical_cast",
-          "version": "1.92.0",
-          "supplier": {
-            "name": "Boost.org"
-          },
-          "scope": "excluded",
-          "licenses": [
-            {
-              "license": {
-                "id": "BSL-1.0"
-              }
-            }
-          ],
-          "purl": "pkg:github/boostorg/lexical_cast@boost-1.92.0",
-          "externalReferences": [
-            {
-              "type": "website",
-              "url": "https://www.boost.org"
-            }
-          ],
-          "properties": [
-            {
-              "name": "jinja2cpp:role",
-              "value": "redundant"
-            },
-            {
-              "name": "jinja2cpp:phases",
-              "value": "build"
-            },
-            {
-              "name": "jinja2cpp:exposure",
-              "value": "none"
-            },
-            {
-              "name": "jinja2cpp:delivery",
-              "value": "fetched"
-            },
-            {
-              "name": "jinja2cpp:selected-by",
-              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
-            },
-            {
-              "name": "jinja2cpp:used-for",
-              "value": "Requested in BOOST_INCLUDE_LIBRARIES, JINJA2CPP_PRIVATE_LIBS (Boost::lexical_cast), the installed config's COMPONENTS and the external-mode find_package; no source includes it"
-            },
-            {
-              "name": "jinja2cpp:why",
-              "value": "Left over"
-            },
-            {
-              "name": "jinja2cpp:lighten",
-              "value": "Remove from the CMake lists (docs/tasks/0229)"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "bom-ref": "boost-numeric_conversion",
-          "name": "boost-numeric_conversion",
-          "version": "1.92.0",
-          "supplier": {
-            "name": "Boost.org"
-          },
-          "scope": "excluded",
-          "licenses": [
-            {
-              "license": {
-                "id": "BSL-1.0"
-              }
-            }
-          ],
-          "purl": "pkg:github/boostorg/numeric_conversion@boost-1.92.0",
-          "externalReferences": [
-            {
-              "type": "website",
-              "url": "https://www.boost.org"
-            }
-          ],
-          "properties": [
-            {
-              "name": "jinja2cpp:role",
-              "value": "redundant"
-            },
-            {
-              "name": "jinja2cpp:phases",
-              "value": "build"
-            },
-            {
-              "name": "jinja2cpp:exposure",
-              "value": "none"
-            },
-            {
-              "name": "jinja2cpp:delivery",
-              "value": "fetched"
-            },
-            {
-              "name": "jinja2cpp:selected-by",
-              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
-            },
-            {
-              "name": "jinja2cpp:used-for",
-              "value": "Requested by the CMake lists like lexical_cast; no source includes it"
-            },
-            {
-              "name": "jinja2cpp:why",
-              "value": "Left over"
-            },
-            {
-              "name": "jinja2cpp:lighten",
-              "value": "Remove from the CMake lists (docs/tasks/0229)"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "bom-ref": "boost-variant",
-          "name": "boost-variant",
-          "version": "1.92.0",
-          "supplier": {
-            "name": "Boost.org"
-          },
-          "scope": "excluded",
-          "licenses": [
-            {
-              "license": {
-                "id": "BSL-1.0"
-              }
-            }
-          ],
-          "purl": "pkg:github/boostorg/variant@boost-1.92.0",
-          "externalReferences": [
-            {
-              "type": "website",
-              "url": "https://www.boost.org"
-            }
-          ],
-          "properties": [
-            {
-              "name": "jinja2cpp:role",
-              "value": "redundant"
-            },
-            {
-              "name": "jinja2cpp:phases",
-              "value": "build"
-            },
-            {
-              "name": "jinja2cpp:exposure",
-              "value": "none"
-            },
-            {
-              "name": "jinja2cpp:delivery",
-              "value": "fetched"
-            },
-            {
-              "name": "jinja2cpp:selected-by",
-              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
-            },
-            {
-              "name": "jinja2cpp:used-for",
-              "value": "Requested by the CMake lists (and -Wno-error flags on boost_variant); std::variant is used everywhere since 0071"
-            },
-            {
-              "name": "jinja2cpp:why",
-              "value": "Left over"
-            },
-            {
-              "name": "jinja2cpp:lighten",
-              "value": "Remove from the CMake lists (docs/tasks/0229)"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "bom-ref": "boost-optional",
-          "name": "boost-optional",
-          "version": "1.92.0",
-          "supplier": {
-            "name": "Boost.org"
-          },
-          "scope": "excluded",
-          "licenses": [
-            {
-              "license": {
-                "id": "BSL-1.0"
-              }
-            }
-          ],
-          "purl": "pkg:github/boostorg/optional@boost-1.92.0",
-          "externalReferences": [
-            {
-              "type": "website",
-              "url": "https://www.boost.org"
-            }
-          ],
-          "properties": [
-            {
-              "name": "jinja2cpp:role",
-              "value": "redundant"
-            },
-            {
-              "name": "jinja2cpp:phases",
-              "value": "build"
-            },
-            {
-              "name": "jinja2cpp:exposure",
-              "value": "none"
-            },
-            {
-              "name": "jinja2cpp:delivery",
-              "value": "fetched"
-            },
-            {
-              "name": "jinja2cpp:selected-by",
-              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
-            },
-            {
-              "name": "jinja2cpp:used-for",
-              "value": "Requested by BOOST_INCLUDE_LIBRARIES and the conan-build find_package; std::optional is used since 0071"
-            },
-            {
-              "name": "jinja2cpp:why",
-              "value": "Left over"
-            },
-            {
-              "name": "jinja2cpp:lighten",
-              "value": "Remove from the CMake lists (docs/tasks/0229)"
             }
           ]
         }
@@ -1701,13 +1353,7 @@
         "boost-filesystem",
         "boost-algorithm",
         "boost-predef",
-        "boost-json",
-        "boost-unordered",
-        "boost-conversion",
-        "boost-lexical_cast",
-        "boost-numeric_conversion",
-        "boost-variant",
-        "boost-optional"
+        "boost-json"
       ]
     }
   ]

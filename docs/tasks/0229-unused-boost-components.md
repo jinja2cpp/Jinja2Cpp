@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: build
 touches: [thirdparty/CMakeLists.txt, thirdparty/thirdparty-internal.cmake, thirdparty/thirdparty-conan-build.cmake, thirdparty/external_boost_deps.cmake, CMakeLists.txt#JINJA2CPP_INSTALL, src/internal_value.h, src/template_parser.cpp, src/statements.cpp, src/string_converter_filter.cpp, src/expression_evaluator.cpp, sbom/components.json]
@@ -26,3 +26,14 @@ component may have been the one pulling a transitive library that is used (for e
 
 **Done when.** No Boost component is requested that the code does not include, all CI
 deps modes are green, and `scripts/sbom.py --check` passes with the entries removed.
+
+**Outcome.** The four components are out of every list and the five includes are gone.
+Two findings from doing it. `lexical_cast` was the only reason `container` (and the
+`boost_container` library `small_vector` code links) came in without Boost.JSON, so it is
+now requested explicitly. `boost_variant` carried an INTERFACE `-Wno-error=maybe-uninitialized`
+that GCC 13 Release builds relied on for a false positive in expected-lite's move
+assignment; the flag now sits in `GCC_CXX_FLAGS` where the same exception for
+`-Warray-bounds` already lives. `trim_all.hpp` supplied `classification.hpp` to
+string_converter_filter.cpp, which now includes it itself. Internal mode now configures 47
+Boost libraries instead of 51. Conan was not run in the cloud (ConanCenter is blocked); CI
+covers it.

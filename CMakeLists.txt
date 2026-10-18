@@ -232,8 +232,11 @@ if (JINJA2CPP_STRICT_WARNINGS)
         set(_strict_warnings -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion
             -Wnon-virtual-dtor -Woverloaded-virtual -Wold-style-cast -Wimplicit-fallthrough -Werror)
         # A profile-guided build (bench/README.md) changes GCC's inlining enough for a false
-        # -Warray-bounds in the vendored robin_hood.h; keep it a warning
-        set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} ${_strict_warnings} -Wno-error=array-bounds)
+        # -Warray-bounds in the vendored robin_hood.h; keep it a warning. GCC 13 Release also
+        # reports a false -Wmaybe-uninitialized in expected-lite's move assignment (ParseResult);
+        # boost_variant used to hand this flag to the library as an INTERFACE option (0229)
+        set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} ${_strict_warnings} -Wno-error=array-bounds
+            -Wno-error=maybe-uninitialized)
         set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} ${_strict_warnings} -Wno-unused-command-line-argument)
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         # Dependencies come in as system headers (thirdparty/CMakeLists.txt), which /W4 leaves alone
@@ -544,7 +547,7 @@ if(JINJA2CPP_INSTALL)
     endif ()
     # The external modes record the components their Boost provides
     if (NOT DEFINED JINJA2CPP_BOOST_COMPONENTS)
-        set(JINJA2CPP_BOOST_COMPONENTS algorithm any filesystem lexical_cast numeric_conversion variant)
+        set(JINJA2CPP_BOOST_COMPONENTS algorithm any filesystem)
         if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
             list(APPEND JINJA2CPP_BOOST_COMPONENTS json)
         endif ()

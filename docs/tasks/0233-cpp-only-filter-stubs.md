@@ -26,3 +26,6 @@ and the `startsWith` test work and stay.
 **Done when.** Each name either renders its documented output with rows in
 `test/filters_test.cpp`, or fails Load with `UnknownFilter`; `docs/parity.md` and the 2.0
 migration notes (0077) say which.
+
+**Release decision (Ruslan 2026-10-18, D16 in docs/release-2.0.md).** Implement `camelize`,
+`underscorize`, `escapecpp` and `toyaml` with documented output; remove `toxml`.

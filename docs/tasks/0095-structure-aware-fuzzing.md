@@ -1,6 +1,6 @@
 ---
 status: open
-priority: medium
+priority: high
 area: robustness
 depends: [0003]
 touches: [fuzz/]
@@ -37,3 +37,7 @@ an input both engines reject teaches nothing, and byte mutants are mostly reject
 budget reaches more coverage (`cov:` and `ft:` in the libFuzzer log) than byte mutation
 alone. The nightly differential run includes generated templates, with the share of
 inputs that both engines render recorded in its report.
+
+**Release role (Ruslan 2026-10-18, D11 in docs/release-2.0.md).** Ruslan prefers extensive
+structure-aware fuzz sessions to a longer RC window, so gate G8 requires an extended campaign
+with this task's mutator and grammar generator on the release candidate.
