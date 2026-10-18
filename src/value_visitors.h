@@ -3,6 +3,7 @@
 
 #include "expression_evaluator.h"
 #include "internal_value.h"
+#include "loop_attr.h"
 #include "make_unexpected.h"
 #include "recursion_guard.h"
 #include "undefined.h"
@@ -777,6 +778,14 @@ void ValueRendererBase<CharT>::operator()(const ListRef& list) const
 template<typename CharT>
 void ValueRendererBase<CharT>::operator()(const MapRef& map) const
 {
+    // A for loop's `loop` prints as Jinja2's LoopContext: <LoopContext index/length>
+    InternalValue loopIndex;
+    InternalValue loopLength;
+    if (map.GetLoopAttr(LoopAttr::Index, loopIndex) && map.GetLoopAttr(LoopAttr::Length, loopLength))
+    {
+        AppendAscii(fmt::format("<LoopContext {}/{}>", *GetIf<int64_t>(&loopIndex), *GetIf<int64_t>(&loopLength)).c_str());
+        return;
+    }
     // An object prints as Python's repr of it: <Namespace {...}> wraps its attributes, the
     // rest have the default <module.Class object at 0x...>
     const char* objectClass = map.GetObjectClass();

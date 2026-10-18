@@ -478,7 +478,7 @@ public:
 
     // `loop.cycle(...)` called on a for loop's object: puts the argument for the current item
     // in `result` and returns true; false when `loop` is something else
-    bool TryCallCycle(RenderContext& values, ArenaSpan<NodeRef<Expression>> params, InternalValue& result) const;
+    bool TryCallCycle(RenderContext& values, const ArenaCallParams& params, InternalValue& result) const;
 
 private:
     LoopAttr m_attr;
