@@ -30,3 +30,7 @@ the stack each default needs (2 MiB for 200 macro levels in Debug, less in Relea
 **Done when.** The limits are settable per environment and covered by
 `test/recursion_limits_test.cpp`, and the cases above render as in Python with the
 default settings on an 8 MiB stack.
+
+**Moved (2026-10-18).** The four counts become fields of `Settings::Limits` in 0262 (Ruslan chose
+one nested struct, enforced at 2.0). This task keeps the default re-tuning against Python and the
+separate `{% block %}` count.

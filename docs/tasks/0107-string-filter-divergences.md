@@ -24,5 +24,9 @@ cases under `test/parity/cases/` by filter, and fix or list each in
 `test/parity/divergences/`. The generator and harness from the run are worth adding to
 `test/parity/` so the corpus covers argument errors, Markup inputs and non-string inputs.
 
+**Also (found by the untrusted-input review, 2026-10-18).** `('x'*3)|replace('', 'y')` returns
+the input unchanged; Python gives `yxyxyxy`. The method form is covered (test/parity/cases/methods.py),
+the filter form is not.
+
 **Done when** wide `urlencode` matches narrow and each class of difference is a corpus case
 that matches Python or is listed as deliberate.

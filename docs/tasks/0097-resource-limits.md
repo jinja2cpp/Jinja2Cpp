@@ -46,3 +46,7 @@ would be much lower and configurable. `fuzz/regressions/huge-range-list.j2` repl
 **Done when.** The three templates above fail fast with the new error when the limits
 are set and render as before when they are not; `'x' * 10**8` takes well under a second
 in a Release build; the fuzz workflow no longer ignores timeouts and OOMs.
+
+**Split (2026-10-18, untrusted-input review).** The opt-in limits API is 0262 (`Settings::Limits`,
+freeze-critical) and the per-operation checks are 0263; this task keeps the `'x' * n` reserve-once
+fix. The fuzzing part moved to 0267.
