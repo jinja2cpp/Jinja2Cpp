@@ -113,6 +113,20 @@ TEST_F(RecursionLimitsTest, ErrorMessage)
     EXPECT_NE(std::string::npos, ErrorToString(result.error()).find("error: Maximum recursion depth exceeded\n")) << ErrorToString(result.error());
 }
 
+TEST_F(RecursionLimitsTest, DeepTupleKeyIsRenderError)
+{
+    // A dict key is hashed through its nested tuples, as deep as the template made them
+    const std::string build = "{% set ns = namespace(t=(1,)) %}{% for i in range(20000) %}{% set ns.t = (ns.t,) %}{% endfor %}";
+    for (const std::string use : { "{{ {ns.t: 1}|length }}", "{{ ns.t in {1: 1} }}", "{{ {1: 1}.get(ns.t) }}" })
+    {
+        Template tpl(&m_env);
+        ASSERT_TRUE(tpl.Load(build + use).has_value()) << use;
+        auto result = tpl.RenderAsString({});
+        ASSERT_FALSE(result.has_value()) << use;
+        EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode()) << use;
+    }
+}
+
 TEST_F(RecursionLimitsTest, InfiniteRecursionIsRenderError)
 {
     AddFile("include_self", "{% include 'include_self' %}");

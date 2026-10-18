@@ -1688,9 +1688,11 @@ bool Reaches(const InternalValue& val, const void* target, std::unordered_set<co
     {
         return false;
     }
-    for (auto& [key, value] : *map->GetMutableItems())
+    const auto& dict = *map->GetMutableItems();
+    for (const auto& [key, value] : dict)
     {
-        if (Reaches(value, target, visited))
+        // A key that is not a string keeps its first spelling, which can hold the target too
+        if (Reaches(value, target, visited) || (dict.HasKeyValues() && Reaches(dict.KeyOf(key), target, visited)))
         {
             return true;
         }

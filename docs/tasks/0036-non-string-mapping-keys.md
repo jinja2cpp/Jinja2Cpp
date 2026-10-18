@@ -39,6 +39,9 @@ Python's `{str(k): v for k, v in d.items()}` has it. A dict of string keys stays
 Changing this rule later is a break for callers who rely on it.
 
 *Not done:* object keys (`{namespace(): 1}`, host objects, callables, undefined) have no
-identity token yet and all read as the empty string, as before; that is the first bullet of
+identity token yet and all read as the empty string when stored, as before, while a lookup by
+one finds nothing (`nothing in {'': 1}` is False); that is the first bullet of
 0212 (`globals.object_dict_key` stays listed). All NaN keys are one key (Python compares NaN by
 identity).
+A cycle through a key (`{% set d = {(ns, 1): 1} %}{% set ns.d = d %}`) leaks like the one
+through a value: that is 0110's (the dict methods' cycle check walks the keys too).

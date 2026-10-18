@@ -125,5 +125,6 @@ CASES = [
     ("not_after_binary_operator", "{{ x + not z }}"),
     ('in_dict_non_string_key', "{{ 'T' if 1 in {1: 'a'} else 'F' }}|{{ 'T' if '1' in {1: 'a'} else 'F' }}|{{ 'T' if 1.0 in {1: 'a'} else 'F' }}|{{ 'T' if (1, 2) in {(1, 2): 'a'} else 'F' }}|{{ 'T' if none in {none: 'a'} else 'F' }}"),
     ('eq_dict_non_string_keys', "{{ 'T' if {1: 'a'} == {1.0: 'a'} else 'F' }}|{{ 'T' if {1: 'a'} == {'1': 'a'} else 'F' }}|{{ 'T' if {(1, 2): 3} == {(1.0, 2): 3} else 'F' }}"),
+    ('in_dict_object_key', "{{ 'T' if nothing in {'': 1} else 'F' }}|{{ 'T' if namespace() in {'': 1} else 'F' }}"),
     ('not_in_dict_non_string_key', "{{ 'T' if 2 not in {1: 'a'} else 'F' }}|{{ 'T' if True in {1: 'a'} else 'F' }}"),
 ]

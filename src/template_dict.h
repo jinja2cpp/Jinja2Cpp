@@ -37,8 +37,9 @@ const char* UnhashableType(const InternalValue& value);
 // The token of a key, which is equal for the keys Python treats as one. Nullopt when the key
 // cannot be hashed, with the type to report in `unhashableType`: Python's TypeError
 // `unhashable type: 'list'`. Objects (namespace(), cycler(), host values), undefined values and
-// callables have no token of their own yet (docs/tasks/0212): they read as the empty string
-std::optional<std::string> MakeDictKey(const InternalValue& key, const char** unhashableType = nullptr);
+// callables have no token of their own yet (docs/tasks/0212): they read as the empty string, and
+// `hasObject` tells a lookup that the token stands for no key of its own
+std::optional<std::string> MakeDictKey(const InternalValue& key, const char** unhashableType = nullptr, bool* hasObject = nullptr);
 
 // Throws Python's TypeError for a key MakeDictKey rejects
 [[noreturn]] void ThrowUnhashable(const char* type);
@@ -75,7 +76,8 @@ public:
     // A string key; end() when absent
     [[nodiscard]] const_iterator FindString(const std::string& name) const;
     [[nodiscard]] iterator FindString(const std::string& name);
-    // Any key; end() when absent or unhashable (the caller checks UnhashableType where Python raises)
+    // Any key; end() when absent or unhashable (the caller checks UnhashableType where Python
+    // raises), and for a key that holds an object, which has no token of its own yet (0212)
     [[nodiscard]] const_iterator Find(const InternalValue& key) const;
     [[nodiscard]] iterator Find(const InternalValue& key);
 

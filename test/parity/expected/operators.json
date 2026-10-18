@@ -2699,6 +2699,28 @@
    "output": "T|F|T"
   },
   {
+   "id": "operators.in_dict_object_key",
+   "template": "{{ 'T' if nothing in {'': 1} else 'F' }}|{{ 'T' if namespace() in {'': 1} else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|F"
+  },
+  {
    "id": "operators.not_in_dict_non_string_key",
    "template": "{{ 'T' if 2 not in {1: 'a'} else 'F' }}|{{ 'T' if True in {1: 'a'} else 'F' }}",
    "context": {

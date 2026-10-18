@@ -1,6 +1,7 @@
 #include "template_dict.h"
 
 #include "internal_value.h"
+#include "recursion_guard.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/string_helpers.h>
@@ -38,6 +39,8 @@ struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
 
     const char* operator()(const ListRef& list) const
     {
+        // A tuple can nest deeper than the stack: Python raises RecursionError
+        CheckStack();
         if (list.GetRangeInfo())
         {
             return nullptr;
@@ -96,8 +99,9 @@ uint64_t RangeLength(const RangeInfo& range)
 // Appends the token of a value, and returns the type that made it unhashable instead
 struct KeyTokenBuilder
 {
-    explicit KeyTokenBuilder(std::string& out)
+    KeyTokenBuilder(std::string& out, bool& hasObject)
         : m_out(out)
+        , m_hasObject(hasObject)
     {
     }
 
@@ -148,6 +152,7 @@ struct KeyTokenBuilder
     }
     const char* operator()(const ListRef& list) const
     {
+        CheckStack();
         if (const auto* range = list.GetRangeInfo())
         {
             // Equal ranges are equal keys: an empty range is one, and a single item has no step
@@ -196,6 +201,7 @@ struct KeyTokenBuilder
     // A dictsort pair is the tuple (key, value)
     const char* operator()(const KeyValuePair& pair) const
     {
+        CheckStack();
         m_out.push_back(DictKeyMark);
         m_out.push_back(KindTuple);
         AppendBytes(m_out, uint32_t{ 2 });
@@ -220,7 +226,7 @@ private:
         const auto lengthAt = m_out.size();
         AppendBytes(m_out, uint32_t{ 0 });
         const auto start = m_out.size();
-        if (const char* type = Apply<KeyTokenBuilder>(item, m_out))
+        if (const char* type = Apply<KeyTokenBuilder>(item, m_out, m_hasObject))
         {
             return type;
         }
@@ -230,8 +236,9 @@ private:
     }
 
     // Objects, undefined values and callables have no key of their own yet (docs/tasks/0212):
-    // they add nothing, so as a key each stands for the empty string, as dict keys did before
-    static void AddObject() {}
+    // they add nothing, so as a key each stands for the empty string, as dict keys did before,
+    // and a lookup by one finds nothing (MakeDictKey's hasObject)
+    void AddObject() const { m_hasObject = true; }
 
     template<typename CharT>
     void AddString(std::basic_string_view<CharT> str) const
@@ -254,6 +261,7 @@ private:
     }
 
     std::string& m_out;
+    bool& m_hasObject;
 };
 
 std::string EscapeString(const std::string& name)
@@ -283,10 +291,16 @@ const char* UnhashableType(const InternalValue& value)
     return Apply<UnhashableTypeGetter>(value);
 }
 
-std::optional<std::string> MakeDictKey(const InternalValue& key, const char** unhashableType)
+std::optional<std::string> MakeDictKey(const InternalValue& key, const char** unhashableType, bool* hasObject)
 {
     std::string token;
-    if (const char* type = Apply<KeyTokenBuilder>(key, token))
+    bool objectFound = false;
+    const char* type = Apply<KeyTokenBuilder>(key, token, objectFound);
+    if (hasObject)
+    {
+        *hasObject = objectFound;
+    }
+    if (type)
     {
         if (unhashableType)
         {
@@ -352,14 +366,16 @@ TemplateDict::iterator TemplateDict::FindString(const std::string& name)
 
 TemplateDict::const_iterator TemplateDict::Find(const InternalValue& key) const
 {
-    auto token = MakeDictKey(key);
-    return token ? m_items.find(*token) : m_items.end();
+    bool hasObject = false;
+    auto token = MakeDictKey(key, nullptr, &hasObject);
+    return token && !hasObject ? m_items.find(*token) : m_items.end();
 }
 
 TemplateDict::iterator TemplateDict::Find(const InternalValue& key)
 {
-    auto token = MakeDictKey(key);
-    return token ? m_items.find(*token) : m_items.end();
+    bool hasObject = false;
+    auto token = MakeDictKey(key, nullptr, &hasObject);
+    return token && !hasObject ? m_items.find(*token) : m_items.end();
 }
 
 TemplateDict::iterator TemplateDict::Set(const InternalValue& key, InternalValue value)
