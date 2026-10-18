@@ -1382,6 +1382,8 @@ PosArgRange FindPosArgRange(const ArgInfoList& argsInfo, std::size_t posParamsCo
             {
                 break;
             }
+            // The scan follows the missing arguments from the first one not skipped
+            curPosArg = startPosArg;
             continue;
         }
 
