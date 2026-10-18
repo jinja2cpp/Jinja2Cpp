@@ -19,3 +19,8 @@ stays a test tool until someone asks for a published wheel.
 
 **Done when.** The decision is recorded here; if prototyped, a CI job runs the chosen
 upstream test subset and its failures are filed as parity tasks.
+
+**Folded into 0248 (2026-10-18).** Ruslan asked for a drop-in replacement for Python
+Jinja2, so the bindings are a product (0248), and running Jinja2's test suite is its proof
+step. This task stays open only for the decision of which upstream tests to adapt; 0248
+owns the binding.
