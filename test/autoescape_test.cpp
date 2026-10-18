@@ -6,7 +6,9 @@
 #include <jinja2cpp/value.h>
 
 #include <cstddef>
+#include <functional>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -253,4 +255,14 @@ TEST(AutoescapeSelectorTest, SelectorTakesPartInEquality)
     Settings other;
     other.autoescapeSelector = SelectAutoescape();
     EXPECT_TRUE(other != selecting);
+}
+
+TEST(AutoescapeSelectorTest, ThrowingSelectorFailsLoad)
+{
+    TemplateEnv env;
+    env.GetSettings().autoescapeSelector = [](const std::string&) -> bool { throw std::runtime_error("boom"); };
+    auto tpl = env.FromString("x");
+    ASSERT_FALSE(!!tpl);
+    EXPECT_EQ(ErrorCode::UnexpectedException, tpl.error().GetCode());
+    EXPECT_THROW(AutoescapeSelector()("a.html"), std::bad_function_call);
 }

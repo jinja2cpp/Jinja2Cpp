@@ -365,7 +365,7 @@ error is compared, not the message or the line.
 |---|---|---|
 | `trim_blocks`, `lstrip_blocks` | ✅ | |
 | `keep_trailing_newline`, `newline_sequence` | ✅ | |
-| `autoescape` | ✅ bool (`Settings::autoescape`); no `select_autoescape` callback | 0051 |
+| `autoescape` | ✅ bool (`Settings::autoescape`) or by template name (`Settings::autoescapeSelector`, `SelectAutoescape`) | 0051, 0181 |
 | `undefined` | ❌ | 0026 |
 | `block_/variable_/comment_start_string` and `_end_string` | ✅ | |
 | `line_statement_prefix`, `line_comment_prefix` | ✅ | |

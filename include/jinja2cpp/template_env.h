@@ -63,7 +63,15 @@ public:
 
     //! Whether a callable is set
     explicit operator bool() const { return m_fn && *m_fn; }
-    bool operator()(const std::string& templateName) const { return (*m_fn)(templateName); }
+    //! Throws std::bad_function_call when no callable is set, as std::function does
+    bool operator()(const std::string& templateName) const
+    {
+        if (!m_fn)
+        {
+            throw std::bad_function_call();
+        }
+        return (*m_fn)(templateName);
+    }
 
     friend bool operator==(const AutoescapeSelector& lhs, const AutoescapeSelector& rhs) { return lhs.m_fn == rhs.m_fn; }
     friend bool operator!=(const AutoescapeSelector& lhs, const AutoescapeSelector& rhs) { return !(lhs == rhs); }
@@ -73,7 +81,7 @@ private:
 };
 
 //! Jinja2 `select_autoescape`: a template whose name ends with `.` and one of `enabledExtensions` escapes, one with one of
-//! `disabledExtensions` does not, ignoring case; any other named template takes `defaultValue`, and a template loaded from a
+//! `disabledExtensions` does not, ignoring the case of ASCII letters; any other named template takes `defaultValue`, and a template loaded from a
 //! string without a name `defaultForString`
 JINJA2CPP_EXPORT AutoescapeSelector SelectAutoescape(std::vector<std::string> enabledExtensions = { "html", "htm", "xml" },
                                                      std::vector<std::string> disabledExtensions = {},
