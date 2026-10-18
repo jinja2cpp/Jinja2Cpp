@@ -3,7 +3,7 @@ status: open
 priority: medium
 area: docs
 depends: [0256, 0257, 0275]
-touches: [README.md, docs/api-2.0.md]
+touches: [README.md, docs/api-2.0.md, REVIEW.md]
 ---
 # User documentation for the memory contract
 
@@ -17,6 +17,10 @@ touches: [README.md, docs/api-2.0.md]
   and the known limit that OOM inside nlohmann::json's destructor (the nlohmann binding)
   terminates the process (0279; drop the note if 0279 fixes it first);
 - docs/api-2.0.md 3.9 brought to its final form; Doxygen notes on the new declarations;
+- REVIEW.md Lifetimes and Ownership rules: add the review checks the contract implies (a sink
+  or `ContainerSink` must outlive the `RenderTo` call; no `bad_alloc` as an internal signal;
+  budgets throw `jinja2::Exception{ResourceLimitExceeded}`; new containers pass the
+  allocation-failure tests);
 - the notes for MIGRATION.md (0077: `Render` no longer reports `bad_alloc` as
   `UnexpectedException`) and docs/security.md (0224: link to the contract).
 
