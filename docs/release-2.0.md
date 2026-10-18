@@ -48,6 +48,8 @@ postponed list in section 5. On 2026-10-18 that is 69 open tasks (this one inclu
 - Dependencies and build: Boost-free core (0230, 0229), robin_hood successor (0231), pin
   drift (0232), SBOM (0187), MSVC items (0079, 0174, 0238), GCC 13 sanitizer build (0184),
   Bazel build (0245, build part), CI speed (0162), coverage gate (0010), Nix toolchains (0078).
+- Performance and reach: a public comparison with rival engines (0246), their benchmark
+  cases and a perf round with an exit criterion (0247), a drop-in Python module (0248).
 - Distribution and docs: licensing (0226), source-artifact check (0225), Conan recipe
   (0006), supported docs and examples (0227), the website (0239-0244), tracker cleanup (0234).
 - C++17 as the language floor; C++17, 20 and 23 supported and tested.
@@ -85,6 +87,7 @@ tag; **A** = accepted for 2.0, tracked, does not block.
 | G10 Inventory | `scripts/sbom.py --check` and `scripts/task_index.py --check` pass; the dependency inventory matches what the release installs | [0187](tasks/0187-generated-data-acquisition.md) (SBOM stays there) | merge steward | B | format-check job |
 | G11 Tracker | Every open GitHub issue names an open task or is closed with a pointer to its fix; milestones 1.2 and 1.3 closed; external PRs #284, #199, #197 resolved | [0234](tasks/0234-github-tracker-cleanup.md) | unassigned | B | issue list on the RC date |
 | G12 Hash map successor | Vendored `robin_hood.h` (upstream archived) replaced by the successor the perf track picks, with its two local additions ported; no regression past the Cachegrind gate; `sbom/components.json` matches | [0231](tasks/0231-robin-hood-successor.md) | perf track | B (Ruslan 2026-10-18) | bench/ and Cachegrind gate results on the switch PR |
+| G13 Comparison report | A generated benchmark and feature-parity report against Python Jinja2, MiniJinja, Tera, minja and inja is published for the RC; rival suites' cases are covered; 0247's perf exit criterion holds or each exception is recorded; the Python drop-in module's pass rate is in the report | [0246](tasks/0246-public-comparison-report.md), [0247](tasks/0247-rival-benchmark-coverage.md), [0248](tasks/0248-python-drop-in-replacement.md) | perf track | B (Ruslan 2026-10-18) | report generated on the candidate; `bench/run.py` output |
 
 Dependency order: 0076 (running) → the API wave → G1 freeze → G4 (0077 → 0222); 0226 → 0225; 0227 alongside 0077. G2, G3 and
 G5's 0226 can start now. 0230 (Boost-free core) and 0231 go before G5's validation, so that 0226, 0225, 0006
@@ -122,8 +125,8 @@ cannot happen before a tag exists, or it has no end state a release could wait f
 | Publishing to package registries: ConanCenter, the Bazel Central Registry, a vcpkg port | publication parts of 0006, 0245; vcpkg (0006/0227) | A registry publishes a tagged release, and its review is outside the project. The recipes and their consumer checks are in scope (G5); publication follows the tag |
 | OSS-Fuzz enrollment | 0096 (OSS-Fuzz part) | Acceptance is Google's decision. ClusterFuzzLite, which runs in our own CI, is in scope |
 | Recurring processes | 0123 (weekly perf scout, drift alert), 0099 (nightly differential triage), 0228's ongoing use | They run for as long as the project does; the release takes their state at the RC. Any finding they file before the freeze is in scope by the rule above |
-| Open-ended performance work | 0164 (tiny templates: "the last places another engine is ahead"), 0117 phases after the current one, 0204 | No done state to wait for, and internal speedups change no API or ABI, so 2.x minors carry them at no compatibility cost. The 0117 P4/0164/park decision pending in the Performance track can move items into scope |
-| Python wheels | 0237 (published bindings) | A second product with its own platform matrix and release. The decision and a test-only prototype that runs Jinja2's test suite are in scope |
+| Performance work beyond 0247's exit criterion | whatever 0164, 0117 and 0204 hold after the pre-2.0 perf round | Ruslan (2026-10-18) brought a perf round into 2.0, driven by the comparison report: every case on par with the fastest rival or a recorded reason (0247). Past that point there is no done state, and internal speedups change no API or ABI |
+| Publishing wheels to PyPI | publication part of 0248 | Like the other registries, it follows the tag. The drop-in module itself, its wheels built in CI and its test-suite pass rate are in scope (0248) |
 | Parity cases found after the freeze | — | The corpus keeps growing; new divergences found during the RC window are filed for 2.x unless they are crashes, leaks or silent wrong values, which block (G8) |
 
 **Deliberate divergences** stay documented, not bugs (14 corpus lines): integer overflow

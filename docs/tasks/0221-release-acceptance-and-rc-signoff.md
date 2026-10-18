@@ -42,7 +42,7 @@ runs and records the exact candidate commit for validation.
 **Next.** Use the gates to choose the stabilization queue and RC signoff; close the
 linked implementation tasks independently.
 
-**Progress.** docs/release-2.0.md has the gates (G1-G12), owners, accepted limitations,
+**Progress.** docs/release-2.0.md has the gates (G0-G13), owners, accepted limitations,
 compatibility promises, RC procedure and the decision list D1-D18 for Ruslan, including
 the 0178/0230 conflict (D3). #556 is confirmed to have closed 0179. The task stays
 in progress until the decisions are recorded and an RC commit is signed off.
@@ -51,3 +51,5 @@ scouted against the backlog; findings filed as 0233-0245 and folded into the gat
 Ruslan decided D3 (pluggable big-integer backend, recorded in 0178).
 Later on 2026-10-18 Ruslan set the scope rule: 2.0 takes every open task by default, and
 only a postponed list with reasons stays out (docs/release-2.0.md sections 2 and 5, gate G0).
+Ruslan then added a pre-2.0 perf round driven by a public comparison report, and a Python
+drop-in module (0246-0248, gate G13).
