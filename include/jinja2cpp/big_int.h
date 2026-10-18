@@ -38,6 +38,25 @@ class BigInt
 public:
     //! Zero
     BigInt() = default;
+    BigInt(const BigInt&) = default;
+    BigInt& operator=(const BigInt&) = default;
+    //! Leaves `other` zero, so that a moved-from BigInt still holds a canonical number
+    BigInt(BigInt&& other) noexcept
+        : m_decimal(std::move(other.m_decimal))
+    {
+        other.m_decimal.assign(1, '0');
+    }
+    //! Leaves `other` zero, as the move constructor does
+    BigInt& operator=(BigInt&& other) noexcept
+    {
+        if (this != &other)
+        {
+            m_decimal.swap(other.m_decimal);
+            other.m_decimal.assign(1, '0');
+        }
+        return *this;
+    }
+    ~BigInt() = default;
 
     //! The value of any integral type except `bool` and the character types
     template<typename I, std::enable_if_t<detail::IsBigIntSource<I>>* = nullptr>

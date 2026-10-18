@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 
 #include <jinja2cpp/big_int.h>
+#include <jinja2cpp/value.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -8,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 using namespace jinja2;
@@ -131,4 +133,29 @@ TEST(BigIntTest, ComparesByValue)
     BigInt padded;
     ASSERT_TRUE(BigInt::TryParse("-0009", padded));
     EXPECT_EQ(BigInt(-9), padded);
+}
+
+// A moved-from BigInt is zero, never an empty text that Sign() or a comparison would read past
+TEST(BigIntTest, MovedFromIsZero)
+{
+    BigInt a(-12);
+    const BigInt b(std::move(a));
+    EXPECT_EQ("-12", b.ToString());
+    EXPECT_EQ("0", a.ToString()); // NOLINT(bugprone-use-after-move,clang-analyzer-cplusplus.Move)
+    EXPECT_EQ(0, a.Sign());       // NOLINT(bugprone-use-after-move,clang-analyzer-cplusplus.Move)
+    EXPECT_TRUE(a < b || b < a);  // NOLINT(bugprone-use-after-move,clang-analyzer-cplusplus.Move)
+
+    BigInt c(7);
+    c = std::move(a); // NOLINT(bugprone-use-after-move,clang-analyzer-cplusplus.Move)
+    EXPECT_EQ("0", c.ToString());
+    EXPECT_EQ("0", a.ToString()); // NOLINT(bugprone-use-after-move,clang-analyzer-cplusplus.Move)
+
+    // Moving a Value moves the BigInt it holds
+    Value held(std::numeric_limits<uint64_t>::max());
+    const Value moved(std::move(held));
+    EXPECT_EQ("18446744073709551615", moved.ToString());
+    if (const auto* rest = held.GetIf<BigInt>()) // NOLINT(bugprone-use-after-move,clang-analyzer-cplusplus.Move)
+    {
+        EXPECT_EQ(0, rest->Sign());
+    }
 }
