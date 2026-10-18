@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_FILESYSTEM_HANDLER_H
 #define JINJA2CPP_FILESYSTEM_HANDLER_H
 
+#include "fwd.h" // IWYU pragma: export
 #include "config.h"
 
 #include <jinja2cpp/utils/i_comparable.h>

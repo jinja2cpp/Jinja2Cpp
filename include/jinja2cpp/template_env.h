@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_TEMPLATE_ENV_H
 #define JINJA2CPP_TEMPLATE_ENV_H
 
+#include "fwd.h" // IWYU pragma: export
 #include "config.h"
 #include "error_info.h" // IWYU pragma: export
 #include "filesystem_handler.h"
@@ -18,8 +19,6 @@ JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 
 namespace jinja2
 {
-
-class IFilesystemHandler;
 
 namespace detail
 {

@@ -553,7 +553,7 @@
         }
       ],
       "primaryPackagePurpose": "SOURCE",
-      "comment": "role: mandatory; phases: build,consumer-build; exposure: public-api; delivery: vendored; selected-by: always; used-for: xyz::polymorphic and xyz::indirect behind jinja2::types (value_ptr.h), used by Value, GenericList and GenericMap; why: Value-semantic owning pointers for the public value model; standardised as std::indirect/std::polymorphic in C++26; lighten: Keep (header-only, installed). Switch to std:: at a C++26 floor; modified: indirect: Clang incomplete-type fix (0edc34d); polymorphic: default constructor constrained on the allocator for MSVC std::variant (0071); polymorphic_cxx14.h records no upstream revision; file: include/jinja2cpp/polymorphic_value/indirect_cxx14.h sha256:5feea68a8a6a91f99743a99cdcf077dfef6a55d8256e63a2d56bfbb820fdac6d; file: include/jinja2cpp/polymorphic_value/polymorphic_cxx14.h sha256:0208577d0f465f2e346c58890fccaceaf025ea7a568ad0de1d1debd6849ca4ea"
+      "comment": "role: mandatory; phases: build,consumer-build; exposure: public-api; delivery: vendored; selected-by: always; used-for: polymorphic and indirect (jinja2::detail::xyz) behind jinja2::types and jinja2::detail (value_ptr.h), used by Value, GenericList and GenericMap; why: Value-semantic owning pointers for the public value model; standardised as std::indirect/std::polymorphic in C++26; lighten: Keep (header-only, installed). Switch to std:: at a C++26 floor; modified: both at upstream 57f2e7a, moved to namespace jinja2::detail::xyz with JINJA2CPP_XYZ_ macros (0076); indirect: Clang incomplete-type fix (0edc34d), tag tested first (0072); polymorphic: default constructor constrained on the allocator for MSVC std::variant (0071), cb_ initialised (0089), in-place initializer_list constructor creates U, not T; file: include/jinja2cpp/polymorphic_value/indirect_cxx14.h sha256:b00dba6183edea9532030a373956ecab3638b6c5cfe61f40cbe862fba701dce3; file: include/jinja2cpp/polymorphic_value/polymorphic_cxx14.h sha256:eb0e46a2c95e693be7a192c1a992ece6e6fb900235ac44620f220bd646b2e372"
     },
     {
       "SPDXID": "SPDXRef-Package-unicode-data",
@@ -736,5 +736,5 @@
       "relatedSpdxElement": "SPDXRef-Package-html-entities"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-library-b0ed8cd53d055a08"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-library-0eaea501e5602d2f"
 }

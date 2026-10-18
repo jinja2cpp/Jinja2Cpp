@@ -5,12 +5,6 @@
 // JINJA2CPP_VERSION_STRING; generated from project(VERSION) by CMake
 #include "jinja2cpp/version.h" // IWYU pragma: export
 
-#ifdef _WIN32
-#define JINJA2_DECLSPEC(S) __declspec(S)
-#else
-#define JINJA2_DECLSPEC(S)
-#endif
-
 // MSVC warns (C4251) about exported classes holding standard library members. The
 // library's headers silence it between these two macros only, so the warning stays
 // on for the rest of the user's translation unit.
@@ -31,11 +25,23 @@
 #define JINJA2CPP_DEPRECATED(msg) [[deprecated(msg)]]
 #endif
 
+// The shared library exports only what JINJA2CPP_EXPORT marks: on Windows by
+// dllexport/dllimport, elsewhere by default visibility, the library being compiled
+// with -fvisibility=hidden (CMakeLists.txt). The same markings serve both, so the
+// Windows build checks they are complete.
 #ifdef JINJA2CPP_BUILD_AS_SHARED
-#define JINJA2CPP_EXPORT JINJA2_DECLSPEC(dllexport)
+#ifdef _WIN32
+#define JINJA2CPP_EXPORT __declspec(dllexport)
+#else
+#define JINJA2CPP_EXPORT __attribute__((visibility("default")))
+#endif
 #define JINJA2CPP_SHARED_LIB
 #elif JINJA2CPP_LINK_AS_SHARED
-#define JINJA2CPP_EXPORT JINJA2_DECLSPEC(dllimport)
+#ifdef _WIN32
+#define JINJA2CPP_EXPORT __declspec(dllimport)
+#else
+#define JINJA2CPP_EXPORT __attribute__((visibility("default")))
+#endif
 #define JINJA2CPP_SHARED_LIB
 #else
 #define JINJA2CPP_EXPORT

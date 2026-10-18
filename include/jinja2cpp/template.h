@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_TEMPLATE_H
 #define JINJA2CPP_TEMPLATE_H
 
+#include "fwd.h" // IWYU pragma: export
 #include "config.h"
 #include "error_info.h"
 #include "value.h"
@@ -27,7 +28,6 @@ JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 namespace jinja2
 {
 class ITemplateImpl;
-class TemplateEnv;
 template<typename CharT>
 class TemplateImpl;
 // Result<T> is expected-lite's nonstd::expected at every C++ standard. Use only what
@@ -221,8 +221,10 @@ bool operator!=(const BasicTemplate<CharT>& lhs, const BasicTemplate<CharT>& rhs
 }
 
 // Both instantiations are compiled into the library. MSVC rejects `extern` together with
-// dllexport (C4910), so the declarations are visible to users of the library only.
-#ifndef JINJA2CPP_BUILD_AS_SHARED
+// dllexport (C4910), so there the declarations are visible to users of the library only.
+// GCC takes the visibility of an explicit instantiation only from its first declaration,
+// so elsewhere the library sees them too (src/template.cpp).
+#if !defined(JINJA2CPP_BUILD_AS_SHARED) || !defined(_WIN32)
 extern template class JINJA2CPP_EXPORT BasicTemplate<char>;
 extern template class JINJA2CPP_EXPORT BasicTemplate<wchar_t>;
 #endif
