@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_USER_CALLABLE_H
 #define JINJA2CPP_USER_CALLABLE_H
 
+#include "markup.h"
 #include "string_helpers.h"
 #include "value.h"
 
@@ -211,6 +212,13 @@ struct ParamUnwrapper
     static const auto& UnwrapRecursive(const T& arg)
     {
         return arg; // std::forward<T>(arg);
+    }
+
+    // A Markup reaches a typed parameter as the string it is; UserCallableParams keep the flag
+    template<typename CharT>
+    static const std::basic_string<CharT>& UnwrapRecursive(const BasicMarkup<CharT>& arg)
+    {
+        return arg;
     }
 
     template<typename T>

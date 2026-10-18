@@ -3,6 +3,7 @@
 
 #include <jinja2cpp/config.h>
 #include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/markup.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/utils/ordered_map.h>
 #include <jinja2cpp/value_ptr.h>
@@ -275,6 +276,7 @@ struct IsStoredAsInt : std::integral_constant<bool, std::is_integral_v<T> && !st
  *  - Wide string value
  *  - String view value (std::string_view)
  *  - Wide string view value (std::wstring_view)
+ *  - Safe text (\ref Markup, \ref WMarkup): a string that a template does not escape
  *  - integer (int64_t) value
  *  - floating point (double) value
  *  - Simple list of other values (\ref ValuesList)
@@ -284,7 +286,8 @@ struct IsStoredAsInt : std::integral_constant<bool, std::is_integral_v<T> && !st
  *  - User-defined callable (\ref UserCallable)
  *
  *  `IsX()` tests what is stored, `AsX()` and `As<T>()` return it (and throw `std::bad_variant_access` when the value
- *  holds something else), `bool AsX(out)` and `GetIf<T>()` do the same without throwing, and `ToString()` prints the
+ *  holds something else; a \ref Markup is a string, so `IsString()`, `AsString()`, `As<std::string>()` and
+ *  `GetIf<std::string>()` accept it, and `IsMarkup()` and `As<Markup>()` tell it from a plain string), `bool AsX(out)` and `GetIf<T>()` do the same without throwing, and `ToString()` prints the
  *  value as `{{ value }}` does. \ref jinja2::Visit visits the stored object.
  */
 class Value
@@ -303,7 +306,9 @@ public:
         RecWrapper<ValuesMap>,
         GenericList,
         GenericMap,
-        RecWrapper<UserCallable>>;
+        RecWrapper<UserCallable>,
+        Markup,
+        WMarkup>;
 
     template<typename T, typename... L>
     struct AnyOf : public std::false_type
@@ -457,10 +462,14 @@ public:
     [[nodiscard]] bool IsInt() const noexcept { return Holds<int64_t>(); }
     //! Test Value for holding a floating-point number (`double`)
     [[nodiscard]] bool IsDouble() const noexcept { return Holds<double>(); }
-    //! Test Value for holding `std::string` (a `std::string_view` does not count)
-    [[nodiscard]] bool IsString() const noexcept { return Holds<std::string>(); }
-    //! Test Value for holding `std::wstring` (a `std::wstring_view` does not count)
-    [[nodiscard]] bool IsWString() const noexcept { return Holds<std::wstring>(); }
+    //! Test Value for holding `std::string` or a \ref Markup, which is one (a `std::string_view` does not count)
+    [[nodiscard]] bool IsString() const noexcept { return Holds<std::string>() || Holds<Markup>(); }
+    //! Test Value for holding `std::wstring` or a \ref WMarkup (a `std::wstring_view` does not count)
+    [[nodiscard]] bool IsWString() const noexcept { return Holds<std::wstring>() || Holds<WMarkup>(); }
+    //! Test Value for holding a \ref Markup exactly: safe narrow text, which a template does not escape
+    [[nodiscard]] bool IsMarkup() const noexcept { return Holds<Markup>(); }
+    //! Test Value for holding a \ref WMarkup exactly
+    [[nodiscard]] bool IsWMarkup() const noexcept { return Holds<WMarkup>(); }
     //! Test Value for holding a list: a \ref ValuesList or a \ref GenericList
     [[nodiscard]] bool IsList() const noexcept { return Holds<RecWrapper<ValuesList>>() || Holds<GenericList>(); }
     //! Test Value for holding a map: a \ref ValuesMap or a \ref GenericMap
@@ -493,22 +502,38 @@ public:
     [[nodiscard]] double AsDouble() const { return As<double>(); }
     //! Same as \ref AsDouble(), without throwing
     bool AsDouble(double& out) const noexcept { return Load(out); }
-    //! The stored `std::string`; throws `std::bad_variant_access` for anything else
+    //! The stored `std::string` (or the text of a \ref Markup); throws `std::bad_variant_access` for anything else
     [[nodiscard]] const std::string& AsString() const { return As<std::string>(); }
-    //! The stored `std::string`, mutable; throws `std::bad_variant_access` for anything else
+    //! The stored `std::string` (or the text of a \ref Markup), mutable; throws `std::bad_variant_access` for anything else
     std::string& AsString() { return As<std::string>(); }
-    //! A view of the stored `std::string`, without throwing or copying
+    //! A view of the stored `std::string` (or \ref Markup), without throwing or copying
     bool AsString(std::string_view& out) const& noexcept { return LoadView<std::string>(out); }
     //! Deleted: the view would outlive the temporary it points into
     bool AsString(std::string_view& out) && = delete;
-    //! The stored `std::wstring`; throws `std::bad_variant_access` for anything else
+    //! The stored `std::wstring` (or the text of a \ref WMarkup); throws `std::bad_variant_access` for anything else
     [[nodiscard]] const std::wstring& AsWString() const { return As<std::wstring>(); }
-    //! The stored `std::wstring`, mutable; throws `std::bad_variant_access` for anything else
+    //! The stored `std::wstring` (or the text of a \ref WMarkup), mutable; throws `std::bad_variant_access` for anything else
     std::wstring& AsWString() { return As<std::wstring>(); }
-    //! A view of the stored `std::wstring`, without throwing or copying
+    //! A view of the stored `std::wstring` (or \ref WMarkup), without throwing or copying
     bool AsWString(std::wstring_view& out) const& noexcept { return LoadView<std::wstring>(out); }
     //! Deleted: the view would outlive the temporary it points into
     bool AsWString(std::wstring_view& out) && = delete;
+    //! The stored \ref Markup exactly; throws `std::bad_variant_access` for anything else, a plain string included
+    [[nodiscard]] const Markup& AsMarkup() const { return As<Markup>(); }
+    //! The stored \ref Markup, mutable; throws `std::bad_variant_access` for anything else
+    Markup& AsMarkup() { return As<Markup>(); }
+    //! A view of the stored \ref Markup, without throwing or copying
+    bool AsMarkup(std::string_view& out) const& noexcept { return LoadView<Markup>(out); }
+    //! Deleted: the view would outlive the temporary it points into
+    bool AsMarkup(std::string_view& out) && = delete;
+    //! The stored \ref WMarkup exactly; throws `std::bad_variant_access` for anything else
+    [[nodiscard]] const WMarkup& AsWMarkup() const { return As<WMarkup>(); }
+    //! The stored \ref WMarkup, mutable; throws `std::bad_variant_access` for anything else
+    WMarkup& AsWMarkup() { return As<WMarkup>(); }
+    //! A view of the stored \ref WMarkup, without throwing or copying
+    bool AsWMarkup(std::wstring_view& out) const& noexcept { return LoadView<WMarkup>(out); }
+    //! Deleted: the view would outlive the temporary it points into
+    bool AsWMarkup(std::wstring_view& out) && = delete;
     //! The stored \ref ValuesList (not a \ref GenericList, see \ref ToGenericList); throws `std::bad_variant_access` for anything else
     [[nodiscard]] const ValuesList& AsList() const { return As<ValuesList>(); }
     //! The stored \ref ValuesList, mutable; throws `std::bad_variant_access` for anything else
@@ -559,6 +584,8 @@ public:
      *
      * `T` is one of the alternatives of \ref ValueData, or \ref ValuesList, \ref ValuesMap or \ref UserCallable
      * (the alternative \ref RecWrapper holds). Throws `std::bad_variant_access` when the value holds something else.
+     * `As<std::string>()` and `As<std::wstring>()` also accept a \ref Markup or \ref WMarkup (it is a string);
+     * `As<Markup>()` and `GetData()` are exact.
      */
     template<typename T>
     [[nodiscard]] const T& As() const
@@ -566,6 +593,15 @@ public:
         if constexpr (IsWrapped<T>::value)
         {
             return *std::get<RecWrapper<T>>(m_data);
+        }
+        else if constexpr (IsPlainString<T>::value)
+        {
+            // A Markup is a string: std::get<Markup> throws when it is not one either
+            if (const auto* text = std::get_if<T>(&m_data))
+            {
+                return *text;
+            }
+            return std::get<MarkupOf<T>>(m_data);
         }
         else
         {
@@ -580,12 +616,20 @@ public:
         {
             return *std::get<RecWrapper<T>>(m_data);
         }
+        else if constexpr (IsPlainString<T>::value)
+        {
+            if (auto* text = std::get_if<T>(&m_data))
+            {
+                return *text;
+            }
+            return std::get<MarkupOf<T>>(m_data);
+        }
         else
         {
             return std::get<T>(m_data);
         }
     }
-    //! A pointer to the stored `T`, or `nullptr`, as `std::get_if`; `T` as for \ref As
+    //! A pointer to the stored `T`, or `nullptr`, as `std::get_if`; `T` as for \ref As, strings accept markup too
     template<typename T>
     [[nodiscard]] const T* GetIf() const noexcept
     {
@@ -594,6 +638,11 @@ public:
             // A moved-from wrapper holds nothing: report it as absent rather than dereference it
             const auto* wrapper = std::get_if<RecWrapper<T>>(&m_data);
             return wrapper && !wrapper->valueless_after_move() ? &**wrapper : nullptr;
+        }
+        else if constexpr (IsPlainString<T>::value)
+        {
+            const T* text = std::get_if<T>(&m_data);
+            return text ? text : std::get_if<MarkupOf<T>>(&m_data);
         }
         else
         {
@@ -608,6 +657,11 @@ public:
         {
             auto* wrapper = std::get_if<RecWrapper<T>>(&m_data);
             return wrapper && !wrapper->valueless_after_move() ? &**wrapper : nullptr;
+        }
+        else if constexpr (IsPlainString<T>::value)
+        {
+            T* text = std::get_if<T>(&m_data);
+            return text ? text : std::get_if<MarkupOf<T>>(&m_data);
         }
         else
         {
@@ -681,16 +735,16 @@ public:
     //! Returns a copy, as in 1.x; \ref As returns a reference
     template<typename T>
     JINJA2CPP_DEPRECATED("jinja2cpp-2: As")
-    auto get() { return std::get<T>(m_data); }
+    auto get() { return GetCopy<T>(); }
     template<typename T>
     JINJA2CPP_DEPRECATED("jinja2cpp-2: As")
-    [[nodiscard]] auto get() const { return std::get<T>(m_data); }
+    [[nodiscard]] auto get() const { return GetCopy<T>(); }
     template<typename T>
     JINJA2CPP_DEPRECATED("jinja2cpp-2: GetIf")
-    auto getPtr() { return std::get_if<T>(&m_data); }
+    auto getPtr() { return GetRaw<T>(); }
     template<typename T>
     JINJA2CPP_DEPRECATED("jinja2cpp-2: GetIf")
-    auto getPtr() const { return std::get_if<T>(&m_data); }
+    auto getPtr() const { return GetRaw<T>(); }
     JINJA2CPP_DEPRECATED("jinja2cpp-2: IsNone")
     [[nodiscard]] bool isEmpty() const { return IsNone(); }
 
@@ -700,6 +754,50 @@ private:
     struct IsWrapped : std::integral_constant<bool, AnyOf<T, ValuesList, ValuesMap, UserCallable>::value>
     {
     };
+
+    // std::string and std::wstring: As and GetIf accept the Markup derived from them as well
+    template<typename T>
+    struct IsPlainString : std::integral_constant<bool, std::is_same_v<T, std::string> || std::is_same_v<T, std::wstring>>
+    {
+    };
+    template<typename T>
+    using MarkupOf = BasicMarkup<typename T::value_type>;
+
+    // The 1.x get<T>() and getPtr<T>() take any alternative of the variant, wrapped ones included
+    template<typename T>
+    [[nodiscard]] auto GetCopy() const
+    {
+        if constexpr (IsPlainString<T>::value)
+        {
+            return As<T>();
+        }
+        else
+        {
+            return std::get<T>(m_data);
+        }
+    }
+    template<typename Self, typename T>
+    static auto GetRawFrom(Self& self) noexcept
+    {
+        if constexpr (IsPlainString<T>::value)
+        {
+            return self.template GetIf<T>();
+        }
+        else
+        {
+            return std::get_if<T>(&self.m_data);
+        }
+    }
+    template<typename T>
+    auto GetRaw() noexcept
+    {
+        return GetRawFrom<Value, T>(*this);
+    }
+    template<typename T>
+    auto GetRaw() const noexcept
+    {
+        return GetRawFrom<const Value, T>(*this);
+    }
 
     template<typename T>
     [[nodiscard]] bool Holds() const noexcept
@@ -719,7 +817,7 @@ private:
     template<typename S>
     bool LoadView(std::basic_string_view<typename S::value_type>& out) const noexcept
     {
-        const auto* p = std::get_if<S>(&m_data);
+        const auto* p = GetIf<S>();
         if (p)
         {
             out = *p;
@@ -1069,6 +1167,15 @@ inline GenericMap::const_iterator GenericMap::cend() const
 {
     return end();
 }
+
+// A Markup is no larger than the std::string it derives from, so the variant did not grow when it joined it
+static_assert(sizeof(Value) == sizeof(Value::ValueData), "Value must be its variant and nothing else");
+static_assert(sizeof(Markup) == sizeof(std::string) && sizeof(WMarkup) == sizeof(std::wstring), "Markup adds no data to the string");
+namespace detail
+{
+inline constexpr std::size_t kWideStringSize = sizeof(std::wstring);
+} // namespace detail
+static_assert(sizeof(Value) <= detail::kWideStringSize + alignof(std::max_align_t), "Value grew past a wide string plus its variant index");
 
 inline Value::Value() = default;
 inline Value::Value(const Value& val) = default;

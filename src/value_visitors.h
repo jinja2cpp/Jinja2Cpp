@@ -10,6 +10,7 @@
 #include "unicode_printable.h"
 
 #include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
@@ -146,6 +147,12 @@ struct RecursiveUnwrapper
     }
     static ListRef UnwrapRecursive(const ListHandle& arg, const ValueObject* owner) noexcept { return ListRef(arg.accessor, owner, arg.isTuple); }
     static MapRef UnwrapRecursive(const MapHandle& arg, const ValueObject* owner) noexcept { return MapRef(arg.accessor, owner); }
+    // A host Markup is visited as its text: the visitors know strings, not the Value's string subclass
+    template<typename CharT>
+    static const std::basic_string<CharT>& UnwrapRecursive(const BasicMarkup<CharT>& arg, const ValueObject* /*owner*/) noexcept
+    {
+        return arg;
+    }
     template<typename T>
     static const T& UnwrapRecursive(const BoxHandle<T>& arg, const ValueObject* /*owner*/) noexcept
     {
@@ -542,6 +549,23 @@ struct InputValueConvertor
     result_t operator()(std::basic_string<ChT>& val) const
     {
         return InternalValue::FromText(std::basic_string_view<ChT>(val));
+    }
+
+    // A Markup converts as its text, flagged: the template does not escape it (include/jinja2cpp/markup.h)
+    template<typename ChT>
+    result_t operator()(const BasicMarkup<ChT>& val) const
+    {
+        auto result = this->operator()(static_cast<const std::basic_string<ChT>&>(val));
+        result.SetMarkup();
+        return result;
+    }
+
+    template<typename ChT>
+    result_t operator()(BasicMarkup<ChT>& val) const
+    {
+        auto result = this->operator()(static_cast<std::basic_string<ChT>&>(val));
+        result.SetMarkup();
+        return result;
     }
 
     result_t operator()(const ValuesList& vals) const

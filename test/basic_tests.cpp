@@ -3,6 +3,7 @@
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/markup.h>
 #include <jinja2cpp/generic_list_iterator.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/string_helpers.h>
@@ -1222,6 +1223,98 @@ TEST(ValueApiTest, VisitUnwrapsContainers)
         },
         list);
     EXPECT_EQ(2U, list.AsList().size());
+}
+
+// Markup is a string that a template does not escape (docs/tasks/0180); is-a: the string accessors accept it
+TEST(ValueApiTest, MarkupIsAStringTheTemplateDoesNotEscape)
+{
+    static_assert(sizeof(Value) <= detail::kWideStringSize + alignof(std::max_align_t), "adding Markup must not grow Value");
+
+    Value markup{ Markup("<b>") };
+    Value plain{ "<b>" };
+    Value wmarkup{ WMarkup(L"<b>") };
+    EXPECT_TRUE(markup.IsMarkup());
+    EXPECT_FALSE(markup.IsWMarkup());
+    EXPECT_FALSE(plain.IsMarkup());
+    EXPECT_TRUE(wmarkup.IsWMarkup());
+    EXPECT_FALSE(wmarkup.IsMarkup());
+
+    // A Markup is a string: IsString, AsString, As and GetIf accept it
+    EXPECT_TRUE(markup.IsString());
+    EXPECT_FALSE(markup.IsWString());
+    EXPECT_TRUE(wmarkup.IsWString());
+    EXPECT_EQ("<b>", markup.AsString());
+    EXPECT_EQ("<b>", markup.As<std::string>());
+    EXPECT_EQ(L"<b>", wmarkup.AsWString());
+    markup.AsString() += "!";
+    EXPECT_EQ("<b>!", markup.AsMarkup());
+    ASSERT_NE(nullptr, markup.GetIf<std::string>());
+    EXPECT_EQ("<b>!", *markup.GetIf<std::string>());
+    EXPECT_EQ(nullptr, markup.GetIf<std::wstring>());
+    EXPECT_EQ(static_cast<const std::string*>(&markup.AsMarkup()), std::as_const(markup).GetIf<std::string>());
+    std::string_view view;
+    EXPECT_TRUE(std::as_const(markup).AsString(view));
+    EXPECT_EQ("<b>!", view);
+    EXPECT_TRUE(std::as_const(markup).AsMarkup(view));
+    std::wstring_view wview;
+    EXPECT_TRUE(std::as_const(wmarkup).AsWString(wview));
+    EXPECT_TRUE(std::as_const(wmarkup).AsWMarkup(wview));
+    EXPECT_EQ(L"<b>", wview);
+
+    // The exact accessors tell them apart
+    EXPECT_THROW((void)plain.AsMarkup(), std::bad_variant_access);
+    EXPECT_FALSE(std::as_const(plain).AsMarkup(view));
+    EXPECT_EQ(nullptr, plain.GetIf<Markup>());
+    EXPECT_NE(nullptr, markup.GetIf<Markup>());
+    EXPECT_THROW((void)Value(5).AsString(), std::bad_variant_access);
+    EXPECT_THROW((void)markup.AsWMarkup(), std::bad_variant_access);
+    EXPECT_FALSE(Value(std::string_view("v")).IsMarkup());
+    EXPECT_TRUE(std::holds_alternative<Markup>(markup.GetData()));
+    EXPECT_FALSE(std::holds_alternative<std::string>(markup.GetData()));
+
+    // Printing shows the text; a container shows the repr
+    EXPECT_EQ("<b>!", markup.ToString());
+    EXPECT_EQ(L"<b>", wmarkup.ToWString());
+    EXPECT_EQ("[Markup('<b>')]", Value(ValuesList{ Markup("<b>") }).ToString());
+    char buf[16];
+    auto res = Value(Markup("<b>")).ToChars(buf, buf + sizeof(buf));
+    EXPECT_EQ("<b>", std::string(buf, res.ptr));
+
+    // Host-side equality is structural: the template-side == compares the text
+    EXPECT_EQ(Value(Markup("a")), Value(Markup("a")));
+    EXPECT_NE(Value(Markup("a")), Value("a"));
+    EXPECT_NE(Value(Markup("a")), Value(WMarkup(L"a")));
+
+    // Visit passes the Markup itself
+    auto kind = [](const auto& item) -> std::string {
+        using T = std::decay_t<decltype(item)>;
+        if constexpr (std::is_same_v<T, Markup>)
+        {
+            return "markup";
+        }
+        else if constexpr (std::is_same_v<T, WMarkup>)
+        {
+            return "wmarkup";
+        }
+        else if constexpr (std::is_same_v<T, std::string>)
+        {
+            return "string";
+        }
+        else
+        {
+            return "other";
+        }
+    };
+    EXPECT_EQ("markup", Visit(kind, markup));
+    EXPECT_EQ("wmarkup", Visit(kind, wmarkup));
+    EXPECT_EQ("string", Visit(kind, plain));
+
+    // Copies keep the flag; text operations give plain strings
+    Value copy = markup;
+    EXPECT_TRUE(copy.IsMarkup());
+    static_assert(std::is_same_v<decltype(markup.AsMarkup() + "x"), std::string>);
+    static_assert(!std::is_convertible_v<const char*, Markup>, "making a Markup is explicit");
+    static_assert(!std::is_convertible_v<std::string, Markup>, "making a Markup is explicit");
 }
 
 // ToString prints as {{ value }} does, Python str() (decision 3b)

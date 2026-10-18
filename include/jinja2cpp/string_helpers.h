@@ -306,6 +306,13 @@ struct StringGetter
         return ToString(str);
     }
 
+    // A Markup is a string; without this the forwarding overload below would take it
+    template<typename CharT>
+    std::string operator()(const BasicMarkup<CharT>& str) const
+    {
+        return ToString(static_cast<const std::basic_string<CharT>&>(str));
+    }
+
     template<typename T>
     std::string operator()(T&&) const
     {
@@ -324,6 +331,13 @@ struct WStringGetter
     std::wstring operator()(const std::basic_string_view<CharT>& str) const
     {
         return ToWString(str);
+    }
+
+    // A Markup is a string; without this the forwarding overload below would take it
+    template<typename CharT>
+    std::wstring operator()(const BasicMarkup<CharT>& str) const
+    {
+        return ToWString(static_cast<const std::basic_string<CharT>&>(str));
     }
 
     template<typename T>
