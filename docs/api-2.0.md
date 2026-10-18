@@ -418,6 +418,14 @@ inside an `if` statement or an inline if, where it fails when it runs (docs/task
 1.x let a `UserCallable` passed in the render parameters or the globals act as a filter or
 test, found when it ran; `Settings::userCallablesAsFilters = true` keeps that behaviour.
 
+### 5.7 C++-only filters render, `toxml` is gone (release note)
+
+In 1.x `camelize`, `underscorize`, `escapecpp`, `toxml` and `toyaml` were registered but
+rendered an empty string. In 2.0 the first four render the output that
+[cpp-only-filters.md](cpp-only-filters.md) describes, and `toxml` is removed: a template that
+uses it fails `Template::Load` with `ErrorCode::UnknownFilter` (docs/tasks/0233,
+docs/release-2.0.md D16). Templates that leaned on the empty output drop the filter.
+
 ## 6. Release options
 
 | Option | What ships | Users get | Cost |

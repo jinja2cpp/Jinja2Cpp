@@ -9,6 +9,7 @@
 #include "render_context.h"
 #include "string_builder.h"
 #include "undefined.h"
+#include "unicode_printable.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
@@ -183,6 +184,7 @@ Serialize::Serialize(const FilterParams& params, const Serialize::Mode mode)
         break;
     }
     default:
+        ParseParams(NoArguments(), params);
         break;
     }
 }
@@ -467,13 +469,348 @@ private:
     StringBuilder<char> m_out;
 };
 
+// toyaml: a YAML document in block style that YAML 1.1 and 1.2 loaders read back as the same
+// data. Mappings keep their order, nested collections indent by two spaces, empty ones are
+// [] and {}, and the document has no trailing newline. A string is a plain scalar only when
+// it cannot be read as anything else: it starts with a letter, _, / or a printable non-ASCII
+// character, holds only those, digits, spaces and -.()+, ends with no space and is no
+// null/bool word (y, n, yes, no, on, off, true, false, null in any case). Any other string is
+// double-quoted with YAML escapes.
+class YamlWriter
+{
+public:
+    explicit YamlWriter(RenderContext& context)
+        : m_context(context)
+    {
+    }
+
+    InternalValue Write(const InternalValue& value)
+    {
+        WriteNode(value, 0, Position::Document);
+        return m_out.Build();
+    }
+
+private:
+    [[noreturn]] void Fail() const
+    {
+        m_context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+        throw std::runtime_error("toyaml(): value is not YAML serializable");
+    }
+
+    // The characters of a UTF-8 string as code points, each with its bytes; continuation bytes
+    // belong to the character before them, as SplitCodePoints splits them
+    template<typename Fn>
+    static void ForEachChar(std::string_view str, const Fn& fn)
+    {
+        size_t pos = 0;
+        while (pos != str.size())
+        {
+            auto end = pos + 1;
+            while (end != str.size() && IsCodePointTail(str[end]))
+            {
+                ++end;
+            }
+            const auto ch = str.substr(pos, end - pos);
+            uint32_t cp = static_cast<unsigned char>(ch[0]);
+            if (ch.size() > 1)
+            {
+                cp &= 0x7FU >> ch.size();
+            }
+            for (size_t n = 1; n < ch.size(); ++n)
+            {
+                cp = (cp << 6) | (static_cast<unsigned char>(ch[n]) & 0x3F);
+            }
+            fn(cp, ch);
+            pos = end;
+        }
+    }
+
+    static bool IsAsciiLetter(uint32_t cp) { return (cp >= 'a' && cp <= 'z') || (cp >= 'A' && cp <= 'Z'); }
+
+    static bool IsPlain(std::string_view str)
+    {
+        if (str.empty() || str.back() == ' ')
+        {
+            return false;
+        }
+        static const char* const words[] = { "y", "n", "yes", "no", "on", "off", "true", "false", "null" };
+        for (const auto* word : words)
+        {
+            if (str.size() == std::strlen(word) && std::equal(str.begin(), str.end(), word, [](char l, char r) { return (l | 0x20) == r; }))
+            {
+                return false;
+            }
+        }
+        bool plain = true;
+        bool first = true;
+        ForEachChar(str, [&plain, &first](uint32_t cp, std::string_view) {
+            const bool startChar = IsAsciiLetter(cp) || cp == '_' || cp == '/' || (cp >= 0x80 && detail::IsPythonPrintable(cp));
+            const bool innerChar = (cp >= '0' && cp <= '9') || cp == ' ' || cp == '-' || cp == '.' || cp == '(' || cp == ')' || cp == '+';
+            plain = plain && (startChar || (!first && innerChar));
+            first = false;
+        });
+        return plain;
+    }
+
+    void WriteHex(char kind, uint32_t cp, int digits)
+    {
+        static const char hexDigits[] = "0123456789ABCDEF";
+        m_out.push_back('\\');
+        m_out.push_back(kind);
+        for (int shift = (digits - 1) * 4; shift >= 0; shift -= 4)
+        {
+            m_out.push_back(hexDigits[(cp >> shift) & 0xF]);
+        }
+    }
+
+    void WriteString(std::string_view str)
+    {
+        if (IsPlain(str))
+        {
+            m_out.append(str.data(), str.size());
+            return;
+        }
+        m_out.push_back('"');
+        ForEachChar(str, [this](uint32_t cp, std::string_view ch) {
+            switch (cp)
+            {
+            case '"':
+                m_out += "\\\"";
+                return;
+            case '\\':
+                m_out += "\\\\";
+                return;
+            case '\0':
+                m_out += "\\0";
+                return;
+            case '\a':
+                m_out += "\\a";
+                return;
+            case '\b':
+                m_out += "\\b";
+                return;
+            case '\t':
+                m_out += "\\t";
+                return;
+            case '\n':
+                m_out += "\\n";
+                return;
+            case '\v':
+                m_out += "\\v";
+                return;
+            case '\f':
+                m_out += "\\f";
+                return;
+            case '\r':
+                m_out += "\\r";
+                return;
+            case 0x1B:
+                m_out += "\\e";
+                return;
+            default:
+                break;
+            }
+            if (cp < 0x20 || cp == 0x7F)
+            {
+                WriteHex('x', cp, 2);
+            }
+            else if (cp < 0x80 || detail::IsPythonPrintable(cp))
+            {
+                m_out.append(ch.data(), ch.size());
+            }
+            else if (cp < 0x10000)
+            {
+                WriteHex('u', cp, 4);
+            }
+            else
+            {
+                WriteHex('U', cp, 8);
+            }
+        });
+        m_out.push_back('"');
+    }
+
+    // YAML 1.1 reads a float only with a dot in it: 1e+20 is written 1.0e+20
+    void WriteFloat(double val)
+    {
+        if (std::isnan(val))
+        {
+            m_out += ".nan";
+            return;
+        }
+        if (std::isinf(val))
+        {
+            m_out += val < 0 ? "-.inf" : ".inf";
+            return;
+        }
+        const auto text = visitors::PythonFloatText(val);
+        const auto view = text.View();
+        const auto exp = view.find('e');
+        if (exp != std::string_view::npos && view.find('.') == std::string_view::npos)
+        {
+            m_out += view.substr(0, exp);
+            m_out += ".0";
+            m_out += view.substr(exp);
+            return;
+        }
+        m_out += view;
+    }
+
+    void NewLine(size_t indent)
+    {
+        m_out.push_back('\n');
+        for (size_t n = 0; n != indent; ++n)
+        {
+            m_out.push_back(' ');
+        }
+    }
+
+    // Where a node starts: the document start, after a sequence item's "-" or after a
+    // mapping key's ":"
+    enum class Position
+    {
+        Document,
+        SequenceItem,
+        MappingValue
+    };
+
+    // Before a scalar, an empty collection or the first line of a collection: nothing at the
+    // document start, a space after "-" (a nested collection starts on that line) and, after
+    // ":", a space or a new line at indent
+    void StartNode(Position pos, size_t indent, bool blockCollection)
+    {
+        if (pos == Position::MappingValue && blockCollection)
+        {
+            NewLine(indent);
+        }
+        else if (pos != Position::Document)
+        {
+            m_out.push_back(' ');
+        }
+    }
+
+    // Writes value with its lines at column indent
+    void WriteNode(const InternalValue& value, size_t indent, Position pos)
+    {
+        CheckStack();
+        if (const auto* info = GetUndefinedInfo(value))
+        {
+            throw std::runtime_error(std::string("Object of type ") + UndefinedClassName(*info) + " is not YAML serializable");
+        }
+        auto scalar = [this, indent, pos] { StartNode(pos, indent, false); };
+        if (value.IsNone() || value.IsUndefined())
+        {
+            scalar();
+            m_out += "null";
+        }
+        else if (const auto* b = GetIf<bool>(&value))
+        {
+            scalar();
+            m_out += *b ? "true" : "false";
+        }
+        else if (const auto* i = GetIf<int64_t>(&value))
+        {
+            scalar();
+            m_out += std::to_string(*i);
+        }
+        else if (const auto* d = GetIf<double>(&value))
+        {
+            scalar();
+            WriteFloat(*d);
+        }
+        else if (auto str = GetAsSameString(std::string(), value))
+        {
+            scalar();
+            WriteString(*str);
+        }
+        else if (const auto* pair = GetIf<KeyValuePair>(&value))
+        {
+            const InternalValueList items{ InternalValue(pair->key), pair->value };
+            WriteSequence(items, indent, pos);
+        }
+        else if (auto list = AsList(value))
+        {
+            WriteSequence(*list, indent, pos);
+        }
+        else if (auto map = AsMap(value))
+        {
+            WriteMapping(*map, indent, pos);
+        }
+        else
+        {
+            Fail();
+        }
+    }
+
+    template<typename Items>
+    void WriteSequence(const Items& items, size_t indent, Position pos)
+    {
+        bool isFirst = true;
+        for (const auto& item : items)
+        {
+            if (isFirst)
+            {
+                StartNode(pos, indent, true);
+            }
+            else
+            {
+                NewLine(indent);
+            }
+            isFirst = false;
+            m_out.push_back('-');
+            WriteNode(item, indent + 2, Position::SequenceItem);
+        }
+        if (isFirst)
+        {
+            StartNode(pos, indent, false);
+            m_out += "[]";
+        }
+    }
+
+    void WriteMapping(const MapRef& map, size_t indent, Position pos)
+    {
+        if (const char* objectClass = map.GetObjectClass())
+        {
+            // namespace(), cycler() and joiner() are objects, not data
+            throw std::runtime_error("Object of type "s + objectClass + " is not YAML serializable");
+        }
+        const auto keys = map.GetKeys();
+        if (keys.empty())
+        {
+            StartNode(pos, indent, false);
+            m_out += "{}";
+            return;
+        }
+        bool isFirst = true;
+        for (const auto& key : keys)
+        {
+            if (isFirst)
+            {
+                StartNode(pos, indent, true);
+            }
+            else
+            {
+                NewLine(indent);
+            }
+            isFirst = false;
+            WriteString(key);
+            m_out.push_back(':');
+            WriteNode(map.GetValueByName(key), indent + 2, Position::MappingValue);
+        }
+    }
+
+    RenderContext& m_context;
+    StringBuilder<char> m_out;
+};
+
 } // namespace
 
 InternalValue Serialize::Filter(const InternalValue& value, RenderContext& context)
 {
-    if (m_mode != JsonMode)
+    if (m_mode == YamlMode)
     {
-        return InternalValue();
+        // YAML is no HTML: under autoescape the result is escaped like any string
+        return YamlWriter(context).Write(value);
     }
 
     // Jinja2's do_tojson: json.dumps with sort_keys=True, then htmlsafe_json_dumps escapes

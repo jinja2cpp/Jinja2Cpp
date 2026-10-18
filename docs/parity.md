@@ -255,8 +255,10 @@ storing a container in itself raises instead of printing `[...]` (deliberate, 00
 | `xmlattr` | ✅ | `xmlattr*` | |
 | Unknown filter is an error; in a branch never taken it is not | ✅ | `unknown_filter*` | |
 
-C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
-`applymacro`) and the `startsWith` test are deliberate extensions; Jinja2 rejects them.
+C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toyaml`, `applymacro`; see
+[cpp-only-filters.md](cpp-only-filters.md)) and the `startsWith` test are deliberate
+extensions; Jinja2 rejects them. `toxml` was removed in 2.0 and is an unknown filter, as in
+Jinja2 (0233).
 
 ## Statements (`statements`)
 

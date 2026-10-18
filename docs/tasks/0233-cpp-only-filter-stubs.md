@@ -1,9 +1,9 @@
 ---
-status: open
+status: done
 priority: medium
 area: api
 issues: ["https://github.com/jinja2cpp/Jinja2Cpp/issues/41"]
-touches: [src/filter_factories.cpp, src/string_converter_filter.cpp, src/serialize_filters.cpp]
+touches: [src/filter_factories.cpp, src/string_converter_filter.cpp, src/serialize_filters.cpp, src/filters.h, test/filters_test.cpp, docs/cpp-only-filters.md]
 shares: [docs/parity.md]
 ---
 # C++-only filters `camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml` do nothing
@@ -26,3 +26,9 @@ and the `startsWith` test work and stay.
 **Done when.** Each name either renders its documented output with rows in
 `test/filters_test.cpp`, or fails Load with `UnknownFilter`; `docs/parity.md` and the 2.0
 migration notes (0077) say which.
+
+**Outcome.** Ruslan chose D16 a (2026-10-18). `camelize(upper_first=true)`, `underscorize`,
+`escapecpp` and `toyaml` render the output documented in `docs/cpp-only-filters.md`, with
+rows in `test/filters_test.cpp`; `toxml` is removed and fails Load with `UnknownFilter`
+(corpus case `filters.unknown_filter_toxml`). Release note: `docs/api-2.0.md` 5.7, for
+0077's `MIGRATION.md`.
