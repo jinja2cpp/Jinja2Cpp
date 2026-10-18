@@ -411,6 +411,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/test_tools.h
         test/testers_test.cpp
         test/tojson_filter_test.cpp
+        test/undeclared_variables_test.cpp
         test/undefined_test.cpp
         test/user_callable_test.cpp
         test/v1_names_test.cpp

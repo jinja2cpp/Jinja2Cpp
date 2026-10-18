@@ -69,12 +69,14 @@ public:
     {
         // `set`, a macro, an import alias, in the frame's own body
         Store,
-        // The same inside a branch (SetInBranch), or a name the frame may hold
-        // that Jinja2 does not store (an imported name besides its alias): never bound at entry
+        // The same inside a branch (SetInBranch): never bound at entry
         Branch,
         // A `with` target: bound as the frame starts (a loop's targets and a macro's arguments
         // are found on their statements, BindsName)
-        Target
+        Target,
+        // A name the frame may hold that Jinja2 does not store (an imported name besides its
+        // alias): never bound at entry, and not a declaration (UndeclaredNames)
+        Hidden
     };
     // `name` is set in a scope of `frame`'s statement (`set`, a macro, an import alias), in a
     // branch of the body when the parser says so (SetInBranch). The resolver keeps the view:
@@ -131,6 +133,12 @@ public:
             ResolveSlots(nodes);
         }
     }
+    // The names a render looks up in the context, as jinja2.meta.find_undeclared_variables
+    // finds them (docs/tasks/0236), in parse order and with repeats: the names read, and the
+    // names stored in a branch, where no store before them in their frame, no frame around
+    // them and no binder (a loop target, `loop`, a macro's argument, `self`, a block's `super`)
+    // declares them. Called after a parse without errors; the views are text of the arena
+    [[nodiscard]] std::vector<std::string_view> UndeclaredNames(const NodeArena& nodes) const;
     // The name expressions made where a slot may be bound, in parse order (for the tests)
     [[nodiscard]] boost::span<const std::pair<NodeRef<ValueRefExpression>, FrameId>> Uses() const { return m_uses; }
 
@@ -207,6 +215,15 @@ private:
     void MarkCandidateReads(FrameId frameId, boost::span<EntryCandidate> candidates, const NodeArena& nodes) const;
     // Whether `frame` binds `name` as it starts: a loop target, `loop`, a macro's argument
     [[nodiscard]] bool BindsName(FrameId frame, std::string_view name, const NodeArena& nodes) const;
+    // Whether `name`, read or stored in `frame`, is declared there: the stores of the frame
+    // before `storeEnd` (an index of m_stores) and every store of the frames around it count, as
+    // Jinja2 analyses a frame's body in order and the frames inside it after it (idtracking)
+    [[nodiscard]] bool IsDeclared(FrameId frame, std::string_view name, std::size_t storeEnd, const NodeArena& nodes) const;
+    // Whether `frame` binds `name` as it starts, for UndeclaredNames: BindsName, a filter's
+    // loop targets, the arguments of the macro whose defaults the frame evaluates
+    [[nodiscard]] bool DeclaresAtEntry(FrameId frame, std::string_view name, const NodeArena& nodes) const;
+    // Whether a frame inside `frame`, or `frame` itself, reads `name`
+    [[nodiscard]] bool IsReadInside(FrameId frame, std::string_view name, const NodeArena& nodes) const;
     [[nodiscard]] bool IsBoundOutside(FrameId frameId, const EntryName& entry, const NodeArena& nodes) const;
     // Gives each entry binding the names no frame around its own reads or binds
     void ResolveEntryBindings(NodeArena& nodes);

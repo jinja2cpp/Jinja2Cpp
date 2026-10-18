@@ -774,7 +774,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&, Stateme
     statement.SetBody(TakeBody(info));
     // Stored once the body has rendered, which may read the name itself
     const auto& outer = statementsInfo.back();
-    const auto kind = StatementInfo::OwnsFrame(outer.type) ? NameResolver::StoreKind::Store : NameResolver::StoreKind::Branch;
+    const auto kind = StatementInfo::OwnsFrame(outer.type) || IsLoopElse(statementsInfo) ? NameResolver::StoreKind::Store : NameResolver::StoreKind::Branch;
     m_names.AddStores(outer.frame, m_nodes[statement.GetTarget()], m_nodes, kind);
     statementsInfo.back().body.push_back(info.renderer);
 
@@ -1485,7 +1485,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
         m_names.AddStore(m_names.Current(), m_nodes.Text(name.alias));
         if (nameInfo.first != nameInfo.second)
         {
-            m_names.AddStore(m_names.Current(), m_nodes.Text(name.name), NameResolver::StoreKind::Branch);
+            m_names.AddStore(m_names.Current(), m_nodes.Text(name.name), NameResolver::StoreKind::Hidden);
         }
     }
     m_nodes[renderer].SetNamesToImport(m_nodes.MakeSpan(names));
@@ -1719,7 +1719,9 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
         }
         else
         {
-            value = ValueRefExpression::Make(m_nodes, name);
+            const auto ref = ValueRefExpression::Make(m_nodes, name);
+            m_names.AddUse(ref);
+            value = ref;
         }
         trans->variables.emplace_back(name, std::move(value));
         trans->paramsCount = trans->variables.size();
@@ -1829,16 +1831,18 @@ std::basic_string<CharT> TrimTransMessage(const std::basic_string<CharT>& messag
     return result;
 }
 
-// The names the messages use become variables too
-void AddTransMessageNames(NodeArena& nodes, TransInfo& trans)
+// The names the messages use become variables too, read where the block is
+void AddTransMessageNames(NodeArena& nodes, NameResolver& names, TransInfo& trans)
 {
-    for (auto* names : { &trans.singularNames, &trans.pluralNames })
+    for (auto* messageNames : { &trans.singularNames, &trans.pluralNames })
     {
-        for (auto& name : *names)
+        for (auto& name : *messageNames)
         {
             if (!trans.HasVariable(name))
             {
-                trans.variables.emplace_back(name, ValueRefExpression::Make(nodes, name));
+                const auto ref = ValueRefExpression::Make(nodes, name);
+                names.AddUse(ref);
+                trans.variables.emplace_back(name, ref);
             }
         }
     }
@@ -1871,7 +1875,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
         return MakeParseError(ErrorCode::UnexpectedStatement, info.token);
     }
 
-    AddTransMessageNames(m_nodes, trans);
+    AddTransMessageNames(m_nodes, m_names, trans);
 
     if (trans.trimmed.value_or(false))
     {

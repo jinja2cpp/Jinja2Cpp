@@ -387,8 +387,8 @@ error is compared, not the message or the line.
 | `finalize` | `Settings::finalize`; corpus area `custom` | ✅ | |
 | Template cache, `auto_reload` | `cacheSize`, `autoReload`, `templateLookup` | ✅ | Jinja2 looks a template up on every `include`/`extends`/`import`; the default `TemplateLookup::OncePerRender` does it once per name per render, `EveryUse` matches Jinja2 |
 | `Template.generate`/`stream` | `Render(std::ostream&)` | ✅ | |
-| `Template.module`, `make_module` | none | ❌ | |
-| `jinja2.meta.find_undeclared_variables` | none (`GetMetadata` reads a C++-specific `meta` block) | ❌ | |
+| `Template.module`, `make_module` | none | ❌ | 0284 |
+| `jinja2.meta.find_undeclared_variables` | `Template::FindUndeclaredVariables` (sorted names; `GetMetadata` reads the C++-specific `meta` block) | ✅ | 0236 |
 | Sandbox | ➖ no Python object access to sandbox | ➖ | |
 | Async rendering | ➖ | ➖ | |
 | Wide strings | `TemplateW`; the corpus runs every case through it too (`ParityWide`), with narrow/wide conversion by a built-in UTF-8 codec, independent of the C locale | ✅ | 0035 |
