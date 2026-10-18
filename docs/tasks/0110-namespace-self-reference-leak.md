@@ -1,11 +1,16 @@
 ---
 status: open
-priority: medium
+priority: high
 area: evaluator
 depends: [0003]
 touches: [src/internal_value.cpp, src/statements.cpp#AssignTo]
 ---
 # A namespace that holds itself leaks
+
+**Release impact (0221).** Ordinary template evaluation can retain allocations
+after the render ends. Treat this as an embedding/lifetime correctness candidate
+for the release gate, not merely a difference in Python garbage collection. The
+zero-crash parity summary does not cover this known leak outside the corpus.
 
 **Problem.** Found by the `fuzz render` job on PR #376 (2026-10-04, unrelated to that PR's
 include changes). The minimized input is:

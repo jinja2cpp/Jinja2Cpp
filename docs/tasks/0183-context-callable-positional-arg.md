@@ -1,11 +1,18 @@
 ---
 status: open
-priority: medium
+priority: high
 area: api
 depends: []
 touches: [src/statements.cpp, src/expression_evaluator.cpp]
 ---
 # A user callable taking `*context` gets None for a positional argument
+
+**Release triage (0221).** Host-callable argument binding is a core embedding
+contract. Confirmed on master 66b9096: next to the keyword row at
+test/user_callable_test.cpp:342, `ContextArgFn('test_value')` renders `none` (narrow
+and wide) where `ContextArgFn(name='test_value')` renders `100500`; that row is the
+reproducer. Fix the binding defect before release. Include the supported
+behavior in the host-callable integration scenarios of 0223.
 
 **Problem.** Found while building 0165: a user callable declared with
 `ArgInfo{"*context"}` plus a named parameter receives None when the template passes that
