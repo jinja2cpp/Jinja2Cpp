@@ -1,9 +1,12 @@
 # Jinja2C++ — Claude Code instructions
 
-Read [AGENTS.md](AGENTS.md) for the shared project instructions: build/test commands,
-layout, behavior and style rules, task conventions and PR workflow. Before reviewing
-any PR, also read [REVIEW.md](REVIEW.md). Keep shared rules in AGENTS.md and review
-criteria in REVIEW.md rather than duplicating them here.
+The shared project instructions (build/test commands, layout, behavior and style
+rules, task conventions and PR workflow) live in AGENTS.md and are imported here:
+
+@AGENTS.md
+
+Before reviewing any PR, also read [REVIEW.md](REVIEW.md). Keep shared rules in
+AGENTS.md and review criteria in REVIEW.md rather than duplicating them here.
 
 This file adds Claude Code-specific environment setup, agent roles and coordination.
 Other runners should use their own available tools and environment initialization.
@@ -19,8 +22,9 @@ and export the `JINJA2CPP_CMAKE_INIT` it prints.
 When archive downloads are blocked in that runner, the hook supplies an initial
 cache for new build directories:
 `cmake -S . -B build-x -G Ninja -C "$JINJA2CPP_CMAKE_INIT" ...`.
-RapidJSON's patched archive may need additional network access. Diagnose the actual
-request rather than assuming every cloud environment blocks it or ConanCenter.
+In Claude Code on the web, `-DJINJA2CPP_WITH_JSON_BINDINGS=rapid` still needs an
+archive download (patched RapidJSON) and does not configure, and ConanCenter is
+blocked, so Conan builds run only in CI.
 Keep strict warnings and TLS/checksum verification enabled, as in AGENTS.md.
 
 ## Agent roles

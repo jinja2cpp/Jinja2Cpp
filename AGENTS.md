@@ -6,13 +6,27 @@ project instructions for Codex, Claude Code and other coding agents. Claude Code
 also reads [CLAUDE.md](CLAUDE.md) for its environment hooks and agent roles; other
 runners must not assume those hooks, model aliases or subagents are available.
 
-## Code review
+## Code Review Rules
 
 Before reviewing a pull request, read [REVIEW.md](REVIEW.md) and apply its review
-criteria. It covers both automatic and explicitly requested reviews. Review the
-proposed changes without editing files, committing fixes or posting additional
-messages unless that work was requested. Review automation is enabled separately
-in Codex/GitHub settings; these files provide instructions, not review triggers.
+criteria; it is shared by every reviewer of this repository (Codex, Claude Code
+Review, the pre-push verifier). It covers both automatic and explicitly requested
+reviews. Review the proposed changes without editing files, committing fixes or
+posting additional messages unless that work was requested. Review automation is
+enabled separately in Codex/GitHub settings; these files provide instructions, not
+review triggers. The rules that matter most, in case REVIEW.md is not read:
+
+- Template text and data may be untrusted. Any input reachable crash, abort, stack
+  overflow, unbounded allocation or output, path escape from a loader root, or
+  autoescape bypass is P0/P1.
+- Lifetimes are this project's worst defect class (tasks 0112, 0115, 0125, 0134):
+  flag any view, lent item, generator item or reflected item used after the statement,
+  frame, render or reload that owned it, and escaping callables without a keep-alive.
+- Python Jinja2 at the pinned version is the oracle: a rendering or rejection
+  difference not on the divergence allow-list is a bug, in narrow and wide paths.
+- Performance claims need `bench/count.py` instruction counts; on the per-node
+  render path, a new allocation, value copy or per-element virtual call is a finding.
+- Public headers stay C++17 and ABI changes need a recorded task decision.
 
 ## Build and test
 
@@ -51,6 +65,7 @@ Useful configurations (see `.github/workflows/` for the actual CI matrix):
 For current Conan dependency-mode builds, use Conan 2:
 
 ```bash
+conan profile detect --force   # once per machine; Conan 2 has no default profile
 conan install . -of .conan --build=missing -s compiler.cppstd=17 -s build_type=Release
 cmake -S . -B build-conan -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_TOOLCHAIN_FILE=.conan/conan_toolchain.cmake \
@@ -85,12 +100,17 @@ Match any targeted compiler workaround to the documented CI configuration.
 - Python Jinja2 is the behavioral oracle. Use the Python version in
   `.github/workflows/parity-expectations.yml` and packages pinned by
   `test/parity/requirements.txt`; record deliberate divergences. Do not infer
-  expected output from C++ behavior or casually upgrade the oracle.
+  expected output from C++ behavior or casually upgrade the oracle. A quick probe:
+  `python3 -c "import jinja2; print(jinja2.Template('{{ x }}').render(x=1))"`.
 - Every behavior fix needs a focused regression case. Prefer an existing table or
-  parity case; edit older unit expectations only where they encode changed behavior.
+  parity case; edit older unit expectations only where they encode changed behavior,
+  and only in files the task lists, so parallel parity PRs do not collide in the
+  shared test tables.
   Check relevant malformed arguments, empty/undefined values and both character types.
 - The parity suite uses checked-in Python expectations and a divergence allowlist.
-  Update cases and remove the fixed task's divergence lines; do not weaken assertions
+  A parity PR deletes its lines from `test/parity/divergences/<area>.txt` (one
+  allow-list per area) and adds cases under `test/parity/cases/` where the corpus
+  lacks one; do not weaken assertions
   or add an allowance just to make a check pass. When cases change, use the pinned
   environment to regenerate expectations and run `test/parity/generate.py --check`.
 - Parser/lexer/evaluator changes also require relevant address/undefined sanitizer
@@ -108,15 +128,20 @@ Match any targeted compiler workaround to the documented CI configuration.
 - Follow `.clang-format`. `src/` and `include/` are formatted as whole files; tests
   include hand-aligned tables, so format only changed test lines. Use
   `git clang-format origin/master` before committing C++ changes.
-- `.clang-tidy` is based on clang-tidy 22.1.8. Use
+- `.clang-tidy` is based on clang-tidy 22.1.8 (`pip install clang-tidy==22.1.8`;
+  older distribution packages lack many checks). CI reports hits on changed lines and
+  fails on checks in `WarningsAsErrors`. Use
   `scripts/clang_tidy_fix.py --checks <check>`, not `run-clang-tidy -fix`, which can
   apply header edits twice. For pointer conditions use `if (p)`/`if (!p)` rather
   than explicit null comparisons; see `scripts/null_compare.py`.
-- Keep dependency pins and hashes aligned with the relevant dependency modes. Do not
+- Keep dependency pins and hashes aligned with the relevant dependency modes: pins in
+  `thirdparty/internal_deps.cmake` change together with their `URL_HASH`, and a new
+  dependency is added to `sbom/components.json`. Do not
   disable TLS/checksum verification or edit an expected hash to bypass a mismatch.
 - Regenerate Unicode/HTML data through its scripts and pinned source environment.
   Preserve vendored/generated provenance and notices; do not hand-edit generated data.
-- Preserve the CI matrix's pairwise coverage when changing it. Verify compiler-specific
+- CI matrices are organised by C++ standard and covered pairwise (comment at the top
+  of `.github/workflows/linux-build.yml`); preserve that when changing them. Verify compiler-specific
   code on supported runners; a Linux build does not establish MSVC or Apple Clang support.
 
 ## Task and PR workflow
@@ -133,10 +158,13 @@ Match any targeted compiler workaround to the documented CI configuration.
   `scripts/task_index.py --check` may warn about expected drift in task-only PRs.
 - Parity PRs land through integration waves. Do not merge master into an individual
   parity PR independently of the merge steward. The steward integrates the wave,
-  reruns the corpus, reconciles divergences and regenerates its summary.
+  reruns the corpus with `test/parity/update_divergences.py` and regenerates the
+  `docs/parity.md` summary; parity PRs never edit that summary. Two PRs that are green
+  apart can be red together when one unblocks a case the other listed.
 - Open implementation PRs as drafts and wait for applicable CI before marking them
-  ready. Most build jobs skip documentation-only changes; check the actual workflow
-  filters rather than claiming an unrun matrix passed.
+  ready. Changes limited to `docs/`, `*.md`, `.claude/`, `scripts/`, `.gitignore` or
+  `LICENSE` skip the build workflows and CodeQL (`paths-ignore`; only the format check
+  runs), so do not claim an unrun matrix passed.
 - PR descriptions explain the problem, resulting behavior, validation and remaining
   limits. Record roles used, verifier rounds and observed red CI pushes/causes;
   distinguish unavailable CI results from zero failures. Never claim tests were run
