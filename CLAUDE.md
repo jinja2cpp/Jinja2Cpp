@@ -88,15 +88,15 @@ CI, with the cause of each red push.
 
 ## External review (Codex)
 
-Codex (`chatgpt-codex-connector[bot]`) reviews PRs against REVIEW.md. Codex settings
-start it automatically only when a PR is opened for review or marked ready, and our
-PRs open as drafts, so owner threads ask for it explicitly:
+Codex (`chatgpt-codex-connector[bot]`) reviews PRs against REVIEW.md. Our PRs open as
+drafts, and marking one ready through the GitHub API did not start a review (#599), so
+owner threads always ask for it explicitly:
 
 - When a PR is green and before telling the merge steward it is final, its owner
   thread comments `@codex review` once and waits for the result (a 👍 reaction or a
   review). Scope: changes in `src/`, `include/`, `test/`, `cmake/`, `thirdparty/`,
   `CMakeLists.txt`, `.github/workflows/` or the agent instructions (AGENTS.md,
-  CLAUDE.md, REVIEW.md, `.claude/`). Skip docs-only and task-only PRs, bench
+  CLAUDE.md, REVIEW.md, `.claude/`). Skip other docs-only and task-only PRs, bench
   re-measures, mechanical clang-tidy batches and merge-steward train PRs. Add
   `@codex security review` when the diff touches the lexer, parsers, evaluator,
   loaders or escaping.
