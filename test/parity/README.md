@@ -84,7 +84,8 @@ operators.int_overflow_mul rejects@nobigint 0178 int64 overflow needs a big-inte
 Results files start with the build's features (`# features: bigint`, or `# features:`
 for the default build). `update_divergences.py` edits only lines whose condition holds in
 that build, and keeps the condition when it rewrites a kind; `generate.py --report`
-counts conditional lines as divergences of the default build and lists them separately.
+describes the default build, so it counts `@no<feature>` lines and not `@<feature>`
+ones, and lists all conditional lines separately.
 
 ## Updating the allow-list
 
