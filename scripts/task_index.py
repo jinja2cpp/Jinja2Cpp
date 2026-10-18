@@ -10,15 +10,17 @@ merge batch and lands the result as one docs-only commit (docs/tasks/0157).
 
 Usage: scripts/task_index.py [--check [--strict]]
   (no flag)  rewrite the table in place
-  --check    print the rows that would change, as a GitHub warning; exit 0
-  --strict   with --check, exit 1 when the table is out of date
+  --check    print the rows that would change, as a GitHub warning; exit 0. Two task
+             files sharing a number are an error here (exit 1, both files named):
+             the index is regenerable, a collision needs a person to renumber
+  --strict   with --check, also exit 1 when the table is out of date
 """
 import difflib
 import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from task_batches import TASKS, front_matter  # noqa: E402
+from task_batches import TASKS, duplicates, front_matter  # noqa: E402
 
 README = TASKS / "README.md"
 HEADER = "| # | Task | Area | Priority | Status |"
@@ -40,6 +42,15 @@ def rows():
     return out
 
 
+def report_duplicates():
+    """Name every task number used by more than one file; True when there is one."""
+    dupes = duplicates()
+    for number, names in dupes.items():
+        print(f"::error::task number {number} is used by {len(names)} files: {', '.join(names)}. "
+              "Keep one and renumber the others to the next free number.")
+    return bool(dupes)
+
+
 def main():
     lines = README.read_text(encoding="utf-8").splitlines()
     try:
@@ -50,16 +61,18 @@ def main():
     while end < len(lines) and lines[end].startswith("|"):
         end += 1
     new = lines[:start] + rows() + lines[end:]
+    checking = "--check" in sys.argv[1:]
+    clash = report_duplicates() if checking else False
     if new == lines:
-        return 0
-    if "--check" in sys.argv[1:]:
+        return 1 if clash else 0
+    if checking:
         sys.stdout.writelines(difflib.unified_diff(
             [l + "\n" for l in lines[start:end]], [l + "\n" for l in rows()],
             "README.md (index)", "task files"))
         level = "error" if "--strict" in sys.argv[1:] else "warning"
         print(f"::{level}::docs/tasks/README.md index differs from the task files. "
               "The merge steward runs: python3 scripts/task_index.py")
-        return 1 if level == "error" else 0
+        return 1 if level == "error" or clash else 0
     README.write_text("\n".join(new) + "\n", encoding="utf-8")
     return 0
 
