@@ -539,15 +539,16 @@ struct InputValueConvertor
     template<typename ChT>
     result_t operator()(const BasicMarkup<ChT>& val) const
     {
-        auto result = this->operator()(static_cast<const std::basic_string<ChT>&>(val));
+        auto result = this->operator()(val.str());
         result.SetMarkup();
         return result;
     }
 
+    // As for a mutable std::string: the text is copied, never lent
     template<typename ChT>
     result_t operator()(BasicMarkup<ChT>& val) const
     {
-        auto result = this->operator()(static_cast<std::basic_string<ChT>&>(val));
+        auto result = InternalValue::FromText(std::basic_string_view<ChT>(val.str()));
         result.SetMarkup();
         return result;
     }

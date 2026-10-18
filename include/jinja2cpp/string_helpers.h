@@ -311,7 +311,7 @@ struct StringGetter
     template<typename CharT>
     std::string operator()(const BasicMarkup<CharT>& str) const
     {
-        return ToString(static_cast<const std::basic_string<CharT>&>(str));
+        return ToString(str.str());
     }
 
     template<typename T>
@@ -338,7 +338,7 @@ struct WStringGetter
     template<typename CharT>
     std::wstring operator()(const BasicMarkup<CharT>& str) const
     {
-        return ToWString(static_cast<const std::basic_string<CharT>&>(str));
+        return ToWString(str.str());
     }
 
     template<typename T>

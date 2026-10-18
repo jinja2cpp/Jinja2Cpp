@@ -289,6 +289,10 @@ struct IsStoredAsInt : std::integral_constant<bool, std::is_integral_v<T> && !st
  *  holds something else; a \ref Markup is a string, so `IsString()`, `AsString()`, `As<std::string>()` and
  *  `GetIf<std::string>()` accept it, and `IsMarkup()` and `As<Markup>()` tell it from a plain string), `bool AsX(out)` and `GetIf<T>()` do the same without throwing, and `ToString()` prints the
  *  value as `{{ value }}` does. \ref jinja2::Visit visits the stored object.
+ *
+ *  A \ref Markup is immutable, like Python's: reading it as a string (the const accessors) leaves it a Markup, but
+ *  mutable access to its text (`AsString()`, `As<std::string>()`, `GetIf<std::string>()` on a non-const Value)
+ *  makes the Value a plain `std::string` first, as any change to a Python Markup gives a `str`.
  */
 class Value
 {
@@ -504,7 +508,7 @@ public:
     bool AsDouble(double& out) const noexcept { return Load(out); }
     //! The stored `std::string` (or the text of a \ref Markup); throws `std::bad_variant_access` for anything else
     [[nodiscard]] const std::string& AsString() const { return As<std::string>(); }
-    //! The stored `std::string` (or the text of a \ref Markup), mutable; throws `std::bad_variant_access` for anything else
+    //! The stored `std::string`, mutable; throws `std::bad_variant_access` for anything else. A \ref Markup becomes a plain string first (mutable access makes it one, as any change to a Python Markup gives a `str`)
     std::string& AsString() { return As<std::string>(); }
     //! A view of the stored `std::string` (or \ref Markup), without throwing or copying
     bool AsString(std::string_view& out) const& noexcept { return LoadView<std::string>(out); }
@@ -512,7 +516,7 @@ public:
     bool AsString(std::string_view& out) && = delete;
     //! The stored `std::wstring` (or the text of a \ref WMarkup); throws `std::bad_variant_access` for anything else
     [[nodiscard]] const std::wstring& AsWString() const { return As<std::wstring>(); }
-    //! The stored `std::wstring` (or the text of a \ref WMarkup), mutable; throws `std::bad_variant_access` for anything else
+    //! The stored `std::wstring`, mutable; throws `std::bad_variant_access` for anything else. A \ref WMarkup becomes a plain string first, see \ref AsString
     std::wstring& AsWString() { return As<std::wstring>(); }
     //! A view of the stored `std::wstring` (or \ref WMarkup), without throwing or copying
     bool AsWString(std::wstring_view& out) const& noexcept { return LoadView<std::wstring>(out); }
@@ -520,7 +524,7 @@ public:
     bool AsWString(std::wstring_view& out) && = delete;
     //! The stored \ref Markup exactly; throws `std::bad_variant_access` for anything else, a plain string included
     [[nodiscard]] const Markup& AsMarkup() const { return As<Markup>(); }
-    //! The stored \ref Markup, mutable; throws `std::bad_variant_access` for anything else
+    //! The stored \ref Markup, mutable (harmless: a Markup is immutable); throws `std::bad_variant_access` for anything else
     Markup& AsMarkup() { return As<Markup>(); }
     //! A view of the stored \ref Markup, without throwing or copying
     bool AsMarkup(std::string_view& out) const& noexcept { return LoadView<Markup>(out); }
@@ -585,7 +589,8 @@ public:
      * `T` is one of the alternatives of \ref ValueData, or \ref ValuesList, \ref ValuesMap or \ref UserCallable
      * (the alternative \ref RecWrapper holds). Throws `std::bad_variant_access` when the value holds something else.
      * `As<std::string>()` and `As<std::wstring>()` also accept a \ref Markup or \ref WMarkup (it is a string);
-     * `As<Markup>()` and `GetData()` are exact.
+     * `As<Markup>()` and `GetData()` are exact. The mutable overloads for strings turn a Markup into a plain
+     * string first (see \ref Value); `GetIf<std::string>()` on a non-const Value does so too.
      */
     template<typename T>
     [[nodiscard]] const T& As() const
@@ -601,14 +606,14 @@ public:
             {
                 return *text;
             }
-            return std::get<MarkupOf<T>>(m_data);
+            return std::get<MarkupOf<T>>(m_data).str();
         }
         else
         {
             return std::get<T>(m_data);
         }
     }
-    //! Mutable \ref As
+    //! Mutable \ref As; for `std::string` and `std::wstring` it turns a held Markup into a plain string first
     template<typename T>
     T& As()
     {
@@ -622,7 +627,7 @@ public:
             {
                 return *text;
             }
-            return std::get<MarkupOf<T>>(m_data);
+            return DemoteMarkup<T>();
         }
         else
         {
@@ -641,8 +646,12 @@ public:
         }
         else if constexpr (IsPlainString<T>::value)
         {
-            const T* text = std::get_if<T>(&m_data);
-            return text ? text : std::get_if<MarkupOf<T>>(&m_data);
+            if (const T* text = std::get_if<T>(&m_data))
+            {
+                return text;
+            }
+            const auto* markup = std::get_if<MarkupOf<T>>(&m_data);
+            return markup ? &markup->str() : nullptr;
         }
         else
         {
@@ -660,8 +669,11 @@ public:
         }
         else if constexpr (IsPlainString<T>::value)
         {
-            T* text = std::get_if<T>(&m_data);
-            return text ? text : std::get_if<MarkupOf<T>>(&m_data);
+            if (T* text = std::get_if<T>(&m_data))
+            {
+                return text;
+            }
+            return std::holds_alternative<MarkupOf<T>>(m_data) ? &DemoteMarkup<T>() : nullptr;
         }
         else
         {
@@ -762,6 +774,13 @@ private:
     };
     template<typename T>
     using MarkupOf = BasicMarkup<typename T::value_type>;
+    // Mutable access to the text of a Markup makes the value a plain string, as any change to a Python Markup gives a str
+    template<typename T>
+    T& DemoteMarkup()
+    {
+        T text = std::get<MarkupOf<T>>(std::move(m_data)).str();
+        return m_data.template emplace<T>(std::move(text));
+    }
 
     // The 1.x get<T>() and getPtr<T>() take any alternative of the variant, wrapped ones included
     template<typename T>
@@ -1168,7 +1187,7 @@ inline GenericMap::const_iterator GenericMap::cend() const
     return end();
 }
 
-// A Markup is no larger than the std::string it derives from, so the variant did not grow when it joined it
+// A Markup is no larger than the std::string it wraps, so the variant did not grow when it joined it
 static_assert(sizeof(Value) == sizeof(Value::ValueData), "Value must be its variant and nothing else");
 static_assert(sizeof(Markup) == sizeof(std::string) && sizeof(WMarkup) == sizeof(std::wstring), "Markup adds no data to the string");
 namespace detail

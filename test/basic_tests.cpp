@@ -1255,18 +1255,18 @@ TEST(ValueApiTest, MarkupIsAStringTheTemplateDoesNotEscape)
     EXPECT_TRUE(markup.IsString());
     EXPECT_FALSE(markup.IsWString());
     EXPECT_TRUE(wmarkup.IsWString());
-    EXPECT_EQ("<b>", markup.AsString());
-    EXPECT_EQ("<b>", markup.As<std::string>());
-    EXPECT_EQ(L"<b>", wmarkup.AsWString());
-    markup.AsString() += "!";
-    EXPECT_EQ("<b>!", markup.AsMarkup());
-    ASSERT_NE(nullptr, markup.GetIf<std::string>());
-    EXPECT_EQ("<b>!", *markup.GetIf<std::string>());
-    EXPECT_EQ(nullptr, markup.GetIf<std::wstring>());
-    EXPECT_EQ(static_cast<const std::string*>(&markup.AsMarkup()), std::as_const(markup).GetIf<std::string>());
+    EXPECT_EQ("<b>", std::as_const(markup).AsString());
+    EXPECT_EQ("<b>", std::as_const(markup).As<std::string>());
+    EXPECT_EQ(L"<b>", std::as_const(wmarkup).AsWString());
+    // Const reads keep it a Markup
+    ASSERT_NE(nullptr, std::as_const(markup).GetIf<std::string>());
+    EXPECT_EQ("<b>", *std::as_const(markup).GetIf<std::string>());
+    EXPECT_EQ(nullptr, std::as_const(markup).GetIf<std::wstring>());
+    EXPECT_EQ(&markup.AsMarkup().str(), std::as_const(markup).GetIf<std::string>());
+    EXPECT_TRUE(markup.IsMarkup());
     std::string_view view;
     EXPECT_TRUE(std::as_const(markup).AsString(view));
-    EXPECT_EQ("<b>!", view);
+    EXPECT_EQ("<b>", view);
     EXPECT_TRUE(std::as_const(markup).AsMarkup(view));
     std::wstring_view wview;
     EXPECT_TRUE(std::as_const(wmarkup).AsWString(wview));
@@ -1285,7 +1285,7 @@ TEST(ValueApiTest, MarkupIsAStringTheTemplateDoesNotEscape)
     EXPECT_FALSE(std::holds_alternative<std::string>(markup.GetData()));
 
     // Printing shows the text; a container shows the repr
-    EXPECT_EQ("<b>!", markup.ToString());
+    EXPECT_EQ("<b>", markup.ToString());
     EXPECT_EQ(L"<b>", wmarkup.ToWString());
     EXPECT_EQ("[Markup('<b>')]", Value(ValuesList{ Markup("<b>") }).ToString());
     char buf[16];
@@ -1324,9 +1324,81 @@ TEST(ValueApiTest, MarkupIsAStringTheTemplateDoesNotEscape)
     // Copies keep the flag; text operations give plain strings
     Value copy = markup;
     EXPECT_TRUE(copy.IsMarkup());
-    static_assert(std::is_same_v<decltype(markup.AsMarkup() + "x"), std::string>);
+    static_assert(std::is_same_v<decltype(markup.AsMarkup().str() + "x"), std::string>);
     static_assert(!std::is_convertible_v<const char*, Markup>, "making a Markup is explicit");
     static_assert(!std::is_convertible_v<std::string, Markup>, "making a Markup is explicit");
+}
+
+namespace
+{
+template<typename T, typename = void>
+struct CanAppend : std::false_type
+{
+};
+template<typename T>
+struct CanAppend<T, std::void_t<decltype(std::declval<T&>().append("x"))>> : std::true_type
+{
+};
+template<typename T, typename = void>
+struct CanPlusAssign : std::false_type
+{
+};
+template<typename T>
+struct CanPlusAssign<T, std::void_t<decltype(std::declval<T&>() += "x")>> : std::true_type
+{
+};
+} // namespace
+
+// A Markup is immutable like Python's: no mutation of the text, and mutable access through a Value gives a string
+TEST(ValueApiTest, MarkupIsImmutableAndMutableAccessDemotesIt)
+{
+    static_assert(!std::is_convertible_v<Markup&, std::string&>, "no mutable view of the text");
+    static_assert(!std::is_convertible_v<WMarkup&, std::wstring&>, "no mutable view of the text");
+    static_assert(!std::is_base_of_v<std::string, Markup>, "a Markup is not a std::string");
+    static_assert(std::is_convertible_v<Markup&, const std::string&>, "reads as a string");
+    static_assert(!CanAppend<Markup>::value && CanAppend<std::string>::value, "no append");
+    static_assert(!CanPlusAssign<Markup>::value && CanPlusAssign<std::string>::value, "no operator+=");
+
+    const Markup text("<b>");
+    EXPECT_EQ("<b>", text.str());
+    EXPECT_EQ(3u, text.size());
+    EXPECT_TRUE(text == Markup("<b>"));
+    EXPECT_TRUE(text == std::string_view("<b>"));
+    EXPECT_TRUE(std::string_view("<b>") == text);
+    EXPECT_TRUE(text != std::string_view("<i>"));
+
+    Value markup{ Markup("<b>") };
+    EXPECT_EQ("<b>", std::as_const(markup).AsString());
+    EXPECT_TRUE(markup.IsMarkup());
+    markup.AsString() += "!";
+    EXPECT_FALSE(markup.IsMarkup());
+    EXPECT_TRUE(markup.IsString());
+    EXPECT_EQ("<b>!", markup.AsString());
+
+    Value viaAs{ Markup("<b>") };
+    viaAs.As<std::string>() += "!";
+    EXPECT_FALSE(viaAs.IsMarkup());
+    EXPECT_EQ("<b>!", viaAs.AsString());
+
+    Value viaGetIf{ Markup("<b>") };
+    ASSERT_NE(nullptr, viaGetIf.GetIf<std::string>());
+    EXPECT_FALSE(viaGetIf.IsMarkup());
+    EXPECT_EQ("<b>", viaGetIf.AsString());
+
+    Value wide{ WMarkup(L"<b>") };
+    wide.AsWString() += L"!";
+    EXPECT_FALSE(wide.IsWMarkup());
+    EXPECT_EQ(L"<b>!", wide.AsWString());
+
+    // Mutable AsMarkup is harmless and keeps the flag
+    Value kept{ Markup("<b>") };
+    (void)kept.AsMarkup();
+    EXPECT_TRUE(kept.IsMarkup());
+
+    // A plain string is untouched
+    Value plain{ std::string("a") };
+    plain.AsString() += "b";
+    EXPECT_EQ("ab", plain.AsString());
 }
 
 // ToString prints as {{ value }} does, Python str() (decision 3b)

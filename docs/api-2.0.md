@@ -130,7 +130,7 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | `getPtr<T>()` | `camelBack` | `GetIf<T>()` | alias |
 | free `AsString(const Value&)`, `AsWString(const Value&)` | lenient conversion under the word the members use for exact access; returns `""` for non-strings | member and free `ToString()`/`ToWString()`, printing as `{{ v }}` does | alias (keeps returning `""`) |
 | no way to print a `Value` without allocating | | `v.ToString(std::string& out)` appends to the caller's buffer (no allocation once it has capacity); `v.ToChars(first, last)` writes into a fixed buffer and returns `std::to_chars_result`, as `std::to_chars`; `std::formatter<jinja2::Value>` for `std::format_to`/`format_to_n` where the standard library has `<format>`. All four go through one internal output sink, so they cannot print differently. *As built (0072):* scalars, None and narrow strings print with no allocation; wide strings, containers and (for `ToChars`) text past the small-string buffer still allocate inside the renderer | add |
-| no way to pass safe HTML from C++ | a host string is always escaped under autoescape, and a callable's Markup result loses the flag in `IntValue2Value` | `jinja2::Markup` / `WMarkup` (`markup.h`): `BasicMarkup<CharT> : std::basic_string<CharT>` with explicit constructors, two more `ValueData` alternatives (13, 14; `sizeof(Value)` unchanged). `IsMarkup()`/`IsWMarkup()`, `AsMarkup()`/`AsWMarkup()` (both forms) and `As<Markup>()`/`GetIf<Markup>()` are exact. **A Markup is a string** (Python's `Markup` is a `str`): `IsString()`, `AsString()`, `As<std::string>()` and `GetIf<std::string>()` accept it, so existing readers keep working. Only `GetData()` with `std::get` or `std::holds_alternative` is exact. Template side: a Markup in the context, in a container or returned by a callable renders unescaped, passes `is escaped`, and comes back from `IntValue2Value` (callable arguments, `UserCallableParams`) as a Markup; a typed `MakeCallable` parameter (`const std::string&`) receives its text | add (0180) |
+| no way to pass safe HTML from C++ | a host string is always escaped under autoescape, and a callable's Markup result loses the flag in `IntValue2Value` | `jinja2::Markup` / `WMarkup` (`markup.h`): `BasicMarkup<CharT>`, an immutable wrapper of a `std::basic_string<CharT>` (composition, not inheritance) with explicit constructors, a read-only string API (`str()`, implicit conversions to `const std::basic_string&` and `std::basic_string_view`, comparisons, `operator<<`) and no mutating member, two more `ValueData` alternatives (13, 14; `sizeof(Value)` unchanged). `IsMarkup()`/`IsWMarkup()`, `AsMarkup()`/`AsWMarkup()` (both forms) and `As<Markup>()`/`GetIf<Markup>()` are exact. **A Markup reads as a string** (Python's `Markup` is a `str`): the const `IsString()`, `AsString()`, `As<std::string>()` and `GetIf<std::string>()` accept it, so existing readers keep working. **A Markup is immutable, as in Python** (`markup += user_input` would append unescaped text and keep the safe flag, so it does not compile): mutable access to the text through a non-const `Value` (`AsString()`, `AsWString()`, `As<std::string>()`, `GetIf<std::string>()`, the deprecated `getPtr`) turns the Value into a plain string first, as any change to a Python Markup gives a `str`. Only `GetData()` with `std::get` or `std::holds_alternative` is exact. Template side: a Markup in the context, in a container or returned by a callable renders unescaped, passes `is escaped`, and comes back from `IntValue2Value` (callable arguments, `UserCallableParams`) as a Markup; a typed `MakeCallable` parameter (`const std::string&`) receives its text | add (0180) |
 | `data()` | `camelBack`; the variant alternatives expose `RecWrapper<T>` = vendored `xyz::polymorphic<T>` to every visitor | `GetData()`; add `jinja2::Visit(fn, value)` that unwraps `RecWrapper` as `ParamUnwrapper` already does internally | alias + add |
 | no `IsBool`, `IsInt`, `IsDouble`, `IsCallable` and getters | incomplete family; users go through `data()` | add them | add |
 | `EmptyValue` | since 0034 it means Python `None`; it also has `template<class T> operator T()`, an implicit conversion to *anything* | `NoneValue`; drop the catch-all conversion | alias (`using EmptyValue [[deprecated]] = NoneValue`); the conversion is a break, check `src/` users first |
@@ -265,7 +265,7 @@ public:
     bool IsBool() const noexcept;
     bool IsInt() const noexcept;
     bool IsDouble() const noexcept;
-    bool IsString() const noexcept;    // std::string or Markup (a Markup is a string)
+    bool IsString() const noexcept;    // std::string or Markup (a Markup reads as a string)
     bool IsWString() const noexcept;
     bool IsMarkup() const noexcept;    // exactly Markup; IsWMarkup likewise
     bool IsList() const noexcept;      // ValuesList or GenericList
@@ -273,7 +273,7 @@ public:
     bool IsCallable() const noexcept;
 
     const std::string& AsString() const;                // throws bad_variant_access
-    std::string& AsString();
+    std::string& AsString();                           // a held Markup becomes a plain string first
     bool AsString(std::string_view& out) const noexcept;    // false if not a string; no copy
     int64_t AsInt() const;
     bool AsInt(int64_t& out) const noexcept;

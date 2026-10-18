@@ -95,9 +95,16 @@ TEST(V1NamesTest, MarkupIsAString)
 {
     Value markup{ Markup("<b>") };
     EXPECT_TRUE(markup.isString());
-    EXPECT_EQ("<b>", markup.asString());
+    EXPECT_EQ("<b>", std::as_const(markup).asString());
     EXPECT_EQ("<b>", markup.get<std::string>());
-    EXPECT_EQ(&markup.AsMarkup(), markup.getPtr<std::string>());
+    EXPECT_EQ(&markup.AsMarkup().str(), std::as_const(markup).getPtr<std::string>());
+    EXPECT_TRUE(markup.IsMarkup());
+    // Mutable access makes it a plain string
+    EXPECT_NE(nullptr, markup.getPtr<std::string>());
+    EXPECT_FALSE(markup.IsMarkup());
+    Value other{ Markup("<i>") };
+    EXPECT_EQ("<i>", other.asString());
+    EXPECT_FALSE(other.IsMarkup());
     EXPECT_EQ("<b>", AsString(markup));
     EXPECT_EQ(L"<b>", AsWString(markup));
     EXPECT_EQ(L"<b>", AsWString(Value(WMarkup(L"<b>"))));

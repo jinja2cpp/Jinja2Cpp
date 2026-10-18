@@ -218,7 +218,7 @@ struct ParamUnwrapper
     template<typename CharT>
     static const std::basic_string<CharT>& UnwrapRecursive(const BasicMarkup<CharT>& arg)
     {
-        return arg;
+        return arg.str();
     }
 
     template<typename T>

@@ -43,11 +43,11 @@ struct ValueRenderer
         fmt::format_to(ctx->out(), UNIVERSAL_STR("{}").GetValue<CharT>(), jinja2::ConvertString<std::basic_string<CharT>>(val));
     }
 
-    // A Markup prints as its text; the generic overload below would hand fmt the subclass
+    // A Markup prints as its text; the generic overload below would hand fmt the Markup
     template<typename CharU>
     void operator()(const jinja2::BasicMarkup<CharU>& val) const
     {
-        this->operator()(static_cast<const std::basic_string<CharU>&>(val));
+        this->operator()(val.str());
     }
 
     template<typename CharU>

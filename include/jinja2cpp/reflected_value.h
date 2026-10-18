@@ -634,7 +634,7 @@ struct Reflector<std::basic_string<CharT>>
     }
 };
 
-// A Markup stays Markup: the std::basic_string specialisation does not match a derived class
+// A Markup stays Markup: Markup is not a std::basic_string, so it has its own specialisation
 template<typename CharT>
 struct Reflector<BasicMarkup<CharT>>
 {
