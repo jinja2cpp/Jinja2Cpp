@@ -9,6 +9,7 @@
 #include "undefined.h"
 #include "unicode_printable.h"
 
+#include <jinja2cpp/big_int.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template_env.h>

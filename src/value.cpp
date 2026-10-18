@@ -1,6 +1,7 @@
 #include "internal_value.h"
 #include "value_visitors.h"
 
+#include <jinja2cpp/big_int.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/value.h>
 

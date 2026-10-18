@@ -1,8 +1,8 @@
 #include "gtest/gtest.h"
 
 #include <jinja2cpp/big_int.h>
-#include <jinja2cpp/value.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <string>

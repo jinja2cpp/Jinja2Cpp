@@ -2,7 +2,6 @@
 #define JINJA2CPP_BIG_INT_H
 
 #include <charconv>
-#include <cstddef>
 #include <cstdint>
 #include <iterator>
 #include <string>
