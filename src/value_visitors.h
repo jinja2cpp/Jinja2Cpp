@@ -1400,7 +1400,7 @@ struct BinaryMathOperation : BaseVisitor<>
     ResultType operator()(int64_t left, int64_t right) const { return ApplyToInts(left, right); }
 
     // The int64_t overload, forced inline into ApplyToNumbers (the fast path of every binary operator)
-    JINJA2CPP_HOT_INLINE ResultType ApplyToInts(int64_t left, int64_t right) const
+    [[nodiscard]] JINJA2CPP_HOT_INLINE ResultType ApplyToInts(int64_t left, int64_t right) const
     {
         int64_t result = 0;
         switch (m_oper)
