@@ -1,9 +1,9 @@
 ---
-status: open
+status: done
 priority: high
 area: evaluator
 depends: [0003]
-touches: [src/internal_value.cpp, src/statements.cpp#AssignTo]
+touches: [src/cycle_collector.h, src/cycle_collector.cpp, src/internal_value.cpp, src/statements.cpp#AssignTo, src/value_methods.cpp, src/template_impl.h]
 ---
 # A namespace that holds itself leaks
 
@@ -45,3 +45,21 @@ same cycle. The sanitizer job runs the parity suite with `detect_leaks=1`, so a 
 would turn CI red until this is fixed; pin it with the fix. A unit test that stores a
 namespace, a dict and a list in themselves, run under the sanitizer configuration, is part
 of Done when.
+
+**Resolution (PR link added on merge).** Python's behaviour, with the cycles freed when the
+render ends. `CycleCollector` (src/cycle_collector.h) lives for each render, made before
+anything the render keeps values in. A store of a container in a list, dict or namespace
+(`set ns.attr`, `append`, `extend`, `insert`, `update`, `setdefault`) notes the receiver.
+When the render ends, the collector walks the containers reachable from those it noted,
+counts the references each gets from the others, and treats one that has more as held from
+outside (a user callable, a cache), with everything it reaches; it empties the rest, which
+frees their cycles, as Python's collector does. It follows only containers whose accessor
+alone holds their items (`OwnsMutableItemsAlone`), so it may miss a cycle but never empties
+a container anything else still sees. A render inside another on the same thread hands its
+notes to the outer one. Self-containing lists and dicts, which 0020 refused, are allowed
+again; `append()`, `update()` and the like still refuse a cycle through a bound method or a
+key-value pair (0049), and cycles through other objects (the `loop` object, `cycler()`, `groupby` tuples) still leak
+(0251). Cases `statements.namespace_contains_itself*`, `methods.*_contains_itself*`;
+regressions `fuzz/regressions/namespace-contains-itself.j2` and
+`list-and-dict-contain-themselves.j2`; unit tests `ExpressionTest.SelfContainingContainers`
+and `CycleFreedKeepsListHeldByCaller`.

@@ -1261,7 +1261,9 @@ enum ArgState
     NotFoundMandatory,
     Keyword,
     Positional,
-    Ignored
+    Ignored,
+    // `*context`: the engine passes it, so no argument of the call binds to it
+    Context
 };
 
 namespace
@@ -1305,6 +1307,11 @@ int MapKeywordArgs(const T& args, const P& params, ArgInfoList& argsInfo, Result
         if (argInfo.name == "*args" || argInfo.name == "**kwargs")
         {
             argsInfo[argIdx++].state = Ignored;
+            continue;
+        }
+        if (argInfo.name == "*context")
+        {
+            argsInfo[argIdx++].state = Context;
             continue;
         }
 
@@ -1366,7 +1373,7 @@ PosArgRange FindPosArgRange(const ArgInfoList& argsInfo, std::size_t posParamsCo
     {
         if (isFirstTime)
         {
-            for (; startPosArg < argsCount && (argsInfo[startPosArg].state == Keyword || argsInfo[startPosArg].state == Positional); ++startPosArg)
+            for (; startPosArg < argsCount && (argsInfo[startPosArg].state == Keyword || argsInfo[startPosArg].state == Positional || argsInfo[startPosArg].state == Context); ++startPosArg)
                 ;
 
             isFirstTime = false;
@@ -1374,6 +1381,8 @@ PosArgRange FindPosArgRange(const ArgInfoList& argsInfo, std::size_t posParamsCo
             {
                 break;
             }
+            // The scan follows the missing arguments from the first one not skipped
+            curPosArg = startPosArg;
             continue;
         }
 
@@ -1433,6 +1442,7 @@ void FillDefaultArgs(const ArgInfoList& argsInfo, Result& result, bool& isSuccee
         case Positional:
         case Keyword:
         case Ignored:
+        case Context:
             continue;
         case NotFound:
         {
