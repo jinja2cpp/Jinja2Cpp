@@ -9,10 +9,12 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <memory>
 #include <optional>
 #include <random>
 #include <sstream>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -626,7 +628,7 @@ TEST_F(RealFsNamesTest, NameRules)
         { "sub/../../outside.j2", std::nullopt },
         { "..", std::nullopt },
         { "..\\outside.j2", std::nullopt },
-        { "sub\\..\\..\\outside.j2", std::nullopt },
+        { R"(sub\..\..\outside.j2)", std::nullopt },
         { outsideAbsolute, std::nullopt },
         { "", std::nullopt },
         { ".", std::nullopt },
