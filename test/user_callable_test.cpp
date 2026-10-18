@@ -261,6 +261,15 @@ TEST_P(UserCallableParamConvertTest, Test)
     }, ArgInfo{"**kwargs"});
     params["ContextArgFn"] =
       MakeCallable([](const GenericMap& val, const std::string& varName) { return val.GetValueByName(varName); }, ArgInfo{ "*context" }, ArgInfo{ "name" });
+    params["ContextMidFn"] = MakeCallable(
+        [](const std::string& prefix, const GenericMap& ctx, const std::string& varName) { return ValuesList{ prefix, ctx.GetValueByName(varName) }; },
+        ArgInfo{ "prefix" },
+        ArgInfo{ "*context" },
+        ArgInfo{ "name" });
+    params["ContextPairFn"] = MakeCallable([](const GenericMap&, const std::string& a, const std::string& b) { return ValuesList{ a, b }; },
+                                           ArgInfo{ "*context" },
+                                           ArgInfo{ "a" },
+                                           ArgInfo{ "b" });
     params["test_value"] = 100500;
 
     PerformBothTests(source, testParam.result, params);
@@ -361,7 +370,21 @@ INSTANTIATE_TEST_SUITE_P(VarKwArgsParamsConvert, UserCallableParamConvertTest, :
 // **kwargs keep the call order (docs/tasks/0043)
 INSTANTIATE_TEST_SUITE_P(VarKwArgsOrder, UserCallableParamConvertTest, ::testing::Values(InputOutputPair{ "VarKwArgsFn(z=1, a=2, m=3) | list", "['z', 'a', 'm']" }));
 
-INSTANTIATE_TEST_SUITE_P(GlobalContextAccess, UserCallableParamConvertTest, ::testing::Values(InputOutputPair{ "ContextArgFn(name='test_value')", "100500" }));
+// `*context` takes no argument of the call, wherever it is declared (docs/tasks/0183)
+// clang-format off
+INSTANTIATE_TEST_SUITE_P(GlobalContextAccess, UserCallableParamConvertTest, ::testing::Values(
+                            InputOutputPair{"ContextArgFn(name='test_value')", "100500"},
+                            InputOutputPair{"ContextArgFn('test_value')", "100500"},
+                            InputOutputPair{"ContextMidFn('x', 'test_value')", "['x', 100500]"},
+                            InputOutputPair{"ContextMidFn('x', name='test_value')", "['x', 100500]"},
+                            InputOutputPair{"ContextMidFn(name='test_value', prefix='x')", "['x', 100500]"},
+                            InputOutputPair{"ContextPairFn('1', '2')", "['1', '2']"},
+                            InputOutputPair{"ContextPairFn('1')", "['1', '']"},
+                            InputOutputPair{"ContextPairFn('1', b='2')", "['1', '2']"},
+                            InputOutputPair{"ContextPairFn('1', '2', '3')", "['1', '2']"},
+                            InputOutputPair{"StringFn(val='Hello World')", "'Hello World'"}
+                            ));
+// clang-format on
 
 INSTANTIATE_TEST_SUITE_P(StringParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"StringFn()",                   "''"},
