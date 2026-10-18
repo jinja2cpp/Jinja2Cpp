@@ -34,5 +34,5 @@ future 2.x build is binary-compatible. Settle the API-shaping decisions listed i
 `jinja2::detail::xyz` with `JINJA2CPP_XYZ_` macros, `JINJA2_DECLSPEC` and
 `error_handler.h` removed, hidden visibility on GCC/Clang. PR-2 (ABI tag): the
 script-generated `inline namespace v2` commit, the nm/link-probe/SONAME gates, the abidiff
-job and the README policy. Follow-ups: 0253 (robin_hood/lexertk namespaces), 0254
-(`<iosfwd>`), 0255 (Windows package link check).
+job and the README policy. Follow-ups: 0259 (robin_hood/lexertk namespaces), 0260
+(`<iosfwd>`), 0261 (Windows package link check).
