@@ -385,6 +385,8 @@ private:
         bool isFirst = true;
         for (auto& item : items)
         {
+            // A generator with no end must not grow the text past the cap
+            CheckSequenceSize(m_out.View().size(), "a JSON document");
             if (!isFirst)
             {
                 m_out += m_indent ? "," : ", ";
@@ -661,8 +663,11 @@ private:
         m_out += view;
     }
 
+    // Every item but a collection's first starts a line: the document stays within the cap
+    // a generator with no end, or quadratic indentation, would pass
     void NewLine(size_t indent)
     {
+        CheckSequenceSize(m_out.View().size(), "a YAML document");
         m_out.push_back('\n');
         for (size_t n = 0; n != indent; ++n)
         {

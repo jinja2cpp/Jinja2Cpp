@@ -1,13 +1,16 @@
 #include "test_tools.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
 #include <iostream>
+#include <optional>
 #include <regex>
 #include <set>
 #include <sstream>
@@ -1101,6 +1104,11 @@ TEST(CppOnlyFilters, UnicodeControlsAndErrors)
     EXPECT_EQ(tails + "|\"a\"", RenderOrError("{{ s|toyaml }}|{{ s|tojson }}", { { "s", tails } }));
     // Lazy sequences are iterated once; a key over 255 bytes is an explicit "? key"
     EXPECT_EQ("- 0\n- 2|r:\n  - 0\n  - 1", RenderOrError("{{ range(0, 3, 2)|toyaml }}|{{ {'r': range(2)}|toyaml }}", {}));
+    // A generator with no end stops at the size cap, in toyaml and tojson alike
+    const std::string chunk(size_t{ 1 } << 20, 'x');
+    auto endless = [&chunk] { return MakeGenericList([&chunk]() -> std::optional<Value> { return Value(chunk); }); };
+    EXPECT_NE(RenderOrError("{{ g|toyaml }}", { { "g", endless() } }).find("a YAML document of length"), std::string::npos);
+    EXPECT_NE(RenderOrError("{{ g|tojson }}", { { "g", endless() } }).find("a JSON document of length"), std::string::npos);
     const std::string longKey(300, 'k');
     EXPECT_EQ("? " + longKey + "\n: 1\n" + "short:\n  - ? " + longKey + "\n    :\n      - 2", RenderOrError("{{ {k: 1, 'short': [{k: [2]}]}|toyaml }}", { { "k", longKey } }));
 
