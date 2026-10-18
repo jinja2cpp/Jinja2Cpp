@@ -11,7 +11,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -78,6 +77,16 @@ bool operator==(const Settings& lhs, const Settings& rhs)
     return lFinalize.callable || rFinalize.callable ? lFinalize.IsEqual(rFinalize) : true;
 }
 
+namespace
+{
+// Not std::tolower: the process locale must not change which names escape (a Turkish one
+// does not lower 'I' to 'i')
+char AsciiLower(char ch)
+{
+    return ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch - 'A' + 'a') : ch;
+}
+} // namespace
+
 AutoescapeSelector SelectAutoescape(std::vector<std::string> enabledExtensions, std::vector<std::string> disabledExtensions, bool defaultForString, bool defaultValue)
 {
     // As Jinja2 does: ".ext", in lower case, matched against the end of the name in lower case
@@ -85,7 +94,7 @@ AutoescapeSelector SelectAutoescape(std::vector<std::string> enabledExtensions, 
         for (auto& ext : extensions)
         {
             ext.erase(0, ext.find_first_not_of('.'));
-            std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+            std::transform(ext.begin(), ext.end(), ext.begin(), AsciiLower);
             ext.insert(ext.begin(), '.');
         }
     };
@@ -97,7 +106,7 @@ AutoescapeSelector SelectAutoescape(std::vector<std::string> enabledExtensions, 
             return defaultForString;
         }
         std::string name = templateName;
-        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        std::transform(name.begin(), name.end(), name.begin(), AsciiLower);
         auto endsWithAny = [&name](const std::vector<std::string>& suffixes) {
             return std::any_of(suffixes.begin(), suffixes.end(), [&name](const std::string& suffix) {
                 return name.size() >= suffix.size() && name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;

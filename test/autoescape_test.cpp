@@ -224,6 +224,12 @@ TEST(AutoescapeSelectorTest, DisabledExtensionsAndDefaults)
     Template tpl(&env);
     ASSERT_TRUE(!!tpl.Load("{{ x }}"));
     EXPECT_EQ("<b>", tpl.RenderAsString({ { "x", "<b>" } }).value());
+
+    // Case folding is ASCII's, whatever the process locale
+    const auto selector = SelectAutoescape({ "jinja" });
+    EXPECT_TRUE(selector("page.JINJA"));
+    EXPECT_TRUE(selector("PAGE.Jinja"));
+    EXPECT_FALSE(selector("page.jinja.txt"));
 }
 
 TEST(AutoescapeSelectorTest, CallableSeesTheName)
