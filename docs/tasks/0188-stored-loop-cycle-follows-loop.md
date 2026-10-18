@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0144]

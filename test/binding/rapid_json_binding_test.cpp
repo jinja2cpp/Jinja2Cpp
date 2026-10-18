@@ -50,8 +50,8 @@ MULTISTR_TEST(RapidJsonTest, BasicTypesReflection, R"(
 {{ json.string | pprint }}
 )",
               R"(
-true
-false
+True
+False
 100500
 100500100500100
 100.5
@@ -71,14 +71,14 @@ MULTISTR_TEST(RapidJsonTest, BasicValuesReflection, R"(
 {{ empty_val | pprint }}
 )",
               R"(
-true
+True
 100500
 100500100500100
 100.5
 'Hello World!'
 [9, 8, 7, 6, 5, 4, 3, 2, 1]
 {'message': 'Hello World from Parser!', 'message2': 'Hello World from Parser-123!'}
-none)")
+None)")
 {
     auto& values = test.GetJson();
 

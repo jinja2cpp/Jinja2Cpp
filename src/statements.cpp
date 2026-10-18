@@ -245,8 +245,15 @@ struct LoopState : ValueObject
     ArenaView recursiveNodes;
     // Where its outermost level runs, and so every level (MakeLoopRecursion)
     ClosureSite recursiveSite;
+    // The output autoescape setting where the recursive loop is written: its levels escape
+    // by it, and their results are Markup by it, wherever loop(...) is called
+    bool recursiveAutoescape = false;
     // The arguments of the last loop.changed() call, made on first use
     std::shared_ptr<std::optional<InternalValueList>> lastChanged;
+    // index0 for the callables loop.cycle made, kept up to date once one is made. They
+    // share this, not the state: a loop object kept past the loop collects the rest of a
+    // filtered loop, which a callable that cycles needs not
+    std::shared_ptr<size_t> cyclePosition;
     // Whether the item after the current one is fetched, isLast telling if there is one
     bool isPeeked = false;
     // A filtered loop over slots fetches its next item lazily, as Jinja2's LoopContext:
@@ -263,6 +270,25 @@ struct LoopState : ValueObject
     ArenaView lazyNodes;
 
     InternalValue& Item(size_t idx) { return items[idx % items.size()]; }
+
+    // The cell loop.cycle callables read the position from, made on first use
+    std::shared_ptr<size_t> CyclePosition()
+    {
+        if (!cyclePosition)
+        {
+            cyclePosition = std::make_shared<size_t>(index0);
+        }
+        return cyclePosition;
+    }
+
+    void SetIndex(size_t idx)
+    {
+        index0 = idx;
+        if (cyclePosition)
+        {
+            *cyclePosition = idx;
+        }
+    }
 
     // Fetches the item after the current one, if not done yet
     void Peek()
@@ -335,6 +361,7 @@ struct LoopState : ValueObject
         recursiveStatement = nullptr;
         recursiveNodes = ArenaView();
         lastChanged = nullptr;
+        cyclePosition = nullptr;
         isPeeked = false;
         lazyFilter = nullptr;
         lazyContext = nullptr;
@@ -426,21 +453,23 @@ Callable MakeLoopChanged(const std::shared_ptr<std::optional<InternalValueList>>
         return true;
     });
 }
-// loop.cycle(*values): the value at the loop's current position, as of the read
-Callable MakeLoopCycle(int64_t index0)
+// loop.cycle(*values): the value at the loop's position when it is called, as Jinja2's
+// bound method, so a callable stored on one item cycles with the loop on later ones, and
+// from its last position once the loop is over. Out of line, which keeps the attribute
+// lookups that inline LoopAccessor::GetProperty small (Render/for_loop_vars)
+JINJA2CPP_NOINLINE_INLINE Callable MakeLoopCycle(LoopState& state)
 {
-    return Callable(Callable::GlobalFunc, [index0](const CallParams& params, RenderContext&) -> InternalValue {
+    return Callable(Callable::GlobalFunc, [position = std::shared_ptr<const size_t>(state.CyclePosition())](const CallParams& params, RenderContext&) -> InternalValue {
         if (!params.kwParams.empty())
         {
-            throw std::runtime_error("cycle() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+            throw std::runtime_error("LoopContext.cycle() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
         }
         const auto& args = params.posParams;
         if (args.empty())
         {
-            throw std::runtime_error("loop.cycle() expects at least one positional argument");
+            throw std::runtime_error("no items for cycling given");
         }
-        // Unsigned on purpose, as in the direct call
-        return args[static_cast<size_t>(index0) % args.size()];
+        return args[*position % args.size()];
     });
 }
 
@@ -605,7 +634,7 @@ private:
             state.Peek();
             return state.Item(state.index0 + 1);
         case Property::Cycle:
-            return MakeLoopCycle(static_cast<int64_t>(state.index0));
+            return MakeLoopCycle(state);
         case Property::Changed:
             if (!state.lastChanged)
             {
@@ -620,7 +649,7 @@ private:
                     throw std::runtime_error("The loop must have the 'recursive' marker to be called recursively.");
                 });
             }
-            return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.recursiveNodes, state.level, state.recursiveSite);
+            return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.recursiveNodes, state.level, state.recursiveSite, state.recursiveAutoescape);
         case Property::None:
             break;
         }
@@ -868,9 +897,9 @@ private:
 };
 } // namespace
 
-Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site)
+Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site, bool autoescape)
 {
-    return Callable(Callable::GlobalFunc, [statement, nodes, level, site](const CallParams& params, OutStream& stream, RenderContext& context) {
+    return Callable(Callable::GlobalFunc, [statement, nodes, level, site, autoescape](const CallParams& params, RenderContext& context) -> InternalValue {
         // As Python's LoopContext.__call__(iterable)
         for (const auto& kwParam : params.kwParams)
         {
@@ -897,7 +926,9 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaVie
         auto var = parsedParams["iterable"];
         if (IsEmpty(var))
         {
-            return;
+            InternalValue empty(RenderToString(context.GetRendererCallback(), [](OutStream&) {}));
+            empty.SetMarkup(autoescape);
+            return empty;
         }
 
         const RenderDepthGuard depthGuard;
@@ -908,17 +939,21 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaVie
         auto& home = homeCall.Context();
         const ArenaSwitch nodesSwitch(home, nodes);
         const bool isLinked = homeCall.HidesScopes(home.GetScopesCount());
+        const OutputAutoescapeGuard autoescapeGuard(home, autoescape);
         home.EnterScope();
         if (isLinked)
         {
             home.PushFrameView({}, homeCall.Link());
         }
-        statement->RenderLoop(var, stream, home, level + 1, &site);
+        // Jinja2's loop(...) returns Markup by the setting the loop is compiled under
+        InternalValue result(RenderToString(home.GetRendererCallback(), [&](OutStream& stream) { statement->RenderLoop(var, stream, home, level + 1, &site); }));
+        result.SetMarkup(autoescape);
         if (isLinked)
         {
             home.PopFrameView();
         }
         home.ExitScope();
+        return result;
     });
 }
 
@@ -973,6 +1008,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         state->recursiveNodes = values.Nodes();
         // loop(...) runs every level where the outermost one runs (ClosureSite)
         state->recursiveSite = site ? *site : ClosureSite(values);
+        state->recursiveAutoescape = values.IsOutputAutoescape();
     }
     auto context = values.EnterScope(std::move(state->loopScope));
     if (!state->loopSlot)
@@ -1004,7 +1040,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     const auto target = values.Nodes()[m_target];
     for (size_t itemIdx = 0; hasItem; ++itemIdx)
     {
-        state->index0 = itemIdx;
+        state->SetIndex(itemIdx);
         state->isAdvancing = true;
         state->isLast = !(*enumerator)->MoveNext();
         state->isAdvancing = false;
@@ -1136,7 +1172,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     const auto rootHash = root.hash;
     for (size_t itemIdx = 0; hasItem; ++itemIdx)
     {
-        state->index0 = itemIdx;
+        state->SetIndex(itemIdx);
         // An unfiltered loop, or one whose rest is collected, fetches the next item first
         state->isPeeked = state->lazyFilter == nullptr;
         if (state->isPeeked)
@@ -1421,7 +1457,9 @@ void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
     {
         return;
     }
-    // Jinja2 wraps the filtered value: Markup(str(result)) under autoescape
+    // The filter takes the body as Markup under autoescape where the block is written, and
+    // Jinja2 wraps the filtered value: Markup(str(result)) under autoescape at run time
+    body.SetMarkup(values.IsOutputAutoescape());
     auto result = values.Nodes()[m_expr].Evaluate(body, values);
     if (values.IsAutoescape())
     {
@@ -1734,8 +1772,10 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     {
         scope["super"] = std::move(*parentBlock);
     }
-    // A block body escapes as its template does, whatever `{% autoescape %}` surrounds it
-    AutoescapeGuard autoescapeGuard(values, TemplateAutoescape(values));
+    // A block body escapes its output as its template does, whatever `{% autoescape %}`
+    // surrounds it; the runtime setting stays the caller's, as Jinja2's derived context
+    // shares its EvalContext
+    OutputAutoescapeGuard autoescapeGuard(values, TemplateAutoescape(values));
     values.Nodes()[m_mainBody].Render(os, values);
     values.ExitScope();
     values.SetSelfDepth(prevSelfDepth);
@@ -1882,6 +1922,8 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
     RenderContext innerContext = values.Clone(withContext);
     if (withContext)
     {
+        // Jinja2 renders it in a new Context, with an EvalContext of its own
+        innerContext.NewEvalContext();
         innerContext.PassOverEntryBindings();
         innerContext.EnterScope();
     }
@@ -2160,16 +2202,18 @@ struct MacroStatement::CallableBody
     {
         // A macro called from another template (imported, or passed as `caller`) runs in its own tree
         const ArenaSwitch nodesSwitch(home, nodes);
-        AutoescapeGuard autoescapeGuard(home, autoescape);
+        OutputAutoescapeGuard autoescapeGuard(home, autoescape);
         macro->InvokeMacroRenderer(callParams, stream, home, link);
     }
 };
 
 Callable MacroStatement::MakeCallable(RenderContext& values) const
 {
-    // The body escapes as where the macro is defined; the caller decides whether the result is
-    // Markup. The defaults are evaluated by each call (BindMacroDefaults)
-    Callable result(Callable::Macro, CallableBody{ this, values.Nodes(), values.IsAutoescape(), ClosureSite(values), m_readsSlotsOnly });
+    // The body escapes its output as where the macro is defined; the runtime setting where it
+    // is called decides whether its results are Markup, its own and those of `caller()` and
+    // `join` in it (RenderContext::IsAutoescape). The defaults are evaluated by each call
+    // (BindMacroDefaults)
+    Callable result(Callable::Macro, CallableBody{ this, values.Nodes(), values.IsOutputAutoescape(), ClosureSite(values), m_readsSlotsOnly });
     result.SetAttributes(m_attributes);
     return result;
 }
@@ -2550,9 +2594,10 @@ void FilterStatement::Render(OutStream& os, RenderContext& values)
     {
         return;
     }
-    // The body is Markup under autoescape; the filtered output is written as is
+    // The body is Markup under autoescape where the block is written; the filtered output is
+    // written as is
     InternalValue body(std::move(arg));
-    body.SetMarkup(values.IsAutoescape());
+    body.SetMarkup(values.IsOutputAutoescape());
     const auto result = values.Nodes()[m_expr].Evaluate(body, values);
     os.WriteValue(result);
 }

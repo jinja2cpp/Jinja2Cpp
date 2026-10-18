@@ -355,7 +355,7 @@ InternalValue LoopAttrExpression::Evaluate(RenderContext& values)
     return SubscriptExpression::Evaluate(values);
 }
 
-bool LoopAttrExpression::TryCallCycle(RenderContext& values, ArenaSpan<NodeRef<Expression>> params, InternalValue& result) const
+bool LoopAttrExpression::TryCallCycle(RenderContext& values, const ArenaCallParams& params, InternalValue& result) const
 {
     if (m_attr != LoopAttr::Cycle || m_subscriptExprs.size() != 1)
     {
@@ -368,12 +368,16 @@ bool LoopAttrExpression::TryCallCycle(RenderContext& values, ArenaSpan<NodeRef<E
     {
         return false;
     }
-    // As loop.cycle(...) called on a loop found by name
+    // As loop.cycle(...) called on a loop found by name (MakeLoopCycle)
     const auto nodes = values.Nodes();
-    const auto items = nodes[params];
+    if (!params.kwParams.empty())
+    {
+        throw std::runtime_error("LoopContext.cycle() got an unexpected keyword argument '" + std::string(nodes.Text(nodes[params.kwParams][0].name)) + "'");
+    }
+    const auto items = nodes[params.posParams];
     if (items.empty())
     {
-        throw std::runtime_error("loop.cycle() expects at least one positional argument");
+        throw std::runtime_error("no items for cycling given");
     }
     const auto idx = static_cast<size_t>(Apply<visitors::IntegerEvaluator>(index0)) % items.size();
     result = nodes[items[idx]].Evaluate(values);
@@ -752,7 +756,7 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
         break;
     }
     case jinja2::BinaryExpression::StringConcat:
-        result = ConcatAsStrings(leftVal, rightVal, context, !m_folded && context.IsAutoescape());
+        result = ConcatAsStrings(leftVal, rightVal, context, !m_folded && context.IsOutputAutoescape());
         break;
     default:
         break;
@@ -1035,7 +1039,7 @@ InternalValue DictionaryCreator::Evaluate(RenderContext& context)
 bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result, InternalValue& callee)
 {
     const auto nodes = values.Nodes();
-    if (const auto loopAttr = nodes.As<LoopAttrExpression>(m_valueRef); loopAttr && nodes[loopAttr].TryCallCycle(values, m_params.posParams, result))
+    if (const auto loopAttr = nodes.As<LoopAttrExpression>(m_valueRef); loopAttr && nodes[loopAttr].TryCallCycle(values, m_params, result))
     {
         return true;
     }
@@ -1165,6 +1169,13 @@ void CallExpression::RenderCallable(OutStream& stream, RenderContext& values, co
     {
         WriteOutput(stream, callable.GetExpressionCallable()(callParams, values), values);
     }
+    else if (callable.GetKind() == Callable::Macro && values.IsOutputAutoescape() && !values.IsAutoescape())
+    {
+        // Autoescape off at run time but on where the code is written: the result is a plain
+        // string, which the output escapes (InvokeCallable)
+        InternalValue result(RenderToString(values.GetRendererCallback(), [&](OutStream& out) { callable.GetStatementCallable()(callParams, out, values); }));
+        WriteOutput(stream, result, values);
+    }
     else
     {
         callable.GetStatementCallable()(callParams, stream, values);
@@ -1210,7 +1221,7 @@ InternalValue InvokeCallable(RenderContext& values, const Callable& callable, co
 
     TargetString resultStr =
         RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { callable.GetStatementCallable()(callParams, stream, values); });
-    // A macro returns Markup when autoescape is on where it is called
+    // A macro returns Markup when autoescape is on where it is called, at run time
     InternalValue result(std::move(resultStr));
     result.SetMarkup(values.IsAutoescape());
     return result;

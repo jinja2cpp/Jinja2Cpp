@@ -253,6 +253,27 @@ CASES = [
     ("call_int_with_int_loop", "{% set loop = 1 %}{% set f = 2 %}{{ f('a') }}"),
     ("loop_cycle_as_value", "{% for x in [1, 2] %}{% set c = loop.cycle %}{{ c('a', 'b') }}{% endfor %}"),
     ("loop_cycle_stored_called_later", "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3] %}{% if ns.c is none %}{% set ns.c = loop.cycle %}{% endif %}{{ ns.c('a', 'b', 'c') }}{% endfor %}"),
+    # A stored loop.cycle follows the loop and keeps its last position after it (0188)
+    ("loop_cycle_stored_after_loop", "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3] %}{% set ns.c = loop.cycle %}{% endfor %}{{ ns.c('a', 'b', 'c') }}"),
+    ("loop_cycle_stored_in_nested_loop", "{% set ns = namespace(c=none) %}{% for x in [1, 2] %}{% set ns.c = loop.cycle %}{% for y in [1, 2, 3] %}{{ ns.c('a', 'b') }}{{ loop.cycle('x', 'y') }}{% endfor %}|{% endfor %}"),
+    ("loop_cycle_stored_filtered_break", "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3] if 10 // (3 - x) %}{% set ns.c = loop.cycle %}{{ x }}{% break %}{% endfor %}{{ ns.c('a', 'b') }}", LC),
+    ("loop_cycle_stored_in_looped_namespace", "{% set ns = namespace(c=none) %}{% for x in [ns] %}{% set ns.c = loop.cycle %}{% endfor %}{{ ns.c('a', 'b') }}"),
+    ("loop_cycle_keyword_arg", "{% for x in [1, 2] %}{{ loop.cycle('a', x=1) }}{% endfor %}"),
+    ("loop_cycle_stored_keyword_arg", "{% for x in [1, 2] %}{% set c = loop.cycle %}{{ c('a', x=1) }}{% endfor %}"),
+    # The loop object is sized and prints as Jinja2's LoopContext (0196)
+    ("loop_len_filtered", "{% for x in [1, 2, 3] if x > 1 %}{{ loop|length }}{{ loop|count }}{% endfor %}"),
+    ("loop_len_kept_past_loop", "{% set ns = namespace(l=none) %}{% for x in [1, 2, 3] %}{% set ns.l = loop %}{% endfor %}{{ ns.l|length }}"),
+    ("loop_repr", "{% for x in [1, 2] %}{{ loop }}|{{ loop|string }}|{{ [loop] }};{% endfor %}"),
+    ("loop_repr_recursive", "{% for x in [[1], 2] recursive %}{{ loop }}{% if x is iterable %}{{ loop(x) }}{% endif %}{% endfor %}"),
+    ("loop_iterable", "{% for x in [1] %}{{ 'T' if loop is iterable else 'F' }}{{ 'T' if loop is sequence else 'F' }}{% endfor %}"),
+    # Iterating the loop object takes the rest of the loop's items (0219)
+    ("loop_iter_list", "{% for x in [1, 2, 3] %}{{ loop|list }};{% endfor %}"),
+    ("loop_iter_for", "{% for x in [1, 2, 3] %}{% for y in loop %}{{ y[0] }}{% endfor %};{% endfor %}"),
+    ("loop_dictsort", "{% for x in [1] %}{{ loop|dictsort }}{% endfor %}"),
+    ("loop_pprint", "{% for x in [1, 2] %}{{ loop|pprint }}|{{ loop.cycle|string }};{% endfor %}"),
+    # Argument unpacking in calls (0220)
+    ("call_star_args", "{{ range(*[1, 3])|list }}"),
+    ("call_star_kwargs", "{% macro m(a, b) %}{{ a }}{{ b }}{% endmacro %}{{ m(**{'a': 1, 'b': 2}) }}"),
     # Loop names in slots (0117 P1): each pins what the Load-time resolver must keep
     ('for_target_shadowed_by_body_set', '{% for x in [1,2] %}{{ x }}{% set x = x * 10 %}{{ x }}{% endfor %}'),
     ('for_nested_same_target', "{% for x in 'ab' %}{{ x }}{% for x in [1,2] %}{{ x }}{% endfor %}{% endfor %}"),
@@ -358,6 +379,17 @@ CASES = [
     # Macros as values (docs/tasks/0208)
     ("macro_pprint", "{% macro m() %}{% endmacro %}{{ m|pprint }}"),
     ("macro_equals_itself", "{% macro m() %}{% endmacro %}{{ 'T' if m == m else 'F' }}|{{ [m, m]|unique|list|length }}"),
+    ("macro_equality_identity", "{% macro m() %}{% endmacro %}{% macro n() %}{% endmacro %}{% set a = m %}{{ 'T' if m == n else 'F' }}{{ 'T' if m != m else 'F' }}{{ 'T' if m != n else 'F' }}{{ 'T' if a == m else 'F' }}{{ 'T' if m in [n, m] else 'F' }}{{ 'T' if m is sameas a else 'F' }}|{{ [m, n, m]|unique|list|length }}"),
+    ("macro_equality_per_definition", "{% set ms = [] %}{% for i in [1, 2] %}{% macro m() %}{% endmacro %}{% set _ = ms.append(m) %}{% endfor %}{{ 'T' if ms[0] == ms[1] else 'F' }}{{ 'T' if ms[0] == ms[0] else 'F' }}"),
+    ("macro_ordering_rejected", "{% macro m() %}{% endmacro %}{{ m < m }}"),
+    ("macro_pprint_nested", "{% macro m() %}{% endmacro %}{{ {'k': m}|pprint }}|{{ (m, m)|pprint }}"),
+    ("macro_truncate_rejected", "{% macro m() %}x{% endmacro %}{{ m|truncate(4) }}"),
+    ("macro_xmlattr", "{% macro m() %}x{% endmacro %}{{ dict(a=m)|xmlattr }}"),
+    ("macro_dunder_call", "{% macro m() %}x{% endmacro %}{{ m.__call__() }}"),
+    ("call_block_callee_without_caller", "{% call range(2) %}x{% endcall %}"),
+    ("call_block_block_reference", "{% block b %}B{% endblock %}{% call self.b() %}x{% endcall %}"),
+    ("block_reference_new_each_read", "{% block b %}{{ 'T' if self.b == self.b else 'F' }}{% endblock %}"),
+    ("loop_method_equals_itself", "{% for i in [1] %}{{ 'T' if loop.cycle == loop.cycle else 'F' }}{% endfor %}"),
     # idtracking (docs/tasks/0168): which reads see the frame's own binding of a name it stores later
     ('idtracking_with_body_read_before_set', '{% for i in [1,2] %}{% with %}{{ x }}{% endwith %}{% set x = i %}{% endfor %}'),
     ('idtracking_set_block_body_read_before_set', '{% for i in [1,2] %}{% set y %}{{ x }}{% endset %}{{ y }}{% set x = i %}{% endfor %}'),

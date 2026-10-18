@@ -131,8 +131,8 @@ kwargs: {{ kwargs | pprint }}
 
 
 name: test
-arguments: ['param1', 'param2', 'param3']
-varargs: [4, 6]
+arguments: ('param1', 'param2', 'param3')
+varargs: (4, 6)
 kwargs: {'extraValue': 5}
 )")
 {
@@ -203,8 +203,8 @@ kwargs: {{ kwargs | pprint }}
               R"(
 
 
-arguments: ['param1', 'param2', 'param3']
-varargs: [4, 6]
+arguments: ('param1', 'param2', 'param3')
+varargs: (4, 6)
 kwargs: {'extraValue': 5}
 )")
 {

@@ -409,6 +409,7 @@ public:
         , m_externalScope(&extValues)
         , m_globalScope(&globalValues)
         , m_builtinScope(builtins)
+        , m_evalContext(NewEvalContextId())
     {
         EnterScope();
     }
@@ -424,6 +425,8 @@ public:
         , m_globalScope(&globalValues)
         , m_builtinScope(builtins)
     {
+        // A render's top context keeps EvalContext id 0, with no atomic count in every
+        // render: the other ids are counted from 1
         assert(topScope.empty());
         // A map that never had a table has nothing to lend
         if (topScope.mask() != 0)
@@ -455,6 +458,8 @@ public:
         , m_hasEntryBindings(other.m_hasEntryBindings)
         , m_entryPassDepth(other.m_entryPassDepth)
         , m_autoescape(other.m_autoescape)
+        , m_outputAutoescape(other.m_outputAutoescape)
+        , m_evalContext(other.m_evalContext)
         , m_lookupCache(other.m_lookupCache)
     {
         // The closures defined in `other` stay at home there: a copy is another context. Only
@@ -501,6 +506,8 @@ public:
         , m_hasEntryBindings(other.m_hasEntryBindings)
         , m_entryPassDepth(other.m_entryPassDepth)
         , m_autoescape(other.m_autoescape)
+        , m_outputAutoescape(other.m_outputAutoescape)
+        , m_evalContext(other.m_evalContext)
         , m_lookupCache(other.m_lookupCache)
     {
         m_fullWalk = m_inheritsViews || m_entryPassDepth != 0;
@@ -849,7 +856,10 @@ public:
         RenderContext result(external, *m_globalScope, m_rendererCallback, m_builtinScope);
         result.m_templateFrame = m_templateFrame;
         result.m_nodes = m_nodes;
-        result.m_autoescape = m_autoescape;
+        // A new Context in Jinja2, whose EvalContext starts from the environment's setting
+        // wherever the import or include is
+        result.m_autoescape = m_rendererCallback ? m_rendererCallback->GetSettings().autoescape : false;
+        result.m_outputAutoescape = result.m_autoescape;
         result.SetLookupCache(m_lookupCache);
         return result;
     }
@@ -870,13 +880,29 @@ public:
     void SetLoopControl(LoopControl control) { m_loopControl = control; }
     // Takes the pending loop control, leaving none
     LoopControl TakeLoopControl() { return std::exchange(m_loopControl, LoopControl::None); }
-    // Whether `{{ }}` output is HTML-escaped here (Jinja2's eval_ctx.autoescape)
+    // Jinja2 decides two things by autoescape (docs/tasks/0179). Whether code escapes its
+    // output, `{{ }}`, `~` and `{% filter %}`, is fixed where the code is written: the setting
+    // the code is compiled under (IsOutputAutoescape). Whether a result is Markup, of a macro,
+    // `caller()`, `{% set %}` block or a filter such as `join`, is the setting in force when it
+    // runs, Jinja2's eval_ctx.autoescape (IsAutoescape). `{% autoescape %}` and a new template
+    // set both; a macro or block body sets only the first, and runs with its caller's runtime
+    // setting (HomeCall). The runtime setting is one per rendered template, as Jinja2's
+    // EvalContext is one per Context: an imported macro runs with its module's
     [[nodiscard]] bool IsAutoescape() const { return m_autoescape; }
     bool SetAutoescape(bool autoescape)
     {
         std::swap(autoescape, m_autoescape);
         return autoescape;
     }
+    [[nodiscard]] bool IsOutputAutoescape() const { return m_outputAutoescape; }
+    bool SetOutputAutoescape(bool autoescape)
+    {
+        std::swap(autoescape, m_outputAutoescape);
+        return autoescape;
+    }
+    // Makes this context the root of a new runtime autoescape setting: an included
+    // template's, which Jinja2 renders in a new Context
+    void NewEvalContext() { m_evalContext = NewEvalContextId(); }
 
     // The slots of the unit running here (docs/design/0117-name-slots-plan.md)
     [[nodiscard]] const SlotFrame& Frame() const { return m_frame; }
@@ -981,7 +1007,7 @@ public:
         {
             return false;
         }
-        return m_autoescape == other.m_autoescape;
+        return m_autoescape == other.m_autoescape && m_outputAutoescape == other.m_outputAutoescape;
     }
 
 private:
@@ -1362,6 +1388,14 @@ private:
     // A scope left empty, kept for the next EnterScope; copies do not take it
     std::optional<InternalValueMap> m_spareScope;
     bool m_autoescape{};
+    bool m_outputAutoescape{};
+    // Contexts with the same id share Jinja2's EvalContext (NewEvalContext)
+    uint32_t m_evalContext{};
+    static uint32_t NewEvalContextId()
+    {
+        static std::atomic<uint32_t> next{ 0 };
+        return next.fetch_add(1, std::memory_order_relaxed) + 1;
+    }
     LookupCache* m_lookupCache{};
     uint64_t m_epoch{};
 #ifndef NDEBUG
@@ -1413,18 +1447,43 @@ inline void ScopeRef::Clear()
     }
 }
 
-// Sets the autoescape mode for a scope and restores the previous one when it ends
+// Sets both autoescape modes (RenderContext::IsAutoescape) for a scope and restores the
+// previous ones when it ends: `{% autoescape %}` and a template's top level
 class AutoescapeGuard
 {
 public:
     AutoescapeGuard(RenderContext& context, bool autoescape)
         : m_context(context)
         , m_prev(context.SetAutoescape(autoescape))
+        , m_prevOutput(context.SetOutputAutoescape(autoescape))
     {
     }
-    ~AutoescapeGuard() { m_context.SetAutoescape(m_prev); }
+    ~AutoescapeGuard()
+    {
+        m_context.SetAutoescape(m_prev);
+        m_context.SetOutputAutoescape(m_prevOutput);
+    }
     AutoescapeGuard(const AutoescapeGuard&) = delete;
     AutoescapeGuard& operator=(const AutoescapeGuard&) = delete;
+
+private:
+    RenderContext& m_context;
+    bool m_prev;
+    bool m_prevOutput;
+};
+
+// Sets the output autoescape mode only, for the body of a macro or a block
+class OutputAutoescapeGuard
+{
+public:
+    OutputAutoescapeGuard(RenderContext& context, bool autoescape)
+        : m_context(context)
+        , m_prev(context.SetOutputAutoescape(autoescape))
+    {
+    }
+    ~OutputAutoescapeGuard() { m_context.SetOutputAutoescape(m_prev); }
+    OutputAutoescapeGuard(const OutputAutoescapeGuard&) = delete;
+    OutputAutoescapeGuard& operator=(const OutputAutoescapeGuard&) = delete;
 
 private:
     RenderContext& m_context;
@@ -1625,6 +1684,7 @@ struct HomeCallSaved
     std::optional<TemplateFrame> callFrame;
     LoopControl loopControl = LoopControl::None;
     bool autoescape = false;
+    bool outputAutoescape = false;
 };
 
 // Runs a closure's body on its home context (ClosureSite::Resolve) for the duration of one
@@ -1856,6 +1916,13 @@ private:
         }
         saved.loopControl = context.TakeLoopControl();
         saved.autoescape = context.m_autoescape;
+        saved.outputAutoescape = context.m_outputAutoescape;
+        // The body runs with its caller's runtime autoescape when they share an EvalContext:
+        // a `{% autoescape %}` the call is in may be set on a context nested in the home
+        if (context.m_evalContext == caller->m_evalContext)
+        {
+            context.m_autoescape = caller->m_autoescape;
+        }
         if (context.m_lookupCache)
         {
             if (home.epoch == ClosureHome::Epoch::Closure)
@@ -1891,6 +1958,7 @@ private:
         context.m_loopControl = saved.loopControl;
         context.m_templateFrame = saved.templateFrame;
         context.m_autoescape = saved.autoescape;
+        context.m_outputAutoescape = saved.outputAutoescape;
         if (context.m_epoch != saved.bodyEpoch)
         {
             context.NewEpoch();
