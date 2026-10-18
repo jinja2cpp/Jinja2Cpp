@@ -13,6 +13,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -20,6 +21,7 @@
 #include <shared_mutex>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <tuple>
 #include <utility>
 
@@ -51,7 +53,7 @@ bool IsSameText(const std::string& lhs, const std::string& rhs)
 
 bool operator==(const Settings& lhs, const Settings& rhs)
 {
-    // Structured bindings name every field: a field added to Settings, Settings::Extensions or Settings::Limits stops this compiling
+    // Structured bindings name every field: a field added to Settings or Settings::Extensions stops this compiling
     // until it is compared here too
     const auto& [lTrim, lLstrip, lCacheSize, lAutoReload, lExt, lMetaType, lKeepNl, lNlSeq, lVarStart, lVarEnd, lBlockStart, lBlockEnd, lCommentStart,
                  lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lUndefined, lLookup, lCallablesAsFilters, lLimits] = lhs;
@@ -59,8 +61,6 @@ bool operator==(const Settings& lhs, const Settings& rhs)
                  rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rUndefined, rLookup, rCallablesAsFilters, rLimits] = rhs;
     const auto& [lDo, lLoopControls, lI18n] = lExt;
     const auto& [rDo, rLoopControls, rI18n] = rExt;
-    const auto& [lRange, lSequence, lOutput, lTemplateSize, lLoads, lSteps, lTime, lRenderDepth, lExprDepth, lOperators, lBlocks] = lLimits;
-    const auto& [rRange, rSequence, rOutput, rTemplateSize, rLoads, rSteps, rTime, rRenderDepth, rExprDepth, rOperators, rBlocks] = rLimits;
 
     // The flags and numbers first, then the strings
     if (std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lKeepNl, lAutoescape, lUndefined, lLookup, lCallablesAsFilters)
@@ -68,8 +68,11 @@ bool operator==(const Settings& lhs, const Settings& rhs)
     {
         return false;
     }
-    if (std::tie(lRange, lSequence, lOutput, lTemplateSize, lLoads, lSteps, lTime, lRenderDepth, lExprDepth, lOperators, lBlocks)
-        != std::tie(rRange, rSequence, rOutput, rTemplateSize, rLoads, rSteps, rTime, rRenderDepth, rExprDepth, rOperators, rBlocks))
+    // Every Load compares the settings, so the limits compare as bytes: integers without padding, and a field added
+    // to Settings::Limits changes the size checked here
+    static_assert(std::has_unique_object_representations_v<Settings::Limits>);
+    static_assert(sizeof(Settings::Limits) == 72);
+    if (std::memcmp(&lLimits, &rLimits, sizeof(Settings::Limits)) != 0)
     {
         return false;
     }

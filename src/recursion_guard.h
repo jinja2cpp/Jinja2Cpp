@@ -90,7 +90,7 @@ struct RenderLimits
     // The built-in cap (MaxSequenceSize in internal_value.h) or a lower maxSequenceSize
     std::uint64_t maxSequenceSize = std::uint64_t{ 1 } << 26;
     std::uint64_t maxRange = UINT64_MAX;
-    std::uint32_t loadsLeft = UINT32_MAX;
+    std::uint64_t loadsLeft = UINT64_MAX;
     unsigned maxRenderDepth = 256;
     // The render's output string (std::string, or std::wstring when `wideOutput`) and the size
     // it may reach (maxOutputSize); null without that limit
@@ -225,7 +225,7 @@ void CountTemplateLoadSlow();
 // Counts one template that `include`, `extends` or `import` loads (maxTemplateLoads)
 inline void CountTemplateLoad()
 {
-    if (detail::t_renderLimits.loadsLeft != UINT32_MAX)
+    if (detail::t_renderLimits.loadsLeft != UINT64_MAX)
     {
         detail::CountTemplateLoadSlow();
     }

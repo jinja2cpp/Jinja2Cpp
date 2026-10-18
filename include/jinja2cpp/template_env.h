@@ -127,7 +127,7 @@ struct Settings
         //! included; 0 is no limit
         std::uint64_t maxTemplateSize = 0;
         //! Templates one Render may load for `include`, `extends` and `import`; 0 is no limit
-        std::uint32_t maxTemplateLoads = 0;
+        std::uint64_t maxTemplateLoads = 0;
         //! Steps one Render may take: a step is a statement body (each loop iteration's among them), an item a loop's
         //! `if` looks at, a level of \ref maxRenderDepth (the template itself, a macro call) or the evaluation of an
         //! operator, call or filter. An approximate unit, which may change between releases; 0 is no limit
