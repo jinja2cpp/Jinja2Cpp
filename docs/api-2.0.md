@@ -118,7 +118,9 @@ locations), 0255 (engine runtime errors).
 1. `Load*`, `Render*`, `GetMetadata*` and `TemplateEnv::LoadTemplate*` report every failure
    through `Result<T>`: template errors, exceptions from host callables, reflectors, accessors
    and filesystem handlers, and throws of non-`std::exception` types.
-2. **Only `std::bad_alloc` escapes them**, and only as "the system is out of memory". Every
+2. **Only `std::bad_alloc` escapes them**, and only as "the system is out of memory" (the one
+   other exception is rule 3's: a failure of a caller-supplied stream whose exception mask the
+   caller enabled). Every
    limit (`Settings::Limits`, 0262; the built-in caps; `std::length_error`) and every budget a
    host enforces is `ErrorCode::ResourceLimitExceeded` in the `Result`; a host allocator or
    memory resource reports a spent budget by throwing `jinja2::Exception{ResourceLimitExceeded}`,
@@ -148,7 +150,10 @@ locations), 0255 (engine runtime errors).
 8. A render error carries a specific `ErrorCode`, the `file:line:col` of the innermost
    statement or `{{ }}` tag that was running (in the template that owns it), a caret line in
    `GetLocationDescr()`, and `GetException()`: the original `std::exception_ptr`, set if and
-   only if the failure began as an exception the engine did not raise.
+   only if the failure began as a C++ exception thrown outside the template engine: by host
+   code, by the standard library, or by the public headers while converting host data
+   (`jinja2::Exception{IntegerOutOfRange}` from `Value(I)`/`Reflect`). Errors the engine raises
+   while evaluating the template (undefined values, type errors, limits, recursion) have none.
 
 **Types.**
 - `jinja2::Exception : std::runtime_error` (`exception.h`, in `fwd.h` and `jinja2cpp.h`) with
