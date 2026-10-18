@@ -16,7 +16,6 @@
 
 #include <jinja2cpp/error_info.h>
 
-#include <boost/cast.hpp>
 #include <boost/container/small_vector.hpp>
 
 #include <algorithm>

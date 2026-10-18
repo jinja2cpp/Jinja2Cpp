@@ -296,7 +296,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0226](0226-license-metadata-and-distribution.md) | Reconcile package license metadata and ship required notices | release | high | open |
 | [0227](0227-supported-docs-and-example-surface.md) | Choose and verify the documentation and examples supported for 2.0 | release | high | open |
 | [0228](0228-task-number-uniqueness.md) | Two task files can share a number | agents | medium | done |
-| [0229](0229-unused-boost-components.md) | Drop the Boost libraries and includes nothing uses | build | low | open |
+| [0229](0229-unused-boost-components.md) | Drop the Boost libraries and includes nothing uses | build | low | done |
 | [0230](0230-boost-free-core.md) | A Boost-free core | build | medium | open |
 | [0231](0231-robin-hood-successor.md) | robin_hood's upstream is archived | perf | high | open |
 | [0232](0232-dependency-pin-drift.md) | Dependency pins disagree across modes and some are mutable | build | low | open |
