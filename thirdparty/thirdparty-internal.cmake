@@ -8,11 +8,8 @@ list(APPEND BOOST_INCLUDE_LIBRARIES
     any
     assert
     atomic
+    container
     filesystem
-    numeric/conversion
-    lexical_cast
-    optional
-    variant
     json
 )
 
@@ -34,21 +31,19 @@ if(NOT MSVC)
     include(CheckCXXCompilerFlag)
     check_cxx_compiler_flag(-Wno-error=parentheses COMPILER_HAS_WNO_ERROR_PARENTHESES_FLAG)
     check_cxx_compiler_flag(-Wno-error=deprecated-declarations COMPILER_HAS_WNO_ERROR_DEPRECATED_DECLARATIONS_FLAG)
-    check_cxx_compiler_flag(-Wno-error=maybe-uninitialized COMPILER_HAS_WNO_ERROR_MAYBE_UNINITIALIZED_FLAG)
 
     if(COMPILER_HAS_WNO_ERROR_PARENTHESES_FLAG)
         target_compile_options(boost_assert INTERFACE -Wno-error=parentheses)
     endif()
     if(COMPILER_HAS_WNO_ERROR_DEPRECATED_DECLARATIONS_FLAG)
-        target_compile_options(boost_unordered INTERFACE -Wno-error=deprecated-declarations)
+        if(TARGET boost_unordered)
+            target_compile_options(boost_unordered INTERFACE -Wno-error=deprecated-declarations)
+        endif()
         target_compile_options(boost_filesystem PRIVATE -Wno-error=deprecated-declarations)
-    endif()
-    if(COMPILER_HAS_WNO_ERROR_MAYBE_UNINITIALIZED_FLAG)
-        target_compile_options(boost_variant INTERFACE -Wno-error=maybe-uninitialized)
     endif()
 endif()
 
-# install(TARGETS boost_filesystem boost_algorithm boost_variant boost_optional
+# install(TARGETS boost_filesystem boost_algorithm
 #        EXPORT InstallTargets
 #        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 #        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

@@ -23,6 +23,10 @@ tuple), which touches the public API and is worth doing only together with 0031.
 
 **Done when.** No line of `test/parity/divergences/` names task 0036, and `ctest -R parity` passes.
 
+**Release decision (Ruslan 2026-10-18, D13 in docs/release-2.0.md).** In 2.0, template-internal
+only: the public `ValuesMap` key type stays `std::string` unless the architect plan shows a
+public need.
+
 **Shipped (D13 = b).** Dict literals, `dict()`, `namespace()` and the results of the dict
 methods take any hashable key (`src/template_dict.*`): `1`, `1.0` and `True` are one key
 (first spelling and position kept, last value wins), so are `(1, 2.0)` and `(1.0, 2)`;
@@ -43,5 +47,5 @@ identity token yet and all read as the empty string when stored, as before, whil
 one finds nothing (`nothing in {'': 1}` is False); that is the first bullet of
 0212 (`globals.object_dict_key` stays listed). All NaN keys are one key (Python compares NaN by
 identity).
-A cycle through a key (`{% set d = {(ns, 1): 1} %}{% set ns.d = d %}`) leaks like the one
-through a value: that is 0110's (the dict methods' cycle check walks the keys too).
+The render's cycle collector (0110) follows the kept keys too, so a cycle through a key
+(`{% set d = {(ns, 1): 1} %}{% set ns.d = d %}`) is freed when the render ends.

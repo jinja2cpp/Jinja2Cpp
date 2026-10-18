@@ -192,9 +192,13 @@ struct Reflector<rapidjson::GenericValue<Enc>>
             result = std::basic_string<typename Enc::Ch>(val->GetString(), val->GetStringLength());
             break;
         case rapidjson::kNumberType:
-            if (val->IsInt64() || val->IsUint64())
+            if (val->IsInt64())
             {
                 result = val->GetInt64();
+            }
+            else if (val->IsUint64())
+            {
+                result = detail::ToStoredInt(val->GetUint64());
             }
             else if (val->IsInt() || val->IsUint())
             {

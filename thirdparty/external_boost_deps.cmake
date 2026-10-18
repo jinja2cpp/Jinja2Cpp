@@ -23,7 +23,7 @@ set(_jinja2cpp_boost_compiled filesystem)
 if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
     list(APPEND _jinja2cpp_boost_compiled json)
 endif ()
-set(_jinja2cpp_boost_header_only algorithm any lexical_cast numeric_conversion variant)
+set(_jinja2cpp_boost_header_only algorithm any)
 
 find_package(Boost 1.75 CONFIG ${FIND_BOOST_PACKAGE_QUIET}
     COMPONENTS ${_jinja2cpp_boost_compiled} ${_jinja2cpp_boost_header_only})

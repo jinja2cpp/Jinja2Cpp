@@ -1,11 +1,13 @@
 #include "test_tools.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/generic_list_iterator.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
+#include <memory>
 #include <string>
 #include <variant>
 
@@ -128,6 +130,24 @@ TEST_F(IncludeTest, TestMissingIncludesError2)
     auto params_iter = filesList->begin();
     EXPECT_EQ("missing", (*params_iter++).AsString());
     EXPECT_EQ("missing2", (*params_iter++).AsString());
+}
+
+// RealFileSystem names follow Python's FileSystemLoader: a ".." piece is not found
+TEST_F(IncludeTest, RealFileSystemNameRules)
+{
+    // Rooted at the copied test data: "../test_data/..." names an existing file through ".."
+    m_env.AddFilesystemHandler(std::string(), std::make_shared<jinja2::RealFileSystem>("test_data"));
+
+    EXPECT_EQ("Hello World!", Render(R"({% include "simple_template1.j2tpl" %})"));
+    EXPECT_EQ("Hello World!", Render(R"({% include "/simple_template1.j2tpl" %})"));
+    EXPECT_EQ("", Render(R"({% include "../test_data/simple_template1.j2tpl" ignore missing %})"));
+    EXPECT_EQ("", Render(R"({% include ["../test_data/simple_template1.j2tpl", "./../test_data/simple_template1.j2tpl"] ignore missing %})"));
+
+    jinja2::Template tpl(&m_env);
+    ASSERT_TRUE(!!tpl.Load(R"({% include "../test_data/simple_template1.j2tpl" %})"));
+    auto renderResult = tpl.RenderAsString({});
+    ASSERT_FALSE(renderResult);
+    EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, renderResult.error().GetCode());
 }
 
 TEST_F(IncludeTest, TestContextIncludeWithOverrides)

@@ -214,3 +214,16 @@ MULTISTR_TEST(NlohmannJsonTest, OrderedJsonKeepsDocumentOrder, R"({{ sorted }}|{
     params["sorted"] = jinja2::Reflect(nlohmann::json::parse(R"({"b": 1, "a": 2})"));
     params["json"] = jinja2::Reflect(nlohmann::ordered_json::parse(doc));
 }
+
+// A JSON unsigned number above INT64_MAX fails the render instead of wrapping (task 0172)
+TEST(NlohmannJsonUnsignedTest, UnsignedAboveInt64MaxFails)
+{
+    jinja2::Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ json.max }}|{{ json.big }}"));
+    jinja2::ValuesMap params{ { "json", jinja2::Reflect(nlohmann::json::parse(R"({"max": 9223372036854775807, "big": 18446744073709551615})")) } };
+    const auto result = tpl.RenderAsString(params);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(jinja2::ErrorCode::UnexpectedException, result.error().GetCode());
+    ASSERT_TRUE(tpl.Load("{{ json.max }}"));
+    EXPECT_EQ("9223372036854775807", tpl.RenderAsString(params).value());
+}

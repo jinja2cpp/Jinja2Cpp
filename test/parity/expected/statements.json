@@ -3419,6 +3419,166 @@
    "output": "[]"
   },
   {
+   "id": "statements.namespace_contains_itself",
+   "template": "{% set ns = namespace(a=1) %}{% set ns.a = ns %}{{ ns }}|{{ 'T' if ns.a.a.a is sameas ns else 'F' }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<Namespace {'a': <Namespace {...}>}>|T"
+  },
+  {
+   "id": "statements.namespace_contains_itself_in_list",
+   "template": "{% set ns = namespace() %}{% set ns.l = [ns] %}{{ ns }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<Namespace {'l': [<Namespace {...}>]}>"
+  },
+  {
+   "id": "statements.namespace_contains_itself_through_key",
+   "template": "{% set ns = namespace() %}{% set d = {(ns, 1): 1} %}{% set ns.d = d %}{{ d|length }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1"
+  },
+  {
+   "id": "statements.dict_contains_itself_through_setdefault_key",
+   "template": "{% set ns = namespace() %}{% set d = {} %}{% set ns.d = d %}{{ d.setdefault((ns, 1), 2) }}|{{ d|length }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "2|1"
+  },
+  {
    "id": "statements.namespace_set_on_dict",
    "template": "{% set m = {} %}{% set m.a = 1 %}",
    "context": {
