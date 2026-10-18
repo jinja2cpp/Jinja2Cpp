@@ -317,3 +317,10 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0247](0247-rival-benchmark-coverage.md) | Cover the rival engines' own benchmark cases, then close the gaps | perf | high | open |
 | [0248](0248-python-drop-in-replacement.md) | Jinja2C++ as a drop-in replacement for Python Jinja2 in common cases | api | medium | open |
 | [0252](0252-public-api-allocator-contract.md) | Allocator and memory contract for the 2.0 public API | api | high | open |
+| [0262](0262-settings-limits.md) | `Settings::Limits`: one place for every limit a template can hit | api | high | open |
+| [0263](0263-per-operation-size-checks.md) | Every growth operation checks its size before allocating | robustness | high | open |
+| [0264](0264-template-cache-bound.md) | The template cache ignores its size, and `MemoryFileSystem` writes in a const path | robustness | medium | open |
+| [0265](0265-hardening-by-default.md) | Build hardening on by default; invariant checks that fail the render, not the process | build | medium | open |
+| [0266](0266-confined-filesystem.md) | `ConfinedFileSystem`: a loader that never leaves its root | api | medium | open |
+| [0267](0267-untrusted-mode-fuzzing.md) | Fuzz targets for templates written by untrusted users | robustness | high | open |
+| [0268](0268-untrusted-mode-followups.md) | Untrusted mode: additive follow-ups after the freeze | api | low | open |
