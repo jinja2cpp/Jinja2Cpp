@@ -248,6 +248,11 @@ TEST_P(AllocationFailureTest, RenderSucceedsOrThrowsBadAlloc)
 TEST_F(AllocationFailureTest, MetadataSucceedsOrThrowsBadAlloc)
 {
     JINJA2CPP_SKIP_UNREACHED_INJECTION();
+#ifdef JINJA2CPP_WITH_JSON_BINDINGS_NLOHMANN
+    // nlohmann::basic_json's destructor allocates for non-empty arrays and objects, so a failure
+    // there ends in std::terminate (docs/tasks/0279)
+    GTEST_SKIP() << "nlohmann::json destruction allocates";
+#endif
     const std::string source = R"({% meta %}{"title": "Report", "tags": ["a", "b"]}{% endmeta %}x)";
     long n = 0;
     for (; n < maxAllocations; ++n)

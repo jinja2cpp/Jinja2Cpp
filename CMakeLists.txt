@@ -445,6 +445,7 @@ if (JINJA2CPP_BUILD_TESTS)
     set_target_properties(jinja2cpp_alloc_tests PROPERTIES
             CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
             CXX_STANDARD_REQUIRED ON)
+    target_compile_definitions(jinja2cpp_alloc_tests PRIVATE ${_bindings_define})
     add_test(NAME jinja2cpp_alloc_tests COMMAND jinja2cpp_alloc_tests)
     # Differential corpus against Python Jinja2, see test/parity/README.md
     add_test(NAME jinja2cpp_parity COMMAND jinja2cpp_tests --gtest_filter=Parity*)

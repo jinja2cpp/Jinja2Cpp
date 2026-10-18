@@ -7,6 +7,8 @@
 #include <boost/any.hpp>
 #include <boost/any/unique_any.hpp>
 
+#include <new>
+
 namespace jinja2
 {
 
@@ -19,6 +21,10 @@ nonstd::expected<Value, std::string> Parse(std::basic_string_view<CharT> json, b
     {
         auto value = nlohmann::json::parse(json.data(), json.data() + json.size());
         return Reflect(value);
+    }
+    catch (const std::bad_alloc&)
+    {
+        throw;
     }
     catch (std::exception& ex)
     {
