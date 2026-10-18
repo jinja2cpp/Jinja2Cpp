@@ -1,6 +1,6 @@
 ---
 status: open
-priority: low
+priority: high
 area: perf
 touches: [src/robin_hood.h, src/internal_value.h, src/render_context.h, test/name_map_test.cpp, .clang-format-ignore, sbom/components.json]
 ---
@@ -20,3 +20,8 @@ decision here.
 
 **Done when.** The map choice is measured and either switched or recorded, and
 sbom/components.json matches what is vendored.
+
+**Release scope (Ruslan 2026-10-18, 0221 thread).** The switch ships before 2.0: it is a
+release gate (docs/release-2.0.md G12). The performance track chooses the successor from
+its measurements. With the Boost-free core (0230) wanted for 2.0, `boost::unordered_flat_map`
+is only a measurement baseline, not a candidate to ship.
