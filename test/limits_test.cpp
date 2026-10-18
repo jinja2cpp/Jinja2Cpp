@@ -94,7 +94,7 @@ std::vector<LimitCase> Cases()
           "maxRenderTime" },
         { "StepsMaxLessOne", "{% for i in range(1000) %}{% endfor %}", [](auto& l) { l.maxRenderSteps = UINT64_MAX - 1; }, "" },
         { "TimeNegative", "{% for i in range(5000) %}{% endfor %}", [](auto& l) { l.maxRenderTime = std::chrono::milliseconds(-5); }, "" },
-        { "TimeForever", "{% for i in range(5000) %}{% endfor %}", [](auto& l) { l.maxRenderTime = (std::chrono::milliseconds::max)(); }, "" },
+        { "TimeForever", "{% for i in range(5000) %}{% endfor %}", [](auto& l) { l.maxRenderTime = std::chrono::milliseconds(INT64_MAX); }, "" },
         { "StepsLoopFilter", "{% for i in range(1000000) if false %}{% endfor %}", [](auto& l) { l.maxRenderSteps = 100000; }, "maxRenderSteps" },
         // The template, its body, the call of range() and ten iterations
         { "StepsAt", "{% for i in range(10) %}{% endfor %}", [](auto& l) { l.maxRenderSteps = 13; }, "" },
