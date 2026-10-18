@@ -21,6 +21,15 @@
 #include <thread>
 #include <vector>
 
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+#define JINJA2CPP_TEST_SANITIZED 1
+#endif
+#ifdef __has_feature
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer) || __has_feature(undefined_behavior_sanitizer)
+#define JINJA2CPP_TEST_SANITIZED 1
+#endif
+#endif
+
 using namespace jinja2;
 
 namespace
@@ -61,6 +70,9 @@ std::vector<LimitCase> Cases()
         { "RepeatAt", "{{ ('x' * 1000)|length }}", [](auto& l) { l.maxSequenceSize = 1000; }, "" },
         { "ListOver", "{{ range(2000)|list|length }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
         { "SequenceAboveCap", "{{ ('x' * 1000)|length }}", [](auto& l) { l.maxSequenceSize = UINT64_MAX; }, "" },
+        // Past the built-in cap as well: the render's own limit is reported
+        { "RepeatAboveCap", "{{ 'x' * 100000000 }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
+        { "CenterAboveCap", "{{ 'x'|center(100000000) }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
         { "OutputOver", "{% for i in range(2000) %}x{% endfor %}", [](auto& l) { l.maxOutputSize = 1000; }, "maxOutputSize" },
         { "OutputAt", "{% for i in range(1000) %}x{% endfor %}", [](auto& l) { l.maxOutputSize = 1000; }, "" },
         { "OutputLongText", "{{ 'x' * 2000 }}", [](auto& l) { l.maxOutputSize = 1000; }, "maxOutputSize" },
@@ -73,6 +85,14 @@ std::vector<LimitCase> Cases()
         { "LoadsImport", "{% import 'a' as x %}{% from 'b' import y %}{% extends 'c' %}", [](auto& l) { l.maxTemplateLoads = 2; }, "maxTemplateLoads" },
         { "StepsMacro", DoublingMacro, [](auto& l) { l.maxRenderSteps = 100000; }, "maxRenderSteps" },
         { "StepsLoop", "{% for i in range(1000000) %}{% endfor %}", [](auto& l) { l.maxRenderSteps = 100000; }, "maxRenderSteps" },
+        { "StepsMaxIsNone", "{% for i in range(1000) %}{% endfor %}", [](auto& l) { l.maxRenderSteps = UINT64_MAX; }, "" },
+        { "StepsMaxWithTime", "{% for i in range(10**9) %}{% endfor %}",
+          [](auto& l) {
+              l.maxRenderSteps = UINT64_MAX;
+              l.maxRenderTime = std::chrono::milliseconds(50);
+          },
+          "maxRenderTime" },
+        { "TimeForever", "{% for i in range(5000) %}{% endfor %}", [](auto& l) { l.maxRenderTime = std::chrono::milliseconds::max(); }, "" },
         { "StepsLoopFilter", "{% for i in range(1000000) if false %}{% endfor %}", [](auto& l) { l.maxRenderSteps = 100000; }, "maxRenderSteps" },
         // The template, its body, the call of range() and ten iterations
         { "StepsAt", "{% for i in range(10) %}{% endfor %}", [](auto& l) { l.maxRenderSteps = 13; }, "" },
@@ -161,9 +181,10 @@ TEST_P(LimitsTest, Enforced)
 TEST_P(LimitsTest, DefaultsRender)
 {
     const auto& param = GetParam();
-    if (param.name == "StepsMacro" || param.name == "RenderDepthStackOnly")
+    if (param.name == "StepsMacro" || param.name == "RenderDepthStackOnly" || param.name == "RepeatAboveCap" || param.name == "CenterAboveCap")
     {
-        // 2^40 calls would render, in time; 400 levels pass the default depth
+        // 2^40 calls would render, in time; 400 levels pass the default depth; the
+        // above-cap rows fail on the internal cap without a limit
         return;
     }
     bool failedAtLoad = false;
@@ -237,7 +258,7 @@ TEST_F(LimitsEnvTest, RenderTime)
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
     EXPECT_EQ("maxRenderTime", ToString(result.error().GetExtraParams()[1]));
     EXPECT_GE(elapsed, std::chrono::milliseconds(200));
-#ifdef NDEBUG
+#if defined(NDEBUG) && !defined(JINJA2CPP_TEST_SANITIZED)
     EXPECT_LT(elapsed, std::chrono::milliseconds(400));
 #endif
 }
@@ -289,6 +310,52 @@ TEST_F(LimitsEnvTest, NestedRenderKeepsItsOwnLimits)
     Template free(&freeEnv);
     ASSERT_TRUE(free.Load("{{ limitedInner() }}{% for i in range(1000) %}{% endfor %}").has_value());
     EXPECT_EQ("stopped", free.RenderAsString(params).value());
+}
+
+TEST_F(LimitsEnvTest, FailedRenderLeavesNoLimits)
+{
+    // A render that fails on its limits leaves none behind for the next one on the thread
+    TemplateEnv limitedEnv;
+    Settings limited;
+    limited.limits.maxRenderSteps = 50;
+    limited.limits.maxSequenceSize = 10;
+    limited.limits.maxRenderDepth = 3;
+    limitedEnv.SetSettings(limited);
+    Template failing(&limitedEnv);
+    ASSERT_TRUE(failing.Load("{% for i in range(1000) %}{% endfor %}").has_value());
+    EXPECT_FALSE(failing.RenderAsString({}).has_value());
+
+    EXPECT_EQ("2000", Render("{% for i in range(2000) %}{% endfor %}{{ ('x' * 2000)|length }}"));
+    EXPECT_EQ("", Render("{% macro f(n) %}{% if n %}{{ f(n - 1) }}{% endif %}{% endmacro %}{{ f(20) }}"));
+}
+
+TEST_F(LimitsEnvTest, LoadsEveryUse)
+{
+    // With EveryUse each use loads the template again, and each load counts
+    Settings settings;
+    settings.templateLookup = TemplateLookup::EveryUse;
+    settings.limits.maxTemplateLoads = 2;
+    m_env.SetSettings(settings);
+    AddFile("a", "a");
+    Template tpl(&m_env);
+    ASSERT_TRUE(tpl.Load("{% include 'a' %}{% include 'a' %}").has_value());
+    EXPECT_EQ("aa", tpl.RenderAsString({}).value());
+    ASSERT_TRUE(tpl.Load("{% include 'a' %}{% include 'a' %}{% include 'a' %}").has_value());
+    auto result = tpl.RenderAsString({});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ("maxTemplateLoads", ToString(result.error().GetExtraParams()[1]));
+}
+
+TEST_F(LimitsEnvTest, WideOutput)
+{
+    Settings settings;
+    settings.limits.maxOutputSize = 1000;
+    m_env.SetSettings(settings);
+    TemplateW tpl(&m_env);
+    ASSERT_TRUE(tpl.Load(L"{% for i in range(2000) %}x{% endfor %}").has_value());
+    auto result = tpl.RenderAsString({});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
 }
 
 TEST_F(LimitsEnvTest, Presets)

@@ -1531,11 +1531,16 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             return InternalValue::FromText(std::basic_string_view<CharT>());
         }
-        if (static_cast<uint64_t>(count) > MaxSequenceSize / text.size())
+        if (static_cast<uint64_t>(count) > jinja2::detail::t_renderLimits.maxSequenceSize / text.size())
         {
-            throw std::runtime_error("repeated string is too long");
+            if (jinja2::detail::t_renderLimits.maxSequenceSize == MaxSequenceSize)
+            {
+                throw std::runtime_error("repeated string is too long");
+            }
+            // The length may not fit in 64 bits
+            ThrowSequenceTooLong(static_cast<uint64_t>(count) > UINT64_MAX / text.size() ? UINT64_MAX : text.size() * static_cast<uint64_t>(count),
+                                 "a repeated string");
         }
-        CheckSequenceSize(text.size() * static_cast<uint64_t>(count), "a repeated string");
         return InternalValue::MakeText<CharT>(text.size() * static_cast<size_t>(count), [text, count](boost::span<CharT> chars) {
             auto out = chars.begin();
             for (int64_t i = 0; i < count; ++i)

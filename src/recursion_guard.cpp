@@ -204,7 +204,8 @@ void RenderLimitsScope::Install(const Settings::Limits* limitsOrNone)
     }
     const auto& limits = *limitsOrNone;
     state.active = true;
-    state.maxSteps = limits.maxRenderSteps;
+    // UINT64_MAX steps cannot be counted to their end: it is no limit
+    state.maxSteps = limits.maxRenderSteps != UINT64_MAX ? limits.maxRenderSteps : 0;
     if (limits.maxSequenceSize != 0)
     {
         state.maxSequenceSize = std::min(state.maxSequenceSize, limits.maxSequenceSize);
@@ -225,9 +226,14 @@ void RenderLimitsScope::Install(const Settings::Limits* limitsOrNone)
     state.maxRenderDepth = LimitOrNone(limits.maxRenderDepth);
     if (limits.maxRenderTime.count() > 0)
     {
-        state.hasDeadline = true;
-        const auto deadline = std::chrono::steady_clock::now() + limits.maxRenderTime;
-        state.deadline = deadline.time_since_epoch().count();
+        // A time past the clock's range (milliseconds::max() for "forever") is no limit
+        const auto now = std::chrono::steady_clock::now();
+        const auto room = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::time_point::max() - now);
+        if (limits.maxRenderTime < room)
+        {
+            state.hasDeadline = true;
+            state.deadline = (now + limits.maxRenderTime).time_since_epoch().count();
+        }
     }
     detail::Refill(state);
     detail::InstallRenderLimits(state);

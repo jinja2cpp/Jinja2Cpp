@@ -119,7 +119,9 @@ struct Settings
         //! Items or characters one operation builds (a list, a string); 0 keeps the built-in cap of 2^26, which a
         //! larger value does not raise
         std::uint64_t maxSequenceSize = 0;
-        //! Characters one Render writes; 0 is no limit
+        //! Characters one Render writes to its output, checked at every step: one expression may pass it by its own
+        //! output. Text a template captures (`{% set %}` blocks, `caller()`, `{% filter %}`) is not output; 0 is
+        //! no limit
         std::uint64_t maxOutputSize = 0;
         //! Characters of a template's source at Load, a template that `include`, `extends` or `import` loads
         //! included; 0 is no limit
@@ -131,7 +133,7 @@ struct Settings
         //! operator, call or filter. An approximate unit, which may change between releases; 0 is no limit
         std::uint64_t maxRenderSteps = 0;
         //! Time one Render may take, checked every 1024 steps and after each host callable returns (a callable is
-        //! not interrupted); 0 is no limit
+        //! not interrupted); 0, a negative time or one past the clock's range is no limit
         std::chrono::milliseconds maxRenderTime{ 0 };
         //! Nesting of the template, macro and caller() calls, super(), recursive loops, included, imported and parent
         //! templates (Python fails at about 250 macro calls). The depth limits stop at the thread's stack too; 0
@@ -151,7 +153,9 @@ struct Settings
 
 //! Limits for templates a host's users write, anchored on Jinja2's `SandboxedEnvironment`: `range()` of at most
 //! 100000 items, sequences of at most 2^20 items, 16 MiB of output, 10^7 render steps, no time limit. The values may
-//! change between releases
+//! change between releases. Not every operation that builds a string or list checks maxSequenceSize yet, so
+//! these limits do not bound a render's memory: a host that needs that bound runs untrusted renders where memory is
+//! limited too
 inline Settings::Limits UntrustedLimits()
 {
     Settings::Limits limits;
