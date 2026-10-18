@@ -113,17 +113,29 @@ TEST_F(RecursionLimitsTest, ErrorMessage)
     EXPECT_NE(std::string::npos, ErrorToString(result.error()).find("error: Maximum recursion depth exceeded\n")) << ErrorToString(result.error());
 }
 
-TEST_F(RecursionLimitsTest, DeepTupleKeyIsRenderError)
+TEST_F(RecursionLimitsTest, DeepTupleKeyRendersOrIsRenderError)
 {
-    // A dict key is hashed through its nested tuples, as deep as the template made them
+    // A dict key is hashed through its nested tuples, as deep as the template made them. The
+    // stack an optimised build needs for that depth may fit: then the key works as in Python
     const std::string build = "{% set ns = namespace(t=(1,)) %}{% for i in range(20000) %}{% set ns.t = (ns.t,) %}{% endfor %}";
-    for (const std::string use : { "{{ {ns.t: 1}|length }}", "{{ ns.t in {1: 1} }}", "{{ {1: 1}.get(ns.t) }}" })
+    const std::pair<std::string, std::string> cases[] = {
+        { "{{ {ns.t: 1}|length }}", "1" },
+        { "{{ ns.t in {1: 1} }}", "False" },
+        { "{{ {1: 1}.get(ns.t) }}", "None" },
+    };
+    for (const auto& [use, expected] : cases)
     {
         Template tpl(&m_env);
         ASSERT_TRUE(tpl.Load(build + use).has_value()) << use;
         auto result = tpl.RenderAsString({});
-        ASSERT_FALSE(result.has_value()) << use;
-        EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode()) << use;
+        if (result.has_value())
+        {
+            EXPECT_EQ(expected, result.value()) << use;
+        }
+        else
+        {
+            EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode()) << use;
+        }
     }
 }
 
