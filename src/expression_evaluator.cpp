@@ -752,7 +752,7 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
         break;
     }
     case jinja2::BinaryExpression::StringConcat:
-        result = ConcatAsStrings(leftVal, rightVal, context, !m_folded && context.IsAutoescape());
+        result = ConcatAsStrings(leftVal, rightVal, context, !m_folded && context.IsOutputAutoescape());
         break;
     default:
         break;
@@ -1165,6 +1165,13 @@ void CallExpression::RenderCallable(OutStream& stream, RenderContext& values, co
     {
         WriteOutput(stream, callable.GetExpressionCallable()(callParams, values), values);
     }
+    else if (callable.GetKind() == Callable::Macro && values.IsOutputAutoescape() && !values.IsAutoescape())
+    {
+        // Autoescape off at run time but on where the code is written: the result is a plain
+        // string, which the output escapes (InvokeCallable)
+        InternalValue result(RenderToString(values.GetRendererCallback(), [&](OutStream& out) { callable.GetStatementCallable()(callParams, out, values); }));
+        WriteOutput(stream, result, values);
+    }
     else
     {
         callable.GetStatementCallable()(callParams, stream, values);
@@ -1210,7 +1217,7 @@ InternalValue InvokeCallable(RenderContext& values, const Callable& callable, co
 
     TargetString resultStr =
         RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { callable.GetStatementCallable()(callParams, stream, values); });
-    // A macro returns Markup when autoescape is on where it is called
+    // A macro returns Markup when autoescape is on where it is called, at run time
     InternalValue result(std::move(resultStr));
     result.SetMarkup(values.IsAutoescape());
     return result;
