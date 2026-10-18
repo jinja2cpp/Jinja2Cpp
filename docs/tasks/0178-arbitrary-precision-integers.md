@@ -31,3 +31,16 @@ a big integer to users (a new alternative, a string, or an error on conversion; 
 
 **Done when.** The listed cases leave `test/parity/divergences/` and `docs/parity.md` no
 longer names integers as a deliberate divergence.
+
+**Decided by Ruslan 2026-10-18 (0221 thread), replacing the single-library proposal above.**
+Big integers go behind a backend interface, so the core stays Boost-free (0230):
+- Default build: no big-integer backend; int64 behaviour of 0015 (overflow raises).
+- `-DJINJA2CPP_BIGINT=boost` (name to be settled by the plan): an optional compile-time
+  backend over Boost.Multiprecision `cpp_int`, which also serves as the sample
+  implementation.
+- Users can supply their own backend.
+The architect plan must decide how a user backend is supplied (a compile-time policy, or
+an interface registered at run time, whose layout then becomes part of the ABI policy of
+docs/api-2.0.md 5.4), how `Value` exposes a big integer when no backend is configured, and
+keep the perf gate (no change for int64 templates). Not a 2.0 condition
+(docs/release-2.0.md D2/D3).

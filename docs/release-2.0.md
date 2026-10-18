@@ -17,7 +17,7 @@ claims the release does make are bounded in sections 5 and 3 (G3) below.
 | Version | 2.0.0, SOVERSION 2 (already set: `CMakeLists.txt`, `project(... VERSION 2.0.0)` and `SOVERSION 2`) |
 | Freeze | not yet; the API freeze waits on G1 and the decisions in section 8 |
 | Candidate commit | **none yet**. The RC is recorded here as a full SHA when it is cut (section 7) |
-| Reference commit for this revision | master `345d0c6` (2026-10-18) |
+| Reference commit for this revision | master `b0fb0ef` (2026-10-18); GitHub issues, PRs and milestones 3/7 scouted the same day (section 6) |
 | Last observed CI on master | `e69c8ad` (#561): linux, macOS, Windows, Conan, CodeQL and benchmark workflows all passed; `345d0c6` changed only `docs/` and ran the format check alone |
 
 "Configured" below means a CI job exists; "observed" means a passing run on a named
@@ -38,7 +38,8 @@ commit. Only observed runs on the candidate commit count for signoff.
 
 Not in scope, and not release conditions: the rest of 0117 and every other performance
 follow-up, 100% of a corpus that keeps growing, a sandbox, configurable resource limits,
-big integers, a Boost-free build. Each of these keeps its own task.
+big integers, a Bazel module. Each of these keeps its own task. A Boost-free core (0230)
+is wanted before the RC but does not block the tag (D17).
 
 ### Supported platforms (configured)
 
@@ -60,19 +61,22 @@ tag; **A** = accepted for 2.0, tracked, does not block.
 
 | Gate | What must hold | Tasks | Owner | B/A | Evidence |
 |---|---|---|---|---|---|
-| G1 API/ABI freeze | Inline namespace `v2` in every public header, `fwd.h`, no leaked macros or vendored names; `nm` shows `jinja2::v2::`; a consumer built against 1.3.2 headers fails to link against 2.0 (static and shared); decisions D1-D6 recorded | [0076](tasks/0076-abi-namespace-and-headers.md) | 0076 thread (running) | B | 0076's tests in CI; negative link check |
+| G1 API/ABI freeze | Inline namespace `v2` in every public header, `fwd.h`, no leaked macros or vendored names; `nm` shows `jinja2::v2::`; a consumer built against 1.3.2 headers fails to link against 2.0 (static and shared); decisions D1-D6 and D16 recorded | [0076](tasks/0076-abi-namespace-and-headers.md) | 0076 thread (running) | B | 0076's tests in CI; negative link check |
 | G2 Known correctness defects | `*context` callable binds positional args; self-referencing namespace/dict/list does not leak under LSan; unsigned above `INT64_MAX` renders the value or fails loudly | [0183](tasks/0183-context-callable-positional-arg.md), [0110](tasks/0110-namespace-self-reference-leak.md), [0172](tasks/0172-value-unsigned-overflow.md) | one thread each (started 2026-10-18) | B | their unit rows; sanitizer jobs with `detect_leaks=1` |
 | G3 Embedding and trust contract | Lifetime/cache/callback scenarios pass under ASan/UBSan/LSan and TSan; `docs/security.md` states the trust model, what `RealFileSystem` does with `../` and absolute names, the fixed caps, and a reporting contact | [0223](tasks/0223-embedding-lifecycle-integration-tests.md), [0224](tasks/0224-template-trust-and-loader-boundary.md) | unassigned | B | sanitizer jobs; 0224's disposable-file probes |
 | G4 Migration | `MIGRATION.md` covers renames and behaviour changes with before/after; the migration script rewrites our 1.x-style tests warning-free in CI; a 1.3.2 consumer fixture upgrades against the installed RC | [0077](tasks/0077-migration-script.md), [0222](tasks/0222-downstream-1x-migration-trial.md) | unassigned (after G1) | B | CI job of 0077 and 0222 |
 | G5 Distribution | License conclusion recorded and LICENSE/notices installed; the source archive builds with tests off in a clean directory and a separate consumer uses it via `find_package` and pkg-config; Conan recipe validated with an installed-package consumer | [0226](tasks/0226-license-metadata-and-distribution.md), [0225](tasks/0225-release-artifact-consumer-gate.md), [0006](tasks/0006-conan-ci-and-releases.md) | unassigned | B (ConanCenter publication: A, D8) | 0225's check output with archive hash; Conan consumer job |
-| G6 Docs and examples | README, `MIGRATION.md` and the versioned 2.0 site agree on C++17, CMake ≥ 3.23 and dependencies; every advertised snippet and example builds against the RC; historical repositories labeled | [0227](tasks/0227-supported-docs-and-example-surface.md) (+ README via 0077) | unassigned | B | `docs/project-support.md` validation table |
-| G7 Parity | The corpus passes on the candidate with no `crash` and no `unsupported` entries; every remaining divergence line names an open task or is `deliberate:`; the accepted list (section 5) is current | — | merge steward | B | `ctest -R parity`; `parity-expectations` workflow |
+| G6 Docs and examples | README, `MIGRATION.md` and the versioned 2.0 site agree on C++17, CMake ≥ 3.23 and dependencies; every advertised snippet and example builds against the RC; historical repositories labeled. The website (jinja2cpp.github.io) builds from pinned versions in CI, serves 1.x and 2.x side by side, has a CI-generated 2.0 API reference, and no 2.x page contradicts `docs/parity.md` | [0227](tasks/0227-supported-docs-and-example-surface.md) (+ README via 0077), [0239](tasks/0239-site-build-and-deploy.md), [0240](tasks/0240-site-versioned-docs.md), [0241](tasks/0241-api-reference-in-ci.md), [0242](tasks/0242-site-content-refresh.md) | unassigned | B (new reference pages 0243: A, D18) | `docs/project-support.md` validation table; site CI build, link check and snippet compile on the RC tag |
+| G7 Parity | The corpus passes on the candidate with no `crash` and no `unsupported` entries; every remaining divergence line names an open task or is `deliberate:`; every ❌/🟡 feature row of `docs/parity.md` cites an open task; the accepted list (section 5) is current | [0235](tasks/0235-parity-feature-rows-drift.md) | merge steward | B | `ctest -R parity`; `parity-expectations` workflow |
 | G8 Robustness | Full CI green incl. sanitizer jobs; the nightly fuzz workflow passes on the candidate (dispatch it); `fuzz/regressions/` replays clean | — | merge steward | B | observed runs on the candidate |
 | G9 Performance | The benchmark workflow passes against the previous master (no regression past its gate). No further gains required | — | perf track | B | `benchmark.yml` run on the candidate |
 | G10 Inventory | `scripts/sbom.py --check` and `scripts/task_index.py --check` pass; the dependency inventory matches what the release installs | [0187](tasks/0187-generated-data-acquisition.md) (SBOM stays there) | merge steward | B | format-check job |
+| G11 Tracker | Every open GitHub issue names an open task or is closed with a pointer to its fix; milestones 1.2 and 1.3 closed; external PRs #284, #199, #197 resolved | [0234](tasks/0234-github-tracker-cleanup.md) | unassigned | B | issue list on the RC date |
 
 Dependency order: G1 → G4 (0077 → 0222); 0226 → 0225; 0227 alongside 0077. G2, G3 and
-G5's 0226 can start now.
+G5's 0226 can start now. 0230 (Boost-free core) goes before G5's validation where it can,
+so that 0226, 0225 and 0006 validate the package once (D17). Website: 0239 → 0240 →
+0241, 0242.
 
 ## 4. Compatibility promises
 
@@ -119,6 +123,9 @@ object), 0213, 0049, 0220, 0211, 0215, 0178 (2 non-deliberate), 0036, 0203, 0209
   0098); 0224 documents the containment a host must provide.
 - No Markup flag on host values (0180), no per-template-name autoescape (0181).
 - `Template::Load`/`Render` are not `[[nodiscard]]` (0080, D6).
+- No template introspection (`meta.find_undeclared_variables`, `Template.module`, 0236), no
+  Python bindings (0237), no Bazel module (0245, D15), no browser playground (0244).
+- An installed MSVC static Debug library lacks usable debug information (0238).
 - Python-version-dependent behaviour (Unicode tables, Jinja2 3.1.6 quirks) follows the
   pinned oracle pair (D7).
 
@@ -135,8 +142,23 @@ object), 0213, 0049, 0220, 0211, 0215, 0178 (2 non-deliberate), 0036, 0203, 0209
 - Boost.Multiprecision supports `BOOST_MP_STANDALONE` (its README: the only dependency is
   Boost.Config, both header-only), checked in the fetched Boost tree; relevant to D3.
 
+- **GitHub scout (2026-10-18, master `b0fb0ef`).** All 49 open issues, the external PRs and
+  milestones 3 ("Release 1.2") and 7 ("Release 1.3") were checked against the backlog, with
+  each repro run on master and Python Jinja2 3.1.6 as the oracle. About 35 issues are fixed
+  on master and only wait to be closed (0234). Uncovered findings were filed as 0233
+  (C++-only filters registered but empty, #41), 0234 (tracker), 0235 (stale parity.md rows),
+  0236 (introspection), 0237 (Python bindings, #256), 0238 (MSVC debug info, #224). Both
+  milestones are delivered by master except `flip` (obsolete: Jinja2 has no such filter),
+  the vcpkg port (0006) and the C++-only filters (0233).
+- **Website scout (same day, site master `dccc3f0`).** Classic Pages build on an unpinned
+  remote theme, no CI, a hand-made 1.0 Doxygen tree from 2019, a compatibility page that
+  contradicts parity.md, examples that no longer compile (`reflection.md`). Filed as
+  0239-0244; 0227 and 0077 keep the support policy, build guide and migration text.
+
 ## 7. RC procedure
 
+0. **Tracker.** Run 0234 on the candidate: close fixed issues with pointers to their
+   fixes, after Ruslan approves the list.
 1. **Freeze.** When G1-G6 are done and section 8 is decided, the steward picks a master
    commit, records its full SHA in section 1 and opens the validation window. From then
    on master takes only fixes for blocking findings; other merges wait.
@@ -176,7 +198,7 @@ Ruslan picks another. Answers are recorded here and in the linked task.
 |---|---|---|---|---|
 | D1 | `Value(uint64_t)` above `INT64_MAX` (0172) | a) throw from `Value`/`Reflect`; b) store as `double`; c) a `uint64_t` alternative | **a** | Loud and cheap; leaves room for 0178 to later turn the throw into a big integer without a source break. b loses precision silently, c costs every evaluator path |
 | D2 | Big integers in 2.0 (0178) | a) defer past 2.0; b) in 2.0 | **a** | Value-model work needing an architect plan; 0015's int64 behaviour is documented as deliberate |
-| D3 | 0178 (Boost.Multiprecision `cpp_int`) against 0230 (Boost-free core) | a) both stand: `cpp_int` in standalone mode (`BOOST_MP_STANDALONE`, header-only, Config only) as a private, non-installed dependency, and 0230's Done reads "no Boost libraries and no Boost in the public interface or installed package"; b) an internal big-integer type; c) drop big integers | **a** | The contradiction is about linked and installed Boost, which standalone header-only use in `src/` does not bring back; b is a correctness-critical reimplementation; c gives up parity for packaging. Neither task blocks 2.0 |
+| D3 | 0178 (big integers) against 0230 (Boost-free core) | *Decided by Ruslan 2026-10-18:* a big-integer backend interface. The default build has none (int64, overflow raises); an optional compile-time backend over Boost.Multiprecision `cpp_int` is the sample implementation; users may supply their own | — | Keeps the core Boost-free and makes big integers opt-in; the architect plan in 0178 decides compile-time against run-time backends |
 | D4 | Markup on host values (0180) | a) defer, later as an additive change with a SOVERSION bump; b) in 2.0 | **a** | A new `Value` alternative breaks users' exhaustive visitors; better designed once than rushed into the freeze |
 | D5 | When deprecated v1 names are removed | a) kept for all of 2.x, removed in 3.0; b) removed in a 2.x minor | **a** | Matches the source promise of section 4 |
 | D6 | `[[nodiscard]]` on `Template::Load`/`Render` (0080) | a) in 2.0; b) later | **a** | Adding it later is a new warning, an error under `-Werror`; 2.0 already breaks source, so this is the cheap moment |
@@ -188,3 +210,7 @@ Ruslan picks another. Answers are recorded here and in the linked task.
 | D12 | Resource and recursion limits (0097, 0098) and `select_autoescape` (0181) | a) defer; additive `Settings` fields in 2.x with SOVERSION bumps; b) in 2.0 | **a** | Fixed caps exist; 0224 documents host-side containment. The SOVERSION policy is made for exactly these additions |
 | D13 | Non-string mapping keys in the public API (0036) | a) public `ValuesMap` keys stay `std::string` for 2.x; non-string keys only inside templates if 0036 lands; b) decide the public key type now | **a** | Changing the public key type later is a source break; keeping strings is the stable promise |
 | D14 | 1.3.2 consumer for 0222 | a) a self-contained fixture in `test/migration/`; b) a real downstream project | **a** | Needs no owner's consent and runs in CI; b can follow |
+| D15 | Bazel module (0245) as a 2.0 condition | a) a 2.0.x release, after 0230; b) blocks 2.0 | **a** | Each dependency needs a BCR module or pinned archive; with Boost gone that is fmt, nlohmann, expected-lite. Adding a build route later breaks nobody |
+| D16 | C++-only filters that do nothing (0233) | a) remove `camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml` for 2.0 (unknown-filter Load error), re-add any as a 2.x feature; b) implement them for 2.0 | **a** | Removing is a 2.0 break that is cheap now and free later to undo; implementing YAML/XML output well is real work nobody has asked for since 2019 |
+| D17 | Boost-free core (0230) | a) wanted before the RC, starts now with its architect plan, does not block the tag; b) blocks 2.0; c) after 2.0 | **a** | Ruslan asked for it to simplify distribution; removing a dependency later breaks nobody, but doing it first saves validating the package twice |
+| D18 | Website reference pages (0243) | a) after the tag, in 2.0.x; b) block 2.0 | **a** | The blocking site work (0239-0242) already gives a correct, versioned 2.0 site; new pages add, they don't correct |
