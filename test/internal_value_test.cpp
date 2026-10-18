@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <limits>
 #include <optional>
 #include <stdexcept>
@@ -255,9 +256,11 @@ TEST(TemplateDictTest, KeyTokensFollowPythonEquality)
     EXPECT_EQ(token(tuple({ tuple({ one }), InternalValue(std::string("a")) })), token(tuple({ tuple({ InternalValue(1.0) }), InternalValue(std::wstring(L"a")) })));
 
     EXPECT_EQ(token(InternalValue(std::string("a"))), token(InternalValue(std::wstring(L"a"))));
-    EXPECT_EQ(std::string("a"), *token(InternalValue(std::string("a"))));
+    EXPECT_EQ(std::optional<std::string>("a"), token(InternalValue(std::string("a"))));
     // A string that spells the token of the integer 1 is another key
-    EXPECT_NE(token(one), token(InternalValue(*token(one))));
+    const auto oneToken = token(one);
+    ASSERT_TRUE(oneToken.has_value());
+    EXPECT_NE(oneToken, token(InternalValue(oneToken.value_or(std::string()))));
     EXPECT_NE(token(InternalValue(NoneValue{})), token(InternalValue(std::string("N"))));
 
     const auto range = [](int64_t start, int64_t stop, int64_t step) { return InternalValue(ListAdapter::CreateRange(start, stop, step)); };

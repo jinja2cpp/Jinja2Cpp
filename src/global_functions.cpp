@@ -127,6 +127,29 @@ InternalValue CallRange(const CallParams& params, RenderContext&)
     return ListAdapter::CreateRange(start, stop, step);
 }
 
+// One item of dict(pairs) into `result`
+void CollectDictPair(const InternalValue& item, TemplateDict& result)
+{
+    if (const auto* pair = GetIf<KeyValuePair>(&item))
+    {
+        result.Set(pair->key, pair->value);
+        return;
+    }
+    // Any iterable of two items is a pair, a two-character string included
+    bool isConverted = false;
+    auto itemList = ConvertToList(item, isConverted, false);
+    if (!isConverted)
+    {
+        throw std::runtime_error("cannot convert dictionary update sequence element to a sequence");
+    }
+    auto pair = itemList.ToValueList();
+    if (pair.size() != 2)
+    {
+        throw std::runtime_error("dictionary update sequence element has wrong length; 2 is required");
+    }
+    result.Set(pair[0], pair[1]);
+}
+
 // The items of dict(mapping_or_pairs, **kwargs), into `result`
 void CollectDictItems(const CallParams& params, const char* fnName, TemplateDict& result)
 {
@@ -155,24 +178,7 @@ void CollectDictItems(const CallParams& params, const char* fnName, TemplateDict
         {
             for (const auto& item : *list)
             {
-                if (const auto* pair = GetIf<KeyValuePair>(&item))
-                {
-                    result.Set(pair->key, pair->value);
-                    continue;
-                }
-                // Any iterable of two items is a pair, a two-character string included
-                bool isConverted = false;
-                auto itemList = ConvertToList(item, isConverted, false);
-                if (!isConverted)
-                {
-                    throw std::runtime_error("cannot convert dictionary update sequence element to a sequence");
-                }
-                auto pair = itemList.ToValueList();
-                if (pair.size() != 2)
-                {
-                    throw std::runtime_error("dictionary update sequence element has wrong length; 2 is required");
-                }
-                result.Set(pair[0], pair[1]);
+                CollectDictPair(item, result);
             }
         }
         else if (!IsEmpty(source))

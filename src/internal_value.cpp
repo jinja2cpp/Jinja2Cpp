@@ -1867,7 +1867,7 @@ public:
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
-        auto* val = dynamic_cast<const SharedDictAdapter*>(&other);
+        const auto* val = dynamic_cast<const SharedDictAdapter*>(&other);
         if (!val)
         {
             return false;

@@ -1,19 +1,22 @@
 #include "template_dict.h"
 
+#include "internal_value.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/value.h>
 
 #include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 namespace jinja2
 {
@@ -212,7 +215,7 @@ struct KeyTokenBuilder
 
 private:
     // A tuple item: the length of its token, then the token
-    const char* AddElement(const InternalValue& item) const
+    [[nodiscard]] const char* AddElement(const InternalValue& item) const
     {
         const auto lengthAt = m_out.size();
         AppendBytes(m_out, uint32_t{ 0 });
