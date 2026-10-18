@@ -22,3 +22,7 @@ Full fix: a key type in the value model (a variant of string, integer, bool, Non
 tuple), which touches the public API and is worth doing only together with 0031.
 
 **Done when.** No line of `test/parity/divergences/` names task 0036, and `ctest -R parity` passes.
+
+**Release decision (Ruslan 2026-10-18, D13 in docs/release-2.0.md).** In 2.0, template-internal
+only: the public `ValuesMap` key type stays `std::string` unless the architect plan shows a
+public need.

@@ -24,3 +24,7 @@ the evaluator; would belong with 0072/0140). Needs a decision before implementin
 
 **Done when.** `Value(ULLONG_MAX)` and `Reflect(uint64_t(-1))` either render the Python
 value or fail loudly, with a test row in `test/basic_tests.cpp`.
+
+**Release decision (Ruslan 2026-10-18, D1 in docs/release-2.0.md).** For now `Value`/`Reflect`
+throw above `INT64_MAX`. How the failure is reported may change with the error contract
+(0250), so this task follows 0250.
