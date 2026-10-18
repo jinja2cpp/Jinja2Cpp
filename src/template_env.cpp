@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -22,6 +23,7 @@
 #include <string_view>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 namespace jinja2
 {
@@ -54,15 +56,15 @@ bool operator==(const Settings& lhs, const Settings& rhs)
     // Structured bindings name every field: a field added to Settings or Settings::Extensions stops this compiling
     // until it is compared here too
     const auto& [lTrim, lLstrip, lCacheSize, lAutoReload, lExt, lMetaType, lKeepNl, lNlSeq, lVarStart, lVarEnd, lBlockStart, lBlockEnd, lCommentStart,
-                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lUndefined, lLookup, lCallablesAsFilters] = lhs;
+                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lAutoescapeSelector, lUndefined, lLookup, lCallablesAsFilters] = lhs;
     const auto& [rTrim, rLstrip, rCacheSize, rAutoReload, rExt, rMetaType, rKeepNl, rNlSeq, rVarStart, rVarEnd, rBlockStart, rBlockEnd, rCommentStart,
-                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rUndefined, rLookup, rCallablesAsFilters] = rhs;
+                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rAutoescapeSelector, rUndefined, rLookup, rCallablesAsFilters] = rhs;
     const auto& [lDo, lLoopControls, lI18n] = lExt;
     const auto& [rDo, rLoopControls, rI18n] = rExt;
 
     // The flags and numbers first, then the strings
-    if (std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lKeepNl, lAutoescape, lUndefined, lLookup, lCallablesAsFilters)
-        != std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rKeepNl, rAutoescape, rUndefined, rLookup, rCallablesAsFilters))
+    if (std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lKeepNl, lAutoescape, lAutoescapeSelector, lUndefined, lLookup, lCallablesAsFilters)
+        != std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rKeepNl, rAutoescape, rAutoescapeSelector, rUndefined, rLookup, rCallablesAsFilters))
     {
         return false;
     }
@@ -74,6 +76,43 @@ bool operator==(const Settings& lhs, const Settings& rhs)
     }
     // A default UserCallable still has an identity of its own, so two unset ones are compared by the missing callable
     return lFinalize.callable || rFinalize.callable ? lFinalize.IsEqual(rFinalize) : true;
+}
+
+AutoescapeSelector SelectAutoescape(std::vector<std::string> enabledExtensions, std::vector<std::string> disabledExtensions, bool defaultForString, bool defaultValue)
+{
+    // As Jinja2 does: ".ext", in lower case, matched against the end of the name in lower case
+    auto toSuffixes = [](std::vector<std::string>& extensions) {
+        for (auto& ext : extensions)
+        {
+            ext.erase(0, ext.find_first_not_of('.'));
+            std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+            ext.insert(ext.begin(), '.');
+        }
+    };
+    toSuffixes(enabledExtensions);
+    toSuffixes(disabledExtensions);
+    return [enabled = std::move(enabledExtensions), disabled = std::move(disabledExtensions), defaultForString, defaultValue](const std::string& templateName) {
+        if (templateName.empty())
+        {
+            return defaultForString;
+        }
+        std::string name = templateName;
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        auto endsWithAny = [&name](const std::vector<std::string>& suffixes) {
+            return std::any_of(suffixes.begin(), suffixes.end(), [&name](const std::string& suffix) {
+                return name.size() >= suffix.size() && name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
+            });
+        };
+        if (endsWithAny(enabled))
+        {
+            return true;
+        }
+        if (endsWithAny(disabled))
+        {
+            return false;
+        }
+        return defaultValue;
+    };
 }
 
 namespace detail

@@ -269,6 +269,11 @@ public:
         std::string name = isNamed ? std::move(tplName) : "noname.j2tpl"s;
         NodeArena nodes;
         TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name, nodes);
+        if (const auto& selector = m_settings->settings.autoescapeSelector)
+        {
+            // Jinja2 passes None for a template from a string
+            parser.SetAutoescape(selector(isNamed ? name : std::string()));
+        }
 
         auto parseResult = parser.Parse();
         if (!parseResult)

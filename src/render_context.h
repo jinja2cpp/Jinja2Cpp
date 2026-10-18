@@ -857,7 +857,8 @@ public:
         result.m_templateFrame = m_templateFrame;
         result.m_nodes = m_nodes;
         // A new Context in Jinja2, whose EvalContext starts from the environment's setting
-        // wherever the import or include is
+        // wherever the import or include is; the template it renders sets its own
+        // (TemplateRenderer::RenderBody, ImportedModule::Render)
         result.m_autoescape = m_rendererCallback ? m_rendererCallback->GetSettings().autoescape : false;
         result.m_outputAutoescape = result.m_autoescape;
         result.SetLookupCache(m_lookupCache);
@@ -1453,9 +1454,14 @@ class AutoescapeGuard
 {
 public:
     AutoescapeGuard(RenderContext& context, bool autoescape)
+        : AutoescapeGuard(context, autoescape, autoescape)
+    {
+    }
+    // The runtime and the output modes apart, for a parent template, which keeps its child's runtime mode
+    AutoescapeGuard(RenderContext& context, bool autoescape, bool outputAutoescape)
         : m_context(context)
         , m_prev(context.SetAutoescape(autoescape))
-        , m_prevOutput(context.SetOutputAutoescape(autoescape))
+        , m_prevOutput(context.SetOutputAutoescape(outputAutoescape))
     {
     }
     ~AutoescapeGuard()

@@ -407,6 +407,8 @@ public:
         return nodes.Text(m_name);
     }
     [[nodiscard]] bool IsRequired() const { return m_isRequired; }
+    // Whether the body escapes its output: its template's autoescape setting
+    void SetAutoescape(bool autoescape) { m_autoescape = autoescape; }
 
     void SetMainBody(NodeRef<IRendererBase> renderer)
     {
@@ -423,6 +425,7 @@ private:
     ArenaText m_name;
     bool m_isScoped{};
     bool m_isRequired{};
+    bool m_autoescape{};
     NodeRef<IRendererBase> m_mainBody;
     UnitLayout m_unitLayout;
 };
@@ -508,6 +511,9 @@ public:
     // The blocks the template defines, each name once
     void SetBlocks(ArenaSpan<NodeRef<BlockStatement>> blocks) { m_blocks = blocks; }
     void SetHasExtends() { m_hasExtends = true; }
+    // The template's autoescape setting (Settings::autoescape or autoescapeSelector)
+    void SetAutoescape(bool autoescape) { m_autoescape = autoescape; }
+    [[nodiscard]] bool IsAutoescape() const { return m_autoescape; }
     // The slots a render of the body takes (0117 P1)
     void SetUnitLayout(UnitLayout layout) { m_unitLayout = layout; }
     // Renders the template on its own (for Template::Render and include); `name` is the one
@@ -526,12 +532,13 @@ public:
 
 private:
     // `stack` is null for a template that defines no blocks and extends nothing
-    // `name` is the one `self` prints (TemplateFrame::name)
-    void RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name);
+    // `name` is the one `self` prints (TemplateFrame::name); `asParent` for RenderAsParent
+    void RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name, bool asParent = false);
 
     NodeRef<ComposedRenderer> m_body;
     ArenaSpan<NodeRef<BlockStatement>> m_blocks;
     bool m_hasExtends = false;
+    bool m_autoescape = false;
     UnitLayout m_unitLayout;
 };
 

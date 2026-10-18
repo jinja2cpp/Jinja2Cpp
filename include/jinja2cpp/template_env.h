@@ -13,6 +13,9 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 
@@ -42,6 +45,40 @@ enum class TemplateLookup
     OncePerRender, //!< The first use of a name in a render looks it up; later uses in the same render reuse it
     EveryUse,      //!< Every use looks it up, as Jinja2 does: with autoReload a template changed during a render is seen by its next use
 };
+
+//! Chooses whether a template escapes its output from the template's name (Jinja2 `autoescape` given a callable, usually
+//! `select_autoescape`). The name is the one the template is loaded with, empty for a template loaded from a string without one.
+//! Copies share the callable and compare equal; selectors made apart compare unequal, whatever they call
+class AutoescapeSelector
+{
+public:
+    using Function = std::function<bool(const std::string& templateName)>;
+
+    AutoescapeSelector() = default;
+    template<typename Fn, typename = std::enable_if_t<std::is_invocable_r_v<bool, const Fn&, const std::string&>>>
+    AutoescapeSelector(Fn fn) // NOLINT(google-explicit-constructor): assigned from a lambda, as Jinja2 takes a callable
+        : m_fn(std::make_shared<const Function>(std::move(fn)))
+    {
+    }
+
+    //! Whether a callable is set
+    explicit operator bool() const { return m_fn && *m_fn; }
+    bool operator()(const std::string& templateName) const { return (*m_fn)(templateName); }
+
+    friend bool operator==(const AutoescapeSelector& lhs, const AutoescapeSelector& rhs) { return lhs.m_fn == rhs.m_fn; }
+    friend bool operator!=(const AutoescapeSelector& lhs, const AutoescapeSelector& rhs) { return !(lhs == rhs); }
+
+private:
+    std::shared_ptr<const Function> m_fn;
+};
+
+//! Jinja2 `select_autoescape`: a template whose name ends with `.` and one of `enabledExtensions` escapes, one with one of
+//! `disabledExtensions` does not, ignoring case; any other named template takes `defaultValue`, and a template loaded from a
+//! string without a name `defaultForString`
+JINJA2CPP_EXPORT AutoescapeSelector SelectAutoescape(std::vector<std::string> enabledExtensions = { "html", "htm", "xml" },
+                                                     std::vector<std::string> disabledExtensions = {},
+                                                     bool defaultForString = true,
+                                                     bool defaultValue = false);
 
 //! Global template environment settings
 struct Settings
@@ -90,6 +127,9 @@ struct Settings
     UserCallable finalize;
     //! HTML-escapes the output of every `{{ }}` unless the value is marked safe (Jinja2 `autoescape`, a bool)
     bool autoescape = false;
+    //! When set, decides \ref autoescape for each template by its name instead (Jinja2 `autoescape` given a callable),
+    //! for example `SelectAutoescape({"html", "xml"})`. A template keeps what it was loaded with
+    AutoescapeSelector autoescapeSelector;
     //! How undefined values behave (Jinja2 `undefined`). A failed use reports ErrorCode::UndefinedError
     UndefinedPolicy undefinedPolicy = UndefinedPolicy::Default;
     //! When `include`, `extends` and `import` look up their template in the environment. `OncePerRender` (default) takes the
