@@ -466,27 +466,6 @@
    "output": "|"
   },
   {
-   "id": "fuzz.list_contains_itself",
-   "template": "{% set l = [] %}{% do l.append(l) %}{{ l|length }}",
-   "context": {
-    "x": 3,
-    "t": true,
-    "d": {
-     "C": 3,
-     "a": 1,
-     "b": 2
-    },
-    "s": "abc def"
-   },
-   "env": {
-    "extensions": [
-     "do"
-    ]
-   },
-   "templates": {},
-   "output": "1"
-  },
-  {
    "id": "fuzz.print_dangling_plus",
    "template": "{{ 'a' +}}",
    "context": {

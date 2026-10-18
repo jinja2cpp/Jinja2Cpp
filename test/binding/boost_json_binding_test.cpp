@@ -1,7 +1,9 @@
 #include "../test_tools.h"
 
 #include <jinja2cpp/binding/boost_json.h>
+#include <jinja2cpp/error_info.h>
 #include <jinja2cpp/reflected_value.h>
+#include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
 #include <gtest/gtest.h>
@@ -217,4 +219,17 @@ TEST(BoostJsonAccessorTest, FindAndContains)
     // The 1.x lookup still answers through the 2.0 one
     EXPECT_TRUE(map.GetAccessor()->HasValue("present"));
     EXPECT_TRUE(map.GetAccessor()->GetValueByName("absent").IsNone());
+}
+
+// A JSON unsigned number above INT64_MAX fails the render instead of wrapping (task 0172)
+TEST(BoostJsonUnsignedTest, UnsignedAboveInt64MaxFails)
+{
+    jinja2::Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ json.max }}|{{ json.big }}"));
+    jinja2::ValuesMap params{ { "json", jinja2::Reflect(boost::json::parse(R"({"max": 9223372036854775807, "big": 18446744073709551615})")) } };
+    const auto result = tpl.RenderAsString(params);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(jinja2::ErrorCode::UnexpectedException, result.error().GetCode());
+    ASSERT_TRUE(tpl.Load("{{ json.max }}"));
+    EXPECT_EQ("9223372036854775807", tpl.RenderAsString(params).value());
 }

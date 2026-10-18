@@ -6,10 +6,15 @@
 
 #include <chrono>
 #include <cstddef>
+#include <filesystem>
 #include <fstream>
 #include <map>
+#include <memory>
 #include <optional>
+#include <random>
+#include <sstream>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -564,4 +569,156 @@ TEST_F(FilesystemHandlerTest, TemplateChangedDuringRender)
         // The next render sees the change either way
         EXPECT_EQ("BB", tpl.RenderAsString({}).value());
     }
+}
+
+namespace
+{
+// A scratch tree for RealFileSystem name rules:
+//   <base>/outside.j2, <base>/root/{a.j2, sub/b.j2, dir/}, <base>/root/link.j2 -> ../outside.j2
+class RealFsNamesTest : public FilesystemHandlerTest
+{
+protected:
+    void SetUp() override
+    {
+        namespace fs = std::filesystem;
+        m_base = fs::temp_directory_path() / ("jinja2cpp_names_" + std::to_string(std::random_device{}()));
+        fs::create_directories(m_base / "root" / "sub");
+        fs::create_directories(m_base / "root" / "dir");
+        WriteFile(m_base / "outside.j2", "outside");
+        WriteFile(m_base / "root" / "a.j2", "a");
+        WriteFile(m_base / "root" / "sub" / "b.j2", "b");
+        std::error_code ec;
+        fs::create_symlink(fs::path("..") / "outside.j2", m_base / "root" / "link.j2", ec);
+        m_hasSymlink = !ec;
+        m_root = (m_base / "root").string();
+    }
+
+    void TearDown() override
+    {
+        std::error_code ec;
+        std::filesystem::remove_all(m_base, ec);
+    }
+
+    static void WriteFile(const std::filesystem::path& path, const std::string& content)
+    {
+        std::ofstream os(path);
+        os << content;
+    }
+
+    std::filesystem::path m_base;
+    std::string m_root;
+    bool m_hasSymlink = false;
+};
+} // namespace
+
+// Python Jinja2's FileSystemLoader: a ".." piece is not found, "/" and "." pieces are skipped,
+// only regular files are found
+TEST_F(RealFsNamesTest, NameRules)
+{
+    const std::string outsideAbsolute = (m_base / "outside.j2").generic_string();
+    const std::vector<std::pair<std::string, std::optional<std::string>>> rows = {
+        { "a.j2", "a" },
+        { "./a.j2", "a" },
+        { "/a.j2", "a" },
+        { "sub/b.j2", "b" },
+        { "sub//b.j2", "b" },
+        { "sub/./b.j2", "b" },
+        { "../outside.j2", std::nullopt },
+        { "sub/../a.j2", std::nullopt },
+        { "sub/../../outside.j2", std::nullopt },
+        { "..", std::nullopt },
+        { "..\\outside.j2", std::nullopt },
+        { R"(sub\..\..\outside.j2)", std::nullopt },
+        { outsideAbsolute, std::nullopt },
+        { "", std::nullopt },
+        { ".", std::nullopt },
+        { "sub", std::nullopt },
+        { "dir", std::nullopt },
+        { "missing.j2", std::nullopt },
+        { std::string("a.j2\0", 5), std::nullopt },
+    };
+
+    jinja2::RealFileSystem fs(m_root);
+    for (const auto& [name, expected] : rows)
+    {
+        SCOPED_TRACE("name: '" + name + "'");
+        auto narrow = fs.OpenStream(name);
+        auto bytes = fs.OpenByteStream(name);
+        auto wide = fs.OpenWStream(name);
+        auto modified = fs.GetLastModificationDate(name);
+        EXPECT_EQ(expected.has_value(), static_cast<bool>(narrow));
+        EXPECT_EQ(expected.has_value(), static_cast<bool>(bytes));
+        EXPECT_EQ(expected.has_value(), static_cast<bool>(wide));
+        EXPECT_EQ(expected.has_value(), modified.has_value());
+        if (expected)
+        {
+            EXPECT_EQ(*expected, ReadFile(narrow));
+            EXPECT_EQ(*expected, ReadFile(bytes));
+            EXPECT_EQ(std::wstring(expected->begin(), expected->end()), ReadFile(wide));
+        }
+    }
+}
+
+TEST_F(RealFsNamesTest, FullFilePath)
+{
+    jinja2::RealFileSystem fs(m_root);
+    EXPECT_EQ(m_root + "/a.j2", fs.GetFullFilePath("a.j2"));
+    EXPECT_EQ(m_root + "/sub/b.j2", fs.GetFullFilePath("/sub//./b.j2"));
+    // An absolute name stays under the root (on Windows its drive ':' or '\\' is not allowed)
+#ifdef _WIN32
+    EXPECT_EQ("", fs.GetFullFilePath(m_root + "/a.j2"));
+#else
+    EXPECT_EQ(m_root + m_root + "/a.j2", fs.GetFullFilePath(m_root + "/a.j2"));
+#endif
+    EXPECT_EQ("", fs.GetFullFilePath("../outside.j2"));
+    EXPECT_EQ("", fs.GetFullFilePath("sub/../a.j2"));
+
+    fs.SetRootFolder(m_root + "/");
+    EXPECT_EQ(m_root + "/a.j2", fs.GetFullFilePath("a.j2"));
+    fs.SetRootFolder(std::string());
+    EXPECT_EQ("a.j2", fs.GetFullFilePath("/a.j2"));
+}
+
+TEST_F(RealFsNamesTest, SymlinksAreFollowed)
+{
+    if (!m_hasSymlink)
+    {
+        GTEST_SKIP() << "symbolic links cannot be created here";
+    }
+    // Python's FileSystemLoader follows links, wherever they point
+    jinja2::RealFileSystem fs(m_root);
+    auto stream = fs.OpenStream("link.j2");
+    ASSERT_TRUE(static_cast<bool>(stream));
+    EXPECT_EQ("outside", ReadFile(stream));
+}
+
+TEST_F(RealFsNamesTest, LoadTemplateNotFound)
+{
+    jinja2::TemplateEnv env;
+    env.AddFilesystemHandler("", std::make_shared<jinja2::RealFileSystem>(m_root));
+    EXPECT_EQ("a", env.LoadTemplate("a.j2").value().RenderAsString({}).value());
+
+    for (const std::string name : { "../outside.j2", "sub/../../outside.j2", "missing.j2", "dir" })
+    {
+        SCOPED_TRACE(name);
+        auto result = env.LoadTemplate(name);
+        ASSERT_FALSE(result);
+        EXPECT_EQ(jinja2::ErrorCode::FileNotFound, result.error().GetCode());
+        std::ostringstream os;
+        os << result.error();
+        EXPECT_EQ(std::string::npos, os.str().find(m_base.string()));
+        EXPECT_EQ(std::string::npos, os.str().find(m_base.generic_string()));
+    }
+}
+
+TEST_F(RealFsNamesTest, CachedTemplateWithRemovedFile)
+{
+    jinja2::TemplateEnv env;
+    env.GetSettings().autoReload = true;
+    env.AddFilesystemHandler("", std::make_shared<jinja2::RealFileSystem>(m_root));
+    EXPECT_EQ("a", env.LoadTemplate("a.j2").value().RenderAsString({}).value());
+
+    std::filesystem::remove(m_base / "root" / "a.j2");
+    // The modification date is unknown now: the cached template is kept, nothing throws
+    EXPECT_EQ("a", env.LoadTemplate("a.j2").value().RenderAsString({}).value());
 }

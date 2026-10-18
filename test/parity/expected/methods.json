@@ -1550,6 +1550,106 @@
    "output": "[1]"
   },
   {
+   "id": "methods.list_contains_itself",
+   "template": "{% set l = [1] %}{% do l.append(l) %}{{ l }}|{{ l|length }}|{{ l[1][1][0] }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[1, [...]]|2|1"
+  },
+  {
+   "id": "methods.list_contains_itself_in_tuple",
+   "template": "{% set l = [1] %}{% do l.append((l,)) %}{{ l }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[1, ([...],)]"
+  },
+  {
+   "id": "methods.dict_contains_itself",
+   "template": "{% set d = {} %}{% do d.update(x=d) %}{% do d.setdefault('y', [d]) %}{{ d }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{'x': {...}, 'y': [{...}]}"
+  },
+  {
+   "id": "methods.list_contains_its_bound_method",
+   "template": "{% set l = [] %}{% do l.append(l.append) %}{{ l|length }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "1"
+  },
+  {
    "id": "methods.list_append_in_macro",
    "template": "{% macro add(acc) %}{% do acc.append(1) %}{% endmacro %}{% set x = [] %}{{ add(x) }}{{ x }}",
    "context": {

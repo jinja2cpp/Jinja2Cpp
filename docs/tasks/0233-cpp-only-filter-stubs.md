@@ -27,7 +27,10 @@ and the `startsWith` test work and stay.
 `test/filters_test.cpp`, or fails Load with `UnknownFilter`; `docs/parity.md` and the 2.0
 migration notes (0077) say which.
 
-**Outcome.** Ruslan chose D16 a (2026-10-18). `camelize(upper_first=true)`, `underscorize`,
+**Release decision (Ruslan 2026-10-18, D16 in docs/release-2.0.md).** Implement `camelize`,
+`underscorize`, `escapecpp` and `toyaml` with documented output; remove `toxml`.
+
+**Outcome.** `camelize(upper_first=true)`, `underscorize`,
 `escapecpp` and `toyaml` render the output documented in `docs/cpp-only-filters.md`, with
 rows in `test/filters_test.cpp`; `toxml` is removed and fails Load with `UnknownFilter`
 (corpus case `filters.unknown_filter_toxml`). Release note: `docs/api-2.0.md` 5.7, for

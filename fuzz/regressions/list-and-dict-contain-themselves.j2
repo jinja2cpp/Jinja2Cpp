@@ -1,0 +1,1 @@
+{% set l = [1] %}{% do l.append(l) %}{% set d = {} %}{% do d.update(x=d, l=l) %}{% do l.append(d) %}{{ l }}{{ d }}

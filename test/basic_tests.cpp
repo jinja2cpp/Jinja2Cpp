@@ -16,6 +16,8 @@
 #include <cstring>
 #include <iostream>
 #include <iterator>
+#include <limits>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -991,6 +993,34 @@ TEST(BasicTests, ValueFromIntegralTypesStoresInt)
     Template tpl;
     ASSERT_TRUE(tpl.Load("{{ u }} {{ s }} {{ u + 1 }} {{ n is none }}"));
     EXPECT_EQ("5 5 6 True", tpl.RenderAsString({ { "u", 5u }, { "s", static_cast<size_t>(5) }, { "n", nullptr } }).value());
+}
+
+static_assert(std::is_nothrow_constructible_v<Value, int64_t>);
+static_assert(std::is_nothrow_constructible_v<Value, uint32_t>);
+static_assert(!std::is_nothrow_constructible_v<Value, uint64_t>);
+
+// An unsigned value above INT64_MAX throws instead of wrapping to a negative int64_t (task 0172)
+TEST(BasicTests, ValueFromUnsignedAboveInt64MaxThrows)
+{
+    constexpr auto int64Max = std::numeric_limits<int64_t>::max();
+    constexpr auto above = static_cast<uint64_t>(int64Max) + 1;
+
+    EXPECT_EQ(int64Max, Value(static_cast<uint64_t>(int64Max)).AsInt());
+    EXPECT_EQ(int64Max, Reflect(static_cast<uint64_t>(int64Max)).AsInt());
+    EXPECT_THROW(Value{ std::numeric_limits<unsigned long long>::max() }, std::overflow_error);
+    EXPECT_THROW(Value{ above }, std::overflow_error);
+    EXPECT_THROW(Value{ static_cast<size_t>(-1) }, std::overflow_error);
+    EXPECT_THROW(Reflect(static_cast<uint64_t>(-1)), std::overflow_error);
+    const uint64_t big = above;
+    EXPECT_THROW(Reflect(&big), std::overflow_error);
+
+    // A lazily reflected item fails the render loudly
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ items[0] }}"));
+    const auto result = tpl.RenderAsString({ { "items", Reflect(std::vector<uint64_t>{ above }) } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode());
+    EXPECT_EQ("9223372036854775807", tpl.RenderAsString({ { "items", Reflect(std::vector<uint64_t>{ static_cast<uint64_t>(int64Max) }) } }).value());
 }
 
 TEST(BasicTests, ValueFromNullptrIsNone)
