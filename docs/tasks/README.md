@@ -298,5 +298,18 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0228](0228-task-number-uniqueness.md) | Two task files can share a number | agents | medium | open |
 | [0229](0229-unused-boost-components.md) | Drop the Boost libraries and includes nothing uses | build | low | open |
 | [0230](0230-boost-free-core.md) | A Boost-free core | build | medium | open |
-| [0231](0231-robin-hood-successor.md) | robin_hood's upstream is archived | perf | low | open |
+| [0231](0231-robin-hood-successor.md) | robin_hood's upstream is archived | perf | high | open |
 | [0232](0232-dependency-pin-drift.md) | Dependency pins disagree across modes and some are mutable | build | low | open |
+| [0233](0233-cpp-only-filter-stubs.md) | C++-only filters `camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml` do nothing | api | medium | open |
+| [0234](0234-github-tracker-cleanup.md) | Close GitHub issues that master already fixes, before 2.0 | release | medium | open |
+| [0235](0235-parity-feature-rows-drift.md) | `docs/parity.md` feature rows contradict master | parity | medium | open |
+| [0236](0236-meta-find-undeclared-variables.md) | Template introspection: `meta.find_undeclared_variables`, `Template.module` | api | low | open |
+| [0237](0237-python-bindings.md) | Python bindings, so Jinja2's own test suite can run against Jinja2C++ | parity | low | open |
+| [0238](0238-msvc-static-debug-info.md) | Installed MSVC static Debug library has no usable debug information | build | low | open |
+| [0239](0239-site-build-and-deploy.md) | Website: pinned build, CI deploy and link check | docs | high | open |
+| [0240](0240-site-versioned-docs.md) | Website: 1.x and 2.x documentation side by side | docs | high | open |
+| [0241](0241-api-reference-in-ci.md) | API reference generated in CI from the library headers | docs | high | open |
+| [0242](0242-site-content-refresh.md) | Website: 2.0 content refresh and compiled snippets | docs | high | open |
+| [0243](0243-site-reference-pages.md) | Website: reference pages for 2.0 features | docs | medium | open |
+| [0244](0244-wasm-playground.md) | A browser playground built with WebAssembly | docs | low | open |
+| [0245](0245-bazel-build.md) | Bazel build and Bazel Central Registry module | release | medium | open |
