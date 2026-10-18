@@ -118,12 +118,15 @@ def load_area(path):
 
 def report():
     """Print the parity metric from expected/ and divergences/; needs no jinja2."""
-    divergences = {}
+    divergences, conditional = {}, {}
     for path in sorted((HERE / "divergences").glob("*.txt")):
         for line in path.read_text(encoding="utf-8").splitlines():
             if line.strip() and not line.startswith("#"):
                 case_id, kind, task = line.split()[:3]
+                kind, _, condition = kind.partition("@")
                 divergences[case_id] = (kind, task)
+                if condition:
+                    conditional[case_id] = (kind, condition, task)
     areas = json.loads((HERE / "expected" / "index.json").read_text(encoding="utf-8"))["areas"]
     kinds = ["output", "rejects", "accepts", "unsupported", "platform", "crash"]
     print("| area | cases | match | " + " | ".join(kinds) + " | tasks |")
@@ -141,6 +144,10 @@ def report():
     print(f"\nWide-only divergences (TemplateW, listed as wide.<id>): {len(wide)}")
     for case_id in wide:
         print(f"- {case_id}: {divergences[case_id][0]}, task {divergences[case_id][1]}")
+    # Counted above as divergences of the default build, which has no optional features.
+    print(f"\nBuild-conditional divergences (counted above; `@no<feature>` ones match in builds with the feature): {len(conditional)}")
+    for case_id, (kind, condition, task) in sorted(conditional.items()):
+        print(f"- {case_id}: {kind}@{condition}, task {task}")
 
 
 def main():
