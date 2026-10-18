@@ -1,17 +1,12 @@
 ---
 status: open
-priority: high
+priority: low
 area: parity
 depends: [0165]
 touches: [src/render_context.h, src/statements.cpp#macro, src/expression_evaluator.cpp#InvokeCallable]
 shares: [src/statements.cpp, src/filters.cpp, src/global_functions.cpp, src/serialize_filters.cpp, src/string_converter_filter.cpp]
 ---
 # Autoescape has a lexical and a runtime side
-
-**Release impact (0212).** The example below can produce less-escaped output than
-the Python oracle. Review it as an escaping correctness candidate before release;
-an accepted parity divergence is not by itself evidence that HTML embedding is safe.
-Keep the trust/autoescape contract aligned with 0215.
 
 **Problem.** Jinja2 decides two things by autoescape, at two different times. Output
 (`{{ }}`) and `~` use the setting compiled into the code where they are written (lexical).

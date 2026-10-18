@@ -9,8 +9,9 @@ shares: [docs/parity.md]
 
 **Problem.** docs/parity.md calls sandboxing inapplicable because templates cannot
 access Python objects. Templates still request CPU/memory, invoke host callables,
-and use loaders. RealFileSystem::GetFullFilePath appends a name to the root; the
-implementation does not establish that the resulting path stays under that root.
+and use loaders. RealFileSystem::GetFullFilePath does `root /= name`: `../` walks
+out of the root, and an absolute name replaces the root entirely (boost::filesystem
+`operator/=`). Nothing checks that the resulting path stays under that root.
 The name "root" can therefore imply confinement the API does not promise.
 
 **Proposal.** Document the supported trust model and resolve the loader policy:

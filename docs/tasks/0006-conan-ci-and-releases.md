@@ -29,7 +29,7 @@ manager get an old version.
 
 **Done when.** The Conan CI job is green and a new release is published to ConanCenter.
 
-**2.0 release acceptance (0212).** Building Jinja2Cpp with dependencies resolved by
+**2.0 release acceptance (0221).** Building Jinja2Cpp with dependencies resolved by
 Conan is not the same as creating and consuming its release package. Validate the
 updated recipe with a separate installed-package consumer and record the recipe PR,
 candidate version and publication status. Cover advertised static/shared and JSON
@@ -37,7 +37,7 @@ binding choices with a representative matrix; the current CI job exercises the
 default Boost binding and static linkage only. Implement the planned pin-alignment
 check, including explicit allowances for ConanCenter's available versions.
 
-Coordinate source-archive checks with 0216 and license metadata/notices with 0217.
+Coordinate source-archive checks with 0225 and license metadata/notices with 0226.
 Confirm whether a maintained vcpkg port exists before promising its update; record
-the supported package-manager routes in 0218. A PR submission or locally created
+the supported package-manager routes in 0227. A PR submission or locally created
 package does not satisfy the published-package part of Done when.

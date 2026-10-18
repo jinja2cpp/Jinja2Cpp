@@ -14,11 +14,12 @@ recorded divergences; it does not establish complete Jinja2 compatibility or saf
 **Proposal.** Write docs/release-2.0.md with a finite release scope, named owners,
 blocking versus accepted findings, and links to reproducible evidence for each gate:
 
-- Finish ABI/header isolation (0076), migration (0077, 0213), distribution (0006,
-  0216), public documentation (0218) and license packaging (0217).
-- Triage the known namespace leak (0110), autoescape-context difference (0179),
-  unsigned overflow (0172) and context-callable binding report (0183) explicitly as
-  release correctness candidates. Reproduce unconfirmed reports before deciding.
+- Finish ABI/header isolation (0076), migration (0077, 0222), distribution (0006,
+  0225), public documentation (0227) and license packaging (0226).
+- Triage the known namespace leak (0110), unsigned overflow (0172) and
+  context-callable binding defect (0183) explicitly as release correctness
+  candidates. Confirm that #556 closed the autoescape-context difference (0179), and
+  decide whether its follow-up for volatile `{% autoescape %}` (0216) blocks release.
 - Settle API-shaping choices before the freeze: host Markup (0180), name-based
   autoescape (0181), resource/recursion limits (0097/0098), and the Python/Jinja2
   compatibility target (0186). An explicit deferral and supported usage contract

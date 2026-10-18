@@ -37,14 +37,14 @@ before the end of an expression is the operator; `+%}` on statements is unchange
 **Done when.** The script migrates a copy of our own 1.x-style tests to warning-free code,
 in CI.
 
-**Release gate (0212).** Cover behavioral changes as well as compiler renames:
+**Release gate (0221).** Cover behavioral changes as well as compiler renames:
 None/undefined, value printing, whitespace, format syntax and macro scoping all
 need before/after examples. Keep current requirements consistent across README
 and the versioned website: C++17, CMake >= 3.23, current dependencies and supported
 compiler versions. Replace the README's find_package(jinja2cpp 1 REQUIRED) and
 historical Conan snippets with commands actually verified against the 2.0 candidate.
-Coordinate the supported repository/example inventory through 0218.
+Coordinate the supported repository/example inventory through 0227.
 
-The external-consumer upgrade trial is tracked separately as 0213. Its failures
+The external-consumer upgrade trial is tracked separately as 0222. Its failures
 feed this task's migration notes/tool; passing the project's own warning-rewrite
 tests alone does not establish a successful downstream upgrade.

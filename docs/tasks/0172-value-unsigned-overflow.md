@@ -7,7 +7,7 @@ touches: [include/jinja2cpp/value.h#Value-constructors, include/jinja2cpp/reflec
 ---
 # Unsigned values above `INT64_MAX` wrap to negative
 
-**Release impact (0212).** This is silent corruption of host-provided data and a
+**Release impact (0221).** This is silent corruption of host-provided data and a
 decision about the public value model being frozen for 2.0. Resolve it independently
 of 0178's full arbitrary-precision integer proposal. A supported failure contract
 is preferable to silently wrapping or introducing undocumented precision loss.

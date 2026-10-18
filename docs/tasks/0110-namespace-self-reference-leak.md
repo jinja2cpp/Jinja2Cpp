@@ -7,7 +7,7 @@ touches: [src/internal_value.cpp, src/statements.cpp#AssignTo]
 ---
 # A namespace that holds itself leaks
 
-**Release impact (0212).** Ordinary template evaluation can retain allocations
+**Release impact (0221).** Ordinary template evaluation can retain allocations
 after the render ends. Treat this as an embedding/lifetime correctness candidate
 for the release gate, not merely a difference in Python garbage collection. The
 zero-crash parity summary does not cover this known leak outside the corpus.

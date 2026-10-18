@@ -2,6 +2,7 @@
 status: open
 priority: high
 area: release
+depends: [0226]
 touches: [scripts/check_release_artifact.py, test/release/]
 shares: [.github/workflows/linux-build.yml, .github/workflows/windows-build.yml, .github/workflows/macos-build.yml]
 ---
@@ -20,10 +21,10 @@ actual published Jinja2Cpp package (0006).
 2. Installs to a scratch prefix and uses a separate consumer through find_package
    and, where supported, pkg-config, reusing test/package rather than duplicating it.
 3. Checks version, public headers, exported definitions, static/shared linkage and
-   required notices (0217). Exercise each advertised dependency mode and JSON binding
+   required notices (0226). Exercise each advertised dependency mode and JSON binding
    with a documented representative matrix, including external/Conan dependencies.
 4. Records the exact archive hash, toolchain, dependency versions and results for RC
-   signoff (0212). Distinguish expected dependency downloads from accidental reliance
+   signoff (0221). Distinguish expected dependency downloads from accidental reliance
    on a checkout, network generation step, or prepopulated cache.
 
 Reuse existing platform CI and package checks. Coordinate Conan recipe publication
