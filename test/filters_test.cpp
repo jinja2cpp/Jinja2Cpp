@@ -294,8 +294,14 @@ INSTANTIATE_TEST_SUITE_P(PPrint, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"10.5 | pprint", "10.5"},
                             InputOutputPair{"intValue | pprint", "3"},
                             InputOutputPair{"stringValue | pprint", "'rain'"},
-                            InputOutputPair{"boolFalseValue | pprint", "false"},
-                            InputOutputPair{"boolTrueValue | pprint", "true"},
+                            InputOutputPair{"boolFalseValue | pprint", "False"},
+                            InputOutputPair{"boolTrueValue | pprint", "True"},
+                            InputOutputPair{"none | pprint", "None"},
+                            InputOutputPair{"[none, true, false] | pprint", "[None, True, False]"},
+                            InputOutputPair{"() | pprint", "()"},
+                            InputOutputPair{"(1,) | pprint", "(1,)"},
+                            InputOutputPair{"(1, (2, 3)) | pprint", "(1, (2, 3))"},
+                            InputOutputPair{"{'a': (none, false)} | dictsort | pprint", "[('a', (None, False))]"},
                             InputOutputPair{"intList | pprint", "[9, 0, 8, 1, 7, 2, 6, 3, 5, 4]"},
                             InputOutputPair{"{'key': 'itemName'} | pprint", "{'key': 'itemName'}"}
                             ));
@@ -322,19 +328,19 @@ grouper: 4
 )"
                                 },
                             InputOutputPair{"testData | groupby('dblValue')", R"(
-grouper: 0
+grouper: 0.0
     {'intValue': 0, 'dblValue': 0.0, 'boolValue': False, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
     {'intValue': 0, 'dblValue': 0.0, 'boolValue': True, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
 grouper: 0.5
     {'intValue': 1, 'dblValue': 0.5, 'boolValue': False, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
     {'intValue': 1, 'dblValue': 0.5, 'boolValue': True, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
-grouper: 1
+grouper: 1.0
     {'intValue': 2, 'dblValue': 1.0, 'boolValue': False, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
     {'intValue': 2, 'dblValue': 1.0, 'boolValue': True, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
 grouper: 1.5
     {'intValue': 3, 'dblValue': 1.5, 'boolValue': False, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
     {'intValue': 3, 'dblValue': 1.5, 'boolValue': True, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
-grouper: 2
+grouper: 2.0
     {'intValue': 4, 'dblValue': 2.0, 'boolValue': False, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
     {'intValue': 4, 'dblValue': 2.0, 'boolValue': True, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
 )"
@@ -358,13 +364,13 @@ grouper: 'test string 4'
 )"
                                 },
                             InputOutputPair{"testData | groupby('boolValue')", R"(
-grouper: false
+grouper: False
     {'intValue': 0, 'dblValue': 0.0, 'boolValue': False, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
     {'intValue': 1, 'dblValue': 0.5, 'boolValue': False, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
     {'intValue': 2, 'dblValue': 1.0, 'boolValue': False, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
     {'intValue': 3, 'dblValue': 1.5, 'boolValue': False, 'strValue': 'test string 3', 'wstrValue': '<wchar_string>'}
     {'intValue': 4, 'dblValue': 2.0, 'boolValue': False, 'strValue': 'test string 4', 'wstrValue': '<wchar_string>'}
-grouper: true
+grouper: True
     {'intValue': 0, 'dblValue': 0.0, 'boolValue': True, 'strValue': 'test string 0', 'wstrValue': '<wchar_string>'}
     {'intValue': 1, 'dblValue': 0.5, 'boolValue': True, 'strValue': 'test string 1', 'wstrValue': '<wchar_string>'}
     {'intValue': 2, 'dblValue': 1.0, 'boolValue': True, 'strValue': 'test string 2', 'wstrValue': '<wchar_string>'}
@@ -377,22 +383,22 @@ grouper: true
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(DictSort, FilterGenericTest, ::testing::Values(
-                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
-                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(by='value') | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
-                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(reverse=true) | pprint", "['Value': 'ItemValue', 'key': 'itemName']"},
-                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(reverse=true, by='value') | pprint", "['Value': 'ItemValue', 'key': 'itemName']"},
-                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(case_sensitive=true) | pprint", "['Value': 'ItemValue', 'key': 'itemName']"},
-                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(case_sensitive=true, reverse=true) | pprint", "['key': 'itemName', 'Value': 'ItemValue']"},
-                            InputOutputPair{"simpleMapValue | dictsort | pprint", "['boolValue': true, 'dblVal': 100.5, 'intVal': 10, 'stringVal': 'string100.5']"},
+                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort | pprint", "[('key', 'itemName'), ('Value', 'ItemValue')]"},
+                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(by='value') | pprint", "[('key', 'itemName'), ('Value', 'ItemValue')]"},
+                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(reverse=true) | pprint", "[('Value', 'ItemValue'), ('key', 'itemName')]"},
+                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(reverse=true, by='value') | pprint", "[('Value', 'ItemValue'), ('key', 'itemName')]"},
+                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(case_sensitive=true) | pprint", "[('Value', 'ItemValue'), ('key', 'itemName')]"},
+                            InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(case_sensitive=true, reverse=true) | pprint", "[('key', 'itemName'), ('Value', 'ItemValue')]"},
+                            InputOutputPair{"simpleMapValue | dictsort | pprint", "[('boolValue', True), ('dblVal', 100.5), ('intVal', 10), ('stringVal', 'string100.5')]"},
     InputOutputPair{
       "reflectedVal | dictsort | pprint",
-      "['basicCallable': <callable>, 'boolValue': false, 'dblValue': 0, 'getInnerStruct': <callable>, 'getInnerStructValue': <callable>, 'innerStruct': "
-      "{'strValue': 'Hello World!'}, 'innerStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+      "[('basicCallable', <callable>), ('boolValue', False), ('dblValue', 0.0), ('getInnerStruct', <callable>), ('getInnerStructValue', <callable>), ('innerStruct', "
+      "{'strValue': 'Hello World!'}), ('innerStructList', [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
       "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-      "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}], 'intEvenValue': 0, 'intValue': 0, 'strValue': 'test string 0', 'strViewValue': 'test "
-      "string 0', 'tmpStructList': [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
+      "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}]), ('intEvenValue', 0), ('intValue', 0), ('strValue', 'test string 0'), ('strViewValue', 'test "
+      "string 0'), ('tmpStructList', [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
       "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-      "{'strValue': 'Hello World!'}], 'wstrValue': 'test string 0', 'wstrViewValue': 'test string 0']" }));
+      "{'strValue': 'Hello World!'}]), ('wstrValue', 'test string 0'), ('wstrViewValue', 'test string 0')]" }));
 // clang-format on
 
 // clang-format off
@@ -625,13 +631,15 @@ INSTANTIATE_TEST_SUITE_P(ListSlice, ListSliceTest, ::testing::Values(
                             ));
 // clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(Striptags, FilterGenericTest, ::testing::Values(
                             InputOutputPair{ "' Hello  World ' | striptags | pprint", "'Hello World'" },
                             InputOutputPair{ "'foo <bar> baz <qux>' | striptags | pprint", "'foo baz'" },
                             InputOutputPair{"'ab&cd&amp;&gt;&lt;efgh' | striptags | pprint", "'ab&cd&><efgh'"},
                             InputOutputPair{"'<em>Foo &amp; Bar</em>' | striptags | pprint", "'Foo & Bar'"},
-                            InputOutputPair{"'&amp;&apos;&gt;&lt;&quot;&#39;\"&#34;' | striptags | pprint", "'&\'><\"\'\"\"'"},
-                            InputOutputPair{"'&#34;&#39;' | striptags | pprint", "'\"\''"}));
+                            InputOutputPair{"'&amp;&apos;&gt;&lt;&quot;&#39;\"&#34;' | striptags | pprint", "'&\\'><\"\\'\"\"'"},
+                            InputOutputPair{"'&#34;&#39;' | striptags | pprint", "'\"\\''"}));
+// clang-format on
 
 
 // clang-format off

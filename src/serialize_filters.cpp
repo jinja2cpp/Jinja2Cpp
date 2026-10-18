@@ -54,22 +54,20 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         std::string str;
         auto os = std::back_inserter(str);
 
-        fmt::format_to(os, "[");
-        bool isFirst = true;
+        // A tuple prints as Python's: (a, b), and (a,) with one item
+        const bool isTuple = list.IsTuple();
+        str += isTuple ? "(" : "[";
+        size_t count = 0;
 
         for (const auto& v : list)
         {
-            if (isFirst)
-            {
-                isFirst = false;
-            }
-            else
+            if (count++ != 0)
             {
                 fmt::format_to(os, ", ");
             }
             fmt::format_to(os, "{}", Print(v, m_context));
         }
-        fmt::format_to(os, "]");
+        str += isTuple ? (count == 1 ? ",)" : ")") : "]";
 
         return str;
     }
@@ -104,7 +102,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
                 fmt::format_to(os, ", ");
             }
 
-            fmt::format_to(os, "'{}': ", k);
+            fmt::format_to(os, "{}: ", Repr(k));
             fmt::format_to(os, "{}", Print(map.GetValueByName(k), m_context));
         }
 
@@ -113,41 +111,50 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         return str;
     }
 
+    // A dictsort or items pair is a (key, value) tuple
     std::string operator()(const KeyValuePair& kwPair) const
     {
         std::string str;
         auto os = std::back_inserter(str);
 
-        fmt::format_to(os, "'{}': ", kwPair.key);
-        fmt::format_to(os, "{}", Print(kwPair.value, m_context));
+        fmt::format_to(os, "({}, ", Repr(kwPair.key));
+        fmt::format_to(os, "{})", Print(kwPair.value, m_context));
 
         return str;
     }
 
-    std::string operator()(const std::string& str) const { return fmt::format("'{}'", str); }
+    // Strings print as their repr: quoted the way Python picks, with escapes
+    template<typename S>
+    static std::string Repr(const S& str)
+    {
+        std::string result;
+        visitors::ValueRenderer<char>(result, true)(str);
+        return result;
+    }
 
-    std::string operator()(const std::string_view& str) const { return fmt::format("'{}'", fmt::basic_string_view<char>(str.data(), str.size())); }
+    std::string operator()(const std::string& str) const { return Repr(str); }
 
-    std::string operator()(const std::wstring& str) const { return fmt::format("'{}'", ConvertString<std::string>(str)); }
+    std::string operator()(const std::string_view& str) const { return Repr(str); }
 
-    std::string operator()(const std::wstring_view& str) const { return fmt::format("'{}'", ConvertString<std::string>(str)); }
+    std::string operator()(const std::wstring& str) const { return Repr(str); }
 
-    std::string operator()(bool val) const { return val ? "true"s : "false"s; }
+    std::string operator()(const std::wstring_view& str) const { return Repr(str); }
 
-    std::string operator()(NoneValue) const { return "none"s; }
+    std::string operator()(bool val) const { return val ? "True"s : "False"s; }
+
+    std::string operator()(NoneValue) const { return "None"s; }
     std::string operator()(const UndefinedValue&) const { return "Undefined"s; }
 
-    std::string operator()(const Callable&) const { return "<callable>"s; }
-
-    std::string operator()(double val) const
+    // A macro prints as its repr; Python's repr of a function names its address
+    std::string operator()(const Callable& callable) const
     {
         std::string str;
-        auto os = std::back_inserter(str);
-
-        fmt::format_to(os, "{:.8g}", val);
-
-        return str;
+        visitors::ValueRenderer<char>(str, true)(callable);
+        return str.empty() ? "<callable>"s : str;
     }
+
+    // Python's float repr: the shortest round-trip form, 1.0 rather than 1
+    std::string operator()(double val) const { return Repr(val); }
 
     std::string operator()(int64_t val) const { return fmt::format("{}", val); }
 

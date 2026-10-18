@@ -2189,6 +2189,23 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
 namespace visitors
 {
 
+namespace
+{
+// The function of a callable converted from a jinja2::UserCallable, which Callable::IsSame
+// reads the identity of
+struct UserCallableBody
+{
+    UserCallable val;
+    std::vector<ArgumentInfo> argsInfo;
+
+    InternalValue operator()(const CallParams& params, RenderContext& context) const
+    {
+        auto ucParams = PrepareUserCallableParams(params, context, argsInfo);
+        return Value2IntValue(val.callable(ucParams));
+    }
+};
+} // namespace
+
 InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const UserCallable& val)
 {
     std::vector<ArgumentInfo> args;
@@ -2199,12 +2216,25 @@ InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const Use
         args.emplace_back(pi.paramName, pi.isMandatory, Value2IntValue(Value(pi.defValue)));
     }
 
-    return InternalValue(Callable(Callable::UserCallable, [val, argsInfo = std::move(args)](const CallParams& params, RenderContext& context) -> InternalValue {
-        auto ucParams = PrepareUserCallableParams(params, context, argsInfo);
-        return Value2IntValue(val.callable(ucParams));
-    }));
+    return InternalValue(Callable(Callable::UserCallable, UserCallableBody{ val, std::move(args) }));
 }
 
 } // namespace visitors
+
+bool Callable::IsSame(const Callable& other) const
+{
+    if (m_callable == other.m_callable)
+    {
+        return true;
+    }
+    // Each lookup of a user callable in the context may convert it anew
+    if (m_kind != UserCallable || other.m_kind != UserCallable || GetType() != Type::Expression || other.GetType() != Type::Expression)
+    {
+        return false;
+    }
+    const auto* left = GetExpressionCallable().target<visitors::UserCallableBody>();
+    const auto* right = other.GetExpressionCallable().target<visitors::UserCallableBody>();
+    return left != nullptr && right != nullptr && left->val.IsEqual(right->val);
+}
 
 } // namespace jinja2

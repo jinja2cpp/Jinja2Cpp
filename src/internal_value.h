@@ -1618,6 +1618,10 @@ public:
         return m_attributes;
     }
 
+    // Python compares functions and macros by identity: the copies of one callable share its
+    // function, and a user callable converted from the same jinja2::UserCallable is the same
+    [[nodiscard]] bool IsSame(const Callable& other) const;
+
 private:
     Kind m_kind;
     std::shared_ptr<const CallableHolder> m_callable;
