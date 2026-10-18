@@ -9,9 +9,9 @@ statements.nested_macro_escapes_its_call output    0165 deliberate: a macro that
 statements.set_unpack_dict_keys        output      0197 tuple assignment from a dict takes the items named like the targets instead of unpacking its keys
 statements.macro_pprint                output      0208 pprint of a macro prints <callable>; Jinja2 prints its repr <Macro 'm'>
 statements.macro_equals_itself         output      0208 a macro is not equal to itself, so unique keeps both copies; Jinja2 compares macros by identity
-statements.loop_iter_list               output      0217 iterating loop yields its attribute names; Jinja2 takes the rest of the loop as (item, loop) pairs
-statements.loop_iter_for                output      0217 iterating loop yields its attribute names; Jinja2 takes the rest of the loop as (item, loop) pairs
-statements.loop_dictsort                accepts     0217 dictsort reads the loop's attributes as a mapping; Jinja2's LoopContext has no items()
-statements.loop_pprint                  output      0217 pprint prints the loop's attribute map and loop.cycle|string nothing; Jinja2 prints <LoopContext 1/2> and the bound method
-statements.call_star_args               rejects     0218 *args in a call is a Load error; Jinja2 unpacks it into positional arguments
-statements.call_star_kwargs             rejects     0218 **kwargs in a call is a Load error; Jinja2 unpacks it into keyword arguments
+statements.loop_iter_list               output      0219 iterating loop yields its attribute names; Jinja2 takes the rest of the loop as (item, loop) pairs
+statements.loop_iter_for                output      0219 iterating loop yields its attribute names; Jinja2 takes the rest of the loop as (item, loop) pairs
+statements.loop_dictsort                accepts     0219 dictsort reads the loop's attributes as a mapping; Jinja2's LoopContext has no items()
+statements.loop_pprint                  output      0219 pprint prints the loop's attribute map and loop.cycle|string nothing; Jinja2 prints <LoopContext 1/2> and the bound method
+statements.call_star_args               rejects     0220 *args in a call is a Load error; Jinja2 unpacks it into positional arguments
+statements.call_star_kwargs             rejects     0220 **kwargs in a call is a Load error; Jinja2 unpacks it into keyword arguments

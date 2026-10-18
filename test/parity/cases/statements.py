@@ -265,12 +265,12 @@ CASES = [
     ("loop_repr", "{% for x in [1, 2] %}{{ loop }}|{{ loop|string }}|{{ [loop] }};{% endfor %}"),
     ("loop_repr_recursive", "{% for x in [[1], 2] recursive %}{{ loop }}{% if x is iterable %}{{ loop(x) }}{% endif %}{% endfor %}"),
     ("loop_iterable", "{% for x in [1] %}{{ 'T' if loop is iterable else 'F' }}{{ 'T' if loop is sequence else 'F' }}{% endfor %}"),
-    # Iterating the loop object takes the rest of the loop's items (0217)
+    # Iterating the loop object takes the rest of the loop's items (0219)
     ("loop_iter_list", "{% for x in [1, 2, 3] %}{{ loop|list }};{% endfor %}"),
     ("loop_iter_for", "{% for x in [1, 2, 3] %}{% for y in loop %}{{ y[0] }}{% endfor %};{% endfor %}"),
     ("loop_dictsort", "{% for x in [1] %}{{ loop|dictsort }}{% endfor %}"),
     ("loop_pprint", "{% for x in [1, 2] %}{{ loop|pprint }}|{{ loop.cycle|string }};{% endfor %}"),
-    # Argument unpacking in calls (0218)
+    # Argument unpacking in calls (0220)
     ("call_star_args", "{{ range(*[1, 3])|list }}"),
     ("call_star_kwargs", "{% macro m(a, b) %}{{ a }}{{ b }}{% endmacro %}{{ m(**{'a': 1, 'b': 2}) }}"),
     # Loop names in slots (0117 P1): each pins what the Load-time resolver must keep

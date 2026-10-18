@@ -20,4 +20,4 @@ non-iterable `*` value, a non-mapping `**` value and a keyword given twice. The 
 that read `posParams` directly (`LoopAttrExpression::TryCallCycle`, the method calls) must
 see the spliced arguments or step aside.
 
-**Done when.** No line of `test/parity/divergences/` names 0218.
+**Done when.** No line of `test/parity/divergences/` names 0220.
