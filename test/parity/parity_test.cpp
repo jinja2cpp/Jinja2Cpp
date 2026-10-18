@@ -296,12 +296,17 @@ jinja2::Value ToValue(const Json& j)
 std::string StrOf(const jinja2::Value& v)
 {
     const auto& data = v.GetData();
-    if (const auto* s = std::get_if<std::string>(&data))
+    // GetIf accepts a Markup as the string it is (docs/tasks/0180); the variant does not
+    if (const auto* s = v.GetIf<std::string>())
+    {
         return *s;
+    }
     if (const auto* s = std::get_if<std::string_view>(&data))
         return std::string(s->begin(), s->end());
-    if (const auto* s = std::get_if<std::wstring>(&data))
+    if (const auto* s = v.GetIf<std::wstring>())
+    {
         return WideToUtf8(*s);
+    }
     if (const auto* s = std::get_if<std::wstring_view>(&data))
         return WideToUtf8(std::wstring(s->begin(), s->end()));
     if (const auto* i = std::get_if<int64_t>(&data))
