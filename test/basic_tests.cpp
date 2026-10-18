@@ -1021,6 +1021,9 @@ TEST(BasicTests, ValueFromUnsignedAboveInt64MaxIsBigInt)
     const uint64_t big = above;
     EXPECT_EQ("9223372036854775808", Reflect(&big).AsBigInt().ToString());
 
+    // Inside a list or map it goes through the template renderer, which holds big integers only with task 0270
+    EXPECT_THROW((void)Value(ValuesList{ max }).ToString(), std::overflow_error);
+
     char buffer[32] = {};
     const auto [end, ec] = max.ToChars(std::begin(buffer), std::end(buffer));
     EXPECT_EQ(std::errc(), ec);

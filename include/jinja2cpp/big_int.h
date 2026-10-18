@@ -43,10 +43,19 @@ public:
     template<typename I, std::enable_if_t<detail::IsBigIntSource<I>>* = nullptr>
     explicit BigInt(I value)
     {
-        using Unsigned = std::make_unsigned_t<I>;
-        const bool negative = value < I(0);
-        // Negating in the unsigned type is exact for the most negative value too
-        Unsigned magnitude = negative ? static_cast<Unsigned>(Unsigned(0) - static_cast<Unsigned>(value)) : static_cast<Unsigned>(value);
+        // Digits are taken in a type no narrower than 64 bits, so that no step narrows through int
+        using Unsigned = std::conditional_t<(sizeof(I) > sizeof(uint64_t)), std::make_unsigned_t<I>, uint64_t>;
+        bool negative = false;
+        Unsigned magnitude = static_cast<Unsigned>(value);
+        if constexpr (std::is_signed_v<I>)
+        {
+            negative = value < 0;
+            // Negating in the unsigned type is exact for the most negative value too
+            if (negative)
+            {
+                magnitude = Unsigned(0) - magnitude;
+            }
+        }
         // 40 digits hold any 128-bit value
         char buffer[48];
         char* end = std::end(buffer);
