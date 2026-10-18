@@ -114,6 +114,16 @@ From api-2.0.md 5.3-5.4, stated as the contract users get:
 - **Behaviour.** Template output may change in minor releases where it moves towards
   the oracle; such changes are listed in the release notes. Deliberate divergences
   (section 5) change only by a decision recorded in their task.
+- **Markup values (0180).** `Value::ValueData` gained the alternatives `jinja2::Markup` and
+  `jinja2::WMarkup` (`std::string`/`std::wstring` subclasses, `include/jinja2cpp/markup.h`),
+  appended at indices 13 and 14; `sizeof(Value)` is unchanged. `IsString()`, `AsString()`,
+  `As<std::string>()` and `GetIf<std::string>()` accept a Markup, but code that visits
+  the raw variant (`std::visit(..., v.GetData())`, `std::get<std::string>`,
+  `std::holds_alternative<std::string>`) sees a Markup as its own alternative: a visitor
+  with a generic overload now receives it there, and one without an overload for it no
+  longer compiles. Host `==` compares structurally (`Value(Markup("a")) != Value("a")`);
+  templates still compare the text. Operations on a Markup (`+`, `substr`) return plain
+  strings.
 - **Dependencies in the interface.** `Result<T>` stays `nonstd::expected` (pinned) for
   all of 2.x; moving to `std::expected` needs a C++23 floor and is a 3.0 question.
 
