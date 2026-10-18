@@ -295,7 +295,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0225](0225-release-artifact-consumer-gate.md) | Validate the release source artifact from a clean downstream consumer | release | high | open |
 | [0226](0226-license-metadata-and-distribution.md) | Reconcile package license metadata and ship required notices | release | high | open |
 | [0227](0227-supported-docs-and-example-surface.md) | Choose and verify the documentation and examples supported for 2.0 | release | high | open |
-| [0228](0228-task-number-uniqueness.md) | Two task files can share a number | agents | medium | open |
+| [0228](0228-task-number-uniqueness.md) | Two task files can share a number | agents | medium | done |
 | [0229](0229-unused-boost-components.md) | Drop the Boost libraries and includes nothing uses | build | low | open |
 | [0230](0230-boost-free-core.md) | A Boost-free core | build | medium | open |
 | [0231](0231-robin-hood-successor.md) | robin_hood's upstream is archived | perf | high | open |
@@ -313,3 +313,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0243](0243-site-reference-pages.md) | Website: reference pages for 2.0 features | docs | medium | open |
 | [0244](0244-wasm-playground.md) | A browser playground built with WebAssembly | docs | low | open |
 | [0245](0245-bazel-build.md) | Bazel build and Bazel Central Registry module | release | medium | open |
+| [0246](0246-public-comparison-report.md) | A user-facing benchmark and feature-parity comparison with rival engines | docs | high | open |
+| [0247](0247-rival-benchmark-coverage.md) | Cover the rival engines' own benchmark cases, then close the gaps | perf | high | open |
+| [0248](0248-python-drop-in-replacement.md) | Jinja2C++ as a drop-in replacement for Python Jinja2 in common cases | api | medium | open |
