@@ -192,7 +192,7 @@ private:
     ParseResult<NodeRef<Expression>> ParseSubscript(LexScanner& lexer, NodeRef<Expression> valueRef);
     NodeRef<SubscriptExpression> MakeSubscript(NodeRef<Expression> value, const std::string& attrName);
     ParseResult<NodeRef<IfExpression>> ParseIfExpression(LexScanner& lexer);
-    // Counts one more chained operator; false past MaxExpressionOperators
+    // Counts one more chained operator; false past Settings::Limits::maxExpressionOperators
     bool AddOperator();
     // The filter or test the environment adds under this name, as a callable; undefined if there is none
     [[nodiscard]] InternalValue FindRegisteredFilter(const std::string& name) const;
@@ -205,10 +205,14 @@ private:
     UnknownCallables& m_unknown;
     // Settings::finalize as a callable; undefined if it is not set
     InternalValue m_finalize;
-    // Nesting level of the expression being parsed, bounded by MaxExpressionDepth
+    // Nesting level of the expression being parsed, bounded by Settings::Limits::maxExpressionDepth
     unsigned m_depth = 0;
-    // Operators chained on the current path (a + b + c, x|f|g, a.b.c, - - x), bounded by MaxExpressionOperators
+    // Operators chained on the current path (a + b + c, x|f|g, a.b.c, - - x), bounded by
+    // Settings::Limits::maxExpressionOperators
     unsigned m_operators = 0;
+    // The two limits; UINT_MAX for one that is 0 (the stack check only)
+    unsigned m_maxDepth;
+    unsigned m_maxOperators;
 };
 
 } // namespace jinja2

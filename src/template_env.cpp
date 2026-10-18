@@ -51,18 +51,25 @@ bool IsSameText(const std::string& lhs, const std::string& rhs)
 
 bool operator==(const Settings& lhs, const Settings& rhs)
 {
-    // Structured bindings name every field: a field added to Settings or Settings::Extensions stops this compiling
+    // Structured bindings name every field: a field added to Settings, Settings::Extensions or Settings::Limits stops this compiling
     // until it is compared here too
     const auto& [lTrim, lLstrip, lCacheSize, lAutoReload, lExt, lMetaType, lKeepNl, lNlSeq, lVarStart, lVarEnd, lBlockStart, lBlockEnd, lCommentStart,
-                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lUndefined, lLookup, lCallablesAsFilters] = lhs;
+                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lUndefined, lLookup, lCallablesAsFilters, lLimits] = lhs;
     const auto& [rTrim, rLstrip, rCacheSize, rAutoReload, rExt, rMetaType, rKeepNl, rNlSeq, rVarStart, rVarEnd, rBlockStart, rBlockEnd, rCommentStart,
-                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rUndefined, rLookup, rCallablesAsFilters] = rhs;
+                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rUndefined, rLookup, rCallablesAsFilters, rLimits] = rhs;
     const auto& [lDo, lLoopControls, lI18n] = lExt;
     const auto& [rDo, rLoopControls, rI18n] = rExt;
+    const auto& [lRange, lSequence, lOutput, lTemplateSize, lLoads, lSteps, lTime, lRenderDepth, lExprDepth, lOperators, lBlocks] = lLimits;
+    const auto& [rRange, rSequence, rOutput, rTemplateSize, rLoads, rSteps, rTime, rRenderDepth, rExprDepth, rOperators, rBlocks] = rLimits;
 
     // The flags and numbers first, then the strings
     if (std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lKeepNl, lAutoescape, lUndefined, lLookup, lCallablesAsFilters)
         != std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rKeepNl, rAutoescape, rUndefined, rLookup, rCallablesAsFilters))
+    {
+        return false;
+    }
+    if (std::tie(lRange, lSequence, lOutput, lTemplateSize, lLoads, lSteps, lTime, lRenderDepth, lExprDepth, lOperators, lBlocks)
+        != std::tie(rRange, rSequence, rOutput, rTemplateSize, rLoads, rSteps, rTime, rRenderDepth, rExprDepth, rOperators, rBlocks))
     {
         return false;
     }

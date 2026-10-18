@@ -172,7 +172,7 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
         const auto openBlocks = std::count_if(statementsInfo.begin(), statementsInfo.end(), [](const StatementInfo& info) {
             return info.type != StatementInfo::ElseIfStatement;
         });
-        if (static_cast<std::size_t>(openBlocks) > MaxBlockNesting)
+        if (static_cast<std::size_t>(openBlocks) > LimitOrNone(m_settings.limits.maxBlockNesting))
         {
             return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }
@@ -359,9 +359,10 @@ class AssignTargetParser
 public:
     using Result = nonstd::expected<void, ParseError>;
 
-    AssignTargetParser(LexScanner& lexer, NodeArena& nodes)
+    AssignTargetParser(LexScanner& lexer, NodeArena& nodes, unsigned maxDepth)
         : m_lexer(lexer)
         , m_nodes(nodes)
+        , m_maxDepth(maxDepth)
     {
     }
 
@@ -382,7 +383,7 @@ private:
     Result ParseTarget(bool withNamespace, bool inParens)
     {
         DepthGuard depthGuard(m_depth);
-        if (depthGuard.Exceeds(MaxExpressionDepth) || StackNearlyExhausted())
+        if (depthGuard.Exceeds(m_maxDepth) || StackNearlyExhausted())
         {
             return MakeParseError(ErrorCode::RecursionLimitExceeded, m_lexer.PeekNextToken());
         }
@@ -506,6 +507,7 @@ private:
     boost::container::small_vector<TargetNode, 4> m_targets;
     boost::container::small_vector<HashedName, 4> m_names;
     unsigned m_depth = 0;
+    unsigned m_maxDepth;
     bool m_givePlaces = false;
     bool m_namesLoop = false;
 };
@@ -516,7 +518,7 @@ private:
 // attributes (`ns.attr`)
 nonstd::expected<ParsedTarget, ParseError> StatementsParser::ParseAssignTarget(LexScanner& lexer, bool withNamespace)
 {
-    return AssignTargetParser(lexer, m_nodes).Parse(withNamespace);
+    return AssignTargetParser(lexer, m_nodes, LimitOrNone(m_settings.limits.maxExpressionDepth)).Parse(withNamespace);
 }
 
 // `break` and `continue` belong to the innermost loop of the same function: a macro, call

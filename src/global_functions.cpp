@@ -2,6 +2,7 @@
 #include "internal_value.h"
 #include "markup.h"
 #include "python_format.h"
+#include "recursion_guard.h"
 #include "undefined.h"
 #include "value_visitors.h"
 
@@ -135,6 +136,18 @@ InternalValue CallRange(const CallParams& params, RenderContext&)
     {
         throw std::runtime_error("range() arg 3 must not be zero");
     }
+    // Its length, as Python counts it for the sandbox's MAX_RANGE
+    const auto span = [](int64_t from, int64_t to) { return static_cast<uint64_t>(to) - static_cast<uint64_t>(from); };
+    uint64_t length = 0;
+    if (step > 0 && start < stop)
+    {
+        length = (span(start, stop) - 1) / static_cast<uint64_t>(step) + 1;
+    }
+    else if (step < 0 && start > stop)
+    {
+        length = (span(stop, start) - 1) / (0 - static_cast<uint64_t>(step)) + 1;
+    }
+    CheckRangeSize(length);
 
     return ListAdapter::CreateRange(start, stop, step);
 }

@@ -261,6 +261,19 @@ public:
     // points into its source, so a failed Load keeps the previous source, tree and name together
     std::optional<BasicErrorInfo<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
     {
+        const auto maxSize = m_settings->settings.limits.maxTemplateSize;
+        if (maxSize != 0 && tpl.size() > maxSize)
+        {
+            typename BasicErrorInfo<CharT>::Data errorData;
+            errorData.code = ErrorCode::ResourceLimitExceeded;
+            errorData.srcLoc.col = 1;
+            errorData.srcLoc.line = 1;
+            errorData.srcLoc.fileName = tplName.empty() ? std::string("noname.j2tpl") : tplName;
+            errorData.extraParams.push_back(Value("the template's source of " + std::to_string(tpl.size()) + " characters is longer than "
+                                                  + std::to_string(maxSize)));
+            errorData.extraParams.push_back(Value(std::string("maxTemplateSize")));
+            return BasicErrorInfo<CharT>(errorData);
+        }
         // On the heap, so the tree's pointers into it survive the hand-over to m_template
         auto source = std::make_unique<std::basic_string<CharT>>(std::move(tpl));
         NormalizeTemplateNewlines(*source, m_settings->settings.keepTrailingNewline);
@@ -324,6 +337,8 @@ public:
 
         try
         {
+            // Before anything the render does, the conversion of the params included
+            const RenderLimitsScope limitsScope(m_settings->settings.limits);
             // The tables of the params and the top scope are lent by the thread's workspace and
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;
@@ -368,6 +383,10 @@ public:
             const auto hint = m_outputSizeHint.value.load(std::memory_order_relaxed);
             os.reserve(start + hint);
             OutStream outStream(os);
+            if (const auto maxOutput = m_settings->settings.limits.maxOutputSize; maxOutput != 0)
+            {
+                outStream.LimitTargetSize(maxOutput < SIZE_MAX - start ? start + static_cast<size_t>(maxOutput) : SIZE_MAX - 1);
+            }
             m_nodes[m_renderer].RenderNamed(outStream, context, SelfName());
             outStream.Flush();
             context.TakeTopScope(maps.TopScope());
@@ -397,6 +416,18 @@ public:
             errorData.srcLoc.col = 1;
             errorData.srcLoc.line = 1;
             errorData.srcLoc.fileName = m_templateName;
+
+            return BasicErrorInfo<CharT>(errorData);
+        }
+        catch (const ResourceLimitError& ex)
+        {
+            typename BasicErrorInfo<CharT>::Data errorData;
+            errorData.code = ErrorCode::ResourceLimitExceeded;
+            errorData.srcLoc.col = 1;
+            errorData.srcLoc.line = 1;
+            errorData.srcLoc.fileName = m_templateName;
+            errorData.extraParams.push_back(Value(std::string(ex.what())));
+            errorData.extraParams.push_back(Value(std::string(ex.Field())));
 
             return BasicErrorInfo<CharT>(errorData);
         }
@@ -600,6 +631,7 @@ private:
             auto p = loaded.find(fileName);
             if (p == loaded.end())
             {
+                CountTemplateLoad();
                 auto& entry = loaded.emplace(fileName, LoadedTemplate{ m_host->LoadTemplate(fileName), nullptr }).first->second;
                 entry.latest = &entry.first;
                 return entry.first;
@@ -607,6 +639,7 @@ private:
             auto& entry = p->second;
             if (m_host->m_settings->settings.templateLookup == TemplateLookup::EveryUse)
             {
+                CountTemplateLoad();
                 auto result = m_host->LoadTemplate(fileName);
                 // A reloaded template is kept as a new result: a render may still be running the one it replaces
                 if (!IsSameTemplate(result, *entry.latest))
@@ -641,6 +674,7 @@ private:
             auto name = GetAsSameString(std::string(), fileName);
             if (!name)
             {
+                CountTemplateLoad();
                 return Loaded().replaced.emplace_back(m_host->LoadTemplate(fileName));
             }
             return LoadTemplate(name.value());

@@ -1,7 +1,9 @@
 #include "recursion_guard.h"
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -102,6 +104,104 @@ bool StackNearlyExhaustedSlow(std::uintptr_t frame)
     // A frame below the stack runs on one of its own (a fiber, a coroutine): no check
     return frame >= stack.low && frame < stack.limit;
 }
+
+namespace
+{
+// Steps between two polls of the clock
+constexpr std::uint64_t StepsPerPoll = 1024;
+
+// Starts the next countdown: to the end of the step budget, or to the next clock poll
+void Refill(RenderLimits& limits)
+{
+    std::uint64_t chunk = limits.hasDeadline ? StepsPerPoll : UINT64_MAX;
+    if (limits.maxSteps != 0)
+    {
+        // The step after the last allowed one reaches the slow path, which fails it
+        chunk = std::min(chunk, limits.maxSteps + 1 - limits.stepsTaken);
+    }
+    limits.chunk = chunk;
+    limits.stepsLeft = chunk;
+}
+
+[[noreturn]] void ThrowLimit(const char* field, std::string message)
+{
+    throw ResourceLimitError(field, std::move(message));
+}
+} // namespace
+
+void PollDeadline()
+{
+    const auto& limits = t_renderLimits;
+    if (limits.hasDeadline && std::chrono::steady_clock::now() > limits.deadline)
+    {
+        ThrowLimit("maxRenderTime", "the render took longer than its time limit");
+    }
+}
+
+void StepsSlow()
+{
+    auto& limits = t_renderLimits;
+    limits.stepsTaken += limits.chunk;
+    if (limits.maxSteps != 0 && limits.stepsTaken > limits.maxSteps)
+    {
+        // Every later step fails too
+        limits.chunk = 0;
+        limits.stepsLeft = 1;
+        limits.stepsTaken = limits.maxSteps + 1;
+        ThrowLimit("maxRenderSteps", "the render took more than " + std::to_string(limits.maxSteps) + " steps");
+    }
+    PollDeadline();
+    Refill(limits);
+}
 } // namespace detail
+
+RenderLimitsScope::RenderLimitsScope(const Settings::Limits& limits)
+    : m_saved(detail::t_renderLimits)
+{
+    detail::RenderLimits state;
+    state.maxSteps = limits.maxRenderSteps;
+    if (limits.maxSequenceSize != 0)
+    {
+        state.maxSequenceSize = std::min(state.maxSequenceSize, limits.maxSequenceSize);
+    }
+    if (limits.maxRange != 0)
+    {
+        state.maxRange = limits.maxRange;
+    }
+    if (limits.maxTemplateLoads != 0)
+    {
+        state.loadsLeft = limits.maxTemplateLoads;
+    }
+    state.maxRenderDepth = LimitOrNone(limits.maxRenderDepth);
+    if (limits.maxRenderTime.count() > 0)
+    {
+        state.hasDeadline = true;
+        state.deadline = std::chrono::steady_clock::now() + limits.maxRenderTime;
+    }
+    detail::Refill(state);
+    detail::t_renderLimits = state;
+}
+
+void CountTemplateLoad()
+{
+    auto& limits = detail::t_renderLimits;
+    if (limits.loadsLeft == 0)
+    {
+        detail::ThrowLimit("maxTemplateLoads", "the render loaded more templates than its limit allows");
+    }
+    if (limits.loadsLeft != UINT32_MAX)
+    {
+        --limits.loadsLeft;
+    }
+}
+
+void CheckRangeSize(std::uint64_t size)
+{
+    const auto limit = detail::t_renderLimits.maxRange;
+    if (size > limit)
+    {
+        detail::ThrowLimit("maxRange", "range() of " + std::to_string(size) + " items is longer than " + std::to_string(limit));
+    }
+}
 
 } // namespace jinja2

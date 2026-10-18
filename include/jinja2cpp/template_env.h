@@ -8,6 +8,8 @@
 
 #include <jinja2cpp/value.h>
 
+#include <chrono>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -104,9 +106,72 @@ struct Settings
     //! (ErrorCode::UnknownFilter, ErrorCode::UnknownTest) unless it is inside an `if`, where it fails when it runs.
     //! With this flag such names are looked up when they run instead
     bool userCallablesAsFilters = false;
+
+    //! Bounds on what one Load or Render may do, for templates that are not trusted (docs/api-2.0.md). A Render that
+    //! passes one fails with ErrorCode::ResourceLimitExceeded, `extraParams[0]` the message and `extraParams[1]` the
+    //! field's name (`"maxRenderTime"`); the depth limits report ErrorCode::RecursionLimitExceeded as before. A Render
+    //! started by a host callable inside another one keeps the limits of its own template. \ref UntrustedLimits has
+    //! values for a host rendering templates its users write
+    struct Limits
+    {
+        //! Items of a `range()`; 0 is no limit (Jinja2 sandbox `MAX_RANGE`)
+        std::uint64_t maxRange = 0;
+        //! Items or characters one operation builds (a list, a string); 0 keeps the built-in cap of 2^26, which a
+        //! larger value does not raise
+        std::uint64_t maxSequenceSize = 0;
+        //! Characters one Render writes; 0 is no limit
+        std::uint64_t maxOutputSize = 0;
+        //! Characters of a template's source at Load, a template that `include`, `extends` or `import` loads
+        //! included; 0 is no limit
+        std::uint64_t maxTemplateSize = 0;
+        //! Templates one Render may load for `include`, `extends` and `import`; 0 is no limit
+        std::uint32_t maxTemplateLoads = 0;
+        //! Steps one Render may take: a step is a statement body (a loop iteration among them), an item a loop's `if`
+        //! looks at, a level of \ref maxRenderDepth (the template itself, a macro call) or a host callable call. An
+        //! approximate unit; 0 is no limit
+        std::uint64_t maxRenderSteps = 0;
+        //! Time one Render may take, checked every 1024 steps and after each host callable returns (a callable is
+        //! not interrupted); 0 is no limit
+        std::chrono::milliseconds maxRenderTime{ 0 };
+        //! Nesting of the template, macro and caller() calls, super(), recursive loops, included, imported and parent
+        //! templates (Python fails at about 250 macro calls). The depth limits stop at the thread's stack too; 0
+        //! leaves only that check
+        std::uint32_t maxRenderDepth = 256;
+        //! Nesting of an expression: brackets, calls, subscripts, filter arguments (Python fails at about 70)
+        std::uint32_t maxExpressionDepth = 64;
+        //! Operators chained along one path of an expression (a + b + c, x|f|g, a.b.c; Python fails at 300-500)
+        std::uint32_t maxExpressionOperators = 400;
+        //! Statement blocks open at once, the template's top level included, `elif` and `else` not (Python fails at
+        //! about 100)
+        std::uint32_t maxBlockNesting = 128;
+    };
+    //! Bounds on Load and Render; none but the depth limits by default
+    Limits limits;
 };
 
-//! Field by field; two unset \ref Settings::finalize callables are equal
+//! Limits for templates a host's users write, anchored on Jinja2's `SandboxedEnvironment`: `range()` of at most
+//! 100000 items, sequences of at most 2^20 items, 16 MiB of output, 10^7 render steps, no time limit. The values may
+//! change between releases
+inline Settings::Limits UntrustedLimits()
+{
+    Settings::Limits limits;
+    limits.maxRange = 100000;
+    limits.maxSequenceSize = std::uint64_t{ 1 } << 20;
+    limits.maxOutputSize = std::uint64_t{ 16 } << 20;
+    limits.maxRenderSteps = 10000000;
+    return limits;
+}
+
+//! Settings for templates a host's users write: \ref UntrustedLimits with `autoescape` on
+inline Settings UntrustedSettings()
+{
+    Settings settings;
+    settings.limits = UntrustedLimits();
+    settings.autoescape = true;
+    return settings;
+}
+
+//! Field by field, \ref Settings::Limits included; two unset \ref Settings::finalize callables are equal
 JINJA2CPP_EXPORT bool operator==(const Settings& lhs, const Settings& rhs);
 inline bool operator!=(const Settings& lhs, const Settings& rhs)
 {
