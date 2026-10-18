@@ -1,5 +1,6 @@
 #include "value_methods.h"
 
+#include "cycle_collector.h"
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "markup.h"
@@ -1638,9 +1639,13 @@ InternalValueList& MutableItems(const InternalValue& self)
     return *items;
 }
 
-// Storing a container in itself would make a reference cycle that shared ownership never
-// frees. Python allows it; Jinja2C++ refuses (a deliberate divergence, docs/tasks/0020).
-bool Reaches(const InternalValue& val, const void* target, std::unordered_set<const void*>& visited)
+// The storage of the lists and dicts a walk from a stored value has seen, after (index 1)
+// and before (index 0) it went through a value the cycle collector cannot follow
+using VisitedStorage = std::array<std::unordered_set<const void*>, 2>;
+
+// Whether `val` reaches the storage `target` through a bound method's receiver or the value
+// of a key-value pair, which CycleCollector does not follow
+bool ReachesThroughOpaque(const InternalValue& val, const void* target, bool viaOpaque, VisitedStorage& visited)
 {
     const void* storage = nullptr;
     if (auto list = AsList(val))
@@ -1659,7 +1664,11 @@ bool Reaches(const InternalValue& val, const void* target, std::unordered_set<co
             return false;
         }
         auto p = attrs->find("__self__");
-        return p != attrs->end() && Reaches(p->second, target, visited);
+        return p != attrs->end() && ReachesThroughOpaque(p->second, target, true, visited);
+    }
+    else if (const auto* pair = GetIf<KeyValuePair>(&val))
+    {
+        return ReachesThroughOpaque(pair->value, target, true, visited);
     }
     // Only containers the template owns can hold one another
     if (!storage)
@@ -1668,9 +1677,9 @@ bool Reaches(const InternalValue& val, const void* target, std::unordered_set<co
     }
     if (storage == target)
     {
-        return true;
+        return viaOpaque;
     }
-    if (!visited.insert(storage).second)
+    if (!visited[viaOpaque ? 1 : 0].insert(storage).second)
     {
         return false;
     }
@@ -1678,7 +1687,7 @@ bool Reaches(const InternalValue& val, const void* target, std::unordered_set<co
     {
         for (auto& item : *list->GetMutableItems())
         {
-            if (Reaches(item, target, visited))
+            if (ReachesThroughOpaque(item, target, viaOpaque, visited))
             {
                 return true;
             }
@@ -1692,21 +1701,12 @@ bool Reaches(const InternalValue& val, const void* target, std::unordered_set<co
     }
     for (auto& [key, value] : *map->GetMutableItems())
     {
-        if (Reaches(value, target, visited))
+        if (ReachesThroughOpaque(value, target, viaOpaque, visited))
         {
             return true;
         }
     }
     return false;
-}
-
-void CheckNoCycle(const void* storage, const InternalValue& item)
-{
-    std::unordered_set<const void*> visited;
-    if (Reaches(item, storage, visited))
-    {
-        Raise("a list or dict cannot contain itself");
-    }
 }
 
 InternalValue ListIndex(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -1743,7 +1743,7 @@ InternalValue ListAppend(const InternalValue& self, const CallParams& params, Re
 {
     CheckArgs(params, "append", 1, 1);
     auto& items = MutableItems(self);
-    CheckNoCycle(&items, params.posParams[0]);
+    NoteContainerStore(self, &items, params.posParams[0]);
     items.push_back(params.posParams[0]);
     return InternalValue(NoneValue());
 }
@@ -1762,7 +1762,7 @@ InternalValue ListExtend(const InternalValue& self, const CallParams& params, Re
     auto& items = MutableItems(self);
     for (auto& item : newItems)
     {
-        CheckNoCycle(&items, item);
+        NoteContainerStore(self, &items, item);
     }
     items.insert(items.end(), newItems.begin(), newItems.end());
     return InternalValue(NoneValue());
@@ -1773,7 +1773,7 @@ InternalValue ListInsert(const InternalValue& self, const CallParams& params, Re
     CheckArgs(params, "insert", 2, 2);
     auto& items = MutableItems(self);
     auto idx = SliceIndex(params.posParams.data(), items.size(), 0, "insert");
-    CheckNoCycle(&items, params.posParams[1]);
+    NoteContainerStore(self, &items, params.posParams[1]);
     items.insert(items.begin() + static_cast<std::ptrdiff_t>(idx), params.posParams[1]);
     return InternalValue(NoneValue());
 }
@@ -1959,7 +1959,7 @@ InternalValue DictSetdefault(const InternalValue& self, const CallParams& params
         return p->second;
     }
     InternalValue value = params.posParams.size() > 1 ? params.posParams[1] : InternalValue(NoneValue());
-    CheckNoCycle(&items, value);
+    NoteContainerStore(self, &items, value);
     items[key] = value;
     return value;
 }
@@ -2024,7 +2024,7 @@ InternalValue DictUpdate(const InternalValue& self, const CallParams& params, Re
     auto& items = MutableDict(self);
     for (auto& [name, value] : updates)
     {
-        CheckNoCycle(&items, value);
+        NoteContainerStore(self, &items, value);
     }
     for (auto& [name, value] : updates)
     {
@@ -2254,6 +2254,21 @@ bool IsMutatingName(std::string_view name)
     const auto* listMethod = FindIn(ListMethods, name);
     const auto* dictMethod = FindIn(DictMethods, name);
     return (listMethod != nullptr && listMethod->isMutating) || (dictMethod != nullptr && dictMethod->isMutating);
+}
+
+void NoteContainerStore(const InternalValue& container, const void* storage, const InternalValue& item)
+{
+    const auto kind = item.Kind();
+    if (kind != ValueKind::List && kind != ValueKind::Map && kind != ValueKind::Callable && kind != ValueKind::KeyValuePair)
+    {
+        return;
+    }
+    VisitedStorage visited;
+    if (ReachesThroughOpaque(item, storage, false, visited))
+    {
+        Raise("a list or dict cannot contain itself through a bound method or a key-value pair");
+    }
+    CycleCollector::NoteStore(container);
 }
 
 void StoreItem(const InternalValue& container, const InternalValue& key, InternalValue value)

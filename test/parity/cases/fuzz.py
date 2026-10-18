@@ -31,8 +31,6 @@ CASES = [
     ("include_list_none_first", "{% include [none, 'header.j2'] %}", HEADER),
     ("include_list_only_non_strings", "{% include [x, none] %}", HEADER),
     ("include_list_only_non_strings_ignore_missing", "{% include [x] ignore missing %}|", HEADER),
-    # A list that contains itself
-    ("list_contains_itself", "{% set l = [] %}{% do l.append(l) %}{{ l|length }}", DO),
     # Syntax Jinja2 rejects that Jinja2C++ accepts
     ("print_dangling_plus", "{{ 'a' +}}"),
     ("print_plus_before_end", "{{ 1 + }}"),

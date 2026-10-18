@@ -152,6 +152,7 @@ include(collect_sources)
 set (LIB_TARGET_NAME jinja2cpp)
 
 set(JINJA2CPP_SOURCES
+    src/cycle_collector.cpp
     src/error_info.cpp
     src/expression_evaluator.cpp
     src/expression_parser.cpp

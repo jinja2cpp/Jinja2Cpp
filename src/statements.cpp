@@ -1,5 +1,6 @@
 #include "statements.h"
 
+#include "cycle_collector.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
 #include "internal_value.h"
@@ -134,6 +135,13 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
         if (!ns || !ns->IsNamespace())
         {
             throw std::runtime_error("cannot assign attribute on non-namespace object");
+        }
+        // The store may close a reference cycle, which the render frees when it ends. Unlike
+        // the list and dict methods it walks nothing: `set ns.v = [ns.v]` in a loop would make
+        // that quadratic (fuzz/regressions/deep-nested-value.j2)
+        if (value.Kind() == ValueKind::List || value.Kind() == ValueKind::Map)
+        {
+            CycleCollector::NoteStore(*found);
         }
         ns->SetValue(std::string(nodes.Text(root.attr)), value);
         return;

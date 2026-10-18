@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: api
 depends: []
@@ -26,3 +26,13 @@ drops positional binding, and fix it there.
 
 **Done when.** The new user_callable_test.cpp rows pass for positional and keyword
 arguments, with and without `*context`.
+
+**Resolution.** Argument binding (`MapKeywordArgs` in src/expression_evaluator.cpp)
+treated `*context` as an ordinary named parameter, so the first positional argument
+was bound to it and then shadowed by the engine-supplied context, leaving `name`
+unbound. `*context` now gets its own `Context` state: no call argument binds to it,
+and the positional scan steps over it wherever it is declared. The scan also used to
+follow the missing arguments from the declaration's first slot rather than the first one
+it had not skipped, which dropped the second positional of `[*context, a, b]`. Rows in the
+`GlobalContextAccess` table of test/user_callable_test.cpp cover positional and
+keyword calls with `*context` first (one and two named parameters) and in the middle, plus a keyword call without it.

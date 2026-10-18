@@ -506,6 +506,9 @@ struct IListAccessor : ValueObject
     // Python list is), so that methods like append() can change them; null for borrowed
     // and computed lists (docs/tasks/0020)
     [[nodiscard]] virtual InternalValueList* GetMutableItems() const { return nullptr; }
+    // Whether this accessor alone holds the items GetMutableItems returns, so that releasing
+    // them through it cannot change a list anything else sees (CycleCollector, docs/tasks/0110)
+    [[nodiscard]] virtual bool OwnsMutableItemsAlone() const { return false; }
     // An accessor with iteration state of its own (a generator, which says so with
     // SetClonesOnCopy) is copied with the list value, so that copies iterate independently;
     // every other accessor is shared
@@ -549,6 +552,8 @@ struct IMapAccessor : ValueObject
     [[nodiscard]] virtual const void* GetIdentity() const { return this; }
     // See IListAccessor::GetMutableItems
     [[nodiscard]] virtual InternalDict* GetMutableItems() const { return nullptr; }
+    // See IListAccessor::OwnsMutableItemsAlone
+    [[nodiscard]] virtual bool OwnsMutableItemsAlone() const { return false; }
     // How x.name resolves against Python's dict methods (items, get, ...)
     [[nodiscard]] virtual MapAttrPolicy GetAttrPolicy() const { return MapAttrPolicy::KeysOnly; }
     // A namespace() object, the only one `set obj.attr = ...` can change
@@ -765,6 +770,7 @@ public:
     [[nodiscard]] MapAdapter ToAdapter() const;
 
     [[nodiscard]] const IMapAccessor* GetAccessor() const noexcept { return m_accessor; }
+    [[nodiscard]] const ValueObject* GetOwner() const noexcept { return m_owner; }
 
 private:
     const IMapAccessor* m_accessor;

@@ -1045,6 +1045,8 @@ public:
 
     [[nodiscard]] T& Get() const { return *m_val; }
     [[nodiscard]] bool ShouldExtendLifetime() const { return false; }
+    // Whether this holder alone keeps the storage
+    [[nodiscard]] bool IsUnique() const { return m_val.use_count() == 1; }
 
     bool operator==(const BySharedMutable<T>& other) const { return *m_val == *other.m_val; }
     bool operator!=(const BySharedMutable<T>& other) const { return !(*this == other); }
@@ -1327,6 +1329,7 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
         [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
         [[nodiscard]] const void* GetIdentity() const override { return m_values.get(); }
         [[nodiscard]] InternalValueList* GetMutableItems() const override { return m_values.get(); }
+        [[nodiscard]] bool OwnsMutableItemsAlone() const override { return m_values.use_count() == 1; }
         [[nodiscard]] GenericList CreateGenericList() const override
         {
             return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
@@ -1752,6 +1755,7 @@ public:
 
     [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
     [[nodiscard]] InternalDict* GetMutableItems() const override { return &m_values.Get(); }
+    [[nodiscard]] bool OwnsMutableItemsAlone() const override { return m_values.IsUnique(); }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::MethodsFirst; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
