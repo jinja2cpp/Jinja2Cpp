@@ -49,6 +49,24 @@ bool IsSameText(const std::string& lhs, const std::string& rhs)
     }
     return true;
 }
+// Word by word without a branch or a memcmp call: compiled to a few vector compares
+template<typename T>
+bool IsSameBytes(const T& lhs, const T& rhs)
+{
+    static_assert(std::has_unique_object_representations_v<T> && sizeof(T) % sizeof(std::uint64_t) == 0);
+    const auto* const left = reinterpret_cast<const unsigned char*>(&lhs);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    const auto* const right = reinterpret_cast<const unsigned char*>(&rhs); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    std::uint64_t diff = 0;
+    for (std::size_t offset = 0; offset != sizeof(T); offset += sizeof(std::uint64_t))
+    {
+        std::uint64_t leftWord = 0;
+        std::uint64_t rightWord = 0;
+        std::memcpy(&leftWord, left + offset, sizeof(leftWord));
+        std::memcpy(&rightWord, right + offset, sizeof(rightWord));
+        diff |= leftWord ^ rightWord;
+    }
+    return diff == 0;
+}
 } // namespace
 
 bool operator==(const Settings& lhs, const Settings& rhs)
@@ -70,9 +88,8 @@ bool operator==(const Settings& lhs, const Settings& rhs)
     }
     // Every Load compares the settings, so the limits compare as bytes: integers without padding, and a field added
     // to Settings::Limits changes the size checked here
-    static_assert(std::has_unique_object_representations_v<Settings::Limits>);
     static_assert(sizeof(Settings::Limits) == 72);
-    if (std::memcmp(&lLimits, &rLimits, sizeof(Settings::Limits)) != 0)
+    if (!IsSameBytes(lLimits, rLimits))
     {
         return false;
     }
