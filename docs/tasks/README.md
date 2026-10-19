@@ -303,7 +303,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0233](0233-cpp-only-filter-stubs.md) | C++-only filters `camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml` do nothing | api | medium | done |
 | [0234](0234-github-tracker-cleanup.md) | Close GitHub issues that master already fixes, before 2.0 | release | medium | open |
 | [0235](0235-parity-feature-rows-drift.md) | `docs/parity.md` feature rows contradict master | parity | medium | open |
-| [0236](0236-meta-find-undeclared-variables.md) | Template introspection: `meta.find_undeclared_variables`, `Template.module` | api | low | open |
+| [0236](0236-meta-find-undeclared-variables.md) | Template introspection: `meta.find_undeclared_variables`, `Template.module` | api | low | done |
 | [0237](0237-python-bindings.md) | Python bindings, so Jinja2's own test suite can run against Jinja2C++ | parity | low | open |
 | [0238](0238-msvc-static-debug-info.md) | Installed MSVC static Debug library has no usable debug information | build | low | open |
 | [0239](0239-site-build-and-deploy.md) | Website: pinned build, CI deploy and link check | docs | high | open |
@@ -344,3 +344,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0278](0278-remove-dead-valueref.md) | Remove the dead ValueRef alternative of InternalValue | internals | low | open |
 | [0280](0280-urlize-markup-input.md) | urlize escapes Markup input | filters | low | open |
 | [0281](0281-attr-bound-method.md) | attr() of a method renders empty | filters | low | open |
+| [0284](0284-template-module.md) | `Template.module` / `make_module`: a template's exports as a map | api | low | open |
