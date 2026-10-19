@@ -89,6 +89,9 @@ const UndeclaredCase undeclaredCases[] = {
     { "{% with a = 1, b = a %}{% endwith %}", "a" },
     { "{% filter upper %}{{ f }}{% endfilter %}", "f" },
     { "{% filter upper %}{% set z = 1 %}{% endfilter %}{{ z }}", "z" },
+    { "{% filter replace(a, \"\") %}{% endfilter %}{% set a = 1 %}", "a" },
+    { "{% set x | replace(a, \"\") %}{% endset %}{% set a = 1 %}", "" },
+    { "{% for i in l %}{% set x | replace(a, \"\") %}{% endset %}{% set a = 1 %}{% endfor %}", "l" },
     { "{% autoescape true %}{{ ae }}{% endautoescape %}", "ae" },
     { "{{ x|default(y) }}{{ h.attr }}{{ k[\"key\"] }}", "h k x y" },
     { "{{ x.y.z(c, a=b) }}", "b c x" },
@@ -199,4 +202,16 @@ TEST(UndeclaredVariablesTest, TransNamesRenderFromSlots)
     Template macro(&env);
     ASSERT_TRUE(macro.Load("{% macro m(user) %}{% trans %}hi {{ user }};{% endtrans %}{% endmacro %}{{ m('c') }}"));
     EXPECT_EQ("hi c;", macro.RenderAsString({}).value());
+}
+
+// A set block's filters run in the block's frame, so a store after the block hides the outer
+// name from them as in Jinja2, while a filter block's arguments read the enclosing frame
+TEST(UndeclaredVariablesTest, SetBlockFiltersReadBlockFrame)
+{
+    Template setBlock;
+    ASSERT_TRUE(setBlock.Load("{% set x | replace(a, '') %}xax{% endset %}{{ x }}{% set a = 'Z' %}"));
+    EXPECT_EQ("xax", setBlock.RenderAsString({ { "a", "a" } }).value());
+    Template filterBlock;
+    ASSERT_TRUE(filterBlock.Load("{% filter replace(a, '') %}xax{% endfilter %}{% set a = 'Z' %}"));
+    EXPECT_EQ("xx", filterBlock.RenderAsString({ { "a", "a" } }).value());
 }

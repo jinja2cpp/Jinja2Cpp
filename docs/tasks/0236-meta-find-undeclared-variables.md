@@ -49,9 +49,13 @@ Bare trans variables (`{% trans user %}`) are reads as well, and a set block in 
 **Other known divergences (verifier, 2026-10-18):** `{% autoescape e %}` reads `e` in the
 frame around it, where Jinja2 reads it in a scope of its own, so a later `{% set e %}` in that
 frame declares it for Jinja2 only; a trans block whose first variable is a call
-(`{% trans x=f(y) %}`) makes Jinja2 also report its synthetic `_trans`. The check is
-O(reads x stores of a frame): about 0.5 s in a Debug build for 5,000 top-level `set`s each
-read once, which only an opt-in call on such a template pays.
+(`{% trans x=f(y) %}`) makes Jinja2 also report its synthetic `_trans`. A variable in a set
+block's filter arguments (`{% set x | replace(a, '') %}`) makes Jinja2's compiler raise an
+AssertionError unless the same frame stores `a` later; Jinja2C++ renders it and reports `a`.
+
+The check indexes the first store of each name per frame and the frames whose body reads a
+macro's special names, so it is linear in reads and stores (Codex review): 29 ms in a Debug
+build for 5,000 top-level `set`s each read once, down from 0.5 s with per-read scans.
 
 **`Template.module`** is filed as 0284: it needs the macros of a template to be callable
 from the host outside a render, which is new lifetime work rather than introspection.

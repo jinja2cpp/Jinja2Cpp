@@ -489,7 +489,7 @@ std::pair<SlotIndex, UnitId> NameResolver::Find(const NodeArena& nodes, NodeRef<
     return dynamic;
 }
 
-bool NameResolver::DeclaresAtEntry(FrameId frameId, std::string_view name, const NodeArena& nodes) const
+bool NameResolver::DeclaresAtEntry(FrameId frameId, std::string_view name, const DeclarationIndex& index, const NodeArena& nodes) const
 {
     const auto& frame = m_frames[frameId];
     if (frame.kind == Kind::For || frame.isMacro)
@@ -512,12 +512,12 @@ bool NameResolver::DeclaresAtEntry(FrameId frameId, std::string_view name, const
     const auto macro = static_cast<FrameId>(next);
     if (name == "caller" || name == "varargs" || name == "kwargs")
     {
-        return IsReadInside(macro, name, nodes);
+        return index.specialReads.count({ macro, name }) != 0;
     }
     return BindsName(macro, name, nodes);
 }
 
-bool NameResolver::IsDeclared(FrameId frameId, std::string_view name, std::size_t storeEnd, const NodeArena& nodes) const
+bool NameResolver::IsDeclared(FrameId frameId, std::string_view name, std::size_t storeEnd, const DeclarationIndex& index, const NodeArena& nodes) const
 {
     // The template's body and every block have `self`
     if (name == "self")
@@ -527,13 +527,17 @@ bool NameResolver::IsDeclared(FrameId frameId, std::string_view name, std::size_
     for (auto id = frameId;;)
     {
         const auto& frame = m_frames[id];
-        const auto end = m_stores.begin() + static_cast<std::ptrdiff_t>(id == frameId ? std::max<std::size_t>(storeEnd, frame.firstStore) : m_stores.size());
-        const auto isStore = [id, name](const Store& store) { return store.frame == id && store.kind != StoreKind::Hidden && store.name == name; };
-        if (frame.hasStores && std::any_of(m_stores.begin() + frame.firstStore, end, isStore))
+        // The frame's first store of the name: before the read in the read's own frame,
+        // anywhere in a frame around it
+        if (frame.hasStores)
         {
-            return true;
+            const auto first = index.firstStores.find({ id, name });
+            if (first != index.firstStores.end() && (id != frameId || first->second < storeEnd))
+            {
+                return true;
+            }
         }
-        if (DeclaresAtEntry(id, name, nodes))
+        if (DeclaresAtEntry(id, name, index, nodes))
         {
             return true;
         }
@@ -550,30 +554,46 @@ bool NameResolver::IsDeclared(FrameId frameId, std::string_view name, std::size_
     }
 }
 
-bool NameResolver::IsReadInside(FrameId frameId, std::string_view name, const NodeArena& nodes) const
+std::size_t NameResolver::FrameNameHash::operator()(const FrameName& key) const noexcept
 {
-    const auto isInside = [this, frameId](FrameId id) {
-        // Jinja2 looks into the macros, loops and call blocks inside the body, not its blocks
-        for (; id != NoFrame && id >= frameId; id = m_frames[id].parent)
+    return std::hash<std::string_view>()(key.second) ^ (std::size_t{ key.first } * 0x9E3779B97F4A7C15ULL);
+}
+
+NameResolver::DeclarationIndex NameResolver::MakeDeclarationIndex(const NodeArena& nodes) const
+{
+    DeclarationIndex index;
+    for (std::size_t idx = 0; idx < m_stores.size(); ++idx)
+    {
+        const auto& store = m_stores[idx];
+        if (store.kind != StoreKind::Hidden)
         {
-            if (id == frameId)
+            index.firstStores.emplace(FrameName{ store.frame, store.name }, idx);
+        }
+    }
+    // The frames that read `caller`, `varargs` or `kwargs`, themselves or in a frame inside
+    // them; Jinja2 looks into the macros, loops and call blocks inside a body, not its blocks
+    for (const auto& [ref, frame] : m_reads)
+    {
+        const auto name = nodes[ref].GetName(nodes);
+        if (name != "caller" && name != "varargs" && name != "kwargs")
+        {
+            continue;
+        }
+        for (auto id = frame; id != NoFrame; id = m_frames[id].parent)
+        {
+            if (!index.specialReads.insert({ id, name }).second || m_frames[id].isBlock)
             {
-                return true;
-            }
-            if (m_frames[id].isBlock)
-            {
-                return false;
+                break;
             }
         }
-        return false;
-    };
-    return std::any_of(m_reads.begin() + m_frames[frameId].firstRead, m_reads.end(),
-                       [&isInside, name, &nodes](const std::pair<NodeRef<ValueRefExpression>, FrameId>& read) { return nodes[read.first].GetName(nodes) == name && isInside(read.second); });
+    }
+    return index;
 }
 
 std::vector<std::string_view> NameResolver::UndeclaredNames(const NodeArena& nodes) const
 {
     std::vector<std::string_view> names;
+    const auto index = MakeDeclarationIndex(nodes);
     // The stores before a read are those made before it: m_stores is in parse order
     auto storeEnd = m_stores.begin();
     for (std::size_t idx = 0; idx < m_reads.size(); ++idx)
@@ -581,7 +601,7 @@ std::vector<std::string_view> NameResolver::UndeclaredNames(const NodeArena& nod
         storeEnd = std::find_if(storeEnd, m_stores.end(), [idx](const Store& store) { return store.readsBefore > idx; });
         const auto& [ref, frame] = m_reads[idx];
         const auto name = nodes[ref].GetName(nodes);
-        if (!IsDeclared(frame, name, static_cast<std::size_t>(storeEnd - m_stores.begin()), nodes))
+        if (!IsDeclared(frame, name, static_cast<std::size_t>(storeEnd - m_stores.begin()), index, nodes))
         {
             names.push_back(name);
         }
@@ -591,7 +611,7 @@ std::vector<std::string_view> NameResolver::UndeclaredNames(const NodeArena& nod
     for (std::size_t idx = 0; idx < m_stores.size(); ++idx)
     {
         const auto& store = m_stores[idx];
-        if (store.kind == StoreKind::Branch && !IsDeclared(store.frame, store.name, idx, nodes))
+        if (store.kind == StoreKind::Branch && !IsDeclared(store.frame, store.name, idx, index, nodes))
         {
             names.push_back(store.name);
         }

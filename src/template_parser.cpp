@@ -725,9 +725,14 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
     }
     else if (lexer.EatIfEqual('|'))
     {
-        // The filters of a set block are in its frame, which Jinja2 checks even in an `if`
+        // The filters of a set block are in its frame, which Jinja2 checks even in an `if`,
+        // and so read the names the frames around it store later as the body does
         CheckGuard checked(m_unknown, UnknownCallables::Check::Now);
+        const auto outerFrame = m_names.Current();
+        const auto frame = m_names.PushWith(outerFrame);
+        m_names.SetCurrent(frame);
         const auto expr = exprParser.ParseFilterExpression(lexer);
+        m_names.SetCurrent(outerFrame);
         if (!expr)
         {
             return MakeUnexpected(expr.error());
@@ -736,7 +741,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
             StatementInfo::SetStatement, stmtTok);
         statementInfo.renderer = m_nodes.Make<SetFilteredBlockStatement>(
             vars, *expr);
-        statementInfo.frame = m_names.PushWith(m_names.Current());
+        statementInfo.frame = frame;
         statementsInfo.push_back(std::move(statementInfo));
     }
     else
