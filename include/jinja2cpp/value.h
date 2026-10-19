@@ -2,6 +2,7 @@
 #define JINJA2CPP_VALUE_H
 
 #include <jinja2cpp/fwd.h> // IWYU pragma: export
+#include <jinja2cpp/big_int.h>
 #include <jinja2cpp/config.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/markup.h>
@@ -264,9 +265,10 @@ struct IsStoredAsInt : std::integral_constant<bool, std::is_integral_v<T> && !st
 template<typename T>
 inline constexpr bool CanExceedInt64 = std::numeric_limits<T>::digits > std::numeric_limits<int64_t>::digits;
 
-//! Converts an integral value to the stored `int64_t`; throws `std::overflow_error` for a value outside its range
-template<typename T>
-constexpr int64_t ToStoredInt(T val) noexcept(!CanExceedInt64<T>)
+//! Converts an integral value to the alternative of `Data` (\ref Value::ValueData) that stores it: `int64_t`, or a
+//! \ref BigInt for a value outside the `int64_t` range. Only types that can hold such values may throw (allocating)
+template<typename Data, typename T>
+Data ToStoredInt(T val) noexcept(!CanExceedInt64<T>)
 {
     if constexpr (CanExceedInt64<T>)
     {
@@ -277,10 +279,10 @@ constexpr int64_t ToStoredInt(T val) noexcept(!CanExceedInt64<T>)
         }
         if (!fits)
         {
-            throw std::overflow_error("jinja2cpp::Value: integer value is out of the int64_t range");
+            return Data(BigInt(val));
         }
     }
-    return static_cast<int64_t>(val);
+    return Data(static_cast<int64_t>(val));
 }
 } // namespace detail
 
@@ -298,6 +300,7 @@ constexpr int64_t ToStoredInt(T val) noexcept(!CanExceedInt64<T>)
  *  - Wide string view value (std::wstring_view)
  *  - Safe text (\ref Markup, \ref WMarkup): a string that a template does not escape
  *  - integer (int64_t) value
+ *  - integer outside the int64_t range (\ref BigInt)
  *  - floating point (double) value
  *  - Simple list of other values (\ref ValuesList)
  *  - Simple map of other values (\ref ValuesMap)
@@ -332,7 +335,8 @@ public:
         GenericMap,
         RecWrapper<UserCallable>,
         Markup,
-        WMarkup>;
+        WMarkup,
+        BigInt>;
 
     template<typename T, typename... L>
     struct AnyOf : public std::false_type
@@ -419,14 +423,14 @@ public:
     /*!
      * \brief Initializing constructor from any integral value except `bool` and characters: stores `int64_t`
      *
-     * A value outside the `int64_t` range (a `uint64_t` or `size_t` above `INT64_MAX`) throws `std::overflow_error`
-     * rather than wrapping; only types that can hold such values may throw.
+     * A value outside the `int64_t` range (a `uint64_t` or `size_t` above `INT64_MAX`) is stored as a \ref BigInt
+     * rather than wrapped; only types that can hold such values may throw (`std::bad_alloc`).
      *
      * @param val Integer value which should be used to initialize \ref Value instance
      */
     template<typename I, std::enable_if_t<detail::IsStoredAsInt<I>::value>* = nullptr>
     Value(I val) noexcept(!detail::CanExceedInt64<I>) // NOLINT(google-explicit-constructor)
-        : m_data(detail::ToStoredInt(val))
+        : m_data(detail::ToStoredInt<ValueData>(val))
     {
     }
     /*!
@@ -487,6 +491,8 @@ public:
     [[nodiscard]] bool IsBool() const noexcept { return Holds<bool>(); }
     //! Test Value for holding an integer (`int64_t`)
     [[nodiscard]] bool IsInt() const noexcept { return Holds<int64_t>(); }
+    //! Test Value for holding an integer outside the `int64_t` range (\ref BigInt); \ref IsInt is false for it
+    [[nodiscard]] bool IsBigInt() const noexcept { return Holds<BigInt>(); }
     //! Test Value for holding a floating-point number (`double`)
     [[nodiscard]] bool IsDouble() const noexcept { return Holds<double>(); }
     //! Test Value for holding `std::string` or a \ref Markup, which is one (a `std::string_view` does not count)
@@ -525,6 +531,12 @@ public:
     [[nodiscard]] int64_t AsInt() const { return As<int64_t>(); }
     //! Same as \ref AsInt(), without throwing
     bool AsInt(int64_t& out) const noexcept { return Load(out); }
+    //! The stored \ref BigInt; throws `std::bad_variant_access` for anything else, an `int64_t` included
+    [[nodiscard]] const BigInt& AsBigInt() const { return As<BigInt>(); }
+    //! A pointer to the stored \ref BigInt, without throwing or copying
+    bool AsBigInt(const BigInt*& out) const& noexcept { return LoadPtr(out); }
+    //! Deleted: the pointer would outlive the temporary it points into
+    bool AsBigInt(const BigInt*& out) && = delete;
     //! The stored `double`; throws `std::bad_variant_access` for anything else
     [[nodiscard]] double AsDouble() const { return As<double>(); }
     //! Same as \ref AsDouble(), without throwing

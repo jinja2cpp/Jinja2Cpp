@@ -2,6 +2,7 @@
 
 #include "helpers.h"
 
+#include <jinja2cpp/big_int.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
@@ -108,6 +109,8 @@ struct ValueRenderer
     void operator()(const jinja2::GenericList& /*val*/) const {}
 
     void operator()(const jinja2::UserCallable& /*val*/) const {}
+
+    void operator()(const jinja2::BigInt& val) const { this->operator()(val.ToString()); }
 
     template<typename T>
     void operator()(const T& val) const
