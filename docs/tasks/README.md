@@ -329,7 +329,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0259](0259-vendored-internal-namespaces.md) | Vendored robin_hood and lexertk still live in global namespaces | release | medium | open |
 | [0260](0260-public-headers-iosfwd.md) | Public headers include `<iostream>` where `<iosfwd>` would do | release | low | open |
 | [0261](0261-windows-package-link-check.md) | Run the installed-package test and the ABI link probe on Windows | ci | low | open |
-| [0262](0262-settings-limits.md) | `Settings::Limits`: one place for every limit a template can hit | api | high | open |
+| [0262](0262-settings-limits.md) | `Settings::Limits`: one place for every limit a template can hit | api | high | done |
 | [0263](0263-per-operation-size-checks.md) | Every growth operation checks its size before allocating | robustness | high | open |
 | [0264](0264-template-cache-bound.md) | The template cache ignores its size, and `MemoryFileSystem` writes in a const path | robustness | medium | open |
 | [0265](0265-hardening-by-default.md) | Build hardening on by default; invariant checks that fail the render, not the process | build | medium | open |
@@ -348,6 +348,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0278](0278-remove-dead-valueref.md) | Remove the dead ValueRef alternative of InternalValue | internals | low | open |
 | [0280](0280-urlize-markup-input.md) | urlize escapes Markup input | filters | low | open |
 | [0281](0281-attr-bound-method.md) | attr() of a method renders empty | filters | low | open |
+| [0282](0282-settings-limits-followups.md) | `Settings::Limits` follow-ups (0262 leftovers) | api | low | open |
 | [0284](0284-template-module.md) | `Template.module` / `make_module`: a template's exports as a map | api | low | open |
 | [0285](0285-abi-baselines-at-rc.md) | Commit the ABI baselines at the 2.0 RC and turn the abidiff gate on | release | high | open |
 | [0286](0286-fixed-cost-drift-oct-12-19.md) | Fixed-cost drift from feature merges, 2026-10-12 to 2026-10-19 | perf | medium | open |

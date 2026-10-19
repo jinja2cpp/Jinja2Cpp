@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_INTERNAL_VALUE_H
 
 #include "loop_attr.h"
+#include "recursion_guard.h"
 
 #include <jinja2cpp/config.h>
 #include <jinja2cpp/generic_list.h>
@@ -395,12 +396,18 @@ using InternalValueList = std::vector<InternalValue>;
 // what the fuzz jobs' memory limit allows in one allocation (docs/tasks/0185).
 constexpr size_t MaxSequenceSize = size_t{ 1 } << 26;
 
+static_assert(detail::RenderLimits{}.maxSequenceSize == MaxSequenceSize);
+
+[[noreturn]] void ThrowSequenceTooLong(uint64_t size, const char* what);
+
 // Throws when an operation is about to build a sequence longer than MaxSequenceSize
+// (std::length_error), or than the render's Settings::Limits::maxSequenceSize when that is
+// lower (ResourceLimitError)
 inline void CheckSequenceSize(uint64_t size, const char* what)
 {
-    if (size > MaxSequenceSize)
+    if (size > detail::t_renderLimits.maxSequenceSize)
     {
-        throw std::length_error(std::string(what) + " of length " + std::to_string(size) + " is too long");
+        ThrowSequenceTooLong(size, what);
     }
 }
 

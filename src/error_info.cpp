@@ -184,6 +184,9 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const BasicErrorInfo<Char
     case ErrorCode::UnknownTest:
         fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("No test named '{}'.").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
         break;
+    case ErrorCode::ResourceLimitExceeded:
+        fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("Resource limit exceeded: {}").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
+        break;
     case ErrorCode::YetUnsupported:
         fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("This feature has not been supported yet").GetValue<CharT>());
         break;

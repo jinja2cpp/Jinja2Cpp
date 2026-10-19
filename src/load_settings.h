@@ -1,6 +1,8 @@
 #ifndef JINJA2CPP_SRC_LOAD_SETTINGS_H
 #define JINJA2CPP_SRC_LOAD_SETTINGS_H
 
+#include "recursion_guard.h"
+
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template_env.h>
 
@@ -100,6 +102,7 @@ struct LoadSettings
         : settings(setts)
         , narrow(setts)
         , wide(setts)
+        , hasRenderLimits(jinja2::HasRenderLimits(setts.limits))
     {
     }
 
@@ -119,6 +122,9 @@ struct LoadSettings
     Settings settings;
     Delimiters<char> narrow;
     Delimiters<wchar_t> wide;
+    // Whether a render has a limit of its own to install (RenderLimitsScope): the Load-time limits aside, one of
+    // settings.limits differs from the defaults
+    bool hasRenderLimits;
 };
 
 using LoadSettingsPtr = std::shared_ptr<const LoadSettings>;

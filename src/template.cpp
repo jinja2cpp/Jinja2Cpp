@@ -69,12 +69,18 @@ BasicTemplate<CharT>::~BasicTemplate() = default;
 template<typename CharT>
 Result<void, CharT> BasicTemplate<CharT>::Load(StringViewType source, std::string name)
 {
-    return ToResult(GetImpl<CharT>(m_impl)->Load(StringType(source), std::move(name)));
+    auto* impl = GetImpl<CharT>(m_impl);
+    if (impl->SourceTooLong(source.size()))
+    {
+        return ToResult(std::optional(impl->SourceTooLongError(name)));
+    }
+    return ToResult(impl->Load(StringType(source), std::move(name)));
 }
 
 template<typename CharT>
 Result<void, CharT> BasicTemplate<CharT>::Load(std::basic_istream<CharT>& stream, std::string name)
 {
+    auto* impl = GetImpl<CharT>(m_impl);
     StringType t;
 
     while (stream.good() && !stream.eof())
@@ -86,9 +92,14 @@ Result<void, CharT> BasicTemplate<CharT>::Load(std::basic_istream<CharT>& stream
         {
             t.append(buff, buff + read);
         }
+        // Stops reading a source past maxTemplateSize
+        if (impl->SourceTooLong(t.size()))
+        {
+            return ToResult(std::optional(impl->SourceTooLongError(name)));
+        }
     }
 
-    return ToResult(GetImpl<CharT>(m_impl)->Load(std::move(t), std::move(name)));
+    return ToResult(impl->Load(std::move(t), std::move(name)));
 }
 
 template<typename CharT>
