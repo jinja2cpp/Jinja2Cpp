@@ -157,7 +157,8 @@ public:
     //! Copy-assignment operator
     BasicErrorInfo& operator=(const BasicErrorInfo<CharT>& other) noexcept
     {
-        BasicErrorInfo(other).Swap(*this);
+        BasicErrorInfo copy(other);
+        copy.Swap(*this);
         return *this;
     }
     //! Move-assignment operator
