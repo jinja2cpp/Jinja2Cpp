@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (1938 templates rendered by both engines, see
+`test/parity/` (1939 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -21,7 +21,7 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | autoescape | 124 | 122 | 1 | 1 | 0 | 0 | 0 | 0 | 0210, 0216 |
 | custom | 28 | 28 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | errors | 97 | 93 | 0 | 2 | 2 | 0 | 0 | 0 | 0036, 0213 |
-| filters | 308 | 302 | 4 | 2 | 0 | 0 | 0 | 0 | 0101, 0178, 0203, 0215 |
+| filters | 309 | 303 | 4 | 2 | 0 | 0 | 0 | 0 | 0101, 0178, 0203, 0215 |
 | fuzz | 32 | 32 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | globals | 74 | 73 | 1 | 0 | 0 | 0 | 0 | 0 | 0212 |
 | i18n | 54 | 54 | 0 | 0 | 0 | 0 | 0 | 0 |  |
@@ -37,7 +37,7 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | tests | 58 | 57 | 0 | 1 | 0 | 0 | 0 | 0 | 0101 |
 | undefined | 106 | 106 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | whitespace | 54 | 54 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| **total** | **1938** | **1894** | **25** | **15** | **4** | **0** | **0** | **0** | |
+| **total** | **1939** | **1895** | **25** | **15** | **4** | **0** | **0** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -255,8 +255,10 @@ storing a container in itself raises instead of printing `[...]` (deliberate, 00
 | `xmlattr` | ✅ | `xmlattr*` | |
 | Unknown filter is an error; in a branch never taken it is not | ✅ | `unknown_filter*` | |
 
-C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml`,
-`applymacro`) and the `startsWith` test are deliberate extensions; Jinja2 rejects them.
+C++-only filters (`camelize`, `underscorize`, `escapecpp`, `toyaml`, `applymacro`; see
+[cpp-only-filters.md](cpp-only-filters.md)) and the `startsWith` test are deliberate
+extensions; Jinja2 rejects them. `toxml` was removed in 2.0 and is an unknown filter, as in
+Jinja2 (0233).
 
 ## Statements (`statements`)
 

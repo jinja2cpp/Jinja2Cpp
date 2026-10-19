@@ -153,7 +153,6 @@ public:
     enum Mode
     {
         JsonMode,
-        XmlMode,
         YamlMode
     };
 
