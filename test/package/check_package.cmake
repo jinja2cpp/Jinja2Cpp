@@ -51,13 +51,19 @@ foreach (_req "${_major}.0;TRUE" "${_next}.0;FALSE" "${_prev}.0;FALSE")
         message(FATAL_ERROR "version file: ${PACKAGE_FIND_VERSION} compatible=${PACKAGE_VERSION_COMPATIBLE}, want ${_want}")
     endif ()
 endforeach ()
-# SOVERSION is the major version (docs/tasks/0076): the loader refuses a shared library of
-# another major, which is what protects shared consumers across an ABI break
+# The installed SONAME carries SOVERSION (docs/tasks/0076): the loader refuses a shared
+# library of another ABI version, which is what protects shared consumers. SOVERSION tracks
+# the ABI, not the major, so it is read from CMakeLists.txt rather than derived from _major.
 if (EXPECT_SHARED AND NOT CMAKE_HOST_WIN32)
+    file(STRINGS "${_src}/../../CMakeLists.txt" _soversion REGEX "^[ \t]*SOVERSION[ \t]+[0-9]+")
+    string(REGEX MATCH "[0-9]+" _soversion "${_soversion}")
+    if (NOT _soversion)
+        message(FATAL_ERROR "no SOVERSION found in ${_src}/../../CMakeLists.txt")
+    endif ()
     if (CMAKE_HOST_APPLE)
-        set(_soname "libjinja2cpp.${_major}.dylib")
+        set(_soname "libjinja2cpp.${_soversion}.dylib")
     else ()
-        set(_soname "libjinja2cpp.so.${_major}")
+        set(_soname "libjinja2cpp.so.${_soversion}")
     endif ()
     file(GLOB _solib "${PREFIX}/lib/${_soname}" "${PREFIX}/lib64/${_soname}" "${PREFIX}/lib/*/${_soname}")
     if (NOT _solib)

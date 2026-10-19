@@ -6,11 +6,12 @@
 # Until the 2.0 RC no baseline is committed and the dump of the last master build
 # (.abi-base/, restored from the Actions cache) is the reference: the report shows what a
 # pull request changes and never fails. From the RC on, abi/libjinja2cpp.so.<N>.cxx<std>.abi
-# is the reference, and an incompatible change fails unless the library's
-# SONAME differs from the baseline's, that is unless SOVERSION was bumped (in which case the
-# pull request also replaces the baseline with the new dump). An incompatible change is any
-# change left once added symbols are ignored: removed or changed functions and variables,
-# and changed layouts of the types they use.
+# is the reference and the gate fails
+# - on an incompatible change: any change left once added symbols are ignored (removed or
+#   changed functions and variables, changed layouts of the types they use). The way out is
+#   to bump SOVERSION and replace the baseline with the new dump in the same pull request;
+# - when the baseline's SONAME differs from the library's, so that a SOVERSION bump cannot
+#   land without its baseline.
 set -uo pipefail
 
 std=${1:?usage: abi_report.sh <std>}
@@ -78,12 +79,14 @@ if (( (rc | break_rc) & 3 )); then
     echo "::error::$verdict"
     exit 1
 fi
+# A SOVERSION bump is only complete with its baseline: until the committed dump carries the
+# new SONAME, every later break would pass as "SONAME differs"
+if [ "$(soname "$baseline")" != "$(soname "$current")" ]; then
+    echo "::error::C++$std: the library's SONAME is $(soname "$current") but $baseline is for $(soname "$baseline"). Replace the baseline with the job's dump (artifact abi-cxx$std) in the same pull request as the SOVERSION bump (docs/tasks/0076)."
+    exit 1
+fi
 if (( break_rc & 12 )); then
-    if [ "$(soname "$baseline")" != "$(soname "$current")" ]; then
-        echo "::notice::C++$std: $verdict with SONAME $(soname "$current") (was $(soname "$baseline")); commit the new dump as the baseline"
-        exit 0
-    fi
-    echo "::error::C++$std: $verdict without a SOVERSION bump. Bump SOVERSION in CMakeLists.txt and commit the job's dump (artifact abi-cxx$std) as abi/, or keep the ABI (docs/tasks/0076)."
+    echo "::error::C++$std: $verdict without a SOVERSION bump. Bump SOVERSION in CMakeLists.txt and replace abi/ with the job's dump (artifact abi-cxx$std), or keep the ABI (docs/tasks/0076)."
     exit 1
 fi
 exit 0
