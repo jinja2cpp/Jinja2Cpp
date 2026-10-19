@@ -260,20 +260,30 @@ public:
 
     // Parses into fresh state and replaces the loaded template only if parsing succeeds: the tree
     // points into its source, so a failed Load keeps the previous source, tree and name together
-    std::optional<BasicErrorInfo<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
+    // The Load overloads check the size before they copy or read the whole source
+    [[nodiscard]] bool SourceTooLong(std::size_t size) const
     {
         const auto maxSize = m_settings->settings.limits.maxTemplateSize;
-        if (maxSize != 0 && tpl.size() > maxSize)
+        return maxSize != 0 && size > maxSize;
+    }
+    [[nodiscard]] BasicErrorInfo<CharT> SourceTooLongError(const std::string& tplName) const
+    {
+        typename BasicErrorInfo<CharT>::Data errorData;
+        errorData.code = ErrorCode::ResourceLimitExceeded;
+        errorData.srcLoc.col = 1;
+        errorData.srcLoc.line = 1;
+        errorData.srcLoc.fileName = tplName.empty() ? std::string("noname.j2tpl") : tplName;
+        errorData.extraParams.push_back(
+            Value("the template's source is longer than " + std::to_string(m_settings->settings.limits.maxTemplateSize) + " characters"));
+        errorData.extraParams.push_back(Value(std::string("maxTemplateSize")));
+        return BasicErrorInfo<CharT>(errorData);
+    }
+
+    std::optional<BasicErrorInfo<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
+    {
+        if (SourceTooLong(tpl.size()))
         {
-            typename BasicErrorInfo<CharT>::Data errorData;
-            errorData.code = ErrorCode::ResourceLimitExceeded;
-            errorData.srcLoc.col = 1;
-            errorData.srcLoc.line = 1;
-            errorData.srcLoc.fileName = tplName.empty() ? std::string("noname.j2tpl") : tplName;
-            errorData.extraParams.push_back(Value("the template's source of " + std::to_string(tpl.size()) + " characters is longer than "
-                                                  + std::to_string(maxSize)));
-            errorData.extraParams.push_back(Value(std::string("maxTemplateSize")));
-            return BasicErrorInfo<CharT>(errorData);
+            return SourceTooLongError(tplName);
         }
         // On the heap, so the tree's pointers into it survive the hand-over to m_template
         auto source = std::make_unique<std::basic_string<CharT>>(std::move(tpl));
@@ -587,6 +597,7 @@ public:
         }
         NodeArena nodes;
         TemplateParser<CharT> parser(m_template.get(), *m_settings, m_env, m_templateName, nodes);
+        const ParseLimitsScope parseLimits(m_settings->settings.limits);
         auto parseResult = parser.Parse();
         if (!parseResult)
         {

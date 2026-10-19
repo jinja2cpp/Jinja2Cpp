@@ -397,7 +397,7 @@ ResultW<TemplateW> TemplateEnv::LoadTemplateW(std::string fileName)
 Result<Template> TemplateEnv::FromString(std::string_view source, std::string name)
 {
     Template tpl(this);
-    auto res = tpl.Load(std::string(source), std::move(name));
+    auto res = tpl.Load(source, std::move(name));
     if (!res)
     {
         return MakeUnexpected(res.error());
@@ -408,7 +408,7 @@ Result<Template> TemplateEnv::FromString(std::string_view source, std::string na
 ResultW<TemplateW> TemplateEnv::FromString(std::wstring_view source, std::string name)
 {
     TemplateW tpl(this);
-    auto res = tpl.Load(std::wstring(source), std::move(name));
+    auto res = tpl.Load(source, std::move(name));
     if (!res)
     {
         return MakeUnexpected(res.error());

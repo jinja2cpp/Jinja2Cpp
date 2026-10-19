@@ -16,7 +16,9 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <istream>
 #include <sstream>
+#include <streambuf>
 #include <string>
 #include <thread>
 #include <vector>
@@ -228,6 +230,63 @@ TEST_F(LimitsEnvTest, LoaderSourcedTemplateSize)
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
     EXPECT_EQ("maxTemplateSize", ToString(result.error().GetExtraParams()[1]));
+}
+
+// A stream that never ends: Load must stop reading it at the limit
+class EndlessSource : public std::streambuf
+{
+public:
+    EndlessSource() { setg(m_chunk.data(), m_chunk.data(), m_chunk.data() + m_chunk.size()); }
+
+protected:
+    int_type underflow() override
+    {
+        setg(m_chunk.data(), m_chunk.data(), m_chunk.data() + m_chunk.size());
+        return traits_type::to_int_type(m_chunk[0]);
+    }
+
+private:
+    std::string m_chunk = std::string(4096, 'x');
+};
+
+TEST_F(LimitsEnvTest, EndlessStreamStopsAtTemplateSize)
+{
+    Settings settings;
+    settings.limits.maxTemplateSize = 1000;
+    m_env.SetSettings(settings);
+    EndlessSource source;
+    std::istream stream(&source);
+    Template tpl(&m_env);
+    auto result = tpl.Load(stream, "endless");
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    EXPECT_EQ("maxTemplateSize", ToString(result.error().GetExtraParams()[1]));
+}
+
+TEST_F(LimitsEnvTest, FromStringTemplateSize)
+{
+    Settings settings;
+    settings.limits.maxTemplateSize = 1000;
+    m_env.SetSettings(settings);
+    auto narrow = m_env.FromString(std::string(2000, 'x'));
+    ASSERT_FALSE(narrow.has_value());
+    EXPECT_EQ("maxTemplateSize", ToString(narrow.error().GetExtraParams()[1]));
+    auto wide = m_env.FromString(std::wstring(2000, L'x'));
+    ASSERT_FALSE(wide.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, wide.error().GetCode());
+}
+
+TEST_F(LimitsEnvTest, UndeclaredVariablesUseTheTemplatesLimits)
+{
+    // Deeper than the default maxExpressionDepth (64), allowed by the template's settings
+    Settings settings;
+    settings.limits.maxExpressionDepth = 200;
+    m_env.SetSettings(settings);
+    Template tpl(&m_env);
+    ASSERT_TRUE(tpl.Load("{{ " + std::string(100, '(') + "x" + std::string(100, ')') + " }}").has_value());
+    auto names = tpl.FindUndeclaredVariables();
+    ASSERT_TRUE(names.has_value()) << ErrorToString(names.error());
+    EXPECT_EQ(std::vector<std::string>{ "x" }, *names);
 }
 
 TEST_F(LimitsEnvTest, OutputCountsThisRenderOnly)
