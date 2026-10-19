@@ -30,6 +30,11 @@ jobs:
     - name: Check formatting of src/ and include/
       run: git ls-files 'src/**.h' 'src/**.cpp' 'include/**.h' | xargs clang-format-18 --dry-run --Werror
 
+    # Every namespace jinja2 in src/ and include/ opens inline namespace v2, the ABI tag
+    # (docs/tasks/0076); the nm test checks the symbols, this also covers header-only code
+    - name: Check the inline ABI namespace
+      run: python3 scripts/abi_namespace.py --check
+
     # test/ still has hand-aligned tables, so only lines touched by the pull request
     # are checked there. src/ and include/ are left to the whole-file step above: given
     # a vendored file, git clang-format reports it as emptied (.clang-format-ignore).

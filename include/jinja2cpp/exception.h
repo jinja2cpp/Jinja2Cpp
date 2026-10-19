@@ -10,6 +10,8 @@ JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 
 namespace jinja2
 {
+inline namespace v2
+{
 enum class ErrorCode;
 
 /*!
@@ -66,6 +68,7 @@ private:
     const char* m_file;
     unsigned m_line;
 };
+} // namespace v2
 } // namespace jinja2
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END

@@ -173,6 +173,7 @@ set(JINJA2CPP_SOURCES
     src/statements.cpp
     src/string_converter_filter.cpp
     src/template.cpp
+    src/template_dict.cpp
     src/template_env.cpp
     src/template_parser.cpp
     src/tester_factories.cpp
@@ -390,6 +391,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/global_functions_test.cpp
         test/helpers_tests.cpp
         test/i18n_test.cpp
+        test/limits_test.cpp
         test/if_test.cpp
         test/import_test.cpp
         test/literals_test.cpp
@@ -457,6 +459,12 @@ if (JINJA2CPP_BUILD_TESTS)
 
     # Differential corpus against Python Jinja2, see test/parity/README.md
     add_test(NAME jinja2cpp_parity COMMAND jinja2cpp_tests --gtest_filter=Parity*)
+    # Every jinja2 symbol the library defines is in the inline ABI namespace v2 (docs/tasks/0076)
+    if (CMAKE_NM AND NOT MSVC)
+        add_test(NAME jinja2cpp_abi_namespace
+            COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_NM} -DLIBRARY=$<TARGET_FILE:jinja2cpp>
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/test/abi_symbols.cmake)
+    endif ()
 
     # Replaces the global operator new, so it cannot share the main test binary (docs/tasks/0253).
     # The TSan and MSan runtimes define operator new themselves, so those builds go without it.

@@ -19,6 +19,8 @@ JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 template<typename CharT>
 using FileStreamPtr = std::unique_ptr<std::basic_istream<CharT>, void (*)(std::basic_istream<CharT>*)>;
@@ -207,6 +209,7 @@ public:
 private:
     std::string m_rootFolder;
 };
+} // namespace v2
 } // namespace jinja2
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END

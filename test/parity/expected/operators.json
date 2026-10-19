@@ -2653,6 +2653,94 @@
     "type": "TemplateSyntaxError",
     "message": "expected token 'end of print statement', got 'z'"
    }
+  },
+  {
+   "id": "operators.in_dict_non_string_key",
+   "template": "{{ 'T' if 1 in {1: 'a'} else 'F' }}|{{ 'T' if '1' in {1: 'a'} else 'F' }}|{{ 'T' if 1.0 in {1: 'a'} else 'F' }}|{{ 'T' if (1, 2) in {(1, 2): 'a'} else 'F' }}|{{ 'T' if none in {none: 'a'} else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|F|T|T|T"
+  },
+  {
+   "id": "operators.eq_dict_non_string_keys",
+   "template": "{{ 'T' if {1: 'a'} == {1.0: 'a'} else 'F' }}|{{ 'T' if {1: 'a'} == {'1': 'a'} else 'F' }}|{{ 'T' if {(1, 2): 3} == {(1.0, 2): 3} else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|F|T"
+  },
+  {
+   "id": "operators.in_dict_object_key",
+   "template": "{{ 'T' if nothing in {'': 1} else 'F' }}|{{ 'T' if namespace() in {'': 1} else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|F"
+  },
+  {
+   "id": "operators.not_in_dict_non_string_key",
+   "template": "{{ 'T' if 2 not in {1: 'a'} else 'F' }}|{{ 'T' if True in {1: 'a'} else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|T"
   }
  ]
 }

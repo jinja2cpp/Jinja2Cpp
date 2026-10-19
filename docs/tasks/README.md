@@ -107,7 +107,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0033](0033-wide-string-parity.md) | Run the corpus through the wide-string API | parity | low | done |
 | [0034](0034-none-versus-undefined.md) | Tell `None` apart from undefined | parity | high | done |
 | [0035](0035-locale-independent-string-conversion.md) | Convert between narrow and wide strings without the C locale | robustness | medium | done |
-| [0036](0036-non-string-mapping-keys.md) | Mapping keys that are not strings | parity | low | open |
+| [0036](0036-non-string-mapping-keys.md) | Mapping keys that are not strings | parity | low | done |
 | [0037](0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups from 0016 | parity | medium | done |
 | [0038](0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | parity | medium | done |
 | [0039](0039-float-values-print-widened.md) | C++ `float` values print with their widened digits | parity | low | open |
@@ -145,7 +145,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0073](0073-template-api-2-0.md) | 2.0 API: `BasicTemplate<CharT>` | release | medium | done |
 | [0074](0074-template-env-api-2-0.md) | 2.0 API: `TemplateEnv` pimpl and `Settings` | release | medium | done |
 | [0075](0075-containers-reflection-api-2-0.md) | 2.0 API: containers, reflection, errors | release | medium | done |
-| [0076](0076-abi-namespace-and-headers.md) | 2.0: inline ABI namespace, header layout, version | release | high | in-progress |
+| [0076](0076-abi-namespace-and-headers.md) | 2.0: inline ABI namespace, header layout, version | release | high | done |
 | [0077](0077-migration-script.md) | 2.0 migration script and notes | release | high | open |
 | [0078](0078-nix-toolchains.md) | Pinned toolchains from Nix for the tool and bleeding-edge rows | ci | low | open |
 | [0079](0079-msvc-runtime-shared-override.md) | Warn when `JINJA2CPP_MSVC_RUNTIME_TYPE` is overridden by a shared build | build | low | open |
@@ -319,15 +319,17 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0249](0249-implicit-conversion-sanitizer.md) | Run the sanitizer CI with `-fsanitize=implicit-conversion` | robustness | medium | open |
 | [0250](0250-public-api-error-contract.md) | One error contract for the 2.0 public API | api | high | open |
 | [0251](0251-cycles-through-opaque-objects.md) | Reference cycles through objects the cycle collector cannot follow leak | evaluator | low | open |
-| [0252](0252-public-api-allocator-contract.md) | Allocator and memory contract for the 2.0 public API | api | high | open |
+| [0252](0252-public-api-allocator-contract.md) | Allocator and memory contract for the 2.0 public API | api | high | done |
 | [0253](0253-error-contract-types.md) | Error contract P1: public error types and the Load/Render boundary | api | high | open |
 | [0254](0254-render-error-locations.md) | Error contract P2: render errors carry their template location | robustness | high | open |
 | [0255](0255-engine-runtime-error-codes.md) | Error contract P3: the engine's own runtime errors get their own codes | robustness | medium | open |
+| [0256](0256-survive-allocation-failure.md) | Survive allocation failure in Load and Render: remaining coverage | robustness | high | open |
+| [0257](0257-render-to-string-and-sink.md) | `RenderTo` a caller's string or an output sink | api | high | open |
 | [0258](0258-positional-and-keyword-same-arg.md) | A call that gives one argument both positionally and by keyword is accepted | api | low | open |
 | [0259](0259-vendored-internal-namespaces.md) | Vendored robin_hood and lexertk still live in global namespaces | release | medium | open |
 | [0260](0260-public-headers-iosfwd.md) | Public headers include `<iostream>` where `<iosfwd>` would do | release | low | open |
 | [0261](0261-windows-package-link-check.md) | Run the installed-package test and the ABI link probe on Windows | ci | low | open |
-| [0262](0262-settings-limits.md) | `Settings::Limits`: one place for every limit a template can hit | api | high | open |
+| [0262](0262-settings-limits.md) | `Settings::Limits`: one place for every limit a template can hit | api | high | done |
 | [0263](0263-per-operation-size-checks.md) | Every growth operation checks its size before allocating | robustness | high | open |
 | [0264](0264-template-cache-bound.md) | The template cache ignores its size, and `MemoryFileSystem` writes in a const path | robustness | medium | open |
 | [0265](0265-hardening-by-default.md) | Build hardening on by default; invariant checks that fail the render, not the process | build | medium | open |
@@ -340,8 +342,13 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0272](0272-big-int-boost-backend.md) | Boost.Multiprecision backend and `JINJA2CPP_WITH_BIGINT` (0178 phase 4) | build | medium | open |
 | [0273](0273-build-conditional-parity-divergences.md) | Build-conditional parity divergences (0178 phase 0) | parity | medium | done |
 | [0274](0274-self-block-before-parent-pushed.md) | Blocks called through `self` at a child's top level lack the parent's blocks | parity | low | open |
+| [0275](0275-release-thread-caches.md) | `ReleaseThreadCaches()` | api | medium | open |
+| [0276](0276-memory-contract-docs.md) | User documentation for the memory contract | docs | medium | open |
 | [0277](0277-markup-escape-helper.md) | A public escape helper for Markup | api | low | open |
 | [0278](0278-remove-dead-valueref.md) | Remove the dead ValueRef alternative of InternalValue | internals | low | open |
 | [0280](0280-urlize-markup-input.md) | urlize escapes Markup input | filters | low | open |
 | [0281](0281-attr-bound-method.md) | attr() of a method renders empty | filters | low | open |
+| [0282](0282-settings-limits-followups.md) | `Settings::Limits` follow-ups (0262 leftovers) | api | low | open |
 | [0284](0284-template-module.md) | `Template.module` / `make_module`: a template's exports as a map | api | low | open |
+| [0285](0285-abi-baselines-at-rc.md) | Commit the ABI baselines at the 2.0 RC and turn the abidiff gate on | release | high | open |
+| [0286](0286-fixed-cost-drift-oct-12-19.md) | Fixed-cost drift from feature merges, 2026-10-12 to 2026-10-19 | perf | medium | open |

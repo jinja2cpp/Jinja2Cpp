@@ -18,6 +18,8 @@ JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 
 namespace jinja2
 {
+inline namespace v2
+{
 /*!
  * \brief Type of the error
  *
@@ -44,7 +46,7 @@ enum class ErrorCode
     UserCallableException = 15,    //!< A user callable (context or global value, filter, test, finalize, gettext) threw. ExtraParams[0] contains `what()`, GetException() the exception
     IntegerOutOfRange = 16,        //!< An integer is outside the `int64_t` range: a \ref BigInt the template uses (until docs/tasks/0270) or template arithmetic. ExtraParams[0] contains the message
     TemplateRuntimeError = 17,     //!< An operation of the template failed (Python's TypeError, ValueError, ...). ExtraParams[0] contains the message
-    ResourceLimitExceeded = 18,    //!< A size or depth limit, or a host's budget, was exceeded. ExtraParams[0] contains the message, ExtraParams[1] (when present) the limit's name
+    ResourceLimitExceeded = 18,    //!< A limit was passed: one of Settings::Limits, a built-in cap or a host's budget. ExtraParams[0] contains the message, ExtraParams[1] (for Settings::Limits) the name of the limit (`"maxRenderSteps"`)
     ExpectedStringLiteral = 1001,  //!< String literal expected
     ExpectedIdentifier = 1002,     //!< Identifier expected
     ExpectedSquareBracket = 1003,  //!< ']' expected
@@ -263,6 +265,7 @@ using ErrorInfoTpl JINJA2CPP_DEPRECATED("jinja2cpp-2: BasicErrorInfo") = BasicEr
 
 JINJA2CPP_EXPORT std::ostream& operator<<(std::ostream& os, const ErrorInfo& res);
 JINJA2CPP_EXPORT std::wostream& operator<<(std::wostream& os, const ErrorInfoW& res);
+} // namespace v2
 } // namespace jinja2
 
 namespace std

@@ -18,6 +18,21 @@ enable_testing()
 add_test(NAME consumer COMMAND consumer ${CMAKE_CURRENT_BINARY_DIR}/templates)
 add_test(NAME consumer_compat COMMAND consumer_compat ${CMAKE_CURRENT_BINARY_DIR}/templates)
 
+# A program built against 1.x headers must fail to link with this library, not misbehave:
+# the inline namespace v2 is in every mangled name (docs/tasks/0076). abi_probe_v2 is the
+# positive control; abi_probe_v1 is built only by the test, which expects the link error.
+add_executable(abi_probe_v2 abi_probe.cpp)
+target_compile_definitions(abi_probe_v2 PRIVATE PROBE_V2)
+target_link_libraries(abi_probe_v2 PRIVATE jinja2cpp::jinja2cpp)
+add_test(NAME abi_probe_v2 COMMAND abi_probe_v2)
+add_executable(abi_probe_v1 EXCLUDE_FROM_ALL abi_probe.cpp)
+target_link_libraries(abi_probe_v1 PRIVATE jinja2cpp::jinja2cpp)
+add_test(NAME abi_probe_v1_does_not_link
+    COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target abi_probe_v1 --config $<CONFIG>)
+# GNU ld, lld, Apple ld and MSVC link; a compile error or a successful link does not match
+set_tests_properties(abi_probe_v1_does_not_link PROPERTIES PASS_REGULAR_EXPRESSION
+    "undefined reference to [`']?jinja2::operator==|undefined symbol: jinja2::operator==|Undefined symbols for architecture|unresolved external symbol")
+
 # check_package.cmake points PKG_CONFIG_PATH at the install and turns this on. pkg-config
 # lists the private dependencies of a static build only in the internal deps mode, where
 # it knows them.

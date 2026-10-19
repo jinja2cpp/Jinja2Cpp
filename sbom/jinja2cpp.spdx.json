@@ -427,7 +427,7 @@
         }
       ],
       "primaryPackagePurpose": "SOURCE",
-      "comment": "role: mandatory; phases: build,consumer-build; exposure: public-api; delivery: vendored; selected-by: always; used-for: polymorphic and indirect (jinja2::detail::xyz) behind jinja2::types and jinja2::detail (value_ptr.h), used by Value, GenericList and GenericMap; why: Value-semantic owning pointers for the public value model; standardised as std::indirect/std::polymorphic in C++26; lighten: Keep (header-only, installed). Switch to std:: at a C++26 floor; modified: both at upstream 57f2e7a, moved to namespace jinja2::detail::xyz with JINJA2CPP_XYZ_ macros (0076); indirect: Clang incomplete-type fix (0edc34d), tag tested first (0072); polymorphic: default constructor constrained on the allocator for MSVC std::variant (0071), cb_ initialised (0089), in-place initializer_list constructor creates U, not T; file: include/jinja2cpp/polymorphic_value/indirect_cxx14.h sha256:b00dba6183edea9532030a373956ecab3638b6c5cfe61f40cbe862fba701dce3; file: include/jinja2cpp/polymorphic_value/polymorphic_cxx14.h sha256:eb0e46a2c95e693be7a192c1a992ece6e6fb900235ac44620f220bd646b2e372"
+      "comment": "role: mandatory; phases: build,consumer-build; exposure: public-api; delivery: vendored; selected-by: always; used-for: polymorphic and indirect (jinja2::v2::detail::xyz) behind jinja2::types and jinja2::detail (value_ptr.h), used by Value, GenericList and GenericMap; why: Value-semantic owning pointers for the public value model; standardised as std::indirect/std::polymorphic in C++26; lighten: Keep (header-only, installed). Switch to std:: at a C++26 floor; modified: both at upstream 57f2e7a, moved to namespace jinja2::v2::detail::xyz with JINJA2CPP_XYZ_ macros (0076); indirect: Clang incomplete-type fix (0edc34d), tag tested first (0072); polymorphic: default constructor constrained on the allocator for MSVC std::variant (0071), cb_ initialised (0089), in-place initializer_list constructor creates U, not T; file: include/jinja2cpp/polymorphic_value/indirect_cxx14.h sha256:14f328d0de7e26f047178a58d443b0316a2ecd69e1ec05007d6a3aeb23290d6a; file: include/jinja2cpp/polymorphic_value/polymorphic_cxx14.h sha256:3d46bb50b19a3f22284aa89866a9a521325456bf3e00f7245a42852ffb9a4db1"
     },
     {
       "SPDXID": "SPDXRef-Package-unicode-data",
@@ -448,7 +448,7 @@
         }
       ],
       "primaryPackagePurpose": "FILE",
-      "comment": "role: mandatory; phases: build; exposure: internal; delivery: generated; selected-by: always; used-for: Code-point tables for str.isprintable/isalpha/..., upper/lower/title/casefold, int() digit handling; why: Python-identical string predicates and case mapping without ICU; lighten: Data only, no dependency at build time (Python is needed only to regenerate). Acquisition decision is still open in docs/tasks/0187 and 0186; file: src/unicode_printable.h sha256:bb7537033f18a1847f7cdb89bb19bcdee61f8afe6fd0d24891ab6967bccb38dc; file: src/unicode_tables.h sha256:5d3160113753deb6394ff66d867522a1c0303da0bfcc83bafaa027cfbbe3b96b; file: src/unicode_case.h sha256:5e7881179bb8cedcc76abef282540138f317cda02286077ced320d06640ce3c3; generator: scripts/gen_unicode_printable.py; generator: scripts/gen_unicode_tables.py; generator: scripts/gen_unicode_case.py"
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: generated; selected-by: always; used-for: Code-point tables for str.isprintable/isalpha/..., upper/lower/title/casefold, int() digit handling; why: Python-identical string predicates and case mapping without ICU; lighten: Data only, no dependency at build time (Python is needed only to regenerate). Acquisition decision is still open in docs/tasks/0187 and 0186; file: src/unicode_printable.h sha256:7cc795a76469cb82072a59c4f19bf92c231668a28497236e9f90f68eb7887f4d; file: src/unicode_tables.h sha256:67feccba784328f3fa4f8ea65d5eb03ab0a118532df178c209777a72d38437c0; file: src/unicode_case.h sha256:6e6bc5f2a2b505fa82477a2f88c0f8a77e2d2adc2e7e136e869bae9a15fe2243; generator: scripts/gen_unicode_printable.py; generator: scripts/gen_unicode_tables.py; generator: scripts/gen_unicode_case.py"
     },
     {
       "SPDXID": "SPDXRef-Package-html-entities",
@@ -460,7 +460,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "83c2e14ba7b52dfd5befbba8f3bca85e0f8bbaf5696cc647c8372602ebc5ed1e"
+          "checksumValue": "faabd9fba5045264f159834f0f6d9eec1a281bb3349c7315231b6ac56d5f4ea6"
         }
       ],
       "homepage": "https://docs.python.org/3.12/library/html.entities.html",
@@ -475,7 +475,7 @@
         }
       ],
       "primaryPackagePurpose": "FILE",
-      "comment": "role: mandatory; phases: build; exposure: internal; delivery: generated; selected-by: always; used-for: Entity table for MarkupSafe-compatible unescape/striptags; why: Same entity set as Python's html.unescape; lighten: Data only; keep; file: src/html_entities.h sha256:83c2e14ba7b52dfd5befbba8f3bca85e0f8bbaf5696cc647c8372602ebc5ed1e; generator: scripts/gen_html_entities.py"
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: generated; selected-by: always; used-for: Entity table for MarkupSafe-compatible unescape/striptags; why: Same entity set as Python's html.unescape; lighten: Data only; keep; file: src/html_entities.h sha256:faabd9fba5045264f159834f0f6d9eec1a281bb3349c7315231b6ac56d5f4ea6; generator: scripts/gen_html_entities.py"
     }
   ],
   "relationships": [
@@ -580,5 +580,5 @@
       "relatedSpdxElement": "SPDXRef-Package-html-entities"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-library-b8a730d8766e05d1"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-library-de6703d730acabb9"
 }

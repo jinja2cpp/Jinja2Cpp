@@ -31,10 +31,10 @@
 
 using namespace jinja2;
 
-namespace jinja2::detail
-{
-// Handles from raw offsets and the bytes of a sealed tree, to corrupt a tree on purpose
-struct ArenaTestAccess
+// Handles from raw offsets and the bytes of a sealed tree, to corrupt a tree on purpose.
+// Defined through its qualified name: reopening `namespace jinja2::detail` here would make
+// MSVC declare a new jinja2::detail beside jinja2::v2::detail (docs/tasks/0076)
+struct jinja2::detail::ArenaTestAccess
 {
     template<typename T>
     static NodeRef<T> Ref(std::uint32_t offset)
@@ -65,7 +65,6 @@ struct ArenaTestAccess
         return header.objects;
     }
 };
-} // namespace jinja2::detail
 
 namespace
 {

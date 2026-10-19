@@ -12,7 +12,11 @@
 #include <string>
 #include <utility>
 
-namespace jinja2::detail
+namespace jinja2
+{
+inline namespace v2
+{
+namespace detail
 {
 // The error a public Load or Render boundary returns for the exception being handled (docs/api-2.0.md,
 // 2.1): its code, its what() and, when the engine did not raise it, the exception itself.
@@ -24,6 +28,8 @@ BasicErrorInfo<CharT> CurrentExceptionToError(const std::string& fileName)
     const char* message = "unknown exception";
     // Kept only for an exception raised outside the engine (docs/api-2.0.md, 2.1)
     bool fromOutside = true;
+    // The Settings::Limits field a limit names, if any
+    const char* limitField = nullptr;
     try
     {
         throw;
@@ -41,6 +47,7 @@ BasicErrorInfo<CharT> CurrentExceptionToError(const std::string& fileName)
     {
         code = ErrorCode::ResourceLimitExceeded;
         message = ex.what();
+        limitField = ex.Field();
         fromOutside = false;
     }
     catch (const IntegerOutOfRangeError& ex)
@@ -69,12 +76,18 @@ BasicErrorInfo<CharT> CurrentExceptionToError(const std::string& fileName)
     errorData.srcLoc.line = 1;
     errorData.srcLoc.col = 1;
     errorData.extraParams.emplace_back(std::string(message));
+    if (limitField)
+    {
+        errorData.extraParams.emplace_back(std::string(limitField));
+    }
     if (fromOutside)
     {
         errorData.exception = std::current_exception();
     }
     return BasicErrorInfo<CharT>(std::move(errorData));
 }
-} // namespace jinja2::detail
+} // namespace detail
+} // namespace v2
+} // namespace jinja2
 
 #endif // JINJA2CPP_SRC_ERROR_BOUNDARY_H

@@ -34,6 +34,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 NodeRef<ComposedRenderer> StatementsParser::TakeFrameBody(StatementInfo& info)
 {
@@ -172,7 +174,7 @@ StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, Stateme
         const auto openBlocks = std::count_if(statementsInfo.begin(), statementsInfo.end(), [](const StatementInfo& info) {
             return info.type != StatementInfo::ElseIfStatement;
         });
-        if (static_cast<std::size_t>(openBlocks) > MaxBlockNesting)
+        if (static_cast<std::size_t>(openBlocks) > detail::t_parseLimits.maxBlockNesting)
         {
             return MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }
@@ -323,6 +325,15 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
             return MakeUnexpected(parsedExpr.error());
         }
         ifExpr = *parsedExpr;
+        if (HasRenderLimits(m_settings.limits))
+        {
+            // The items the filter skips render no body, and a plain name or constant checks
+            // nothing: the wrapper's check counts each item as a render step
+            // (Settings::Limits::maxRenderSteps). A template without limits does without it
+            auto evaluator = m_nodes.Make<FullExpressionEvaluator>();
+            m_nodes[evaluator].SetExpression(ifExpr);
+            ifExpr = evaluator;
+        }
         filterReadsLoop = ReadsName(lexer, filterStart, "loop");
         isRecursive = lexer.EatIfEqual(Keyword::Recursive);
     }
@@ -382,7 +393,7 @@ private:
     Result ParseTarget(bool withNamespace, bool inParens)
     {
         DepthGuard depthGuard(m_depth);
-        if (depthGuard.Exceeds(MaxExpressionDepth) || StackNearlyExhausted())
+        if (depthGuard.Exceeds(detail::t_parseLimits.maxExpressionDepth) || StackNearlyExhausted())
         {
             return MakeParseError(ErrorCode::RecursionLimitExceeded, m_lexer.PeekNextToken());
         }
@@ -1952,4 +1963,5 @@ InternalValue EscapedLiteralValue(std::basic_string_view<CharT> text, const std:
 template InternalValue EscapedLiteralValue<char>(std::string_view text, const std::string& newlineSequence, bool& malformed);
 template InternalValue EscapedLiteralValue<wchar_t>(std::wstring_view text, const std::string& newlineSequence, bool& malformed);
 
+} // namespace v2
 } // namespace jinja2

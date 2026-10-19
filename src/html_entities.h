@@ -8,7 +8,11 @@
 #include <iterator>
 #include <string_view>
 
-namespace jinja2::html
+namespace jinja2
+{
+inline namespace v2
+{
+namespace html
 {
 
 // A named character reference and the one or two code points it stands for (0 when only one)
@@ -2261,6 +2265,8 @@ inline const HtmlEntity* FindHtmlEntity(std::string_view name)
     return it != std::end(HtmlEntities) && std::string_view(it->name) == name ? &*it : nullptr;
 }
 
-} // namespace jinja2::html
+} // namespace html
+} // namespace v2
+} // namespace jinja2
 
 #endif // JINJA2CPP_SRC_HTML_ENTITIES_H

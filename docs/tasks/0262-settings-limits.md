@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 priority: high
 area: api
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/601
 depends: [0250]
 touches: [include/jinja2cpp/template_env.h, src/template_env.cpp, src/recursion_guard.h, src/recursion_guard.cpp, src/renderer.h, src/global_functions.cpp, src/out_stream.cpp, src/template_impl.h, test/limits_test.cpp]
 shares: [src/internal_value.h, src/internal_value.cpp]
@@ -70,3 +71,8 @@ plus `maxRenderDepth = 10`.
 
 **Done when.** The struct and presets ship in 2.0, every field is enforced and tested, and
 docs/api-2.0.md and docs/security.md (0224) describe them.
+
+**Done in #601.** All eleven fields, both presets and error code 18 as specified. Measured with limits
+off, in instructions: Render from −0.02% to +0.5% (layout), with Render/plain_text +8 as its fixed cost;
+Load/plain_text about +47 (the limits compared word by word, the size check, the parse-limit scope).
+Leftovers are in 0282; memory bounds stay in 0263.

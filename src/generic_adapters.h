@@ -18,6 +18,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 template<typename ImplType, typename List, typename ValType, typename Base>
 class IndexedEnumeratorImpl : public Base
@@ -331,6 +333,7 @@ inline std::optional<ListEnumeratorPtr> IndexedListItemAccessorImpl<T>::CreateEn
     return MakeEnumerator<Enumerator>(this);
 }
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_GENERIC_ADAPTERS_H

@@ -8,6 +8,7 @@
 #include "recursion_guard.h"
 #include "render_context.h"
 #include "string_builder.h"
+#include "template_dict.h"
 #include "undefined.h"
 #include "unicode_printable.h"
 #include "value_visitors.h"
@@ -28,10 +29,15 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 using namespace std::string_literals;
 
-namespace jinja2::filters
+namespace jinja2
+{
+inline namespace v2
+{
+namespace filters
 {
 struct PrettyPrinter : visitors::BaseVisitor<std::string>
 {
@@ -40,6 +46,55 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     explicit PrettyPrinter(const RenderContext* context)
         : m_context(context)
     {
+    }
+
+    // pprint's _safe_key: `a < b` when Python can order the two keys, else by the name of
+    // their types (str(type)), so that {1: 'a', 'b': 2} prints with the int first. Two keys
+    // of one type that cannot be ordered (None and None) stay where they are, as Python
+    // compares their ids
+    static bool SafeKeyLess(const InternalValue& left, const InternalValue& right)
+    {
+        const auto isNumber = [](const InternalValue& val) {
+            return val.Kind() == ValueKind::Int || val.Kind() == ValueKind::Double || val.Kind() == ValueKind::Bool;
+        };
+        const auto isSequence = [](const InternalValue& val) { return val.Kind() == ValueKind::List || val.Kind() == ValueKind::KeyValuePair; };
+        if ((isNumber(left) && isNumber(right)) || (IsStringValue(left) && IsStringValue(right)) || (isSequence(left) && isSequence(right)))
+        {
+            try
+            {
+                return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
+            }
+            catch (const std::runtime_error&) // NOLINT(bugprone-empty-catch): the fallback below is the handling
+            {
+                // Tuples with items Python cannot order: ordered by type like the rest
+            }
+        }
+        return std::strcmp(Apply<visitors::PythonTypeNameGetter>(left), Apply<visitors::PythonTypeNameGetter>(right)) < 0;
+    }
+
+    // The entries in the order pprint prints them: by key. String keys sort by code point,
+    // which is UTF-8 byte order
+    static void SortEntriesByKey(std::vector<KeyValuePair>& entries)
+    {
+        if (!std::all_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return IsStringValue(entry.key); }))
+        {
+            std::stable_sort(entries.begin(), entries.end(), [](const KeyValuePair& left, const KeyValuePair& right) { return SafeKeyLess(left.key, right.key); });
+            return;
+        }
+        std::vector<std::pair<std::string, size_t>> order;
+        order.reserve(entries.size());
+        for (size_t idx = 0; idx != entries.size(); ++idx)
+        {
+            order.emplace_back(AsString(entries[idx].key), idx);
+        }
+        std::sort(order.begin(), order.end());
+        std::vector<KeyValuePair> sorted;
+        sorted.reserve(entries.size());
+        for (const auto& item : order)
+        {
+            sorted.push_back(std::move(entries[item.second]));
+        }
+        entries = std::move(sorted);
     }
 
     // A value as pprint prints it: Markup as Markup('...')
@@ -88,11 +143,11 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         fmt::format_to(os, "{{");
 
         // Python's pprint sorts dict keys; UTF-8 byte order is code point order
-        auto keys = map.GetKeys();
-        std::sort(keys.begin(), keys.end());
+        auto entries = map.GetEntries();
+        SortEntriesByKey(entries);
 
         bool isFirst = true;
-        for (auto& k : keys)
+        for (auto& entry : entries)
         {
             if (isFirst)
             {
@@ -103,8 +158,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
                 fmt::format_to(os, ", ");
             }
 
-            fmt::format_to(os, "{}: ", Repr(k));
-            fmt::format_to(os, "{}", Print(map.GetValueByName(k), m_context));
+            fmt::format_to(os, "{}: ", Print(entry.key, m_context));
+            fmt::format_to(os, "{}", Print(entry.value, m_context));
         }
 
         fmt::format_to(os, "}}");
@@ -118,7 +173,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         std::string str;
         auto os = std::back_inserter(str);
 
-        fmt::format_to(os, "({}, ", Repr(kwPair.key));
+        fmt::format_to(os, "({}, ", Print(kwPair.key, m_context));
         fmt::format_to(os, "{})", Print(kwPair.value, m_context));
 
         return str;
@@ -428,18 +483,7 @@ private:
         }
         else if (const auto* d = GetIf<double>(&value))
         {
-            if (std::isnan(*d))
-            {
-                m_out += "NaN";
-            }
-            else if (std::isinf(*d))
-            {
-                m_out += *d < 0 ? "-Infinity" : "Infinity";
-            }
-            else
-            {
-                m_out += visitors::PythonFloatText(*d).View();
-            }
+            m_out += JsonFloatText(*d);
         }
         else if (auto str = GetAsSameString(std::string(), value))
         {
@@ -447,7 +491,7 @@ private:
         }
         else if (const auto* pair = GetIf<KeyValuePair>(&value))
         {
-            InternalValueList items{ InternalValue(pair->key), pair->value };
+            InternalValueList items{ pair->key, pair->value };
             WriteContainer('[', ']', items, level, [this, level](const InternalValue& item) { WriteValue(item, level + 1); });
         }
         else if (auto list = AsList(value))
@@ -462,18 +506,100 @@ private:
                 throw std::runtime_error("Object of type "s + objectClass + " is not JSON serializable");
             }
             // sort_keys: Python orders str keys by code point, which is UTF-8 byte order
-            auto keys = map->GetKeys();
-            std::sort(keys.begin(), keys.end());
-            WriteContainer('{', '}', keys, level, [this, map, level](const std::string& key) {
-                WriteString(key);
+            auto entries = map->GetEntries();
+            std::vector<std::pair<std::string, size_t>> order;
+            order.reserve(entries.size());
+            if (std::all_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return IsStringValue(entry.key); }))
+            {
+                for (size_t idx = 0; idx != entries.size(); ++idx)
+                {
+                    order.emplace_back(AsString(entries[idx].key), idx);
+                }
+                std::sort(order.begin(), order.end());
+            }
+            else
+            {
+                OrderNonStringKeys(entries, order);
+            }
+            WriteContainer('{', '}', order, level, [this, &entries, level](const std::pair<std::string, size_t>& item) {
+                WriteString(item.first);
                 m_out += ": ";
-                WriteValue(map->GetValueByName(key), level + 1);
+                WriteValue(entries[item.second].value, level + 1);
             });
         }
         else
         {
             Fail();
         }
+    }
+
+    // How json.dumps writes a float, also as a key
+    static std::string JsonFloatText(double val)
+    {
+        if (std::isnan(val))
+        {
+            return "NaN";
+        }
+        if (std::isinf(val))
+        {
+            return val < 0 ? "-Infinity" : "Infinity";
+        }
+        return std::string(visitors::PythonFloatText(val).View());
+    }
+
+    // Python's `a < b` for two keys that json.dumps accepts: numbers (bool included) order
+    // among themselves, strings among themselves, and anything else is a TypeError
+    static bool KeyLess(const InternalValue& left, const InternalValue& right)
+    {
+        const bool leftString = IsStringValue(left);
+        const bool rightString = IsStringValue(right);
+        if (leftString && rightString)
+        {
+            return AsString(left) < AsString(right);
+        }
+        if (leftString || rightString || left.IsNone() || right.IsNone())
+        {
+            throw std::runtime_error("'<' not supported between instances of '"s + Apply<visitors::PythonTypeNameGetter>(left) + "' and '" + Apply<visitors::PythonTypeNameGetter>(right) + "'");
+        }
+        return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
+    }
+
+    // The keys of a mapping with a key that is not a string, in sort_keys order, with the JSON
+    // spelling of each: 1 is "1", 2.5 is "2.5", True is "true" and None is "null". A tuple or
+    // an object is no JSON key; keys of types Python cannot compare (a str and an int) are a TypeError
+    static void OrderNonStringKeys(const std::vector<KeyValuePair>& entries, std::vector<std::pair<std::string, size_t>>& order)
+    {
+        for (size_t idx = 0; idx != entries.size(); ++idx)
+        {
+            const auto& key = entries[idx].key;
+            std::string text;
+            if (const auto* i = GetIf<int64_t>(&key))
+            {
+                text = std::to_string(*i);
+            }
+            else if (const auto* b = GetIf<bool>(&key))
+            {
+                text = *b ? "true" : "false";
+            }
+            else if (const auto* d = GetIf<double>(&key))
+            {
+                text = JsonFloatText(*d);
+            }
+            else if (key.IsNone())
+            {
+                text = "null";
+            }
+            else if (IsStringValue(key))
+            {
+                text = AsString(key);
+            }
+            else
+            {
+                throw std::runtime_error("keys must be str, int, float, bool or None, not "s + Apply<visitors::PythonTypeNameGetter>(key));
+            }
+            order.emplace_back(std::move(text), idx);
+        }
+        std::stable_sort(order.begin(), order.end(), [&entries](const auto& left, const auto& right) { return KeyLess(entries[left.second].key, entries[right.second].key); });
     }
 
     RenderContext& m_context;
@@ -784,7 +910,15 @@ private:
             // namespace(), cycler() and joiner() are objects, not data
             throw std::runtime_error("Object of type "s + objectClass + " is not YAML serializable");
         }
-        const auto keys = map.GetKeys();
+        // A key that is not a string is written as its str() spelling (DictKeyText), as at the
+        // public boundary (docs/tasks/0036)
+        const auto entries = map.GetEntries();
+        std::vector<std::string> keys;
+        keys.reserve(entries.size());
+        for (const auto& entry : entries)
+        {
+            keys.push_back(IsStringValue(entry.key) ? AsString(entry.key) : DictKeyText(entry.key));
+        }
         if (keys.empty())
         {
             StartNode(pos, indent, false);
@@ -792,8 +926,9 @@ private:
             return;
         }
         bool isFirst = true;
-        for (const auto& key : keys)
+        for (size_t idx = 0; idx != keys.size(); ++idx)
         {
+            const auto& key = keys[idx];
             if (isFirst)
             {
                 StartNode(pos, indent, true);
@@ -816,7 +951,7 @@ private:
                 WriteString(key);
             }
             m_out.push_back(':');
-            WriteNode(map.GetValueByName(key), indent + 2, Position::MappingValue);
+            WriteNode(entries[idx].value, indent + 2, Position::MappingValue);
         }
     }
 
@@ -952,13 +1087,18 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     // Port of Jinja2's do_xmlattr: key="escaped str(value)" in the mapping's order, None and
     // undefined values left out (and callables, which have no str() here)
     std::string result;
-    for (auto& key : map->GetKeys())
+    for (auto& [keyValue, value] : map->GetEntries())
     {
-        auto value = map->GetValueByName(key);
         if (IsEmpty(value) || GetIf<Callable>(&value))
         {
             continue;
         }
+        // Jinja2 searches the key for whitespace with a regular expression, which only takes text
+        if (!IsStringValue(keyValue))
+        {
+            throw std::runtime_error("expected string or bytes-like object, got '"s + Apply<visitors::PythonTypeNameGetter>(keyValue) + "'");
+        }
+        const auto key = AsString(keyValue);
         // Jinja2 rejects keys with whitespace, "/", ">" or "="
         if (std::any_of(key.begin(), key.end(), [](char ch) { return std::strchr(" \t\n\r\f\v/>=", ch) != nullptr && ch != 0; }))
         {
@@ -978,4 +1118,6 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     return resultVal;
 }
 
-} // namespace jinja2::filters
+} // namespace filters
+} // namespace v2
+} // namespace jinja2

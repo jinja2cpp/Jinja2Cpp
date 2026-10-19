@@ -13,6 +13,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 using TesterPtr = std::shared_ptr<IsExpression::ITester>;
 using TesterParams = CallParamsInfo;
 
@@ -117,6 +119,7 @@ private:
     InternalValue m_callable;
 };
 } // namespace testers
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_TESTERS_H

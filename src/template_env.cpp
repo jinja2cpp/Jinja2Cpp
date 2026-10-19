@@ -14,6 +14,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -21,11 +22,14 @@
 #include <shared_mutex>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <tuple>
 #include <utility>
 #include <vector>
 
 namespace jinja2
+{
+inline namespace v2
 {
 
 namespace
@@ -49,6 +53,24 @@ bool IsSameText(const std::string& lhs, const std::string& rhs)
     }
     return true;
 }
+// Word by word without a branch or a memcmp call: compiled to a few vector compares
+template<typename T>
+bool IsSameBytes(const T& lhs, const T& rhs)
+{
+    static_assert(std::has_unique_object_representations_v<T> && sizeof(T) % sizeof(std::uint64_t) == 0);
+    const auto* const left = reinterpret_cast<const unsigned char*>(&lhs);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    const auto* const right = reinterpret_cast<const unsigned char*>(&rhs); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    std::uint64_t diff = 0;
+    for (std::size_t offset = 0; offset != sizeof(T); offset += sizeof(std::uint64_t))
+    {
+        std::uint64_t leftWord = 0;
+        std::uint64_t rightWord = 0;
+        std::memcpy(&leftWord, left + offset, sizeof(leftWord));
+        std::memcpy(&rightWord, right + offset, sizeof(rightWord));
+        diff |= leftWord ^ rightWord;
+    }
+    return diff == 0;
+}
 } // namespace
 
 bool operator==(const Settings& lhs, const Settings& rhs)
@@ -56,15 +78,22 @@ bool operator==(const Settings& lhs, const Settings& rhs)
     // Structured bindings name every field: a field added to Settings or Settings::Extensions stops this compiling
     // until it is compared here too
     const auto& [lTrim, lLstrip, lCacheSize, lAutoReload, lExt, lMetaType, lKeepNl, lNlSeq, lVarStart, lVarEnd, lBlockStart, lBlockEnd, lCommentStart,
-                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lAutoescapeSelector, lUndefined, lLookup, lCallablesAsFilters] = lhs;
+                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lAutoescapeSelector, lUndefined, lLookup, lCallablesAsFilters, lLimits] = lhs;
     const auto& [rTrim, rLstrip, rCacheSize, rAutoReload, rExt, rMetaType, rKeepNl, rNlSeq, rVarStart, rVarEnd, rBlockStart, rBlockEnd, rCommentStart,
-                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rAutoescapeSelector, rUndefined, rLookup, rCallablesAsFilters] = rhs;
+                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rAutoescapeSelector, rUndefined, rLookup, rCallablesAsFilters, rLimits] = rhs;
     const auto& [lDo, lLoopControls, lI18n] = lExt;
     const auto& [rDo, rLoopControls, rI18n] = rExt;
 
     // The flags and numbers first, then the strings
     if (std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lKeepNl, lAutoescape, lAutoescapeSelector, lUndefined, lLookup, lCallablesAsFilters)
         != std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rKeepNl, rAutoescape, rAutoescapeSelector, rUndefined, rLookup, rCallablesAsFilters))
+    {
+        return false;
+    }
+    // Every Load compares the settings, so the limits compare as bytes: integers without padding, and a field added
+    // to Settings::Limits changes the size checked here
+    static_assert(sizeof(Settings::Limits) == 72);
+    if (!IsSameBytes(lLimits, rLimits))
     {
         return false;
     }
@@ -380,7 +409,7 @@ ResultW<TemplateW> TemplateEnv::LoadTemplateW(std::string fileName)
 Result<Template> TemplateEnv::FromString(std::string_view source, std::string name)
 {
     Template tpl(this);
-    auto res = tpl.Load(std::string(source), std::move(name));
+    auto res = tpl.Load(source, std::move(name));
     if (!res)
     {
         return MakeUnexpected(res.error());
@@ -391,7 +420,7 @@ Result<Template> TemplateEnv::FromString(std::string_view source, std::string na
 ResultW<TemplateW> TemplateEnv::FromString(std::wstring_view source, std::string name)
 {
     TemplateW tpl(this);
-    auto res = tpl.Load(std::wstring(source), std::move(name));
+    auto res = tpl.Load(source, std::move(name));
     if (!res)
     {
         return MakeUnexpected(res.error());
@@ -497,4 +526,5 @@ void TemplateEnv::ApplyGlobals(const std::function<void(const ValuesMap&)>& fn) 
     fn(*m_impl->globalValues);
 }
 
+} // namespace v2
 } // namespace jinja2

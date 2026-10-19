@@ -51,6 +51,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 template<typename CharT>
 class TemplateImpl;
 
@@ -1987,6 +1989,7 @@ private:
     int m_debugExceptions = 0;
 #endif
 };
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_RENDER_CONTEXT_H

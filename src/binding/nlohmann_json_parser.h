@@ -11,6 +11,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 template<typename CharT>
 nonstd::expected<Value, std::string> Parse(std::basic_string_view<CharT> json, boost::anys::unique_any& metadataJson)
@@ -32,6 +34,7 @@ nonstd::expected<Value, std::string> Parse(std::basic_string_view<CharT> json, b
     }
 }
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_NLOHMANN_JSON_PARSER_H

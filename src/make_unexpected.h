@@ -7,6 +7,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 // The one place that names the backing `expected` library's error factory, so that
 // switching it (docs/api-2.0.md, decision 4) touches this function and not every
@@ -17,6 +19,7 @@ auto MakeUnexpected(E&& error)
     return nonstd::make_unexpected(std::forward<E>(error));
 }
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_MAKE_UNEXPECTED_H

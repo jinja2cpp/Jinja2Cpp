@@ -1,6 +1,8 @@
 #ifndef JINJA2CPP_SRC_LOAD_SETTINGS_H
 #define JINJA2CPP_SRC_LOAD_SETTINGS_H
 
+#include "recursion_guard.h"
+
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template_env.h>
 
@@ -11,7 +13,11 @@
 #include <utility>
 #include <vector>
 
-namespace jinja2::detail
+namespace jinja2
+{
+inline namespace v2
+{
+namespace detail
 {
 
 // Delimiters and line prefixes from Settings, in the character type of a template
@@ -96,6 +102,7 @@ struct LoadSettings
         : settings(setts)
         , narrow(setts)
         , wide(setts)
+        , hasRenderLimits(jinja2::HasRenderLimits(setts.limits))
     {
     }
 
@@ -115,6 +122,9 @@ struct LoadSettings
     Settings settings;
     Delimiters<char> narrow;
     Delimiters<wchar_t> wide;
+    // Whether a render has a limit of its own to install (RenderLimitsScope): the Load-time limits aside, one of
+    // settings.limits differs from the defaults
+    bool hasRenderLimits;
 };
 
 using LoadSettingsPtr = std::shared_ptr<const LoadSettings>;
@@ -122,6 +132,8 @@ using LoadSettingsPtr = std::shared_ptr<const LoadSettings>;
 // For templates made without an environment
 const LoadSettingsPtr& DefaultLoadSettings();
 
-} // namespace jinja2::detail
+} // namespace detail
+} // namespace v2
+} // namespace jinja2
 
 #endif // JINJA2CPP_SRC_LOAD_SETTINGS_H

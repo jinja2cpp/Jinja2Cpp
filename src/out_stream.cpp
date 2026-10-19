@@ -13,6 +13,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 void OutStream::Flush()
 {
     if (!m_writer)
@@ -262,4 +264,5 @@ void OutStream::WriteValueTo(const InternalValue& val)
 
 template void OutStream::WriteValueTo<char>(const InternalValue& val);
 template void OutStream::WriteValueTo<wchar_t>(const InternalValue& val);
+} // namespace v2
 } // namespace jinja2

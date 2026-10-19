@@ -30,12 +30,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // Local change: upstream includes "feature_check.h" here for
 // XYZ_HAS_TEMPLATE_ARGUMENT_DEDUCTION; the C++17 floor always has it, and this
 // copy stays a single header. Vendored from jbcoe/value_types 57f2e7a (task 0072).
-// Local change (task 0076): namespace xyz moved into jinja2::detail and the
+// Local change (task 0076): namespace xyz moved into jinja2::v2::detail and the
 // XYZ_ macros renamed JINJA2CPP_XYZ_, so a user's own copy of value_types
 // neither shadows this one through the shared include guards nor collides
 // with it at link time.
 
 namespace jinja2 {
+inline namespace v2 {
 namespace detail {
 namespace xyz {
 #ifndef JINJA2CPP_XYZ_IN_PLACE_DEFINED
@@ -616,6 +617,7 @@ indirect(std::allocator_arg_t, Alloc, Value) -> indirect<
 
 }  // namespace xyz
 }  // namespace detail
+}  // namespace v2
 }  // namespace jinja2
 
 template <class T, class Alloc>

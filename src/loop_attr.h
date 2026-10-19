@@ -6,6 +6,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 // An attribute of a for loop's `loop` object. `loop.<name>` in the template is resolved to
 // one of these at Load, so a render reads the attribute without comparing strings
 // (docs/design/perf-design-overview.md row 17; 0117 P1)
@@ -61,6 +63,7 @@ inline LoopAttr FindLoopAttr(std::string_view name)
     }
     return LoopAttr::None;
 }
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_LOOP_ATTR_H

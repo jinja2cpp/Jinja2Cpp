@@ -10,6 +10,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 // Frees the reference cycles among the lists, dicts and namespaces a render builds
 // (docs/tasks/0110). They are shared by reference count, as Python's are, so a container
@@ -78,6 +80,7 @@ private:
     std::unique_ptr<Notes> m_notes;
 };
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_CYCLE_COLLECTOR_H

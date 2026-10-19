@@ -13,6 +13,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 namespace
 {
@@ -77,4 +79,5 @@ InternalValue ParseNumberLiteral(std::string number)
     return InternalValue(std::strtod(digits, nullptr));
 }
 
+} // namespace v2
 } // namespace jinja2

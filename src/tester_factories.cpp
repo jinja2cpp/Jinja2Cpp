@@ -22,6 +22,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 namespace
 {
@@ -149,4 +151,5 @@ TesterPtr CreateTester(std::string testerName, const CallParamsInfo& params, Ren
     return std::make_shared<testers::UserDefinedTester>(std::move(testerName), params, std::move(callable));
 }
 
+} // namespace v2
 } // namespace jinja2

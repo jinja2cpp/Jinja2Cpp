@@ -28,6 +28,8 @@ JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 
 namespace jinja2
 {
+inline namespace v2
+{
 class ITemplateImpl;
 template<typename CharT>
 class TemplateImpl;
@@ -250,6 +252,7 @@ using Template = BasicTemplate<char>;
 //! Template with wide (`wchar_t`) source and output
 using TemplateW = BasicTemplate<wchar_t>;
 
+} // namespace v2
 } // namespace jinja2
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END

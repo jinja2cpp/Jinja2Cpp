@@ -25,6 +25,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 // A name's slot in the frame of its unit; Dynamic for a name looked up by name
 struct SlotIndex
 {
@@ -152,6 +154,7 @@ struct ScopeView
     bool operator==(const ScopeView& other) const { return view == other.view && scopeIndex == other.scopeIndex && linkBelow == other.linkBelow; }
     bool operator!=(const ScopeView& other) const { return !(*this == other); }
 };
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_SLOT_FRAME_H

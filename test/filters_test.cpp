@@ -690,6 +690,7 @@ INSTANTIATE_TEST_SUITE_P(EscapeCpp, FilterGenericTest, ::testing::Values(
 INSTANTIATE_TEST_SUITE_P(ToYaml, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'a': 1, 'b': [1, 2], 'c': {'d': none, 'e': 'x y'}} | toyaml",
                                             "a: 1\nb:\n  - 1\n  - 2\nc:\n  d: null\n  e: x y"},
+                            InputOutputPair{"{1: 'a', (1, 2): 'b', none: 'c'} | toyaml", "\"1\": a\n\"(1, 2)\": b\nNone: c"},
                             InputOutputPair{"[1, 'two', [3, 4], {'k': true}, [], {}] | toyaml",
                                             "- 1\n- two\n- - 3\n  - 4\n- k: true\n- []\n- {}"},
                             InputOutputPair{"[{'a': 1, 'b': {'c': 2}}] | toyaml", "- a: 1\n  b:\n    c: 2"},

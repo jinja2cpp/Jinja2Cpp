@@ -144,6 +144,8 @@ struct formatter<jinja2::Value, CharT>
 
 namespace jinja2
 {
+inline namespace v2
+{
 Exception::~Exception() = default;
 
 namespace
@@ -468,4 +470,5 @@ std::wostream& operator<<(std::wostream& os, const ErrorInfoW& res)
     os << res.ToString();
     return os;
 }
+} // namespace v2
 } // namespace jinja2
