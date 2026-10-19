@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 
@@ -59,9 +60,10 @@ public:
     // A dict of string keys, such as the names of keyword arguments, which never start with the mark
     explicit TemplateDict(InternalDict&& items);
     TemplateDict(const TemplateDict& other);
-    TemplateDict(TemplateDict&& other) noexcept = default;
+    // OrderedMap's moves allocate on MSVC (see ordered_map.h), so these are noexcept only where its are
+    TemplateDict(TemplateDict&& other) noexcept(std::is_nothrow_move_constructible_v<InternalDict>) = default;
     TemplateDict& operator=(const TemplateDict& other);
-    TemplateDict& operator=(TemplateDict&& other) noexcept = default;
+    TemplateDict& operator=(TemplateDict&& other) noexcept(std::is_nothrow_move_assignable_v<InternalDict>) = default;
     ~TemplateDict() = default;
 
     // The entries under their tokens: for the count and the values. Read the keys through KeyOf
