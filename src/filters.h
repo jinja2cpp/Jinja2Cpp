@@ -14,6 +14,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 using FilterPtr = std::shared_ptr<ExpressionFilter::IExpressionFilter>;
 using FilterParams = CallParamsInfo;
 
@@ -340,6 +342,7 @@ private:
 };
 
 } // namespace filters
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_FILTERS_H

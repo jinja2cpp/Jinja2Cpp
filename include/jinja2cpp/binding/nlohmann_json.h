@@ -12,6 +12,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 namespace detail
 {
 
@@ -237,6 +239,7 @@ struct Reflector<nlohmann::ordered_json> : detail::NLohmannJsonReflector<nlohman
 };
 #endif
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_BINDING_NLOHMANN_JSON_H

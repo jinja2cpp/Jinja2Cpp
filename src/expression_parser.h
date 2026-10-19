@@ -20,6 +20,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 // Jinja2 rejects a filter or test it does not know when it compiles the template, except in
 // an `if` statement or an inline if, which leave the check to the call (Frame.soft_frame in
 // jinja2/compiler.py). The expression parsers of one template report each unknown name here.
@@ -211,6 +213,7 @@ private:
     unsigned m_operators = 0;
 };
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_EXPRESSION_PARSER_H

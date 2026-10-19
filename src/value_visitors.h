@@ -37,6 +37,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 namespace detail
 {
@@ -2069,6 +2071,7 @@ JINJA2CPP_HOT_INLINE InternalValue ApplyToNumbers(const InternalValue& left, con
 
 } // namespace visitors
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_VALUE_VISITORS_H

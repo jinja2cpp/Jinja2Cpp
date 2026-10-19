@@ -12,6 +12,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 // What a named lookup missed, and the policy that decides how the undefined result may be
 // used. It travels with the value, as the class of a Python Undefined does: a variable set
@@ -102,6 +104,7 @@ inline void CheckStrictUndefined(const UndefinedValue& val)
     }
 }
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_UNDEFINED_H

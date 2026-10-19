@@ -63,6 +63,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 // The default globals of every render, looked up after the environment's (global_functions.cpp)
 extern const InternalValueMap& GetBuiltinGlobals(bool withI18n);
@@ -827,6 +829,7 @@ private:
     MetadataInfo<CharT> m_metadataInfo;
 };
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_TEMPLATE_IMPL_H

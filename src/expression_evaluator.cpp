@@ -41,6 +41,8 @@ using namespace std::string_literals;
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 // Out of line, so that the paths without autoescape stay small
 void WriteEscaped(OutStream& stream, const InternalValue& val, IRendererCallback* callback)
@@ -1589,4 +1591,5 @@ ArenaCallParams ArenaCallParams::Make(NodeArena& nodes, const CallParamsInfo& pa
     result.kwParams = nodes.MakeSpan(kwParams);
     return result;
 }
+} // namespace v2
 } // namespace jinja2

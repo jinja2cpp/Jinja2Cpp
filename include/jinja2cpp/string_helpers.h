@@ -14,6 +14,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 namespace detail
 {
 template<typename Src, typename Dst>
@@ -374,6 +376,7 @@ inline std::string AsString(const Value& val) { return std::visit(detail::String
 //! The stored string, converted if needed, or an empty string for any other value, as in 1.x; \ref ToWString prints every value
 JINJA2CPP_DEPRECATED("jinja2cpp-2: ToWString")
 inline std::wstring AsWString(const Value& val) { return std::visit(detail::WStringGetter(), val.GetData()); }
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_STRING_HELPERS_H

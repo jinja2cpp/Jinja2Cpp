@@ -12,6 +12,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 class Value;
 class GenericList;
 class GenericMap;
@@ -59,6 +61,7 @@ using ErrorInfo = BasicErrorInfo<char>;
 using ErrorInfoW = BasicErrorInfo<wchar_t>;
 using ValuesList = std::vector<Value>;
 using FilesystemHandlerPtr = std::shared_ptr<IFilesystemHandler>;
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_FWD_H

@@ -31,7 +31,11 @@
 
 using namespace std::string_literals;
 
-namespace jinja2::methods
+namespace jinja2
+{
+inline namespace v2
+{
+namespace methods
 {
 namespace
 {
@@ -2388,4 +2392,6 @@ void ThrowNoAttribute(const InternalValue& obj, const std::string& name)
     Raise("'" + TypeName(obj) + " object' has no attribute '" + name + "'");
 }
 
-} // namespace jinja2::methods
+} // namespace methods
+} // namespace v2
+} // namespace jinja2

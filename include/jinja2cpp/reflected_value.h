@@ -23,6 +23,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 /*!
  * \brief Reflect the arbitrary C++ type to the Jinja2C++ engine
@@ -687,6 +689,7 @@ Value Reflect(T&& val)
     return Reflector<T>::Create(std::forward<T>(val));
 }
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_REFLECTED_VALUE_H

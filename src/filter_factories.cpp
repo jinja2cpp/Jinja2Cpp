@@ -22,6 +22,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 namespace
 {
@@ -164,4 +166,5 @@ FilterPtr CreateFilter(const std::string& filterName, const CallParamsInfo& para
     return std::make_shared<filters::UserDefinedFilter>(filterName, params, std::move(callable));
 }
 
+} // namespace v2
 } // namespace jinja2

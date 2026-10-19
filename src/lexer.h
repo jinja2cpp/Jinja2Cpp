@@ -12,6 +12,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 struct CharRange
 {
     size_t startOffset;
@@ -919,6 +921,7 @@ private:
     }
 };
 
+} // namespace v2
 } // namespace jinja2
 
 namespace std

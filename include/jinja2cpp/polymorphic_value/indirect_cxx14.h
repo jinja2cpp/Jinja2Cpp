@@ -36,6 +36,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // with it at link time.
 
 namespace jinja2 {
+inline namespace v2 {
 namespace detail {
 namespace xyz {
 #ifndef JINJA2CPP_XYZ_IN_PLACE_DEFINED
@@ -616,6 +617,7 @@ indirect(std::allocator_arg_t, Alloc, Value) -> indirect<
 
 }  // namespace xyz
 }  // namespace detail
+}  // namespace v2
 }  // namespace jinja2
 
 template <class T, class Alloc>

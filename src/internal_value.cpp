@@ -31,6 +31,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 namespace detail
 {
@@ -2246,4 +2248,5 @@ bool Callable::IsSame(const Callable& other) const
     return left != nullptr && right != nullptr && left->val.IsEqual(right->val);
 }
 
+} // namespace v2
 } // namespace jinja2

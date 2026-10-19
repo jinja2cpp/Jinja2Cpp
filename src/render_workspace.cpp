@@ -14,6 +14,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 RenderWorkspace::RenderWorkspace()
 {
     m_loopFrames.reserve(MaxLoopFrames);
@@ -70,4 +72,5 @@ void RenderWorkspace::EmptyMaps(RenderMaps& maps, bool keepTables) noexcept
         }
     }
 }
+} // namespace v2
 } // namespace jinja2

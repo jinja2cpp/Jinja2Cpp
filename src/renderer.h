@@ -18,6 +18,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 class IRendererBase : public ArenaNode
 {
 public:
@@ -181,6 +183,7 @@ inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<E
     }
     return nodes.Make<ExpressionRenderer>(expr);
 }
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_RENDERER_H

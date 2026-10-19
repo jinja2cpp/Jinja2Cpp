@@ -21,6 +21,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 namespace
 {
 
@@ -864,4 +866,5 @@ std::string CompiledPercentFormat::Format(const InternalValue* args, size_t coun
     return Formatter(args, count, false).Run(m_format, m_pieces);
 }
 
+} // namespace v2
 } // namespace jinja2

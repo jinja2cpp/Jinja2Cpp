@@ -19,6 +19,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 NameResolver::FrameId NameResolver::Push(FrameId parent, Kind kind)
 {
     const auto id = static_cast<FrameId>(m_frames.size());
@@ -488,4 +490,5 @@ std::pair<SlotIndex, UnitId> NameResolver::Find(const NodeArena& nodes, NodeRef<
     }
     return dynamic;
 }
+} // namespace v2
 } // namespace jinja2

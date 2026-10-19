@@ -47,6 +47,8 @@ using namespace std::string_literals;
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 void ForStatement::Render(OutStream& os, RenderContext& values)
 {
@@ -2642,4 +2644,5 @@ void BindUndefinedStatement::Render(OutStream& /*os*/, RenderContext& values)
         }
     }
 }
+} // namespace v2
 } // namespace jinja2

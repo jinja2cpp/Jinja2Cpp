@@ -35,7 +35,11 @@ namespace ba = boost::algorithm;
 
 using namespace std::string_literals;
 
-namespace jinja2::filters
+namespace jinja2
+{
+inline namespace v2
+{
+namespace filters
 {
 
 template<typename D>
@@ -2035,9 +2039,15 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     return resultVal;
 }
 
-} // namespace jinja2::filters
+} // namespace filters
+} // namespace v2
+} // namespace jinja2
 
-namespace jinja2::detail
+namespace jinja2
+{
+inline namespace v2
+{
+namespace detail
 {
 namespace
 {
@@ -2091,4 +2101,6 @@ int CompareLowerUnicode(std::wstring_view left, std::wstring_view right)
 {
     return CompareLower(left, right);
 }
-} // namespace jinja2::detail
+} // namespace detail
+} // namespace v2
+} // namespace jinja2

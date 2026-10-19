@@ -30,6 +30,8 @@ JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 
 namespace jinja2
 {
+inline namespace v2
+{
 //! Python `None`: what a default-constructed \ref Value holds
 struct NoneValue
 {
@@ -1356,6 +1358,7 @@ decltype(auto) Visit(Fn&& fn, Value& val)
     return detail::VisitUnwrapped(std::forward<Fn>(fn), val.GetData());
 }
 
+} // namespace v2
 } // namespace jinja2
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END

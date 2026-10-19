@@ -34,6 +34,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 NodeRef<ComposedRenderer> StatementsParser::TakeFrameBody(StatementInfo& info)
 {
@@ -1943,4 +1945,5 @@ InternalValue EscapedLiteralValue(std::basic_string_view<CharT> text, const std:
 template InternalValue EscapedLiteralValue<char>(std::string_view text, const std::string& newlineSequence, bool& malformed);
 template InternalValue EscapedLiteralValue<wchar_t>(std::wstring_view text, const std::string& newlineSequence, bool& malformed);
 
+} // namespace v2
 } // namespace jinja2

@@ -28,6 +28,8 @@ using namespace std::string_literals;
 
 namespace jinja2
 {
+inline namespace v2
+{
 namespace
 {
 // jinja2.constants.LOREM_IPSUM_WORDS
@@ -530,4 +532,5 @@ const InternalValueMap& GetBuiltinGlobals(bool withI18n)
     }();
     return withI18n ? globalsWithI18n : globals;
 }
+} // namespace v2
 } // namespace jinja2

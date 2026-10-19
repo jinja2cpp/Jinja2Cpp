@@ -19,7 +19,11 @@
 #include <unordered_map>
 #include <vector>
 
-namespace jinja2::detail
+namespace jinja2
+{
+inline namespace v2
+{
+namespace detail
 {
 
 // The state of a TemplateEnv. The TemplateEnv the user creates owns it; every template made in the environment holds
@@ -100,6 +104,8 @@ struct TemplateEnvAccess
     static TemplateEnv MakeHandle(const TemplateEnv* env) { return TemplateEnv(env ? env->m_impl : nullptr); }
 };
 
-} // namespace jinja2::detail
+} // namespace detail
+} // namespace v2
+} // namespace jinja2
 
 #endif // JINJA2CPP_SRC_TEMPLATE_ENV_IMPL_H

@@ -18,6 +18,8 @@ JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 
 namespace jinja2
 {
+inline namespace v2
+{
 /*!
  * \brief Interface for accessing items in list by the indexes
  *
@@ -287,6 +289,7 @@ inline ListEnumeratorPtr IListItemAccessor::MakeEnumerator(Args&&... args)
 {
     return ListEnumeratorPtr{ types::in_place_type_t<T>{}, std::forward<Args&&>(args)... };
 }
+} // namespace v2
 } // namespace jinja2
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END

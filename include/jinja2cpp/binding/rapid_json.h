@@ -9,6 +9,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 namespace detail
 {
 
@@ -227,6 +229,7 @@ struct Reflector<rapidjson::GenericDocument<Enc>>
         return GenericMap([accessor = detail::RapidJsonObjectAccessor<rapidjson::GenericDocument<Enc>>(val)]() { return &accessor; });
     }
 };
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_BINDING_RAPID_JSON_H
