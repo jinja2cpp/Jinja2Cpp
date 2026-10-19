@@ -36,6 +36,7 @@ TAG = "v2"
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOTS = ("include", "src")
 OPENING = re.compile(r"^namespace jinja2(?P<nested>(?:::\w+)*)(?P<brace>\s*\{)?\s*$")
+ANY_OPENING = re.compile(r"(?<!using )\bnamespace\s+jinja2\b")
 INLINE = re.compile(r"^inline namespace (?P<tag>v\d+)(?P<brace>\s*\{)?\s*$")
 CLOSE_COMMENT = re.compile(r"^\}(?P<space>\s*)//\s*namespace\s+(?P<name>[\w:]+)\s*$")
 
@@ -162,6 +163,11 @@ def rewrite(text):
             edit = (open_line + 1, open_line + 1, insert, close_line, ["}" + space + f"// namespace {TAG}", close_text])
             break
         if edit is None:
+            # Any other spelling (indented, one-line `namespace jinja2 { ... }`) would stay
+            # outside v2 unnoticed: a free function in it becomes a second overload
+            for li, code in enumerate(mask_lines):
+                if ANY_OPENING.search(code) and not OPENING.match(code.rstrip()):
+                    raise ValueError(f"line {li + 1}: write `namespace jinja2` alone at the start of a line")
             return "\n".join(lines)
         if edit == ():
             continue

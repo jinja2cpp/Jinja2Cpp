@@ -47,4 +47,8 @@ major 2; README "Compatibility and versioning". The abidiff job runs on one shar
 RelWithDebInfo row per standard and reports against the last master build; committing the
 baselines at the RC is 0285. Deliberate divergence from the plan: `jinja2::v2::detail` is
 not suppressed in abidiff (exported detail functions are called from inline headers), and
-the C++20 abi row is gcc-12, not gcc-14, so that the Release rows keep every pair.
+the C++20 abi row is gcc-12, not gcc-14, so that the Release rows keep every pair; the C++17
+abi row stays clang-18 (the plan preferred GCC, but the only C++17 shared row is clang-18).
+The gate counts any change left after `--no-added-syms` as a break, since abidiff reports
+a changed layout (a new `Settings` field) with bit 4, not bit 8. The four Unicode/HTML
+generators in scripts/ emit the `v2` form, so their `--check` stays green.

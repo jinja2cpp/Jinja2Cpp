@@ -138,7 +138,8 @@ jobs:
         path: .abi-base
         key: abi-cxx${{ matrix.std }}-${{ github.sha }}
 
-    - if: matrix.abi
+    # also when the report fails: its message points at this dump
+    - if: ${{ !cancelled() && matrix.abi }}
       uses: actions/upload-artifact@v4
       with:
         name: abi-cxx${{ matrix.std }}
