@@ -37,6 +37,11 @@ struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
 {
     using visitors::BaseVisitor<const char*>::operator();
 
+    explicit UnhashableTypeGetter(uint64_t& items)
+        : m_items(items)
+    {
+    }
+
     const char* operator()(const ListRef& list) const
     {
         // A tuple can nest deeper than the stack: Python raises RecursionError
@@ -49,9 +54,13 @@ struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
         {
             return "list";
         }
+        // A lazy tuple (('x',) * 2**40) reports items it never stores: the walk is held to
+        // MaxSequenceSize items over all its tuples, like any sequence the template builds
+        m_items += list.GetSize().value_or(0);
+        CheckSequenceSize(m_items, "a dict key");
         const char* result = nullptr;
-        list.ForEach([&result](const InternalValue& item) {
-            result = Apply<UnhashableTypeGetter>(item);
+        list.ForEach([this, &result](const InternalValue& item) {
+            result = Apply<UnhashableTypeGetter>(item, m_items);
             return result == nullptr;
         });
         return result;
@@ -60,7 +69,10 @@ struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
     {
         return map.GetObjectClass() || map.GetAttrPolicy() == MapAttrPolicy::KeysFirst ? nullptr : "dict";
     }
-    const char* operator()(const KeyValuePair& pair) const { return Apply<UnhashableTypeGetter>(pair.value); }
+    const char* operator()(const KeyValuePair& pair) const { return Apply<UnhashableTypeGetter>(pair.value, m_items); }
+
+private:
+    uint64_t& m_items;
 };
 
 template<typename T>
@@ -179,11 +191,16 @@ struct KeyTokenBuilder
         {
             return "list";
         }
+        // A lazy tuple (('x',) * 2**40) reports items it never stores; its token would, so it
+        // is held to MaxSequenceSize like any sequence the template builds
+        const auto size = list.GetSize().value_or(0);
+        CheckSequenceSize(size, "a dict key");
         m_out.push_back(DictKeyMark);
         m_out.push_back(KindTuple);
-        AppendBytes(m_out, static_cast<uint32_t>(list.GetSize().value_or(0)));
+        AppendBytes(m_out, static_cast<uint32_t>(size));
         const char* result = nullptr;
         list.ForEach([this, &result](const InternalValue& item) {
+            CheckSequenceSize(m_out.size(), "a dict key");
             result = AddElement(item);
             return result == nullptr;
         });
@@ -288,7 +305,8 @@ bool IsSpelledToken(const std::string& stored)
 
 const char* UnhashableType(const InternalValue& value)
 {
-    return Apply<UnhashableTypeGetter>(value);
+    uint64_t items = 0;
+    return Apply<UnhashableTypeGetter>(value, items);
 }
 
 std::optional<std::string> MakeDictKey(const InternalValue& key, const char** unhashableType, bool* hasObject)
