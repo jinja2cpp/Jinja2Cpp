@@ -145,11 +145,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0073](0073-template-api-2-0.md) | 2.0 API: `BasicTemplate<CharT>` | release | medium | done |
 | [0074](0074-template-env-api-2-0.md) | 2.0 API: `TemplateEnv` pimpl and `Settings` | release | medium | done |
 | [0075](0075-containers-reflection-api-2-0.md) | 2.0 API: containers, reflection, errors | release | medium | done |
-| [0076](0076-abi-namespace-and-headers.md) | 2.0: inline ABI namespace, header layout, version | release | high | open |
+| [0076](0076-abi-namespace-and-headers.md) | 2.0: inline ABI namespace, header layout, version | release | high | in-progress |
 | [0077](0077-migration-script.md) | 2.0 migration script and notes | release | high | open |
 | [0078](0078-nix-toolchains.md) | Pinned toolchains from Nix for the tool and bleeding-edge rows | ci | low | open |
 | [0079](0079-msvc-runtime-shared-override.md) | Warn when `JINJA2CPP_MSVC_RUNTIME_TYPE` is overridden by a shared build | build | low | open |
-| [0080](0080-nodiscard-result-void.md) | `[[nodiscard]]` on `Load` and `Render`, whose only output is an error | api | low | open |
+| [0080](0080-nodiscard-result-void.md) | `[[nodiscard]]` on `Load` and `Render`, whose only output is an error | api | low | done |
 | [0081](0081-tidy-leftovers.md) | clang-tidy hits left after the batches | style | low | done |
 | [0082](0082-msvc-warning-flags.md) | MSVC never gets the strict warning flags | build | low | done |
 | [0083](0083-cxx17-idioms.md) | C++17 idioms clang-tidy does not automate | style | low | done |
@@ -247,10 +247,10 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0175](0175-recursive-loop-filter-leftovers.md) | Recursive loop filter: the outer `loop` at depth > 0, and the legacy `recursive if` order | parity | low | done |
 | [0176](0176-tuple-identity-and-sort-case.md) | A dictsort pair has no identity, and sort folds case inside tuples | parity | low | done |
 | [0177](0177-filters-on-none.md) | Filters that accept None where Python raises | parity | low | done |
-| [0178](0178-arbitrary-precision-integers.md) | Integers of arbitrary size, as Python's `int` | parity | medium | open |
+| [0178](0178-arbitrary-precision-integers.md) | Integers of arbitrary size, as Python's `int` | parity | medium | in-progress |
 | [0179](0179-caller-markup-eval-context.md) | Autoescape has a lexical and a runtime side | parity | low | done |
-| [0180](0180-markup-from-cpp.md) | Markup from C++ | api | low | open |
-| [0181](0181-select-autoescape.md) | Autoescape chosen by template name (`select_autoescape`) | api | low | open |
+| [0180](0180-markup-from-cpp.md) | Markup from C++ | api | low | in-progress |
+| [0181](0181-select-autoescape.md) | Autoescape chosen by template name (`select_autoescape`) | api | low | done |
 | [0182](0182-markup-percent-repr.md) | `%r` and containers in Markup's `%` | parity | low | done |
 | [0183](0183-context-callable-positional-arg.md) | A user callable taking `*context` gets None for a positional argument | api | high | done |
 | [0184](0184-gcc13-sanitizer-stringop-overflow.md) | The GCC 13 sanitizer build fails with -Wstringop-overflow | build | low | open |
@@ -320,4 +320,27 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0250](0250-public-api-error-contract.md) | One error contract for the 2.0 public API | api | high | open |
 | [0251](0251-cycles-through-opaque-objects.md) | Reference cycles through objects the cycle collector cannot follow leak | evaluator | low | open |
 | [0252](0252-public-api-allocator-contract.md) | Allocator and memory contract for the 2.0 public API | api | high | open |
+| [0253](0253-error-contract-types.md) | Error contract P1: public error types and the Load/Render boundary | api | high | open |
+| [0254](0254-render-error-locations.md) | Error contract P2: render errors carry their template location | robustness | high | open |
+| [0255](0255-engine-runtime-error-codes.md) | Error contract P3: the engine's own runtime errors get their own codes | robustness | medium | open |
 | [0258](0258-positional-and-keyword-same-arg.md) | A call that gives one argument both positionally and by keyword is accepted | api | low | open |
+| [0259](0259-vendored-internal-namespaces.md) | Vendored robin_hood and lexertk still live in global namespaces | release | medium | open |
+| [0260](0260-public-headers-iosfwd.md) | Public headers include `<iostream>` where `<iosfwd>` would do | release | low | open |
+| [0261](0261-windows-package-link-check.md) | Run the installed-package test and the ABI link probe on Windows | ci | low | open |
+| [0262](0262-settings-limits.md) | `Settings::Limits`: one place for every limit a template can hit | api | high | open |
+| [0263](0263-per-operation-size-checks.md) | Every growth operation checks its size before allocating | robustness | high | open |
+| [0264](0264-template-cache-bound.md) | The template cache ignores its size, and `MemoryFileSystem` writes in a const path | robustness | medium | open |
+| [0265](0265-hardening-by-default.md) | Build hardening on by default; invariant checks that fail the render, not the process | build | medium | open |
+| [0266](0266-confined-filesystem.md) | `ConfinedFileSystem`: a loader that never leaves its root | api | medium | open |
+| [0267](0267-untrusted-mode-fuzzing.md) | Fuzz targets for templates written by untrusted users | robustness | high | open |
+| [0268](0268-untrusted-mode-followups.md) | Untrusted mode: additive follow-ups after the freeze | api | low | open |
+| [0269](0269-public-big-int-value.md) | Public `BigInt` value (0178 phase 1, G1) | api | high | open |
+| [0270](0270-big-int-core-text-form.md) | Big integers in the core, text form (0178 phase 2) | parity | medium | open |
+| [0271](0271-big-int-backend-interface.md) | Big-integer backend interface and overflow promotion (0178 phase 3) | api | medium | open |
+| [0272](0272-big-int-boost-backend.md) | Boost.Multiprecision backend and `JINJA2CPP_WITH_BIGINT` (0178 phase 4) | build | medium | open |
+| [0273](0273-build-conditional-parity-divergences.md) | Build-conditional parity divergences (0178 phase 0) | parity | medium | done |
+| [0274](0274-self-block-before-parent-pushed.md) | Blocks called through `self` at a child's top level lack the parent's blocks | parity | low | open |
+| [0277](0277-markup-escape-helper.md) | A public escape helper for Markup | api | low | open |
+| [0278](0278-remove-dead-valueref.md) | Remove the dead ValueRef alternative of InternalValue | internals | low | open |
+| [0280](0280-urlize-markup-input.md) | urlize escapes Markup input | filters | low | open |
+| [0281](0281-attr-bound-method.md) | attr() of a method renders empty | filters | low | open |

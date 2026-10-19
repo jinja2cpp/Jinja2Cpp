@@ -199,7 +199,8 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | `getPtr<T>()` | `camelBack` | `GetIf<T>()` | alias |
 | free `AsString(const Value&)`, `AsWString(const Value&)` | lenient conversion under the word the members use for exact access; returns `""` for non-strings | member and free `ToString()`/`ToWString()`, printing as `{{ v }}` does | alias (keeps returning `""`) |
 | no way to print a `Value` without allocating | | `v.ToString(std::string& out)` appends to the caller's buffer (no allocation once it has capacity); `v.ToChars(first, last)` writes into a fixed buffer and returns `std::to_chars_result`, as `std::to_chars`; `std::formatter<jinja2::Value>` for `std::format_to`/`format_to_n` where the standard library has `<format>`. All four go through one internal output sink, so they cannot print differently. *As built (0072):* scalars, None and narrow strings print with no allocation; wide strings, containers and (for `ToChars`) text past the small-string buffer still allocate inside the renderer | add |
-| `data()` | `camelBack`; the variant alternatives expose `RecWrapper<T>` = vendored `xyz::polymorphic<T>` to every visitor | `GetData()`; add `jinja2::Visit(fn, value)` that unwraps `RecWrapper` as `ParamUnwrapper` already does internally | alias + add |
+| no way to pass safe HTML from C++ | a host string is always escaped under autoescape, and a callable's Markup result loses the flag in `IntValue2Value` | `jinja2::Markup` / `WMarkup` (`markup.h`): `BasicMarkup<CharT>`, an immutable wrapper of a `std::basic_string<CharT>` (composition, not inheritance) with explicit constructors, a read-only string API (`str()`, implicit conversions to `const std::basic_string&` and `std::basic_string_view`, comparisons, `operator<<`) and no mutating member, two more `ValueData` alternatives (13, 14; `sizeof(Value)` unchanged). `IsMarkup()`/`IsWMarkup()`, `AsMarkup()`/`AsWMarkup()` (both forms) and `As<Markup>()`/`GetIf<Markup>()` are exact. **A Markup reads as a string** (Python's `Markup` is a `str`): the const `IsString()`, `AsString()`, `As<std::string>()` and `GetIf<std::string>()` accept it, so existing readers keep working. **A Markup is immutable, as in Python** (`markup += user_input` would append unescaped text and keep the safe flag, so it does not compile): mutable access to the text through a non-const `Value` (`AsString()`, `AsWString()`, `As<std::string>()`, `GetIf<std::string>()`, the deprecated `getPtr`) turns the Value into a plain string first, as any change to a Python Markup gives a `str`. Only `GetData()` with `std::get` or `std::holds_alternative` is exact. Template side: a Markup in the context, in a container or returned by a callable renders unescaped, passes `is escaped`, and comes back from `IntValue2Value` (callable arguments, `UserCallableParams`) as a Markup; a typed `MakeCallable` parameter (`const std::string&`) receives its text | add (0180) |
+| `data()` | `camelBack`; the variant alternatives expose `RecWrapper<T>` = vendored `indirect<T>` to every visitor | `GetData()`; add `jinja2::Visit(fn, value)` that unwraps `RecWrapper` as `ParamUnwrapper` already does internally | alias + add |
 | no `IsBool`, `IsInt`, `IsDouble`, `IsCallable` and getters | incomplete family; users go through `data()` | add them | add |
 | `EmptyValue` | since 0034 it means Python `None`; it also has `template<class T> operator T()`, an implicit conversion to *anything* | `NoneValue`; drop the catch-all conversion | alias (`using EmptyValue [[deprecated]] = NoneValue`); the conversion is a break, check `src/` users first |
 | `Value(T&&)` for unsigned, `long long`, `short`, `char`, `size_t` | *probe:* stores `bool` at C++14 (`Value(5u).data().index() == 1`), `int64_t` at C++17, and `Value(size_t(5))` does not compile at C++17 | constructors for every integral type storing `int64_t`, as `Reflect` already does; `Value(char)` deleted (ambiguous between a number and a one-letter string) | fix (task 0067) |
@@ -295,7 +296,7 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 |---|---|---|---|
 | `JINJA2CPP_VERSION 10100` | the project is 1.3.2: the macro is stale | generate from `project(VERSION)` | fix (0069) |
 | `#pragma warning(disable : 4251)` in `config.h` | disables the warning for the rest of every user TU | `push`/`pop` around our declarations | fix (0069) |
-| `JINJA2_DECLSPEC` | wrong prefix | `JINJA2CPP_DECLSPEC` | break (internal macro) |
+| `JINJA2_DECLSPEC` | wrong prefix | removed: only `config.h` used it (decided 2026-10-18, 0076) | break (internal macro) |
 | `value_ptr.h` includes `polymorphic_cxx14.h`, then `polymorphic.h` under `__cplusplus != 201402L` | both share one include guard, so the second include is dead; `using namespace xyz;` inside `jinja2::types` | include one; drop the `using` | fix (0069) |
 | vendored `xyz::polymorphic` in the global `xyz` namespace | collides with a user's own copy of the reference implementation | move into `jinja2::detail` | none |
 | `RecWrapper<T>` = `polymorphic<T>` for the concrete `ValuesList`, `ValuesMap`, `UserCallable` | pays for type erasure (virtual copy through a control block) that a final type never uses | vendor `indirect<T>` from the same reference implementation (jbcoe/value_types, the source of C++26 `std::indirect`); `RecWrapper<T>` = `detail::indirect<T>`; `polymorphic` stays for the enumerator interfaces (decided by Ruslan 2026-10-02) | break (ABI; source unchanged for code that spells `RecWrapper`) |
@@ -320,7 +321,7 @@ class Value
 public:
     using ValueData = variant<NoneValue, bool, std::string, std::wstring, string_view, wstring_view,
                               int64_t, double, RecWrapper<ValuesList>, RecWrapper<ValuesMap>,
-                              GenericList, GenericMap, RecWrapper<UserCallable>>;
+                              GenericList, GenericMap, RecWrapper<UserCallable>, Markup, WMarkup>;
 
     Value();
     Value(std::nullptr_t) noexcept;                         // None
@@ -334,17 +335,19 @@ public:
     bool IsBool() const noexcept;
     bool IsInt() const noexcept;
     bool IsDouble() const noexcept;
-    bool IsString() const noexcept;
+    bool IsString() const noexcept;    // std::string or Markup (a Markup reads as a string)
     bool IsWString() const noexcept;
+    bool IsMarkup() const noexcept;    // exactly Markup; IsWMarkup likewise
     bool IsList() const noexcept;      // ValuesList or GenericList
     bool IsMap() const noexcept;       // ValuesMap or GenericMap
     bool IsCallable() const noexcept;
 
     const std::string& AsString() const;                // throws bad_variant_access
-    std::string& AsString();
+    std::string& AsString();                           // a held Markup becomes a plain string first
     bool AsString(std::string_view& out) const noexcept;    // false if not a string; no copy
     int64_t AsInt() const;
     bool AsInt(int64_t& out) const noexcept;
+    const Markup& AsMarkup() const;                     // exactly Markup, throws for a plain string
     const ValuesList& AsList() const;                   // the ValuesList alternative only
     bool AsList(const ValuesList*& out) const noexcept;
     GenericList ToGenericList() const;                  // a view over either list representation
@@ -473,11 +476,13 @@ allocates `Settings`. Parity work adds options regularly, so the alternative (fr
 Functions whose result is the point of the call carry `[[nodiscard]]` (docs/tasks/0059):
 the `const` accessors and queries of the public headers (`Value::isString`, `asString`,
 `get`, `IsEqual`, `RenderAsString`, `GetMetadata`, the error accessors, about 110 in all)
-and `TemplateEnv::LoadTemplate` and `FromString`. Code that calls one of them and drops
-the result now gets a compiler warning (`-Wunused-result`, MSVC C4834), an error under
-`-Werror`. Use the result, or cast it to `void` where dropping it is intended.
-`Template::Load` and `Render`, which return only an error, are not marked yet
-(docs/tasks/0080).
+and `TemplateEnv::LoadTemplate` and `FromString`, and `Template::Load`, `LoadFromFile`
+and `Render` (both `Template` and `TemplateW`), whose result is the only report of a parse
+or render error (docs/tasks/0080). Code that calls one of them and drops the result now
+gets a compiler warning (`-Wunused-result`, MSVC C4834), an error under `-Werror`. The
+common case is a bare `tpl.Load(source);` as 1.x examples wrote it: check the result
+(`if (auto r = tpl.Load(source); !r) { /* r.error() */ }`), or cast it to `void` where
+dropping it is intended.
 
 ### 5.6 Unknown filters and tests fail at load (release note)
 

@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: api
 depends: [0059]
@@ -23,3 +23,9 @@ so there, so users know the omission is deliberate.
 
 **Done when** the decision is recorded here and, if taken, the full CI matrix builds
 warning-free with the attribute on.
+
+**Decision (2026-10-18, docs/release-2.0.md D6):** marked in 2.0. `Load` (both overloads),
+`LoadFromFile`, `Render` (both overloads) and the private `RenderGeneric` of
+`BasicTemplate` carry `[[nodiscard]]`; the library, tests, bench and fuzz targets already
+checked every result, so no call site changed. The README examples check the result, and
+docs/api-2.0.md section 5.5 lists the functions.

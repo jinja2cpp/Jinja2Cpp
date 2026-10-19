@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: high
 area: release
 depends: [0072, 0073, 0074, 0075, 0043]
-touches: [include/, CMakeLists.txt, cmake/public/]
+touches: [include/, src/, CMakeLists.txt, cmake/public/, test/package/, test/fwd_test.cpp, test/value_ptr_test.cpp, README.md, sbom/, scripts/abi_namespace.py, .git-blame-ignore-revs, .github/workflows/format-check.yml]
 ---
 # 2.0: inline ABI namespace, header layout, version
 
@@ -28,3 +28,11 @@ and shared artifacts where supported. Publish the agreed source-compatibility an
 SOVERSION policy, including Settings layout changes, rather than implying every
 future 2.x build is binary-compatible. Settle the API-shaping decisions listed in
 0221 before the final namespace/header freeze.
+
+**Progress.** Plan approved 2026-10-18 (decisions in the plan thread; the release-2.0
+0076 plan). PR-1 (headers): `fwd.h` and `jinja2cpp.h`, vendored value_types moved to
+`jinja2::detail::xyz` with `JINJA2CPP_XYZ_` macros, `JINJA2_DECLSPEC` and
+`error_handler.h` removed, hidden visibility on GCC/Clang. PR-2 (ABI tag): the
+script-generated `inline namespace v2` commit, the nm/link-probe/SONAME gates, the abidiff
+job and the README policy. Follow-ups: 0259 (robin_hood/lexertk namespaces), 0260
+(`<iosfwd>`), 0261 (Windows package link check).

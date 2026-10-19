@@ -2,6 +2,7 @@
 #include "test_tools.h"
 
 #include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/markup.h>
 #include <jinja2cpp/generic_list_iterator.h> // IWYU pragma: keep (GenericList::iterator is only declared in generic_list.h)
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/string_helpers.h>
@@ -386,32 +387,37 @@ INSTANTIATE_TEST_SUITE_P(GlobalContextAccess, UserCallableParamConvertTest, ::te
                             ));
 // clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(StringParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"StringFn()",                   "''"},
                             InputOutputPair{"StringFn('Hello World')", "'Hello World'"},
                             InputOutputPair{"StringFn(stringValue)", "'rain'"},
-                            InputOutputPair{"StringFn(wstringValue)", "'  hello world '"}
+                            InputOutputPair{"StringFn(wstringValue)", "'  hello world '"},
+                            InputOutputPair{"StringFn('<i>'|safe)", "'<i>'"}
                             ));
 
 INSTANTIATE_TEST_SUITE_P(WStringParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"WStringFn()",                   "''"},
                             InputOutputPair{"WStringFn('Hello World')", "'Hello World'"},
                             InputOutputPair{"WStringFn(stringValue)", "'rain'"},
-                            InputOutputPair{"WStringFn(wstringValue)", "'  hello world '"}
+                            InputOutputPair{"WStringFn(wstringValue)", "'  hello world '"},
+                            InputOutputPair{"WStringFn('<i>'|safe)", "'<i>'"}
                             ));
 
 INSTANTIATE_TEST_SUITE_P(StringViewParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"StringViewFn()",                   "''"},
                             InputOutputPair{"StringViewFn('Hello World')", "'Hello World'"},
                             InputOutputPair{"StringViewFn(stringValue)", "'rain'"},
-                            InputOutputPair{"StringViewFn(wstringValue)", "'  hello world '"}
+                            InputOutputPair{"StringViewFn(wstringValue)", "'  hello world '"},
+                            InputOutputPair{"StringViewFn('<i>'|safe)", "'<i>'"}
                             ));
 
 INSTANTIATE_TEST_SUITE_P(WStringViewParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"WStringViewFn()",                   "''"},
                             InputOutputPair{"WStringViewFn('Hello World')", "'Hello World'"},
                             InputOutputPair{"WStringViewFn(stringValue)", "'rain'"},
-                            InputOutputPair{"WStringViewFn(wstringValue)", "'  hello world '"}
+                            InputOutputPair{"WStringViewFn(wstringValue)", "'  hello world '"},
+                            InputOutputPair{"WStringViewFn('<i>'|safe)", "'<i>'"}
                             ));
 
 // clang-format off
@@ -648,3 +654,97 @@ INSTANTIATE_TEST_SUITE_P(Escapes, OwnedUserDataTest, ::testing::Values(
                             InputOutputPair{ "{% set e = rempty() %}{{ e.lst | length }}|{{ e.mp | length }}|{{ e.lst | list }}", "0|0|[]" },
                             InputOutputPair{ "{% set r = rrecs() | sort(attribute='name') %}{{ r | map(attribute='words') | map('join') | join('|') }}", "YX|X" }));
 // clang-format on
+
+// Markup from C++ (docs/tasks/0180): the expected outputs are Python Jinja2's, with markupsafe.Markup
+// values for x, heap, l[0], m.k and the callable results
+struct MarkupRow
+{
+    std::string tpl;
+    std::string escaped; // autoescape on
+    std::string plain;   // autoescape off
+    friend std::ostream& operator<<(std::ostream& os, const MarkupRow& row) { return os << row.tpl; }
+};
+
+class MarkupTest : public ::testing::TestWithParam<MarkupRow>
+{
+protected:
+    static ValuesMap Params()
+    {
+        ValuesMap params;
+        params["x"] = Markup("<b>");
+        params["wx"] = WMarkup(L"<b>");
+        params["s"] = "<i>";
+        params["heap"] = Markup("<b>" + std::string("x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&"));
+        params["l"] = ValuesList{ Markup("<u>") };
+        params["m"] = ValuesMap{ { "k", Markup("<k>") } };
+        params["ret"] = UserCallable([](const UserCallableParams&) { return Value(Markup("<r>")); }, {});
+        params["retList"] = UserCallable([](const UserCallableParams&) { return Value(ValuesList{ Markup("<a>"), "<b>" }); }, {});
+        params["ident"] = UserCallable([](const UserCallableParams& p) { return p["v"]; }, { ArgInfo{ "v" } });
+        params["kind"] = UserCallable([](const UserCallableParams& p) { return Value(p["v"].IsMarkup() || p["v"].IsWMarkup() ? "markup" : "string"); }, { ArgInfo{ "v" } });
+        params["typed"] = MakeCallable([](const std::string& v) { return v; }, ArgInfo{ "v" });
+        return params;
+    }
+
+    template<typename TemplateT, typename CharT>
+    static void Check(const std::string& source, const std::string& expected, bool autoescape)
+    {
+        TemplateEnv env;
+        env.GetSettings().autoescape = autoescape;
+        TemplateT tpl(&env);
+        ASSERT_TRUE(tpl.Load(ConvertString<std::basic_string<CharT>>(source)).has_value()) << source;
+        auto result = tpl.RenderAsString(Params());
+        ASSERT_TRUE(result.has_value()) << source;
+        EXPECT_EQ(ConvertString<std::basic_string<CharT>>(expected), result.value()) << source << " autoescape=" << autoescape;
+    }
+};
+
+TEST_P(MarkupTest, Renders)
+{
+    const auto& row = GetParam();
+    Check<Template, char>(row.tpl, row.escaped, true);
+    Check<Template, char>(row.tpl, row.plain, false);
+    Check<TemplateW, wchar_t>(row.tpl, row.escaped, true);
+    Check<TemplateW, wchar_t>(row.tpl, row.plain, false);
+}
+
+// clang-format off
+INSTANTIATE_TEST_SUITE_P(Markup, MarkupTest, ::testing::Values(
+    MarkupRow{ "{{ x }}", "<b>", "<b>" },
+    MarkupRow{ "{{ wx }}", "<b>", "<b>" },
+    MarkupRow{ "{{ s }}", "&lt;i&gt;", "<i>" },
+    MarkupRow{ "{{ heap }}", "<b>x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&", "<b>x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&x&" },
+    MarkupRow{ "{{ x is escaped }} {{ wx is escaped }} {{ s is escaped }} {{ heap is escaped }}", "True True False True", "True True False True" },
+    MarkupRow{ "{{ x|e }}{{ s|e }}", "<b>&lt;i&gt;", "<b>&lt;i&gt;" },
+    MarkupRow{ "{{ (s|e) is escaped }}", "True", "True" },
+    MarkupRow{ "{{ x ~ s }}", "<b>&lt;i&gt;", "<b><i>" },
+    MarkupRow{ "{{ s ~ x }}", "&lt;i&gt;<b>", "<i><b>" },
+    MarkupRow{ "{{ x == '<b>' }}", "True", "True" },
+    MarkupRow{ "{{ l[0] }}{{ m.k }}", "<u><k>", "<u><k>" },
+    MarkupRow{ "{% for i in l %}{{ i }}{% endfor %}", "<u>", "<u>" },
+    MarkupRow{ "{{ [x, s]|join }}", "<b>&lt;i&gt;", "<b><i>" },
+    MarkupRow{ "{{ [x] }}", "[Markup(&#39;&lt;b&gt;&#39;)]", "[Markup('<b>')]" },
+    MarkupRow{ "{{ [x, s] }}", "[Markup(&#39;&lt;b&gt;&#39;), &#39;&lt;i&gt;&#39;]", "[Markup('<b>'), '<i>']" },
+    MarkupRow{ "{{ ret() }}", "<r>", "<r>" },
+    MarkupRow{ "{{ retList()|join }}", "<a>&lt;b&gt;", "<a><b>" },
+    MarkupRow{ "{{ ident(x) }}|{{ ident(s) }}", "<b>|&lt;i&gt;", "<b>|<i>" },
+    MarkupRow{ "{{ kind(x) }} {{ kind(s) }} {{ kind(s|e) }} {{ kind(heap) }} {{ kind(s|safe) }} {{ kind(l[0]) }}", "markup string markup markup markup markup",
+               "markup string markup markup markup markup" },
+    MarkupRow{ "{{ x|tojson }}", "\"\\u003cb\\u003e\"", "\"\\u003cb\\u003e\"" },
+    MarkupRow{ "{{ x|upper }}", "<B>", "<B>" },
+    MarkupRow{ "{{ x|length }}", "3", "3" },
+    MarkupRow{ "{{ x|replace('b','i') }}", "<i>", "<i>" },
+    MarkupRow{ "{{ x|string }}", "<b>", "<b>" },
+    // A typed std::string parameter receives the text of a Markup, escaped again when it comes back as a plain string
+    MarkupRow{ "{{ typed(x) }}", "&lt;b&gt;", "<b>" }
+));
+// clang-format on
+
+TEST(MarkupValueTest, RoundTripsThroughTheContext)
+{
+    // A callable's Markup argument and result keep the flag, short and long
+    UserCallable echo([](const UserCallableParams& p) { return p["v"]; }, { ArgInfo{ "v" } });
+    ValuesMap params{ { "echo", echo }, { "short", Markup("<s>") }, { "long", Markup(std::string(100, '<')) } };
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ echo(short) is escaped }} {{ echo(long) is escaped }} {{ echo(short|string) is escaped }} {{ echo('<') is escaped }}").has_value());
+    EXPECT_EQ("True True True False", tpl.RenderAsString(params).value());
+}
