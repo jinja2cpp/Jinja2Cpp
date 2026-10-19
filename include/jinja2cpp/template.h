@@ -22,6 +22,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <vector>
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 
@@ -191,6 +192,17 @@ public:
      * @return Non-parsed metadata information or instance of \ref BasicErrorInfo as an error
      */
     [[nodiscard]] Result<MetadataInfo<CharT>, CharT> GetMetadataRaw() const;
+    /*!
+     * \brief The names the template reads from its params, as `jinja2.meta.find_undeclared_variables`
+     *
+     * Every name a render of the template looks up among the params and the environment's
+     * globals, sorted, without the globals: a name the template reads before or without setting
+     * it, or sets only in a branch of `if`. Templates the template includes, imports or extends
+     * are not looked into, as in Jinja2. Parses the template's source again.
+     *
+     * @return The names, or the error of the parse (TemplateNotParsed before a successful Load)
+     */
+    [[nodiscard]] Result<std::vector<std::string>, CharT> FindUndeclaredVariables() const;
 
     /* !
      * \brief compares to an other object of the same type

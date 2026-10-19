@@ -17,6 +17,7 @@
 #include <ostream>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace jinja2
 {
@@ -163,6 +164,12 @@ template<typename CharT>
 Result<MetadataInfo<CharT>, CharT> BasicTemplate<CharT>::GetMetadataRaw() const
 {
     return GetImpl<CharT>(m_impl)->GetMetadataRaw();
+}
+
+template<typename CharT>
+Result<std::vector<std::string>, CharT> BasicTemplate<CharT>::FindUndeclaredVariables() const
+{
+    return GetImpl<CharT>(m_impl)->FindUndeclaredVariables();
 }
 
 template<typename CharT>
