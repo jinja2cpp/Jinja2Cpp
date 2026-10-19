@@ -139,4 +139,17 @@ CASES = [
     ("env_on_loop_recursion_in_autoescape_block", "{% for i in [[[]]] recursive %}{% autoescape false %}{% set r = loop(i) %}{{ 'T' if r is escaped else 'F' }}{{ loop(i) }}{% endautoescape %}{{ html }}|{% endfor %}", AE),
     ("env_on_includer_macro_in_include_call_site", "{% macro m0() %}{% macro i() %}{% if caller %}{% endif %}{% endmacro %}{{ 'T' if i() is escaped else 'F' }}{% endmacro %}{% autoescape false %}{% include 'inc.j2' %}{% endautoescape %}",
      {"env": {"autoescape": True}, "templates": {"inc.j2": "{% call m0() %}{% endcall %}"}}),
+    # Jinja2's select_autoescape: the "autoescape" option as a list of extensions (docs/tasks/0181).
+    # Each template escapes by its own name; the case template has none (default_for_string)
+    ("select_by_name_include", "{% include 'a.txt' %}|{% include 'a.html' %}|{% include 'A.XML' %}|{% include 'a.htm' %}|{{ html }}",
+     {"env": {"autoescape": ["html", "xml"]}, "templates": {"a.txt": "{{ html }}", "a.html": "{{ html }}", "A.XML": "{{ html }}", "a.htm": "{{ html }}"}}),
+    ("select_by_name_extends", "{% include 'child.txt' %}|{% include 'child.html' %}|{% include 'c3.txt' %}",
+     {"env": {"autoescape": ["html", "xml"]},
+      "templates": {"base.html": "B{{ html }}{% block b %}{{ html }}{% endblock %}", "child.txt": "{% extends 'base.html' %}{% block b %}C{{ html }}{% endblock %}",
+                    "base.txt": "B{{ html }}{% block b %}{{ html }}{% endblock %}", "child.html": "{% extends 'base.txt' %}{% block b %}C{{ html }}{% endblock %}",
+                    "base3.html": "{% set j = ['<']|join %}{{ j }}{% block b %}{% endblock %}", "c3.txt": "{% extends 'base3.html' %}{% block b %}{{ ['<']|join }}{% endblock %}"}}),
+    ("select_by_name_import", "{% include 'imp.txt' %}|{% import 'mac.txt' as M with context %}{{ M.m() }}",
+     {"env": {"autoescape": ["html", "xml"]},
+      "templates": {"mac.html": "{% macro k() %}{% set s %}<{% endset %}{{ s }}{% endmacro %}", "mac.txt": "{% macro m() %}{{ html }}{% endmacro %}",
+                    "imp.txt": "{% import 'mac.html' as M %}{{ M.k() }}"}}),
 ]

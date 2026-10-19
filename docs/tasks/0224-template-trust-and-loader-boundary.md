@@ -37,3 +37,16 @@ provide. The loader policy is backed by small reproducible probes using disposab
 files (including traversal and symlink cases where supported), with no reading of
 host-sensitive files. Documentation makes no confinement or resource guarantees
 that those probes and the implementation do not support.
+
+**Decided (Ruslan 2026-10-18, untrusted-input review).**
+- Two tiers. Tier 0: trusted templates, untrusted data, default settings. Tier 1: untrusted templates
+  with `UntrustedLimits()`/`UntrustedSettings()` (0262), a loader whose root holds only templates
+  (`ConfinedFileSystem`, 0266, recommended), and no callables the host would not hand to the author.
+- `RealFileSystem` follows Python's `FileSystemLoader` name rules in 2.0 (S3) and follows symlinks,
+  documented (S4); the strict loader is 0266.
+- Never promised: preempting a running host callback, a per-render memory total without a host
+  allocator or process limits, process isolation, timing side channels, XSS safety of the template
+  itself (an author can always write `|safe`), stack checks on fibers, `-fno-exceptions`.
+- Write this task last: it states what 0262-0267 deliver. SECURITY.md (contact via GitHub private
+  vulnerability reporting, supported versions, embargo, GHSA/CVE) must exist before the tier-1 claim
+  is published.

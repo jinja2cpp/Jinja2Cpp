@@ -9,7 +9,9 @@
 #include "undefined.h"
 #include "unicode_printable.h"
 
+#include <jinja2cpp/big_int.h>
 #include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
@@ -144,6 +146,12 @@ struct RecursiveUnwrapper
     {
         return arg.View();
     }
+    // A host Value read in place may hold an integer outside int64, which templates cannot
+    // hold yet (docs/tasks/0270): it fails loudly, so no visitor meets one
+    [[noreturn]] static NoneValue UnwrapRecursive(const BigInt& arg, const ValueObject* /*owner*/)
+    {
+        throw std::overflow_error("integer " + arg.ToString() + " does not fit in 64 bits");
+    }
     static ListRef UnwrapRecursive(const ListHandle& arg, const ValueObject* owner) noexcept { return ListRef(arg.accessor, owner, arg.isTuple); }
     static MapRef UnwrapRecursive(const MapHandle& arg, const ValueObject* owner) noexcept { return MapRef(arg.accessor, owner); }
     template<typename T>
@@ -170,40 +178,30 @@ private:
     }
 };
 
-// Calls fn with what val holds and the object that owns it; a host value is visited as what
-// it holds
-template<typename Fn>
-auto ApplyUnwrapped(const InternalValue& val, Fn&& fn)
-{
-    const auto& data = InternalValueAccess::Data(val);
-    if (const auto* valueRef = std::get_if<ValueRef>(&data))
-    {
-        return std::forward<Fn>(fn)(valueRef->get().GetData(), nullptr);
-    }
-    return std::forward<Fn>(fn)(data, InternalValueAccess::Object(val));
-}
 } // namespace detail
 
+// What a value holds is visited in place. A ValueRef (a host Value seen by reference, which
+// nothing makes today) reaches the visitor as itself; visiting the Value's own variant
+// instead instantiated every visitor for its alternatives too, and Apply2 for their
+// products, which grew every unit that applies a visitor past GCC's inlining budget once
+// Markup joined the Value (docs/tasks/0180)
 template<typename V, typename... Args>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): args construct a visitor per alternative
 auto Apply(const InternalValue& val, Args&&... args)
 {
-    return detail::ApplyUnwrapped(val, [&args...](auto& data, const ValueObject* owner) {
-        auto v = V(args...);
-        return std::visit(detail::RecursiveUnwrapper<V, 1>(&v, { owner }), data);
-    });
+    auto v = V(args...);
+    return std::visit(detail::RecursiveUnwrapper<V, 1>(&v, { detail::InternalValueAccess::Object(val) }), detail::InternalValueAccess::Data(val));
 }
 
 template<typename V, typename... Args>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): args construct a visitor per alternative
 auto Apply2(const InternalValue& val1, const InternalValue& val2, Args&&... args)
 {
-    return detail::ApplyUnwrapped(val1, [&val2, &args...](auto& uwVal1, const ValueObject* owner1) {
-        return detail::ApplyUnwrapped(val2, [&uwVal1, owner1, &args...](auto& uwVal2, const ValueObject* owner2) {
-            auto v = V(args...);
-            return std::visit(detail::RecursiveUnwrapper<V, 2>(&v, { owner1, owner2 }), uwVal1, uwVal2);
-        });
-    });
+    using detail::InternalValueAccess;
+    auto v = V(args...);
+    return std::visit(detail::RecursiveUnwrapper<V, 2>(&v, { InternalValueAccess::Object(val1), InternalValueAccess::Object(val2) }),
+                      InternalValueAccess::Data(val1),
+                      InternalValueAccess::Data(val2));
 }
 
 bool ConvertToBool(const InternalValue& val);
@@ -544,6 +542,24 @@ struct InputValueConvertor
         return InternalValue::FromText(std::basic_string_view<ChT>(val));
     }
 
+    // A Markup converts as its text, flagged: the template does not escape it (include/jinja2cpp/markup.h)
+    template<typename ChT>
+    result_t operator()(const BasicMarkup<ChT>& val) const
+    {
+        auto result = this->operator()(val.str());
+        result.SetMarkup();
+        return result;
+    }
+
+    // As for a mutable std::string: the text is copied, never lent
+    template<typename ChT>
+    result_t operator()(BasicMarkup<ChT>& val) const
+    {
+        auto result = InternalValue::FromText(std::basic_string_view<ChT>(val.str()));
+        result.SetMarkup();
+        return result;
+    }
+
     result_t operator()(const ValuesList& vals) const
     {
         if (m_byValue)
@@ -631,6 +647,12 @@ struct InputValueConvertor
     result_t operator()(double val) const
     {
         return result_t(InternalValue(val));
+    }
+
+    // Integers outside int64 enter templates with docs/tasks/0270; until then they fail loudly
+    [[noreturn]] result_t operator()(const BigInt& val) const
+    {
+        throw std::overflow_error("integer " + val.ToString() + " does not fit in 64 bits");
     }
 
     template<typename T>
@@ -1369,7 +1391,10 @@ struct BinaryMathOperation : BaseVisitor<>
         return rem;
     }
 
-    ResultType operator()(int64_t left, int64_t right) const
+    ResultType operator()(int64_t left, int64_t right) const { return ApplyToInts(left, right); }
+
+    // The int64_t overload, forced inline into ApplyToNumbers (the fast path of every binary operator)
+    [[nodiscard]] JINJA2CPP_HOT_INLINE ResultType ApplyToInts(int64_t left, int64_t right) const
     {
         int64_t result = 0;
         switch (m_oper)
@@ -2044,9 +2069,18 @@ inline auto VisitNumber(const InternalValue& value, Fn&& fn)
 }
 
 // An arithmetic operator or comparison on two numbers (IsNumber): the overload of
-// BinaryMathOperation that Apply2 would pick, called without its two variant dispatches
-inline InternalValue ApplyToNumbers(const InternalValue& left, const InternalValue& right, BinaryExpression::Operation oper)
+// BinaryMathOperation that Apply2 would pick, called without its two variant dispatches.
+// Two integers, the common case, are forced inline with no lambda between: GCC otherwise
+// leaves the integer operation out of line in BinaryExpression::Apply (+3.5%
+// Render/expressions, docs/tasks/0180)
+JINJA2CPP_HOT_INLINE InternalValue ApplyToNumbers(const InternalValue& left, const InternalValue& right, BinaryExpression::Operation oper)
 {
+    const auto* leftInt = GetIf<int64_t>(&left);
+    const auto* rightInt = GetIf<int64_t>(&right);
+    if (leftInt && rightInt)
+    {
+        return visitors::BinaryMathOperation(oper).ApplyToInts(*leftInt, *rightInt);
+    }
     return VisitNumber(left, [&](auto leftNum) {
         return VisitNumber(right, [&](auto rightNum) { return visitors::BinaryMathOperation(oper)(leftNum, rightNum); });
     });

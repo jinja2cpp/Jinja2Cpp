@@ -182,9 +182,11 @@ private:
 #ifdef _MSC_VER
 #define JINJA2CPP_COLD_INLINE __declspec(noinline) inline
 #define JINJA2CPP_OUTLINE_INLINE __declspec(noinline) inline
+#define JINJA2CPP_HOT_INLINE __forceinline
 #else
 #define JINJA2CPP_COLD_INLINE __attribute__((noinline, cold)) inline
 #define JINJA2CPP_OUTLINE_INLINE __attribute__((noinline)) inline
+#define JINJA2CPP_HOT_INLINE inline __attribute__((always_inline))
 #endif
 
 // Holds a value whose type is incomplete where InternalValue is declared (a pair or a
@@ -513,6 +515,9 @@ struct IListAccessor : ValueObject
     // Python list is), so that methods like append() can change them; null for borrowed
     // and computed lists (docs/tasks/0020)
     [[nodiscard]] virtual InternalValueList* GetMutableItems() const { return nullptr; }
+    // Whether this accessor alone holds the items GetMutableItems returns, so that releasing
+    // them through it cannot change a list anything else sees (CycleCollector, docs/tasks/0110)
+    [[nodiscard]] virtual bool OwnsMutableItemsAlone() const { return false; }
     // An accessor with iteration state of its own (a generator, which says so with
     // SetClonesOnCopy) is copied with the list value, so that copies iterate independently;
     // every other accessor is shared
@@ -556,6 +561,8 @@ struct IMapAccessor : ValueObject
     [[nodiscard]] virtual const void* GetIdentity() const { return this; }
     // See IListAccessor::GetMutableItems
     [[nodiscard]] virtual InternalDict* GetMutableItems() const { return nullptr; }
+    // See IListAccessor::OwnsMutableItemsAlone
+    [[nodiscard]] virtual bool OwnsMutableItemsAlone() const { return false; }
     // How x.name resolves against Python's dict methods (items, get, ...)
     [[nodiscard]] virtual MapAttrPolicy GetAttrPolicy() const { return MapAttrPolicy::KeysOnly; }
     // A namespace() object, the only one `set obj.attr = ...` can change
@@ -772,6 +779,7 @@ public:
     [[nodiscard]] MapAdapter ToAdapter() const;
 
     [[nodiscard]] const IMapAccessor* GetAccessor() const noexcept { return m_accessor; }
+    [[nodiscard]] const ValueObject* GetOwner() const noexcept { return m_owner; }
 
 private:
     const IMapAccessor* m_accessor;
@@ -993,7 +1001,9 @@ public:
         std::visit([this](auto view) { InitView(view); }, val);
     }
 
-    InternalValue(ValueRef val) noexcept // NOLINT(google-explicit-constructor)
+    // Explicit: a direct-initialised InternalValue(value) of a host Value would otherwise make
+    // a ValueRef through ReferenceWrapper's implicit constructor (nothing makes one, 0278)
+    explicit InternalValue(ValueRef val) noexcept
         : m_imm(val)
     {
     }

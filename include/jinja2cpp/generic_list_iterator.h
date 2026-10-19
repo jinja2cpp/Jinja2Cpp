@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_GENERIC_LIST_ITERATOR_H
 #define JINJA2CPP_GENERIC_LIST_ITERATOR_H
 
+#include "fwd.h" // IWYU pragma: export
 #include "generic_list.h"
 #include "value.h"
 #include "value_ptr.h"

@@ -94,6 +94,8 @@ CASES = [
     ("namespace_set_block", "{% set ns = namespace() %}{% set ns.a %}x{{ x }}{% endset %}{{ ns.a }}"),
     ("namespace_subscript", "{% set ns = namespace({'a': 1}, b=2) %}{{ ns['a'] }}{{ ns.b }}"),
     ("namespace_missing_attr", "{% set ns = namespace() %}[{{ ns.a }}]"),
+    ("namespace_contains_itself", "{% set ns = namespace(a=1) %}{% set ns.a = ns %}{{ ns }}|{{ 'T' if ns.a.a.a is sameas ns else 'F' }}"),
+    ("namespace_contains_itself_in_list", "{% set ns = namespace() %}{% set ns.l = [ns] %}{{ ns }}"),
     ("namespace_set_on_dict", "{% set m = {} %}{% set m.a = 1 %}"),
     ("namespace_set_on_undefined", "{% set nope.a = 1 %}"),
     ("namespace_keeps_loop", "{% set ns = namespace() %}{% for i in l %}{% set ns.x = loop %}{% endfor %}{{ ns.x.index }}{{ ns.x.length }}{{ ns.x.revindex }}{{ 'T' if ns.x.last else 'F' }}"),

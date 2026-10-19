@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_TEMPLATE_H
 #define JINJA2CPP_TEMPLATE_H
 
+#include "fwd.h" // IWYU pragma: export
 #include "config.h"
 #include "error_info.h"
 #include "value.h"
@@ -21,13 +22,13 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <vector>
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 
 namespace jinja2
 {
 class ITemplateImpl;
-class TemplateEnv;
 template<typename CharT>
 class TemplateImpl;
 // Result<T> is expected-lite's nonstd::expected at every C++ standard. Use only what
@@ -62,7 +63,8 @@ struct MetadataInfo
  * Basic usage:
  * ```c++
  * jinja2::Template tpl;
- * tpl.Load("Hello {{ name }}!");
+ * if (!tpl.Load("Hello {{ name }}!"))
+ *     return; // the result holds the parse error
  * std::string result = tpl.RenderAsString({{"name", "World"}}).value();
  * ```
  *
@@ -110,7 +112,7 @@ public:
      *
      * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
-    Result<void, CharT> Load(StringViewType source, std::string name = {});
+    [[nodiscard]] Result<void, CharT> Load(StringViewType source, std::string name = {});
     /*!
      * \brief Load template from the stream
      *
@@ -122,7 +124,7 @@ public:
      *
      * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
-    Result<void, CharT> Load(std::basic_istream<CharT>& stream, std::string name = {});
+    [[nodiscard]] Result<void, CharT> Load(std::basic_istream<CharT>& stream, std::string name = {});
     /*!
      * \brief Load template from the specified file
      *
@@ -133,7 +135,7 @@ public:
      *
      * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
-    Result<void, CharT> LoadFromFile(const std::string& fileName);
+    [[nodiscard]] Result<void, CharT> LoadFromFile(const std::string& fileName);
 
     /*!
      * \brief Render previously loaded template to the stream
@@ -145,7 +147,7 @@ public:
      *
      * @return Either nothing or instance of \ref BasicErrorInfo as an error
      */
-    Result<void, CharT> Render(std::basic_ostream<CharT>& os, const ValuesMap& params) const;
+    [[nodiscard]] Result<void, CharT> Render(std::basic_ostream<CharT>& os, const ValuesMap& params) const;
     /*!
      * \brief Render previously loaded template to the stream, taking params from a generic map
      *
@@ -153,7 +155,7 @@ public:
      * object (anything \ref Reflect turns into a \ref GenericMap).
      */
     template<typename Map, std::enable_if_t<std::is_same_v<Map, GenericMap>, int> = 0>
-    Result<void, CharT> Render(std::basic_ostream<CharT>& os, const Map& params) const
+    [[nodiscard]] Result<void, CharT> Render(std::basic_ostream<CharT>& os, const Map& params) const
     {
         return RenderGeneric(os, params);
     }
@@ -190,6 +192,17 @@ public:
      * @return Non-parsed metadata information or instance of \ref BasicErrorInfo as an error
      */
     [[nodiscard]] Result<MetadataInfo<CharT>, CharT> GetMetadataRaw() const;
+    /*!
+     * \brief The names the template reads from its params, as `jinja2.meta.find_undeclared_variables`
+     *
+     * Every name a render of the template looks up among the params and the environment's
+     * globals, sorted, without the globals: a name the template reads before or without setting
+     * it, or sets only in a branch of `if`. Templates the template includes, imports or extends
+     * are not looked into, as in Jinja2. Parses the template's source again.
+     *
+     * @return The names, or the error of the parse (TemplateNotParsed before a successful Load)
+     */
+    [[nodiscard]] Result<std::vector<std::string>, CharT> FindUndeclaredVariables() const;
 
     /* !
      * \brief compares to an other object of the same type
@@ -201,7 +214,7 @@ public:
 private:
     // Out of line, so that the GenericMap overloads (templates only to keep `RenderAsString({})`
     // unambiguous) are still compiled into the library.
-    Result<void, CharT> RenderGeneric(std::basic_ostream<CharT>& os, const GenericMap& params) const;
+    [[nodiscard]] Result<void, CharT> RenderGeneric(std::basic_ostream<CharT>& os, const GenericMap& params) const;
     [[nodiscard]] Result<StringType, CharT> RenderAsStringGeneric(const GenericMap& params) const;
 
     std::shared_ptr<ITemplateImpl> m_impl;
@@ -221,8 +234,10 @@ bool operator!=(const BasicTemplate<CharT>& lhs, const BasicTemplate<CharT>& rhs
 }
 
 // Both instantiations are compiled into the library. MSVC rejects `extern` together with
-// dllexport (C4910), so the declarations are visible to users of the library only.
-#ifndef JINJA2CPP_BUILD_AS_SHARED
+// dllexport (C4910), so there the declarations are visible to users of the library only.
+// GCC takes the visibility of an explicit instantiation only from its first declaration,
+// so elsewhere the library sees them too (src/template.cpp).
+#if !defined(JINJA2CPP_BUILD_AS_SHARED) || !defined(_WIN32)
 extern template class JINJA2CPP_EXPORT BasicTemplate<char>;
 extern template class JINJA2CPP_EXPORT BasicTemplate<wchar_t>;
 #endif

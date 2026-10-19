@@ -38,7 +38,8 @@ postponed list in section 5. On 2026-10-18 that is 69 open tasks (this one inclu
   forwards), the inline ABI namespace `jinja2::v2` (0076) and migration (0077, 0222).
 - Everything that shapes the public API, so that it is decided once before the freeze:
   one error contract for the whole public API (0250, Ruslan 2026-10-18) and one allocator and
-  memory contract (0252), which the others follow,
+  memory contract (0252), which the others follow, implemented by 0253 (error contract P1),
+  0262 (`Settings::Limits`) and 0266 (`ConfinedFileSystem`),
   unsigned values (0172), big integers behind a backend interface (0178), Markup from C++
   (0180), name-based autoescape (0181), non-string mapping keys (0036), resource and
   recursion limits (0097, 0098), `[[nodiscard]]` on `Load`/`Render` (0080), the C++-only
@@ -77,7 +78,7 @@ tag; **A** = accepted for 2.0, tracked, does not block.
 | Gate | What must hold | Tasks | Owner | B/A | Evidence |
 |---|---|---|---|---|---|
 | G0 Scope | Every task in `docs/tasks/` is `done`, `dropped`, or on the postponed list of section 5; nothing is postponed without Ruslan's word | all open tasks | Ruslan | B | `grep -l 'status: open' docs/tasks/0*.md` on the candidate, checked against section 5 |
-| G1 API/ABI freeze | Inline namespace `v2` in every public header, `fwd.h`, no leaked macros or vendored names; `nm` shows `jinja2::v2::`; a consumer built against 1.3.2 headers fails to link against 2.0 (static and shared); the **API wave** has landed first: 0250 (one error contract for the public API) and 0252 (allocator and memory contract, PR #575) settle before the rest, then 0172, 0178, 0180, 0181, 0036, 0097, 0098, 0080, 0233, 0236, 0183 (every task that adds to or changes public headers) follow it; decisions of section 8 recorded | [0076](tasks/0076-abi-namespace-and-headers.md) and the API wave | 0076 thread (running) | B | 0076's tests in CI; negative link check |
+| G1 API/ABI freeze | Inline namespace `v2` in every public header, `fwd.h`, no leaked macros or vendored names; `nm` shows `jinja2::v2::`; a consumer built against 1.3.2 headers fails to link against 2.0 (static and shared); the **API wave** has landed first: 0250 (one error contract for the public API) and 0252 (allocator and memory contract, PR #575) settle before the rest, then 0253 (error contract P1), 0262 (`Settings::Limits`), 0266 (`ConfinedFileSystem`), 0172, 0178, 0180, 0181, 0036, 0097, 0098, 0080, 0233, 0236, 0183 (every task that adds to or changes public headers) follow it; decisions of section 8 recorded | [0076](tasks/0076-abi-namespace-and-headers.md) and the API wave | 0076 thread (running) | B | 0076's tests in CI; negative link check |
 | G2 Known correctness defects | `*context` callable binds positional args; self-referencing namespace/dict/list does not leak under LSan; unsigned above `INT64_MAX` renders the value or fails loudly | [0183](tasks/0183-context-callable-positional-arg.md), [0110](tasks/0110-namespace-self-reference-leak.md), [0172](tasks/0172-value-unsigned-overflow.md) | one thread each (started 2026-10-18) | B | their unit rows; sanitizer jobs with `detect_leaks=1` |
 | G3 Embedding and trust contract | Lifetime/cache/callback scenarios pass under ASan/UBSan/LSan and TSan; `docs/security.md` states the trust model, what `RealFileSystem` does with `../` and absolute names, the fixed caps, and a reporting contact | [0223](tasks/0223-embedding-lifecycle-integration-tests.md), [0224](tasks/0224-template-trust-and-loader-boundary.md) | unassigned | B | sanitizer jobs; 0224's disposable-file probes |
 | G4 Migration | `MIGRATION.md` covers renames and behaviour changes with before/after; the migration script rewrites our 1.x-style tests warning-free in CI; a 1.3.2 consumer fixture upgrades against the installed RC | [0077](tasks/0077-migration-script.md), [0222](tasks/0222-downstream-1x-migration-trial.md) | unassigned (after G1) | B | CI job of 0077 and 0222 |
@@ -114,6 +115,18 @@ From api-2.0.md 5.3-5.4, stated as the contract users get:
 - **Behaviour.** Template output may change in minor releases where it moves towards
   the oracle; such changes are listed in the release notes. Deliberate divergences
   (section 5) change only by a decision recorded in their task.
+- **Markup values (0180).** `Value::ValueData` gained the alternatives `jinja2::Markup` and
+  `jinja2::WMarkup` (immutable wrappers of `std::string`/`std::wstring`, `include/jinja2cpp/markup.h`),
+  appended at indices 13 and 14; `sizeof(Value)` is unchanged. `IsString()`, `AsString()`,
+  `As<std::string>()` and `GetIf<std::string>()` accept a Markup (mutable access to the text
+  of a Markup value turns the value into a plain string first, as any change to a Python
+  `Markup` gives a `str`; a Markup has no `append` or `+=`), but code that visits
+  the raw variant (`std::visit(..., v.GetData())`, `std::get<std::string>`,
+  `std::holds_alternative<std::string>`) sees a Markup as its own alternative: a visitor
+  with a generic overload now receives it there, and one without an overload for it no
+  longer compiles. Host `==` compares structurally (`Value(Markup("a")) != Value("a")`);
+  templates still compare the text. To change a Markup, build the new text from `str()` and
+  wrap it again, which states that it is safe.
 - **Dependencies in the interface.** `Result<T>` stays `nonstd::expected` (pinned) for
   all of 2.x; moving to `std::expected` needs a C++23 floor and is a 3.0 question.
 
@@ -206,7 +219,7 @@ Answers are recorded here and in the linked task.
 
 | # | Question | Options | Recommended | Why |
 |---|---|---|---|---|
-| D1 | `Value(uint64_t)` above `INT64_MAX` (0172) | *Decided by Ruslan 2026-10-18:* a) throw from `Value`/`Reflect`, for now | — | b loses precision silently, c costs every evaluator path. The error contract (0250) may change how the failure is reported; 0172 follows 0250 |
+| D1 | `Value(uint64_t)` above `INT64_MAX` (0172) | *Decided by Ruslan 2026-10-18:* a) throw from `Value`/`Reflect`, for now | — | b loses precision silently, c costs every evaluator path. Confirmed by the error contract (0250, approved 2026-10-18 12:24): kept, typed as `jinja2::Exception{IntegerOutOfRange}`; 0172 follows 0250 |
 | D2 | Big integers in 2.0 (0178) | *Settled by the scope rule (2026-10-18):* in 2.0 | — | The backend interface of D3 touches `Value`, so it belongs before the freeze |
 | D3 | 0178 (big integers) against 0230 (Boost-free core) | *Decided by Ruslan 2026-10-18:* a big-integer backend interface. The default build has none (int64, overflow raises); an optional compile-time backend over Boost.Multiprecision `cpp_int` is the sample implementation; users may supply their own | — | Keeps the core Boost-free and makes big integers opt-in; the architect plan in 0178 decides compile-time against run-time backends |
 | D4 | Markup on host values (0180) | *Settled by the scope rule:* in 2.0, in the API wave | — | It changes `Value`; doing it before the freeze avoids a SOVERSION bump right after 2.0 |

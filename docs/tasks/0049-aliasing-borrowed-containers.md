@@ -25,10 +25,11 @@ owning list or dict). Every other name that already referred to the old data kee
 
 Two smaller leftovers of the same change:
 
-- Shared ownership cannot free a cycle, so storing a list or dict in itself
-  (`x.append(x)`, through `update`, `insert`, `setdefault`) raises "a list or dict cannot
-  contain itself" where Python prints `[...]`. Values captured by macros or user
-  callables are not inspected, so a cycle through them leaks.
+- Cycles: since 0110 a list, dict or namespace may contain itself, as in Python, and the
+  render frees such cycles when it ends (`CycleCollector`). A cycle through a bound method's
+  receiver or a key-value pair, which the collector cannot follow, still raises "a list or
+  dict cannot contain itself through a bound method or a key-value pair"
+  (`methods.list_contains_its_bound_method`); cycles through other objects leak (0251).
 - `loop.length`, `loop.last` and `loop.revindex` are taken before the body runs; a list
   that grows or shrinks inside the loop is iterated live, so they can be wrong.
 - `for` reads one item ahead (for `loop.last` and `loop.nextitem`), Jinja2 only when
@@ -45,9 +46,7 @@ only.
 **Proposal.** Convert each borrowed container once per render into a lazily-filled
 copy-on-write state shared by every value converted from it (a per-render cache keyed by
 the source address, owned by the `RenderContext`), so all aliases see the first write.
-Keep the read path free of allocations for templates that never mutate. For cycles, a
-render-scoped arena that owns template containers (freed when the render ends) would allow
-Python's behaviour.
+Keep the read path free of allocations for templates that never mutate.
 
 **Done when.** No line of `test/parity/divergences/` names 0049, and an ASan/LSan run of
 the corpus is clean.

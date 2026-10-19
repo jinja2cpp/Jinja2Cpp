@@ -1229,6 +1229,170 @@ JINJA2CPP_ALWAYS_INLINE InternalValue TitleCase(std::basic_string_view<CharT> st
     return TitleCaseUnicode(str);
 }
 
+// A cased character that str.lower() changes, or that str.upper() changes; characters with no
+// case (digits, CJK) are neither. A titlecase character counts as uppercase.
+inline bool ChangesUnder(CaseFn map, uint32_t cp)
+{
+    uint32_t mapped[3];
+    return unicode::IsCased(cp) && (map(cp, mapped) != 1 || mapped[0] != cp);
+}
+
+inline bool IsUpperChar(uint32_t cp)
+{
+    return ChangesUnder(unicode::ToLower, cp);
+}
+
+inline bool IsLowerChar(uint32_t cp)
+{
+    return !IsUpperChar(cp) && ChangesUnder(unicode::ToUpper, cp);
+}
+
+// The words camelize and underscorize build an identifier from, as [begin, end) indexes of
+// chars: runs of \w characters other than _, split before an uppercase character that follows
+// a lowercase one or a digit (fooBar, Vector3D), and before the last of a run of uppercase
+// ones that a lowercase one follows (HTTPServer is HTTP and Server)
+template<typename CharT>
+std::vector<std::pair<size_t, size_t>> IdentifierWords(const CaseChars<CharT>& chars)
+{
+    const auto& cps = chars.cps;
+    auto inWord = [&cps](size_t idx) { return cps[idx] != '_' && unicode::IsWordChar(cps[idx]); };
+    std::vector<std::pair<size_t, size_t>> words;
+    for (size_t idx = 0; idx < cps.size();)
+    {
+        if (!inWord(idx))
+        {
+            ++idx;
+            continue;
+        }
+        auto begin = idx++;
+        for (; idx < cps.size() && inWord(idx); ++idx)
+        {
+            if (!IsUpperChar(cps[idx]))
+            {
+                continue;
+            }
+            const bool afterLower = IsLowerChar(cps[idx - 1]) || unicode::IsDecimal(cps[idx - 1]);
+            const bool acronymEnd = IsUpperChar(cps[idx - 1]) && idx + 1 < cps.size() && IsLowerChar(cps[idx + 1]);
+            if (afterLower || acronymEnd)
+            {
+                words.emplace_back(begin, idx);
+                begin = idx;
+            }
+        }
+        words.emplace_back(begin, idx);
+    }
+    return words;
+}
+
+// camelize: the words of IdentifierWords, each with a titlecase first character and lowercase
+// others, joined; with upperFirst false the first word is all lowercase ("http_server" and
+// "HTTPServer" are HttpServer, or httpServer)
+template<typename CharT>
+InternalValue Camelize(std::basic_string_view<CharT> str, bool upperFirst)
+{
+    const CaseChars<CharT> chars(str);
+    std::basic_string<CharT> result;
+    bool first = true;
+    for (const auto& [begin, end] : IdentifierWords(chars))
+    {
+        if (first && !upperFirst)
+        {
+            AppendLower(result, chars, begin, begin, end);
+        }
+        else
+        {
+            AppendMapped(result, chars, begin, unicode::ToTitle);
+            AppendLower(result, chars, begin, begin + 1, end);
+        }
+        first = false;
+    }
+    return InternalValue(result);
+}
+
+// underscorize: the words of IdentifierWords in lowercase, joined with _ ("HTTPServer" and
+// "http-server" are http_server)
+template<typename CharT>
+InternalValue Underscorize(std::basic_string_view<CharT> str)
+{
+    const CaseChars<CharT> chars(str);
+    std::basic_string<CharT> result;
+    for (const auto& [begin, end] : IdentifierWords(chars))
+    {
+        if (!result.empty())
+        {
+            result.push_back('_');
+        }
+        AppendLower(result, chars, begin, begin, end);
+    }
+    return InternalValue(result);
+}
+
+// escapecpp: the text as the contents of a C++ string literal. Backslash, double quote and
+// control characters are escaped, the latter as \n-style escapes or three octal digits (an
+// octal escape ends after three, where \x would swallow the hex digits that follow); other
+// characters, non-ASCII ones too, are kept as they are.
+template<typename CharT>
+std::basic_string<CharT> EscapeCpp(std::basic_string_view<CharT> str)
+{
+    std::basic_string<CharT> result;
+    result.reserve(str.size());
+    auto append = [&result](const char* text) {
+        for (; *text; ++text)
+        {
+            result.push_back(static_cast<CharT>(*text));
+        }
+    };
+    for (auto ch : str)
+    {
+        const auto unit = CodeUnit(ch);
+        switch (unit)
+        {
+        case '\\':
+            append("\\\\");
+            break;
+        case '"':
+            append("\\\"");
+            break;
+        case '\n':
+            append("\\n");
+            break;
+        case '\r':
+            append("\\r");
+            break;
+        case '\t':
+            append("\\t");
+            break;
+        case '\a':
+            append("\\a");
+            break;
+        case '\b':
+            append("\\b");
+            break;
+        case '\f':
+            append("\\f");
+            break;
+        case '\v':
+            append("\\v");
+            break;
+        default:
+            if (unit < 0x20 || unit == 0x7F)
+            {
+                result.push_back('\\');
+                for (int shift = 6; shift >= 0; shift -= 3)
+                {
+                    result.push_back(static_cast<CharT>('0' + ((unit >> shift) & 7)));
+                }
+            }
+            else
+            {
+                result.push_back(ch);
+            }
+            break;
+        }
+    }
+    return result;
+}
+
 // The code point a numeric character reference stands for, as html.unescape maps it; 0 for
 // the references it drops (html._invalid_codepoints)
 inline uint32_t CharRefCodePoint(uint64_t value)
@@ -1536,6 +1700,12 @@ StringConverter::StringConverter(const FilterParams& params, StringConverter::Mo
     case TrimMode:
     {
         static const auto args = MakeArgumentsTable({ { "chars", false } });
+        ParseParams(args, params);
+        break;
+    }
+    case CamelMode:
+    {
+        static const auto args = MakeArgumentsTable({ { "upper_first", false, true } });
         ParseParams(args, params);
         break;
     }
@@ -1945,6 +2115,15 @@ InternalValue StringConverter::Convert(const InternalValue& baseVal, RenderConte
         return InternalValue(ApplyCenter(baseVal, context));
     case WordWrapMode:
         return InternalValue(ApplyWordWrap(baseVal, context));
+    case CamelMode:
+    {
+        const bool upperFirst = ConvertToBool(this->GetArgumentValue("upper_first", context));
+        return ConvertText(baseVal, [upperFirst](auto srcStr) { return Camelize(srcStr, upperFirst); });
+    }
+    case UnderscoreMode:
+        return ConvertText(baseVal, [](auto srcStr) { return Underscorize(srcStr); });
+    case EscapeCppMode:
+        return InternalValue(ApplyStringConverter(baseVal, [](auto srcStr) -> TargetString { return EscapeCpp(srcStr); }));
     default:
         return InternalValue(TargetString());
     }
@@ -2012,6 +2191,9 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     case ReplaceMode:
     case WordCountMode:
     case StriptagsMode:
+    case CamelMode:
+    case UnderscoreMode:
+    case EscapeCppMode:
         // These filters convert any value with str() first
         if (!IsStringValue(baseVal))
         {

@@ -2,7 +2,9 @@
 
 #include "helpers.h"
 
+#include <jinja2cpp/big_int.h>
 #include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/value.h>
 
@@ -40,6 +42,13 @@ struct ValueRenderer
     void operator()(const std::basic_string<CharU>& val) const
     {
         fmt::format_to(ctx->out(), UNIVERSAL_STR("{}").GetValue<CharT>(), jinja2::ConvertString<std::basic_string<CharT>>(val));
+    }
+
+    // A Markup prints as its text; the generic overload below would hand fmt the Markup
+    template<typename CharU>
+    void operator()(const jinja2::BasicMarkup<CharU>& val) const
+    {
+        this->operator()(val.str());
     }
 
     template<typename CharU>
@@ -100,6 +109,8 @@ struct ValueRenderer
     void operator()(const jinja2::GenericList& /*val*/) const {}
 
     void operator()(const jinja2::UserCallable& /*val*/) const {}
+
+    void operator()(const jinja2::BigInt& val) const { this->operator()(val.ToString()); }
 
     template<typename T>
     void operator()(const T& val) const

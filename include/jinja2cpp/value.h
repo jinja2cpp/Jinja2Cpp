@@ -1,8 +1,11 @@
 #ifndef JINJA2CPP_VALUE_H
 #define JINJA2CPP_VALUE_H
 
+#include <jinja2cpp/fwd.h> // IWYU pragma: export
+#include <jinja2cpp/big_int.h>
 #include <jinja2cpp/config.h>
 #include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/markup.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/utils/ordered_map.h>
 #include <jinja2cpp/value_ptr.h>
@@ -13,8 +16,10 @@
 #include <cstdint>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -42,8 +47,6 @@ inline bool operator!=(const NoneValue& /*lhs*/, const NoneValue& /*rhs*/) noexc
 }
 
 using EmptyValue JINJA2CPP_DEPRECATED("jinja2cpp-2: NoneValue") = NoneValue;
-
-class Value;
 
 /*!
  * \brief Interface to the generic dictionary type which maps string to some value
@@ -233,10 +236,6 @@ JINJA2CPP_EXPORT bool operator==(const GenericMap& lhs, const GenericMap& rhs);
 JINJA2CPP_EXPORT bool operator!=(const GenericMap& lhs, const GenericMap& rhs);
 
 using ValuesList = std::vector<Value>;
-struct ValuesMap;
-struct UserCallableArgs;
-struct ParamInfo;
-struct UserCallable;
 
 //! Holds the recursive alternatives of \ref Value (\ref ValuesList, \ref ValuesMap, \ref UserCallable) by value
 template<typename T>
@@ -261,6 +260,30 @@ template<typename T>
 struct IsStoredAsInt : std::integral_constant<bool, std::is_integral_v<T> && !std::is_same_v<T, bool> && !IsCharType<T>::value>
 {
 };
+
+//! Integral types with values outside the `int64_t` range \ref Value stores: `uint64_t`, `size_t` and wider
+template<typename T>
+inline constexpr bool CanExceedInt64 = std::numeric_limits<T>::digits > std::numeric_limits<int64_t>::digits;
+
+//! Converts an integral value to the alternative of `Data` (\ref Value::ValueData) that stores it: `int64_t`, or a
+//! \ref BigInt for a value outside the `int64_t` range. Only types that can hold such values may throw (allocating)
+template<typename Data, typename T>
+Data ToStoredInt(T val) noexcept(!CanExceedInt64<T>)
+{
+    if constexpr (CanExceedInt64<T>)
+    {
+        bool fits = val <= static_cast<T>(std::numeric_limits<int64_t>::max());
+        if constexpr (std::is_signed_v<T>)
+        {
+            fits = fits && val >= static_cast<T>(std::numeric_limits<int64_t>::min());
+        }
+        if (!fits)
+        {
+            return Data(BigInt(val));
+        }
+    }
+    return Data(static_cast<int64_t>(val));
+}
 } // namespace detail
 
 /*!
@@ -275,7 +298,9 @@ struct IsStoredAsInt : std::integral_constant<bool, std::is_integral_v<T> && !st
  *  - Wide string value
  *  - String view value (std::string_view)
  *  - Wide string view value (std::wstring_view)
+ *  - Safe text (\ref Markup, \ref WMarkup): a string that a template does not escape
  *  - integer (int64_t) value
+ *  - integer outside the int64_t range (\ref BigInt)
  *  - floating point (double) value
  *  - Simple list of other values (\ref ValuesList)
  *  - Simple map of other values (\ref ValuesMap)
@@ -284,8 +309,13 @@ struct IsStoredAsInt : std::integral_constant<bool, std::is_integral_v<T> && !st
  *  - User-defined callable (\ref UserCallable)
  *
  *  `IsX()` tests what is stored, `AsX()` and `As<T>()` return it (and throw `std::bad_variant_access` when the value
- *  holds something else), `bool AsX(out)` and `GetIf<T>()` do the same without throwing, and `ToString()` prints the
+ *  holds something else; a \ref Markup is a string, so `IsString()`, `AsString()`, `As<std::string>()` and
+ *  `GetIf<std::string>()` accept it, and `IsMarkup()` and `As<Markup>()` tell it from a plain string), `bool AsX(out)` and `GetIf<T>()` do the same without throwing, and `ToString()` prints the
  *  value as `{{ value }}` does. \ref jinja2::Visit visits the stored object.
+ *
+ *  A \ref Markup is immutable, like Python's: reading it as a string (the const accessors) leaves it a Markup, but
+ *  mutable access to its text (`AsString()`, `As<std::string>()`, `GetIf<std::string>()` on a non-const Value)
+ *  makes the Value a plain `std::string` first, as any change to a Python Markup gives a `str`.
  */
 class Value
 {
@@ -303,7 +333,10 @@ public:
         RecWrapper<ValuesMap>,
         GenericList,
         GenericMap,
-        RecWrapper<UserCallable>>;
+        RecWrapper<UserCallable>,
+        Markup,
+        WMarkup,
+        BigInt>;
 
     template<typename T, typename... L>
     struct AnyOf : public std::false_type
@@ -390,11 +423,14 @@ public:
     /*!
      * \brief Initializing constructor from any integral value except `bool` and characters: stores `int64_t`
      *
+     * A value outside the `int64_t` range (a `uint64_t` or `size_t` above `INT64_MAX`) is stored as a \ref BigInt
+     * rather than wrapped; only types that can hold such values may throw (`std::bad_alloc`).
+     *
      * @param val Integer value which should be used to initialize \ref Value instance
      */
     template<typename I, std::enable_if_t<detail::IsStoredAsInt<I>::value>* = nullptr>
-    Value(I val) noexcept // NOLINT(google-explicit-constructor)
-        : m_data(static_cast<int64_t>(val))
+    Value(I val) noexcept(!detail::CanExceedInt64<I>) // NOLINT(google-explicit-constructor)
+        : m_data(detail::ToStoredInt<ValueData>(val))
     {
     }
     /*!
@@ -455,12 +491,18 @@ public:
     [[nodiscard]] bool IsBool() const noexcept { return Holds<bool>(); }
     //! Test Value for holding an integer (`int64_t`)
     [[nodiscard]] bool IsInt() const noexcept { return Holds<int64_t>(); }
+    //! Test Value for holding an integer outside the `int64_t` range (\ref BigInt); \ref IsInt is false for it
+    [[nodiscard]] bool IsBigInt() const noexcept { return Holds<BigInt>(); }
     //! Test Value for holding a floating-point number (`double`)
     [[nodiscard]] bool IsDouble() const noexcept { return Holds<double>(); }
-    //! Test Value for holding `std::string` (a `std::string_view` does not count)
-    [[nodiscard]] bool IsString() const noexcept { return Holds<std::string>(); }
-    //! Test Value for holding `std::wstring` (a `std::wstring_view` does not count)
-    [[nodiscard]] bool IsWString() const noexcept { return Holds<std::wstring>(); }
+    //! Test Value for holding `std::string` or a \ref Markup, which is one (a `std::string_view` does not count)
+    [[nodiscard]] bool IsString() const noexcept { return Holds<std::string>() || Holds<Markup>(); }
+    //! Test Value for holding `std::wstring` or a \ref WMarkup (a `std::wstring_view` does not count)
+    [[nodiscard]] bool IsWString() const noexcept { return Holds<std::wstring>() || Holds<WMarkup>(); }
+    //! Test Value for holding a \ref Markup exactly: safe narrow text, which a template does not escape
+    [[nodiscard]] bool IsMarkup() const noexcept { return Holds<Markup>(); }
+    //! Test Value for holding a \ref WMarkup exactly
+    [[nodiscard]] bool IsWMarkup() const noexcept { return Holds<WMarkup>(); }
     //! Test Value for holding a list: a \ref ValuesList or a \ref GenericList
     [[nodiscard]] bool IsList() const noexcept { return Holds<RecWrapper<ValuesList>>() || Holds<GenericList>(); }
     //! Test Value for holding a map: a \ref ValuesMap or a \ref GenericMap
@@ -489,26 +531,48 @@ public:
     [[nodiscard]] int64_t AsInt() const { return As<int64_t>(); }
     //! Same as \ref AsInt(), without throwing
     bool AsInt(int64_t& out) const noexcept { return Load(out); }
+    //! The stored \ref BigInt; throws `std::bad_variant_access` for anything else, an `int64_t` included
+    [[nodiscard]] const BigInt& AsBigInt() const { return As<BigInt>(); }
+    //! A pointer to the stored \ref BigInt, without throwing or copying
+    bool AsBigInt(const BigInt*& out) const& noexcept { return LoadPtr(out); }
+    //! Deleted: the pointer would outlive the temporary it points into
+    bool AsBigInt(const BigInt*& out) && = delete;
     //! The stored `double`; throws `std::bad_variant_access` for anything else
     [[nodiscard]] double AsDouble() const { return As<double>(); }
     //! Same as \ref AsDouble(), without throwing
     bool AsDouble(double& out) const noexcept { return Load(out); }
-    //! The stored `std::string`; throws `std::bad_variant_access` for anything else
+    //! The stored `std::string` (or the text of a \ref Markup); throws `std::bad_variant_access` for anything else
     [[nodiscard]] const std::string& AsString() const { return As<std::string>(); }
-    //! The stored `std::string`, mutable; throws `std::bad_variant_access` for anything else
+    //! The stored `std::string`, mutable; throws `std::bad_variant_access` for anything else. A \ref Markup becomes a plain string first (mutable access makes it one, as any change to a Python Markup gives a `str`)
     std::string& AsString() { return As<std::string>(); }
-    //! A view of the stored `std::string`, without throwing or copying
+    //! A view of the stored `std::string` (or \ref Markup), without throwing or copying
     bool AsString(std::string_view& out) const& noexcept { return LoadView<std::string>(out); }
     //! Deleted: the view would outlive the temporary it points into
     bool AsString(std::string_view& out) && = delete;
-    //! The stored `std::wstring`; throws `std::bad_variant_access` for anything else
+    //! The stored `std::wstring` (or the text of a \ref WMarkup); throws `std::bad_variant_access` for anything else
     [[nodiscard]] const std::wstring& AsWString() const { return As<std::wstring>(); }
-    //! The stored `std::wstring`, mutable; throws `std::bad_variant_access` for anything else
+    //! The stored `std::wstring`, mutable; throws `std::bad_variant_access` for anything else. A \ref WMarkup becomes a plain string first, see \ref AsString
     std::wstring& AsWString() { return As<std::wstring>(); }
-    //! A view of the stored `std::wstring`, without throwing or copying
+    //! A view of the stored `std::wstring` (or \ref WMarkup), without throwing or copying
     bool AsWString(std::wstring_view& out) const& noexcept { return LoadView<std::wstring>(out); }
     //! Deleted: the view would outlive the temporary it points into
     bool AsWString(std::wstring_view& out) && = delete;
+    //! The stored \ref Markup exactly; throws `std::bad_variant_access` for anything else, a plain string included
+    [[nodiscard]] const Markup& AsMarkup() const { return As<Markup>(); }
+    //! The stored \ref Markup, mutable (harmless: a Markup is immutable); throws `std::bad_variant_access` for anything else
+    Markup& AsMarkup() { return As<Markup>(); }
+    //! A view of the stored \ref Markup, without throwing or copying
+    bool AsMarkup(std::string_view& out) const& noexcept { return LoadView<Markup>(out); }
+    //! Deleted: the view would outlive the temporary it points into
+    bool AsMarkup(std::string_view& out) && = delete;
+    //! The stored \ref WMarkup exactly; throws `std::bad_variant_access` for anything else
+    [[nodiscard]] const WMarkup& AsWMarkup() const { return As<WMarkup>(); }
+    //! The stored \ref WMarkup, mutable; throws `std::bad_variant_access` for anything else
+    WMarkup& AsWMarkup() { return As<WMarkup>(); }
+    //! A view of the stored \ref WMarkup, without throwing or copying
+    bool AsWMarkup(std::wstring_view& out) const& noexcept { return LoadView<WMarkup>(out); }
+    //! Deleted: the view would outlive the temporary it points into
+    bool AsWMarkup(std::wstring_view& out) && = delete;
     //! The stored \ref ValuesList (not a \ref GenericList, see \ref ToGenericList); throws `std::bad_variant_access` for anything else
     [[nodiscard]] const ValuesList& AsList() const { return As<ValuesList>(); }
     //! The stored \ref ValuesList, mutable; throws `std::bad_variant_access` for anything else
@@ -559,6 +623,9 @@ public:
      *
      * `T` is one of the alternatives of \ref ValueData, or \ref ValuesList, \ref ValuesMap or \ref UserCallable
      * (the alternative \ref RecWrapper holds). Throws `std::bad_variant_access` when the value holds something else.
+     * `As<std::string>()` and `As<std::wstring>()` also accept a \ref Markup or \ref WMarkup (it is a string);
+     * `As<Markup>()` and `GetData()` are exact. The mutable overloads for strings turn a Markup into a plain
+     * string first (see \ref Value); `GetIf<std::string>()` on a non-const Value does so too.
      */
     template<typename T>
     [[nodiscard]] const T& As() const
@@ -567,12 +634,21 @@ public:
         {
             return *std::get<RecWrapper<T>>(m_data);
         }
+        else if constexpr (IsPlainString<T>::value)
+        {
+            // A Markup is a string: std::get<Markup> throws when it is not one either
+            if (const auto* text = std::get_if<T>(&m_data))
+            {
+                return *text;
+            }
+            return std::get<MarkupOf<T>>(m_data).str();
+        }
         else
         {
             return std::get<T>(m_data);
         }
     }
-    //! Mutable \ref As
+    //! Mutable \ref As; for `std::string` and `std::wstring` it turns a held Markup into a plain string first
     template<typename T>
     T& As()
     {
@@ -580,12 +656,20 @@ public:
         {
             return *std::get<RecWrapper<T>>(m_data);
         }
+        else if constexpr (IsPlainString<T>::value)
+        {
+            if (auto* text = std::get_if<T>(&m_data))
+            {
+                return *text;
+            }
+            return DemoteMarkup<T>();
+        }
         else
         {
             return std::get<T>(m_data);
         }
     }
-    //! A pointer to the stored `T`, or `nullptr`, as `std::get_if`; `T` as for \ref As
+    //! A pointer to the stored `T`, or `nullptr`, as `std::get_if`; `T` as for \ref As, strings accept markup too
     template<typename T>
     [[nodiscard]] const T* GetIf() const noexcept
     {
@@ -594,6 +678,15 @@ public:
             // A moved-from wrapper holds nothing: report it as absent rather than dereference it
             const auto* wrapper = std::get_if<RecWrapper<T>>(&m_data);
             return wrapper && !wrapper->valueless_after_move() ? &**wrapper : nullptr;
+        }
+        else if constexpr (IsPlainString<T>::value)
+        {
+            if (const T* text = std::get_if<T>(&m_data))
+            {
+                return text;
+            }
+            const auto* markup = std::get_if<MarkupOf<T>>(&m_data);
+            return markup ? &markup->str() : nullptr;
         }
         else
         {
@@ -608,6 +701,14 @@ public:
         {
             auto* wrapper = std::get_if<RecWrapper<T>>(&m_data);
             return wrapper && !wrapper->valueless_after_move() ? &**wrapper : nullptr;
+        }
+        else if constexpr (IsPlainString<T>::value)
+        {
+            if (T* text = std::get_if<T>(&m_data))
+            {
+                return text;
+            }
+            return std::holds_alternative<MarkupOf<T>>(m_data) ? &DemoteMarkup<T>() : nullptr;
         }
         else
         {
@@ -646,7 +747,7 @@ public:
      */
     JINJA2CPP_EXPORT std::to_chars_result ToChars(char* first, char* last) const noexcept;
 
-    [[nodiscard]] bool IsEqual(const Value& rhs) const;
+    [[nodiscard]] JINJA2CPP_EXPORT bool IsEqual(const Value& rhs) const;
 
     // 1.x names, kept as one-line forwards until 3.0 (docs/api-2.0.md 5.1)
 
@@ -681,16 +782,16 @@ public:
     //! Returns a copy, as in 1.x; \ref As returns a reference
     template<typename T>
     JINJA2CPP_DEPRECATED("jinja2cpp-2: As")
-    auto get() { return std::get<T>(m_data); }
+    auto get() { return GetCopy<T>(); }
     template<typename T>
     JINJA2CPP_DEPRECATED("jinja2cpp-2: As")
-    [[nodiscard]] auto get() const { return std::get<T>(m_data); }
+    [[nodiscard]] auto get() const { return GetCopy<T>(); }
     template<typename T>
     JINJA2CPP_DEPRECATED("jinja2cpp-2: GetIf")
-    auto getPtr() { return std::get_if<T>(&m_data); }
+    auto getPtr() { return GetRaw<T>(); }
     template<typename T>
     JINJA2CPP_DEPRECATED("jinja2cpp-2: GetIf")
-    auto getPtr() const { return std::get_if<T>(&m_data); }
+    auto getPtr() const { return GetRaw<T>(); }
     JINJA2CPP_DEPRECATED("jinja2cpp-2: IsNone")
     [[nodiscard]] bool isEmpty() const { return IsNone(); }
 
@@ -700,6 +801,57 @@ private:
     struct IsWrapped : std::integral_constant<bool, AnyOf<T, ValuesList, ValuesMap, UserCallable>::value>
     {
     };
+
+    // std::string and std::wstring: As and GetIf accept the Markup derived from them as well
+    template<typename T>
+    struct IsPlainString : std::integral_constant<bool, std::is_same_v<T, std::string> || std::is_same_v<T, std::wstring>>
+    {
+    };
+    template<typename T>
+    using MarkupOf = BasicMarkup<typename T::value_type>;
+    // Mutable access to the text of a Markup makes the value a plain string, as any change to a Python Markup gives a str
+    template<typename T>
+    T& DemoteMarkup()
+    {
+        T text = std::get<MarkupOf<T>>(std::move(m_data)).str();
+        return m_data.template emplace<T>(std::move(text));
+    }
+
+    // The 1.x get<T>() and getPtr<T>() take any alternative of the variant, wrapped ones included
+    template<typename T>
+    [[nodiscard]] auto GetCopy() const
+    {
+        if constexpr (IsPlainString<T>::value)
+        {
+            return As<T>();
+        }
+        else
+        {
+            return std::get<T>(m_data);
+        }
+    }
+    template<typename Self, typename T>
+    static auto GetRawFrom(Self& self) noexcept
+    {
+        if constexpr (IsPlainString<T>::value)
+        {
+            return self.template GetIf<T>();
+        }
+        else
+        {
+            return std::get_if<T>(&self.m_data);
+        }
+    }
+    template<typename T>
+    auto GetRaw() noexcept
+    {
+        return GetRawFrom<Value, T>(*this);
+    }
+    template<typename T>
+    auto GetRaw() const noexcept
+    {
+        return GetRawFrom<const Value, T>(*this);
+    }
 
     template<typename T>
     [[nodiscard]] bool Holds() const noexcept
@@ -719,7 +871,7 @@ private:
     template<typename S>
     bool LoadView(std::basic_string_view<typename S::value_type>& out) const noexcept
     {
-        const auto* p = std::get_if<S>(&m_data);
+        const auto* p = GetIf<S>();
         if (p)
         {
             out = *p;
@@ -953,17 +1105,17 @@ private:
     uint64_t m_counter{};
 };
 
-bool operator==(const UserCallable& lhs, const UserCallable& rhs);
-bool operator!=(const UserCallable& lhs, const UserCallable& rhs);
+JINJA2CPP_EXPORT bool operator==(const UserCallable& lhs, const UserCallable& rhs);
+JINJA2CPP_EXPORT bool operator!=(const UserCallable& lhs, const UserCallable& rhs);
 
 
 inline Value::Value(const UserCallable& callable)
-    : m_data(RecWrapper<UserCallable>(xyz::in_place_t{}, callable))
+    : m_data(RecWrapper<UserCallable>(detail::in_place_t{}, callable))
 {
 }
 
 inline Value::Value(UserCallable&& callable)
-    : m_data(RecWrapper<UserCallable>(xyz::in_place_t{}, std::move(callable)))
+    : m_data(RecWrapper<UserCallable>(detail::in_place_t{}, std::move(callable)))
 {
 }
 
@@ -1070,6 +1222,28 @@ inline GenericMap::const_iterator GenericMap::cend() const
     return end();
 }
 
+// A Markup is no larger than the std::string it wraps, so the variant did not grow when it joined it
+static_assert(sizeof(Value) == sizeof(Value::ValueData), "Value must be its variant and nothing else");
+static_assert(sizeof(Markup) == sizeof(std::string) && sizeof(WMarkup) == sizeof(std::wstring), "Markup adds no data to the string");
+namespace detail
+{
+// Value's variant as it was before Markup joined it (docs/tasks/0180)
+using ValueDataBeforeMarkup = std::variant<NoneValue,
+                                           bool,
+                                           std::string,
+                                           std::wstring,
+                                           std::string_view,
+                                           std::wstring_view,
+                                           int64_t,
+                                           double,
+                                           RecWrapper<ValuesList>,
+                                           RecWrapper<ValuesMap>,
+                                           GenericList,
+                                           GenericMap,
+                                           RecWrapper<UserCallable>>;
+} // namespace detail
+static_assert(sizeof(Value) == sizeof(detail::ValueDataBeforeMarkup), "Markup must not make Value larger");
+
 inline Value::Value() = default;
 inline Value::Value(const Value& val) = default;
 inline Value::Value(Value&& val) noexcept
@@ -1089,19 +1263,19 @@ inline Value& Value::operator=(Value&& val) noexcept
     return *this;
 }
 inline Value::Value(const ValuesMap& map)
-    : m_data(RecWrapper<ValuesMap>(xyz::in_place_t{}, map))
+    : m_data(RecWrapper<ValuesMap>(detail::in_place_t{}, map))
 {
 }
 inline Value::Value(const ValuesList& list)
-    : m_data(RecWrapper<ValuesList>(xyz::in_place_t{}, list))
+    : m_data(RecWrapper<ValuesList>(detail::in_place_t{}, list))
 {
 }
 inline Value::Value(ValuesList&& list)
-    : m_data(RecWrapper<ValuesList>(xyz::in_place_t{}, std::move(list)))
+    : m_data(RecWrapper<ValuesList>(detail::in_place_t{}, std::move(list)))
 {
 }
 inline Value::Value(ValuesMap&& map)
-    : m_data(RecWrapper<ValuesMap>(xyz::in_place_t{}, std::move(map)))
+    : m_data(RecWrapper<ValuesMap>(detail::in_place_t{}, std::move(map)))
 {
 }
 
@@ -1117,14 +1291,15 @@ inline std::wstring ToWString(const Value& val)
     return val.ToWString();
 }
 
-//! Same as `ToString(Value(val))` for a number or `bool`: exact, so a literal 0 never looks like a null string
+//! Same as `ToString(Value(val))` for a number or `bool`: exact, so a literal 0 never looks like a null string;
+//! throws `std::overflow_error` for an integer outside the `int64_t` range, as \ref Value does
 template<typename T, std::enable_if_t<std::is_arithmetic_v<T> && !detail::IsCharType<T>::value>* = nullptr>
 std::string ToString(T val)
 {
     return Value(val).ToString();
 }
 
-//! Same as `ToWString(Value(val))` for a number or `bool`
+//! Same as `ToWString(Value(val))` for a number or `bool`; throws `std::overflow_error` as \ref ToString(T) does
 template<typename T, std::enable_if_t<std::is_arithmetic_v<T> && !detail::IsCharType<T>::value>* = nullptr>
 std::wstring ToWString(T val)
 {

@@ -171,8 +171,10 @@ struct NLohmannJsonReflector
             result = val.template get<bool>();
             break;
         case nlohmann::detail::value_t::number_integer:
-        case nlohmann::detail::value_t::number_unsigned:
             result = val.template get<int64_t>();
+            break;
+        case nlohmann::detail::value_t::number_unsigned:
+            result = Value(val.template get<uint64_t>());
             break;
         case nlohmann::detail::value_t::number_float:
             result = val.template get<double>();
@@ -205,8 +207,10 @@ struct NLohmannJsonReflector
             result = val->template get<bool>();
             break;
         case nlohmann::detail::value_t::number_integer:
-        case nlohmann::detail::value_t::number_unsigned:
             result = val->template get<int64_t>();
+            break;
+        case nlohmann::detail::value_t::number_unsigned:
+            result = Value(val->template get<uint64_t>());
             break;
         case nlohmann::detail::value_t::number_float:
             result = val->template get<double>();

@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_GENERIC_LIST_H
 #define JINJA2CPP_GENERIC_LIST_H
 
+#include <jinja2cpp/fwd.h> // IWYU pragma: export
 #include <jinja2cpp/config.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value_ptr.h>
@@ -17,14 +18,12 @@ JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 
 namespace jinja2
 {
-class Value;
-
 /*!
  * \brief Interface for accessing items in list by the indexes
  *
  * This interface should provided by the particular list implementation in case of support index-based access to the items.
  */
-struct IIndexBasedAccessor : virtual IComparable
+struct JINJA2CPP_EXPORT IIndexBasedAccessor : virtual IComparable
 {
     ~IIndexBasedAccessor() override = default;
     /*!
@@ -49,7 +48,7 @@ using ListEnumeratorPtr = types::ValuePtr<IListEnumerator>;
  * enumerator to the first element end returns `true` or moves enumerator to the end and returns `false` in case of empty list. Each call of \ref GetCurrent
  * method should return the current enumerable item.
  */
-struct IListEnumerator : virtual IComparable
+struct JINJA2CPP_EXPORT IListEnumerator : virtual IComparable
 {
     //! Destructor
     ~IListEnumerator() override = default;
@@ -107,7 +106,7 @@ struct IListEnumerator : virtual IComparable
  *
  *   It's assumed that indexer interface is a part of list implementation.
  */
-struct IListItemAccessor : virtual IComparable
+struct JINJA2CPP_EXPORT IListItemAccessor : virtual IComparable
 {
     ~IListItemAccessor() override = default;
 

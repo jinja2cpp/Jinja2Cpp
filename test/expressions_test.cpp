@@ -3,6 +3,7 @@
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/generic_list_iterator.h> // IWYU pragma: keep (GenericList::iterator is only declared in generic_list.h)
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
@@ -276,13 +277,59 @@ TEST(ExpressionTest, MapKeyNamedLikeADictMethodUsesTheMethod)
     EXPECT_EQ("True|True|1|2|3|get,items,keys|True|3", tpl.RenderAsString(params).value());
 }
 
-TEST(ExpressionTest, SelfContainingListIsRefused)
+// A namespace, dict or list that holds itself is a reference cycle, which the render frees
+// when it ends (docs/tasks/0110): the sanitizer configuration fails this test on a leak
+TEST(ExpressionTest, SelfContainingContainers)
+{
+    TemplateEnv env;
+    env.GetSettings().extensions.doStatement = true;
+    auto render = [&env](const std::string& source) {
+        Template tpl(&env);
+        EXPECT_TRUE(tpl.Load(source).has_value()) << source;
+        auto result = tpl.RenderAsString(ValuesMap{});
+        EXPECT_TRUE(result.has_value()) << source;
+        return result ? result.value() : std::string();
+    };
+    EXPECT_EQ("<Namespace {'a': <Namespace {...}>}>|True", render("{% set ns = namespace(a=1) %}{% set ns.a = ns %}{{ ns }}|{{ ns.a.a.a is sameas ns }}"));
+    EXPECT_EQ("<Namespace {'a': [<Namespace {...}>]}>", render("{% set ns = namespace(a=1) %}{% set ns.a = [ns] %}{{ ns }}"));
+    EXPECT_EQ("{'x': {...}}", render("{% set d = {} %}{% do d.update(x=d) %}{{ d }}"));
+    EXPECT_EQ("{'a': [{...}]}", render("{% set d = {} %}{% do d.setdefault('a', [d]) %}{{ d }}"));
+    EXPECT_EQ("[1, [...]]|1", render("{% set l = [1] %}{% do l.append(l) %}{{ l }}|{{ l[1][1][0] }}"));
+    EXPECT_EQ("[1, ([...],)]", render("{% set l = [1] %}{% do l.append((l,)) %}{{ l }}"));
+    EXPECT_EQ("[[...], [...], [...]]3", render("{% set l = [] %}{% do l.extend([l, l]) %}{% do l.insert(0, l) %}{{ l }}{{ l|length }}"));
+    EXPECT_EQ("[[[...]]]True", render("{% set a = [] %}{% set b = [a] %}{% do a.append(b) %}{{ a }}{{ a == a }}"));
+    // Enough notes for the collector to drop the temporaries during the render and keep the cycles
+    EXPECT_EQ("x", render("{% for i in range(300) %}{% set ns = namespace() %}{% set ns.s = ns %}{% set t = [] %}{% do t.append([i]) %}{% endfor %}x"));
+    // A cycle that a macro or another variable still refers to is freed all the same
+    EXPECT_EQ("True", render("{% set ns = namespace() %}{% macro m() %}{{ ns.s is sameas ns }}{% endmacro %}{% set ns.m = m %}{% set ns.s = ns %}{{ ns.m() }}"));
+}
+
+// The collector cannot follow a bound method's receiver, so that cycle is refused (docs/tasks/0049)
+TEST(ExpressionTest, CycleThroughBoundMethodIsRefused)
 {
     TemplateEnv env;
     env.GetSettings().extensions.doStatement = true;
     Template tpl(&env);
-    ASSERT_TRUE(tpl.Load("{% set x = [] %}{% do x.append(x) %}{{ x }}"));
+    ASSERT_TRUE(tpl.Load("{% set x = [] %}{% do x.append(x.append) %}{{ x }}"));
     EXPECT_FALSE(tpl.RenderAsString(ValuesMap{}).has_value());
+}
+
+// Freeing a cycle releases what it holds, and a list the caller still holds keeps its items
+TEST(ExpressionTest, CycleFreedKeepsListHeldByCaller)
+{
+    GenericList kept;
+    ValuesMap params{ { "keep", MakeCallable([&kept](const GenericList& v) { kept = v; return true; }, ArgInfo{ "v" }) } };
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% set ns = namespace() %}{% set ns.self = ns %}{% set ns.l = [1, [2]] %}{{ keep(ns.l) }}"));
+    EXPECT_EQ("True", tpl.RenderAsString(params).value());
+    const std::vector<Value> items(kept.begin(), kept.end());
+    ASSERT_EQ(2u, items.size());
+    const auto* first = items[0].GetIf<int64_t>();
+    ASSERT_TRUE(first);
+    EXPECT_EQ(1, *first);
+    const auto* inner = items[1].GetIf<GenericList>();
+    ASSERT_TRUE(inner);
+    EXPECT_EQ(1u, inner->GetSize().value_or(0));
 }
 
 // clang-format off

@@ -18,8 +18,8 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ==============================================================================*/
 
-#ifndef XYZ_POLYMORPHIC_H_
-#define XYZ_POLYMORPHIC_H_
+#ifndef JINJA2CPP_XYZ_POLYMORPHIC_H_
+#define JINJA2CPP_XYZ_POLYMORPHIC_H_
 
 #include <cassert>
 #include <initializer_list>
@@ -27,22 +27,40 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <type_traits>
 #include <utility>
 
-#ifndef XYZ_POLYMORPHIC_HAS_EXTENDED_CONSTRUCTORS
-#define XYZ_POLYMORPHIC_HAS_EXTENDED_CONSTRUCTORS 1
-#endif  // XYZ_POLYMORPHIC_HAS_EXTENDED_CONSTRUCTORS
+// Vendored from jbcoe/value_types 57f2e7a (compatibility/polymorphic_cxx14.h)
+// with these local changes:
+// - namespace xyz moved into jinja2::detail and the XYZ_ macros renamed
+//   JINJA2CPP_XYZ_ (task 0076), so a user's own copy of value_types neither
+//   shadows this one through the shared include guards nor collides with it at
+//   link time;
+// - the default constructor is constrained on the allocator being default
+//   constructible, for MSVC's std::variant (task 0071);
+// - cb_ has a default member initialiser (task 0089, see the member);
+// - the in_place_type_t<U>, initializer_list constructor creates U, where
+//   upstream creates T (which slices, or fails to compile for an abstract T).
 
-#ifndef XYZ_IN_PLACE_TYPE_DEFINED
-#define XYZ_IN_PLACE_TYPE_DEFINED
+#ifndef JINJA2CPP_XYZ_POLYMORPHIC_HAS_EXTENDED_CONSTRUCTORS
+#define JINJA2CPP_XYZ_POLYMORPHIC_HAS_EXTENDED_CONSTRUCTORS 1
+#endif  // JINJA2CPP_XYZ_POLYMORPHIC_HAS_EXTENDED_CONSTRUCTORS
 
+#ifndef JINJA2CPP_XYZ_IN_PLACE_TYPE_DEFINED
+#define JINJA2CPP_XYZ_IN_PLACE_TYPE_DEFINED
+
+namespace jinja2 {
+namespace detail {
 namespace xyz {
 template <class T>
 struct in_place_type_t {};
 }  // namespace xyz
-#endif  // XYZ_IN_PLACE_TYPE_DEFINED
+}  // namespace detail
+}  // namespace jinja2
+#endif  // JINJA2CPP_XYZ_IN_PLACE_TYPE_DEFINED
 
-#ifndef XYZ_UNREACHABLE_DEFINED
-#define XYZ_UNREACHABLE_DEFINED
+#ifndef JINJA2CPP_XYZ_UNREACHABLE_DEFINED
+#define JINJA2CPP_XYZ_UNREACHABLE_DEFINED
 
+namespace jinja2 {
+namespace detail {
 namespace xyz {
 [[noreturn]] inline void unreachable() {  // LCOV_EXCL_LINE
 #if (__cpp_lib_unreachable >= 202202L)
@@ -54,16 +72,20 @@ namespace xyz {
 #endif
 }
 }  // namespace xyz
-#endif  // XYZ_UNREACHABLE_DEFINED
+}  // namespace detail
+}  // namespace jinja2
+#endif  // JINJA2CPP_XYZ_UNREACHABLE_DEFINED
 
-#ifndef XYZ_EMPTY_BASE_DEFINED
-#define XYZ_EMPTY_BASE_DEFINED
+#ifndef JINJA2CPP_XYZ_EMPTY_BASE_DEFINED
+#define JINJA2CPP_XYZ_EMPTY_BASE_DEFINED
 
 // This is a helper class to allow empty base class optimization.
 // This implementation is duplicated in compatibility/in_place_type_cxx14.h.
 // These implementations must be kept in sync.
 // We duplicate implementations to allow this header to work as a single
 // include. https://godbolt.org needs single-file includes.
+namespace jinja2 {
+namespace detail {
 namespace xyz {
 namespace detail {
 template <class T, bool CanBeEmptyBaseClass =
@@ -98,8 +120,12 @@ class empty_base_optimization<T, true> : private T {
 };
 }  // namespace detail
 }  // namespace xyz
-#endif  // XYZ_EMPTY_BASE_DEFINED
+}  // namespace detail
+}  // namespace jinja2
+#endif  // JINJA2CPP_XYZ_EMPTY_BASE_DEFINED
 
+namespace jinja2 {
+namespace detail {
 namespace xyz {
 
 template <class T, class A = std::allocator<T>>
@@ -478,5 +504,7 @@ class polymorphic : private detail::empty_base_optimization<A> {
 };
 
 }  // namespace xyz
+}  // namespace detail
+}  // namespace jinja2
 
-#endif  // XYZ_POLYMORPHIC_H_
+#endif  // JINJA2CPP_XYZ_POLYMORPHIC_H_

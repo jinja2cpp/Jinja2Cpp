@@ -103,7 +103,6 @@ const std::vector<FilterEntry>& BuiltinFilters()
             Entry<filters::SequenceAccessor, filters::SequenceAccessor::SumItemsMode>("sum"),
             Entry<filters::StringConverter, filters::StringConverter::TitleMode>("title"),
             Entry<filters::Serialize, filters::Serialize::JsonMode>("tojson"),
-            Entry<filters::Serialize, filters::Serialize::XmlMode>("toxml"),
             Entry<filters::Serialize, filters::Serialize::YamlMode>("toyaml"),
             Entry<filters::StringConverter, filters::StringConverter::TrimMode>("trim"),
             Entry<filters::StringConverter, filters::StringConverter::TruncateMode>("truncate"),

@@ -7,6 +7,7 @@
 #include "value_visitors.h"
 
 #include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value.h>
@@ -1057,6 +1058,8 @@ public:
 
     [[nodiscard]] T& Get() const { return *m_val; }
     [[nodiscard]] bool ShouldExtendLifetime() const { return false; }
+    // Whether this holder alone keeps the storage
+    [[nodiscard]] bool IsUnique() const { return m_val.use_count() == 1; }
 
     bool operator==(const BySharedMutable<T>& other) const { return *m_val == *other.m_val; }
     bool operator!=(const BySharedMutable<T>& other) const { return !(*this == other); }
@@ -1224,7 +1227,8 @@ InternalValue LendItem([[maybe_unused]] const Holder<T>& holder, const Value& it
     }
     else
     {
-        // Scalars, the usual items of user data, skip the convertor's visit
+        // Scalars, the usual items of user data, skip the convertor's visit. The exact
+        // std::get_if<std::string> leaves a Markup to the convertor: do not switch it to GetIf<std::string>
         if (const auto* s = std::get_if<std::string>(&item.GetData()))
         {
             return InternalValue(TargetStringView(std::string_view(*s)));
@@ -1261,7 +1265,8 @@ public:
         const auto& item = m_values.Get()[static_cast<size_t>(idx)];
         if constexpr (std::is_same_v<Holder<ValuesList>, ByRef<ValuesList>>)
         {
-            // LendItem's scalars first, as there: a map is the less common item
+            // LendItem's scalars first, as there: a map is the less common item. As there, the
+            // exact std::get_if<std::string> leaves a Markup to the convertor
             if (const auto* s = std::get_if<std::string>(&item.GetData()))
             {
                 return InternalValue(TargetStringView(std::string_view(*s)));
@@ -1339,6 +1344,7 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
         [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
         [[nodiscard]] const void* GetIdentity() const override { return m_values.get(); }
         [[nodiscard]] InternalValueList* GetMutableItems() const override { return m_values.get(); }
+        [[nodiscard]] bool OwnsMutableItemsAlone() const override { return m_values.use_count() == 1; }
         [[nodiscard]] GenericList CreateGenericList() const override
         {
             return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
@@ -1764,6 +1770,7 @@ public:
 
     [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
     [[nodiscard]] InternalDict* GetMutableItems() const override { return &m_values.Get(); }
+    [[nodiscard]] bool OwnsMutableItemsAlone() const override { return m_values.IsUnique(); }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::MethodsFirst; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
@@ -2096,15 +2103,17 @@ Value IntValue2Value(const InternalValue& val)
 {
     // A string the value owns is visited as a view of its object (docs/tasks/0151): the Value
     // gets a copy. Only a view of host text stays a view
-    if (IsStringValue(val) && !IsStringView(val))
+    // A Markup becomes a Markup, even when it only views host text: the flag has nowhere else to go
+    if (IsStringValue(val) && (!IsStringView(val) || val.IsMarkup()))
     {
+        const bool isMarkup = val.IsMarkup();
         if (auto text = AsStringView<char>(val))
         {
-            return Value(std::string(*text));
+            return isMarkup ? Value(Markup(*text)) : Value(std::string(*text));
         }
         if (auto text = AsStringView<wchar_t>(val))
         {
-            return Value(std::wstring(*text));
+            return isMarkup ? Value(WMarkup(*text)) : Value(std::wstring(*text));
         }
     }
     return Apply<OutputValueConvertor>(val);

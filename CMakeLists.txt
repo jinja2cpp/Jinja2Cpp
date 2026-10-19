@@ -152,6 +152,7 @@ include(collect_sources)
 set (LIB_TARGET_NAME jinja2cpp)
 
 set(JINJA2CPP_SOURCES
+    src/cycle_collector.cpp
     src/error_info.cpp
     src/expression_evaluator.cpp
     src/expression_parser.cpp
@@ -329,7 +330,15 @@ endif ()
 set_target_properties(${LIB_TARGET_NAME} PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 2
+    # Only what JINJA2CPP_EXPORT marks leaves the shared library, as on Windows
+    # (config.h), so internal changes do not show as ABI changes (docs/tasks/0076)
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON
 )
+# Nor do the static dependencies linked into it (fmt, Boost in the internal mode)
+if (JINJA2CPP_BUILD_SHARED AND UNIX AND NOT APPLE)
+    target_link_options(${LIB_TARGET_NAME} PRIVATE "LINKER:--exclude-libs,ALL")
+endif ()
 # An installed shared library finds the shared dependencies installed next to it
 if (APPLE)
     set_target_properties(${LIB_TARGET_NAME} PROPERTIES INSTALL_RPATH "@loader_path")
@@ -369,6 +378,7 @@ if (JINJA2CPP_BUILD_TESTS)
     set(JINJA2CPP_TEST_SOURCES
         test/autoescape_test.cpp
         test/basic_tests.cpp
+        test/big_int_test.cpp
         test/containers_api_test.cpp
         test/errors_test.cpp
         test/expressions_test.cpp
@@ -376,6 +386,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/filesystem_handler_test.cpp
         test/filters_test.cpp
         test/forloop_test.cpp
+        test/fwd_test.cpp
         test/global_functions_test.cpp
         test/helpers_tests.cpp
         test/i18n_test.cpp
@@ -402,6 +413,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/test_tools.h
         test/testers_test.cpp
         test/tojson_filter_test.cpp
+        test/undeclared_variables_test.cpp
         test/undefined_test.cpp
         test/user_callable_test.cpp
         test/v1_names_test.cpp
@@ -416,6 +428,11 @@ if (JINJA2CPP_BUILD_TESTS)
     set_target_properties(jinja2cpp_tests PROPERTIES
             CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
             CXX_STANDARD_REQUIRED ON)
+
+    # fwd.h must repeat each type's class-key (MSVC mangles it, C4099)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        set_source_files_properties(test/fwd_test.cpp PROPERTIES COMPILE_OPTIONS "-Wmismatched-tags")
+    endif ()
 
     if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(jinja2cpp_tests PRIVATE /bigobj)

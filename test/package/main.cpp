@@ -1,8 +1,6 @@
 // Built against the installed package by check_package.cmake (docs/tasks/0068)
-#include <jinja2cpp/filesystem_handler.h>
-#include <jinja2cpp/template.h>
-#include <jinja2cpp/template_env.h>
-#include <jinja2cpp/version.h>
+// The umbrella header is installed and self-contained (docs/tasks/0076)
+#include <jinja2cpp/jinja2cpp.h>
 
 #include <exception>
 #include <iostream>

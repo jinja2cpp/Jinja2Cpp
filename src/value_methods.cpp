@@ -1,5 +1,6 @@
 #include "value_methods.h"
 
+#include "cycle_collector.h"
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "markup.h"
@@ -1638,75 +1639,102 @@ InternalValueList& MutableItems(const InternalValue& self)
     return *items;
 }
 
-// Storing a container in itself would make a reference cycle that shared ownership never
-// frees. Python allows it; Jinja2C++ refuses (a deliberate divergence, docs/tasks/0020).
-bool Reaches(const InternalValue& val, const void* target, std::unordered_set<const void*>& visited)
+// The storage of the lists and dicts a walk from a stored value has seen, after (index 1)
+// and before (index 0) it went through a value the cycle collector cannot follow
+using VisitedStorage = std::array<std::unordered_set<const void*>, 2>;
+
+// The receiver a bound method holds, or null
+const InternalValue* BoundReceiver(const Callable& callable)
 {
-    const void* storage = nullptr;
-    if (auto list = AsList(val))
+    const auto& attrs = callable.GetAttributes();
+    if (!attrs)
     {
-        storage = list->GetMutableItems();
+        return nullptr;
     }
-    else if (auto map = AsMap(val))
-    {
-        storage = map->GetMutableItems();
-    }
-    else if (const auto* callable = GetIf<Callable>(&val))
-    {
-        const auto& attrs = callable->GetAttributes();
-        if (!attrs)
-        {
-            return false;
-        }
-        auto p = attrs->find("__self__");
-        return p != attrs->end() && Reaches(p->second, target, visited);
-    }
+    auto p = attrs->find("__self__");
+    return p != attrs->end() ? &p->second : nullptr;
+}
+
+// A value the walk has still to look at, and whether its path went through a value the cycle
+// collector cannot follow
+struct PendingValue
+{
+    const InternalValue* value;
+    bool viaOpaque;
+};
+
+// Queues the items of `items`, the storage of a list or dict the template owns, unless the
+// walk has seen it on a path of the same kind; true when it is `target` on an opaque path
+template<typename Items, typename Fn>
+bool QueueItems(Items* items, const void* target, bool viaOpaque, VisitedStorage& visited, const Fn& queue)
+{
     // Only containers the template owns can hold one another
-    if (!storage)
+    if (!items)
     {
         return false;
     }
-    if (storage == target)
+    if (items == target)
     {
-        return true;
+        return viaOpaque;
     }
-    if (!visited.insert(storage).second)
+    if (visited[viaOpaque ? 1 : 0].insert(items).second)
     {
-        return false;
-    }
-    if (auto list = AsList(val))
-    {
-        for (auto& item : *list->GetMutableItems())
+        for (auto& item : *items)
         {
-            if (Reaches(item, target, visited))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-    auto map = AsMap(val);
-    if (!map)
-    {
-        return false;
-    }
-    for (auto& [key, value] : *map->GetMutableItems())
-    {
-        if (Reaches(value, target, visited))
-        {
-            return true;
+            queue(item, viaOpaque);
         }
     }
     return false;
 }
 
-void CheckNoCycle(const void* storage, const InternalValue& item)
+// Whether `root` reaches the storage `target` through a bound method's receiver or the value
+// of a key-value pair, which CycleCollector does not follow. Iterative, so that values nested
+// deeper than the thread stack allows are walked too; each list or dict is visited at most
+// twice (once per kind of path), so the walk is linear in the size of the stored value.
+bool ReachesThroughOpaque(const InternalValue& root, const void* target)
 {
-    std::unordered_set<const void*> visited;
-    if (Reaches(item, storage, visited))
+    VisitedStorage visited;
+    // Items stay where they are while the walk runs: nothing changes a container under it
+    std::vector<PendingValue> pending{ { &root, false } };
+    // Only values that can hold a container are queued: a wide flat list costs no work list
+    const auto queueValue = [&pending](const InternalValue& item, bool viaOpaque) {
+        const auto kind = item.Kind();
+        if (kind == ValueKind::List || kind == ValueKind::Map || kind == ValueKind::Callable || kind == ValueKind::KeyValuePair)
+        {
+            pending.push_back({ &item, viaOpaque });
+        }
+    };
+    const auto queuePairValue = [&queueValue](const auto& item, bool viaOpaque) { queueValue(item.second, viaOpaque); };
+    while (!pending.empty())
     {
-        Raise("a list or dict cannot contain itself");
+        const auto [val, viaOpaque] = pending.back();
+        pending.pop_back();
+        bool found = false;
+        if (auto list = AsList(*val))
+        {
+            found = QueueItems(list->GetMutableItems(), target, viaOpaque, visited, queueValue);
+        }
+        else if (auto map = AsMap(*val))
+        {
+            found = QueueItems(map->GetMutableItems(), target, viaOpaque, visited, queuePairValue);
+        }
+        else if (const auto* callable = GetIf<Callable>(val))
+        {
+            if (const auto* receiver = BoundReceiver(*callable))
+            {
+                pending.push_back({ receiver, true });
+            }
+        }
+        else if (const auto* pair = GetIf<KeyValuePair>(val))
+        {
+            pending.push_back({ &pair->value, true });
+        }
+        if (found)
+        {
+            return true;
+        }
     }
+    return false;
 }
 
 InternalValue ListIndex(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -1743,7 +1771,7 @@ InternalValue ListAppend(const InternalValue& self, const CallParams& params, Re
 {
     CheckArgs(params, "append", 1, 1);
     auto& items = MutableItems(self);
-    CheckNoCycle(&items, params.posParams[0]);
+    NoteContainerStore(self, &items, params.posParams[0]);
     items.push_back(params.posParams[0]);
     return InternalValue(NoneValue());
 }
@@ -1762,7 +1790,7 @@ InternalValue ListExtend(const InternalValue& self, const CallParams& params, Re
     auto& items = MutableItems(self);
     for (auto& item : newItems)
     {
-        CheckNoCycle(&items, item);
+        NoteContainerStore(self, &items, item);
     }
     items.insert(items.end(), newItems.begin(), newItems.end());
     return InternalValue(NoneValue());
@@ -1773,7 +1801,7 @@ InternalValue ListInsert(const InternalValue& self, const CallParams& params, Re
     CheckArgs(params, "insert", 2, 2);
     auto& items = MutableItems(self);
     auto idx = SliceIndex(params.posParams.data(), items.size(), 0, "insert");
-    CheckNoCycle(&items, params.posParams[1]);
+    NoteContainerStore(self, &items, params.posParams[1]);
     items.insert(items.begin() + static_cast<std::ptrdiff_t>(idx), params.posParams[1]);
     return InternalValue(NoneValue());
 }
@@ -1959,7 +1987,7 @@ InternalValue DictSetdefault(const InternalValue& self, const CallParams& params
         return p->second;
     }
     InternalValue value = params.posParams.size() > 1 ? params.posParams[1] : InternalValue(NoneValue());
-    CheckNoCycle(&items, value);
+    NoteContainerStore(self, &items, value);
     items[key] = value;
     return value;
 }
@@ -2024,7 +2052,7 @@ InternalValue DictUpdate(const InternalValue& self, const CallParams& params, Re
     auto& items = MutableDict(self);
     for (auto& [name, value] : updates)
     {
-        CheckNoCycle(&items, value);
+        NoteContainerStore(self, &items, value);
     }
     for (auto& [name, value] : updates)
     {
@@ -2254,6 +2282,20 @@ bool IsMutatingName(std::string_view name)
     const auto* listMethod = FindIn(ListMethods, name);
     const auto* dictMethod = FindIn(DictMethods, name);
     return (listMethod != nullptr && listMethod->isMutating) || (dictMethod != nullptr && dictMethod->isMutating);
+}
+
+void NoteContainerStore(const InternalValue& container, const void* storage, const InternalValue& item)
+{
+    const auto kind = item.Kind();
+    if (kind != ValueKind::List && kind != ValueKind::Map && kind != ValueKind::Callable && kind != ValueKind::KeyValuePair)
+    {
+        return;
+    }
+    if (ReachesThroughOpaque(item, storage))
+    {
+        Raise("a list or dict cannot contain itself through a bound method or a key-value pair");
+    }
+    CycleCollector::NoteStore(container);
 }
 
 void StoreItem(const InternalValue& container, const InternalValue& key, InternalValue value)

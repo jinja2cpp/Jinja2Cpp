@@ -1976,6 +1976,82 @@
     "inc.j2": "{% call m0() %}{% endcall %}"
    },
    "output": "F"
+  },
+  {
+   "id": "autoescape.select_by_name_include",
+   "template": "{% include 'a.txt' %}|{% include 'a.html' %}|{% include 'A.XML' %}|{% include 'a.htm' %}|{{ html }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": [
+     "html",
+     "xml"
+    ]
+   },
+   "templates": {
+    "a.txt": "{{ html }}",
+    "a.html": "{{ html }}",
+    "A.XML": "{{ html }}",
+    "a.htm": "{{ html }}"
+   },
+   "output": "<b>&'\"</b>|&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;|&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;|<b>&'\"</b>|&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;"
+  },
+  {
+   "id": "autoescape.select_by_name_extends",
+   "template": "{% include 'child.txt' %}|{% include 'child.html' %}|{% include 'c3.txt' %}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": [
+     "html",
+     "xml"
+    ]
+   },
+   "templates": {
+    "base.html": "B{{ html }}{% block b %}{{ html }}{% endblock %}",
+    "child.txt": "{% extends 'base.html' %}{% block b %}C{{ html }}{% endblock %}",
+    "base.txt": "B{{ html }}{% block b %}{{ html }}{% endblock %}",
+    "child.html": "{% extends 'base.txt' %}{% block b %}C{{ html }}{% endblock %}",
+    "base3.html": "{% set j = ['<']|join %}{{ j }}{% block b %}{% endblock %}",
+    "c3.txt": "{% extends 'base3.html' %}{% block b %}{{ ['<']|join }}{% endblock %}"
+   },
+   "output": "B&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;C<b>&'\"</b>|B<b>&'\"</b>C&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;|&lt;<"
+  },
+  {
+   "id": "autoescape.select_by_name_import",
+   "template": "{% include 'imp.txt' %}|{% import 'mac.txt' as M with context %}{{ M.m() }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": [
+     "html",
+     "xml"
+    ]
+   },
+   "templates": {
+    "mac.html": "{% macro k() %}{% set s %}<{% endset %}{{ s }}{% endmacro %}",
+    "mac.txt": "{% macro m() %}{{ html }}{% endmacro %}",
+    "imp.txt": "{% import 'mac.html' as M %}{{ M.k() }}"
+   },
+   "output": "<|<b>&'\"</b>"
   }
  ]
 }

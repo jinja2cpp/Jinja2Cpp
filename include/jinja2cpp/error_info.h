@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_ERROR_INFO_H
 #define JINJA2CPP_ERROR_INFO_H
 
+#include "fwd.h" // IWYU pragma: export
 #include "config.h"
 #include "value.h"
 
@@ -182,7 +183,7 @@ public:
     [[nodiscard]] auto& GetExtraParams() const { return m_errorData.extraParams; }
 
     //! Convert error to the detailed string representation
-    JINJA2CPP_EXPORT [[nodiscard]] std::basic_string<CharT> ToString() const;
+    [[nodiscard]] JINJA2CPP_EXPORT std::basic_string<CharT> ToString() const;
 
 private:
     Data m_errorData;

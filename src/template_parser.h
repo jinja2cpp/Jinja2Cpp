@@ -464,8 +464,11 @@ public:
         , m_delims(setts.GetDelimiters<CharT>())
         , m_unknown(setts.settings.userCallablesAsFilters)
         , m_metadataType(setts.settings.defaultMetadataType)
+        , m_autoescape(setts.settings.autoescape)
     {
     }
+    // Whether the template escapes its output, when Settings::autoescapeSelector decides it
+    void SetAutoescape(bool autoescape) { m_autoescape = autoescape; }
     ParseResult Parse()
     {
         // One pass over the source: the splitter hands each block to the fine parse as soon as it
@@ -1506,6 +1509,11 @@ private:
         }
         auto& templateRoot = m_nodes[templateRef];
         templateRoot.SetBlocks(m_nodes.MakeSpan(m_root.blocks));
+        templateRoot.SetAutoescape(m_autoescape);
+        for (const auto block : m_root.blocks)
+        {
+            m_nodes[block].SetAutoescape(m_autoescape);
+        }
         if (m_root.hasExtends)
         {
             templateRoot.SetHasExtends();
@@ -2248,6 +2256,7 @@ private:
     SourceLocation m_metadataLocation;
     std::unique_ptr<LexBuffers> m_lexBuffers;
     TemplateRootInfo m_root;
+    bool m_autoescape;
     std::unique_ptr<ConvertedTexts> m_convertedTexts;
     // The last name GetAsConvertedView converted
     std::string m_convertedName;

@@ -8,8 +8,8 @@ namespace jinja2::types
 {
 
 // Only the names the library's headers use, not the whole vendored namespace
-using xyz::in_place_type_t;
-using xyz::polymorphic;
+using detail::xyz::in_place_type_t;
+using detail::xyz::polymorphic;
 
 template<typename T>
 using ValuePtr = polymorphic<T>;
@@ -17,7 +17,7 @@ using ValuePtr = polymorphic<T>;
 template<class T, class... Ts>
 auto MakeValuePtr(Ts&&... ts)
 {
-    return polymorphic<T>(xyz::in_place_type_t<T>{}, std::forward<Ts&&>(ts)...);
+    return polymorphic<T>(in_place_type_t<T>{}, std::forward<Ts&&>(ts)...);
 }
 
 } // namespace jinja2::types
@@ -28,6 +28,8 @@ namespace jinja2::detail
 // incomplete where the wrapper is declared. Holds the recursive alternatives of Value.
 template<typename T>
 using indirect = xyz::indirect<T>;
+// The tag that selects indirect's in-place constructor
+using in_place_t = xyz::in_place_t;
 } // namespace jinja2::detail
 
 #endif // JINJA2CPP_VALUE_PTR_H
