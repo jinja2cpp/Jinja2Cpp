@@ -427,6 +427,56 @@ void WalkDeepValues(TemplateEnv* env)
     }
 }
 
+// Storing a deep value in a list or dict walks it once (a container cannot hold itself)
+void StoreDeepValues(TemplateEnv* env)
+{
+    const std::string lists = DeepLists();
+    const std::string dicts = DeepDicts();
+    const std::pair<std::string, std::string> stores[] = {
+        { lists + "{% set x = [] %}{% set _ = x.append(ns.v) %}{% set _ = x.insert(0, ns.w) %}{% set _ = x.extend([ns.v]) %}{{ x|length }}", "3" },
+        { lists + "{% set x = {} %}{% set _ = x.update(y=ns.v) %}{% set _ = x.setdefault('z', ns.w) %}{{ x|length }}", "2" },
+        { dicts + "{% set x = [] %}{% set _ = x.append(ns.v) %}{{ x|length }}", "1" },
+        { dicts + "{% set x = {} %}{% set _ = x.update(y=ns.v) %}{{ x|length }}", "1" },
+        // A bound method keeps its list: storing it walks into the list too
+        { lists + "{% set x = [] %}{% set _ = x.append(ns.v.append) %}{{ x|length }}", "1" },
+    };
+    for (const auto& [source, expected] : stores)
+    {
+        Template tpl(env);
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source.substr(source.size() - 30);
+        auto result = tpl.RenderAsString({});
+        EXPECT_EQ(expected, result ? result.value() : result.error().ToString()) << source.substr(source.size() - 30);
+    }
+
+    // The receiver at the bottom of a deep value: a plain cycle is kept (the render frees it at
+    // its end), one through a bound method is still refused
+    const std::string deepList = "{% set x = [] %}{% set ns = namespace(v=[x]) %}{% for i in range(" + std::string(DeepLevels) + ") %}{% set ns.v = [ns.v] %}{% endfor %}";
+    const std::string deepDict = "{% set x = {} %}{% set ns = namespace(v={'a': x}) %}{% for i in range(" + std::string(DeepLevels) + ") %}{% set ns.v = {'a': ns.v} %}{% endfor %}";
+    const std::pair<std::string, std::string> cycles[] = {
+        { deepList + "{% set _ = x.append(ns.v) %}{{ x|length }}", "1" },
+        { deepDict + "{% set _ = x.update(y=ns.v) %}{{ x|length }}", "1" },
+    };
+    for (const auto& [source, expected] : cycles)
+    {
+        Template tpl(env);
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source.substr(source.size() - 30);
+        auto result = tpl.RenderAsString({});
+        EXPECT_EQ(expected, result ? result.value() : result.error().ToString()) << source.substr(source.size() - 30);
+    }
+    const std::string refused[] = {
+        deepList + "{% set _ = x.append(ns.v.append) %}",
+        deepDict + "{% set _ = x.update(y=ns.v.update) %}",
+    };
+    for (const auto& source : refused)
+    {
+        Template tpl(env);
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source.substr(source.size() - 30);
+        auto result = tpl.RenderAsString({});
+        ASSERT_FALSE(result.has_value()) << source.substr(source.size() - 30);
+        EXPECT_NE(std::string::npos, result.error().ToString().find("cannot contain itself")) << result.error().ToString();
+    }
+}
+
 #if defined(__linux__) || defined(__APPLE__)
 struct DeepValuesJob
 {
@@ -462,8 +512,10 @@ TEST_F(RecursionLimitsTest, DeepValues)
     // The renders need room for 1500 levels of tojson; the walks a stack their depth surely overflows
     RunOnThread(std::size_t{ 4 } * 1024 * 1024, RenderDeepValues, &m_env);
     RunOnThread(std::size_t{ 1024 } * 1024, WalkDeepValues, &m_env);
+    RunOnThread(std::size_t{ 1024 } * 1024, StoreDeepValues, &m_env);
 #else
     RenderDeepValues(&m_env);
     WalkDeepValues(&m_env);
+    StoreDeepValues(&m_env);
 #endif
 }

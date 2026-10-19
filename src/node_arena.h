@@ -1,7 +1,7 @@
 #ifndef JINJA2CPP_SRC_NODE_ARENA_H
 #define JINJA2CPP_SRC_NODE_ARENA_H
 
-#include "resource_limit.h"
+#include "engine_errors.h"
 
 #include <boost/container/small_vector.hpp>
 #include <boost/core/span.hpp>

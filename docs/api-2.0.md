@@ -137,12 +137,11 @@ locations), 0255 (engine runtime errors).
    | Throws | Non-throwing sibling |
    |---|---|
    | `Value::AsX()`, `As<T>()`: `std::bad_variant_access` | `bool AsX(out) noexcept`, `GetIf<T>()` |
-   | `Value(I)`, `Reflect`, JSON bindings for an integer outside int64: `jinja2::Exception{IntegerOutOfRange}` | `static bool Value::TryFrom(I, Value& out) noexcept` |
    | `OrderedMap::at`: `std::out_of_range` | `find` |
    | `Result::value()`: `jinja2::BadResultAccess<CharT>` | `has_value()`, `operator*` |
 
 6. `noexcept`: `Value` moves, `IsX`, `bool AsX(out)`, `GetIf`, `ToChars`, `Value(nullptr)`,
-   `Value(I)` for every `I` that fits int64, `Value(F)`; `BasicErrorInfo` copy, move and
+   `Value(I)` for every `I` that fits int64 (wider types may allocate a `BigInt`), `Value(F)`; `BasicErrorInfo` copy, move and
    getters; `OrderedMap` moves, iterators, `size`, `empty`, `clear`, `swap`; destructors.
    Host-supplied destructors, `IComparable::IsEqual` and filesystem-handler destructors must
    not throw.
@@ -151,16 +150,16 @@ locations), 0255 (engine runtime errors).
    statement or `{{ }}` tag that was running (in the template that owns it), a caret line in
    `GetLocationDescr()`, and `GetException()`: the original `std::exception_ptr`, set if and
    only if the failure began as a C++ exception thrown outside the template engine: by host
-   code, by the standard library, or by the public headers while converting host data
-   (`jinja2::Exception{IntegerOutOfRange}` from `Value(I)`/`Reflect`). Errors the engine raises
-   while evaluating the template (undefined values, type errors, limits, recursion) have none.
+   code or by the standard library. Errors the engine raises while evaluating the template
+   (undefined values, type errors, limits, recursion, a `BigInt` it cannot hold yet) have none.
 
 **Types.**
 - `jinja2::Exception : std::runtime_error` (`exception.h`, in `fwd.h` and `jinja2cpp.h`) with
   `ErrorCode Code() const noexcept` and the C++ origin (`__builtin_FILE()`/`__builtin_LINE()`
   default arguments; no `std::source_location`, so C++17 and C++20 builds share one layout).
-  Thrown by our headers for host-data errors and by hosts to report a specific code, which then
-  passes through the render boundary with its location.
+  Thrown by hosts to report a specific code, which then passes through the render boundary with
+  its location. (`Value(I)` once threw it for an integer outside int64; with `BigInt` (0269) it
+  stores the value instead, so `Value::TryFrom` was dropped before release.)
 - `BasicErrorInfo` is one pointer to an immutable shared payload (code, locations, parameters,
   description, `exception_ptr`): copies share it. The payload's exception object lives in the
   module that threw it; an `ErrorInfo` must not outlive that module.
@@ -168,8 +167,8 @@ locations), 0255 (engine runtime errors).
   `std::error_code ec = ErrorCode::TemplateNotFound;` works and compares equal to
   `std::errc::no_such_file_or_directory`.
 - New codes, appended: 15 `UserCallableException` (anything thrown out of a `UserCallable`,
-  filter, test, finalize or gettext callable), 16 `IntegerOutOfRange` (host integer outside
-  int64; int64 overflow in template arithmetic), 17 `TemplateRuntimeError` (the template's own
+  filter, test, finalize or gettext callable), 16 `IntegerOutOfRange` (a `BigInt` reaching a
+  template before 0270; int64 overflow in template arithmetic), 17 `TemplateRuntimeError` (the template's own
   operation failed: Python's `TypeError`, `ValueError`, ...), 18 `ResourceLimitExceeded`
   (`extraParams[1]` names the limit). `UnexpectedException` (1) now means "an exception the
   engine did not raise and could not attribute", with location and `GetException()`.
@@ -199,12 +198,14 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | `getPtr<T>()` | `camelBack` | `GetIf<T>()` | alias |
 | free `AsString(const Value&)`, `AsWString(const Value&)` | lenient conversion under the word the members use for exact access; returns `""` for non-strings | member and free `ToString()`/`ToWString()`, printing as `{{ v }}` does | alias (keeps returning `""`) |
 | no way to print a `Value` without allocating | | `v.ToString(std::string& out)` appends to the caller's buffer (no allocation once it has capacity); `v.ToChars(first, last)` writes into a fixed buffer and returns `std::to_chars_result`, as `std::to_chars`; `std::formatter<jinja2::Value>` for `std::format_to`/`format_to_n` where the standard library has `<format>`. All four go through one internal output sink, so they cannot print differently. *As built (0072):* scalars, None and narrow strings print with no allocation; wide strings, containers and (for `ToChars`) text past the small-string buffer still allocate inside the renderer | add |
-| `data()` | `camelBack`; the variant alternatives expose `RecWrapper<T>` = vendored `xyz::polymorphic<T>` to every visitor | `GetData()`; add `jinja2::Visit(fn, value)` that unwraps `RecWrapper` as `ParamUnwrapper` already does internally | alias + add |
+| no way to pass safe HTML from C++ | a host string is always escaped under autoescape, and a callable's Markup result loses the flag in `IntValue2Value` | `jinja2::Markup` / `WMarkup` (`markup.h`): `BasicMarkup<CharT>`, an immutable wrapper of a `std::basic_string<CharT>` (composition, not inheritance) with explicit constructors, a read-only string API (`str()`, implicit conversions to `const std::basic_string&` and `std::basic_string_view`, comparisons, `operator<<`) and no mutating member, two more `ValueData` alternatives (13, 14; `sizeof(Value)` unchanged). `IsMarkup()`/`IsWMarkup()`, `AsMarkup()`/`AsWMarkup()` (both forms) and `As<Markup>()`/`GetIf<Markup>()` are exact. **A Markup reads as a string** (Python's `Markup` is a `str`): the const `IsString()`, `AsString()`, `As<std::string>()` and `GetIf<std::string>()` accept it, so existing readers keep working. **A Markup is immutable, as in Python** (`markup += user_input` would append unescaped text and keep the safe flag, so it does not compile): mutable access to the text through a non-const `Value` (`AsString()`, `AsWString()`, `As<std::string>()`, `GetIf<std::string>()`, the deprecated `getPtr`) turns the Value into a plain string first, as any change to a Python Markup gives a `str`. Only `GetData()` with `std::get` or `std::holds_alternative` is exact. Template side: a Markup in the context, in a container or returned by a callable renders unescaped, passes `is escaped`, and comes back from `IntValue2Value` (callable arguments, `UserCallableParams`) as a Markup; a typed `MakeCallable` parameter (`const std::string&`) receives its text | add (0180) |
+| `data()` | `camelBack`; the variant alternatives expose `RecWrapper<T>` = vendored `indirect<T>` to every visitor | `GetData()`; add `jinja2::Visit(fn, value)` that unwraps `RecWrapper` as `ParamUnwrapper` already does internally | alias + add |
 | no `IsBool`, `IsInt`, `IsDouble`, `IsCallable` and getters | incomplete family; users go through `data()` | add them | add |
 | `EmptyValue` | since 0034 it means Python `None`; it also has `template<class T> operator T()`, an implicit conversion to *anything* | `NoneValue`; drop the catch-all conversion | alias (`using EmptyValue [[deprecated]] = NoneValue`); the conversion is a break, check `src/` users first |
 | `Value(T&&)` for unsigned, `long long`, `short`, `char`, `size_t` | *probe:* stores `bool` at C++14 (`Value(5u).data().index() == 1`), `int64_t` at C++17, and `Value(size_t(5))` does not compile at C++17 | constructors for every integral type storing `int64_t`, as `Reflect` already does; `Value(char)` deleted (ambiguous between a number and a one-letter string) | fix (task 0067) |
 | `Value(nullptr)` | *probe:* picks `Value(const char*)` and throws `logic_error` from `std::string(nullptr)` | `Value(std::nullptr_t)` makes `None` | fix (0067) |
 | `Value(ValuesList&&) noexcept`, `Value(ValuesMap&&) noexcept` | allocate, so `bad_alloc` becomes `std::terminate` | drop `noexcept` there | fix |
+| `Value(uint64_t)` above `INT64_MAX` | cannot be held: wrapped to a negative number in 1.x, `std::overflow_error` since 0172 | `jinja2::BigInt` (`big_int.h`): an integer of any size as canonical decimal text, `TryParse(std::string_view, BigInt&) noexcept`, `Sign`, `ToInt64`/`ToUInt64`, comparisons by value; the last `Value` alternative (`sizeof(Value)` unchanged), with `IsBigInt()`, `AsBigInt()`, `bool AsBigInt(const BigInt*&)`; the integral constructor, `Reflect` and the JSON bindings store it for a value outside `int64_t`. `IsInt()` stays `int64_t` only. Until 0270 a `BigInt` that enters a template fails the render (a top-level render parameter fails it even unread), and `ToString()` prints one only at top level, not inside a list or map; arithmetic on it needs a backend (0271, plan docs/design/0178-big-integer-plan.md) | add (0269); an exhaustive `std::visit` over `GetData()` must handle the new alternative |
 | `IsEqual()` next to `operator==` | redundant | keep both; not worth a break | — |
 | `ValuesMap : std::unordered_map` | hash order | ordered map (task 0043) | break, done in 0043 |
 | free `AsString`/`AsWString` overloads for `std::string`, `std::wstring` and the views | encoding conversion; the `std::string` one returns a `const` value, defeating moves | `ToString`/`ToWString` returning `std::string`/`std::wstring` | alias |
@@ -295,7 +296,7 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 |---|---|---|---|
 | `JINJA2CPP_VERSION 10100` | the project is 1.3.2: the macro is stale | generate from `project(VERSION)` | fix (0069) |
 | `#pragma warning(disable : 4251)` in `config.h` | disables the warning for the rest of every user TU | `push`/`pop` around our declarations | fix (0069) |
-| `JINJA2_DECLSPEC` | wrong prefix | `JINJA2CPP_DECLSPEC` | break (internal macro) |
+| `JINJA2_DECLSPEC` | wrong prefix | removed: only `config.h` used it (decided 2026-10-18, 0076) | break (internal macro) |
 | `value_ptr.h` includes `polymorphic_cxx14.h`, then `polymorphic.h` under `__cplusplus != 201402L` | both share one include guard, so the second include is dead; `using namespace xyz;` inside `jinja2::types` | include one; drop the `using` | fix (0069) |
 | vendored `xyz::polymorphic` in the global `xyz` namespace | collides with a user's own copy of the reference implementation | move into `jinja2::detail` | none |
 | `RecWrapper<T>` = `polymorphic<T>` for the concrete `ValuesList`, `ValuesMap`, `UserCallable` | pays for type erasure (virtual copy through a control block) that a final type never uses | vendor `indirect<T>` from the same reference implementation (jbcoe/value_types, the source of C++26 `std::indirect`); `RecWrapper<T>` = `detail::indirect<T>`; `polymorphic` stays for the enumerator interfaces (decided by Ruslan 2026-10-02) | break (ABI; source unchanged for code that spells `RecWrapper`) |
@@ -303,6 +304,47 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | installed `jinja2cpp-config.cmake` | hand-written, always `STATIC IMPORTED`, no namespaced target, sets `PUBLIC` definitions on an imported target | generated export with `jinja2cpp::jinja2cpp` | fixed (0068) |
 | no umbrella or forward header | users include five headers; inline namespace (5.3) breaks user forward declarations | `jinja2cpp/jinja2cpp.h`, `jinja2cpp/fwd.h` | add |
 | `error_handler.h` | see 3.4 | remove | break |
+
+### 3.9 Memory and allocation
+
+Decided by Ruslan 2026-10-18 (task 0252; plan in
+[design/0252-memory-contract-plan.md](design/0252-memory-contract-plan.md)). The error side is
+section 2.1 (0250).
+
+- **No allocator parameters in 2.0.** No entry point takes a `memory_resource`, and `Value`,
+  `ValuesList` and `ValuesMap` stay on `std::allocator`. A Load upstream would cover about 1 of
+  ~958 Load allocations (the parse-tree arena allocates its own blocks), a per-render resource
+  is escaped by values that outlive the render, a pmr string would grow `Value` from 40 to 48 B
+  against the 0140 work, and Apple's libc++ ships `std::pmr` only from macOS 14 / iOS 17. If a
+  hook comes in 2.x, it is an additive `TemplateEnv` method taking `std::pmr::memory_resource&`
+  (never Boost's pmr: 0230). Host data enters without copies through `string_view`,
+  `Reflect(const T&)` and generic accessors (0115).
+- **Out of memory.** `std::bad_alloc` propagates out of the call that hit it, and means only
+  that the system is out of memory (2.1). A spent budget is `ResourceLimitExceeded`: the
+  library's limits (0262), the arena's size cap at Load, and a host budget signalled by throwing
+  `jinja2::Exception{ResourceLimitExceeded}` from a callable, a sink or the host's allocator. A
+  failed Load keeps the previous template; a failed render leaves `Template`, `TemplateEnv`
+  and the thread caches usable. Until [0256](tasks/0256-survive-allocation-failure.md) lands,
+  some allocation failures crash (arena block bookkeeping, vendored robin_hood; fixed by
+  #597). With the nlohmann JSON binding, OOM inside `nlohmann::json`'s destructor terminates
+  the process (0279).
+- **Caller-owned output** ([0257](tasks/0257-render-to-string-and-sink.md)):
+  - `RenderTo(StringType& out, params)` appends; on any failure `out` is truncated back to its
+    size at entry;
+  - `RenderTo(BasicOutputSink<CharT>& sink, params)` streams; chunks already written stay
+    written. `BasicOutputSink` has one virtual `Write(basic_string_view<CharT>)`, frozen for 2.x;
+    its exceptions are host exceptions under 2.1;
+  - header-only `ContainerSink<C>` appends to any container with `append(first, last)`
+    (`std::string`, `fmt::basic_memory_buffer`, `std::vector`, `small_vector`). No fmt type
+    appears in a signature: fmt stays a private dependency;
+  - `Render(ostream&)` stays all-or-nothing: the stream receives output only on success.
+  These are overloads rather than an options struct, so every later target is ABI-additive.
+- **Thread caches.** Renders on a thread reuse slot frames, loop frames, parameter tables, the
+  last environment's converted globals and buffers. `bool ReleaseThreadCaches() noexcept`
+  ([0275](tasks/0275-release-thread-caches.md)) frees them on the calling thread and returns
+  `false`, freeing nothing, while a render runs there. No caller-passed workspace.
+- **User-facing text:** README "Memory and threads" and Doxygen notes
+  ([0276](tasks/0276-memory-contract-docs.md)).
 
 ## 4. The 2.0 `Value`, in code
 
@@ -320,13 +362,13 @@ class Value
 public:
     using ValueData = variant<NoneValue, bool, std::string, std::wstring, string_view, wstring_view,
                               int64_t, double, RecWrapper<ValuesList>, RecWrapper<ValuesMap>,
-                              GenericList, GenericMap, RecWrapper<UserCallable>>;
+                              GenericList, GenericMap, RecWrapper<UserCallable>, Markup, WMarkup, BigInt>;
 
     Value();
     Value(std::nullptr_t) noexcept;                         // None
     template<class I, std::enable_if_t<detail::IsStoredAsInt<I>::value>* = nullptr>
-    Value(I val) noexcept(!detail::CanExceedInt64<I>)       // above INT64_MAX: std::overflow_error (0172)
-        : m_data(detail::ToStoredInt(val)) {}
+    Value(I val) noexcept(!detail::CanExceedInt64<I>)       // outside int64_t: a BigInt (0269)
+        : m_data(detail::ToStoredInt<ValueData>(val)) {}
     Value(char) = delete;                                   // number or one-letter string? say which
     // ... string, double, list, map, callable constructors as today
 
@@ -334,17 +376,20 @@ public:
     bool IsBool() const noexcept;
     bool IsInt() const noexcept;
     bool IsDouble() const noexcept;
-    bool IsString() const noexcept;
+    bool IsString() const noexcept;    // std::string or Markup (a Markup reads as a string)
     bool IsWString() const noexcept;
+    bool IsMarkup() const noexcept;    // exactly Markup; IsWMarkup likewise
     bool IsList() const noexcept;      // ValuesList or GenericList
     bool IsMap() const noexcept;       // ValuesMap or GenericMap
     bool IsCallable() const noexcept;
+    bool IsBigInt() const noexcept;    // an integer outside int64_t
 
     const std::string& AsString() const;                // throws bad_variant_access
-    std::string& AsString();
+    std::string& AsString();                           // a held Markup becomes a plain string first
     bool AsString(std::string_view& out) const noexcept;    // false if not a string; no copy
     int64_t AsInt() const;
     bool AsInt(int64_t& out) const noexcept;
+    const Markup& AsMarkup() const;                     // exactly Markup, throws for a plain string
     const ValuesList& AsList() const;                   // the ValuesList alternative only
     bool AsList(const ValuesList*& out) const noexcept;
     GenericList ToGenericList() const;                  // a view over either list representation
@@ -473,11 +518,13 @@ allocates `Settings`. Parity work adds options regularly, so the alternative (fr
 Functions whose result is the point of the call carry `[[nodiscard]]` (docs/tasks/0059):
 the `const` accessors and queries of the public headers (`Value::isString`, `asString`,
 `get`, `IsEqual`, `RenderAsString`, `GetMetadata`, the error accessors, about 110 in all)
-and `TemplateEnv::LoadTemplate` and `FromString`. Code that calls one of them and drops
-the result now gets a compiler warning (`-Wunused-result`, MSVC C4834), an error under
-`-Werror`. Use the result, or cast it to `void` where dropping it is intended.
-`Template::Load` and `Render`, which return only an error, are not marked yet
-(docs/tasks/0080).
+and `TemplateEnv::LoadTemplate` and `FromString`, and `Template::Load`, `LoadFromFile`
+and `Render` (both `Template` and `TemplateW`), whose result is the only report of a parse
+or render error (docs/tasks/0080). Code that calls one of them and drops the result now
+gets a compiler warning (`-Wunused-result`, MSVC C4834), an error under `-Werror`. The
+common case is a bare `tpl.Load(source);` as 1.x examples wrote it: check the result
+(`if (auto r = tpl.Load(source); !r) { /* r.error() */ }`), or cast it to `void` where
+dropping it is intended.
 
 ### 5.6 Unknown filters and tests fail at load (release note)
 
@@ -487,6 +534,14 @@ As in Jinja2, a filter or test is one built in or added with `TemplateEnv::AddFi
 inside an `if` statement or an inline if, where it fails when it runs (docs/tasks/0193).
 1.x let a `UserCallable` passed in the render parameters or the globals act as a filter or
 test, found when it ran; `Settings::userCallablesAsFilters = true` keeps that behaviour.
+
+### 5.7 C++-only filters render, `toxml` is gone (release note)
+
+In 1.x `camelize`, `underscorize`, `escapecpp`, `toxml` and `toyaml` were registered but
+rendered an empty string. In 2.0 the first four render the output that
+[cpp-only-filters.md](cpp-only-filters.md) describes, and `toxml` is removed: a template that
+uses it fails `Template::Load` with `ErrorCode::UnknownFilter` (docs/tasks/0233,
+docs/release-2.0.md D16). Templates that leaned on the empty output drop the filter.
 
 ## 6. Release options
 
@@ -534,6 +589,10 @@ Recommend A now, C only if someone asks.
 6. **`Value(char)`**: delete it (force the user to say `Value(int64_t('c'))` or
    `Value(std::string(1, 'c'))`), or store a one-letter string? *Decided: delete.*
    Today it silently stores `true`.
+7. **Memory contract** (0252, 3.9). *Decided by Ruslan 2026-10-18 (all as recommended):*
+   R1 no allocator parameters in 2.0; R2 `bad_alloc` only for system OOM, budgets are
+   `ResourceLimitExceeded`; R3 `Render(ostream&)` stays all-or-nothing; R4 output targets as
+   `RenderTo` overloads (string, sink) plus the header-only `ContainerSink`.
 
 ## 8. Work breakdown
 
@@ -592,3 +651,8 @@ Defects found during the survey that are worth fixing regardless of the 2.0 desi
   closer to the standard spelling (`tl` adds a non-standard `map`). Users write
   `jinja2::Result<T>`, so the backing library is swappable later; the next swap is to
   `std::expected` once the floor reaches C++23.
+- **Allocator-aware API in 2.0** (0252): a `memory_resource` for Load or Render, pmr
+  `Value`/containers, a caller-passed render workspace, a per-render byte budget, an
+  `OutOfMemory` error code, `RenderTo(fmt::memory_buffer&)` and an options struct for output
+  targets. Reasons in [design/0252-memory-contract-plan.md](design/0252-memory-contract-plan.md)
+  section 9.

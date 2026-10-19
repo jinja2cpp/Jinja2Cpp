@@ -184,8 +184,7 @@ struct Reflector<boost::json::value>
             result = val.get_int64();
             break;
         case boost::json::kind::uint64:
-            // Above INT64_MAX throws jinja2::Exception{ErrorCode::IntegerOutOfRange}
-            result = detail::ToStoredInt(val.get_uint64());
+            result = Value(val.get_uint64());
             break;
         case boost::json::kind::double_:
             result = val.get_double();
@@ -224,7 +223,7 @@ struct Reflector<boost::json::value>
             result = val->get_int64();
             break;
         case boost::json::kind::uint64:
-            result = detail::ToStoredInt(val->get_uint64());
+            result = Value(val->get_uint64());
             break;
         case boost::json::kind::double_:
             result = val->get_double();

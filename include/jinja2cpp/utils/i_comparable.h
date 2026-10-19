@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_ICOMPARABLE_H
 #define JINJA2CPP_ICOMPARABLE_H
 
+#include <jinja2cpp/fwd.h> // IWYU pragma: export
 #include <jinja2cpp/config.h>
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN

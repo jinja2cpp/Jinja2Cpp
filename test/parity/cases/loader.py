@@ -289,4 +289,8 @@ CASES = [
     ("idtracking_include_in_loop_before_set", "{% for i in [1, 2] %}{% include 'uses_x.j2' %}{% set x = i %}{% for j in [1] %}{{ x }}{% endfor %}{% endfor %}", L),
     ("idtracking_import_with_context_before_set", "{% import 'macros.j2' as m with context %}{{ m.ctx() }}{% set name = 'b' %}{% for j in [1] %}{{ name }}{% endfor %}", L),
     ("idtracking_from_import_alias_binds", "{% for i in [1] %}{% for j in [1] %}[{{ x }}]{% endfor %}{% from 'macros.j2' import greet as x %}{% endfor %}", L),
+    # A child's top level after `extends` runs, its output dropped: `self.b1()` there renders
+    # the child's block, whose super() is the parent's (docs/tasks/0274)
+    ("self_block_after_extends_at_top_level", "{% extends 'a.txt' %}{% block b1 %}C{{ super() }}{% endblock %}{{ self.b1() }}",
+     {"templates": {"a.txt": "{% block b1 %}A{% endblock %}"}}),
 ]

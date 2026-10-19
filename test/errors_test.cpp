@@ -6,6 +6,7 @@
 #include <jinja2cpp/exception.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/make_generic_list.h>
+#include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/user_callable.h>
@@ -26,6 +27,7 @@
 #include <system_error>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 using namespace jinja2;
 
@@ -651,7 +653,6 @@ static_assert(noexcept(std::declval<const ErrorInfo&>().GetLocationDescr()));
 static_assert(noexcept(std::declval<const ErrorInfo&>().GetException()));
 static_assert(std::is_base_of_v<std::runtime_error, jinja2::Exception>);
 static_assert(std::is_nothrow_copy_constructible_v<jinja2::Exception>);
-static_assert(noexcept(Value::TryFrom(uint64_t{}, std::declval<Value&>())));
 static_assert(noexcept(Value(int{})));
 static_assert(!noexcept(Value(uint64_t{})));
 static_assert(std::is_error_code_enum_v<ErrorCode>);
@@ -755,27 +756,23 @@ TEST(ErrorContractTest, ExceptionRecordsOrigin)
     EXPECT_NE(nullptr, std::strstr(ex.File(), "errors_test.cpp")) << ex.File();
 }
 
-TEST(ErrorContractTest, ValueThrowsIntegerOutOfRange)
+// A big integer is stored, not refused; one that reaches a template (until docs/tasks/0270) is an
+// error the engine raises, so it carries no exception
+TEST(ErrorContractTest, BigIntInTemplateIsIntegerOutOfRange)
 {
     const auto big = static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1;
-    try
-    {
-        Value v(big);
-        FAIL() << "no exception";
-    }
-    catch (const jinja2::Exception& ex)
-    {
-        EXPECT_EQ(ErrorCode::IntegerOutOfRange, ex.Code());
-    }
-    EXPECT_THROW(Value{ big }, std::runtime_error);
+    EXPECT_TRUE(Value(big).IsBigInt());
 
-    Value out("unchanged");
-    EXPECT_FALSE(Value::TryFrom(big, out));
-    EXPECT_EQ("unchanged", out.AsString());
-    EXPECT_TRUE(Value::TryFrom(big - 1, out));
-    EXPECT_EQ(std::numeric_limits<int64_t>::max(), out.AsInt());
-    EXPECT_TRUE(Value::TryFrom(-5, out));
-    EXPECT_EQ(-5, out.AsInt());
+    const std::pair<const char*, Value> rows[] = { { "{{ n + 1 }}", Value(big) }, { "{{ n[0] }}", Reflect(std::vector<uint64_t>{ big }) } };
+    for (const auto& [source, n] : rows)
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load(source));
+        const auto result = tpl.RenderAsString({ { "n", n } });
+        ASSERT_FALSE(result.has_value()) << source;
+        EXPECT_EQ(ErrorCode::IntegerOutOfRange, result.error().GetCode()) << source;
+        EXPECT_FALSE(result.error().GetException()) << source;
+    }
 }
 
 TEST(ErrorContractTest, ErrorCodeInterop)

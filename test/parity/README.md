@@ -66,8 +66,26 @@ line per case, sorted by id:
 `kind` is one of `output`, `rejects`, `accepts`, `unsupported`, `platform`, `crash`
 (above); `task` is the `docs/tasks/` number that owns the fix. A case blocked by several
 gaps is listed under the first one that has to be fixed. `ParityRegistry.*` fails on an
-unknown case or kind, a missing reason, an id listed twice, or a line in the wrong
-area's file.
+unknown case, kind or condition, a missing task or reason, an id listed twice, or a line
+in the wrong area's file.
+
+### Build conditions
+
+Some cases depend on an optional build feature (task 0273). A kind may carry a condition:
+`rejects@nobigint` lists a divergence of builds without the feature, and builds with it
+must match; `output@bigint` is the reverse. The known features are `bigint` (an integer
+arithmetic backend in the suite's default env, task 0178); `platform` takes no condition.
+Where the condition does not hold, the case is held to a match like an unlisted one.
+
+```
+operators.int_overflow_mul rejects@nobigint 0178 int64 overflow needs a big-integer backend
+```
+
+Results files start with the build's features (`# features: bigint`, or `# features:`
+for the default build). `update_divergences.py` edits only lines whose condition holds in
+that build, and keeps the condition when it rewrites a kind; `generate.py --report`
+describes the default build, so it counts `@no<feature>` lines and not `@<feature>`
+ones, and lists all conditional lines separately.
 
 ## Updating the allow-list
 
@@ -81,7 +99,9 @@ JINJA2CPP_PARITY_RESULTS=/tmp/parity.txt build/jinja2cpp_tests --gtest_filter='P
 python3 test/parity/update_divergences.py /tmp/parity.txt
 ```
 
-Run it after each fix and after every merge of master into a parity branch. A changed
+Run it after each fix and after every merge of master into a parity branch.
+`update_divergences.py --self-test` checks the script itself on built-in fixtures (CI runs
+it in `parity-expectations`). A changed
 kind usually means the case is now blocked by another gap: move its line to that task.
 When two branches add cases to the same area, take either side of the conflict in
 `expected/<area>.json` and run `generate.py` again; never merge that file by hand.
@@ -90,7 +110,8 @@ When two branches add cases to the same area, take either side of the conflict i
 
 1. Add a tuple to the right `cases/<area>.py` (or a new area file). Options:
    `ctx` (replaces the area context; must survive JSON), `env` (Environment options:
-   `trim_blocks`, `lstrip_blocks`, `keep_trailing_newline`, `autoescape`, `undefined`,
+   `trim_blocks`, `lstrip_blocks`, `keep_trailing_newline`, `autoescape` (a bool, or a list of
+   extensions for `select_autoescape`), `undefined`,
    `extensions`, delimiters, line prefixes, `newline_sequence`, and `filters`, `tests` and
    `finalize`, which name fixed functions defined in `generate.py` and, with the same
    names, in `parity_test.cpp`) and `templates`

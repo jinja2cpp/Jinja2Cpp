@@ -5,6 +5,7 @@
 #include "gtest/gtest.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/markup.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/value.h>
@@ -87,4 +88,25 @@ TEST(V1NamesTest, TypeAliases)
     static_assert(std::is_same_v<UserCallable::UserCallableFunctionPtr, UserCallable::Function>);
     static_assert(std::is_same_v<ErrorInfoTpl<char>, BasicErrorInfo<char>>);
     EXPECT_TRUE(Value(EmptyValue()).IsNone());
+}
+
+// A Markup is a string, so the 1.x names accept it as the new ones do (docs/tasks/0180)
+TEST(V1NamesTest, MarkupIsAString)
+{
+    Value markup{ Markup("<b>") };
+    EXPECT_TRUE(markup.isString());
+    EXPECT_EQ("<b>", std::as_const(markup).asString());
+    EXPECT_EQ("<b>", markup.get<std::string>());
+    EXPECT_EQ(&markup.AsMarkup().str(), std::as_const(markup).getPtr<std::string>());
+    EXPECT_TRUE(markup.IsMarkup());
+    // Mutable access makes it a plain string
+    EXPECT_NE(nullptr, markup.getPtr<std::string>());
+    EXPECT_FALSE(markup.IsMarkup());
+    Value other{ Markup("<i>") };
+    EXPECT_EQ("<i>", other.asString());
+    EXPECT_FALSE(other.IsMarkup());
+    EXPECT_EQ("<b>", AsString(markup));
+    EXPECT_EQ(L"<b>", AsWString(markup));
+    EXPECT_EQ(L"<b>", AsWString(Value(WMarkup(L"<b>"))));
+    EXPECT_EQ("<b>", AsString(Value(WMarkup(L"<b>"))));
 }

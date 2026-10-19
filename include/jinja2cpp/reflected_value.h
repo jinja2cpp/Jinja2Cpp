@@ -1,6 +1,8 @@
 #ifndef JINJA2CPP_REFLECTED_VALUE_H
 #define JINJA2CPP_REFLECTED_VALUE_H
 
+#include <jinja2cpp/fwd.h> // IWYU pragma: export
+#include "markup.h"
 #include "value.h"
 
 #include <jinja2cpp/generic_list.h>
@@ -79,7 +81,7 @@ namespace detail
  * `detail::Reflector` keeps working, still takes precedence over the library's reflector for the same type, and can
  * still delegate to one (`detail::Reflector<std::string>::Create(...)`). New code specialises \ref jinja2::Reflector.
  */
-template<typename T, typename Tag = void>
+template<typename T, typename Tag>
 struct Reflector;
 } // namespace detail
 
@@ -104,7 +106,7 @@ struct Reflector;
  *
  * @tparam T Type to reflect
  */
-template<typename T, typename Tag = void>
+template<typename T, typename Tag>
 struct Reflector : detail::Reflector<T, Tag>
 {
 };
@@ -125,7 +127,7 @@ struct TypeReflected : TypeReflectedImpl<T, true>
 
 
 
-template<typename T, typename = void>
+template<typename T, typename>
 struct TypeReflection : TypeReflectedImpl<T, false>
 {
 };
@@ -633,6 +635,14 @@ struct Reflector<std::basic_string<CharT>>
     }
 };
 
+// A Markup stays Markup: Markup is not a std::basic_string, so it has its own specialisation
+template<typename CharT>
+struct Reflector<BasicMarkup<CharT>>
+{
+    static auto Create(BasicMarkup<CharT> str) { return Value(std::move(str)); }
+    static auto CreateFromPtr(const BasicMarkup<CharT>* str) { return Value(*str); }
+};
+
 template<typename CharT>
 struct Reflector<std::basic_string_view<CharT>>
 {
@@ -661,12 +671,12 @@ struct Reflector<T, std::enable_if_t<std::is_floating_point_v<T>>>
 };
 
 // Every integral type except bool, including the character types, is reflected as int64_t; a value outside its
-// range throws jinja2::Exception{ErrorCode::IntegerOutOfRange}, as Value's constructor does
+// range becomes a BigInt, as Value's constructor stores it
 template<typename T>
 struct Reflector<T, std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<std::remove_cv_t<T>, bool>>>
 {
-    static auto Create(T val) { return Value(ToStoredInt(val)); }
-    static auto CreateFromPtr(const T* val) { return Value(ToStoredInt(*val)); }
+    static auto Create(T val) { return Value(ToStoredInt<Value::ValueData>(val)); }
+    static auto CreateFromPtr(const T* val) { return Value(ToStoredInt<Value::ValueData>(*val)); }
 };
 } // namespace detail
 #endif

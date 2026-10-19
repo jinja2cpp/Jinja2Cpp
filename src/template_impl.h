@@ -277,6 +277,11 @@ public:
         try
         {
             TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name, nodes);
+            // Jinja2 passes None for a template from a string. A selector that throws fails the Load
+            if (const auto& selector = m_settings->settings.autoescapeSelector)
+            {
+                parser.SetAutoescape(selector(isNamed ? name : std::string()));
+            }
 
             auto parseResult = parser.Parse();
             if (!parseResult)
@@ -489,6 +494,49 @@ public:
         return info;
     }
 
+    // jinja2.meta.find_undeclared_variables (docs/tasks/0236). The tree keeps no record of where
+    // names are declared, so the source is parsed again, into an arena of its own, and the
+    // resolver of that parse reports them: Load pays nothing for it
+    nonstd::expected<std::vector<std::string>, BasicErrorInfo<CharT>> FindUndeclaredVariables() const
+    {
+        if (!m_renderer)
+        {
+            typename BasicErrorInfo<CharT>::Data errorData;
+            errorData.code = ErrorCode::TemplateNotParsed;
+            errorData.srcLoc.col = 1;
+            errorData.srcLoc.line = 1;
+            errorData.srcLoc.fileName = "<unknown file>";
+            return MakeUnexpected(BasicErrorInfo<CharT>(errorData));
+        }
+        NodeArena nodes;
+        TemplateParser<CharT> parser(m_template.get(), *m_settings, m_env, m_templateName, nodes);
+        auto parseResult = parser.Parse();
+        if (!parseResult)
+        {
+            return MakeUnexpected(parseResult.error()[0]);
+        }
+        const auto found = parser.GetNames().UndeclaredNames(nodes);
+        std::vector<std::string> names(found.begin(), found.end());
+        std::sort(names.begin(), names.end());
+        names.erase(std::unique(names.begin(), names.end()), names.end());
+        // Jinja2 leaves out the environment's globals: the built-in functions and the host's
+        const auto& builtins = GetBuiltinGlobals(m_settings->settings.extensions.i18n);
+        const auto isGlobal = [this, &builtins](const std::string& name) {
+            if (builtins.find(name) != builtins.end())
+            {
+                return true;
+            }
+            bool isHostGlobal = false;
+            if (m_env)
+            {
+                m_env->ApplyGlobals([&name, &isHostGlobal](const ValuesMap& globals) { isHostGlobal = globals.find(name) != globals.end(); });
+            }
+            return isHostGlobal;
+        };
+        names.erase(std::remove_if(names.begin(), names.end(), isGlobal), names.end());
+        return names;
+    }
+
     bool operator==(const TemplateImpl<CharT>& other) const
     {
         if (m_env && other.m_env)
@@ -502,7 +550,8 @@ public:
         {
             return false;
         }
-        // The same source, settings and environment parse to the same tree
+        // The same source, settings and environment parse to the same tree (but for the
+        // autoescape setting an autoescapeSelector chooses by name)
         const bool sameSource = m_template && other.m_template ? *m_template == *other.m_template : m_template == other.m_template;
         if (!sameSource)
         {

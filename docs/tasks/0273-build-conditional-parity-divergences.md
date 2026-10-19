@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: parity
 touches: [test/parity/parity_test.cpp, test/parity/update_divergences.py, test/parity/generate.py, test/parity/README.md]
@@ -18,3 +18,5 @@ suffixed lines and the report names them. Unknown suffixes fail.
 and `update_divergences.py` self-checks on fixture results with and without the feature header.
 
 Plan: [docs/design/0178-big-integer-plan.md](../design/0178-big-integer-plan.md).
+
+Done in #595.

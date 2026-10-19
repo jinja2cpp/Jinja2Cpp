@@ -15,10 +15,9 @@ enum class ErrorCode;
 /*!
  * \brief The exception type of Jinja2C++ (docs/api-2.0.md, 2.1)
  *
- * The library's headers throw it for errors in host data, for instance `Value(I)` for an integer outside the
- * `int64_t` range (`ErrorCode::IntegerOutOfRange`). Host code (user callables, reflectors, accessors, filesystem
- * handlers, allocators) throws it to report a specific \ref ErrorCode: Load and Render then return that code in their
- * `Result`, with the exception kept in `ErrorInfo::GetException()`.
+ * Host code (user callables, reflectors, accessors, filesystem handlers, allocators) throws it to report a specific
+ * \ref ErrorCode: Load and Render then return that code in their `Result`, with the exception kept in
+ * `ErrorInfo::GetException()`.
  *
  * It also records the C++ origin of the throw: the file and line of the expression that constructed it.
  */

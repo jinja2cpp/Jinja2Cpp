@@ -17,6 +17,7 @@
 #include <ostream>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace jinja2
 {
@@ -172,14 +173,26 @@ Result<MetadataInfo<CharT>, CharT> BasicTemplate<CharT>::GetMetadataRaw() const
 }
 
 template<typename CharT>
+Result<std::vector<std::string>, CharT> BasicTemplate<CharT>::FindUndeclaredVariables() const
+{
+    return GetImpl<CharT>(m_impl)->FindUndeclaredVariables();
+}
+
+template<typename CharT>
 bool BasicTemplate<CharT>::IsEqual(const BasicTemplate& other) const
 {
     return m_impl == other.m_impl;
 }
 
+#ifdef _WIN32
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 template class JINJA2CPP_EXPORT BasicTemplate<char>;
 template class JINJA2CPP_EXPORT BasicTemplate<wchar_t>;
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
+#else
+// Exported by the explicit instantiation declarations in template.h
+template class BasicTemplate<char>;
+template class BasicTemplate<wchar_t>;
+#endif
 
 } // namespace jinja2

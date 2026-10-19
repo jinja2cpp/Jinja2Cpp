@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: api
 touches: [docs/api-2.0.md]
@@ -47,3 +47,12 @@ with global `new` only.
 
 **Done when.** The decisions are written in docs/api-2.0.md, the memory contract is
 documented for users, and implementation tasks are filed for any API it adds.
+
+**Outcome (Ruslan 2026-10-18, all as recommended).** No allocator parameters in 2.0;
+`bad_alloc` only for system OOM, budgets are `ResourceLimitExceeded` (with 0250);
+`Render(ostream&)` all-or-nothing; `RenderTo` into a string or a sink plus a header-only
+`ContainerSink`; `ReleaseThreadCaches()`. Decisions in docs/api-2.0.md 3.9 and decision 7,
+plan in [design/0252-memory-contract-plan.md](../design/0252-memory-contract-plan.md).
+Implementation: [0256](0256-survive-allocation-failure.md) (OOM crashes),
+[0257](0257-render-to-string-and-sink.md) (`RenderTo`, sink),
+[0275](0275-release-thread-caches.md), [0276](0276-memory-contract-docs.md) (docs).

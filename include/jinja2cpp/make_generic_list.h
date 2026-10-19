@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_MAKE_GENERIC_LIST_H
 #define JINJA2CPP_MAKE_GENERIC_LIST_H
 
+#include "fwd.h" // IWYU pragma: export
 #include "generic_list.h"
 #include "reflected_value.h"
 #include "value.h"

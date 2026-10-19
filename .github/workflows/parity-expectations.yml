@@ -62,6 +62,9 @@ jobs:
     - name: Check expectations
       run: python test/parity/generate.py --check
 
+    - name: Self-test update_divergences.py
+      run: python test/parity/update_divergences.py --self-test
+
     # repr() escaping follows this Python's Unicode database (src/unicode_printable.h)
     - name: Check the printable-character table
       run: python scripts/gen_unicode_printable.py --check src/unicode_printable.h

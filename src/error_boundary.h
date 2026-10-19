@@ -1,7 +1,7 @@
 #ifndef JINJA2CPP_SRC_ERROR_BOUNDARY_H
 #define JINJA2CPP_SRC_ERROR_BOUNDARY_H
 
-#include "resource_limit.h"
+#include "engine_errors.h"
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/exception.h>
@@ -40,6 +40,12 @@ BasicErrorInfo<CharT> CurrentExceptionToError(const std::string& fileName)
     catch (const ResourceLimitError& ex)
     {
         code = ErrorCode::ResourceLimitExceeded;
+        message = ex.what();
+        fromOutside = false;
+    }
+    catch (const IntegerOutOfRangeError& ex)
+    {
+        code = ErrorCode::IntegerOutOfRange;
         message = ex.what();
         fromOutside = false;
     }

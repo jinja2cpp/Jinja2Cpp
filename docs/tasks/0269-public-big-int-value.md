@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: api
 depends: [0172, 0178]
@@ -23,3 +23,5 @@ that enters a template raises OverflowError. Coordinate with 0250's phase 0253, 
 rows), abidiff shows `sizeof(Value)` unchanged, and docs/api-2.0.md documents `BigInt`.
 
 Plan: [docs/design/0178-big-integer-plan.md](../design/0178-big-integer-plan.md).
+
+Done in #596.

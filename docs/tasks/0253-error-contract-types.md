@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: high
 area: api
 depends: [0250, 0172]
@@ -8,9 +8,11 @@ shares: [src/template_impl.h, include/jinja2cpp/reflected_value.h, include/jinja
 ---
 # Error contract P1: public error types and the Load/Render boundary
 
-**In progress in [#597](https://github.com/jinja2cpp/Jinja2Cpp/pull/597).** Left for it: the
-`fwd.h`/`jinja2cpp.h` lines and `fwd_test.cpp`, which wait for #580 (0076). Filed from it: the
-nlohmann binding's allocating destructor (0279) and cycle leaks on a failed allocation (0283).
+**Done in [#597](https://github.com/jinja2cpp/Jinja2Cpp/pull/597).** `Value::TryFrom` and
+`detail::ThrowIntegerOutOfRange` were dropped: with `BigInt` (0269) `Value(I)` stores an integer
+outside int64 instead of throwing, and a `BigInt` that reaches a template reports
+`IntegerOutOfRange` as an engine error, with no exception. Filed from it: the nlohmann binding's
+allocating destructor (0279) and cycle leaks on a failed allocation (0283).
 
 **Release impact (0221).** Freeze-critical (gate G1): changes public types and `ErrorInfo`'s
 layout. Lands after #573 (0172), in the API wave. Contract: docs/api-2.0.md §2.1; plan and

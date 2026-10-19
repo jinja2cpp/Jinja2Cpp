@@ -4643,6 +4643,19 @@
     "outer_include.j2": "outer:{% include 'include_inner.j2' %}"
    },
    "output": "[]"
+  },
+  {
+   "id": "loader.self_block_after_extends_at_top_level",
+   "template": "{% extends 'a.txt' %}{% block b1 %}C{{ super() }}{% endblock %}{{ self.b1() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a.txt": "{% block b1 %}A{% endblock %}"
+   },
+   "output": "CA"
   }
  ]
 }

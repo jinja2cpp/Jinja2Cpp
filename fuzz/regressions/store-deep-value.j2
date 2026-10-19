@@ -1,0 +1,1 @@
+{% set ns = namespace(v=[], d={}) %}{% for i in range(100000) %}{% set ns.v = [ns.v] %}{% set ns.d = {'a': ns.d} %}{% endfor %}{% set x = [] %}{% do x.append(ns.v) %}{% set y = {} %}{% do y.update(a=ns.d) %}{{ x|length }}{{ y|length }}

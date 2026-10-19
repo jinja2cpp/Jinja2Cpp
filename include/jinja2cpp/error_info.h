@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_ERROR_INFO_H
 #define JINJA2CPP_ERROR_INFO_H
 
+#include "fwd.h" // IWYU pragma: export
 #include "config.h"
 #include "exception.h" // IWYU pragma: export
 #include "value.h"
@@ -41,7 +42,7 @@ enum class ErrorCode
     UnknownFilter = 13,            //!< The template names a filter that is neither built in nor added to the environment (Jinja2's TemplateAssertionError). ExtraParams[0] contains the name
     UnknownTest = 14,              //!< The template names a test that is neither built in nor added to the environment (Jinja2's TemplateAssertionError). ExtraParams[0] contains the name
     UserCallableException = 15,    //!< A user callable (context or global value, filter, test, finalize, gettext) threw. ExtraParams[0] contains `what()`, GetException() the exception
-    IntegerOutOfRange = 16,        //!< An integer is outside the `int64_t` range: host data (Value, Reflect, JSON bindings) or template arithmetic. ExtraParams[0] contains the message
+    IntegerOutOfRange = 16,        //!< An integer is outside the `int64_t` range: a \ref BigInt the template uses (until docs/tasks/0270) or template arithmetic. ExtraParams[0] contains the message
     TemplateRuntimeError = 17,     //!< An operation of the template failed (Python's TypeError, ValueError, ...). ExtraParams[0] contains the message
     ResourceLimitExceeded = 18,    //!< A size or depth limit, or a host's budget, was exceeded. ExtraParams[0] contains the message, ExtraParams[1] (when present) the limit's name
     ExpectedStringLiteral = 1001,  //!< String literal expected
@@ -222,7 +223,7 @@ public:
     [[nodiscard]] const std::exception_ptr& GetException() const noexcept { return GetData().exception; }
 
     //! Convert error to the detailed string representation
-    JINJA2CPP_EXPORT [[nodiscard]] std::basic_string<CharT> ToString() const;
+    [[nodiscard]] JINJA2CPP_EXPORT std::basic_string<CharT> ToString() const;
 
 private:
     // One immutable description, shared by the copies: an error is one pointer wide and copies without allocating

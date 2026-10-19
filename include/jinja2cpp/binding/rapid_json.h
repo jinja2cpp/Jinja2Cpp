@@ -198,8 +198,7 @@ struct Reflector<rapidjson::GenericValue<Enc>>
             }
             else if (val->IsUint64())
             {
-                // Above INT64_MAX throws jinja2::Exception{ErrorCode::IntegerOutOfRange}
-                result = detail::ToStoredInt(val->GetUint64());
+                result = Value(val->GetUint64());
             }
             else if (val->IsInt() || val->IsUint())
             {

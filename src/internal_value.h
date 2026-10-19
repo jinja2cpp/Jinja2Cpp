@@ -2,7 +2,7 @@
 #define JINJA2CPP_SRC_INTERNAL_VALUE_H
 
 #include "loop_attr.h"
-#include "resource_limit.h"
+#include "engine_errors.h"
 
 #include <jinja2cpp/config.h>
 #include <jinja2cpp/generic_list.h>
@@ -182,9 +182,11 @@ private:
 #ifdef _MSC_VER
 #define JINJA2CPP_COLD_INLINE __declspec(noinline) inline
 #define JINJA2CPP_OUTLINE_INLINE __declspec(noinline) inline
+#define JINJA2CPP_HOT_INLINE __forceinline
 #else
 #define JINJA2CPP_COLD_INLINE __attribute__((noinline, cold)) inline
 #define JINJA2CPP_OUTLINE_INLINE __attribute__((noinline)) inline
+#define JINJA2CPP_HOT_INLINE inline __attribute__((always_inline))
 #endif
 
 // Holds a value whose type is incomplete where InternalValue is declared (a pair or a
@@ -993,7 +995,9 @@ public:
         std::visit([this](auto view) { InitView(view); }, val);
     }
 
-    InternalValue(ValueRef val) noexcept // NOLINT(google-explicit-constructor)
+    // Explicit: a direct-initialised InternalValue(value) of a host Value would otherwise make
+    // a ValueRef through ReferenceWrapper's implicit constructor (nothing makes one, 0278)
+    explicit InternalValue(ValueRef val) noexcept
         : m_imm(val)
     {
     }
