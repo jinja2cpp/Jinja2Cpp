@@ -909,7 +909,16 @@ private:
             // namespace(), cycler() and joiner() are objects, not data
             throw std::runtime_error("Object of type "s + objectClass + " is not YAML serializable");
         }
-        const auto keys = map.GetKeys();
+        // Keys other than strings (docs/tasks/0036) are not written as YAML mapping keys
+        std::vector<std::string> keys;
+        for (const auto& entry : map.GetEntries())
+        {
+            if (!IsStringValue(entry.key))
+            {
+                throw std::runtime_error("Only string dictionary keys are YAML serializable");
+            }
+            keys.push_back(AsString(entry.key));
+        }
         if (keys.empty())
         {
             StartNode(pos, indent, false);
