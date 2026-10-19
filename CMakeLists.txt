@@ -173,6 +173,7 @@ set(JINJA2CPP_SOURCES
     src/statements.cpp
     src/string_converter_filter.cpp
     src/template.cpp
+    src/template_dict.cpp
     src/template_env.cpp
     src/template_parser.cpp
     src/tester_factories.cpp

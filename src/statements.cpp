@@ -173,7 +173,7 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
     InternalValueList items;
     if (auto* pair = GetIf<KeyValuePair>(&value))
     {
-        items.emplace_back(TargetString(pair->key));
+        items.push_back(pair->key);
         items.push_back(pair->value);
     }
     else
@@ -432,7 +432,7 @@ void AssignLoopTarget(TargetNodes target, const InternalValue& item, ScopeRef sc
         {
             slots.items = { &scope.ForName(NameOf(target[1], values.Nodes())), &scope.ForName(NameOf(target[2], values.Nodes())) };
         }
-        *slots.items[0] = TargetString(pair->key);
+        *slots.items[0] = pair->key;
         *slots.items[1] = pair->value;
         return;
     }
@@ -1202,7 +1202,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
         else if (const auto* pair = isPair ? GetIf<KeyValuePair>(&curValue) : nullptr)
         {
             // `for k, v in d|dictsort` (or d.items()): no list of items to unpack through
-            values.BindSlot(slots[target[1].slot.value], target[1].hash, TargetString(pair->key));
+            values.BindSlot(slots[target[1].slot.value], target[1].hash, pair->key);
             values.BindSlot(slots[target[2].slot.value], target[2].hash, pair->value);
         }
         else

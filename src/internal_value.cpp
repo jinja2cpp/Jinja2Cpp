@@ -2,6 +2,7 @@
 
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
+#include "template_dict.h"
 #include "undefined.h"
 #include "value_visitors.h"
 
@@ -435,7 +436,28 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         return values.GetValueByIndex(index);
     }
 
-    InternalValue operator()(const MapRef& /*values*/, int64_t /*index*/) const { return InternalValue(); }
+    // A key that is not a string is a key of a dict the template owns (1, 1.5, True, none, a tuple);
+    // other maps hold strings only, and an unhashable key reads as undefined, as Jinja2 swallows
+    // the TypeError
+    [[nodiscard]] static InternalValue FindKey(const MapRef& values, const InternalValue& key)
+    {
+        auto found = values.FindItem(key);
+        return found ? std::move(*found) : InternalValue();
+    }
+
+    InternalValue operator()(const MapRef& values, int64_t key) const { return FindKey(values, InternalValue(key)); }
+    InternalValue operator()(const MapRef& values, bool key) const { return FindKey(values, InternalValue(key)); }
+    InternalValue operator()(const MapRef& values, double key) const { return FindKey(values, InternalValue(key)); }
+    InternalValue operator()(const MapRef& values, NoneValue /*key*/) const { return FindKey(values, InternalValue(NoneValue{})); }
+    InternalValue operator()(const MapRef& values, const KeyValuePair& key) const { return FindKey(values, InternalValue(key)); }
+    InternalValue operator()(const MapRef& values, const ListRef& key) const
+    {
+        if (!key.IsTuple() && !key.GetRangeInfo())
+        {
+            return InternalValue();
+        }
+        return FindKey(values, InternalValue(key.ToAdapter()));
+    }
 
     // A dictsort pair reads as the 2-tuple (key, value)
     InternalValue operator()(const KeyValuePair& pair, int64_t index) const
@@ -891,9 +913,9 @@ struct ListConverter : public visitors::BaseVisitor<std::optional<ListAdapter>>
         }
 
         InternalValueList list;
-        for (auto& k : map.GetKeys())
+        for (auto& k : map.GetKeyValues())
         {
-            list.emplace_back(TargetString(k));
+            list.emplace_back(std::move(k));
         }
 
         return ListAdapter::CreateAdapter(std::move(list));
@@ -1668,10 +1690,37 @@ std::vector<KeyValuePair> IMapAccessor::GetEntries() const
     for (auto& key : keys)
     {
         auto value = GetItem(key);
-        result.push_back(KeyValuePair{ std::move(key), std::move(value) });
+        result.push_back(KeyValuePair{ InternalValue(key), std::move(value) });
     }
 
     return result;
+}
+
+InternalValueList IMapAccessor::GetKeyValues() const
+{
+    InternalValueList result;
+    auto keys = GetKeys();
+    result.reserve(keys.size());
+    for (auto& key : keys)
+    {
+        result.emplace_back(key);
+    }
+
+    return result;
+}
+
+std::optional<InternalValue> IMapAccessor::FindItem(const InternalValue& key) const
+{
+    if (IsStringValue(key))
+    {
+        const auto name = AsString(key);
+        if (HasValue(name))
+        {
+            return GetItem(name);
+        }
+    }
+
+    return std::nullopt;
 }
 
 template<template<typename> class Holder, bool canModify, typename Map = InternalValueMap>
@@ -1716,7 +1765,7 @@ public:
 
         for (const auto& [key, value] : m_values.Get())
         {
-            result.push_back(KeyValuePair{ key, value });
+            result.push_back(KeyValuePair{ InternalValue(key), value });
         }
 
         return result;
@@ -1750,20 +1799,123 @@ protected:
     mutable Holder<Map> m_values;
 };
 
-// A dict the template owns (dict literals, kwargs, dict()): shared like a Python dict
-class SharedDictAdapter : public InternalValueMapAdapter<BySharedMutable, true, InternalDict>
+// A dict the template owns (dict literals, kwargs, dict()): shared like a Python dict, and keyed
+// like one (TemplateDict). A string key costs one lookup as in any other map
+class SharedDictAdapter : public MapAccessorImpl<SharedDictAdapter>
 {
 public:
-    using InternalValueMapAdapter::InternalValueMapAdapter;
+    explicit SharedDictAdapter(TemplateDict&& values)
+        : m_values(std::move(values))
+    {
+    }
 
+    [[nodiscard]] size_t GetSize() const override { return m_values.Get().size(); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return m_values.Get().FindString(name) != m_values.Get().end(); }
+    [[nodiscard]] InternalValue GetItem(const std::string& name) const override
+    {
+        auto& vals = m_values.Get();
+        auto p = vals.FindString(name);
+        return p == vals.end() ? InternalValue() : p->second;
+    }
+    // The keys spelled as str(), so that a reader of the string keyed view never sees a token
+    [[nodiscard]] std::vector<std::string> GetKeys() const override
+    {
+        std::vector<std::string> result;
+        auto& vals = m_values.Get();
+        result.reserve(vals.size());
+        for (const auto& [stored, value] : vals)
+        {
+            result.push_back(DictKeyText(vals.KeyOf(stored)));
+        }
+
+        return result;
+    }
+    [[nodiscard]] InternalValueList GetKeyValues() const override
+    {
+        InternalValueList result;
+        auto& vals = m_values.Get();
+        result.reserve(vals.size());
+        for (const auto& [stored, value] : vals)
+        {
+            result.push_back(vals.KeyOf(stored));
+        }
+
+        return result;
+    }
+    [[nodiscard]] std::vector<KeyValuePair> GetEntries() const override
+    {
+        std::vector<KeyValuePair> result;
+        auto& vals = m_values.Get();
+        result.reserve(vals.size());
+        for (const auto& [stored, value] : vals)
+        {
+            result.push_back(KeyValuePair{ vals.KeyOf(stored), value });
+        }
+
+        return result;
+    }
+    [[nodiscard]] std::optional<InternalValue> FindItem(const InternalValue& key) const override
+    {
+        auto& vals = m_values.Get();
+        auto p = vals.Find(key);
+        if (p == vals.end())
+        {
+            return std::nullopt;
+        }
+        return p->second;
+    }
+
+    bool SetValue(std::string name, const InternalValue& val) const override
+    {
+        m_values.Get().SetString(std::move(name), val);
+        return true;
+    }
+    [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* val = dynamic_cast<const SharedDictAdapter*>(&other);
+        if (!val)
+        {
+            return false;
+        }
+        return m_values == val->m_values;
+    }
     [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
-    [[nodiscard]] InternalDict* GetMutableItems() const override { return &m_values.Get(); }
+    [[nodiscard]] TemplateDict* GetMutableItems() const override { return &m_values.Get(); }
     [[nodiscard]] bool OwnsMutableItemsAlone() const override { return m_values.IsUnique(); }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::MethodsFirst; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
+        if (auto snapshot = CreateSnapshot())
+        {
+            return std::move(*snapshot);
+        }
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
+
+protected:
+    // The public map has string keys only (D13: docs/release-2.0.md, docs/tasks/0036). A dict
+    // with a key that is not a string is handed over as a copy, not a live view, with the keys
+    // spelled as str() does: {1: 'x', None: 'y'} has the keys "1" and "None". Keys that spell
+    // alike ({1: 'x', '1': 'y'}) collapse, and the later value wins at the position of the first,
+    // as Python's {str(k): v for k, v in d.items()} has it. A dict of string keys stays a live view
+    [[nodiscard]] std::optional<GenericMap> CreateSnapshot() const
+    {
+        auto& vals = m_values.Get();
+        if (!vals.HasKeyValues())
+        {
+            return std::nullopt;
+        }
+        ValuesMap snapshot;
+        for (const auto& [stored, value] : vals)
+        {
+            snapshot[DictKeyText(vals.KeyOf(stored))] = IntValue2Value(value);
+        }
+        return CreateMapAdapter(std::move(snapshot)).CreateGenericMap();
+    }
+
+    // Mutable for SetValue, the one writer (IMapAccessor::SetValue)
+    mutable BySharedMutable<TemplateDict> m_values;
 };
 
 // namespace(): shared like a dict, but an object with attributes rather than a dict to the
@@ -1773,11 +1925,20 @@ class NamespaceAdapter : public SharedDictAdapter
 public:
     using SharedDictAdapter::SharedDictAdapter;
 
+    // Its attributes are names: ns[1] is undefined, as in Python
+    [[nodiscard]] std::optional<InternalValue> FindItem(const InternalValue& key) const override
+    {
+        return IsStringValue(key) ? SharedDictAdapter::FindItem(key) : std::nullopt;
+    }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysOnly; }
     [[nodiscard]] bool IsNamespace() const override { return true; }
     [[nodiscard]] const char* GetObjectClass() const override { return "Namespace"; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
+        if (auto snapshot = CreateSnapshot())
+        {
+            return std::move(*snapshot);
+        }
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
 };
@@ -1868,6 +2029,21 @@ private:
     Holder<GenericMap> m_values;
 };
 
+// A key of user data as LendItem lends its string items: a view while the data outlives the
+// render, so reading entries copies no key text (Render/dict_ops)
+template<template<typename> class Holder, typename T>
+InternalValue LendKey([[maybe_unused]] const Holder<T>& holder, const std::string& key)
+{
+    if constexpr (std::is_same_v<Holder<T>, ByRef<T>>)
+    {
+        return InternalValue(TargetStringView(std::string_view(key)));
+    }
+    else
+    {
+        return InternalValue(key);
+    }
+}
+
 template<template<typename> class Holder>
 class ValuesMapAdapter : public MapAccessorImpl<ValuesMapAdapter<Holder>>
 {
@@ -1910,7 +2086,7 @@ public:
 
         for (const auto& [key, value] : m_values.Get())
         {
-            result.push_back(KeyValuePair{ key, LendItem(m_values, value) });
+            result.push_back(KeyValuePair{ LendKey(m_values, key), LendItem(m_values, value) });
         }
 
         return result;
@@ -1994,12 +2170,22 @@ MapAdapter CreateMapAdapter(InternalValueMap&& values)
 
 MapAdapter CreateMapAdapter(InternalDict&& values)
 {
+    return MapAdapter(MakeRef<SharedDictAdapter>(TemplateDict(std::move(values))));
+}
+
+MapAdapter CreateMapAdapter(TemplateDict&& values)
+{
     return MapAdapter(MakeRef<SharedDictAdapter>(std::move(values)));
+}
+
+MapAdapter CreateNamespaceAdapter(TemplateDict&& values)
+{
+    return MapAdapter(MakeRef<NamespaceAdapter>(std::move(values)));
 }
 
 MapAdapter CreateNamespaceAdapter(InternalDict&& values)
 {
-    return MapAdapter(MakeRef<NamespaceAdapter>(std::move(values)));
+    return MapAdapter(MakeRef<NamespaceAdapter>(TemplateDict(std::move(values))));
 }
 
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className)
@@ -2051,7 +2237,7 @@ struct OutputValueConvertor
     result_t operator()(const MapRef& adapter) const { return result_t(adapter.CreateGenericMap()); }
     result_t operator()(const ListRef& adapter) const { return result_t(adapter.CreateGenericList()); }
     result_t operator()(const ValueRef& ref) const { return ref.get(); }
-    result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }
+    result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", IntValue2Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }
     result_t operator()(const Callable&) const { return result_t(); }
     result_t operator()(const UserCallable&) const { return result_t(); }
     result_t operator()(const std::shared_ptr<IRendererBase>&) const { return result_t(); }

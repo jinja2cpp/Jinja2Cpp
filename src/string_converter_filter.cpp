@@ -1732,9 +1732,9 @@ InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, Rend
     };
     if (auto map = AsMap(baseVal))
     {
-        for (auto& key : map->GetKeys())
+        for (auto& [key, value] : map->GetEntries())
         {
-            appendPair(InternalValue(key), map->GetValueByName(key));
+            appendPair(key, value);
         }
     }
     else if (auto list = AsList(baseVal))

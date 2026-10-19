@@ -104,4 +104,13 @@ CASES = [
     ("str_format_huge_width", "{{ '{:99999999999999999999}'.format(1) }}"),
     ("loop_cycle_no_args", "{% for x in [1, 2] %}{{ loop.cycle() }}{% endfor %}"),
     ("loop_attr_not_dict_method", "{% for i in [1] %}{{ loop.items is defined }}{% endfor %}"),
+    ('dict_methods_non_string_keys', "{% set d = {1: 'a'} %}{{ d.get(1) }}|{{ d.get(1.0) }}|{{ d.get('1', 'none') }}|{{ d.keys()|list }}|{{ d.setdefault(2.0, 'b') }}|{% do d.update({(1, 2): 'c'}) %}{{ d }}|{{ d.pop(1) }}|{{ d.popitem() }}|{{ d }}", {"env": {"extensions": ["do"]}}),
+    ('dict_get_host_int_key', "{{ dd.get(1) }}|{{ dd.get(1, 'dflt') }}", {"ctx": {"dd": {"1": 2}}}),
+    ('dict_pop_missing_int', '{{ {}.pop(1) }}'),
+    ('format_index_int_key', "{{ '{0[1]}'.format({1: 2}) }}"),
+    ('dict_update_pairs_and_kwargs', "{% set d = {1: 'a'} %}{% do d.update([(1.0, 'b'), (None, 'n')], z=1) %}{{ d }}", {"env": {"extensions": ["do"]}}),
+    ('dict_copy_keeps_keys', "{% set d = {1: 'a', (2, 3): 'b'} %}{% set c = d.copy() %}{% do c.update({1: 'x'}) %}{{ d }}|{{ c }}", {"env": {"extensions": ["do"]}}),
+    ('dict_setdefault_existing_float', "{% set d = {1: 'a'} %}{{ d.setdefault(1.0, 'z') }}{{ d }}", {"env": {"extensions": ["do"]}}),
+    ('dict_update_unhashable_unchanged', "{% set d = {1: 'a'} %}{% do d.update([(2, 'b'), ([3], 'c')]) %}", {"env": {"extensions": ["do"]}}),
+    ('dict_store_item_non_string', "{% set d = {1: 'a'} %}{% do d.update({2: 'b'}) %}{{ d[2] }}{{ d.get(2) }}{{ d|length }}", {"env": {"extensions": ["do"]}}),
 ]

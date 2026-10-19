@@ -5,6 +5,7 @@
 #include "internal_value.h"
 #include "markup.h"
 #include "render_context.h"
+#include "template_dict.h"
 #include "unicode_tables.h"
 #include "value_visitors.h"
 
@@ -17,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <deque>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
@@ -51,16 +53,13 @@ bool Equals(const InternalValue& lhs, const InternalValue& rhs)
     return ConvertToBool(Apply2<visitors::BinaryMathOperation>(lhs, rhs, BinaryExpression::LogicalEq));
 }
 
-// Mapping keys are strings in the value model (task 0036): other keys by their printed form
-std::string KeyString(const InternalValue& key)
+// Python hashes a dict key before it looks at the dict: a list or a dict is a TypeError
+void CheckHashable(const InternalValue& key)
 {
-    if (IsStringValue(key))
+    if (const char* type = UnhashableType(key))
     {
-        return AsString(key);
+        ThrowUnhashable(type);
     }
-    std::string result;
-    Apply<visitors::ValueRenderer<char>>(key, result);
-    return result;
 }
 
 // Positional argument `idx`, or the keyword argument `kwName` when the method takes one
@@ -1696,6 +1695,8 @@ bool ReachesThroughOpaque(const InternalValue& root, const void* target)
     VisitedStorage visited;
     // Items stay where they are while the walk runs: nothing changes a container under it
     std::vector<PendingValue> pending{ { &root, false } };
+    // Keys are read by value, so the walk keeps them where it can point at them
+    std::deque<InternalValue> keys;
     // Only values that can hold a container are queued: a wide flat list costs no work list
     const auto queueValue = [&pending](const InternalValue& item, bool viaOpaque) {
         const auto kind = item.Kind();
@@ -1716,6 +1717,16 @@ bool ReachesThroughOpaque(const InternalValue& root, const void* target)
         }
         else if (auto map = AsMap(*val))
         {
+            auto* items = map->GetMutableItems();
+            // A key that is not a string keeps its first spelling, which CycleCollector follows too
+            if (items && items->HasKeyValues() && !visited[viaOpaque ? 1 : 0].count(items))
+            {
+                for (const auto& entry : *items)
+                {
+                    keys.push_back(items->KeyOf(entry.first));
+                    queueValue(keys.back(), viaOpaque);
+                }
+            }
             found = QueueItems(map->GetMutableItems(), target, viaOpaque, visited, queuePairValue);
         }
         else if (const auto* callable = GetIf<Callable>(val))
@@ -1893,7 +1904,7 @@ MapRef MapOf(const InternalValue& self)
     return *map;
 }
 
-InternalDict& MutableDict(const InternalValue& self)
+TemplateDict& MutableDict(const InternalValue& self)
 {
     auto* items = MapOf(self).GetMutableItems();
     if (!items)
@@ -1903,31 +1914,10 @@ InternalDict& MutableDict(const InternalValue& self)
     return *items;
 }
 
-// The keys in iteration order: insertion order for the dicts the template owns
-std::vector<std::string> KeysOf(const MapRef& map)
-{
-    if (auto* items = map.GetMutableItems())
-    {
-        std::vector<std::string> keys;
-        keys.reserve(items->size());
-        for (auto& [key, value] : *items)
-        {
-            keys.push_back(key);
-        }
-        return keys;
-    }
-    return map.GetKeys();
-}
-
 InternalValue DictKeys(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "keys", 0, 0);
-    InternalValueList result;
-    for (auto& key : KeysOf(MapOf(self)))
-    {
-        result.emplace_back(key);
-    }
-    return ListAdapter::CreateAdapter(std::move(result));
+    return ListAdapter::CreateAdapter(MapOf(self).GetKeyValues());
 }
 
 InternalValue DictValues(const InternalValue& self, const CallParams& params, RenderContext&)
@@ -1935,9 +1925,9 @@ InternalValue DictValues(const InternalValue& self, const CallParams& params, Re
     CheckArgs(params, "values", 0, 0);
     const auto& map = MapOf(self);
     InternalValueList result;
-    for (auto& key : KeysOf(map))
+    for (auto& entry : map.GetEntries())
     {
-        result.push_back(map.GetValueByName(key));
+        result.push_back(std::move(entry.value));
     }
     InternalValue list = ListAdapter::CreateAdapter(std::move(result));
     if (self.ShouldExtendLifetime())
@@ -1952,9 +1942,9 @@ InternalValue DictItems(const InternalValue& self, const CallParams& params, Ren
     CheckArgs(params, "items", 0, 0);
     const auto& map = MapOf(self);
     InternalValueList result;
-    for (auto& key : KeysOf(map))
+    for (auto& entry : map.GetEntries())
     {
-        result.push_back(MakeTuple({ InternalValue(key), map.GetValueByName(key) }));
+        result.push_back(MakeTuple({ std::move(entry.key), std::move(entry.value) }));
     }
     InternalValue list = ListAdapter::CreateAdapter(std::move(result));
     if (self.ShouldExtendLifetime())
@@ -1968,10 +1958,23 @@ InternalValue DictGet(const InternalValue& self, const CallParams& params, Rende
 {
     CheckArgs(params, "get", 1, 2);
     const auto& map = MapOf(self);
-    auto key = KeyString(params.posParams[0]);
-    if (map.HasValue(key))
+    const auto& key = params.posParams[0];
+    if (IsStringValue(key))
     {
-        return map.GetValueByName(key);
+        const auto name = AsString(key);
+        if (map.HasValue(name))
+        {
+            return map.GetValueByName(name);
+        }
+    }
+    else
+    {
+        // Python hashes the key first, also when the dict has no such key
+        CheckHashable(key);
+        if (auto found = map.FindItem(key))
+        {
+            return std::move(*found);
+        }
     }
     return params.posParams.size() > 1 ? params.posParams[1] : InternalValue(NoneValue());
 }
@@ -1980,19 +1983,22 @@ InternalValue DictSetdefault(const InternalValue& self, const CallParams& params
 {
     CheckArgs(params, "setdefault", 1, 2);
     auto& items = MutableDict(self);
-    auto key = KeyString(params.posParams[0]);
-    auto p = items.find(key);
+    const auto& key = params.posParams[0];
+    CheckHashable(key);
+    auto p = items.Find(key);
     if (p != items.end())
     {
         return p->second;
     }
     InternalValue value = params.posParams.size() > 1 ? params.posParams[1] : InternalValue(NoneValue());
+    // A key that is not a string is kept too, and a tuple key can hold a container
+    NoteContainerStore(self, &items, key);
     NoteContainerStore(self, &items, value);
-    items[key] = value;
+    items.Set(key, value);
     return value;
 }
 
-using DictUpdates = std::vector<std::pair<std::string, InternalValue>>;
+using DictUpdates = std::vector<std::pair<InternalValue, InternalValue>>;
 
 // The key-value pairs of an iterable of pairs, d.update([(k, v), ...])
 void CollectPairUpdates(const InternalValue& other, DictUpdates& updates)
@@ -2012,7 +2018,9 @@ void CollectPairUpdates(const InternalValue& other, DictUpdates& updates)
         {
             Raise("dictionary update sequence element has wrong length; 2 is required");
         }
-        updates.emplace_back(KeyString(pair[0]), pair[1]);
+        // A failing update leaves the dict as it was: the keys are checked before any is stored
+        CheckHashable(pair[0]);
+        updates.emplace_back(pair[0], pair[1]);
     }
 }
 
@@ -2022,9 +2030,9 @@ void CollectPositionalUpdates(const InternalValue& other, DictUpdates& updates)
     // An object such as namespace() is no mapping, and not iterable either
     if (auto otherMap = AsMap(other); otherMap && !otherMap->GetObjectClass())
     {
-        for (auto& key : KeysOf(*otherMap))
+        for (auto& entry : otherMap->GetEntries())
         {
-            updates.emplace_back(key, otherMap->GetValueByName(key));
+            updates.emplace_back(std::move(entry.key), std::move(entry.value));
         }
     }
     else
@@ -2047,16 +2055,17 @@ InternalValue DictUpdate(const InternalValue& self, const CallParams& params, Re
     }
     for (const auto& [name, value] : params.kwParams)
     {
-        updates.emplace_back(name, value);
+        updates.emplace_back(InternalValue(name), value);
     }
     auto& items = MutableDict(self);
-    for (auto& [name, value] : updates)
+    for (auto& [key, value] : updates)
     {
+        NoteContainerStore(self, &items, key);
         NoteContainerStore(self, &items, value);
     }
-    for (auto& [name, value] : updates)
+    for (auto& [key, value] : updates)
     {
-        items[name] = std::move(value);
+        items.Set(key, std::move(value));
     }
     return InternalValue(NoneValue());
 }
@@ -2065,18 +2074,21 @@ InternalValue DictPop(const InternalValue& self, const CallParams& params, Rende
 {
     CheckArgs(params, "pop", 1, 2);
     auto& items = MutableDict(self);
-    auto key = KeyString(params.posParams[0]);
-    auto p = items.find(key);
+    const auto& key = params.posParams[0];
+    CheckHashable(key);
+    auto p = items.Find(key);
     if (p == items.end())
     {
         if (params.posParams.size() > 1)
         {
             return params.posParams[1];
         }
-        Raise("KeyError: '" + key + "'");
+        std::string spelling;
+        Apply<visitors::ValueRenderer<char>>(key, spelling, true);
+        Raise("KeyError: " + spelling);
     }
     auto result = p->second;
-    items.erase(p);
+    items.Erase(p);
     return result;
 }
 
@@ -2089,8 +2101,8 @@ InternalValue DictPopitem(const InternalValue& self, const CallParams& params, R
         Raise("popitem(): dictionary is empty");
     }
     auto last = std::prev(items.end());
-    auto result = MakeTuple({ InternalValue(last->first), last->second });
-    items.erase(last);
+    auto result = MakeTuple({ items.KeyOf(last->first), last->second });
+    items.Erase(last);
     return result;
 }
 
@@ -2098,10 +2110,14 @@ InternalValue DictCopy(const InternalValue& self, const CallParams& params, Rend
 {
     CheckArgs(params, "copy", 0, 0);
     const auto& map = MapOf(self);
-    InternalDict result;
-    for (auto& key : KeysOf(map))
+    if (const auto* items = map.GetMutableItems())
     {
-        result[key] = map.GetValueByName(key);
+        return CreateMapAdapter(TemplateDict(*items));
+    }
+    TemplateDict result;
+    for (auto& entry : map.GetEntries())
+    {
+        result.Set(entry.key, std::move(entry.value));
     }
     return CreateMapAdapter(std::move(result));
 }
@@ -2109,7 +2125,7 @@ InternalValue DictCopy(const InternalValue& self, const CallParams& params, Rend
 InternalValue DictClear(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "clear", 0, 0);
-    MutableDict(self).clear();
+    MutableDict(self).Clear();
     return InternalValue(NoneValue());
 }
 
@@ -2319,7 +2335,7 @@ void StoreItem(const InternalValue& container, const InternalValue& key, Interna
         auto* items = map->GetMutableItems();
         if (items)
         {
-            (*items)[KeyString(key)] = std::move(value);
+            items->Set(key, std::move(value));
         }
     }
 }
@@ -2368,15 +2384,14 @@ InternalValue MakeMutable(const InternalValue& value)
     }
     if (auto map = AsMap(value))
     {
-        InternalDict items;
-        for (auto& key : map->GetKeys())
+        TemplateDict items;
+        for (auto& [key, item] : map->GetEntries())
         {
-            auto item = map->GetValueByName(key);
             if (extendLifetime)
             {
                 item.SetParentData(value);
             }
-            items[key] = std::move(item);
+            items.Set(key, std::move(item));
         }
         return CreateMapAdapter(std::move(items));
     }

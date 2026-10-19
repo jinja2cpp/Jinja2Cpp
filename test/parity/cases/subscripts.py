@@ -41,4 +41,7 @@ CASES = [
     ("dot_index_chain", "{{ d.b.c }}{{ users.1.name }}"),
     ("slice_extreme_step", "{{ l[1::9223372036854775807] }}|{{ l[::-9223372036854775807-1] }}"),
     ("tuple_index", "[{{ l[1, 2] }}][{{ l[] }}]"),
+    ('dict_unhashable_subscript', '[{{ {1:2}[[1]] }}]'),
+    ('dict_subscript_float_and_bool', "{{ {1: 'a'}[1.0] }}|{{ {1: 'a'}[true] }}|{{ {1.5: 'f'}[1.5] }}"),
+    ('dict_subscript_missing_non_string', "[{{ {1: 'a'}[2] }}][{{ {1: 'a'}[none] }}]"),
 ]

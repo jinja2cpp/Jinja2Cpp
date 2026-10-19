@@ -8,6 +8,7 @@
 #include "out_stream.h" // IWYU pragma: keep (GetStreamOnString returns an OutStream by value)
 #include "render_context.h"
 #include "string_builder.h"
+#include "template_dict.h"
 #include "testers.h"
 #include "undefined.h"
 #include "unicode_tables.h"
@@ -467,21 +468,37 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     struct SortItem
     {
         KeyValuePair* pair;
+        // The lowered key when case-insensitive and every key is a string
         std::string sortKey;
     };
     bool (*comparator)(const SortItem& left, const SortItem& right) = nullptr;
     bool lowerKeys = false;
+    bool sortByKey = false;
+    bool keysAreStrings = true;
+
+    auto entries = map->GetEntries();
 
     if (AsString(byVal) == "key") // Sort by key
     {
+        sortByKey = true;
         lowerKeys = !ConvertToBool(isCsVal);
-        if (lowerKeys)
+        // Narrow text, as map keys are UTF-8 (a template dict converts wide keys)
+        keysAreStrings = std::all_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return AsStringView<char>(entry.key).has_value(); });
+        if (keysAreStrings && lowerKeys)
         {
             comparator = [](const SortItem& left, const SortItem& right) { return left.sortKey < right.sortKey; };
         }
+        else if (keysAreStrings)
+        {
+            comparator = [](const SortItem& left, const SortItem& right) { return *AsStringView<char>(left.pair->key) < *AsStringView<char>(right.pair->key); };
+        }
         else
         {
-            comparator = [](const SortItem& left, const SortItem& right) { return left.pair->key < right.pair->key; };
+            // Python lowers only str keys, and a str key next to a key of another type
+            // fails the comparison either way, so other keys compare as they are
+            comparator = [](const SortItem& left, const SortItem& right) {
+                return CompareForOrder(left.pair->key, right.pair->key, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive);
+            };
         }
     }
     else if (AsString(byVal) == "value")
@@ -505,15 +522,14 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
         throw std::runtime_error(R"(You can only sort by either "key" or "value")");
     }
 
-    auto entries = map->GetEntries();
     std::vector<SortItem> tempVector;
     tempVector.reserve(entries.size());
     for (auto& entry : entries)
     {
         SortItem item{ &entry, std::string() };
-        if (lowerKeys)
+        if (sortByKey && keysAreStrings && lowerKeys)
         {
-            detail::LowerUtf8(entry.key, item.sortKey);
+            detail::LowerUtf8(*AsStringView<char>(entry.key), item.sortKey);
         }
         tempVector.push_back(std::move(item));
     }
@@ -956,37 +972,6 @@ struct UniqueItem
     int64_t idx;
 };
 
-// The type Python's hash() rejects in a value, if any: a list or a dict, also inside a
-// tuple. A range hashes, and so does an object stored as a map (namespace(), cycler()) or
-// a host object (a reflected struct, which Python would hold as an object, or a JSON object)
-struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
-{
-    using visitors::BaseVisitor<const char*>::operator();
-
-    const char* operator()(const ListRef& list) const
-    {
-        if (list.GetRangeInfo())
-        {
-            return nullptr;
-        }
-        if (!list.IsTuple())
-        {
-            return "list";
-        }
-        const char* result = nullptr;
-        list.ForEach([&result](const InternalValue& item) {
-            result = Apply<UnhashableTypeGetter>(item);
-            return result == nullptr;
-        });
-        return result;
-    }
-    const char* operator()(const MapRef& map) const
-    {
-        return map.GetObjectClass() || map.GetAttrPolicy() == MapAttrPolicy::KeysFirst ? nullptr : "dict";
-    }
-    const char* operator()(const KeyValuePair& pair) const { return Apply<UnhashableTypeGetter>(pair.value); }
-};
-
 // Drops repeated keys, keeping the first of each in its original position
 void DropDuplicates(std::vector<UniqueItem>& items, BinaryExpression::CompareType compType)
 {
@@ -1047,7 +1032,7 @@ InternalValue Unique(const ListAdapter& list,
     // Jinja2 keeps a set of the keys it saw
     for (const auto& item : items)
     {
-        if (const char* type = Apply<UnhashableTypeGetter>(item.val))
+        if (const char* type = UnhashableType(item.val))
         {
             throw std::runtime_error("unhashable type: '"s + type + "'");
         }
@@ -1680,7 +1665,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             return InternalValue();
         }
 
-        return ListAdapter::CreateAdapter(InternalValueList{ InternalValue(val.key), val.value });
+        return ListAdapter::CreateAdapter(InternalValueList{ val.key, val.value });
     }
 
     InternalValue operator()(const MapRef& val) const
@@ -1694,9 +1679,9 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
             throw std::runtime_error("'"s + objectClass + "' object is not iterable");
         }
 
-        auto keys = val.GetKeys();
+        auto keys = val.GetKeyValues();
         auto numKeys = keys.size();
-        return ListAdapter::CreateAdapter(numKeys, [values = std::move(keys)](size_t idx) { return InternalValue(values[idx]); });
+        return ListAdapter::CreateAdapter(numKeys, [values = std::move(keys)](size_t idx) { return values[idx]; });
     }
 
     template<typename T>
@@ -2350,7 +2335,7 @@ InternalValue ValueConverter::Items(const InternalValue& baseVal, RenderContext&
     InternalValueList items;
     for (auto& [key, value] : map->GetEntries())
     {
-        items.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(std::move(key)), std::move(value) }).MarkAsTuple());
+        items.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ std::move(key), std::move(value) }).MarkAsTuple());
     }
     InternalValue result = ListAdapter::CreateAdapter(std::move(items));
     if (baseVal.ShouldExtendLifetime())

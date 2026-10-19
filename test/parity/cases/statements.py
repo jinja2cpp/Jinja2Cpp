@@ -96,6 +96,8 @@ CASES = [
     ("namespace_missing_attr", "{% set ns = namespace() %}[{{ ns.a }}]"),
     ("namespace_contains_itself", "{% set ns = namespace(a=1) %}{% set ns.a = ns %}{{ ns }}|{{ 'T' if ns.a.a.a is sameas ns else 'F' }}"),
     ("namespace_contains_itself_in_list", "{% set ns = namespace() %}{% set ns.l = [ns] %}{{ ns }}"),
+    ("namespace_contains_itself_through_key", "{% set ns = namespace() %}{% set d = {(ns, 1): 1} %}{% set ns.d = d %}{{ d|length }}"),
+    ("dict_contains_itself_through_setdefault_key", "{% set ns = namespace() %}{% set d = {} %}{% set ns.d = d %}{{ d.setdefault((ns, 1), 2) }}|{{ d|length }}"),
     ("namespace_set_on_dict", "{% set m = {} %}{% set m.a = 1 %}"),
     ("namespace_set_on_undefined", "{% set nope.a = 1 %}"),
     ("namespace_keeps_loop", "{% set ns = namespace() %}{% for i in l %}{% set ns.x = loop %}{% endfor %}{{ ns.x.index }}{{ ns.x.length }}{{ ns.x.revindex }}{{ 'T' if ns.x.last else 'F' }}"),
@@ -437,4 +439,6 @@ CASES = [
     # the else frame binds at entry, and its set hides a loop target outside only there (docs/tasks/0202)
     ('idtracking_loop_else_binds_at_entry', '{% for i in e %}{% else %}{% for k in [1] %}{{ x }}{% endfor %}{% set x = 1 %}{% endfor %}'),
     ('loop_else_set_keeps_outer_target', '{% for x in [1] %}{% for j in e %}{% else %}{% set x = 2 %}{{ x }}{% endfor %}{{ x }}{% endfor %}'),
+    ('for_dict_int_keys', "{% for k in {1: 'a', 2: 'b'} %}{{ k + 1 }}{% endfor %}|{% for k, v in {2: 'a'}.items() %}{{ k }}{{ v }}{% endfor %}|{% for k, v in {20: 'x', 10: 'y'}|dictsort %}{{ k }}{% endfor %}"),
+    ('for_dict_tuple_key_unpack', "{% for k, v in {(1, 2): 'a'}.items() %}{{ k[0] }}{{ k[1] }}{{ v }}{% endfor %}"),
 ]

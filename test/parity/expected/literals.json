@@ -569,6 +569,62 @@
    "env": {},
    "templates": {},
    "output": "[][]"
+  },
+  {
+   "id": "literals.dict_int_key_print",
+   "template": "{{ {1: 'x', '1': 'y'} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{1: 'x', '1': 'y'}"
+  },
+  {
+   "id": "literals.dict_numeric_keys_merge",
+   "template": "{{ {1:'a', 1.0:'b', True:'c'} }}|{{ {1.0:'x'} }}|{{ {True:1}[1] }}|{{ {0:'z'}[false] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{1: 'c'}|{1.0: 'x'}|1|z"
+  },
+  {
+   "id": "literals.dict_other_hashable_keys",
+   "template": "{{ {none:1, 1.5:2, (1,2):3} }}|{{ {(1,2):3}[(1,2)] }}|{{ {(1,2.0):3}[(1.0,2)] }}|{{ {none:1}[none] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{None: 1, 1.5: 2, (1, 2): 3}|3|3|1"
+  },
+  {
+   "id": "literals.dict_int_key_not_string",
+   "template": "{{ {1:'x'}['1'] is defined }}|{{ {'1':'x'}[1] is defined }}|{{ {1:2}.1 }}|{{ {-1:2}[-1] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "False|False|2|2"
+  },
+  {
+   "id": "literals.dict_float_keys",
+   "template": "{{ {0.1+0.2:'x'} }}|{{ {-0.0:'x', 0:'y'} }}|{{ {1e100:'x'} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{0.30000000000000004: 'x'}|{-0.0: 'y'}|{1e+100: 'x'}"
+  },
+  {
+   "id": "literals.dict_key_range_and_nested_tuple",
+   "template": "{{ {range(3): 'r', ((1, 2), 'a'): 'n'} }}|{{ {range(3): 'r'}[range(0, 3)] }}|{{ {((1, 2), 'a'): 'n'}[((1.0, 2), 'a')] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{range(0, 3): 'r', ((1, 2), 'a'): 'n'}|r|n"
+  },
+  {
+   "id": "literals.dict_key_big_float_is_float",
+   "template": "{{ {2.0**63: 'f'}[2.0**63] }}|{{ {2.0**63: 'f'} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "f|{9.223372036854776e+18: 'f'}"
   }
  ]
 }

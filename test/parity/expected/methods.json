@@ -2129,6 +2129,218 @@
    "env": {},
    "templates": {},
    "output": "False"
+  },
+  {
+   "id": "methods.dict_methods_non_string_keys",
+   "template": "{% set d = {1: 'a'} %}{{ d.get(1) }}|{{ d.get(1.0) }}|{{ d.get('1', 'none') }}|{{ d.keys()|list }}|{{ d.setdefault(2.0, 'b') }}|{% do d.update({(1, 2): 'c'}) %}{{ d }}|{{ d.pop(1) }}|{{ d.popitem() }}|{{ d }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "a|a|none|[1]|b|{1: 'a', 2.0: 'b', (1, 2): 'c'}|a|((1, 2), 'c')|{2.0: 'b'}"
+  },
+  {
+   "id": "methods.dict_get_host_int_key",
+   "template": "{{ dd.get(1) }}|{{ dd.get(1, 'dflt') }}",
+   "context": {
+    "dd": {
+     "1": 2
+    }
+   },
+   "env": {},
+   "templates": {},
+   "output": "None|dflt"
+  },
+  {
+   "id": "methods.dict_pop_missing_int",
+   "template": "{{ {}.pop(1) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "KeyError",
+    "message": "1"
+   }
+  },
+  {
+   "id": "methods.format_index_int_key",
+   "template": "{{ '{0[1]}'.format({1: 2}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "2"
+  },
+  {
+   "id": "methods.dict_update_pairs_and_kwargs",
+   "template": "{% set d = {1: 'a'} %}{% do d.update([(1.0, 'b'), (None, 'n')], z=1) %}{{ d }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{1: 'b', None: 'n', 'z': 1}"
+  },
+  {
+   "id": "methods.dict_copy_keeps_keys",
+   "template": "{% set d = {1: 'a', (2, 3): 'b'} %}{% set c = d.copy() %}{% do c.update({1: 'x'}) %}{{ d }}|{{ c }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{1: 'a', (2, 3): 'b'}|{1: 'x', (2, 3): 'b'}"
+  },
+  {
+   "id": "methods.dict_setdefault_existing_float",
+   "template": "{% set d = {1: 'a'} %}{{ d.setdefault(1.0, 'z') }}{{ d }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "a{1: 'a'}"
+  },
+  {
+   "id": "methods.dict_update_unhashable_unchanged",
+   "template": "{% set d = {1: 'a'} %}{% do d.update([(2, 'b'), ([3], 'c')]) %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "methods.dict_store_item_non_string",
+   "template": "{% set d = {1: 'a'} %}{% do d.update({2: 'b'}) %}{{ d[2] }}{{ d.get(2) }}{{ d|length }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "bb2"
   }
  ]
 }

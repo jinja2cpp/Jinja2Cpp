@@ -10,6 +10,7 @@
 #include "python_format.h"
 #include "recursion_guard.h"
 #include "render_context.h"
+#include "template_dict.h"
 #include "testers.h"
 #include "undefined.h"
 #include "value_methods.h"
@@ -843,29 +844,6 @@ InternalValue TupleCreator::Evaluate(RenderContext& context)
     return list;
 }
 
-namespace
-{
-// Mapping keys are strings in the value model; integer and boolean keys are stored as
-// their decimal or Python spelling, so {1: 'x'} has the key '1'
-struct DictKeyGetter : public visitors::BaseVisitor<std::string>
-{
-    using BaseVisitor::operator();
-
-    template<typename CharT>
-    std::string operator()(const std::basic_string<CharT>& str) const
-    {
-        return ConvertString<std::string>(str);
-    }
-    template<typename CharT>
-    std::string operator()(const std::basic_string_view<CharT>& str) const
-    {
-        return ConvertString<std::string>(str);
-    }
-    std::string operator()(int64_t val) const { return std::to_string(val); }
-    std::string operator()(bool val) const { return val ? "True" : "False"; }
-};
-} // namespace
-
 bool DictCreator::IsFoldable(const NodeArena& nodes) const
 {
     const auto items = nodes[m_exprs];
@@ -876,13 +854,15 @@ InternalValue DictCreator::Evaluate(RenderContext& context)
 {
     CheckStack();
     const auto nodes = context.Nodes();
-    InternalDict result;
+    TemplateDict result;
     for (const auto& item : nodes[m_exprs])
     {
         // Python evaluates the key before the value; an assignment does not fix that order
-        auto key = Apply<DictKeyGetter>(nodes[item.key].Evaluate(context));
+        const auto key = nodes[item.key].Evaluate(context);
         auto value = nodes[item.value].Evaluate(context);
-        result[std::move(key)] = std::move(value);
+        // Any hashable key; an unhashable one is a TypeError. A repeated key (1 and 1.0) keeps
+        // its first spelling and position and takes the last value
+        result.Set(key, std::move(value));
     }
 
     return CreateMapAdapter(std::move(result));

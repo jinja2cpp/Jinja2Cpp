@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0013]
@@ -26,3 +26,26 @@ tuple), which touches the public API and is worth doing only together with 0031.
 **Release decision (Ruslan 2026-10-18, D13 in docs/release-2.0.md).** In 2.0, template-internal
 only: the public `ValuesMap` key type stays `std::string` unless the architect plan shows a
 public need.
+
+**Shipped (D13 = b).** Dict literals, `dict()`, `namespace()` and the results of the dict
+methods take any hashable key (`src/template_dict.*`): `1`, `1.0` and `True` are one key
+(first spelling and position kept, last value wins), so are `(1, 2.0)` and `(1.0, 2)`;
+`none`, floats, tuples and ranges are keys; a list or a dict raises `TypeError: unhashable
+type`. Subscript, `in`, `get`, `setdefault`, `update`, `pop`, `popitem`, `copy`, iteration,
+`items`, `dictsort`, `pprint`, `tojson`, `xmlattr`, `urlencode` and `==` follow Python. The
+public `ValuesMap`/`GenericMap` keys stay `std::string`.
+
+*Conversion rule at the public boundary* (`CreateGenericMap` of a template dict, what a user
+callable receives): a dict with a key that is not a string is handed over as a snapshot, not a
+live view, keyed by `str(key)` (`{1: 'x', None: 'y'}` has the keys `"1"` and `"None"`). When two
+keys spell alike (`{1: 'x', '1': 'y'}`) the later value wins at the position of the first, as
+Python's `{str(k): v for k, v in d.items()}` has it. A dict of string keys stays a live view.
+Changing this rule later is a break for callers who rely on it.
+
+*Not done:* object keys (`{namespace(): 1}`, host objects, callables, undefined) have no
+identity token yet and all read as the empty string when stored, as before, while a lookup by
+one finds nothing (`nothing in {'': 1}` is False); that is the first bullet of
+0212 (`globals.object_dict_key` stays listed). All NaN keys are one key (Python compares NaN by
+identity).
+The render's cycle collector (0110) follows the kept keys too, so a cycle through a key
+(`{% set d = {(ns, 1): 1} %}{% set ns.d = d %}`) is freed when the render ends.
