@@ -45,7 +45,7 @@ are what this codebase has actually got wrong.
   boundary is `detail::CurrentExceptionToError` (`src/error_boundary.h`): a host
   `jinja2::Exception` keeps its code, any other exception becomes `UnexpectedException`,
   and `GetException()` holds the original only when the exception came from outside the
-  engine. An engine limit throws `ResourceLimitError` (`src/resource_limit.h`, code 18,
+  engine. An engine limit throws `ResourceLimitError` (`src/engine_errors.h`, code 18,
   no exception kept), not a bare `std::length_error`. Flag a catch that swallows
   `std::bad_alloc` (a `catch (std::exception&)` or `catch (...)` that does not rethrow it),
   a `noexcept` function or destructor that can allocate or throw, a value returned into

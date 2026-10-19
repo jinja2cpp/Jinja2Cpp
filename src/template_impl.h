@@ -278,9 +278,19 @@ public:
         {
             TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name, nodes);
             // Jinja2 passes None for a template from a string. A selector that throws fails the Load
+            // as host code, whatever it throws (an ErrorInfo too)
             if (const auto& selector = m_settings->settings.autoescapeSelector)
             {
-                parser.SetAutoescape(selector(isNamed ? name : std::string()));
+                bool autoescape = false;
+                try
+                {
+                    autoescape = selector(isNamed ? name : std::string());
+                }
+                catch (...)
+                {
+                    return detail::CurrentExceptionToError<CharT>(name);
+                }
+                parser.SetAutoescape(autoescape);
             }
 
             auto parseResult = parser.Parse();

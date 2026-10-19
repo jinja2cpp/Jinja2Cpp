@@ -758,6 +758,23 @@ TEST(ErrorContractTest, ExceptionRecordsOrigin)
 
 // A big integer is stored, not refused; one that reaches a template (until docs/tasks/0270) is an
 // error the engine raises, so it carries no exception
+// The autoescape selector is host code: whatever it throws, an ErrorInfo included, is
+// UnexpectedException with the exception kept
+TEST(ErrorContractTest, ThrowingAutoescapeSelectorIsHostException)
+{
+    TemplateEnv env;
+    env.GetSettings().autoescapeSelector = [](const std::string&) -> bool {
+        ErrorInfo::Data data;
+        data.code = ErrorCode::TemplateNotFound;
+        throw ErrorInfo(data);
+    };
+    auto tpl = env.FromString("x");
+    ASSERT_FALSE(tpl.has_value());
+    EXPECT_EQ(ErrorCode::UnexpectedException, tpl.error().GetCode());
+    ASSERT_TRUE(tpl.error().GetException());
+    EXPECT_THROW(std::rethrow_exception(tpl.error().GetException()), ErrorInfo);
+}
+
 TEST(ErrorContractTest, BigIntInTemplateIsIntegerOutOfRange)
 {
     const auto big = static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1;
