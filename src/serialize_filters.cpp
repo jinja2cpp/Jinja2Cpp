@@ -8,6 +8,7 @@
 #include "recursion_guard.h"
 #include "render_context.h"
 #include "string_builder.h"
+#include "template_dict.h"
 #include "undefined.h"
 #include "unicode_printable.h"
 #include "value_visitors.h"
@@ -909,15 +910,14 @@ private:
             // namespace(), cycler() and joiner() are objects, not data
             throw std::runtime_error("Object of type "s + objectClass + " is not YAML serializable");
         }
-        // Keys other than strings (docs/tasks/0036) are not written as YAML mapping keys
+        // A key that is not a string is written as its str() spelling (DictKeyText), as at the
+        // public boundary (docs/tasks/0036)
+        const auto entries = map.GetEntries();
         std::vector<std::string> keys;
-        for (const auto& entry : map.GetEntries())
+        keys.reserve(entries.size());
+        for (const auto& entry : entries)
         {
-            if (!IsStringValue(entry.key))
-            {
-                throw std::runtime_error("Only string dictionary keys are YAML serializable");
-            }
-            keys.push_back(AsString(entry.key));
+            keys.push_back(IsStringValue(entry.key) ? AsString(entry.key) : DictKeyText(entry.key));
         }
         if (keys.empty())
         {
@@ -926,8 +926,9 @@ private:
             return;
         }
         bool isFirst = true;
-        for (const auto& key : keys)
+        for (size_t idx = 0; idx != keys.size(); ++idx)
         {
+            const auto& key = keys[idx];
             if (isFirst)
             {
                 StartNode(pos, indent, true);
@@ -950,7 +951,7 @@ private:
                 WriteString(key);
             }
             m_out.push_back(':');
-            WriteNode(map.GetValueByName(key), indent + 2, Position::MappingValue);
+            WriteNode(entries[idx].value, indent + 2, Position::MappingValue);
         }
     }
 
