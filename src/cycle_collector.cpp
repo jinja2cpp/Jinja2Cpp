@@ -13,6 +13,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 namespace
 {
@@ -268,4 +270,5 @@ void CycleCollector::Collect() noexcept
     m_notes->candidates.clear();
 }
 
+} // namespace v2
 } // namespace jinja2

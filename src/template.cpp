@@ -21,6 +21,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 namespace
 {
 template<typename CharT>
@@ -189,4 +191,5 @@ template class BasicTemplate<char>;
 template class BasicTemplate<wchar_t>;
 #endif
 
+} // namespace v2
 } // namespace jinja2

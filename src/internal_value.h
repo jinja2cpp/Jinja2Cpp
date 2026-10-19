@@ -45,6 +45,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 template<class T>
 class ReferenceWrapper
@@ -1778,6 +1780,7 @@ static_assert(std::is_nothrow_move_assignable_v<InternalValue>);
 Value IntValue2Value(const InternalValue& val);
 Value OptIntValue2Value(std::optional<InternalValue> val);
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_INTERNAL_VALUE_H

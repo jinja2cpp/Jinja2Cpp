@@ -12,6 +12,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 // The dict a template owns (dict literals, dict(), namespace(), the result of the dict methods):
 // Python keys, which are any hashable value, over the string keys of InternalDict (docs/tasks/0036).
 //
@@ -109,6 +111,7 @@ private:
     std::unique_ptr<KeyTable> m_keys;
 };
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_TEMPLATE_DICT_H

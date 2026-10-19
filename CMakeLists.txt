@@ -457,6 +457,12 @@ if (JINJA2CPP_BUILD_TESTS)
     add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests --gtest_filter=-Parity*)
     # Differential corpus against Python Jinja2, see test/parity/README.md
     add_test(NAME jinja2cpp_parity COMMAND jinja2cpp_tests --gtest_filter=Parity*)
+    # Every jinja2 symbol the library defines is in the inline ABI namespace v2 (docs/tasks/0076)
+    if (CMAKE_NM AND NOT MSVC)
+        add_test(NAME jinja2cpp_abi_namespace
+            COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_NM} -DLIBRARY=$<TARGET_FILE:jinja2cpp>
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/test/abi_symbols.cmake)
+    endif ()
 
     if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
         set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")

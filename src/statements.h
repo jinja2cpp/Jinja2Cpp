@@ -22,6 +22,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 class Statement : public IRendererBase
 {
 public:
@@ -962,6 +964,7 @@ private:
     ArenaSpan<SlotName> m_names;
 };
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_STATEMENTS_H

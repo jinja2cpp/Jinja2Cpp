@@ -22,6 +22,8 @@ JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 namespace detail
 {
@@ -379,6 +381,7 @@ private:
     std::shared_ptr<detail::TemplateEnvImpl> m_impl;
 };
 
+} // namespace v2
 } // namespace jinja2
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END

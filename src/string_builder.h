@@ -14,6 +14,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 // The text of a string value being built: the first 500 characters on the stack, so that the
 // finished value allocates once, its object holding the characters (docs/tasks/0151). Code that
@@ -64,6 +66,7 @@ private:
     fmt::basic_memory_buffer<CharT> m_buffer;
 };
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_STRING_BUILDER_H

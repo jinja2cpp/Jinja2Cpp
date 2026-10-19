@@ -15,6 +15,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 namespace
 {
 // Every printing form of Value meets here, so none can print differently from {{ value }}:
@@ -123,4 +125,5 @@ std::to_chars_result Value::ToChars(char* first, char* last) const noexcept
     }
 }
 
+} // namespace v2
 } // namespace jinja2

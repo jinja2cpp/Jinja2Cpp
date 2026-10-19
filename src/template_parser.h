@@ -50,6 +50,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 template<typename CharT>
 struct ParserTraits;
 
@@ -2391,6 +2393,7 @@ std::unordered_map<int, MultiStringLiteral> ParserTraitsBase<T>::s_tokens = {
     { Token::ExprEnd, UNIVERSAL_STR("}}") },
 };
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_TEMPLATE_PARSER_H

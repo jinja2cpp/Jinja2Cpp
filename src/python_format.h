@@ -12,6 +12,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 // Python's printf-style formatting, `format % values`, for a UTF-8 format string. `values` is
 // what Python's right operand is: a tuple (a list marked as tuple) of positional arguments, a
@@ -78,6 +80,7 @@ private:
     std::vector<PercentDirective> m_pieces;
 };
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_PYTHON_FORMAT_H

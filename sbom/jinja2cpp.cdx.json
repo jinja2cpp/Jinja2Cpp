@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:11349e2e-8f15-5505-bdfe-c51fdcc762fb",
+  "serialNumber": "urn:uuid:6517a686-4ed3-5d9a-9ee7-94f64aa14c22",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -1122,7 +1122,7 @@
         }
       ],
       "pedigree": {
-        "notes": "both at upstream 57f2e7a, moved to namespace jinja2::detail::xyz with JINJA2CPP_XYZ_ macros (0076); indirect: Clang incomplete-type fix (0edc34d), tag tested first (0072); polymorphic: default constructor constrained on the allocator for MSVC std::variant (0071), cb_ initialised (0089), in-place initializer_list constructor creates U, not T"
+        "notes": "both at upstream 57f2e7a, moved to namespace jinja2::v2::detail::xyz with JINJA2CPP_XYZ_ macros (0076); indirect: Clang incomplete-type fix (0edc34d), tag tested first (0072); polymorphic: default constructor constrained on the allocator for MSVC std::variant (0071), cb_ initialised (0089), in-place initializer_list constructor creates U, not T"
       },
       "properties": [
         {
@@ -1147,7 +1147,7 @@
         },
         {
           "name": "jinja2cpp:used-for",
-          "value": "polymorphic and indirect (jinja2::detail::xyz) behind jinja2::types and jinja2::detail (value_ptr.h), used by Value, GenericList and GenericMap"
+          "value": "polymorphic and indirect (jinja2::v2::detail::xyz) behind jinja2::types and jinja2::detail (value_ptr.h), used by Value, GenericList and GenericMap"
         },
         {
           "name": "jinja2cpp:why",
@@ -1159,15 +1159,15 @@
         },
         {
           "name": "jinja2cpp:modified",
-          "value": "both at upstream 57f2e7a, moved to namespace jinja2::detail::xyz with JINJA2CPP_XYZ_ macros (0076); indirect: Clang incomplete-type fix (0edc34d), tag tested first (0072); polymorphic: default constructor constrained on the allocator for MSVC std::variant (0071), cb_ initialised (0089), in-place initializer_list constructor creates U, not T"
+          "value": "both at upstream 57f2e7a, moved to namespace jinja2::v2::detail::xyz with JINJA2CPP_XYZ_ macros (0076); indirect: Clang incomplete-type fix (0edc34d), tag tested first (0072); polymorphic: default constructor constrained on the allocator for MSVC std::variant (0071), cb_ initialised (0089), in-place initializer_list constructor creates U, not T"
         },
         {
           "name": "jinja2cpp:file",
-          "value": "include/jinja2cpp/polymorphic_value/indirect_cxx14.h sha256:b00dba6183edea9532030a373956ecab3638b6c5cfe61f40cbe862fba701dce3"
+          "value": "include/jinja2cpp/polymorphic_value/indirect_cxx14.h sha256:14f328d0de7e26f047178a58d443b0316a2ecd69e1ec05007d6a3aeb23290d6a"
         },
         {
           "name": "jinja2cpp:file",
-          "value": "include/jinja2cpp/polymorphic_value/polymorphic_cxx14.h sha256:eb0e46a2c95e693be7a192c1a992ece6e6fb900235ac44620f220bd646b2e372"
+          "value": "include/jinja2cpp/polymorphic_value/polymorphic_cxx14.h sha256:3d46bb50b19a3f22284aa89866a9a521325456bf3e00f7245a42852ffb9a4db1"
         }
       ]
     },
@@ -1229,15 +1229,15 @@
         },
         {
           "name": "jinja2cpp:file",
-          "value": "src/unicode_printable.h sha256:bb7537033f18a1847f7cdb89bb19bcdee61f8afe6fd0d24891ab6967bccb38dc"
+          "value": "src/unicode_printable.h sha256:7cc795a76469cb82072a59c4f19bf92c231668a28497236e9f90f68eb7887f4d"
         },
         {
           "name": "jinja2cpp:file",
-          "value": "src/unicode_tables.h sha256:5d3160113753deb6394ff66d867522a1c0303da0bfcc83bafaa027cfbbe3b96b"
+          "value": "src/unicode_tables.h sha256:67feccba784328f3fa4f8ea65d5eb03ab0a118532df178c209777a72d38437c0"
         },
         {
           "name": "jinja2cpp:file",
-          "value": "src/unicode_case.h sha256:5e7881179bb8cedcc76abef282540138f317cda02286077ced320d06640ce3c3"
+          "value": "src/unicode_case.h sha256:6e6bc5f2a2b505fa82477a2f88c0f8a77e2d2adc2e7e136e869bae9a15fe2243"
         },
         {
           "name": "jinja2cpp:generator",
@@ -1265,7 +1265,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "83c2e14ba7b52dfd5befbba8f3bca85e0f8bbaf5696cc647c8372602ebc5ed1e"
+          "content": "faabd9fba5045264f159834f0f6d9eec1a281bb3349c7315231b6ac56d5f4ea6"
         }
       ],
       "licenses": [
@@ -1317,7 +1317,7 @@
         },
         {
           "name": "jinja2cpp:file",
-          "value": "src/html_entities.h sha256:83c2e14ba7b52dfd5befbba8f3bca85e0f8bbaf5696cc647c8372602ebc5ed1e"
+          "value": "src/html_entities.h sha256:faabd9fba5045264f159834f0f6d9eec1a281bb3349c7315231b6ac56d5f4ea6"
         },
         {
           "name": "jinja2cpp:generator",

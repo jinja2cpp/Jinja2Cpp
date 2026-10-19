@@ -11,6 +11,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 // Limits that keep hostile or runaway templates from overflowing the stack (docs/tasks/0003).
 //
@@ -189,6 +191,7 @@ private:
     DepthGuard m_guard;
 };
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_RECURSION_GUARD_H

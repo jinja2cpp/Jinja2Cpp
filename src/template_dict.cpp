@@ -21,6 +21,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 namespace
 {
 // The kind byte after the mark. Built from char constants, never from string literals: a
@@ -484,4 +486,5 @@ InternalValue TemplateDict::KeyOf(const std::string& stored) const
     return InternalValue(stored);
 }
 
+} // namespace v2
 } // namespace jinja2

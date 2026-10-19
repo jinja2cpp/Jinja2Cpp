@@ -4,3 +4,6 @@
 
 # docs/tasks/0060: braces around every single-statement body (clang-format InsertBraces)
 33b30998156056c4de59dcb0ce598390602ab253
+
+# docs/tasks/0076: namespace jinja2 wrapped in inline namespace v2 (scripts/abi_namespace.py)
+ae4649c98baaf1999e99096f7d39ef7a4dca2b8d

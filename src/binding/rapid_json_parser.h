@@ -14,6 +14,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 namespace detail
 {
@@ -68,6 +70,7 @@ nonstd::expected<Value, std::string> Parse(std::basic_string_view<CharT> json, b
     return Reflect(jsonDoc);
 }
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_RAPID_JSON_PARSER_H

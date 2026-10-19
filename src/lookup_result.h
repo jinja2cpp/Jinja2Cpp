@@ -7,6 +7,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 // Where a lookup found a value, or nothing: a nullable reference to a value stored elsewhere
 // (a scope, a constant node), read in place instead of copied (docs/tasks/0088, 0117). It is
 // valid while what holds the value is unchanged: for a variable, until a scope of the
@@ -47,6 +49,7 @@ private:
 using LookupResult = BasicLookupResult<const InternalValue>;
 // A variable found for changing in place (docs/tasks/0020)
 using MutableLookupResult = BasicLookupResult<InternalValue>;
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_LOOKUP_RESULT_H

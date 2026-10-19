@@ -19,6 +19,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 namespace detail
 {
 
@@ -247,6 +249,7 @@ struct Reflector<boost::json::value>
     }
 };
 
+} // namespace v2
 } // namespace jinja2
 
 #endif //  JINJA2CPP_BINDING_BOOST_JSON_H

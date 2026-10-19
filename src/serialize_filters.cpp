@@ -32,7 +32,11 @@
 
 using namespace std::string_literals;
 
-namespace jinja2::filters
+namespace jinja2
+{
+inline namespace v2
+{
+namespace filters
 {
 struct PrettyPrinter : visitors::BaseVisitor<std::string>
 {
@@ -1104,4 +1108,6 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     return resultVal;
 }
 
-} // namespace jinja2::filters
+} // namespace filters
+} // namespace v2
+} // namespace jinja2

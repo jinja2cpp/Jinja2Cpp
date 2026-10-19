@@ -12,6 +12,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 namespace detail
 {
 //! Integral types a \ref BigInt is made from: all except `bool` and the character types, as for \ref Value
@@ -204,6 +206,7 @@ private:
 
     std::string m_decimal = "0";
 };
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_BIG_INT_H

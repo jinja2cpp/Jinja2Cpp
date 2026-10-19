@@ -14,6 +14,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 namespace
 {
@@ -132,4 +134,5 @@ const char* UndefinedClassName(const UndefinedInfo& info)
     return "Undefined";
 }
 
+} // namespace v2
 } // namespace jinja2

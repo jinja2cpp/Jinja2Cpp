@@ -17,6 +17,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 // A hash map that iterates in insertion order, like a Python dict (docs/tasks/0031, 0043). It is the base of
 // the public ValuesMap and of the library's own dicts.
@@ -408,6 +410,7 @@ private:
     std::unordered_map<KeyRef, iterator, KeyRefHash, KeyRefEqual> m_index;
 };
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_UTILS_ORDERED_MAP_H

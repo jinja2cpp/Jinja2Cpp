@@ -16,6 +16,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 struct GlobalsSnapshot;
 
 namespace detail
@@ -171,6 +173,7 @@ private:
     std::vector<std::unique_ptr<RenderMaps>> m_maps;
     std::size_t m_lentMaps = 0;
 };
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_RENDER_WORKSPACE_H

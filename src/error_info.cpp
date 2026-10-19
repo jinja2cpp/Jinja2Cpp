@@ -142,6 +142,8 @@ struct formatter<jinja2::Value, CharT>
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 template<typename CharT>
 void RenderErrorInfo(std::basic_string<CharT>& result, const BasicErrorInfo<CharT>& errInfo)
@@ -330,4 +332,5 @@ std::wostream& operator<<(std::wostream& os, const ErrorInfoW& res)
     os << res.ToString();
     return os;
 }
+} // namespace v2
 } // namespace jinja2

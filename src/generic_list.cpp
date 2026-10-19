@@ -3,6 +3,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 GenericList::iterator GenericList::begin() const
 {
@@ -47,4 +49,5 @@ bool operator!=(const GenericList& lhs, const GenericList& rhs)
     return !(lhs == rhs);
 }
 
+} // namespace v2
 } // namespace jinja2

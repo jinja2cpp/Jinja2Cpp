@@ -19,6 +19,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 class BindUndefinedStatement;
 class ForStatement;
 class IRendererBase;
@@ -277,6 +279,7 @@ private:
     bool m_inBranch = false;
     bool m_hasSlots = false;
 };
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_NAME_RESOLVER_H

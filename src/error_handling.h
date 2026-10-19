@@ -12,6 +12,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 struct ParseError
 {
@@ -49,5 +51,6 @@ inline auto MakeParseError(ErrorCode code, Token tok, std::initializer_list<Toke
     return MakeUnexpected(ParseError{ code, std::move(tok), toks });
 }
 
+} // namespace v2
 } // namespace jinja2
 #endif // JINJA2CPP_SRC_ERROR_HANDLING_H

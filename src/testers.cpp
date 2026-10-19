@@ -24,7 +24,11 @@
 
 using namespace std::string_literals;
 
-namespace jinja2::testers
+namespace jinja2
+{
+inline namespace v2
+{
+namespace testers
 {
 
 Comparator::Comparator(const TesterParams& params, BinaryExpression::Operation op)
@@ -611,4 +615,6 @@ bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& contex
 
     return ConvertToBool(callable->GetExpressionCallable()(callParams, context));
 }
-} // namespace jinja2::testers
+} // namespace testers
+} // namespace v2
+} // namespace jinja2

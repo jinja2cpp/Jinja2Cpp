@@ -29,6 +29,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 namespace
 {
 // Stack left free for the work between two checks: a filter, a value conversion, the
@@ -104,4 +106,5 @@ bool StackNearlyExhaustedSlow(std::uintptr_t frame)
 }
 } // namespace detail
 
+} // namespace v2
 } // namespace jinja2

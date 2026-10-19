@@ -11,6 +11,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 // Where a render writes its output. A render to a string, the common case, gathers the
 // output in a small buffer and appends it to the string a buffer at a time: a fragment
 // costs a bounds check and a memcpy, with no virtual call (docs/tasks/0113). Any other
@@ -171,6 +173,7 @@ TargetString RenderToString(Callback* callback, Fn&& render)
     return result;
 }
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_OUT_STREAM_H

@@ -42,7 +42,11 @@
 
 using namespace std::string_literals;
 
-namespace jinja2::filters
+namespace jinja2
+{
+inline namespace v2
+{
+namespace filters
 {
 
 // Which values Python can order against each other with `<`
@@ -2589,4 +2593,6 @@ InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderCont
     return callable->GetExpressionCallable()(callParams, context);
 }
 
-} // namespace jinja2::filters
+} // namespace filters
+} // namespace v2
+} // namespace jinja2

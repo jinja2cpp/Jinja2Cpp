@@ -8,6 +8,8 @@ JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 /*!
  * \brief Equality comparison for the extension interfaces (list and map accessors, enumerators, filesystem handlers)
@@ -28,6 +30,7 @@ struct JINJA2CPP_EXPORT IComparable
     [[nodiscard]] virtual bool IsEqual(const IComparable& other) const { return this == &other; }
 };
 
+} // namespace v2
 } // namespace jinja2
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END
