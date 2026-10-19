@@ -1723,12 +1723,15 @@ bool ReachesThroughOpaque(const InternalValue& root, const void* target)
         {
             auto* items = map->GetMutableItems();
             // A key that is not a string keeps its first spelling, which CycleCollector follows too
-            if (items && items->HasKeyValues() && !visited[viaOpaque ? 1 : 0].count(items))
+            if (items)
             {
-                for (const auto& entry : *items)
+                if (items->HasKeyValues() && visited[viaOpaque ? 1 : 0].count(items) == 0)
                 {
-                    keys.push_back(items->KeyOf(entry.first));
-                    queueValue(keys.back(), viaOpaque);
+                    for (const auto& entry : *items)
+                    {
+                        keys.push_back(items->KeyOf(entry.first));
+                        queueValue(keys.back(), viaOpaque);
+                    }
                 }
             }
             found = QueueItems(map->GetMutableItems(), target, viaOpaque, visited, queuePairValue);
