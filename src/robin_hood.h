@@ -44,6 +44,11 @@
 // Second local change (0154): tables and node pools are allocated with ::operator new and
 // freed with ::operator delete instead of std::malloc/std::free, so that a replaced
 // operator new (the bench's allocation counter, a user's allocator) sees them
+// Third local change (0253): a table stays valid when an allocation or a key or value
+// constructor throws (test/allocation_failure_test.cpp): inserts give back the spot they
+// prepared (abandonPreparedSpot), emplace destroys its node when no spot can be made,
+// initData allocates before it changes the table, a failed rehash keeps the hash multiplier,
+// and a copy that fails part way destroys what it copied
 
 #include <algorithm>
 #include <cstdlib>
@@ -1168,10 +1173,17 @@ private:
             auto const numElementsWithBuffer = t.calcNumElementsWithBuffer(t.mMask + 1);
             std::copy(s.mInfo, s.mInfo + t.calcNumBytesInfo(numElementsWithBuffer), t.mInfo);
 
-            for (size_t i = 0; i < numElementsWithBuffer; ++i) {
-                if (t.mInfo[i]) {
-                    ::new (static_cast<void*>(t.mKeyVals + i)) Node(t, *s.mKeyVals[i]);
+            size_t i = 0;
+            try {
+                for (; i < numElementsWithBuffer; ++i) {
+                    if (t.mInfo[i]) {
+                        ::new (static_cast<void*>(t.mKeyVals + i)) Node(t, *s.mKeyVals[i]);
+                    }
                 }
+            } catch (...) {
+                // Jinja2C++ (0253): only the nodes made so far are in the table
+                std::fill(t.mInfo + i, t.mInfo + numElementsWithBuffer, uint8_t{0});
+                throw;
             }
         }
     };
@@ -1420,6 +1432,24 @@ private:
         mKeyVals[idx].~Node();
     }
 
+    // Jinja2C++ local change (0253): gives back the spot insertKeyPrepareEmptySpot prepared at
+    // `idx` when the node for it could not be made. With `shifted`, shiftUp moved the nodes from
+    // `idx` on one up and left a moved-from node at `idx` (for a node map, a second handle to the
+    // node now at idx + 1): it is ended without destroying its data, and the nodes move back.
+    void abandonPreparedSpot(size_t idx, bool shifted) noexcept {
+        if (shifted) {
+            mKeyVals[idx].~Node();
+            while (mInfo[idx + 1] >= 2 * mInfoInc) {
+                mInfo[idx] = static_cast<uint8_t>(mInfo[idx + 1] - mInfoInc);
+                ::new (static_cast<void*>(mKeyVals + idx)) Node(*this, std::move(mKeyVals[idx + 1]));
+                mKeyVals[idx + 1].~Node();
+                ++idx;
+            }
+        }
+        mInfo[idx] = 0;
+        --mNumElements;
+    }
+
     // copy of find(), except that it returns iterator instead of const_iterator.
     template <typename Other>
     ROBIN_HOOD(NODISCARD)
@@ -1609,7 +1639,12 @@ public:
             mMaxNumElementsAllowed = o.mMaxNumElementsAllowed;
             mInfoInc = o.mInfoInc;
             mInfoHashShift = o.mInfoHashShift;
-            cloneData(o);
+            try {
+                cloneData(o);
+            } catch (...) {
+                destroy();
+                throw;
+            }
         }
     }
 
@@ -1642,6 +1677,17 @@ public:
             return *this;
         }
 
+        // Jinja2C++ (0253): the new array first, so that a failed allocation leaves the table as it was
+        Node* newKeyVals = nullptr;
+        if (mMask != o.mMask) {
+            auto const numElementsWithBuffer = calcNumElementsWithBuffer(o.mMask + 1);
+            auto const numBytesTotal = calcNumBytesTotal(numElementsWithBuffer);
+            ROBIN_HOOD_LOG("std::malloc " << numBytesTotal << " = calcNumBytesTotal("
+                                          << numElementsWithBuffer << ")")
+            newKeyVals = static_cast<Node*>(
+                detail::assertNotNull<std::bad_alloc>(::operator new(numBytesTotal)));
+        }
+
         // clean up old stuff
         Destroyer<Self, IsFlat && std::is_trivially_destructible<Node>::value>{}.nodes(*this);
 
@@ -1654,11 +1700,7 @@ public:
             }
 
             auto const numElementsWithBuffer = calcNumElementsWithBuffer(o.mMask + 1);
-            auto const numBytesTotal = calcNumBytesTotal(numElementsWithBuffer);
-            ROBIN_HOOD_LOG("std::malloc " << numBytesTotal << " = calcNumBytesTotal("
-                                          << numElementsWithBuffer << ")")
-            mKeyVals = static_cast<Node*>(
-                detail::assertNotNull<std::bad_alloc>(::operator new(numBytesTotal)));
+            mKeyVals = newKeyVals;
 
             // no need for calloc here because cloneData performs a memcpy.
             mInfo = reinterpret_cast<uint8_t*>(mKeyVals + numElementsWithBuffer);
@@ -1673,7 +1715,13 @@ public:
         mMaxNumElementsAllowed = o.mMaxNumElementsAllowed;
         mInfoInc = o.mInfoInc;
         mInfoHashShift = o.mInfoHashShift;
-        cloneData(o);
+        try {
+            cloneData(o);
+        } catch (...) {
+            destroy();
+            init();
+            throw;
+        }
 
         return *this;
     }
@@ -1741,14 +1789,24 @@ public:
             break;
 
         case InsertionState::new_node:
-            ::new (static_cast<void*>(&mKeyVals[idxAndState.first]))
-                Node(*this, std::piecewise_construct, std::forward_as_tuple(key),
-                     std::forward_as_tuple());
+            try {
+                ::new (static_cast<void*>(&mKeyVals[idxAndState.first]))
+                    Node(*this, std::piecewise_construct, std::forward_as_tuple(key),
+                         std::forward_as_tuple());
+            } catch (...) {
+                abandonPreparedSpot(idxAndState.first, false);
+                throw;
+            }
             break;
 
         case InsertionState::overwrite_node:
-            mKeyVals[idxAndState.first] = Node(*this, std::piecewise_construct,
-                                               std::forward_as_tuple(key), std::forward_as_tuple());
+            try {
+                mKeyVals[idxAndState.first] = Node(*this, std::piecewise_construct,
+                                                   std::forward_as_tuple(key), std::forward_as_tuple());
+            } catch (...) {
+                abandonPreparedSpot(idxAndState.first, true);
+                throw;
+            }
             break;
 
         case InsertionState::overflow_error:
@@ -1767,15 +1825,25 @@ public:
             break;
 
         case InsertionState::new_node:
-            ::new (static_cast<void*>(&mKeyVals[idxAndState.first]))
-                Node(*this, std::piecewise_construct, std::forward_as_tuple(std::move(key)),
-                     std::forward_as_tuple());
+            try {
+                ::new (static_cast<void*>(&mKeyVals[idxAndState.first]))
+                    Node(*this, std::piecewise_construct, std::forward_as_tuple(std::move(key)),
+                         std::forward_as_tuple());
+            } catch (...) {
+                abandonPreparedSpot(idxAndState.first, false);
+                throw;
+            }
             break;
 
         case InsertionState::overwrite_node:
-            mKeyVals[idxAndState.first] =
-                Node(*this, std::piecewise_construct, std::forward_as_tuple(std::move(key)),
-                     std::forward_as_tuple());
+            try {
+                mKeyVals[idxAndState.first] =
+                    Node(*this, std::piecewise_construct, std::forward_as_tuple(std::move(key)),
+                         std::forward_as_tuple());
+            } catch (...) {
+                abandonPreparedSpot(idxAndState.first, true);
+                throw;
+            }
             break;
 
         case InsertionState::overflow_error:
@@ -1803,7 +1871,14 @@ public:
     std::pair<iterator, bool> emplace(Args&&... args) {
         ROBIN_HOOD_TRACE(this)
         Node n{*this, std::forward<Args>(args)...};
-        auto idxAndState = insertKeyPrepareEmptySpot(getFirstConst(n));
+        std::pair<size_t, InsertionState> idxAndState;
+        try {
+            idxAndState = insertKeyPrepareEmptySpot(getFirstConst(n));
+        } catch (...) {
+            // Jinja2C++ (0253): growing the table failed
+            n.destroy(*this);
+            throw;
+        }
         switch (idxAndState.second) {
         case InsertionState::key_found:
             n.destroy(*this);
@@ -2281,15 +2356,25 @@ private:
             break;
 
         case InsertionState::new_node:
-            ::new (static_cast<void*>(&mKeyVals[idxAndState.first])) Node(
-                *this, std::piecewise_construct, std::forward_as_tuple(std::forward<OtherKey>(key)),
-                std::forward_as_tuple(std::forward<Args>(args)...));
+            try {
+                ::new (static_cast<void*>(&mKeyVals[idxAndState.first])) Node(
+                    *this, std::piecewise_construct, std::forward_as_tuple(std::forward<OtherKey>(key)),
+                    std::forward_as_tuple(std::forward<Args>(args)...));
+            } catch (...) {
+                abandonPreparedSpot(idxAndState.first, false);
+                throw;
+            }
             break;
 
         case InsertionState::overwrite_node:
-            mKeyVals[idxAndState.first] = Node(*this, std::piecewise_construct,
-                                               std::forward_as_tuple(std::forward<OtherKey>(key)),
-                                               std::forward_as_tuple(std::forward<Args>(args)...));
+            try {
+                mKeyVals[idxAndState.first] = Node(*this, std::piecewise_construct,
+                                                   std::forward_as_tuple(std::forward<OtherKey>(key)),
+                                                   std::forward_as_tuple(std::forward<Args>(args)...));
+            } catch (...) {
+                abandonPreparedSpot(idxAndState.first, true);
+                throw;
+            }
             break;
 
         case InsertionState::overflow_error:
@@ -2311,15 +2396,25 @@ private:
             break;
 
         case InsertionState::new_node:
-            ::new (static_cast<void*>(&mKeyVals[idxAndState.first])) Node(
-                *this, std::piecewise_construct, std::forward_as_tuple(std::forward<OtherKey>(key)),
-                std::forward_as_tuple(std::forward<Mapped>(obj)));
+            try {
+                ::new (static_cast<void*>(&mKeyVals[idxAndState.first])) Node(
+                    *this, std::piecewise_construct, std::forward_as_tuple(std::forward<OtherKey>(key)),
+                    std::forward_as_tuple(std::forward<Mapped>(obj)));
+            } catch (...) {
+                abandonPreparedSpot(idxAndState.first, false);
+                throw;
+            }
             break;
 
         case InsertionState::overwrite_node:
-            mKeyVals[idxAndState.first] = Node(*this, std::piecewise_construct,
-                                               std::forward_as_tuple(std::forward<OtherKey>(key)),
-                                               std::forward_as_tuple(std::forward<Mapped>(obj)));
+            try {
+                mKeyVals[idxAndState.first] = Node(*this, std::piecewise_construct,
+                                                   std::forward_as_tuple(std::forward<OtherKey>(key)),
+                                                   std::forward_as_tuple(std::forward<Mapped>(obj)));
+            } catch (...) {
+                abandonPreparedSpot(idxAndState.first, true);
+                throw;
+            }
             break;
 
         case InsertionState::overflow_error:
@@ -2332,18 +2427,18 @@ private:
     }
 
     void initData(size_t max_elements) {
-        mNumElements = 0;
-        mMask = max_elements - 1;
-        mMaxNumElementsAllowed = calcMaxNumElementsAllowed(max_elements);
-
         auto const numElementsWithBuffer = calcNumElementsWithBuffer(max_elements);
 
         // malloc & zero mInfo. Faster than calloc everything.
         auto const numBytesTotal = calcNumBytesTotal(numElementsWithBuffer);
         ROBIN_HOOD_LOG("std::calloc " << numBytesTotal << " = calcNumBytesTotal("
                                       << numElementsWithBuffer << ")")
+        // Jinja2C++ (0253): allocated before the table changes, so that a failure leaves it as it was
         mKeyVals = reinterpret_cast<Node*>(
             detail::assertNotNull<std::bad_alloc>(::operator new(numBytesTotal)));
+        mNumElements = 0;
+        mMask = max_elements - 1;
+        mMaxNumElementsAllowed = calcMaxNumElementsAllowed(max_elements);
         mInfo = reinterpret_cast<uint8_t*>(mKeyVals + numElementsWithBuffer);
         std::memset(mInfo, 0, numBytesTotal - numElementsWithBuffer * sizeof(Node));
 
@@ -2462,8 +2557,15 @@ private:
             // we have to resize, even though there would still be plenty of space left!
             // Try to rehash instead. Delete freed memory so we don't steadyily increase mem in case
             // we have to rehash a few times
+            // Jinja2C++ (0253): a failed rehash keeps the multiplier the keys are placed by
+            auto const oldHashMultiplier = mHashMultiplier;
             nextHashMultiplier();
-            rehashPowerOfTwo(mMask + 1, true);
+            try {
+                rehashPowerOfTwo(mMask + 1, true);
+            } catch (...) {
+                mHashMultiplier = oldHashMultiplier;
+                throw;
+            }
         } else {
             // we've reached the capacity of the map, so the hash seems to work nice. Keep using it.
             rehashPowerOfTwo((mMask + 1) * 2, false);

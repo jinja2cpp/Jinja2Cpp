@@ -65,8 +65,9 @@ public:
     {
         Reindex();
     }
-    // swap() keeps iterators valid on every standard library, a move constructor only since LWG 2321
-    OrderedMap(OrderedMap&& other) noexcept { swap(other); }
+    // swap() keeps iterators valid on every standard library, a move constructor only since LWG 2321.
+    // MSVC's list and unordered_map allocate in their default constructors, so a move there can throw
+    OrderedMap(OrderedMap&& other) noexcept(NothrowDefault) { swap(other); }
     ~OrderedMap() = default;
 
     OrderedMap& operator=(const OrderedMap& other)
@@ -78,7 +79,7 @@ public:
         }
         return *this;
     }
-    OrderedMap& operator=(OrderedMap&& other) noexcept
+    OrderedMap& operator=(OrderedMap&& other) noexcept(NothrowDefault)
     {
         if (this != &other)
         {
@@ -406,8 +407,11 @@ private:
         }
     }
 
+    using Index = std::unordered_map<KeyRef, iterator, KeyRefHash, KeyRefEqual>;
+    static constexpr bool NothrowDefault = std::is_nothrow_default_constructible_v<List> && std::is_nothrow_default_constructible_v<Index>;
+
     List m_items;
-    std::unordered_map<KeyRef, iterator, KeyRefHash, KeyRefEqual> m_index;
+    Index m_index;
 };
 
 } // namespace v2

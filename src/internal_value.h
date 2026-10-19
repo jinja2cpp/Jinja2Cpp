@@ -400,9 +400,9 @@ static_assert(detail::RenderLimits{}.maxSequenceSize == MaxSequenceSize);
 
 [[noreturn]] void ThrowSequenceTooLong(uint64_t size, const char* what);
 
-// Throws when an operation is about to build a sequence longer than MaxSequenceSize
-// (std::length_error), or than the render's Settings::Limits::maxSequenceSize when that is
-// lower (ResourceLimitError)
+// Throws ResourceLimitError when an operation is about to build a sequence longer than
+// MaxSequenceSize, or than the render's Settings::Limits::maxSequenceSize when that is lower
+// (then naming the field)
 inline void CheckSequenceSize(uint64_t size, const char* what)
 {
     if (size > detail::t_renderLimits.maxSequenceSize)

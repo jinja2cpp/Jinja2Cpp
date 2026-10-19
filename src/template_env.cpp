@@ -1,5 +1,6 @@
 #include <jinja2cpp/template_env.h>
 
+#include "error_boundary.h"
 #include "load_settings.h"
 #include "make_unexpected.h"
 #include "template_env_impl.h"
@@ -255,76 +256,85 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
     using Functions = TemplateFunctions<CharT>;
     using ResultType = typename Functions::ResultType;
     using ErrorType = typename ResultType::error_type;
-    auto& cache = Functions::GetCache(*this);
-
+    // Filesystem handlers and the template loading are host code and parsing: whatever they throw,
+    // except std::bad_alloc, becomes the error (docs/api-2.0.md, 2.1)
+    try
     {
-        std::shared_lock<std::shared_timed_mutex> l(guard);
-        auto p = cache.find(fileName);
-        if (p != cache.end())
+        auto& cache = Functions::GetCache(*this);
+
         {
-            if (settings.autoReload)
+            std::shared_lock<std::shared_timed_mutex> l(guard);
+            auto p = cache.find(fileName);
+            if (p != cache.end())
             {
-                auto lastModified = p->second.handler->GetLastModificationDate(fileName);
-                if (!lastModified || (p->second.lastModification && lastModified.value() <= p->second.lastModification.value()))
+                if (settings.autoReload)
+                {
+                    auto lastModified = p->second.handler->GetLastModificationDate(fileName);
+                    if (!lastModified || (p->second.lastModification && lastModified.value() <= p->second.lastModification.value()))
+                    {
+                        return ResultType(p->second.tpl);
+                    }
+                }
+                else
                 {
                     return ResultType(p->second.tpl);
                 }
             }
-            else
-            {
-                return ResultType(p->second.tpl);
-            }
-        }
-    }
-
-    // Created only on a miss: a new template allocates its environment handle
-    auto tpl = Functions::CreateTemplate(env);
-    for (auto& fh : filesystemHandlers)
-    {
-        if (!fh.prefix.empty() && fileName.find(fh.prefix) != 0)
-        {
-            continue;
         }
 
-        auto stream = Functions::LoadFile(fileName, fh.handler.get());
-        if (stream)
+        // Created only on a miss: a new template allocates its environment handle
+        auto tpl = Functions::CreateTemplate(env);
+        for (auto& fh : filesystemHandlers)
         {
-            auto res = tpl.Load(*stream, fileName);
-            if (!res)
+            if (!fh.prefix.empty() && fileName.find(fh.prefix) != 0)
             {
-                return ResultType(MakeUnexpected(res.error()));
+                continue;
             }
 
-            if (settings.cacheSize != 0)
+            auto stream = Functions::LoadFile(fileName, fh.handler.get());
+            if (stream)
             {
-                auto lastModified = fh.handler->GetLastModificationDate(fileName);
-                // A template this replaces (another thread loaded the same file concurrently) is
-                // released after the lock: it may hold the last handle to this environment, and
-                // ~TemplateEnv takes the same lock
-                std::optional<decltype(tpl)> replaced;
-                std::unique_lock<std::shared_timed_mutex> l(guard);
-                if (owner)
+                auto res = tpl.Load(*stream, fileName);
+                if (!res)
                 {
-                    auto& cacheEntry = cache[fileName];
-                    replaced = std::move(cacheEntry.tpl);
-                    cacheEntry.tpl = tpl;
-                    cacheEntry.handler = fh.handler;
-                    cacheEntry.lastModification = lastModified;
+                    return ResultType(MakeUnexpected(res.error()));
                 }
+
+                if (settings.cacheSize != 0)
+                {
+                    auto lastModified = fh.handler->GetLastModificationDate(fileName);
+                    // A template this replaces (another thread loaded the same file concurrently) is
+                    // released after the lock: it may hold the last handle to this environment, and
+                    // ~TemplateEnv takes the same lock
+                    std::optional<decltype(tpl)> replaced;
+                    std::unique_lock<std::shared_timed_mutex> l(guard);
+                    if (owner)
+                    {
+                        auto& cacheEntry = cache[fileName];
+                        replaced = std::move(cacheEntry.tpl);
+                        cacheEntry.tpl = tpl;
+                        cacheEntry.handler = fh.handler;
+                        cacheEntry.lastModification = lastModified;
+                    }
+                }
+
+                return ResultType(tpl);
             }
-
-            return ResultType(tpl);
         }
+
+        typename ErrorType::Data errorData;
+        errorData.code = ErrorCode::FileNotFound;
+        errorData.srcLoc.col = 1;
+        errorData.srcLoc.line = 1;
+        errorData.srcLoc.fileName = "";
+        errorData.extraParams.push_back(Value(fileName));
+
+        return ResultType(MakeUnexpected(ErrorType(errorData)));
     }
-
-    typename ErrorType::Data errorData;
-    errorData.code = ErrorCode::FileNotFound;
-    errorData.srcLoc.col = 1;
-    errorData.srcLoc.line = 1;
-    errorData.srcLoc.fileName = "";
-    errorData.extraParams.push_back(Value(fileName));
-
-    return ResultType(MakeUnexpected(ErrorType(errorData)));
+    catch (...)
+    {
+        return ResultType(MakeUnexpected(CurrentExceptionToError<CharT>(fileName)));
+    }
 }
 } // namespace detail
 

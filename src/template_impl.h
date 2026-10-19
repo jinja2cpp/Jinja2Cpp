@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
 #include "cycle_collector.h"
+#include "error_boundary.h"
 #include "internal_value.h"
 #include "load_settings.h"
 #include "make_unexpected.h"
@@ -170,9 +171,11 @@ struct ErrorConverter<BasicErrorInfo<CharT1>, BasicErrorInfo<CharT2>>
         errorData.code = srcError.GetCode();
         errorData.srcLoc = srcError.GetErrorLocation();
         errorData.locationDescr = ConvertString<std::basic_string<CharT1>>(srcError.GetLocationDescr());
+        errorData.relatedLocs = srcError.GetRelatedLocations();
         errorData.extraParams = srcError.GetExtraParams();
+        errorData.exception = srcError.GetException();
 
-        return BasicErrorInfo<CharT1>(errorData);
+        return BasicErrorInfo<CharT1>(std::move(errorData));
     }
 };
 
@@ -294,55 +297,52 @@ public:
         const bool isNamed = !tplName.empty();
         std::string name = isNamed ? std::move(tplName) : "noname.j2tpl"s;
         NodeArena nodes;
-        TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name, nodes);
-        if (const auto& selector = m_settings->settings.autoescapeSelector)
-        {
-            // Jinja2 passes None for a template from a string. A selector that throws fails
-            // the Load, which reports errors rather than throwing
-            try
-            {
-                parser.SetAutoescape(selector(isNamed ? name : std::string()));
-            }
-            catch (const std::exception& ex)
-            {
-                typename BasicErrorInfo<CharT>::Data errorData;
-                errorData.code = ErrorCode::UnexpectedException;
-                errorData.srcLoc.col = 1;
-                errorData.srcLoc.line = 1;
-                errorData.srcLoc.fileName = name;
-                errorData.extraParams.push_back(Value(std::string(ex.what())));
-                return BasicErrorInfo<CharT>(errorData);
-            }
-        }
-
-        const ParseLimitsScope parseLimits(m_settings->settings.limits);
-        auto parseResult = parser.Parse();
-        if (!parseResult)
-        {
-            return parseResult.error()[0];
-        }
-
-        parser.ReleaseParseState();
-        // The checks of the tree's handles (NodeRefChecks) fail only on a bug in the parser:
-        // the template that was loaded before stays
+        // Whatever parsing throws, except std::bad_alloc, becomes the error: the template that was loaded before stays.
+        // The checks of the tree's handles (NodeRefChecks) in Seal fail only on a bug in the parser.
         try
         {
-            m_nodes = nodes.Seal(*parseResult);
+            TemplateParser<CharT> parser(source.get(), *m_settings, m_env, name, nodes);
+            // Jinja2 passes None for a template from a string. A selector that throws fails the Load
+            // as host code, whatever it throws (an ErrorInfo too)
+            if (const auto& selector = m_settings->settings.autoescapeSelector)
+            {
+                bool autoescape = false;
+                try
+                {
+                    autoescape = selector(isNamed ? name : std::string());
+                }
+                catch (...)
+                {
+                    return detail::CurrentExceptionToError<CharT>(name);
+                }
+                parser.SetAutoescape(autoescape);
+            }
+
+            const ParseLimitsScope parseLimits(m_settings->settings.limits);
+            auto parseResult = parser.Parse();
+            if (!parseResult)
+            {
+                return parseResult.error()[0];
+            }
+
+            parser.ReleaseParseState();
+            auto sealed = nodes.Seal(*parseResult);
+            auto convertedTexts = parser.TakeConvertedTexts();
+            auto metadataInfo = parser.GetMetadataInfo();
+            m_nodes = std::move(sealed);
+            m_renderer = *parseResult;
+            m_convertedTexts = std::move(convertedTexts);
+            m_metadataInfo = std::move(metadataInfo);
         }
-        catch (const InvalidNodeRef& ex)
+        catch (const BasicErrorInfo<CharT>& error)
         {
-            typename BasicErrorInfo<CharT>::Data errorData;
-            errorData.code = ErrorCode::UnexpectedException;
-            errorData.srcLoc.col = 1;
-            errorData.srcLoc.line = 1;
-            errorData.srcLoc.fileName = name;
-            errorData.extraParams.push_back(Value(std::string(ex.what())));
-            return BasicErrorInfo<CharT>(errorData);
+            return error;
         }
-        m_renderer = *parseResult;
+        catch (...)
+        {
+            return detail::CurrentExceptionToError<CharT>(name);
+        }
         m_template = std::move(source);
-        m_convertedTexts = parser.TakeConvertedTexts();
-        m_metadataInfo = parser.GetMetadataInfo();
         // Last: the parser refers to the name
         m_templateName = std::move(name);
         m_isNamed = isNamed;
@@ -459,18 +459,6 @@ public:
 
             return BasicErrorInfo<CharT>(errorData);
         }
-        catch (const ResourceLimitError& ex)
-        {
-            typename BasicErrorInfo<CharT>::Data errorData;
-            errorData.code = ErrorCode::ResourceLimitExceeded;
-            errorData.srcLoc.col = 1;
-            errorData.srcLoc.line = 1;
-            errorData.srcLoc.fileName = m_templateName;
-            errorData.extraParams.push_back(Value(std::string(ex.what())));
-            errorData.extraParams.push_back(Value(std::string(ex.Field())));
-
-            return BasicErrorInfo<CharT>(errorData);
-        }
         catch (const UndefinedError& ex)
         {
             typename BasicErrorInfo<CharT>::Data errorData;
@@ -482,16 +470,10 @@ public:
 
             return BasicErrorInfo<CharT>(errorData);
         }
-        catch (const std::exception& ex)
+        catch (...)
         {
-            typename BasicErrorInfo<CharT>::Data errorData;
-            errorData.code = ErrorCode::UnexpectedException;
-            errorData.srcLoc.col = 1;
-            errorData.srcLoc.line = 1;
-            errorData.srcLoc.fileName = m_templateName;
-            errorData.extraParams.push_back(Value(std::string(ex.what())));
-
-            return BasicErrorInfo<CharT>(errorData);
+            // Host exceptions, and the engine's own still reported as standard exceptions; std::bad_alloc goes on
+            return detail::CurrentExceptionToError<CharT>(m_templateName);
         }
 
         return normalResult;
@@ -541,47 +523,23 @@ public:
         // The JSON document is parsed once and kept in the template: the returned maps may refer to
         // it (the RapidJSON binding does), so it must outlive every map handed out
         std::scoped_lock lock(m_metadataMutex);
-        if (m_metadata)
+        try
         {
-            return m_metadata.value();
+            return ParseMetadata();
         }
-
-        auto& metadataString = m_metadataInfo.metadata;
-        if (metadataString.empty())
+        catch (...)
         {
-            return GenericMap();
+            return MakeUnexpected(detail::CurrentExceptionToError<CharT>(m_templateName));
         }
-
-        if (m_metadataInfo.metadataType == "json")
-        {
-            // The JSON bindings parse narrow strings; wide metadata is converted first and kept,
-            // since the parsed document may refer to its source
-            std::string_view narrowMetadata;
-            if constexpr (std::is_same_v<CharT, char>)
-            {
-                narrowMetadata = metadataString;
-            }
-            else
-            {
-                m_metadataSource = ConvertString<std::string>(metadataString);
-                narrowMetadata = m_metadataSource;
-            }
-            auto result = Parse<char>(narrowMetadata, m_metadataJson);
-            if (!result)
-            {
-                typename BasicErrorInfo<CharT>::Data errorData;
-                errorData.code = ErrorCode::MetadataParseError;
-                errorData.srcLoc = m_metadataInfo.location;
-                errorData.extraParams.push_back(Value(result.error()));
-                return MakeUnexpected(BasicErrorInfo<CharT>(errorData));
-            }
-            m_metadata = std::move(std::get<GenericMap>(result.value().GetData()));
-            return m_metadata.value();
-        }
-        return GenericMap();
     }
 
-    nonstd::expected<MetadataInfo<CharT>, BasicErrorInfo<CharT>> GetMetadataRaw() const { return m_metadataInfo; }
+    nonstd::expected<MetadataInfo<CharT>, BasicErrorInfo<CharT>> GetMetadataRaw() const
+    {
+        // Copied before it goes into the expected, whose converting constructor is noexcept:
+        // std::bad_alloc must reach the caller, not std::terminate
+        MetadataInfo<CharT> info = m_metadataInfo;
+        return info;
+    }
 
     // jinja2.meta.find_undeclared_variables (docs/tasks/0236). The tree keeps no record of where
     // names are declared, so the source is parsed again, into an arena of its own, and the
@@ -661,6 +619,53 @@ public:
         return true;
     }
 private:
+    // GetMetadata with m_metadataMutex held
+    nonstd::expected<GenericMap, BasicErrorInfo<CharT>> ParseMetadata() const
+    {
+        if (m_metadata)
+        {
+            // Copied first: expected's converting constructor is noexcept (see GetMetadataRaw)
+            GenericMap metadata = m_metadata.value();
+            return metadata;
+        }
+
+        auto& metadataString = m_metadataInfo.metadata;
+        if (metadataString.empty())
+        {
+            return GenericMap();
+        }
+
+        if (m_metadataInfo.metadataType == "json")
+        {
+            // The JSON bindings parse narrow strings; wide metadata is converted first and kept,
+            // since the parsed document may refer to its source
+            std::string_view narrowMetadata;
+            if constexpr (std::is_same_v<CharT, char>)
+            {
+                narrowMetadata = metadataString;
+            }
+            else
+            {
+                m_metadataSource = ConvertString<std::string>(metadataString);
+                narrowMetadata = m_metadataSource;
+            }
+            auto result = Parse<char>(narrowMetadata, m_metadataJson);
+            if (!result)
+            {
+                typename BasicErrorInfo<CharT>::Data errorData;
+                errorData.code = ErrorCode::MetadataParseError;
+                errorData.srcLoc = m_metadataInfo.location;
+                errorData.extraParams.push_back(Value(result.error()));
+                return MakeUnexpected(BasicErrorInfo<CharT>(errorData));
+            }
+            m_metadata = std::move(std::get<GenericMap>(result.value().GetData()));
+            // Copied first: expected's converting constructor is noexcept (see GetMetadataRaw)
+            GenericMap metadata = m_metadata.value();
+            return metadata;
+        }
+        return GenericMap();
+    }
+
     [[noreturn]] void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) const
     {
         typename BasicErrorInfo<CharT>::Data errorData;

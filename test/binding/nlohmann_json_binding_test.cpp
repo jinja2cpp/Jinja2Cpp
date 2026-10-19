@@ -227,7 +227,7 @@ TEST(NlohmannJsonUnsignedTest, UnsignedAboveInt64MaxIsBigInt)
     EXPECT_EQ("18446744073709551615", big.AsBigInt().ToString());
     const auto result = tpl.RenderAsString(params);
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(jinja2::ErrorCode::UnexpectedException, result.error().GetCode());
+    EXPECT_EQ(jinja2::ErrorCode::IntegerOutOfRange, result.error().GetCode());
     ASSERT_TRUE(tpl.Load("{{ json.max }}"));
     EXPECT_EQ("9223372036854775807", tpl.RenderAsString(params).value());
 }

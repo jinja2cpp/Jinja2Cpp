@@ -1,15 +1,33 @@
 #include "test_tools.h"
 
+#include "../src/template_impl.h"
+
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/exception.h>
+#include <jinja2cpp/filesystem_handler.h>
+#include <jinja2cpp/make_generic_list.h>
+#include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
 #include <chrono>
+#include <cstdint>
+#include <cstring>
+#include <exception>
 #include <iostream>
+#include <iterator>
+#include <limits>
+#include <memory>
+#include <new>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <system_error>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 using namespace jinja2;
 
@@ -614,3 +632,277 @@ INSTANTIATE_TEST_SUITE_P(ExtensionStatementsTest, ErrorsGenericExtensionsTest, :
                                             "noname.j2tpl:1:11: error: Unexpected token: '<<End of block>>'\n{% do 1 + %}\n       ---^-------"}
                             ));
 // clang-format on
+
+// The error contract (docs/api-2.0.md 2.1, task 0253): types, codes and the Load/Render boundary
+static_assert(static_cast<int>(ErrorCode::UserCallableException) == 15);
+static_assert(static_cast<int>(ErrorCode::IntegerOutOfRange) == 16);
+static_assert(static_cast<int>(ErrorCode::TemplateRuntimeError) == 17);
+static_assert(static_cast<int>(ErrorCode::ResourceLimitExceeded) == 18);
+static_assert(sizeof(ErrorInfo) == sizeof(void*));
+static_assert(sizeof(ErrorInfoW) == sizeof(void*));
+static_assert(std::is_nothrow_default_constructible_v<ErrorInfo>);
+static_assert(std::is_nothrow_copy_constructible_v<ErrorInfo>);
+static_assert(std::is_nothrow_move_constructible_v<ErrorInfo>);
+static_assert(std::is_nothrow_copy_assignable_v<ErrorInfo>);
+static_assert(std::is_nothrow_move_assignable_v<ErrorInfo>);
+static_assert(noexcept(std::declval<const ErrorInfo&>().GetCode()));
+static_assert(noexcept(std::declval<const ErrorInfo&>().GetErrorLocation()));
+static_assert(noexcept(std::declval<const ErrorInfo&>().GetRelatedLocations()));
+static_assert(noexcept(std::declval<const ErrorInfo&>().GetExtraParams()));
+static_assert(noexcept(std::declval<const ErrorInfo&>().GetLocationDescr()));
+static_assert(noexcept(std::declval<const ErrorInfo&>().GetException()));
+static_assert(std::is_base_of_v<std::runtime_error, jinja2::Exception>);
+static_assert(std::is_nothrow_copy_constructible_v<jinja2::Exception>);
+static_assert(noexcept(Value(int{})));
+static_assert(!noexcept(Value(uint64_t{})));
+static_assert(std::is_error_code_enum_v<ErrorCode>);
+static_assert(std::is_same_v<BadResultAccess<>, nonstd::bad_expected_access<ErrorInfo>>);
+static_assert(std::is_same_v<BadResultAccess<wchar_t>, nonstd::bad_expected_access<ErrorInfoW>>);
+
+namespace
+{
+template<typename Fn>
+Result<std::string> RenderCalling(Fn&& fn)
+{
+    Template tpl;
+    EXPECT_TRUE(tpl.Load("a{{ f() }}b").has_value());
+    return tpl.RenderAsString({ { "f", MakeCallable(std::forward<Fn>(fn)) } });
+}
+
+struct HostError
+{
+    int value;
+};
+} // namespace
+
+TEST(ErrorContractTest, NonStdExceptionFromCallableIsKept)
+{
+    auto result = RenderCalling([]() -> Value { throw HostError{ 42 }; });
+    ASSERT_FALSE(result.has_value());
+    const auto& error = result.error();
+    EXPECT_EQ(ErrorCode::UnexpectedException, error.GetCode());
+    EXPECT_EQ("unknown exception", error.GetExtraParams().at(0).AsString());
+    ASSERT_TRUE(error.GetException());
+    try
+    {
+        std::rethrow_exception(error.GetException());
+    }
+    catch (const HostError& e)
+    {
+        EXPECT_EQ(42, e.value);
+    }
+}
+
+TEST(ErrorContractTest, StdExceptionFromCallableIsKept)
+{
+    auto result = RenderCalling([]() -> Value { throw std::invalid_argument("bad"); });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode());
+    EXPECT_EQ("bad", result.error().GetExtraParams().at(0).AsString());
+    EXPECT_THROW(std::rethrow_exception(result.error().GetException()), std::invalid_argument);
+}
+
+TEST(ErrorContractTest, BadAllocFromCallablePropagates)
+{
+    EXPECT_THROW(static_cast<void>(RenderCalling([]() -> Value { throw std::bad_alloc(); })), std::bad_alloc);
+}
+
+TEST(ErrorContractTest, LengthErrorIsResourceLimit)
+{
+    auto result = RenderCalling([]() -> Value { throw std::length_error("too long"); });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    EXPECT_TRUE(result.error().GetException());
+}
+
+TEST(ErrorContractTest, HostExceptionCodePassesThrough)
+{
+    auto result = RenderCalling([]() -> Value { throw jinja2::Exception(ErrorCode::UndefinedError, "'x' is undefined"); });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UndefinedError, result.error().GetCode());
+    EXPECT_EQ("'x' is undefined", result.error().GetExtraParams().at(0).AsString());
+    EXPECT_THROW(std::rethrow_exception(result.error().GetException()), jinja2::Exception);
+
+    result = RenderCalling([]() -> Value { throw jinja2::Exception(ErrorCode::ResourceLimitExceeded, "budget spent"); });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+}
+
+TEST(ErrorContractTest, ThrowingListAccessorIsKept)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% for i in xs %}{{ i }}{% endfor %}").has_value());
+    auto list = MakeGenericList([n = 0]() mutable -> std::optional<Value> {
+        if (n++ == 1)
+        {
+            throw std::runtime_error("accessor failed");
+        }
+        return Value(n);
+    });
+    auto result = tpl.RenderAsString({ { "xs", list } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode());
+    EXPECT_EQ("accessor failed", result.error().GetExtraParams().at(0).AsString());
+    EXPECT_TRUE(result.error().GetException());
+}
+
+TEST(ErrorContractTest, ExceptionRecordsOrigin)
+{
+    const unsigned line = __LINE__ + 1;
+    const jinja2::Exception ex(ErrorCode::IntegerOutOfRange, std::string("big"));
+    EXPECT_EQ(ErrorCode::IntegerOutOfRange, ex.Code());
+    EXPECT_STREQ("big", ex.what());
+    EXPECT_EQ(line, ex.Line());
+    EXPECT_NE(nullptr, std::strstr(ex.File(), "errors_test.cpp")) << ex.File();
+}
+
+// A big integer is stored, not refused; one that reaches a template (until docs/tasks/0270) is an
+// error the engine raises, so it carries no exception
+// The autoescape selector is host code: whatever it throws, an ErrorInfo included, is
+// UnexpectedException with the exception kept
+TEST(ErrorContractTest, ThrowingAutoescapeSelectorIsHostException)
+{
+    TemplateEnv env;
+    env.GetSettings().autoescapeSelector = [](const std::string&) -> bool {
+        ErrorInfo::Data data;
+        data.code = ErrorCode::TemplateNotFound;
+        throw ErrorInfo(data);
+    };
+    auto tpl = env.FromString("x");
+    ASSERT_FALSE(tpl.has_value());
+    EXPECT_EQ(ErrorCode::UnexpectedException, tpl.error().GetCode());
+    ASSERT_TRUE(tpl.error().GetException());
+    EXPECT_THROW(std::rethrow_exception(tpl.error().GetException()), ErrorInfo);
+}
+
+TEST(ErrorContractTest, BigIntInTemplateIsIntegerOutOfRange)
+{
+    const auto big = static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1;
+    EXPECT_TRUE(Value(big).IsBigInt());
+
+    const std::pair<const char*, Value> rows[] = { { "{{ n + 1 }}", Value(big) }, { "{{ n[0] }}", Reflect(std::vector<uint64_t>{ big }) } };
+    for (const auto& [source, n] : rows)
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load(source));
+        const auto result = tpl.RenderAsString({ { "n", n } });
+        ASSERT_FALSE(result.has_value()) << source;
+        EXPECT_EQ(ErrorCode::IntegerOutOfRange, result.error().GetCode()) << source;
+        EXPECT_FALSE(result.error().GetException()) << source;
+    }
+}
+
+TEST(ErrorContractTest, ErrorCodeInterop)
+{
+    std::error_code ec = ErrorCode::TemplateNotFound;
+    EXPECT_EQ(&jinja2::error_category(), &ec.category());
+    EXPECT_STREQ("jinja2cpp", ec.category().name());
+    EXPECT_EQ(6, ec.value());
+    EXPECT_EQ("template not found", ec.message());
+    EXPECT_TRUE(ec == std::errc::no_such_file_or_directory);
+    EXPECT_TRUE(std::error_code(ErrorCode::FileNotFound) == std::errc::no_such_file_or_directory);
+    EXPECT_TRUE(std::error_code(ErrorCode::ResourceLimitExceeded) == std::errc::value_too_large);
+    EXPECT_TRUE(std::error_code(ErrorCode::IntegerOutOfRange) == std::errc::value_too_large);
+    EXPECT_TRUE(std::error_code(ErrorCode::InvalidTemplateName) == std::errc::invalid_argument);
+    EXPECT_FALSE(std::error_code(ErrorCode::UndefinedError) == std::errc::invalid_argument);
+    EXPECT_TRUE(std::error_code(ErrorCode::UndefinedError) == std::error_code(ErrorCode::UndefinedError).default_error_condition());
+    EXPECT_EQ("integer out of range", std::error_code(ErrorCode::IntegerOutOfRange).message());
+}
+
+TEST(ErrorContractTest, ErrorInfoSharesItsPayload)
+{
+    const ErrorInfo empty;
+    EXPECT_EQ(ErrorCode::Unspecified, empty.GetCode());
+    EXPECT_TRUE(empty.GetExtraParams().empty());
+    EXPECT_TRUE(empty.GetLocationDescr().empty());
+    EXPECT_FALSE(empty.GetException());
+
+    ErrorInfo::Data data;
+    data.code = ErrorCode::UnexpectedException;
+    data.srcLoc = { "t.j2", 2, 3 };
+    data.relatedLocs.push_back({ "u.j2", 4, 5 });
+    data.extraParams.emplace_back(std::string("boom"));
+    data.exception = std::make_exception_ptr(HostError{ 7 });
+    ErrorInfo error(std::move(data));
+
+    ErrorInfo copy = error;
+    EXPECT_EQ(&error.GetExtraParams(), &copy.GetExtraParams());
+    EXPECT_EQ(error.GetException(), copy.GetException());
+    ErrorInfo moved = std::move(copy);
+    EXPECT_EQ(ErrorCode::Unspecified, copy.GetCode()); // NOLINT(bugprone-use-after-move)
+    EXPECT_EQ(error.GetException(), moved.GetException());
+    copy = moved;
+    EXPECT_EQ(2u, copy.GetErrorLocation().line);
+    moved = ErrorInfo();
+    EXPECT_EQ(ErrorCode::UnexpectedException, copy.GetCode());
+    auto& self = copy;
+    copy = std::move(self);
+    EXPECT_EQ(ErrorCode::UnexpectedException, copy.GetCode());
+
+    // The wide conversion keeps every field
+    auto wide = ErrorConverter<ErrorInfoW, ErrorInfo>::Convert(error);
+    EXPECT_EQ(ErrorCode::UnexpectedException, wide.GetCode());
+    ASSERT_EQ(1u, wide.GetRelatedLocations().size());
+    EXPECT_EQ("u.j2", wide.GetRelatedLocations()[0].fileName);
+    EXPECT_EQ(error.GetException(), wide.GetException());
+}
+
+TEST(ErrorContractTest, LoadFromMissingFileFails)
+{
+    Template tpl;
+    auto result = tpl.LoadFromFile("no-such-dir/no-such-template.j2");
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::FileNotFound, result.error().GetCode());
+    EXPECT_EQ("no-such-dir/no-such-template.j2", result.error().GetExtraParams().at(0).AsString());
+
+    TemplateW tplW;
+    auto resultW = tplW.LoadFromFile("no-such-dir/no-such-template.j2");
+    ASSERT_FALSE(resultW.has_value());
+    EXPECT_EQ(ErrorCode::FileNotFound, resultW.error().GetCode());
+}
+
+namespace
+{
+class ThrowingFileSystem : public IFilesystemHandler
+{
+public:
+    [[nodiscard]] CharFileStreamPtr OpenStream(const std::string& /*name*/) const override { throw std::runtime_error("disk on fire"); }
+    [[nodiscard]] WCharFileStreamPtr OpenWStream(const std::string& /*name*/) const override { throw HostError{ 1 }; }
+    [[nodiscard]] std::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& /*name*/) const override
+    {
+        return {};
+    }
+};
+} // namespace
+
+TEST(ErrorContractTest, ThrowingFilesystemHandlerIsKept)
+{
+    TemplateEnv env;
+    env.AddFilesystemHandler(std::string(), std::make_shared<ThrowingFileSystem>());
+    auto result = env.LoadTemplate("a.j2");
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode());
+    EXPECT_EQ("disk on fire", result.error().GetExtraParams().at(0).AsString());
+    EXPECT_THROW(std::rethrow_exception(result.error().GetException()), std::runtime_error);
+
+    auto resultW = env.LoadTemplateW("a.j2");
+    ASSERT_FALSE(resultW.has_value());
+    EXPECT_EQ(ErrorCode::UnexpectedException, resultW.error().GetCode());
+    EXPECT_THROW(std::rethrow_exception(resultW.error().GetException()), HostError);
+
+    // Through an include, at render time
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% include 'a.j2' %}").has_value());
+    auto rendered = tpl.RenderAsString({});
+    ASSERT_FALSE(rendered.has_value());
+    EXPECT_TRUE(rendered.error().GetException());
+}
+
+TEST(ErrorContractTest, ToCharsReportsHostFailures)
+{
+    auto list = MakeGenericList([]() -> std::optional<Value> { throw std::runtime_error("accessor failed"); });
+    const Value value(list);
+    char buffer[32];
+    const auto result = value.ToChars(std::begin(buffer), std::end(buffer));
+    EXPECT_EQ(std::errc::invalid_argument, result.ec);
+}

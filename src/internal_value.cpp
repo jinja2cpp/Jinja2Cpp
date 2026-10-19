@@ -1,5 +1,6 @@
 #include "internal_value.h"
 
+#include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
 #include "recursion_guard.h"
@@ -40,7 +41,7 @@ void ThrowSequenceTooLong(uint64_t size, const char* what)
     // Past the built-in cap, a render with a maxSequenceSize of its own reports its limit too
     if (size > MaxSequenceSize && detail::t_renderLimits.maxSequenceSize == MaxSequenceSize)
     {
-        throw std::length_error(std::string(what) + " of length " + std::to_string(size) + " is too long");
+        throw ResourceLimitError(std::string(what) + " of length " + std::to_string(size) + " is too long");
     }
     throw ResourceLimitError("maxSequenceSize",
                              std::string(what) + " of length " + std::to_string(size) + " is longer than " + std::to_string(detail::t_renderLimits.maxSequenceSize));

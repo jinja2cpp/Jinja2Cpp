@@ -15,6 +15,7 @@ namespace jinja2
 inline namespace v2
 {
 class Value;
+class Exception;
 class GenericList;
 class GenericMap;
 class TemplateEnv;

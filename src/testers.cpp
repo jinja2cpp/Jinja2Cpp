@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -212,6 +213,10 @@ bool IsFilterName(const std::string& name, RenderContext& context)
     try
     {
         filter = CreateFilter(name, CallParamsInfo());
+    }
+    catch (const std::bad_alloc&)
+    {
+        throw;
     }
     catch (...)
     {

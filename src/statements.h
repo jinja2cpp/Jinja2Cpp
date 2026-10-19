@@ -492,8 +492,9 @@ struct SelfBlocks
 
     // The stack, until it ends; only compared then, to find the frames of its template
     const BlocksStack* live;
-    // Its blocks once it has ended
-    std::optional<BlocksStack> ended;
+    // Its blocks once it has ended. Made with the `self`: the stack's destructor, which fills
+    // it, must not allocate, and MSVC's unordered_map allocates when default constructed
+    BlocksStack ended;
 };
 
 // The root of a parsed template

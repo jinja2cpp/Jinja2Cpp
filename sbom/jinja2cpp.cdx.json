@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:6517a686-4ed3-5d9a-9ee7-94f64aa14c22",
+  "serialNumber": "urn:uuid:55812ef6-34bf-5c2b-b656-122ed2fe754f",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -961,7 +961,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "89a5929b4cb887f70000f312ca8aae0e9de10c5f5f04b52e0e6e005bef800f98"
+          "content": "1db6cd776ccc6e0c83889be9d52eccd67384e8b695b8e9a58ed6e5267aa7b09f"
         }
       ],
       "licenses": [
@@ -979,7 +979,7 @@
         }
       ],
       "pedigree": {
-        "notes": "try_emplace_transparent added (0118 P5b-3b); allocation through ::operator new/delete (0154); documented at src/robin_hood.h:41-50"
+        "notes": "try_emplace_transparent added (0118 P5b-3b); allocation through ::operator new/delete (0154); exception safety of inserts, growth and copies (0253); documented at src/robin_hood.h:41-51"
       },
       "properties": [
         {
@@ -1016,11 +1016,11 @@
         },
         {
           "name": "jinja2cpp:modified",
-          "value": "try_emplace_transparent added (0118 P5b-3b); allocation through ::operator new/delete (0154); documented at src/robin_hood.h:41-50"
+          "value": "try_emplace_transparent added (0118 P5b-3b); allocation through ::operator new/delete (0154); exception safety of inserts, growth and copies (0253); documented at src/robin_hood.h:41-51"
         },
         {
           "name": "jinja2cpp:file",
-          "value": "src/robin_hood.h sha256:89a5929b4cb887f70000f312ca8aae0e9de10c5f5f04b52e0e6e005bef800f98"
+          "value": "src/robin_hood.h sha256:1db6cd776ccc6e0c83889be9d52eccd67384e8b695b8e9a58ed6e5267aa7b09f"
         }
       ]
     },

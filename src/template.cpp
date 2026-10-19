@@ -109,7 +109,13 @@ Result<void, CharT> BasicTemplate<CharT>::LoadFromFile(const std::string& fileNa
 
     if (!file.good())
     {
-        return {};
+        typename BasicErrorInfo<CharT>::Data errorData;
+        errorData.code = ErrorCode::FileNotFound;
+        errorData.srcLoc.col = 1;
+        errorData.srcLoc.line = 1;
+        errorData.srcLoc.fileName = fileName;
+        errorData.extraParams.emplace_back(fileName);
+        return MakeUnexpected(BasicErrorInfo<CharT>(std::move(errorData)));
     }
 
     return Load(file, fileName);

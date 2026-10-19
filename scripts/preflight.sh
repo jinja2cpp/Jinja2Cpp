@@ -71,6 +71,7 @@ else
   git diff -U0 --no-color "$base" -- src include test "${tidy_excludes[@]}" \
     | python3 "$tidy_dir/clang-tidy-diff.py" -p1 -path "$build" -j "$(nproc)" -quiet \
         -clang-tidy-binary "$tidy_dir/clang-tidy" -extra-arg=-Wno-unknown-warning-option \
+        -extra-arg=-I"$(realpath "$build")/generated/include" \
     > /tmp/preflight-tidy.log 2>&1
   tidy_status=$?
   grep -E ': (warning|error): ' /tmp/preflight-tidy.log | sort -u | head -30

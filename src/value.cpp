@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <charconv>
 #include <cstddef>
+#include <new>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -119,9 +120,14 @@ std::to_chars_result Value::ToChars(char* first, char* last) const noexcept
         }
         return { std::copy_n(text.data(), text.size(), first), std::errc() };
     }
-    catch (...)
+    catch (const std::bad_alloc&)
     {
         return { last, std::errc::not_enough_memory };
+    }
+    catch (...)
+    {
+        // A host accessor or reflector threw
+        return { last, std::errc::invalid_argument };
     }
 }
 

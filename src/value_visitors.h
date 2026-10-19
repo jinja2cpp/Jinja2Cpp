@@ -6,6 +6,7 @@
 #include "loop_attr.h"
 #include "make_unexpected.h"
 #include "recursion_guard.h"
+#include "engine_errors.h"
 #include "undefined.h"
 #include "unicode_printable.h"
 
@@ -152,7 +153,7 @@ struct RecursiveUnwrapper
     // hold yet (docs/tasks/0270): it fails loudly, so no visitor meets one
     [[noreturn]] static NoneValue UnwrapRecursive(const BigInt& arg, const ValueObject* /*owner*/)
     {
-        throw std::overflow_error("integer " + arg.ToString() + " does not fit in 64 bits");
+        throw IntegerOutOfRangeError("integer " + arg.ToString() + " does not fit in 64 bits");
     }
     static ListRef UnwrapRecursive(const ListHandle& arg, const ValueObject* owner) noexcept { return ListRef(arg.accessor, owner, arg.isTuple); }
     static MapRef UnwrapRecursive(const MapHandle& arg, const ValueObject* owner) noexcept { return MapRef(arg.accessor, owner); }
@@ -654,7 +655,7 @@ struct InputValueConvertor
     // Integers outside int64 enter templates with docs/tasks/0270; until then they fail loudly
     [[noreturn]] result_t operator()(const BigInt& val) const
     {
-        throw std::overflow_error("integer " + val.ToString() + " does not fit in 64 bits");
+        throw IntegerOutOfRangeError("integer " + val.ToString() + " does not fit in 64 bits");
     }
 
     template<typename T>
@@ -1561,7 +1562,7 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             if (jinja2::detail::t_renderLimits.maxSequenceSize == MaxSequenceSize)
             {
-                throw std::runtime_error("repeated string is too long");
+                throw ResourceLimitError("repeated string is too long");
             }
             // The length may not fit in 64 bits
             ThrowSequenceTooLong(static_cast<uint64_t>(count) > UINT64_MAX / text.size() ? UINT64_MAX : text.size() * static_cast<uint64_t>(count),
@@ -1735,7 +1736,7 @@ struct BinaryMathOperation : BaseVisitor<>
         const auto size = values.size();
         if (size != 0 && count > 0 && static_cast<uint64_t>(count) > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) / size)
         {
-            throw std::runtime_error("repeated list is too long");
+            throw ResourceLimitError("repeated list is too long");
         }
         const auto listSize = size * static_cast<size_t>(count > 0 ? count : 0);
         auto result = ListAdapter::CreateAdapter(listSize, [size, values = std::move(values)](size_t idx) { return values[idx % size]; });

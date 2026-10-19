@@ -5,6 +5,7 @@
 // out: each needs its JSON library, so include the one you use next to this header.
 
 #include <jinja2cpp/error_info.h>            // IWYU pragma: export
+#include <jinja2cpp/exception.h>             // IWYU pragma: export
 #include <jinja2cpp/filesystem_handler.h>    // IWYU pragma: export
 #include <jinja2cpp/fwd.h>                   // IWYU pragma: export
 #include <jinja2cpp/generic_list.h>          // IWYU pragma: export

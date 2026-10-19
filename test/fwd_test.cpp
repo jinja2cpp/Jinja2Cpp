@@ -11,6 +11,7 @@ struct Local
 };
 
 jinja2::Value Describe(const jinja2::Value& value, jinja2::Template* tpl, jinja2::TemplateEnv& env, const jinja2::ValuesMap& params, const jinja2::ValuesList& items);
+jinja2::ErrorCode CodeOf(const jinja2::Exception& ex);
 } // namespace fwd_test
 
 template<>
@@ -51,12 +52,18 @@ jinja2::Value fwd_test::Describe(const jinja2::Value& value, jinja2::Template* t
     return rendered ? jinja2::Value(rendered.value()) : jinja2::Value(std::string("render failed"));
 }
 
+jinja2::ErrorCode fwd_test::CodeOf(const jinja2::Exception& ex)
+{
+    return ex.Code();
+}
+
 TEST(FwdTest, DeclaredThroughFwdHeaderUsedThroughUmbrella)
 {
     jinja2::TemplateEnv env;
     jinja2::Template tpl(&env);
     const auto out = fwd_test::Describe(jinja2::Reflect(fwd_test::Local{ 42 }), &tpl, env, { { "name", "fwd" } }, { 1, 2 });
     EXPECT_EQ("42 fwd 1,2", out.AsString());
+    EXPECT_EQ(jinja2::ErrorCode::UndefinedError, fwd_test::CodeOf(jinja2::Exception(jinja2::ErrorCode::UndefinedError, "x")));
 }
 
 // Public functions defined in the library must be exported: a shared build hides the rest

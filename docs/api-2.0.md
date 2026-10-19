@@ -137,12 +137,11 @@ locations), 0255 (engine runtime errors).
    | Throws | Non-throwing sibling |
    |---|---|
    | `Value::AsX()`, `As<T>()`: `std::bad_variant_access` | `bool AsX(out) noexcept`, `GetIf<T>()` |
-   | `Value(I)`, `Reflect`, JSON bindings for an integer outside int64: `jinja2::Exception{IntegerOutOfRange}` | `static bool Value::TryFrom(I, Value& out) noexcept` |
    | `OrderedMap::at`: `std::out_of_range` | `find` |
    | `Result::value()`: `jinja2::BadResultAccess<CharT>` | `has_value()`, `operator*` |
 
 6. `noexcept`: `Value` moves, `IsX`, `bool AsX(out)`, `GetIf`, `ToChars`, `Value(nullptr)`,
-   `Value(I)` for every `I` that fits int64, `Value(F)`; `BasicErrorInfo` copy, move and
+   `Value(I)` for every `I` that fits int64 (wider types may allocate a `BigInt`), `Value(F)`; `BasicErrorInfo` copy, move and
    getters; `OrderedMap` moves, iterators, `size`, `empty`, `clear`, `swap`; destructors.
    Host-supplied destructors, `IComparable::IsEqual` and filesystem-handler destructors must
    not throw.
@@ -151,16 +150,16 @@ locations), 0255 (engine runtime errors).
    statement or `{{ }}` tag that was running (in the template that owns it), a caret line in
    `GetLocationDescr()`, and `GetException()`: the original `std::exception_ptr`, set if and
    only if the failure began as a C++ exception thrown outside the template engine: by host
-   code, by the standard library, or by the public headers while converting host data
-   (`jinja2::Exception{IntegerOutOfRange}` from `Value(I)`/`Reflect`). Errors the engine raises
-   while evaluating the template (undefined values, type errors, limits, recursion) have none.
+   code or by the standard library. Errors the engine raises while evaluating the template
+   (undefined values, type errors, limits, recursion, a `BigInt` it cannot hold yet) have none.
 
 **Types.**
 - `jinja2::Exception : std::runtime_error` (`exception.h`, in `fwd.h` and `jinja2cpp.h`) with
   `ErrorCode Code() const noexcept` and the C++ origin (`__builtin_FILE()`/`__builtin_LINE()`
   default arguments; no `std::source_location`, so C++17 and C++20 builds share one layout).
-  Thrown by our headers for host-data errors and by hosts to report a specific code, which then
-  passes through the render boundary with its location.
+  Thrown by hosts to report a specific code, which then passes through the render boundary with
+  its location. (`Value(I)` once threw it for an integer outside int64; with `BigInt` (0269) it
+  stores the value instead, so `Value::TryFrom` was dropped before release.)
 - `BasicErrorInfo` is one pointer to an immutable shared payload (code, locations, parameters,
   description, `exception_ptr`): copies share it. The payload's exception object lives in the
   module that threw it; an `ErrorInfo` must not outlive that module.
@@ -168,8 +167,8 @@ locations), 0255 (engine runtime errors).
   `std::error_code ec = ErrorCode::TemplateNotFound;` works and compares equal to
   `std::errc::no_such_file_or_directory`.
 - New codes, appended: 15 `UserCallableException` (anything thrown out of a `UserCallable`,
-  filter, test, finalize or gettext callable), 16 `IntegerOutOfRange` (host integer outside
-  int64; int64 overflow in template arithmetic), 17 `TemplateRuntimeError` (the template's own
+  filter, test, finalize or gettext callable), 16 `IntegerOutOfRange` (a `BigInt` reaching a
+  template before 0270; int64 overflow in template arithmetic), 17 `TemplateRuntimeError` (the template's own
   operation failed: Python's `TypeError`, `ValueError`, ...), 18 `ResourceLimitExceeded`
   (`extraParams[1]` names the limit). `UnexpectedException` (1) now means "an exception the
   engine did not raise and could not attribute", with location and `GetException()`.

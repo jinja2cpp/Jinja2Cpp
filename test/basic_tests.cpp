@@ -1054,12 +1054,12 @@ TEST(BasicTests, ValueFromUnsignedAboveInt64MaxIsBigInt)
     ASSERT_TRUE(tpl.Load("{{ items[0] }}"));
     const auto result = tpl.RenderAsString({ { "items", Reflect(std::vector<uint64_t>{ above }) } });
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode());
+    EXPECT_EQ(ErrorCode::IntegerOutOfRange, result.error().GetCode());
     EXPECT_EQ("9223372036854775807", tpl.RenderAsString({ { "items", Reflect(std::vector<uint64_t>{ static_cast<uint64_t>(int64Max) }) } }).value());
     ASSERT_TRUE(tpl.Load("{{ n }}"));
     const auto direct = tpl.RenderAsString({ { "n", max } });
     ASSERT_FALSE(direct.has_value());
-    EXPECT_EQ(ErrorCode::UnexpectedException, direct.error().GetCode());
+    EXPECT_EQ(ErrorCode::IntegerOutOfRange, direct.error().GetCode());
 }
 
 TEST(BasicTests, ValueFromNullptrIsNone)

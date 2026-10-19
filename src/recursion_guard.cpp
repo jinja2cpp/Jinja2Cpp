@@ -1,5 +1,7 @@
 #include "recursion_guard.h"
 
+#include "engine_errors.h"
+
 #include <jinja2cpp/template_env.h>
 
 #include <algorithm>

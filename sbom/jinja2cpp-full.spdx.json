@@ -365,7 +365,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "89a5929b4cb887f70000f312ca8aae0e9de10c5f5f04b52e0e6e005bef800f98"
+          "checksumValue": "1db6cd776ccc6e0c83889be9d52eccd67384e8b695b8e9a58ed6e5267aa7b09f"
         }
       ],
       "homepage": "https://github.com/martinus/robin-hood-hashing",
@@ -380,7 +380,7 @@
         }
       ],
       "primaryPackagePurpose": "SOURCE",
-      "comment": "role: mandatory; phases: build; exposure: internal; delivery: vendored; selected-by: always; used-for: InternalValueMap and scope tables (internal_value.h:1345, render_context.h), robin_hood::hash_bytes; why: Flat open-addressing map, measurably faster than std::unordered_map on the render paths; lighten: Upstream is archived and recommends its successor ankerl::unordered_dense (MIT); boost::unordered_flat_map is the other candidate while Boost stays. Not a size issue, a maintenance one (docs/tasks/0231); modified: try_emplace_transparent added (0118 P5b-3b); allocation through ::operator new/delete (0154); documented at src/robin_hood.h:41-50; file: src/robin_hood.h sha256:89a5929b4cb887f70000f312ca8aae0e9de10c5f5f04b52e0e6e005bef800f98"
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: vendored; selected-by: always; used-for: InternalValueMap and scope tables (internal_value.h:1345, render_context.h), robin_hood::hash_bytes; why: Flat open-addressing map, measurably faster than std::unordered_map on the render paths; lighten: Upstream is archived and recommends its successor ankerl::unordered_dense (MIT); boost::unordered_flat_map is the other candidate while Boost stays. Not a size issue, a maintenance one (docs/tasks/0231); modified: try_emplace_transparent added (0118 P5b-3b); allocation through ::operator new/delete (0154); exception safety of inserts, growth and copies (0253); documented at src/robin_hood.h:41-51; file: src/robin_hood.h sha256:1db6cd776ccc6e0c83889be9d52eccd67384e8b695b8e9a58ed6e5267aa7b09f"
     },
     {
       "SPDXID": "SPDXRef-Package-lexertk",
@@ -1207,5 +1207,5 @@
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-45343781f625a58f"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-5c0d78ff6f757bb4"
 }

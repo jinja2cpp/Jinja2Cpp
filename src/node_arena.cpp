@@ -1,5 +1,6 @@
 #include "node_arena.h"
 
+#include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "renderer.h"
 #include "statements.h"
@@ -138,6 +139,26 @@ void SealedArena::DestroyNodes() noexcept
     }
     m_buffer.reset();
     m_view = ArenaView();
+}
+
+void NodeArena::AddBlock(std::size_t size)
+{
+    const std::size_t blockSize = std::max(m_nextBlock, size);
+    // The block is listed only once its storage exists: a failed allocation must not leave a
+    // block without storage for DestroyNodes to walk
+    std::unique_ptr<std::byte[]> storage(new std::byte[blockSize]);
+    auto& block = m_blocks.emplace_back();
+    block.owned = std::move(storage);
+    block.data = block.owned.get();
+    block.start = m_used;
+    m_nextBlock = std::min(blockSize * 2, MaxBlockSize);
+    m_free = block.data;
+    m_left = blockSize;
+}
+
+void NodeArena::ThrowTooLarge(const char* what)
+{
+    throw ResourceLimitError(what);
 }
 
 void NodeArena::DestroyNodes() noexcept

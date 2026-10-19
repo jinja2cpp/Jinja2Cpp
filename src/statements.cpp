@@ -1602,14 +1602,14 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
             // The template has ended (an include that stored `self`): its blocks, in a frame
             // of their own
             TemplateFrame endedFrame;
-            if (!frame && owner->ended)
+            if (!frame && !owner->live)
             {
-                endedFrame.blocks = &*owner->ended;
+                endedFrame.blocks = &owner->ended;
                 endedFrame.baseDepth = home.link;
                 endedFrame.name = templateName;
                 endedFrame.outer = curFrame;
                 // Its scopes have ended too: a `self` in the block renders the ended blocks
-                endedFrame.self = MakeTemplateSelf(*owner->ended, ClosureSite(), templateName);
+                endedFrame.self = MakeTemplateSelf(owner->ended, ClosureSite(), templateName);
                 frame = &endedFrame;
             }
             if (!frame)
@@ -1681,7 +1681,7 @@ BlocksStack::~BlocksStack()
     if (self)
     {
         self->live = nullptr;
-        self->ended.emplace().blocks = std::move(blocks);
+        self->ended.blocks = std::move(blocks);
     }
 }
 
@@ -1760,7 +1760,7 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
             parentBlock.emplace(Callable::Macro, [owner = stack->self, name, depth, site = ClosureSite(values)](const CallParams&, OutStream& stream, RenderContext& context) {
                 const auto home = site.Resolve(context);
                 RenderContext superContext(*home.context, home.link);
-                RenderBlockAt(owner->live ? *owner->live : *owner->ended, name, depth + 1, stream, superContext);
+                RenderBlockAt(owner->live ? *owner->live : owner->ended, name, depth + 1, stream, superContext);
             });
         }
         else

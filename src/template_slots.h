@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_TEMPLATE_SLOTS_H
 
 #include "node_arena.h"
+#include "engine_errors.h"
 
 #include <boost/container/small_vector.hpp>
 
@@ -142,7 +143,7 @@ private:
     {
         if (m_slots.size() == TemplateHandle::MaxSlots)
         {
-            throw std::length_error("too many templates in one render");
+            throw ResourceLimitError("too many templates in one render");
         }
         m_slots.push_back(nodes);
         return { static_cast<std::uint32_t>(m_slots.size() - 1), m_generation };

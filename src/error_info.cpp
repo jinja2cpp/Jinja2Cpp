@@ -1,4 +1,5 @@
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/exception.h>
 
 #include "helpers.h"
 
@@ -16,6 +17,7 @@
 #include <ostream>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 namespace
 {
@@ -144,6 +146,130 @@ namespace jinja2
 {
 inline namespace v2
 {
+Exception::~Exception() = default;
+
+namespace
+{
+const char* CodeDescription(ErrorCode code) noexcept
+{
+    switch (code)
+    {
+    case ErrorCode::Unspecified:
+        return "unspecified error";
+    case ErrorCode::UnexpectedException:
+        return "unexpected exception";
+    case ErrorCode::YetUnsupported:
+        return "feature not supported yet";
+    case ErrorCode::FileNotFound:
+        return "file not found";
+    case ErrorCode::ExtensionDisabled:
+        return "extension disabled";
+    case ErrorCode::TemplateEnvAbsent:
+        return "template environment not set";
+    case ErrorCode::TemplateNotFound:
+        return "template not found";
+    case ErrorCode::TemplateNotParsed:
+        return "template not parsed";
+    case ErrorCode::InvalidValueType:
+        return "invalid value type";
+    case ErrorCode::InvalidTemplateName:
+        return "invalid template name";
+    case ErrorCode::MetadataParseError:
+        return "template metadata parse error";
+    case ErrorCode::UndefinedError:
+        return "undefined value";
+    case ErrorCode::RecursionLimitExceeded:
+        return "maximum recursion depth exceeded";
+    case ErrorCode::UnknownFilter:
+        return "unknown filter";
+    case ErrorCode::UnknownTest:
+        return "unknown test";
+    case ErrorCode::UserCallableException:
+        return "exception thrown by a user callable";
+    case ErrorCode::IntegerOutOfRange:
+        return "integer out of range";
+    case ErrorCode::TemplateRuntimeError:
+        return "template runtime error";
+    case ErrorCode::ResourceLimitExceeded:
+        return "resource limit exceeded";
+    case ErrorCode::ExpectedStringLiteral:
+        return "string literal expected";
+    case ErrorCode::ExpectedIdentifier:
+        return "identifier expected";
+    case ErrorCode::ExpectedSquareBracket:
+        return "']' expected";
+    case ErrorCode::ExpectedRoundBracket:
+        return "')' expected";
+    case ErrorCode::ExpectedCurlyBracket:
+        return "'}' expected";
+    case ErrorCode::ExpectedToken:
+        return "token expected";
+    case ErrorCode::ExpectedExpression:
+        return "expression expected";
+    case ErrorCode::ExpectedEndOfStatement:
+        return "end of statement expected";
+    case ErrorCode::ExpectedRawEnd:
+        return "end of raw block expected";
+    case ErrorCode::ExpectedMetaEnd:
+        return "end of meta block expected";
+    case ErrorCode::UnexpectedToken:
+        return "unexpected token";
+    case ErrorCode::UnexpectedStatement:
+        return "unexpected statement";
+    case ErrorCode::UnexpectedCommentBegin:
+        return "unexpected comment begin";
+    case ErrorCode::UnexpectedCommentEnd:
+        return "unexpected comment end";
+    case ErrorCode::UnexpectedExprBegin:
+        return "unexpected expression block begin";
+    case ErrorCode::UnexpectedExprEnd:
+        return "unexpected expression block end";
+    case ErrorCode::UnexpectedStmtBegin:
+        return "unexpected statement block begin";
+    case ErrorCode::UnexpectedStmtEnd:
+        return "unexpected statement block end";
+    case ErrorCode::UnexpectedRawBegin:
+        return "unexpected raw block begin";
+    case ErrorCode::UnexpectedRawEnd:
+        return "unexpected raw block end";
+    case ErrorCode::UnexpectedMetaBegin:
+        return "unexpected meta block begin";
+    case ErrorCode::UnexpectedMetaEnd:
+        return "unexpected meta block end";
+    }
+    return "unknown error";
+}
+
+class ErrorCategory final : public std::error_category
+{
+public:
+    [[nodiscard]] const char* name() const noexcept override { return "jinja2cpp"; }
+    [[nodiscard]] std::string message(int code) const override { return CodeDescription(static_cast<ErrorCode>(code)); }
+    [[nodiscard]] std::error_condition default_error_condition(int code) const noexcept override
+    {
+        switch (static_cast<ErrorCode>(code))
+        {
+        case ErrorCode::FileNotFound:
+        case ErrorCode::TemplateNotFound:
+            return std::errc::no_such_file_or_directory;
+        case ErrorCode::IntegerOutOfRange:
+        case ErrorCode::ResourceLimitExceeded:
+            return std::errc::value_too_large;
+        case ErrorCode::InvalidValueType:
+        case ErrorCode::InvalidTemplateName:
+            return std::errc::invalid_argument;
+        default:
+            return { code, *this };
+        }
+    }
+};
+} // namespace
+
+const std::error_category& error_category() noexcept
+{
+    static const ErrorCategory category;
+    return category;
+}
 
 template<typename CharT>
 void RenderErrorInfo(std::basic_string<CharT>& result, const BasicErrorInfo<CharT>& errInfo)
@@ -183,6 +309,15 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const BasicErrorInfo<Char
         break;
     case ErrorCode::UnknownTest:
         fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("No test named '{}'.").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
+        break;
+    case ErrorCode::UserCallableException:
+        fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("Exception thrown by a user callable: {}").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
+        break;
+    case ErrorCode::IntegerOutOfRange:
+        fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("Integer out of range: {}").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
+        break;
+    case ErrorCode::TemplateRuntimeError:
+        fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("{}").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
         break;
     case ErrorCode::ResourceLimitExceeded:
         fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("Resource limit exceeded: {}").GetValue<CharT>(), errInfo.GetExtraParams()[0]);

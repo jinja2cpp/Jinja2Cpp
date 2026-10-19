@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_RECURSION_GUARD_H
 #define JINJA2CPP_SRC_RECURSION_GUARD_H
 
+
 #include <jinja2cpp/template_env.h>
 
 #include <algorithm>
@@ -113,24 +114,6 @@ inline thread_local RenderLimits t_renderLimits;
 void PollDeadline();
 void InstallRenderLimits(const RenderLimits& limits);
 } // namespace detail
-
-// A limit of Settings::Limits that a render passed. Template rendering reports it as
-// ErrorCode::ResourceLimitExceeded with the message and the field's name
-class ResourceLimitError : public std::exception
-{
-public:
-    ResourceLimitError(const char* field, std::string message)
-        : m_field(field)
-        , m_message(std::move(message))
-    {
-    }
-    [[nodiscard]] const char* what() const noexcept override { return m_message.c_str(); }
-    [[nodiscard]] const char* Field() const noexcept { return m_field; }
-
-private:
-    const char* m_field;
-    std::string m_message;
-};
 
 // Installs a render's limits for as long as it lives and puts back the ones of the render it
 // interrupts (a host callable may render another template). A render without limits (null)

@@ -456,6 +456,7 @@ if (JINJA2CPP_BUILD_TESTS)
     add_dependencies(jinja2cpp_tests CopyTestData)
 
     add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests --gtest_filter=-Parity*)
+
     # Differential corpus against Python Jinja2, see test/parity/README.md
     add_test(NAME jinja2cpp_parity COMMAND jinja2cpp_tests --gtest_filter=Parity*)
     # Every jinja2 symbol the library defines is in the inline ABI namespace v2 (docs/tasks/0076)
@@ -464,6 +465,20 @@ if (JINJA2CPP_BUILD_TESTS)
             COMMAND ${CMAKE_COMMAND} -DNM=${CMAKE_NM} -DLIBRARY=$<TARGET_FILE:jinja2cpp>
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/test/abi_symbols.cmake)
     endif ()
+
+    # Replaces the global operator new, so it cannot share the main test binary (docs/tasks/0253).
+    # The TSan and MSan runtimes define operator new themselves, so those builds go without it.
+    if (NOT JINJA2CPP_WITH_SANITIZERS MATCHES "thread|memory")
+        add_executable(jinja2cpp_alloc_tests test/allocation_failure_test.cpp)
+        target_compile_options(jinja2cpp_alloc_tests PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
+        target_link_libraries(jinja2cpp_alloc_tests gtest gtest_main ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
+        set_target_properties(jinja2cpp_alloc_tests PROPERTIES
+                CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
+                CXX_STANDARD_REQUIRED ON)
+        target_compile_definitions(jinja2cpp_alloc_tests PRIVATE ${_bindings_define})
+        # After the parity run, whose output would push this one out of the CI log tail
+        add_test(NAME jinja2cpp_alloc_tests COMMAND jinja2cpp_alloc_tests)
+    endif()
 
     if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
         set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
