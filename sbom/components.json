@@ -572,6 +572,24 @@
       "evidence": [{"file": ".github/workflows/format-check.yml", "contains": ["clang-format-18"]}]
     },
     {
+      "id": "libabigail",
+      "name": "libabigail (abigail-tools)",
+      "version": "2.4",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "supplier": "Red Hat / sourceware.org",
+      "url": "https://sourceware.org/libabigail/",
+      "purl": "pkg:generic/libabigail@2.4",
+      "delivery": "system",
+      "role": "tooling",
+      "phases": ["ci"],
+      "exposure": "none",
+      "selected_by": "linux-build CI abi rows (apt abigail-tools, Ubuntu 24.04)",
+      "used_for": "ABI dump and comparison of the shared library (abidw, abidiff)",
+      "why": "SOVERSION policy gate (docs/tasks/0076)",
+      "lighten": "Not part of any build",
+      "evidence": [{"file": ".github/workflows/linux-build.yml", "contains": ["abigail-tools"]}]
+    },
+    {
       "id": "cmake",
       "name": "CMake",
       "version": "3.23",

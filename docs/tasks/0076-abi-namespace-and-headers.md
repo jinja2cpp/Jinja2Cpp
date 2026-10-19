@@ -1,9 +1,9 @@
 ---
-status: in-progress
+status: done
 priority: high
 area: release
 depends: [0072, 0073, 0074, 0075, 0043]
-touches: [include/, src/, CMakeLists.txt, cmake/public/, test/package/, test/fwd_test.cpp, test/value_ptr_test.cpp, README.md, sbom/, scripts/abi_namespace.py, .git-blame-ignore-revs, .github/workflows/format-check.yml]
+touches: [include/, src/, CMakeLists.txt, cmake/public/, test/package/, test/fwd_test.cpp, test/value_ptr_test.cpp, test/abi_symbols.cmake, test/template_api_test.cpp, README.md, sbom/, abi/, scripts/abi_namespace.py, scripts/abi_report.sh, .git-blame-ignore-revs, .github/workflows/format-check.yml, .github/workflows/linux-build.yml]
 ---
 # 2.0: inline ABI namespace, header layout, version
 
@@ -36,3 +36,15 @@ future 2.x build is binary-compatible. Settle the API-shaping decisions listed i
 script-generated `inline namespace v2` commit, the nm/link-probe/SONAME gates, the abidiff
 job and the README policy. Follow-ups: 0259 (robin_hood/lexertk namespaces), 0260
 (`<iosfwd>`), 0261 (Windows package link check).
+
+**Done.** PR-1 #580. PR-2: `scripts/abi_namespace.py` wrote `inline namespace v2` into
+every `namespace jinja2` of include/ and src/ (one commit, in .git-blame-ignore-revs) and
+checks it in the format-check job; CTest `jinja2cpp_abi_namespace` (test/abi_symbols.cmake)
+fails on a jinja2 symbol outside `v2` or a global `xyz`; test/package links
+`abi_probe_v2` and expects `abi_probe_v1` (1.x mangling) not to link, in the static and
+shared package rows; check_package.cmake checks the SONAME; the version asserts require
+major 2; README "Compatibility and versioning". The abidiff job runs on one shared
+RelWithDebInfo row per standard and reports against the last master build; committing the
+baselines at the RC is 0285. Deliberate divergence from the plan: `jinja2::v2::detail` is
+not suppressed in abidiff (exported detail functions are called from inline headers), and
+the C++20 abi row is gcc-12, not gcc-14, so that the Release rows keep every pair.

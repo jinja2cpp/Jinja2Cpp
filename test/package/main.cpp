@@ -12,8 +12,9 @@ static_assert(nsel_USES_STD_EXPECTED == 0, "Result<T> must be expected-lite's ow
 #if defined(EXPECT_SHARED) != defined(JINJA2CPP_LINK_AS_SHARED)
 #error "JINJA2CPP_LINK_AS_SHARED does not match the installed library's link type"
 #endif
-// The generated version.h is installed with the headers (docs/tasks/0069)
-static_assert(JINJA2CPP_VERSION >= 10302, "jinja2cpp/version.h is stale or missing");
+// The generated version.h is installed with the headers (docs/tasks/0069), and its major
+// version is the one in the inline ABI namespace v2 (docs/tasks/0076)
+static_assert(JINJA2CPP_VERSION_MAJOR == 2, "jinja2cpp/version.h is stale or missing, or the ABI namespace tag needs a new major");
 
 namespace
 {

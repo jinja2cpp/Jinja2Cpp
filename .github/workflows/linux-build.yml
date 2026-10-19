@@ -46,6 +46,11 @@ jobs:
   # Two rows also install the library and build a consumer against the installed package
   # at another standard (`package`, docs/tasks/0068): a static and a shared install, each
   # read through find_package and pkg-config. It is a check after the tests, not an axis.
+  # One shared row per standard builds RelWithDebInfo (`abi`) so that abidiff can compare
+  # the library's exported ABI with the previous one (docs/tasks/0076): the headers differ
+  # by standard, so the ABI is checked once per standard. For the pairwise design those rows
+  # count as Release (optimised); the remaining Release rows still meet every standard,
+  # compiler, linkage, binding and noderef value on their own.
   linux-build:
     name: C++${{ matrix.std }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }} json=${{ matrix.bindings }}${{ matrix.noderef == 'OFF' && ' noderef=OFF' || '' }}
     runs-on: ubuntu-24.04
@@ -56,14 +61,14 @@ jobs:
         include:
           - { std: 17, compiler: gcc-12,   config: Release, shared: 'OFF', bindings: boost,    noderef: 'OFF' }
           - { std: 17, compiler: gcc-14,   config: Debug,   shared: 'OFF', bindings: rapid }
-          - { std: 17, compiler: clang-18, config: Release, shared: 'ON',  bindings: nlohmann }
+          - { std: 17, compiler: clang-18, config: RelWithDebInfo, shared: 'ON', bindings: nlohmann, abi: true }
           - { std: 17, compiler: clang-20, config: Release, shared: 'OFF', bindings: boost,                    package: 23 }
-          - { std: 20, compiler: gcc-12,   config: Release, shared: 'ON',  bindings: rapid }
+          - { std: 20, compiler: gcc-12,   config: RelWithDebInfo, shared: 'ON', bindings: rapid,  abi: true }
           - { std: 20, compiler: gcc-14,   config: Release, shared: 'ON',  bindings: nlohmann }
           - { std: 20, compiler: clang-18, config: Debug,   shared: 'OFF', bindings: boost }
           - { std: 20, compiler: clang-20, config: Debug,   shared: 'OFF', bindings: nlohmann, noderef: 'OFF' }
           - { std: 23, compiler: gcc-12,   config: Debug,   shared: 'OFF', bindings: nlohmann }
-          - { std: 23, compiler: gcc-14,   config: Release, shared: 'ON',  bindings: boost,    noderef: 'OFF', package: 17 }
+          - { std: 23, compiler: gcc-14,   config: RelWithDebInfo, shared: 'ON', bindings: boost,  noderef: 'OFF', package: 17, abi: true }
           - { std: 23, compiler: clang-18, config: Release, shared: 'ON',  bindings: rapid,    noderef: 'OFF' }
           - { std: 23, compiler: clang-20, config: Debug,   shared: 'ON',  bindings: rapid }
           - { std: 26, compiler: gcc-14,   config: Release, shared: 'OFF', bindings: boost }
@@ -98,6 +103,46 @@ jobs:
 
     - name: Test
       run: ctest --test-dir .build --output-on-failure
+
+    # abidiff against the ABI of the previous master build (report only) or, once the RC
+    # commits abi/libjinja2cpp.so.2.cxx<std>.abi, against that baseline: an incompatible
+    # change then fails unless SOVERSION is bumped and the baseline regenerated (0076)
+    - name: ABI dump
+      if: matrix.abi
+      run: |
+        sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends abigail-tools
+        mkdir -p .abi
+        abidw --headers-dir include --drop-private-types --no-show-locs \
+          --suppressions abi/suppressions.ini \
+          --out-file .abi/libjinja2cpp.so.2.cxx${{ matrix.std }}.abi .build/libjinja2cpp.so
+
+    - name: Previous ABI dump
+      if: matrix.abi && github.event_name == 'pull_request'
+      uses: actions/cache/restore@v4
+      with:
+        path: .abi-base
+        key: abi-cxx${{ matrix.std }}-${{ github.event.pull_request.base.sha }}
+        restore-keys: abi-cxx${{ matrix.std }}-
+
+    - name: ABI report
+      if: matrix.abi
+      run: scripts/abi_report.sh ${{ matrix.std }}
+
+    - name: Save ABI dump
+      if: matrix.abi && github.event_name == 'push'
+      run: mkdir -p .abi-base && cp .abi/*.abi .abi-base/
+
+    - if: matrix.abi && github.event_name == 'push'
+      uses: actions/cache/save@v4
+      with:
+        path: .abi-base
+        key: abi-cxx${{ matrix.std }}-${{ github.sha }}
+
+    - if: matrix.abi
+      uses: actions/upload-artifact@v4
+      with:
+        name: abi-cxx${{ matrix.std }}
+        path: .abi/
 
     - name: Installed package
       if: matrix.package

@@ -29,7 +29,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 // Vendored from jbcoe/value_types 57f2e7a (compatibility/polymorphic_cxx14.h)
 // with these local changes:
-// - namespace xyz moved into jinja2::detail and the XYZ_ macros renamed
+// - namespace xyz moved into jinja2::v2::detail and the XYZ_ macros renamed
 //   JINJA2CPP_XYZ_ (task 0076), so a user's own copy of value_types neither
 //   shadows this one through the shared include guards nor collides with it at
 //   link time;

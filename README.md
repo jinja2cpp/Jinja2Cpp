@@ -189,7 +189,7 @@ The install carries a CMake package and a pkg-config file. With CMake, point
 target:
 
 ```cmake
-find_package(jinja2cpp 1 REQUIRED)
+find_package(jinja2cpp 2 REQUIRED)
 target_link_libraries(my_app PRIVATE jinja2cpp::jinja2cpp)
 ```
 
@@ -201,6 +201,27 @@ it in the default internal dependencies mode). The un-namespaced `jinja2cpp` tar
 `lib/cmake/jinja2cpp` (was `lib/jinja2cpp`), the static library in `lib` (was
 `lib/static`) and `jinja2cpp.pc` in `lib/pkgconfig` (was `share/pkgconfig`). Without CMake, use `pkg-config --cflags --libs jinja2cpp`
 (`--static` for a static build).
+
+### Compatibility and versioning
+
+- **Names.** The 1.x names that 2.0 could keep still compile, marked `[[deprecated]]`;
+  they are removed in 3.0.
+- **ABI across majors.** Everything is declared in `jinja2::v2`, an inline namespace: you
+  keep writing `jinja2::Value`, but the major version is part of every mangled name, so a
+  program compiled against 1.x headers fails to link with a 2.x library (static or shared)
+  instead of misbehaving at run time. Never spell `v2` yourself. To declare Jinja2C++ types
+  without their definitions, include `<jinja2cpp/fwd.h>`: a hand-written
+  `namespace jinja2 { class Value; }` declares a different, undefined class and makes later
+  uses ambiguous. `<jinja2cpp/jinja2cpp.h>` includes the whole API except the JSON bindings.
+  If your code says `using namespace jinja2;` and has its own namespace-scope `v2`, qualify
+  one of them.
+- **ABI within 2.x.** The shared library's SONAME carries the ABI version
+  (`libjinja2cpp.so.2`, `libjinja2cpp.2.dylib`). It is bumped by any release that changes the
+  layout of a type you allocate (a `Settings` field, a `Value` alternative) or the signature
+  of an exported function, so a shared consumer is never loaded against an incompatible
+  library. A static consumer has no such guard and rebuilds after a minor upgrade; patch
+  releases keep the ABI.
+
 ### Usage with conan.io dependency manager
 Jinja2C++ can be used as conan.io package. In this case, you should do the following steps:
 
