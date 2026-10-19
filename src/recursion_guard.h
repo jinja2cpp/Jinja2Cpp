@@ -1,9 +1,18 @@
 #ifndef JINJA2CPP_SRC_RECURSION_GUARD_H
 #define JINJA2CPP_SRC_RECURSION_GUARD_H
 
+#include <jinja2cpp/template_env.h>
+
 #include <algorithm>
+#include <chrono>
+#include <climits>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <optional>
+#include <string>
+#include <type_traits>
+#include <utility>
 
 #if defined(_MSC_VER) && !defined(__clang__)
 #include <intrin.h>
@@ -23,36 +32,214 @@ inline namespace v2
 // renderer also check how much of the current thread's stack is left
 // (StackNearlyExhausted) and stop there with the same error.
 //
-// Expression nesting: brackets, calls, subscripts, filter arguments. Python Jinja2 fails at
-// about 70 nested brackets.
-constexpr unsigned MaxExpressionDepth = 64;
-// Operator depth of an expression: a + b + c, x|f|g, a.b.c, - - x and a if x else b if y
-// else c nest one level per operator although the parser reads them in a loop. Siblings
-// (operands, list items, call arguments) do not add up; the deepest one counts. Python
-// fails at 300-500.
-constexpr unsigned MaxExpressionOperators = 400;
-// Render nesting: macro and caller() calls, super() and self.<block>, loop() of recursive
-// loops, included, imported and parent templates. Python fails at about 250 macro calls.
-constexpr unsigned MaxRenderDepth = 256;
-// Statement blocks open at once ({% if %}, {% for %}, {% macro %}, ...; elif and else do
-// not count). Python compiles a template to Python code and fails at about 100 nested
-// blocks (IndentationError), 20 of them loops.
-constexpr unsigned MaxBlockNesting = 128;
+// The counts are Settings::Limits: maxExpressionDepth, maxExpressionOperators and
+// maxBlockNesting, which the parser reads from ParseLimits, and maxRenderDepth, which
+// RenderDepthGuard reads from the render's RenderLimits.
+
+// A depth limit of Settings::Limits as the counters compare it: 0, no limit, never passed
+constexpr unsigned LimitOrNone(std::uint32_t limit)
+{
+    return limit != 0 ? limit : UINT_MAX;
+}
 
 namespace detail
 {
 // The current thread's stack below `limit` is the reserve that StackNearlyExhausted keeps
 // free; `low` is its end. The bounds are read on the first check in a thread, which always
 // takes the slow path; a stack of unknown bounds gets limit 0 and is never checked again.
+// `renderLimit` is what CheckStack, the renderer's check, compares with: `limit`, or
+// UINTPTR_MAX while a render with limits runs, so that every check of that render takes the
+// slow path, which counts it as a step (Settings::Limits::maxRenderSteps). A render without
+// limits pays nothing for them.
 struct ThreadStack
 {
     std::uintptr_t limit = UINTPTR_MAX;
     std::uintptr_t low = 0;
+    std::uintptr_t renderLimit = UINTPTR_MAX;
 };
 inline thread_local ThreadStack t_threadStack;
 
 bool StackNearlyExhaustedSlow(std::uintptr_t frame);
+
+// The parser's limits for the template being loaded (ParseLimitsScope), in a thread-local
+// rather than in each parser, which lives for one tag
+struct ParseLimits
+{
+    unsigned maxExpressionDepth = 64;
+    unsigned maxExpressionOperators = 400;
+    unsigned maxBlockNesting = 128;
+};
+static_assert(ParseLimits{}.maxExpressionDepth == Settings::Limits{}.maxExpressionDepth
+              && ParseLimits{}.maxExpressionOperators == Settings::Limits{}.maxExpressionOperators
+              && ParseLimits{}.maxBlockNesting == Settings::Limits{}.maxBlockNesting);
+inline thread_local ParseLimits t_parseLimits;
+
+// CheckStack's slow path: counts the step of a render with limits, then checks the stack
+void CheckStackSlow(std::uintptr_t frame);
+
+// What the running render may still do (Settings::Limits, docs/tasks/0262). A limit that is
+// off holds the largest value of its type, so each check is one compare. Outside a render,
+// and in a render without limits, every limit is off.
+struct RenderLimits
+{
+    // Steps left before StepsSlow: the rest of the step budget, or of the 1024 steps between
+    // two clock polls, whichever ends first
+    std::uint64_t stepsLeft = UINT64_MAX;
+    // Steps the countdown started from, and the steps taken before it
+    std::uint64_t chunk = UINT64_MAX;
+    std::uint64_t stepsTaken = 0;
+    std::uint64_t maxSteps = 0;
+    // The built-in cap (MaxSequenceSize in internal_value.h) or a lower maxSequenceSize
+    std::uint64_t maxSequenceSize = std::uint64_t{ 1 } << 26;
+    std::uint64_t maxRange = UINT64_MAX;
+    std::uint64_t loadsLeft = UINT64_MAX;
+    unsigned maxRenderDepth = 256;
+    // The render's output string (std::string, or std::wstring when `wideOutput`) and the size
+    // it may reach (maxOutputSize); null without that limit
+    const void* output = nullptr;
+    std::size_t maxOutputEnd = SIZE_MAX;
+    bool wideOutput = false;
+    // Whether a limit is set: a render without limits inside one with them installs these defaults
+    bool active = false;
+    bool hasDeadline = false;
+    // steady_clock ticks since its epoch: a time_point's constructor is not noexcept, which a
+    // thread-local's initialiser has to be
+    std::chrono::steady_clock::rep deadline = 0;
+};
+static_assert(RenderLimits{}.maxRenderDepth == Settings::Limits{}.maxRenderDepth);
+// Constant-initialised, so that reading it needs no guard
+inline thread_local RenderLimits t_renderLimits;
+
+void PollDeadline();
+void InstallRenderLimits(const RenderLimits& limits);
 } // namespace detail
+
+// A limit of Settings::Limits that a render passed. Template rendering reports it as
+// ErrorCode::ResourceLimitExceeded with the message and the field's name
+class ResourceLimitError : public std::exception
+{
+public:
+    ResourceLimitError(const char* field, std::string message)
+        : m_field(field)
+        , m_message(std::move(message))
+    {
+    }
+    [[nodiscard]] const char* what() const noexcept override { return m_message.c_str(); }
+    [[nodiscard]] const char* Field() const noexcept { return m_field; }
+
+private:
+    const char* m_field;
+    std::string m_message;
+};
+
+// Installs a render's limits for as long as it lives and puts back the ones of the render it
+// interrupts (a host callable may render another template). A render without limits (null)
+// on a thread that runs none costs a test of a thread-local flag
+class RenderLimitsScope
+{
+public:
+    explicit RenderLimitsScope(const Settings::Limits* limits)
+    {
+        if (limits || detail::t_renderLimits.active)
+        {
+            Install(limits);
+        }
+    }
+    ~RenderLimitsScope()
+    {
+        if (m_saved)
+        {
+            detail::InstallRenderLimits(*m_saved);
+        }
+    }
+    RenderLimitsScope(const RenderLimitsScope&) = delete;
+    RenderLimitsScope& operator=(const RenderLimitsScope&) = delete;
+    RenderLimitsScope(RenderLimitsScope&&) = delete;
+    RenderLimitsScope& operator=(RenderLimitsScope&&) = delete;
+
+private:
+    void Install(const Settings::Limits* limits);
+
+    std::optional<detail::RenderLimits> m_saved;
+};
+
+// Whether a template loaded with these limits renders with any (RenderLimitsScope): the
+// Load-time limits aside, one of them differs from the defaults
+inline bool HasRenderLimits(const Settings::Limits& limits)
+{
+    const Settings::Limits defaults;
+    return limits.maxRange != 0 || limits.maxSequenceSize != 0 || limits.maxOutputSize != 0 || limits.maxTemplateLoads != 0
+           || limits.maxRenderSteps != 0 || limits.maxRenderTime.count() > 0 || limits.maxRenderDepth != defaults.maxRenderDepth;
+}
+
+// Bounds the render's output (Settings::Limits::maxOutputSize): `output` may grow to `start`
+// plus that many characters. Checked at every render step and when the render ends, so it
+// may pass the limit by the output of one expression and what the stream buffers
+template<typename CharT>
+void LimitRenderOutput(const std::basic_string<CharT>& output, std::size_t start)
+{
+    auto& limits = detail::t_renderLimits;
+    if (limits.maxOutputEnd != SIZE_MAX)
+    {
+        limits.output = &output;
+        limits.wideOutput = !std::is_same_v<CharT, char>;
+        limits.maxOutputEnd = limits.maxOutputEnd < SIZE_MAX - start ? start + limits.maxOutputEnd : SIZE_MAX - 1;
+    }
+}
+// Throws ResourceLimitError when the render's output is past its limit
+void CheckRenderOutput();
+
+// After a host callable returns: a render past its deadline stops here, not 1024 steps later
+inline void AfterHostCall()
+{
+    if (detail::t_renderLimits.hasDeadline)
+    {
+        detail::PollDeadline();
+    }
+}
+
+// Installs the parser's limits for the Load it lives for and puts back those of the Load it
+// interrupts (a render loads the templates it includes)
+class ParseLimitsScope
+{
+public:
+    explicit ParseLimitsScope(const Settings::Limits& limits)
+        : m_saved(detail::t_parseLimits)
+    {
+        detail::t_parseLimits = { LimitOrNone(limits.maxExpressionDepth), LimitOrNone(limits.maxExpressionOperators), LimitOrNone(limits.maxBlockNesting) };
+    }
+    ~ParseLimitsScope() { detail::t_parseLimits = m_saved; }
+    ParseLimitsScope(const ParseLimitsScope&) = delete;
+    ParseLimitsScope& operator=(const ParseLimitsScope&) = delete;
+    ParseLimitsScope(ParseLimitsScope&&) = delete;
+    ParseLimitsScope& operator=(ParseLimitsScope&&) = delete;
+
+private:
+    detail::ParseLimits m_saved;
+};
+
+namespace detail
+{
+void CountTemplateLoadSlow();
+[[noreturn]] void ThrowRangeTooLong(std::uint64_t size);
+} // namespace detail
+
+// Counts one template that `include`, `extends` or `import` loads (maxTemplateLoads)
+inline void CountTemplateLoad()
+{
+    if (detail::t_renderLimits.loadsLeft != UINT64_MAX)
+    {
+        detail::CountTemplateLoadSlow();
+    }
+}
+// Throws ResourceLimitError when range() would have more than maxRange items
+inline void CheckRangeSize(std::uint64_t size)
+{
+    if (size > detail::t_renderLimits.maxRange)
+    {
+        detail::ThrowRangeTooLong(size);
+    }
+}
 
 // Whether the current thread has less stack left than one more level of parsing or
 // rendering may need. False where the stack bounds are unknown. Called for every evaluated
@@ -156,25 +343,32 @@ public:
     [[nodiscard]] const char* what() const noexcept override { return "maximum recursion depth exceeded"; }
 };
 
-// Throws RecursionLimitError when the thread's stack is nearly used up
+// Throws RecursionLimitError when the thread's stack is nearly used up. The renderer's and
+// the evaluator's check: in a render with limits each call is a render step, which may throw
+// ResourceLimitError
 inline void CheckStack()
 {
-    if (StackNearlyExhausted())
+#if defined(_MSC_VER) && !defined(__clang__)
+    const auto frame = reinterpret_cast<std::uintptr_t>(_AddressOfReturnAddress());
+#else
+    const auto frame = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
+#endif
+    if (frame < detail::t_threadStack.renderLimit)
     {
-        throw RecursionLimitError();
+        detail::CheckStackSlow(frame);
     }
 }
 
-// One level of render nesting; throws RecursionLimitError past MaxRenderDepth or when the
-// stack runs low. The count is per thread, so it spans every template and context one
-// render goes through.
+// One level of render nesting; throws RecursionLimitError past
+// Settings::Limits::maxRenderDepth or when the stack runs low. The count is per thread, so it
+// spans every template and context one render goes through.
 class RenderDepthGuard
 {
 public:
     RenderDepthGuard()
         : m_guard(Depth())
     {
-        if (m_guard.Exceeds(MaxRenderDepth))
+        if (m_guard.Exceeds(detail::t_renderLimits.maxRenderDepth))
         {
             throw RecursionLimitError();
         }

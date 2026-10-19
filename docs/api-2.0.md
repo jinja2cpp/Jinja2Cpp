@@ -242,6 +242,23 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | `Settings::jinja2CompatMode`, `enum Jinja2CompatMode { None, Vesrsion_2_10 }` | misspelt, and **never read** by the library | remove | break |
 | `operator==(Settings, Settings)` lists every field by hand | a new field that is not added there compares equal silently | out of line, next to a `static_assert` on the field count or a test that fails when the struct grows | fix |
 | every new `Settings` field changes `sizeof(Settings)` | parity work keeps adding options, each an ABI break | accepted: see SOVERSION policy in 5.4 | — |
+| no way to bound a render: the depth limits are compile-time constants, nothing bounds time, steps, output or loads | a host rendering templates its users write cannot stop a runaway one | `Settings::Limits limits` (0262), fixed at 2.0, see below | add |
+
+**`Settings::Limits` (task 0262).** One nested struct, every field enforced, 0 meaning no
+limit beyond the built-in caps: `maxRange`, `maxSequenceSize` (only lowers the 2^26 cap),
+`maxOutputSize`, `maxTemplateSize` (Load, loader-sourced templates included),
+`maxTemplateLoads`, `maxRenderSteps`, `maxRenderTime` (polled every 1024 steps and after each
+host callable returns), and the depth limits `maxRenderDepth` (256), `maxExpressionDepth`
+(64), `maxExpressionOperators` (400), `maxBlockNesting` (128), which used to be constants. A
+limit fails the call with `ErrorCode::ResourceLimitExceeded`, `extraParams[1]` naming the field;
+the depth limits keep `RecursionLimitExceeded`. A render started by a host callable inside
+another keeps its own template's limits. Presets: `UntrustedLimits()` (Jinja2
+`SandboxedEnvironment` anchors: `range()` 100000, sequences 2^20, 16 MiB of output, 10^7
+steps) and `UntrustedSettings()` (the same with `autoescape`). A step is a statement body,
+an item a loop's `if` looks at, a render level, or the evaluation of an operator, call or
+filter: the chat-template benchmarks take 550-1000. With every limit at its default a render
+pays nothing per step: steps are counted in the stack check's slow path, which only a render
+with limits takes.
 
 ### 3.4 Errors (`error_info.h`, `error_handler.h`)
 

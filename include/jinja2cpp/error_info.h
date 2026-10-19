@@ -39,6 +39,7 @@ enum class ErrorCode
     RecursionLimitExceeded = 12,   //!< Expressions nest, or macros, includes or recursive loops recurse, deeper than Jinja2C++ allows (Python's RecursionError)
     UnknownFilter = 13,            //!< The template names a filter that is neither built in nor added to the environment (Jinja2's TemplateAssertionError). ExtraParams[0] contains the name
     UnknownTest = 14,              //!< The template names a test that is neither built in nor added to the environment (Jinja2's TemplateAssertionError). ExtraParams[0] contains the name
+    ResourceLimitExceeded = 18,    //!< A limit of Settings::Limits was passed. ExtraParams[0] contains the message, ExtraParams[1] the name of the limit (`"maxRenderSteps"`)
     ExpectedStringLiteral = 1001,  //!< String literal expected
     ExpectedIdentifier = 1002,     //!< Identifier expected
     ExpectedSquareBracket = 1003,  //!< ']' expected

@@ -262,8 +262,31 @@ public:
 
     // Parses into fresh state and replaces the loaded template only if parsing succeeds: the tree
     // points into its source, so a failed Load keeps the previous source, tree and name together
+    // The Load overloads check the size before they copy or read the whole source
+    [[nodiscard]] bool SourceTooLong(std::size_t size) const
+    {
+        const auto maxSize = m_settings->settings.limits.maxTemplateSize;
+        return maxSize != 0 && size > maxSize;
+    }
+    [[nodiscard]] BasicErrorInfo<CharT> SourceTooLongError(const std::string& tplName) const
+    {
+        typename BasicErrorInfo<CharT>::Data errorData;
+        errorData.code = ErrorCode::ResourceLimitExceeded;
+        errorData.srcLoc.col = 1;
+        errorData.srcLoc.line = 1;
+        errorData.srcLoc.fileName = tplName.empty() ? std::string("noname.j2tpl") : tplName;
+        errorData.extraParams.push_back(
+            Value("the template's source is longer than " + std::to_string(m_settings->settings.limits.maxTemplateSize) + " characters"));
+        errorData.extraParams.push_back(Value(std::string("maxTemplateSize")));
+        return BasicErrorInfo<CharT>(errorData);
+    }
+
     std::optional<BasicErrorInfo<CharT>> Load(std::basic_string<CharT> tpl, std::string tplName)
     {
+        if (SourceTooLong(tpl.size()))
+        {
+            return SourceTooLongError(tplName);
+        }
         // On the heap, so the tree's pointers into it survive the hand-over to m_template
         auto source = std::make_unique<std::basic_string<CharT>>(std::move(tpl));
         NormalizeTemplateNewlines(*source, m_settings->settings.keepTrailingNewline);
@@ -292,6 +315,7 @@ public:
             }
         }
 
+        const ParseLimitsScope parseLimits(m_settings->settings.limits);
         auto parseResult = parser.Parse();
         if (!parseResult)
         {
@@ -348,6 +372,8 @@ public:
         {
             // First, so that it ends last: when nothing of the render holds values any more
             const CycleCollector cycles;
+            // Before anything else the render does, the conversion of the params included
+            const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr);
             // The tables of the params and the top scope are lent by the thread's workspace and
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;
@@ -392,8 +418,17 @@ public:
             const auto hint = m_outputSizeHint.value.load(std::memory_order_relaxed);
             os.reserve(start + hint);
             OutStream outStream(os);
+            if (m_settings->hasRenderLimits)
+            {
+                LimitRenderOutput(os, start);
+            }
             m_nodes[m_renderer].RenderNamed(outStream, context, SelfName());
             outStream.Flush();
+            if (m_settings->hasRenderLimits)
+            {
+                CheckRenderOutput();
+                detail::PollDeadline();
+            }
             context.TakeTopScope(maps.TopScope());
             // Stored only when the output outgrows the hint or needs less than half of it, so
             // that renders of a steady size store nothing: every core rendering the template
@@ -421,6 +456,18 @@ public:
             errorData.srcLoc.col = 1;
             errorData.srcLoc.line = 1;
             errorData.srcLoc.fileName = m_templateName;
+
+            return BasicErrorInfo<CharT>(errorData);
+        }
+        catch (const ResourceLimitError& ex)
+        {
+            typename BasicErrorInfo<CharT>::Data errorData;
+            errorData.code = ErrorCode::ResourceLimitExceeded;
+            errorData.srcLoc.col = 1;
+            errorData.srcLoc.line = 1;
+            errorData.srcLoc.fileName = m_templateName;
+            errorData.extraParams.push_back(Value(std::string(ex.what())));
+            errorData.extraParams.push_back(Value(std::string(ex.Field())));
 
             return BasicErrorInfo<CharT>(errorData);
         }
@@ -552,6 +599,7 @@ public:
         }
         NodeArena nodes;
         TemplateParser<CharT> parser(m_template.get(), *m_settings, m_env, m_templateName, nodes);
+        const ParseLimitsScope parseLimits(m_settings->settings.limits);
         auto parseResult = parser.Parse();
         if (!parseResult)
         {
@@ -668,6 +716,7 @@ private:
             auto p = loaded.find(fileName);
             if (p == loaded.end())
             {
+                CountTemplateLoad();
                 auto& entry = loaded.emplace(fileName, LoadedTemplate{ m_host->LoadTemplate(fileName), nullptr }).first->second;
                 entry.latest = &entry.first;
                 return entry.first;
@@ -675,6 +724,7 @@ private:
             auto& entry = p->second;
             if (m_host->m_settings->settings.templateLookup == TemplateLookup::EveryUse)
             {
+                CountTemplateLoad();
                 auto result = m_host->LoadTemplate(fileName);
                 // A reloaded template is kept as a new result: a render may still be running the one it replaces
                 if (!IsSameTemplate(result, *entry.latest))
@@ -709,6 +759,7 @@ private:
             auto name = GetAsSameString(std::string(), fileName);
             if (!name)
             {
+                CountTemplateLoad();
                 return Loaded().replaced.emplace_back(m_host->LoadTemplate(fileName));
             }
             return LoadTemplate(name.value());
