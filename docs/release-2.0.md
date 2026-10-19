@@ -88,7 +88,7 @@ tag; **A** = accepted for 2.0, tracked, does not block.
 | G8 Robustness | Full CI green incl. sanitizer jobs; the nightly fuzz workflow passes on the candidate (dispatch it); an extended structure-aware fuzz campaign (0095: custom mutator and grammar-generated differential run) on the candidate finds no new crash, leak or silent wrong value; `fuzz/regressions/` replays clean | [0095](tasks/0095-structure-aware-fuzzing.md) | merge steward | B | observed runs on the candidate |
 | G9 Performance | The benchmark workflow passes against the previous master (no regression past its gate). No further gains required | — | perf track | B | `benchmark.yml` run on the candidate |
 | G10 Inventory | `scripts/sbom.py --check` and `scripts/task_index.py --check` pass; the dependency inventory matches what the release installs | [0187](tasks/0187-generated-data-acquisition.md) (SBOM stays there) | merge steward | B | format-check job |
-| G11 Tracker | Every open GitHub issue names an open task or is closed with a pointer to its fix; milestones 1.2 and 1.3 closed; external PRs #284, #199, #197 resolved | [0234](tasks/0234-github-tracker-cleanup.md) | unassigned | B | issue list on the RC date |
+| G11 Tracker | Every open GitHub issue names an open task or is closed with a pointer to its fix; milestones 1.2 and 1.3 closed; external PRs #284, #199, #197 resolved; done in the pre-freeze sweep (section 7, step 0) | [0234](tasks/0234-github-tracker-cleanup.md) | unassigned | B | issue list on the RC date |
 | G12 Hash map successor | Vendored `robin_hood.h` (upstream archived) replaced by the successor the perf track picks, with its two local additions ported; no regression past the Cachegrind gate; `sbom/components.json` matches | [0231](tasks/0231-robin-hood-successor.md) | perf track | B (Ruslan 2026-10-18) | bench/ and Cachegrind gate results on the switch PR |
 | G13 Comparison report | A generated benchmark and feature-parity report against Python Jinja2, MiniJinja, Tera, minja and inja is published for the RC; rival suites' cases are covered; 0247's perf exit criterion holds or each exception is recorded; the Python drop-in module's pass rate is in the report | [0246](tasks/0246-public-comparison-report.md), [0247](tasks/0247-rival-benchmark-coverage.md), [0248](tasks/0248-python-drop-in-replacement.md) | perf track | B (Ruslan 2026-10-18) | report generated on the candidate; `bench/run.py` output |
 
@@ -179,8 +179,12 @@ Corpus on master `b0fb0ef`: 1929 cases, 1886 match.
 
 ## 7. RC procedure
 
-0. **Tracker.** Run 0234 on the candidate: close fixed issues with pointers to their
-   fixes, after Ruslan approves the list.
+0. **Tracker sweep (Ruslan 2026-10-19).** Right before the freeze, scan once more through
+   every open GitHub issue, every milestone and every open PR, and draft one list of what
+   to close: issues fixed on master (with a pointer to the fix), issues and PRs that are
+   stale or no longer relevant (with a one-line reason), and milestones that are delivered
+   or superseded. Ruslan approves the list, then it is closed in one pass (0234). Until
+   this sweep, external PRs and issues are left as they are.
 1. **Freeze.** When G1-G6 are done and section 8 is decided, the steward picks a master
    commit, records its full SHA in section 1 and opens the validation window. From then
    on master takes only fixes for blocking findings; other merges wait.
