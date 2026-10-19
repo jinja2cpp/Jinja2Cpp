@@ -1,12 +1,16 @@
 #include "test_tools.h"
 
+#include <jinja2cpp/error_info.h>
+#include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
 #include <iostream>
+#include <optional>
 #include <regex>
 #include <set>
 #include <sstream>
@@ -649,6 +653,58 @@ INSTANTIATE_TEST_SUITE_P(Center, FilterGenericTest, ::testing::Values(
                             InputOutputPair{" 'x' | center(width=0) | pprint", "'x'"},
                             InputOutputPair{" '  x' | center(width=5) | pprint", "'   x '"}
                             ));
+
+// C++-only filters (docs/tasks/0233): identifier case conversion, C++ string-literal escaping
+// and block-style YAML
+INSTANTIATE_TEST_SUITE_P(Camelize, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"'device_type' | camelize", "DeviceType"},
+                            InputOutputPair{"'device_type' | camelize(upper_first=false)", "deviceType"},
+                            InputOutputPair{"'HTTPServer' | camelize", "HttpServer"},
+                            InputOutputPair{"'XMLHttpRequest' | camelize(false)", "xmlHttpRequest"},
+                            InputOutputPair{"'__FOO_BAR__' | camelize", "FooBar"},
+                            InputOutputPair{"'some-name with  spaces.x' | camelize", "SomeNameWithSpacesX"},
+                            InputOutputPair{"'vector3d_type' | camelize", "Vector3dType"},
+                            InputOutputPair{"'' | camelize | pprint", "''"},
+                            InputOutputPair{"42 | camelize | pprint", "'42'"}
+                            ));
+
+INSTANTIATE_TEST_SUITE_P(Underscorize, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"'DeviceType' | underscorize", "device_type"},
+                            InputOutputPair{"'HTTPServer' | underscorize", "http_server"},
+                            InputOutputPair{"'getHTTPResponseCode' | underscorize", "get_http_response_code"},
+                            InputOutputPair{"'Vector3D' | underscorize", "vector3_d"},
+                            InputOutputPair{"'already_snake' | underscorize", "already_snake"},
+                            InputOutputPair{"'  Some Name-here ' | underscorize", "some_name_here"},
+                            InputOutputPair{"'__init__' | underscorize", "init"},
+                            InputOutputPair{"'deviceType' | camelize | underscorize", "device_type"}
+                            ));
+
+INSTANTIATE_TEST_SUITE_P(EscapeCpp, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"'say \"hi\"' | escapecpp", "say \\\"hi\\\""},
+                            InputOutputPair{"'a\\\\b' | escapecpp", "a\\\\b"},
+                            InputOutputPair{"'tab\\tnl\\ncr\\r' | escapecpp", "tab\\tnl\\ncr\\r"},
+                            InputOutputPair{"\"it's ok\" | escapecpp", "it's ok"},
+                            InputOutputPair{"12 | escapecpp", "12"}
+                            ));
+
+INSTANTIATE_TEST_SUITE_P(ToYaml, FilterGenericTest, ::testing::Values(
+                            InputOutputPair{"{'a': 1, 'b': [1, 2], 'c': {'d': none, 'e': 'x y'}} | toyaml",
+                                            "a: 1\nb:\n  - 1\n  - 2\nc:\n  d: null\n  e: x y"},
+                            InputOutputPair{"[1, 'two', [3, 4], {'k': true}, [], {}] | toyaml",
+                                            "- 1\n- two\n- - 3\n  - 4\n- k: true\n- []\n- {}"},
+                            InputOutputPair{"[{'a': 1, 'b': {'c': 2}}] | toyaml", "- a: 1\n  b:\n    c: 2"},
+                            InputOutputPair{"{'items': [{'id': 1}, {'id': 2}, {'n': 3}], 'e': []} | toyaml", "items:\n  - id: 1\n  - id: 2\n  - \"n\": 3\ne: []"},
+                            InputOutputPair{"['yes', '', '1.5', ' x', 'x ', 'a: b', 'a#b', 'Null', '-x', 'a\\nb', 'q\"\\\\'] | toyaml",
+                                            "- \"yes\"\n- \"\"\n- \"1.5\"\n- \" x\"\n- \"x \"\n- \"a: b\"\n- \"a#b\"\n- \"Null\"\n- \"-x\"\n- \"a\\nb\"\n- \"q\\\"\\\\\""},
+                            InputOutputPair{"['plain text', 'path/to-file.txt', 'f(x) + 1', '_x'] | toyaml",
+                                            "- plain text\n- path/to-file.txt\n- f(x) + 1\n- _x"},
+                            InputOutputPair{"[1.5, 1e20, -2.0, false] | toyaml", "- 1.5\n- 1.0e+20\n- -2.0\n- false"},
+                            InputOutputPair{"{'a': 1} | dictsort | toyaml", "- - a\n  - 1"},
+                            InputOutputPair{"'plain' | toyaml", "plain"},
+                            InputOutputPair{"none | toyaml", "null"},
+                            InputOutputPair{"{} | toyaml", "{}"},
+                            InputOutputPair{"[] | toyaml", "[]"}
+                            ));
 // clang-format on
 struct XmlAttr : ::testing::Test
 {
@@ -1030,6 +1086,36 @@ TEST(FilterErrors, VerifierLeftovers)
     const std::string fileSep = std::string(1, '\x1c') + "5";
     const std::string unitSep = std::string(1, '\x1f') + "5";
     EXPECT_EQ("0|0.0|5|5.0", RenderOrError("{{ fs|int }}|{{ us|float }}|{{ '\v5\t'|int }}|{{ '\f5\r'|float }}", { { "fs", fileSep }, { "us", unitSep } }));
+}
+
+// docs/tasks/0233: the C++-only filters on non-ASCII text, control characters and values
+// YAML has no form for; toxml was removed and is an unknown filter, as in Jinja2
+TEST(CppOnlyFilters, UnicodeControlsAndErrors)
+{
+    EXPECT_EQ("Stra\303\237eName|\303\244pfel_birnen|\303\204pfel", RenderOrError("{{ 'stra\303\237e_name'|camelize }}|{{ '\303\204pfelBirnen'|underscorize }}|{{ '\303\244pfel'|camelize }}", {}));
+    // Joined pieces: a hex escape would swallow the b and the 1 that follow it
+    const std::string controls = std::string("a\x01") + "b\x7f\x1b" + "1";
+    EXPECT_EQ("a\\001b\\177\\0331|\303\251", RenderOrError("{{ s|escapecpp }}|{{ '\303\251'|escapecpp }}", { { "s", controls } }));
+    EXPECT_EQ("- \346\227\245\346\234\254\n- \"\\x01\\e\\0\"\n- \"\\u2028\"\n- .nan\n- -.inf", RenderOrError("{{ ['\346\227\245\346\234\254', s, '\342\200\250', 'nan'|float, '-inf'|float]|toyaml }}", { { "s", std::string("\x01\x1b\0", 3) } }));
+    EXPECT_NE(RenderOrError("{{ namespace(a=1)|toyaml }}", {}).find("not YAML serializable"), std::string::npos);
+    EXPECT_NE(RenderOrError("{{ {'a': missing}|toyaml }}", {}).find("Object of type Undefined is not YAML serializable"), std::string::npos);
+    // Malformed UTF-8: a long run of continuation bytes was an out-of-range shift (UBSan)
+    const std::string tails = std::string("a") + std::string(40, '\x80');
+    EXPECT_EQ(tails + "|\"a\"", RenderOrError("{{ s|toyaml }}|{{ s|tojson }}", { { "s", tails } }));
+    // Lazy sequences are iterated once; a key over 255 bytes is an explicit "? key"
+    EXPECT_EQ("- 0\n- 2|r:\n  - 0\n  - 1", RenderOrError("{{ range(0, 3, 2)|toyaml }}|{{ {'r': range(2)}|toyaml }}", {}));
+    // A generator with no end stops at the size cap, in toyaml and tojson alike
+    const std::string chunk(size_t{ 1 } << 20, 'x');
+    auto endless = [&chunk] { return MakeGenericList([&chunk]() -> std::optional<Value> { return Value(chunk); }); };
+    EXPECT_NE(RenderOrError("{{ g|toyaml }}", { { "g", endless() } }).find("a YAML document of length"), std::string::npos);
+    EXPECT_NE(RenderOrError("{{ g|tojson }}", { { "g", endless() } }).find("a JSON document of length"), std::string::npos);
+    const std::string longKey(300, 'k');
+    EXPECT_EQ("? " + longKey + "\n: 1\n" + "short:\n  - ? " + longKey + "\n    :\n      - 2", RenderOrError("{{ {k: 1, 'short': [{k: [2]}]}|toyaml }}", { { "k", longKey } }));
+
+    Template tpl;
+    auto loaded = tpl.Load("{{ {'a': 1}|toxml }}");
+    ASSERT_FALSE(loaded.has_value());
+    EXPECT_EQ(ErrorCode::UnknownFilter, loaded.error().GetCode());
 }
 
 TEST(FilterUnicode, PercentAEscapesNonAscii)
