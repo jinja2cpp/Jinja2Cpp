@@ -200,7 +200,7 @@ struct Reflector<rapidjson::GenericValue<Enc>>
             }
             else if (val->IsUint64())
             {
-                result = detail::ToStoredInt(val->GetUint64());
+                result = Value(val->GetUint64());
             }
             else if (val->IsInt() || val->IsUint())
             {

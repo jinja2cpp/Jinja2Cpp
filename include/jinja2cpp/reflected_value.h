@@ -673,12 +673,12 @@ struct Reflector<T, std::enable_if_t<std::is_floating_point_v<T>>>
 };
 
 // Every integral type except bool, including the character types, is reflected as int64_t; a value outside its
-// range throws std::overflow_error, as Value's constructor does
+// range becomes a BigInt, as Value's constructor stores it
 template<typename T>
 struct Reflector<T, std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<std::remove_cv_t<T>, bool>>>
 {
-    static auto Create(T val) { return Value(ToStoredInt(val)); }
-    static auto CreateFromPtr(const T* val) { return Value(ToStoredInt(*val)); }
+    static auto Create(T val) { return Value(ToStoredInt<Value::ValueData>(val)); }
+    static auto CreateFromPtr(const T* val) { return Value(ToStoredInt<Value::ValueData>(*val)); }
 };
 } // namespace detail
 #endif

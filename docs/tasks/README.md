@@ -300,7 +300,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0230](0230-boost-free-core.md) | A Boost-free core | build | medium | open |
 | [0231](0231-robin-hood-successor.md) | robin_hood's upstream is archived | perf | high | open |
 | [0232](0232-dependency-pin-drift.md) | Dependency pins disagree across modes and some are mutable | build | low | open |
-| [0233](0233-cpp-only-filter-stubs.md) | C++-only filters `camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml` do nothing | api | medium | open |
+| [0233](0233-cpp-only-filter-stubs.md) | C++-only filters `camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml` do nothing | api | medium | done |
 | [0234](0234-github-tracker-cleanup.md) | Close GitHub issues that master already fixes, before 2.0 | release | medium | open |
 | [0235](0235-parity-feature-rows-drift.md) | `docs/parity.md` feature rows contradict master | parity | medium | open |
 | [0236](0236-meta-find-undeclared-variables.md) | Template introspection: `meta.find_undeclared_variables`, `Template.module` | api | low | open |
@@ -334,7 +334,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0266](0266-confined-filesystem.md) | `ConfinedFileSystem`: a loader that never leaves its root | api | medium | open |
 | [0267](0267-untrusted-mode-fuzzing.md) | Fuzz targets for templates written by untrusted users | robustness | high | open |
 | [0268](0268-untrusted-mode-followups.md) | Untrusted mode: additive follow-ups after the freeze | api | low | open |
-| [0269](0269-public-big-int-value.md) | Public `BigInt` value (0178 phase 1, G1) | api | high | open |
+| [0269](0269-public-big-int-value.md) | Public `BigInt` value (0178 phase 1, G1) | api | high | done |
 | [0270](0270-big-int-core-text-form.md) | Big integers in the core, text form (0178 phase 2) | parity | medium | open |
 | [0271](0271-big-int-backend-interface.md) | Big-integer backend interface and overflow promotion (0178 phase 3) | api | medium | open |
 | [0272](0272-big-int-boost-backend.md) | Boost.Multiprecision backend and `JINJA2CPP_WITH_BIGINT` (0178 phase 4) | build | medium | open |

@@ -206,6 +206,7 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | `Value(T&&)` for unsigned, `long long`, `short`, `char`, `size_t` | *probe:* stores `bool` at C++14 (`Value(5u).data().index() == 1`), `int64_t` at C++17, and `Value(size_t(5))` does not compile at C++17 | constructors for every integral type storing `int64_t`, as `Reflect` already does; `Value(char)` deleted (ambiguous between a number and a one-letter string) | fix (task 0067) |
 | `Value(nullptr)` | *probe:* picks `Value(const char*)` and throws `logic_error` from `std::string(nullptr)` | `Value(std::nullptr_t)` makes `None` | fix (0067) |
 | `Value(ValuesList&&) noexcept`, `Value(ValuesMap&&) noexcept` | allocate, so `bad_alloc` becomes `std::terminate` | drop `noexcept` there | fix |
+| `Value(uint64_t)` above `INT64_MAX` | cannot be held: wrapped to a negative number in 1.x, `std::overflow_error` since 0172 | `jinja2::BigInt` (`big_int.h`): an integer of any size as canonical decimal text, `TryParse(std::string_view, BigInt&) noexcept`, `Sign`, `ToInt64`/`ToUInt64`, comparisons by value; the last `Value` alternative (`sizeof(Value)` unchanged), with `IsBigInt()`, `AsBigInt()`, `bool AsBigInt(const BigInt*&)`; the integral constructor, `Reflect` and the JSON bindings store it for a value outside `int64_t`. `IsInt()` stays `int64_t` only. Until 0270 a `BigInt` that enters a template fails the render (a top-level render parameter fails it even unread), and `ToString()` prints one only at top level, not inside a list or map; arithmetic on it needs a backend (0271, plan docs/design/0178-big-integer-plan.md) | add (0269); an exhaustive `std::visit` over `GetData()` must handle the new alternative |
 | `IsEqual()` next to `operator==` | redundant | keep both; not worth a break | — |
 | `ValuesMap : std::unordered_map` | hash order | ordered map (task 0043) | break, done in 0043 |
 | free `AsString`/`AsWString` overloads for `std::string`, `std::wstring` and the views | encoding conversion; the `std::string` one returns a `const` value, defeating moves | `ToString`/`ToWString` returning `std::string`/`std::wstring` | alias |
@@ -321,13 +322,13 @@ class Value
 public:
     using ValueData = variant<NoneValue, bool, std::string, std::wstring, string_view, wstring_view,
                               int64_t, double, RecWrapper<ValuesList>, RecWrapper<ValuesMap>,
-                              GenericList, GenericMap, RecWrapper<UserCallable>, Markup, WMarkup>;
+                              GenericList, GenericMap, RecWrapper<UserCallable>, Markup, WMarkup, BigInt>;
 
     Value();
     Value(std::nullptr_t) noexcept;                         // None
     template<class I, std::enable_if_t<detail::IsStoredAsInt<I>::value>* = nullptr>
-    Value(I val) noexcept(!detail::CanExceedInt64<I>)       // above INT64_MAX: std::overflow_error (0172)
-        : m_data(detail::ToStoredInt(val)) {}
+    Value(I val) noexcept(!detail::CanExceedInt64<I>)       // outside int64_t: a BigInt (0269)
+        : m_data(detail::ToStoredInt<ValueData>(val)) {}
     Value(char) = delete;                                   // number or one-letter string? say which
     // ... string, double, list, map, callable constructors as today
 
@@ -341,6 +342,7 @@ public:
     bool IsList() const noexcept;      // ValuesList or GenericList
     bool IsMap() const noexcept;       // ValuesMap or GenericMap
     bool IsCallable() const noexcept;
+    bool IsBigInt() const noexcept;    // an integer outside int64_t
 
     const std::string& AsString() const;                // throws bad_variant_access
     std::string& AsString();                           // a held Markup becomes a plain string first
@@ -492,6 +494,14 @@ As in Jinja2, a filter or test is one built in or added with `TemplateEnv::AddFi
 inside an `if` statement or an inline if, where it fails when it runs (docs/tasks/0193).
 1.x let a `UserCallable` passed in the render parameters or the globals act as a filter or
 test, found when it ran; `Settings::userCallablesAsFilters = true` keeps that behaviour.
+
+### 5.7 C++-only filters render, `toxml` is gone (release note)
+
+In 1.x `camelize`, `underscorize`, `escapecpp`, `toxml` and `toyaml` were registered but
+rendered an empty string. In 2.0 the first four render the output that
+[cpp-only-filters.md](cpp-only-filters.md) describes, and `toxml` is removed: a template that
+uses it fails `Template::Load` with `ErrorCode::UnknownFilter` (docs/tasks/0233,
+docs/release-2.0.md D16). Templates that leaned on the empty output drop the filter.
 
 ## 6. Release options
 
