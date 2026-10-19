@@ -1,5 +1,6 @@
 #include "internal_value.h"
 
+#include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
 #include "recursion_guard.h"

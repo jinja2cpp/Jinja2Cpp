@@ -1,7 +1,6 @@
 #ifndef JINJA2CPP_SRC_RECURSION_GUARD_H
 #define JINJA2CPP_SRC_RECURSION_GUARD_H
 
-#include "engine_errors.h"
 
 #include <jinja2cpp/template_env.h>
 

@@ -2,7 +2,6 @@
 #define JINJA2CPP_SRC_INTERNAL_VALUE_H
 
 #include "loop_attr.h"
-#include "engine_errors.h"
 #include "recursion_guard.h"
 
 #include <jinja2cpp/config.h>
