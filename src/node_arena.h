@@ -1,8 +1,6 @@
 #ifndef JINJA2CPP_SRC_NODE_ARENA_H
 #define JINJA2CPP_SRC_NODE_ARENA_H
 
-#include "engine_errors.h"
-
 #include <boost/container/small_vector.hpp>
 #include <boost/core/span.hpp>
 
@@ -1051,7 +1049,7 @@ public:
         static_assert(sizeof(T) % alignof(Item) == 0, "the items are aligned right after the node");
         if (items.size() > (std::numeric_limits<std::uint32_t>::max() - sizeof(T)) / sizeof(Item))
         {
-            throw ResourceLimitError("a template list too long");
+            ThrowTooLarge("a template list too long");
         }
         const auto ref = MakeSized<T>(sizeof(T) + items.size_bytes(), static_cast<std::uint32_t>(items.size()));
         // Right after the node: one past it, in the same allocation
@@ -1072,7 +1070,7 @@ public:
         static_assert(alignof(T) <= Alignment, "the arena aligns lists to 8 bytes");
         if (items.size() > std::numeric_limits<std::uint32_t>::max() / sizeof(T))
         {
-            throw ResourceLimitError("a template list too long");
+            ThrowTooLarge("a template list too long");
         }
         std::uint32_t offset = 0;
         T* data = static_cast<T*>(Allocate(items.size_bytes(), offset));
@@ -1116,7 +1114,7 @@ public:
 
         if (name.size() > std::numeric_limits<std::uint32_t>::max())
         {
-            throw ResourceLimitError("a template list too long");
+            ThrowTooLarge("a template list too long");
         }
         std::uint32_t offset = 0;
         // Blocks stay where they are until the tree is sealed, so the entry keeps the pointer
@@ -1265,21 +1263,11 @@ private:
         size = (size + Alignment - 1) & ~(Alignment - 1);
         if (size > std::numeric_limits<std::uint32_t>::max() - m_used)
         {
-            throw ResourceLimitError("a template too large for its arena");
+            ThrowTooLarge("a template too large for its arena");
         }
         if (size > m_left)
         {
-            const std::size_t blockSize = std::max(m_nextBlock, size);
-            // The block is listed only once its storage exists: a failed allocation must not
-            // leave a block without storage for DestroyNodes to walk
-            std::unique_ptr<std::byte[]> storage(new std::byte[blockSize]);
-            auto& block = m_blocks.emplace_back();
-            block.owned = std::move(storage);
-            block.data = block.owned.get();
-            block.start = m_used;
-            m_nextBlock = std::min(blockSize * 2, MaxBlockSize);
-            m_free = block.data;
-            m_left = blockSize;
+            AddBlock(size);
         }
         void* ptr = m_free;
         offset = m_used;
@@ -1288,6 +1276,12 @@ private:
         m_used += static_cast<std::uint32_t>(size);
         return ptr;
     }
+
+    // Out of line, so the common path of Allocate stays small: a new block of at least `size`
+    // bytes becomes the current one
+    void AddBlock(std::size_t size);
+    // Throws ResourceLimitError; out of line so no caller builds its message string
+    [[noreturn]] static void ThrowTooLarge(const char* what);
 
     // Where the object at `offset` is while the arena is built
     [[nodiscard]] std::byte* Locate(std::uint32_t offset) const
