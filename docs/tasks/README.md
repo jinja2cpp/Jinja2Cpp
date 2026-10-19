@@ -320,7 +320,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0250](0250-public-api-error-contract.md) | One error contract for the 2.0 public API | api | high | open |
 | [0251](0251-cycles-through-opaque-objects.md) | Reference cycles through objects the cycle collector cannot follow leak | evaluator | low | open |
 | [0252](0252-public-api-allocator-contract.md) | Allocator and memory contract for the 2.0 public API | api | high | done |
-| [0253](0253-error-contract-types.md) | Error contract P1: public error types and the Load/Render boundary | api | high | open |
+| [0253](0253-error-contract-types.md) | Error contract P1: public error types and the Load/Render boundary | api | high | done |
 | [0254](0254-render-error-locations.md) | Error contract P2: render errors carry their template location | robustness | high | open |
 | [0255](0255-engine-runtime-error-codes.md) | Error contract P3: the engine's own runtime errors get their own codes | robustness | medium | open |
 | [0256](0256-survive-allocation-failure.md) | Survive allocation failure in Load and Render: remaining coverage | robustness | high | open |
@@ -346,9 +346,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0276](0276-memory-contract-docs.md) | User documentation for the memory contract | docs | medium | open |
 | [0277](0277-markup-escape-helper.md) | A public escape helper for Markup | api | low | open |
 | [0278](0278-remove-dead-valueref.md) | Remove the dead ValueRef alternative of InternalValue | internals | low | open |
+| [0279](0279-nlohmann-destructor-allocates.md) | nlohmann::json destruction allocates, so OOM there terminates | robustness | low | open |
 | [0280](0280-urlize-markup-input.md) | urlize escapes Markup input | filters | low | open |
 | [0281](0281-attr-bound-method.md) | attr() of a method renders empty | filters | low | open |
 | [0282](0282-settings-limits-followups.md) | `Settings::Limits` follow-ups (0262 leftovers) | api | low | open |
+| [0283](0283-cycle-collector-oom-leaks.md) | Reference cycles leak when an allocation fails during a render | robustness | low | open |
 | [0284](0284-template-module.md) | `Template.module` / `make_module`: a template's exports as a map | api | low | open |
 | [0285](0285-abi-baselines-at-rc.md) | Commit the ABI baselines at the 2.0 RC and turn the abidiff gate on | release | high | open |
 | [0286](0286-fixed-cost-drift-oct-12-19.md) | Fixed-cost drift from feature merges, 2026-10-12 to 2026-10-19 | perf | medium | open |
