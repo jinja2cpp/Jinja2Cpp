@@ -37,6 +37,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 // How much a handle is checked before it is followed (CMake JINJA2CPP_NODEREF_CHECKS):
 // 0 (OFF): never. 1 (ON, the Release default): Seal checks every handle of the tree, and
 // a render checks the ones that cross into another template. 2 (FULL, Debug, sanitizer and
@@ -1392,6 +1394,7 @@ private:
     std::size_t m_symbolCount = 0;
 };
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_NODE_ARENA_H

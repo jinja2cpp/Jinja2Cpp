@@ -18,6 +18,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 /*!
  * \brief Generator of a generated list, see \ref MakeGenericList(ListGenerator)
  *
@@ -513,6 +515,7 @@ inline GenericList MakeGenericList(ListGenerator fn)
     return detail::MakeGeneratedList(std::move(fn));
 }
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_MAKE_GENERIC_LIST_H

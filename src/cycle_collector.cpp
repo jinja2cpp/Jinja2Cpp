@@ -1,6 +1,7 @@
 #include "cycle_collector.h"
 
 #include "internal_value.h"
+#include "template_dict.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -12,6 +13,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 namespace
 {
@@ -21,7 +24,7 @@ struct Container
 {
     const ValueObject* object = nullptr;
     InternalValueList* list = nullptr;
-    InternalDict* dict = nullptr;
+    TemplateDict* dict = nullptr;
 };
 
 Container FindContainer(const InternalValue& val)
@@ -84,6 +87,11 @@ void ForEachItem(const Container& container, const Fn& fn)
         for (const auto& [key, item] : *container.dict)
         {
             fn(item);
+            // A key that is not a string keeps its first spelling, a tuple that can hold a container
+            if (container.dict->HasKeyValues())
+            {
+                fn(container.dict->KeyOf(key));
+            }
         }
     }
 }
@@ -171,7 +179,7 @@ void CycleCollector::Collect() noexcept
     // The items of the containers found garbage: released after the walk, when every
     // container they keep alive has been emptied
     std::vector<InternalValueList> releasedLists;
-    std::vector<InternalDict> releasedDicts;
+    std::vector<TemplateDict> releasedDicts;
     try
     {
         // Most of what a render noted is garbage by now with no cycle in it (a list built and
@@ -252,7 +260,7 @@ void CycleCollector::Collect() noexcept
             else
             {
                 releasedDicts.push_back(std::move(*node->container.dict));
-                node->container.dict->clear();
+                node->container.dict->Clear();
             }
         }
     }
@@ -262,4 +270,5 @@ void CycleCollector::Collect() noexcept
     m_notes->candidates.clear();
 }
 
+} // namespace v2
 } // namespace jinja2

@@ -17,6 +17,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 #ifndef JINJA2CPP_NO_DOXYGEN
 namespace detail
 {
@@ -455,6 +457,7 @@ auto MakeCallable(Fn&& f)
 {
     return UserCallable{ [=, fn = std::forward<Fn>(f)](const UserCallableParams&) { return fn(); }, {} };
 }
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_USER_CALLABLE_H

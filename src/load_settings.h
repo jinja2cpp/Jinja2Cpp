@@ -11,7 +11,11 @@
 #include <utility>
 #include <vector>
 
-namespace jinja2::detail
+namespace jinja2
+{
+inline namespace v2
+{
+namespace detail
 {
 
 // Delimiters and line prefixes from Settings, in the character type of a template
@@ -122,6 +126,8 @@ using LoadSettingsPtr = std::shared_ptr<const LoadSettings>;
 // For templates made without an environment
 const LoadSettingsPtr& DefaultLoadSettings();
 
-} // namespace jinja2::detail
+} // namespace detail
+} // namespace v2
+} // namespace jinja2
 
 #endif // JINJA2CPP_SRC_LOAD_SETTINGS_H

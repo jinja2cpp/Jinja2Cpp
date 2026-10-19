@@ -8,6 +8,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 struct CallParams;
 
 // Python's builtin methods on template values: s.upper(), l.append(x), d.items(), ...
@@ -65,6 +67,7 @@ bool IsContainer(const InternalValue& value);
 [[noreturn]] void ThrowNoAttribute(const InternalValue& obj, const std::string& name);
 
 } // namespace methods
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_VALUE_METHODS_H

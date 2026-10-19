@@ -102,4 +102,10 @@ CASES = [
     # caller() outside a call block raises "No caller defined" (docs/tasks/0169)
     ("caller_without_call_block", "{% macro m() %}[{{ caller() }}]{% endmacro %}{{ m() }}"),
     ("call_body_reads_own_missing_caller", "{% macro inner() %}<{{ caller() }}>{% endmacro %}{% macro m() %}{% call inner() %}{{ caller() }}{% endcall %}{% endmacro %}{% call m() %}x{% endcall %}"),
+    ('dict_unhashable_dict_key', "{{ {{'a':1}: 2} }}"),
+    ('dict_unhashable_tuple_key', '{{ {(1, [2]): 3} }}'),
+    ('in_dict_unhashable', '{{ [1] in {1: 2} }}'),
+    ('dict_get_unhashable', '{{ {1: 2}.get([1]) }}'),
+    ('dict_setdefault_unhashable', '{{ {1: 2}.setdefault([1], 3) }}'),
+    ('dict_pop_unhashable', '{{ {1: 2}.pop([1]) }}'),
 ]

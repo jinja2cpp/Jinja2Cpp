@@ -14,6 +14,8 @@ JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 
 namespace jinja2
 {
+inline namespace v2
+{
 /*!
  * \brief Type of the error
  *
@@ -197,6 +199,7 @@ using ErrorInfoTpl JINJA2CPP_DEPRECATED("jinja2cpp-2: BasicErrorInfo") = BasicEr
 
 JINJA2CPP_EXPORT std::ostream& operator<<(std::ostream& os, const ErrorInfo& res);
 JINJA2CPP_EXPORT std::wostream& operator<<(std::wostream& os, const ErrorInfoW& res);
+} // namespace v2
 } // namespace jinja2
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_END

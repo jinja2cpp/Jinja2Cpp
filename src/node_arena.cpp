@@ -20,6 +20,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 namespace detail
 {
 void OffsetList::Grow()
@@ -259,4 +261,5 @@ SealedArena NodeArena::SealWith(boost::span<const detail::RootRef> roots)
     }
     return sealed;
 }
+} // namespace v2
 } // namespace jinja2

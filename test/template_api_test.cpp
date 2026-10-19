@@ -338,7 +338,8 @@ TEST(TemplateApiTest, ConcurrentRenderOfOneTemplate)
 TEST(TemplateApiTest, VersionMacrosMatchProjectVersion)
 {
     static_assert(JINJA2CPP_VERSION == (JINJA2CPP_VERSION_MAJOR * 10000) + (JINJA2CPP_VERSION_MINOR * 100) + JINJA2CPP_VERSION_PATCH);
-    static_assert(JINJA2CPP_VERSION >= 10302);
+    // the inline ABI namespace is v2 (docs/tasks/0076); a new major retags it with scripts/abi_namespace.py
+    static_assert(JINJA2CPP_VERSION_MAJOR == 2);
     const auto expected = std::to_string(JINJA2CPP_VERSION_MAJOR) + "." + std::to_string(JINJA2CPP_VERSION_MINOR) + "." + std::to_string(JINJA2CPP_VERSION_PATCH);
     EXPECT_EQ(expected, JINJA2CPP_VERSION_STRING);
 }

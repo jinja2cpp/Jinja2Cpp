@@ -45,6 +45,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 template<class T>
 class ReferenceWrapper
@@ -414,6 +416,9 @@ void ReserveHint(List& list, size_t size)
 // dicts do; scopes and other lookup-only maps stay InternalValueMap (docs/tasks/0031)
 using InternalDict = OrderedMap<std::string, InternalValue>;
 
+// A dict with Python's keys: any hashable value, over the string keys of InternalDict (template_dict.h)
+class TemplateDict;
+
 
 struct IListAccessor;
 struct IListAccessorEnumerator;
@@ -540,6 +545,11 @@ struct IMapAccessor : ValueObject
     // The pairs in GetKeys() order. The default looks every key up again; adapters that
     // own a map read its entries directly
     [[nodiscard]] virtual std::vector<KeyValuePair> GetEntries() const;
+    // The keys as template values, in GetKeys() order. The default turns each string into a value
+    [[nodiscard]] virtual InternalValueList GetKeyValues() const;
+    // The value under `key`, if there is one. The default answers a string key through
+    // HasValue/GetItem and has no other key, as host maps hold only strings
+    [[nodiscard]] virtual std::optional<InternalValue> FindItem(const InternalValue& key) const;
     // Const as reading is, so that a value can hold its accessor as a const object; the
     // accessor changes its own mutable state (docs/tasks/0140). By value: overrides store
     // the key. `set ns.attr = ...` has no use for the result.
@@ -553,7 +563,7 @@ struct IMapAccessor : ValueObject
     // See IListAccessor::GetIdentity
     [[nodiscard]] virtual const void* GetIdentity() const { return this; }
     // See IListAccessor::GetMutableItems
-    [[nodiscard]] virtual InternalDict* GetMutableItems() const { return nullptr; }
+    [[nodiscard]] virtual TemplateDict* GetMutableItems() const { return nullptr; }
     // See IListAccessor::OwnsMutableItemsAlone
     [[nodiscard]] virtual bool OwnsMutableItemsAlone() const { return false; }
     // How x.name resolves against Python's dict methods (items, get, ...)
@@ -754,9 +764,10 @@ public:
     [[nodiscard]] InternalValue GetValueByName(const std::string& name) const;
     [[nodiscard]] const void* GetIdentity() const { return m_accessor ? m_accessor->GetIdentity() : nullptr; }
     [[nodiscard]] bool HasAttributes() const { return m_accessor != nullptr && m_accessor->HasAttributes(); }
-    [[nodiscard]] std::vector<std::string> GetKeys() const { return m_accessor ? m_accessor->GetKeys() : std::vector<std::string>(); }
     [[nodiscard]] std::vector<KeyValuePair> GetEntries() const;
-    [[nodiscard]] InternalDict* GetMutableItems() const { return m_accessor ? m_accessor->GetMutableItems() : nullptr; }
+    [[nodiscard]] InternalValueList GetKeyValues() const;
+    [[nodiscard]] std::optional<InternalValue> FindItem(const InternalValue& key) const;
+    [[nodiscard]] TemplateDict* GetMutableItems() const { return m_accessor ? m_accessor->GetMutableItems() : nullptr; }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const { return m_accessor ? m_accessor->GetAttrPolicy() : MapAttrPolicy::KeysOnly; }
     [[nodiscard]] bool IsNamespace() const { return m_accessor != nullptr && m_accessor->IsNamespace(); }
     [[nodiscard]] const char* GetObjectClass() const { return m_accessor ? m_accessor->GetObjectClass() : nullptr; }
@@ -804,9 +815,10 @@ public:
     [[nodiscard]] InternalValue GetValueByName(const std::string& name) const;
     [[nodiscard]] const void* GetIdentity() const { return Ref().GetIdentity(); }
     [[nodiscard]] bool HasAttributes() const { return Ref().HasAttributes(); }
-    [[nodiscard]] std::vector<std::string> GetKeys() const { return Ref().GetKeys(); }
     [[nodiscard]] std::vector<KeyValuePair> GetEntries() const;
-    [[nodiscard]] InternalDict* GetMutableItems() const { return Ref().GetMutableItems(); }
+    [[nodiscard]] InternalValueList GetKeyValues() const;
+    [[nodiscard]] std::optional<InternalValue> FindItem(const InternalValue& key) const;
+    [[nodiscard]] TemplateDict* GetMutableItems() const { return Ref().GetMutableItems(); }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const { return Ref().GetAttrPolicy(); }
     [[nodiscard]] bool IsNamespace() const { return Ref().IsNamespace(); }
     [[nodiscard]] const char* GetObjectClass() const { return Ref().GetObjectClass(); }
@@ -1355,8 +1367,10 @@ using InternalValueMap = robin_hood::unordered_map<std::string, InternalValue, N
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values);
 MapAdapter CreateMapAdapter(InternalDict&& values);
+MapAdapter CreateMapAdapter(TemplateDict&& values);
 // Jinja2's namespace(): a shared mapping whose attributes `set ns.attr = ...` assigns
 MapAdapter CreateNamespaceAdapter(InternalDict&& values);
+MapAdapter CreateNamespaceAdapter(TemplateDict&& values);
 // An object of the Python class `className` (a string literal) whose attributes are `values`:
 // cycler() and joiner()
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className);
@@ -1468,7 +1482,7 @@ inline MapAdapter MapRef::ToAdapter() const
 
 struct KeyValuePair
 {
-    std::string key;
+    InternalValue key;
     InternalValue value;
 };
 
@@ -1490,6 +1504,26 @@ inline std::vector<KeyValuePair> MapRef::GetEntries() const
 inline std::vector<KeyValuePair> MapAdapter::GetEntries() const
 {
     return Ref().GetEntries();
+}
+
+inline InternalValueList MapRef::GetKeyValues() const
+{
+    return m_accessor ? m_accessor->GetKeyValues() : InternalValueList();
+}
+
+inline InternalValueList MapAdapter::GetKeyValues() const
+{
+    return Ref().GetKeyValues();
+}
+
+inline std::optional<InternalValue> MapRef::FindItem(const InternalValue& key) const
+{
+    return m_accessor ? m_accessor->FindItem(key) : std::nullopt;
+}
+
+inline std::optional<InternalValue> MapAdapter::FindItem(const InternalValue& key) const
+{
+    return Ref().FindItem(key);
 }
 
 // The list or map a value holds, if it holds one: `if (auto list = AsList(val)) list->GetSize()`.
@@ -1746,6 +1780,7 @@ static_assert(std::is_nothrow_move_assignable_v<InternalValue>);
 Value IntValue2Value(const InternalValue& val);
 Value OptIntValue2Value(std::optional<InternalValue> val);
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_INTERNAL_VALUE_H

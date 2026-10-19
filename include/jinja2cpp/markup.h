@@ -8,6 +8,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 /*!
  * \brief Text that is already safe HTML: Python's `markupsafe.Markup`
  *
@@ -115,6 +117,7 @@ private:
 using Markup = BasicMarkup<char>;
 //! Safe wide text, see \ref BasicMarkup
 using WMarkup = BasicMarkup<wchar_t>;
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_MARKUP_H

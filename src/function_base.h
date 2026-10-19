@@ -18,6 +18,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 // The parameters of a filter or tester kind, built once (a function-local static): an instance
 // keeps a pointer to its table, so the names and defaults are stored once per kind
 using ArgumentsTable = std::vector<ArgumentInfo>;
@@ -166,6 +168,7 @@ inline bool FunctionBase::ParseParams(const ArgumentsTable& argsInfo, const Call
     return result;
 }
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_FUNCTION_BASE_H

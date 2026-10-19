@@ -16,6 +16,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 namespace detail
 {
@@ -218,6 +220,7 @@ inline void WriteOutput(OutStream& stream, const InternalValue& val, RenderConte
     WriteEscaped(stream, val, context.GetRendererCallback());
 }
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_MARKUP_H

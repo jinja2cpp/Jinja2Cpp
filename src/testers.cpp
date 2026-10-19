@@ -5,6 +5,7 @@
 #include "function_base.h"
 #include "internal_value.h"
 #include "render_context.h"
+#include "template_dict.h"
 #include "undefined.h"
 #include "value_visitors.h"
 
@@ -23,7 +24,11 @@
 
 using namespace std::string_literals;
 
-namespace jinja2::testers
+namespace jinja2
+{
+inline namespace v2
+{
+namespace testers
 {
 
 Comparator::Comparator(const TesterParams& params, BinaryExpression::Operation op)
@@ -406,9 +411,21 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
     }
     else if (seqKind == TestKind::Map)
     {
-        // `key in dict` tests the keys; dict keys are always strings here
+        // `key in dict` tests the keys: any hashable value for a dict the template owns, strings
+        // for every other map
         auto map = AsMap(seq);
-        result = map && Apply<ValueKindGetter>(baseVal) == TestKind::String && map->HasValue(AsString(baseVal));
+        if (map && Apply<ValueKindGetter>(baseVal) == TestKind::String)
+        {
+            result = map->HasValue(AsString(baseVal));
+        }
+        else if (map)
+        {
+            if (const char* type = UnhashableType(baseVal))
+            {
+                ThrowUnhashable(type);
+            }
+            result = map->FindItem(baseVal).has_value();
+        }
     }
     else if (seqKind == TestKind::String)
     {
@@ -598,4 +615,6 @@ bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& contex
 
     return ConvertToBool(callable->GetExpressionCallable()(callParams, context));
 }
-} // namespace jinja2::testers
+} // namespace testers
+} // namespace v2
+} // namespace jinja2

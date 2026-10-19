@@ -26,6 +26,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 namespace
 {
@@ -487,4 +489,5 @@ void TemplateEnv::ApplyGlobals(const std::function<void(const ValuesMap&)>& fn) 
     fn(*m_impl->globalValues);
 }
 
+} // namespace v2
 } // namespace jinja2

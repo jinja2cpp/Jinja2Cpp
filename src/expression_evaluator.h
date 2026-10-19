@@ -33,6 +33,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 class ExpressionEvaluatorBase : public ArenaNode
 {
@@ -1064,6 +1066,7 @@ ParsedArgumentsInfo ParseCallParamsInfo(const std::vector<ArgumentInfo>& args, c
 CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context);
 CallParams EvaluateCallParams(const ArenaCallParams& info, RenderContext& context);
 } // namespace helpers
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_EXPRESSION_EVALUATOR_H

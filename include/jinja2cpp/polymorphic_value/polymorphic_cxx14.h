@@ -29,7 +29,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 // Vendored from jbcoe/value_types 57f2e7a (compatibility/polymorphic_cxx14.h)
 // with these local changes:
-// - namespace xyz moved into jinja2::detail and the XYZ_ macros renamed
+// - namespace xyz moved into jinja2::v2::detail and the XYZ_ macros renamed
 //   JINJA2CPP_XYZ_ (task 0076), so a user's own copy of value_types neither
 //   shadows this one through the shared include guards nor collides with it at
 //   link time;
@@ -47,12 +47,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define JINJA2CPP_XYZ_IN_PLACE_TYPE_DEFINED
 
 namespace jinja2 {
+inline namespace v2 {
 namespace detail {
 namespace xyz {
 template <class T>
 struct in_place_type_t {};
 }  // namespace xyz
 }  // namespace detail
+}  // namespace v2
 }  // namespace jinja2
 #endif  // JINJA2CPP_XYZ_IN_PLACE_TYPE_DEFINED
 
@@ -60,6 +62,7 @@ struct in_place_type_t {};
 #define JINJA2CPP_XYZ_UNREACHABLE_DEFINED
 
 namespace jinja2 {
+inline namespace v2 {
 namespace detail {
 namespace xyz {
 [[noreturn]] inline void unreachable() {  // LCOV_EXCL_LINE
@@ -73,6 +76,7 @@ namespace xyz {
 }
 }  // namespace xyz
 }  // namespace detail
+}  // namespace v2
 }  // namespace jinja2
 #endif  // JINJA2CPP_XYZ_UNREACHABLE_DEFINED
 
@@ -85,6 +89,7 @@ namespace xyz {
 // We duplicate implementations to allow this header to work as a single
 // include. https://godbolt.org needs single-file includes.
 namespace jinja2 {
+inline namespace v2 {
 namespace detail {
 namespace xyz {
 namespace detail {
@@ -121,10 +126,12 @@ class empty_base_optimization<T, true> : private T {
 }  // namespace detail
 }  // namespace xyz
 }  // namespace detail
+}  // namespace v2
 }  // namespace jinja2
 #endif  // JINJA2CPP_XYZ_EMPTY_BASE_DEFINED
 
 namespace jinja2 {
+inline namespace v2 {
 namespace detail {
 namespace xyz {
 
@@ -505,6 +512,7 @@ class polymorphic : private detail::empty_base_optimization<A> {
 
 }  // namespace xyz
 }  // namespace detail
+}  // namespace v2
 }  // namespace jinja2
 
 #endif  // JINJA2CPP_XYZ_POLYMORPHIC_H_

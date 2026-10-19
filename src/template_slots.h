@@ -15,6 +15,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 // A template one render runs, by its place in the render's table of templates (0118 P4b).
 // The render keeps every template it loads until it ends, so a handle needs no reference
@@ -165,6 +167,7 @@ private:
     std::uint8_t m_generation = 0;
 };
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_TEMPLATE_SLOTS_H

@@ -19,6 +19,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 using TargetFileStream = std::variant<CharFileStreamPtr*, WCharFileStreamPtr*>;
 
@@ -277,4 +279,5 @@ bool RealFileSystem::IsEqual(const IComparable& other) const
     return m_rootFolder == ptr->m_rootFolder;
 }
 
+} // namespace v2
 } // namespace jinja2

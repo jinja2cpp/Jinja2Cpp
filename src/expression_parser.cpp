@@ -28,6 +28,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 
 ParseError::ParseError(const ParseError&) = default;
 ParseError::ParseError(ParseError&& other) noexcept
@@ -1281,4 +1283,5 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
     return result;
 }
 
+} // namespace v2
 } // namespace jinja2

@@ -1843,6 +1843,120 @@
     "type": "UndefinedError",
     "message": "No caller defined"
    }
+  },
+  {
+   "id": "errors.dict_unhashable_dict_key",
+   "template": "{{ {{'a':1}: 2} }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'dict'"
+   }
+  },
+  {
+   "id": "errors.dict_unhashable_tuple_key",
+   "template": "{{ {(1, [2]): 3} }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "errors.in_dict_unhashable",
+   "template": "{{ [1] in {1: 2} }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "errors.dict_get_unhashable",
+   "template": "{{ {1: 2}.get([1]) }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "errors.dict_setdefault_unhashable",
+   "template": "{{ {1: 2}.setdefault([1], 3) }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
+  },
+  {
+   "id": "errors.dict_pop_unhashable",
+   "template": "{{ {1: 2}.pop([1]) }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unhashable type: 'list'"
+   }
   }
  ]
 }

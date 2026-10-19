@@ -68,4 +68,11 @@ CASES = [
     ("dict_nested_lookup", "{% set d = {'a': {'b': [1, 2]}} %}{{ d['a']['b'][1] }}"),
     ("parenthesised", "{{ (1) }}"),
     ("number_dot_attribute", "[{{ 1.e3 }}][{{ 1.5.2 }}]"),
+    ('dict_int_key_print', "{{ {1: 'x', '1': 'y'} }}"),
+    ('dict_numeric_keys_merge', "{{ {1:'a', 1.0:'b', True:'c'} }}|{{ {1.0:'x'} }}|{{ {True:1}[1] }}|{{ {0:'z'}[false] }}"),
+    ('dict_other_hashable_keys', '{{ {none:1, 1.5:2, (1,2):3} }}|{{ {(1,2):3}[(1,2)] }}|{{ {(1,2.0):3}[(1.0,2)] }}|{{ {none:1}[none] }}'),
+    ('dict_int_key_not_string', "{{ {1:'x'}['1'] is defined }}|{{ {'1':'x'}[1] is defined }}|{{ {1:2}.1 }}|{{ {-1:2}[-1] }}"),
+    ('dict_float_keys', "{{ {0.1+0.2:'x'} }}|{{ {-0.0:'x', 0:'y'} }}|{{ {1e100:'x'} }}"),
+    ('dict_key_range_and_nested_tuple', "{{ {range(3): 'r', ((1, 2), 'a'): 'n'} }}|{{ {range(3): 'r'}[range(0, 3)] }}|{{ {((1, 2), 'a'): 'n'}[((1.0, 2), 'a')] }}"),
+    ('dict_key_big_float_is_float', "{{ {2.0**63: 'f'}[2.0**63] }}|{{ {2.0**63: 'f'} }}"),
 ]

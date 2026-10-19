@@ -77,4 +77,8 @@ CASES = [
     ("lipsum_no_paragraphs", "[{{ lipsum(0, min=200) }}]"),
     # an object can be a dict key: Python hashes it by identity (0212)
     ("object_dict_key", "{{ {namespace(): 1} }}"),
+    ('dict_from_non_string_pairs', "{{ dict([(1, 'a'), ((1, 2), 'b')]) }}|{{ dict({1: 'a'}, b=2) }}|{{ namespace({1: 2}) }}"),
+    ('dict_unhashable_pair_key', '{{ dict([([1], 2)]) }}'),
+    ('dict_merge_equal_numeric_keys', "{{ dict([(1, 'a'), (1.0, 'b'), (True, 'c')]) }}"),
+    ('namespace_non_string_subscript', '{% set ns = namespace(a=1) %}[{{ ns[1] }}][{{ ns.a }}]'),
 ]

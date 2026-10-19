@@ -107,7 +107,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0033](0033-wide-string-parity.md) | Run the corpus through the wide-string API | parity | low | done |
 | [0034](0034-none-versus-undefined.md) | Tell `None` apart from undefined | parity | high | done |
 | [0035](0035-locale-independent-string-conversion.md) | Convert between narrow and wide strings without the C locale | robustness | medium | done |
-| [0036](0036-non-string-mapping-keys.md) | Mapping keys that are not strings | parity | low | open |
+| [0036](0036-non-string-mapping-keys.md) | Mapping keys that are not strings | parity | low | done |
 | [0037](0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups from 0016 | parity | medium | done |
 | [0038](0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | parity | medium | done |
 | [0039](0039-float-values-print-widened.md) | C++ `float` values print with their widened digits | parity | low | open |
@@ -145,7 +145,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0073](0073-template-api-2-0.md) | 2.0 API: `BasicTemplate<CharT>` | release | medium | done |
 | [0074](0074-template-env-api-2-0.md) | 2.0 API: `TemplateEnv` pimpl and `Settings` | release | medium | done |
 | [0075](0075-containers-reflection-api-2-0.md) | 2.0 API: containers, reflection, errors | release | medium | done |
-| [0076](0076-abi-namespace-and-headers.md) | 2.0: inline ABI namespace, header layout, version | release | high | in-progress |
+| [0076](0076-abi-namespace-and-headers.md) | 2.0: inline ABI namespace, header layout, version | release | high | done |
 | [0077](0077-migration-script.md) | 2.0 migration script and notes | release | high | open |
 | [0078](0078-nix-toolchains.md) | Pinned toolchains from Nix for the tool and bleeding-edge rows | ci | low | open |
 | [0079](0079-msvc-runtime-shared-override.md) | Warn when `JINJA2CPP_MSVC_RUNTIME_TYPE` is overridden by a shared build | build | low | open |
@@ -345,3 +345,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0280](0280-urlize-markup-input.md) | urlize escapes Markup input | filters | low | open |
 | [0281](0281-attr-bound-method.md) | attr() of a method renders empty | filters | low | open |
 | [0284](0284-template-module.md) | `Template.module` / `make_module`: a template's exports as a map | api | low | open |
+| [0285](0285-abi-baselines-at-rc.md) | Commit the ABI baselines at the 2.0 RC and turn the abidiff gate on | release | high | open |

@@ -9,6 +9,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 struct MultiStringLiteral
 {
     const char* charValue;
@@ -281,6 +283,7 @@ Sequence CompileEscapes(Sequence s, bool* ok = nullptr)
     return s;
 }
 
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_HELPERS_H

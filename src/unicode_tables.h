@@ -9,6 +9,8 @@
 
 namespace jinja2
 {
+inline namespace v2
+{
 namespace unicode
 {
 
@@ -877,6 +879,7 @@ inline bool IsSpace(uint32_t cp)
 }
 
 } // namespace unicode
+} // namespace v2
 } // namespace jinja2
 
 #endif // JINJA2CPP_SRC_UNICODE_TABLES_H
