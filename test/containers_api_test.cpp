@@ -166,11 +166,13 @@ struct Reflector<Celsius>
     static Value CreateFromPtr(const Celsius* val) { return Create(*val); }
 };
 
-namespace detail
-{
-// A 1.x-style specialisation keeps working
+} // namespace jinja2
+
+// A 1.x-style specialisation keeps working. It is written with the qualified name: MSVC does
+// not implement CWG 2061, so `namespace jinja2 { namespace detail {` there declares a new
+// jinja2::detail beside jinja2::v2::detail instead of reopening it (docs/tasks/0076, README)
 template<>
-struct Reflector<LegacyReflected>
+struct jinja2::detail::Reflector<LegacyReflected>
 {
     static Value Create(const LegacyReflected& val) { return Value(static_cast<int64_t>(val.value * 10)); }
     static Value CreateFromPtr(const LegacyReflected* val) { return Create(*val); }
@@ -178,20 +180,18 @@ struct Reflector<LegacyReflected>
 
 // 1.x code could delegate to the library's reflectors, and override one for a type the library also covers
 template<>
-struct Reflector<LegacyDelegating>
+struct jinja2::detail::Reflector<LegacyDelegating>
 {
     static Value Create(const LegacyDelegating& val) { return Reflector<std::string>::Create(val.text + "!"); }
     static Value CreateFromPtr(const LegacyDelegating* val) { return Create(*val); }
 };
 
 template<>
-struct Reflector<char16_t>
+struct jinja2::detail::Reflector<char16_t>
 {
     static Value Create(char16_t val) { return Value(std::string(1, static_cast<char>(val))); }
     static Value CreateFromPtr(const char16_t* val) { return Create(*val); }
 };
-} // namespace detail
-} // namespace jinja2
 
 TEST(ContainersApiTest, ErrorCodeValuesAreStable)
 {

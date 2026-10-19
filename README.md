@@ -214,7 +214,12 @@ it in the default internal dependencies mode). The un-namespaced `jinja2cpp` tar
   `namespace jinja2 { class Value; }` declares a different, undefined class and makes later
   uses ambiguous. `<jinja2cpp/jinja2cpp.h>` includes the whole API except the JSON bindings.
   If your code says `using namespace jinja2;` and has its own namespace-scope `v2`, qualify
-  one of them.
+  one of them. Specialise the extension points inside `namespace jinja2 { ... }` or with their
+  qualified name (`template<> struct jinja2::Reflector<MyType>`). A 1.x-style
+  `detail::Reflector` specialisation must use the qualified form
+  (`template<> struct jinja2::detail::Reflector<MyType>`): MSVC does not look through the
+  inline namespace when `namespace detail` is reopened inside `namespace jinja2`, and declares
+  a second `jinja2::detail` instead.
 - **ABI within 2.x.** The shared library's SONAME carries the ABI version
   (`libjinja2cpp.so.2`, `libjinja2cpp.2.dylib`). It is bumped by any release that changes the
   layout of a type you allocate (a `Settings` field, a `Value` alternative) or the signature
