@@ -488,4 +488,134 @@ std::pair<SlotIndex, UnitId> NameResolver::Find(const NodeArena& nodes, NodeRef<
     }
     return dynamic;
 }
+
+bool NameResolver::DeclaresAtEntry(FrameId frameId, std::string_view name, const DeclarationIndex& index, const NodeArena& nodes) const
+{
+    const auto& frame = m_frames[frameId];
+    if (frame.kind == Kind::For || frame.isMacro)
+    {
+        return BindsName(frameId, name, nodes);
+    }
+    // A loop's filter binds the loop's targets, not `loop`
+    if (frame.kind == Kind::Filter)
+    {
+        return frame.loop != NoFrame && name != "loop" && BindsName(frame.loop, name, nodes);
+    }
+    // A macro's defaults are evaluated in its frame, next after theirs (ParseMacroParams),
+    // where its arguments are bound, and `caller`, `varargs` and `kwargs` only when its body
+    // reads them, as Jinja2 declares them for the macro then
+    const auto next = std::size_t{ frameId } + 1;
+    if (frame.kind != Kind::Dynamic || next == m_frames.size() || !m_frames[next].isMacro || m_frames[next].parent != frame.parent)
+    {
+        return false;
+    }
+    const auto macro = static_cast<FrameId>(next);
+    if (name == "caller" || name == "varargs" || name == "kwargs")
+    {
+        return index.specialReads.count({ macro, name }) != 0;
+    }
+    return BindsName(macro, name, nodes);
+}
+
+bool NameResolver::IsDeclared(FrameId frameId, std::string_view name, std::size_t storeEnd, const DeclarationIndex& index, const NodeArena& nodes) const
+{
+    // The template's body and every block have `self`
+    if (name == "self")
+    {
+        return true;
+    }
+    for (auto id = frameId;;)
+    {
+        const auto& frame = m_frames[id];
+        // The frame's first store of the name: before the read in the read's own frame,
+        // anywhere in a frame around it
+        if (frame.hasStores)
+        {
+            const auto first = index.firstStores.find({ id, name });
+            if (first != index.firstStores.end() && (id != frameId || first->second < storeEnd))
+            {
+                return true;
+            }
+        }
+        if (DeclaresAtEntry(id, name, index, nodes))
+        {
+            return true;
+        }
+        // A block sees the names around it through the context only
+        if (frame.isBlock)
+        {
+            return name == "super";
+        }
+        if (frame.parent == NoFrame)
+        {
+            return false;
+        }
+        id = frame.parent;
+    }
+}
+
+std::size_t NameResolver::FrameNameHash::operator()(const FrameName& key) const noexcept
+{
+    return std::hash<std::string_view>()(key.second) ^ (std::size_t{ key.first } * 0x9E3779B97F4A7C15ULL);
+}
+
+NameResolver::DeclarationIndex NameResolver::MakeDeclarationIndex(const NodeArena& nodes) const
+{
+    DeclarationIndex index;
+    for (std::size_t idx = 0; idx < m_stores.size(); ++idx)
+    {
+        const auto& store = m_stores[idx];
+        if (store.kind != StoreKind::Hidden)
+        {
+            index.firstStores.emplace(FrameName{ store.frame, store.name }, idx);
+        }
+    }
+    // The frames that read `caller`, `varargs` or `kwargs`, themselves or in a frame inside
+    // them; Jinja2 looks into the macros, loops and call blocks inside a body, not its blocks
+    for (const auto& [ref, frame] : m_reads)
+    {
+        const auto name = nodes[ref].GetName(nodes);
+        if (name != "caller" && name != "varargs" && name != "kwargs")
+        {
+            continue;
+        }
+        for (auto id = frame; id != NoFrame; id = m_frames[id].parent)
+        {
+            if (!index.specialReads.insert({ id, name }).second || m_frames[id].isBlock)
+            {
+                break;
+            }
+        }
+    }
+    return index;
+}
+
+std::vector<std::string_view> NameResolver::UndeclaredNames(const NodeArena& nodes) const
+{
+    std::vector<std::string_view> names;
+    const auto index = MakeDeclarationIndex(nodes);
+    // The stores before a read are those made before it: m_stores is in parse order
+    auto storeEnd = m_stores.begin();
+    for (std::size_t idx = 0; idx < m_reads.size(); ++idx)
+    {
+        storeEnd = std::find_if(storeEnd, m_stores.end(), [idx](const Store& store) { return store.readsBefore > idx; });
+        const auto& [ref, frame] = m_reads[idx];
+        const auto name = nodes[ref].GetName(nodes);
+        if (!IsDeclared(frame, name, static_cast<std::size_t>(storeEnd - m_stores.begin()), index, nodes))
+        {
+            names.push_back(name);
+        }
+    }
+    // Jinja2 resolves a name stored in some branches only from the context when no frame
+    // around declares it (Symbols.branch_update), and counts `if` without `else` as such
+    for (std::size_t idx = 0; idx < m_stores.size(); ++idx)
+    {
+        const auto& store = m_stores[idx];
+        if (store.kind == StoreKind::Branch && !IsDeclared(store.frame, store.name, idx, index, nodes))
+        {
+            names.push_back(store.name);
+        }
+    }
+    return names;
+}
 } // namespace jinja2
