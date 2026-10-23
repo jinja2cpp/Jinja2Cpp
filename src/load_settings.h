@@ -103,7 +103,7 @@ struct LoadSettings
         : settings(setts)
         , narrow(setts)
         , wide(setts)
-        , hasRenderLimits(jinja2::HasRenderLimits(setts.limits) || backend)
+        , hasRenderLimits(jinja2::HasRenderLimits(setts.limits) || backend != nullptr)
         , bigIntBackend(backend)
     {
     }
