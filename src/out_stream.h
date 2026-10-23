@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <string>
 #include <utility>
 
@@ -56,7 +57,7 @@ public:
     explicit OutStream(OutputSinkW& sink)
         : m_sink(&sink)
         , m_charSize(sizeof(wchar_t))
-        , m_end(m_buffer + sizeof(m_buffer))
+        , m_end(std::end(m_buffer))
     {}
     // NOLINTEND(cppcoreguidelines-pro-type-member-init)
 
