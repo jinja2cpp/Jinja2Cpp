@@ -333,14 +333,20 @@ enum class OpenStep
 OpenStep OpenPiece(int dirFd, const std::string& name, bool last, NativeFile* file)
 {
     const int flags = last ? (O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK | O_NOCTTY) : (O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    struct stat st
+    {
+    };
+    // A device or FIFO is not opened at all, as opening one may act (a tape rewinds, a FIFO's writer wakes). The
+    // entry may change before the openat below; the fstat after it is the check that counts
+    if (last && ::fstatat(dirFd, name.c_str(), &st, AT_SYMLINK_NOFOLLOW) == 0 && !S_ISREG(st.st_mode) && !S_ISLNK(st.st_mode))
+    {
+        return OpenStep::Refused;
+    }
     *file = NativeFile(::openat(dirFd, name.c_str(), flags));
     if (!file->Valid())
     {
         return OpenStep::NotOpened;
     }
-    struct stat st
-    {
-    };
     if (last && (::fstat(file->Get(), &st) != 0 || !S_ISREG(st.st_mode)))
     {
         return OpenStep::Refused;
@@ -422,42 +428,78 @@ NativeFile OpenTemplateFile(const std::string& root, const std::string& name)
     return OpenConfinedFile(root, *pieces);
 }
 
-// Bytes of the file, read when the stream needs them (a size limit on the reader stops the reading)
+// Bytes of the file, read when the stream needs them (a size limit on the reader stops the reading). With
+// `text` (Windows), "\r\n" reads as "\n", as RealFileSystem's text-mode streams read it there
 class FileStreambuf : public std::streambuf
 {
 public:
-    explicit FileStreambuf(NativeFile file)
+    FileStreambuf(NativeFile file, bool text)
         : m_file(std::move(file))
+        , m_text(text)
     {
     }
 
 protected:
     int_type underflow() override
     {
-        if (gptr() < egptr())
+        while (gptr() == egptr())
         {
-            return traits_type::to_int_type(*gptr());
+            // A '\r' held back from the end of the last chunk starts this one
+            const std::size_t start = m_heldCr ? 1 : 0;
+            m_buffer[0] = '\r';
+            const auto count = m_file.Read(m_buffer + start, sizeof(m_buffer) - start);
+            if (count <= 0)
+            {
+                if (!m_heldCr)
+                {
+                    return traits_type::eof();
+                }
+                m_heldCr = false;
+                setg(m_buffer, m_buffer, m_buffer + 1);
+                break;
+            }
+            const std::size_t size = start + static_cast<std::size_t>(count);
+            std::size_t out = size;
+            m_heldCr = false;
+            if (m_text)
+            {
+                out = 0;
+                for (std::size_t i = 0; i < size; ++i)
+                {
+                    if (m_buffer[i] == '\r' && i + 1 == size)
+                    {
+                        m_heldCr = true;
+                    }
+                    else if (m_buffer[i] != '\r' || m_buffer[i + 1] != '\n')
+                    {
+                        m_buffer[out++] = m_buffer[i];
+                    }
+                }
+            }
+            setg(m_buffer, m_buffer, m_buffer + out);
         }
-        const auto count = m_file.Read(m_buffer, sizeof(m_buffer));
-        if (count <= 0)
-        {
-            return traits_type::eof();
-        }
-        setg(m_buffer, m_buffer, m_buffer + count);
         return traits_type::to_int_type(*gptr());
     }
 
 private:
     NativeFile m_file;
+    bool m_text;
+    bool m_heldCr = false;
     char m_buffer[16384]{};
 };
+
+#ifdef _WIN32
+constexpr bool textStreams = true;
+#else
+constexpr bool textStreams = false;
+#endif
 
 class FileIStream : public std::istream
 {
 public:
-    explicit FileIStream(NativeFile file)
+    FileIStream(NativeFile file, bool text)
         : std::istream(nullptr)
-        , m_buf(std::move(file))
+        , m_buf(std::move(file), text)
     {
         rdbuf(&m_buf);
     }
@@ -501,7 +543,7 @@ class FileWideStreambuf : public std::wstreambuf
 {
 public:
     explicit FileWideStreambuf(NativeFile file)
-        : m_in(std::move(file))
+        : m_in(std::move(file), textStreams)
     {
     }
 
@@ -586,7 +628,7 @@ CharFileStreamPtr ConfinedFileSystem::OpenStream(const std::string& name) const
     {
         return CharFileStreamPtr(nullptr, DeleteNarrow);
     }
-    return CharFileStreamPtr(new FileIStream(std::move(file)), DeleteNarrow);
+    return CharFileStreamPtr(new FileIStream(std::move(file), textStreams), DeleteNarrow);
 }
 
 WCharFileStreamPtr ConfinedFileSystem::OpenWStream(const std::string& name) const
@@ -601,7 +643,12 @@ WCharFileStreamPtr ConfinedFileSystem::OpenWStream(const std::string& name) cons
 
 CharFileStreamPtr ConfinedFileSystem::OpenByteStream(const std::string& name) const
 {
-    return OpenStream(name);
+    auto file = OpenTemplateFile(m_rootFolder, name);
+    if (!file.Valid())
+    {
+        return CharFileStreamPtr(nullptr, DeleteNarrow);
+    }
+    return CharFileStreamPtr(new FileIStream(std::move(file), false), DeleteNarrow);
 }
 
 std::optional<std::chrono::system_clock::time_point> ConfinedFileSystem::GetLastModificationDate(const std::string& name) const

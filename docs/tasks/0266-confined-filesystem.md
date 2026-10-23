@@ -1,8 +1,8 @@
 ---
-status: open
+status: done
 priority: medium
 area: api
-touches: [include/jinja2cpp/filesystem_handler.h, src/filesystem_handler.cpp, test/filesystem_handler_test.cpp]
+touches: [include/jinja2cpp/filesystem_handler.h, include/jinja2cpp/fwd.h, src/filesystem_handler.cpp, src/confined_filesystem.cpp, src/template_path.h, CMakeLists.txt, test/filesystem_handler_test.cpp]
 ---
 # `ConfinedFileSystem`: a loader that never leaves its root
 
@@ -33,3 +33,24 @@ pointing inside renders; a junction on Windows is not found; a FIFO is not opene
 
 **Done when.** The class ships in 2.0, is exported, listed in fwd.h/jinja2cpp.h (0076), and
 docs/security.md (0224) recommends it for tier 1.
+
+**Done (this PR).** `ConfinedFileSystem` (src/confined_filesystem.cpp, no Boost), declared in
+fwd.h; `jinja2cpp.h` already includes filesystem_handler.h. The name rules moved to
+`src/template_path.h` (`SplitTemplateName`), shared with `RealFileSystem`, whose behaviour is
+unchanged.
+- POSIX: a walk from a descriptor of the root, one `openat(O_NOFOLLOW)` per piece. A link met on
+  the way is read with `readlinkat` and its target walked the same way, so a link that stays inside
+  the root renders; an absolute or empty target, a `..` climbing above the root or more than 40
+  expansions is not found. The last piece must be a regular file (`fstatat` before the open so a
+  device or FIFO is never opened, `fstat` of the opened descriptor as the check that counts). The
+  stream reads from that descriptor (own `streambuf`; the wide one decodes UTF-8 chunk by chunk, so
+  `maxTemplateSize` still stops the read).
+- Windows (compiled in CI only): the file is opened normally and `GetFinalPathNameByHandleW` of the
+  opened handle must lie under the root's final path (case-insensitive `CompareStringOrdinal`); final
+  paths are long names, so short names need nothing extra, and junctions or links leading outside
+  fail the check. A non-disk handle or a directory is not found. `OpenStream`/`OpenWStream` read
+  `\r\n` as `\n` like RealFileSystem's text-mode streams; `OpenByteStream` reads raw bytes.
+- Tests: `ConfinedFsTest` rows in test/filesystem_handler_test.cpp (POSIX), the link-swapping stress
+  row included. No junction test on Windows.
+- Left: docs/security.md does not exist yet; 0224 must recommend this class for tier 1 when it writes
+  that page. Modification time is `st_mtime` (one-second resolution), as RealFileSystem's.

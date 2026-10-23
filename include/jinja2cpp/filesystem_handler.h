@@ -262,7 +262,8 @@ public:
     /*!
      * \brief Open the specified file as a binary stream
      *
-     * Reads the same bytes as \ref OpenStream (no newline translation on any platform).
+     * Reads the file's bytes as they are. \ref OpenStream and \ref OpenWStream read `\r\n` as `\n` on Windows, as \ref RealFileSystem's text-mode
+     * streams do, and \ref OpenWStream decodes the file as UTF-8
      *
      * @param name Name of the file to open
      * @return Opened stream object or empty pointer in case of any error
