@@ -514,6 +514,9 @@ public:
     // The blocks the template defines, each name once
     void SetBlocks(ArenaSpan<NodeRef<BlockStatement>> blocks) { m_blocks = blocks; }
     void SetHasExtends() { m_hasExtends = true; }
+    // The source has the word `loop` somewhere: only then can the template read the `loop` of an including loop
+    void SetMentionsLoop() { m_mentionsLoop = true; }
+    [[nodiscard]] bool MayReadLoop() const { return m_mentionsLoop || m_hasExtends; }
     // The template's autoescape setting (Settings::autoescape or autoescapeSelector)
     void SetAutoescape(bool autoescape) { m_autoescape = autoescape; }
     [[nodiscard]] bool IsAutoescape() const { return m_autoescape; }
@@ -541,6 +544,7 @@ private:
     NodeRef<ComposedRenderer> m_body;
     ArenaSpan<NodeRef<BlockStatement>> m_blocks;
     bool m_hasExtends = false;
+    bool m_mentionsLoop = false;
     bool m_autoescape = false;
     UnitLayout m_unitLayout;
 };

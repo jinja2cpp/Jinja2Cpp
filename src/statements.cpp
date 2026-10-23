@@ -1946,7 +1946,9 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
             return map && dynamic_cast<const LoopAccessor*>(map->GetAccessor()) != nullptr;
         };
         const HashedName loopName{ "loop", HashedName::Hash("loop") };
-        if (const auto found = values.FindValue(loopName); found && isLoopObject(*found))
+        // A template that never says `loop` cannot read it: skip the lookup
+        const bool mayReadLoop = tpl.Nodes()[tpl.GetRenderer()].MayReadLoop();
+        if (const auto found = mayReadLoop ? values.FindValue(loopName) : LookupResult(); found && isLoopObject(*found))
         {
             auto outer = values.FindValueWhere("loop"s, [&isLoopObject](const InternalValue& value) { return !isLoopObject(value); });
             innerContext.GetCurrentScope()["loop"s] = outer ? *outer : MakeUndefined(values, "loop");
