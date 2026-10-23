@@ -4,10 +4,12 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <optional>
@@ -722,3 +724,266 @@ TEST_F(RealFsNamesTest, CachedTemplateWithRemovedFile)
     // The modification date is unknown now: the cached template is kept, nothing throws
     EXPECT_EQ("a", env.LoadTemplate("a.j2").value().RenderAsString({}).value());
 }
+
+#ifndef _WIN32
+
+#include <sys/stat.h>
+
+namespace
+{
+// A scratch tree for ConfinedFileSystem:
+//   <base>/outside/canary.j2 ("CANARY"), <base>/root/{a.j2, sub/b.j2, dir/}
+class ConfinedFsTest : public FilesystemHandlerTest
+{
+protected:
+    void SetUp() override
+    {
+        namespace fs = std::filesystem;
+        m_base = fs::temp_directory_path() / ("jinja2cpp_confined_" + std::to_string(std::random_device{}()));
+        fs::create_directories(m_base / "root" / "sub");
+        fs::create_directories(m_base / "root" / "dir");
+        fs::create_directories(m_base / "outside");
+        WriteFile(m_base / "outside" / "canary.j2", "CANARY");
+        WriteFile(m_base / "root" / "a.j2", "a");
+        WriteFile(m_base / "root" / "sub" / "b.j2", "b");
+        m_root = (m_base / "root").string();
+    }
+
+    void TearDown() override
+    {
+        std::error_code ec;
+        std::filesystem::remove_all(m_base, ec);
+    }
+
+    static void WriteFile(const std::filesystem::path& path, const std::string& content)
+    {
+        std::ofstream os(path);
+        os << content;
+    }
+
+    // Creates a symbolic link <root>/<name> with the target text as given
+    bool Link(const std::string& name, const std::string& target)
+    {
+        std::error_code ec;
+        std::filesystem::create_symlink(target, m_base / "root" / name, ec);
+        return !ec;
+    }
+
+    std::filesystem::path m_base;
+    std::string m_root;
+};
+} // namespace
+
+TEST_F(ConfinedFsTest, PlainFilesRender)
+{
+    jinja2::TemplateEnv env;
+    env.AddFilesystemHandler("", std::make_shared<jinja2::ConfinedFileSystem>(m_root));
+    EXPECT_EQ("a", env.LoadTemplate("a.j2").value().RenderAsString({}).value());
+    EXPECT_EQ("b", env.LoadTemplate("sub/b.j2").value().RenderAsString({}).value());
+    EXPECT_EQ("b", env.LoadTemplate("/./sub//b.j2").value().RenderAsString({}).value());
+    auto wideTpl = env.LoadTemplateW("sub/b.j2");
+    ASSERT_TRUE(wideTpl);
+    EXPECT_EQ(L"b", wideTpl.value().RenderAsString({}).value());
+}
+
+TEST_F(ConfinedFsTest, NameRules)
+{
+    const std::string outsideAbsolute = (m_base / "outside" / "canary.j2").generic_string();
+    const std::vector<std::pair<std::string, std::optional<std::string>>> rows = {
+        { "a.j2", "a" },
+        { "./a.j2", "a" },
+        { "/a.j2", "a" },
+        { "sub/b.j2", "b" },
+        { "sub//b.j2", "b" },
+        { "../outside/canary.j2", std::nullopt },
+        { "sub/../a.j2", std::nullopt },
+        { "..", std::nullopt },
+        { outsideAbsolute, std::nullopt },
+        { "", std::nullopt },
+        { ".", std::nullopt },
+        { "sub", std::nullopt },
+        { "dir", std::nullopt },
+        { "missing.j2", std::nullopt },
+        { "a.j2/x", std::nullopt },
+        { std::string("a.j2\0", 5), std::nullopt },
+    };
+
+    jinja2::ConfinedFileSystem fs(m_root);
+    for (const auto& [name, expected] : rows)
+    {
+        SCOPED_TRACE("name: '" + name + "'");
+        auto narrow = fs.OpenStream(name);
+        auto bytes = fs.OpenByteStream(name);
+        auto wide = fs.OpenWStream(name);
+        auto modified = fs.GetLastModificationDate(name);
+        EXPECT_EQ(expected.has_value(), static_cast<bool>(narrow));
+        EXPECT_EQ(expected.has_value(), static_cast<bool>(bytes));
+        EXPECT_EQ(expected.has_value(), static_cast<bool>(wide));
+        EXPECT_EQ(expected.has_value(), modified.has_value());
+        if (expected)
+        {
+            EXPECT_EQ(*expected, ReadFile(narrow));
+            EXPECT_EQ(*expected, ReadFile(bytes));
+            EXPECT_EQ(std::wstring(expected->begin(), expected->end()), ReadFile(wide));
+        }
+    }
+}
+
+TEST_F(ConfinedFsTest, RootAndEquality)
+{
+    jinja2::ConfinedFileSystem fs(m_root);
+    EXPECT_EQ(m_root, fs.GetRootFolder());
+    EXPECT_TRUE(fs.IsEqual(jinja2::ConfinedFileSystem(m_root)));
+    EXPECT_FALSE(fs.IsEqual(jinja2::ConfinedFileSystem(m_root + "/sub")));
+    EXPECT_FALSE(fs.IsEqual(jinja2::RealFileSystem(m_root)));
+    EXPECT_FALSE(jinja2::ConfinedFileSystem("/nonexistent_root_for_test").OpenStream("a.j2"));
+    fs.SetRootFolder(m_root + "/sub");
+    EXPECT_TRUE(fs.OpenStream("b.j2"));
+    EXPECT_FALSE(fs.OpenStream("a.j2"));
+}
+
+TEST_F(ConfinedFsTest, LinksInsideRootAreFollowed)
+{
+    if (!Link("l.j2", "a.j2") || !Link("sub/up.j2", "../a.j2") || !Link("dirlink", "sub") || !Link("chain1", "chain2") || !Link("chain2", "sub/../a.j2"))
+    {
+        GTEST_SKIP() << "symbolic links cannot be created here";
+    }
+    jinja2::ConfinedFileSystem fs(m_root);
+    for (const std::string name : { "l.j2", "sub/up.j2", "dirlink/b.j2", "chain1" })
+    {
+        SCOPED_TRACE(name);
+        auto stream = fs.OpenStream(name);
+        ASSERT_TRUE(static_cast<bool>(stream));
+        EXPECT_FALSE(ReadFile(stream).empty());
+        EXPECT_TRUE(fs.GetLastModificationDate(name).has_value());
+    }
+
+    jinja2::TemplateEnv env;
+    env.AddFilesystemHandler("", std::make_shared<jinja2::ConfinedFileSystem>(m_root));
+    EXPECT_EQ("a", env.LoadTemplate("sub/up.j2").value().RenderAsString({}).value());
+    EXPECT_EQ("b", env.LoadTemplate("dirlink/b.j2").value().RenderAsString({}).value());
+}
+
+TEST_F(ConfinedFsTest, LinksLeadingOutsideAreNotFound)
+{
+    const std::string insideAbsolute = (m_base / "root" / "a.j2").string();
+    const std::string outsideAbsolute = (m_base / "outside" / "canary.j2").string();
+    if (!Link("out.j2", "../outside/canary.j2") || !Link("sub/out2.j2", "../../outside/canary.j2") || !Link("abs_inside.j2", insideAbsolute) || !Link("abs_outside.j2", outsideAbsolute) || !Link("outdir", "../outside") || !Link("sub/deep", "../../outside") || !Link("climb", "sub/../../outside/canary.j2") || !Link("loop1", "loop2") || !Link("loop2", "loop1") || !Link("self", "self") || !Link("dir_link", "dir"))
+    {
+        GTEST_SKIP() << "symbolic links cannot be created here";
+    }
+    jinja2::ConfinedFileSystem fs(m_root);
+    for (const std::string name : { "out.j2", "sub/out2.j2", "abs_inside.j2", "abs_outside.j2", "outdir/canary.j2", "sub/deep/canary.j2", "climb", "loop1", "self", "dir_link" })
+    {
+        SCOPED_TRACE(name);
+        EXPECT_FALSE(fs.OpenStream(name));
+        EXPECT_FALSE(fs.OpenWStream(name));
+        EXPECT_FALSE(fs.OpenByteStream(name));
+        EXPECT_FALSE(fs.GetLastModificationDate(name).has_value());
+    }
+
+    jinja2::TemplateEnv env;
+    env.AddFilesystemHandler("", std::make_shared<jinja2::ConfinedFileSystem>(m_root));
+    auto result = env.LoadTemplate("out.j2");
+    ASSERT_FALSE(result);
+    EXPECT_EQ(jinja2::ErrorCode::FileNotFound, result.error().GetCode());
+    std::ostringstream os;
+    os << result.error();
+    EXPECT_EQ(std::string::npos, os.str().find(m_base.string()));
+
+    // RealFileSystem follows the same link
+    jinja2::RealFileSystem real(m_root);
+    auto stream = real.OpenStream("out.j2");
+    ASSERT_TRUE(static_cast<bool>(stream));
+    EXPECT_EQ("CANARY", ReadFile(stream));
+}
+
+TEST_F(ConfinedFsTest, RootItselfMayBeALink)
+{
+    std::error_code ec;
+    std::filesystem::create_directory_symlink(m_base / "root", m_base / "rootlink", ec);
+    if (ec)
+    {
+        GTEST_SKIP() << "symbolic links cannot be created here";
+    }
+    jinja2::ConfinedFileSystem fs((m_base / "rootlink").string());
+    auto stream = fs.OpenStream("sub/b.j2");
+    ASSERT_TRUE(static_cast<bool>(stream));
+    EXPECT_EQ("b", ReadFile(stream));
+}
+
+TEST_F(ConfinedFsTest, FifoIsNotOpened)
+{
+    if (::mkfifo((m_base / "root" / "pipe.j2").c_str(), 0600) != 0)
+    {
+        GTEST_SKIP() << "FIFOs cannot be created here";
+    }
+    jinja2::ConfinedFileSystem fs(m_root);
+    EXPECT_FALSE(fs.OpenStream("pipe.j2"));
+    EXPECT_FALSE(fs.OpenWStream("pipe.j2"));
+    EXPECT_FALSE(fs.GetLastModificationDate("pipe.j2").has_value());
+}
+
+TEST_F(ConfinedFsTest, WideStreamDecodesUtf8AcrossChunks)
+{
+    // Multi-byte characters straddle the internal chunk boundaries at many offsets
+    std::string content;
+    std::wstring expected;
+    for (int i = 0; i < 5000; ++i)
+    {
+        content += "x\xD0\xB6\xE2\x82\xAC";
+        expected += L"xж€";
+    }
+    content += "\xE2\x82"; // an incomplete sequence at the very end
+    expected += L"�";
+    WriteFile(m_base / "root" / "u.j2", content);
+
+    jinja2::ConfinedFileSystem fs(m_root);
+    auto wide = fs.OpenWStream("u.j2");
+    ASSERT_TRUE(static_cast<bool>(wide));
+    std::wstring got((std::istreambuf_iterator<wchar_t>(*wide)), std::istreambuf_iterator<wchar_t>());
+    EXPECT_EQ(expected, got);
+    auto narrow = fs.OpenStream("u.j2");
+    EXPECT_EQ(content, ReadFile(narrow));
+}
+
+TEST_F(ConfinedFsTest, SwappingALinkNeverReachesOutside)
+{
+    ASSERT_TRUE(Link("l", "a.j2"));
+    jinja2::ConfinedFileSystem fs(m_root);
+    std::atomic<bool> stop{ false };
+    std::thread swapper(
+        [&] {
+            const auto tmp = m_base / "root" / "l.tmp";
+            const auto target = m_base / "root" / "l";
+            bool outside = true;
+            while (!stop.load())
+            {
+                std::error_code ec;
+                std::filesystem::remove(tmp, ec);
+                std::filesystem::create_symlink(outside ? "../outside/canary.j2" : "a.j2", tmp, ec);
+                if (!ec)
+                {
+                    std::filesystem::rename(tmp, target, ec);
+                }
+                outside = !outside;
+            }
+        });
+
+    int found = 0;
+    for (int i = 0; i < 2000; ++i)
+    {
+        auto stream = fs.OpenStream("l");
+        if (!stream)
+        {
+            continue;
+        }
+        ++found;
+        EXPECT_NE("CANARY", ReadFile(stream));
+    }
+    stop = true;
+    swapper.join();
+    EXPECT_GT(found, 0);
+}
+
+#endif // !_WIN32
