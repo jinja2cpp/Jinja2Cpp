@@ -78,6 +78,21 @@ bool RenderWorkspace::ReleaseCaches() noexcept
     return true;
 }
 
+bool RenderWorkspace::ReleaseThisThread() noexcept
+{
+    RenderWorkspace* workspace = nullptr;
+    try
+    {
+        workspace = &ForThisThread();
+    }
+    catch (...)
+    {
+        // Out of memory making the workspace of a thread that never rendered: nothing to free
+        return true;
+    }
+    return workspace->ReleaseCaches();
+}
+
 void RenderWorkspace::EmptyMaps(RenderMaps& maps, bool keepTables) noexcept
 {
     for (auto* map : { &maps.params, &maps.topScope })

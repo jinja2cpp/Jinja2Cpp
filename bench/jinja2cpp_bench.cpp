@@ -613,32 +613,35 @@ int CountCase(const Case& c, CountKind kind, int iterations, const ProfileOption
             std::cerr << c.name << ": failed to load\n";
             return 1;
         }
-        // RenderTo reuses one string, as a host reusing its buffer does: kept outside the
-        // probe, so that retained is what a render leaves behind in every kind
+        // Each kind counts a lambda of its own, so that Render/* counts what it did before
+        // RenderTo/* came. RenderTo reuses one string, as a host reusing its buffer does: made
+        // outside the probe, so that retained is what a render leaves behind in every kind
+        auto measure = [&](auto fn) {
+            fn();
+            RunCounted(fn, iterations, profile);
+
+            MemoryProbe probe;
+            fn(); // the output string is freed: retained is what a render leaves behind
+            probe.Stop();
+            probe.Print();
+        };
         std::basic_string<CharT> out;
         CountingSink<CharT> sink;
-        auto fn = [&] {
-            switch (kind)
-            {
-            case CountKind::RenderTo:
+        switch (kind)
+        {
+        case CountKind::RenderTo:
+            measure([&tpl, &c, &ok, &out] {
                 out.clear();
                 ok = ok && tpl.RenderTo(out, c.params).has_value();
-                break;
-            case CountKind::RenderSink:
-                ok = ok && tpl.RenderTo(sink, c.params).has_value();
-                break;
-            default:
-                ok = ok && tpl.RenderAsString(c.params).has_value();
-                break;
-            }
-        };
-        fn();
-        RunCounted(fn, iterations, profile);
-
-        MemoryProbe probe;
-        fn(); // the output string is freed: retained is what a render leaves behind
-        probe.Stop();
-        probe.Print();
+            });
+            break;
+        case CountKind::RenderSink:
+            measure([&tpl, &c, &ok, &sink] { ok = ok && tpl.RenderTo(sink, c.params).has_value(); });
+            break;
+        default:
+            measure([&tpl, &c, &ok] { ok = ok && tpl.RenderAsString(c.params).has_value(); });
+            break;
+        }
     }
     if (!ok)
     {

@@ -261,17 +261,7 @@ bool BasicTemplate<CharT>::IsEqual(const BasicTemplate& other) const
 
 bool ReleaseThreadCaches() noexcept
 {
-    RenderWorkspace* workspace = nullptr;
-    try
-    {
-        workspace = &RenderWorkspace::ForThisThread();
-    }
-    catch (...)
-    {
-        // Out of memory making the workspace of a thread that never rendered: nothing to free
-        return true;
-    }
-    if (!workspace->ReleaseCaches())
+    if (!RenderWorkspace::ReleaseThisThread())
     {
         return false;
     }
