@@ -34,9 +34,11 @@ public:
 
     // The buffer is left uninitialised: only its written part is ever read
     // NOLINTBEGIN(cppcoreguidelines-pro-type-member-init)
-    // Writes through a writer that outlives the stream
-    explicit OutStream(StreamWriter* writer)
+    // Writes through a writer that outlives the stream; `reachesSink` when what it writes
+    // goes on to a sink stream
+    explicit OutStream(StreamWriter* writer, bool reachesSink = false)
         : m_writer(writer)
+        , m_reachesSink(reachesSink)
         , m_end(m_buffer)
     {}
     // Appends to `target`, which must outlive the stream. The output reaches the string
@@ -53,9 +55,11 @@ public:
     // what is written before a render throws stays written
     explicit OutStream(OutputSink& sink)
         : m_sink(&sink)
+        , m_reachesSink(true)
     {}
     explicit OutStream(OutputSinkW& sink)
         : m_sink(&sink)
+        , m_reachesSink(true)
         , m_charSize(sizeof(wchar_t))
         , m_end(std::end(m_buffer))
     {}
@@ -104,6 +108,10 @@ public:
 
     // Appends the buffered output to the target string, or writes it to the sink
     void Flush();
+    // Whether the output goes to a host's sink, which may run a render on this thread while
+    // the stream still needs a fragment: such fragments must not live in a per-thread
+    // scratch buffer that the render reuses (the HTML-escape buffer, WriteEscaped)
+    [[nodiscard]] bool ReachesSink() const { return m_reachesSink; }
     // The characters written to the sink so far (Settings::Limits::maxOutputSize)
     [[nodiscard]] const size_t& SinkWritten() const { return m_sinkWritten; }
 
@@ -175,6 +183,7 @@ private:
     // Or the target sink: OutputSink or OutputSinkW by m_charSize
     void* m_sink = nullptr;
     size_t m_sinkWritten = 0;
+    bool m_reachesSink = false;
     size_t m_charSize = 1;
     // [m_buffer, m_cur) is output not yet in the target, [m_cur, m_end) the room left. A
     // narrow stream uses the first BufferLength bytes only. A writer stream has no room, so

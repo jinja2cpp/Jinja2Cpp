@@ -5,6 +5,7 @@
 #include "gtest/gtest.h"
 
 #include <jinja2cpp/exception.h>
+#include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
@@ -15,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <memory>
 #include <new>
 #include <stdexcept>
 #include <string>
@@ -454,4 +456,75 @@ TEST(OutputTest, ContainerSinkAppendsToContainers)
     static_assert(std::is_base_of_v<OutputSink, ContainerSink<std::string>>);
     static_assert(std::is_base_of_v<OutputSinkW, ContainerSink<std::wstring>>);
     static_assert(std::is_base_of_v<OutputSink, ContainerSink<fmt::memory_buffer>>);
+}
+
+TEST(OutputTest, SinkRenderingDuringWriteKeepsEscapedText)
+{
+    // A sink that renders an escaped template of its own on every chunk: the per-thread escape
+    // buffer must not hold text the outer stream still has to write (Codex on #616)
+    Template inner;
+    ASSERT_TRUE(inner.Load("{% autoescape true %}{{ y }}{% endautoescape %}"));
+    const ValuesMap innerParams{ { "y", std::string(3000, '<') } };
+    struct RenderingSink final : OutputSink
+    {
+        void Write(std::string_view text) override
+        {
+            output.append(text);
+            auto rendered = nested->RenderAsString(*nestedParams);
+            ok = ok && rendered && rendered.value().size() == 12000;
+        }
+        const Template* nested = nullptr;
+        const ValuesMap* nestedParams = nullptr;
+        std::string output;
+        bool ok = true;
+    };
+
+    // A long escaped fragment after buffered text: the flush before it calls the sink
+    Template longFragment;
+    ASSERT_TRUE(longFragment.Load("{% autoescape true %}prefix{{ x }}{% endautoescape %}"));
+    RenderingSink sink;
+    sink.nested = &inner;
+    sink.nestedParams = &innerParams;
+    ASSERT_TRUE(longFragment.RenderTo(sink, { { "x", std::string(200, '&') } }));
+    std::string expected = "prefix";
+    for (int idx = 0; idx != 200; ++idx)
+    {
+        expected += "&amp;";
+    }
+    EXPECT_EQ(expected, sink.output);
+    EXPECT_TRUE(sink.ok);
+
+    // Short escaped fragments that fill the buffer: each flush calls the sink
+    Template shortFragments;
+    ASSERT_TRUE(shortFragments.Load("{% autoescape true %}{% for i in range(300) %}{{ v }}{% endfor %}{% endautoescape %}"));
+    RenderingSink loopSink;
+    loopSink.nested = &inner;
+    loopSink.nestedParams = &innerParams;
+    ASSERT_TRUE(shortFragments.RenderTo(loopSink, { { "v", std::string("<&>") } }));
+    expected.clear();
+    for (int idx = 0; idx != 300; ++idx)
+    {
+        expected += "&lt;&amp;&gt;";
+    }
+    EXPECT_EQ(expected, loopSink.output);
+    EXPECT_TRUE(loopSink.ok);
+
+    // Through an extends: the top-level writer passes the fragments on to the sink stream
+    TemplateEnv env;
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("base.j2", "{% autoescape true %}[{% block b %}{% endblock %}]{% endautoescape %}");
+    env.AddFilesystemHandler({}, fs);
+    Template child(&env);
+    ASSERT_TRUE(child.Load("{% extends 'base.j2' %}{{ x }}{% block b %}{% autoescape true %}pre{{ x }}{% endautoescape %}{% endblock %}"));
+    RenderingSink childSink;
+    childSink.nested = &inner;
+    childSink.nestedParams = &innerParams;
+    ASSERT_TRUE(child.RenderTo(childSink, { { "x", std::string(200, '&') } }));
+    expected = "[pre";
+    for (int idx = 0; idx != 200; ++idx)
+    {
+        expected += "&amp;";
+    }
+    EXPECT_EQ(expected + "]", childSink.output);
+    EXPECT_TRUE(childSink.ok);
 }
