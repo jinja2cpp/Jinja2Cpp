@@ -114,12 +114,14 @@ public:
     void ReturnMaps(RenderMaps& maps) noexcept
     {
         assert(m_lentMaps != 0 && m_maps[m_lentMaps - 1].get() == &maps);
-        --m_lentMaps;
-        // A render that set no name and got no params has nothing to empty
+        // A render that set no name and got no params has nothing to empty. The maps stay lent
+        // while they are emptied: a destructor of a value in them may call ReleaseCaches
+        const std::size_t outer = m_lentMaps - 1;
         if ((maps.params.mask() | maps.topScope.mask()) != 0)
         {
-            EmptyMaps(maps, m_lentMaps < MaxKeptMaps);
+            EmptyMaps(maps, outer < MaxKeptMaps);
         }
+        m_lentMaps = outer;
     }
     // The tables kept for the next render have at most 1024 buckets: about 800 names. A
     // bigger one is let go, so that one huge render does not hold memory on the thread
