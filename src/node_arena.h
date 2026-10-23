@@ -1041,8 +1041,11 @@ public:
     {
         std::uint32_t nameRefs = 0;
         std::uint32_t contextNodes = 0;
+        // The references to the name `loop` (NoteLoopRead): a for loop's body reads it or not
+        std::uint32_t loopReads = 0;
     };
-    [[nodiscard]] ContextMarks Marks() const { return { m_nameRefs, m_contextNodes }; }
+    [[nodiscard]] ContextMarks Marks() const { return { m_nameRefs, m_contextNodes, m_loopReads }; }
+    void NoteLoopRead() { ++m_loopReads; }
 
     template<typename T, typename... Args>
     NodeRef<T> Make(Args&&... args)
@@ -1397,6 +1400,7 @@ private:
     // (NodeArena::ContextMarks)
     std::uint32_t m_nameRefs = 0;
     std::uint32_t m_contextNodes = 0;
+    std::uint32_t m_loopReads = 0;
     bool m_sealed = false;
     detail::TemplateOriginPtr m_origin = nullptr;
     // The symbols of the names, while the tree is parsed: a list in place for the first few,

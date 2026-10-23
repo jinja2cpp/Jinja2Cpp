@@ -17,6 +17,10 @@ innermost enclosing loop (slot or scope) from the cloned context in
 `RenderIncludedTemplate` when it is rendered with context; check `{% import ... with context %}`
 too.
 
-**Progress.** `RenderIncludedTemplate` binds `loop` in the included template's scope to the next `loop`
-that is not a loop object (a top-level `{% set loop %}` or a render parameter), or to undefined. Cases
-`statements.loop_not_visible_in_include` (line gone from the allow-list) and `statements.loop_include_*`.
+**Progress.** The premise above was too coarse. Jinja2 makes a `loop` object only when the loop's body (not
+its iterable, filter or `else`) names `loop`, or the loop is recursive; an include then sees it, otherwise the
+`loop` that resolves there is an enclosing extended loop's, a render parameter or none. `ForStatement` records
+whether its body names `loop` (`SetBodyReadsLoop`, counted by `NodeArena::NoteLoopRead`), and
+`RenderIncludedTemplate` takes the loop's binding out of sight for the length of the include when it does not,
+or shows the next visible `loop` instead. Only templates that contain the name `loop` pay for the check.
+Cases `statements.loop_not_visible_in_include` (line gone from the allow-list) and `statements.loop_include_*`.

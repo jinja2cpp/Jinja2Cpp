@@ -247,6 +247,8 @@ struct LoopState : ValueObject
     // Set while the loop moves to the next item, which runs the loop filter
     bool isAdvancing = false;
     int level = 0;
+    // Whether the statement's body names `loop` (ForStatement::BodyReadsLoop)
+    bool bodyReadsLoop = false;
     // The previous, current and next items, at index0 % 3 for the current one, so that
     // moving to the next item fetches one value and moves none
     std::array<InternalValue, 3> items;
@@ -540,6 +542,7 @@ public:
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return true; }
+    [[nodiscard]] const LoopState* State() const { return m_state; }
     [[nodiscard]] const void* GetIdentity() const override { return m_state; }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -1017,6 +1020,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     auto state = LoopFramePool::Take(m_loopId);
     const LoopFrameReturn frameReturn{ state };
     state->level = level;
+    state->bodyReadsLoop = m_bodyReadsLoop;
     if (m_isRecursive)
     {
         state->recursiveStatement = this;
@@ -1109,6 +1113,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     // Declared first, so that the loop's slots let go of `loop` before the frame is given back
     auto state = LoopFramePool::Take(m_loopId);
     const LoopFrameReturn frameReturn{ state };
+    state->bodyReadsLoop = m_bodyReadsLoop;
     // `loop`, then the targets; the frame's slots never move during the call
     const auto names = values.Nodes()[m_slotNames];
     const auto frameSlots = values.Frame().slots;
@@ -1928,11 +1933,92 @@ void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
     });
 }
 
+const LoopAccessor* AsLoopAccessor(const InternalValue& value)
+{
+    const auto map = AsMap(value);
+    return map ? dynamic_cast<const LoopAccessor*>(map->GetAccessor()) : nullptr;
+}
+
+bool IsLoopObject(const InternalValue& value)
+{
+    return AsLoopAccessor(value) != nullptr;
+}
+
+// Takes the `loop` of a running for loop out of sight of the template included from it, and puts
+// it back when the include is done
+class LoopHiding
+{
+public:
+    explicit LoopHiding(RenderContext& values)
+        : m_values(values)
+    {
+    }
+    LoopHiding(const LoopHiding&) = delete;
+    LoopHiding& operator=(const LoopHiding&) = delete;
+    ~LoopHiding()
+    {
+        if (m_isHidden)
+        {
+            if (const auto slot = m_values.FindForWrite("loop"))
+            {
+                *slot = std::move(m_saved);
+            }
+        }
+    }
+    // The binding of the loop itself becomes undefined in place, which costs no allocation
+    void Hide(InternalValue& binding)
+    {
+        m_saved = std::move(binding);
+        binding = InternalValue();
+        m_isHidden = true;
+    }
+
+private:
+    RenderContext& m_values;
+    InternalValue m_saved;
+    bool m_isHidden = false;
+};
+
+// `loop` as the included template of `values` sees it. With a `loop` of the same name outside the
+// loop (a render parameter, a global, a top-level set) that one is shadowed in the include's own
+// scope; otherwise the loop's binding is hidden for the length of the include
+void HideIncludingLoop(RenderContext& values, RenderContext& innerContext, LoopHiding& hidden)
+{
+    static const HashedName loopName{ "loop", HashedName::Hash("loop") };
+    const auto found = values.FindValue(loopName);
+    if (!found)
+    {
+        return;
+    }
+    // Jinja2 passes the loop to the include only when the body names `loop`
+    const auto* loopAccessor = AsLoopAccessor(*found);
+    if (!loopAccessor || loopAccessor->State()->bodyReadsLoop)
+    {
+        return;
+    }
+    // The `loop` that is visible to Jinja2 there: an enclosing loop whose body names it, or a
+    // value of that name set outside the loops
+    if (auto outer = values.FindValueWhere("loop"s, [](const InternalValue& value) {
+            const auto* accessor = AsLoopAccessor(value);
+            return !accessor || accessor->State()->bodyReadsLoop;
+        }))
+    {
+        innerContext.GetCurrentScope()["loop"s] = *outer;
+        return;
+    }
+    if (const auto binding = values.FindForWrite("loop"))
+    {
+        hidden.Hide(*binding);
+    }
+}
+
 // Renders `tpl` for `include`: the names it sets stay its own
 template<typename CharT>
 void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values)
 {
     RenderContext innerContext = values.Clone(withContext);
+    // Declared after the context: the loop is put back once the included template has rendered
+    LoopHiding hidden(values);
     if (withContext)
     {
         // Jinja2 renders it in a new Context, with an EvalContext of its own
@@ -1941,17 +2027,9 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
         innerContext.EnterScope();
         // The names of the including loop are visible, `loop` is not (Jinja2's include context
         // takes the loop's targets, not its LoopContext); a `loop` set outside it is
-        const auto isLoopObject = [](const InternalValue& value) {
-            const auto map = AsMap(value);
-            return map && dynamic_cast<const LoopAccessor*>(map->GetAccessor()) != nullptr;
-        };
-        const HashedName loopName{ "loop", HashedName::Hash("loop") };
-        // A template that never says `loop` cannot read it: skip the lookup
-        const bool mayReadLoop = tpl.Nodes()[tpl.GetRenderer()].MayReadLoop();
-        if (const auto found = mayReadLoop ? values.FindValue(loopName) : LookupResult(); found && isLoopObject(*found))
+        if (tpl.Nodes()[tpl.GetRenderer()].MayReadLoop())
         {
-            auto outer = values.FindValueWhere("loop"s, [&isLoopObject](const InternalValue& value) { return !isLoopObject(value); });
-            innerContext.GetCurrentScope()["loop"s] = outer ? *outer : MakeUndefined(values, "loop");
+            HideIncludingLoop(values, innerContext, hidden);
         }
     }
 

@@ -5153,6 +5153,300 @@
    "output": "True"
   },
   {
+   "id": "statements.loop_include_restored_after",
+   "template": "{% for x in 'ab' %}{% include 't' %}{{ loop.index }}{{ loop.last }}|{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t": "{{ loop is defined }}"
+   },
+   "output": "True1False|True2True|"
+  },
+  {
+   "id": "statements.loop_include_twice_in_loop",
+   "template": "{% for x in 'ab' %}{% include 't' %}{% include 't' %}{{ loop.index }}|{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t": "{{ loop is defined }}"
+   },
+   "output": "TrueTrue1|TrueTrue2|"
+  },
+  {
+   "id": "statements.loop_include_outer_body_reads_loop",
+   "template": "{% for x in 'ab' %}{% for y in 'c' %}{% include 't' %}{% endfor %}{{ loop.index }}|{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t": "{{ loop is defined }}"
+   },
+   "output": "True1|True2|"
+  },
+  {
+   "id": "statements.loop_include_inner_body_reads_loop",
+   "template": "{% for x in 'ab' %}{% for y in 'c' %}{% include 't' %}{{ loop.index }}{% endfor %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t": "{{ loop is defined }}"
+   },
+   "output": "True1True1"
+  },
+  {
+   "id": "statements.loop_include_recursive",
+   "template": "{% for x in [1] recursive %}{% include 't' %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t": "{{ loop is defined }}"
+   },
+   "output": "True"
+  },
+  {
+   "id": "statements.loop_include_loop_read_in_else",
+   "template": "{% for x in 'ab' %}{% include 't' %}{% else %}{{ loop }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t": "{{ loop is defined }}"
+   },
+   "output": "FalseFalse"
+  },
+  {
+   "id": "statements.loop_include_macro_loop_argument",
+   "template": "{% macro m(loop) %}{% include 't' %}{% endmacro %}{% for x in [1, 2] %}{{ m(loop) }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t": "{{ loop.index }}"
+   },
+   "output": "12"
+  },
+  {
    "id": "statements.loop_include_in_macro",
    "template": "{% macro m() %}{% include 't' %}{% endmacro %}{% for x in [1] %}{{ m() }}{% endfor %}",
    "context": {

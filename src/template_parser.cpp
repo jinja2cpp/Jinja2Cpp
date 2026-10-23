@@ -350,6 +350,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     m_nodes.Get<ForStatement>(renderer).SetFilterReadsLoop(filterReadsLoop);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ForStatement, stmtTok, m_tagOffset);
     statementInfo.renderer = renderer;
+    statementInfo.marks = m_nodes.Marks();
     statementInfo.frame = m_names.PushFor(outerFrame, renderer, isRecursive);
     if (filterFrame != NameResolver::NoFrame)
     {
@@ -568,9 +569,11 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     }
 
     NodeRef<IRendererBase> elseRenderer;
+    auto bodyEndReads = m_nodes.Marks().loopReads;
     if (statementsInfo.back().type == StatementInfo::ElseIfStatement)
     {
         auto elseInfo = PopStatement(statementsInfo);
+        bodyEndReads = elseInfo.marks.loopReads;
         // The body of a frame of its own (ParseElse)
         m_nodes.Get<ElseBranchStatement>(elseInfo.renderer).SetMainBody(m_names.MayBindAtEntry(elseInfo.frame) ? TakeFrameBody(elseInfo) : TakeBody(elseInfo));
         elseRenderer = elseInfo.renderer;
@@ -584,6 +587,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     auto info = PopStatement(statementsInfo);
     auto& renderer = m_nodes.Get<ForStatement>(info.renderer);
     renderer.SetMainBody(TakeBody(info));
+    renderer.SetBodyReadsLoop(renderer.IsRecursive() || bodyEndReads != info.marks.loopReads);
     if (elseRenderer)
     {
         renderer.SetElseBody(elseRenderer);
@@ -635,6 +639,8 @@ StatementsParser::ParseResult StatementsParser::ParseElse(LexScanner& /*lexer*/,
     auto renderer = m_nodes.Make<ElseBranchStatement>(NodeRef<Expression>());
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ElseIfStatement, stmtTok, m_tagOffset);
     statementInfo.renderer = renderer;
+    // Where the loop's body ends, for the names it reads (ForStatement::SetBodyReadsLoop)
+    statementInfo.marks = m_nodes.Marks();
     // A loop's `else` body is outside the loop, in a frame of its own, as in Jinja2
     // (docs/tasks/0202)
     statementInfo.frame = prev.type == StatementInfo::ForStatement ? m_names.PushWith(m_names.Parent(prev.frame)) : prev.frame;

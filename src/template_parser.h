@@ -1632,7 +1632,8 @@ private:
         {
             templateRoot.SetHasExtends();
         }
-        if (m_nodes.HasSymbol(HashedName::Hash("loop")))
+        static const auto loopHash = HashedName::Hash("loop");
+        if (m_nodes.HasSymbol(loopHash))
         {
             templateRoot.SetMentionsLoop();
         }

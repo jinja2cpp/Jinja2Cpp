@@ -153,6 +153,10 @@ public:
 
     // The filter may read `loop`, which there is the loop around this one, as in Jinja2
     void SetFilterReadsLoop(bool reads) { m_filterReadsLoop = reads; }
+    // The body, the else branch and what is nested in them name `loop`, or the loop is recursive: only
+    // then does Jinja2 make a `loop` that a template included from the body can see
+    void SetBodyReadsLoop(bool reads) { m_bodyReadsLoop = reads; }
+    [[nodiscard]] bool BodyReadsLoop() const { return m_bodyReadsLoop; }
 
     void Render(OutStream& os, RenderContext& values) override;
 
@@ -195,6 +199,7 @@ private:
     NodeRef<Expression> m_ifExpr;
     bool m_isRecursive{};
     bool m_filterReadsLoop{};
+    bool m_bodyReadsLoop{};
     NodeRef<IRendererBase> m_mainBody;
     NodeRef<IRendererBase> m_elseBody;
     // Unique for the process, unlike the address: a reused loop frame keeps the names this
@@ -516,7 +521,7 @@ public:
     void SetHasExtends() { m_hasExtends = true; }
     // The source has the word `loop` somewhere: only then can the template read the `loop` of an including loop
     void SetMentionsLoop() { m_mentionsLoop = true; }
-    [[nodiscard]] bool MayReadLoop() const { return m_mentionsLoop || m_hasExtends; }
+    [[nodiscard]] bool MayReadLoop() const { return m_mentionsLoop; }
     // The template's autoescape setting (Settings::autoescape or autoescapeSelector)
     void SetAutoescape(bool autoescape) { m_autoescape = autoescape; }
     [[nodiscard]] bool IsAutoescape() const { return m_autoescape; }
