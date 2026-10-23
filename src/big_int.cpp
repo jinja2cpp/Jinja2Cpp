@@ -481,9 +481,9 @@ public:
     }
     ~BackendObject()
     {
-        if (m_made)
+        if (m_madeBy)
         {
-            m_backend->destroy(m_backend, m_storage.data());
+            m_madeBy->destroy(m_madeBy, m_storage.data());
         }
     }
     BackendObject(const BackendObject&) = delete;
@@ -494,22 +494,24 @@ public:
     // Storage for a call that makes the object; null once made, which no call accepts
     void* Out() noexcept // NOLINT(readability-make-member-function-const): the caller makes the object in it
     {
-        assert(!m_made);
+        assert(!m_madeBy);
         return m_storage.data();
     }
     // Records what the call that got Out() reported
     void Made(BigIntStatus status);
     [[nodiscard]] const void* Get() const noexcept
     {
-        assert(m_made);
+        assert(m_madeBy);
         return m_storage.data();
     }
-    [[nodiscard]] bool IsMade() const noexcept { return m_made; }
+    [[nodiscard]] bool IsMade() const noexcept { return m_madeBy != nullptr; }
 
 private:
-    const BigIntBackend* m_backend;
+    // The slot first and two pointers after it: no padding, which MSVC would warn about (C4324)
     alignas(MaxBigIntObjectAlign) std::array<unsigned char, MaxBigIntObjectSize> m_storage{};
-    bool m_made = false;
+    const BigIntBackend* m_backend;
+    // The backend once the object is made, which destroys it; null before
+    const BigIntBackend* m_madeBy = nullptr;
 };
 
 [[noreturn]] void ThrowBackendFailure(const BigIntBackend& backend, BigIntStatus status)
@@ -534,7 +536,7 @@ void BackendObject::Made(BigIntStatus status)
     {
         ThrowBackendFailure(*m_backend, status);
     }
-    m_made = true;
+    m_madeBy = m_backend;
 }
 
 void Load(const BigIntBackend& backend, BackendObject& obj, const IntOperand& val)
@@ -561,14 +563,36 @@ InternalValue ToValue(const BigIntBackend& backend, const BackendObject& obj)
     {
         ThrowTooManyBits();
     }
-    std::string decimal;
+    // The sink runs inside the backend's noexcept call, so a failed append is recorded rather than thrown through it
+    struct Sink
+    {
+        std::string decimal;
+        bool outOfMemory = false;
+    } sink;
     const auto status = backend.toDecimal(
-        &backend, obj.Get(), [](void* ctx, const char* data, size_t size) { static_cast<std::string*>(ctx)->append(data, size); }, &decimal);
+        &backend,
+        obj.Get(),
+        [](void* ctx, const char* data, size_t size) {
+            auto* const out = static_cast<Sink*>(ctx);
+            try
+            {
+                out->decimal.append(data, size);
+            }
+            catch (const std::bad_alloc&)
+            {
+                out->outOfMemory = true;
+            }
+        },
+        &sink);
+    if (sink.outOfMemory)
+    {
+        throw std::bad_alloc();
+    }
     if (status != BigIntStatus::Ok)
     {
         ThrowBackendFailure(backend, status);
     }
-    return MakeBigIntValue(decimal);
+    return MakeBigIntValue(sink.decimal);
 }
 
 int Sign(const IntOperand& val) noexcept

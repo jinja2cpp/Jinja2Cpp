@@ -23,6 +23,7 @@ struct ToyInt
     std::string magnitude; // decimal digits, no leading zeros; "0" for zero
 };
 
+// Not atomic: the tests that read it make and destroy objects on one thread
 inline int& LiveObjects()
 {
     static int count = 0;

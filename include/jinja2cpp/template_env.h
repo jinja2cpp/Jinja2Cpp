@@ -288,7 +288,7 @@ public:
      * With a backend, integer arithmetic in templates is exact at any size, as in Python; without one (`nullptr`),
      * a result outside `int64_t` fails the render with ErrorCode::IntegerOutOfRange. Every environment starts with
      * \ref GetBuiltinBigIntBackend. A template uses the backend its environment had when the template was made
-     * (\ref LoadTemplate, or a template constructed with this environment), as it does the settings. The backend must outlive every template that uses it.
+     * (\ref LoadTemplate, or a template constructed with this environment), as it does the settings. A template \ref LoadTemplate has cached keeps its backend until it is loaded again. The backend must outlive every template that uses it.
      * Method is thread-unsafe, as \ref SetSettings is.
      *
      * @param backend The backend, or `nullptr` for none
