@@ -295,8 +295,9 @@ public:
     /*!
      * \brief Render previously loaded template, streaming the output to a sink
      *
-     * Writes the output to `sink` while rendering, so it is never held whole. What was written
-     * before an error stays written, as with Python's `Template.generate()`.
+     * Writes the output to `sink` while rendering, so it is never held whole. The chunks the sink
+     * received before an error stay written, as with Python's `Template.generate()`; output still
+     * in the render's buffer (under 512 characters) when the error happens is not written.
      *
      * @param sink    Sink to write the output to (\ref BasicOutputSink)
      * @param params  Set of params which should be passed to the template engine and can be used within the template

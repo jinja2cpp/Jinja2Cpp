@@ -88,8 +88,8 @@ void OutStream::WriteBufferSlow(const void* ptr, size_t length)
 
 void OutStream::WriteLong(const void* ptr, size_t length)
 {
-    // Only a string stream has a target string: one test sends a writer's and a sink's
-    // fragments on, and leaves the string's path as it was
+    // Writer and sink streams have no target string: testing m_target, as m_writer was tested
+    // before sinks came, keeps the string's path one test long
     if (!m_target)
     {
         if (m_writer)

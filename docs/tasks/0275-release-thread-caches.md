@@ -27,3 +27,16 @@ destroy the env; the sentinel is still held; release; it is freed. TSan: four th
 and releasing in turn.
 
 **Perf.** Not on the render path: every case ±0.1%.
+
+**As built (2026-10-23).** `RenderWorkspace::ReleaseCaches()` (named apart from the existing
+`Release(SlotFrame)`) refuses while maps are lent or frames taken; it moves the chunks, frames,
+lent tables and globals out before they are destroyed, so a host destructor that renders sees an
+empty workspace, and keeps the frame generation counting so that a stale handle never resolves.
+Loop frames leave their reserved vector one at a time. `ReleaseThisThread()` lives in
+render_workspace.cpp so that `ForThisThread()` stays inline in template.cpp (an out-of-line copy
+there cost Render/plain_text 12 instructions). The HTML-escape buffer is freed through
+`detail::HtmlEscapeBuffer()`. The pending-destroy array (internal_value.cpp) needed no change: it
+is allocated only during a destruction nested 64 deep and freed when that destruction ends, so it
+is always empty and unallocated between renders. `LookupCache` keeps no memory to free (128 fixed
+entries) and its stale entries are never used (epochs). Added to the `noexcept` list in
+docs/api-2.0.md section 2 item 6.
