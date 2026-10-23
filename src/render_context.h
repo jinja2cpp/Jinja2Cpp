@@ -64,6 +64,8 @@ class ImportedModule;
 struct TemplateFrame
 {
     const BlocksStack* blocks = nullptr;
+    // The same stack where `extends` may add the parent's blocks to it; null for a template that extends nothing
+    BlocksStack* extendable = nullptr;
     // Set by `extends`; from then on this template's top-level output is dropped
     TemplateNode<TemplateRenderer> parent;
     // Scopes visible to the template's top level, and so to unscoped blocks

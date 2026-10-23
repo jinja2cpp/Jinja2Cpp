@@ -4656,6 +4656,45 @@
     "a.txt": "{% block b1 %}A{% endblock %}"
    },
    "output": "CA"
+  },
+  {
+   "id": "loader.self_block_after_extends_set",
+   "template": "{% extends 'a.txt' %}{% block b1 %}C{{ super() }}{% endblock %}{% set x = self.b1() %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a.txt": "{{ x }}|{% block b1 %}A{% endblock %}"
+   },
+   "output": "CA|CA"
+  },
+  {
+   "id": "loader.self_block_after_extends_parent_only_block",
+   "template": "{% extends 'a.txt' %}{% set x = self.b1() ~ self.b2() %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a.txt": "{{ x }}|{% block b1 %}A{% endblock %}{% block b2 %}[{{ 1 + 1 }}]{% endblock %}"
+   },
+   "output": "A[2]|A[2]"
+  },
+  {
+   "id": "loader.self_block_before_extends",
+   "template": "{% set x = self.b1() %}{% extends 'a.txt' %}{% block b1 %}C{% endblock %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a.txt": "{{ x }}|{% block b1 %}A{% endblock %}"
+   },
+   "output": "C|C"
   }
  ]
 }

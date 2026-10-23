@@ -1822,7 +1822,7 @@ void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values, Bloc
     // The parent shares the child's top-level scope, but a `self` the child set there is not
     // the parent's: in Jinja2 `self` is a local of each template's root function
     values.GetCurrentScope().Erase("self");
-    PushBlocks(*values.GetRendererCallback(), values.Nodes(), stack);
+    // Its blocks are on the stack already: `extends` pushed them (ExtendsStatement::Render)
     RenderBody(os, values, &stack, childName, true);
 }
 
@@ -1846,6 +1846,7 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     AutoescapeGuard autoescapeGuard(values, asParent ? values.IsAutoescape() : m_autoescape, m_autoescape);
     TemplateFrame frame;
     frame.blocks = stack ? stack : &noBlocks;
+    frame.extendable = stack;
     frame.baseDepth = values.GetScopesCount();
     frame.name = name;
     TemplateFrameGuard frameGuard(values, &frame);
@@ -1926,6 +1927,13 @@ void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
     frame->parent = VisitTemplateImpl<TemplateNode<TemplateRenderer>>(tpl, true, [&templates](const auto& tplPtr) {
         return TemplateNode<TemplateRenderer>{ templates.Add(tplPtr->Nodes()), tplPtr->GetRenderer() };
     });
+    // Jinja2 adds the parent's blocks to the context when `extends` runs, so that the rest of the
+    // child's top level (a `self.name()` call) already finds them below the child's own
+    if (frame->extendable)
+    {
+        const auto parent = templates.Resolve(frame->parent);
+        parent.node.PushBlocks(*values.GetRendererCallback(), parent.nodes, *frame->extendable);
+    }
 }
 
 // Renders `tpl` for `include`: the names it sets stay its own
