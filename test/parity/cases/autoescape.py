@@ -146,8 +146,14 @@ CASES = [
     ("volatile_concat_runtime", "{% autoescape on %}{% macro m() %}{{ x ~ '<'|safe }}{% endmacro %}{{ x ~ '<'|safe }}{% autoescape false %}{{ m() }}{% endautoescape %}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
     ("volatile_block_and_include", "{% autoescape on %}{% block b %}{{ x }}{{ '<' }}{% endblock %}{% include 'i.j2' %}{% endautoescape %}",
      {"ctx": {"on": True, "x": "<"}, "templates": {"i.j2": "{{ x }}{{ '<' }}"}}),
-    # Settings::finalize: its result is written unescaped (docs/tasks/0288)
+    # Settings::finalize under autoescape (docs/tasks/0288)
     ("env_on_finalize", "{{ '<' }}{{ x }}{% autoescape on %}{{ '<' }}{{ x }}{% endautoescape %}", {"env": {"autoescape": True, "finalize": "brackets"}, "ctx": {"on": True, "x": "<"}}),
+    # Jinja2 escapes after finalize for a value of run time, before it for a value it folds
+    ("env_on_finalize_order", "{{ '<'|safe }}{{ x|safe }}{{ none }}{{ y }}{{ '<' ~ x }}{{ ['<'][0] }}", {"env": {"autoescape": True, "finalize": "brackets"}, "ctx": {"x": "<", "y": None}}),
+    ("env_on_finalize_folded_none", "{{ none }}|{{ y }}|{{ x|safe }}", {"env": {"autoescape": True, "finalize": "none_to_empty"}, "ctx": {"x": "<", "y": None}}),
+    ("env_off_finalize", "{{ '<' }}{{ x }}{{ '<'|safe }}", {"env": {"finalize": "brackets"}, "ctx": {"x": "<"}}),
+    ("env_on_trans_finalize", "{% trans %}<b>{{ x }}{% endtrans %}|{% trans %}<i>{% endtrans %}", {"env": {"autoescape": True, "extensions": ["i18n"], "finalize": "brackets"}, "ctx": {"x": "<"}}),
+    ("volatile_finalize", "{% autoescape true %}{% autoescape on %}{{ '<' }}{{ x }}{% endautoescape %}{% endautoescape %}|{% autoescape false %}{% autoescape not on %}{{ '<' }}{{ x }}{% endautoescape %}{% endautoescape %}", {"env": {"finalize": "brackets"}, "ctx": {"on": False, "x": "<"}}),
     ("env_on_import_in_autoescape_block", "{% autoescape false %}{% import 'lib.j2' as z %}{{ z.z() }}{% from 'lib.j2' import z as y %}{{ y() }}{% endautoescape %}|{% import 'lib.j2' as z2 %}{{ z2.z() }}",
      {"env": {"autoescape": True}, "templates": {"lib.j2": "{% macro z() %}{{ 'T' if l|join(','|safe) is escaped else 'F' }}{{ '<'|e ~ html ~ ('<'|safe) }}{% endmacro %}"}}),
     ("env_off_import_in_autoescape_block", "{% autoescape true %}{% import 'lib.j2' as z %}{{ z.z() }}{% endautoescape %}|{% import 'lib.j2' as z2 %}{{ z2.z() }}",

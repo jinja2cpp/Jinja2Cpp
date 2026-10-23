@@ -4,6 +4,7 @@
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "lexertk.h"
+#include "markup.h"
 #include "node_arena.h"
 #include "out_stream.h"
 #include "recursion_guard.h"
@@ -181,29 +182,45 @@ protected:
     NodeRef<Expression> m_expression;
 };
 
-// `{{ ... }}` when Settings::finalize is set: only such templates pay for the callable
+// `{{ ... }}` when Settings::finalize is set: only such templates pay for the callable.
+// Jinja2 writes escape(finalize(value)), escaped by the output setting, for a value it
+// evaluates at run time, and str(finalize(escape(value))), escaped by the static setting, for
+// a value it folds (CodeGenerator._output_child_to_const, docs/tasks/0288)
 class FinalizedExpressionRenderer final : public ExpressionRenderer
 {
 public:
     static constexpr NodeKind Kind = NodeKind::FinalizedExprRenderer;
     static bool MatchesKind(NodeKind kind) { return kind == Kind; }
 
-    // finalize: Settings::finalize as a callable
-    FinalizedExpressionRenderer(NodeRef<Expression> expr, InternalValue finalize)
+    // finalize: Settings::finalize as a callable. isFolded: Jinja2 folds the value
+    FinalizedExpressionRenderer(NodeRef<Expression> expr, InternalValue finalize, bool isFolded)
         : ExpressionRenderer(expr)
         , m_finalize(std::move(finalize))
+        , m_isFolded(isFolded)
     {
     }
 
     void Render(OutStream& os, RenderContext& values) override
     {
+        auto value = values.Nodes()[m_expression].Evaluate(values);
+        if (m_isFolded && values.IsStaticAutoescape())
+        {
+            value = MarkupEscape(value, values.GetRendererCallback());
+        }
         CallParams params;
-        params.posParams.push_back(values.Nodes()[m_expression].Evaluate(values));
-        os.WriteValue(GetIf<Callable>(&m_finalize)->GetExpressionCallable()(params, values));
+        params.posParams.push_back(std::move(value));
+        auto result = GetIf<Callable>(&m_finalize)->GetExpressionCallable()(params, values);
+        if (m_isFolded)
+        {
+            os.WriteValue(result);
+            return;
+        }
+        WriteOutput(os, result, values);
     }
 
 private:
     InternalValue m_finalize;
+    bool m_isFolded;
 };
 
 // `{{ ... }}` of a value Jinja2 folds, in volatile code (RenderContext::IsVolatileAutoescape):
@@ -224,15 +241,15 @@ public:
     }
 };
 
-// finalize: Settings::finalize as a callable, or undefined. isStatic: the value is folded in
-// volatile code (StaticOutputRenderer)
-inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<Expression> expr, const InternalValue& finalize, bool isStatic = false)
+// finalize: Settings::finalize as a callable, or undefined. isVolatile: in volatile code
+// (RenderContext::IsVolatileAutoescape), where a folded value is a StaticOutputRenderer
+inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<Expression> expr, const InternalValue& finalize, bool isVolatile = false)
 {
     if (GetIf<Callable>(&finalize))
     {
-        return nodes.Make<FinalizedExpressionRenderer>(expr, finalize);
+        return nodes.Make<FinalizedExpressionRenderer>(expr, finalize, nodes[expr].IsFoldable(nodes));
     }
-    if (isStatic)
+    if (isVolatile && nodes[expr].IsFoldable(nodes))
     {
         return nodes.Make<StaticOutputRenderer>(expr);
     }

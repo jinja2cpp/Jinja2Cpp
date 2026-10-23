@@ -1,6 +1,6 @@
 ---
-status: open
-priority: medium
+status: in-progress
+priority: high
 area: parity
 touches: [src/renderer.h#FinalizedExpressionRenderer]
 shares: [src/expression_parser.cpp]

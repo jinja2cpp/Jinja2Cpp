@@ -139,7 +139,7 @@ ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(Le
         return MakeParseError(ErrorCode::ExpectedToken, tok, { tok1 });
     }
 
-    auto result = MakeExpressionRenderer(m_nodes, *evaluator, m_finalize, m_volatile && m_nodes[*evaluator].IsFoldable(m_nodes));
+    auto result = MakeExpressionRenderer(m_nodes, *evaluator, m_finalize, m_volatile);
 
     return result;
 }
