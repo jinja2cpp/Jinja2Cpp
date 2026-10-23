@@ -41,7 +41,7 @@ arena offsets (+1 per template with the fallback).
 
 **Done when.** The rows pass and the bench gate holds.
 
-**Result (PR #PRNUM).** As planned, with these choices:
+**Result (PR #612).** As planned, with these choices:
 - Offsets are stored after the children, last child first, so `ComposedRenderer::Render` finds
   them from the end pointer the loop already holds: the handler adds no live register, and
   Render instruction counts stay at the base (-0.3% to +0.1%). The origin is a pointer slot

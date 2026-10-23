@@ -28,7 +28,7 @@ recursion_limits_test.cpp and containers_api_test.cpp. The parity corpus is unaf
 
 **Done when.** No engine-raised error reports `UnexpectedException`.
 
-**Result (PR #PRNUM).** `TemplateRuntimeError` lives in src/engine_errors.h with the engine's other
+**Result (PR #612).** `TemplateRuntimeError` lives in src/engine_errors.h with the engine's other
 error types, not in error_handling.h. Commit A (9e2f697, in `.git-blame-ignore-revs`) rewrote 139
 sites. The integer overflow part (`ThrowIntegerOverflow` to `IntegerOutOfRange`) is left to
 0270, whose PR changes that function; until it lands, `{{ 9223372036854775807 + 1 }}` reports 17.
