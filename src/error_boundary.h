@@ -94,6 +94,12 @@ typename BasicErrorInfo<CharT>::Data CurrentExceptionToData(bool& located)
         message = ex.what();
         exception = nullptr;
     }
+    catch (const TemplateRuntimeError& ex)
+    {
+        code = ErrorCode::TemplateRuntimeError;
+        message = ex.what();
+        exception = nullptr;
+    }
     catch (const RecursionLimitError&)
     {
         code = ErrorCode::RecursionLimitExceeded;

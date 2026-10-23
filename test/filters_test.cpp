@@ -919,6 +919,11 @@ std::string RenderOrError(const std::string& source, const ValuesMap& params)
     {
         return *result;
     }
+    // The engine's runtime error (Python's TypeError, ValueError): written as before it had a code of its own
+    if (result.error().GetCode() == ErrorCode::TemplateRuntimeError)
+    {
+        return "Exception: " + result.error().GetExtraParams().at(0).AsString() + "\n";
+    }
     auto text = ErrorToString(result.error());
     auto pos = text.find("Exception: ");
     // Without the source line the error is located at

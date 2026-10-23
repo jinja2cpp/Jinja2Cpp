@@ -2452,9 +2452,12 @@ struct UserCallableBody
         {
             throw;
         }
-        catch (const std::length_error&)
+        catch (const ResourceLimitError&)
         {
-            // A limit, the engine's or the host's
+            throw;
+        }
+        catch (const TemplateRuntimeError&)
+        {
             throw;
         }
         catch (const IntegerOutOfRangeError&)

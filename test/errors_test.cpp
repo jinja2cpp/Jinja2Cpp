@@ -143,7 +143,7 @@ TEST(ErrorsFilterArgumentsTest, ReportedAtRender)
     ASSERT_TRUE(tpl.Load("{% if false %}{{ x | int(1, 2, 3, 4) }}{% endif %}{{ x | default(1, a_long_keyword_name=2) }}"));
     auto result = tpl.RenderAsString({ { "x", 1 } });
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ("noname.j2tpl:1:51: error: Unexpected exception occurred during template processing. Exception: default() got an unexpected keyword argument "
+    EXPECT_EQ("noname.j2tpl:1:51: error: default() got an unexpected keyword argument "
               "'a_long_keyword_name'\n{% if false %}{{ x | int(1, 2, 3, 4) }}{% endif %}{{ x | default(1, a_long_keyword_name=2) }}\n"
               "                                               ---^-------",
               ErrorToString(result.error()));
@@ -710,9 +710,19 @@ TEST(ErrorContractTest, BadAllocFromCallablePropagates)
     EXPECT_THROW(static_cast<void>(RenderCalling([]() -> Value { throw std::bad_alloc(); })), std::bad_alloc);
 }
 
+// A std::length_error is a limit, unless a callable threw it: what a callable throws is its own
+// failure (docs/api-2.0.md 2.1; a host budget throws jinja2::Exception{ResourceLimitExceeded})
 TEST(ErrorContractTest, LengthErrorIsResourceLimit)
 {
     auto result = RenderCalling([]() -> Value { throw std::length_error("too long"); });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UserCallableException, result.error().GetCode());
+    EXPECT_TRUE(result.error().GetException());
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% for i in xs %}{{ i }}{% endfor %}").has_value());
+    auto list = MakeGenericList([]() -> std::optional<Value> { throw std::length_error("too long"); });
+    result = tpl.RenderAsString({ { "xs", list } });
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
     EXPECT_TRUE(result.error().GetException());
@@ -1000,4 +1010,46 @@ TEST_F(RenderErrorLocationTest, Wide)
     ASSERT_FALSE(included.has_value());
     EXPECT_EQ("inc.j2", included.error().GetErrorLocation().fileName);
     EXPECT_EQ(L"  {{ fail() }}\n  ^-------", included.error().GetLocationDescr());
+}
+
+// The engine's own runtime errors have codes of their own, with no exception kept (docs/tasks/0255)
+TEST(ErrorContractTest, EngineErrorsHaveTheirCodes)
+{
+    const std::pair<const char*, ErrorCode> rows[] = {
+        { "{{ 1 + 'a' }}", ErrorCode::TemplateRuntimeError },
+        { "{{ '%d' % 'x' }}", ErrorCode::TemplateRuntimeError },
+        { "{{ ('x' * 100000000) | length }}", ErrorCode::ResourceLimitExceeded },
+        { "{{ x.y.z }}", ErrorCode::UndefinedError },
+    };
+    for (const auto& [source, code] : rows)
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source;
+        const auto result = tpl.RenderAsString({});
+        ASSERT_FALSE(result.has_value()) << source;
+        EXPECT_EQ(code, result.error().GetCode()) << source;
+        EXPECT_FALSE(result.error().GetException()) << source;
+        EXPECT_FALSE(result.error().GetExtraParams().at(0).AsString().empty()) << source;
+    }
+
+    // A host callable's std::runtime_error is the host's, not the engine's
+    auto result = RenderCalling([]() -> Value { throw std::runtime_error("host"); });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UserCallableException, result.error().GetCode());
+
+    // A list the engine sorts keeps the host's exception: the engine's fallback for items it
+    // cannot order no longer takes it for its own error
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ xs | unique | list }}").has_value());
+    auto list = MakeGenericList([n = 0]() mutable -> std::optional<Value> {
+        if (n++ == 2)
+        {
+            throw std::runtime_error("accessor failed");
+        }
+        return Value(n);
+    });
+    result = tpl.RenderAsString({ { "xs", list } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode());
+    EXPECT_TRUE(result.error().GetException());
 }

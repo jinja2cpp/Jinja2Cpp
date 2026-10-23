@@ -65,7 +65,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             {
                 return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
             }
-            catch (const std::runtime_error&) // NOLINT(bugprone-empty-catch): the fallback below is the handling
+            catch (const TemplateRuntimeError&) // NOLINT(bugprone-empty-catch): the fallback below is the handling
             {
                 // Tuples with items Python cannot order: ordered by type like the rest
             }

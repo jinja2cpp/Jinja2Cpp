@@ -53,7 +53,10 @@ are what this codebase has actually got wrong.
   expected-lite's `noexcept` converting constructor without a local copy, and code that
   leaves an arena, table or template unusable when an allocation fails
   (`jinja2cpp_alloc_tests` exercises Load and Render with each allocation failing).
-  Engine errors still reported as standard exceptions get their own codes in 0255.
+  The engine's own runtime errors (Python's TypeError, ValueError) throw
+  `TemplateRuntimeError` (code 17, task 0255), never a bare `std::runtime_error`, and an
+  internal `catch` of the engine's errors catches `TemplateRuntimeError`, so that it does
+  not swallow a host exception passing through.
 - **Render errors are located (task 0254).** Each statement body (`ComposedRenderer`)
   turns what a statement throws into `detail::RenderFailure`, located at that statement's
   tag; bodies around it pass it on unchanged. So no exception may be control flow across

@@ -1001,7 +1001,7 @@ void DropDuplicates(std::vector<UniqueItem>& items, BinaryExpression::CompareTyp
             uniqueItems.push_back(std::move(items[idx]));
         }
     }
-    catch (const std::runtime_error&)
+    catch (const TemplateRuntimeError&)
     {
         // Unorderable items (mixed types, None, dicts): Python hashes them, so keep the
         // first of each run of equal items in a quadratic pass instead
