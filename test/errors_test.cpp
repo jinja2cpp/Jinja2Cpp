@@ -966,7 +966,7 @@ TEST_F(RenderErrorLocationTest, Rows)
     const RenderErrorLocationRow rows[] = {
         { "x\n{{ fail() }}", "noname.j2tpl", ErrorCode::UserCallableException, 2, 1, true },
         { "{% for i in [1] %}\n  {{ i.y.z }}{% endfor %}", "noname.j2tpl", ErrorCode::UndefinedError, 2, 3, false },
-        { "a\nb {{ big[0] }}", "noname.j2tpl", ErrorCode::IntegerOutOfRange, 2, 3, false },
+        { "a\nb {{ big[0] + 1 }}", "noname.j2tpl", ErrorCode::IntegerOutOfRange, 2, 3, false },
         { "{% for i in xs %}\n{{ i }}{% endfor %}", "noname.j2tpl", ErrorCode::UnexpectedException, 1, 1, true },
         { "\n{{ 's' | boom }}", "noname.j2tpl", ErrorCode::UserCallableException, 2, 1, true },
         { "a\n{% include 'inc.j2' %}", "inc.j2", ErrorCode::UserCallableException, 2, 3, true },
