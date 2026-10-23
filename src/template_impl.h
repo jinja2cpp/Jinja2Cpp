@@ -350,11 +350,13 @@ public:
         return std::optional<BasicErrorInfo<CharT>>();
     }
 
-    // Renders with the params of a ValuesMap or a GenericMap. Rendering reads the template only, so
-    // several threads may render one template at once.
-    template<typename ParamsMap>
-    std::optional<BasicErrorInfo<CharT>> Render(std::basic_string<CharT>& os, const ParamsMap& params) const
+    // Renders with the params of a ValuesMap or a GenericMap, appending to a string or writing to a
+    // host's sink. Rendering reads the template only, so several threads may render one template at once.
+    template<typename Target, typename ParamsMap>
+    std::optional<BasicErrorInfo<CharT>> Render(Target& os, const ParamsMap& params) const
     {
+        constexpr bool toString = std::is_same_v<Target, std::basic_string<CharT>>;
+        static_assert(toString || std::is_same_v<Target, BasicOutputSink<CharT>>);
         std::optional<BasicErrorInfo<CharT>> normalResult;
 
         if (!m_renderer)
@@ -414,13 +416,25 @@ public:
             // The output of earlier renders sizes this one, so that the string does not
             // regrow while it is written (docs/tasks/0100). A hint only: concurrent renders
             // may race on it harmlessly.
-            const auto start = os.size();
-            const auto hint = m_outputSizeHint.value.load(std::memory_order_relaxed);
-            os.reserve(start + hint);
+            size_t start = 0;
+            size_t hint = 0;
+            if constexpr (toString)
+            {
+                start = os.size();
+                hint = m_outputSizeHint.value.load(std::memory_order_relaxed);
+                os.reserve(start + hint);
+            }
             OutStream outStream(os);
             if (m_settings->hasRenderLimits)
             {
-                LimitRenderOutput(os, start);
+                if constexpr (toString)
+                {
+                    LimitRenderOutput(os, start);
+                }
+                else
+                {
+                    LimitRenderOutput(outStream.SinkWritten());
+                }
             }
             m_nodes[m_renderer].RenderNamed(outStream, context, SelfName());
             outStream.Flush();
@@ -434,11 +448,15 @@ public:
             // that renders of a steady size store nothing: every core rendering the template
             // reads the hint, and a store makes them all fetch it again (docs/tasks/0138). One
             // huge render does not make every later one reserve as much.
-            constexpr size_t maxOutputSizeHint = size_t{ 16 } << 20;
-            const auto newHint = std::min(os.size() - start, maxOutputSizeHint);
-            if (newHint > hint || newHint < hint / 2)
+            // A sink holds no output, so its renders leave the hint as it is.
+            if constexpr (toString)
             {
-                m_outputSizeHint.value.store(newHint, std::memory_order_relaxed);
+                constexpr size_t maxOutputSizeHint = size_t{ 16 } << 20;
+                const auto newHint = std::min(os.size() - start, maxOutputSizeHint);
+                if (newHint > hint || newHint < hint / 2)
+                {
+                    m_outputSizeHint.value.store(newHint, std::memory_order_relaxed);
+                }
             }
         }
         catch (const BasicErrorInfo<char>& error)

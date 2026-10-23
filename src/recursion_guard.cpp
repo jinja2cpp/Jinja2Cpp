@@ -250,7 +250,15 @@ void CheckRenderOutput()
     {
         return;
     }
-    const auto size = limits.wideOutput ? static_cast<const std::wstring*>(limits.output)->size() : static_cast<const std::string*>(limits.output)->size();
+    std::size_t size = 0;
+    if (limits.sinkOutput)
+    {
+        size = *static_cast<const std::size_t*>(limits.output);
+    }
+    else
+    {
+        size = limits.wideOutput ? static_cast<const std::wstring*>(limits.output)->size() : static_cast<const std::string*>(limits.output)->size();
+    }
     if (size > limits.maxOutputEnd)
     {
         detail::ThrowLimit("maxOutputSize", "the render wrote more characters than its output limit allows");

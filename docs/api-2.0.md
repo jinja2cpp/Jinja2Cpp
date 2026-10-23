@@ -142,7 +142,8 @@ locations), 0255 (engine runtime errors).
 
 6. `noexcept`: `Value` moves, `IsX`, `bool AsX(out)`, `GetIf`, `ToChars`, `Value(nullptr)`,
    `Value(I)` for every `I` that fits int64 (wider types may allocate a `BigInt`), `Value(F)`; `BasicErrorInfo` copy, move and
-   getters; `OrderedMap` moves, iterators, `size`, `empty`, `clear`, `swap`; destructors.
+   getters; `OrderedMap` moves, iterators, `size`, `empty`, `clear`, `swap`; `ReleaseThreadCaches()`
+   (0275); destructors.
    Host-supplied destructors, `IComparable::IsEqual` and filesystem-handler destructors must
    not throw.
 7. C++ exceptions are required: building without them is an `#error` in `config.h`.

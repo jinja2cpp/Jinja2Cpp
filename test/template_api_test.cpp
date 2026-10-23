@@ -7,6 +7,7 @@
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
+#include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
 #include <atomic>
@@ -29,6 +30,37 @@ static_assert(std::is_same_v<ResultW<int>, Result<int, wchar_t>>);
 static_assert(std::is_same_v<Result<int>, Result<int, char>>);
 static_assert(std::is_same_v<decltype(std::declval<const Template&>().RenderAsString(ValuesMap{})), Result<std::string>>);
 static_assert(std::is_same_v<decltype(std::declval<const TemplateW&>().RenderAsString(ValuesMap{})), ResultW<std::wstring>>);
+static_assert(std::is_same_v<decltype(std::declval<const Template&>().RenderTo(std::declval<std::string&>(), ValuesMap{})), Result<void>>);
+static_assert(std::is_same_v<decltype(std::declval<const TemplateW&>().RenderTo(std::declval<std::wstring&>(), ValuesMap{})), ResultW<void>>);
+static_assert(std::is_same_v<decltype(std::declval<const Template&>().RenderTo(std::declval<OutputSink&>(), ValuesMap{})), Result<void>>);
+static_assert(std::is_same_v<decltype(std::declval<const TemplateW&>().RenderTo(std::declval<OutputSinkW&>(), ValuesMap{})), ResultW<void>>);
+static_assert(std::is_same_v<decltype(std::declval<const Template&>().RenderTo(std::declval<std::string&>(), std::declval<const GenericMap&>())), Result<void>>);
+static_assert(std::is_same_v<decltype(std::declval<const Template&>().RenderTo(std::declval<OutputSink&>(), std::declval<const GenericMap&>())), Result<void>>);
+static_assert(std::is_same_v<decltype(ReleaseThreadCaches()), bool>);
+static_assert(noexcept(ReleaseThreadCaches()));
+// A sink is never deleted through the base, nor made on its own
+static_assert(!std::is_destructible_v<OutputSink>);
+static_assert(std::is_abstract_v<OutputSink>);
+static_assert(std::is_same_v<ContainerSink<std::wstring>, ContainerSink<std::wstring, wchar_t>>);
+
+namespace
+{
+// RenderTo(std::string{}, ...) must not compile: the output would be lost
+template<typename Out, typename = void>
+struct CanRenderTo : std::false_type
+{
+};
+template<typename Out>
+struct CanRenderTo<Out, std::void_t<decltype(std::declval<const Template&>().RenderTo(std::declval<Out>(), ValuesMap{}))>> : std::true_type
+{
+};
+} // namespace
+static_assert(CanRenderTo<std::string&>::value);
+static_assert(!CanRenderTo<std::string&&>::value);
+static_assert(!CanRenderTo<const std::string&>::value);
+static_assert(!CanRenderTo<std::wstring&>::value);
+static_assert(!CanRenderTo<ContainerSink<std::string>&&>::value);
+static_assert(CanRenderTo<ContainerSink<std::string>&>::value);
 
 TEST(TemplateApiTest, LoadAcceptsEveryStringForm)
 {
@@ -70,6 +102,12 @@ TEST(TemplateApiTest, RenderIsConst)
     EXPECT_EQ("a", os.str());
     EXPECT_EQ("b", ctpl.RenderAsString({ { "x", "b" } }).value());
     EXPECT_EQ("", ctpl.RenderAsString({}).value());
+    std::string out;
+    ASSERT_TRUE(!!ctpl.RenderTo(out, { { "x", "c" } }));
+    ASSERT_TRUE(!!ctpl.RenderTo(out, {}));
+    ContainerSink sink(out);
+    ASSERT_TRUE(!!ctpl.RenderTo(sink, { { "x", "d" } }));
+    EXPECT_EQ("cd", out);
     EXPECT_TRUE(!!ctpl.GetMetadata());
     EXPECT_TRUE(!!ctpl.GetMetadataRaw());
 }
@@ -90,9 +128,30 @@ TEST(TemplateApiTest, RenderWithGenericMapContext)
     ASSERT_TRUE(!!tpl.Render(os, context));
     EXPECT_EQ("10 hello True", os.str());
 
+    std::string out = "> ";
+    ASSERT_TRUE(!!tpl.RenderTo(out, context));
+    EXPECT_EQ("> 10 hello True", out);
+    std::string streamed;
+    ContainerSink sink(streamed);
+    ASSERT_TRUE(!!tpl.RenderTo(sink, context));
+    EXPECT_EQ("10 hello True", streamed);
+
     TemplateW wtpl;
     ASSERT_TRUE(!!wtpl.Load(L"{{ intValue }} {{ strValue }}"));
     EXPECT_EQ(L"10 hello", wtpl.RenderAsString(context).value());
+    std::wstring wout;
+    ASSERT_TRUE(!!wtpl.RenderTo(wout, context));
+    EXPECT_EQ(L"10 hello", wout);
+    ContainerSink wsink(wout);
+    ASSERT_TRUE(!!wtpl.RenderTo(wsink, context));
+    EXPECT_EQ(L"10 hello10 hello", wout);
+
+    // A failed render truncates through the GenericMap overload too
+    Template failing;
+    ASSERT_TRUE(!!failing.Load("{{ intValue }}{{ intValue() }}"));
+    out = "kept";
+    EXPECT_FALSE(failing.RenderTo(out, context));
+    EXPECT_EQ("kept", out);
 }
 
 TEST(TemplateApiTest, GenericMapContextSeesEnvironmentGlobals)
@@ -342,4 +401,100 @@ TEST(TemplateApiTest, VersionMacrosMatchProjectVersion)
     static_assert(JINJA2CPP_VERSION_MAJOR == 2);
     const auto expected = std::to_string(JINJA2CPP_VERSION_MAJOR) + "." + std::to_string(JINJA2CPP_VERSION_MINOR) + "." + std::to_string(JINJA2CPP_VERSION_PATCH);
     EXPECT_EQ(expected, JINJA2CPP_VERSION_STRING);
+}
+
+// What renders keep on a thread is freed by ReleaseThreadCaches (docs/tasks/0275)
+TEST(TemplateApiTest, ReleaseThreadCachesBetweenRenders)
+{
+    TemplateEnv env;
+    env.AddGlobal("g", "global");
+    Template tpl(&env);
+    ASSERT_TRUE(!!tpl.Load(R"({% macro m(x) %}<{{ x | e }}>{% endmacro %}{% for i in items %}{{ m(i) }}{% for j in [1, 2] %}{{ loop.index }}{% endfor %}{% endfor %}{{ g }}{{ '<&>' * 300 | e | length }})"));
+    const ValuesMap params{ { "items", ValuesList{ "a&", "b", "c" } } };
+    const auto first = tpl.RenderAsString(params);
+    ASSERT_TRUE(first);
+    EXPECT_TRUE(ReleaseThreadCaches());
+    EXPECT_TRUE(ReleaseThreadCaches());
+    EXPECT_EQ(first.value(), tpl.RenderAsString(params).value());
+    EXPECT_TRUE(ReleaseThreadCaches());
+    EXPECT_EQ(first.value(), tpl.RenderAsString(params).value());
+}
+
+TEST(TemplateApiTest, ReleaseThreadCachesRefusedDuringRender)
+{
+    std::vector<bool> released;
+    Template inner;
+    ASSERT_TRUE(!!inner.Load("{{ release() }}"));
+    ValuesMap params{ { "release", MakeCallable([&released]() {
+                            released.push_back(ReleaseThreadCaches());
+                            return Value(std::string("r"));
+                        }) } };
+    params["nested"] = MakeCallable([&inner, &params]() { return Value(inner.RenderAsString(params).value()); });
+
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro m() %}{{ release() }}{% endmacro %}{{ release() }}{% for i in [1] %}{{ m() }}{% endfor %}{{ nested() }}"));
+    EXPECT_EQ("rrr", tpl.RenderAsString(params).value());
+    EXPECT_EQ((std::vector<bool>{ false, false, false }), released);
+
+    // From a sink too
+    struct ReleasingSink final : OutputSink
+    {
+        void Write(std::string_view) override { released = ReleaseThreadCaches(); }
+        bool released = true;
+    };
+    ReleasingSink sink;
+    Template plain;
+    ASSERT_TRUE(!!plain.Load("text"));
+    ASSERT_TRUE(!!plain.RenderTo(sink, {}));
+    EXPECT_FALSE(sink.released);
+
+    // and once the render ended
+    EXPECT_TRUE(ReleaseThreadCaches());
+}
+
+TEST(TemplateApiTest, ReleaseThreadCachesLetsGoOfDestroyedEnvironment)
+{
+    // The thread keeps the globals of the last environment it rendered with, and with them what
+    // their callables capture, after the environment is destroyed
+    auto sentinel = std::make_shared<int>(42);
+    std::weak_ptr<int> watch = sentinel;
+    {
+        TemplateEnv env;
+        env.AddGlobal("answer", MakeCallable([held = std::move(sentinel)]() { return Value(int64_t{ *held }); }));
+        Template tpl(&env);
+        ASSERT_TRUE(!!tpl.Load("{{ answer() }}"));
+        EXPECT_EQ("42", tpl.RenderAsString({}).value());
+    }
+    EXPECT_FALSE(watch.expired());
+    EXPECT_TRUE(ReleaseThreadCaches());
+    EXPECT_TRUE(watch.expired());
+}
+
+TEST(TemplateApiTest, ReleaseThreadCachesOnSeveralThreads)
+{
+    TemplateEnv env;
+    env.AddGlobal("g", "x");
+    Template tpl(&env);
+    ASSERT_TRUE(!!tpl.Load("{% for i in range(20) %}{{ g }}{{ i | e }}{% endfor %}"));
+    const auto expected = tpl.RenderAsString({}).value();
+    std::atomic<int> failures{ 0 };
+    std::vector<std::thread> threads;
+    for (int idx = 0; idx != 4; ++idx)
+    {
+        threads.emplace_back([&]() {
+            for (int round = 0; round != 200; ++round)
+            {
+                std::string out;
+                if (!tpl.RenderTo(out, {}) || out != expected || !ReleaseThreadCaches())
+                {
+                    ++failures;
+                }
+            }
+        });
+    }
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+    EXPECT_EQ(0, failures.load());
 }

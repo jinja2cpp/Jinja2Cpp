@@ -95,11 +95,13 @@ struct RenderLimits
     std::uint64_t maxRange = UINT64_MAX;
     std::uint64_t loadsLeft = UINT64_MAX;
     unsigned maxRenderDepth = 256;
-    // The render's output string (std::string, or std::wstring when `wideOutput`) and the size
-    // it may reach (maxOutputSize); null without that limit
+    // The render's output string (std::string, or std::wstring when `wideOutput`), or the count
+    // of the characters its sink received (`sinkOutput`), and the size it may reach
+    // (maxOutputSize); null without that limit
     const void* output = nullptr;
     std::size_t maxOutputEnd = SIZE_MAX;
     bool wideOutput = false;
+    bool sinkOutput = false;
     // Whether a limit is set: a render without limits inside one with them installs these defaults
     bool active = false;
     bool hasDeadline = false;
@@ -166,7 +168,18 @@ void LimitRenderOutput(const std::basic_string<CharT>& output, std::size_t start
     {
         limits.output = &output;
         limits.wideOutput = !std::is_same_v<CharT, char>;
+        limits.sinkOutput = false;
         limits.maxOutputEnd = limits.maxOutputEnd < SIZE_MAX - start ? start + limits.maxOutputEnd : SIZE_MAX - 1;
+    }
+}
+// The same for a render to a sink: `written` counts the characters the sink received
+inline void LimitRenderOutput(const std::size_t& written)
+{
+    auto& limits = detail::t_renderLimits;
+    if (limits.maxOutputEnd != SIZE_MAX)
+    {
+        limits.output = &written;
+        limits.sinkOutput = true;
     }
 }
 // Throws ResourceLimitError when the render's output is past its limit

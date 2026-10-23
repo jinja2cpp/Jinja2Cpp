@@ -128,6 +128,12 @@ public:
     // recursion through user callables leaves no tables on the thread
     static constexpr std::size_t MaxKeptMaps = 4;
 
+    // Frees what the workspace keeps for the next render: slot chunks, the frames of finished
+    // loops, the globals of the last environment and the tables of the params (ReleaseThreadCaches,
+    // docs/tasks/0275). Refuses, and frees nothing, while a render runs on the thread: it holds
+    // frames or maps lent from here
+    bool ReleaseCaches() noexcept;
+
 private:
     struct Chunk
     {

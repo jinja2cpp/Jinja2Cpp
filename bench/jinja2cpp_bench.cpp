@@ -10,12 +10,15 @@
 // For each case two benchmarks are registered:
 //   Load/<case>    parse main.j2 (Template::Load)
 //   Render/<case>  render the loaded template to a string
+// and for the cases in OutputTargetCases two more (docs/tasks/0257):
+//   RenderTo/<case>    render with RenderTo into one string, cleared before each render
+//   RenderSink/<case>  render with RenderTo into a sink that only counts the characters
 //
 // Usage: jinja2cpp_bench [--cases-dir=<dir>] [--dump-dir=<dir>] [google benchmark flags]
 //   --cases-dir  where the cases live (default: the source tree's bench/cases)
 //   --dump-dir   write each case's rendered output to <dir>/<case>.txt and exit, so
 //                bench/run.py can check that both engines produce the same text
-//   --count=<Load|Render>/<case> [--count-iters=N]
+//   --count=<Load|Render|RenderTo|RenderSink>/<case> [--count-iters=N]
 //                run that benchmark N times (default 10) inside CountedRegion() and exit;
 //                bench/count.py runs this under callgrind, collecting only that function,
 //                to get a deterministic instruction count per iteration. It also prints
@@ -56,10 +59,12 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <new>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -382,6 +387,56 @@ void BenchRender(benchmark::State& state, const Case* c)
     state.SetBytesProcessed(static_cast<int64_t>(state.iterations() * outSize));
 }
 
+// The cases that compare the output targets: the smallest renders, where a target's fixed
+// cost shows, and the largest output, where holding it does
+const std::vector<std::string> OutputTargetCases = { "plain_text", "substitute", "large_static", "mitsuhiko_table", "mitsuhiko_table_wide" };
+
+// A sink that keeps nothing: what a host streaming to a socket or file pays the library
+template<typename CharT>
+class CountingSink final : public jinja2::BasicOutputSink<CharT>
+{
+public:
+    void Write(std::basic_string_view<CharT> text) override { size += text.size(); }
+
+    size_t size = 0;
+};
+
+enum class Target
+{
+    String,
+    Sink
+};
+
+template<typename CharT, Target target>
+void BenchRenderTo(benchmark::State& state, const Case* c)
+{
+    jinja2::BasicTemplate<CharT> tpl(c->env.get());
+    auto loaded = tpl.Load(SourceOf<CharT>(*c), c->name);
+    if (!loaded)
+    {
+        state.SkipWithError(jinja2::ToString(loaded.error().ToString()));
+        return;
+    }
+    std::basic_string<CharT> out;
+    CountingSink<CharT> sink;
+    size_t outSize = 0;
+    for (auto _ : state)
+    {
+        out.clear();
+        sink.size = 0;
+        auto res = target == Target::String ? tpl.RenderTo(out, c->params) : tpl.RenderTo(sink, c->params);
+        if (!res)
+        {
+            state.SkipWithError(jinja2::ToString(res.error().ToString()));
+            break;
+        }
+        outSize = target == Target::String ? out.size() : sink.size;
+        benchmark::DoNotOptimize(out);
+        benchmark::DoNotOptimize(sink.size);
+    }
+    state.SetBytesProcessed(static_cast<int64_t>(state.iterations() * outSize));
+}
+
 // Many threads render one shared template, as a server does; real time, items per second
 template<typename CharT>
 void BenchRenderShared(benchmark::State& state, Case* c)
@@ -522,9 +577,18 @@ private:
 #endif
 };
 
-template<typename CharT>
-int CountCase(const Case& c, bool load, int iterations, const ProfileOptions& profile)
+enum class CountKind
 {
+    Load,
+    Render,
+    RenderTo,
+    RenderSink
+};
+
+template<typename CharT>
+int CountCase(const Case& c, CountKind kind, int iterations, const ProfileOptions& profile)
+{
+    const bool load = kind == CountKind::Load;
     bool ok = true;
     if (load)
     {
@@ -549,7 +613,25 @@ int CountCase(const Case& c, bool load, int iterations, const ProfileOptions& pr
             std::cerr << c.name << ": failed to load\n";
             return 1;
         }
-        auto fn = [&tpl, &c, &ok] { ok = ok && tpl.RenderAsString(c.params).has_value(); };
+        // RenderTo reuses one string, as a host reusing its buffer does: kept outside the
+        // probe, so that retained is what a render leaves behind in every kind
+        std::basic_string<CharT> out;
+        CountingSink<CharT> sink;
+        auto fn = [&] {
+            switch (kind)
+            {
+            case CountKind::RenderTo:
+                out.clear();
+                ok = ok && tpl.RenderTo(out, c.params).has_value();
+                break;
+            case CountKind::RenderSink:
+                ok = ok && tpl.RenderTo(sink, c.params).has_value();
+                break;
+            default:
+                ok = ok && tpl.RenderAsString(c.params).has_value();
+                break;
+            }
+        };
         fn();
         RunCounted(fn, iterations, profile);
 
@@ -571,14 +653,17 @@ int Count(const std::vector<std::unique_ptr<Case>>& cases, const std::string& na
     const std::string kind = name.substr(0, slash);
     const std::string caseName = slash == std::string::npos ? std::string() : name.substr(slash + 1);
     auto found = std::find_if(cases.begin(), cases.end(), [&](const auto& c) { return c->name == caseName; });
-    if (found == cases.end() || (kind != "Load" && kind != "Render"))
+    const std::pair<const char*, CountKind> kinds[] = {
+        { "Load", CountKind::Load }, { "Render", CountKind::Render }, { "RenderTo", CountKind::RenderTo }, { "RenderSink", CountKind::RenderSink }
+    };
+    auto known = std::find_if(std::begin(kinds), std::end(kinds), [&](const auto& k) { return kind == k.first; });
+    if (found == cases.end() || known == std::end(kinds))
     {
         std::cerr << "unknown benchmark: " << name << '\n';
         return 1;
     }
     const Case* c = found->get();
-    return c->wide ? CountCase<wchar_t>(*c, kind == "Load", iterations, profile)
-                   : CountCase<char>(*c, kind == "Load", iterations, profile);
+    return c->wide ? CountCase<wchar_t>(*c, known->second, iterations, profile) : CountCase<char>(*c, known->second, iterations, profile);
 }
 
 // Renders the case to `out` as UTF-8, so a wide case compares with Python's output too
@@ -678,6 +763,17 @@ int main(int argc, char** argv)
     {
         benchmark::RegisterBenchmark("Load/" + c->name, c->wide ? BenchLoad<wchar_t> : BenchLoad<char>, c.get());
         benchmark::RegisterBenchmark("Render/" + c->name, c->wide ? BenchRender<wchar_t> : BenchRender<char>, c.get());
+    }
+    for (const auto& c : cases)
+    {
+        if (std::find(OutputTargetCases.begin(), OutputTargetCases.end(), c->name) == OutputTargetCases.end())
+        {
+            continue;
+        }
+        benchmark::RegisterBenchmark("RenderTo/" + c->name,
+                                     c->wide ? BenchRenderTo<wchar_t, Target::String> : BenchRenderTo<char, Target::String>, c.get());
+        benchmark::RegisterBenchmark("RenderSink/" + c->name,
+                                     c->wide ? BenchRenderTo<wchar_t, Target::Sink> : BenchRenderTo<char, Target::Sink>, c.get());
     }
     if (threaded)
     {
