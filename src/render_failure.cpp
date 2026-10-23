@@ -120,6 +120,11 @@ template<typename CharT>
     auto errorData = CurrentExceptionToData<CharT>(located);
     if (!located)
     {
+        // A thrown error that names a template of its own (one too long to load) keeps the name
+        if (!errorData.srcLoc.fileName.empty() && (!origin || !origin->name || errorData.srcLoc.fileName != *origin->name))
+        {
+            errorData.relatedLocs.push_back(errorData.srcLoc);
+        }
         errorData.srcLoc.fileName = origin && origin->name ? *origin->name : std::string();
         errorData.srcLoc.line = 1;
         errorData.srcLoc.col = 1;

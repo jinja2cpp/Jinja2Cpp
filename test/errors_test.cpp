@@ -992,6 +992,24 @@ TEST_F(RenderErrorLocationTest, Rows)
     }
 }
 
+// An included template too long to load: located at the include, naming the template too
+TEST_F(RenderErrorLocationTest, IncludedTemplateTooLong)
+{
+    Settings settings;
+    settings.limits.maxTemplateSize = 30;
+    m_env.SetSettings(settings);
+    AddFile("long.j2", "a template longer than thirty characters, the limit");
+    Template tpl(&m_env);
+    ASSERT_TRUE(tpl.Load("x\n{% include 'long.j2' %}").has_value());
+    const auto result = tpl.RenderAsString({});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    EXPECT_EQ("noname.j2tpl", result.error().GetErrorLocation().fileName);
+    EXPECT_EQ(2U, result.error().GetErrorLocation().line);
+    ASSERT_EQ(1U, result.error().GetRelatedLocations().size());
+    EXPECT_EQ("long.j2", result.error().GetRelatedLocations()[0].fileName);
+}
+
 TEST_F(RenderErrorLocationTest, Wide)
 {
     TemplateW tpl(&m_env);
