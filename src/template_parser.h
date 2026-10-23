@@ -25,7 +25,6 @@
 #include <jinja2cpp/template_env.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/config.hpp>
 #include <boost/container/small_vector.hpp>
 #include <nonstd/expected.hpp>
 
@@ -238,7 +237,7 @@ public:
     // Where the body of a statement opened now starts
     [[nodiscard]] std::uint32_t Size() const { return m_size; }
     // To the innermost open body. Inline: a call costs more than the add
-    BOOST_FORCEINLINE void Add(Child node, std::size_t offset)
+    JINJA2CPP_HOT_INLINE void Add(Child node, std::size_t offset)
     {
         if (m_size == m_capacity)
         {
@@ -254,7 +253,7 @@ public:
         std::rotate(m_data + start, m_data + m_size - 1, m_data + m_size);
     }
     // The body that starts at `start`, as a node; its children leave the list
-    BOOST_FORCEINLINE NodeRef<ComposedRenderer> Take(NodeArena& nodes, std::uint32_t start)
+    JINJA2CPP_HOT_INLINE NodeRef<ComposedRenderer> Take(NodeArena& nodes, std::uint32_t start)
     {
         assert(start <= m_size);
         const std::size_t count = m_size - start;
@@ -285,7 +284,7 @@ private:
     // A source past 4 GiB locates its errors at the last offset that fits
     static std::uint32_t ToOffset(std::size_t offset) { return static_cast<std::uint32_t>(std::min<std::size_t>(offset, std::numeric_limits<std::uint32_t>::max())); }
     // Out of line: few templates have more children open at once than fit in place
-    BOOST_NOINLINE void Grow()
+    JINJA2CPP_COLD_INLINE void Grow()
     {
         if (m_capacity > std::numeric_limits<std::uint32_t>::max() / 2)
         {
