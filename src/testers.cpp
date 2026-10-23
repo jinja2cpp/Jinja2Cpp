@@ -346,6 +346,16 @@ bool HasNoLowerLetter(const InternalValue& val)
 
 namespace
 {
+// Out of line, so that the int comparison below needs no frame of its own (docs/tasks/0286)
+JINJA2CPP_NOINLINE_INLINE bool IsInEqualByValue(const InternalValue& item, const InternalValue& value)
+{
+    if (visitors::IsNumber(item) && visitors::IsNumber(value))
+    {
+        return ConvertToBool(visitors::ApplyToNumbers(item, value, BinaryExpression::LogicalEq));
+    }
+    return ConvertToBool(Apply2<visitors::BinaryMathOperation>(item, value, BinaryExpression::LogicalEq));
+}
+
 bool IsInEqual(const InternalValue& item, const InternalValue& value)
 {
     // Two ints, the usual `i in [1, 2, 3]`, compare without the number visitor
@@ -355,11 +365,7 @@ bool IsInEqual(const InternalValue& item, const InternalValue& value)
     {
         return *itemInt == *valueInt;
     }
-    if (visitors::IsNumber(item) && visitors::IsNumber(value))
-    {
-        return ConvertToBool(visitors::ApplyToNumbers(item, value, BinaryExpression::LogicalEq));
-    }
-    return ConvertToBool(Apply2<visitors::BinaryMathOperation>(item, value, BinaryExpression::LogicalEq));
+    return IsInEqualByValue(item, value);
 }
 // `value in list`: a list the template owns is compared in place, any other through one
 // enumerator (ListAdapter::Iterator clones its enumerator on every copy)

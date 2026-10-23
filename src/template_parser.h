@@ -111,9 +111,10 @@ struct ParserTraitsBase
     // Exact, case-sensitive match of an identifier against s_keywordsInfo. Called for every
     // identifier the lexer sees, so it looks in a table sorted once per character type, where
     // the first character picks a run of at most a dozen entries, instead of matching a regex
-    // (which also cost a regex compilation per Load).
+    // (which also cost a regex compilation per Load). Inlined into the one caller, which GCC
+    // stopped doing once the parser grew (docs/tasks/0286)
     template<typename CharT>
-    static Keyword FindKeyword(std::basic_string_view<CharT> name)
+    JINJA2CPP_ALWAYS_INLINE static Keyword FindKeyword(std::basic_string_view<CharT> name)
     {
         struct Entry
         {
