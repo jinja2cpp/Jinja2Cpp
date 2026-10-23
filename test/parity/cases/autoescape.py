@@ -63,6 +63,8 @@ CASES = [
     ("env_on_filter_block", "{% filter title %}<i>{% endfilter %}", AE),
     ("env_on_filter_block_replace", "{% filter replace('<', '[') %}<{{ html }}>{% endfilter %}", AE),
     ("env_on_urlize", "{{ 'see <http://a.b>'|urlize }}", AE),
+    ("env_on_urlize_markup", "{{ '<b>x</b> http://a.b'|safe|urlize }}|{{ '<b>x</b> http://a.b'|urlize }}", AE),
+    ("env_off_urlize_markup", "{{ '<b>x</b> http://a.b'|safe|urlize }}"),
     ("env_on_list", "{{ l }}", AE),
     ("env_on_set_value", "{% set v = html %}{{ v }}{% set w = html|safe %}{{ w }}", AE),
     ("env_on_import", "{% from 'm.j2' import mm %}{{ mm(html) }}|{{ mm(html) is escaped }}",

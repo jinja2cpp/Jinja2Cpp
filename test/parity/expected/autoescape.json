@@ -956,6 +956,38 @@
    "output": "see &lt;http://a.b&gt;"
   },
   {
+   "id": "autoescape.env_on_urlize_markup",
+   "template": "{{ '<b>x</b> http://a.b'|safe|urlize }}|{{ '<b>x</b> http://a.b'|urlize }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<b>x</b> http://a.b|&lt;b&gt;x&lt;/b&gt; http://a.b"
+  },
+  {
+   "id": "autoescape.env_off_urlize_markup",
+   "template": "{{ '<b>x</b> http://a.b'|safe|urlize }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<b>x</b> http://a.b"
+  },
+  {
    "id": "autoescape.env_on_list",
    "template": "{{ l }}",
    "context": {
