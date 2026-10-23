@@ -1021,7 +1021,7 @@ public:
     // Tells the first filter of the chain that its input is always this literal
     void SetConstantBase(const NodeArena& nodes, const InternalValue& base);
     // Jinja2 folds every filter of the chain on a foldable value (Expression::IsFoldable)
-    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const { return m_foldable && (!m_parentFilter || nodes[m_parentFilter].IsFoldable(nodes)); }
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const;
 
 private:
     NodeRef<IExpressionFilter> m_filter;

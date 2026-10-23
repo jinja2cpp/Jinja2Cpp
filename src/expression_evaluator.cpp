@@ -489,6 +489,12 @@ BinaryExpression::BinaryExpression(const NodeArena& nodes, BinaryExpression::Ope
 
 bool BinaryExpression::IsFoldable(const NodeArena& nodes) const
 {
+    // The parser builds a chain of operators without recursing: a chain too long to walk on
+    // the stack is not folded, which only leaves it to the evaluator (docs/tasks/0216)
+    if (StackNearlyExhausted())
+    {
+        return false;
+    }
     // `and` and `or` stop at a literal left operand that decides them, as Python's do
     if (m_oper == LogicalAnd || m_oper == LogicalOr)
     {
@@ -898,16 +904,31 @@ NodeRef<ExpressionFilter> ExpressionFilter::Make(NodeArena& nodes, const std::st
     return nodes.Make<ExpressionFilter>(filter, argsError, foldable);
 }
 
+bool ExpressionFilter::IsFoldable(const NodeArena& nodes) const
+{
+    // A chain of filters is built without recursing, so it is walked without recursing too
+    for (const auto* filter = this;; filter = &nodes[filter->m_parentFilter])
+    {
+        if (!filter->m_foldable)
+        {
+            return false;
+        }
+        if (!filter->m_parentFilter)
+        {
+            return true;
+        }
+    }
+}
+
 void ExpressionFilter::SetConstantBase(const NodeArena& nodes, const InternalValue& base)
 {
-    if (m_parentFilter)
+    // The first filter of the chain takes the base (IsFoldable)
+    const auto* filter = this;
+    while (filter->m_parentFilter)
     {
-        nodes[m_parentFilter].SetConstantBase(nodes, base);
+        filter = &nodes[filter->m_parentFilter];
     }
-    else
-    {
-        nodes[m_filter].SetConstantBase(base);
-    }
+    nodes[filter->m_filter].SetConstantBase(base);
 }
 
 namespace
