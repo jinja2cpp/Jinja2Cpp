@@ -3,6 +3,7 @@
 
 #include "engine_errors.h"
 
+#include <jinja2cpp/big_int_backend.h>
 #include <jinja2cpp/template_env.h>
 
 #include <algorithm>
@@ -99,10 +100,16 @@ struct RenderLimits
     // The render's output string (std::string, or std::wstring when `wideOutput`) and the size
     // it may reach (maxOutputSize); null without that limit
     const void* output = nullptr;
+    // The big-integer arithmetic of the render (TemplateEnv::SetBigIntBackend, docs/tasks/0271);
+    // null for none. It rides with the limits so that a render without either costs nothing more
+    const BigIntBackend* bigInts = nullptr;
     std::size_t maxOutputEnd = SIZE_MAX;
     bool wideOutput = false;
     // Whether a limit is set: a render without limits inside one with them installs these defaults
     bool active = false;
+    // Whether a render installed these, for its limits or its big-integer backend: a render
+    // without either inside one with them installs the defaults
+    bool scoped = false;
     bool hasDeadline = false;
     // steady_clock ticks since its epoch: a time_point's constructor is not noexcept, which a
     // thread-local's initialiser has to be
@@ -122,11 +129,12 @@ void InstallRenderLimits(const RenderLimits& limits);
 class RenderLimitsScope
 {
 public:
-    explicit RenderLimitsScope(const Settings::Limits* limits)
+    // `limits` is null when the render has neither limits nor a big-integer backend
+    RenderLimitsScope(const Settings::Limits* limits, const BigIntBackend* bigInts)
     {
-        if (limits || detail::t_renderLimits.active)
+        if (limits || detail::t_renderLimits.scoped)
         {
-            Install(limits);
+            Install(limits, bigInts);
         }
     }
     ~RenderLimitsScope()
@@ -142,7 +150,7 @@ public:
     RenderLimitsScope& operator=(RenderLimitsScope&&) = delete;
 
 private:
-    void Install(const Settings::Limits* limits);
+    void Install(const Settings::Limits* limits, const BigIntBackend* bigInts);
 
     std::optional<detail::RenderLimits> m_saved;
 };

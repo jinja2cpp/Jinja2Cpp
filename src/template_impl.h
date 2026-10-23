@@ -376,7 +376,7 @@ public:
             // First, so that it ends last: when nothing of the render holds values any more
             const CycleCollector cycles;
             // Before anything else the render does, the conversion of the params included
-            const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr);
+            const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr, m_settings->bigIntBackend);
             // The tables of the params and the top scope are lent by the thread's workspace and
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;

@@ -1,14 +1,20 @@
+#include "big_int_toy_backend.h"
 #include "gtest/gtest.h"
+
+#include <jinja2cpp/big_int_backend.h>
 
 #include <jinja2cpp/big_int.h>
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
+#include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
 #include <cstddef>
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <new>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -245,11 +251,14 @@ ValuesMap BigIntParams()
 }
 
 template<typename CharT>
-void CheckBigIntCase(const BigIntCase& row, bool hasBackend)
+void CheckBigIntCase(const BigIntCase& row, const BigIntBackend* backend)
 {
     using TemplateT = std::conditional_t<std::is_same_v<CharT, char>, Template, TemplateW>;
+    const bool hasBackend = backend != nullptr;
     const std::string_view narrow(row.source);
-    TemplateT tpl;
+    TemplateEnv env;
+    ASSERT_TRUE(env.SetBigIntBackend(backend));
+    TemplateT tpl(&env);
     ASSERT_TRUE(tpl.Load(std::basic_string<CharT>(narrow.begin(), narrow.end()))) << row.source;
     const auto result = tpl.RenderAsString(BigIntParams());
     const bool overflows = row.expect == Expect::Overflow || (row.expect == Expect::OverflowWithoutBackend && !hasBackend);
@@ -272,7 +281,178 @@ TEST(BigIntNoBackend, RendersAsPythonOrOverflows)
 {
     for (const auto& row : BigIntCases)
     {
-        CheckBigIntCase<char>(row, false);
-        CheckBigIntCase<wchar_t>(row, false);
+        CheckBigIntCase<char>(row, nullptr);
+        CheckBigIntCase<wchar_t>(row, nullptr);
     }
+}
+
+// The same rows with a backend (docs/tasks/0271): arithmetic is exact, as in Python
+TEST(BigIntToyBackend, RendersAsPython)
+{
+    for (const auto& row : BigIntCases)
+    {
+        CheckBigIntCase<char>(row, big_int_toy::Backend());
+        CheckBigIntCase<wchar_t>(row, big_int_toy::Backend());
+    }
+    EXPECT_EQ(0, big_int_toy::LiveObjects());
+}
+
+namespace
+{
+// Arithmetic rows only a backend renders; outputs from Python Jinja2 3.1.6
+const BigIntCase BigIntBackendCases[] = {
+    { "{{ -(2 ** 64) // 7 }}|{{ -(2 ** 64) % 7 }}|{{ (2 ** 64) // -7 }}|{{ (2 ** 64) % -7 }}|{{ -(2 ** 64) // -7 }}|{{ -(2 ** 64) % -7 }}", "-2635249153387078803|5|-2635249153387078803|-5|2635249153387078802|-2", Expect::OverflowWithoutBackend },
+    { "{{ 2 ** 100 }}|{{ (-3) ** 41 }}|{{ 7 ** 0 }}|{{ big ** 0 }}|{{ big ** 1 }}|{{ (-1) ** big }}|{{ 1 ** big }}|{{ 0 ** big }}|{{ big ** -1 }}|{{ 2 ** -2 }}", "1267650600228229401496703205376|-36472996377170786403|1|1|18446744073709551615|-1|1|0|5.421010862427522e-20|0.25", Expect::OverflowWithoutBackend },
+    { "{{ (2 ** 64) - (2 ** 64) + 5 }}|{{ ((2 ** 64) - (2 ** 64) + 5) is integer }}|{{ big - big }}|{{ big + nbig }}|{{ (big // big) }}|{{ 9223372036854775807 + 1 - 1 }}", "5|True|0|0|1|9223372036854775807", Expect::OverflowWithoutBackend },
+    { "{{ 9223372036854775807 * 2 }}|{{ (-9223372036854775807 - 1) // -1 }}|{{ -(-9223372036854775807 - 1) }}|{{ 4294967296 * 4294967296 }}|{{ -9223372036854775807 - 2 }}", "18446744073709551614|9223372036854775808|9223372036854775808|18446744073709551616|-9223372036854775809", Expect::OverflowWithoutBackend },
+    { "{{ [big, 1, 2]|sum }}|{{ [big, nbig]|sum }}|{{ big is divisibleby 3 }}|{{ big is divisibleby 7 }}|{{ (2 ** 70)|round(-20) }}|{{ (2 ** 64 + 0.5) }}|{{ (2 ** 64) * 1.5 }}", "18446744073709551618|0|True|False|1200000000000000000000|1.8446744073709552e+19|2.7670116110564327e+19", Expect::OverflowWithoutBackend },
+    { "{{ big * big }}|{{ big * nbig }}|{{ nbig * nbig }}|{{ big + 1 }}|{{ nbig - 1 }}|{{ big % 1000 }}|{{ nbig % 1000 }}|{{ big // 1000 }}|{{ nbig // 1000 }}", "340282366920938463426481119284349108225|-340282366920938463426481119284349108225|340282366920938463426481119284349108225|18446744073709551616|-18446744073709551616|615|385|18446744073709551|-18446744073709552", Expect::OverflowWithoutBackend },
+    { "{{ (2 ** 20000) % 7 }}|{{ ((2 ** 20000) // (2 ** 19990)) }}|{{ (10 ** 30)|string|length }}|{{ (2 ** 64) == 18446744073709551616 }}|{{ (2 ** 64) > 2 ** 63 }}", "4|1024|31|True|True", Expect::OverflowWithoutBackend },
+    { "{% set ns = namespace(x=1) %}{% for i in range(30) %}{% set ns.x = ns.x * 7 %}{% endfor %}{{ ns.x }}|{{ ns.x % 1000000007 }}", "22539340290692258087863249|157445110", Expect::OverflowWithoutBackend },
+    { "{{ big ** -1 }}|{{ 2 ** -2 }}", "5.421010862427522e-20|0.25", Expect::Python },
+    { "{{ big // 0 }}", nullptr, Expect::Python },
+    { "{{ (2 ** 64) % 0 }}", nullptr, Expect::Python },
+};
+
+template<typename CharT>
+ErrorCode RenderError(const std::string& source, const BigIntBackend* backend)
+{
+    TemplateEnv env;
+    env.SetBigIntBackend(backend);
+    Template tpl(&env);
+    EXPECT_TRUE(tpl.Load(source)) << source;
+    const auto result = tpl.RenderAsString(BigIntParams());
+    EXPECT_FALSE(result.has_value()) << source;
+    return result.has_value() ? ErrorCode::Unspecified : result.error().GetCode();
+}
+} // namespace
+
+TEST(BigIntToyBackend, ArithmeticAsPython)
+{
+    for (const auto& row : BigIntBackendCases)
+    {
+        CheckBigIntCase<char>(row, nullptr);
+        CheckBigIntCase<char>(row, big_int_toy::Backend());
+        CheckBigIntCase<wchar_t>(row, big_int_toy::Backend());
+    }
+    EXPECT_EQ(0, big_int_toy::LiveObjects());
+}
+
+TEST(BigIntToyBackend, Limits)
+{
+    const auto* toy = big_int_toy::Backend();
+    // The cap of 2^20 bits stops `**` before it computes, and a product past it
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, RenderError<char>("{{ 2 ** 2097152 }}", toy));
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, RenderError<char>("{{ 3 ** big }}", toy));
+    // Printing more than 4300 digits is Python's ValueError; computing with them is fine
+    EXPECT_NE(ErrorCode::IntegerOutOfRange, RenderError<char>("{{ 2 ** 20000 }}", toy));
+    EXPECT_EQ(0, big_int_toy::LiveObjects());
+}
+
+TEST(BigIntToyBackend, EnvironmentChecksTheTable)
+{
+    TemplateEnv env;
+    EXPECT_EQ(GetBuiltinBigIntBackend(), env.GetBigIntBackend());
+    const auto* toy = big_int_toy::Backend();
+    ASSERT_TRUE(env.SetBigIntBackend(toy));
+    EXPECT_EQ(toy, env.GetBigIntBackend());
+
+    auto rejected = [&env, toy](auto change) {
+        BigIntBackend bad = *toy;
+        change(bad);
+        const bool accepted = env.SetBigIntBackend(&bad);
+        // A rejected table changes nothing
+        EXPECT_EQ(toy, env.GetBigIntBackend());
+        return !accepted;
+    };
+    EXPECT_TRUE(rejected([](BigIntBackend& b) { b.structSize = sizeof(BigIntBackend) - sizeof(b.divideTruncated); }));
+    EXPECT_TRUE(rejected([](BigIntBackend& b) { b.version = 2; }));
+    EXPECT_TRUE(rejected([](BigIntBackend& b) { b.objectSize = MaxBigIntObjectSize + 1; }));
+    EXPECT_TRUE(rejected([](BigIntBackend& b) { b.objectAlign = 32; }));
+    EXPECT_TRUE(rejected([](BigIntBackend& b) { b.objectAlign = 3; }));
+    EXPECT_TRUE(rejected([](BigIntBackend& b) { b.name = nullptr; }));
+    EXPECT_TRUE(rejected([](BigIntBackend& b) { b.multiply = nullptr; }));
+    EXPECT_TRUE(rejected([](BigIntBackend& b) { b.divideTruncated = nullptr; }));
+
+    // A later version's larger table is used as far as version 1 goes
+    struct Larger
+    {
+        BigIntBackend v1;
+        void* extra;
+    };
+    static Larger larger{ *toy, nullptr };
+    larger.v1.structSize = sizeof(Larger);
+    EXPECT_TRUE(env.SetBigIntBackend(&larger.v1));
+    EXPECT_TRUE(env.SetBigIntBackend(nullptr));
+    EXPECT_EQ(nullptr, env.GetBigIntBackend());
+}
+
+TEST(BigIntToyBackend, TemplateKeepsTheBackendItWasLoadedWith)
+{
+    TemplateEnv env;
+    ASSERT_TRUE(env.SetBigIntBackend(big_int_toy::Backend()));
+    Template withBackend(&env);
+    ASSERT_TRUE(withBackend.Load("{{ big + 1 }}"));
+    ASSERT_TRUE(env.SetBigIntBackend(nullptr));
+    Template without(&env);
+    ASSERT_TRUE(without.Load("{{ big + 1 }}"));
+    EXPECT_EQ("18446744073709551616", withBackend.RenderAsString(BigIntParams()).value());
+    const auto failed = without.RenderAsString(BigIntParams());
+    ASSERT_FALSE(failed.has_value());
+    EXPECT_EQ(ErrorCode::IntegerOutOfRange, failed.error().GetCode());
+
+    // A render inside another one uses its own template's backend, and the outer one's comes back after it
+    jinja2::ValuesMap params = BigIntParams();
+    params["inner"] = MakeCallable([&without]() { return without.RenderAsString(BigIntParams()).has_value(); });
+    ASSERT_TRUE(env.SetBigIntBackend(big_int_toy::Backend()));
+    Template outer(&env);
+    ASSERT_TRUE(outer.Load("{{ inner() }}|{{ big + 2 }}"));
+    const auto nested = outer.RenderAsString(params);
+    ASSERT_TRUE(nested.has_value()) << nested.error().ToString();
+    EXPECT_EQ("False|18446744073709551617", nested.value());
+
+    // Settings changed after the backend was set keep it, through the env and its templates
+    Settings changed = env.GetSettings();
+    changed.trimBlocks = true;
+    env.SetSettings(changed);
+    EXPECT_EQ(big_int_toy::Backend(), env.GetBigIntBackend());
+    Template afterSettings(&env);
+    ASSERT_TRUE(afterSettings.Load("{{ big + 3 }}"));
+    EXPECT_EQ("18446744073709551618", afterSettings.RenderAsString(BigIntParams()).value());
+    TemplateEnv fresh;
+    ASSERT_TRUE(fresh.SetBigIntBackend(big_int_toy::Backend()));
+    fresh.SetSettings(changed);
+    Template beforeFirstLoad(&fresh);
+    ASSERT_TRUE(beforeFirstLoad.Load("{{ big + 3 }}"));
+    EXPECT_EQ("18446744073709551618", beforeFirstLoad.RenderAsString(BigIntParams()).value());
+    EXPECT_EQ(0, big_int_toy::LiveObjects());
+}
+
+namespace
+{
+// A backend that reports a status from every operation that makes an object
+template<BigIntStatus Status>
+const BigIntBackend* FailingBackend()
+{
+    static const BigIntBackend backend = [] {
+        BigIntBackend b = *big_int_toy::Backend();
+        b.add = [](const BigIntBackend*, void*, const void*, const void*) noexcept { return Status; };
+        b.multiply = [](const BigIntBackend*, void*, const void*, const void*) noexcept { return Status; };
+        return b;
+    }();
+    return &backend;
+}
+} // namespace
+
+TEST(BigIntToyBackend, FailuresOfTheBackend)
+{
+    // Out of memory is std::bad_alloc, the one exception a render lets through (docs/api-2.0.md 2.1)
+    TemplateEnv env;
+    ASSERT_TRUE(env.SetBigIntBackend(FailingBackend<BigIntStatus::OutOfMemory>()));
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{{ big + 1 }}"));
+    EXPECT_THROW((void)tpl.RenderAsString(BigIntParams()), std::bad_alloc);
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, RenderError<char>("{{ big * 3 }}", FailingBackend<BigIntStatus::TooLarge>()));
+    EXPECT_NE(ErrorCode::IntegerOutOfRange, RenderError<char>("{{ big + 1 }}", FailingBackend<BigIntStatus::Unsupported>()));
+    EXPECT_EQ(0, big_int_toy::LiveObjects());
 }

@@ -4,6 +4,7 @@
 // The whole public API in one include. The JSON bindings (jinja2cpp/binding/) are left
 // out: each needs its JSON library, so include the one you use next to this header.
 
+#include <jinja2cpp/big_int_backend.h>       // IWYU pragma: export
 #include <jinja2cpp/error_info.h>            // IWYU pragma: export
 #include <jinja2cpp/exception.h>             // IWYU pragma: export
 #include <jinja2cpp/filesystem_handler.h>    // IWYU pragma: export

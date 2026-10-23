@@ -21,6 +21,7 @@ class GenericMap;
 class TemplateEnv;
 
 struct NoneValue;
+struct BigIntBackend;
 struct ValuesMap;
 struct UserCallable;
 struct IComparable;

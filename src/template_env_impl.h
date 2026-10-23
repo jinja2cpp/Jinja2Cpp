@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_TEMPLATE_ENV_IMPL_H
 #define JINJA2CPP_SRC_TEMPLATE_ENV_IMPL_H
 
+#include <jinja2cpp/big_int_backend.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
@@ -92,8 +93,16 @@ public:
     // The TemplateEnv that owns this state; null once it is destroyed, and nothing is cached then. Changed under `guard`
     std::atomic<const TemplateEnv*> owner{ nullptr };
 
+    // The big-integer arithmetic of templates loaded from now on (TemplateEnv::SetBigIntBackend). It is kept in
+    // m_loadSettings rather than in a field of its own, so GetLoadSettings compares nothing more than the settings
+    bool SetBigIntBackend(const BigIntBackend* backend) noexcept;
+    const BigIntBackend* GetBigIntBackend() const noexcept;
+
 private:
+    const BigIntBackend* BigIntBackendLocked() const noexcept { return m_loadSettings ? m_loadSettings->bigIntBackend : GetBuiltinBigIntBackend(); }
+
     mutable std::mutex m_loadSettingsGuard;
+    // Made on the first Load, or by SetBigIntBackend when the backend differs from the built-in one
     mutable LoadSettingsPtr m_loadSettings;
 };
 
