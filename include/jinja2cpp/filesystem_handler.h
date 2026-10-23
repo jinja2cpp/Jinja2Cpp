@@ -220,10 +220,11 @@ private:
  * Names follow the same rules as \ref RealFileSystem (those of Python's `FileSystemLoader`): a name is split at `/` (on Windows, `\` too), and a name with a
  * `..` piece is not found. Empty and `.` pieces are skipped. On Windows a piece holding `\` or `:` is not found. In addition:
  * - The root path itself is trusted: links in it are followed.
- * - Below the root, a symbolic link is followed only while it resolves inside the root. A link with an absolute target, or one whose `..` pieces climb above
- *   the root, is not found.
+ * - Below the root, a symbolic link is followed only while it resolves inside the root. On POSIX systems a link with an absolute target, or one whose
+ *   `..` pieces climb above the root, is not found. On Windows the file is opened following links and junctions, and is found only if its final path lies
+ *   under the root's final path (an absolute link to a file inside the root is found; a file behind a volume mount point is not).
  * - Only regular files are opened; FIFOs, devices and directories are not found.
- * - Hard links and mount points under the root are inside the root by definition.
+ * - Hard links are inside the root by definition, as are POSIX mount points under it.
  *
  * Every failure (a refused name, a missing file, an outside link) gives an empty stream pointer or an empty optional; no message carries the host path.
  * There is no `GetFullFilePath`: a path to open again by name is exactly the race this class avoids. Each call opens the root afresh,

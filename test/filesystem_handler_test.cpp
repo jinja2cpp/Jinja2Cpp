@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <ios>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -18,6 +19,7 @@
 #include <string>
 #include <system_error>
 #include <thread>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -725,10 +727,6 @@ TEST_F(RealFsNamesTest, CachedTemplateWithRemovedFile)
     EXPECT_EQ("a", env.LoadTemplate("a.j2").value().RenderAsString({}).value());
 }
 
-#ifndef _WIN32
-
-#include <sys/stat.h>
-
 namespace
 {
 // A scratch tree for ConfinedFileSystem:
@@ -785,6 +783,40 @@ TEST_F(ConfinedFsTest, PlainFilesRender)
     ASSERT_TRUE(wideTpl);
     EXPECT_EQ(L"b", wideTpl.value().RenderAsString({}).value());
 }
+
+// On every platform, Windows' final-path check included
+TEST_F(ConfinedFsTest, FilesAndNewlines)
+{
+    {
+        std::ofstream os(m_base / "root" / "crlf.j2", std::ios::binary);
+        os << "a\r\nb\r";
+    }
+    const jinja2::ConfinedFileSystem fs(m_root);
+    auto read = [](auto stream) {
+        using CharT = typename std::decay_t<decltype(*stream)>::char_type;
+        return std::basic_string<CharT>(std::istreambuf_iterator<CharT>(*stream), std::istreambuf_iterator<CharT>());
+    };
+#ifdef _WIN32
+    EXPECT_EQ("a\nb\r", read(fs.OpenStream("crlf.j2")));
+    EXPECT_EQ(L"a\nb\r", read(fs.OpenWStream("crlf.j2")));
+#else
+    EXPECT_EQ("a\r\nb\r", read(fs.OpenStream("crlf.j2")));
+    EXPECT_EQ(L"a\r\nb\r", read(fs.OpenWStream("crlf.j2")));
+#endif
+    EXPECT_EQ("a\r\nb\r", read(fs.OpenByteStream("crlf.j2")));
+    EXPECT_EQ("b", read(fs.OpenStream("sub/b.j2")));
+    EXPECT_TRUE(fs.GetLastModificationDate("sub/b.j2"));
+    for (const char* name : { "dir", "sub", "", "../outside/canary.j2", "missing.j2" })
+    {
+        EXPECT_FALSE(fs.OpenStream(name)) << name;
+        EXPECT_FALSE(fs.OpenWStream(name)) << name;
+        EXPECT_FALSE(fs.GetLastModificationDate(name)) << name;
+    }
+}
+
+#ifndef _WIN32
+
+#include <sys/stat.h>
 
 TEST_F(ConfinedFsTest, NameRules)
 {

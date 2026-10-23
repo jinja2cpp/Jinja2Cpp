@@ -223,7 +223,7 @@ TEST_F(RecursionLimitsTest, RecursionJinja2AcceptsRenders)
 TEST_F(RecursionLimitsTest, LongChains)
 {
     // The parser reads chains in a loop but the evaluator recurses once per operator.
-    // Python Jinja2 fails past 491 chained operators.
+    // Python Jinja2 fails past 491 unary operators or `+` (filter chains: past 197 to 328).
     EXPECT_EQ("400", Render("{{ " + Repeat("1 + ", 399) + "1 }}"));
     EXPECT_EQ("3", Render("{{ x" + Repeat("|abs", 350) + " }}", { { "x", -3 } }));
     EXPECT_EQ("3", Render("{{ ((x" + Repeat("|abs", 100) + ")" + Repeat("|abs", 100) + ")" + Repeat("|abs", 50) + " }}", { { "x", -3 } }));
@@ -276,8 +276,8 @@ TEST_F(RecursionLimitsTest, SiblingsDoNotAddUp)
 
 TEST_F(RecursionLimitsTest, NestedBlocks)
 {
-    // Python Jinja2 renders 247 nested blocks, with, filter and set blocks and fails at the
-    // 248th with RecursionError. It stops nested if at 99 and for at 21, where CPython refuses
+    // Python Jinja2 renders 247 nested blocks, with and filter blocks (246 set blocks) and
+    // fails one deeper with RecursionError. It stops nested if at 99 and for at 21, where CPython refuses
     // the generated code (too many indentation levels, statically nested blocks); Jinja2C++
     // has no such limit and takes every kind of block to 247 (docs/tasks/0098)
     std::string blocks;

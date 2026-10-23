@@ -40,8 +40,12 @@ brackets (75 lists), 491 unary operators, 492 operands of `+`, 328 filters, and 
 `with`, `filter` (246 `set` blocks); it stops nested `if` and `macro` at 98 (CPython's 100
 indentation levels) and `for` at 20 (CPython's static block limit). Ruslan chose (2026-10-23) one
 count for every block kind: defaults are now `maxExpressionDepth` 70, `maxExpressionOperators` 491,
-`maxBlockNesting` 248, so Jinja2C++ stops exactly where Python does for brackets, operators and
-blocks and renders the deeper `if`/`for` that CPython's compiler refuses. `maxRenderDepth` stays 256
-(Python: 247 macro levels). `~` chains stay nested operators (Python's are flat): 0287. Tests:
+`maxBlockNesting` 248, so Jinja2C++ stops exactly where Python does for parentheses, unary operators, `+` chains and
+`block`/`with`/`filter` nesting, and renders the deeper `if`/`for` that CPython's compiler refuses.
+Remaining differences, all near the boundary: nested list and dict literals stop at 69 (Python 75),
+`set` blocks at 247 (Python 246), filter chains at 491 (Python 197 to 328). Under ASan a thread
+stack no larger than the 512 KiB reserve is never checked (src/recursion_guard.cpp), so deep
+nesting overflows it, as it did with the old limits. `maxRenderDepth` stays 256
+(Python: 247 macro levels). `~` chains stay nested operators (Python's are flat): 0289. Tests:
 `RecursionLimitsTest.NestingJinja2AcceptsRenders` and `NestedBlocks` check both sides of each
 boundary.

@@ -447,7 +447,7 @@ protected:
             // A '\r' held back from the end of the last chunk starts this one
             const std::size_t start = m_heldCr ? 1 : 0;
             m_buffer[0] = '\r';
-            const auto count = m_file.Read(m_buffer + start, sizeof(m_buffer) - start);
+            const auto count = m_file.Read(m_buffer + start, BufferSize - start);
             if (count <= 0)
             {
                 if (!m_heldCr)
@@ -485,7 +485,8 @@ private:
     NativeFile m_file;
     bool m_text;
     bool m_heldCr = false;
-    char m_buffer[16384]{};
+    static constexpr std::size_t BufferSize = 16384;
+    char m_buffer[BufferSize]{};
 };
 
 #ifdef _WIN32
