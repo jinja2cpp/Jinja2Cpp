@@ -211,13 +211,19 @@ TEST_F(LimitsEnvTest, LongChainsWithUnlimitedOperators)
     Settings settings;
     settings.limits.maxExpressionOperators = 0;
     m_env.SetSettings(settings);
+#ifdef JINJA2CPP_TEST_SANITIZED
+    // LLVM 18's ThreadSanitizer corrupts its trace on a history this long (docs/tasks/0093)
+    constexpr unsigned chain = 20000;
+#else
+    constexpr unsigned chain = 200000;
+#endif
     const std::string sources[] = {
-        "{% autoescape 1" + Repeat(" + 1", 200000) + " %}x{% endautoescape %}",
-        "{% autoescape x %}{{ 1" + Repeat(" + 1", 200000) + " }}{% endautoescape %}",
-        "{% autoescape 'a'" + Repeat("[:]", 200000) + " %}x{% endautoescape %}",
-        "{% autoescape x %}{{ ['a']" + Repeat("[0][:]", 100000) + " }}{% endautoescape %}",
-        "{{ 'a'" + Repeat("|upper", 200000) + " }}",
-        "{% autoescape x %}{{ 'a'" + Repeat("|upper", 200000) + " }}{% endautoescape %}",
+        "{% autoescape 1" + Repeat(" + 1", chain) + " %}x{% endautoescape %}",
+        "{% autoescape x %}{{ 1" + Repeat(" + 1", chain) + " }}{% endautoescape %}",
+        "{% autoescape 'a'" + Repeat("[:]", chain) + " %}x{% endautoescape %}",
+        "{% autoescape x %}{{ ['a']" + Repeat("[0][:]", chain / 2) + " }}{% endautoescape %}",
+        "{{ 'a'" + Repeat("|upper", chain) + " }}",
+        "{% autoescape x %}{{ 'a'" + Repeat("|upper", chain) + " }}{% endautoescape %}",
     };
     for (const auto& source : sources)
     {
