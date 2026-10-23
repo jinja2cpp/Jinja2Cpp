@@ -930,7 +930,7 @@ struct BigIntObject final : ValueObject
     static void operator delete(void* ptr) noexcept { ::operator delete(ptr); } // NOLINT(misc-new-delete-overloads)
 
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the digits follow the object
-    [[nodiscard]] std::string_view Decimal() const noexcept { return { reinterpret_cast<const char*>(this + 1), m_size }; }
+    [[nodiscard]] std::string_view Decimal() const noexcept { return { reinterpret_cast<const char*>(this) + sizeof(BigIntObject), m_size }; }
 
 private:
     explicit BigIntObject(size_t size) noexcept

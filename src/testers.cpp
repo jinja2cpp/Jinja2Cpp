@@ -162,6 +162,7 @@ struct ValueKindGetter : visitors::BaseVisitor<TestKind>
     {
         return TestKind::Integer;
     }
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     TestKind operator()(const BigIntView&) const
     {
         return TestKind::Integer;

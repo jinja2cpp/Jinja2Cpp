@@ -1450,6 +1450,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     }
 
     // The filters that take numbers handle big integers before they get here (ValueConverter::Filter)
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     InternalValue operator()(const BigIntView& /*val*/) const { return InternalValue(); }
 
     InternalValue operator()(int64_t val) const

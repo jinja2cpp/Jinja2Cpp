@@ -1262,7 +1262,7 @@ struct StrOps
         {
             intValue = *boolVal ? 1 : 0;
         }
-        bool isInt = intVal || bigVal || (boolVal && type != 0 && type != 's');
+        const bool isInt = intVal != nullptr || bigVal.has_value() || (boolVal != nullptr && type != 0 && type != 's');
         Formatted out;
         if (IsStringValue(val) || (boolVal && type == 0))
         {
@@ -1274,7 +1274,7 @@ struct StrOps
         }
         else if (isInt || dblVal)
         {
-            double real = static_cast<double>(intValue);
+            auto real = static_cast<double>(intValue);
             if (dblVal)
             {
                 real = *dblVal;

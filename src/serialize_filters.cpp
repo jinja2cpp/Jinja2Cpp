@@ -215,6 +215,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
 
     std::string operator()(int64_t val) const { return fmt::format("{}", val); }
 
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     std::string operator()(const BigIntView& val) const { return std::string(CheckedDecimal(val)); }
 
     const RenderContext* m_context;

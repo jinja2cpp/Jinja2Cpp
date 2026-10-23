@@ -74,6 +74,7 @@ struct StringEncoder : public visitors::BaseVisitor<TargetString>
     }
 
     // Not a string, as an int is not
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     TargetString operator()(const BigIntView& /*val*/) const { return TargetString(); }
 
     template<typename Str, typename CharT>

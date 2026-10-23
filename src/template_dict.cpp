@@ -75,6 +75,7 @@ struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
         return map.GetObjectClass() || map.GetAttrPolicy() == MapAttrPolicy::KeysFirst ? nullptr : "dict";
     }
     const char* operator()(const KeyValuePair& pair) const { return Apply<UnhashableTypeGetter>(pair.value, m_items); }
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     const char* operator()(const BigIntView& /*val*/) const { return nullptr; }
 
 private:

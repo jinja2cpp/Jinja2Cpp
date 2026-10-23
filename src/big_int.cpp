@@ -1,6 +1,7 @@
 #include "big_int.h"
 
 #include "engine_errors.h"
+#include "internal_value.h"
 
 #include <fmt/format.h>
 
@@ -8,10 +9,15 @@
 #include <cerrno>
 #include <charconv>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
 #include <vector>
 
 namespace jinja2
@@ -25,7 +31,7 @@ boost::intrusive_ptr<BigIntObject> BigIntObject::Make(std::string_view decimal)
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
     boost::intrusive_ptr<BigIntObject> obj(new (CharCount{ decimal.size() }) BigIntObject(decimal.size()));
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the digits follow the object
-    std::copy(decimal.begin(), decimal.end(), reinterpret_cast<char*>(obj.get() + 1));
+    std::copy(decimal.begin(), decimal.end(), reinterpret_cast<char*>(obj.get()) + sizeof(BigIntObject));
     return obj;
 }
 } // namespace detail
@@ -151,8 +157,9 @@ bool ExceedsBitCap(std::string_view magnitude)
 InternalValue MakeBigIntValue(std::string_view decimal)
 {
     int64_t small = 0;
-    const auto* end = decimal.data() + decimal.size();
-    const auto [ptr, ec] = std::from_chars(decimal.data(), end, small);
+    const char* begin = decimal.data();
+    const char* end = begin + decimal.size();
+    const auto [ptr, ec] = std::from_chars(begin, end, small);
     if (ec == std::errc() && ptr == end)
     {
         return small;
@@ -201,8 +208,8 @@ InternalValue IntegerFromDigits(std::string_view digits, int base, bool negative
         ThrowTooManyBits();
     }
     // As many digits at a time as fit 32 bits
-    uint64_t chunkMult = 1;
-    size_t chunkSize = 0;
+    auto chunkMult = static_cast<uint64_t>(base);
+    size_t chunkSize = 1;
     while (chunkMult * static_cast<uint64_t>(base) <= std::numeric_limits<uint32_t>::max())
     {
         chunkMult *= static_cast<uint64_t>(base);

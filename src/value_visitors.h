@@ -1075,6 +1075,7 @@ struct UnaryOperation : BaseVisitor<InternalValue>
     }
 
     // An integer outside int64 (docs/tasks/0270) is never zero; -x may fit int64 again
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     InternalValue operator()(const BigIntView& val) const
     {
         switch (m_oper)
@@ -1490,6 +1491,7 @@ struct BinaryMathOperation : BaseVisitor<>
     // An integer outside int64 (docs/tasks/0270). Comparisons are exact: a big integer is
     // outside int64, so against an int only its sign matters. `/` divides as floats, as int / int
     // does; any other arithmetic needs a big result, which raises OverflowError
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     ResultType operator()(const BigIntView& left, const BigIntView& right) const
     {
         if (IsComparison())
@@ -1979,6 +1981,7 @@ struct BooleanEvaluator : BaseVisitor<bool>
     }
 
     // Never zero (docs/tasks/0270)
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     bool operator()(const BigIntView&) const
     {
         return true;

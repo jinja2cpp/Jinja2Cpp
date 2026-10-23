@@ -9,6 +9,7 @@
 #include "undefined.h"
 #include "value_visitors.h"
 
+#include <jinja2cpp/big_int.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
@@ -479,6 +480,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     {
         return InternalValue();
     }
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     InternalValue operator()(const BigIntView& /*values*/, const BigIntView& /*index*/) const { return InternalValue(); }
 
     InternalValue operator()(const MapRef& values, const ListRef& key) const
@@ -725,6 +727,7 @@ struct SliceVisitor : public visitors::BaseVisitor<>
     }
 
     // An int does not slice
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     InternalValue operator()(const BigIntView& /*val*/) const { return InternalValue(); }
 
     // A dictsort pair slices as the 2-tuple (key, value)
@@ -911,6 +914,7 @@ struct StringGetter : public visitors::BaseVisitor<std::string>
     std::string operator()(const std::string_view& str) const { return std::string(str.begin(), str.end()); }
     std::string operator()(const std::wstring& str) const { return ConvertString<std::string>(str); }
     std::string operator()(const std::wstring_view& str) const { return ConvertString<std::string>(str); }
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     std::string operator()(const BigIntView& /*val*/) const { return {}; }
 };
 
@@ -939,6 +943,7 @@ struct ListConverter : public visitors::BaseVisitor<std::optional<ListAdapter>>
         return ListAdapter::CreateAdapter(InternalValueList{ InternalValue(pair.key), pair.value });
     }
     // An int is not iterable
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     result_t operator()(const BigIntView& /*val*/) const { return result_t(); }
     // Iterating undefined yields nothing, as in Python; StrictUndefined refuses
     result_t operator()(const UndefinedValue& val) const
