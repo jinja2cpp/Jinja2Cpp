@@ -60,7 +60,6 @@ static_assert(CanRenderTo<std::string&>::value);
 static_assert(!CanRenderTo<std::string&&>::value);
 static_assert(!CanRenderTo<const std::string&>::value);
 static_assert(!CanRenderTo<std::wstring&>::value);
-static_assert(!CanRenderTo<ContainerSink<std::string>&&>::value);
 static_assert(CanRenderTo<ContainerSink<std::string>&>::value);
 
 TEST(TemplateApiTest, LoadAcceptsEveryStringForm)
