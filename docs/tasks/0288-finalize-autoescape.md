@@ -1,6 +1,7 @@
 ---
-status: in-progress
+status: done
 priority: high
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/628
 area: parity
 touches: [src/renderer.h#FinalizedExpressionRenderer]
 shares: [src/expression_parser.cpp]
