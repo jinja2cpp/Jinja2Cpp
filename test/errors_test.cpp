@@ -1038,6 +1038,9 @@ TEST(ErrorContractTest, EngineErrorsHaveTheirCodes)
         { "{{ '%d' % 'x' }}", ErrorCode::TemplateRuntimeError },
         { "{{ ('x' * 100000000) | length }}", ErrorCode::ResourceLimitExceeded },
         { "{{ x.y.z }}", ErrorCode::UndefinedError },
+        // A field number past Py_ssize_t: Python's ValueError, not the engine's std::out_of_range
+        { "{{ '{99999999999999999999}'.format(1) }}", ErrorCode::TemplateRuntimeError },
+        { "{{ '{0[99999999999999999999]}'.format([1]) }}", ErrorCode::TemplateRuntimeError },
     };
     for (const auto& [source, code] : rows)
     {
@@ -1048,6 +1051,15 @@ TEST(ErrorContractTest, EngineErrorsHaveTheirCodes)
         EXPECT_EQ(code, result.error().GetCode()) << source;
         EXPECT_FALSE(result.error().GetException()) << source;
         EXPECT_FALSE(result.error().GetExtraParams().at(0).AsString().empty()) << source;
+    }
+
+    // An attribute path's index past int64 finds no item, as in Python
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load("{{ [1, 2] | map(attribute='99999999999999999999') | list }}").has_value());
+        const auto rendered = tpl.RenderAsString({});
+        ASSERT_TRUE(rendered.has_value()) << rendered.error().ToString();
+        EXPECT_EQ("[Undefined, Undefined]", rendered.value());
     }
 
     // A host callable's std::runtime_error is the host's, not the engine's

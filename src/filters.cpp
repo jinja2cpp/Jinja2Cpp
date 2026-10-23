@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -36,6 +37,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -115,9 +117,11 @@ InternalValueList AttributePath(const InternalValue& attribute)
         auto end = str->find('.', start);
         auto part = str->substr(start, end == std::string::npos ? std::string::npos : end - start);
         bool isIndex = !part.empty() && std::all_of(part.begin(), part.end(), [](char ch) { return ch >= '0' && ch <= '9'; });
-        if (isIndex)
+        std::int64_t index = 0;
+        // An index past int64 is no item of any sequence: looked up as a key, it finds none either
+        if (isIndex && std::from_chars(part.data(), part.data() + part.size(), index).ec == std::errc())
         {
-            parts.emplace_back(static_cast<int64_t>(std::stoll(part)));
+            parts.emplace_back(index);
         }
         else
         {
