@@ -224,8 +224,34 @@ void SubscriptExpression::AddIndex(const NodeArena& nodes, NodeRef<Expression> v
     m_subscriptExprs.push_back(std::move(idx));
 }
 
+namespace
+{
+// The parser builds chains of operators, postfixes and filters without recursing, so a
+// foldability check that recurses through one can reach the end of the stack: such an
+// expression is not folded, which leaves it to the evaluator, which reports its depth
+// (docs/tasks/0216)
+bool FoldWalkTooDeep()
+{
+    return StackNearlyExhausted();
+}
+} // namespace
+
+bool UnaryExpression::IsFoldable(const NodeArena& nodes) const
+{
+    return !FoldWalkTooDeep() && nodes[m_expr].IsFoldable(nodes);
+}
+
+bool IsExpression::IsFoldable(const NodeArena& nodes) const
+{
+    return m_foldable && !FoldWalkTooDeep() && nodes[m_value].IsFoldable(nodes);
+}
+
 bool SubscriptExpression::IsFoldable(const NodeArena& nodes) const
 {
+    if (FoldWalkTooDeep())
+    {
+        return false;
+    }
     return nodes[m_value].IsFoldable(nodes) && std::all_of(m_subscriptExprs.begin(), m_subscriptExprs.end(), [&nodes](const Index& idx) { return idx.isAttr || nodes[idx.expr].IsFoldable(nodes); });
 }
 
@@ -435,6 +461,10 @@ FilteredExpression::FilteredExpression(const NodeArena& nodes, NodeRef<Expressio
 
 bool FilteredExpression::IsFoldable(const NodeArena& nodes) const
 {
+    if (FoldWalkTooDeep())
+    {
+        return false;
+    }
     return nodes[m_expression].IsFoldable(nodes) && nodes[m_filter].IsFoldable(nodes);
 }
 
@@ -489,9 +519,7 @@ BinaryExpression::BinaryExpression(const NodeArena& nodes, BinaryExpression::Ope
 
 bool BinaryExpression::IsFoldable(const NodeArena& nodes) const
 {
-    // The parser builds a chain of operators without recursing: a chain too long to walk on
-    // the stack is not folded, which only leaves it to the evaluator (docs/tasks/0216)
-    if (StackNearlyExhausted())
+    if (FoldWalkTooDeep())
     {
         return false;
     }
@@ -807,6 +835,10 @@ InternalValue CompareExpression::Evaluate(RenderContext& context)
 
 bool SliceExpression::IsFoldable(const NodeArena& nodes) const
 {
+    if (FoldWalkTooDeep())
+    {
+        return false;
+    }
     auto part = [&nodes](const NodeRef<Expression>& expr) { return !expr || nodes[expr].IsFoldable(nodes); };
     return nodes[m_value].IsFoldable(nodes) && part(m_start) && part(m_stop) && part(m_step);
 }
@@ -830,6 +862,10 @@ InternalValue SliceExpression::Evaluate(RenderContext& context)
 
 bool TupleCreator::IsFoldable(const NodeArena& nodes) const
 {
+    if (FoldWalkTooDeep())
+    {
+        return false;
+    }
     const auto items = nodes[m_exprs];
     return std::all_of(items.begin(), items.end(), [&nodes](const NodeRef<Expression>& item) { return nodes[item].IsFoldable(nodes); });
 }
@@ -856,6 +892,10 @@ InternalValue TupleCreator::Evaluate(RenderContext& context)
 
 bool DictCreator::IsFoldable(const NodeArena& nodes) const
 {
+    if (FoldWalkTooDeep())
+    {
+        return false;
+    }
     const auto items = nodes[m_exprs];
     return std::all_of(items.begin(), items.end(), [&nodes](const Item& item) { return nodes[item.key].IsFoldable(nodes) && nodes[item.value].IsFoldable(nodes); });
 }
@@ -906,7 +946,7 @@ NodeRef<ExpressionFilter> ExpressionFilter::Make(NodeArena& nodes, const std::st
 
 bool ExpressionFilter::IsFoldable(const NodeArena& nodes) const
 {
-    // A chain of filters is built without recursing, so it is walked without recursing too
+    // A chain of filters is walked without recursing (FoldWalkTooDeep)
     for (const auto* filter = this;; filter = &nodes[filter->m_parentFilter])
     {
         if (!filter->m_foldable)
@@ -922,7 +962,7 @@ bool ExpressionFilter::IsFoldable(const NodeArena& nodes) const
 
 void ExpressionFilter::SetConstantBase(const NodeArena& nodes, const InternalValue& base)
 {
-    // The first filter of the chain takes the base (IsFoldable)
+    // The first filter of the chain takes the base, found without recursing (IsFoldable)
     const auto* filter = this;
     while (filter->m_parentFilter)
     {
@@ -994,6 +1034,10 @@ InternalValue IsExpression::Evaluate(RenderContext& context)
 
 bool IfExpression::IsFoldable(const NodeArena& nodes, NodeRef<Expression> value) const
 {
+    if (FoldWalkTooDeep())
+    {
+        return false;
+    }
     if (const auto* test = nodes[m_testExpr].GetConstant(nodes))
     {
         const auto chosen = ConvertToBool(*test) ? value : m_altValue;
@@ -1004,6 +1048,10 @@ bool IfExpression::IsFoldable(const NodeArena& nodes, NodeRef<Expression> value)
 
 bool FullExpressionEvaluator::IsFoldable(const NodeArena& nodes) const
 {
+    if (FoldWalkTooDeep())
+    {
+        return false;
+    }
     if (!m_expression)
     {
         return false;
@@ -1013,6 +1061,10 @@ bool FullExpressionEvaluator::IsFoldable(const NodeArena& nodes) const
 
 bool CompareExpression::IsFoldable(const NodeArena& nodes) const
 {
+    if (FoldWalkTooDeep())
+    {
+        return false;
+    }
     const auto operands = nodes[m_operands];
     return nodes[m_first].IsFoldable(nodes) && std::all_of(operands.begin(), operands.end(), [&nodes](const Operand& operand) { return nodes[operand.expr].IsFoldable(nodes); });
 }

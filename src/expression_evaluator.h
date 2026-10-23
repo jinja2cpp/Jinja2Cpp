@@ -673,7 +673,7 @@ public:
         , m_expr(std::move(expr))
     {}
     InternalValue Evaluate(RenderContext&) override;
-    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override { return nodes[m_expr].IsFoldable(nodes); }
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
 
 private:
     Operation m_oper;
@@ -729,7 +729,7 @@ public:
     {
     }
     InternalValue Evaluate(RenderContext& context) override;
-    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override { return m_foldable && nodes[m_value].IsFoldable(nodes); }
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
 
 private:
     NodeRef<Expression> m_value;

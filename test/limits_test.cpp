@@ -115,6 +115,8 @@ std::vector<LimitCase> Cases()
         { "OperatorsUnlimitedAutoescape", "{% autoescape 1" + Repeat(" + 1", 200000) + " %}x{% endautoescape %}", [](auto& l) { l.maxExpressionOperators = 0; }, "RecursionLimitExceeded" },
         { "OperatorsUnlimitedVolatileOutput", "{% autoescape x %}{{ 1" + Repeat(" + 1", 200000) + " }}{% endautoescape %}", [](auto& l) { l.maxExpressionOperators = 0; }, "RecursionLimitExceeded" },
         { "OperatorsUnlimitedConcat", "{{ 1" + Repeat(" + 1", 200000) + " ~ 'a' }}", [](auto& l) { l.maxExpressionOperators = 0; }, "RecursionLimitExceeded" },
+        { "SlicesUnlimitedAutoescape", "{% autoescape 'a'" + Repeat("[:]", 200000) + " %}x{% endautoescape %}", [](auto& l) { l.maxExpressionOperators = 0; }, "RecursionLimitExceeded" },
+        { "PostfixUnlimitedVolatileOutput", "{% autoescape x %}{{ ['a']" + Repeat("[0][:]", 100000) + " }}{% endautoescape %}", [](auto& l) { l.maxExpressionOperators = 0; }, "RecursionLimitExceeded" },
         { "FiltersUnlimited", "{{ 'a'" + Repeat("|upper", 200000) + " }}", [](auto& l) { l.maxExpressionOperators = 0; }, "RecursionLimitExceeded" },
         { "FiltersUnlimitedVolatileOutput", "{% autoescape x %}{{ 'a'" + Repeat("|upper", 200000) + " }}{% endautoescape %}", [](auto& l) { l.maxExpressionOperators = 0; }, "RecursionLimitExceeded" },
         // The template's top level is a block too
