@@ -1,5 +1,6 @@
 #include "python_format.h"
 
+#include "engine_errors.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "value_visitors.h"
@@ -528,7 +529,7 @@ private:
     {
         if (!m_isMapping && m_next < m_count)
         {
-            throw std::runtime_error("not all arguments converted during string formatting");
+            throw TemplateRuntimeError("not all arguments converted during string formatting");
         }
         return result;
     }
@@ -542,14 +543,14 @@ private:
         {
             if (m_keyedUsed)
             {
-                throw std::runtime_error("not enough arguments for format string");
+                throw TemplateRuntimeError("not enough arguments for format string");
             }
             m_keyedUsed = true;
             return m_keyedValue;
         }
         if (m_next >= m_count)
         {
-            throw std::runtime_error("not enough arguments for format string");
+            throw TemplateRuntimeError("not enough arguments for format string");
         }
         auto index = m_next++;
         if (m_list)
@@ -566,7 +567,7 @@ private:
         // markupsafe's helper wraps the '*' argument too, and it is not an int
         if (m_markup)
         {
-            throw std::runtime_error("* wants int");
+            throw TemplateRuntimeError("* wants int");
         }
         // Clamped like a literal width, so a huge or INT64_MIN star neither allocates nor overflows on negation
         if (const auto* i = GetIf<int64_t>(&val))
@@ -577,7 +578,7 @@ private:
         {
             return *b ? 1 : 0;
         }
-        throw std::runtime_error("* wants int");
+        throw TemplateRuntimeError("* wants int");
     }
 
     // Selects the mapping value named by "(key)" as the argument
@@ -585,12 +586,12 @@ private:
     {
         if (!m_map)
         {
-            throw std::runtime_error("format requires a mapping");
+            throw TemplateRuntimeError("format requires a mapping");
         }
         std::string key(name);
         if (!m_map->HasValue(key))
         {
-            throw std::runtime_error("KeyError: '" + key + "'");
+            throw TemplateRuntimeError("KeyError: '" + key + "'");
         }
         m_keyedValue = m_map->GetValueByName(key);
         m_keyed = true;
@@ -607,7 +608,7 @@ private:
         }
         if (directive.error == PercentDirective::Error::Incomplete)
         {
-            throw std::runtime_error("incomplete format");
+            throw TemplateRuntimeError("incomplete format");
         }
         if (directive.hasKey)
         {
@@ -615,9 +616,9 @@ private:
             {
                 if (!m_map)
                 {
-                    throw std::runtime_error("format requires a mapping");
+                    throw TemplateRuntimeError("format requires a mapping");
                 }
-                throw std::runtime_error("incomplete format key");
+                throw TemplateRuntimeError("incomplete format key");
             }
             Key(format.substr(directive.keyStart, directive.keySize));
         }
@@ -644,7 +645,7 @@ private:
         }
         if (directive.error == PercentDirective::Error::IncompleteAfterSpec)
         {
-            throw std::runtime_error("incomplete format");
+            throw TemplateRuntimeError("incomplete format");
         }
 
         auto conversion = directive.conversion;
@@ -662,7 +663,7 @@ private:
             // markupsafe's helper has __int__ but no __index__, which these need
             if (m_markup)
             {
-                throw std::runtime_error(fmt::format("%{} format: an integer is required, not _MarkupEscapeHelper", conversion));
+                throw TemplateRuntimeError(fmt::format("%{} format: an integer is required, not _MarkupEscapeHelper", conversion));
             }
             ConvertInteger(out, arg, conversion, spec);
             break;
@@ -683,12 +684,12 @@ private:
             // markupsafe's helper is neither an int nor a one-character string
             if (m_markup)
             {
-                throw std::runtime_error("%c requires int or char");
+                throw TemplateRuntimeError("%c requires int or char");
             }
             ConvertChar(out, arg, spec);
             break;
         default:
-            throw std::runtime_error(fmt::format("unsupported format character '{}' (0x{:x}) at index {}", conversion, static_cast<unsigned char>(conversion), directive.index));
+            throw TemplateRuntimeError(fmt::format("unsupported format character '{}' (0x{:x}) at index {}", conversion, static_cast<unsigned char>(conversion), directive.index));
         }
     }
     // With `escape` (a Markup format) the text is escaped before precision cuts it, except
@@ -747,11 +748,11 @@ private:
         {
             if (std::isnan(*d))
             {
-                throw std::runtime_error("cannot convert float NaN to integer");
+                throw TemplateRuntimeError("cannot convert float NaN to integer");
             }
             if (std::isinf(*d))
             {
-                throw std::runtime_error("cannot convert float infinity to integer");
+                throw TemplateRuntimeError("cannot convert float infinity to integer");
             }
             if (std::fabs(*d) < 9223372036854775808.0)
             {
@@ -762,7 +763,7 @@ private:
             AppendDigits(out, *d < 0, "", fmt::format("{:.0f}", std::fabs(*d)), spec);
             return;
         }
-        throw std::runtime_error(fmt::format("%{} format: {} is required, not {}", conversion, isDecimal ? "a real number" : "an integer", TypeName(arg)));
+        throw TemplateRuntimeError(fmt::format("%{} format: {} is required, not {}", conversion, isDecimal ? "a real number" : "an integer", TypeName(arg)));
     }
 
     static void ConvertFloat(std::string& out, const InternalValue& arg, char conversion, const Spec& spec)
@@ -783,7 +784,7 @@ private:
             AppendFloat(out, *b ? 1.0 : 0.0, conversion, spec);
             return;
         }
-        throw std::runtime_error(fmt::format("must be real number, not {}", TypeName(arg)));
+        throw TemplateRuntimeError(fmt::format("must be real number, not {}", TypeName(arg)));
     }
 
     static void ConvertChar(std::string& out, const InternalValue& arg, const Spec& spec)
@@ -803,19 +804,19 @@ private:
             auto str = GetAsSameString(std::string(), arg);
             if (!str || CodePoints(*str) != 1)
             {
-                throw std::runtime_error("%c requires int or char");
+                throw TemplateRuntimeError("%c requires int or char");
             }
             text = *str;
         }
         else
         {
-            throw std::runtime_error("%c requires int or char");
+            throw TemplateRuntimeError("%c requires int or char");
         }
         if (text.empty())
         {
             if (cp < 0 || cp > 0x10FFFF)
             {
-                throw std::runtime_error("%c arg not in range(0x110000)");
+                throw TemplateRuntimeError("%c arg not in range(0x110000)");
             }
             AppendUtf8(text, static_cast<uint32_t>(cp));
         }

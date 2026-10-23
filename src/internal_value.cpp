@@ -841,12 +841,12 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         std::optional<int64_t> step;
         if (!GetIndex(m_start, start) || !GetIndex(m_stop, stop) || !GetIndex(m_step, step))
         {
-            throw std::runtime_error("slice indices must be integers or None or have an __index__ method");
+            throw TemplateRuntimeError("slice indices must be integers or None or have an __index__ method");
         }
         indices.step = step.value_or(1);
         if (indices.step == 0)
         {
-            throw std::runtime_error("slice step cannot be zero");
+            throw TemplateRuntimeError("slice step cannot be zero");
         }
         // Any step at least as long as the sequence takes one item; this keeps -step defined
         if (indices.step < -std::numeric_limits<int64_t>::max())
@@ -1421,7 +1421,7 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
             {
                 if (!fn)
                 {
-                    throw std::runtime_error("List enumerator couldn't be created without element accessor function!");
+                    throw TemplateRuntimeError("List enumerator couldn't be created without element accessor function!");
                 }
             }
 
@@ -1579,7 +1579,7 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
             // Python raises OverflowError for len() of such a range; lengths here are int64_t
             if (m_size > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
             {
-                throw std::runtime_error("range() has more items than fit in a 64-bit integer");
+                throw TemplateRuntimeError("range() has more items than fit in a 64-bit integer");
             }
         }
 

@@ -1,6 +1,7 @@
 #include "value_methods.h"
 
 #include "cycle_collector.h"
+#include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "markup.h"
@@ -43,7 +44,7 @@ namespace
 {
 [[noreturn]] void Raise(const std::string& message)
 {
-    throw std::runtime_error(message);
+    throw TemplateRuntimeError(message);
 }
 
 std::string TypeName(const InternalValue& val)

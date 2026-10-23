@@ -1,5 +1,6 @@
 #include "filters.h"
 
+#include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "function_base.h"
 #include "internal_value.h"
@@ -92,7 +93,7 @@ bool CompareForOrder(const InternalValue& left,
         auto kind = GetOrderKind(left);
         if (kind != GetOrderKind(right) || kind == OrderKind::Unordered)
         {
-            throw std::runtime_error("'<' not supported between these values");
+            throw TemplateRuntimeError("'<' not supported between these values");
         }
     }
     return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, oper, compType));
@@ -167,7 +168,7 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
     {
         message += " (" + UndefinedMessage(*info) + "; did you forget to quote the callable name?)";
     }
-    throw std::runtime_error(message);
+    throw TemplateRuntimeError(message);
 }
 
 // Jinja2's filters iterate their input: None, a bool, a number or a callable is not
@@ -195,7 +196,7 @@ bool IsNotIterable(const InternalValue& val)
 
 [[noreturn]] void ThrowNotIterable(const InternalValue& val)
 {
-    throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(val) + "' object is not iterable");
+    throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(val) + "' object is not iterable");
 }
 
 // Jinja2's make_multi_attrgetter: "a,b.c" sorts by the list [item.a, item.b.c]
@@ -399,7 +400,7 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     if (!IsStringValue(attrNameVal))
     {
         const auto* info = GetUndefinedInfo(attrNameVal);
-        throw std::runtime_error("attribute name must be string, not '" + (info ? std::string(UndefinedClassName(*info)) : Apply<visitors::PythonTypeNameGetter>(attrNameVal)) + "'");
+        throw TemplateRuntimeError("attribute name must be string, not '" + (info ? std::string(UndefinedClassName(*info)) : Apply<visitors::PythonTypeNameGetter>(attrNameVal)) + "'");
     }
     CheckUndefinedUse(baseVal, UndefinedUse::Attribute);
     // Python's attr reads attributes only: the items of a dict are not attributes, the fields
@@ -457,7 +458,7 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
         // Python calls value.items(), which only a mapping has
         if (!baseVal.IsUndefined())
         {
-            throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object has no attribute 'items'");
+            throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object has no attribute 'items'");
         }
         return InternalValue();
     }
@@ -523,7 +524,7 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     else
     {
         // Jinja2 raises FilterArgumentError
-        throw std::runtime_error(R"(You can only sort by either "key" or "value")");
+        throw TemplateRuntimeError(R"(You can only sort by either "key" or "value")");
     }
 
     std::vector<SortItem> tempVector;
@@ -776,7 +777,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         // The extra arguments go to the filter, which checks them when it is called
         if (auto error = filter->GetArgumentsError(); !error.empty())
         {
-            throw std::runtime_error(AsString(filterName) + "() " + error);
+            throw TemplateRuntimeError(AsString(filterName) + "() " + error);
         }
         resultList.push_back(filter->Filter(val, context));
         return true;
@@ -1038,7 +1039,7 @@ InternalValue Unique(const ListAdapter& list,
     {
         if (const char* type = UnhashableType(item.val))
         {
-            throw std::runtime_error("unhashable type: '"s + type + "'");
+            throw TemplateRuntimeError("unhashable type: '"s + type + "'");
         }
     }
     DropDuplicates(items, compType);
@@ -1099,11 +1100,11 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
             {
             case LengthMode:
             case RandomMode:
-                throw std::runtime_error("object of type '" + typeName + "' has no len()");
+                throw TemplateRuntimeError("object of type '" + typeName + "' has no len()");
             case LastItemMode:
-                throw std::runtime_error("'" + typeName + "' object is not reversible");
+                throw TemplateRuntimeError("'" + typeName + "' object is not reversible");
             case ReverseMode:
-                throw std::runtime_error("argument must be iterable");
+                throw TemplateRuntimeError("argument must be iterable");
             default:
                 ThrowNotIterable(baseVal);
             }
@@ -1680,7 +1681,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         }
         if (const char* objectClass = val.GetObjectClass())
         {
-            throw std::runtime_error("'"s + objectClass + "' object is not iterable");
+            throw TemplateRuntimeError("'"s + objectClass + "' object is not iterable");
         }
 
         auto keys = val.GetKeyValues();
@@ -2133,7 +2134,7 @@ double PythonRound(double val, int64_t ndigits)
     auto rounded = std::strtod(text.c_str(), nullptr);
     if (std::isinf(rounded))
     {
-        throw std::runtime_error("rounded value too large to represent");
+        throw TemplateRuntimeError("rounded value too large to represent");
     }
     return std::copysign(rounded, val);
 }
@@ -2196,17 +2197,17 @@ double PythonRoundByMethod(double value, bool isInt, int64_t precision, bool isC
     }
     if (precision > 308)
     {
-        throw std::runtime_error("int too large to convert to float");
+        throw TemplateRuntimeError("int too large to convert to float");
     }
     auto scale = PowerOfTen(precision);
     auto scaled = value * scale;
     if (std::isnan(scaled))
     {
-        throw std::runtime_error("cannot convert float NaN to integer");
+        throw TemplateRuntimeError("cannot convert float NaN to integer");
     }
     if (std::isinf(scaled))
     {
-        throw std::runtime_error("cannot convert float infinity to integer");
+        throw TemplateRuntimeError("cannot convert float infinity to integer");
     }
     auto whole = isCeil ? std::ceil(scaled) : std::floor(scaled);
     if (precision < 0)
@@ -2214,7 +2215,7 @@ double PythonRoundByMethod(double value, bool isInt, int64_t precision, bool isC
         // The integer is divided by the float 10 ** precision
         if (scale == 0.0)
         {
-            throw std::runtime_error("float division by zero");
+            throw TemplateRuntimeError("float division by zero");
         }
         return (whole / scale) + 0.0;
     }
@@ -2423,11 +2424,11 @@ InternalValue PythonRoundToInt(double value)
 {
     if (std::isnan(value))
     {
-        throw std::runtime_error("cannot convert float NaN to integer");
+        throw TemplateRuntimeError("cannot convert float NaN to integer");
     }
     if (std::isinf(value))
     {
-        throw std::runtime_error("cannot convert float infinity to integer");
+        throw TemplateRuntimeError("cannot convert float infinity to integer");
     }
     // The default rounding mode rounds halves to even
     const double rounded = std::nearbyint(value);
@@ -2446,13 +2447,13 @@ InternalValue ValueConverter::Round(const InternalValue& baseVal, RenderContext&
     auto method = AsString(GetArgumentValue("method", context));
     if (method != "common" && method != "ceil" && method != "floor")
     {
-        throw std::runtime_error("round(): method must be common, ceil or floor");
+        throw TemplateRuntimeError("round(): method must be common, ceil or floor");
     }
     auto precVal = GetArgumentValue("precision", context);
     const bool noPrecision = precVal.Kind() == ValueKind::None;
     if (!noPrecision && !GetIf<int64_t>(&precVal) && !GetIf<bool>(&precVal))
     {
-        throw std::runtime_error("round(): precision must be an integer");
+        throw TemplateRuntimeError("round(): precision must be an integer");
     }
     auto asInt = PythonIntOf(baseVal);
     const auto* dblVal = GetIf<double>(&baseVal);
@@ -2465,7 +2466,7 @@ InternalValue ValueConverter::Round(const InternalValue& baseVal, RenderContext&
         // round(value, None) is round(value): an int, halves to even
         if (method != "common")
         {
-            throw std::runtime_error("unsupported operand type(s) for ** or pow(): 'int' and 'NoneType'");
+            throw TemplateRuntimeError("unsupported operand type(s) for ** or pow(): 'int' and 'NoneType'");
         }
         if (asInt)
         {
@@ -2547,7 +2548,7 @@ namespace
 {
 [[noreturn]] void ThrowUnknownFilter(const std::string& name)
 {
-    throw std::runtime_error("No filter named '" + name + "' found.");
+    throw TemplateRuntimeError("No filter named '" + name + "' found.");
 }
 } // namespace
 

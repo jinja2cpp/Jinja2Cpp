@@ -1,5 +1,6 @@
 #include "template_dict.h"
 
+#include "engine_errors.h"
 #include "internal_value.h"
 #include "recursion_guard.h"
 #include "value_visitors.h"
@@ -333,7 +334,7 @@ std::optional<std::string> MakeDictKey(const InternalValue& key, const char** un
 
 void ThrowUnhashable(const char* type)
 {
-    throw std::runtime_error(std::string("unhashable type: '") + (type ? type : "object") + "'");
+    throw TemplateRuntimeError(std::string("unhashable type: '") + (type ? type : "object") + "'");
 }
 
 std::string DictKeyText(const InternalValue& key)

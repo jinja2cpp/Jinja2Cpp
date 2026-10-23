@@ -1,5 +1,6 @@
 #include "expression_evaluator.h"
 
+#include "engine_errors.h"
 #include "filters.h"
 #include "internal_value.h"
 #include "lookup_result.h"
@@ -374,12 +375,12 @@ bool LoopAttrExpression::TryCallCycle(RenderContext& values, const ArenaCallPara
     const auto nodes = values.Nodes();
     if (!params.kwParams.empty())
     {
-        throw std::runtime_error("LoopContext.cycle() got an unexpected keyword argument '" + std::string(nodes.Text(nodes[params.kwParams][0].name)) + "'");
+        throw TemplateRuntimeError("LoopContext.cycle() got an unexpected keyword argument '" + std::string(nodes.Text(nodes[params.kwParams][0].name)) + "'");
     }
     const auto items = nodes[params.posParams];
     if (items.empty())
     {
-        throw std::runtime_error("no items for cycling given");
+        throw TemplateRuntimeError("no items for cycling given");
     }
     const auto idx = static_cast<size_t>(Apply<visitors::IntegerEvaluator>(index0)) % items.size();
     result = nodes[items[idx]].Evaluate(values);
@@ -913,7 +914,7 @@ namespace
 // Out of line, so that the filters that fit their call pay only the test
 [[noreturn]] JINJA2CPP_NOINLINE_INLINE void ThrowArgumentsError(std::string_view error)
 {
-    throw std::runtime_error(std::string(error));
+    throw TemplateRuntimeError(std::string(error));
 }
 } // namespace
 
@@ -1181,7 +1182,7 @@ const Callable* ResolveCallee(InternalValue& fnVal)
         {
             return nullptr;
         }
-        throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(fnVal) + "' object is not callable");
+        throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(fnVal) + "' object is not callable");
     }
     fnVal = std::move(callOperator);
     return GetIf<Callable>(&fnVal);

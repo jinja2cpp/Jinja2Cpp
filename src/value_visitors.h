@@ -1023,7 +1023,7 @@ inline bool MulOverflows(int64_t a, int64_t b, int64_t& result)
 
 [[noreturn]] inline void ThrowIntegerOverflow()
 {
-    throw std::runtime_error("integer result does not fit in 64 bits");
+    throw TemplateRuntimeError("integer result does not fit in 64 bits");
 }
 
 struct UnaryOperation : BaseVisitor<InternalValue>
@@ -1080,7 +1080,7 @@ struct UnaryOperation : BaseVisitor<InternalValue>
     {
         const char* oper = m_oper == jinja2::UnaryExpression::UnaryMinus ? "-" : "+";
         using namespace std::string_literals;
-        throw std::runtime_error("bad operand type for unary "s + oper + ": '" + PythonTypeName(val) + "'");
+        throw TemplateRuntimeError("bad operand type for unary "s + oper + ": '" + PythonTypeName(val) + "'");
     }
 
     UnaryExpression::Operation m_oper;
@@ -1148,13 +1148,13 @@ struct BinaryMathOperation : BaseVisitor<>
         using namespace std::string_literals;
         if (IsOrdering())
         {
-            throw std::runtime_error("'"s + OperatorName() + "' not supported between instances of '" + leftType + "' and '" + rightType + "'");
+            throw TemplateRuntimeError("'"s + OperatorName() + "' not supported between instances of '" + leftType + "' and '" + rightType + "'");
         }
         if (m_oper == BinaryExpression::Plus && leftType == "str")
         {
-            throw std::runtime_error("can only concatenate str (not \"" + rightType + "\") to str");
+            throw TemplateRuntimeError("can only concatenate str (not \"" + rightType + "\") to str");
         }
-        throw std::runtime_error("unsupported operand type(s) for "s + OperatorName() + ": '" + leftType + "' and '" + rightType + "'");
+        throw TemplateRuntimeError("unsupported operand type(s) for "s + OperatorName() + ": '" + leftType + "' and '" + rightType + "'");
     }
 
     // Operands that have no operation in common: unequal, anything else is a TypeError
@@ -1243,14 +1243,14 @@ struct BinaryMathOperation : BaseVisitor<>
         case jinja2::BinaryExpression::Div:
             if (right == 0.0)
             {
-                throw std::runtime_error("float division by zero");
+                throw TemplateRuntimeError("float division by zero");
             }
             return left / right;
         case jinja2::BinaryExpression::DivRemainder:
         {
             if (right == 0.0)
             {
-                throw std::runtime_error("float modulo by zero");
+                throw TemplateRuntimeError("float modulo by zero");
             }
             double mod = 0;
             FloatDivMod(left, right, mod);
@@ -1260,7 +1260,7 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             if (right == 0.0)
             {
-                throw std::runtime_error("float floor division by zero");
+                throw TemplateRuntimeError("float floor division by zero");
             }
             double mod = 0;
             return FloatDivMod(left, right, mod);
@@ -1269,12 +1269,12 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             if (left == 0.0 && right < 0)
             {
-                throw std::runtime_error("0.0 cannot be raised to a negative power");
+                throw TemplateRuntimeError("0.0 cannot be raised to a negative power");
             }
             const double result = std::pow(left, right);
             if (std::isinf(result) && std::isfinite(left) && std::isfinite(right))
             {
-                throw std::runtime_error("(34, 'Numerical result out of range')");
+                throw TemplateRuntimeError("(34, 'Numerical result out of range')");
             }
             return result;
         }
@@ -1332,7 +1332,7 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             if (base == 0)
             {
-                throw std::runtime_error("0.0 cannot be raised to a negative power");
+                throw TemplateRuntimeError("0.0 cannot be raised to a negative power");
             }
             return std::pow(static_cast<double>(base), static_cast<double>(exp));
         }
@@ -1359,7 +1359,7 @@ struct BinaryMathOperation : BaseVisitor<>
     {
         if (right == 0)
         {
-            throw std::runtime_error("integer division or modulo by zero");
+            throw TemplateRuntimeError("integer division or modulo by zero");
         }
         if (right == -1 && left == std::numeric_limits<int64_t>::min())
         {
@@ -1378,7 +1378,7 @@ struct BinaryMathOperation : BaseVisitor<>
     {
         if (right == 0)
         {
-            throw std::runtime_error("integer modulo by zero");
+            throw TemplateRuntimeError("integer modulo by zero");
         }
         if (right == -1)
         {
@@ -1428,7 +1428,7 @@ struct BinaryMathOperation : BaseVisitor<>
         case jinja2::BinaryExpression::Div:
             if (right == 0)
             {
-                throw std::runtime_error("division by zero");
+                throw TemplateRuntimeError("division by zero");
             }
             return static_cast<double>(left) / static_cast<double>(right);
         case jinja2::BinaryExpression::LogicalEq:
@@ -1647,7 +1647,7 @@ struct BinaryMathOperation : BaseVisitor<>
             if (m_oper == jinja2::BinaryExpression::Plus)
             {
                 using namespace std::string_literals;
-                throw std::runtime_error("can only concatenate "s + PythonTypeName(left) + " (not \"" + PythonTypeName(right) + "\") to " + PythonTypeName(left));
+                throw TemplateRuntimeError("can only concatenate "s + PythonTypeName(left) + " (not \"" + PythonTypeName(right) + "\") to " + PythonTypeName(left));
             }
             return Mismatch(left, right);
         }

@@ -1,3 +1,4 @@
+#include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "filters.h"
 #include "function_base.h"
@@ -319,7 +320,7 @@ private:
     [[noreturn]] void Fail() const
     {
         m_context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
-        throw std::runtime_error("tojson(): value is not JSON serializable");
+        throw TemplateRuntimeError("tojson(): value is not JSON serializable");
     }
 
     void NewLine(size_t level)
@@ -467,7 +468,7 @@ private:
         if (const auto* info = GetUndefinedInfo(value))
         {
             // json.dumps knows no Undefined; a plain undefined (a host's null) stays null
-            throw std::runtime_error(std::string("Object of type ") + UndefinedClassName(*info) + " is not JSON serializable");
+            throw TemplateRuntimeError(std::string("Object of type ") + UndefinedClassName(*info) + " is not JSON serializable");
         }
         if (value.IsNone() || value.IsUndefined())
         {
@@ -503,7 +504,7 @@ private:
             if (const char* objectClass = map->GetObjectClass())
             {
                 // namespace(), cycler() and joiner() are objects, which json.dumps rejects
-                throw std::runtime_error("Object of type "s + objectClass + " is not JSON serializable");
+                throw TemplateRuntimeError("Object of type "s + objectClass + " is not JSON serializable");
             }
             // sort_keys: Python orders str keys by code point, which is UTF-8 byte order
             auto entries = map->GetEntries();
@@ -559,7 +560,7 @@ private:
         }
         if (leftString || rightString || left.IsNone() || right.IsNone())
         {
-            throw std::runtime_error("'<' not supported between instances of '"s + Apply<visitors::PythonTypeNameGetter>(left) + "' and '" + Apply<visitors::PythonTypeNameGetter>(right) + "'");
+            throw TemplateRuntimeError("'<' not supported between instances of '"s + Apply<visitors::PythonTypeNameGetter>(left) + "' and '" + Apply<visitors::PythonTypeNameGetter>(right) + "'");
         }
         return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
     }
@@ -595,7 +596,7 @@ private:
             }
             else
             {
-                throw std::runtime_error("keys must be str, int, float, bool or None, not "s + Apply<visitors::PythonTypeNameGetter>(key));
+                throw TemplateRuntimeError("keys must be str, int, float, bool or None, not "s + Apply<visitors::PythonTypeNameGetter>(key));
             }
             order.emplace_back(std::move(text), idx);
         }
@@ -636,7 +637,7 @@ private:
     [[noreturn]] void Fail() const
     {
         m_context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
-        throw std::runtime_error("toyaml(): value is not YAML serializable");
+        throw TemplateRuntimeError("toyaml(): value is not YAML serializable");
     }
 
     // The characters of a UTF-8 string as code points, each with its bytes; continuation bytes
@@ -831,7 +832,7 @@ private:
         CheckStack();
         if (const auto* info = GetUndefinedInfo(value))
         {
-            throw std::runtime_error(std::string("Object of type ") + UndefinedClassName(*info) + " is not YAML serializable");
+            throw TemplateRuntimeError(std::string("Object of type ") + UndefinedClassName(*info) + " is not YAML serializable");
         }
         auto scalar = [this, indent, pos] { StartNode(pos, indent, false); };
         if (value.IsNone() || value.IsUndefined())
@@ -908,7 +909,7 @@ private:
         if (const char* objectClass = map.GetObjectClass())
         {
             // namespace(), cycler() and joiner() are objects, not data
-            throw std::runtime_error("Object of type "s + objectClass + " is not YAML serializable");
+            throw TemplateRuntimeError("Object of type "s + objectClass + " is not YAML serializable");
         }
         // A key that is not a string is written as its str() spelling (DictKeyText), as at the
         // public boundary (docs/tasks/0036)
@@ -998,7 +999,7 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     }
     else if (!IsEmpty(indentVal))
     {
-        throw std::runtime_error("can't multiply sequence by non-int of type '"s + Apply<visitors::PythonTypeNameGetter>(indentVal) + "'");
+        throw TemplateRuntimeError("can't multiply sequence by non-int of type '"s + Apply<visitors::PythonTypeNameGetter>(indentVal) + "'");
     }
 
     InternalValue resultVal = PythonJsonWriter(context, std::move(indent)).Write(value);
@@ -1037,11 +1038,11 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
     // str() of an undefined is empty, and Python's '' % args has an argument left over
     if (GetUndefinedInfo(baseVal) && !m_params.posParams.empty())
     {
-        throw std::runtime_error("not all arguments converted during string formatting");
+        throw TemplateRuntimeError("not all arguments converted during string formatting");
     }
     if (!m_params.posParams.empty() && !m_params.kwParams.empty())
     {
-        throw std::runtime_error("format(): can't handle positional and keyword arguments at the same time");
+        throw TemplateRuntimeError("format(): can't handle positional and keyword arguments at the same time");
     }
     auto params = helpers::EvaluateCallParams(m_params, context);
     bool markup = baseVal.IsMarkup();
@@ -1096,13 +1097,13 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
         // Jinja2 searches the key for whitespace with a regular expression, which only takes text
         if (!IsStringValue(keyValue))
         {
-            throw std::runtime_error("expected string or bytes-like object, got '"s + Apply<visitors::PythonTypeNameGetter>(keyValue) + "'");
+            throw TemplateRuntimeError("expected string or bytes-like object, got '"s + Apply<visitors::PythonTypeNameGetter>(keyValue) + "'");
         }
         const auto key = AsString(keyValue);
         // Jinja2 rejects keys with whitespace, "/", ">" or "="
         if (std::any_of(key.begin(), key.end(), [](char ch) { return std::strchr(" \t\n\r\f\v/>=", ch) != nullptr && ch != 0; }))
         {
-            throw std::runtime_error("xmlattr(): invalid character in attribute name: '" + key + "'");
+            throw TemplateRuntimeError("xmlattr(): invalid character in attribute name: '" + key + "'");
         }
         auto text = AsString(InternalValue(context.GetRendererCallback()->GetAsTargetString(value)));
         result += (result.empty() ? "" : " ") + escape(key) + "=\"" + (value.IsMarkup() ? text : escape(text)) + "\"";
