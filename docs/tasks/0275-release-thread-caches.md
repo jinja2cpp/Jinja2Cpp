@@ -4,6 +4,7 @@ priority: medium
 area: api
 depends: [0252]
 touches: [include/jinja2cpp/template.h, src/template.cpp, src/render_workspace.h, src/render_workspace.cpp, src/markup.h, src/internal_value.cpp, test/template_api_test.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/616
 ---
 # `ReleaseThreadCaches()`
 
