@@ -31,6 +31,7 @@ struct IMapItemAccessor;
 class IFilesystemHandler;
 class MemoryFileSystem;
 class RealFileSystem;
+class ConfinedFileSystem;
 struct Settings;
 struct SourceLocation;
 

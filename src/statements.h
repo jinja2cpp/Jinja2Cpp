@@ -158,7 +158,7 @@ public:
 
     // The loop(...) callable of a recursive loop at depth0 `level`, whose outermost level
     // runs at `site`
-    static Callable MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site, bool autoescape);
+    static Callable MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site, bool autoescape, bool isVolatile);
 
     [[nodiscard]] bool IsRecursive() const { return m_isRecursive; }
     [[nodiscard]] AssignTarget GetTarget() const { return m_target; }
@@ -932,10 +932,14 @@ public:
         refs(m_body);
     }
 
-    explicit AutoescapeStatement(NodeRef<Expression> expr)
+    // isVolatile: the value is not constant, as Jinja2 decides it at compile time; the
+    // code inside is volatile (RenderContext::IsVolatileAutoescape)
+    AutoescapeStatement(NodeRef<Expression> expr, bool isVolatile)
         : m_expr(std::move(expr))
+        , m_isVolatile(isVolatile)
     {
     }
+    [[nodiscard]] bool IsVolatile() const { return m_isVolatile; }
 
     void SetBody(NodeRef<IRendererBase> renderer) { m_body = renderer; }
 
@@ -944,6 +948,7 @@ public:
 private:
     NodeRef<Expression> m_expr;
     NodeRef<IRendererBase> m_body;
+    bool m_isVolatile;
 };
 
 // The names a frame stores later, read before that from a frame inside it: bound as

@@ -189,13 +189,16 @@ struct Settings
         //! templates (Python fails at about 250 macro calls). The depth limits stop at the thread's stack too; 0
         //! leaves only that check
         std::uint32_t maxRenderDepth = 256;
-        //! Nesting of an expression: brackets, calls, subscripts, filter arguments (Python fails at about 70)
-        std::uint32_t maxExpressionDepth = 64;
-        //! Operators chained along one path of an expression (a + b + c, x|f|g, a.b.c; Python fails at 300-500)
-        std::uint32_t maxExpressionOperators = 400;
-        //! Statement blocks open at once, the template's top level included, `elif` and `else` not (Python fails at
-        //! about 100)
-        std::uint32_t maxBlockNesting = 128;
+        //! Nesting of an expression: brackets, calls, subscripts, filter arguments. The default stops where Python
+        //! Jinja2 does (70 brackets)
+        std::uint32_t maxExpressionDepth = 70;
+        //! Operators chained along one path of an expression (a + b + c, x|f|g, a.b.c). The default stops where
+        //! Python Jinja2 does (492 unary operators or 492 `+`)
+        std::uint32_t maxExpressionOperators = 491;
+        //! Statement blocks open at once, the template's top level included, `elif` and `else` not. The default
+        //! stops where Python Jinja2 does (248 nested `block`, `with`, `filter` tags); CPython's compiler stops
+        //! nested `if` and `for` earlier, which Jinja2C++ does not copy
+        std::uint32_t maxBlockNesting = 248;
     };
     //! Bounds on Load and Render; none but the depth limits by default
     Limits limits;

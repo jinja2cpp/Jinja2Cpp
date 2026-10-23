@@ -202,6 +202,39 @@ INSTANTIATE_TEST_SUITE_P(Limits, LimitsTest, ::testing::ValuesIn(Cases()), [](co
 
 using LimitsEnvTest = TemplateEnvFixture;
 
+// Unlimited operators (maxExpressionOperators = 0): checking whether a long chain folds, or
+// giving a constant to its first filter, must not overflow the stack while the template loads
+// (docs/tasks/0216). The parser builds these chains without recursing; whether the evaluator
+// then runs out of stack depends on the platform's stack and frames, so either outcome passes
+TEST_F(LimitsEnvTest, LongChainsWithUnlimitedOperators)
+{
+    Settings settings;
+    settings.limits.maxExpressionOperators = 0;
+    m_env.SetSettings(settings);
+#ifdef JINJA2CPP_TEST_SANITIZED
+    // LLVM 18's ThreadSanitizer corrupts its trace on a history this long (docs/tasks/0093)
+    constexpr unsigned chain = 20000;
+#else
+    constexpr unsigned chain = 200000;
+#endif
+    const std::string sources[] = {
+        "{% autoescape 1" + Repeat(" + 1", chain) + " %}x{% endautoescape %}",
+        "{% autoescape x %}{{ 1" + Repeat(" + 1", chain) + " }}{% endautoescape %}",
+        "{% autoescape 'a'" + Repeat("[:]", chain) + " %}x{% endautoescape %}",
+        "{% autoescape x %}{{ ['a']" + Repeat("[0][:]", chain / 2) + " }}{% endautoescape %}",
+        "{{ 'a'" + Repeat("|upper", chain) + " }}",
+        "{% autoescape x %}{{ 'a'" + Repeat("|upper", chain) + " }}{% endautoescape %}",
+    };
+    for (const auto& source : sources)
+    {
+        bool failedAtLoad = false;
+        if (const auto error = LoadAndRender(m_env, source, failedAtLoad))
+        {
+            EXPECT_EQ(ErrorCode::RecursionLimitExceeded, error->GetCode()) << source.substr(0, 40) << ": " << ErrorToString(*error);
+        }
+    }
+}
+
 TEST_F(LimitsEnvTest, ErrorMessage)
 {
     Settings settings;
@@ -211,7 +244,7 @@ TEST_F(LimitsEnvTest, ErrorMessage)
     ASSERT_TRUE(tpl.Load("{{ range(11)|list }}").has_value());
     auto result = tpl.RenderAsString({});
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ("noname.j2tpl:1:1: error: Resource limit exceeded: range() of 11 items is longer than 10\n", ErrorToString(result.error()));
+    EXPECT_EQ("noname.j2tpl:1:1: error: Resource limit exceeded: range() of 11 items is longer than 10\n{{ range(11)|list }}\n^-------", ErrorToString(result.error()));
 
     TemplateW wide(&m_env);
     ASSERT_TRUE(wide.Load(L"{{ range(11)|list }}").has_value());
@@ -278,7 +311,7 @@ TEST_F(LimitsEnvTest, FromStringTemplateSize)
 
 TEST_F(LimitsEnvTest, UndeclaredVariablesUseTheTemplatesLimits)
 {
-    // Deeper than the default maxExpressionDepth (64), allowed by the template's settings
+    // Deeper than the default maxExpressionDepth (70), allowed by the template's settings
     Settings settings;
     settings.limits.maxExpressionDepth = 200;
     m_env.SetSettings(settings);

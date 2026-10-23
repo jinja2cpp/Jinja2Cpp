@@ -127,4 +127,8 @@ CASES = [
     ('eq_dict_non_string_keys', "{{ 'T' if {1: 'a'} == {1.0: 'a'} else 'F' }}|{{ 'T' if {1: 'a'} == {'1': 'a'} else 'F' }}|{{ 'T' if {(1, 2): 3} == {(1.0, 2): 3} else 'F' }}"),
     ('in_dict_object_key', "{{ 'T' if nothing in {'': 1} else 'F' }}|{{ 'T' if namespace() in {'': 1} else 'F' }}"),
     ('not_in_dict_non_string_key', "{{ 'T' if 2 not in {1: 'a'} else 'F' }}|{{ 'T' if True in {1: 'a'} else 'F' }}"),
+    # task 0270: integers beyond int64 compare exactly and divide as floats
+    ('int_big_compare_float', "{{ 'T' if 9223372036854775808 == 9223372036854775808.0 else 'F' }}|{{ 'T' if 9223372036854775809 > 9223372036854775808.0 else 'F' }}|{{ 'T' if 18446744073709551615 < 1e30 else 'F' }}|{{ 'T' if -18446744073709551615 < -1 else 'F' }}|{{ 'T' if 12345678901234567890 == 12345678901234567890 else 'F' }}"),
+    ('int_big_true_div', "{{ 18446744073709551615 / 2 }}|{{ 18446744073709551615 + 0.5 }}|{{ 1.5 - 18446744073709551615 }}"),
+    ('int_big_repeat', "{{ 'a' * 18446744073709551615 }}"),
 ]

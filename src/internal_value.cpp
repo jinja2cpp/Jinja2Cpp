@@ -1,13 +1,17 @@
 #include "internal_value.h"
 
+#include "big_int.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
 #include "recursion_guard.h"
+#include "render_failure.h"
 #include "template_dict.h"
 #include "undefined.h"
 #include "value_visitors.h"
 
+#include <jinja2cpp/exception.h>
+#include <jinja2cpp/big_int.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
@@ -20,9 +24,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <functional>
 #include <limits>
 #include <memory>
+#include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -465,6 +471,22 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     InternalValue operator()(const MapRef& values, double key) const { return FindKey(values, InternalValue(key)); }
     InternalValue operator()(const MapRef& values, NoneValue /*key*/) const { return FindKey(values, InternalValue(NoneValue{})); }
     InternalValue operator()(const MapRef& values, const KeyValuePair& key) const { return FindKey(values, InternalValue(key)); }
+    // An integer outside int64 indexes no sequence (Python's IndexError, which reads as
+    // undefined) and is a key like any int (docs/tasks/0270)
+    InternalValue operator()(const MapRef& values, const BigIntView& key) const { return FindKey(values, MakeBigIntValue(key.decimal)); }
+    template<typename T>
+    InternalValue operator()(const T& /*values*/, const BigIntView& /*index*/) const
+    {
+        return InternalValue();
+    }
+    template<typename T>
+    InternalValue operator()(const BigIntView& /*values*/, const T& /*index*/) const
+    {
+        return InternalValue();
+    }
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
+    InternalValue operator()(const BigIntView& /*values*/, const BigIntView& /*index*/) const { return InternalValue(); }
+
     InternalValue operator()(const MapRef& values, const ListRef& key) const
     {
         if (!key.IsTuple() && !key.GetRangeInfo())
@@ -708,6 +730,10 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         return list;
     }
 
+    // An int does not slice
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
+    InternalValue operator()(const BigIntView& /*val*/) const { return InternalValue(); }
+
     // A dictsort pair slices as the 2-tuple (key, value)
     InternalValue operator()(const KeyValuePair& pair) const
     {
@@ -796,6 +822,11 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         {
             index = *boolVal ? 1 : 0;
         }
+        else if (const auto big = AsBigInt(val))
+        {
+            // Beyond any length: clipped by its sign, as Python clips it to the ssize_t range
+            index = big->Sign() < 0 ? std::numeric_limits<int64_t>::min() : std::numeric_limits<int64_t>::max();
+        }
         else
         {
             return false;
@@ -837,12 +868,12 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         std::optional<int64_t> step;
         if (!GetIndex(m_start, start) || !GetIndex(m_stop, stop) || !GetIndex(m_step, step))
         {
-            throw std::runtime_error("slice indices must be integers or None or have an __index__ method");
+            throw TemplateRuntimeError("slice indices must be integers or None or have an __index__ method");
         }
         indices.step = step.value_or(1);
         if (indices.step == 0)
         {
-            throw std::runtime_error("slice step cannot be zero");
+            throw TemplateRuntimeError("slice step cannot be zero");
         }
         // Any step at least as long as the sequence takes one item; this keeps -step defined
         if (indices.step < -std::numeric_limits<int64_t>::max())
@@ -887,6 +918,8 @@ struct StringGetter : public visitors::BaseVisitor<std::string>
     std::string operator()(const std::string_view& str) const { return std::string(str.begin(), str.end()); }
     std::string operator()(const std::wstring& str) const { return ConvertString<std::string>(str); }
     std::string operator()(const std::wstring_view& str) const { return ConvertString<std::string>(str); }
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
+    std::string operator()(const BigIntView& /*val*/) const { return {}; }
 };
 
 std::string AsString(const InternalValue& val)
@@ -913,6 +946,9 @@ struct ListConverter : public visitors::BaseVisitor<std::optional<ListAdapter>>
     {
         return ListAdapter::CreateAdapter(InternalValueList{ InternalValue(pair.key), pair.value });
     }
+    // An int is not iterable
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
+    result_t operator()(const BigIntView& /*val*/) const { return result_t(); }
     // Iterating undefined yields nothing, as in Python; StrictUndefined refuses
     result_t operator()(const UndefinedValue& val) const
     {
@@ -1417,7 +1453,7 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
             {
                 if (!fn)
                 {
-                    throw std::runtime_error("List enumerator couldn't be created without element accessor function!");
+                    throw TemplateRuntimeError("List enumerator couldn't be created without element accessor function!");
                 }
             }
 
@@ -1575,7 +1611,7 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
             // Python raises OverflowError for len() of such a range; lengths here are int64_t
             if (m_size > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
             {
-                throw std::runtime_error("range() has more items than fit in a 64-bit integer");
+                throw TemplateRuntimeError("range() has more items than fit in a 64-bit integer");
             }
         }
 
@@ -2256,6 +2292,17 @@ struct OutputValueConvertor
     result_t operator()(const Callable&) const { return result_t(); }
     result_t operator()(const UserCallable&) const { return result_t(); }
     result_t operator()(const std::shared_ptr<IRendererBase>&) const { return result_t(); }
+    // A big integer leaves a render as a BigInt, never as the value's own object (docs/tasks/0270)
+    result_t operator()(const BigIntView& val) const
+    {
+        BigInt result;
+        // The text is canonical, so TryParse fails only when memory runs out, which it reports as false
+        if (!BigInt::TryParse(val.decimal, result))
+        {
+            throw std::bad_alloc();
+        }
+        return result_t(std::move(result));
+    }
 
     template<typename T>
     result_t operator()(const RecWrapper<T>& val) const
@@ -2411,9 +2458,67 @@ struct UserCallableBody
     InternalValue operator()(const CallParams& params, RenderContext& context) const
     {
         auto ucParams = PrepareUserCallableParams(params, context, argsInfo);
-        auto result = Value2IntValue(val.callable(ucParams));
+        auto result = Value2IntValue(CallHost(ucParams));
         AfterHostCall();
         return result;
+    }
+
+    // The host's call: what it throws is a HostCallableFailure, unless the engine raised it (a
+    // callable may call back into a template or a macro, which keeps its own error)
+    [[nodiscard]] Value CallHost(const UserCallableParams& ucParams) const
+    {
+        try
+        {
+            return val.callable(ucParams);
+        }
+        catch (const std::bad_alloc&)
+        {
+            throw;
+        }
+        catch (const jinja2::detail::RenderFailure&)
+        {
+            throw;
+        }
+        catch (const jinja2::detail::HostCallableFailure&)
+        {
+            throw;
+        }
+        catch (const jinja2::Exception&)
+        {
+            throw;
+        }
+        catch (const UndefinedError&)
+        {
+            throw;
+        }
+        catch (const RecursionLimitError&)
+        {
+            throw;
+        }
+        catch (const ResourceLimitError&)
+        {
+            throw;
+        }
+        catch (const TemplateRuntimeError&)
+        {
+            throw;
+        }
+        catch (const IntegerOutOfRangeError&)
+        {
+            throw;
+        }
+        catch (const ErrorInfo&)
+        {
+            throw;
+        }
+        catch (const ErrorInfoW&)
+        {
+            throw;
+        }
+        catch (...)
+        {
+            throw jinja2::detail::HostCallableFailure(std::current_exception());
+        }
     }
 };
 } // namespace

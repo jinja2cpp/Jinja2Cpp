@@ -12,9 +12,11 @@
 #include <jinja2cpp/value.h>
 
 #include <cstdint>
+#include <exception>
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -533,6 +535,38 @@ TEST(EnvCallablesTest, Finalize)
     Template tpl(&env);
     ASSERT_TRUE(tpl.Load("{{ none }}{{ 1 }}{{ missing }}").has_value());
     EXPECT_EQ("-1-", tpl.RenderAsString({}).value());
+}
+
+// What a callable throws reaches the caller as it was thrown, under UserCallableException (docs/tasks/0254)
+TEST(EnvCallablesTest, ThrownExceptionIsKept)
+{
+    struct HostFailure
+    {
+        int code;
+    };
+    TemplateEnv env;
+    env.AddFilter("fail", MakeCallable([](const std::string&) -> Value { throw HostFailure{ 7 }; }, ArgInfo{ "s" }));
+    env.AddGlobal("raise", MakeCallable([]() -> Value { throw std::out_of_range("raised"); }));
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{{ 'x' | fail }}").has_value());
+    auto result = tpl.RenderAsString({});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UserCallableException, result.error().GetCode());
+    try
+    {
+        std::rethrow_exception(result.error().GetException());
+    }
+    catch (const HostFailure& failure)
+    {
+        EXPECT_EQ(7, failure.code);
+    }
+
+    ASSERT_TRUE(tpl.Load("{{ raise() }}").has_value());
+    result = tpl.RenderAsString({});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UserCallableException, result.error().GetCode());
+    EXPECT_EQ("raised", result.error().GetExtraParams().at(0).AsString());
+    EXPECT_THROW(std::rethrow_exception(result.error().GetException()), std::out_of_range);
 }
 
 TEST(EnvCallablesTest, KeptFilteredLoop)

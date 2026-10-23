@@ -221,8 +221,8 @@ TEST(BoostJsonAccessorTest, FindAndContains)
     EXPECT_TRUE(map.GetAccessor()->GetValueByName("absent").IsNone());
 }
 
-// A JSON unsigned number above INT64_MAX is a BigInt instead of wrapping (task 0172, 0269); until templates
-// hold big integers (task 0270) the render that reads it fails
+// A JSON unsigned number above INT64_MAX is a BigInt instead of wrapping (task 0172, 0269), which templates
+// print exactly (task 0270)
 TEST(BoostJsonUnsignedTest, UnsignedAboveInt64MaxIsBigInt)
 {
     jinja2::Template tpl;
@@ -231,9 +231,5 @@ TEST(BoostJsonUnsignedTest, UnsignedAboveInt64MaxIsBigInt)
     const auto big = params["json"].ToGenericMap().GetValueByName("big");
     ASSERT_TRUE(big.IsBigInt());
     EXPECT_EQ("18446744073709551615", big.AsBigInt().ToString());
-    const auto result = tpl.RenderAsString(params);
-    ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(jinja2::ErrorCode::IntegerOutOfRange, result.error().GetCode());
-    ASSERT_TRUE(tpl.Load("{{ json.max }}"));
-    EXPECT_EQ("9223372036854775807", tpl.RenderAsString(params).value());
+    EXPECT_EQ("9223372036854775807|18446744073709551615", tpl.RenderAsString(params).value());
 }

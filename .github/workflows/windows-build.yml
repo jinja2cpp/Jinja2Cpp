@@ -83,6 +83,9 @@ jobs:
       shell: cmd
       env:
         INPUT_BUILD_CONFIG: ${{ matrix.build-config }}
+        # Only failures in the log, as in linux-build.yml: under -V the output of the later
+        # tests pushed a failing test of jinja2cpp_tests out of the log tail
+        GTEST_BRIEF: 1
       run: |
         cd .build
-        ctest -C %INPUT_BUILD_CONFIG% -V
+        ctest -C %INPUT_BUILD_CONFIG% --output-on-failure

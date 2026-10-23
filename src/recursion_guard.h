@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_RECURSION_GUARD_H
 #define JINJA2CPP_SRC_RECURSION_GUARD_H
 
+#include "engine_errors.h"
 
 #include <jinja2cpp/template_env.h>
 
@@ -66,9 +67,9 @@ bool StackNearlyExhaustedSlow(std::uintptr_t frame);
 // rather than in each parser, which lives for one tag
 struct ParseLimits
 {
-    unsigned maxExpressionDepth = 64;
-    unsigned maxExpressionOperators = 400;
-    unsigned maxBlockNesting = 128;
+    unsigned maxExpressionDepth = 70;
+    unsigned maxExpressionOperators = 491;
+    unsigned maxBlockNesting = 248;
 };
 static_assert(ParseLimits{}.maxExpressionDepth == Settings::Limits{}.maxExpressionDepth
               && ParseLimits{}.maxExpressionOperators == Settings::Limits{}.maxExpressionOperators
@@ -330,13 +331,6 @@ private:
     unsigned& m_counter;
     unsigned m_base;
     unsigned m_left = 0;
-};
-
-// Python's RecursionError. Template rendering reports it as ErrorCode::RecursionLimitExceeded
-class RecursionLimitError : public std::exception
-{
-public:
-    [[nodiscard]] const char* what() const noexcept override { return "maximum recursion depth exceeded"; }
 };
 
 // Throws RecursionLimitError when the thread's stack is nearly used up. The renderer's and

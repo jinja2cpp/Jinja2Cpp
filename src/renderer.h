@@ -8,6 +8,7 @@
 #include "out_stream.h"
 #include "recursion_guard.h"
 #include "render_context.h"
+#include "render_failure.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -45,7 +46,8 @@ protected:
 using RendererPtr = std::shared_ptr<IRendererBase>;
 
 // A body: the arena keeps its children right after the node (NodeArena::MakeWithItems), so
-// rendering it reads no separate list
+// rendering it reads no separate list, and after them where each child's tag starts in the
+// template's source, which only an error reads
 class ComposedRenderer final : public IRendererBase
 {
 public:
@@ -67,13 +69,35 @@ public:
         // Every statement body: nested blocks recurse through here
         CheckStack();
         const auto& nodes = values.Nodes();
-        for (auto r : Children())
+        const auto children = Children();
+        const auto* const end = children.data() + children.size();
+        const auto* child = children.data();
+        // An error gets the location of the statement it came out of here, unless a body in
+        // that statement gave it one (docs/api-2.0.md, 2.1 rule 8). Table-based unwinding: the
+        // try costs nothing until something throws, and the handler needs nothing the loop
+        // does not keep anyway
+        bool failed = false;
+        try
         {
-            nodes[r].Render(os, values);
-            if (values.HasLoopControl())
+            for (; child != end; ++child)
             {
-                return;
+                nodes[*child].Render(os, values);
+                if (values.HasLoopControl())
+                {
+                    return;
+                }
             }
+        }
+        catch (...)
+        {
+            // Thrown on once the handler is left (ThrowRenderFailure). A flag, not the
+            // exception_ptr itself: a local that needs destroying would cost every body
+            detail::KeepRenderFailure();
+            failed = true;
+        }
+        if (failed)
+        {
+            detail::ThrowRenderFailure(values.Nodes(), child, OffsetOf(child, end));
         }
     }
 
@@ -84,6 +108,14 @@ public:
     }
 
 private:
+    // Where the tag of `child` starts in the source: the offsets follow the children, last
+    // child first, so that the end of the children finds them
+    static std::uint32_t OffsetOf(const Child* child, const Child* end)
+    {
+        const auto* offsets = std::launder(reinterpret_cast<const std::uint32_t*>(end));
+        return offsets[end - child - 1];
+    }
+
     std::uint32_t m_count;
 };
 
@@ -124,7 +156,7 @@ class ExpressionRenderer : public IRendererBase
 {
 public:
     static constexpr NodeKind Kind = NodeKind::ExprRenderer;
-    static bool MatchesKind(NodeKind kind) { return kind == NodeKind::ExprRenderer || kind == NodeKind::FinalizedExprRenderer; }
+    static bool MatchesKind(NodeKind kind) { return kind == NodeKind::ExprRenderer || kind == NodeKind::FinalizedExprRenderer || kind == NodeKind::StaticExprRenderer; }
     void VisitRefs(detail::RefChecker& refs) const
     {
         refs(m_expression);
@@ -174,12 +206,35 @@ private:
     InternalValue m_finalize;
 };
 
-// finalize: Settings::finalize as a callable, or undefined
-inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<Expression> expr, const InternalValue& finalize)
+// `{{ ... }}` of a value Jinja2 folds, in volatile code (RenderContext::IsVolatileAutoescape):
+// Jinja2 escapes the folded value by the setting the code is compiled under, not by the
+// runtime one the rest of the output follows (docs/tasks/0216)
+class StaticOutputRenderer final : public ExpressionRenderer
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::StaticExprRenderer;
+    static bool MatchesKind(NodeKind kind) { return kind == Kind; }
+
+    using ExpressionRenderer::ExpressionRenderer;
+
+    void Render(OutStream& os, RenderContext& values) override
+    {
+        const OutputAutoescapeGuard autoescapeGuard(values, values.IsStaticAutoescape());
+        values.Nodes()[m_expression].Render(os, values);
+    }
+};
+
+// finalize: Settings::finalize as a callable, or undefined. isStatic: the value is folded in
+// volatile code (StaticOutputRenderer)
+inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<Expression> expr, const InternalValue& finalize, bool isStatic = false)
 {
     if (GetIf<Callable>(&finalize))
     {
         return nodes.Make<FinalizedExpressionRenderer>(expr, finalize);
+    }
+    if (isStatic)
+    {
+        return nodes.Make<StaticOutputRenderer>(expr);
     }
     return nodes.Make<ExpressionRenderer>(expr);
 }

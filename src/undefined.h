@@ -33,20 +33,6 @@ struct UndefinedInfo final : ValueObject
     std::string hint;
 };
 
-// Python's UndefinedError. Template rendering reports it as ErrorCode::UndefinedError
-class UndefinedError : public std::exception
-{
-public:
-    explicit UndefinedError(std::string message)
-        : m_message(std::move(message))
-    {
-    }
-    [[nodiscard]] const char* what() const noexcept override { return m_message.c_str(); }
-
-private:
-    std::string m_message;
-};
-
 // The ways a template uses a value that an undefined value may refuse
 enum class UndefinedUse
 {

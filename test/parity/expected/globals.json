@@ -741,6 +741,14 @@
    "env": {},
    "templates": {},
    "output": "[][1]"
+  },
+  {
+   "id": "globals.range_big_bounds",
+   "template": "{{ range(18446744073709551615) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "range(0, 18446744073709551615)"
   }
  ]
 }
