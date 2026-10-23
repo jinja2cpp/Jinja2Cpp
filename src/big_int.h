@@ -3,6 +3,8 @@
 
 #include "internal_value.h"
 
+#include <jinja2cpp/config.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <string>
