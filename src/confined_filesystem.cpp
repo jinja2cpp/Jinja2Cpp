@@ -219,8 +219,11 @@ bool IsUnderRoot(const std::wstring& rootFinal, const std::wstring& fileFinal)
     {
         return false;
     }
+    // Exact, not case-folded: a normalized final path spells every component as it is stored, so the root's
+    // directories compare equal to themselves, while a sibling that differs only in case (a case-sensitive
+    // directory may hold `Root` and `root`) does not
     const int length = static_cast<int>(prefix.size());
-    return ::CompareStringOrdinal(fileFinal.data(), length, prefix.data(), length, TRUE) == CSTR_EQUAL;
+    return ::CompareStringOrdinal(fileFinal.data(), length, prefix.data(), length, FALSE) == CSTR_EQUAL;
 }
 
 // The root is opened and resolved on every call (it is trusted, links in it are followed). The file is opened
@@ -329,25 +332,72 @@ enum class OpenStep
     Opened     // `file` is the directory entered, or for the last piece the regular file
 };
 
-// One step of a walk: the last piece is opened as a file, an earlier one as a directory. Links are not followed
+// Whether st describes a regular file, and when `same` is given, the same one
+bool IsRegularFile(const struct stat& st, const struct stat* same)
+{
+    if (!S_ISREG(st.st_mode))
+    {
+        return false;
+    }
+    if (!same)
+    {
+        return true;
+    }
+    return st.st_dev == same->st_dev && st.st_ino == same->st_ino;
+}
+
+// One step of a walk: the last piece is opened as a file, an earlier one as a directory. Links are not followed.
+// A device or FIFO is never opened for reading, as opening one may act (a tape rewinds, a FIFO's writer wakes).
+// On Linux the last piece is pinned with O_PATH, which opens nothing, checked, and only then reopened for reading
+// through /proc/self/fd, so an entry swapped for a FIFO in between cannot be opened. Elsewhere, or without /proc,
+// the entry is checked before the openat and the opened descriptor after it: a swap in between may open a special
+// file, which is then closed unread
 OpenStep OpenPiece(int dirFd, const std::string& name, bool last, NativeFile* file)
 {
-    const int flags = last ? (O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK | O_NOCTTY) : (O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-    struct stat st
+    if (!last)
+    {
+        *file = NativeFile(::openat(dirFd, name.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+        return file->Valid() ? OpenStep::Opened : OpenStep::NotOpened;
+    }
+
+    struct stat pinned
     {
     };
-    // A device or FIFO is not opened at all, as opening one may act (a tape rewinds, a FIFO's writer wakes). The
-    // entry may change before the openat below; the fstat after it is the check that counts
-    if (last && ::fstatat(dirFd, name.c_str(), &st, AT_SYMLINK_NOFOLLOW) == 0 && !S_ISREG(st.st_mode) && !S_ISLNK(st.st_mode))
-    {
-        return OpenStep::Refused;
-    }
-    *file = NativeFile(::openat(dirFd, name.c_str(), flags));
-    if (!file->Valid())
+#ifdef O_PATH
+    const NativeFile path(::openat(dirFd, name.c_str(), O_PATH | O_NOFOLLOW | O_CLOEXEC));
+    if (!path.Valid() || ::fstat(path.Get(), &pinned) != 0)
     {
         return OpenStep::NotOpened;
     }
-    if (last && (::fstat(file->Get(), &st) != 0 || !S_ISREG(st.st_mode)))
+    if (S_ISLNK(pinned.st_mode))
+    {
+        return OpenStep::NotOpened; // the caller reads the link
+    }
+    if (!IsRegularFile(pinned, nullptr))
+    {
+        return OpenStep::Refused;
+    }
+    const std::string procPath = "/proc/self/fd/" + std::to_string(path.Get());
+    *file = NativeFile(::open(procPath.c_str(), O_RDONLY | O_CLOEXEC | O_NOCTTY));
+    if (!file->Valid() && errno == ENOENT)
+#else
+    if (::fstatat(dirFd, name.c_str(), &pinned, AT_SYMLINK_NOFOLLOW) != 0 || S_ISLNK(pinned.st_mode))
+    {
+        return OpenStep::NotOpened;
+    }
+    if (!IsRegularFile(pinned, nullptr))
+    {
+        return OpenStep::Refused;
+    }
+#endif
+    {
+        // No /proc (or no O_PATH): open by name, which the identity check below ties to the entry checked above
+        *file = NativeFile(::openat(dirFd, name.c_str(), O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK | O_NOCTTY));
+    }
+    struct stat st
+    {
+    };
+    if (!file->Valid() || ::fstat(file->Get(), &st) != 0 || !IsRegularFile(st, &pinned))
     {
         return OpenStep::Refused;
     }

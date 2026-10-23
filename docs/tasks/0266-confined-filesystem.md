@@ -42,12 +42,16 @@ unchanged.
 - POSIX: a walk from a descriptor of the root, one `openat(O_NOFOLLOW)` per piece. A link met on
   the way is read with `readlinkat` and its target walked the same way, so a link that stays inside
   the root renders; an absolute or empty target, a `..` climbing above the root or more than 40
-  expansions is not found. The last piece must be a regular file (`fstatat` before the open so a
-  device or FIFO is never opened, `fstat` of the opened descriptor as the check that counts). The
+  expansions is not found. The last piece must be a regular file: on Linux it is pinned with `O_PATH`
+  (which opens nothing), checked, and reopened for reading through `/proc/self/fd`, so a device
+  or FIFO is never opened even if swapped in (Codex P2); elsewhere, or without `/proc`, `fstatat`
+  before the open and an identity check (`st_dev`/`st_ino`) of the opened descriptor after it, so a
+  swap in between can open a special file but never read it. The
   stream reads from that descriptor (own `streambuf`; the wide one decodes UTF-8 chunk by chunk, so
   `maxTemplateSize` still stops the read).
 - Windows (compiled in CI only): the file is opened normally and `GetFinalPathNameByHandleW` of the
-  opened handle must lie under the root's final path (case-insensitive `CompareStringOrdinal`); final
+  opened handle must lie under the root's final path, compared exactly (normalized final paths spell each
+  component as stored, so a case-sensitive sibling `root` of `Root` does not match, Codex P1); final
   paths are long names, so short names need nothing extra, and junctions or links leading outside
   fail the check. A non-disk handle or a directory is not found. `OpenStream`/`OpenWStream` read
   `\r\n` as `\n` like RealFileSystem's text-mode streams; `OpenByteStream` reads raw bytes.
