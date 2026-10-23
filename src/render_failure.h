@@ -5,7 +5,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <exception>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -53,13 +52,15 @@ private:
     std::variant<ErrorInfo, ErrorInfoW> m_error;
 };
 
-// Throws the RenderFailure of `failure`, which a statement of a body in `nodes` threw: the
-// statement's tag starts at `offset` in its template's source. `child` is the body's link to the
-// statement, which tells whether `nodes` is still the tree the body is in. A RenderFailure and
-// std::bad_alloc go on unchanged. Call it outside any catch handler: MSVC runs a handler on top
-// of the stack of the throw, so a throw from the handlers of nested bodies would take stack for
-// every level, and a render the stack guard stopped has none left
-[[noreturn]] void ThrowRenderFailure(std::exception_ptr failure, const ArenaView& nodes, const void* child, std::uint32_t offset);
+// Keeps the exception being handled for ThrowRenderFailure. Call it from a catch handler
+void KeepRenderFailure() noexcept;
+// Throws the RenderFailure of the exception KeepRenderFailure kept, which a statement of a body
+// in `nodes` threw: the statement's tag starts at `offset` in its template's source. `child` is
+// the body's link to the statement, which tells whether `nodes` is still the tree the body is
+// in. A RenderFailure and std::bad_alloc go on unchanged. Call it outside any catch handler:
+// MSVC runs a handler on top of the stack of the throw, so a throw from the handlers of nested
+// bodies would take stack for every level, and a render the stack guard stopped has none left
+[[noreturn]] void ThrowRenderFailure(const ArenaView& nodes, const void* child, std::uint32_t offset);
 
 // The line of a source with a marker under the 0-based column `col`, cut to a window around the
 // column when the line is long (a minified template)

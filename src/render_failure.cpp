@@ -149,8 +149,21 @@ RenderFailure Locate(const TemplateOrigin* origin, std::uint32_t offset)
 }
 } // namespace
 
-void ThrowRenderFailure(std::exception_ptr failure, const ArenaView& nodes, const void* child, std::uint32_t offset)
+namespace
 {
+// The failure of the innermost body, between its handler and its throw; one at a time per thread
+thread_local std::exception_ptr t_failure;
+} // namespace
+
+void KeepRenderFailure() noexcept
+{
+    t_failure = std::current_exception();
+}
+
+void ThrowRenderFailure(const ArenaView& nodes, const void* child, std::uint32_t offset)
+{
+    std::exception_ptr failure = std::move(t_failure);
+    t_failure = nullptr;
     std::optional<RenderFailure> located;
     try
     {

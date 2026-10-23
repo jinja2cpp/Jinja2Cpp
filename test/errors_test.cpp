@@ -1030,6 +1030,29 @@ TEST_F(RenderErrorLocationTest, Wide)
     EXPECT_EQ(L"  {{ fail() }}\n  ^-------", included.error().GetLocationDescr());
 }
 
+// Bodies with more children open at once than the parser keeps in place (StatementBodies)
+TEST_F(RenderErrorLocationTest, LongNestedBodies)
+{
+    std::string source;
+    for (int idx = 0; idx != 40; ++idx)
+    {
+        source += "{{ 1 }}\n";
+    }
+    source += "{% for i in [1] %}{% if true %}\n";
+    for (int idx = 0; idx != 40; ++idx)
+    {
+        source += "{{ i }}\n";
+    }
+    source += "{% endif %}{{ i }}\n  {{ fail() }}{% endfor %}{{ 2 }}";
+    Template tpl(&m_env);
+    ASSERT_TRUE(tpl.Load(source).has_value());
+    const auto result = tpl.RenderAsString(Params());
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UserCallableException, result.error().GetCode());
+    EXPECT_EQ(83U, result.error().GetErrorLocation().line);
+    EXPECT_EQ(3U, result.error().GetErrorLocation().col);
+}
+
 // The engine's own runtime errors have codes of their own, with no exception kept (docs/tasks/0255)
 TEST(ErrorContractTest, EngineErrorsHaveTheirCodes)
 {

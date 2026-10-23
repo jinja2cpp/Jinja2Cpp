@@ -41,9 +41,9 @@ NodeRef<ComposedRenderer> StatementsParser::TakeFrameBody(StatementInfo& info)
 {
     if (const auto binding = m_names.EntryBinding(info.frame, m_nodes))
     {
-        info.body.AddFirst(binding, info.tagOffset);
+        m_bodies.AddFirst(info.bodyStart, binding, info.tagOffset);
     }
-    return info.body.Take(m_nodes);
+    return m_bodies.Take(m_nodes, info.bodyStart);
 }
 
 StatementsParser::ParseResult StatementsParser::Parse(LexScanner& lexer, StatementInfoList& statementsInfo)
@@ -355,7 +355,7 @@ StatementsParser::ParseResult StatementsParser::ParseFor(LexScanner& lexer, Stat
     {
         m_names.LinkFilter(filterFrame, statementInfo.frame);
     }
-    statementsInfo.push_back(std::move(statementInfo));
+    Push(statementsInfo, std::move(statementInfo));
     return ParseResult();
 }
 
@@ -556,7 +556,7 @@ StatementsParser::ParseResult StatementsParser::ParseLoopControl(StatementInfoLi
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
 
-    statementsInfo.back().body.Add(m_nodes.Make<LoopControlStatement>(control), m_tagOffset);
+    m_bodies.Add(m_nodes.Make<LoopControlStatement>(control), m_tagOffset);
     return ParseResult();
 }
 
@@ -589,7 +589,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
         renderer.SetElseBody(elseRenderer);
     }
 
-    statementsInfo.back().body.Add(info.renderer, info.tagOffset);
+    m_bodies.Add(info.renderer, info.tagOffset);
 
     return ParseResult();
 }
@@ -609,7 +609,7 @@ StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, State
     auto renderer = m_nodes.Make<IfStatement>(*valueExpr);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::IfStatement, stmtTok, m_tagOffset);
     statementInfo.renderer = renderer;
-    statementsInfo.push_back(std::move(statementInfo));
+    Push(statementsInfo, std::move(statementInfo));
     return ParseResult();
 }
 
@@ -638,7 +638,7 @@ StatementsParser::ParseResult StatementsParser::ParseElse(LexScanner& /*lexer*/,
     // A loop's `else` body is outside the loop, in a frame of its own, as in Jinja2
     // (docs/tasks/0202)
     statementInfo.frame = prev.type == StatementInfo::ForStatement ? m_names.PushWith(m_names.Parent(prev.frame)) : prev.frame;
-    statementsInfo.push_back(std::move(statementInfo));
+    Push(statementsInfo, std::move(statementInfo));
     return ParseResult();
 }
 
@@ -661,7 +661,7 @@ StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, Sta
     auto renderer = m_nodes.Make<ElseBranchStatement>(*valueExpr);
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::ElseIfStatement, stmtTok, m_tagOffset);
     statementInfo.renderer = renderer;
-    statementsInfo.push_back(std::move(statementInfo));
+    Push(statementsInfo, std::move(statementInfo));
     return ParseResult();
 }
 
@@ -698,7 +698,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndIf(LexScanner&, Statemen
     std::reverse(elseBranches.begin(), elseBranches.end());
     renderer.SetElseBranches(m_nodes.MakeSpan(elseBranches));
 
-    statementsInfo.back().body.Add(info.renderer, info.tagOffset);
+    m_bodies.Add(info.renderer, info.tagOffset);
 
     return ParseResult();
 }
@@ -729,7 +729,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         }
         // Stored once the value is read, which may read the name itself
         m_names.AddStores(m_names.Current(), m_nodes[vars], m_nodes);
-        statementsInfo.back().body.Add(m_nodes.Make<SetLineStatement>(vars, *expr), m_tagOffset);
+        m_bodies.Add(m_nodes.Make<SetLineStatement>(vars, *expr), m_tagOffset);
     }
     else if (lexer.EatIfEqual('|'))
     {
@@ -750,7 +750,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         statementInfo.renderer = m_nodes.Make<SetFilteredBlockStatement>(
             vars, *expr);
         statementInfo.frame = frame;
-        statementsInfo.push_back(std::move(statementInfo));
+        Push(statementsInfo, std::move(statementInfo));
     }
     else
     {
@@ -764,7 +764,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         statementInfo.renderer = m_nodes.Make<SetRawBlockStatement>(
             vars);
         statementInfo.frame = m_names.PushWith(m_names.Current());
-        statementsInfo.push_back(std::move(statementInfo));
+        Push(statementsInfo, std::move(statementInfo));
     }
 
     return {};
@@ -789,7 +789,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&, Stateme
     const auto& outer = statementsInfo.back();
     const auto kind = StatementInfo::OwnsFrame(outer.type) || IsLoopElse(statementsInfo) ? NameResolver::StoreKind::Store : NameResolver::StoreKind::Branch;
     m_names.AddStores(outer.frame, m_nodes[statement.GetTarget()], m_nodes, kind);
-    statementsInfo.back().body.Add(info.renderer, info.tagOffset);
+    m_bodies.Add(info.renderer, info.tagOffset);
 
     return {};
 }
@@ -833,7 +833,7 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::BlockStatement, stmtTok, m_tagOffset);
     statementInfo.frame = m_names.PushUnit(m_names.Current(), blockRenderer);
     statementInfo.renderer = std::move(blockRenderer);
-    statementsInfo.push_back(std::move(statementInfo));
+    Push(statementsInfo, std::move(statementInfo));
     return ParseResult();
 }
 
@@ -859,7 +859,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
     }
 
     blockStmt.SetMainBody(TakeBody(info));
-    statementsInfo.back().body.Add(info.renderer, info.tagOffset);
+    m_bodies.Add(info.renderer, info.tagOffset);
 
     return ParseResult();
 }
@@ -893,7 +893,7 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
     }
 
     auto renderer = m_nodes.Make<ExtendsStatement>(*expr);
-    statementsInfo.back().body.Add(renderer, m_tagOffset);
+    m_bodies.Add(renderer, m_tagOffset);
     m_root.hasExtends = true;
     if (statementsInfo.size() == 1)
     {
@@ -940,7 +940,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     statementInfo.renderer = renderer;
     statementInfo.marks = marks;
     statementInfo.frame = m_names.PushMacro(outerFrame, renderer);
-    statementsInfo.push_back(std::move(statementInfo));
+    Push(statementsInfo, std::move(statementInfo));
 
     return ParseResult();
 }
@@ -1089,7 +1089,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
     renderer.SetMainBody(TakeBody(info));
     renderer.SetBodyMarks(info.marks, m_nodes.Marks());
 
-    statementsInfo.back().body.Add(info.renderer, info.tagOffset);
+    m_bodies.Add(info.renderer, info.tagOffset);
 
     return ParseResult();
 }
@@ -1185,7 +1185,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     statementInfo.renderer = renderer;
     statementInfo.marks = marks;
     statementInfo.frame = m_names.PushMacro(m_names.Current(), renderer);
-    statementsInfo.push_back(std::move(statementInfo));
+    Push(statementsInfo, std::move(statementInfo));
 
     return ParseResult();
 }
@@ -1212,7 +1212,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner&, Statem
     renderer.SetMainBody(TakeBody(info));
     renderer.SetBodyMarks(info.marks, m_nodes.Marks());
 
-    statementsInfo.back().body.Add(info.renderer, info.tagOffset);
+    m_bodies.Add(info.renderer, info.tagOffset);
 
     return ParseResult();
 }
@@ -1290,12 +1290,12 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
 
     auto renderer = m_nodes.Make<IncludeStatement>(isIgnoreMissing, isWithContext);
     m_nodes[renderer].SetIncludeNamesExpr(valueExpr, m_nodes[valueExpr].GetConstant(m_nodes) != nullptr);
-    statementsInfo.back().body.Add(renderer, m_tagOffset);
+    m_bodies.Add(renderer, m_tagOffset);
 
     return ParseResult();
 }
 
-StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, StatementInfoList& /*statementsInfo*/, const Token& stmtTok)
 {
     if (!m_env)
     {
@@ -1355,7 +1355,7 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
     const auto namespaceText = m_nodes.MakeText(namespaceName);
     m_names.AddStore(m_names.Current(), m_nodes.Text(namespaceText));
     m_nodes[renderer].SetNamespace(namespaceText, HashedName::Hash(namespaceName));
-    statementsInfo.back().body.Add(renderer, m_tagOffset);
+    m_bodies.Add(renderer, m_tagOffset);
 
     return ParseResult();
 }
@@ -1412,7 +1412,7 @@ nonstd::expected<std::pair<std::string, std::string>, ParseError> ParseImportedN
 }
 } // namespace
 
-StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, StatementInfoList& /*statementsInfo*/, const Token& stmtTok)
 {
     if (!m_env)
     {
@@ -1503,12 +1503,12 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
     }
     m_nodes[renderer].SetNamesToImport(m_nodes.MakeSpan(names));
 
-    statementsInfo.back().body.Add(renderer, m_tagOffset);
+    m_bodies.Add(renderer, m_tagOffset);
 
     return ParseResult();
 }
 
-StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& /*stmtTok*/)
+StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, StatementInfoList& /*statementsInfo*/, const Token& /*stmtTok*/)
 {
     NodeRef<Expression> valueExpr;
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
@@ -1520,7 +1520,7 @@ StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, State
     valueExpr = *expr;
 
     auto renderer = m_nodes.Make<DoStatement>(valueExpr);
-    statementsInfo.back().body.Add(renderer, m_tagOffset);
+    m_bodies.Add(renderer, m_tagOffset);
 
     return jinja2::StatementsParser::ParseResult();
 }
@@ -1571,7 +1571,7 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
     auto renderer = m_nodes.Make<WithStatement>();
     m_nodes[renderer].SetScopeVars(m_nodes.MakeSpan(vars));
     statementInfo.renderer = renderer;
-    statementsInfo.push_back(std::move(statementInfo));
+    Push(statementsInfo, std::move(statementInfo));
 
     return ParseResult();
 }
@@ -1592,7 +1592,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer
     auto& renderer = m_nodes.Get<WithStatement>(info.renderer);
     renderer.SetMainBody(TakeBody(info));
 
-    statementsInfo.back().body.Add(info.renderer, info.tagOffset);
+    m_bodies.Add(info.renderer, info.tagOffset);
 
     return ParseResult();
 }
@@ -1613,7 +1613,7 @@ StatementsParser::ParseResult StatementsParser::ParseFilter(LexScanner& lexer, S
         StatementInfo::FilterStatement, stmtTok, m_tagOffset);
     statementInfo.renderer = std::move(renderer);
     statementInfo.frame = m_names.PushWith(m_names.Current());
-    statementsInfo.push_back(std::move(statementInfo));
+    Push(statementsInfo, std::move(statementInfo));
 
     return {};
 }
@@ -1634,7 +1634,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndFilter(LexScanner&, Stat
     auto& renderer = m_nodes.Get<FilterStatement>(info.renderer);
     renderer.SetBody(TakeBody(info));
 
-    statementsInfo.back().body.Add(info.renderer, info.tagOffset);
+    m_bodies.Add(info.renderer, info.tagOffset);
 
     return {};
 }
@@ -1654,7 +1654,7 @@ StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexe
     auto statementInfo = StatementInfo::Create(StatementInfo::AutoescapeStatement, stmtTok, m_tagOffset);
     statementInfo.renderer = std::move(renderer);
     statementInfo.frame = m_names.PushWith(m_names.Current());
-    statementsInfo.push_back(std::move(statementInfo));
+    Push(statementsInfo, std::move(statementInfo));
 
     return {};
 }
@@ -1675,7 +1675,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndAutoescape(LexScanner&, 
     auto& renderer = m_nodes.Get<AutoescapeStatement>(info.renderer);
     renderer.SetBody(TakeBody(info));
 
-    statementsInfo.back().body.Add(info.renderer, info.tagOffset);
+    m_bodies.Add(info.renderer, info.tagOffset);
 
     return {};
 }
@@ -1746,7 +1746,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
 
     auto statementInfo = StatementInfo::Create(StatementInfo::TransStatement, stmtTok, m_tagOffset);
     statementInfo.trans = std::move(trans);
-    statementsInfo.push_back(std::move(statementInfo));
+    Push(statementsInfo, std::move(statementInfo));
     return {};
 }
 
@@ -1930,7 +1930,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     {
         values.push_back(var.second);
     }
-    statementsInfo.back().body.Add(m_nodes.Make<TransStatement>(m_nodes.MakeSpan(values), output), info.tagOffset);
+    m_bodies.Add(m_nodes.Make<TransStatement>(m_nodes.MakeSpan(values), output), info.tagOffset);
     return {};
 }
 
