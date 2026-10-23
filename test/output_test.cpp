@@ -172,14 +172,13 @@ TEST(OutputTest, IntegersAtTheBufferEnd)
 
 namespace
 {
-// A sink that fails on its `failAt`th chunk, with `error`
-template<typename Error>
+// A sink that fails on its `failAt`th chunk, with what `fail` throws
 class ThrowingSink final : public OutputSink
 {
 public:
-    ThrowingSink(size_t failAt, const Error& error)
+    ThrowingSink(size_t failAt, void (*fail)())
         : m_failAt(failAt)
-        , m_error(error)
+        , m_fail(fail)
     {
     }
 
@@ -187,7 +186,7 @@ public:
     {
         if (++m_calls == m_failAt)
         {
-            throw m_error;
+            m_fail();
         }
         output.append(text);
     }
@@ -197,7 +196,7 @@ public:
 private:
     size_t m_calls = 0;
     size_t m_failAt;
-    Error m_error;
+    void (*m_fail)();
 };
 
 // 2000 numbers, then a call of `fail`, which throws
@@ -323,7 +322,7 @@ TEST(OutputTest, SinkExceptionsAreHostExceptions)
     ASSERT_TRUE(tpl.Load("{% for i in range(2000) %}{{ i }},{% endfor %}"));
 
     // Any exception: kept in the error, as one from a user callable
-    ThrowingSink<std::runtime_error> failing(2, std::runtime_error("sink failed"));
+    ThrowingSink failing(2, [] { throw std::runtime_error("sink failed"); });
     auto result = tpl.RenderTo(failing, {});
     ASSERT_FALSE(result);
     EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode());
@@ -332,7 +331,7 @@ TEST(OutputTest, SinkExceptionsAreHostExceptions)
     EXPECT_EQ(Numbers(2000).substr(0, failing.output.size()), failing.output);
 
     // A jinja2::Exception keeps its code: a sink enforcing an output budget
-    ThrowingSink<Exception> budget(3, Exception(ErrorCode::ResourceLimitExceeded, "output budget spent"));
+    ThrowingSink budget(3, [] { throw Exception(ErrorCode::ResourceLimitExceeded, "output budget spent"); });
     result = tpl.RenderTo(budget, {});
     ASSERT_FALSE(result);
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
@@ -340,13 +339,13 @@ TEST(OutputTest, SinkExceptionsAreHostExceptions)
     // Thrown by the final flush, after the template's body ended
     Template shortTpl;
     ASSERT_TRUE(shortTpl.Load("short"));
-    ThrowingSink<Exception> atFlush(1, Exception(ErrorCode::ResourceLimitExceeded, "output budget spent"));
+    ThrowingSink atFlush(1, [] { throw Exception(ErrorCode::ResourceLimitExceeded, "output budget spent"); });
     result = shortTpl.RenderTo(atFlush, {});
     ASSERT_FALSE(result);
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
 
     // std::bad_alloc goes on to the caller
-    ThrowingSink<std::bad_alloc> outOfMemory(1, std::bad_alloc());
+    ThrowingSink outOfMemory(1, [] { throw std::bad_alloc(); });
     EXPECT_THROW(static_cast<void>(shortTpl.RenderTo(outOfMemory, {})), std::bad_alloc);
     // and leaves the template and the thread usable
     RecordingSink<char> sink;
