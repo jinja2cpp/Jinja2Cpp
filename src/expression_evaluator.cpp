@@ -48,7 +48,9 @@ inline namespace v2
 // Out of line, so that the paths without autoescape stay small
 void WriteEscaped(OutStream& stream, const InternalValue& val, IRendererCallback* callback)
 {
-    const auto view = callback->IsWideTarget() ? std::nullopt : AsStringView<char>(val);
+    // The escape buffer is the thread's: a sink called while the stream still holds the
+    // escaped text could render, and escape, into it
+    const auto view = callback->IsWideTarget() || stream.ReachesSink() ? std::nullopt : AsStringView<char>(val);
     if (view && view->size() <= detail::maxBufferedHtmlEscape)
     {
         auto escaped = detail::EscapeHtmlToBuffer(*view);
