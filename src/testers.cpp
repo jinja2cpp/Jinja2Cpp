@@ -1,6 +1,7 @@
 #include "testers.h"
 
 #include "engine_errors.h"
+#include "big_int.h"
 #include "expression_evaluator.h"
 #include "filters.h"
 #include "function_base.h"
@@ -162,6 +163,11 @@ struct ValueKindGetter : visitors::BaseVisitor<TestKind>
     {
         return TestKind::Integer;
     }
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
+    TestKind operator()(const BigIntView&) const
+    {
+        return TestKind::Integer;
+    }
     TestKind operator()(double) const
     {
         return TestKind::Double;
@@ -294,7 +300,11 @@ bool IsEvenOrOdd(const InternalValue& val, TestKind valKind, bool even)
 {
     bool result = false;
     // bool is an int in Python, so `false is even` holds
-    if (valKind == TestKind::Integer || valKind == TestKind::Boolean)
+    if (const auto big = AsBigInt(val))
+    {
+        result = IsOdd(*big) != even;
+    }
+    else if (valKind == TestKind::Integer || valKind == TestKind::Boolean)
     {
         auto intVal = ConvertToInt(val);
         result = (intVal & 1) == (even ? 0 : 1);

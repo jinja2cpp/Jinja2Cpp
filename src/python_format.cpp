@@ -1,5 +1,6 @@
 #include "python_format.h"
 
+#include "big_int.h"
 #include "engine_errors.h"
 #include "internal_value.h"
 #include "markup.h"
@@ -40,7 +41,7 @@ const char* TypeName(const InternalValue& val)
     {
         return "float";
     }
-    if (GetIf<int64_t>(&val))
+    if (GetIf<int64_t>(&val) || val.Kind() == ValueKind::BigInt)
     {
         return "int";
     }
@@ -205,6 +206,35 @@ void AppendInteger(std::string& out, int64_t value, char conversion, const Spec&
     std::string_view digits = digitsEnd != digitsBuffer ? std::string_view(digitsBuffer, static_cast<size_t>(digitsEnd - digitsBuffer))
                                                         : std::string_view(decimal.data(), decimal.size());
     AppendDigits(out, value < 0, prefix, digits, spec);
+}
+
+// The same for an integer outside int64 (docs/tasks/0270): decimal digits are subject to
+// CPython's digit limit, the power-of-two bases are not
+void AppendBigInteger(std::string& out, const BigIntView& value, char conversion, const Spec& spec)
+{
+    std::string digits;
+    std::string_view prefix;
+    switch (conversion)
+    {
+    case 'x':
+        digits = MagnitudeInBase(value, 16);
+        prefix = spec.alternate ? "0x" : "";
+        break;
+    case 'X':
+        digits = MagnitudeInBase(value, 16);
+        std::transform(digits.begin(), digits.end(), digits.begin(), [](char ch) { return ch >= 'a' && ch <= 'f' ? static_cast<char>(ch - 'a' + 'A') : ch; });
+        prefix = spec.alternate ? "0X" : "";
+        break;
+    case 'o':
+        digits = MagnitudeInBase(value, 8);
+        prefix = spec.alternate ? "0o" : "";
+        break;
+    default:
+        CheckedDecimal(value);
+        digits = std::string(value.Magnitude());
+        break;
+    }
+    AppendDigits(out, value.Sign() < 0, prefix, digits, spec);
 }
 
 // Python's ascii(): every code point beyond ASCII becomes a backslash escape of 2, 4 or 8 lowercase hex digits (x, u, U)
@@ -578,6 +608,10 @@ private:
         {
             return *b ? 1 : 0;
         }
+        if (val.Kind() == ValueKind::BigInt)
+        {
+            ThrowIndexOverflow();
+        }
         throw TemplateRuntimeError("* wants int");
     }
 
@@ -743,6 +777,11 @@ private:
             AppendInteger(out, *b ? 1 : 0, conversion, spec);
             return;
         }
+        if (const auto big = AsBigInt(arg))
+        {
+            AppendBigInteger(out, *big, conversion, spec);
+            return;
+        }
         const auto* d = GetIf<double>(&arg);
         if (d && isDecimal)
         {
@@ -784,6 +823,11 @@ private:
             AppendFloat(out, *b ? 1.0 : 0.0, conversion, spec);
             return;
         }
+        if (const auto big = AsBigInt(arg))
+        {
+            AppendFloat(out, BigIntToDouble(*big), conversion, spec);
+            return;
+        }
         throw TemplateRuntimeError(fmt::format("must be real number, not {}", TypeName(arg)));
     }
 
@@ -798,6 +842,10 @@ private:
         else if (const auto* b = GetIf<bool>(&arg))
         {
             cp = *b ? 1 : 0;
+        }
+        else if (arg.Kind() == ValueKind::BigInt)
+        {
+            throw IntegerOutOfRangeError("%c arg not in range(0x110000)");
         }
         else if (!GetIf<double>(&arg) && !IsEmpty(arg))
         {

@@ -8,6 +8,8 @@
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/value.h>
 
+#include <fmt/format.h>
+
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -34,6 +36,7 @@ constexpr char KindNone = 'N';
 constexpr char KindTuple = 't';
 constexpr char KindRange = 'r';
 constexpr char KindString = 's';
+constexpr char KindBigInt = 'b';
 
 // The type of a value Python's hash() rejects, also inside a tuple
 struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
@@ -73,6 +76,8 @@ struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
         return map.GetObjectClass() || map.GetAttrPolicy() == MapAttrPolicy::KeysFirst ? nullptr : "dict";
     }
     const char* operator()(const KeyValuePair& pair) const { return Apply<UnhashableTypeGetter>(pair.value, m_items); }
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
+    const char* operator()(const BigIntView& /*val*/) const { return nullptr; }
 
 private:
     uint64_t& m_items;
@@ -91,6 +96,15 @@ void AppendInt(std::string& out, int64_t value)
     out.push_back(DictKeyMark);
     out.push_back(KindInt);
     AppendBytes(out, value);
+}
+
+// An integer outside int64 by its decimal spelling (docs/tasks/0270)
+void AppendBigInt(std::string& out, std::string_view decimal)
+{
+    out.push_back(DictKeyMark);
+    out.push_back(KindBigInt);
+    AppendBytes(out, static_cast<uint64_t>(decimal.size()));
+    out.append(decimal);
 }
 
 // The number of items of range(start, stop, step), for a step that is not zero
@@ -142,6 +156,11 @@ struct KeyTokenBuilder
         AppendInt(m_out, val);
         return nullptr;
     }
+    const char* operator()(const BigIntView& val) const
+    {
+        AppendBigInt(m_out, val.decimal);
+        return nullptr;
+    }
     const char* operator()(double val) const
     {
         // 2^63: the first double that is no int64
@@ -150,6 +169,12 @@ struct KeyTokenBuilder
         {
             // 1.0 is the key 1, and -0.0 the key 0
             AppendInt(m_out, static_cast<int64_t>(val));
+            return nullptr;
+        }
+        // A whole double beyond int64 is the key of the equal big integer, which fmt spells exactly
+        if (std::isfinite(val) && val == std::floor(val))
+        {
+            AppendBigInt(m_out, fmt::format("{:.0f}", val));
             return nullptr;
         }
         // Python compares NaN by identity; one NaN key here, a deliberate divergence

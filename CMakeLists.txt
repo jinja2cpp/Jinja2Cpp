@@ -155,6 +155,7 @@ set(JINJA2CPP_SOURCES
     src/confined_filesystem.cpp
     src/cycle_collector.cpp
     src/error_info.cpp
+    src/big_int.cpp
     src/expression_evaluator.cpp
     src/expression_parser.cpp
     src/filesystem_handler.cpp

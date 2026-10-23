@@ -373,14 +373,14 @@ TEST_F(RecursionLimitsTest, HugeSequencesFailFast)
         // The engine's own limit: no exception to hand back (docs/api-2.0.md, 2.1)
         EXPECT_FALSE(result.error().GetException()) << source;
     }
-    // An integer literal beyond int64 is a float here (docs/tasks/0178), which range()
-    // refuses before computing a length; Python raises OverflowError
+    // An integer literal beyond int64 is a big integer (docs/tasks/0270), which range()
+    // refuses before computing a length (OverflowError, docs/design/0178-big-integer-plan.md 5)
     {
         Template tpl(&m_env);
         ASSERT_TRUE(tpl.Load("{{ range(775807, -92233720368547753372036854775803, -9223758807)|list }}").has_value());
         auto result = tpl.RenderAsString({});
         ASSERT_FALSE(result.has_value());
-        EXPECT_NE(std::string::npos, result.error().ToString().find("cannot be interpreted as an integer")) << result.error().ToString();
+        EXPECT_EQ(ErrorCode::IntegerOutOfRange, result.error().GetCode()) << result.error().ToString();
     }
     // Below the limit nothing changes
     Template tpl(&m_env);

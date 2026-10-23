@@ -353,8 +353,10 @@ jinja2::Value ToValue(const Json& j)
     case Json::value_t::boolean:
         return j.get<bool>();
     case Json::value_t::number_integer:
-    case Json::value_t::number_unsigned:
         return j.get<int64_t>();
+    case Json::value_t::number_unsigned:
+        // Above INT64_MAX it becomes a jinja2::BigInt (docs/tasks/0270)
+        return jinja2::Value(j.get<uint64_t>());
     case Json::value_t::number_float:
         return j.get<double>();
     case Json::value_t::string:

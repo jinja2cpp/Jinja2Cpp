@@ -1,5 +1,6 @@
 #include "value_methods.h"
 
+#include "big_int.h"
 #include "cycle_collector.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
@@ -140,6 +141,10 @@ int64_t IntArg(const InternalValue& val, const char* name)
     if (const auto* b = GetIf<bool>(&val))
     {
         return *b ? 1 : 0;
+    }
+    if (val.Kind() == ValueKind::BigInt)
+    {
+        ThrowIndexOverflow();
     }
     Raise(std::string(name) + "(): '" + TypeName(val) + "' object cannot be interpreted as an integer");
 }
@@ -999,23 +1004,24 @@ struct StrOps
         return type == 0 || type == 'e' || type == 'E' || type == 'f' || type == 'F' || type == 'g' || type == 'G' || type == '%' || type == 'n';
     }
 
+    static int IntegerBase(uint32_t type)
+    {
+        if (type == 'b')
+        {
+            return 2;
+        }
+        if (type == 'o')
+        {
+            return 8;
+        }
+        return type == 'x' || type == 'X' ? 16 : 10;
+    }
+
     // Digits of magnitude in the base the type selects, grouped and with the 0b/0o/0x prefix
     static std::string IntegerDigits(uint64_t magnitude, const FormatSpec& spec)
     {
         const auto type = spec.type;
-        int base = 10;
-        if (type == 'b')
-        {
-            base = 2;
-        }
-        else if (type == 'o')
-        {
-            base = 8;
-        }
-        else if (type == 'x' || type == 'X')
-        {
-            base = 16;
-        }
+        const int base = IntegerBase(type);
         std::string digits;
         do
         {
@@ -1023,6 +1029,36 @@ struct StrOps
             digits.push_back(static_cast<char>(d < 10 ? '0' + d : (type == 'X' ? 'A' : 'a') + d - 10));
             magnitude /= static_cast<uint64_t>(base);
         } while (magnitude != 0);
+        return DecorateDigits(std::move(digits), base, spec);
+    }
+
+    // The same for an integer outside int64 (docs/tasks/0270): decimal digits are subject to
+    // CPython's digit limit, the power-of-two bases are not
+    static std::string IntegerDigits(const BigIntView& val, const FormatSpec& spec)
+    {
+        const int base = IntegerBase(spec.type);
+        std::string digits;
+        if (base == 10)
+        {
+            CheckedDecimal(val);
+            digits = std::string(val.Magnitude());
+        }
+        else
+        {
+            digits = MagnitudeInBase(val, base);
+            if (spec.type == 'X')
+            {
+                std::transform(digits.begin(), digits.end(), digits.begin(), [](char ch) { return ch >= 'a' && ch <= 'f' ? static_cast<char>(ch - 'a' + 'A') : ch; });
+            }
+        }
+        std::reverse(digits.begin(), digits.end());
+        return DecorateDigits(std::move(digits), base, spec);
+    }
+
+    // Groups digits, given least significant first, and adds the prefix
+    static std::string DecorateDigits(std::string digits, int base, const FormatSpec& spec)
+    {
+        const auto type = spec.type;
         if (spec.grouping != 0)
         {
             size_t groupSize = base == 10 ? 3 : 4;
@@ -1175,6 +1211,23 @@ struct StrOps
         return result;
     }
 
+    static Formatted FormatBigInteger(const BigIntView& value, const FormatSpec& spec)
+    {
+        if (spec.precision >= 0)
+        {
+            Raise("Precision not allowed in integer format specifier");
+        }
+        if (spec.type == 'c')
+        {
+            throw IntegerOutOfRangeError("%c arg not in range(0x110000)");
+        }
+        Formatted result;
+        result.numeric = true;
+        result.negative = value.Sign() < 0;
+        result.body = Ascii(IntegerDigits(value, spec));
+        return result;
+    }
+
     static Formatted FormatReal(const InternalValue& val, double value, const FormatSpec& spec)
     {
         if (!IsFloatType(spec.type))
@@ -1201,6 +1254,7 @@ struct StrOps
         const auto* intVal = GetIf<int64_t>(&val);
         const auto* boolVal = GetIf<bool>(&val);
         const auto* dblVal = GetIf<double>(&val);
+        const auto bigVal = AsBigInt(val);
         int64_t intValue = 0;
         if (intVal)
         {
@@ -1210,7 +1264,7 @@ struct StrOps
         {
             intValue = *boolVal ? 1 : 0;
         }
-        bool isInt = intVal || (boolVal && type != 0 && type != 's');
+        const bool isInt = intVal != nullptr || bigVal.has_value() || (boolVal != nullptr && type != 0 && type != 's');
         Formatted out;
         if (IsStringValue(val) || (boolVal && type == 0))
         {
@@ -1218,11 +1272,20 @@ struct StrOps
         }
         else if (isInt && IsIntegerType(type))
         {
-            out = FormatInteger(intValue, spec);
+            out = bigVal ? FormatBigInteger(*bigVal, spec) : FormatInteger(intValue, spec);
         }
         else if (isInt || dblVal)
         {
-            out = FormatReal(val, dblVal ? *dblVal : static_cast<double>(intValue), spec);
+            auto real = static_cast<double>(intValue);
+            if (dblVal)
+            {
+                real = *dblVal;
+            }
+            else if (bigVal)
+            {
+                real = BigIntToDouble(*bigVal);
+            }
+            out = FormatReal(val, real, spec);
         }
         else
         {
@@ -2171,6 +2234,10 @@ const MethodInfo DictMethods[] = {
 InternalValue IntBitLength(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "bit_length", 0, 0);
+    if (const auto big = AsBigInt(self))
+    {
+        return static_cast<int64_t>(BitLength(*big));
+    }
     auto value = IntArg(self, "bit_length");
     uint64_t magnitude = value < 0 ? 0 - static_cast<uint64_t>(value) : static_cast<uint64_t>(value);
     int64_t bits = 0;
@@ -2228,6 +2295,7 @@ const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view n
         }
         return nullptr;
     case ValueKind::Int:
+    case ValueKind::BigInt:
     case ValueKind::Bool:
         return FindIn(IntMethods, name);
     case ValueKind::Double:

@@ -1063,9 +1063,9 @@ TEST(FilterErrors, DottedAttributePathWithMissingParent)
 
 TEST(FilterErrors, RoundBeyondInt64)
 {
-    EXPECT_NE(std::string::npos, RenderError("{{ 9223372036854775807|round(-1) }}").find("integer result does not fit in 64 bits"));
-    EXPECT_NE(std::string::npos, RenderError("{{ 9000000000000000000|round(-19) }}").find("integer result does not fit in 64 bits"));
-    EXPECT_NE(std::string::npos, RenderError("{{ -9223372036854775807|round(-1) }}").find("integer result does not fit in 64 bits"));
+    // Beyond int64 the result is a big integer, rounded in decimal (task 0270)
+    EXPECT_EQ("9223372036854775810|10000000000000000000|-9223372036854775810",
+              RenderOrError("{{ 9223372036854775807|round(-1) }}|{{ 9000000000000000000|round(-19) }}|{{ -9223372036854775807|round(-1) }}", {}));
     EXPECT_EQ("Exception: rounded value too large to represent\n", RenderError("{{ 1.797e308|round(-308) }}"));
     EXPECT_EQ("Exception: int too large to convert to float\n", RenderError("{{ 2.5|round(309, 'floor') }}"));
     EXPECT_EQ("Exception: cannot convert float infinity to integer\n", RenderError("{{ 1e308|round(2, 'floor') }}"));
@@ -1088,7 +1088,8 @@ TEST(FilterErrors, VerifierLeftovers)
     EXPECT_NE(RenderOrError("{{ 1|tojson(1.5) }}", {}).find("can't multiply sequence"), std::string::npos);
     EXPECT_EQ("2|2|5|-4|2.0", RenderOrError("{{ 1.5|round(None) }}|{{ 2.5|round(None) }}|{{ 5|round(None) }}|{{ -3.5|round(None) }}|{{ 1.5|round }}", {}));
     EXPECT_NE(RenderOrError("{{ 1.5|round(None, 'floor') }}", {}).find("NoneType"), std::string::npos);
-    EXPECT_NE(RenderOrError("{{ 1e300|round(None) }}", {}).find("64 bits"), std::string::npos);
+    // An integer beyond int64 is a big integer (task 0270)
+    EXPECT_EQ("1000000000000000052504760255204420248704468581108159154915854115511802457988908195786371375080447864043704443832883878176942523235360430575644792184786706982848387200926575803737830233794788090059368953234970799945081119038967640880074652742780142494579258788820056842838115669472196386865459400540160", RenderOrError("{{ 1e300|round(None) }}", {}));
     // \x1c-\x1f as variables: an octal escape before a digit is MSVC C4125
     const std::string fileSep = std::string(1, '\x1c') + "5";
     const std::string unitSep = std::string(1, '\x1f') + "5";

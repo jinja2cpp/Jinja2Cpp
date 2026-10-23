@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: parity
 depends: [0269]
@@ -23,3 +23,5 @@ cases listed in plan section 9 are added, the sanitizer configuration is clean a
 (section 4) shows no change for int64 templates.
 
 Plan: [docs/design/0178-big-integer-plan.md](../design/0178-big-integer-plan.md).
+
+In progress in #613.
