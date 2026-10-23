@@ -413,9 +413,10 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     auto map = AsMap(baseVal);
     const bool isPlainDict = map && !map->HasAttributes() && map->GetObjectClass() == nullptr;
     // getattr finds the methods of the value (s|attr('lower')), those of a dict before its items
-    if (const auto* method = methods::FindMethod(baseVal, AsString(attrNameVal)))
+    const auto attrName = AsString(attrNameVal);
+    if (const auto* method = methods::FindMethod(baseVal, attrName))
     {
-        if (isPlainDict || !map || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(AsString(attrNameVal)))
+        if (isPlainDict || !map || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(attrName))
         {
             return methods::MakeBoundMethod(baseVal, *method);
         }
