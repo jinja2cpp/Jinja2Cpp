@@ -829,7 +829,7 @@ public:
             names.emplace(name, value);
         }
     }
-    // The innermost value of `name` among the scopes and the external scope for which `accepts`
+    // The innermost value of `name` among the scopes, the external scope and the globals for which `accepts`
     // is true: a lookup that passes over the values it refuses (the `loop` of an including loop)
     template<typename Accepts>
     [[nodiscard]] std::optional<InternalValue> FindValueWhere(const std::string& name, const Accepts& accepts) const
@@ -860,6 +860,14 @@ public:
             if (external != m_externalScope->end() && accepts(external->second))
             {
                 result = external->second;
+            }
+        }
+        if (!result)
+        {
+            const auto global = m_globalScope->find(name);
+            if (global != m_globalScope->end() && accepts(global->second))
+            {
+                result = global->second;
             }
         }
         return result;
