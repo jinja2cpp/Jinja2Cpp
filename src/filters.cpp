@@ -120,7 +120,6 @@ InternalValueList AttributePath(const InternalValue& attribute)
         auto end = str->find('.', start);
         auto part = str->substr(start, end == std::string::npos ? std::string::npos : end - start);
         bool isIndex = !part.empty() && std::all_of(part.begin(), part.end(), [](char ch) { return ch >= '0' && ch <= '9'; });
-        std::int64_t index = 0;
         if (isIndex)
         {
             // int(part): an index beyond int64 is a big integer, which indexes nothing
