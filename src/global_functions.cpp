@@ -90,7 +90,8 @@ void CheckIntegerArgument(const InternalValue& arg)
     {
         throw std::runtime_error(std::string("'") + UndefinedClassName(*info) + "' object cannot be interpreted as an integer");
     }
-    if (!arg.IsUndefined() && !GetIf<int64_t>(&arg) && !GetIf<bool>(&arg))
+    // An int outside int64 is an integer, which ConvertToInt then rejects with OverflowError
+    if (!arg.IsUndefined() && !GetIf<int64_t>(&arg) && !GetIf<bool>(&arg) && arg.Kind() != ValueKind::BigInt)
     {
         throw std::runtime_error(std::string("'") + Apply<visitors::PythonTypeNameGetter>(arg) + "' object cannot be interpreted as an integer");
     }

@@ -73,6 +73,9 @@ struct StringEncoder : public visitors::BaseVisitor<TargetString>
         return TargetString(std::move(result));
     }
 
+    // Not a string, as an int is not
+    TargetString operator()(const BigIntView& /*val*/) const { return TargetString(); }
+
     template<typename Str, typename CharT>
     static void AppendChar(Str& str, CharT ch)
     {
@@ -1639,7 +1642,8 @@ int64_t NumericArgument(const InternalValue& val, const char* filter, const char
 {
     const auto* asDouble = GetIf<double>(&val);
     bool isAcceptedDouble = asDouble != nullptr && kind == NumberKind::Any;
-    bool isNumber = GetIf<int64_t>(&val) != nullptr || GetIf<bool>(&val) != nullptr || isAcceptedDouble;
+    // An int outside int64 is a number, which no index-sized argument can hold (OverflowError)
+    bool isNumber = GetIf<int64_t>(&val) != nullptr || GetIf<bool>(&val) != nullptr || val.Kind() == ValueKind::BigInt || isAcceptedDouble;
     if (!isNumber)
     {
         throw std::runtime_error(std::string(filter) + "(): '" + arg + "' must be " + (kind == NumberKind::Any ? "a number" : "an integer"));

@@ -288,7 +288,9 @@ enum class ValueKind : uint8_t
     Map,
     KeyValuePair,
     Callable,
-    Renderer
+    Renderer,
+    // An int outside int64, as Python's int (docs/tasks/0270): never one that fits int64
+    BigInt
 };
 
 struct IListAccessor;
@@ -363,6 +365,14 @@ struct BoxHandle
 
 using RendererPtr = std::shared_ptr<IRendererBase>;
 
+// An integer outside int64, in a BigIntObject (docs/tasks/0270)
+struct BigIntObject;
+
+struct BigIntHandle
+{
+    const BigIntObject* object;
+};
+
 using ValueStorage = std::variant<
     UndefinedValue,
     NoneValue,
@@ -380,11 +390,23 @@ using ValueStorage = std::variant<
     MapHandle,
     BoxHandle<KeyValuePair>,
     BoxHandle<Callable>,
-    BoxHandle<RendererPtr>>;
+    BoxHandle<RendererPtr>,
+    BigIntHandle>;
 
 static_assert(std::is_trivially_copyable_v<ValueStorage>, "copying a value must not dispatch on its kind");
 static_assert(sizeof(ValueStorage) <= 24);
 } // namespace detail
+
+// What a visitor receives for an integer outside int64 (docs/tasks/0270): its canonical
+// decimal form, which the value (or the host BigInt read in place) keeps alive
+struct BigIntView
+{
+    std::string_view decimal;
+
+    // -1 or 1: a big integer is never zero
+    [[nodiscard]] int Sign() const noexcept { return decimal.front() == '-' ? -1 : 1; }
+    [[nodiscard]] std::string_view Magnitude() const noexcept { return Sign() < 0 ? decimal.substr(1) : decimal; }
+};
 
 using InternalValueRef = ReferenceWrapper<InternalValue>;
 using InternalValueList = std::vector<InternalValue>;
@@ -891,6 +913,34 @@ private:
     size_t m_size;
 };
 
+// The object of an integer outside int64: its canonical decimal form ("-" and digits, no
+// leading zero) follows it in the same allocation, as a StringObject's characters do
+// (docs/tasks/0270). Made only by MakeBigIntValue (big_int.h), which keeps a value that fits
+// int64 an int
+struct BigIntObject final : ValueObject
+{
+    static boost::intrusive_ptr<BigIntObject> Make(std::string_view decimal);
+
+    struct CharCount
+    {
+        size_t count;
+    };
+    static void* operator new(size_t objectSize, CharCount chars) { return ::operator new(objectSize + chars.count); }
+    static void operator delete(void* ptr, CharCount /*chars*/) noexcept { ::operator delete(ptr); }
+    static void operator delete(void* ptr) noexcept { ::operator delete(ptr); } // NOLINT(misc-new-delete-overloads)
+
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the digits follow the object
+    [[nodiscard]] std::string_view Decimal() const noexcept { return { reinterpret_cast<const char*>(this + 1), m_size }; }
+
+private:
+    explicit BigIntObject(size_t size) noexcept
+        : m_size(size)
+    {
+    }
+
+    size_t m_size;
+};
+
 // The index of T among the alternatives of ValueStorage
 template<typename T, typename Variant>
 struct AlternativeIndex;
@@ -1139,7 +1189,7 @@ public:
         static constexpr std::array kinds{ ValueKind::Undefined, ValueKind::None, ValueKind::Bool, ValueKind::Int, ValueKind::Double,
                                            ValueKind::String, ValueKind::String, ValueKind::String, ValueKind::String, ValueKind::String,
                                            ValueKind::String, ValueKind::HostValue, ValueKind::List, ValueKind::Map, ValueKind::KeyValuePair,
-                                           ValueKind::Callable, ValueKind::Renderer };
+                                           ValueKind::Callable, ValueKind::Renderer, ValueKind::BigInt };
         static_assert(kinds.size() == std::variant_size_v<detail::ValueStorage>);
         const auto index = m_imm.index();
         return index < kinds.size() ? kinds[index] : ValueKind::Undefined;
@@ -1578,6 +1628,17 @@ std::optional<std::basic_string_view<CharT>> AsStringView(const InternalValue& v
 }
 template<typename CharT>
 std::optional<std::basic_string_view<CharT>> AsStringView(const InternalValue&&) = delete;
+
+// The integer outside int64 a value holds, if it holds one. Not for temporaries, which the view would outlive
+inline std::optional<BigIntView> AsBigInt(const InternalValue& val)
+{
+    if (const auto* big = std::get_if<detail::BigIntHandle>(&detail::InternalValueAccess::Data(val)))
+    {
+        return BigIntView{ big->object->Decimal() };
+    }
+    return std::nullopt;
+}
+std::optional<BigIntView> AsBigInt(const InternalValue&&) = delete;
 
 // The text of a string value as a string of its own, for code that edits it (a value keeps its
 // characters in its object, so they are always copied). None for any other value

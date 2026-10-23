@@ -44,4 +44,6 @@ CASES = [
     ('dict_unhashable_subscript', '[{{ {1:2}[[1]] }}]'),
     ('dict_subscript_float_and_bool', "{{ {1: 'a'}[1.0] }}|{{ {1: 'a'}[true] }}|{{ {1.5: 'f'}[1.5] }}"),
     ('dict_subscript_missing_non_string', "[{{ {1: 'a'}[2] }}][{{ {1: 'a'}[none] }}]"),
+    # task 0270: an index beyond int64 finds nothing; slice bounds clip by their sign
+    ('big_index_and_slice', "[{{ l[18446744073709551615] }}]|{{ l[18446744073709551615:] }}|{{ l[:18446744073709551615] }}|{{ l[-18446744073709551615:] }}|{{ {18446744073709551615: 'k'}[18446744073709551615] }}"),
 ]

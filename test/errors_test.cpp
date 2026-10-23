@@ -775,12 +775,13 @@ TEST(ErrorContractTest, ThrowingAutoescapeSelectorIsHostException)
     EXPECT_THROW(std::rethrow_exception(tpl.error().GetException()), ErrorInfo);
 }
 
+// A template holds a big integer (task 0270), but without a backend its arithmetic fails
 TEST(ErrorContractTest, BigIntInTemplateIsIntegerOutOfRange)
 {
     const auto big = static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1;
     EXPECT_TRUE(Value(big).IsBigInt());
 
-    const std::pair<const char*, Value> rows[] = { { "{{ n + 1 }}", Value(big) }, { "{{ n[0] }}", Reflect(std::vector<uint64_t>{ big }) } };
+    const std::pair<const char*, Value> rows[] = { { "{{ n + 1 }}", Value(big) }, { "{{ n[0] * 2 }}", Reflect(std::vector<uint64_t>{ big }) } };
     for (const auto& [source, n] : rows)
     {
         Template tpl;

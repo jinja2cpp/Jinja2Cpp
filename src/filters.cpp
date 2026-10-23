@@ -1,5 +1,7 @@
 #include "filters.h"
 
+#include "big_int.h"
+
 #include "expression_evaluator.h"
 #include "function_base.h"
 #include "internal_value.h"
@@ -66,6 +68,7 @@ OrderKind GetOrderKind(const InternalValue& val)
     switch (val.Kind())
     {
     case ValueKind::Int:
+    case ValueKind::BigInt:
     case ValueKind::Double:
     case ValueKind::Bool:
         return OrderKind::Number;
@@ -116,7 +119,8 @@ InternalValueList AttributePath(const InternalValue& attribute)
         bool isIndex = !part.empty() && std::all_of(part.begin(), part.end(), [](char ch) { return ch >= '0' && ch <= '9'; });
         if (isIndex)
         {
-            parts.emplace_back(static_cast<int64_t>(std::stoll(part)));
+            // int(part): an index beyond int64 is a big integer, which indexes nothing
+            parts.push_back(part.size() < 19 ? InternalValue(static_cast<int64_t>(std::stoll(part))) : IntegerFromDigits(part, 10, false));
         }
         else
         {
@@ -179,6 +183,7 @@ bool IsNotIterable(const InternalValue& val)
     case ValueKind::None:
     case ValueKind::Bool:
     case ValueKind::Int:
+    case ValueKind::BigInt:
     case ValueKind::Double:
     case ValueKind::Callable:
         return true;
@@ -1444,6 +1449,9 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
     {
     }
 
+    // The filters that take numbers handle big integers before they get here (ValueConverter::Filter)
+    InternalValue operator()(const BigIntView& /*val*/) const { return InternalValue(); }
+
     InternalValue operator()(int64_t val) const
     {
         InternalValue result;
@@ -1990,12 +1998,12 @@ int64_t IntDigitValue(char ch, int64_t base)
 }
 
 // The digits from `pos` to the end of `text` in `base`, with single underscores between
-// them; nullopt on a bad digit or underscore, no digits or uint64 overflow
-std::optional<uint64_t> ReadIntDigits(const std::string& text, size_t pos, int64_t base, bool hasPrefix, bool& nonZero)
+// them; nullopt on a bad digit or underscore or no digits. `overflow` is set when the value
+// does not fit uint64
+std::optional<uint64_t> ReadIntDigits(const std::string& text, size_t pos, int64_t base, bool hasPrefix, bool& nonZero, bool& overflow)
 {
     uint64_t value = 0;
     size_t digits = 0;
-    bool overflow = false;
     // An underscore must follow a digit or the prefix ("0x_1f") and precede a digit
     bool underscoreAllowed = hasPrefix;
     bool lastUnderscore = false;
@@ -2027,7 +2035,7 @@ std::optional<uint64_t> ReadIntDigits(const std::string& text, size_t pos, int64
         }
         value = (value * static_cast<uint64_t>(base)) + static_cast<uint64_t>(digit);
     }
-    if (digits == 0 || lastUnderscore || overflow)
+    if (digits == 0 || lastUnderscore)
     {
         return std::nullopt;
     }
@@ -2036,8 +2044,8 @@ std::optional<uint64_t> ReadIntDigits(const std::string& text, size_t pos, int64
 
 // Python's int() of a string in `base` (0, or 2 to 36): surrounding whitespace, a sign, digits
 // with single underscores between them and, for base 0 or a matching base, a 0x/0o/0b prefix.
-// Values out of the int64 range are not supported and fail.
-std::optional<int64_t> ParsePythonInt(const std::string& str, int64_t base)
+// A value outside int64 is a big integer (docs/tasks/0270)
+std::optional<InternalValue> ParsePythonInt(const std::string& str, int64_t base)
 {
     if (base != 0 && (base < 2 || base > 36))
     {
@@ -2056,7 +2064,8 @@ std::optional<int64_t> ParsePythonInt(const std::string& str, int64_t base)
     }
 
     bool nonZero = false;
-    auto value = ReadIntDigits(text, pos, base, hasPrefix, nonZero);
+    bool overflow = false;
+    auto value = ReadIntDigits(text, pos, base, hasPrefix, nonZero, overflow);
     if (!value)
     {
         return std::nullopt;
@@ -2066,11 +2075,13 @@ std::optional<int64_t> ParsePythonInt(const std::string& str, int64_t base)
         return std::nullopt;
     }
     auto limit = static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + (negative ? 1 : 0);
-    if (*value > limit)
+    if (overflow || *value > limit)
     {
-        return std::nullopt;
+        std::string digits;
+        std::copy_if(text.begin() + static_cast<std::ptrdiff_t>(pos), text.end(), std::back_inserter(digits), [](char ch) { return ch != '_'; });
+        return IntegerFromDigits(digits, static_cast<int>(base), negative);
     }
-    return negative ? static_cast<int64_t>(0 - *value) : static_cast<int64_t>(*value);
+    return InternalValue(negative ? static_cast<int64_t>(0 - *value) : static_cast<int64_t>(*value));
 }
 
 // Python's round(x, ndigits) for a float: the exact binary value rounded half to even at
@@ -2139,8 +2150,8 @@ double PythonRound(double val, int64_t ndigits)
 }
 
 // Python's round(n, ndigits) for an integer: unchanged for ndigits >= 0, else half to even.
-// A result beyond int64 raises like any integer overflow
-int64_t PythonRoundInt(int64_t val, int64_t ndigits)
+// A result beyond int64 is a big integer, rounded in decimal (docs/tasks/0270)
+InternalValue PythonRoundInt(int64_t val, int64_t ndigits)
 {
     if (ndigits >= 0)
     {
@@ -2153,9 +2164,9 @@ int64_t PythonRoundInt(int64_t val, int64_t ndigits)
     {
         if (ndigits == -19 && magnitude > 5000000000000000000ULL)
         {
-            visitors::ThrowIntegerOverflow();
+            return RoundIntegerDecimal(std::to_string(val), ndigits);
         }
-        return 0;
+        return int64_t{ 0 };
     }
     uint64_t unit = 1;
     for (int64_t n = 0; n != -ndigits; ++n)
@@ -2172,7 +2183,7 @@ int64_t PythonRoundInt(int64_t val, int64_t ndigits)
     auto rounded = quotient * unit;
     if (rounded > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + (val < 0 ? 1 : 0))
     {
-        visitors::ThrowIntegerOverflow();
+        return RoundIntegerDecimal(std::to_string(val), ndigits);
     }
     return val < 0 ? static_cast<int64_t>(0 - rounded) : static_cast<int64_t>(rounded);
 }
@@ -2285,14 +2296,14 @@ std::optional<int64_t> PythonIntOf(const InternalValue& val)
     return std::nullopt;
 }
 
-// int() of inf or nan fails; larger values are not supported
-std::optional<int64_t> FloatToInt(double val)
+// int() of inf or nan fails; a value beyond int64 is a big integer
+std::optional<InternalValue> FloatToInt(double val)
 {
-    if (!std::isfinite(val) || std::fabs(val) >= 9223372036854775808.0)
+    if (!std::isfinite(val))
     {
         return std::nullopt;
     }
-    return static_cast<int64_t>(val);
+    return IntegerFromDouble(val);
 }
 
 } // namespace
@@ -2311,6 +2322,10 @@ InternalValue ValueConverter::FileSizeFormat(const InternalValue& baseVal, Rende
     else if (const auto* boolVal = GetIf<bool>(&baseVal))
     {
         bytes = *boolVal ? 1.0 : 0.0;
+    }
+    else if (const auto big = AsBigInt(baseVal))
+    {
+        bytes = BigIntToDouble(*big);
     }
     else if (auto str = NumberTextOf(baseVal))
     {
@@ -2356,7 +2371,11 @@ InternalValue ValueConverter::ToInt(const InternalValue& baseVal, RenderContext&
     {
         return *asInt;
     }
-    std::optional<int64_t> result;
+    if (baseVal.Kind() == ValueKind::BigInt)
+    {
+        return baseVal;
+    }
+    std::optional<InternalValue> result;
     if (const auto* dblVal = GetIf<double>(&baseVal))
     {
         result = FloatToInt(*dblVal);
@@ -2375,7 +2394,7 @@ InternalValue ValueConverter::ToInt(const InternalValue& baseVal, RenderContext&
     }
     if (result)
     {
-        return *result;
+        return std::move(*result);
     }
     return GetArgumentValue("default", context);
 }
@@ -2391,6 +2410,10 @@ InternalValue ValueConverter::ToFloat(const InternalValue& baseVal, RenderContex
     {
         return *dblVal;
     }
+    if (const auto big = AsBigInt(baseVal))
+    {
+        return BigIntToDouble(*big);
+    }
     if (auto str = NumberTextOf(baseVal))
     {
         if (auto result = ParsePythonFloat(*str))
@@ -2405,7 +2428,16 @@ InternalValue ValueConverter::Abs(const InternalValue& baseVal, RenderContext& c
 {
     if (auto asInt = PythonIntOf(baseVal))
     {
-        return static_cast<int64_t>(*asInt < 0 ? 0 - static_cast<uint64_t>(*asInt) : static_cast<uint64_t>(*asInt));
+        // abs(-2**63) is 2**63, outside int64
+        if (*asInt == std::numeric_limits<int64_t>::min())
+        {
+            return MakeBigIntValue(std::to_string(*asInt).substr(1));
+        }
+        return *asInt < 0 ? -*asInt : *asInt;
+    }
+    if (const auto big = AsBigInt(baseVal))
+    {
+        return MakeBigIntValue(big->Magnitude());
     }
     if (const auto* dblVal = GetIf<double>(&baseVal))
     {
@@ -2418,7 +2450,7 @@ InternalValue ValueConverter::Abs(const InternalValue& baseVal, RenderContext& c
 
 namespace
 {
-// Python's round(x) of a float: the nearest int, halves to even; integers are int64 (0178)
+// Python's round(x) of a float: the nearest int, halves to even
 InternalValue PythonRoundToInt(double value)
 {
     if (std::isnan(value))
@@ -2430,13 +2462,26 @@ InternalValue PythonRoundToInt(double value)
         throw std::runtime_error("cannot convert float infinity to integer");
     }
     // The default rounding mode rounds halves to even
-    const double rounded = std::nearbyint(value);
-    // -2**63 is exact; 2**63 is the first double beyond int64
-    if (rounded < -9223372036854775808.0 || rounded >= 9223372036854775808.0)
+    return IntegerFromDouble(std::nearbyint(value));
+}
+
+// round() of an integer outside int64 (docs/tasks/0270): itself, or rounded in decimal; ceil
+// and floor divide by a float, as for any int
+InternalValue RoundBigInt(const InternalValue& value, const BigIntView& big, const std::string& method, std::optional<int64_t> precision)
+{
+    if (!precision)
     {
-        visitors::ThrowIntegerOverflow();
+        if (method != "common")
+        {
+            throw std::runtime_error("unsupported operand type(s) for ** or pow(): 'int' and 'NoneType'");
+        }
+        return value;
     }
-    return static_cast<int64_t>(rounded);
+    if (method == "common")
+    {
+        return *precision >= 0 ? value : RoundIntegerDecimal(big.decimal, *precision);
+    }
+    return PythonRoundByMethod(BigIntToDouble(big), true, *precision, method == "ceil");
 }
 } // namespace
 
@@ -2453,6 +2498,10 @@ InternalValue ValueConverter::Round(const InternalValue& baseVal, RenderContext&
     if (!noPrecision && !GetIf<int64_t>(&precVal) && !GetIf<bool>(&precVal))
     {
         throw std::runtime_error("round(): precision must be an integer");
+    }
+    if (const auto big = AsBigInt(baseVal))
+    {
+        return RoundBigInt(baseVal, *big, method, noPrecision ? std::optional<int64_t>() : ConvertToInt(precVal));
     }
     auto asInt = PythonIntOf(baseVal);
     const auto* dblVal = GetIf<double>(&baseVal);

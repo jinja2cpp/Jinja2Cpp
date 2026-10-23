@@ -1022,8 +1022,8 @@ TEST(BasicTests, ValueFromUnsignedAboveInt64MaxIsBigInt)
     const uint64_t big = above;
     EXPECT_EQ("9223372036854775808", Reflect(&big).AsBigInt().ToString());
 
-    // Inside a list or map it goes through the template renderer, which holds big integers only with task 0270
-    EXPECT_THROW((void)Value(ValuesList{ max }).ToString(), std::overflow_error);
+    // Inside a list or map it goes through the template renderer, which holds big integers (task 0270)
+    EXPECT_EQ("[18446744073709551615]", Value(ValuesList{ max }).ToString());
 
     char buffer[32] = {};
     const auto [end, ec] = max.ToChars(std::begin(buffer), std::end(buffer));
@@ -1049,17 +1049,13 @@ TEST(BasicTests, ValueFromUnsignedAboveInt64MaxIsBigInt)
     EXPECT_NE(max, Value(Value{ above }));
     EXPECT_NE(Value(5), Value(BigInt(5)));
 
-    // Until templates hold big integers (task 0270), one that enters a template fails the render loudly
+    // Templates hold big integers (task 0270): they print exactly, and a BigInt that fits int64 is an int there
     Template tpl;
     ASSERT_TRUE(tpl.Load("{{ items[0] }}"));
-    const auto result = tpl.RenderAsString({ { "items", Reflect(std::vector<uint64_t>{ above }) } });
-    ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(ErrorCode::IntegerOutOfRange, result.error().GetCode());
+    EXPECT_EQ("9223372036854775808", tpl.RenderAsString({ { "items", Reflect(std::vector<uint64_t>{ above }) } }).value());
     EXPECT_EQ("9223372036854775807", tpl.RenderAsString({ { "items", Reflect(std::vector<uint64_t>{ static_cast<uint64_t>(int64Max) }) } }).value());
-    ASSERT_TRUE(tpl.Load("{{ n }}"));
-    const auto direct = tpl.RenderAsString({ { "n", max } });
-    ASSERT_FALSE(direct.has_value());
-    EXPECT_EQ(ErrorCode::IntegerOutOfRange, direct.error().GetCode());
+    ASSERT_TRUE(tpl.Load("{{ n }}|{{ n is integer }}|{{ small + 1 }}"));
+    EXPECT_EQ("18446744073709551615|True|6", tpl.RenderAsString({ { "n", max }, { "small", BigInt(5) } }).value());
 }
 
 TEST(BasicTests, ValueFromNullptrIsNone)

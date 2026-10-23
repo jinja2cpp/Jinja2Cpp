@@ -44,7 +44,7 @@ enum class ErrorCode
     UnknownFilter = 13,            //!< The template names a filter that is neither built in nor added to the environment (Jinja2's TemplateAssertionError). ExtraParams[0] contains the name
     UnknownTest = 14,              //!< The template names a test that is neither built in nor added to the environment (Jinja2's TemplateAssertionError). ExtraParams[0] contains the name
     UserCallableException = 15,    //!< A user callable (context or global value, filter, test, finalize, gettext) threw. ExtraParams[0] contains `what()`, GetException() the exception
-    IntegerOutOfRange = 16,        //!< An integer is outside the `int64_t` range: a \ref BigInt the template uses (until docs/tasks/0270) or template arithmetic. ExtraParams[0] contains the message
+    IntegerOutOfRange = 16,        //!< Python's OverflowError for an integer: template arithmetic whose result is outside the `int64_t` range and has no big-integer backend, or an integer too big for a size or an index. ExtraParams[0] contains the message
     TemplateRuntimeError = 17,     //!< An operation of the template failed (Python's TypeError, ValueError, ...). ExtraParams[0] contains the message
     ResourceLimitExceeded = 18,    //!< A limit was passed: one of Settings::Limits, a built-in cap or a host's budget. ExtraParams[0] contains the message, ExtraParams[1] (for Settings::Limits) the name of the limit (`"maxRenderSteps"`)
     ExpectedStringLiteral = 1001,  //!< String literal expected

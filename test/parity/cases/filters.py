@@ -350,4 +350,8 @@ CASES = [
     ('string_dict_non_string_keys', "{{ {1: 'a', None: 'b', (1, 2): 'c'}|string }}"),
     ('format_percent_int_key', "{{ '%(1)s'|format(a=1) }}"),
     ('map_over_dict_int_keys', "{{ {1: 'a', 2: 'b'}|map('string')|join(',') }}|{{ {1: 'a', 2: 'b'}|sum }}"),
+    # task 0270: integers beyond int64 print, convert and format exactly without arithmetic
+    ('big_int_print', "{{ 18446744073709551615|string }}|{{ 18446744073709551615|tojson }}|{{ [18446744073709551615]|pprint }}|{{ -18446744073709551615|abs }}|{{ 18446744073709551615|float }}|{{ 18446744073709551615|filesizeformat }}|{{ 18446744073709551615|round(-3) }}"),
+    ('format_big_int', "{{ '%d|%x|%o|%e'|format(18446744073709551615, 18446744073709551615, 18446744073709551615, 18446744073709551615) }}|{{ '{:,}'.format(18446744073709551615) }}"),
+    ('sort_unique_big', "{{ [18446744073709551615, 3, -18446744073709551615, 1.5]|sort|join(',') }}|{{ [18446744073709551615, 18446744073709551615, 3]|unique|join(',') }}|{{ [18446744073709551615, 3]|max }}"),
 ]

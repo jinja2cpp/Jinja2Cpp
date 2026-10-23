@@ -75,4 +75,9 @@ CASES = [
     ('dict_float_keys', "{{ {0.1+0.2:'x'} }}|{{ {-0.0:'x', 0:'y'} }}|{{ {1e100:'x'} }}"),
     ('dict_key_range_and_nested_tuple', "{{ {range(3): 'r', ((1, 2), 'a'): 'n'} }}|{{ {range(3): 'r'}[range(0, 3)] }}|{{ {((1, 2), 'a'): 'n'}[((1.0, 2), 'a')] }}"),
     ('dict_key_big_float_is_float', "{{ {2.0**63: 'f'}[2.0**63] }}|{{ {2.0**63: 'f'} }}"),
+    # task 0270: integer literals beyond int64 are ints, as in Python
+    ('int_big_hex', "{{ 0x1_0000_0000_0000_0000 }}|{{ 0o2000000000000000000000 }}|{{ 0b1{} }}".replace('{}', '0' * 64)),
+    ('int_min_literal', "{{ -9223372036854775808 }}|{{ (-9223372036854775808) is integer }}|{{ 9223372036854775808 }}"),
+    ('int_digits_limit', "{{ " + "1" * 4301 + " }}"),
+    ('int_big_context', "{{ n }}|{{ n is integer }}|{{ [n] }}|{{ n > 9223372036854775807 }}", {"ctx": {"n": 18446744073709551615}}),
 ]

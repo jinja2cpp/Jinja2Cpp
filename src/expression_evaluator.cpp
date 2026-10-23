@@ -467,6 +467,7 @@ bool IsImmutableScalar(const InternalValue& value)
     case ValueKind::None:
     case ValueKind::Bool:
     case ValueKind::Int:
+    case ValueKind::BigInt:
     case ValueKind::Double:
         return true;
     case ValueKind::String:

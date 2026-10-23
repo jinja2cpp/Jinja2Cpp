@@ -64,4 +64,6 @@ CASES = [
     ("is_not_with_parens", "{{ 'T' if 4 is not divisibleby(3) else 'F' }}"),
     # operator.eq and friends take no keyword arguments (0206)
     ("comparison_keyword_arg", "{{ 'T' if 1 is eq(b=1) else 'F' }}"),
+    # task 0270: an integer beyond int64 is an int
+    ('big_int_tests', "{{ 'T' if 18446744073709551615 is number else 'F' }}{{ 'T' if 18446744073709551615 is integer else 'F' }}{{ 'T' if 18446744073709551615 is odd else 'F' }}{{ 'T' if 18446744073709551616 is even else 'F' }}{{ 'T' if 18446744073709551615 is float else 'F' }}"),
 ]

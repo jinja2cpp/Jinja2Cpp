@@ -985,7 +985,8 @@ SubscriptParseResult<DotSubscript> ParseDotSubscript(NodeArena& nodes, LexScanne
     {
         result.attrName = lexer.GetAsString(tok);
     }
-    else if (auto value = tok == Token::IntegerNum || tok == Token::FloatNum ? lexer.GetValue(tok) : InternalValue(); GetIf<int64_t>(&value))
+    else if (auto value = tok == Token::IntegerNum || tok == Token::FloatNum ? lexer.GetValue(tok) : InternalValue();
+             GetIf<int64_t>(&value) || value.Kind() == ValueKind::BigInt)
     {
         result.indexExpr = MakeConstant(nodes, std::move(value));
     }

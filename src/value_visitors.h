@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_VALUE_VISITORS_H
 #define JINJA2CPP_SRC_VALUE_VISITORS_H
 
+#include "big_int.h"
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "loop_attr.h"
@@ -149,12 +150,8 @@ struct RecursiveUnwrapper
     {
         return arg.View();
     }
-    // A host Value read in place may hold an integer outside int64, which templates cannot
-    // hold yet (docs/tasks/0270): it fails loudly, so no visitor meets one
-    [[noreturn]] static NoneValue UnwrapRecursive(const BigInt& arg, const ValueObject* /*owner*/)
-    {
-        throw IntegerOutOfRangeError("integer " + arg.ToString() + " does not fit in 64 bits");
-    }
+    // An integer outside int64 is visited as its decimal form (docs/tasks/0270)
+    static BigIntView UnwrapRecursive(const BigIntHandle& arg, const ValueObject* /*owner*/) noexcept { return BigIntView{ arg.object->Decimal() }; }
     static ListRef UnwrapRecursive(const ListHandle& arg, const ValueObject* owner) noexcept { return ListRef(arg.accessor, owner, arg.isTuple); }
     static MapRef UnwrapRecursive(const MapHandle& arg, const ValueObject* owner) noexcept { return MapRef(arg.accessor, owner); }
     template<typename T>
@@ -231,6 +228,15 @@ struct BaseVisitor
         assert(false);
         return R();
     }
+
+    // An integer outside int64 has no default: a visitor that can meet one says what it does,
+    // or it does not compile (docs/tasks/0270)
+    R operator()(const BigIntView&) const = delete;
+    template<typename U>
+    R operator()(const BigIntView&, U&&) const = delete;
+    template<typename T>
+    R operator()(T&&, const BigIntView&) const = delete;
+    R operator()(const BigIntView&, const BigIntView&) const = delete;
 
     template<typename T>
     R operator()(T&&) const
@@ -322,6 +328,7 @@ struct ValueRendererBase
         AppendAscii({ text.data(), text.size() });
     }
     void operator()(bool val) const { AppendAscii(val ? "True" : "False"); }
+    void operator()(const BigIntView& val) const { AppendAscii(CheckedDecimal(val)); }
     void operator()(const std::basic_string_view<CharT>& val) const { AppendString(val); }
     void operator()(const std::basic_string<CharT>& val) const { AppendString(val); }
 
@@ -652,11 +659,8 @@ struct InputValueConvertor
         return result_t(InternalValue(val));
     }
 
-    // Integers outside int64 enter templates with docs/tasks/0270; until then they fail loudly
-    [[noreturn]] result_t operator()(const BigInt& val) const
-    {
-        throw IntegerOutOfRangeError("integer " + val.ToString() + " does not fit in 64 bits");
-    }
+    // An integer outside int64 is a big integer; one that fits is an int (docs/tasks/0270)
+    result_t operator()(const BigInt& val) const { return MakeBigIntValue(val.ToString()); }
 
     template<typename T>
     result_t operator()(const T& val) const
@@ -906,6 +910,10 @@ inline const char* PythonTypeName(double)
 {
     return "float";
 }
+inline const char* PythonTypeName(const BigIntView&)
+{
+    return "int";
+}
 template<typename CharT>
 const char* PythonTypeName(const std::basic_string<CharT>&)
 {
@@ -966,8 +974,8 @@ struct IsStringType<std::basic_string_view<CharT>> : std::true_type
 template<typename T>
 inline constexpr bool IsStringType_v = IsStringType<T>::value;
 
-// Overflow-checked int64 arithmetic. Python integers are unbounded; Jinja2C++ raises
-// instead of switching to big integers (a deliberate divergence, docs/parity.md).
+// Overflow-checked int64 arithmetic. Python integers are unbounded; a result outside int64
+// raises OverflowError until a big-integer backend computes it (docs/tasks/0271).
 inline bool AddOverflows(int64_t a, int64_t b, int64_t& result)
 {
 #if defined(__GNUC__) || defined(__clang__)
@@ -1021,9 +1029,10 @@ inline bool MulOverflows(int64_t a, int64_t b, int64_t& result)
 #endif
 }
 
+// Python's int grows past 64 bits; without a big-integer backend the result raises OverflowError (docs/tasks/0270)
 [[noreturn]] inline void ThrowIntegerOverflow()
 {
-    throw std::runtime_error("integer result does not fit in 64 bits");
+    ThrowBigIntArithmetic();
 }
 
 struct UnaryOperation : BaseVisitor<InternalValue>
@@ -1061,6 +1070,21 @@ struct UnaryOperation : BaseVisitor<InternalValue>
             return val;
         case jinja2::UnaryExpression::UnaryMinus:
             return -val;
+        }
+        return InternalValue();
+    }
+
+    // An integer outside int64 (docs/tasks/0270) is never zero; -x may fit int64 again
+    InternalValue operator()(const BigIntView& val) const
+    {
+        switch (m_oper)
+        {
+        case jinja2::UnaryExpression::LogicalNot:
+            return false;
+        case jinja2::UnaryExpression::UnaryPlus:
+            return MakeBigIntValue(val.decimal);
+        case jinja2::UnaryExpression::UnaryMinus:
+            return NegateBigInt(val);
         }
         return InternalValue();
     }
@@ -1463,6 +1487,91 @@ struct BinaryMathOperation : BaseVisitor<>
         return this->operator()(left, static_cast<double>(right));
     }
 
+    // An integer outside int64 (docs/tasks/0270). Comparisons are exact: a big integer is
+    // outside int64, so against an int only its sign matters. `/` divides as floats, as int / int
+    // does; any other arithmetic needs a big result, which raises OverflowError
+    ResultType operator()(const BigIntView& left, const BigIntView& right) const
+    {
+        if (IsComparison())
+        {
+            return FromCompare(CompareBigInts(left, right));
+        }
+        return BigIntArithmetic(left, right, false);
+    }
+    ResultType operator()(const BigIntView& left, int64_t right) const
+    {
+        if (IsComparison())
+        {
+            return FromCompare(left.Sign());
+        }
+        return BigIntArithmetic(left, right, right == 0);
+    }
+    ResultType operator()(int64_t left, const BigIntView& right) const
+    {
+        if (IsComparison())
+        {
+            return FromCompare(-right.Sign());
+        }
+        return BigIntArithmetic(left, right, false);
+    }
+    ResultType operator()(const BigIntView& left, bool right) const { return this->operator()(left, static_cast<int64_t>(right)); }
+    ResultType operator()(bool left, const BigIntView& right) const { return this->operator()(static_cast<int64_t>(left), right); }
+    ResultType operator()(const BigIntView& left, double right) const
+    {
+        if (IsComparison())
+        {
+            return FromCompare(CompareBigIntDouble(left, right));
+        }
+        return this->operator()(BigIntToDouble(left), right);
+    }
+    ResultType operator()(double left, const BigIntView& right) const
+    {
+        if (IsComparison())
+        {
+            const int cmp = CompareBigIntDouble(right, left);
+            return FromCompare(cmp == 2 ? 2 : -cmp);
+        }
+        return this->operator()(left, BigIntToDouble(right));
+    }
+
+    // int op int where an operand is outside int64; rightIsZero for the division errors
+    template<typename L, typename R>
+    [[nodiscard]] ResultType BigIntArithmetic(const L& left, const R& right, bool rightIsZero) const
+    {
+        switch (m_oper)
+        {
+        case jinja2::BinaryExpression::Div:
+            if (rightIsZero)
+            {
+                throw std::runtime_error("division by zero");
+            }
+            return ToDouble(left) / ToDouble(right);
+        case jinja2::BinaryExpression::DivInteger:
+            if (rightIsZero)
+            {
+                throw std::runtime_error("integer division or modulo by zero");
+            }
+            break;
+        case jinja2::BinaryExpression::DivRemainder:
+            if (rightIsZero)
+            {
+                throw std::runtime_error("integer modulo by zero");
+            }
+            break;
+        case jinja2::BinaryExpression::Plus:
+        case jinja2::BinaryExpression::Minus:
+        case jinja2::BinaryExpression::Mul:
+        case jinja2::BinaryExpression::Pow:
+            break;
+        default:
+            ThrowUnsupported(left, right);
+        }
+        ThrowBigIntArithmetic();
+    }
+
+    static double ToDouble(int64_t val) { return static_cast<double>(val); }
+    static double ToDouble(const BigIntView& val) { return BigIntToDouble(val); }
+
     // bool is an int subclass in Python: True + 1 == 2, True == 1
     ResultType operator()(bool left, bool right) const { return this->operator()(static_cast<int64_t>(left), static_cast<int64_t>(right)); }
     ResultType operator()(bool left, int64_t right) const { return this->operator()(static_cast<int64_t>(left), right); }
@@ -1542,6 +1651,32 @@ struct BinaryMathOperation : BaseVisitor<>
     std::enable_if_t<IsStringType_v<S>, ResultType> operator()(bool left, const S& right) const
     {
         return RepeatString(right, static_cast<int64_t>(left), left, right);
+    }
+
+    // A repeat count outside int64 cannot be an index (Python's OverflowError)
+    template<typename S>
+    std::enable_if_t<IsStringType_v<S>, ResultType> operator()(const S& left, const BigIntView& right) const
+    {
+        return RepeatBig(left, right);
+    }
+    template<typename S>
+    std::enable_if_t<IsStringType_v<S>, ResultType> operator()(const BigIntView& left, const S& right) const
+    {
+        return RepeatBig(left, right);
+    }
+    ResultType operator()(const ListRef& left, const BigIntView& right) const { return RepeatBig(left, right); }
+    ResultType operator()(const BigIntView& left, const ListRef& right) const { return RepeatBig(left, right); }
+    ResultType operator()(const KeyValuePair& left, const BigIntView& right) const { return RepeatBig(left, right); }
+    ResultType operator()(const BigIntView& left, const KeyValuePair& right) const { return RepeatBig(left, right); }
+
+    template<typename L, typename R>
+    [[nodiscard]] ResultType RepeatBig(const L& left, const R& right) const
+    {
+        if (m_oper != jinja2::BinaryExpression::Mul)
+        {
+            return Mismatch(left, right);
+        }
+        ThrowIndexOverflow();
     }
 
     template<typename S, typename L, typename R>
@@ -1843,6 +1978,12 @@ struct BooleanEvaluator : BaseVisitor<bool>
         return val;
     }
 
+    // Never zero (docs/tasks/0270)
+    bool operator()(const BigIntView&) const
+    {
+        return true;
+    }
+
     template<typename CharT>
     bool operator()(const std::basic_string<CharT>& str) const
     {
@@ -1909,6 +2050,19 @@ struct NumberEvaluator
     {
         return static_cast<TargetType>(val);
     }
+    // An integer outside int64 is a float exactly as Python converts it; as an integer it
+    // cannot be one (Python's OverflowError for an index-sized argument)
+    TargetType operator()(const BigIntView& val) const
+    {
+        if constexpr (std::is_integral_v<TargetType>)
+        {
+            ThrowIndexOverflow();
+        }
+        else
+        {
+            return static_cast<TargetType>(BigIntToDouble(val));
+        }
+    }
     template<typename U>
     TargetType operator()(U&&) const
     {
@@ -1965,6 +2119,9 @@ struct StringConverterImpl : public BaseVisitor<decltype(std::declval<Fn>()(std:
         return m_fn(str);
     }
 
+    // Not a string, as an int is not
+    R operator()(const BigIntView&) const { return R(); }
+
     const Fn& m_fn;
 };
 
@@ -1997,6 +2154,8 @@ struct SameStringGetter : public visitors::BaseVisitor<nonstd::expected<void, st
     {
         return MakeUnexpected(ConvertString<ResultString>(str));
     }
+
+    Result operator()(const BigIntView&) const { return Result(); }
 };
 
 } // namespace visitors

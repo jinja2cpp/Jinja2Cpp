@@ -1,3 +1,4 @@
+#include "big_int.h"
 #include "expression_evaluator.h"
 #include "filters.h"
 #include "function_base.h"
@@ -55,7 +56,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     static bool SafeKeyLess(const InternalValue& left, const InternalValue& right)
     {
         const auto isNumber = [](const InternalValue& val) {
-            return val.Kind() == ValueKind::Int || val.Kind() == ValueKind::Double || val.Kind() == ValueKind::Bool;
+            return val.Kind() == ValueKind::Int || val.Kind() == ValueKind::BigInt || val.Kind() == ValueKind::Double || val.Kind() == ValueKind::Bool;
         };
         const auto isSequence = [](const InternalValue& val) { return val.Kind() == ValueKind::List || val.Kind() == ValueKind::KeyValuePair; };
         if ((isNumber(left) && isNumber(right)) || (IsStringValue(left) && IsStringValue(right)) || (isSequence(left) && isSequence(right)))
@@ -213,6 +214,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     std::string operator()(double val) const { return Repr(val); }
 
     std::string operator()(int64_t val) const { return fmt::format("{}", val); }
+
+    std::string operator()(const BigIntView& val) const { return std::string(CheckedDecimal(val)); }
 
     const RenderContext* m_context;
 };
@@ -481,6 +484,10 @@ private:
         {
             m_out += std::to_string(*i);
         }
+        else if (const auto big = AsBigInt(value))
+        {
+            m_out += CheckedDecimal(*big);
+        }
         else if (const auto* d = GetIf<double>(&value))
         {
             m_out += JsonFloatText(*d);
@@ -576,6 +583,10 @@ private:
             if (const auto* i = GetIf<int64_t>(&key))
             {
                 text = std::to_string(*i);
+            }
+            else if (const auto big = AsBigInt(key))
+            {
+                text = CheckedDecimal(*big);
             }
             else if (const auto* b = GetIf<bool>(&key))
             {
@@ -848,6 +859,11 @@ private:
         {
             scalar();
             m_out += std::to_string(*i);
+        }
+        else if (const auto big = AsBigInt(value))
+        {
+            scalar();
+            m_out += CheckedDecimal(*big);
         }
         else if (const auto* d = GetIf<double>(&value))
         {

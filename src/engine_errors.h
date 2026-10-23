@@ -33,8 +33,9 @@ private:
     const char* m_field = nullptr;
 };
 
-// A big integer (BigInt) reached a template, which cannot hold one yet (docs/tasks/0270):
-// ErrorCode::IntegerOutOfRange
+// Python's OverflowError for an integer: arithmetic whose result is outside int64 and has no
+// big-integer backend to compute it, or a big integer where an index-sized one is needed
+// (docs/tasks/0270): ErrorCode::IntegerOutOfRange
 class IntegerOutOfRangeError : public std::overflow_error
 {
 public:
