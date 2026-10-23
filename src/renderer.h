@@ -12,6 +12,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <new>
 #include <utility>
@@ -76,6 +77,7 @@ public:
         // that statement gave it one (docs/api-2.0.md, 2.1 rule 8). Table-based unwinding: the
         // try costs nothing until something throws, and the handler needs nothing the loop
         // does not keep anyway
+        std::exception_ptr failure;
         try
         {
             for (; child != end; ++child)
@@ -87,17 +89,14 @@ public:
                 }
             }
         }
-        catch (const std::bad_alloc&)
-        {
-            throw;
-        }
-        catch (const detail::RenderFailure&)
-        {
-            throw;
-        }
         catch (...)
         {
-            detail::ThrowRenderFailure(values.Nodes(), child, OffsetOf(child, end));
+            // Thrown on once the handler is left (ThrowRenderFailure)
+            failure = std::current_exception();
+        }
+        if (failure)
+        {
+            detail::ThrowRenderFailure(std::move(failure), values.Nodes(), child, OffsetOf(child, end));
         }
     }
 
