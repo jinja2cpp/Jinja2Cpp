@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: api
 depends: [0270]
@@ -20,3 +20,5 @@ every CI row tests the interface without Boost. Add a `bench/cases/int_arith` wo
 gate holds: within ±0.5% Ir and the same allocation counts on every bench case.
 
 Plan: [docs/design/0178-big-integer-plan.md](../design/0178-big-integer-plan.md).
+
+Done in #620.

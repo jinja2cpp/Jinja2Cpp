@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: parity
 depends: [0269]
@@ -24,4 +24,4 @@ cases listed in plan section 9 are added, the sanitizer configuration is clean a
 
 Plan: [docs/design/0178-big-integer-plan.md](../design/0178-big-integer-plan.md).
 
-In progress in #613.
+Done in #613 (merged in train 30, #619).
