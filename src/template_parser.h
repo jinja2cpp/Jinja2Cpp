@@ -277,7 +277,7 @@ private:
     struct Item
     {
         Child node;
-        std::uint32_t offset;
+        std::uint32_t offset = 0;
     };
     static_assert(std::is_trivially_copyable_v<Item> && std::is_trivially_destructible_v<Item>, "the list never destroys its children");
 
