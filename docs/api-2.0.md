@@ -259,6 +259,15 @@ filter: the chat-template benchmarks take 550-1000. With every limit at its defa
 pays nothing per step: steps are counted in the stack check's slow path, which only a render
 with limits takes.
 
+**Big-integer backend (task 0271, plan docs/design/0178-big-integer-plan.md).**
+`TemplateEnv::SetBigIntBackend(const BigIntBackend*) noexcept` installs the arithmetic for
+integers outside `int64_t` (`big_int_backend.h`: a versioned table of 13 noexcept functions on
+objects of at most 64 bytes). It returns false, changing nothing, for a table the library cannot
+use. A template keeps the backend its environment had when it was made, as it keeps the settings.
+Without a backend (`nullptr`, the default until 0272) such arithmetic fails the render with
+`ErrorCode::IntegerOutOfRange`. `GetBigIntBackend()` and `GetBuiltinBigIntBackend()` read it back.
+Only int64 overflow calls the backend, so int64 arithmetic costs the same with or without one.
+
 ### 3.4 Errors (`error_info.h`, `error_handler.h`)
 
 | Now | Problem | 2.0 | Migration |
@@ -528,7 +537,9 @@ and in the user's code) cannot happen in 2.0, and the namespace needs no extra t
 SOVERSION goes to 2 with this release. After that, it tracks the ABI, not the major
 version: a minor release that adds a `Settings` field bumps it, because user code
 allocates `Settings`. Parity work adds options regularly, so the alternative (freezing
-`Settings` or hiding it behind setters) costs more than a SOVERSION number.
+`Settings` or hiding it behind setters) costs more than a SOVERSION number. `BigIntBackend` grows
+only at its end, behind `structSize` and `version`, so a later version's larger table is not an
+ABI break (0271).
 
 ### 5.5 `[[nodiscard]]` results (release note)
 
