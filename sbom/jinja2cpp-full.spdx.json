@@ -302,6 +302,27 @@
       "comment": "role: alternative; phases: build,consumer-link,runtime; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=boost (the default); used-for: Parses {% meta %} JSON metadata for Template::GetMetadata (template_impl.h:484-498, binding/boost_json_parser.h); the opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value; why: One of three interchangeable JSON backends; the default because Boost is already required; lighten: The heaviest backend (boost_json.a + boost_container.a, about 4.8 MB in a Debug build) for a niche feature (template metadata). An internal minimal JSON reader, or nlohmann as default, would remove both libraries; the adapter headers stay opt-in"
     },
     {
+      "SPDXID": "SPDXRef-Package-boost-multiprecision",
+      "name": "boost-multiprecision",
+      "versionInfo": "1.92.0",
+      "supplier": "Organization: Boost.org",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://www.boost.org",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/boostorg/multiprecision@boost-1.92.0"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: optional; phases: build,test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_BIGINT=boost (default none) compiles it into src/big_int_builtin.cpp; the tests always build the adapter. Standalone mode (BOOST_MP_STANDALONE): only Multiprecision and Config headers, taken from the Boost release of the deps mode; also-roles: test; used-for: cpp_int behind the built-in big-integer backend (exact integer arithmetic beyond int64, docs/tasks/0272); the opt-in header-only adapter include/jinja2cpp/big_int/boost_cpp_int.h is also the sample backend; why: A mature header-only arbitrary-precision integer; the library calls a backend only through the BigIntBackend table (include/jinja2cpp/big_int_backend.h), so any library can replace it at run time; lighten: Header-only, no link cost, off by default. After 0230 drops Boost from the core, fetch boostorg/multiprecision and boostorg/config on their own (docs/design/0178-big-integer-plan.md section 8)"
+    },
+    {
       "SPDXID": "SPDXRef-Package-nlohmann-json",
       "name": "nlohmann_json",
       "versionInfo": "3.12.0",
@@ -1052,6 +1073,11 @@
       "relatedSpdxElement": "SPDXRef-Package-boost-json"
     },
     {
+      "spdxElementId": "SPDXRef-Package-boost",
+      "relationshipType": "CONTAINS",
+      "relatedSpdxElement": "SPDXRef-Package-boost-multiprecision"
+    },
+    {
       "spdxElementId": "SPDXRef-Package-nlohmann-json",
       "relationshipType": "OPTIONAL_DEPENDENCY_OF",
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
@@ -1207,5 +1233,5 @@
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-5c0d78ff6f757bb4"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-41a49be67aa2308c"
 }

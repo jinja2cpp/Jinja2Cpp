@@ -1,6 +1,7 @@
 #include "big_int_toy_backend.h"
 #include "gtest/gtest.h"
 
+#include <jinja2cpp/big_int/boost_cpp_int.h>
 #include <jinja2cpp/big_int_backend.h>
 
 #include <jinja2cpp/big_int.h>
@@ -411,6 +412,33 @@ TEST(BigIntToyBackend, TemplateKeepsTheBackendItWasLoadedWith)
     ASSERT_TRUE(nested.has_value()) << nested.error().ToString();
     EXPECT_EQ("False|18446744073709551617", nested.value());
 
+    // The same when the inner render has limits of its own, and when the outer one has them
+    // (a backend alone does not install limits, docs/tasks/0272)
+    TemplateEnv limited;
+    Settings withLimits;
+    withLimits.limits.maxRenderSteps = 1000;
+    limited.SetSettings(withLimits);
+    ASSERT_TRUE(limited.SetBigIntBackend(nullptr));
+    Template innerLimited(&limited);
+    ASSERT_TRUE(innerLimited.Load("{{ big + 1 }}"));
+    params["inner"] = MakeCallable([&innerLimited]() { return innerLimited.RenderAsString(BigIntParams()).has_value(); });
+    EXPECT_EQ("False|18446744073709551617", outer.RenderAsString(params).value());
+    ASSERT_TRUE(limited.SetBigIntBackend(big_int_toy::Backend()));
+    Template outerLimited(&limited);
+    ASSERT_TRUE(outerLimited.Load("{{ inner() }}|{{ big + 2 }}"));
+    params["inner"] = MakeCallable([&without]() { return without.RenderAsString(BigIntParams()).has_value(); });
+    EXPECT_EQ("False|18446744073709551617", outerLimited.RenderAsString(params).value());
+    Template innerWith(&env);
+    ASSERT_TRUE(innerWith.Load("{{ big + 1 }}"));
+    params["inner"] = MakeCallable([&innerWith]() { return innerWith.RenderAsString(BigIntParams()).value(); });
+    ASSERT_TRUE(env.SetBigIntBackend(nullptr));
+    Template plainOuter(&env);
+    ASSERT_TRUE(plainOuter.Load("{{ inner() }}|{{ big + 2 }}"));
+    const auto restored = plainOuter.RenderAsString(params);
+    ASSERT_FALSE(restored.has_value());
+    EXPECT_EQ(ErrorCode::IntegerOutOfRange, restored.error().GetCode());
+    ASSERT_TRUE(env.SetBigIntBackend(big_int_toy::Backend()));
+
     // Settings changed after the backend was set keep it, through the env and its templates
     Settings changed = env.GetSettings();
     changed.trimBlocks = true;
@@ -455,4 +483,96 @@ TEST(BigIntToyBackend, FailuresOfTheBackend)
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, RenderError<char>("{{ big * 3 }}", FailingBackend<BigIntStatus::TooLarge>()));
     EXPECT_NE(ErrorCode::IntegerOutOfRange, RenderError<char>("{{ big + 1 }}", FailingBackend<BigIntStatus::Unsupported>()));
     EXPECT_EQ(0, big_int_toy::LiveObjects());
+}
+
+// The Boost.Multiprecision adapter (docs/tasks/0272) renders every row as Python, and so does the
+// built-in default of a -DJINJA2CPP_WITH_BIGINT=boost build
+namespace
+{
+void CheckBackendRendersAsPython(const BigIntBackend* backend)
+{
+    for (const auto& row : BigIntCases)
+    {
+        CheckBigIntCase<char>(row, backend);
+        CheckBigIntCase<wchar_t>(row, backend);
+    }
+    for (const auto& row : BigIntBackendCases)
+    {
+        CheckBigIntCase<char>(row, backend);
+        CheckBigIntCase<wchar_t>(row, backend);
+    }
+}
+} // namespace
+
+TEST(BigIntBoost, RendersAsPython)
+{
+    const auto* boost = BoostCppIntBackend();
+    EXPECT_EQ(std::string_view("boost-cpp_int"), boost->name);
+    TemplateEnv env;
+    EXPECT_TRUE(env.SetBigIntBackend(boost));
+    CheckBackendRendersAsPython(boost);
+}
+
+TEST(BigIntBoost, Limits)
+{
+    const auto* boost = BoostCppIntBackend();
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, RenderError<char>("{{ 2 ** 2097152 }}", boost));
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, RenderError<char>("{{ 3 ** big }}", boost));
+    EXPECT_NE(ErrorCode::IntegerOutOfRange, RenderError<char>("{{ 2 ** 20000 }}", boost));
+}
+
+TEST(BigIntBoost, Operations)
+{
+    const auto* b = BoostCppIntBackend();
+    alignas(MaxBigIntObjectAlign) unsigned char x[MaxBigIntObjectSize];
+    alignas(MaxBigIntObjectAlign) unsigned char y[MaxBigIntObjectSize];
+    alignas(MaxBigIntObjectAlign) unsigned char q[MaxBigIntObjectSize];
+    alignas(MaxBigIntObjectAlign) unsigned char r[MaxBigIntObjectSize];
+    const std::string_view text = "-18446744073709551616";
+    ASSERT_EQ(BigIntStatus::Ok, b->fromDecimal(b, x, text.data(), text.size()));
+    ASSERT_EQ(BigIntStatus::Ok, b->fromInt64(b, y, 7));
+    EXPECT_EQ(-1, b->sign(b, x));
+    EXPECT_EQ(65U, b->bitLength(b, x));
+    // compare runs through the template rows (the analyzer misreads cpp_int's limb loop when called here)
+    int64_t small = 0;
+    EXPECT_FALSE(b->toInt64(b, x, &small));
+    ASSERT_TRUE(b->toInt64(b, y, &small));
+    EXPECT_EQ(7, small);
+    // Truncating division: -(2^64) / 7 is -2635249153387078802 remainder -2
+    ASSERT_EQ(BigIntStatus::Ok, b->divideTruncated(b, q, r, x, y));
+    std::string out;
+    auto sink = [](void* ctx, const char* data, size_t size) { static_cast<std::string*>(ctx)->append(data, size); };
+    ASSERT_EQ(BigIntStatus::Ok, b->toDecimal(b, q, sink, &out));
+    EXPECT_EQ("-2635249153387078802", out);
+    ASSERT_TRUE(b->toInt64(b, r, &small));
+    EXPECT_EQ(-2, small);
+    b->destroy(b, q);
+    b->destroy(b, r);
+    // Either output may be left out, and division by zero makes neither
+    ASSERT_EQ(BigIntStatus::Ok, b->divideTruncated(b, nullptr, r, x, y));
+    b->destroy(b, r);
+    ASSERT_EQ(BigIntStatus::Ok, b->fromInt64(b, q, 0));
+    EXPECT_EQ(0U, b->bitLength(b, q));
+    EXPECT_EQ(0, b->sign(b, q));
+    EXPECT_EQ(BigIntStatus::DivisionByZero, b->divideTruncated(b, r, nullptr, x, q));
+    b->destroy(b, q);
+    b->destroy(b, y);
+    b->destroy(b, x);
+}
+
+TEST(BigIntBuiltin, MatchesTheBuildOption)
+{
+    const auto* builtin = GetBuiltinBigIntBackend();
+    EXPECT_EQ(builtin, TemplateEnv().GetBigIntBackend());
+#ifdef JINJA2CPP_TEST_BIGINT_BOOST
+    ASSERT_NE(nullptr, builtin);
+    EXPECT_EQ(std::string_view("boost-cpp_int"), builtin->name);
+    CheckBackendRendersAsPython(builtin);
+    // A default environment computes beyond int64
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ 2 ** 64 }}|{{ big * big }}"));
+    EXPECT_EQ("18446744073709551616|340282366920938463426481119284349108225", tpl.RenderAsString(BigIntParams()).value());
+#else
+    EXPECT_EQ(nullptr, builtin);
+#endif
 }

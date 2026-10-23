@@ -51,6 +51,7 @@ source and committed), `system` (found on the machine), `ci` (GitHub Actions).
 | Boost.JSON | 1.92.0 | BSL-1.0 | alternative (default) | public-optional | fetched | parses `{% meta %}` JSON for `GetMetadata` | Yes: the heaviest backend for a niche feature |
 | nlohmann_json | 3.12.0 | MIT | alternative, and test | public-optional | fetched | the same, header-only; the tests' JSON reader | The natural default if Boost.JSON goes |
 | RapidJSON | 24b5e7a8, patched | MIT | alternative | public-optional | fetched | the same, for RapidJSON users | Candidate to retire as a built-in backend |
+| Boost.Multiprecision | 1.92.0 | BSL-1.0 | optional, and test | public-optional | fetched | `cpp_int` behind the built-in big-integer backend with `-DJINJA2CPP_WITH_BIGINT=boost` (off by default) and the opt-in adapter `jinja2cpp/big_int/boost_cpp_int.h`; standalone mode, so only its own and Boost.Config's headers | Header-only and optional; after 0230 it is fetched on its own (docs/design/0178-big-integer-plan.md 8) |
 
 ### Boost, library by library
 

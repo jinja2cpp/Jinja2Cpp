@@ -24,6 +24,12 @@ endif ()
 set(JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS boost nlohmann rapid)
 set(JINJA2CPP_WITH_JSON_BINDINGS boost CACHE STRING "Build with json support(boost|rapid|nlohmann) for serialization operations, like tojson filter. 'boost' is default.")
 set_property(CACHE JINJA2CPP_WITH_JSON_BINDINGS PROPERTY STRINGS ${JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS})
+set(JINJA2CPP_WITH_BIGINT_SUPPORTED_BACKENDS none boost)
+set(JINJA2CPP_WITH_BIGINT none CACHE STRING "Built-in big-integer backend (none|boost): with 'boost', integer arithmetic beyond int64 is exact by default (docs/tasks/0272). 'none' is default.")
+set_property(CACHE JINJA2CPP_WITH_BIGINT PROPERTY STRINGS ${JINJA2CPP_WITH_BIGINT_SUPPORTED_BACKENDS})
+if (NOT JINJA2CPP_WITH_BIGINT IN_LIST JINJA2CPP_WITH_BIGINT_SUPPORTED_BACKENDS)
+    message(FATAL_ERROR "JINJA2CPP_WITH_BIGINT must be one of ${JINJA2CPP_WITH_BIGINT_SUPPORTED_BACKENDS}, not '${JINJA2CPP_WITH_BIGINT}'")
+endif ()
 set (JINJA2CPP_DEPS_MODE "internal" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
 option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
 option(JINJA2CPP_BUILD_BENCHMARKS "Build the Google Benchmark suite in bench/ (needs JINJA2CPP_BUILD_TESTS)" OFF)
@@ -156,6 +162,7 @@ set(JINJA2CPP_SOURCES
     src/cycle_collector.cpp
     src/error_info.cpp
     src/big_int.cpp
+    src/big_int_builtin.cpp
     src/expression_evaluator.cpp
     src/expression_parser.cpp
     src/filesystem_handler.cpp
@@ -271,6 +278,13 @@ else()
     # header-only and private: keep it out of the exported link interface
     list(APPEND JINJA2CPP_PRIVATE_LIBS $<BUILD_INTERFACE:nlohmann_json::nlohmann_json>)
 endif()
+
+# The built-in big-integer backend: header-only and private, so consumers need nothing for it
+if ("${JINJA2CPP_WITH_BIGINT}" STREQUAL "boost")
+    list(APPEND JINJA2CPP_PRIVATE_LIBS $<BUILD_INTERFACE:jinja2cpp_boost_multiprecision>)
+    target_compile_definitions(${LIB_TARGET_NAME} PRIVATE JINJA2CPP_WITH_BIGINT_BOOST)
+endif()
+message(STATUS "Jinja2C++ built-in big-integer backend: ${JINJA2CPP_WITH_BIGINT}")
 
 target_link_libraries(
         ${LIB_TARGET_NAME}
@@ -428,6 +442,11 @@ if (JINJA2CPP_BUILD_TESTS)
     target_compile_options(jinja2cpp_tests PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
     target_link_libraries(jinja2cpp_tests gtest gmock gtest_main
         nlohmann_json::nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
+    # The Boost big-integer adapter is checked in every build; the built-in one only in boost builds
+    target_link_libraries(jinja2cpp_tests jinja2cpp_boost_multiprecision)
+    if ("${JINJA2CPP_WITH_BIGINT}" STREQUAL "boost")
+        target_compile_definitions(jinja2cpp_tests PRIVATE JINJA2CPP_TEST_BIGINT_BOOST)
+    endif ()
 
     set_target_properties(jinja2cpp_tests PROPERTIES
             CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}

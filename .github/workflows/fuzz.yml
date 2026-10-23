@@ -48,6 +48,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # render runs with the Boost big-integer backend, so that `**` and the size caps on
+        # big values are fuzzed too (docs/tasks/0272); render_wide keeps the default none
         target: [parse, render, render_wide]
 
     env:
@@ -66,7 +68,7 @@ jobs:
 
     - uses: ./.github/actions/setup-ccache
       with:
-        key: fuzz-clang-18-${{ matrix.target }}
+        key: fuzz-clang-18-${{ matrix.target }}-${{ matrix.target == 'render' && 'bigint' || 'none' }}
 
     - name: Configure
       run: |
@@ -74,6 +76,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=RelWithDebInfo \
           -DJINJA2CPP_DEPS_MODE=internal \
           -DJINJA2CPP_WITH_SANITIZERS=address+undefined \
+          -DJINJA2CPP_WITH_BIGINT=${{ matrix.target == 'render' && 'boost' || 'none' }} \
           -DJINJA2CPP_BUILD_FUZZERS=ON \
           -DJINJA2CPP_CHECK_SLOTS=ON \
           -DJINJA2CPP_BUILD_TESTS=OFF \

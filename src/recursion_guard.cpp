@@ -201,6 +201,7 @@ void RenderLimitsScope::Install(const Settings::Limits* limitsOrNone, const BigI
 {
     m_saved = detail::t_renderLimits;
     detail::RenderLimits state;
+    state.bigInts = bigInts;
     if (!limitsOrNone)
     {
         detail::InstallRenderLimits(state);
@@ -208,8 +209,6 @@ void RenderLimitsScope::Install(const Settings::Limits* limitsOrNone, const BigI
     }
     const auto& limits = *limitsOrNone;
     state.scoped = true;
-    state.bigInts = bigInts;
-    // A template with a backend and no limits installs the defaults
     state.active = HasRenderLimits(limits);
     // UINT64_MAX steps cannot be counted to their end: it is no limit
     state.maxSteps = limits.maxRenderSteps != UINT64_MAX ? limits.maxRenderSteps : 0;

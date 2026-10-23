@@ -1,6 +1,6 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the operators area (cases/operators.py).
 # Format and kinds: test/parity/README.md.
 
-operators.int_big_pow                   rejects     0015 deliberate: integers are 64-bit and overflow raises instead of growing (docs/parity.md)
-operators.int_min_floordiv_overflow     rejects     0015 deliberate: integers are 64-bit and overflow raises instead of growing (docs/parity.md)
-operators.int_overflow_mul              rejects     0015 deliberate: integers are 64-bit and overflow raises instead of growing (docs/parity.md)
+operators.int_big_pow                   rejects@nobigint 0178 build option: without a big-integer backend, arithmetic past int64 raises (-DJINJA2CPP_WITH_BIGINT=boost, docs/parity.md)
+operators.int_min_floordiv_overflow     rejects@nobigint 0178 build option: without a big-integer backend, arithmetic past int64 raises (-DJINJA2CPP_WITH_BIGINT=boost, docs/parity.md)
+operators.int_overflow_mul              rejects@nobigint 0178 build option: without a big-integer backend, arithmetic past int64 raises (-DJINJA2CPP_WITH_BIGINT=boost, docs/parity.md)

@@ -31,6 +31,8 @@ endfunction()
 
 file(STRINGS "${BUILD_DIR}/CMakeCache.txt" _ver REGEX "^CMAKE_PROJECT_VERSION:")
 string(REGEX REPLACE ".*=" "" _ver "${_ver}")
+file(STRINGS "${BUILD_DIR}/CMakeCache.txt" _bigint REGEX "^JINJA2CPP_WITH_BIGINT:")
+string(REGEX REPLACE ".*=" "" _bigint "${_bigint}")
 
 run(${CMAKE_COMMAND} --install "${BUILD_DIR}" --prefix "${PREFIX}" --config ${CONFIG})
 file(TOUCH "${PREFIX}/.jinja2cpp-check-package")
@@ -91,6 +93,7 @@ run(${CMAKE_COMMAND} -S "${_src}" -B "${PREFIX}-consumer" -G Ninja
     "-DCMAKE_PREFIX_PATH=${PREFIX}" -DCMAKE_BUILD_TYPE=${CONFIG}
     -DCMAKE_CXX_STANDARD=${CONSUMER_STD} -DCMAKE_CXX_STANDARD_REQUIRED=ON
     -DJINJA2CPP_EXPECT_VERSION=${_ver} -DJINJA2CPP_EXPECT_SHARED=${EXPECT_SHARED}
+    -DJINJA2CPP_EXPECT_BIGINT=${_bigint}
     -DJINJA2CPP_CHECK_PKGCONFIG=ON
     ${CONSUMER_ARGS})
 run(${CMAKE_COMMAND} --build "${PREFIX}-consumer" --config ${CONFIG})

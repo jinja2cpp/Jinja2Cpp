@@ -9,6 +9,7 @@
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
@@ -795,9 +796,12 @@ TEST(ErrorContractTest, BigIntInTemplateIsIntegerOutOfRange)
     EXPECT_TRUE(Value(big).IsBigInt());
 
     const std::pair<const char*, Value> rows[] = { { "{{ n + 1 }}", Value(big) }, { "{{ n[0] * 2 }}", Reflect(std::vector<uint64_t>{ big }) } };
+    // Without a backend, also in a -DJINJA2CPP_WITH_BIGINT=boost build
+    TemplateEnv env;
+    ASSERT_TRUE(env.SetBigIntBackend(nullptr));
     for (const auto& [source, n] : rows)
     {
-        Template tpl;
+        Template tpl(&env);
         ASSERT_TRUE(tpl.Load(source));
         const auto result = tpl.RenderAsString({ { "n", n } });
         ASSERT_FALSE(result.has_value()) << source;
@@ -944,6 +948,8 @@ protected:
         AddFile("base.j2", "{% block b %}{% endblock %}\n\n{{ fail() }}");
         AddFile("nested.j2", "{% include 'missing.j2' %}");
         m_env.AddFilter("boom", MakeCallable([](const std::string&) -> Value { throw std::runtime_error("filter failed"); }, ArgInfo{ "value" }));
+        // Big-integer arithmetic fails without a backend, also in a -DJINJA2CPP_WITH_BIGINT=boost build
+        m_env.SetBigIntBackend(nullptr);
     }
 
     [[nodiscard]] ValuesMap Params() const

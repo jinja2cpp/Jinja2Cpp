@@ -109,8 +109,8 @@ struct RenderLimits
     bool sinkOutput = false;
     // Whether a limit is set: a render without limits inside one with them installs these defaults
     bool active = false;
-    // Whether a render installed these, for its limits or its big-integer backend: a render
-    // without either inside one with them installs the defaults
+    // Whether a render installed these for its limits: a render without limits inside one with
+    // them installs the defaults
     bool scoped = false;
     bool hasDeadline = false;
     // steady_clock ticks since its epoch: a time_point's constructor is not noexcept, which a
@@ -131,20 +131,29 @@ void InstallRenderLimits(const RenderLimits& limits);
 class RenderLimitsScope
 {
 public:
-    // `limits` is null when the render has neither limits nor a big-integer backend
+    // `limits` is null when the render has no limits; `bigInts` is its big-integer backend, or null.
+    // A backend alone swaps one pointer: in a -DJINJA2CPP_WITH_BIGINT=boost build every render has
+    // one, and installing the default limits for it cost a short render 17% (docs/tasks/0272)
     RenderLimitsScope(const Settings::Limits* limits, const BigIntBackend* bigInts)
     {
-        if (limits || detail::t_renderLimits.scoped)
+        auto& state = detail::t_renderLimits;
+        if (limits || state.scoped)
         {
             Install(limits, bigInts);
+            return;
         }
+        // Unconditional: cheaper than testing whether either pointer is set
+        m_savedBigInts = state.bigInts;
+        state.bigInts = bigInts;
     }
     ~RenderLimitsScope()
     {
         if (m_saved)
         {
             detail::InstallRenderLimits(*m_saved);
+            return;
         }
+        detail::t_renderLimits.bigInts = m_savedBigInts;
     }
     RenderLimitsScope(const RenderLimitsScope&) = delete;
     RenderLimitsScope& operator=(const RenderLimitsScope&) = delete;
@@ -155,6 +164,8 @@ private:
     void Install(const Settings::Limits* limits, const BigIntBackend* bigInts);
 
     std::optional<detail::RenderLimits> m_saved;
+    // The backend of the render this one interrupts, when this one installs no limits
+    const BigIntBackend* m_savedBigInts = nullptr;
 };
 
 // Whether a template loaded with these limits renders with any (RenderLimitsScope): the
