@@ -166,6 +166,8 @@ private:
     void WriteToSink(const void* ptr, size_t bytes);
     template<typename CharT>
     void WriteValueTo(const InternalValue& val);
+    template<typename CharT>
+    void WriteRenderedToSink(const InternalValue& val);
 
     StreamWriter* m_writer = nullptr;
     // The target string: std::string or std::wstring by m_charSize

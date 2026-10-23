@@ -20,7 +20,6 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
-#include <utility>
 #include <vector>
 
 using namespace jinja2;
@@ -178,9 +177,9 @@ template<typename Error>
 class ThrowingSink final : public OutputSink
 {
 public:
-    ThrowingSink(size_t failAt, Error error)
+    ThrowingSink(size_t failAt, const Error& error)
         : m_failAt(failAt)
-        , m_error(std::move(error))
+        , m_error(error)
     {
     }
 
@@ -202,7 +201,7 @@ private:
 };
 
 // 2000 numbers, then a call of `fail`, which throws
-const std::string failingTemplate = "{% for i in range(2000) %}{{ i }},{% endfor %}{{ fail() }}tail";
+constexpr const char* failingTemplate = "{% for i in range(2000) %}{{ i }},{% endfor %}{{ fail() }}tail";
 
 std::string Numbers(int count)
 {

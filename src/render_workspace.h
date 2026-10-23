@@ -133,6 +133,9 @@ public:
     // docs/tasks/0275). Refuses, and frees nothing, while a render runs on the thread: it holds
     // frames or maps lent from here
     bool ReleaseCaches() noexcept;
+    // ReleaseCaches on this thread's workspace. Out of line here, so that ForThisThread stays
+    // inline where renders use it
+    static bool ReleaseThisThread() noexcept;
 
 private:
     struct Chunk

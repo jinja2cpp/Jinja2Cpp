@@ -88,12 +88,20 @@ void OutStream::WriteBufferSlow(const void* ptr, size_t length)
 
 void OutStream::WriteLong(const void* ptr, size_t length)
 {
-    if (m_writer)
+    // Only a string stream has a target string: one test sends a writer's and a sink's
+    // fragments on, and leaves the string's path as it was
+    if (!m_target)
     {
-        m_writer->WriteBuffer(ptr, length);
+        if (m_writer)
+        {
+            m_writer->WriteBuffer(ptr, length);
+            return;
+        }
+        FlushBuffer();
+        WriteToSink(ptr, length * m_charSize);
         return;
     }
-    if (m_charSize == 1 && !m_sink)
+    if (m_charSize == 1)
     {
         auto& str = *static_cast<std::string*>(m_target);
         if (m_cur != m_buffer)
@@ -286,15 +294,21 @@ void OutStream::WriteValueTo(const InternalValue& val)
 
     if (m_sink)
     {
-        // Through the buffer: such values are mostly short (a float, None), and each would
-        // otherwise be a chunk of its own
-        string_t rendered;
-        RenderValue(val, rendered);
-        WriteBuffer(rendered.data(), rendered.size());
+        WriteRenderedToSink<CharT>(val);
         return;
     }
     FlushBuffer();
     RenderValue(val, *static_cast<string_t*>(m_target));
+}
+
+// Through the buffer: such values are mostly short (a float, None), and each would otherwise
+// be a chunk of its own. Out of line: the string's frame would slow down WriteValueTo
+template<typename CharT>
+JINJA2CPP_NOINLINE void OutStream::WriteRenderedToSink(const InternalValue& val)
+{
+    std::basic_string<CharT> rendered;
+    RenderValue(val, rendered);
+    WriteBuffer(rendered.data(), rendered.size());
 }
 
 template void OutStream::WriteValueTo<char>(const InternalValue& val);
