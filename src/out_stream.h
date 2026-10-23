@@ -3,6 +3,8 @@
 
 #include "internal_value.h"
 
+#include <jinja2cpp/fwd.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -15,8 +17,9 @@ inline namespace v2
 {
 // Where a render writes its output. A render to a string, the common case, gathers the
 // output in a small buffer and appends it to the string a buffer at a time: a fragment
-// costs a bounds check and a memcpy, with no virtual call (docs/tasks/0113). Any other
-// target goes through a StreamWriter.
+// costs a bounds check and a memcpy, with no virtual call (docs/tasks/0113). A render to a
+// host's sink (RenderTo) gathers it the same way and writes it to the sink a buffer at a
+// time. Any other target goes through a StreamWriter.
 class OutStream
 {
 public:
@@ -42,6 +45,16 @@ public:
     {}
     explicit OutStream(std::wstring& target)
         : m_target(&target)
+        , m_charSize(sizeof(wchar_t))
+        , m_end(m_buffer + sizeof(m_buffer))
+    {}
+    // Writes to `sink`, which must outlive the stream, as a string target is appended to:
+    // what is written before a render throws stays written
+    explicit OutStream(OutputSink& sink)
+        : m_sink(&sink)
+    {}
+    explicit OutStream(OutputSinkW& sink)
+        : m_sink(&sink)
         , m_charSize(sizeof(wchar_t))
         , m_end(m_buffer + sizeof(m_buffer))
     {}
@@ -88,8 +101,10 @@ public:
         }
     }
 
-    // Appends the buffered output to the target string
+    // Appends the buffered output to the target string, or writes it to the sink
     void Flush();
+    // The characters written to the sink so far (Settings::Limits::maxOutputSize)
+    [[nodiscard]] const size_t& SinkWritten() const { return m_sinkWritten; }
 
 private:
     // The buffer holds this many characters of the target's type: a wide stream gets as
@@ -147,12 +162,16 @@ private:
     }
     void FlushBuffer();
     void AppendToTarget(const void* ptr, size_t bytes);
+    void WriteToSink(const void* ptr, size_t bytes);
     template<typename CharT>
     void WriteValueTo(const InternalValue& val);
 
     StreamWriter* m_writer = nullptr;
     // The target string: std::string or std::wstring by m_charSize
     void* m_target = nullptr;
+    // Or the target sink: OutputSink or OutputSinkW by m_charSize
+    void* m_sink = nullptr;
+    size_t m_sinkWritten = 0;
     size_t m_charSize = 1;
     // [m_buffer, m_cur) is output not yet in the target, [m_cur, m_end) the room left. A
     // narrow stream uses the first BufferLength bytes only. A writer stream has no room, so

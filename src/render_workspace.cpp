@@ -57,6 +57,27 @@ RenderWorkspace::RenderMaps& RenderWorkspace::LendNewMaps()
     return *m_maps[m_lentMaps++];
 }
 
+bool RenderWorkspace::ReleaseCaches() noexcept
+{
+    if (m_lentMaps != 0 || !m_frames.empty())
+    {
+        return false;
+    }
+    // Moved out first, so that the workspace is empty before the destructors of what they hold
+    // run host code. m_lastGeneration goes on counting: a handle of a freed frame never resolves
+    const auto chunks = std::move(m_chunks);
+    const auto frames = std::move(m_frames);
+    const auto maps = std::move(m_maps);
+    const auto globals = std::move(m_globals);
+    m_chunks.clear();
+    m_frames.clear();
+    m_maps.clear();
+    m_current = 0;
+    // Its capacity stays reserved (LoopFrames)
+    m_loopFrames.clear();
+    return true;
+}
+
 void RenderWorkspace::EmptyMaps(RenderMaps& maps, bool keepTables) noexcept
 {
     for (auto* map : { &maps.params, &maps.topScope })

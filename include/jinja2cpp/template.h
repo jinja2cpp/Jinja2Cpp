@@ -22,6 +22,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
@@ -56,6 +57,88 @@ struct MetadataInfo
     std::string metadataType;
     std::basic_string_view<CharT> metadata;
     SourceLocation location;
+};
+
+/*!
+ * \brief Receives the output of a render in order (\ref BasicTemplate::RenderTo)
+ *
+ * Implemented by the host and not owned by the library. `Write` is called on the rendering thread
+ * with the output in chunks: up to 512 characters gathered from the template, or a long fragment of
+ * the template source on its own. An exception thrown by `Write` ends the render, which returns it
+ * as an error the way it returns one from a user callable: a \ref jinja2::Exception keeps its code
+ * (so a sink enforcing an output budget throws `Exception{ErrorCode::ResourceLimitExceeded}`), any
+ * other exception is kept in the error, and `std::bad_alloc` propagates. No virtual function will be
+ * added in 2.x.
+ */
+template<typename CharT>
+class BasicOutputSink
+{
+public:
+    //! `text` is never empty and is valid during the call only
+    virtual void Write(std::basic_string_view<CharT> text) = 0;
+
+protected:
+    BasicOutputSink() = default;
+    BasicOutputSink(const BasicOutputSink&) = default;
+    BasicOutputSink(BasicOutputSink&&) noexcept = default;
+    BasicOutputSink& operator=(const BasicOutputSink&) = default;
+    BasicOutputSink& operator=(BasicOutputSink&&) noexcept = default;
+    //! Never deleted through the base
+    ~BasicOutputSink() = default;
+};
+
+namespace detail
+{
+template<typename Container, typename = void>
+struct HasRangeAppend : std::false_type
+{
+};
+template<typename Container>
+struct HasRangeAppend<Container, std::void_t<decltype(std::declval<Container&>().append(std::declval<const typename Container::value_type*>(), std::declval<const typename Container::value_type*>()))>>
+    : std::true_type
+{
+};
+} // namespace detail
+
+/*!
+ * \brief Appends the output of a render to a container
+ *
+ * Works with any container with `append(first, last)` (`std::basic_string`,
+ * `fmt::basic_memory_buffer`) or `insert(end, first, last)` (`std::vector`). Header-only and
+ * compiled in the caller, so the library takes no dependency on the container's library. Unlike
+ * `RenderTo(StringType&)` it keeps what was written before an error, as any sink does. `out` must
+ * outlive the sink, and the sink the `RenderTo` call:
+ * ```c++
+ * fmt::memory_buffer buffer;
+ * jinja2::ContainerSink sink(buffer);
+ * auto result = tpl.RenderTo(sink, params);
+ * ```
+ */
+template<typename Container, typename CharT>
+class ContainerSink final : public BasicOutputSink<CharT>
+{
+public:
+    explicit ContainerSink(Container& out) noexcept
+        : m_out(out)
+    {
+    }
+
+    void Write(std::basic_string_view<CharT> text) override
+    {
+        const CharT* first = text.data();
+        const CharT* last = text.data() + text.size();
+        if constexpr (detail::HasRangeAppend<Container>::value)
+        {
+            m_out.append(first, last);
+        }
+        else
+        {
+            m_out.insert(m_out.end(), first, last);
+        }
+    }
+
+private:
+    Container& m_out;
 };
 
 /*!
@@ -186,6 +269,53 @@ public:
         return RenderAsStringGeneric(params);
     }
     /*!
+     * \brief Render previously loaded template, appending the output to a string
+     *
+     * Appends to `out`, so a string can be reused (`out.clear()` first) or collect several renders.
+     * It allocates only when `out` lacks the capacity. On an error, `std::bad_alloc` included, `out`
+     * is truncated back to its size at entry; its capacity may have grown.
+     *
+     * @param out     String to append the output to
+     * @param params  Set of params which should be passed to the template engine and can be used within the template
+     *
+     * @return Either nothing or instance of \ref BasicErrorInfo as an error
+     */
+    [[nodiscard]] Result<void, CharT> RenderTo(StringType& out, const ValuesMap& params) const;
+    /*!
+     * \brief Render previously loaded template, appending the output to a string, taking params from a generic map
+     *
+     * The same as the \ref ValuesMap overload, for a context that is a reflected object or a JSON
+     * object (anything \ref Reflect turns into a \ref GenericMap).
+     */
+    template<typename Map, std::enable_if_t<std::is_same_v<Map, GenericMap>, int> = 0>
+    [[nodiscard]] Result<void, CharT> RenderTo(StringType& out, const Map& params) const
+    {
+        return RenderToGeneric(out, params);
+    }
+    /*!
+     * \brief Render previously loaded template, streaming the output to a sink
+     *
+     * Writes the output to `sink` while rendering, so it is never held whole. What was written
+     * before an error stays written, as with Python's `Template.generate()`.
+     *
+     * @param sink    Sink to write the output to (\ref BasicOutputSink)
+     * @param params  Set of params which should be passed to the template engine and can be used within the template
+     *
+     * @return Either nothing or instance of \ref BasicErrorInfo as an error
+     */
+    [[nodiscard]] Result<void, CharT> RenderTo(BasicOutputSink<CharT>& sink, const ValuesMap& params) const;
+    /*!
+     * \brief Render previously loaded template, streaming the output to a sink, taking params from a generic map
+     *
+     * The same as the \ref ValuesMap overload, for a context that is a reflected object or a JSON
+     * object (anything \ref Reflect turns into a \ref GenericMap).
+     */
+    template<typename Map, std::enable_if_t<std::is_same_v<Map, GenericMap>, int> = 0>
+    [[nodiscard]] Result<void, CharT> RenderTo(BasicOutputSink<CharT>& sink, const Map& params) const
+    {
+        return RenderToGeneric(sink, params);
+    }
+    /*!
      * \brief Get metadata, provided in the {% meta %} tag
      *
      * @return Parsed metadata as a generic map value or instance of \ref BasicErrorInfo as an error
@@ -221,6 +351,8 @@ private:
     // unambiguous) are still compiled into the library.
     [[nodiscard]] Result<void, CharT> RenderGeneric(std::basic_ostream<CharT>& os, const GenericMap& params) const;
     [[nodiscard]] Result<StringType, CharT> RenderAsStringGeneric(const GenericMap& params) const;
+    [[nodiscard]] Result<void, CharT> RenderToGeneric(StringType& out, const GenericMap& params) const;
+    [[nodiscard]] Result<void, CharT> RenderToGeneric(BasicOutputSink<CharT>& sink, const GenericMap& params) const;
 
     std::shared_ptr<ITemplateImpl> m_impl;
     friend class TemplateImpl<CharT>;
@@ -251,6 +383,20 @@ extern template class JINJA2CPP_EXPORT BasicTemplate<wchar_t>;
 using Template = BasicTemplate<char>;
 //! Template with wide (`wchar_t`) source and output
 using TemplateW = BasicTemplate<wchar_t>;
+
+/*!
+ * \brief Frees what renders on the calling thread keep for the next render
+ *
+ * Each thread that renders keeps reusable memory: slot and loop frames, the tables of the params,
+ * an escape buffer, and the globals of the last \ref TemplateEnv it rendered with, which keeps
+ * them (and what their callables capture) alive after that environment is destroyed. This frees
+ * them on the calling thread: before an idle pool thread parks, or before a plugin is unloaded.
+ * The next render on the thread allocates them again.
+ *
+ * @return false, having freed nothing, when a render is running on this thread (called from a
+ *         user callable or a sink); true otherwise
+ */
+JINJA2CPP_EXPORT bool ReleaseThreadCaches() noexcept;
 
 } // namespace v2
 } // namespace jinja2

@@ -3,6 +3,8 @@
 #include "internal_value.h"
 #include "value_visitors.h"
 
+#include <jinja2cpp/template.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -34,6 +36,11 @@ void OutStream::FlushBuffer()
 
 void OutStream::AppendToTarget(const void* ptr, size_t bytes)
 {
+    if (m_sink)
+    {
+        WriteToSink(ptr, bytes);
+        return;
+    }
     if (m_charSize == 1)
     {
         static_cast<std::string*>(m_target)->append(static_cast<const char*>(ptr), bytes);
@@ -42,6 +49,25 @@ void OutStream::AppendToTarget(const void* ptr, size_t bytes)
     {
         static_cast<std::wstring*>(m_target)->append(static_cast<const wchar_t*>(ptr), bytes / sizeof(wchar_t));
     }
+}
+
+void OutStream::WriteToSink(const void* ptr, size_t bytes)
+{
+    // A sink is never given an empty chunk
+    if (bytes == 0)
+    {
+        return;
+    }
+    const size_t length = bytes / m_charSize;
+    if (m_charSize == 1)
+    {
+        static_cast<OutputSink*>(m_sink)->Write(std::string_view(static_cast<const char*>(ptr), length));
+    }
+    else
+    {
+        static_cast<OutputSinkW*>(m_sink)->Write(std::wstring_view(static_cast<const wchar_t*>(ptr), length));
+    }
+    m_sinkWritten += length;
 }
 
 void OutStream::WriteBufferSlow(const void* ptr, size_t length)
@@ -67,7 +93,7 @@ void OutStream::WriteLong(const void* ptr, size_t length)
         m_writer->WriteBuffer(ptr, length);
         return;
     }
-    if (m_charSize == 1)
+    if (m_charSize == 1 && !m_sink)
     {
         auto& str = *static_cast<std::string*>(m_target);
         if (m_cur != m_buffer)
@@ -258,6 +284,15 @@ void OutStream::WriteValueTo(const InternalValue& val)
         return;
     }
 
+    if (m_sink)
+    {
+        // Through the buffer: such values are mostly short (a float, None), and each would
+        // otherwise be a chunk of its own
+        string_t rendered;
+        RenderValue(val, rendered);
+        WriteBuffer(rendered.data(), rendered.size());
+        return;
+    }
     FlushBuffer();
     RenderValue(val, *static_cast<string_t*>(m_target));
 }

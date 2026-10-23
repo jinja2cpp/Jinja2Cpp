@@ -42,6 +42,10 @@ template<typename CharT>
 class BasicTemplate;
 template<typename CharT>
 class BasicErrorInfo;
+template<typename CharT>
+class BasicOutputSink;
+template<typename Container, typename CharT = typename Container::value_type>
+class ContainerSink;
 
 namespace detail
 {
@@ -62,6 +66,8 @@ using Template = BasicTemplate<char>;
 using TemplateW = BasicTemplate<wchar_t>;
 using ErrorInfo = BasicErrorInfo<char>;
 using ErrorInfoW = BasicErrorInfo<wchar_t>;
+using OutputSink = BasicOutputSink<char>;
+using OutputSinkW = BasicOutputSink<wchar_t>;
 using ValuesList = std::vector<Value>;
 using FilesystemHandlerPtr = std::shared_ptr<IFilesystemHandler>;
 } // namespace v2

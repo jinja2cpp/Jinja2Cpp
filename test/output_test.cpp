@@ -1,15 +1,27 @@
 // The output writer: values written without ValueRenderer, the buffer between the
-// render and its string, and long fragments that skip it (docs/tasks/0113)
+// render and its string, and long fragments that skip it (docs/tasks/0113). Every case
+// renders through RenderAsString, RenderTo a string and RenderTo a sink (docs/tasks/0257)
 
 #include "gtest/gtest.h"
 
+#include <jinja2cpp/exception.h>
 #include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
+#include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
+
+#include <fmt/format.h>
 
 #include <cstddef>
 #include <cstdint>
+#include <exception>
+#include <new>
+#include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 using namespace jinja2;
 
@@ -18,6 +30,40 @@ namespace
 std::wstring Widen(const std::string& str)
 {
     return { str.begin(), str.end() };
+}
+
+// Keeps every chunk a render writes, and checks the sink contract on each
+template<typename CharT>
+class RecordingSink final : public BasicOutputSink<CharT>
+{
+public:
+    void Write(std::basic_string_view<CharT> text) override
+    {
+        EXPECT_FALSE(text.empty());
+        chunks.emplace_back(text);
+        output.append(text);
+    }
+
+    std::vector<std::basic_string<CharT>> chunks;
+    std::basic_string<CharT> output;
+};
+
+// Renders `tpl` with RenderAsString, RenderTo a string that holds a prefix already, and RenderTo
+// a sink, and checks that all three write `expected`
+template<typename CharT>
+void ExpectRenderPaths(const BasicTemplate<CharT>& tpl, const std::basic_string<CharT>& expected, const ValuesMap& params)
+{
+    auto asString = tpl.RenderAsString(params);
+    ASSERT_TRUE(asString);
+    EXPECT_EQ(expected, asString.value());
+
+    std::basic_string<CharT> appended(3, CharT('>'));
+    ASSERT_TRUE(tpl.RenderTo(appended, params));
+    EXPECT_EQ(std::basic_string<CharT>(3, CharT('>')) + expected, appended);
+
+    RecordingSink<CharT> sink;
+    ASSERT_TRUE(tpl.RenderTo(sink, params));
+    EXPECT_EQ(expected, sink.output);
 }
 
 // Renders `tpl` narrow and wide, twice each (the second render reserves from the first), and
@@ -30,12 +76,8 @@ void ExpectRender(const std::string& tpl, const std::string& expected, const Val
     ASSERT_TRUE(wide.Load(Widen(tpl)));
     for (int pass = 0; pass != 2; ++pass)
     {
-        auto narrowResult = narrow.RenderAsString(params);
-        ASSERT_TRUE(narrowResult) << narrowResult.error();
-        EXPECT_EQ(expected, narrowResult.value());
-        auto wideResult = wide.RenderAsString(params);
-        ASSERT_TRUE(wideResult);
-        EXPECT_EQ(Widen(expected), wideResult.value());
+        ExpectRenderPaths(narrow, expected, params);
+        ExpectRenderPaths(wide, Widen(expected), params);
     }
 }
 } // namespace
@@ -127,4 +169,291 @@ TEST(OutputTest, IntegersAtTheBufferEnd)
         expected += std::string(pad, 'x') + "-9223372036854775808127True|";
     }
     ExpectRender(tpl, expected);
+}
+
+namespace
+{
+// A sink that fails on its `failAt`th chunk, with `error`
+template<typename Error>
+class ThrowingSink final : public OutputSink
+{
+public:
+    ThrowingSink(size_t failAt, Error error)
+        : m_failAt(failAt)
+        , m_error(std::move(error))
+    {
+    }
+
+    void Write(std::string_view text) override
+    {
+        if (++m_calls == m_failAt)
+        {
+            throw m_error;
+        }
+        output.append(text);
+    }
+
+    std::string output;
+
+private:
+    size_t m_calls = 0;
+    size_t m_failAt;
+    Error m_error;
+};
+
+// 2000 numbers, then a call of `fail`, which throws
+const std::string failingTemplate = "{% for i in range(2000) %}{{ i }},{% endfor %}{{ fail() }}tail";
+
+std::string Numbers(int count)
+{
+    std::string out;
+    for (int idx = 0; idx != count; ++idx)
+    {
+        out += std::to_string(idx) + ",";
+    }
+    return out;
+}
+
+ValuesMap FailingParams()
+{
+    return { { "fail", MakeCallable([]() -> Value { throw std::runtime_error("callable failed"); }) } };
+}
+} // namespace
+
+TEST(OutputTest, SinkGetsBufferedChunks)
+{
+    // Short fragments are gathered into chunks of the buffer's size: 512 characters at most
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% for i in range(2000) %}<td>{{ i }}</td>{% endfor %}"));
+    RecordingSink<char> sink;
+    ASSERT_TRUE(tpl.RenderTo(sink, {}));
+    EXPECT_GT(sink.chunks.size(), 20U);
+    for (const auto& chunk : sink.chunks)
+    {
+        EXPECT_LE(chunk.size(), 512U);
+    }
+
+    TemplateW wide;
+    ASSERT_TRUE(wide.Load(L"{% for i in range(2000) %}<td>{{ i }}</td>{% endfor %}"));
+    RecordingSink<wchar_t> wideSink;
+    ASSERT_TRUE(wide.RenderTo(wideSink, {}));
+    EXPECT_EQ(sink.chunks.size(), wideSink.chunks.size());
+    for (const auto& chunk : wideSink.chunks)
+    {
+        EXPECT_LE(chunk.size(), 512U);
+    }
+}
+
+TEST(OutputTest, SinkGetsLongFragmentsAsTheirOwnChunks)
+{
+    // A text fragment of 128 characters or more skips the buffer: what the buffer holds goes first
+    const std::string text(1000, 't');
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ 1 }}{{ 'ab' }}" + text + "{{ 2 }}"));
+    RecordingSink<char> sink;
+    ASSERT_TRUE(tpl.RenderTo(sink, {}));
+    ASSERT_EQ(3U, sink.chunks.size());
+    EXPECT_EQ("1ab", sink.chunks[0]);
+    EXPECT_EQ(text, sink.chunks[1]);
+    EXPECT_EQ("2", sink.chunks[2]);
+
+    TemplateW wide;
+    ASSERT_TRUE(wide.Load(L"{{ 1 }}{{ 'ab' }}" + Widen(text) + L"{{ 2 }}"));
+    RecordingSink<wchar_t> wideSink;
+    ASSERT_TRUE(wide.RenderTo(wideSink, {}));
+    ASSERT_EQ(3U, wideSink.chunks.size());
+    EXPECT_EQ(Widen(text), wideSink.chunks[1]);
+}
+
+TEST(OutputTest, EmptyOutput)
+{
+    // A sink is never given an empty chunk, and a render that writes nothing never calls it
+    ExpectRender("", "");
+    ExpectRender("{{ '' }}{% if false %}x{% endif %}", "");
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ '' }}"));
+    RecordingSink<char> sink;
+    ASSERT_TRUE(tpl.RenderTo(sink, {}));
+    EXPECT_TRUE(sink.chunks.empty());
+}
+
+TEST(OutputTest, ErrorMidRenderTruncatesTheString)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(failingTemplate));
+    std::string out = "prefix";
+    auto result = tpl.RenderTo(out, FailingParams());
+    ASSERT_FALSE(result);
+    EXPECT_EQ("prefix", out);
+
+    // Wide too
+    TemplateW wide;
+    ASSERT_TRUE(wide.Load(Widen(failingTemplate)));
+    std::wstring wideOut = L"prefix";
+    ASSERT_FALSE(wide.RenderTo(wideOut, FailingParams()));
+    EXPECT_EQ(L"prefix", wideOut);
+
+    // The same template renders afterwards on this thread
+    out.clear();
+    ASSERT_TRUE(tpl.RenderTo(out, { { "fail", MakeCallable([]() { return Value(std::string("ok")); }) } }));
+    EXPECT_EQ(Numbers(2000) + "oktail", out);
+}
+
+TEST(OutputTest, ErrorMidRenderKeepsWhatTheSinkGot)
+{
+    // As Python's generate(): the chunks written before the error stay written
+    const auto expected = Numbers(2000);
+    Template tpl;
+    ASSERT_TRUE(tpl.Load(failingTemplate));
+    RecordingSink<char> sink;
+    ASSERT_FALSE(tpl.RenderTo(sink, FailingParams()));
+    EXPECT_FALSE(sink.chunks.empty());
+    EXPECT_LT(sink.output.size(), expected.size());
+    EXPECT_EQ(expected.substr(0, sink.output.size()), sink.output);
+
+    // ContainerSink keeps them too: it does not truncate
+    std::string kept;
+    ContainerSink containerSink(kept);
+    ASSERT_FALSE(tpl.RenderTo(containerSink, FailingParams()));
+    EXPECT_EQ(sink.output, kept);
+}
+
+TEST(OutputTest, SinkExceptionsAreHostExceptions)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% for i in range(2000) %}{{ i }},{% endfor %}"));
+
+    // Any exception: kept in the error, as one from a user callable
+    ThrowingSink<std::runtime_error> failing(2, std::runtime_error("sink failed"));
+    auto result = tpl.RenderTo(failing, {});
+    ASSERT_FALSE(result);
+    EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode());
+    ASSERT_TRUE(result.error().GetException());
+    EXPECT_THROW(std::rethrow_exception(result.error().GetException()), std::runtime_error);
+    EXPECT_EQ(Numbers(2000).substr(0, failing.output.size()), failing.output);
+
+    // A jinja2::Exception keeps its code: a sink enforcing an output budget
+    ThrowingSink<Exception> budget(3, Exception(ErrorCode::ResourceLimitExceeded, "output budget spent"));
+    result = tpl.RenderTo(budget, {});
+    ASSERT_FALSE(result);
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+
+    // Thrown by the final flush, after the template's body ended
+    Template shortTpl;
+    ASSERT_TRUE(shortTpl.Load("short"));
+    ThrowingSink<Exception> atFlush(1, Exception(ErrorCode::ResourceLimitExceeded, "output budget spent"));
+    result = shortTpl.RenderTo(atFlush, {});
+    ASSERT_FALSE(result);
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+
+    // std::bad_alloc goes on to the caller
+    ThrowingSink<std::bad_alloc> outOfMemory(1, std::bad_alloc());
+    EXPECT_THROW(static_cast<void>(shortTpl.RenderTo(outOfMemory, {})), std::bad_alloc);
+    // and leaves the template and the thread usable
+    RecordingSink<char> sink;
+    ASSERT_TRUE(shortTpl.RenderTo(sink, {}));
+    EXPECT_EQ("short", sink.output);
+}
+
+TEST(OutputTest, BadAllocTruncatesTheString)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% for i in range(2000) %}{{ i }},{% endfor %}{{ fail() }}"));
+    std::string out = "prefix";
+    EXPECT_THROW(static_cast<void>(tpl.RenderTo(out, { { "fail", MakeCallable([]() -> Value { throw std::bad_alloc(); }) } })), std::bad_alloc);
+    EXPECT_EQ("prefix", out);
+}
+
+TEST(OutputTest, OutputLimitCountsWhatTheSinkGot)
+{
+    Settings settings;
+    settings.limits.maxOutputSize = 1000;
+    TemplateEnv env;
+    env.SetSettings(settings);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% for i in range(2000) %}{{ i }},{% endfor %}"));
+    RecordingSink<char> sink;
+    auto result = tpl.RenderTo(sink, {});
+    ASSERT_FALSE(result);
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    EXPECT_GE(sink.output.size(), 1000U);
+    EXPECT_LT(sink.output.size(), 2000U);
+
+    // A string limit counts from where the render started appending
+    std::string out(5000, '-');
+    result = tpl.RenderTo(out, {});
+    ASSERT_FALSE(result);
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    EXPECT_EQ(std::string(5000, '-'), out);
+
+    Template small(&env);
+    ASSERT_TRUE(small.Load("{% for i in range(10) %}{{ i }}{% endfor %}"));
+    RecordingSink<char> smallSink;
+    ASSERT_TRUE(small.RenderTo(smallSink, {}));
+    EXPECT_EQ("0123456789", smallSink.output);
+}
+
+TEST(OutputTest, CallableRendersAnotherTemplateToASink)
+{
+    // A render started inside another one, on the same thread, writes to its own sink
+    Template inner;
+    ASSERT_TRUE(inner.Load("{% for i in range(300) %}[{{ i }}]{% endfor %}"));
+    RecordingSink<char> innerSink;
+    Template outer;
+    ASSERT_TRUE(outer.Load("{% for i in range(300) %}{{ i }}{% endfor %}|{{ nested() }}|{{ 'end' }}"));
+    RecordingSink<char> outerSink;
+    ValuesMap params{ { "nested", MakeCallable([&]() {
+                            auto result = inner.RenderTo(innerSink, {});
+                            return Value(result ? int64_t{ 1 } : int64_t{ 0 });
+                        }) } };
+    ASSERT_TRUE(outer.RenderTo(outerSink, params));
+
+    std::string innerExpected;
+    std::string outerExpected;
+    for (int idx = 0; idx != 300; ++idx)
+    {
+        innerExpected += "[" + std::to_string(idx) + "]";
+        outerExpected += std::to_string(idx);
+    }
+    EXPECT_EQ(innerExpected, innerSink.output);
+    EXPECT_EQ(outerExpected + "|1|end", outerSink.output);
+}
+
+TEST(OutputTest, ContainerSinkAppendsToContainers)
+{
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% for i in range(500) %}{{ i }} {% endfor %}" + std::string(300, 'x')));
+    auto expected = std::string(">");
+    for (int idx = 0; idx != 500; ++idx)
+    {
+        expected += std::to_string(idx) + " ";
+    }
+    expected += std::string(300, 'x');
+
+    std::string str = ">";
+    ContainerSink strSink(str);
+    ASSERT_TRUE(tpl.RenderTo(strSink, {}));
+    EXPECT_EQ(expected, str);
+
+    std::vector<char> vec{ '>' };
+    ContainerSink vecSink(vec);
+    ASSERT_TRUE(tpl.RenderTo(vecSink, {}));
+    EXPECT_EQ(expected, std::string(vec.begin(), vec.end()));
+
+    fmt::memory_buffer buffer;
+    buffer.push_back('>');
+    ContainerSink bufferSink(buffer);
+    ASSERT_TRUE(tpl.RenderTo(bufferSink, {}));
+    EXPECT_EQ(expected, fmt::to_string(buffer));
+
+    TemplateW wide;
+    ASSERT_TRUE(wide.Load(L"{{ 'w' }}" + std::wstring(200, L'y')));
+    std::wstring wideStr;
+    ContainerSink wideSink(wideStr);
+    ASSERT_TRUE(wide.RenderTo(wideSink, {}));
+    EXPECT_EQ(L"w" + std::wstring(200, L'y'), wideStr);
+
+    static_assert(std::is_base_of_v<OutputSink, ContainerSink<std::string>>);
+    static_assert(std::is_base_of_v<OutputSinkW, ContainerSink<std::wstring>>);
+    static_assert(std::is_base_of_v<OutputSink, ContainerSink<fmt::memory_buffer>>);
 }

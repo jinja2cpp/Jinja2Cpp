@@ -59,11 +59,18 @@ inline constexpr HtmlEscapeTable htmlEscapeTable{};
 // size; longer ones are measured first, so the buffer stays small
 constexpr size_t maxBufferedHtmlEscape = 4096;
 
+// The buffer of EscapeHtmlToBuffer on this thread; ReleaseThreadCaches frees it
+inline std::string& HtmlEscapeBuffer()
+{
+    thread_local std::string buffer;
+    return buffer;
+}
+
 // Escapes a narrow string in one pass, without a capacity check per byte. The view is valid until
 // the next call on the same thread.
 inline std::string_view EscapeHtmlToBuffer(std::string_view str)
 {
-    thread_local std::string buffer;
+    auto& buffer = HtmlEscapeBuffer();
     auto worstCase = (str.size() * 5) + 8;
     if (buffer.size() < worstCase)
     {

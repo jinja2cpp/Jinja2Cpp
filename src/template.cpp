@@ -1,6 +1,8 @@
 #include <jinja2cpp/template.h>
 
 #include "make_unexpected.h"
+#include "markup.h"
+#include "render_workspace.h"
 #include "template_impl.h"
 
 #include <jinja2cpp/config.h>
@@ -40,6 +42,40 @@ Result<void, CharT> ToResult(std::optional<BasicErrorInfo<CharT>> error)
     }
     return MakeUnexpected(std::move(*error));
 }
+
+// Truncates a RenderTo string back to its size at entry, unless the render succeeded: on an error
+// and when std::bad_alloc goes through. Shrinking never allocates
+template<typename StringT>
+class TruncateOnError
+{
+public:
+    explicit TruncateOnError(StringT& out) noexcept
+        : m_out(out)
+        , m_size(out.size())
+    {
+    }
+    TruncateOnError(const TruncateOnError&) = delete;
+    TruncateOnError& operator=(const TruncateOnError&) = delete;
+    ~TruncateOnError()
+    {
+        if (!m_succeeded)
+        {
+            m_out.resize(m_size);
+        }
+    }
+
+    template<typename ErrorT>
+    auto Done(std::optional<ErrorT> error)
+    {
+        m_succeeded = !error;
+        return error;
+    }
+
+private:
+    StringT& m_out;
+    typename StringT::size_type m_size;
+    bool m_succeeded = false;
+};
 
 template<typename CharT>
 struct FileStream;
@@ -174,6 +210,32 @@ auto BasicTemplate<CharT>::RenderAsStringGeneric(const GenericMap& params) const
 }
 
 template<typename CharT>
+Result<void, CharT> BasicTemplate<CharT>::RenderTo(StringType& out, const ValuesMap& params) const
+{
+    TruncateOnError guard(out);
+    return ToResult(guard.Done(GetImpl<CharT>(m_impl)->Render(out, params)));
+}
+
+template<typename CharT>
+Result<void, CharT> BasicTemplate<CharT>::RenderToGeneric(StringType& out, const GenericMap& params) const
+{
+    TruncateOnError guard(out);
+    return ToResult(guard.Done(GetImpl<CharT>(m_impl)->Render(out, params)));
+}
+
+template<typename CharT>
+Result<void, CharT> BasicTemplate<CharT>::RenderTo(BasicOutputSink<CharT>& sink, const ValuesMap& params) const
+{
+    return ToResult(GetImpl<CharT>(m_impl)->Render(sink, params));
+}
+
+template<typename CharT>
+Result<void, CharT> BasicTemplate<CharT>::RenderToGeneric(BasicOutputSink<CharT>& sink, const GenericMap& params) const
+{
+    return ToResult(GetImpl<CharT>(m_impl)->Render(sink, params));
+}
+
+template<typename CharT>
 Result<GenericMap, CharT> BasicTemplate<CharT>::GetMetadata() const
 {
     return GetImpl<CharT>(m_impl)->GetMetadata();
@@ -195,6 +257,26 @@ template<typename CharT>
 bool BasicTemplate<CharT>::IsEqual(const BasicTemplate& other) const
 {
     return m_impl == other.m_impl;
+}
+
+bool ReleaseThreadCaches() noexcept
+{
+    RenderWorkspace* workspace = nullptr;
+    try
+    {
+        workspace = &RenderWorkspace::ForThisThread();
+    }
+    catch (...)
+    {
+        // Out of memory making the workspace of a thread that never rendered: nothing to free
+        return true;
+    }
+    if (!workspace->ReleaseCaches())
+    {
+        return false;
+    }
+    std::string().swap(detail::HtmlEscapeBuffer());
+    return true;
 }
 
 #ifdef _WIN32
