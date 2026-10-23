@@ -672,19 +672,9 @@ InternalValue ApplyMathOperation(BinaryExpression::Operation oper, const Interna
     return result;
 }
 
-// a ~ b: both operands as strings of the template's width. With markupJoin (Jinja2's
-// markup_join, `~` under autoescape) Markup on either side escapes the other one and the
-// result is Markup
-InternalValue ConcatAsStrings(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context, bool markupJoin)
+// a ~ b: both operands as strings of the template's width
+JINJA2CPP_ALWAYS_INLINE InternalValue ConcatAsStrings(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
 {
-    if (markupJoin && (leftVal.IsMarkup() || rightVal.IsMarkup()))
-    {
-        auto* callback = context.GetRendererCallback();
-        InternalValue result = ConcatAsStrings(MarkupEscape(leftVal, callback), MarkupEscape(rightVal, callback), context, false);
-        result.SetMarkup();
-        return result;
-    }
-
     // Two strings of the template's width are copied into the result, allocated once
     // (docs/tasks/0151)
     auto concat = [&leftVal, &rightVal](auto tag) -> std::optional<InternalValue> {
@@ -713,6 +703,16 @@ InternalValue ConcatAsStrings(const InternalValue& leftVal, const InternalValue&
         Apply<visitors::ValueRenderer<wchar_t>>(rightVal, std::get<std::wstring>(result));
     }
     return InternalValue(std::move(result));
+}
+
+// Jinja2's markup_join, `~` under autoescape when either side is Markup: the other one is
+// escaped and the result is Markup. Kept apart so that the plain concatenation stays inlined
+JINJA2CPP_NOINLINE_INLINE InternalValue MarkupJoin(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
+{
+    auto* callback = context.GetRendererCallback();
+    InternalValue result = ConcatAsStrings(MarkupEscape(leftVal, callback), MarkupEscape(rightVal, callback), context);
+    result.SetMarkup();
+    return result;
 }
 } // namespace
 
@@ -758,7 +758,8 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
         break;
     }
     case jinja2::BinaryExpression::StringConcat:
-        result = ConcatAsStrings(leftVal, rightVal, context, !m_folded && context.IsOutputAutoescape());
+        result = !m_folded && context.IsOutputAutoescape() && (leftVal.IsMarkup() || rightVal.IsMarkup()) ? MarkupJoin(leftVal, rightVal, context)
+                                                                                                          : ConcatAsStrings(leftVal, rightVal, context);
         break;
     default:
         break;

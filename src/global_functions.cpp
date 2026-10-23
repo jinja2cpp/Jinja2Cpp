@@ -114,14 +114,17 @@ InternalValue CallRange(const CallParams& params, RenderContext&)
     {
         throw std::runtime_error("range expected at most 3 arguments");
     }
-    // A missing argument is a plain undefined
-    for (const char* name : { "start", "stop", "step" })
+    // A missing argument is a plain undefined. Each is looked up once (docs/tasks/0286)
+    const auto startArg = args["start"];
+    const auto stopArg = args["stop"];
+    const auto stepArg = args["step"];
+    for (const auto* arg : { &startArg, &stopArg, &stepArg })
     {
-        CheckIntegerArgument(args[name]);
+        CheckIntegerArgument(*arg);
     }
-    int64_t start = ConvertToInt(args["start"]);
-    int64_t stop = ConvertToInt(args["stop"]);
-    int64_t step = IsEmpty(args["step"]) ? 1 : ConvertToInt(args["step"]);
+    int64_t start = ConvertToInt(startArg);
+    int64_t stop = ConvertToInt(stopArg);
+    int64_t step = IsEmpty(stepArg) ? 1 : ConvertToInt(stepArg);
     if (step == 0)
     {
         throw std::runtime_error("range() arg 3 must not be zero");

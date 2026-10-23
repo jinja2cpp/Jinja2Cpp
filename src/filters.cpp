@@ -765,18 +765,20 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         ThrowNotIterable(baseVal);
     }
 
+    // The extra arguments go to the filter, which checks them when it is called
+    const auto argsError = filter ? filter->GetArgumentsError() : std::string();
     InternalValueList resultList;
     ReserveHint(resultList, list.GetSize().value_or(0));
     list.ForEach([&](const InternalValue& val) {
-        // Python's map is lazy: a name that is no filter fails at the first item
+        // Python's map is lazy: a name that is no filter, or arguments that do not fit it,
+        // fail at the first item
         if (!filter)
         {
             ThrowNotACallableName("filter", filterName);
         }
-        // The extra arguments go to the filter, which checks them when it is called
-        if (auto error = filter->GetArgumentsError(); !error.empty())
+        if (!argsError.empty())
         {
-            throw std::runtime_error(AsString(filterName) + "() " + error);
+            throw std::runtime_error(AsString(filterName) + "() " + argsError);
         }
         resultList.push_back(filter->Filter(val, context));
         return true;
