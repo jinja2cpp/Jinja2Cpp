@@ -1,6 +1,7 @@
 #include "statements.h"
 
 #include "cycle_collector.h"
+#include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
 #include "internal_value.h"
@@ -41,6 +42,7 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 using namespace std::string_literals;
@@ -68,7 +70,7 @@ void CheckIterable(const InternalValue& value)
         CheckUndefinedUse(value, UndefinedUse::Operator);
         return;
     }
-    throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(value) + "' object is not iterable");
+    throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(value) + "' object is not iterable");
 }
 
 
@@ -136,7 +138,7 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
         const auto ns = found ? AsMap(*found) : std::nullopt;
         if (!ns || !ns->IsNamespace())
         {
-            throw std::runtime_error("cannot assign attribute on non-namespace object");
+            throw TemplateRuntimeError("cannot assign attribute on non-namespace object");
         }
         // The store may close a reference cycle, which the render frees when it ends. Unlike
         // the list and dict methods it walks nothing: `set ns.v = [ns.v]` in a loop would make
@@ -161,7 +163,7 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
     // An object (namespace(), cycler(), joiner()) is neither a mapping nor iterable
     if (map && map->GetObjectClass())
     {
-        throw std::runtime_error("cannot unpack non-iterable "s + map->GetObjectClass() + " object");
+        throw TemplateRuntimeError("cannot unpack non-iterable "s + map->GetObjectClass() + " object");
     }
     if (allNames && map && map->HasAttributes())
     {
@@ -184,7 +186,7 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
         auto list = ConvertToList(value, isConverted, false);
         if (!isConverted)
         {
-            throw std::runtime_error("cannot unpack non-iterable value");
+            throw TemplateRuntimeError("cannot unpack non-iterable value");
         }
         // One item past the targets is enough to tell that there are too many
         for (const auto& item : list)
@@ -199,11 +201,11 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
 
     if (items.size() > count)
     {
-        throw std::runtime_error("too many values to unpack (expected " + std::to_string(count) + ")");
+        throw TemplateRuntimeError("too many values to unpack (expected " + std::to_string(count) + ")");
     }
     if (items.size() < count)
     {
-        throw std::runtime_error("not enough values to unpack (expected " + std::to_string(count) + ", got " + std::to_string(items.size()) + ")");
+        throw TemplateRuntimeError("not enough values to unpack (expected " + std::to_string(count) + ", got " + std::to_string(items.size()) + ")");
     }
 
     std::size_t idx = 0;
@@ -315,7 +317,7 @@ struct LoopState : ValueObject
         // Jinja2 has no `loop` in the filter at all
         if (isAdvancing)
         {
-            throw std::runtime_error("'loop' is undefined in the loop filter");
+            throw TemplateRuntimeError("'loop' is undefined in the loop filter");
         }
         isLast = !FetchNext(Item(index0 + 1));
         isPeeked = true;
@@ -449,7 +451,7 @@ Callable MakeLoopChanged(const std::shared_ptr<std::optional<InternalValueList>>
     return Callable(Callable::GlobalFunc, [lastChanged](const CallParams& params, RenderContext&) -> InternalValue {
         if (!params.kwParams.empty())
         {
-            throw std::runtime_error("changed() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+            throw TemplateRuntimeError("changed() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
         }
         auto isEqual = [](const InternalValue& lhs, const InternalValue& rhs) {
             return ConvertToBool(Apply2<visitors::BinaryMathOperation>(lhs, rhs, BinaryExpression::LogicalEq));
@@ -473,12 +475,12 @@ JINJA2CPP_NOINLINE_INLINE Callable MakeLoopCycle(LoopState& state)
     return Callable(Callable::GlobalFunc, [position = std::shared_ptr<const size_t>(state.CyclePosition())](const CallParams& params, RenderContext&) -> InternalValue {
         if (!params.kwParams.empty())
         {
-            throw std::runtime_error("LoopContext.cycle() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+            throw TemplateRuntimeError("LoopContext.cycle() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
         }
         const auto& args = params.posParams;
         if (args.empty())
         {
-            throw std::runtime_error("no items for cycling given");
+            throw TemplateRuntimeError("no items for cycling given");
         }
         return args[*position % args.size()];
     });
@@ -658,7 +660,7 @@ private:
             {
                 // A loop without the recursive marker is callable in Jinja2, which then refuses
                 return Callable(Callable::GlobalFunc, [](const CallParams&, RenderContext&) -> InternalValue {
-                    throw std::runtime_error("The loop must have the 'recursive' marker to be called recursively.");
+                    throw TemplateRuntimeError("The loop must have the 'recursive' marker to be called recursively.");
                 });
             }
             return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.recursiveNodes, state.level, state.recursiveSite, state.recursiveAutoescape, state.recursiveVolatile);
@@ -917,22 +919,22 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaVie
         {
             if (kwParam.first != "iterable")
             {
-                throw std::runtime_error("LoopContext.__call__() got an unexpected keyword argument '" + kwParam.first + "'");
+                throw TemplateRuntimeError("LoopContext.__call__() got an unexpected keyword argument '" + kwParam.first + "'");
             }
             if (!params.posParams.empty())
             {
-                throw std::runtime_error("LoopContext.__call__() got multiple values for argument 'iterable'");
+                throw TemplateRuntimeError("LoopContext.__call__() got multiple values for argument 'iterable'");
             }
         }
         if (params.posParams.size() > 1)
         {
-            throw std::runtime_error("LoopContext.__call__() takes 2 positional arguments but " + std::to_string(params.posParams.size() + 1) + " were given");
+            throw TemplateRuntimeError("LoopContext.__call__() takes 2 positional arguments but " + std::to_string(params.posParams.size() + 1) + " were given");
         }
         bool isSucceeded = false;
         auto parsedParams = helpers::ParseCallParams({ { "iterable", true } }, params, isSucceeded);
         if (!isSucceeded)
         {
-            throw std::runtime_error("LoopContext.__call__() missing 1 required positional argument: 'iterable'");
+            throw TemplateRuntimeError("LoopContext.__call__() missing 1 required positional argument: 'iterable'");
         }
 
         auto var = parsedParams["iterable"];
@@ -1554,11 +1556,11 @@ void CheckBlockCallParams(const CallParams& params)
     // Python reports a keyword argument first
     if (!params.kwParams.empty())
     {
-        throw std::runtime_error("BlockReference.__call__() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+        throw TemplateRuntimeError("BlockReference.__call__() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
     }
     if (!params.posParams.empty())
     {
-        throw std::runtime_error("BlockReference.__call__() takes 1 positional argument but " + std::to_string(params.posParams.size() + 1) + " were given");
+        throw TemplateRuntimeError("BlockReference.__call__() takes 1 positional argument but " + std::to_string(params.posParams.size() + 1) + " were given");
     }
 }
 
@@ -1730,7 +1732,7 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
     auto p = frame->blocks->blocks.find(name);
     if (m_isRequired && (p == frame->blocks->blocks.end() || p->second.size() <= 1))
     {
-        throw std::runtime_error("Required block '" + std::string(name) + "' not found");
+        throw TemplateRuntimeError("Required block '" + std::string(name) + "' not found");
     }
 
     // An unscoped block sees the template-level names only, not the loop variables or
@@ -1770,7 +1772,7 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
         else
         {
             parentBlock.emplace(Callable::Macro, [name](const CallParams&, OutStream&, RenderContext&) {
-                throw std::runtime_error("there is no parent block called '" + std::string(name) + "'.");
+                throw TemplateRuntimeError("there is no parent block called '" + std::string(name) + "'.");
             });
         }
     }
@@ -1915,7 +1917,7 @@ void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
     }
     if (frame->parent)
     {
-        throw std::runtime_error("extended multiple times");
+        throw TemplateRuntimeError("extended multiple times");
     }
 
     auto name = values.Nodes()[m_templateExpr].Evaluate(values);
@@ -1945,30 +1947,29 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
 
 void IncludeStatement::Render(OutStream& os, RenderContext& values)
 {
+    // Only a template that is not found is skipped, as Python's `ignore missing` and select_template
+    // skip it: what fails once it is found, while it loads or renders, fails the include
     auto doRender = [this, &values, &os](const IRendererCallback::LoadTemplateResult& tpl) -> bool {
-        try
+        const bool missing = std::visit(
+            [](const auto& loaded) {
+                if constexpr (std::is_same_v<std::decay_t<decltype(loaded)>, NoneValue>)
+                {
+                    return false;
+                }
+                else
+                {
+                    return !loaded && loaded.error().GetCode() == ErrorCode::FileNotFound;
+                }
+            },
+            tpl);
+        if (missing)
         {
-            return VisitTemplateImpl<bool>(tpl, true, [this, &values, &os](const auto& tplPtr) {
-                RenderIncludedTemplate(*tplPtr, m_withContext, os, values);
-                return true;
-            });
+            return false;
         }
-        catch (const BasicErrorInfo<char>& err)
-        {
-            if (err.GetCode() != ErrorCode::FileNotFound)
-            {
-                throw;
-            }
-        }
-        catch (const BasicErrorInfo<wchar_t>& err)
-        {
-            if (err.GetCode() != ErrorCode::FileNotFound)
-            {
-                throw;
-            }
-        }
-
-        return false;
+        return VisitTemplateImpl<bool>(tpl, true, [this, &values, &os](const auto& tplPtr) {
+            RenderIncludedTemplate(*tplPtr, m_withContext, os, values);
+            return true;
+        });
     };
 
     // A constant name found in this render is not looked up again
@@ -2355,13 +2356,13 @@ template<typename DisplayName>
             }
             if (kwParams.find("caller"s) != kwParams.end() && binder.IsExtraKeyword("caller"))
             {
-                throw std::runtime_error("macro " + displayName() + " was invoked with two values for the special caller argument. This is most likely a bug.");
+                throw TemplateRuntimeError("macro " + displayName() + " was invoked with two values for the special caller argument. This is most likely a bug.");
             }
-            throw std::runtime_error("macro " + displayName() + " takes no keyword argument '" + name + "'");
+            throw TemplateRuntimeError("macro " + displayName() + " takes no keyword argument '" + name + "'");
         }
     }
 
-    throw std::runtime_error("macro " + displayName() + " takes not more than " + std::to_string(argsCount) + " argument(s)");
+    throw TemplateRuntimeError("macro " + displayName() + " takes not more than " + std::to_string(argsCount) + " argument(s)");
 }
 
 // The slots of the special names: they follow the arguments, in this order, the ones the
@@ -2548,7 +2549,7 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     {
         // Calling a name that does not exist is an UndefinedError under every policy
         CheckUndefinedUse(fnVal, UndefinedUse::Call);
-        throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(fnVal) + "' object is not callable");
+        throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(fnVal) + "' object is not callable");
     }
 
     auto callParams = helpers::EvaluateCallParams(call.GetParams(), values);

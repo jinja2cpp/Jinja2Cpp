@@ -13,6 +13,7 @@
 #include "make_unexpected.h"
 #include "node_arena.h"
 #include "render_context.h"
+#include "render_failure.h"
 #include "renderer.h"
 #include "statements.h"
 #include "unicode_tables.h"
@@ -29,6 +30,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -36,10 +38,13 @@
 #include <cwchar>
 #include <forward_list>
 #include <iterator>
+#include <limits>
 #include <list>
 #include <memory>
+#include <new>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -215,6 +220,94 @@ struct TransInfo
     }
 };
 
+// The children of the bodies of the open statements, and where the tag of each starts in the
+// source, for the locations of render errors (ComposedRenderer). Only the innermost open
+// statement adds to its body, and a statement's body is made before its parent's goes on, so
+// each body is the run of children from where its statement opened to the end: one list for all
+// of them, not one in each statement on the stack
+class StatementBodies // NOLINT(cppcoreguidelines-pro-type-member-init): m_inPlace is raw storage
+{
+public:
+    using Child = NodeRef<IRendererBase>;
+
+    StatementBodies() = default;
+    StatementBodies(const StatementBodies&) = delete;
+    StatementBodies& operator=(const StatementBodies&) = delete;
+    ~StatementBodies() = default;
+
+    // Where the body of a statement opened now starts
+    [[nodiscard]] std::uint32_t Size() const { return m_size; }
+    // To the innermost open body. Inline: a call costs more than the add
+    JINJA2CPP_HOT_INLINE void Add(Child node, std::size_t offset)
+    {
+        if (m_size == m_capacity)
+        {
+            Grow();
+        }
+        new (m_data + m_size) Item{ node, ToOffset(offset) };
+        ++m_size;
+    }
+    // At the start of the body that starts at `start`: the binding a frame starts with
+    void AddFirst(std::uint32_t start, Child node, std::size_t offset)
+    {
+        Add(node, offset);
+        std::rotate(m_data + start, m_data + m_size - 1, m_data + m_size);
+    }
+    // The body that starts at `start`, as a node; its children leave the list
+    JINJA2CPP_HOT_INLINE NodeRef<ComposedRenderer> Take(NodeArena& nodes, std::uint32_t start)
+    {
+        assert(start <= m_size);
+        const std::size_t count = m_size - start;
+        const Item* const items = m_data + start;
+        auto body = nodes.MakeWithItems<ComposedRenderer, Child, std::uint32_t>(
+            count,
+            [items, count](Child* children, std::uint32_t* offsets) {
+                for (std::size_t idx = 0; idx != count; ++idx)
+                {
+                    children[idx] = items[idx].node;
+                    // Last child first (ComposedRenderer::OffsetOf)
+                    offsets[count - 1 - idx] = items[idx].offset;
+                }
+            },
+            true);
+        m_size = start;
+        return body;
+    }
+
+private:
+    struct Item
+    {
+        Child node;
+        std::uint32_t offset = 0;
+    };
+    static_assert(std::is_trivially_copyable_v<Item> && std::is_trivially_destructible_v<Item>, "the list never destroys its children");
+
+    // A source past 4 GiB locates its errors at the last offset that fits
+    static std::uint32_t ToOffset(std::size_t offset) { return static_cast<std::uint32_t>(std::min<std::size_t>(offset, std::numeric_limits<std::uint32_t>::max())); }
+    // Out of line: few templates have more children open at once than fit in place
+    JINJA2CPP_COLD_INLINE void Grow()
+    {
+        if (m_capacity > std::numeric_limits<std::uint32_t>::max() / 2)
+        {
+            throw std::length_error("a template body too long");
+        }
+        const std::uint32_t capacity = m_capacity * 2;
+        auto heap = std::make_unique<Item[]>(capacity);
+        std::copy(m_data, m_data + m_size, heap.get());
+        m_heap = std::move(heap);
+        m_data = m_heap.get();
+        m_capacity = capacity;
+    }
+
+    static constexpr std::uint32_t InPlace = 32;
+    // Raw bytes, so that making the parser constructs no children: only those added are read
+    alignas(Item) std::byte m_inPlace[InPlace * sizeof(Item)]; // NOLINT(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
+    std::unique_ptr<Item[]> m_heap;                            // NOLINT(cppcoreguidelines-avoid-c-arrays,modernize-avoid-c-arrays)
+    Item* m_data = reinterpret_cast<Item*>(m_inPlace);
+    std::uint32_t m_size = 0;
+    std::uint32_t m_capacity = InPlace;
+};
+
 struct StatementInfo
 {
     enum Type
@@ -235,9 +328,12 @@ struct StatementInfo
     };
 
     Type type{};
-    // The body the statement's tags add to, made into a ComposedRenderer when the statement ends
-    boost::container::small_vector<NodeRef<IRendererBase>, 8> body;
+    // Where its body starts in the parser's StatementBodies; made into a ComposedRenderer when
+    // the statement ends
+    std::uint32_t bodyStart = 0;
     Token token;
+    // Where its opening tag starts in the source
+    std::size_t tagOffset = 0;
     NodeRef<IRendererBase> renderer;
     // Set on `{% trans %}` only
     std::shared_ptr<TransInfo> trans;
@@ -256,11 +352,12 @@ struct StatementInfo
         return ((mask >> type) & 1U) != 0;
     }
 
-    static StatementInfo Create(Type type, const Token& tok)
+    static StatementInfo Create(Type type, const Token& tok, std::size_t tagOffset)
     {
         StatementInfo result;
         result.type = type;
         result.token = tok;
+        result.tagOffset = tagOffset;
         return result;
     }
 };
@@ -333,14 +430,16 @@ class StatementsParser
 public:
     using ParseResult = nonstd::expected<void, ParseError>;
 
-    // A parser lives for one tag; the settings and the arena outlive it
-    StatementsParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names, UnknownCallables& unknown, TemplateRootInfo& root)
+    // A parser lives for one tag, which starts at `tagOffset` in the source; the settings and the arena outlive it
+    StatementsParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names, UnknownCallables& unknown, TemplateRootInfo& root, StatementBodies& bodies, std::size_t tagOffset)
         : m_settings(settings)
         , m_env(env)
         , m_nodes(nodes)
         , m_names(names)
         , m_unknown(unknown)
         , m_root(root)
+        , m_bodies(bodies)
+        , m_tagOffset(tagOffset)
     {
     }
 
@@ -381,6 +480,12 @@ private:
     ParseResult ParsePluralize(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
 
+    // Opens `info`: its body starts with no children
+    void Push(StatementInfoList& statementsInfo, StatementInfo&& info)
+    {
+        info.bodyStart = m_bodies.Size();
+        statementsInfo.push_back(std::move(info));
+    }
     // The statement on top of the stack, taken off it
     static StatementInfo PopStatement(StatementInfoList& statementsInfo)
     {
@@ -397,9 +502,7 @@ private:
         {
             return TakeFrameBody(info);
         }
-        auto body = m_nodes.MakeWithItems<ComposedRenderer>(boost::span<const ComposedRenderer::Child>(info.body.data(), info.body.size()));
-        info.body.clear();
-        return body;
+        return m_bodies.Take(m_nodes, info.bodyStart);
     }
     NodeRef<ComposedRenderer> TakeFrameBody(StatementInfo& info);
     // Whether the innermost open statement is a loop's `else`, whose body is a frame of its own
@@ -415,6 +518,9 @@ private:
     NameResolver& m_names;
     UnknownCallables& m_unknown;
     TemplateRootInfo& m_root;
+    StatementBodies& m_bodies;
+    // Where the tag starts in the source
+    std::size_t m_tagOffset;
 };
 
 // `{{ name }}` inside `{% trans %}`: Jinja2 allows a plain name only. The result is the name
@@ -586,6 +692,8 @@ private:
     struct TextBlockInfo
     {
         CharRange range;
+        // Where the tag starts, at its begin delimiter; where the text starts for text
+        std::size_t tagStart = 0;
         TextBlockType type;
         // The tokens of the tag are in m_lexBuffers already: the splitter lexed it to find its end
         bool preLexed = false;
@@ -1186,6 +1294,7 @@ private:
         }
 
         m_currentBlockInfo.type = blockType;
+        m_currentBlockInfo.tagStart = matchStart;
 
         // Jinja2 does not apply trim_blocks to the newline after `{% raw %}`, only `-%}` strips there
         if (blockType == TextBlockType::RawBlock)
@@ -1508,10 +1617,9 @@ private:
             return MakeUnexpected(std::move(errors));
         }
 
-        auto& rootBody = statementsStack.front().body;
         if (const auto binding = m_names.EntryBinding(statementsStack.front().frame, m_nodes))
         {
-            rootBody.insert(rootBody.begin(), binding);
+            m_bodies.AddFirst(0, binding, 0);
         }
         auto& templateRoot = m_nodes[templateRef];
         templateRoot.SetBlocks(m_nodes.MakeSpan(m_root.blocks));
@@ -1524,7 +1632,7 @@ private:
         {
             templateRoot.SetHasExtends();
         }
-        templateRoot.SetBody(m_nodes.MakeWithItems<ComposedRenderer>(boost::span<const ComposedRenderer::Child>(rootBody.data(), rootBody.size())));
+        templateRoot.SetBody(m_bodies.Take(m_nodes, 0));
         return nonstd::expected<void, std::vector<ParseError>>();
     }
 
@@ -1545,7 +1653,7 @@ private:
             AppendTransText(*statementsStack.back().trans, range);
             return;
         }
-        statementsStack.back().body.push_back(MakeRawTextRenderer(range));
+        m_bodies.Add(MakeRawTextRenderer(range), range.startOffset);
     }
 
     void FineParseMetaBlock(const TextBlockInfo& block)
@@ -1591,7 +1699,7 @@ private:
         }
         if (parseResult)
         {
-            statementsStack.back().body.push_back(*parseResult);
+            m_bodies.Add(*parseResult, block.tagStart);
         }
         else
         {
@@ -1805,7 +1913,7 @@ private:
 
         MarkMacroSpecialNames(tokens, std::is_same_v<P, StatementsParser>);
 
-        auto praser = MakeParser<P>();
+        auto praser = MakeParser<P>(block);
         LexScanner scanner(tokens, this);
         auto result = praser.Parse(scanner, std::forward<Args>(args)...);
         if (!result)
@@ -1818,11 +1926,11 @@ private:
 
     // A parser for one tag: a statement's adds the blocks it defines to the root's
     template<typename P>
-    P MakeParser()
+    P MakeParser(const TextBlockInfo& block)
     {
         if constexpr (std::is_same_v<P, StatementsParser>)
         {
-            return P(m_settings, m_env, m_nodes, m_names, m_unknown, m_root);
+            return P(m_settings, m_env, m_nodes, m_names, m_unknown, m_root, m_bodies, block.tagStart);
         }
         else
         {
@@ -2132,78 +2240,15 @@ private:
         col = static_cast<unsigned>(offset - p->range.startOffset + 1);
     }
 
-    // The source line with a marker under the error column. A line longer than maxShownLen (a
-    // minified template) is cut to a window around the column, so the message stays bounded.
+    // The source line with a marker under the error column (detail::DescribeLocation)
     string_t GetLocationDescr(unsigned line, unsigned col)
     {
         if (line == 0 && col == 0)
         {
             return string_t();
         }
-
-        --line;
-        --col;
-
-        static constexpr std::size_t maxShownLen = 160;
-        static constexpr std::size_t windowHead = 40;
-        static constexpr std::size_t windowLen = 120;
-        static constexpr std::size_t headLen = 3;
-        static constexpr std::size_t tailLen = 7;
-        const CharT ellipsis[] = { static_cast<CharT>('.'), static_cast<CharT>('.'), static_cast<CharT>('.') };
-
-        const auto& lineInfo = m_lines[line];
-        std::basic_string_view<CharT> origLine(m_template->data() + lineInfo.range.startOffset, lineInfo.range.size());
-
-        string_t result;
-        std::size_t caretCol = col;
-        if (origLine.size() > maxShownLen)
-        {
-            const std::size_t start = col > windowHead ? std::min<std::size_t>(col - windowHead, origLine.size() - windowLen) : 0;
-            const std::size_t end = start + windowLen;
-            result.reserve(windowLen + (2 * std::size(ellipsis)) + 1 + windowHead + headLen + 1 + tailLen + std::size(ellipsis));
-            if (start != 0)
-            {
-                result.append(ellipsis, std::size(ellipsis));
-            }
-            caretCol = col - start + result.size();
-            result.append(origLine.data() + start, windowLen);
-            if (end != origLine.size())
-            {
-                result.append(ellipsis, std::size(ellipsis));
-            }
-        }
-        else
-        {
-            result.reserve((origLine.size() * 2) + headLen + 1 + tailLen + 1);
-            result.append(origLine.data(), origLine.size());
-        }
-        const std::size_t shownLen = result.size();
-        result.append(1, static_cast<CharT>('\n'));
-
-        // Leading whitespace is copied as is so that tabs keep the marker aligned
-        auto locale = std::locale();
-        std::size_t spacePrefixLen = 0;
-        while (spacePrefixLen < shownLen && std::isspace(result[spacePrefixLen], locale))
-        {
-            ++spacePrefixLen;
-        }
-
-        if (caretCol < spacePrefixLen)
-        {
-            result.append(caretCol, static_cast<CharT>(' '));
-        }
-        else
-        {
-            const string_t spacePrefix = result.substr(0, spacePrefixLen);
-            result.append(spacePrefix);
-            const std::size_t actualHeadLen = std::min(caretCol - spacePrefixLen, headLen);
-            result.append(caretCol - actualHeadLen - spacePrefixLen, static_cast<CharT>(' '));
-            result.append(actualHeadLen, static_cast<CharT>('-'));
-        }
-        result.append(1, static_cast<CharT>('^'));
-        result.append(tailLen, static_cast<CharT>('-'));
-
-        return result;
+        const auto& lineInfo = m_lines[line - 1];
+        return detail::DescribeLocation(std::basic_string_view<CharT>(m_template->data() + lineInfo.range.startOffset, lineInfo.range.size()), col - 1);
     }
 
 public:
@@ -2264,6 +2309,8 @@ private:
     // Inline room for the lines of small templates
     boost::container::small_vector<LineInfo, 8, void, boost::container::small_vector_options_t<boost::container::growth_factor<boost::container::growth_factor_100>>> m_lines;
     StatementInfoList* m_openStatements = nullptr;
+    // The children of the open statements' bodies
+    StatementBodies m_bodies;
     // The errors of the fine parse so far, and whether one of them stopped it
     std::vector<ParseError> m_fineErrors;
     bool m_fineParseStopped = false;

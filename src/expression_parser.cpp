@@ -1,5 +1,6 @@
 #include "expression_parser.h"
 
+#include "engine_errors.h"
 #include "error_handling.h"
 #include "expression_evaluator.h"
 #include "internal_value.h"
@@ -18,7 +19,6 @@
 #include <boost/container/small_vector.hpp>
 
 #include <cstdint>
-#include <iostream>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -739,7 +739,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
             m_unknown.Add(nameTok, true);
         }
     }
-    catch (const std::runtime_error&)
+    catch (const TemplateRuntimeError&)
     {
         return MakeParseError(ErrorCode::UnexpectedException, nameTok);
     }
@@ -1234,7 +1234,7 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
     {
         return MakeUnexpected(error);
     }
-    catch (const std::runtime_error&)
+    catch (const TemplateRuntimeError&)
     {
         return MakeParseError(ErrorCode::UnexpectedException, startTok);
     }
@@ -1244,6 +1244,7 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
 ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfExpression(LexScanner& lexer)
 {
     NodeRef<IfExpression> result;
+    const auto& startTok = lexer.PeekNextToken();
 
     try
     {
@@ -1278,9 +1279,9 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
     {
         return MakeUnexpected(error);
     }
-    catch (const std::runtime_error& ex)
+    catch (const TemplateRuntimeError&)
     {
-        std::cout << "Filter parsing problem: " << ex.what() << '\n';
+        return MakeParseError(ErrorCode::UnexpectedException, startTok);
     }
 
     return result;

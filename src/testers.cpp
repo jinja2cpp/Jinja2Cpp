@@ -1,5 +1,6 @@
 #include "testers.h"
 
+#include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "filters.h"
 #include "function_base.h"
@@ -49,7 +50,7 @@ namespace
 // Out of line, so that the tests that fit their call pay only the check
 [[noreturn]] JINJA2CPP_NOINLINE_INLINE void ThrowArgumentsError(const std::string& error)
 {
-    throw std::runtime_error(error);
+    throw TemplateRuntimeError(error);
 }
 } // namespace
 
@@ -442,7 +443,7 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
     {
         if (Apply<ValueKindGetter>(baseVal) != TestKind::String)
         {
-            throw std::runtime_error("'in <string>' requires string as left operand, not "s + Apply<visitors::PythonTypeNameGetter>(baseVal));
+            throw TemplateRuntimeError("'in <string>' requires string as left operand, not "s + Apply<visitors::PythonTypeNameGetter>(baseVal));
         }
         result = ApplyStringConverter(baseVal, [&](const auto& srcStr) {
             std::decay_t<decltype(srcStr)> emptyStrView;
@@ -457,7 +458,7 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
     }
     else if (seqKind == TestKind::Integer || seqKind == TestKind::Double || seqKind == TestKind::Boolean || seqKind == TestKind::Object)
     {
-        throw std::runtime_error("argument of type '"s + Apply<visitors::PythonTypeNameGetter>(seq) + "' is not iterable");
+        throw TemplateRuntimeError("argument of type '"s + Apply<visitors::PythonTypeNameGetter>(seq) + "' is not iterable");
     }
     return result;
 }
@@ -605,7 +606,7 @@ bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& contex
     // unless it is in an `if`. Settings::userCallablesAsFilters looks it up among the values
     if (!callable || callable->GetKind() != Callable::UserCallable)
     {
-        throw std::runtime_error("No test named '" + m_testerName + "' found.");
+        throw TemplateRuntimeError("No test named '" + m_testerName + "' found.");
     }
 
     CallParams tmpCallParams = helpers::EvaluateCallParams(m_callParams, context);

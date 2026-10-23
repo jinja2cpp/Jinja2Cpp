@@ -177,22 +177,25 @@ TEST_F(RecursionLimitsTest, InfiniteRecursionIsRenderError)
     AddFile("include_self", "{% include 'include_self' %}");
     AddFile("extends_self", "{% extends 'extends_self' %}");
     AddFile("import_self", "{% import 'import_self' as m %}");
-    const std::string templates[] = {
-        "{% macro m() %}{{ m() }}{% endmacro %}{{ m() }}",
-        "{% include 'include_self' %}",
-        "{% extends 'extends_self' %}",
-        "{% import 'import_self' as m %}",
-        "{% block b %}{{ self.b() }}{% endblock %}",
-        "{% set l = [[1]] %}{% for i in l recursive %}{{ loop(l) }}{% endfor %}",
+    // Located at the statement the recursion failed in, in the template it is in (docs/tasks/0254)
+    const std::pair<std::string, std::string> templates[] = {
+        { "{% macro m() %}{{ m() }}{% endmacro %}{{ m() }}", "noname.j2tpl:1:16" },
+        { "{% include 'include_self' %}", "include_self:1:1" },
+        // The parent renders after the body of the template that extends it, outside every statement
+        { "{% extends 'extends_self' %}", "noname.j2tpl:1:1" },
+        { "{% import 'import_self' as m %}", "import_self:1:1" },
+        { "{% block b %}{{ self.b() }}{% endblock %}", "noname.j2tpl:1:14" },
+        { "{% set l = [[1]] %}{% for i in l recursive %}{{ loop(l) }}{% endfor %}", "noname.j2tpl:1:46" },
     };
-    for (const auto& source : templates)
+    for (const auto& [source, location] : templates)
     {
         Template tpl(&m_env);
         ASSERT_TRUE(tpl.Load(source).has_value()) << source;
         auto result = tpl.RenderAsString({});
         ASSERT_FALSE(result.has_value()) << source;
         EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode()) << source;
-        EXPECT_EQ("noname.j2tpl:1:1: error: Maximum recursion depth exceeded\n", ErrorToString(result.error())) << source;
+        const auto text = ErrorToString(result.error());
+        EXPECT_EQ(location + ": error: Maximum recursion depth exceeded", text.substr(0, text.find('\n'))) << source;
     }
 
     TemplateW tpl(&m_env);

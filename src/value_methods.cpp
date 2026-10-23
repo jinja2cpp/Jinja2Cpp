@@ -1,6 +1,7 @@
 #include "value_methods.h"
 
 #include "cycle_collector.h"
+#include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "markup.h"
@@ -14,6 +15,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -26,6 +28,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <unordered_set>
 #include <utility>
 #include <variant>
@@ -43,7 +46,7 @@ namespace
 {
 [[noreturn]] void Raise(const std::string& message)
 {
-    throw std::runtime_error(message);
+    throw TemplateRuntimeError(message);
 }
 
 std::string TypeName(const InternalValue& val)
@@ -1245,6 +1248,19 @@ struct StrOps
         return !str.empty() && std::all_of(str.begin(), str.end(), [](CharT c) { return c >= '0' && c <= '9'; });
     }
 
+    // A field's index or key of digits: Python's limit is its Py_ssize_t
+    static std::int64_t ParseFieldNumber(View digits)
+    {
+        const auto narrow = Narrow(digits);
+        std::int64_t result = 0;
+        const auto parsed = std::from_chars(narrow.data(), narrow.data() + narrow.size(), result);
+        if (parsed.ec != std::errc())
+        {
+            Raise("Too many decimal digits in format string");
+        }
+        return result;
+    }
+
     // Python forbids mixing {} with {0} in one format string
     struct FieldNumbering
     {
@@ -1282,7 +1298,7 @@ struct StrOps
                 Raise("cannot switch from automatic field numbering to manual field specification");
             }
             numbering.usedManual = true;
-            idx = static_cast<size_t>(std::stoull(Narrow(first)));
+            idx = static_cast<size_t>(ParseFieldNumber(first));
         }
         if (idx >= params.posParams.size())
         {
@@ -1314,7 +1330,7 @@ struct StrOps
                 Raise("Missing ']' in format string");
             }
             auto key = rest.substr(1, end - 1);
-            InternalValue keyVal = IsDigits(key) ? InternalValue(static_cast<int64_t>(std::stoll(Narrow(key)))) : InternalValue(Narrow(key));
+            InternalValue keyVal = IsDigits(key) ? InternalValue(ParseFieldNumber(key)) : InternalValue(Narrow(key));
             value = GetItem(value, keyVal, &context);
             rest = rest.substr(end + 1);
             if (!rest.empty() && rest[0] != '.' && rest[0] != '[')

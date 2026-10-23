@@ -919,9 +919,15 @@ std::string RenderOrError(const std::string& source, const ValuesMap& params)
     {
         return *result;
     }
+    // The engine's runtime error (Python's TypeError, ValueError): written as before it had a code of its own
+    if (result.error().GetCode() == ErrorCode::TemplateRuntimeError)
+    {
+        return "Exception: " + result.error().GetExtraParams().at(0).AsString() + "\n";
+    }
     auto text = ErrorToString(result.error());
     auto pos = text.find("Exception: ");
-    return pos == std::string::npos ? text : text.substr(pos);
+    // Without the source line the error is located at
+    return pos == std::string::npos ? text : text.substr(pos, text.find('\n', pos) + 1 - pos);
 }
 } // namespace
 

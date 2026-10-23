@@ -1,3 +1,4 @@
+#include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "markup.h"
@@ -77,7 +78,7 @@ ParsedArguments ParseArgs(const std::initializer_list<ArgumentInfo>& argsInfo, c
     auto args = helpers::ParseCallParams(argsInfo, params, isSucceeded);
     if (!isSucceeded || !args.extraPosArgs.empty() || !args.extraKwArgs.empty())
     {
-        throw std::runtime_error(std::string(fnName) + "() got unexpected arguments");
+        throw TemplateRuntimeError(std::string(fnName) + "() got unexpected arguments");
     }
     return args;
 }
@@ -88,11 +89,11 @@ void CheckIntegerArgument(const InternalValue& arg)
 {
     if (const auto* info = GetUndefinedInfo(arg))
     {
-        throw std::runtime_error(std::string("'") + UndefinedClassName(*info) + "' object cannot be interpreted as an integer");
+        throw TemplateRuntimeError(std::string("'") + UndefinedClassName(*info) + "' object cannot be interpreted as an integer");
     }
     if (!arg.IsUndefined() && !GetIf<int64_t>(&arg) && !GetIf<bool>(&arg))
     {
-        throw std::runtime_error(std::string("'") + Apply<visitors::PythonTypeNameGetter>(arg) + "' object cannot be interpreted as an integer");
+        throw TemplateRuntimeError(std::string("'") + Apply<visitors::PythonTypeNameGetter>(arg) + "' object cannot be interpreted as an integer");
     }
 }
 
@@ -101,7 +102,7 @@ InternalValue CallRange(const CallParams& params, RenderContext&)
 {
     if (!params.kwParams.empty())
     {
-        throw std::runtime_error("range() takes no keyword arguments");
+        throw TemplateRuntimeError("range() takes no keyword arguments");
     }
     // Unlike Python, a call without stop renders empty instead of failing (forloop_test)
     bool isSucceeded = true;
@@ -112,7 +113,7 @@ InternalValue CallRange(const CallParams& params, RenderContext&)
     }
     if (!args.extraPosArgs.empty() || !args.extraKwArgs.empty())
     {
-        throw std::runtime_error("range expected at most 3 arguments");
+        throw TemplateRuntimeError("range expected at most 3 arguments");
     }
     // A missing argument is a plain undefined. Each is looked up once (docs/tasks/0286)
     const auto startArg = args["start"];
@@ -127,7 +128,7 @@ InternalValue CallRange(const CallParams& params, RenderContext&)
     int64_t step = IsEmpty(stepArg) ? 1 : ConvertToInt(stepArg);
     if (step == 0)
     {
-        throw std::runtime_error("range() arg 3 must not be zero");
+        throw TemplateRuntimeError("range() arg 3 must not be zero");
     }
     // Its length, as Python counts it for the sandbox's MAX_RANGE
     const auto span = [](int64_t from, int64_t to) { return static_cast<uint64_t>(to) - static_cast<uint64_t>(from); };
@@ -158,12 +159,12 @@ void CollectDictPair(const InternalValue& item, TemplateDict& result)
     auto itemList = ConvertToList(item, isConverted, false);
     if (!isConverted)
     {
-        throw std::runtime_error("cannot convert dictionary update sequence element to a sequence");
+        throw TemplateRuntimeError("cannot convert dictionary update sequence element to a sequence");
     }
     auto pair = itemList.ToValueList();
     if (pair.size() != 2)
     {
-        throw std::runtime_error("dictionary update sequence element has wrong length; 2 is required");
+        throw TemplateRuntimeError("dictionary update sequence element has wrong length; 2 is required");
     }
     result.Set(pair[0], pair[1]);
 }
@@ -173,7 +174,7 @@ void CollectDictItems(const CallParams& params, const char* fnName, TemplateDict
 {
     if (params.posParams.size() > 1)
     {
-        throw std::runtime_error(std::string(fnName) + " expected at most 1 argument, got " + std::to_string(params.posParams.size()));
+        throw TemplateRuntimeError(std::string(fnName) + " expected at most 1 argument, got " + std::to_string(params.posParams.size()));
     }
 
     if (!params.posParams.empty())
@@ -183,7 +184,7 @@ void CollectDictItems(const CallParams& params, const char* fnName, TemplateDict
         // None and an object such as namespace() are not iterable
         if (source.IsNone() || (map && map->GetObjectClass()))
         {
-            throw std::runtime_error("'"s + Apply<visitors::PythonTypeNameGetter>(source) + "' object is not iterable");
+            throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(source) + "' object is not iterable");
         }
         if (map)
         {
@@ -201,7 +202,7 @@ void CollectDictItems(const CallParams& params, const char* fnName, TemplateDict
         }
         else if (!IsEmpty(source))
         {
-            throw std::runtime_error("dict() argument is not a mapping or a sequence of pairs");
+            throw TemplateRuntimeError("dict() argument is not a mapping or a sequence of pairs");
         }
     }
 
@@ -232,11 +233,11 @@ void CheckNoArguments(const CallParams& params, const char* method)
 {
     if (!params.posParams.empty())
     {
-        throw std::runtime_error(std::string(method) + "() takes 1 positional argument but " + std::to_string(params.posParams.size() + 1) + " were given");
+        throw TemplateRuntimeError(std::string(method) + "() takes 1 positional argument but " + std::to_string(params.posParams.size() + 1) + " were given");
     }
     if (!params.kwParams.empty())
     {
-        throw std::runtime_error(std::string(method) + "() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+        throw TemplateRuntimeError(std::string(method) + "() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
     }
 }
 
@@ -245,11 +246,11 @@ InternalValue CallCycler(const CallParams& params, RenderContext&)
 {
     if (!params.kwParams.empty())
     {
-        throw std::runtime_error("cycler() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+        throw TemplateRuntimeError("cycler() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
     }
     if (params.posParams.empty())
     {
-        throw std::runtime_error("at least one item has to be provided");
+        throw TemplateRuntimeError("at least one item has to be provided");
     }
 
     struct State
@@ -396,7 +397,7 @@ InternalValue CallLipsum(const CallParams& params, std::minstd_rand& random)
     auto maxWords = ConvertToInt(args["max"]);
     if (count > 0 && minWords >= maxWords)
     {
-        throw std::runtime_error("lipsum(): empty range for the number of words");
+        throw TemplateRuntimeError("lipsum(): empty range for the number of words");
     }
 
     std::string result;
@@ -447,7 +448,7 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
     size_t argsCount = 1U + (fn.hasContext ? 1U : 0U) + (fn.hasPlural ? 2U : 0U);
     if (params.posParams.size() != argsCount)
     {
-        throw std::runtime_error(std::string(fn.name) + "() takes " + std::to_string(argsCount) + " positional arguments but " + std::to_string(params.posParams.size()) + " were given");
+        throw TemplateRuntimeError(std::string(fn.name) + "() takes " + std::to_string(argsCount) + " positional arguments but " + std::to_string(params.posParams.size()) + " were given");
     }
 
     InternalDict variables = params.kwParams;
@@ -479,7 +480,7 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
     });
     if (!isString)
     {
-        throw std::runtime_error("unsupported operand type(s) for %: '"s + Apply<visitors::PythonTypeNameGetter>(translated) + "' and 'dict'");
+        throw TemplateRuntimeError("unsupported operand type(s) for %: '"s + Apply<visitors::PythonTypeNameGetter>(translated) + "' and 'dict'");
     }
 
     InternalValue values = CreateMapAdapter(std::move(variables));

@@ -96,7 +96,7 @@ TEST_F(TemplateEnvFixture, RenderErrorsTest)
     renderResult = tpl2.RenderAsString({{"foo", MakeCallable([]() -> Value {throw std::runtime_error("Bang!"); })}});
     ASSERT_FALSE(renderResult.has_value());
 
-    EXPECT_EQ("noname.j2tpl:1:1: error: Unexpected exception occurred during template processing. Exception: Bang!\n", ErrorToString(renderResult.error()));
+    EXPECT_EQ("noname.j2tpl:1:1: error: Exception thrown by a user callable: Bang!\n{{ foo() }}\n^-------", ErrorToString(renderResult.error()));
 
     Template tpl3(&m_env);
     auto parseResult = tpl3.Load("{% import name as name %}");
@@ -106,7 +106,7 @@ TEST_F(TemplateEnvFixture, RenderErrorsTest)
     renderResult = tpl3.RenderAsString({{"name", 10}});
     ASSERT_FALSE(renderResult.has_value());
 
-    EXPECT_EQ("noname.j2tpl:1:1: error: Invalid template name: 10\n", ErrorToString(renderResult.error()));
+    EXPECT_EQ("noname.j2tpl:1:1: error: Invalid template name: 10\n{% import name as name %}\n^-------", ErrorToString(renderResult.error()));
 }
 
 TEST_F(TemplateEnvFixture, RenderErrorsTest_Wide)
@@ -122,7 +122,7 @@ TEST_F(TemplateEnvFixture, RenderErrorsTest_Wide)
     renderResult = tpl2.RenderAsString({ {"foo", MakeCallable([]() -> Value {throw std::runtime_error("Bang!"); })} });
     ASSERT_FALSE(renderResult.has_value());
 
-    EXPECT_EQ(L"noname.j2tpl:1:1: error: Unexpected exception occurred during template processing. Exception: Bang!\n", ErrorToString(renderResult.error()));
+    EXPECT_EQ(L"noname.j2tpl:1:1: error: Exception thrown by a user callable: Bang!\n{{ foo() }}\n^-------", ErrorToString(renderResult.error()));
 
     TemplateW tpl3(&m_env);
     auto parseResult = tpl3.Load(L"{% import name as name %}");
@@ -132,7 +132,7 @@ TEST_F(TemplateEnvFixture, RenderErrorsTest_Wide)
     renderResult = tpl3.RenderAsString({ {"name", 10} });
     ASSERT_FALSE(renderResult.has_value());
 
-    EXPECT_EQ(L"noname.j2tpl:1:1: error: Invalid template name: 10\n", ErrorToString(renderResult.error()));
+    EXPECT_EQ(L"noname.j2tpl:1:1: error: Invalid template name: 10\n{% import name as name %}\n^-------", ErrorToString(renderResult.error()));
 }
 
 // A call that does not fit its filter fails where the filter runs, as in Jinja2; the message
@@ -143,7 +143,10 @@ TEST(ErrorsFilterArgumentsTest, ReportedAtRender)
     ASSERT_TRUE(tpl.Load("{% if false %}{{ x | int(1, 2, 3, 4) }}{% endif %}{{ x | default(1, a_long_keyword_name=2) }}"));
     auto result = tpl.RenderAsString({ { "x", 1 } });
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ("noname.j2tpl:1:1: error: Unexpected exception occurred during template processing. Exception: default() got an unexpected keyword argument 'a_long_keyword_name'\n", ErrorToString(result.error()));
+    EXPECT_EQ("noname.j2tpl:1:51: error: default() got an unexpected keyword argument "
+              "'a_long_keyword_name'\n{% if false %}{{ x | int(1, 2, 3, 4) }}{% endif %}{{ x | default(1, a_long_keyword_name=2) }}\n"
+              "                                               ---^-------",
+              ErrorToString(result.error()));
 
     TemplateW wide;
     ASSERT_TRUE(wide.Load(L"{{ x | int(1, 2, 3, 4) }}"));
@@ -680,7 +683,7 @@ TEST(ErrorContractTest, NonStdExceptionFromCallableIsKept)
     auto result = RenderCalling([]() -> Value { throw HostError{ 42 }; });
     ASSERT_FALSE(result.has_value());
     const auto& error = result.error();
-    EXPECT_EQ(ErrorCode::UnexpectedException, error.GetCode());
+    EXPECT_EQ(ErrorCode::UserCallableException, error.GetCode());
     EXPECT_EQ("unknown exception", error.GetExtraParams().at(0).AsString());
     ASSERT_TRUE(error.GetException());
     try
@@ -697,7 +700,7 @@ TEST(ErrorContractTest, StdExceptionFromCallableIsKept)
 {
     auto result = RenderCalling([]() -> Value { throw std::invalid_argument("bad"); });
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode());
+    EXPECT_EQ(ErrorCode::UserCallableException, result.error().GetCode());
     EXPECT_EQ("bad", result.error().GetExtraParams().at(0).AsString());
     EXPECT_THROW(std::rethrow_exception(result.error().GetException()), std::invalid_argument);
 }
@@ -707,9 +710,19 @@ TEST(ErrorContractTest, BadAllocFromCallablePropagates)
     EXPECT_THROW(static_cast<void>(RenderCalling([]() -> Value { throw std::bad_alloc(); })), std::bad_alloc);
 }
 
+// A std::length_error is a limit, unless a callable threw it: what a callable throws is its own
+// failure (docs/api-2.0.md 2.1; a host budget throws jinja2::Exception{ResourceLimitExceeded})
 TEST(ErrorContractTest, LengthErrorIsResourceLimit)
 {
     auto result = RenderCalling([]() -> Value { throw std::length_error("too long"); });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UserCallableException, result.error().GetCode());
+    EXPECT_TRUE(result.error().GetException());
+
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% for i in xs %}{{ i }}{% endfor %}").has_value());
+    auto list = MakeGenericList([]() -> std::optional<Value> { throw std::length_error("too long"); });
+    result = tpl.RenderAsString({ { "xs", list } });
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
     EXPECT_TRUE(result.error().GetException());
@@ -905,4 +918,199 @@ TEST(ErrorContractTest, ToCharsReportsHostFailures)
     char buffer[32];
     const auto result = value.ToChars(std::begin(buffer), std::end(buffer));
     EXPECT_EQ(std::errc::invalid_argument, result.ec);
+}
+
+// A render error is located at the statement it came out of, in the template that statement is in
+// (docs/api-2.0.md, 2.1 rule 8; docs/tasks/0254)
+struct RenderErrorLocationRow
+{
+    const char* source;
+    const char* file;
+    ErrorCode code;
+    unsigned line;
+    unsigned col;
+    bool hasException;
+};
+
+class RenderErrorLocationTest : public TemplateEnvFixture
+{
+protected:
+    void SetUp() override
+    {
+        TemplateEnvFixture::SetUp();
+        AddFile("inc.j2", "ok\n  {{ fail() }}");
+        AddFile("mod.j2", "{% macro m() %}\n{{ fail() }}{% endmacro %}");
+        AddFile("base.j2", "{% block b %}{% endblock %}\n\n{{ fail() }}");
+        AddFile("nested.j2", "{% include 'missing.j2' %}");
+        m_env.AddFilter("boom", MakeCallable([](const std::string&) -> Value { throw std::runtime_error("filter failed"); }, ArgInfo{ "value" }));
+    }
+
+    [[nodiscard]] ValuesMap Params() const
+    {
+        auto list = MakeGenericList([n = 0]() mutable -> std::optional<Value> {
+            if (n++ == 1)
+            {
+                throw std::runtime_error("accessor failed");
+            }
+            return Value(n);
+        });
+        return { { "fail", MakeCallable([]() -> Value { throw std::runtime_error("Bang!"); }) },
+                 { "xs", list },
+                 { "big", Reflect(std::vector<uint64_t>{ std::numeric_limits<uint64_t>::max() }) } };
+    }
+};
+
+TEST_F(RenderErrorLocationTest, Rows)
+{
+    const RenderErrorLocationRow rows[] = {
+        { "x\n{{ fail() }}", "noname.j2tpl", ErrorCode::UserCallableException, 2, 1, true },
+        { "{% for i in [1] %}\n  {{ i.y.z }}{% endfor %}", "noname.j2tpl", ErrorCode::UndefinedError, 2, 3, false },
+        { "a\nb {{ big[0] }}", "noname.j2tpl", ErrorCode::IntegerOutOfRange, 2, 3, false },
+        { "{% for i in xs %}\n{{ i }}{% endfor %}", "noname.j2tpl", ErrorCode::UnexpectedException, 1, 1, true },
+        { "\n{{ 's' | boom }}", "noname.j2tpl", ErrorCode::UserCallableException, 2, 1, true },
+        { "a\n{% include 'inc.j2' %}", "inc.j2", ErrorCode::UserCallableException, 2, 3, true },
+        // Imported without the context, as in Jinja2: `fail` is undefined there
+        { "{% import 'mod.j2' as mod %}\n{{ mod.m() }}", "mod.j2", ErrorCode::UndefinedError, 2, 1, false },
+        { "{% import 'mod.j2' as mod with context %}\n{{ mod.m() }}", "mod.j2", ErrorCode::UserCallableException, 2, 1, true },
+        { "{% extends 'base.j2' %}{% block b %}x{% endblock %}", "base.j2", ErrorCode::UserCallableException, 3, 1, true },
+        { "{% macro m() %}{{ m() }}{% endmacro %}\n{{ m() }}", "noname.j2tpl", ErrorCode::RecursionLimitExceeded, 1, 16, false },
+        { "\n  {% include 'nested.j2' ignore missing %}", "nested.j2", ErrorCode::TemplateNotFound, 1, 1, false },
+    };
+    for (const auto& row : rows)
+    {
+        Template tpl(&m_env);
+        ASSERT_TRUE(tpl.Load(row.source).has_value()) << row.source;
+        const auto result = tpl.RenderAsString(Params());
+        ASSERT_FALSE(result.has_value()) << row.source;
+        const auto& error = result.error();
+        EXPECT_EQ(row.code, error.GetCode()) << row.source;
+        EXPECT_EQ(row.file, error.GetErrorLocation().fileName) << row.source;
+        EXPECT_EQ(row.line, error.GetErrorLocation().line) << row.source;
+        EXPECT_EQ(row.col, error.GetErrorLocation().col) << row.source;
+        EXPECT_FALSE(error.GetLocationDescr().empty()) << row.source;
+        EXPECT_EQ(row.hasException, static_cast<bool>(error.GetException())) << row.source;
+    }
+}
+
+// An included template too long to load: located at the include, naming the template too
+TEST_F(RenderErrorLocationTest, IncludedTemplateTooLong)
+{
+    Settings settings;
+    settings.limits.maxTemplateSize = 30;
+    m_env.SetSettings(settings);
+    AddFile("long.j2", "a template longer than thirty characters, the limit");
+    Template tpl(&m_env);
+    ASSERT_TRUE(tpl.Load("x\n{% include 'long.j2' %}").has_value());
+    const auto result = tpl.RenderAsString({});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    EXPECT_EQ("noname.j2tpl", result.error().GetErrorLocation().fileName);
+    EXPECT_EQ(2U, result.error().GetErrorLocation().line);
+    ASSERT_EQ(1U, result.error().GetRelatedLocations().size());
+    EXPECT_EQ("long.j2", result.error().GetRelatedLocations()[0].fileName);
+}
+
+TEST_F(RenderErrorLocationTest, Wide)
+{
+    TemplateW tpl(&m_env);
+    ASSERT_TRUE(tpl.Load(L"x\n  {{ fail() }}").has_value());
+    const auto result = tpl.RenderAsString(Params());
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UserCallableException, result.error().GetCode());
+    EXPECT_EQ(2U, result.error().GetErrorLocation().line);
+    EXPECT_EQ(3U, result.error().GetErrorLocation().col);
+    EXPECT_EQ(L"  {{ fail() }}\n  ^-------", result.error().GetLocationDescr());
+
+    // A narrow template included from a wide one keeps its own location
+    TemplateW outer(&m_env);
+    ASSERT_TRUE(outer.Load(L"{% include 'inc.j2' %}").has_value());
+    const auto included = outer.RenderAsString(Params());
+    ASSERT_FALSE(included.has_value());
+    EXPECT_EQ("inc.j2", included.error().GetErrorLocation().fileName);
+    EXPECT_EQ(L"  {{ fail() }}\n  ^-------", included.error().GetLocationDescr());
+}
+
+// Bodies with more children open at once than the parser keeps in place (StatementBodies)
+TEST_F(RenderErrorLocationTest, LongNestedBodies)
+{
+    std::string source;
+    for (int idx = 0; idx != 40; ++idx)
+    {
+        source += "{{ 1 }}\n";
+    }
+    source += "{% for i in [1] %}{% if true %}\n";
+    for (int idx = 0; idx != 40; ++idx)
+    {
+        source += "{{ i }}\n";
+    }
+    source += "{% endif %}{{ i }}\n  {{ fail() }}{% endfor %}{{ 2 }}";
+    Template tpl(&m_env);
+    ASSERT_TRUE(tpl.Load(source).has_value());
+    const auto result = tpl.RenderAsString(Params());
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UserCallableException, result.error().GetCode());
+    EXPECT_EQ(83U, result.error().GetErrorLocation().line);
+    EXPECT_EQ(3U, result.error().GetErrorLocation().col);
+}
+
+// The engine's own runtime errors have codes of their own, with no exception kept (docs/tasks/0255)
+TEST(ErrorContractTest, EngineErrorsHaveTheirCodes)
+{
+    const std::pair<const char*, ErrorCode> rows[] = {
+        { "{{ 1 + 'a' }}", ErrorCode::TemplateRuntimeError },
+        { "{{ '%d' % 'x' }}", ErrorCode::TemplateRuntimeError },
+        { "{{ ('x' * 100000000) | length }}", ErrorCode::ResourceLimitExceeded },
+        { "{{ x.y.z }}", ErrorCode::UndefinedError },
+        // A field number past Py_ssize_t: Python's ValueError, not the engine's std::out_of_range
+        { "{{ '{99999999999999999999}'.format(1) }}", ErrorCode::TemplateRuntimeError },
+        { "{{ '{0[99999999999999999999]}'.format([1]) }}", ErrorCode::TemplateRuntimeError },
+    };
+    for (const auto& [source, code] : rows)
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source;
+        const auto result = tpl.RenderAsString({});
+        ASSERT_FALSE(result.has_value()) << source;
+        EXPECT_EQ(code, result.error().GetCode()) << source;
+        EXPECT_FALSE(result.error().GetException()) << source;
+        EXPECT_FALSE(result.error().GetExtraParams().at(0).AsString().empty()) << source;
+    }
+
+    // An attribute path's index past int64 finds no item, as in Python
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load("{{ [1, 2] | map(attribute='99999999999999999999') | list }}").has_value());
+        const auto rendered = tpl.RenderAsString({});
+        ASSERT_TRUE(rendered.has_value()) << rendered.error().ToString();
+        EXPECT_EQ("[Undefined, Undefined]", rendered.value());
+        // Nor a string key of its digits, as Python's int is not
+        ASSERT_TRUE(tpl.Load("{{ [{'99999999999999999999': 5}] | map(attribute='99999999999999999999') | list }}").has_value());
+        EXPECT_EQ("[Undefined]", tpl.RenderAsString({}).value());
+        // Nor the largest int64
+        ASSERT_TRUE(tpl.Load("{{ [{9223372036854775807: 5}, [1]] | map(attribute='99999999999999999999') | list }}").has_value());
+        EXPECT_EQ("[Undefined, Undefined]", tpl.RenderAsString({}).value());
+        ASSERT_TRUE(tpl.Load("{{ [{9223372036854775807: 5}] | map(attribute='99999999999999999999', default='d') | list }}").has_value());
+        EXPECT_EQ("['d']", tpl.RenderAsString({}).value());
+    }
+
+    // A host callable's std::runtime_error is the host's, not the engine's
+    auto result = RenderCalling([]() -> Value { throw std::runtime_error("host"); });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UserCallableException, result.error().GetCode());
+
+    // A list the engine sorts keeps the host's exception: the engine's fallback for items it
+    // cannot order no longer takes it for its own error
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ xs | unique | list }}").has_value());
+    auto list = MakeGenericList([n = 0]() mutable -> std::optional<Value> {
+        if (n++ == 2)
+        {
+            throw std::runtime_error("accessor failed");
+        }
+        return Value(n);
+    });
+    result = tpl.RenderAsString({ { "xs", list } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UnexpectedException, result.error().GetCode());
+    EXPECT_TRUE(result.error().GetException());
 }

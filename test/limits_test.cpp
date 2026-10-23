@@ -238,7 +238,7 @@ TEST_F(LimitsEnvTest, ErrorMessage)
     ASSERT_TRUE(tpl.Load("{{ range(11)|list }}").has_value());
     auto result = tpl.RenderAsString({});
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ("noname.j2tpl:1:1: error: Resource limit exceeded: range() of 11 items is longer than 10\n", ErrorToString(result.error()));
+    EXPECT_EQ("noname.j2tpl:1:1: error: Resource limit exceeded: range() of 11 items is longer than 10\n{{ range(11)|list }}\n^-------", ErrorToString(result.error()));
 
     TemplateW wide(&m_env);
     ASSERT_TRUE(wide.Load(L"{{ range(11)|list }}").has_value());
