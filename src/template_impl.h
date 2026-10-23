@@ -98,12 +98,35 @@ public:
     WorkspaceMaps& operator=(const WorkspaceMaps&) = delete;
     WorkspaceMaps& operator=(WorkspaceMaps&&) = delete;
 
+    [[nodiscard]] RenderWorkspace& Workspace() const { return m_workspace; }
     [[nodiscard]] InternalValueMap& Params() const { return m_maps.params; }
     [[nodiscard]] InternalValueMap& TopScope() const { return m_maps.topScope; }
 
 private:
     RenderWorkspace& m_workspace;
     RenderWorkspace::RenderMaps& m_maps;
+};
+
+// Installs the big-integer backend of a template for its render, and restores the one of the
+// render around it (a user callable may render another template): a load and two stores
+class BigIntBackendScope
+{
+public:
+    BigIntBackendScope(RenderWorkspace& workspace, const BigIntBackend* backend) noexcept
+        : m_current(workspace.BigInts())
+        , m_saved(m_current)
+    {
+        m_current = backend;
+    }
+    ~BigIntBackendScope() { m_current = m_saved; }
+    BigIntBackendScope(const BigIntBackendScope&) = delete;
+    BigIntBackendScope(BigIntBackendScope&&) = delete;
+    BigIntBackendScope& operator=(const BigIntBackendScope&) = delete;
+    BigIntBackendScope& operator=(BigIntBackendScope&&) = delete;
+
+private:
+    const BigIntBackend*& m_current;
+    const BigIntBackend* m_saved;
 };
 
 // The globals converted last on this thread
@@ -378,11 +401,11 @@ public:
             const CycleCollector cycles;
             // Before anything else the render does, the conversion of the params included
             const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr);
-            // The arithmetic of integers outside int64 (docs/tasks/0271)
-            const BigIntBackendScope bigInts(m_settings->bigIntBackend);
             // The tables of the params and the top scope are lent by the thread's workspace and
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;
+            // The arithmetic of integers outside int64 (docs/tasks/0271)
+            const BigIntBackendScope bigInts(maps.Workspace(), m_settings->bigIntBackend);
             auto& intParams = maps.Params();
 
             auto convertParam = [&intParams](const std::string& name, const Value& value) {

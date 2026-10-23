@@ -80,49 +80,6 @@ inline bool IsOdd(const BigIntView& val) noexcept
 // Whether the library can use the table: version 1, every field set, the object within the caps
 JINJA2CPP_EXPORT bool IsUsableBigIntBackend(const BigIntBackend& backend) noexcept;
 
-namespace detail
-{
-// The backend of the render running on this thread (BigIntBackendScope); null for none
-inline thread_local const BigIntBackend* t_bigIntBackend = nullptr;
-} // namespace detail
-
-// Installs the backend of a template for its render and restores the one of the render around it
-// (a user callable may render another template). Costs a compare when the backend is the same
-// as the thread's: in a library without one, always
-class BigIntBackendScope
-{
-public:
-    explicit BigIntBackendScope(const BigIntBackend* backend) noexcept
-    {
-        if (backend != detail::t_bigIntBackend)
-        {
-            Install(backend);
-        }
-    }
-    ~BigIntBackendScope()
-    {
-        if (m_installed)
-        {
-            detail::t_bigIntBackend = m_saved;
-        }
-    }
-    BigIntBackendScope(const BigIntBackendScope&) = delete;
-    BigIntBackendScope(BigIntBackendScope&&) = delete;
-    BigIntBackendScope& operator=(const BigIntBackendScope&) = delete;
-    BigIntBackendScope& operator=(BigIntBackendScope&&) = delete;
-
-private:
-    void Install(const BigIntBackend* backend) noexcept
-    {
-        m_saved = detail::t_bigIntBackend;
-        m_installed = true;
-        detail::t_bigIntBackend = backend;
-    }
-
-    const BigIntBackend* m_saved = nullptr;
-    bool m_installed = false;
-};
-
 // An integer operand of BigIntBinary: an int64, or a big integer when `decimal` is set
 struct IntOperand
 {

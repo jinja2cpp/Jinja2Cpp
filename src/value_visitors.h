@@ -1029,6 +1029,13 @@ inline bool MulOverflows(int64_t a, int64_t b, int64_t& result)
 #endif
 }
 
+// An int64 result that overflowed, computed again as a big integer (docs/tasks/0271). Cold and
+// out of line, so that the int64 paths keep the code they had
+JINJA2CPP_COLD_INLINE InternalValue PromoteInts(BigIntOp op, int64_t left, int64_t right)
+{
+    return BigIntBinary(op, left, right);
+}
+
 struct UnaryOperation : BaseVisitor<InternalValue>
 {
     explicit UnaryOperation(UnaryExpression::Operation oper)
@@ -1048,7 +1055,7 @@ struct UnaryOperation : BaseVisitor<InternalValue>
             if (val == std::numeric_limits<int64_t>::min())
             {
                 // Python's int grows past 64 bits (docs/tasks/0271)
-                return BigIntBinary(BigIntOp::Subtract, int64_t{ 0 }, val);
+                return PromoteInts(BigIntOp::Subtract, int64_t{ 0 }, val);
             }
             return -val;
         }
@@ -1365,13 +1372,13 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             if ((exp & 1) != 0 && MulOverflows(result, base, result))
             {
-                return BigIntBinary(BigIntOp::Power, origBase, origExp);
+                return PromoteInts(BigIntOp::Power, origBase, origExp);
             }
             exp >>= 1;
             // Squaring only matters while bits remain; once it overflows, so would the result
             if (exp != 0 && MulOverflows(base, base, base))
             {
-                return BigIntBinary(BigIntOp::Power, origBase, origExp);
+                return PromoteInts(BigIntOp::Power, origBase, origExp);
             }
         }
         return result;
@@ -1386,7 +1393,7 @@ struct BinaryMathOperation : BaseVisitor<>
         }
         if (right == -1 && left == std::numeric_limits<int64_t>::min())
         {
-            return BigIntBinary(BigIntOp::FloorDivide, left, right);
+            return PromoteInts(BigIntOp::FloorDivide, left, right);
         }
         int64_t quot = left / right;
         if (left % right != 0 && (left < 0) != (right < 0))
@@ -1427,19 +1434,19 @@ struct BinaryMathOperation : BaseVisitor<>
         case jinja2::BinaryExpression::Plus:
             if (AddOverflows(left, right, result))
             {
-                return BigIntBinary(BigIntOp::Add, left, right);
+                return PromoteInts(BigIntOp::Add, left, right);
             }
             return result;
         case jinja2::BinaryExpression::Minus:
             if (SubOverflows(left, right, result))
             {
-                return BigIntBinary(BigIntOp::Subtract, left, right);
+                return PromoteInts(BigIntOp::Subtract, left, right);
             }
             return result;
         case jinja2::BinaryExpression::Mul:
             if (MulOverflows(left, right, result))
             {
-                return BigIntBinary(BigIntOp::Multiply, left, right);
+                return PromoteInts(BigIntOp::Multiply, left, right);
             }
             return result;
         case jinja2::BinaryExpression::DivInteger:
