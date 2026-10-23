@@ -35,11 +35,23 @@ on:
       - 'LICENSE'
   schedule:
     - cron: '23 15 * * 2'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-24.04
+    # Pushes and PRs analyse the library alone (about 5 minutes of queries). The
+    # GoogleTest suite multiplies the data-flow work: with it, the shared data-flow
+    # stage of the security queries took 105 minutes on master in October 2026 (it
+    # was 15 at 7c838c0 and grew with every train). The weekly and manual runs still
+    # analyse the tests, under their own category so the two databases do not close
+    # each other's alerts.
+    timeout-minutes: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 240 || 45 }}
     permissions:
       actions: read
       contents: read
@@ -83,17 +95,27 @@ jobs:
     #   make release
 
     - name: Install build tools
+      timeout-minutes: 10
       run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ninja-build
 
     - name: Build
+      env:
+        WITH_TESTS: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'ON' || 'OFF' }}
       run: |
         cmake -S . -B .build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DJINJA2CPP_DEPS_MODE=internal \
           -DJINJA2CPP_BUILD_SHARED=ON \
-          -DJINJA2CPP_CXX_STANDARD=17
-        cmake --build .build --parallel --target jinja2cpp jinja2cpp_tests
+          -DJINJA2CPP_CXX_STANDARD=17 \
+          -DJINJA2CPP_BUILD_TESTS=$WITH_TESTS
+        if [ "$WITH_TESTS" = ON ]; then
+          cmake --build .build --parallel --target jinja2cpp jinja2cpp_tests
+        else
+          cmake --build .build --parallel --target jinja2cpp
+        fi
 
-
+    # An empty category keeps the default one, so existing alerts stay attached.
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
+      with:
+        category: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'with-tests' || '' }}

@@ -2,7 +2,8 @@ name: Install toolchain
 description: >
   Installs Ninja and the requested GCC or Clang version on an Ubuntu runner and
   exports CC/CXX for the following steps. Clang versions missing from the Ubuntu
-  archive are taken from apt.llvm.org.
+  archive are taken from apt.llvm.org. Every apt call is bounded and retried: a
+  stalled mirror once held a job in this step for three hours (PR #613).
 
 inputs:
   compiler:
@@ -20,19 +21,34 @@ runs:
         set -euo pipefail
         family="${COMPILER%-*}"
         version="${COMPILER##*-}"
-        sudo apt-get update -qq
-        sudo apt-get install -y --no-install-recommends ninja-build
+        # Up to three attempts of at most 5 minutes each; a hung download is killed and retried.
+        apt_get() {
+          local attempt
+          for attempt in 1 2 3; do
+            if sudo timeout --kill-after=30 300 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=60 "$@"; then
+              return 0
+            fi
+            echo "::warning::apt-get $1 failed or timed out (attempt $attempt)"
+            sudo dpkg --configure -a || true
+            sleep 10
+          done
+          return 1
+        }
+        apt_get update -qq
+        apt_get install -y --no-install-recommends ninja-build
         case "$family" in
           gcc)
-            sudo apt-get install -y --no-install-recommends "gcc-$version" "g++-$version"
+            apt_get install -y --no-install-recommends "gcc-$version" "g++-$version"
             echo "CC=gcc-$version" >> "$GITHUB_ENV"
             echo "CXX=g++-$version" >> "$GITHUB_ENV"
             ;;
           clang)
-            if ! sudo apt-get install -y --no-install-recommends "clang-$version" "libclang-rt-$version-dev"; then
-              wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
-              sudo bash /tmp/llvm.sh "$version"
-              sudo apt-get install -y --no-install-recommends "libclang-rt-$version-dev"
+            if apt-cache show "clang-$version" > /dev/null 2>&1; then
+              apt_get install -y --no-install-recommends "clang-$version" "libclang-rt-$version-dev"
+            else
+              wget -q --tries=3 --timeout=60 -O /tmp/llvm.sh https://apt.llvm.org/llvm.sh
+              sudo timeout --kill-after=30 900 bash /tmp/llvm.sh "$version"
+              apt_get install -y --no-install-recommends "libclang-rt-$version-dev"
             fi
             echo "CC=clang-$version" >> "$GITHUB_ENV"
             echo "CXX=clang++-$version" >> "$GITHUB_ENV"
