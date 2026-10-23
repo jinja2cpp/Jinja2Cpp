@@ -9,7 +9,7 @@ touches: [src/big_int.cpp, src/big_int.h]
 
 **Problem.** 0270 keeps a big integer as decimal text, and converts between bases with a
 schoolbook base-1e9 loop. That is quadratic in the length, which the 2^20-bit cap (0178 plan Q6)
-bounds but does not make cheap. The pre-push verifier of #(0270 PR) measured, in a GCC `-O2`
+bounds but does not make cheap. The pre-push verifier of #613 measured, in a GCC `-O2`
 build:
 
 - a template holding `0x` and 262144 `f`s (about 256 KB, just inside the cap) takes 2.3 s to
