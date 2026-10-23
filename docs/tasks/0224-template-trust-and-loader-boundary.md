@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: TBD
 priority: high
 area: robustness
 touches: [docs/security.md, SECURITY.md, include/jinja2cpp/filesystem_handler.h]
@@ -50,3 +51,13 @@ that those probes and the implementation do not support.
 - Write this task last: it states what 0262-0267 deliver. SECURITY.md (contact via GitHub private
   vulnerability reporting, supported versions, embargo, GHSA/CVE) must exist before the tier-1 claim
   is published.
+
+**Done.** [docs/security.md](../security.md) states the tiers, the escaping contract, the host's
+responsibilities, the loader rules (with the 1.x `RealFileSystem` behaviour), the built-in caps and
+`Settings::Limits`, what is never promised and the containment a host provides. Tier 1 is published
+with the gaps that 0263, 0264, 0265, 0267, 0268 and 0282 still own listed, rather than waiting for
+them; each of those tasks updates the Known gaps section when it lands. [SECURITY.md](../../SECURITY.md)
+gives the private reporting channel (GitHub private vulnerability reporting, which a repository
+admin has to enable), supported versions, a 90-day disclosure target and GHSA/CVE. The loader
+probes are the `RealFsNamesTest` and `ConfinedFsTest` rows (#589, #615); the Sandbox row of
+docs/parity.md links the page.

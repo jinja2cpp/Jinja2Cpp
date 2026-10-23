@@ -391,7 +391,7 @@ error is compared, not the message or the line.
 | `Template.generate`/`stream` | `Render(std::ostream&)` | ✅ | |
 | `Template.module`, `make_module` | none | ❌ | 0284 |
 | `jinja2.meta.find_undeclared_variables` | `Template::FindUndeclaredVariables` (sorted names; `GetMetadata` reads the C++-specific `meta` block) | ✅ | 0236 |
-| Sandbox | ➖ no Python object access to sandbox | ➖ | |
+| Sandbox | ➖ templates reach only what the host passes; `Settings::Limits`/`UntrustedSettings()` and `ConfinedFileSystem` for templates users write, per the [trust model](security.md) | ➖ | 0224 |
 | Async rendering | ➖ | ➖ | |
 | Wide strings | `TemplateW`; the corpus runs every case through it too (`ParityWide`), with narrow/wide conversion by a built-in UTF-8 codec, independent of the C locale | ✅ | 0035 |
 | Error position (file, line, column) | `ErrorInfo` | ✅ messages differ from Jinja2 | |

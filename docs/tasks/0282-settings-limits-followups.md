@@ -27,3 +27,5 @@ Found while `Settings::Limits` was built and verified (0262). None is in its sco
 4. **Stale names in docs.** `docs/tasks/0118`, `docs/tasks/0152` and
    `docs/design/0117-name-slots-plan.md` still name `MaxExpressionOperators`, `MaxExpressionDepth`
    and `MaxRenderDepth`, which 0262 replaced with `Settings::Limits` fields.
+
+**Trust model.** When this lands, update its entry under Known gaps in [docs/security.md](../security.md) (0224).
