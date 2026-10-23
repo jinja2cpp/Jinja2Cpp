@@ -1123,6 +1123,16 @@ public:
     }
     // A copy of characters the arena keeps
     ArenaText MakeText(std::string_view text) { return MakeSpan(boost::span<const char>(text.data(), text.size())); }
+    // Whether a symbol of this hash was made: a name used somewhere in the tree (it may also be
+    // another name of the same hash, which is rare)
+    [[nodiscard]] bool HasSymbol(std::size_t hash)
+    {
+        if (!m_heapSymbols)
+        {
+            return std::any_of(m_inlineSymbols.begin(), m_inlineSymbols.begin() + m_symbolCount, [hash](const SymbolEntry& e) { return e.hash == hash; });
+        }
+        return FindSymbol(hash)->chars != nullptr;
+    }
     // The symbol of `name`, whose hash is `hash`: made on its first use, with the cache slot
     // newSlot() gives, and the same for every later use. Two names with one hash (which a
     // 64-bit hash makes rare) get two symbols: the second one is not kept

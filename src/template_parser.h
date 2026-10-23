@@ -557,8 +557,6 @@ InternalValue EscapedLiteralValue(std::basic_string_view<CharT> text, const std:
 extern template InternalValue EscapedLiteralValue<char>(std::string_view text, const std::string& newlineSequence, bool& malformed);
 extern template InternalValue EscapedLiteralValue<wchar_t>(std::wstring_view text, const std::string& newlineSequence, bool& malformed);
 
-inline constexpr char kLoopWord[] = "loop";
-
 template<typename CharT>
 class TemplateParser final : public LexerHelper
 {
@@ -1634,8 +1632,7 @@ private:
         {
             templateRoot.SetHasExtends();
         }
-        if (std::search(m_template->begin(), m_template->end(), std::begin(kLoopWord), std::end(kLoopWord) - 1, [](CharT ch, char word) { return ch == static_cast<CharT>(word); })
-            != m_template->end())
+        if (m_nodes.HasSymbol(HashedName::Hash("loop")))
         {
             templateRoot.SetMentionsLoop();
         }
