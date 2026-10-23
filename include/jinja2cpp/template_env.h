@@ -283,6 +283,25 @@ public:
     void SetSettings(const Settings& setts);
 
     /*!
+     * \brief Set the big-integer arithmetic of the templates made from now on (see \ref BigIntBackend)
+     *
+     * With a backend, integer arithmetic in templates is exact at any size, as in Python; without one (`nullptr`),
+     * a result outside `int64_t` fails the render with ErrorCode::IntegerOutOfRange. Every environment starts with
+     * \ref GetBuiltinBigIntBackend. A template uses the backend its environment had when the template was made
+     * (\ref LoadTemplate, or a template constructed with this environment), as it does the settings. The backend must outlive every template that uses it.
+     * Method is thread-unsafe, as \ref SetSettings is.
+     *
+     * @param backend The backend, or `nullptr` for none
+     *
+     * @return false, changing nothing, when the table is not one this library can use: `structSize` smaller than
+     *         version 1's, `version` other than 1, a null name or function, or an object larger than
+     *         \ref MaxBigIntObjectSize or aligned beyond \ref MaxBigIntObjectAlign
+     */
+    bool SetBigIntBackend(const BigIntBackend* backend) noexcept;
+    //! The backend set by \ref SetBigIntBackend, or the built-in one
+    [[nodiscard]] const BigIntBackend* GetBigIntBackend() const noexcept;
+
+    /*!
      * \brief Add pointer to file system handler with the specified prefix
      *
      * Adds filesystem handler which provides access to the external source of templates. With added handlers it's

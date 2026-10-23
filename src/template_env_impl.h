@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_TEMPLATE_ENV_IMPL_H
 #define JINJA2CPP_SRC_TEMPLATE_ENV_IMPL_H
 
+#include <jinja2cpp/big_int_backend.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
@@ -83,6 +84,8 @@ public:
     // Changes with every change of the globals: a render converts them only when it differs
     // from the one of the copy it converted last
     std::atomic<uint64_t> globalsGeneration{ NewGlobalsGeneration() };
+    // The big-integer arithmetic of templates loaded from now on (TemplateEnv::SetBigIntBackend)
+    const BigIntBackend* bigIntBackend = GetBuiltinBigIntBackend();
     CallablesMap filters;
     CallablesMap tests;
     CallablesMap translations;

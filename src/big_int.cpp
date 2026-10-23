@@ -6,6 +6,8 @@
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <array>
+#include <cassert>
 #include <cerrno>
 #include <charconv>
 #include <cmath>
@@ -13,6 +15,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
+#include <new>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -439,6 +443,290 @@ void ThrowBigIntArithmetic()
 void ThrowIndexOverflow()
 {
     throw IntegerOutOfRangeError("cannot fit 'int' into an index-sized integer");
+}
+
+const BigIntBackend* GetBuiltinBigIntBackend() noexcept
+{
+    // -DJINJA2CPP_WITH_BIGINT=boost compiles one in (docs/tasks/0272)
+    return nullptr;
+}
+
+bool IsUsableBigIntBackend(const BigIntBackend& backend) noexcept
+{
+    // Version 1 ends with divideTruncated: a larger table is a later version's, read as far as v1 goes
+    constexpr auto v1Size = static_cast<uint32_t>(offsetof(BigIntBackend, divideTruncated) + sizeof(backend.divideTruncated));
+    if (backend.structSize < v1Size || backend.version != 1 || !backend.name)
+    {
+        return false;
+    }
+    if (backend.objectSize == 0 || backend.objectSize > MaxBigIntObjectSize || backend.objectAlign == 0 || backend.objectAlign > MaxBigIntObjectAlign || (backend.objectAlign & (backend.objectAlign - 1)) != 0)
+    {
+        return false;
+    }
+    return backend.destroy && backend.fromInt64 && backend.fromDecimal && backend.toInt64 && backend.toDecimal && backend.sign && backend.compare && backend.bitLength && backend.negate && backend.add && backend.subtract && backend.multiply && backend.divideTruncated;
+}
+
+namespace
+{
+// One backend object in a stack slot, destroyed with the slot
+class BackendObject
+{
+public:
+    explicit BackendObject(const BigIntBackend& backend) noexcept
+        : m_backend(&backend)
+    {
+    }
+    ~BackendObject()
+    {
+        if (m_made)
+        {
+            m_backend->destroy(m_backend, m_storage.data());
+        }
+    }
+    BackendObject(const BackendObject&) = delete;
+    BackendObject(BackendObject&&) = delete;
+    BackendObject& operator=(const BackendObject&) = delete;
+    BackendObject& operator=(BackendObject&&) = delete;
+
+    // Storage for a call that makes the object; null once made, which no call accepts
+    void* Out() noexcept
+    {
+        assert(!m_made);
+        return m_storage.data();
+    }
+    // Records what the call that got Out() reported
+    void Made(BigIntStatus status);
+    [[nodiscard]] const void* Get() const noexcept
+    {
+        assert(m_made);
+        return m_storage.data();
+    }
+    [[nodiscard]] bool IsMade() const noexcept { return m_made; }
+
+private:
+    const BigIntBackend* m_backend;
+    alignas(MaxBigIntObjectAlign) std::array<unsigned char, MaxBigIntObjectSize> m_storage{};
+    bool m_made = false;
+};
+
+[[noreturn]] void ThrowBackendFailure(const BigIntBackend& backend, BigIntStatus status)
+{
+    switch (status)
+    {
+    case BigIntStatus::OutOfMemory:
+        throw std::bad_alloc();
+    case BigIntStatus::TooLarge:
+        ThrowTooManyBits();
+    case BigIntStatus::DivisionByZero:
+        throw TemplateRuntimeError("integer division or modulo by zero");
+    default:
+        break;
+    }
+    throw TemplateRuntimeError(std::string("big-integer backend '") + backend.name + "' failed (status " + std::to_string(static_cast<int>(status)) + ")");
+}
+
+void BackendObject::Made(BigIntStatus status)
+{
+    if (status != BigIntStatus::Ok)
+    {
+        ThrowBackendFailure(*m_backend, status);
+    }
+    m_made = true;
+}
+
+void Load(const BigIntBackend& backend, BackendObject& obj, const IntOperand& val)
+{
+    if (val.decimal.empty())
+    {
+        obj.Made(backend.fromInt64(&backend, obj.Out(), val.small));
+    }
+    else
+    {
+        obj.Made(backend.fromDecimal(&backend, obj.Out(), val.decimal.data(), val.decimal.size()));
+    }
+}
+
+// The value of a computed object: an int when it fits int64
+InternalValue ToValue(const BigIntBackend& backend, const BackendObject& obj)
+{
+    int64_t small = 0;
+    if (backend.toInt64(&backend, obj.Get(), &small))
+    {
+        return small;
+    }
+    if (backend.bitLength(&backend, obj.Get()) > MaxBigIntBits)
+    {
+        ThrowTooManyBits();
+    }
+    std::string decimal;
+    const auto status = backend.toDecimal(
+        &backend, obj.Get(), [](void* ctx, const char* data, size_t size) { static_cast<std::string*>(ctx)->append(data, size); }, &decimal);
+    if (status != BigIntStatus::Ok)
+    {
+        ThrowBackendFailure(backend, status);
+    }
+    return MakeBigIntValue(decimal);
+}
+
+int Sign(const IntOperand& val) noexcept
+{
+    if (!val.decimal.empty())
+    {
+        return val.decimal.front() == '-' ? -1 : 1;
+    }
+    return val.small < 0 ? -1 : (val.small > 0 ? 1 : 0);
+}
+
+double ToDouble(const IntOperand& val)
+{
+    return val.decimal.empty() ? static_cast<double>(val.small) : BigIntToDouble(BigIntView{ val.decimal });
+}
+
+bool IsOdd(const IntOperand& val) noexcept
+{
+    return val.decimal.empty() ? (val.small & 1) != 0 : IsOdd(BigIntView{ val.decimal });
+}
+
+// a - b < 0 or the like: the floored result from a truncated one. Python's floor division and
+// modulo round the quotient down, and the remainder takes the sign of the divisor
+InternalValue FloorDivide(const BigIntBackend& backend, const BackendObject& left, const BackendObject& right, bool wantRemainder)
+{
+    BackendObject quot(backend);
+    BackendObject rem(backend);
+    const auto status = backend.divideTruncated(&backend, quot.Out(), rem.Out(), left.Get(), right.Get());
+    quot.Made(status);
+    rem.Made(status);
+    const int remSign = backend.sign(&backend, rem.Get());
+    if (remSign == 0 || remSign == backend.sign(&backend, right.Get()))
+    {
+        return ToValue(backend, wantRemainder ? rem : quot);
+    }
+    BackendObject fixed(backend);
+    if (wantRemainder)
+    {
+        fixed.Made(backend.add(&backend, fixed.Out(), rem.Get(), right.Get()));
+    }
+    else
+    {
+        BackendObject one(backend);
+        one.Made(backend.fromInt64(&backend, one.Out(), 1));
+        fixed.Made(backend.subtract(&backend, fixed.Out(), quot.Get(), one.Get()));
+    }
+    return ToValue(backend, fixed);
+}
+
+// The bits of a product of factors of `leftBits` and `rightBits` bits: at least their sum less one
+void CheckProductBits(size_t leftBits, size_t rightBits)
+{
+    if (leftBits != 0 && rightBits != 0 && leftBits + rightBits - 1 > MaxBigIntBits)
+    {
+        ThrowTooManyBits();
+    }
+}
+
+InternalValue Power(const BigIntBackend* backend, const IntOperand& base, const IntOperand& exp)
+{
+    const int expSign = Sign(exp);
+    if (expSign < 0)
+    {
+        // As Python: a float, through float(base) ** float(exp)
+        if (Sign(base) == 0)
+        {
+            throw TemplateRuntimeError("0.0 cannot be raised to a negative power");
+        }
+        return std::pow(ToDouble(base), ToDouble(exp));
+    }
+    if (base.decimal.empty() && (base.small == 0 || base.small == 1 || base.small == -1))
+    {
+        if (expSign == 0)
+        {
+            return int64_t{ 1 };
+        }
+        return base.small == -1 && !IsOdd(exp) ? int64_t{ 1 } : base.small;
+    }
+    if (!backend)
+    {
+        ThrowBigIntArithmetic();
+    }
+    // |base| >= 2: the result has at least (bits(base) - 1) * exp + 1 bits
+    BackendObject acc(*backend);
+    Load(*backend, acc, base);
+    const size_t baseBits = backend->bitLength(backend, acc.Get());
+    if (!exp.decimal.empty() || (baseBits - 1) * static_cast<uint64_t>(exp.small) >= MaxBigIntBits)
+    {
+        ThrowTooManyBits();
+    }
+    // Square and multiply from the low bit: results[r] holds the product so far and `current` is
+    // base ** 2^k. Each step makes the next object in the other slot of a pair, then lets go of the old one
+    auto bits = static_cast<uint64_t>(exp.small);
+    std::array<std::optional<BackendObject>, 2> results;
+    std::array<std::optional<BackendObject>, 2> squares;
+    size_t r = 0;
+    size_t q = 0;
+    results[r].emplace(*backend);
+    results[r]->Made(backend->fromInt64(backend, results[r]->Out(), 1));
+    const void* current = acc.Get();
+    while (bits != 0)
+    {
+        if ((bits & 1) != 0)
+        {
+            CheckProductBits(backend->bitLength(backend, results[r]->Get()), backend->bitLength(backend, current));
+            auto& next = results[1 - r].emplace(*backend);
+            next.Made(backend->multiply(backend, next.Out(), results[r]->Get(), current));
+            results[r].reset();
+            r = 1 - r;
+        }
+        bits >>= 1;
+        if (bits != 0)
+        {
+            const size_t currentBits = backend->bitLength(backend, current);
+            CheckProductBits(currentBits, currentBits);
+            auto& next = squares[1 - q].emplace(*backend);
+            next.Made(backend->multiply(backend, next.Out(), current, current));
+            squares[q].reset();
+            q = 1 - q;
+            current = next.Get();
+        }
+    }
+    return ToValue(*backend, *results[r]);
+}
+} // namespace
+
+InternalValue BigIntBinary(BigIntOp op, IntOperand left, IntOperand right)
+{
+    const BigIntBackend* backend = detail::t_bigIntBackend;
+    if (op == BigIntOp::Power)
+    {
+        return Power(backend, left, right);
+    }
+    if (!backend)
+    {
+        ThrowBigIntArithmetic();
+    }
+    BackendObject lhs(*backend);
+    Load(*backend, lhs, left);
+    BackendObject rhs(*backend);
+    Load(*backend, rhs, right);
+    BackendObject result(*backend);
+    switch (op)
+    {
+    case BigIntOp::Add:
+        result.Made(backend->add(backend, result.Out(), lhs.Get(), rhs.Get()));
+        break;
+    case BigIntOp::Subtract:
+        result.Made(backend->subtract(backend, result.Out(), lhs.Get(), rhs.Get()));
+        break;
+    case BigIntOp::Multiply:
+        CheckProductBits(backend->bitLength(backend, lhs.Get()), backend->bitLength(backend, rhs.Get()));
+        result.Made(backend->multiply(backend, result.Out(), lhs.Get(), rhs.Get()));
+        break;
+    case BigIntOp::FloorDivide:
+    case BigIntOp::Remainder:
+        return FloorDivide(*backend, lhs, rhs, op == BigIntOp::Remainder);
+    case BigIntOp::Power:
+        break;
+    }
+    return ToValue(*backend, result);
 }
 } // namespace v2
 } // namespace jinja2

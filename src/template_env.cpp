@@ -1,10 +1,12 @@
 #include <jinja2cpp/template_env.h>
 
+#include "big_int.h"
 #include "error_boundary.h"
 #include "load_settings.h"
 #include "make_unexpected.h"
 #include "template_env_impl.h"
 
+#include <jinja2cpp/big_int_backend.h>
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
@@ -223,7 +225,7 @@ bool TemplateEnvImpl::IsEqual(const TemplateEnvImpl& other) const
     std::shared_lock<std::shared_timed_mutex> l1(guard, std::defer_lock);
     std::shared_lock<std::shared_timed_mutex> l2(other.guard, std::defer_lock);
     std::lock(l1, l2);
-    return filesystemHandlers == other.filesystemHandlers && settings == other.settings && *globalValues == *other.globalValues && IsSameCallables(filters, other.filters) && IsSameCallables(tests, other.tests) && IsSameCallables(translations, other.translations) && templateCache == other.templateCache && templateWCache == other.templateWCache;
+    return filesystemHandlers == other.filesystemHandlers && settings == other.settings && bigIntBackend == other.bigIntBackend && *globalValues == *other.globalValues && IsSameCallables(filters, other.filters) && IsSameCallables(tests, other.tests) && IsSameCallables(translations, other.translations) && templateCache == other.templateCache && templateWCache == other.templateWCache;
 }
 
 LoadSettingsPtr TemplateEnvImpl::GetLoadSettings() const
@@ -234,19 +236,19 @@ LoadSettingsPtr TemplateEnvImpl::GetLoadSettings() const
     // with one get settings of their own
     if (settings.finalize.callable)
     {
-        return std::make_shared<const LoadSettings>(settings);
+        return std::make_shared<const LoadSettings>(settings, bigIntBackend);
     }
     std::scoped_lock l(m_loadSettingsGuard);
-    if (!m_loadSettings || m_loadSettings->settings != settings)
+    if (!m_loadSettings || m_loadSettings->settings != settings || m_loadSettings->bigIntBackend != bigIntBackend)
     {
-        m_loadSettings = std::make_shared<const LoadSettings>(settings);
+        m_loadSettings = std::make_shared<const LoadSettings>(settings, bigIntBackend);
     }
     return m_loadSettings;
 }
 
 const LoadSettingsPtr& DefaultLoadSettings()
 {
-    static const LoadSettingsPtr defaultSettings = std::make_shared<const LoadSettings>(Settings());
+    static const LoadSettingsPtr defaultSettings = std::make_shared<const LoadSettings>(Settings(), GetBuiltinBigIntBackend());
     return defaultSettings;
 }
 
@@ -384,6 +386,21 @@ Settings& TemplateEnv::GetSettings()
 void TemplateEnv::SetSettings(const Settings& setts)
 {
     m_impl->settings = setts;
+}
+
+bool TemplateEnv::SetBigIntBackend(const BigIntBackend* backend) noexcept
+{
+    if (backend && !IsUsableBigIntBackend(*backend))
+    {
+        return false;
+    }
+    m_impl->bigIntBackend = backend;
+    return true;
+}
+
+const BigIntBackend* TemplateEnv::GetBigIntBackend() const noexcept
+{
+    return m_impl->bigIntBackend;
 }
 
 void TemplateEnv::AddFilesystemHandler(std::string prefix, FilesystemHandlerPtr h)

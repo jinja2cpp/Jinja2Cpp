@@ -1,0 +1,1 @@
+{% set ns = namespace(acc=0) %}{% for i in range(200) %}{% set ns.acc = (ns.acc * 31 + i * i - 7) % 1000003 %}{{ ns.acc // 7 }},{{ i ** 3 % 97 }},{{ i < ns.acc }};{% endfor %}{{ range(500)|sum }}|{{ [ns.acc, 12345, -678]|sum * 3 - 1 }}

@@ -3,6 +3,7 @@
 
 #include "internal_value.h"
 
+#include <jinja2cpp/big_int_backend.h>
 #include <jinja2cpp/config.h>
 
 #include <cstddef>
@@ -71,6 +72,72 @@ inline bool IsOdd(const BigIntView& val) noexcept
 
 // OverflowError for integer arithmetic whose operand or result is outside int64
 [[noreturn]] JINJA2CPP_EXPORT void ThrowBigIntArithmetic();
+
+// Arithmetic with a big-integer backend (docs/tasks/0271, plan sections 3.2-4)
+
+// Whether the library can use the table: version 1, every field set, the object within the caps
+JINJA2CPP_EXPORT bool IsUsableBigIntBackend(const BigIntBackend& backend) noexcept;
+
+namespace detail
+{
+// The backend of the render running on this thread (BigIntBackendScope); null for none
+inline thread_local const BigIntBackend* t_bigIntBackend = nullptr;
+} // namespace detail
+
+// Installs the backend of a template for its render and restores the one of the render around it
+// (a user callable may render another template). Costs a compare when the backend is the same
+class BigIntBackendScope
+{
+public:
+    explicit BigIntBackendScope(const BigIntBackend* backend) noexcept
+        : m_saved(detail::t_bigIntBackend)
+    {
+        if (backend != m_saved)
+        {
+            detail::t_bigIntBackend = backend;
+        }
+    }
+    ~BigIntBackendScope() { detail::t_bigIntBackend = m_saved; }
+    BigIntBackendScope(const BigIntBackendScope&) = delete;
+    BigIntBackendScope(BigIntBackendScope&&) = delete;
+    BigIntBackendScope& operator=(const BigIntBackendScope&) = delete;
+    BigIntBackendScope& operator=(BigIntBackendScope&&) = delete;
+
+private:
+    const BigIntBackend* m_saved;
+};
+
+// An integer operand of BigIntBinary: an int64, or a big integer when `decimal` is set
+struct IntOperand
+{
+    IntOperand(int64_t val) noexcept // NOLINT(google-explicit-constructor): either kind of integer is an operand
+        : small(val)
+    {
+    }
+    IntOperand(const BigIntView& val) noexcept // NOLINT(google-explicit-constructor): either kind of integer is an operand
+        : decimal(val.decimal)
+    {
+    }
+
+    int64_t small = 0;
+    std::string_view decimal;
+};
+
+enum class BigIntOp
+{
+    Add,
+    Subtract,
+    Multiply,
+    FloorDivide,
+    Remainder,
+    Power,
+};
+
+// Python's int `left op right` where the result or an operand is outside int64: exact through the
+// backend of the render, an int again when the result fits int64. Without a backend it raises
+// OverflowError, except that `**` with a negative exponent is a float as in Python. The caller
+// has already reported division by zero. Out of line and off the int64 paths
+JINJA2CPP_EXPORT InternalValue BigIntBinary(BigIntOp op, IntOperand left, IntOperand right);
 // OverflowError for a big integer where Python needs an index-sized one (a repeat count, an argument)
 [[noreturn]] JINJA2CPP_EXPORT void ThrowIndexOverflow();
 } // namespace v2

@@ -3,6 +3,7 @@
 
 #include "recursion_guard.h"
 
+#include <jinja2cpp/big_int_backend.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template_env.h>
 
@@ -98,11 +99,12 @@ private:
 // (TemplateEnvImpl::GetLoadSettings), instead of each copying the settings and rebuilding the delimiters
 struct LoadSettings
 {
-    explicit LoadSettings(const Settings& setts)
+    explicit LoadSettings(const Settings& setts, const BigIntBackend* backend = nullptr)
         : settings(setts)
         , narrow(setts)
         , wide(setts)
         , hasRenderLimits(jinja2::HasRenderLimits(setts.limits))
+        , bigIntBackend(backend)
     {
     }
 
@@ -125,6 +127,8 @@ struct LoadSettings
     // Whether a render has a limit of its own to install (RenderLimitsScope): the Load-time limits aside, one of
     // settings.limits differs from the defaults
     bool hasRenderLimits;
+    // The big-integer arithmetic the template's renders use (TemplateEnv::SetBigIntBackend); null for none
+    const BigIntBackend* bigIntBackend;
 };
 
 using LoadSettingsPtr = std::shared_ptr<const LoadSettings>;

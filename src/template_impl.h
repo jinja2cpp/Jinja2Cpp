@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_TEMPLATE_IMPL_H
 #define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
+#include "big_int.h"
 #include "cycle_collector.h"
 #include "error_boundary.h"
 #include "internal_value.h"
@@ -377,6 +378,8 @@ public:
             const CycleCollector cycles;
             // Before anything else the render does, the conversion of the params included
             const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr);
+            // The arithmetic of integers outside int64 (docs/tasks/0271)
+            const BigIntBackendScope bigInts(m_settings->bigIntBackend);
             // The tables of the params and the top scope are lent by the thread's workspace and
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;

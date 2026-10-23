@@ -1029,12 +1029,6 @@ inline bool MulOverflows(int64_t a, int64_t b, int64_t& result)
 #endif
 }
 
-// Python's int grows past 64 bits; without a big-integer backend the result raises OverflowError (docs/tasks/0270)
-[[noreturn]] inline void ThrowIntegerOverflow()
-{
-    ThrowBigIntArithmetic();
-}
-
 struct UnaryOperation : BaseVisitor<InternalValue>
 {
     explicit UnaryOperation(UnaryExpression::Operation oper)
@@ -1053,7 +1047,8 @@ struct UnaryOperation : BaseVisitor<InternalValue>
         case jinja2::UnaryExpression::UnaryMinus:
             if (val == std::numeric_limits<int64_t>::min())
             {
-                ThrowIntegerOverflow();
+                // Python's int grows past 64 bits (docs/tasks/0271)
+                return BigIntBinary(BigIntOp::Subtract, int64_t{ 0 }, val);
             }
             return -val;
         }
@@ -1362,25 +1357,28 @@ struct BinaryMathOperation : BaseVisitor<>
             return std::pow(static_cast<double>(base), static_cast<double>(exp));
         }
 
+        // Past int64 the result is a big integer, computed again from the start (docs/tasks/0271)
+        const int64_t origBase = base;
+        const int64_t origExp = exp;
         int64_t result = 1;
         while (exp != 0)
         {
             if ((exp & 1) != 0 && MulOverflows(result, base, result))
             {
-                ThrowIntegerOverflow();
+                return BigIntBinary(BigIntOp::Power, origBase, origExp);
             }
             exp >>= 1;
             // Squaring only matters while bits remain; once it overflows, so would the result
             if (exp != 0 && MulOverflows(base, base, base))
             {
-                ThrowIntegerOverflow();
+                return BigIntBinary(BigIntOp::Power, origBase, origExp);
             }
         }
         return result;
     }
 
     // Python's // on ints: the floored quotient
-    static int64_t IntegerFloorDiv(int64_t left, int64_t right)
+    static ResultType IntegerFloorDiv(int64_t left, int64_t right)
     {
         if (right == 0)
         {
@@ -1388,7 +1386,7 @@ struct BinaryMathOperation : BaseVisitor<>
         }
         if (right == -1 && left == std::numeric_limits<int64_t>::min())
         {
-            ThrowIntegerOverflow();
+            return BigIntBinary(BigIntOp::FloorDivide, left, right);
         }
         int64_t quot = left / right;
         if (left % right != 0 && (left < 0) != (right < 0))
@@ -1429,19 +1427,19 @@ struct BinaryMathOperation : BaseVisitor<>
         case jinja2::BinaryExpression::Plus:
             if (AddOverflows(left, right, result))
             {
-                ThrowIntegerOverflow();
+                return BigIntBinary(BigIntOp::Add, left, right);
             }
             return result;
         case jinja2::BinaryExpression::Minus:
             if (SubOverflows(left, right, result))
             {
-                ThrowIntegerOverflow();
+                return BigIntBinary(BigIntOp::Subtract, left, right);
             }
             return result;
         case jinja2::BinaryExpression::Mul:
             if (MulOverflows(left, right, result))
             {
-                ThrowIntegerOverflow();
+                return BigIntBinary(BigIntOp::Multiply, left, right);
             }
             return result;
         case jinja2::BinaryExpression::DivInteger:
@@ -1490,7 +1488,7 @@ struct BinaryMathOperation : BaseVisitor<>
 
     // An integer outside int64 (docs/tasks/0270). Comparisons are exact: a big integer is
     // outside int64, so against an int only its sign matters. `/` divides as floats, as int / int
-    // does; any other arithmetic needs a big result, which raises OverflowError
+    // does; any other arithmetic goes to the big-integer backend (BigIntBinary)
     // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     ResultType operator()(const BigIntView& left, const BigIntView& right) const
     {
@@ -1553,22 +1551,24 @@ struct BinaryMathOperation : BaseVisitor<>
             {
                 throw TemplateRuntimeError("integer division or modulo by zero");
             }
-            break;
+            return BigIntBinary(BigIntOp::FloorDivide, left, right);
         case jinja2::BinaryExpression::DivRemainder:
             if (rightIsZero)
             {
                 throw TemplateRuntimeError("integer modulo by zero");
             }
-            break;
+            return BigIntBinary(BigIntOp::Remainder, left, right);
         case jinja2::BinaryExpression::Plus:
+            return BigIntBinary(BigIntOp::Add, left, right);
         case jinja2::BinaryExpression::Minus:
+            return BigIntBinary(BigIntOp::Subtract, left, right);
         case jinja2::BinaryExpression::Mul:
+            return BigIntBinary(BigIntOp::Multiply, left, right);
         case jinja2::BinaryExpression::Pow:
-            break;
+            return BigIntBinary(BigIntOp::Power, left, right);
         default:
             ThrowUnsupported(left, right);
         }
-        ThrowBigIntArithmetic();
     }
 
     static double ToDouble(int64_t val) { return static_cast<double>(val); }
