@@ -3,6 +3,7 @@ status: open
 priority: low
 area: ci
 touches: [.github/workflows/codeql-analysis.yml]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/618
 ---
 # Find what in the test suite makes CodeQL's data-flow stage explode
 
@@ -18,11 +19,13 @@ growth is superlinear in something the tests do (the many-alternative `Value`/`I
 variants and their visitors instantiated from hundreds of `TEST`/`MULTISTR_TEST` bodies are
 the first suspect, not a measured cause).
 
-The fix in this PR analyses the library alone on pushes and PRs, and the tests only in the
+The fix in PR #618 analyses the library alone on pushes and PRs, and the tests only in the
 weekly (and manual) run under the `with-tests` category. That run still takes about two
 hours and will keep growing toward its 240-minute timeout.
 
-**Proposal.** Build the with-tests database locally (see the PR for commands), run one slow
+**Proposal.** Build the with-tests database locally with the CodeQL bundle from the
+`github/codeql-action` releases (`codeql database create db --language=cpp
+--command="cmake --build <Release, shared, C++17 build dir> --target jinja2cpp jinja2cpp_tests"`), run one slow
 query (`Critical/UseAfterFree.ql`) with `--evaluator-log` and `codeql generate log-summary`,
 and name the predicates and source files that dominate. Then either change the test code
 that drives it (if it is an accident, e.g. one huge generated function), exclude that test
