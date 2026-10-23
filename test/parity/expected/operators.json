@@ -2741,6 +2741,76 @@
    "env": {},
    "templates": {},
    "output": "T|T"
+  },
+  {
+   "id": "operators.int_big_compare_float",
+   "template": "{{ 'T' if 9223372036854775808 == 9223372036854775808.0 else 'F' }}|{{ 'T' if 9223372036854775809 > 9223372036854775808.0 else 'F' }}|{{ 'T' if 18446744073709551615 < 1e30 else 'F' }}|{{ 'T' if -18446744073709551615 < -1 else 'F' }}|{{ 'T' if 12345678901234567890 == 12345678901234567890 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "T|T|T|T|T"
+  },
+  {
+   "id": "operators.int_big_true_div",
+   "template": "{{ 18446744073709551615 / 2 }}|{{ 18446744073709551615 + 0.5 }}|{{ 1.5 - 18446744073709551615 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "9.223372036854776e+18|1.8446744073709552e+19|-1.8446744073709552e+19"
+  },
+  {
+   "id": "operators.int_big_repeat",
+   "template": "{{ 'a' * 18446744073709551615 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "OverflowError",
+    "message": "cannot fit 'int' into an index-sized integer"
+   }
   }
  ]
 }

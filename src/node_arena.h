@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <new>
@@ -86,6 +87,7 @@ enum class NodeKind : std::uint8_t
     RawText,
     ExprRenderer,
     FinalizedExprRenderer,
+    StaticExprRenderer,
     TemplateRoot,
     ForStmt,
     IfStmt,
@@ -164,6 +166,9 @@ class ArenaAccess;
 // Makes handles from raw offsets and reaches a sealed tree's bytes: defined by the tests only
 struct ArenaTestAccess;
 class RefChecker;
+// render_failure.h
+struct TemplateOrigin;
+using TemplateOriginPtr = const TemplateOrigin*;
 } // namespace detail
 
 // A link to a node of T, or a null link: the node's offset in its arena
@@ -710,12 +715,14 @@ private:
 
 // What a sealed tree keeps after its nodes, each part aligned for its words: the bitmap of
 // where the nodes' headers start (unless the checks are OFF), in FULL the bitmap of the
-// nodes and lists Seal reached, then the table of the objects to destroy
+// nodes and lists Seal reached, then the table of the objects to destroy and the template the
+// tree comes from (SealedArena::SetOrigin)
 struct SealedLayout
 {
     std::size_t starts;
     std::size_t validated;
     std::size_t cleanup;
+    std::size_t origin;
     std::size_t end;
 };
 inline SealedLayout LayoutOf(std::uint32_t size, std::uint32_t objects)
@@ -727,7 +734,8 @@ inline SealedLayout LayoutOf(std::uint32_t size, std::uint32_t objects)
     layout.starts = size;
     layout.validated = layout.starts + (words * sizeof(std::uint64_t));
     layout.cleanup = layout.validated + (NodeRefChecks >= 2 ? words * sizeof(std::uint64_t) : 0);
-    layout.end = layout.cleanup + (std::size_t{ objects } * sizeof(std::uint32_t));
+    layout.origin = layout.cleanup + (std::size_t{ objects } * sizeof(std::uint32_t));
+    layout.end = layout.origin + sizeof(TemplateOriginPtr);
     return layout;
 }
 
@@ -793,6 +801,30 @@ public:
     // The same for every use of one symbol of this tree (NodeArena::Intern), and different from
     // any other symbol's and any other live tree's. Never read through
     [[nodiscard]] const void* KeyOf(ArenaText symbol) const { return m_base + symbol.m_offset; }
+
+    // Whether `node` is in this tree
+    [[nodiscard]] bool Holds(const void* node) const
+    {
+        if (!m_base)
+        {
+            return false;
+        }
+        const auto* p = static_cast<const std::byte*>(node);
+        return std::less_equal<>()(m_base, p) && std::less<>()(p, m_base + m_size);
+    }
+    // The template the tree comes from, if its owner set it. Read on an error only
+    [[nodiscard]] const detail::TemplateOrigin* Origin() const
+    {
+        if (!m_base)
+        {
+            return nullptr;
+        }
+        detail::ArenaHeader header{};
+        std::memcpy(&header, m_base, sizeof(header));
+        detail::TemplateOriginPtr origin = nullptr;
+        std::memcpy(static_cast<void*>(&origin), m_base + detail::LayoutOf(m_size, header.objects).origin, sizeof(detail::TemplateOriginPtr));
+        return origin;
+    }
 
     // Views of the same tree
     friend bool operator==(const ArenaView& lhs, const ArenaView& rhs) { return lhs.m_base == rhs.m_base; }
@@ -978,6 +1010,7 @@ constexpr bool NeedsNoContext(NodeKind kind)
     case NodeKind::ComposedBody:
     case NodeKind::RawText:
     case NodeKind::ExprRenderer:
+    case NodeKind::StaticExprRenderer:
     case NodeKind::IfStmt:
     case NodeKind::ElseBranchStmt:
         return true;
@@ -1044,17 +1077,28 @@ public:
     template<typename T, typename Item>
     NodeRef<T> MakeWithItems(boost::span<const Item> items)
     {
+        return MakeWithItems<T, Item, Item>(items.size(), [items](Item* to, Item* /*extras*/) { std::uninitialized_copy(items.begin(), items.end(), to); }, false);
+    }
+    // The same for `count` items, and as many extras after them when `withExtras`: fill(items,
+    // extras) writes them
+    template<typename T, typename Item, typename Extra, typename Fill>
+    NodeRef<T> MakeWithItems(std::size_t count, const Fill& fill, bool withExtras)
+    {
         static_assert(std::is_final_v<T>, "the items follow the most derived object");
         static_assert(std::is_trivially_copyable_v<Item> && std::is_trivially_destructible_v<Item>, "Seal copies the items with the node's bytes");
+        static_assert(std::is_trivially_copyable_v<Extra> && std::is_trivially_destructible_v<Extra>, "Seal copies the extras with the node's bytes");
         static_assert(sizeof(T) % alignof(Item) == 0, "the items are aligned right after the node");
-        if (items.size() > (std::numeric_limits<std::uint32_t>::max() - sizeof(T)) / sizeof(Item))
+        static_assert(sizeof(Item) % alignof(Extra) == 0, "the extras are aligned right after the items");
+        const std::size_t itemSize = sizeof(Item) + (withExtras ? sizeof(Extra) : 0);
+        if (count > (std::numeric_limits<std::uint32_t>::max() - sizeof(T)) / itemSize)
         {
             ThrowTooLarge("a template list too long");
         }
-        const auto ref = MakeSized<T>(sizeof(T) + items.size_bytes(), static_cast<std::uint32_t>(items.size()));
+        const auto ref = MakeSized<T>(sizeof(T) + (count * itemSize), static_cast<std::uint32_t>(count));
         // Right after the node: one past it, in the same allocation
         T* const node = std::launder(reinterpret_cast<T*>(Locate(ref.m_offset)));
-        std::uninitialized_copy(items.begin(), items.end(), reinterpret_cast<Item*>(node + 1));
+        auto* const items = reinterpret_cast<Item*>(node + 1);
+        fill(items, withExtras ? reinterpret_cast<Extra*>(items + count) : nullptr);
         return ref;
     }
 
@@ -1184,6 +1228,9 @@ public:
         const std::array<detail::RootRef, sizeof...(Roots)> list{ RootOf(roots)... };
         return SealWith(boost::span<const detail::RootRef>(list.data(), list.size()));
     }
+    // The template the sealed tree comes from, for the locations of render errors: `origin`
+    // must outlive the tree. Set before Seal
+    void SetOrigin(detail::TemplateOriginPtr origin) noexcept { m_origin = origin; }
 
 private:
     struct Block
@@ -1341,6 +1388,7 @@ private:
     std::uint32_t m_nameRefs = 0;
     std::uint32_t m_contextNodes = 0;
     bool m_sealed = false;
+    detail::TemplateOriginPtr m_origin = nullptr;
     // The symbols of the names, while the tree is parsed: a list in place for the first few,
     // then an open-addressed table by the hash of the name
     // Trivial, so that the table in place costs nothing until the first name

@@ -1,5 +1,7 @@
 #include "testers.h"
 
+#include "engine_errors.h"
+#include "big_int.h"
 #include "expression_evaluator.h"
 #include "filters.h"
 #include "function_base.h"
@@ -49,7 +51,7 @@ namespace
 // Out of line, so that the tests that fit their call pay only the check
 [[noreturn]] JINJA2CPP_NOINLINE_INLINE void ThrowArgumentsError(const std::string& error)
 {
-    throw std::runtime_error(error);
+    throw TemplateRuntimeError(error);
 }
 } // namespace
 
@@ -158,6 +160,11 @@ struct ValueKindGetter : visitors::BaseVisitor<TestKind>
         return TestKind::String;
     }
     TestKind operator()(int64_t) const
+    {
+        return TestKind::Integer;
+    }
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
+    TestKind operator()(const BigIntView&) const
     {
         return TestKind::Integer;
     }
@@ -293,7 +300,11 @@ bool IsEvenOrOdd(const InternalValue& val, TestKind valKind, bool even)
 {
     bool result = false;
     // bool is an int in Python, so `false is even` holds
-    if (valKind == TestKind::Integer || valKind == TestKind::Boolean)
+    if (const auto big = AsBigInt(val))
+    {
+        result = IsOdd(*big) != even;
+    }
+    else if (valKind == TestKind::Integer || valKind == TestKind::Boolean)
     {
         auto intVal = ConvertToInt(val);
         result = (intVal & 1) == (even ? 0 : 1);
@@ -346,6 +357,16 @@ bool HasNoLowerLetter(const InternalValue& val)
 
 namespace
 {
+// Out of line, so that the int comparison below needs no frame of its own (docs/tasks/0286)
+JINJA2CPP_NOINLINE_INLINE bool IsInEqualByValue(const InternalValue& item, const InternalValue& value)
+{
+    if (visitors::IsNumber(item) && visitors::IsNumber(value))
+    {
+        return ConvertToBool(visitors::ApplyToNumbers(item, value, BinaryExpression::LogicalEq));
+    }
+    return ConvertToBool(Apply2<visitors::BinaryMathOperation>(item, value, BinaryExpression::LogicalEq));
+}
+
 bool IsInEqual(const InternalValue& item, const InternalValue& value)
 {
     // Two ints, the usual `i in [1, 2, 3]`, compare without the number visitor
@@ -355,11 +376,7 @@ bool IsInEqual(const InternalValue& item, const InternalValue& value)
     {
         return *itemInt == *valueInt;
     }
-    if (visitors::IsNumber(item) && visitors::IsNumber(value))
-    {
-        return ConvertToBool(visitors::ApplyToNumbers(item, value, BinaryExpression::LogicalEq));
-    }
-    return ConvertToBool(Apply2<visitors::BinaryMathOperation>(item, value, BinaryExpression::LogicalEq));
+    return IsInEqualByValue(item, value);
 }
 // `value in list`: a list the template owns is compared in place, any other through one
 // enumerator (ListAdapter::Iterator clones its enumerator on every copy)
@@ -436,7 +453,7 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
     {
         if (Apply<ValueKindGetter>(baseVal) != TestKind::String)
         {
-            throw std::runtime_error("'in <string>' requires string as left operand, not "s + Apply<visitors::PythonTypeNameGetter>(baseVal));
+            throw TemplateRuntimeError("'in <string>' requires string as left operand, not "s + Apply<visitors::PythonTypeNameGetter>(baseVal));
         }
         result = ApplyStringConverter(baseVal, [&](const auto& srcStr) {
             std::decay_t<decltype(srcStr)> emptyStrView;
@@ -451,7 +468,7 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
     }
     else if (seqKind == TestKind::Integer || seqKind == TestKind::Double || seqKind == TestKind::Boolean || seqKind == TestKind::Object)
     {
-        throw std::runtime_error("argument of type '"s + Apply<visitors::PythonTypeNameGetter>(seq) + "' is not iterable");
+        throw TemplateRuntimeError("argument of type '"s + Apply<visitors::PythonTypeNameGetter>(seq) + "' is not iterable");
     }
     return result;
 }
@@ -599,7 +616,7 @@ bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& contex
     // unless it is in an `if`. Settings::userCallablesAsFilters looks it up among the values
     if (!callable || callable->GetKind() != Callable::UserCallable)
     {
-        throw std::runtime_error("No test named '" + m_testerName + "' found.");
+        throw TemplateRuntimeError("No test named '" + m_testerName + "' found.");
     }
 
     CallParams tmpCallParams = helpers::EvaluateCallParams(m_callParams, context);

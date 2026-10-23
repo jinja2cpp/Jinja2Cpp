@@ -141,7 +141,9 @@ public:
 
     // The nodes go to `nodes`, which outlives the parser; unknown filters and tests to `unknown`
     ExpressionParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names, UnknownCallables& unknown);
-    ParseResult<NodeRef<IRendererBase>> Parse(LexScanner& lexer);
+    // `{{ ... }}`; isVolatile: in volatile code (RenderContext::IsVolatileAutoescape), where
+    // Jinja2 folds no filter or test and escapes a folded value by the static setting
+    ParseResult<NodeRef<IRendererBase>> Parse(LexScanner& lexer, bool isVolatile = false);
     // Before each of several top-level expressions of one statement (with bindings, macro
     // defaults): their operators do not add up
     void NextTopLevelExpression() { m_operators = 0; }
@@ -207,6 +209,8 @@ private:
     UnknownCallables& m_unknown;
     // Settings::finalize as a callable; undefined if it is not set
     InternalValue m_finalize;
+    // Parse's isVolatile
+    bool m_volatile = false;
     // Nesting level of the expression being parsed, bounded by Settings::Limits::maxExpressionDepth
     unsigned m_depth = 0;
     // Operators chained on the current path (a + b + c, x|f|g, a.b.c, - - x), bounded by

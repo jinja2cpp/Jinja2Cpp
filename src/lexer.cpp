@@ -1,9 +1,9 @@
 #include "lexer.h"
 
+#include "big_int.h"
 #include "internal_value.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cerrno>
 #include <cstdint>
 #include <cstdlib>
@@ -60,20 +60,19 @@ InternalValue ParseNumberLiteral(std::string number)
         {
             return InternalValue(static_cast<int64_t>(value));
         }
-
-        // Wider than int64_t: degrade to double like a decimal literal does
-        double result = 0;
-        for (const char* ch = digits; *ch; ++ch)
-        {
-            result = (result * radix) + (std::isdigit(static_cast<unsigned char>(*ch)) ? *ch - '0' : std::tolower(static_cast<unsigned char>(*ch)) - 'a' + 10);
-        }
-        return InternalValue(result);
+        // Wider than int64_t: a big integer (docs/tasks/0270)
+        return IntegerFromDigits(digits, radix, false);
     }
 
     const auto value = std::strtoll(digits, &end, 10);
     if (errno != ERANGE && *end == '\0')
     {
         return InternalValue(static_cast<int64_t>(value));
+    }
+    if (number.find_first_of(".eE") == std::string::npos)
+    {
+        // An integer literal beyond int64: a big integer, as Python's int() makes it
+        return IntegerFromDigits(number, 10, false);
     }
 
     return InternalValue(std::strtod(digits, nullptr));

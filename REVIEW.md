@@ -36,14 +36,16 @@ are what this codebase has actually got wrong.
   from template text or data (`range`, `*` repetition, center/indent/format widths,
   join over generators) goes through the existing hard cap (`MaxSequenceSize` and
   its check in `src/internal_value.h`), with the size arithmetic checked before the
-  allocation and integer conversions following task 0172. Configurable limits are
-  still open (task 0097): a missing per-render budget is not a finding, but a new
-  path that bypasses the existing cap is.
+  allocation and integer conversions following task 0172. The check reads
+  `detail::t_renderLimits.maxSequenceSize`, so a host's `Settings::Limits` (task 0262)
+  lowers the cap for the same paths. Growth operations that do not call it yet are
+  listed in task 0263 and are not new findings; a new path that bypasses the check is.
 - **Errors reach the caller as a `Result`.** Load, Render, `GetMetadata*` and
   `TemplateEnv::LoadTemplate*` return every failure in `Result`; only `std::bad_alloc`
   escapes, meaning the system is out of memory (docs/api-2.0.md 2.1, task 0253). The
   boundary is `detail::CurrentExceptionToError` (`src/error_boundary.h`): a host
-  `jinja2::Exception` keeps its code, any other exception becomes `UnexpectedException`,
+  `jinja2::Exception` keeps its code, a host callable's exception becomes
+  `UserCallableException`, any other exception becomes `UnexpectedException`,
   and `GetException()` holds the original only when the exception came from outside the
   engine. An engine limit throws `ResourceLimitError` (`src/engine_errors.h`, code 18,
   no exception kept), not a bare `std::length_error`. Flag a catch that swallows
@@ -52,7 +54,18 @@ are what this codebase has actually got wrong.
   expected-lite's `noexcept` converting constructor without a local copy, and code that
   leaves an arena, table or template unusable when an allocation fails
   (`jinja2cpp_alloc_tests` exercises Load and Render with each allocation failing).
-  Engine errors still reported as standard exceptions get their own codes in 0255.
+  The engine's own runtime errors (Python's TypeError, ValueError) throw
+  `TemplateRuntimeError` (code 17, task 0255), never a bare `std::runtime_error`, and an
+  internal `catch` of the engine's errors catches `TemplateRuntimeError`, so that it does
+  not swallow a host exception passing through.
+- **Render errors are located (task 0254).** Each statement body (`ComposedRenderer`)
+  turns what a statement throws into `detail::RenderFailure`, located at that statement's
+  tag; bodies around it pass it on unchanged. So no exception may be control flow across
+  a statement body: a `catch` that expects an engine error from inside a rendered body
+  sees a `RenderFailure` instead. Flag such a catch, and a body made without its tag
+  offsets (`StatementBody::Take`). What a host callable throws becomes
+  `detail::HostCallableFailure` (code 15) in `UserCallableBody`; the engine's own error
+  types pass through it.
 - **Lifetimes.** The worst historical class (0112, 0115, 0125, 0134). Trace the owner
   of every `string_view`, lent item, generator item, reflected nested item, container
   returned by a callable, arena node (`NodeRef`) and stored macro/self/super callable.

@@ -1,8 +1,8 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
-touches: [src/render_context.h, src/statements.cpp#AutoescapeStatement]
+touches: [src/render_context.h, src/statements.cpp#AutoescapeStatement, src/renderer.h, src/expression_parser.cpp]
 shares: [src/statements.cpp, src/expression_evaluator.cpp, src/markup.h]
 ---
 # `{% autoescape %}` with a runtime value (volatile EvalContext)
@@ -28,3 +28,16 @@ and the runtime `{% autoescape false %}` nested in it sets both, as now.
 
 **Done when.** `autoescape.volatile_macro_output` matches and its line is gone from
 `test/parity/divergences/autoescape.txt`.
+
+**Outcome (PR #614).** Jinja2 3.1.6 gives `<` for `autoescape.volatile_macro_output` because it folds the
+constant `{{ '<' }}` and escapes it by the setting the code is compiled under, the
+environment's here, not because the macro reads the runtime setting. Both rules are in now.
+RenderContext keeps Jinja2's compile-time state at run time: the static setting
+(`IsStaticAutoescape`, `frame.eval_ctx.autoescape`) and whether the code is volatile
+(`IsVolatileAutoescape`, `frame.eval_ctx.volatile`); `IsOutputAutoescape` is the setting
+non-constant output follows, the runtime one in volatile code. `{% autoescape %}` with a value
+that is not foldable keeps the static setting and makes its body volatile; a macro, `caller`
+or recursive loop captures both where it is defined; a block or template body is not
+volatile. In volatile code a `{{ }}` Jinja2 folds is a `StaticOutputRenderer`, filters and
+tests do not fold, `~` joins as str, and filter blocks and `loop(...)` follow the runtime
+setting. Cases `autoescape.volatile_*` pin each rule.

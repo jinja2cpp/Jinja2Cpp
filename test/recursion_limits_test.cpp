@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <string>
 #include <utility>
+#include <vector>
 
 #if defined(__linux__) || defined(__APPLE__)
 #include <pthread.h>
@@ -106,11 +107,27 @@ TEST_F(RecursionLimitsTest, DeepTargetIsParseError)
 
 TEST_F(RecursionLimitsTest, NestingJinja2AcceptsRenders)
 {
-    // Python Jinja2 fails at about 80 nested brackets and 300 unary operators
-    EXPECT_EQ("1", Render(Nested("(", ")", 60)));
+    // The default limits stop where Python Jinja2 3.1.6 on Python 3.12 does (docs/tasks/0098):
+    // it renders 69 nested brackets, 491 unary operators and 492 operands of `+`, and fails one deeper
+    EXPECT_EQ("1", Render(Nested("(", ")", 69)));
     EXPECT_EQ("1", Render(Nested("[", "][0]", 40)));
-    EXPECT_EQ("1", Render(Nested("-", "", 200)));
-    EXPECT_EQ("True", Render(Nested("not ", "", 200)));
+    EXPECT_EQ("-1", Render(Nested("-", "", 491)));
+    EXPECT_EQ("False", Render(Nested("not ", "", 491)));
+    EXPECT_EQ("492", Render("{{ " + Repeat("1 + ", 491) + "1 }}"));
+
+    const std::string templates[] = {
+        Nested("(", ")", 70),
+        Nested("-", "", 492),
+        Nested("not ", "", 492),
+        "{{ " + Repeat("1 + ", 492) + "1 }}",
+    };
+    for (const auto& source : templates)
+    {
+        Template tpl(&m_env);
+        auto result = tpl.Load(source);
+        ASSERT_FALSE(result.has_value()) << source.substr(0, 20);
+        EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode()) << source.substr(0, 20);
+    }
 }
 
 TEST_F(RecursionLimitsTest, ErrorMessage)
@@ -160,22 +177,25 @@ TEST_F(RecursionLimitsTest, InfiniteRecursionIsRenderError)
     AddFile("include_self", "{% include 'include_self' %}");
     AddFile("extends_self", "{% extends 'extends_self' %}");
     AddFile("import_self", "{% import 'import_self' as m %}");
-    const std::string templates[] = {
-        "{% macro m() %}{{ m() }}{% endmacro %}{{ m() }}",
-        "{% include 'include_self' %}",
-        "{% extends 'extends_self' %}",
-        "{% import 'import_self' as m %}",
-        "{% block b %}{{ self.b() }}{% endblock %}",
-        "{% set l = [[1]] %}{% for i in l recursive %}{{ loop(l) }}{% endfor %}",
+    // Located at the statement the recursion failed in, in the template it is in (docs/tasks/0254)
+    const std::pair<std::string, std::string> templates[] = {
+        { "{% macro m() %}{{ m() }}{% endmacro %}{{ m() }}", "noname.j2tpl:1:16" },
+        { "{% include 'include_self' %}", "include_self:1:1" },
+        // The parent renders after the body of the template that extends it, outside every statement
+        { "{% extends 'extends_self' %}", "noname.j2tpl:1:1" },
+        { "{% import 'import_self' as m %}", "import_self:1:1" },
+        { "{% block b %}{{ self.b() }}{% endblock %}", "noname.j2tpl:1:14" },
+        { "{% set l = [[1]] %}{% for i in l recursive %}{{ loop(l) }}{% endfor %}", "noname.j2tpl:1:46" },
     };
-    for (const auto& source : templates)
+    for (const auto& [source, location] : templates)
     {
         Template tpl(&m_env);
         ASSERT_TRUE(tpl.Load(source).has_value()) << source;
         auto result = tpl.RenderAsString({});
         ASSERT_FALSE(result.has_value()) << source;
         EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode()) << source;
-        EXPECT_EQ("noname.j2tpl:1:1: error: Maximum recursion depth exceeded\n", ErrorToString(result.error())) << source;
+        const auto text = ErrorToString(result.error());
+        EXPECT_EQ(location + ": error: Maximum recursion depth exceeded", text.substr(0, text.find('\n'))) << source;
     }
 
     TemplateW tpl(&m_env);
@@ -206,7 +226,7 @@ TEST_F(RecursionLimitsTest, RecursionJinja2AcceptsRenders)
 TEST_F(RecursionLimitsTest, LongChains)
 {
     // The parser reads chains in a loop but the evaluator recurses once per operator.
-    // Python Jinja2 fails at 300-500 chained operators.
+    // Python Jinja2 fails past 491 unary operators or `+` (filter chains: past 197 to 328).
     EXPECT_EQ("400", Render("{{ " + Repeat("1 + ", 399) + "1 }}"));
     EXPECT_EQ("3", Render("{{ x" + Repeat("|abs", 350) + " }}", { { "x", -3 } }));
     EXPECT_EQ("3", Render("{{ ((x" + Repeat("|abs", 100) + ")" + Repeat("|abs", 100) + ")" + Repeat("|abs", 50) + " }}", { { "x", -3 } }));
@@ -227,7 +247,7 @@ TEST_F(RecursionLimitsTest, LongChains)
         "{{ x" + Repeat("()", 20000) + " }}",
         "{% filter upper" + Repeat("|lower", 20000) + " %}{% endfilter %}",
         // A chain inside brackets continues outside them: the depth is their sum
-        "{{ " + Repeat("(", 60) + "x" + Repeat("|abs)", 60) + Repeat("|abs", 400) + " }}",
+        "{{ " + Repeat("(", 60) + "x" + Repeat("|abs)", 60) + Repeat("|abs", 440) + " }}",
     };
     for (const auto& source : templates)
     {
@@ -259,17 +279,35 @@ TEST_F(RecursionLimitsTest, SiblingsDoNotAddUp)
 
 TEST_F(RecursionLimitsTest, NestedBlocks)
 {
-    // Python Jinja2 fails at about 100 nested blocks
-    EXPECT_EQ("x", Render(Repeat("{% if 1 %}", 90) + "x" + Repeat("{% endif %}", 90)));
+    // Python Jinja2 renders 247 nested blocks, with and filter blocks (246 set blocks) and
+    // fails one deeper with RecursionError. It stops nested if at 99 and for at 21, where CPython refuses
+    // the generated code (too many indentation levels, statically nested blocks); Jinja2C++
+    // has no such limit and takes every kind of block to 247 (docs/tasks/0098)
+    std::string blocks;
+    for (int i = 0; i < 247; ++i)
+    {
+        blocks += "{% block b" + std::to_string(i) + " %}";
+    }
+    const std::pair<std::string, std::string> kinds[] = {
+        { "{% if 1 %}", "{% endif %}" },
+        { "{% for i in [1] %}", "{% endfor %}" },
+        { "{% filter upper %}", "{% endfilter %}" },
+        { "{% with %}", "{% endwith %}" },
+    };
+    EXPECT_EQ("x", Render(blocks + "x" + Repeat("{% endblock %}", 247)));
+    for (const auto& [open, close] : kinds)
+    {
+        EXPECT_EQ(open == "{% filter upper %}" ? "X" : "x", Render(Repeat(open, 247) + "x" + Repeat(close, 247))) << open;
+    }
+    EXPECT_EQ("", Render(Repeat("{% set a %}", 246) + "x" + Repeat("{% endset %}", 246)));
     // elif and else branches are not nested
     EXPECT_EQ("ok", Render("{% if 0 %}a" + Repeat("{% elif 0 %}b", 1000) + "{% else %}ok{% endif %}"));
 
-    const std::string templates[] = {
-        Repeat("{% if 1 %}", 300) + "x" + Repeat("{% endif %}", 300),
-        Repeat("{% for i in [1] %}", 300) + "x" + Repeat("{% endfor %}", 300),
-        Repeat("{% filter upper %}", 300) + "x" + Repeat("{% endfilter %}", 300),
-        Repeat("{% with %}", 300) + "x" + Repeat("{% endwith %}", 300),
-    };
+    std::vector<std::string> templates{ blocks + "{% block last %}x" + Repeat("{% endblock %}", 248) };
+    for (const auto& [open, close] : kinds)
+    {
+        templates.push_back(Repeat(open, 248) + "x" + Repeat(close, 248));
+    }
     for (const auto& source : templates)
     {
         Template tpl(&m_env);
@@ -335,14 +373,14 @@ TEST_F(RecursionLimitsTest, HugeSequencesFailFast)
         // The engine's own limit: no exception to hand back (docs/api-2.0.md, 2.1)
         EXPECT_FALSE(result.error().GetException()) << source;
     }
-    // An integer literal beyond int64 is a float here (docs/tasks/0178), which range()
-    // refuses before computing a length; Python raises OverflowError
+    // An integer literal beyond int64 is a big integer (docs/tasks/0270), which range()
+    // refuses before computing a length (OverflowError, docs/design/0178-big-integer-plan.md 5)
     {
         Template tpl(&m_env);
         ASSERT_TRUE(tpl.Load("{{ range(775807, -92233720368547753372036854775803, -9223758807)|list }}").has_value());
         auto result = tpl.RenderAsString({});
         ASSERT_FALSE(result.has_value());
-        EXPECT_NE(std::string::npos, result.error().ToString().find("cannot be interpreted as an integer")) << result.error().ToString();
+        EXPECT_EQ(ErrorCode::IntegerOutOfRange, result.error().GetCode()) << result.error().ToString();
     }
     // Below the limit nothing changes
     Template tpl(&m_env);

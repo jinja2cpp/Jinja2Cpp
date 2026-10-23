@@ -213,8 +213,8 @@ struct LexerHelper
 
 using TokensList = std::vector<Token>;
 
-// A numeric literal as the lexer has checked it: an int64_t, or a double when it is not an
-// integer or does not fit one
+// A numeric literal as the lexer has checked it: an int (a big integer beyond int64), or a
+// double when it is not an integer
 InternalValue ParseNumberLiteral(std::string number);
 
 // The lexer of a tag's body (docs/tasks/0142). It reads the template source in place and makes

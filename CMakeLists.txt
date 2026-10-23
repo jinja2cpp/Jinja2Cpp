@@ -152,8 +152,10 @@ include(collect_sources)
 set (LIB_TARGET_NAME jinja2cpp)
 
 set(JINJA2CPP_SOURCES
+    src/confined_filesystem.cpp
     src/cycle_collector.cpp
     src/error_info.cpp
+    src/big_int.cpp
     src/expression_evaluator.cpp
     src/expression_parser.cpp
     src/filesystem_handler.cpp
@@ -168,6 +170,7 @@ set(JINJA2CPP_SOURCES
     src/out_stream.cpp
     src/python_format.cpp
     src/recursion_guard.cpp
+    src/render_failure.cpp
     src/render_workspace.cpp
     src/serialize_filters.cpp
     src/statements.cpp

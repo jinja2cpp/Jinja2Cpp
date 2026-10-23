@@ -81,4 +81,6 @@ CASES = [
     ('dict_unhashable_pair_key', '{{ dict([([1], 2)]) }}'),
     ('dict_merge_equal_numeric_keys', "{{ dict([(1, 'a'), (1.0, 'b'), (True, 'c')]) }}"),
     ('namespace_non_string_subscript', '{% set ns = namespace(a=1) %}[{{ ns[1] }}][{{ ns.a }}]'),
+    # task 0270: Python's range is lazy; Jinja2C++ ranges are int64
+    ('range_big_bounds', "{{ range(18446744073709551615) }}"),
 ]

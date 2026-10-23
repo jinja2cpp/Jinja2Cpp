@@ -166,8 +166,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0094](0094-differential-fuzzing-findings.md) | Divergences found by differential fuzzing | parity | medium | done |
 | [0095](0095-structure-aware-fuzzing.md) | Structure-aware fuzzing: mutate templates, not bytes | robustness | high | open |
 | [0096](0096-continuous-fuzzing-service.md) | Continuous fuzzing on ClusterFuzzLite or OSS-Fuzz | ci | low | open |
-| [0097](0097-resource-limits.md) | Templates can ask for unbounded time and memory | robustness | medium | open |
-| [0098](0098-configurable-recursion-limits.md) | Configurable recursion limits, closer to Python's | api | low | open |
+| [0097](0097-resource-limits.md) | Templates can ask for unbounded time and memory | robustness | medium | done |
+| [0098](0098-configurable-recursion-limits.md) | Configurable recursion limits, closer to Python's | api | low | done |
 | [0099](0099-differential-triage-routine.md) | Triage the nightly differential report into parity cases | process | low | open |
 | [0100](0100-render-hot-path-round-2.md) | Render hot path, round 2 | perf | medium | done |
 | [0101](0101-single-pass-generator-lists.md) | Lazy filter results are reusable, Python generators are single-pass | parity | low | done |
@@ -285,7 +285,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0213](0213-if-condexpr-and-unclosed-raw.md) | An `if` test with a conditional expression, and an unclosed raw block at the end | parity | low | open |
 | [0214](0214-macro-value-leftovers.md) | Macros and methods as values: what 0208 and 0145 left over | parity | low | open |
 | [0215](0215-pprint-width.md) | `pprint` does not wrap at Python's width, and other repr gaps | parity | low | open |
-| [0216](0216-volatile-autoescape.md) | `{% autoescape %}` with a runtime value (volatile EvalContext) | parity | low | open |
+| [0216](0216-volatile-autoescape.md) | `{% autoescape %}` with a runtime value (volatile EvalContext) | parity | low | done |
 | [0219](0219-loop-iteration.md) | Iterating `loop` takes the rest of the loop | parity | low | open |
 | [0220](0220-call-argument-unpacking.md) | `f(*args, **kwargs)` in calls | parity | medium | open |
 | [0221](0221-release-acceptance-and-rc-signoff.md) | Define 2.0 release gates and release-candidate signoff | release | high | in-progress |
@@ -321,8 +321,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0251](0251-cycles-through-opaque-objects.md) | Reference cycles through objects the cycle collector cannot follow leak | evaluator | low | open |
 | [0252](0252-public-api-allocator-contract.md) | Allocator and memory contract for the 2.0 public API | api | high | done |
 | [0253](0253-error-contract-types.md) | Error contract P1: public error types and the Load/Render boundary | api | high | done |
-| [0254](0254-render-error-locations.md) | Error contract P2: render errors carry their template location | robustness | high | open |
-| [0255](0255-engine-runtime-error-codes.md) | Error contract P3: the engine's own runtime errors get their own codes | robustness | medium | open |
+| [0254](0254-render-error-locations.md) | Error contract P2: render errors carry their template location | robustness | high | done |
+| [0255](0255-engine-runtime-error-codes.md) | Error contract P3: the engine's own runtime errors get their own codes | robustness | medium | done |
 | [0256](0256-survive-allocation-failure.md) | Survive allocation failure in Load and Render: remaining coverage | robustness | high | open |
 | [0257](0257-render-to-string-and-sink.md) | `RenderTo` a caller's string or an output sink | api | high | open |
 | [0258](0258-positional-and-keyword-same-arg.md) | A call that gives one argument both positionally and by keyword is accepted | api | low | open |
@@ -333,11 +333,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0263](0263-per-operation-size-checks.md) | Every growth operation checks its size before allocating | robustness | high | open |
 | [0264](0264-template-cache-bound.md) | The template cache ignores its size, and `MemoryFileSystem` writes in a const path | robustness | medium | open |
 | [0265](0265-hardening-by-default.md) | Build hardening on by default; invariant checks that fail the render, not the process | build | medium | open |
-| [0266](0266-confined-filesystem.md) | `ConfinedFileSystem`: a loader that never leaves its root | api | medium | open |
+| [0266](0266-confined-filesystem.md) | `ConfinedFileSystem`: a loader that never leaves its root | api | medium | done |
 | [0267](0267-untrusted-mode-fuzzing.md) | Fuzz targets for templates written by untrusted users | robustness | high | open |
 | [0268](0268-untrusted-mode-followups.md) | Untrusted mode: additive follow-ups after the freeze | api | low | open |
 | [0269](0269-public-big-int-value.md) | Public `BigInt` value (0178 phase 1, G1) | api | high | done |
-| [0270](0270-big-int-core-text-form.md) | Big integers in the core, text form (0178 phase 2) | parity | medium | open |
+| [0270](0270-big-int-core-text-form.md) | Big integers in the core, text form (0178 phase 2) | parity | medium | in-progress |
 | [0271](0271-big-int-backend-interface.md) | Big-integer backend interface and overflow promotion (0178 phase 3) | api | medium | open |
 | [0272](0272-big-int-boost-backend.md) | Boost.Multiprecision backend and `JINJA2CPP_WITH_BIGINT` (0178 phase 4) | build | medium | open |
 | [0273](0273-build-conditional-parity-divergences.md) | Build-conditional parity divergences (0178 phase 0) | parity | medium | done |
@@ -353,4 +353,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0283](0283-cycle-collector-oom-leaks.md) | Reference cycles leak when an allocation fails during a render | robustness | low | open |
 | [0284](0284-template-module.md) | `Template.module` / `make_module`: a template's exports as a map | api | low | open |
 | [0285](0285-abi-baselines-at-rc.md) | Commit the ABI baselines at the 2.0 RC and turn the abidiff gate on | release | high | open |
-| [0286](0286-fixed-cost-drift-oct-12-19.md) | Fixed-cost drift from feature merges, 2026-10-12 to 2026-10-19 | perf | medium | open |
+| [0286](0286-fixed-cost-drift-oct-12-19.md) | Fixed-cost drift from feature merges, 2026-10-12 to 2026-10-19 | perf | medium | done |
+| [0287](0287-big-int-radix-conversion-cost.md) | Quadratic radix conversion of big integers near the bit cap | robustness | low | open |
+| [0288](0288-finalize-autoescape.md) | `finalize` output is not escaped under autoescape | parity | medium | open |
+| [0289](0289-flat-concat-chains.md) | `~` chains as one node, as Jinja2's `Concat` | parity | low | open |
+| [0290](0290-codeql-test-suite-cost.md) | Find what in the test suite makes CodeQL's data-flow stage explode | ci | low | open |

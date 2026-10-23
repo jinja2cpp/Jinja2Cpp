@@ -1,3 +1,4 @@
+#include "engine_errors.h"
 #include "filters.h"
 #include "function_base.h"
 #include "html_entities.h"
@@ -72,6 +73,10 @@ struct StringEncoder : public visitors::BaseVisitor<TargetString>
 
         return TargetString(std::move(result));
     }
+
+    // Not a string, as an int is not
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
+    TargetString operator()(const BigIntView& /*val*/) const { return TargetString(); }
 
     template<typename Str, typename CharT>
     static void AppendChar(Str& str, CharT ch)
@@ -367,7 +372,7 @@ private:
             // textwrap slices the word with the width; a float width of 1 or more fails there
             if (m_floatWidth && m_width >= 1)
             {
-                throw std::runtime_error("slice indices must be integers or None or have an __index__ method");
+                throw TemplateRuntimeError("slice indices must be integers or None or have an __index__ method");
             }
             auto end = LongWordCut(chunk, spaceLeft);
             curLine.emplace_back(chunk.first, chunk.first + end);
@@ -1639,10 +1644,11 @@ int64_t NumericArgument(const InternalValue& val, const char* filter, const char
 {
     const auto* asDouble = GetIf<double>(&val);
     bool isAcceptedDouble = asDouble != nullptr && kind == NumberKind::Any;
-    bool isNumber = GetIf<int64_t>(&val) != nullptr || GetIf<bool>(&val) != nullptr || isAcceptedDouble;
+    // An int outside int64 is a number, which no index-sized argument can hold (OverflowError)
+    bool isNumber = GetIf<int64_t>(&val) != nullptr || GetIf<bool>(&val) != nullptr || val.Kind() == ValueKind::BigInt || isAcceptedDouble;
     if (!isNumber)
     {
-        throw std::runtime_error(std::string(filter) + "(): '" + arg + "' must be " + (kind == NumberKind::Any ? "a number" : "an integer"));
+        throw TemplateRuntimeError(std::string(filter) + "(): '" + arg + "' must be " + (kind == NumberKind::Any ? "a number" : "an integer"));
     }
     return ConvertToInt(val);
 }
@@ -1811,7 +1817,7 @@ InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, Rende
     const auto endVal = GetArgumentValue("end", context);
     if (!IsStringValue(endVal) && !endVal.IsUndefined())
     {
-        throw std::runtime_error("object of type '"s + Apply<visitors::PythonTypeNameGetter>(endVal) + "' has no len()");
+        throw TemplateRuntimeError("object of type '"s + Apply<visitors::PythonTypeNameGetter>(endVal) + "' has no len()");
     }
     if (!IsStringValue(baseVal))
     {
@@ -1829,7 +1835,7 @@ InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, Rende
         // Jinja2 asserts both
         if (length < endLength || leeway < 0)
         {
-            throw std::runtime_error("truncate(): expected length >= len(end) and leeway >= 0");
+            throw TemplateRuntimeError("truncate(): expected length >= len(end) and leeway >= 0");
         }
 
         // Port of Jinja2's do_truncate, counting code points
@@ -1877,7 +1883,7 @@ InternalValue StringConverter::TruncateNonString(const InternalValue& baseVal, R
     });
     if (length < endLength || leeway < 0)
     {
-        throw std::runtime_error("truncate(): expected length >= len(end) and leeway >= 0");
+        throw TemplateRuntimeError("truncate(): expected length >= len(end) and leeway >= 0");
     }
 
     // An undefined is empty, as Jinja2's Undefined.__len__ says
@@ -1897,7 +1903,7 @@ InternalValue StringConverter::TruncateNonString(const InternalValue& baseVal, R
     }
     if (!size)
     {
-        throw std::runtime_error("object of type '"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' has no len()");
+        throw TemplateRuntimeError("object of type '"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' has no len()");
     }
     if (static_cast<int64_t>(*size) - length <= leeway)
     {
@@ -1906,14 +1912,14 @@ InternalValue StringConverter::TruncateNonString(const InternalValue& baseVal, R
     if (map)
     {
         // A dict slice is a missing key
-        throw std::runtime_error("slice(None, " + std::to_string(length - endLength) + ", None)");
+        throw TemplateRuntimeError("slice(None, " + std::to_string(length - endLength) + ", None)");
     }
     const std::string typeName = Apply<visitors::PythonTypeNameGetter>(baseVal);
     if (ConvertToBool(GetArgumentValue("killwords", context)))
     {
-        throw std::runtime_error("can only concatenate " + typeName + " (not \"str\") to " + typeName);
+        throw TemplateRuntimeError("can only concatenate " + typeName + " (not \"str\") to " + typeName);
     }
-    throw std::runtime_error("'" + typeName + "' object has no attribute 'rsplit'");
+    throw TemplateRuntimeError("'" + typeName + "' object has no attribute 'rsplit'");
 }
 
 TargetString StringConverter::ApplyIndent(const InternalValue& baseVal, RenderContext& context)
@@ -2152,9 +2158,9 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         const std::string typeName = Apply<visitors::PythonTypeNameGetter>(baseVal);
         if (baseVal.Kind() == ValueKind::List)
         {
-            throw std::runtime_error("'" + typeName + "' object has no attribute 'splitlines'");
+            throw TemplateRuntimeError("'" + typeName + "' object has no attribute 'splitlines'");
         }
-        throw std::runtime_error("unsupported operand type(s) for +=: '" + typeName + "' and 'str'");
+        throw TemplateRuntimeError("unsupported operand type(s) for +=: '" + typeName + "' and 'str'");
     }
     switch (m_mode)
     {

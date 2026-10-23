@@ -248,7 +248,7 @@ limit beyond the built-in caps: `maxRange`, `maxSequenceSize` (only lowers the 2
 `maxOutputSize`, `maxTemplateSize` (Load, loader-sourced templates included),
 `maxTemplateLoads`, `maxRenderSteps`, `maxRenderTime` (polled every 1024 steps and after each
 host callable returns), and the depth limits `maxRenderDepth` (256), `maxExpressionDepth`
-(64), `maxExpressionOperators` (400), `maxBlockNesting` (128), which used to be constants. A
+(70), `maxExpressionOperators` (491), `maxBlockNesting` (248), which used to be constants (defaults where Python Jinja2 stops, 0098). A
 limit fails the call with `ErrorCode::ResourceLimitExceeded`, `extraParams[1]` naming the field;
 the depth limits keep `RecursionLimitExceeded`. A render started by a host callable inside
 another keeps its own template's limits. Presets: `UntrustedLimits()` (Jinja2

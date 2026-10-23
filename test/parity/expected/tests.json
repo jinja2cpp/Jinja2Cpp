@@ -1403,6 +1403,29 @@
     "type": "TypeError",
     "message": "_operator.eq() takes no keyword arguments"
    }
+  },
+  {
+   "id": "tests.big_int_tests",
+   "template": "{{ 'T' if 18446744073709551615 is number else 'F' }}{{ 'T' if 18446744073709551615 is integer else 'F' }}{{ 'T' if 18446744073709551615 is odd else 'F' }}{{ 'T' if 18446744073709551616 is even else 'F' }}{{ 'T' if 18446744073709551615 is float else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "TTTTF"
   }
  ]
 }

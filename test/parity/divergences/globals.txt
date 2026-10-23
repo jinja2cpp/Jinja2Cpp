@@ -2,3 +2,4 @@
 # Format and kinds: test/parity/README.md.
 
 globals.object_dict_key                 output      0212 a dict key is stored as a string, so an object key prints as an empty string
+globals.range_big_bounds                rejects     0178 deliberate: ranges are int64; Python's range is lazy and holds any int (docs/design/0178-big-integer-plan.md 5)

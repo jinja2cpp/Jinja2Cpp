@@ -7,3 +7,6 @@
 
 # docs/tasks/0076: namespace jinja2 wrapped in inline namespace v2 (scripts/abi_namespace.py)
 ae4649c98baaf1999e99096f7d39ef7a4dca2b8d
+
+# docs/tasks/0255: `throw std::runtime_error(` becomes `throw TemplateRuntimeError(` in src/ (scripted)
+9e2f6974ea365a036bd12fb9dc5f002afa9fbd18
