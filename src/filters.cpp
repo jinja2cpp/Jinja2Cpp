@@ -120,13 +120,16 @@ InternalValueList AttributePath(const InternalValue& attribute)
         std::int64_t index = 0;
         if (isIndex)
         {
-            // An index past int64 is no item of any sequence and, as Python's int, no string
-            // key: the largest int64 stands for it
-            if (std::from_chars(part.data(), part.data() + part.size(), index).ec != std::errc())
+            if (std::from_chars(part.data(), part.data() + part.size(), index).ec == std::errc())
             {
-                index = std::numeric_limits<std::int64_t>::max();
+                parts.emplace_back(index);
             }
-            parts.emplace_back(index);
+            else
+            {
+                // An index past int64 is a float, as such an integer literal is (docs/tasks/0178):
+                // no item of a sequence, and equal to no key a value of the engine can hold
+                parts.emplace_back(std::strtod(part.c_str(), nullptr));
+            }
         }
         else
         {

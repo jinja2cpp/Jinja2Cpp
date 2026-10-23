@@ -1086,6 +1086,11 @@ TEST(ErrorContractTest, EngineErrorsHaveTheirCodes)
         // Nor a string key of its digits, as Python's int is not
         ASSERT_TRUE(tpl.Load("{{ [{'99999999999999999999': 5}] | map(attribute='99999999999999999999') | list }}").has_value());
         EXPECT_EQ("[Undefined]", tpl.RenderAsString({}).value());
+        // Nor the largest int64
+        ASSERT_TRUE(tpl.Load("{{ [{9223372036854775807: 5}, [1]] | map(attribute='99999999999999999999') | list }}").has_value());
+        EXPECT_EQ("[Undefined, Undefined]", tpl.RenderAsString({}).value());
+        ASSERT_TRUE(tpl.Load("{{ [{9223372036854775807: 5}] | map(attribute='99999999999999999999', default='d') | list }}").has_value());
+        EXPECT_EQ("['d']", tpl.RenderAsString({}).value());
     }
 
     // A host callable's std::runtime_error is the host's, not the engine's
