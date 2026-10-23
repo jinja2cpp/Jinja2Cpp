@@ -42,6 +42,15 @@ class IntegerOutOfRangeError : public std::overflow_error
 public:
     using std::overflow_error::overflow_error;
 };
+// An operation of the template failed: Python's TypeError, ValueError and the like.
+// ErrorCode::TemplateRuntimeError. A std::runtime_error, as the engine's errors were before it
+// had codes of their own
+class TemplateRuntimeError : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
 // Python's UndefinedError: ErrorCode::UndefinedError
 class UndefinedError : public std::exception
 {
