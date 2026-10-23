@@ -3,6 +3,8 @@
 #include "engine_errors.h"
 #include "internal_value.h"
 
+#include <jinja2cpp/big_int_backend.h>
+
 #include <fmt/format.h>
 
 #include <algorithm>
@@ -463,7 +465,7 @@ bool IsUsableBigIntBackend(const BigIntBackend& backend) noexcept
     {
         return false;
     }
-    return backend.destroy && backend.fromInt64 && backend.fromDecimal && backend.toInt64 && backend.toDecimal && backend.sign && backend.compare && backend.bitLength && backend.negate && backend.add && backend.subtract && backend.multiply && backend.divideTruncated;
+    return backend.destroy != nullptr && backend.fromInt64 != nullptr && backend.fromDecimal != nullptr && backend.toInt64 != nullptr && backend.toDecimal != nullptr && backend.sign != nullptr && backend.compare != nullptr && backend.bitLength != nullptr && backend.negate != nullptr && backend.add != nullptr && backend.subtract != nullptr && backend.multiply != nullptr && backend.divideTruncated != nullptr;
 }
 
 namespace
@@ -663,18 +665,19 @@ InternalValue Power(const BigIntBackend* backend, const IntOperand& base, const 
     std::array<std::optional<BackendObject>, 2> squares;
     size_t r = 0;
     size_t q = 0;
-    results[r].emplace(*backend);
-    results[r]->Made(backend->fromInt64(backend, results[r]->Out(), 1));
+    BackendObject* result = &results[r].emplace(*backend);
+    result->Made(backend->fromInt64(backend, result->Out(), 1));
     const void* current = acc.Get();
     while (bits != 0)
     {
         if ((bits & 1) != 0)
         {
-            CheckProductBits(backend->bitLength(backend, results[r]->Get()), backend->bitLength(backend, current));
+            CheckProductBits(backend->bitLength(backend, result->Get()), backend->bitLength(backend, current));
             auto& next = results[1 - r].emplace(*backend);
-            next.Made(backend->multiply(backend, next.Out(), results[r]->Get(), current));
+            next.Made(backend->multiply(backend, next.Out(), result->Get(), current));
             results[r].reset();
             r = 1 - r;
+            result = &next;
         }
         bits >>= 1;
         if (bits != 0)
@@ -688,7 +691,7 @@ InternalValue Power(const BigIntBackend* backend, const IntOperand& base, const 
             current = next.Get();
         }
     }
-    return ToValue(*backend, *results[r]);
+    return ToValue(*backend, *result);
 }
 } // namespace
 

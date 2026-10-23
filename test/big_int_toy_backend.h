@@ -40,7 +40,7 @@ inline int CompareMagnitudes(const std::string& a, const std::string& b)
     return cmp < 0 ? -1 : (cmp > 0 ? 1 : 0);
 }
 
-inline std::string Trim(std::string digits)
+inline std::string Trim(const std::string& digits)
 {
     const auto first = digits.find_first_not_of('0');
     return first == std::string::npos ? std::string("0") : digits.substr(first);
@@ -55,11 +55,11 @@ inline std::string AddMagnitudes(const std::string& a, const std::string& b)
         int sum = carry;
         sum += idx < a.size() ? a[a.size() - 1 - idx] - '0' : 0;
         sum += idx < b.size() ? b[b.size() - 1 - idx] - '0' : 0;
-        result.push_back(static_cast<char>('0' + sum % 10));
+        result.push_back(static_cast<char>('0' + (sum % 10)));
         carry = sum / 10;
     }
     std::reverse(result.begin(), result.end());
-    return Trim(std::move(result));
+    return Trim(result);
 }
 
 // a - b for a >= b
@@ -71,10 +71,10 @@ inline std::string SubtractMagnitudes(const std::string& a, const std::string& b
     {
         int diff = (a[a.size() - 1 - idx] - '0') - borrow - (idx < b.size() ? b[b.size() - 1 - idx] - '0' : 0);
         borrow = diff < 0 ? 1 : 0;
-        result.push_back(static_cast<char>('0' + diff + borrow * 10));
+        result.push_back(static_cast<char>('0' + diff + (borrow * 10)));
     }
     std::reverse(result.begin(), result.end());
-    return Trim(std::move(result));
+    return Trim(result);
 }
 
 inline std::string MultiplyMagnitudes(const std::string& a, const std::string& b)
@@ -85,7 +85,7 @@ inline std::string MultiplyMagnitudes(const std::string& a, const std::string& b
         int carry = 0;
         for (size_t j = b.size(); j-- != 0;)
         {
-            const int cur = digits[i + j + 1] + (a[i] - '0') * (b[j] - '0') + carry;
+            const int cur = digits[i + j + 1] + ((a[i] - '0') * (b[j] - '0')) + carry;
             digits[i + j + 1] = static_cast<char>(cur % 10);
             carry = cur / 10;
         }
@@ -95,7 +95,7 @@ inline std::string MultiplyMagnitudes(const std::string& a, const std::string& b
     {
         ch = static_cast<char>(ch + '0');
     }
-    return Trim(std::move(digits));
+    return Trim(digits);
 }
 
 // Long division of magnitudes: {quotient, remainder}
@@ -106,7 +106,7 @@ inline std::pair<std::string, std::string> DivideMagnitudes(const std::string& a
     for (const char digit : a)
     {
         rem.push_back(digit);
-        rem = Trim(std::move(rem));
+        rem = Trim(rem);
         int count = 0;
         while (CompareMagnitudes(rem, b) >= 0)
         {
@@ -115,7 +115,7 @@ inline std::pair<std::string, std::string> DivideMagnitudes(const std::string& a
         }
         quotient.push_back(static_cast<char>('0' + count));
     }
-    return { Trim(std::move(quotient)), rem };
+    return { Trim(quotient), rem };
 }
 
 inline const ToyInt& Get(const void* obj)
@@ -228,12 +228,12 @@ inline size_t BitLength(const jinja2::BigIntBackend*, const void* obj) noexcept
         for (size_t idx = 0; idx != take; ++idx)
         {
             mult *= 10;
-            carry = carry * 10 + static_cast<uint64_t>(digits[pos + idx] - '0');
+            carry = (carry * 10) + static_cast<uint64_t>(digits[pos + idx] - '0');
         }
         pos += take;
         for (auto& limb : limbs)
         {
-            const uint64_t cur = limb * mult + carry;
+            const uint64_t cur = (limb * mult) + carry;
             limb = static_cast<uint32_t>(cur);
             carry = cur >> 32;
         }

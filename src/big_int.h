@@ -88,25 +88,39 @@ inline thread_local const BigIntBackend* t_bigIntBackend = nullptr;
 
 // Installs the backend of a template for its render and restores the one of the render around it
 // (a user callable may render another template). Costs a compare when the backend is the same
+// as the thread's: in a library without one, always
 class BigIntBackendScope
 {
 public:
     explicit BigIntBackendScope(const BigIntBackend* backend) noexcept
-        : m_saved(detail::t_bigIntBackend)
     {
-        if (backend != m_saved)
+        if (backend != detail::t_bigIntBackend)
         {
-            detail::t_bigIntBackend = backend;
+            Install(backend);
         }
     }
-    ~BigIntBackendScope() { detail::t_bigIntBackend = m_saved; }
+    ~BigIntBackendScope()
+    {
+        if (m_installed)
+        {
+            detail::t_bigIntBackend = m_saved;
+        }
+    }
     BigIntBackendScope(const BigIntBackendScope&) = delete;
     BigIntBackendScope(BigIntBackendScope&&) = delete;
     BigIntBackendScope& operator=(const BigIntBackendScope&) = delete;
     BigIntBackendScope& operator=(BigIntBackendScope&&) = delete;
 
 private:
-    const BigIntBackend* m_saved;
+    void Install(const BigIntBackend* backend) noexcept
+    {
+        m_saved = detail::t_bigIntBackend;
+        m_installed = true;
+        detail::t_bigIntBackend = backend;
+    }
+
+    const BigIntBackend* m_saved = nullptr;
+    bool m_installed = false;
 };
 
 // An integer operand of BigIntBinary: an int64, or a big integer when `decimal` is set
