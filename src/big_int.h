@@ -72,6 +72,8 @@ inline bool IsOdd(const BigIntView& val) noexcept
 
 // OverflowError for integer arithmetic whose operand or result is outside int64
 [[noreturn]] JINJA2CPP_EXPORT void ThrowBigIntArithmetic();
+// OverflowError for a big integer where Python needs an index-sized one (a repeat count, an argument)
+[[noreturn]] JINJA2CPP_EXPORT void ThrowIndexOverflow();
 
 // Arithmetic with a big-integer backend (docs/tasks/0271, plan sections 3.2-4)
 
@@ -138,8 +140,6 @@ enum class BigIntOp
 // OverflowError, except that `**` with a negative exponent is a float as in Python. The caller
 // has already reported division by zero. Out of line and off the int64 paths
 JINJA2CPP_EXPORT InternalValue BigIntBinary(BigIntOp op, IntOperand left, IntOperand right);
-// OverflowError for a big integer where Python needs an index-sized one (a repeat count, an argument)
-[[noreturn]] JINJA2CPP_EXPORT void ThrowIndexOverflow();
 } // namespace v2
 } // namespace jinja2
 
