@@ -118,9 +118,14 @@ InternalValueList AttributePath(const InternalValue& attribute)
         auto part = str->substr(start, end == std::string::npos ? std::string::npos : end - start);
         bool isIndex = !part.empty() && std::all_of(part.begin(), part.end(), [](char ch) { return ch >= '0' && ch <= '9'; });
         std::int64_t index = 0;
-        // An index past int64 is no item of any sequence: looked up as a key, it finds none either
-        if (isIndex && std::from_chars(part.data(), part.data() + part.size(), index).ec == std::errc())
+        if (isIndex)
         {
+            // An index past int64 is no item of any sequence and, as Python's int, no string
+            // key: the largest int64 stands for it
+            if (std::from_chars(part.data(), part.data() + part.size(), index).ec != std::errc())
+            {
+                index = std::numeric_limits<std::int64_t>::max();
+            }
             parts.emplace_back(index);
         }
         else

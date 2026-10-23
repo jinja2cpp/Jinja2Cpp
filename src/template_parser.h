@@ -25,6 +25,7 @@
 #include <jinja2cpp/template_env.h>
 
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/config.hpp>
 #include <boost/container/small_vector.hpp>
 #include <nonstd/expected.hpp>
 

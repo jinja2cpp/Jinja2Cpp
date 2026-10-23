@@ -1083,6 +1083,9 @@ TEST(ErrorContractTest, EngineErrorsHaveTheirCodes)
         const auto rendered = tpl.RenderAsString({});
         ASSERT_TRUE(rendered.has_value()) << rendered.error().ToString();
         EXPECT_EQ("[Undefined, Undefined]", rendered.value());
+        // Nor a string key of its digits, as Python's int is not
+        ASSERT_TRUE(tpl.Load("{{ [{'99999999999999999999': 5}] | map(attribute='99999999999999999999') | list }}").has_value());
+        EXPECT_EQ("[Undefined]", tpl.RenderAsString({}).value());
     }
 
     // A host callable's std::runtime_error is the host's, not the engine's
