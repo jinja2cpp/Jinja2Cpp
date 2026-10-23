@@ -29,7 +29,7 @@ and the runtime `{% autoescape false %}` nested in it sets both, as now.
 **Done when.** `autoescape.volatile_macro_output` matches and its line is gone from
 `test/parity/divergences/autoescape.txt`.
 
-**Outcome.** Jinja2 3.1.6 gives `<` for `autoescape.volatile_macro_output` because it folds the
+**Outcome (PR #614).** Jinja2 3.1.6 gives `<` for `autoescape.volatile_macro_output` because it folds the
 constant `{{ '<' }}` and escapes it by the setting the code is compiled under, the
 environment's here, not because the macro reads the runtime setting. Both rules are in now.
 RenderContext keeps Jinja2's compile-time state at run time: the static setting
