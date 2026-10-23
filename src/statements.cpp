@@ -1857,7 +1857,7 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     }
 
     TopLevelWriter writer(os, frame);
-    OutStream topLevelStream(&writer, os.ReachesSink());
+    OutStream topLevelStream(&writer, os.SinkToPassOn());
     values.Nodes()[m_body].Render(topLevelStream, values);
 
     if (frame.parent)
