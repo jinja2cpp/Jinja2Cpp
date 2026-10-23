@@ -292,6 +292,11 @@ public:
     {
         return RenderToGeneric(out, params);
     }
+    //! A temporary string would lose the output; deleted rather than left to MSVC, which binds a
+    //! temporary to `StringType&` as an extension
+    Result<void, CharT> RenderTo(StringType&& out, const ValuesMap& params) const = delete;
+    template<typename Map, std::enable_if_t<std::is_same_v<Map, GenericMap>, int> = 0>
+    Result<void, CharT> RenderTo(StringType&& out, const Map& params) const = delete;
     /*!
      * \brief Render previously loaded template, streaming the output to a sink
      *
