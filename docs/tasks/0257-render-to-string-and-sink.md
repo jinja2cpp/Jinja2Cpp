@@ -38,3 +38,24 @@ large_static, mitsuhiko_table, mitsuhiko_table_wide). Existing `Render/*` within
 Expected: one allocation fewer per render, plain_text -8..-15% instructions, large cases ±0.5%,
 `ContainerSink<fmt::memory_buffer>` within ±0.5% of `RenderTo`; sink peak memory far below
 `Render`'s on mitsuhiko_table.
+
+**As built (2026-10-23).**
+- `OutStream` has a sink target (`m_sink`); writer and sink streams have no target string, so
+  `WriteLong` tells them apart from the string path with the one test it had before. A value
+  `ValueRenderer` prints (floats, containers) reaches a sink through the buffer, via an
+  out-of-line `WriteRenderedToSink`.
+- `maxOutputSize` counts what the sink received (`LimitRenderOutput(const size_t&)`, in
+  src/recursion_guard.h, outside the listed touches). As with a string it may be passed by
+  what the buffer holds, up to 512 characters.
+- A sink keeps the chunks it received before an error; the buffered tail (under 512
+  characters) is not written. Documented on `RenderTo(sink)`; flushing it after an engine
+  error was not done, since after a sink's own exception the sink must not be called again.
+- Known limit, shared with user callables: a host exception that is a `BasicErrorInfo` with
+  `FileNotFound`, thrown while an `{% include ... ignore missing %}` renders, is taken as the
+  missing template by IncludeStatement's catch (statements.cpp) and the render goes on. Only
+  a host that rethrows a Jinja2C++ error object can reach it.
+- Instructions (bench/count.py, Release, GCC 13) against master dd26b6c: every `Render/*` within
+  +0.5% (plain_text +5 instructions per render, most cases -0.1..-0.5%). `RenderTo/plain_text` 815
+  and `RenderSink/plain_text` 717 against `Render/plain_text` 1,041 (-22%, -31%), with no
+  allocation; `RenderSink/mitsuhiko_table` peaks at 28,824 B against `Render`'s 373,296 B.
+  `ContainerSink<fmt::memory_buffer>` was checked by tests, not measured.

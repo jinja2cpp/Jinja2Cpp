@@ -73,8 +73,12 @@ bool RenderWorkspace::ReleaseCaches() noexcept
     m_frames.clear();
     m_maps.clear();
     m_current = 0;
-    // Its capacity stays reserved (LoopFrames)
-    m_loopFrames.clear();
+    // One at a time, each destroyed after it left the vector; the capacity stays reserved (LoopFrames)
+    while (!m_loopFrames.empty())
+    {
+        const auto frame = std::move(m_loopFrames.back());
+        m_loopFrames.pop_back();
+    }
     return true;
 }
 
