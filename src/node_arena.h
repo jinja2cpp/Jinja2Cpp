@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <new>
@@ -164,6 +165,8 @@ class ArenaAccess;
 // Makes handles from raw offsets and reaches a sealed tree's bytes: defined by the tests only
 struct ArenaTestAccess;
 class RefChecker;
+// render_failure.h
+struct TemplateOrigin;
 } // namespace detail
 
 // A link to a node of T, or a null link: the node's offset in its arena
@@ -710,12 +713,14 @@ private:
 
 // What a sealed tree keeps after its nodes, each part aligned for its words: the bitmap of
 // where the nodes' headers start (unless the checks are OFF), in FULL the bitmap of the
-// nodes and lists Seal reached, then the table of the objects to destroy
+// nodes and lists Seal reached, then the table of the objects to destroy and the template the
+// tree comes from (SealedArena::SetOrigin)
 struct SealedLayout
 {
     std::size_t starts;
     std::size_t validated;
     std::size_t cleanup;
+    std::size_t origin;
     std::size_t end;
 };
 inline SealedLayout LayoutOf(std::uint32_t size, std::uint32_t objects)
@@ -727,7 +732,8 @@ inline SealedLayout LayoutOf(std::uint32_t size, std::uint32_t objects)
     layout.starts = size;
     layout.validated = layout.starts + (words * sizeof(std::uint64_t));
     layout.cleanup = layout.validated + (NodeRefChecks >= 2 ? words * sizeof(std::uint64_t) : 0);
-    layout.end = layout.cleanup + (std::size_t{ objects } * sizeof(std::uint32_t));
+    layout.origin = layout.cleanup + (std::size_t{ objects } * sizeof(std::uint32_t));
+    layout.end = layout.origin + sizeof(const TemplateOrigin*);
     return layout;
 }
 
@@ -793,6 +799,26 @@ public:
     // The same for every use of one symbol of this tree (NodeArena::Intern), and different from
     // any other symbol's and any other live tree's. Never read through
     [[nodiscard]] const void* KeyOf(ArenaText symbol) const { return m_base + symbol.m_offset; }
+
+    // Whether `node` is in this tree
+    [[nodiscard]] bool Holds(const void* node) const
+    {
+        const auto* p = static_cast<const std::byte*>(node);
+        return m_base && std::less_equal<>()(m_base, p) && std::less<>()(p, m_base + m_size);
+    }
+    // The template the tree comes from, if its owner set it. Read on an error only
+    [[nodiscard]] const detail::TemplateOrigin* Origin() const
+    {
+        if (!m_base)
+        {
+            return nullptr;
+        }
+        detail::ArenaHeader header{};
+        std::memcpy(&header, m_base, sizeof(header));
+        const detail::TemplateOrigin* origin = nullptr;
+        std::memcpy(static_cast<void*>(&origin), m_base + detail::LayoutOf(m_size, header.objects).origin, sizeof(origin));
+        return origin;
+    }
 
     // Views of the same tree
     friend bool operator==(const ArenaView& lhs, const ArenaView& rhs) { return lhs.m_base == rhs.m_base; }
@@ -927,6 +953,13 @@ public:
         return View()[list];
     }
 
+    // Names the template the tree comes from, for the locations of render errors: `origin`
+    // must outlive the tree. Set before the tree is rendered
+    void SetOrigin(const detail::TemplateOrigin* origin) noexcept
+    {
+        std::memcpy(m_buffer.get() + detail::LayoutOf(Header().size, Header().objects).origin, static_cast<const void*>(&origin), sizeof(origin));
+    }
+
 private:
     friend class NodeArena;
     friend struct detail::ArenaTestAccess;
@@ -1044,17 +1077,28 @@ public:
     template<typename T, typename Item>
     NodeRef<T> MakeWithItems(boost::span<const Item> items)
     {
+        return MakeWithItems<T>(items, boost::span<const Item>());
+    }
+    // The same, with the items of `extras` (one for each item, or none) after the items
+    template<typename T, typename Item, typename Extra>
+    NodeRef<T> MakeWithItems(boost::span<const Item> items, boost::span<const Extra> extras)
+    {
         static_assert(std::is_final_v<T>, "the items follow the most derived object");
         static_assert(std::is_trivially_copyable_v<Item> && std::is_trivially_destructible_v<Item>, "Seal copies the items with the node's bytes");
+        static_assert(std::is_trivially_copyable_v<Extra> && std::is_trivially_destructible_v<Extra>, "Seal copies the items with the node's bytes");
         static_assert(sizeof(T) % alignof(Item) == 0, "the items are aligned right after the node");
-        if (items.size() > (std::numeric_limits<std::uint32_t>::max() - sizeof(T)) / sizeof(Item))
+        static_assert(sizeof(Item) % alignof(Extra) == 0, "the extras are aligned right after the items");
+        assert(extras.empty() || extras.size() == items.size());
+        if (items.size() > (std::numeric_limits<std::uint32_t>::max() - sizeof(T)) / (sizeof(Item) + sizeof(Extra)))
         {
             ThrowTooLarge("a template list too long");
         }
-        const auto ref = MakeSized<T>(sizeof(T) + items.size_bytes(), static_cast<std::uint32_t>(items.size()));
+        const auto ref = MakeSized<T>(sizeof(T) + items.size_bytes() + extras.size_bytes(), static_cast<std::uint32_t>(items.size()));
         // Right after the node: one past it, in the same allocation
         T* const node = std::launder(reinterpret_cast<T*>(Locate(ref.m_offset)));
-        std::uninitialized_copy(items.begin(), items.end(), reinterpret_cast<Item*>(node + 1));
+        auto* const itemsAt = reinterpret_cast<Item*>(node + 1);
+        std::uninitialized_copy(items.begin(), items.end(), itemsAt);
+        std::uninitialized_copy(extras.begin(), extras.end(), reinterpret_cast<Extra*>(itemsAt + items.size()));
         return ref;
     }
 

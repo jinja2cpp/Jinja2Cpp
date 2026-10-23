@@ -1941,30 +1941,29 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
 
 void IncludeStatement::Render(OutStream& os, RenderContext& values)
 {
+    // Only a template that is not found is skipped, as Python's `ignore missing` and select_template
+    // skip it: what fails once it is found, while it loads or renders, fails the include
     auto doRender = [this, &values, &os](const IRendererCallback::LoadTemplateResult& tpl) -> bool {
-        try
+        const bool missing = std::visit(
+            [](const auto& loaded) {
+                if constexpr (std::is_same_v<std::decay_t<decltype(loaded)>, NoneValue>)
+                {
+                    return false;
+                }
+                else
+                {
+                    return !loaded && loaded.error().GetCode() == ErrorCode::FileNotFound;
+                }
+            },
+            tpl);
+        if (missing)
         {
-            return VisitTemplateImpl<bool>(tpl, true, [this, &values, &os](const auto& tplPtr) {
-                RenderIncludedTemplate(*tplPtr, m_withContext, os, values);
-                return true;
-            });
+            return false;
         }
-        catch (const BasicErrorInfo<char>& err)
-        {
-            if (err.GetCode() != ErrorCode::FileNotFound)
-            {
-                throw;
-            }
-        }
-        catch (const BasicErrorInfo<wchar_t>& err)
-        {
-            if (err.GetCode() != ErrorCode::FileNotFound)
-            {
-                throw;
-            }
-        }
-
-        return false;
+        return VisitTemplateImpl<bool>(tpl, true, [this, &values, &os](const auto& tplPtr) {
+            RenderIncludedTemplate(*tplPtr, m_withContext, os, values);
+            return true;
+        });
     };
 
     // A constant name found in this render is not looked up again

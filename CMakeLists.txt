@@ -168,6 +168,7 @@ set(JINJA2CPP_SOURCES
     src/out_stream.cpp
     src/python_format.cpp
     src/recursion_guard.cpp
+    src/render_failure.cpp
     src/render_workspace.cpp
     src/serialize_filters.cpp
     src/statements.cpp

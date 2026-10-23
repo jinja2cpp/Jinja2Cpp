@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_UNDEFINED_H
 #define JINJA2CPP_SRC_UNDEFINED_H
 
+#include "engine_errors.h"
 #include "internal_value.h"
 
 #include <jinja2cpp/template_env.h>
@@ -31,20 +32,6 @@ struct UndefinedInfo final : ValueObject
     bool isAttr = true;
     // Replaces the message built from the fields above when set
     std::string hint;
-};
-
-// Python's UndefinedError. Template rendering reports it as ErrorCode::UndefinedError
-class UndefinedError : public std::exception
-{
-public:
-    explicit UndefinedError(std::string message)
-        : m_message(std::move(message))
-    {
-    }
-    [[nodiscard]] const char* what() const noexcept override { return m_message.c_str(); }
-
-private:
-    std::string m_message;
 };
 
 // The ways a template uses a value that an undefined value may refuse

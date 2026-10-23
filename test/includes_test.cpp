@@ -110,6 +110,23 @@ TEST_F(IncludeTest, TestMissingInnerIncludesError)
   EXPECT_EQ("missing", (*filesList->begin()).AsString());
 }
 
+// `ignore missing` skips the included template only when it is not found: a missing template
+// included by it fails the render, as in Python's Jinja2 (docs/tasks/0254)
+TEST_F(IncludeTest, IgnoreMissingCoversTheLookupOnly)
+{
+    jinja2::Template tpl(&m_env);
+    ASSERT_TRUE(tpl.Load(R"({% include "missing_inner_header" ignore missing %})").has_value());
+    auto renderResult = tpl.RenderAsString({});
+    ASSERT_FALSE(renderResult.has_value());
+    EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, renderResult.error().GetCode());
+    EXPECT_EQ("missing_inner_header", renderResult.error().GetErrorLocation().fileName);
+
+    ASSERT_TRUE(tpl.Load(R"({% include ["missing", "missing_inner_header"] ignore missing %})").has_value());
+    renderResult = tpl.RenderAsString({});
+    ASSERT_FALSE(renderResult.has_value());
+    EXPECT_EQ(jinja2::ErrorCode::TemplateNotFound, renderResult.error().GetCode());
+}
+
 TEST_F(IncludeTest, TestMissingIncludesError2)
 {
     jinja2::ValuesMap params{};

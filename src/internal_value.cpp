@@ -4,10 +4,12 @@
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
 #include "recursion_guard.h"
+#include "render_failure.h"
 #include "template_dict.h"
 #include "undefined.h"
 #include "value_visitors.h"
 
+#include <jinja2cpp/exception.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
@@ -20,9 +22,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <functional>
 #include <limits>
 #include <memory>
+#include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -2411,9 +2415,64 @@ struct UserCallableBody
     InternalValue operator()(const CallParams& params, RenderContext& context) const
     {
         auto ucParams = PrepareUserCallableParams(params, context, argsInfo);
-        auto result = Value2IntValue(val.callable(ucParams));
+        auto result = Value2IntValue(CallHost(ucParams));
         AfterHostCall();
         return result;
+    }
+
+    // The host's call: what it throws is a HostCallableFailure, unless the engine raised it (a
+    // callable may call back into a template or a macro, which keeps its own error)
+    Value CallHost(const UserCallableParams& ucParams) const
+    {
+        try
+        {
+            return val.callable(ucParams);
+        }
+        catch (const std::bad_alloc&)
+        {
+            throw;
+        }
+        catch (const jinja2::detail::RenderFailure&)
+        {
+            throw;
+        }
+        catch (const jinja2::detail::HostCallableFailure&)
+        {
+            throw;
+        }
+        catch (const jinja2::Exception&)
+        {
+            throw;
+        }
+        catch (const UndefinedError&)
+        {
+            throw;
+        }
+        catch (const RecursionLimitError&)
+        {
+            throw;
+        }
+        catch (const std::length_error&)
+        {
+            // A limit, the engine's or the host's
+            throw;
+        }
+        catch (const IntegerOutOfRangeError&)
+        {
+            throw;
+        }
+        catch (const ErrorInfo&)
+        {
+            throw;
+        }
+        catch (const ErrorInfoW&)
+        {
+            throw;
+        }
+        catch (...)
+        {
+            throw jinja2::detail::HostCallableFailure(std::current_exception());
+        }
     }
 };
 } // namespace

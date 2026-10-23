@@ -8,6 +8,7 @@
 #include "out_stream.h"
 #include "recursion_guard.h"
 #include "render_context.h"
+#include "render_failure.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -45,7 +46,8 @@ protected:
 using RendererPtr = std::shared_ptr<IRendererBase>;
 
 // A body: the arena keeps its children right after the node (NodeArena::MakeWithItems), so
-// rendering it reads no separate list
+// rendering it reads no separate list, and after them where each child's tag starts in the
+// template's source, which only an error reads
 class ComposedRenderer final : public IRendererBase
 {
 public:
@@ -67,13 +69,33 @@ public:
         // Every statement body: nested blocks recurse through here
         CheckStack();
         const auto& nodes = values.Nodes();
-        for (auto r : Children())
+        const auto children = Children();
+        std::uint32_t idx = 0;
+        // An error gets the location of the statement it came out of here, unless a body in
+        // that statement gave it one (docs/api-2.0.md, 2.1 rule 8). Table-based unwinding: the
+        // try costs nothing until something throws
+        try
         {
-            nodes[r].Render(os, values);
-            if (values.HasLoopControl())
+            for (; idx != m_count; ++idx)
             {
-                return;
+                nodes[children[idx]].Render(os, values);
+                if (values.HasLoopControl())
+                {
+                    return;
+                }
             }
+        }
+        catch (const std::bad_alloc&)
+        {
+            throw;
+        }
+        catch (const detail::RenderFailure&)
+        {
+            throw;
+        }
+        catch (...)
+        {
+            detail::ThrowRenderFailure(values.Nodes(), this, Offsets()[idx]);
         }
     }
 
@@ -81,6 +103,11 @@ public:
     {
         // NodeArena::MakeWithItems put them one past this node
         return { std::launder(reinterpret_cast<const Child*>(this + 1)), m_count };
+    }
+    // Where the tag of each child starts in the source, after the children
+    [[nodiscard]] const std::uint32_t* Offsets() const
+    {
+        return std::launder(reinterpret_cast<const std::uint32_t*>(reinterpret_cast<const Child*>(this + 1) + m_count));
     }
 
 private:

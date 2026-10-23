@@ -228,6 +228,9 @@ SealedArena NodeArena::SealWith(boost::span<const detail::RootRef> roots)
 
     const detail::ArenaHeader header{ m_used, m_owners };
     std::memcpy(base, &header, sizeof(header));
+    // None until the template sets it
+    const detail::TemplateOrigin* const origin = nullptr;
+    std::memcpy(base + layout.origin, static_cast<const void*>(&origin), sizeof(origin));
     // The lists and every byte of the nodes; the nodes are then moved over their copies
     for (std::size_t idx = 0; idx != m_blocks.size(); ++idx)
     {

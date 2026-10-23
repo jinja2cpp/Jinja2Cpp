@@ -13,6 +13,7 @@
 #include "make_unexpected.h"
 #include "node_arena.h"
 #include "render_context.h"
+#include "render_failure.h"
 #include "renderer.h"
 #include "statements.h"
 #include "unicode_tables.h"
@@ -36,6 +37,7 @@
 #include <cwchar>
 #include <forward_list>
 #include <iterator>
+#include <limits>
 #include <list>
 #include <memory>
 #include <optional>
@@ -214,6 +216,42 @@ struct TransInfo
     }
 };
 
+// A statement's body while it is parsed: its children, and where the tag of each starts in the
+// source, which the body keeps for the locations of render errors (ComposedRenderer)
+class StatementBody
+{
+public:
+    using Child = NodeRef<IRendererBase>;
+
+    void Add(Child node, std::size_t offset)
+    {
+        m_nodes.push_back(node);
+        m_offsets.push_back(ToOffset(offset));
+    }
+    // Before the other children: the binding a frame starts with
+    void AddFirst(Child node, std::size_t offset)
+    {
+        m_nodes.insert(m_nodes.begin(), node);
+        m_offsets.insert(m_offsets.begin(), ToOffset(offset));
+    }
+    // The body, as a node; the list is left empty
+    NodeRef<ComposedRenderer> Take(NodeArena& nodes)
+    {
+        auto body = nodes.MakeWithItems<ComposedRenderer>(boost::span<const Child>(m_nodes.data(), m_nodes.size()),
+                                                          boost::span<const std::uint32_t>(m_offsets.data(), m_offsets.size()));
+        m_nodes.clear();
+        m_offsets.clear();
+        return body;
+    }
+
+private:
+    // A source past 4 GiB locates its errors at the last offset that fits
+    static std::uint32_t ToOffset(std::size_t offset) { return static_cast<std::uint32_t>(std::min<std::size_t>(offset, std::numeric_limits<std::uint32_t>::max())); }
+
+    boost::container::small_vector<Child, 8> m_nodes;
+    boost::container::small_vector<std::uint32_t, 8> m_offsets;
+};
+
 struct StatementInfo
 {
     enum Type
@@ -235,8 +273,10 @@ struct StatementInfo
 
     Type type{};
     // The body the statement's tags add to, made into a ComposedRenderer when the statement ends
-    boost::container::small_vector<NodeRef<IRendererBase>, 8> body;
+    StatementBody body;
     Token token;
+    // Where its opening tag starts in the source
+    std::size_t tagOffset = 0;
     NodeRef<IRendererBase> renderer;
     // Set on `{% trans %}` only
     std::shared_ptr<TransInfo> trans;
@@ -255,11 +295,12 @@ struct StatementInfo
         return ((mask >> type) & 1U) != 0;
     }
 
-    static StatementInfo Create(Type type, const Token& tok)
+    static StatementInfo Create(Type type, const Token& tok, std::size_t tagOffset)
     {
         StatementInfo result;
         result.type = type;
         result.token = tok;
+        result.tagOffset = tagOffset;
         return result;
     }
 };
@@ -329,14 +370,15 @@ class StatementsParser
 public:
     using ParseResult = nonstd::expected<void, ParseError>;
 
-    // A parser lives for one tag; the settings and the arena outlive it
-    StatementsParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names, UnknownCallables& unknown, TemplateRootInfo& root)
+    // A parser lives for one tag, which starts at `tagOffset` in the source; the settings and the arena outlive it
+    StatementsParser(const Settings& settings, TemplateEnv* env, NodeArena& nodes, NameResolver& names, UnknownCallables& unknown, TemplateRootInfo& root, std::size_t tagOffset)
         : m_settings(settings)
         , m_env(env)
         , m_nodes(nodes)
         , m_names(names)
         , m_unknown(unknown)
         , m_root(root)
+        , m_tagOffset(tagOffset)
     {
     }
 
@@ -393,9 +435,7 @@ private:
         {
             return TakeFrameBody(info);
         }
-        auto body = m_nodes.MakeWithItems<ComposedRenderer>(boost::span<const ComposedRenderer::Child>(info.body.data(), info.body.size()));
-        info.body.clear();
-        return body;
+        return info.body.Take(m_nodes);
     }
     NodeRef<ComposedRenderer> TakeFrameBody(StatementInfo& info);
     // Whether the innermost open statement is a loop's `else`, whose body is a frame of its own
@@ -411,6 +451,8 @@ private:
     NameResolver& m_names;
     UnknownCallables& m_unknown;
     TemplateRootInfo& m_root;
+    // Where the tag starts in the source
+    std::size_t m_tagOffset;
 };
 
 // `{{ name }}` inside `{% trans %}`: Jinja2 allows a plain name only. The result is the name
@@ -582,6 +624,8 @@ private:
     struct TextBlockInfo
     {
         CharRange range;
+        // Where the tag starts, at its begin delimiter; where the text starts for text
+        std::size_t tagStart = 0;
         TextBlockType type;
         // The tokens of the tag are in m_lexBuffers already: the splitter lexed it to find its end
         bool preLexed = false;
@@ -1182,6 +1226,7 @@ private:
         }
 
         m_currentBlockInfo.type = blockType;
+        m_currentBlockInfo.tagStart = matchStart;
 
         // Jinja2 does not apply trim_blocks to the newline after `{% raw %}`, only `-%}` strips there
         if (blockType == TextBlockType::RawBlock)
@@ -1507,7 +1552,7 @@ private:
         auto& rootBody = statementsStack.front().body;
         if (const auto binding = m_names.EntryBinding(statementsStack.front().frame, m_nodes))
         {
-            rootBody.insert(rootBody.begin(), binding);
+            rootBody.AddFirst(binding, 0);
         }
         auto& templateRoot = m_nodes[templateRef];
         templateRoot.SetBlocks(m_nodes.MakeSpan(m_root.blocks));
@@ -1520,7 +1565,7 @@ private:
         {
             templateRoot.SetHasExtends();
         }
-        templateRoot.SetBody(m_nodes.MakeWithItems<ComposedRenderer>(boost::span<const ComposedRenderer::Child>(rootBody.data(), rootBody.size())));
+        templateRoot.SetBody(rootBody.Take(m_nodes));
         return nonstd::expected<void, std::vector<ParseError>>();
     }
 
@@ -1541,7 +1586,7 @@ private:
             AppendTransText(*statementsStack.back().trans, range);
             return;
         }
-        statementsStack.back().body.push_back(MakeRawTextRenderer(range));
+        statementsStack.back().body.Add(MakeRawTextRenderer(range), range.startOffset);
     }
 
     void FineParseMetaBlock(const TextBlockInfo& block)
@@ -1587,7 +1632,7 @@ private:
         }
         if (parseResult)
         {
-            statementsStack.back().body.push_back(*parseResult);
+            statementsStack.back().body.Add(*parseResult, block.tagStart);
         }
         else
         {
@@ -1782,7 +1827,7 @@ private:
 
         MarkMacroSpecialNames(tokens, std::is_same_v<P, StatementsParser>);
 
-        auto praser = MakeParser<P>();
+        auto praser = MakeParser<P>(block);
         LexScanner scanner(tokens, this);
         auto result = praser.Parse(scanner, std::forward<Args>(args)...);
         if (!result)
@@ -1795,11 +1840,11 @@ private:
 
     // A parser for one tag: a statement's adds the blocks it defines to the root's
     template<typename P>
-    P MakeParser()
+    P MakeParser(const TextBlockInfo& block)
     {
         if constexpr (std::is_same_v<P, StatementsParser>)
         {
-            return P(m_settings, m_env, m_nodes, m_names, m_unknown, m_root);
+            return P(m_settings, m_env, m_nodes, m_names, m_unknown, m_root, block.tagStart);
         }
         else
         {
@@ -2109,78 +2154,15 @@ private:
         col = static_cast<unsigned>(offset - p->range.startOffset + 1);
     }
 
-    // The source line with a marker under the error column. A line longer than maxShownLen (a
-    // minified template) is cut to a window around the column, so the message stays bounded.
+    // The source line with a marker under the error column (detail::DescribeLocation)
     string_t GetLocationDescr(unsigned line, unsigned col)
     {
         if (line == 0 && col == 0)
         {
             return string_t();
         }
-
-        --line;
-        --col;
-
-        static constexpr std::size_t maxShownLen = 160;
-        static constexpr std::size_t windowHead = 40;
-        static constexpr std::size_t windowLen = 120;
-        static constexpr std::size_t headLen = 3;
-        static constexpr std::size_t tailLen = 7;
-        const CharT ellipsis[] = { static_cast<CharT>('.'), static_cast<CharT>('.'), static_cast<CharT>('.') };
-
-        const auto& lineInfo = m_lines[line];
-        std::basic_string_view<CharT> origLine(m_template->data() + lineInfo.range.startOffset, lineInfo.range.size());
-
-        string_t result;
-        std::size_t caretCol = col;
-        if (origLine.size() > maxShownLen)
-        {
-            const std::size_t start = col > windowHead ? std::min<std::size_t>(col - windowHead, origLine.size() - windowLen) : 0;
-            const std::size_t end = start + windowLen;
-            result.reserve(windowLen + (2 * std::size(ellipsis)) + 1 + windowHead + headLen + 1 + tailLen + std::size(ellipsis));
-            if (start != 0)
-            {
-                result.append(ellipsis, std::size(ellipsis));
-            }
-            caretCol = col - start + result.size();
-            result.append(origLine.data() + start, windowLen);
-            if (end != origLine.size())
-            {
-                result.append(ellipsis, std::size(ellipsis));
-            }
-        }
-        else
-        {
-            result.reserve((origLine.size() * 2) + headLen + 1 + tailLen + 1);
-            result.append(origLine.data(), origLine.size());
-        }
-        const std::size_t shownLen = result.size();
-        result.append(1, static_cast<CharT>('\n'));
-
-        // Leading whitespace is copied as is so that tabs keep the marker aligned
-        auto locale = std::locale();
-        std::size_t spacePrefixLen = 0;
-        while (spacePrefixLen < shownLen && std::isspace(result[spacePrefixLen], locale))
-        {
-            ++spacePrefixLen;
-        }
-
-        if (caretCol < spacePrefixLen)
-        {
-            result.append(caretCol, static_cast<CharT>(' '));
-        }
-        else
-        {
-            const string_t spacePrefix = result.substr(0, spacePrefixLen);
-            result.append(spacePrefix);
-            const std::size_t actualHeadLen = std::min(caretCol - spacePrefixLen, headLen);
-            result.append(caretCol - actualHeadLen - spacePrefixLen, static_cast<CharT>(' '));
-            result.append(actualHeadLen, static_cast<CharT>('-'));
-        }
-        result.append(1, static_cast<CharT>('^'));
-        result.append(tailLen, static_cast<CharT>('-'));
-
-        return result;
+        const auto& lineInfo = m_lines[line - 1];
+        return detail::DescribeLocation(std::basic_string_view<CharT>(m_template->data() + lineInfo.range.startOffset, lineInfo.range.size()), col - 1);
     }
 
 public:

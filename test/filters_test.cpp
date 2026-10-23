@@ -921,7 +921,8 @@ std::string RenderOrError(const std::string& source, const ValuesMap& params)
     }
     auto text = ErrorToString(result.error());
     auto pos = text.find("Exception: ");
-    return pos == std::string::npos ? text : text.substr(pos);
+    // Without the source line the error is located at
+    return pos == std::string::npos ? text : text.substr(pos, text.find('\n', pos) + 1 - pos);
 }
 } // namespace
 

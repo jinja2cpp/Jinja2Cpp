@@ -9,6 +9,7 @@
 #include "node_arena.h"
 #include "recursion_guard.h"
 #include "render_context.h"
+#include "render_failure.h"
 #include "render_workspace.h"
 #include "renderer.h"
 #include "statements.h"
@@ -32,6 +33,7 @@
 #include <exception>
 #include <forward_list>
 #include <memory>
+#include <new>
 #include <optional>
 #include <random>
 #include <string_view>
@@ -313,7 +315,7 @@ public:
                 }
                 catch (...)
                 {
-                    return detail::CurrentExceptionToError<CharT>(name);
+                    return detail::HostExceptionToError<CharT>(name);
                 }
                 parser.SetAutoescape(autoescape);
             }
@@ -334,10 +336,6 @@ public:
             m_convertedTexts = std::move(convertedTexts);
             m_metadataInfo = std::move(metadataInfo);
         }
-        catch (const BasicErrorInfo<CharT>& error)
-        {
-            return error;
-        }
         catch (...)
         {
             return detail::CurrentExceptionToError<CharT>(name);
@@ -346,6 +344,10 @@ public:
         // Last: the parser refers to the name
         m_templateName = std::move(name);
         m_isNamed = isNamed;
+        m_origin.source = m_template.get();
+        m_origin.name = &m_templateName;
+        m_origin.isWide = std::is_same_v<CharT, wchar_t>;
+        m_nodes.SetOrigin(&m_origin);
         m_metadata.reset();
         return std::optional<BasicErrorInfo<CharT>>();
     }
@@ -441,38 +443,18 @@ public:
                 m_outputSizeHint.value.store(newHint, std::memory_order_relaxed);
             }
         }
-        catch (const BasicErrorInfo<char>& error)
+        catch (const std::bad_alloc&)
         {
-            return ErrorConverter<BasicErrorInfo<CharT>, BasicErrorInfo<char>>::Convert(error);
+            throw;
         }
-        catch (const BasicErrorInfo<wchar_t>& error)
+        catch (const detail::RenderFailure& failure)
         {
-            return ErrorConverter<BasicErrorInfo<CharT>, BasicErrorInfo<wchar_t>>::Convert(error);
-        }
-        catch (const RecursionLimitError&)
-        {
-            typename BasicErrorInfo<CharT>::Data errorData;
-            errorData.code = ErrorCode::RecursionLimitExceeded;
-            errorData.srcLoc.col = 1;
-            errorData.srcLoc.line = 1;
-            errorData.srcLoc.fileName = m_templateName;
-
-            return BasicErrorInfo<CharT>(errorData);
-        }
-        catch (const UndefinedError& ex)
-        {
-            typename BasicErrorInfo<CharT>::Data errorData;
-            errorData.code = ErrorCode::UndefinedError;
-            errorData.srcLoc.col = 1;
-            errorData.srcLoc.line = 1;
-            errorData.srcLoc.fileName = m_templateName;
-            errorData.extraParams.push_back(Value(std::string(ex.what())));
-
-            return BasicErrorInfo<CharT>(errorData);
+            // Out of a statement: located there
+            return failure.ErrorAs<CharT>();
         }
         catch (...)
         {
-            // Host exceptions, and the engine's own still reported as standard exceptions; std::bad_alloc goes on
+            // Out of no statement: the conversion of the params, the output limit at the end
             return detail::CurrentExceptionToError<CharT>(m_templateName);
         }
 
@@ -926,6 +908,8 @@ private:
     mutable std::string m_metadataSource;
     mutable std::mutex m_metadataMutex;
     MetadataInfo<CharT> m_metadataInfo;
+    // The source and name the tree's render errors are located in; read on an error only
+    detail::TemplateOrigin m_origin;
 };
 
 } // namespace v2
