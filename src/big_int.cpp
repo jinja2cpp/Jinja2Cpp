@@ -2,7 +2,7 @@
 
 #include "engine_errors.h"
 #include "internal_value.h"
-#include "render_workspace.h"
+#include "recursion_guard.h"
 
 #include <jinja2cpp/big_int_backend.h>
 
@@ -698,7 +698,7 @@ InternalValue Power(const BigIntBackend* backend, const IntOperand& base, const 
 
 InternalValue BigIntBinary(BigIntOp op, IntOperand left, IntOperand right)
 {
-    const BigIntBackend* backend = RenderWorkspace::ForThisThread().BigInts();
+    const BigIntBackend* backend = detail::t_renderLimits.bigInts;
     if (op == BigIntOp::Power)
     {
         return Power(backend, left, right);
