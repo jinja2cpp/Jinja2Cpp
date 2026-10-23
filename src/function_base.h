@@ -135,7 +135,11 @@ inline bool FunctionBase::ParseParams(const ArgumentsTable& argsInfo, const Call
     auto parsed = helpers::ParseCallParamsInfo(argsInfo, params, result);
 
     m_argsError.reset();
-    for (std::size_t idx = 0; idx < argsInfo.size(); ++idx)
+    if (parsed.multipleValues)
+    {
+        SetArgumentsError("got multiple values for argument '" + parsed.multipleValues->name + "'");
+    }
+    for (std::size_t idx = 0; !m_argsError && idx < argsInfo.size(); ++idx)
     {
         if (argsInfo[idx].mandatory && !parsed.args[idx])
         {
