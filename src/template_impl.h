@@ -328,6 +328,8 @@ public:
             }
 
             parser.ReleaseParseState();
+            // Its fields are set once the Load succeeds
+            nodes.SetOrigin(&m_origin);
             auto sealed = nodes.Seal(*parseResult);
             auto convertedTexts = parser.TakeConvertedTexts();
             auto metadataInfo = parser.GetMetadataInfo();
@@ -347,7 +349,6 @@ public:
         m_origin.source = m_template.get();
         m_origin.name = &m_templateName;
         m_origin.isWide = std::is_same_v<CharT, wchar_t>;
-        m_nodes.SetOrigin(&m_origin);
         m_metadata.reset();
         return std::optional<BasicErrorInfo<CharT>>();
     }

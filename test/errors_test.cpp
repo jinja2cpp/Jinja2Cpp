@@ -915,8 +915,8 @@ TEST(ErrorContractTest, ToCharsReportsHostFailures)
 struct RenderErrorLocationRow
 {
     const char* source;
-    ErrorCode code;
     const char* file;
+    ErrorCode code;
     unsigned line;
     unsigned col;
     bool hasException;
@@ -935,7 +935,7 @@ protected:
         m_env.AddFilter("boom", MakeCallable([](const std::string&) -> Value { throw std::runtime_error("filter failed"); }, ArgInfo{ "value" }));
     }
 
-    ValuesMap Params() const
+    [[nodiscard]] ValuesMap Params() const
     {
         auto list = MakeGenericList([n = 0]() mutable -> std::optional<Value> {
             if (n++ == 1)
@@ -953,18 +953,18 @@ protected:
 TEST_F(RenderErrorLocationTest, Rows)
 {
     const RenderErrorLocationRow rows[] = {
-        { "x\n{{ fail() }}", ErrorCode::UserCallableException, "noname.j2tpl", 2, 1, true },
-        { "{% for i in [1] %}\n  {{ i.y.z }}{% endfor %}", ErrorCode::UndefinedError, "noname.j2tpl", 2, 3, false },
-        { "a\nb {{ big[0] }}", ErrorCode::IntegerOutOfRange, "noname.j2tpl", 2, 3, false },
-        { "{% for i in xs %}\n{{ i }}{% endfor %}", ErrorCode::UnexpectedException, "noname.j2tpl", 1, 1, true },
-        { "\n{{ 's' | boom }}", ErrorCode::UserCallableException, "noname.j2tpl", 2, 1, true },
-        { "a\n{% include 'inc.j2' %}", ErrorCode::UserCallableException, "inc.j2", 2, 3, true },
+        { "x\n{{ fail() }}", "noname.j2tpl", ErrorCode::UserCallableException, 2, 1, true },
+        { "{% for i in [1] %}\n  {{ i.y.z }}{% endfor %}", "noname.j2tpl", ErrorCode::UndefinedError, 2, 3, false },
+        { "a\nb {{ big[0] }}", "noname.j2tpl", ErrorCode::IntegerOutOfRange, 2, 3, false },
+        { "{% for i in xs %}\n{{ i }}{% endfor %}", "noname.j2tpl", ErrorCode::UnexpectedException, 1, 1, true },
+        { "\n{{ 's' | boom }}", "noname.j2tpl", ErrorCode::UserCallableException, 2, 1, true },
+        { "a\n{% include 'inc.j2' %}", "inc.j2", ErrorCode::UserCallableException, 2, 3, true },
         // Imported without the context, as in Jinja2: `fail` is undefined there
-        { "{% import 'mod.j2' as mod %}\n{{ mod.m() }}", ErrorCode::UndefinedError, "mod.j2", 2, 1, false },
-        { "{% import 'mod.j2' as mod with context %}\n{{ mod.m() }}", ErrorCode::UserCallableException, "mod.j2", 2, 1, true },
-        { "{% extends 'base.j2' %}{% block b %}x{% endblock %}", ErrorCode::UserCallableException, "base.j2", 3, 1, true },
-        { "{% macro m() %}{{ m() }}{% endmacro %}\n{{ m() }}", ErrorCode::RecursionLimitExceeded, "noname.j2tpl", 1, 16, false },
-        { "\n  {% include 'nested.j2' ignore missing %}", ErrorCode::TemplateNotFound, "nested.j2", 1, 1, false },
+        { "{% import 'mod.j2' as mod %}\n{{ mod.m() }}", "mod.j2", ErrorCode::UndefinedError, 2, 1, false },
+        { "{% import 'mod.j2' as mod with context %}\n{{ mod.m() }}", "mod.j2", ErrorCode::UserCallableException, 2, 1, true },
+        { "{% extends 'base.j2' %}{% block b %}x{% endblock %}", "base.j2", ErrorCode::UserCallableException, 3, 1, true },
+        { "{% macro m() %}{{ m() }}{% endmacro %}\n{{ m() }}", "noname.j2tpl", ErrorCode::RecursionLimitExceeded, 1, 16, false },
+        { "\n  {% include 'nested.j2' ignore missing %}", "nested.j2", ErrorCode::TemplateNotFound, 1, 1, false },
     };
     for (const auto& row : rows)
     {

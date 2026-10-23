@@ -41,6 +41,7 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 using namespace std::string_literals;

@@ -1,5 +1,6 @@
 #include "undefined.h"
 
+#include "engine_errors.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "render_context.h"

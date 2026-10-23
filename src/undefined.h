@@ -1,7 +1,6 @@
 #ifndef JINJA2CPP_SRC_UNDEFINED_H
 #define JINJA2CPP_SRC_UNDEFINED_H
 
-#include "engine_errors.h"
 #include "internal_value.h"
 
 #include <jinja2cpp/template_env.h>

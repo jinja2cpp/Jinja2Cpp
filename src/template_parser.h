@@ -223,33 +223,39 @@ class StatementBody
 public:
     using Child = NodeRef<IRendererBase>;
 
-    void Add(Child node, std::size_t offset)
-    {
-        m_nodes.push_back(node);
-        m_offsets.push_back(ToOffset(offset));
-    }
+    void Add(Child node, std::size_t offset) { m_items.push_back({ node, ToOffset(offset) }); }
     // Before the other children: the binding a frame starts with
-    void AddFirst(Child node, std::size_t offset)
-    {
-        m_nodes.insert(m_nodes.begin(), node);
-        m_offsets.insert(m_offsets.begin(), ToOffset(offset));
-    }
+    void AddFirst(Child node, std::size_t offset) { m_items.insert(m_items.begin(), { node, ToOffset(offset) }); }
     // The body, as a node; the list is left empty
     NodeRef<ComposedRenderer> Take(NodeArena& nodes)
     {
-        auto body = nodes.MakeWithItems<ComposedRenderer>(boost::span<const Child>(m_nodes.data(), m_nodes.size()),
-                                                          boost::span<const std::uint32_t>(m_offsets.data(), m_offsets.size()));
-        m_nodes.clear();
-        m_offsets.clear();
+        const auto count = m_items.size();
+        auto body = nodes.MakeWithItems<ComposedRenderer, Child, std::uint32_t>(
+            count,
+            [this, count](Child* children, std::uint32_t* offsets) {
+                for (std::size_t idx = 0; idx != count; ++idx)
+                {
+                    children[idx] = m_items[idx].node;
+                    // Last child first (ComposedRenderer::Offsets)
+                    offsets[count - 1 - idx] = m_items[idx].offset;
+                }
+            },
+            true);
+        m_items.clear();
         return body;
     }
 
 private:
+    struct Item
+    {
+        Child node;
+        std::uint32_t offset;
+    };
+
     // A source past 4 GiB locates its errors at the last offset that fits
     static std::uint32_t ToOffset(std::size_t offset) { return static_cast<std::uint32_t>(std::min<std::size_t>(offset, std::numeric_limits<std::uint32_t>::max())); }
 
-    boost::container::small_vector<Child, 8> m_nodes;
-    boost::container::small_vector<std::uint32_t, 8> m_offsets;
+    boost::container::small_vector<Item, 8> m_items;
 };
 
 struct StatementInfo

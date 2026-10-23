@@ -167,6 +167,7 @@ struct ArenaTestAccess;
 class RefChecker;
 // render_failure.h
 struct TemplateOrigin;
+using TemplateOriginPtr = const TemplateOrigin*;
 } // namespace detail
 
 // A link to a node of T, or a null link: the node's offset in its arena
@@ -733,7 +734,7 @@ inline SealedLayout LayoutOf(std::uint32_t size, std::uint32_t objects)
     layout.validated = layout.starts + (words * sizeof(std::uint64_t));
     layout.cleanup = layout.validated + (NodeRefChecks >= 2 ? words * sizeof(std::uint64_t) : 0);
     layout.origin = layout.cleanup + (std::size_t{ objects } * sizeof(std::uint32_t));
-    layout.end = layout.origin + sizeof(const TemplateOrigin*);
+    layout.end = layout.origin + sizeof(TemplateOriginPtr);
     return layout;
 }
 
@@ -803,8 +804,12 @@ public:
     // Whether `node` is in this tree
     [[nodiscard]] bool Holds(const void* node) const
     {
+        if (!m_base)
+        {
+            return false;
+        }
         const auto* p = static_cast<const std::byte*>(node);
-        return m_base && std::less_equal<>()(m_base, p) && std::less<>()(p, m_base + m_size);
+        return std::less_equal<>()(m_base, p) && std::less<>()(p, m_base + m_size);
     }
     // The template the tree comes from, if its owner set it. Read on an error only
     [[nodiscard]] const detail::TemplateOrigin* Origin() const
@@ -815,8 +820,8 @@ public:
         }
         detail::ArenaHeader header{};
         std::memcpy(&header, m_base, sizeof(header));
-        const detail::TemplateOrigin* origin = nullptr;
-        std::memcpy(static_cast<void*>(&origin), m_base + detail::LayoutOf(m_size, header.objects).origin, sizeof(origin));
+        detail::TemplateOriginPtr origin = nullptr;
+        std::memcpy(static_cast<void*>(&origin), m_base + detail::LayoutOf(m_size, header.objects).origin, sizeof(detail::TemplateOriginPtr));
         return origin;
     }
 
@@ -953,13 +958,6 @@ public:
         return View()[list];
     }
 
-    // Names the template the tree comes from, for the locations of render errors: `origin`
-    // must outlive the tree. Set before the tree is rendered
-    void SetOrigin(const detail::TemplateOrigin* origin) noexcept
-    {
-        std::memcpy(m_buffer.get() + detail::LayoutOf(Header().size, Header().objects).origin, static_cast<const void*>(&origin), sizeof(origin));
-    }
-
 private:
     friend class NodeArena;
     friend struct detail::ArenaTestAccess;
@@ -1077,28 +1075,28 @@ public:
     template<typename T, typename Item>
     NodeRef<T> MakeWithItems(boost::span<const Item> items)
     {
-        return MakeWithItems<T>(items, boost::span<const Item>());
+        return MakeWithItems<T, Item, Item>(items.size(), [items](Item* to, Item* /*extras*/) { std::uninitialized_copy(items.begin(), items.end(), to); }, false);
     }
-    // The same, with the items of `extras` (one for each item, or none) after the items
-    template<typename T, typename Item, typename Extra>
-    NodeRef<T> MakeWithItems(boost::span<const Item> items, boost::span<const Extra> extras)
+    // The same for `count` items, and as many extras after them when `withExtras`: fill(items,
+    // extras) writes them
+    template<typename T, typename Item, typename Extra, typename Fill>
+    NodeRef<T> MakeWithItems(std::size_t count, const Fill& fill, bool withExtras)
     {
         static_assert(std::is_final_v<T>, "the items follow the most derived object");
         static_assert(std::is_trivially_copyable_v<Item> && std::is_trivially_destructible_v<Item>, "Seal copies the items with the node's bytes");
-        static_assert(std::is_trivially_copyable_v<Extra> && std::is_trivially_destructible_v<Extra>, "Seal copies the items with the node's bytes");
+        static_assert(std::is_trivially_copyable_v<Extra> && std::is_trivially_destructible_v<Extra>, "Seal copies the extras with the node's bytes");
         static_assert(sizeof(T) % alignof(Item) == 0, "the items are aligned right after the node");
         static_assert(sizeof(Item) % alignof(Extra) == 0, "the extras are aligned right after the items");
-        assert(extras.empty() || extras.size() == items.size());
-        if (items.size() > (std::numeric_limits<std::uint32_t>::max() - sizeof(T)) / (sizeof(Item) + sizeof(Extra)))
+        const std::size_t itemSize = sizeof(Item) + (withExtras ? sizeof(Extra) : 0);
+        if (count > (std::numeric_limits<std::uint32_t>::max() - sizeof(T)) / itemSize)
         {
             ThrowTooLarge("a template list too long");
         }
-        const auto ref = MakeSized<T>(sizeof(T) + items.size_bytes() + extras.size_bytes(), static_cast<std::uint32_t>(items.size()));
+        const auto ref = MakeSized<T>(sizeof(T) + (count * itemSize), static_cast<std::uint32_t>(count));
         // Right after the node: one past it, in the same allocation
         T* const node = std::launder(reinterpret_cast<T*>(Locate(ref.m_offset)));
-        auto* const itemsAt = reinterpret_cast<Item*>(node + 1);
-        std::uninitialized_copy(items.begin(), items.end(), itemsAt);
-        std::uninitialized_copy(extras.begin(), extras.end(), reinterpret_cast<Extra*>(itemsAt + items.size()));
+        auto* const items = reinterpret_cast<Item*>(node + 1);
+        fill(items, withExtras ? reinterpret_cast<Extra*>(items + count) : nullptr);
         return ref;
     }
 
@@ -1228,6 +1226,9 @@ public:
         const std::array<detail::RootRef, sizeof...(Roots)> list{ RootOf(roots)... };
         return SealWith(boost::span<const detail::RootRef>(list.data(), list.size()));
     }
+    // The template the sealed tree comes from, for the locations of render errors: `origin`
+    // must outlive the tree. Set before Seal
+    void SetOrigin(detail::TemplateOriginPtr origin) noexcept { m_origin = origin; }
 
 private:
     struct Block
@@ -1385,6 +1386,7 @@ private:
     std::uint32_t m_nameRefs = 0;
     std::uint32_t m_contextNodes = 0;
     bool m_sealed = false;
+    detail::TemplateOriginPtr m_origin = nullptr;
     // The symbols of the names, while the tree is parsed: a list in place for the first few,
     // then an open-addressed table by the hash of the name
     // Trivial, so that the table in place costs nothing until the first name

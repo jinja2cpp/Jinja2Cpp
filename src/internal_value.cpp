@@ -2422,7 +2422,7 @@ struct UserCallableBody
 
     // The host's call: what it throws is a HostCallableFailure, unless the engine raised it (a
     // callable may call back into a template or a macro, which keeps its own error)
-    Value CallHost(const UserCallableParams& ucParams) const
+    [[nodiscard]] Value CallHost(const UserCallableParams& ucParams) const
     {
         try
         {

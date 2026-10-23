@@ -70,15 +70,17 @@ public:
         CheckStack();
         const auto& nodes = values.Nodes();
         const auto children = Children();
-        std::uint32_t idx = 0;
+        const auto* const end = children.data() + children.size();
+        const auto* child = children.data();
         // An error gets the location of the statement it came out of here, unless a body in
         // that statement gave it one (docs/api-2.0.md, 2.1 rule 8). Table-based unwinding: the
-        // try costs nothing until something throws
+        // try costs nothing until something throws, and the handler needs nothing the loop
+        // does not keep anyway
         try
         {
-            for (; idx != m_count; ++idx)
+            for (; child != end; ++child)
             {
-                nodes[children[idx]].Render(os, values);
+                nodes[*child].Render(os, values);
                 if (values.HasLoopControl())
                 {
                     return;
@@ -95,7 +97,7 @@ public:
         }
         catch (...)
         {
-            detail::ThrowRenderFailure(values.Nodes(), this, Offsets()[idx]);
+            detail::ThrowRenderFailure(values.Nodes(), child, OffsetOf(child, end));
         }
     }
 
@@ -104,13 +106,16 @@ public:
         // NodeArena::MakeWithItems put them one past this node
         return { std::launder(reinterpret_cast<const Child*>(this + 1)), m_count };
     }
-    // Where the tag of each child starts in the source, after the children
-    [[nodiscard]] const std::uint32_t* Offsets() const
-    {
-        return std::launder(reinterpret_cast<const std::uint32_t*>(reinterpret_cast<const Child*>(this + 1) + m_count));
-    }
 
 private:
+    // Where the tag of `child` starts in the source: the offsets follow the children, last
+    // child first, so that the end of the children finds them
+    static std::uint32_t OffsetOf(const Child* child, const Child* end)
+    {
+        const auto* offsets = std::launder(reinterpret_cast<const std::uint32_t*>(end));
+        return offsets[end - child - 1];
+    }
+
     std::uint32_t m_count;
 };
 

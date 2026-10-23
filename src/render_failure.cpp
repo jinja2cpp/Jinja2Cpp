@@ -3,6 +3,8 @@
 #include "error_boundary.h"
 #include "node_arena.h"
 
+#include <jinja2cpp/error_info.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -139,11 +141,11 @@ template<typename CharT>
 }
 } // namespace
 
-void ThrowRenderFailure(const ArenaView& nodes, const void* body, std::uint32_t offset)
+void ThrowRenderFailure(const ArenaView& nodes, const void* child, std::uint32_t offset)
 {
     // A body runs in the tree it is in, which the render context names: should it ever not, the
     // error gets no location rather than one in another template
-    const TemplateOrigin* origin = nodes.Holds(body) ? nodes.Origin() : nullptr;
+    const TemplateOrigin* origin = nodes.Holds(child) ? nodes.Origin() : nullptr;
     if (origin && origin->isWide)
     {
         ThrowLocated<wchar_t>(origin, offset);

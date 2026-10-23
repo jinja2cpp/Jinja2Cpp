@@ -166,10 +166,10 @@ BasicErrorInfo<CharT> HostExceptionToError(const std::string& fileName)
     {
         throw;
     }
-    catch (const BasicErrorInfo<char>&)
+    catch (const BasicErrorInfo<char>&) // NOLINT(bugprone-empty-catch): described below
     {
     }
-    catch (const BasicErrorInfo<wchar_t>&)
+    catch (const BasicErrorInfo<wchar_t>&) // NOLINT(bugprone-empty-catch): described below
     {
     }
     catch (...)

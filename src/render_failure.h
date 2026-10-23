@@ -3,6 +3,7 @@
 
 #include <jinja2cpp/error_info.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -51,11 +52,11 @@ private:
     std::variant<ErrorInfo, ErrorInfoW> m_error;
 };
 
-// Throws the RenderFailure of the exception being handled, which a statement of a body of
-// `nodes` threw: the statement's tag starts at `offset` in its template's source. `body` is the
-// body, which tells whether `nodes` is still the tree it is in. Call it from a catch handler only;
-// std::bad_alloc goes on unchanged
-[[noreturn]] void ThrowRenderFailure(const ArenaView& nodes, const void* body, std::uint32_t offset);
+// Throws the RenderFailure of the exception being handled, which a statement of a body in
+// `nodes` threw: the statement's tag starts at `offset` in its template's source. `child` is the
+// body's link to the statement, which tells whether `nodes` is still the tree the body is in.
+// Call it from a catch handler only; std::bad_alloc goes on unchanged
+[[noreturn]] void ThrowRenderFailure(const ArenaView& nodes, const void* child, std::uint32_t offset);
 
 // The line of a source with a marker under the 0-based column `col`, cut to a window around the
 // column when the line is long (a minified template)
