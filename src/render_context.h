@@ -461,6 +461,8 @@ public:
         , m_entryPassDepth(other.m_entryPassDepth)
         , m_autoescape(other.m_autoescape)
         , m_outputAutoescape(other.m_outputAutoescape)
+        , m_staticAutoescape(other.m_staticAutoescape)
+        , m_volatileAutoescape(other.m_volatileAutoescape)
         , m_evalContext(other.m_evalContext)
         , m_lookupCache(other.m_lookupCache)
     {
@@ -509,6 +511,8 @@ public:
         , m_entryPassDepth(other.m_entryPassDepth)
         , m_autoescape(other.m_autoescape)
         , m_outputAutoescape(other.m_outputAutoescape)
+        , m_staticAutoescape(other.m_staticAutoescape)
+        , m_volatileAutoescape(other.m_volatileAutoescape)
         , m_evalContext(other.m_evalContext)
         , m_lookupCache(other.m_lookupCache)
     {
@@ -863,6 +867,7 @@ public:
         // (TemplateRenderer::RenderBody, ImportedModule::Render)
         result.m_autoescape = m_rendererCallback ? m_rendererCallback->GetSettings().autoescape : false;
         result.m_outputAutoescape = result.m_autoescape;
+        result.m_staticAutoescape = result.m_autoescape;
         result.SetLookupCache(m_lookupCache);
         return result;
     }
@@ -890,7 +895,12 @@ public:
     // runs, Jinja2's eval_ctx.autoescape (IsAutoescape). `{% autoescape %}` and a new template
     // set both; a macro or block body sets only the first, and runs with its caller's runtime
     // setting (HomeCall). The runtime setting is one per rendered template, as Jinja2's
-    // EvalContext is one per Context: an imported macro runs with its module's
+    // EvalContext is one per Context: an imported macro runs with its module's.
+    // `{% autoescape %}` with a value that is not constant (docs/tasks/0216) leaves the
+    // compile-time setting (IsStaticAutoescape) as it is and makes the code inside volatile
+    // (IsVolatileAutoescape): there the output follows the runtime setting, except a `{{ }}`
+    // Jinja2 folds (StaticOutputRenderer), and `~` joins as str. IsOutputAutoescape is the
+    // setting the output follows: the runtime one in volatile code, the static one elsewhere
     [[nodiscard]] bool IsAutoescape() const { return m_autoescape; }
     bool SetAutoescape(bool autoescape)
     {
@@ -903,6 +913,16 @@ public:
         std::swap(autoescape, m_outputAutoescape);
         return autoescape;
     }
+    [[nodiscard]] bool IsStaticAutoescape() const { return m_staticAutoescape; }
+    // Sets every mode: a module's context, which its template's code runs in
+    void ResetAutoescape(bool autoescape)
+    {
+        m_autoescape = autoescape;
+        m_outputAutoescape = autoescape;
+        m_staticAutoescape = autoescape;
+        m_volatileAutoescape = false;
+    }
+    [[nodiscard]] bool IsVolatileAutoescape() const { return m_volatileAutoescape; }
     // Makes this context the root of a new runtime autoescape setting: an included
     // template's, which Jinja2 renders in a new Context
     void NewEvalContext() { m_evalContext = NewEvalContextId(); }
@@ -1010,13 +1030,16 @@ public:
         {
             return false;
         }
-        return m_autoescape == other.m_autoescape && m_outputAutoescape == other.m_outputAutoescape;
+        return m_autoescape == other.m_autoescape && m_outputAutoescape == other.m_outputAutoescape && m_staticAutoescape == other.m_staticAutoescape
+               && m_volatileAutoescape == other.m_volatileAutoescape;
     }
 
 private:
     // A closure records where it was defined, and its calls run there
     friend class ClosureSite;
     friend class HomeCall;
+    friend class AutoescapeGuard;
+    friend class OutputAutoescapeGuard;
 
     // The control block of a context's anchor: it owns nothing, the anchor points at the context
     struct ContextAnchor
@@ -1392,6 +1415,8 @@ private:
     std::optional<InternalValueMap> m_spareScope;
     bool m_autoescape{};
     bool m_outputAutoescape{};
+    bool m_staticAutoescape{};
+    bool m_volatileAutoescape{};
     // Contexts with the same id share Jinja2's EvalContext (NewEvalContext)
     uint32_t m_evalContext{};
     static uint32_t NewEvalContextId()
@@ -1450,7 +1475,7 @@ inline void ScopeRef::Clear()
     }
 }
 
-// Sets both autoescape modes (RenderContext::IsAutoescape) for a scope and restores the
+// Sets the autoescape modes (RenderContext::IsAutoescape) for a scope and restores the
 // previous ones when it ends: `{% autoescape %}` and a template's top level
 class AutoescapeGuard
 {
@@ -1461,41 +1486,73 @@ public:
     }
     // The runtime and the output modes apart, for a parent template, which keeps its child's runtime mode
     AutoescapeGuard(RenderContext& context, bool autoescape, bool outputAutoescape)
-        : m_context(context)
-        , m_prev(context.SetAutoescape(autoescape))
-        , m_prevOutput(context.SetOutputAutoescape(outputAutoescape))
+        : AutoescapeGuard(context, autoescape, outputAutoescape, false)
     {
+    }
+    // `{% autoescape %}`, whose value is not constant when isVolatile: the code inside keeps
+    // the static mode and is volatile; a constant one inside volatile code keeps it volatile
+    static AutoescapeGuard Statement(RenderContext& context, bool autoescape, bool isVolatile)
+    {
+        if (isVolatile || context.IsVolatileAutoescape())
+        {
+            return { context, autoescape, isVolatile ? context.IsStaticAutoescape() : autoescape, true };
+        }
+        return { context, autoescape, autoescape, false };
     }
     ~AutoescapeGuard()
     {
-        m_context.SetAutoescape(m_prev);
-        m_context.SetOutputAutoescape(m_prevOutput);
+        m_context.m_autoescape = m_prev;
+        m_context.m_outputAutoescape = m_prevOutput;
+        m_context.m_staticAutoescape = m_prevStatic;
+        m_context.m_volatileAutoescape = m_prevVolatile;
     }
     AutoescapeGuard(const AutoescapeGuard&) = delete;
     AutoescapeGuard& operator=(const AutoescapeGuard&) = delete;
 
 private:
+    AutoescapeGuard(RenderContext& context, bool autoescape, bool staticAutoescape, bool isVolatile)
+        : m_context(context)
+        , m_prev(std::exchange(context.m_autoescape, autoescape))
+        , m_prevOutput(std::exchange(context.m_outputAutoescape, isVolatile ? autoescape : staticAutoescape))
+        , m_prevStatic(std::exchange(context.m_staticAutoescape, staticAutoescape))
+        , m_prevVolatile(std::exchange(context.m_volatileAutoescape, isVolatile))
+    {
+    }
+
     RenderContext& m_context;
     bool m_prev;
     bool m_prevOutput;
+    bool m_prevStatic;
+    bool m_prevVolatile;
 };
 
-// Sets the output autoescape mode only, for the body of a macro or a block
+// Sets the output autoescape mode only, for the body of a macro, a block or a recursive
+// loop: the static mode it is written under, and whether it is volatile, when its output
+// follows the runtime mode in force (RenderContext::IsVolatileAutoescape)
 class OutputAutoescapeGuard
 {
 public:
-    OutputAutoescapeGuard(RenderContext& context, bool autoescape)
+    OutputAutoescapeGuard(RenderContext& context, bool autoescape, bool isVolatile = false)
         : m_context(context)
-        , m_prev(context.SetOutputAutoescape(autoescape))
+        , m_prev(std::exchange(context.m_outputAutoescape, isVolatile ? context.m_autoescape : autoescape))
+        , m_prevStatic(std::exchange(context.m_staticAutoescape, autoescape))
+        , m_prevVolatile(std::exchange(context.m_volatileAutoescape, isVolatile))
     {
     }
-    ~OutputAutoescapeGuard() { m_context.SetOutputAutoescape(m_prev); }
+    ~OutputAutoescapeGuard()
+    {
+        m_context.m_outputAutoescape = m_prev;
+        m_context.m_staticAutoescape = m_prevStatic;
+        m_context.m_volatileAutoescape = m_prevVolatile;
+    }
     OutputAutoescapeGuard(const OutputAutoescapeGuard&) = delete;
     OutputAutoescapeGuard& operator=(const OutputAutoescapeGuard&) = delete;
 
 private:
     RenderContext& m_context;
     bool m_prev;
+    bool m_prevStatic;
+    bool m_prevVolatile;
 };
 
 // Runs another template's code (an include, a parent, a block or macro defined elsewhere):
@@ -1693,6 +1750,8 @@ struct HomeCallSaved
     LoopControl loopControl = LoopControl::None;
     bool autoescape = false;
     bool outputAutoescape = false;
+    bool staticAutoescape = false;
+    bool volatileAutoescape = false;
 };
 
 // Runs a closure's body on its home context (ClosureSite::Resolve) for the duration of one
@@ -1925,6 +1984,8 @@ private:
         saved.loopControl = context.TakeLoopControl();
         saved.autoescape = context.m_autoescape;
         saved.outputAutoescape = context.m_outputAutoescape;
+        saved.staticAutoescape = context.m_staticAutoescape;
+        saved.volatileAutoescape = context.m_volatileAutoescape;
         // The body runs with its caller's runtime autoescape when they share an EvalContext:
         // a `{% autoescape %}` the call is in may be set on a context nested in the home
         if (context.m_evalContext == caller->m_evalContext)
@@ -1967,6 +2028,8 @@ private:
         context.m_templateFrame = saved.templateFrame;
         context.m_autoescape = saved.autoescape;
         context.m_outputAutoescape = saved.outputAutoescape;
+        context.m_staticAutoescape = saved.staticAutoescape;
+        context.m_volatileAutoescape = saved.volatileAutoescape;
         if (context.m_epoch != saved.bodyEpoch)
         {
             context.NewEpoch();

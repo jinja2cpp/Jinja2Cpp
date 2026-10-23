@@ -124,7 +124,7 @@ class ExpressionRenderer : public IRendererBase
 {
 public:
     static constexpr NodeKind Kind = NodeKind::ExprRenderer;
-    static bool MatchesKind(NodeKind kind) { return kind == NodeKind::ExprRenderer || kind == NodeKind::FinalizedExprRenderer; }
+    static bool MatchesKind(NodeKind kind) { return kind == NodeKind::ExprRenderer || kind == NodeKind::FinalizedExprRenderer || kind == NodeKind::StaticExprRenderer; }
     void VisitRefs(detail::RefChecker& refs) const
     {
         refs(m_expression);
@@ -174,12 +174,35 @@ private:
     InternalValue m_finalize;
 };
 
-// finalize: Settings::finalize as a callable, or undefined
-inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<Expression> expr, const InternalValue& finalize)
+// `{{ ... }}` of a value Jinja2 folds, in volatile code (RenderContext::IsVolatileAutoescape):
+// Jinja2 escapes the folded value by the setting the code is compiled under, not by the
+// runtime one the rest of the output follows (docs/tasks/0216)
+class StaticOutputRenderer final : public ExpressionRenderer
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::StaticExprRenderer;
+    static bool MatchesKind(NodeKind kind) { return kind == Kind; }
+
+    using ExpressionRenderer::ExpressionRenderer;
+
+    void Render(OutStream& os, RenderContext& values) override
+    {
+        const OutputAutoescapeGuard autoescapeGuard(values, values.IsStaticAutoescape());
+        values.Nodes()[m_expression].Render(os, values);
+    }
+};
+
+// finalize: Settings::finalize as a callable, or undefined. isStatic: the value is folded in
+// volatile code (StaticOutputRenderer)
+inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<Expression> expr, const InternalValue& finalize, bool isStatic = false)
 {
     if (GetIf<Callable>(&finalize))
     {
         return nodes.Make<FinalizedExpressionRenderer>(expr, finalize);
+    }
+    if (isStatic)
+    {
+        return nodes.Make<StaticOutputRenderer>(expr);
     }
     return nodes.Make<ExpressionRenderer>(expr);
 }

@@ -1889,6 +1889,129 @@
    "output": "&lt;&lt;"
   },
   {
+   "id": "autoescape.volatile_folded_output",
+   "template": "{% autoescape on %}{{ '<' }}{{ x }}{{ '<' ~ 'a' }}{{ '<'|upper }}{{ ['<'][0] }}{{ '<' if 1 is odd }}{{ ('<', 1)[0] ~ x }}{% endautoescape %}",
+   "context": {
+    "on": true,
+    "x": "<"
+   },
+   "env": {},
+   "templates": {},
+   "output": "<&lt;<a&lt;<&lt;&lt;&lt;"
+  },
+  {
+   "id": "autoescape.volatile_folded_output_under_true",
+   "template": "{% autoescape true %}{% autoescape on %}{{ x }}{{ '<' ~ 'a' }}{{ '<'|e }}{{ ['<'][0] }}{{ '<' if true }}{% endautoescape %}{% endautoescape %}",
+   "context": {
+    "on": false,
+    "x": "<"
+   },
+   "env": {},
+   "templates": {},
+   "output": "<&lt;a&lt;&lt;&lt;"
+  },
+  {
+   "id": "autoescape.volatile_nested_constant",
+   "template": "{% autoescape on %}{% autoescape false %}{{ x }}{{ '<' }}{% endautoescape %}{% autoescape true %}{{ x }}{{ '<' }}{% endautoescape %}{% endautoescape %}",
+   "context": {
+    "on": true,
+    "x": "<"
+   },
+   "env": {},
+   "templates": {},
+   "output": "<<&lt;&lt;"
+  },
+  {
+   "id": "autoescape.volatile_constant_value",
+   "template": "{% autoescape 1 and true %}{% macro m() %}{{ '<' }}{% endmacro %}{% autoescape false %}{{ m() }}{% endautoescape %}{{ '<' }}{% endautoescape %}",
+   "context": {
+    "on": true,
+    "x": "<"
+   },
+   "env": {},
+   "templates": {},
+   "output": "&lt;&lt;"
+  },
+  {
+   "id": "autoescape.volatile_macro_runtime_output",
+   "template": "{% autoescape on %}{% macro m() %}{{ x }}{% endmacro %}{% autoescape false %}{{ m() }}{{ 'T' if m() is escaped else 'F' }}{% endautoescape %}|{{ m() }}{{ 'T' if m() is escaped else 'F' }}{% endautoescape %}",
+   "context": {
+    "on": true,
+    "x": "<"
+   },
+   "env": {},
+   "templates": {},
+   "output": "<F|&lt;T"
+  },
+  {
+   "id": "autoescape.volatile_macro_through_static_macro",
+   "template": "{% autoescape true %}{% macro c(f) %}{{ f() }}{% endmacro %}{% autoescape on %}{% macro m() %}{{ x }}{% endmacro %}{% autoescape false %}{{ c(m) }}{% endautoescape %}{% endautoescape %}{% endautoescape %}",
+   "context": {
+    "on": true,
+    "x": "<"
+   },
+   "env": {},
+   "templates": {},
+   "output": "&lt;"
+  },
+  {
+   "id": "autoescape.volatile_caller",
+   "template": "{% macro w() %}{% autoescape false %}{{ caller() }}{% endautoescape %}{% endmacro %}{% autoescape on %}{% call w() %}{{ x }}{% endcall %}{% endautoescape %}",
+   "context": {
+    "on": true,
+    "x": "<"
+   },
+   "env": {},
+   "templates": {},
+   "output": "<"
+  },
+  {
+   "id": "autoescape.volatile_loop_recursion",
+   "template": "{% autoescape on %}{% for y in [[1],[]] recursive %}{{ x }}{% autoescape false %}{{ loop(y) if y is iterable }}{% endautoescape %}{% endfor %}{% endautoescape %}",
+   "context": {
+    "on": true,
+    "x": "<"
+   },
+   "env": {},
+   "templates": {},
+   "output": "&lt;<&lt;"
+  },
+  {
+   "id": "autoescape.volatile_filter_and_set_blocks",
+   "template": "{% autoescape on %}{% macro m() %}{% filter upper %}{{ x }}{% endfilter %}{% set s %}{{ x }}{% endset %}{{ s }}{% set t | lower %}{{ x }}{% endset %}{{ t }}{% endmacro %}{% autoescape false %}{{ m() }}{% endautoescape %}|{{ m() }}{% endautoescape %}",
+   "context": {
+    "on": true,
+    "x": "<"
+   },
+   "env": {},
+   "templates": {},
+   "output": "<<<|&LT;&lt;&lt;"
+  },
+  {
+   "id": "autoescape.volatile_concat_runtime",
+   "template": "{% autoescape on %}{% macro m() %}{{ x ~ '<'|safe }}{% endmacro %}{{ x ~ '<'|safe }}{% autoescape false %}{{ m() }}{% endautoescape %}{% endautoescape %}",
+   "context": {
+    "on": true,
+    "x": "<"
+   },
+   "env": {},
+   "templates": {},
+   "output": "&lt;&lt;<<"
+  },
+  {
+   "id": "autoescape.volatile_block_and_include",
+   "template": "{% autoescape on %}{% block b %}{{ x }}{{ '<' }}{% endblock %}{% include 'i.j2' %}{% endautoescape %}",
+   "context": {
+    "on": true,
+    "x": "<"
+   },
+   "env": {},
+   "templates": {
+    "i.j2": "{{ x }}{{ '<' }}"
+   },
+   "output": "<<<<"
+  },
+  {
    "id": "autoescape.env_on_import_in_autoescape_block",
    "template": "{% autoescape false %}{% import 'lib.j2' as z %}{{ z.z() }}{% from 'lib.j2' import z as y %}{{ y() }}{% endautoescape %}|{% import 'lib.j2' as z2 %}{{ z2.z() }}",
    "context": {

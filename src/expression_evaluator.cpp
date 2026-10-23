@@ -758,7 +758,9 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
         break;
     }
     case jinja2::BinaryExpression::StringConcat:
-        result = ConcatAsStrings(leftVal, rightVal, context, !m_folded && context.IsOutputAutoescape());
+        // Jinja2 3.1.6 joins as str in volatile code: it reads eval_ctx.volatile at run time,
+        // which is never set (docs/tasks/0216)
+        result = ConcatAsStrings(leftVal, rightVal, context, !m_folded && context.IsOutputAutoescape() && !context.IsVolatileAutoescape());
         break;
     default:
         break;
@@ -870,7 +872,7 @@ InternalValue DictCreator::Evaluate(RenderContext& context)
     return CreateMapAdapter(std::move(result));
 }
 
-NodeRef<ExpressionFilter> ExpressionFilter::Make(NodeArena& nodes, const std::string& filterName, const CallParamsInfo& params, InternalValue registered, bool* unknown)
+NodeRef<ExpressionFilter> ExpressionFilter::Make(NodeArena& nodes, const std::string& filterName, const CallParamsInfo& params, InternalValue registered, bool* unknown, bool canFold)
 {
     // Filters added to the environment take precedence over the builtins, as in Jinja2's env.filters
     const auto filter = GetIf<Callable>(&registered)
@@ -884,7 +886,7 @@ NodeRef<ExpressionFilter> ExpressionFilter::Make(NodeArena& nodes, const std::st
     // Jinja2 does not fold the filters that take the context, nor can it be told whether a
     // filter of the environment does
     static constexpr std::string_view contextFilters[] = { "map", "random", "reject", "rejectattr", "select", "selectattr" };
-    bool foldable = GetIf<Callable>(&registered) == nullptr && std::find(std::begin(contextFilters), std::end(contextFilters), filterName) == std::end(contextFilters);
+    bool foldable = canFold && GetIf<Callable>(&registered) == nullptr && std::find(std::begin(contextFilters), std::end(contextFilters), filterName) == std::end(contextFilters);
     for (const auto& arg : params.posParams)
     {
         foldable = foldable && nodes[arg].IsFoldable(nodes);
@@ -933,7 +935,7 @@ InternalValue ExpressionFilter::Evaluate(const InternalValue& baseVal, RenderCon
     return nodes[m_filter].Filter(baseVal, context);
 }
 
-NodeRef<IsExpression> IsExpression::Make(NodeArena& nodes, NodeRef<Expression> value, const std::string& tester, const CallParamsInfo& params, InternalValue registered, bool* unknown)
+NodeRef<IsExpression> IsExpression::Make(NodeArena& nodes, NodeRef<Expression> value, const std::string& tester, const CallParamsInfo& params, InternalValue registered, bool* unknown, bool canFold)
 {
     if (GetIf<Callable>(&registered))
     {
@@ -942,7 +944,7 @@ NodeRef<IsExpression> IsExpression::Make(NodeArena& nodes, NodeRef<Expression> v
     }
     const bool testInPlace = params.posParams.empty() && params.kwParams.empty();
     // Jinja2 folds a built-in test whose arguments it can fold (Expression::IsFoldable)
-    bool foldable = true;
+    bool foldable = canFold;
     for (const auto& arg : params.posParams)
     {
         foldable = foldable && nodes[arg].IsFoldable(nodes);

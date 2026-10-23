@@ -1580,7 +1580,7 @@ private:
         }
         m_names.SetCurrent(statementsStack.back().frame);
         const auto unknownMark = m_unknown.Mark();
-        auto parseResult = InvokeParser<NodeRef<IRendererBase>, ExpressionParser>(block);
+        auto parseResult = InvokeParser<NodeRef<IRendererBase>, ExpressionParser>(block, IsInVolatileCode(statementsStack));
         if (m_unknown.Mark() != unknownMark)
         {
             PlaceUnknownCallables(statementsStack, statementsStack.size(), unknownMark, true);
@@ -1736,6 +1736,21 @@ private:
         default:
             return Token::Eof;
         }
+    }
+
+    // Whether the innermost tag is in volatile code: inside `{% autoescape %}` with a value that
+    // is not constant (RenderContext::IsVolatileAutoescape). A block body is not, as Jinja2
+    // compiles it on its own
+    bool IsInVolatileCode(const StatementInfoList& statementsStack) const
+    {
+        for (auto info = statementsStack.rbegin(); info != statementsStack.rend() && info->type != StatementInfo::BlockStatement; ++info)
+        {
+            if (info->type == StatementInfo::AutoescapeStatement && m_nodes.Get<AutoescapeStatement>(info->renderer).IsVolatile())
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Jinja2: required blocks can only contain comments or whitespace

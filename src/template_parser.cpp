@@ -1653,7 +1653,7 @@ StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexe
         return MakeUnexpected(valueExpr.error());
     }
 
-    auto renderer = m_nodes.Make<AutoescapeStatement>(*valueExpr);
+    auto renderer = m_nodes.Make<AutoescapeStatement>(*valueExpr, !m_nodes[*valueExpr].IsFoldable(m_nodes));
     auto statementInfo = StatementInfo::Create(StatementInfo::AutoescapeStatement, stmtTok);
     statementInfo.renderer = std::move(renderer);
     statementInfo.frame = m_names.PushWith(m_names.Current());

@@ -120,8 +120,9 @@ InternalValue ExpressionParser::FindRegisteredTester(const std::string& name) co
     return tester ? visitors::InputValueConvertor::ConvertUserCallable(*tester) : InternalValue();
 }
 
-ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(LexScanner& lexer)
+ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(LexScanner& lexer, bool isVolatile)
 {
+    m_volatile = isVolatile;
     auto evaluator = ParseTupleOrExpression(lexer);
     if (!evaluator)
     {
@@ -137,7 +138,7 @@ ExpressionParser::ParseResult<NodeRef<IRendererBase>> ExpressionParser::Parse(Le
         return MakeParseError(ErrorCode::ExpectedToken, tok, { tok1 });
     }
 
-    auto result = MakeExpressionRenderer(m_nodes, *evaluator, m_finalize);
+    auto result = MakeExpressionRenderer(m_nodes, *evaluator, m_finalize, m_volatile && m_nodes[*evaluator].IsFoldable(m_nodes));
 
     return result;
 }
@@ -730,7 +731,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
     try
     {
         bool unknown = false;
-        result = IsExpression::Make(m_nodes, valueRef, name, params, FindRegisteredTester(name), &unknown);
+        result = IsExpression::Make(m_nodes, valueRef, name, params, FindRegisteredTester(name), &unknown, !m_volatile);
         if (unknown)
         {
             m_unknown.Add(nameTok, true);
@@ -1204,7 +1205,7 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
             }
 
             bool unknown = false;
-            auto filter = ExpressionFilter::Make(m_nodes, name, *params, FindRegisteredFilter(name), &unknown);
+            auto filter = ExpressionFilter::Make(m_nodes, name, *params, FindRegisteredFilter(name), &unknown, !m_volatile);
             if (unknown)
             {
                 m_unknown.Add(tok, false);

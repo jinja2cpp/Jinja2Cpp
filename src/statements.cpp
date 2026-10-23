@@ -257,6 +257,8 @@ struct LoopState : ValueObject
     // The output autoescape setting where the recursive loop is written: its levels escape
     // by it, and their results are Markup by it, wherever loop(...) is called
     bool recursiveAutoescape = false;
+    // Whether the loop is in volatile code (RenderContext::IsVolatileAutoescape)
+    bool recursiveVolatile = false;
     // The arguments of the last loop.changed() call, made on first use
     std::shared_ptr<std::optional<InternalValueList>> lastChanged;
     // index0 for the callables loop.cycle made, kept up to date once one is made. They
@@ -659,7 +661,7 @@ private:
                     throw std::runtime_error("The loop must have the 'recursive' marker to be called recursively.");
                 });
             }
-            return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.recursiveNodes, state.level, state.recursiveSite, state.recursiveAutoescape);
+            return ForStatement::MakeLoopRecursion(state.recursiveStatement, state.recursiveNodes, state.level, state.recursiveSite, state.recursiveAutoescape, state.recursiveVolatile);
         case Property::None:
             break;
         }
@@ -907,9 +909,9 @@ private:
 };
 } // namespace
 
-Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site, bool autoescape)
+Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaView& nodes, int level, const ClosureSite& site, bool autoescape, bool isVolatile)
 {
-    return Callable(Callable::GlobalFunc, [statement, nodes, level, site, autoescape](const CallParams& params, RenderContext& context) -> InternalValue {
+    return Callable(Callable::GlobalFunc, [statement, nodes, level, site, autoescape, isVolatile](const CallParams& params, RenderContext& context) -> InternalValue {
         // As Python's LoopContext.__call__(iterable)
         for (const auto& kwParam : params.kwParams)
         {
@@ -937,7 +939,7 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaVie
         if (IsEmpty(var))
         {
             InternalValue empty(RenderToString(context.GetRendererCallback(), [](OutStream&) {}));
-            empty.SetMarkup(autoescape);
+            empty.SetMarkup(isVolatile ? context.IsAutoescape() : autoescape);
             return empty;
         }
 
@@ -949,15 +951,16 @@ Callable ForStatement::MakeLoopRecursion(ForStatement* statement, const ArenaVie
         auto& home = homeCall.Context();
         const ArenaSwitch nodesSwitch(home, nodes);
         const bool isLinked = homeCall.HidesScopes(home.GetScopesCount());
-        const OutputAutoescapeGuard autoescapeGuard(home, autoescape);
+        const OutputAutoescapeGuard autoescapeGuard(home, autoescape, isVolatile);
         home.EnterScope();
         if (isLinked)
         {
             home.PushFrameView({}, homeCall.Link());
         }
-        // Jinja2's loop(...) returns Markup by the setting the loop is compiled under
+        // Jinja2's loop(...) returns Markup by the setting the loop is compiled under, the
+        // runtime one in volatile code
         InternalValue result(RenderToString(home.GetRendererCallback(), [&](OutStream& stream) { statement->RenderLoop(var, stream, home, level + 1, &site); }));
-        result.SetMarkup(autoescape);
+        result.SetMarkup(home.IsOutputAutoescape());
         if (isLinked)
         {
             home.PopFrameView();
@@ -1018,7 +1021,8 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         state->recursiveNodes = values.Nodes();
         // loop(...) runs every level where the outermost one runs (ClosureSite)
         state->recursiveSite = site ? *site : ClosureSite(values);
-        state->recursiveAutoescape = values.IsOutputAutoescape();
+        state->recursiveAutoescape = values.IsStaticAutoescape();
+        state->recursiveVolatile = values.IsVolatileAutoescape();
     }
     auto context = values.EnterScope(std::move(state->loopScope));
     if (!state->loopSlot)
@@ -2059,9 +2063,7 @@ void ImportedModule::Render(const Tpl& tpl)
     m_context.SetNodes(tpl.Nodes());
     // The module's context is its template's: its macros run with the template's runtime
     // autoescape setting wherever they are called
-    const bool autoescape = m_context.Nodes()[tpl.GetRenderer()].IsAutoescape();
-    m_context.SetAutoescape(autoescape);
-    m_context.SetOutputAutoescape(autoescape);
+    m_context.ResetAutoescape(m_context.Nodes()[tpl.GetRenderer()].IsAutoescape());
     // Only the names the template, and the ones it extends, define are imported, as in
     // Jinja2; its output is dropped
     RenderToString(&callback, [this, &tpl](OutStream& stream) { m_context.Nodes()[tpl.GetRenderer()].RenderAsModule(stream, m_context, m_blocks, tpl.SelfName()); });
@@ -2199,6 +2201,9 @@ struct MacroStatement::CallableBody
     const MacroStatement* macro;
     ArenaView nodes;
     bool autoescape;
+    // Defined in volatile code: the body's output follows the runtime setting where it is
+    // called (RenderContext::IsVolatileAutoescape)
+    bool isVolatile;
     // The body resolves its names where the macro is defined, not through its caller
     // (docs/design/0038-lexical-scoping-plan.md)
     ClosureSite site;
@@ -2214,7 +2219,7 @@ struct MacroStatement::CallableBody
     {
         // A macro called from another template (imported, or passed as `caller`) runs in its own tree
         const ArenaSwitch nodesSwitch(home, nodes);
-        OutputAutoescapeGuard autoescapeGuard(home, autoescape);
+        const OutputAutoescapeGuard autoescapeGuard(home, autoescape, isVolatile);
         macro->InvokeMacroRenderer(callParams, stream, home, link);
     }
 };
@@ -2225,7 +2230,7 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
     // is called decides whether its results are Markup, its own and those of `caller()` and
     // `join` in it (RenderContext::IsAutoescape). The defaults are evaluated by each call
     // (BindMacroDefaults)
-    Callable result(Callable::Macro, CallableBody{ this, values.Nodes(), values.IsOutputAutoescape(), ClosureSite(values), m_readsSlotsOnly });
+    Callable result(Callable::Macro, CallableBody{ this, values.Nodes(), values.IsStaticAutoescape(), values.IsVolatileAutoescape(), ClosureSite(values), m_readsSlotsOnly });
     result.SetAttributes(m_attributes);
     return result;
 }
@@ -2616,7 +2621,7 @@ void FilterStatement::Render(OutStream& os, RenderContext& values)
 
 void AutoescapeStatement::Render(OutStream& os, RenderContext& values)
 {
-    AutoescapeGuard autoescapeGuard(values, ConvertToBool(values.Nodes()[m_expr].Evaluate(values)));
+    const auto autoescapeGuard = AutoescapeGuard::Statement(values, ConvertToBool(values.Nodes()[m_expr].Evaluate(values)), m_isVolatile);
     values.EnterScope();
     values.Nodes()[m_body].Render(os, values);
     values.ExitScope();
