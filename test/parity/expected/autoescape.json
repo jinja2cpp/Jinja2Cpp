@@ -2054,6 +2054,19 @@
    "output": "None||<"
   },
   {
+   "id": "autoescape.env_on_finalize_folded_choice",
+   "template": "{{ '<'|safe if 1 > 0 else x }}{{ ('<'|safe) or x }}",
+   "context": {
+    "x": "<"
+   },
+   "env": {
+    "autoescape": true,
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[<][<]"
+  },
+  {
    "id": "autoescape.env_off_finalize",
    "template": "{{ '<' }}{{ x }}{{ '<'|safe }}",
    "context": {
