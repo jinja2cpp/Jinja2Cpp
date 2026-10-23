@@ -410,6 +410,21 @@ TEST(BigIntToyBackend, TemplateKeepsTheBackendItWasLoadedWith)
     const auto nested = outer.RenderAsString(params);
     ASSERT_TRUE(nested.has_value()) << nested.error().ToString();
     EXPECT_EQ("False|18446744073709551617", nested.value());
+
+    // Settings changed after the backend was set keep it, through the env and its templates
+    Settings changed = env.GetSettings();
+    changed.trimBlocks = true;
+    env.SetSettings(changed);
+    EXPECT_EQ(big_int_toy::Backend(), env.GetBigIntBackend());
+    Template afterSettings(&env);
+    ASSERT_TRUE(afterSettings.Load("{{ big + 3 }}"));
+    EXPECT_EQ("18446744073709551618", afterSettings.RenderAsString(BigIntParams()).value());
+    TemplateEnv fresh;
+    ASSERT_TRUE(fresh.SetBigIntBackend(big_int_toy::Backend()));
+    fresh.SetSettings(changed);
+    Template beforeFirstLoad(&fresh);
+    ASSERT_TRUE(beforeFirstLoad.Load("{{ big + 3 }}"));
+    EXPECT_EQ("18446744073709551618", beforeFirstLoad.RenderAsString(BigIntParams()).value());
     EXPECT_EQ(0, big_int_toy::LiveObjects());
 }
 

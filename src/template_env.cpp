@@ -225,7 +225,7 @@ bool TemplateEnvImpl::IsEqual(const TemplateEnvImpl& other) const
     std::shared_lock<std::shared_timed_mutex> l1(guard, std::defer_lock);
     std::shared_lock<std::shared_timed_mutex> l2(other.guard, std::defer_lock);
     std::lock(l1, l2);
-    return filesystemHandlers == other.filesystemHandlers && settings == other.settings && bigIntBackend == other.bigIntBackend && *globalValues == *other.globalValues && IsSameCallables(filters, other.filters) && IsSameCallables(tests, other.tests) && IsSameCallables(translations, other.translations) && templateCache == other.templateCache && templateWCache == other.templateWCache;
+    return filesystemHandlers == other.filesystemHandlers && settings == other.settings && GetBigIntBackend() == other.GetBigIntBackend() && *globalValues == *other.globalValues && IsSameCallables(filters, other.filters) && IsSameCallables(tests, other.tests) && IsSameCallables(translations, other.translations) && templateCache == other.templateCache && templateWCache == other.templateWCache;
 }
 
 LoadSettingsPtr TemplateEnvImpl::GetLoadSettings() const
@@ -234,16 +234,40 @@ LoadSettingsPtr TemplateEnvImpl::GetLoadSettings() const
     // the reference TemplateEnv::GetSettings returns
     // A finalize callable edited in place keeps its identity, so it would compare equal: templates of an environment
     // with one get settings of their own
+    std::scoped_lock l(m_loadSettingsGuard);
     if (settings.finalize.callable)
     {
-        return std::make_shared<const LoadSettings>(settings, bigIntBackend);
+        return std::make_shared<const LoadSettings>(settings, BigIntBackendLocked());
     }
-    std::scoped_lock l(m_loadSettingsGuard);
-    if (!m_loadSettings || m_loadSettings->settings != settings || m_loadSettings->bigIntBackend != bigIntBackend)
+    if (!m_loadSettings || m_loadSettings->settings != settings)
     {
-        m_loadSettings = std::make_shared<const LoadSettings>(settings, bigIntBackend);
+        m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked());
     }
     return m_loadSettings;
+}
+
+bool TemplateEnvImpl::SetBigIntBackend(const BigIntBackend* backend) noexcept
+{
+    std::scoped_lock l(m_loadSettingsGuard);
+    if (backend == BigIntBackendLocked())
+    {
+        return true;
+    }
+    try
+    {
+        m_loadSettings = std::make_shared<const LoadSettings>(settings, backend);
+    }
+    catch (...)
+    {
+        return false;
+    }
+    return true;
+}
+
+const BigIntBackend* TemplateEnvImpl::GetBigIntBackend() const noexcept
+{
+    std::scoped_lock l(m_loadSettingsGuard);
+    return BigIntBackendLocked();
 }
 
 const LoadSettingsPtr& DefaultLoadSettings()
@@ -394,13 +418,12 @@ bool TemplateEnv::SetBigIntBackend(const BigIntBackend* backend) noexcept
     {
         return false;
     }
-    m_impl->bigIntBackend = backend;
-    return true;
+    return m_impl->SetBigIntBackend(backend);
 }
 
 const BigIntBackend* TemplateEnv::GetBigIntBackend() const noexcept
 {
-    return m_impl->bigIntBackend;
+    return m_impl->GetBigIntBackend();
 }
 
 void TemplateEnv::AddFilesystemHandler(std::string prefix, FilesystemHandlerPtr h)

@@ -295,7 +295,7 @@ public:
      *
      * @return false, changing nothing, when the table is not one this library can use: `structSize` smaller than
      *         version 1's, `version` other than 1, a null name or function, or an object larger than
-     *         \ref MaxBigIntObjectSize or aligned beyond \ref MaxBigIntObjectAlign
+     *         \ref MaxBigIntObjectSize or aligned beyond \ref MaxBigIntObjectAlign; or when memory runs out
      */
     bool SetBigIntBackend(const BigIntBackend* backend) noexcept;
     //! The backend set by \ref SetBigIntBackend, or the built-in one

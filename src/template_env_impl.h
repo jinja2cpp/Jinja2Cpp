@@ -84,8 +84,6 @@ public:
     // Changes with every change of the globals: a render converts them only when it differs
     // from the one of the copy it converted last
     std::atomic<uint64_t> globalsGeneration{ NewGlobalsGeneration() };
-    // The big-integer arithmetic of templates loaded from now on (TemplateEnv::SetBigIntBackend)
-    const BigIntBackend* bigIntBackend = GetBuiltinBigIntBackend();
     CallablesMap filters;
     CallablesMap tests;
     CallablesMap translations;
@@ -95,8 +93,16 @@ public:
     // The TemplateEnv that owns this state; null once it is destroyed, and nothing is cached then. Changed under `guard`
     std::atomic<const TemplateEnv*> owner{ nullptr };
 
+    // The big-integer arithmetic of templates loaded from now on (TemplateEnv::SetBigIntBackend). It is kept in
+    // m_loadSettings rather than in a field of its own, so GetLoadSettings compares nothing more than the settings
+    bool SetBigIntBackend(const BigIntBackend* backend) noexcept;
+    const BigIntBackend* GetBigIntBackend() const noexcept;
+
 private:
+    const BigIntBackend* BigIntBackendLocked() const noexcept { return m_loadSettings ? m_loadSettings->bigIntBackend : GetBuiltinBigIntBackend(); }
+
     mutable std::mutex m_loadSettingsGuard;
+    // Made on the first Load, or by SetBigIntBackend when the backend differs from the built-in one
     mutable LoadSettingsPtr m_loadSettings;
 };
 
