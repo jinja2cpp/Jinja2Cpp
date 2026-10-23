@@ -5027,6 +5027,217 @@
    "output": "False1|False2|"
   },
   {
+   "id": "statements.loop_include_nested_loops",
+   "template": "{% for x in [1, 2] %}{% for y in 'ab' %}{% include 't' %}|{% endfor %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t": "{{ loop is defined }}{{ x }}{{ y }}"
+   },
+   "output": "False1a|False1b|False2a|False2b|"
+  },
+  {
+   "id": "statements.loop_include_own_loop",
+   "template": "{% for x in [1, 2] %}{% include 't' %}|{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t": "{% for z in 'ab' %}{{ loop.index }}{{ z }}{% endfor %}{{ loop is defined }}"
+   },
+   "output": "1a2bFalse|1a2bFalse|"
+  },
+  {
+   "id": "statements.loop_include_set_loop_kept",
+   "template": "{% set loop = 5 %}{% for x in [1] %}{% include 't' %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t": "{{ loop is defined }}"
+   },
+   "output": "True"
+  },
+  {
+   "id": "statements.loop_include_in_macro",
+   "template": "{% macro m() %}{% include 't' %}{% endmacro %}{% for x in [1] %}{{ m() }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "t": "{{ loop is defined }}"
+   },
+   "output": "False"
+  },
+  {
+   "id": "statements.loop_include_in_nested_include",
+   "template": "{% for x in [1] %}{% include 'a' %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "{{ loop is defined }}[{% include 'b' %}]",
+    "b": "{{ loop is defined }}{{ x }}"
+   },
+   "output": "False[False1]"
+  },
+  {
    "id": "statements.set_loop_in_loop_else",
    "template": "{% for x in [] %}{% else %}{% set loop = 1 %}{{ loop }}{% endfor %}",
    "context": {

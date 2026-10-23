@@ -1939,6 +1939,18 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
         innerContext.NewEvalContext();
         innerContext.PassOverEntryBindings();
         innerContext.EnterScope();
+        // The names of the including loop are visible, `loop` is not (Jinja2's include context
+        // takes the loop's targets, not its LoopContext); a `loop` set outside it is
+        const auto isLoopObject = [](const InternalValue& value) {
+            const auto map = AsMap(value);
+            return map && dynamic_cast<const LoopAccessor*>(map->GetAccessor()) != nullptr;
+        };
+        const HashedName loopName{ "loop", HashedName::Hash("loop") };
+        if (const auto found = values.FindValue(loopName); found && isLoopObject(*found))
+        {
+            auto outer = values.FindValueWhere("loop"s, [&isLoopObject](const InternalValue& value) { return !isLoopObject(value); });
+            innerContext.GetCurrentScope()["loop"s] = outer ? *outer : MakeUndefined(values, "loop");
+        }
     }
 
     innerContext.SetNodes(tpl.Nodes());

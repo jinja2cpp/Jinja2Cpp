@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 touches: [src/statements.cpp#RenderIncludedTemplate]
@@ -16,3 +16,7 @@ Pinned by `statements.loop_not_visible_in_include`. Fix: hide the `loop` binding
 innermost enclosing loop (slot or scope) from the cloned context in
 `RenderIncludedTemplate` when it is rendered with context; check `{% import ... with context %}`
 too.
+
+**Progress.** `RenderIncludedTemplate` binds `loop` in the included template's scope to the next `loop`
+that is not a loop object (a top-level `{% set loop %}` or a render parameter), or to undefined. Cases
+`statements.loop_not_visible_in_include` (line gone from the allow-list) and `statements.loop_include_*`.
