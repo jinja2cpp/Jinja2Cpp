@@ -4,6 +4,7 @@ priority: high
 area: api
 depends: [0252, 0076, 0253]
 touches: [include/jinja2cpp/template.h, include/jinja2cpp/fwd.h, src/template.cpp, src/template_impl.h, src/out_stream.h, src/out_stream.cpp, test/output_test.cpp, test/template_api_test.cpp, test/fwd_test.cpp, bench/jinja2cpp_bench.cpp, bench/README.md]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/616
 ---
 # `RenderTo` a caller's string or an output sink
 
