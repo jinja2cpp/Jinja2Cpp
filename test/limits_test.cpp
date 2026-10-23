@@ -202,6 +202,33 @@ INSTANTIATE_TEST_SUITE_P(Limits, LimitsTest, ::testing::ValuesIn(Cases()), [](co
 
 using LimitsEnvTest = TemplateEnvFixture;
 
+// Unlimited operators (maxExpressionOperators = 0): checking whether a long chain folds, or
+// giving a constant to its first filter, must not overflow the stack while the template loads
+// (docs/tasks/0216). The parser builds these chains without recursing; whether the evaluator
+// then runs out of stack depends on the platform's stack and frames, so either outcome passes
+TEST_F(LimitsEnvTest, LongChainsWithUnlimitedOperators)
+{
+    Settings settings;
+    settings.limits.maxExpressionOperators = 0;
+    m_env.SetSettings(settings);
+    const std::string sources[] = {
+        "{% autoescape 1" + Repeat(" + 1", 200000) + " %}x{% endautoescape %}",
+        "{% autoescape x %}{{ 1" + Repeat(" + 1", 200000) + " }}{% endautoescape %}",
+        "{% autoescape 'a'" + Repeat("[:]", 200000) + " %}x{% endautoescape %}",
+        "{% autoescape x %}{{ ['a']" + Repeat("[0][:]", 100000) + " }}{% endautoescape %}",
+        "{{ 'a'" + Repeat("|upper", 200000) + " }}",
+        "{% autoescape x %}{{ 'a'" + Repeat("|upper", 200000) + " }}{% endautoescape %}",
+    };
+    for (const auto& source : sources)
+    {
+        bool failedAtLoad = false;
+        if (const auto error = LoadAndRender(m_env, source, failedAtLoad))
+        {
+            EXPECT_EQ(ErrorCode::RecursionLimitExceeded, error->GetCode()) << source.substr(0, 40) << ": " << ErrorToString(*error);
+        }
+    }
+}
+
 TEST_F(LimitsEnvTest, ErrorMessage)
 {
     Settings settings;

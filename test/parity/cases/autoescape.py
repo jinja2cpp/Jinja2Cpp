@@ -127,10 +127,27 @@ CASES = [
     ("env_on_macro_in_include_call_site", "{% macro m() %}({{ 'T' if caller() is escaped else 'F' }}){% endmacro %}{% autoescape false %}{% include 'inc.j2' %}{% endautoescape %}|{% include 'inc.j2' %}",
      {"env": {"autoescape": True}, "templates": {"inc.j2": "{{ 'T' if l|join(','|safe) is escaped else 'F' }}{% call m() %}<{% endcall %}"}}),
     ("env_on_set_filtered_block_in_macro_call_site", "{% macro j() %}{% set x | replace('a', '<') %}a{% endset %}{{ 'T' if x is escaped else 'F' }}{{ x }}{% endmacro %}{% autoescape false %}{{ j() }}{% endautoescape %}|{{ j() }}", AE),
-    # `{% autoescape %}` with a value known only at run time makes the code it encloses read the
-    # runtime setting for its output too (Jinja2's volatile EvalContext)
+    # `{% autoescape %}` with a value known only at run time makes the code it encloses volatile
+    # (Jinja2's volatile EvalContext): its output reads the runtime setting, and a value Jinja2
+    # folds is escaped by the setting the code is compiled under (here the environment's)
     ("volatile_macro_output", "{% autoescape on %}{% macro m() %}{{ '<' }}{% endmacro %}{% autoescape false %}{{ m() }}{% endautoescape %}{% endautoescape %}", {"ctx": {"on": True}}),
     ("volatile_concat", "{% autoescape on %}{{ '<' ~ '<'|safe }}{% endautoescape %}", {"ctx": {"on": True}}),
+    # A value Jinja2 folds is escaped by the setting the code is compiled under, filters and
+    # tests are not folded there, and `~` joins as str (docs/tasks/0216)
+    ("volatile_folded_output", "{% autoescape on %}{{ '<' }}{{ x }}{{ '<' ~ 'a' }}{{ '<'|upper }}{{ ['<'][0] }}{{ '<' if 1 is odd }}{{ ('<', 1)[0] ~ x }}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
+    ("volatile_folded_output_under_true", "{% autoescape true %}{% autoescape on %}{{ x }}{{ '<' ~ 'a' }}{{ '<'|e }}{{ ['<'][0] }}{{ '<' if true }}{% endautoescape %}{% endautoescape %}", {"ctx": {"on": False, "x": "<"}}),
+    ("volatile_nested_constant", "{% autoescape on %}{% autoescape false %}{{ x }}{{ '<' }}{% endautoescape %}{% autoescape true %}{{ x }}{{ '<' }}{% endautoescape %}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
+    ("volatile_constant_value", "{% autoescape 1 and true %}{% macro m() %}{{ '<' }}{% endmacro %}{% autoescape false %}{{ m() }}{% endautoescape %}{{ '<' }}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
+    ("volatile_macro_runtime_output", "{% autoescape on %}{% macro m() %}{{ x }}{% endmacro %}{% autoescape false %}{{ m() }}{{ 'T' if m() is escaped else 'F' }}{% endautoescape %}|{{ m() }}{{ 'T' if m() is escaped else 'F' }}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
+    ("volatile_macro_through_static_macro", "{% autoescape true %}{% macro c(f) %}{{ f() }}{% endmacro %}{% autoescape on %}{% macro m() %}{{ x }}{% endmacro %}{% autoescape false %}{{ c(m) }}{% endautoescape %}{% endautoescape %}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
+    ("volatile_caller", "{% macro w() %}{% autoescape false %}{{ caller() }}{% endautoescape %}{% endmacro %}{% autoescape on %}{% call w() %}{{ x }}{% endcall %}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
+    ("volatile_loop_recursion", "{% autoescape on %}{% for y in [[1],[]] recursive %}{{ x }}{% autoescape false %}{{ loop(y) if y is iterable }}{% endautoescape %}{% endfor %}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
+    ("volatile_filter_and_set_blocks", "{% autoescape on %}{% macro m() %}{% filter upper %}{{ x }}{% endfilter %}{% set s %}{{ x }}{% endset %}{{ s }}{% set t | lower %}{{ x }}{% endset %}{{ t }}{% endmacro %}{% autoescape false %}{{ m() }}{% endautoescape %}|{{ m() }}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
+    ("volatile_concat_runtime", "{% autoescape on %}{% macro m() %}{{ x ~ '<'|safe }}{% endmacro %}{{ x ~ '<'|safe }}{% autoescape false %}{{ m() }}{% endautoescape %}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
+    ("volatile_block_and_include", "{% autoescape on %}{% block b %}{{ x }}{{ '<' }}{% endblock %}{% include 'i.j2' %}{% endautoescape %}",
+     {"ctx": {"on": True, "x": "<"}, "templates": {"i.j2": "{{ x }}{{ '<' }}"}}),
+    # Settings::finalize: its result is written unescaped (docs/tasks/0288)
+    ("env_on_finalize", "{{ '<' }}{{ x }}{% autoescape on %}{{ '<' }}{{ x }}{% endautoescape %}", {"env": {"autoescape": True, "finalize": "brackets"}, "ctx": {"on": True, "x": "<"}}),
     ("env_on_import_in_autoescape_block", "{% autoescape false %}{% import 'lib.j2' as z %}{{ z.z() }}{% from 'lib.j2' import z as y %}{{ y() }}{% endautoescape %}|{% import 'lib.j2' as z2 %}{{ z2.z() }}",
      {"env": {"autoescape": True}, "templates": {"lib.j2": "{% macro z() %}{{ 'T' if l|join(','|safe) is escaped else 'F' }}{{ '<'|e ~ html ~ ('<'|safe) }}{% endmacro %}"}}),
     ("env_off_import_in_autoescape_block", "{% autoescape true %}{% import 'lib.j2' as z %}{{ z.z() }}{% endautoescape %}|{% import 'lib.j2' as z2 %}{{ z2.z() }}",
