@@ -18,6 +18,7 @@ inline namespace v2
 // Arithmetic that needs a big result raises OverflowError (IntegerOutOfRangeError).
 //
 // Every function here is out of line and off the int64 paths: they run only once a value is big.
+// Inline code in headers (value_visitors.h) calls them, so the shared library exports them.
 
 // The widest integer a value may hold, 128 KiB of digits (plan Q6): ResourceLimitExceeded past it
 constexpr size_t MaxBigIntBits = size_t{ 1 } << 20;
@@ -26,39 +27,39 @@ constexpr size_t MaxIntStrDigits = 4300;
 
 // The integer whose canonical decimal form is `decimal` ("-" and digits, no leading zero): an
 // int when it fits int64, else a big integer. Throws ResourceLimitError past MaxBigIntBits
-InternalValue MakeBigIntValue(std::string_view decimal);
+JINJA2CPP_EXPORT InternalValue MakeBigIntValue(std::string_view decimal);
 
 // Python's int(text, base) for digits already checked to be valid in `base` (2-36, no sign, no
 // separators, at least one digit). A base that is not a power of two raises ValueError past
 // MaxIntStrDigits, as CPython does
-InternalValue IntegerFromDigits(std::string_view digits, int base, bool negative);
+JINJA2CPP_EXPORT InternalValue IntegerFromDigits(std::string_view digits, int base, bool negative);
 
 // Python's int(x) of a finite double: its whole part, exactly
-InternalValue IntegerFromDouble(double val);
+JINJA2CPP_EXPORT InternalValue IntegerFromDouble(double val);
 
 // The decimal form for str() and repr(): ValueError past MaxIntStrDigits, as CPython raises
-std::string_view CheckedDecimal(const BigIntView& val);
+JINJA2CPP_EXPORT std::string_view CheckedDecimal(const BigIntView& val);
 
 // The digits of |val| in base 2, 8 or 16, lower case
-std::string MagnitudeInBase(const BigIntView& val, int base);
+JINJA2CPP_EXPORT std::string MagnitudeInBase(const BigIntView& val, int base);
 
 // Python's int.bit_length(): the bits of |val|
-size_t BitLength(const BigIntView& val);
+JINJA2CPP_EXPORT size_t BitLength(const BigIntView& val);
 
 // Three-way comparisons: -1, 0 or 1, and 2 when `right` is NaN (unordered). Python compares
 // an int and a float exactly
-int CompareBigInts(const BigIntView& left, const BigIntView& right) noexcept;
-int CompareBigIntDouble(const BigIntView& left, double right);
+JINJA2CPP_EXPORT int CompareBigInts(const BigIntView& left, const BigIntView& right) noexcept;
+JINJA2CPP_EXPORT int CompareBigIntDouble(const BigIntView& left, double right);
 
 // Python's float(x): correctly rounded; OverflowError when it is out of a double's range
-double BigIntToDouble(const BigIntView& val);
+JINJA2CPP_EXPORT double BigIntToDouble(const BigIntView& val);
 
 // Python's round(x, ndigits) of an integer for ndigits < 0, x in decimal: half to even at
 // 10 ** -ndigits. Only digits move, so it needs no arithmetic
-InternalValue RoundIntegerDecimal(std::string_view decimal, int64_t ndigits);
+JINJA2CPP_EXPORT InternalValue RoundIntegerDecimal(std::string_view decimal, int64_t ndigits);
 
 // -x, an int again for -(-2**63)
-InternalValue NegateBigInt(const BigIntView& val);
+JINJA2CPP_EXPORT InternalValue NegateBigInt(const BigIntView& val);
 
 // Whether the integer is odd
 inline bool IsOdd(const BigIntView& val) noexcept
@@ -67,9 +68,9 @@ inline bool IsOdd(const BigIntView& val) noexcept
 }
 
 // OverflowError for integer arithmetic whose operand or result is outside int64
-[[noreturn]] void ThrowBigIntArithmetic();
+[[noreturn]] JINJA2CPP_EXPORT void ThrowBigIntArithmetic();
 // OverflowError for a big integer where Python needs an index-sized one (a repeat count, an argument)
-[[noreturn]] void ThrowIndexOverflow();
+[[noreturn]] JINJA2CPP_EXPORT void ThrowIndexOverflow();
 } // namespace v2
 } // namespace jinja2
 
