@@ -2,3 +2,4 @@
 # Format and kinds: test/parity/README.md.
 
 autoescape.markup_percent_d_of_string     rejects     0210 %d and %f of a string argument in Markup's % raise; markupsafe's helper converts it with int()/float()
+autoescape.env_on_finalize                output      0288 with Settings::finalize the output is not escaped under autoescape

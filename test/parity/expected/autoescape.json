@@ -2012,6 +2012,20 @@
    "output": "<<<<"
   },
   {
+   "id": "autoescape.env_on_finalize",
+   "template": "{{ '<' }}{{ x }}{% autoescape on %}{{ '<' }}{{ x }}{% endautoescape %}",
+   "context": {
+    "on": true,
+    "x": "<"
+   },
+   "env": {
+    "autoescape": true,
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[&lt;][&lt;][&lt;][&lt;]"
+  },
+  {
    "id": "autoescape.env_on_import_in_autoescape_block",
    "template": "{% autoescape false %}{% import 'lib.j2' as z %}{{ z.z() }}{% from 'lib.j2' import z as y %}{{ y() }}{% endautoescape %}|{% import 'lib.j2' as z2 %}{{ z2.z() }}",
    "context": {
