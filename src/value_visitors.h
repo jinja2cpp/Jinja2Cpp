@@ -1568,11 +1568,14 @@ struct BinaryMathOperation : BaseVisitor<>
             ThrowSequenceTooLong(static_cast<uint64_t>(count) > UINT64_MAX / text.size() ? UINT64_MAX : text.size() * static_cast<uint64_t>(count),
                                  "a repeated string");
         }
-        return InternalValue::MakeText<CharT>(text.size() * static_cast<size_t>(count), [text, count](boost::span<CharT> chars) {
-            auto out = chars.begin();
-            for (int64_t i = 0; i < count; ++i)
+        // Copies the text once, then doubles what is written: log2(count) copies, not count
+        return InternalValue::MakeText<CharT>(text.size() * static_cast<size_t>(count), [text](boost::span<CharT> chars) {
+            std::copy(text.begin(), text.end(), chars.begin());
+            for (size_t done = text.size(); done < chars.size();)
             {
-                out = std::copy(text.begin(), text.end(), out);
+                const auto n = std::min(done, chars.size() - done);
+                std::copy_n(chars.begin(), n, chars.begin() + static_cast<std::ptrdiff_t>(done));
+                done += n;
             }
         });
     }

@@ -278,7 +278,7 @@ TEST_F(LimitsEnvTest, FromStringTemplateSize)
 
 TEST_F(LimitsEnvTest, UndeclaredVariablesUseTheTemplatesLimits)
 {
-    // Deeper than the default maxExpressionDepth (64), allowed by the template's settings
+    // Deeper than the default maxExpressionDepth (70), allowed by the template's settings
     Settings settings;
     settings.limits.maxExpressionDepth = 200;
     m_env.SetSettings(settings);

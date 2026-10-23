@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <string>
 #include <utility>
+#include <vector>
 
 #if defined(__linux__) || defined(__APPLE__)
 #include <pthread.h>
@@ -106,11 +107,27 @@ TEST_F(RecursionLimitsTest, DeepTargetIsParseError)
 
 TEST_F(RecursionLimitsTest, NestingJinja2AcceptsRenders)
 {
-    // Python Jinja2 fails at about 80 nested brackets and 300 unary operators
-    EXPECT_EQ("1", Render(Nested("(", ")", 60)));
+    // The default limits stop where Python Jinja2 3.1.6 on Python 3.12 does (docs/tasks/0098):
+    // it renders 69 nested brackets, 491 unary operators and 492 operands of `+`, and fails one deeper
+    EXPECT_EQ("1", Render(Nested("(", ")", 69)));
     EXPECT_EQ("1", Render(Nested("[", "][0]", 40)));
-    EXPECT_EQ("1", Render(Nested("-", "", 200)));
-    EXPECT_EQ("True", Render(Nested("not ", "", 200)));
+    EXPECT_EQ("-1", Render(Nested("-", "", 491)));
+    EXPECT_EQ("False", Render(Nested("not ", "", 491)));
+    EXPECT_EQ("492", Render("{{ " + Repeat("1 + ", 491) + "1 }}"));
+
+    const std::string templates[] = {
+        Nested("(", ")", 70),
+        Nested("-", "", 492),
+        Nested("not ", "", 492),
+        "{{ " + Repeat("1 + ", 492) + "1 }}",
+    };
+    for (const auto& source : templates)
+    {
+        Template tpl(&m_env);
+        auto result = tpl.Load(source);
+        ASSERT_FALSE(result.has_value()) << source.substr(0, 20);
+        EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode()) << source.substr(0, 20);
+    }
 }
 
 TEST_F(RecursionLimitsTest, ErrorMessage)
@@ -206,7 +223,7 @@ TEST_F(RecursionLimitsTest, RecursionJinja2AcceptsRenders)
 TEST_F(RecursionLimitsTest, LongChains)
 {
     // The parser reads chains in a loop but the evaluator recurses once per operator.
-    // Python Jinja2 fails at 300-500 chained operators.
+    // Python Jinja2 fails past 491 chained operators.
     EXPECT_EQ("400", Render("{{ " + Repeat("1 + ", 399) + "1 }}"));
     EXPECT_EQ("3", Render("{{ x" + Repeat("|abs", 350) + " }}", { { "x", -3 } }));
     EXPECT_EQ("3", Render("{{ ((x" + Repeat("|abs", 100) + ")" + Repeat("|abs", 100) + ")" + Repeat("|abs", 50) + " }}", { { "x", -3 } }));
@@ -227,7 +244,7 @@ TEST_F(RecursionLimitsTest, LongChains)
         "{{ x" + Repeat("()", 20000) + " }}",
         "{% filter upper" + Repeat("|lower", 20000) + " %}{% endfilter %}",
         // A chain inside brackets continues outside them: the depth is their sum
-        "{{ " + Repeat("(", 60) + "x" + Repeat("|abs)", 60) + Repeat("|abs", 400) + " }}",
+        "{{ " + Repeat("(", 60) + "x" + Repeat("|abs)", 60) + Repeat("|abs", 440) + " }}",
     };
     for (const auto& source : templates)
     {
@@ -259,17 +276,35 @@ TEST_F(RecursionLimitsTest, SiblingsDoNotAddUp)
 
 TEST_F(RecursionLimitsTest, NestedBlocks)
 {
-    // Python Jinja2 fails at about 100 nested blocks
-    EXPECT_EQ("x", Render(Repeat("{% if 1 %}", 90) + "x" + Repeat("{% endif %}", 90)));
+    // Python Jinja2 renders 247 nested blocks, with, filter and set blocks and fails at the
+    // 248th with RecursionError. It stops nested if at 99 and for at 21, where CPython refuses
+    // the generated code (too many indentation levels, statically nested blocks); Jinja2C++
+    // has no such limit and takes every kind of block to 247 (docs/tasks/0098)
+    std::string blocks;
+    for (int i = 0; i < 247; ++i)
+    {
+        blocks += "{% block b" + std::to_string(i) + " %}";
+    }
+    const std::pair<std::string, std::string> kinds[] = {
+        { "{% if 1 %}", "{% endif %}" },
+        { "{% for i in [1] %}", "{% endfor %}" },
+        { "{% filter upper %}", "{% endfilter %}" },
+        { "{% with %}", "{% endwith %}" },
+    };
+    EXPECT_EQ("x", Render(blocks + "x" + Repeat("{% endblock %}", 247)));
+    for (const auto& [open, close] : kinds)
+    {
+        EXPECT_EQ(open == "{% filter upper %}" ? "X" : "x", Render(Repeat(open, 247) + "x" + Repeat(close, 247))) << open;
+    }
+    EXPECT_EQ("", Render(Repeat("{% set a %}", 246) + "x" + Repeat("{% endset %}", 246)));
     // elif and else branches are not nested
     EXPECT_EQ("ok", Render("{% if 0 %}a" + Repeat("{% elif 0 %}b", 1000) + "{% else %}ok{% endif %}"));
 
-    const std::string templates[] = {
-        Repeat("{% if 1 %}", 300) + "x" + Repeat("{% endif %}", 300),
-        Repeat("{% for i in [1] %}", 300) + "x" + Repeat("{% endfor %}", 300),
-        Repeat("{% filter upper %}", 300) + "x" + Repeat("{% endfilter %}", 300),
-        Repeat("{% with %}", 300) + "x" + Repeat("{% endwith %}", 300),
-    };
+    std::vector<std::string> templates{ blocks + "{% block last %}x" + Repeat("{% endblock %}", 248) };
+    for (const auto& [open, close] : kinds)
+    {
+        templates.push_back(Repeat(open, 248) + "x" + Repeat(close, 248));
+    }
     for (const auto& source : templates)
     {
         Template tpl(&m_env);

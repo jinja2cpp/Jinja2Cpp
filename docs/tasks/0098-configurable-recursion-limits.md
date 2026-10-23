@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: api
 depends: [0003]
@@ -34,3 +34,14 @@ default settings on an 8 MiB stack.
 **Moved (2026-10-18).** The four counts become fields of `Settings::Limits` in 0262 (Ruslan chose
 one nested struct, enforced at 2.0). This task keeps the default re-tuning against Python and the
 separate `{% block %}` count.
+
+**Done (this PR).** Measured with the oracle (Python 3.12, Jinja2 3.1.6): Python renders 69 nested
+brackets (75 lists), 491 unary operators, 492 operands of `+`, 328 filters, and 247 nested `block`,
+`with`, `filter` (246 `set` blocks); it stops nested `if` and `macro` at 98 (CPython's 100
+indentation levels) and `for` at 20 (CPython's static block limit). Ruslan chose (2026-10-23) one
+count for every block kind: defaults are now `maxExpressionDepth` 70, `maxExpressionOperators` 491,
+`maxBlockNesting` 248, so Jinja2C++ stops exactly where Python does for brackets, operators and
+blocks and renders the deeper `if`/`for` that CPython's compiler refuses. `maxRenderDepth` stays 256
+(Python: 247 macro levels). `~` chains stay nested operators (Python's are flat): 0287. Tests:
+`RecursionLimitsTest.NestingJinja2AcceptsRenders` and `NestedBlocks` check both sides of each
+boundary.

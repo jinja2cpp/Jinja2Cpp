@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: robustness
 depends: [0003]
@@ -50,3 +50,10 @@ in a Release build; the fuzz workflow no longer ignores timeouts and OOMs.
 **Split (2026-10-18, untrusted-input review).** The opt-in limits API is 0262 (`Settings::Limits`,
 freeze-critical) and the per-operation checks are 0263; this task keeps the `'x' * n` reserve-once
 fix. The fuzzing part moved to 0267.
+
+**Done (0097 leftover, this PR).** `'x' * n` already built its string in one allocation; the fill
+now copies the text once and doubles what it wrote, so `'x' * 60000000` takes 65 ms in a Debug
+build (`'x' * 10**8` is past the 2^26 cap and fails at once). `[x] * n` is a lazy adapter and builds
+nothing. REVIEW.md's rule on template-controlled sizes now names `Settings::Limits` (0262) and
+0263 instead of this task. String `|length` still walks a list of characters (1.7 s for 6M in
+Debug); that is 0263's "string `|length` without building a list".
