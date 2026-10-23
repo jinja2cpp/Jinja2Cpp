@@ -66,9 +66,9 @@ bool StackNearlyExhaustedSlow(std::uintptr_t frame);
 // rather than in each parser, which lives for one tag
 struct ParseLimits
 {
-    unsigned maxExpressionDepth = 64;
-    unsigned maxExpressionOperators = 400;
-    unsigned maxBlockNesting = 128;
+    unsigned maxExpressionDepth = 70;
+    unsigned maxExpressionOperators = 491;
+    unsigned maxBlockNesting = 248;
 };
 static_assert(ParseLimits{}.maxExpressionDepth == Settings::Limits{}.maxExpressionDepth
               && ParseLimits{}.maxExpressionOperators == Settings::Limits{}.maxExpressionOperators

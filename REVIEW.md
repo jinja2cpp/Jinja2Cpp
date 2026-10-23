@@ -36,9 +36,10 @@ are what this codebase has actually got wrong.
   from template text or data (`range`, `*` repetition, center/indent/format widths,
   join over generators) goes through the existing hard cap (`MaxSequenceSize` and
   its check in `src/internal_value.h`), with the size arithmetic checked before the
-  allocation and integer conversions following task 0172. Configurable limits are
-  still open (task 0097): a missing per-render budget is not a finding, but a new
-  path that bypasses the existing cap is.
+  allocation and integer conversions following task 0172. The check reads
+  `detail::t_renderLimits.maxSequenceSize`, so a host's `Settings::Limits` (task 0262)
+  lowers the cap for the same paths. Growth operations that do not call it yet are
+  listed in task 0263 and are not new findings; a new path that bypasses the check is.
 - **Errors reach the caller as a `Result`.** Load, Render, `GetMetadata*` and
   `TemplateEnv::LoadTemplate*` return every failure in `Result`; only `std::bad_alloc`
   escapes, meaning the system is out of memory (docs/api-2.0.md 2.1, task 0253). The

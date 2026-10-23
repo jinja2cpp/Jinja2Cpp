@@ -209,6 +209,79 @@ public:
 private:
     std::string m_rootFolder;
 };
+
+/*!
+ * \brief Filesystem handler that never opens a file outside its root folder
+ *
+ * Use it when the template root may hold symbolic links (or, on Windows, junctions) that the host does not control. \ref RealFileSystem follows links
+ * wherever they point, as Python's `FileSystemLoader` does; this handler opens a file only if it really lies under the root, and the check applies to the
+ * file that is actually read, so a link swapped while a template loads cannot reach outside.
+ *
+ * Names follow the same rules as \ref RealFileSystem (those of Python's `FileSystemLoader`): a name is split at `/` (on Windows, `\` too), and a name with a
+ * `..` piece is not found. Empty and `.` pieces are skipped. On Windows a piece holding `\` or `:` is not found. In addition:
+ * - The root path itself is trusted: links in it are followed.
+ * - Below the root, a symbolic link is followed only while it resolves inside the root. On POSIX systems a link with an absolute target, or one whose
+ *   `..` pieces climb above the root, is not found. On Windows the file is opened following links and junctions, and is found only if its final path lies
+ *   under the root's final path (an absolute link to a file inside the root is found; a file behind a volume mount point is not).
+ * - Only regular files are opened; FIFOs, devices and directories are not found.
+ * - Hard links are inside the root by definition, as are POSIX mount points under it.
+ *
+ * Every failure (a refused name, a missing file, an outside link) gives an empty stream pointer or an empty optional; no message carries the host path.
+ * There is no `GetFullFilePath`: a path to open again by name is exactly the race this class avoids. Each call opens the root afresh,
+ * so the class keeps no descriptors and may be used from many threads.
+ */
+class JINJA2CPP_EXPORT ConfinedFileSystem : public IFilesystemHandler
+{
+public:
+    /*!
+     * \brief Initializing/default constructor
+     *
+     * @param rootFolder Path to the root folder. Every opened file lies under it
+     */
+    explicit ConfinedFileSystem(std::string rootFolder = ".");
+
+    /*!
+     * \brief Reset path to the root folder to the new value
+     *
+     * @param newRoot New path to the root folder
+     */
+    void SetRootFolder(std::string newRoot)
+    {
+        m_rootFolder = std::move(newRoot);
+    }
+
+    /*!
+     * \brief Get path to the current root folder
+     */
+    [[nodiscard]] const std::string& GetRootFolder() const
+    {
+        return m_rootFolder;
+    }
+
+    [[nodiscard]] CharFileStreamPtr OpenStream(const std::string& name) const override;
+    [[nodiscard]] WCharFileStreamPtr OpenWStream(const std::string& name) const override;
+    /*!
+     * \brief Open the specified file as a binary stream
+     *
+     * Reads the file's bytes as they are. \ref OpenStream and \ref OpenWStream read `\r\n` as `\n` on Windows, as \ref RealFileSystem's text-mode
+     * streams do, and \ref OpenWStream decodes the file as UTF-8
+     *
+     * @param name Name of the file to open
+     * @return Opened stream object or empty pointer in case of any error
+     */
+    [[nodiscard]] CharFileStreamPtr OpenByteStream(const std::string& name) const;
+    [[nodiscard]] std::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const override;
+
+    /*!
+     * \brief Compares to an object of the same type
+     *
+     * return true if equal (same root folder string)
+     */
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override;
+
+private:
+    std::string m_rootFolder;
+};
 } // namespace v2
 } // namespace jinja2
 

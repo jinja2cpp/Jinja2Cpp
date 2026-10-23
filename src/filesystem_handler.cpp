@@ -3,6 +3,8 @@
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/utils/i_comparable.h>
 
+#include "template_path.h"
+
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
 
@@ -126,51 +128,29 @@ bool MemoryFileSystem::IsEqual(const IComparable& other) const
 
 namespace
 {
-// Python's FileSystemLoader name rules (split_template_path): the name is split at '/', a ".." piece
-// makes it not found, and empty and "." pieces are dropped, so a leading '/' still names a file under
-// the root. On Windows '\\' is a separator too, and a piece holding it (or a drive ':') is not found,
-// as Python rejects os.sep and os.altsep pieces. The pieces are appended to the root as text: path
-// operator/ lets an absolute or drive-qualified piece replace the root
+// The pieces are appended to the root as text: path operator/ lets an absolute or drive-qualified
+// piece replace the root
 std::optional<std::string> JoinTemplatePath(const std::string& root, const std::string& name)
 {
-#ifdef _WIN32
-    constexpr std::string_view rejectedChars{ "\\:\0", 3 };
-#else
-    constexpr std::string_view rejectedChars{ "\0", 1 };
-#endif
-    if (name.find_first_of(rejectedChars) != std::string::npos)
+    const auto pieces = SplitTemplateName(name);
+    if (!pieces)
     {
         return {};
     }
 
     std::string result = root;
-    std::string_view rest = name;
-    while (true)
+    for (const auto piece : *pieces)
     {
-        const auto end = rest.find('/');
-        const auto piece = rest.substr(0, end);
-        if (piece == "..")
-        {
-            return {};
-        }
-        if (!piece.empty() && piece != ".")
-        {
 #ifdef _WIN32
-            const bool endsWithSeparator = !result.empty() && (result.back() == '/' || result.back() == '\\');
+        const bool endsWithSeparator = !result.empty() && (result.back() == '/' || result.back() == '\\');
 #else
-            const bool endsWithSeparator = !result.empty() && result.back() == '/';
+        const bool endsWithSeparator = !result.empty() && result.back() == '/';
 #endif
-            if (!result.empty() && !endsWithSeparator)
-            {
-                result += '/';
-            }
-            result += piece;
-        }
-        if (end == std::string_view::npos)
+        if (!result.empty() && !endsWithSeparator)
         {
-            break;
+            result += '/';
         }
-        rest.remove_prefix(end + 1);
+        result += piece;
     }
     return result;
 }
