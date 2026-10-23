@@ -277,6 +277,9 @@ struct TemplateRootInfo
     // An `extends` at the top level, outside any `if`: Jinja2 compiles no output of the
     // template's body after it (has_known_extends)
     bool knownExtends = false;
+    // A `{% autoescape %}` with a value that is not constant was parsed: only then can a tag
+    // be in volatile code (TemplateParser::IsInVolatileCode)
+    bool hasVolatileAutoescape = false;
 
     // False if a block of this name is defined already. Most templates define few blocks,
     // whose names are compared one by one; past those, the names go to a set, so that a
@@ -1743,6 +1746,10 @@ private:
     // compiles it on its own
     bool IsInVolatileCode(const StatementInfoList& statementsStack) const
     {
+        if (!m_root.hasVolatileAutoescape)
+        {
+            return false;
+        }
         for (auto info = statementsStack.rbegin(); info != statementsStack.rend() && info->type != StatementInfo::BlockStatement; ++info)
         {
             if (info->type == StatementInfo::AutoescapeStatement && m_nodes.Get<AutoescapeStatement>(info->renderer).IsVolatile())

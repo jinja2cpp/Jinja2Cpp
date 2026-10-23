@@ -9,6 +9,7 @@
 #include "name_resolver.h"
 #include "node_arena.h"
 #include "recursion_guard.h"
+#include "render_context.h"
 #include "renderer.h"
 #include "value_visitors.h"
 
@@ -238,8 +239,9 @@ struct BinaryOperator
     bool negated = false;
 };
 
-// The binary operator the next token starts; Precedence::None if it starts none
-BinaryOperator PeekBinaryOperator(LexScanner& lexer)
+// The binary operator the next token starts; Precedence::None if it starts none. Inlined:
+// GCC's budget for this file left it out of line once, adding 1% to Load (docs/tasks/0216)
+JINJA2CPP_ALWAYS_INLINE BinaryOperator PeekBinaryOperator(LexScanner& lexer)
 {
     using Precedence = ExpressionParser::Precedence;
     const auto& tok = lexer.PeekNextToken();

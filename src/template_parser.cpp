@@ -1653,7 +1653,9 @@ StatementsParser::ParseResult StatementsParser::ParseAutoescape(LexScanner& lexe
         return MakeUnexpected(valueExpr.error());
     }
 
-    auto renderer = m_nodes.Make<AutoescapeStatement>(*valueExpr, !m_nodes[*valueExpr].IsFoldable(m_nodes));
+    const bool isVolatile = !m_nodes[*valueExpr].IsFoldable(m_nodes);
+    m_root.hasVolatileAutoescape = m_root.hasVolatileAutoescape || isVolatile;
+    auto renderer = m_nodes.Make<AutoescapeStatement>(*valueExpr, isVolatile);
     auto statementInfo = StatementInfo::Create(StatementInfo::AutoescapeStatement, stmtTok);
     statementInfo.renderer = std::move(renderer);
     statementInfo.frame = m_names.PushWith(m_names.Current());
