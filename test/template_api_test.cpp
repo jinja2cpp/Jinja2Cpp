@@ -470,6 +470,46 @@ TEST(TemplateApiTest, ReleaseThreadCachesLetsGoOfDestroyedEnvironment)
     EXPECT_TRUE(watch.expired());
 }
 
+// A capture whose destructor calls ReleaseThreadCaches: the render's own copy of the callable,
+// in the params table, is destroyed while the render empties that table
+TEST(TemplateApiTest, ReleaseThreadCachesRefusedWhileRenderEmptiesItsTables)
+{
+    struct Releaser
+    {
+        Releaser(const bool* isActive, std::vector<bool>* results)
+            : active(isActive)
+            , released(results)
+        {}
+        Releaser(const Releaser&) = default;
+        Releaser(Releaser&&) = default;
+        Releaser& operator=(const Releaser&) = default;
+        Releaser& operator=(Releaser&&) = default;
+        ~Releaser()
+        {
+            if (*active)
+            {
+                released->push_back(ReleaseThreadCaches());
+            }
+        }
+        const bool* active;
+        std::vector<bool>* released;
+    };
+    bool rendering = false;
+    std::vector<bool> released;
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{{ f() }}{% set x = 'y' %}{{ x }}"));
+    for (int round = 0; round != 2; ++round)
+    {
+        ValuesMap params{ { "f", MakeCallable([releaser = Releaser(&rendering, &released)]() { return Value("f"); }) } };
+        rendering = true;
+        const auto result = tpl.RenderAsString(params);
+        rendering = false;
+        EXPECT_EQ("fy", result.value());
+    }
+    EXPECT_EQ(std::vector<bool>(released.size(), false), released);
+    EXPECT_TRUE(ReleaseThreadCaches());
+}
+
 TEST(TemplateApiTest, ReleaseThreadCachesOnSeveralThreads)
 {
     TemplateEnv env;
