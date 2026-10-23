@@ -2000,11 +2000,10 @@ int64_t IntDigitValue(char ch, int64_t base)
 
 // The digits from `pos` to the end of `text` in `base`, with single underscores between
 // them; nullopt on a bad digit or underscore or no digits. `overflow` is set when the value
-// does not fit uint64
-std::optional<uint64_t> ReadIntDigits(const std::string& text, size_t pos, int64_t base, bool hasPrefix, bool& nonZero, bool& overflow)
+// does not fit uint64; `digits` counts the digits, leading zeros included
+std::optional<uint64_t> ReadIntDigits(const std::string& text, size_t pos, int64_t base, bool hasPrefix, bool& nonZero, bool& overflow, size_t& digits)
 {
     uint64_t value = 0;
-    size_t digits = 0;
     // An underscore must follow a digit or the prefix ("0x_1f") and precede a digit
     bool underscoreAllowed = hasPrefix;
     bool lastUnderscore = false;
@@ -2066,8 +2065,15 @@ std::optional<InternalValue> ParsePythonInt(const std::string& str, int64_t base
 
     bool nonZero = false;
     bool overflow = false;
-    auto value = ReadIntDigits(text, pos, base, hasPrefix, nonZero, overflow);
+    size_t digitCount = 0;
+    auto value = ReadIntDigits(text, pos, base, hasPrefix, nonZero, overflow, digitCount);
     if (!value)
+    {
+        return std::nullopt;
+    }
+    // Past CPython's digit limit, which counts leading zeros too, int() raises ValueError, which do_int
+    // catches: the caller goes on to float(), as Jinja2 does. Power-of-two bases have no limit
+    if ((base & (base - 1)) != 0 && digitCount > MaxIntStrDigits)
     {
         return std::nullopt;
     }
@@ -2080,13 +2086,6 @@ std::optional<InternalValue> ParsePythonInt(const std::string& str, int64_t base
     {
         std::string digits;
         std::copy_if(text.begin() + static_cast<std::ptrdiff_t>(pos), text.end(), std::back_inserter(digits), [](char ch) { return ch != '_'; });
-        // Past CPython's digit limit int() raises ValueError, which do_int catches: the caller
-        // goes on to float(), as Jinja2 does
-        const auto significant = digits.size() - std::min(digits.size(), digits.find_first_not_of('0'));
-        if ((base & (base - 1)) != 0 && significant > MaxIntStrDigits)
-        {
-            return std::nullopt;
-        }
         return IntegerFromDigits(digits, static_cast<int>(base), negative);
     }
     return InternalValue(negative ? static_cast<int64_t>(0 - *value) : static_cast<int64_t>(*value));

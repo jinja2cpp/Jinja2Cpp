@@ -25,6 +25,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -2292,7 +2293,11 @@ struct OutputValueConvertor
     result_t operator()(const BigIntView& val) const
     {
         BigInt result;
-        BigInt::TryParse(val.decimal, result);
+        // The text is canonical, so TryParse fails only when memory runs out, which it reports as false
+        if (!BigInt::TryParse(val.decimal, result))
+        {
+            throw std::bad_alloc();
+        }
         return result_t(std::move(result));
     }
 
