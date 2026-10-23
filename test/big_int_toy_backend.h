@@ -105,7 +105,8 @@ inline std::pair<std::string, std::string> DivideMagnitudes(const std::string& a
     std::string rem = "0";
     for (const char digit : a)
     {
-        rem = Trim(rem + digit);
+        rem.push_back(digit);
+        rem = Trim(std::move(rem));
         int count = 0;
         while (CompareMagnitudes(rem, b) >= 0)
         {
@@ -143,134 +144,178 @@ inline jinja2::BigIntStatus Sum(void* out, const ToyInt& a, bool negateB, const 
     return Make(out, bNegative, SubtractMagnitudes(b.magnitude, a.magnitude));
 }
 
+inline void Destroy(const jinja2::BigIntBackend*, void* obj) noexcept
+{
+    --LiveObjects();
+    static_cast<ToyInt*>(obj)->~ToyInt();
+}
+
+inline jinja2::BigIntStatus FromInt64(const jinja2::BigIntBackend*, void* out, int64_t value) noexcept
+{
+    // The magnitude of INT64_MIN does not fit int64
+    const auto magnitude = value < 0 ? 0 - static_cast<uint64_t>(value) : static_cast<uint64_t>(value);
+    return Make(out, value < 0, std::to_string(magnitude));
+}
+
+inline jinja2::BigIntStatus FromDecimal(const jinja2::BigIntBackend*, void* out, const char* digits, size_t size) noexcept
+{
+    std::string_view text(digits, size);
+    const bool negative = !text.empty() && text.front() == '-';
+    if (negative)
+    {
+        text.remove_prefix(1);
+    }
+    if (text.empty() || text.find_first_not_of("0123456789") != std::string_view::npos)
+    {
+        return jinja2::BigIntStatus::BadInput;
+    }
+    return Make(out, negative, Trim(std::string(text)));
+}
+
+inline bool ToInt64(const jinja2::BigIntBackend*, const void* obj, int64_t* out) noexcept
+{
+    const auto& val = Get(obj);
+    const std::string limit = val.negative ? "9223372036854775808" : "9223372036854775807";
+    if (CompareMagnitudes(val.magnitude, limit) > 0)
+    {
+        return false;
+    }
+    const auto magnitude = std::stoull(val.magnitude);
+    *out = val.negative ? static_cast<int64_t>(0 - magnitude) : static_cast<int64_t>(magnitude);
+    return true;
+}
+
+inline jinja2::BigIntStatus ToDecimal(const jinja2::BigIntBackend*, const void* obj, void (*sink)(void*, const char*, size_t), void* ctx) noexcept
+{
+    const auto& val = Get(obj);
+    if (val.negative)
+    {
+        sink(ctx, "-", 1);
+    }
+    sink(ctx, val.magnitude.data(), val.magnitude.size());
+    return jinja2::BigIntStatus::Ok;
+}
+
+inline int Sign(const jinja2::BigIntBackend*, const void* obj) noexcept
+{
+    const auto& val = Get(obj);
+    return val.magnitude == "0" ? 0 : (val.negative ? -1 : 1);
+}
+
+inline int Compare(const jinja2::BigIntBackend*, const void* a, const void* b) noexcept
+{
+    const auto& x = Get(a);
+    const auto& y = Get(b);
+    if (x.negative != y.negative)
+    {
+        return x.negative ? -1 : 1;
+    }
+    const int cmp = CompareMagnitudes(x.magnitude, y.magnitude);
+    return x.negative ? -cmp : cmp;
+}
+
+inline size_t BitLength(const jinja2::BigIntBackend*, const void* obj) noexcept
+{
+    // Through base-2^32 limbs, nine decimal digits at a time
+    const std::string& digits = Get(obj).magnitude;
+    std::vector<uint32_t> limbs;
+    size_t pos = 0;
+    while (pos != digits.size())
+    {
+        const size_t take = std::min<size_t>(9, digits.size() - pos);
+        uint64_t mult = 1;
+        uint64_t carry = 0;
+        for (size_t idx = 0; idx != take; ++idx)
+        {
+            mult *= 10;
+            carry = carry * 10 + static_cast<uint64_t>(digits[pos + idx] - '0');
+        }
+        pos += take;
+        for (auto& limb : limbs)
+        {
+            const uint64_t cur = limb * mult + carry;
+            limb = static_cast<uint32_t>(cur);
+            carry = cur >> 32;
+        }
+        if (carry != 0)
+        {
+            limbs.push_back(static_cast<uint32_t>(carry));
+        }
+    }
+    if (limbs.empty())
+    {
+        return size_t{ 0 };
+    }
+    size_t bits = (limbs.size() - 1) * 32;
+    for (uint32_t top = limbs.back(); top != 0; top >>= 1)
+    {
+        ++bits;
+    }
+    return bits;
+}
+
+inline jinja2::BigIntStatus Negate(const jinja2::BigIntBackend*, void* out, const void* x) noexcept
+{
+    return Make(out, !Get(x).negative, Get(x).magnitude);
+}
+
+inline jinja2::BigIntStatus Add(const jinja2::BigIntBackend*, void* out, const void* a, const void* b) noexcept
+{
+    return Sum(out, Get(a), false, Get(b));
+}
+
+inline jinja2::BigIntStatus Subtract(const jinja2::BigIntBackend*, void* out, const void* a, const void* b) noexcept
+{
+    return Sum(out, Get(a), true, Get(b));
+}
+
+inline jinja2::BigIntStatus Multiply(const jinja2::BigIntBackend*, void* out, const void* a, const void* b) noexcept
+{
+    return Make(out, Get(a).negative != Get(b).negative, MultiplyMagnitudes(Get(a).magnitude, Get(b).magnitude));
+}
+
+inline jinja2::BigIntStatus DivideTruncated(const jinja2::BigIntBackend*, void* quotient, void* remainder, const void* a, const void* b) noexcept
+{
+    const auto& x = Get(a);
+    const auto& y = Get(b);
+    if (y.magnitude == "0")
+    {
+        return jinja2::BigIntStatus::DivisionByZero;
+    }
+    auto [quot, rem] = DivideMagnitudes(x.magnitude, y.magnitude);
+    if (quotient)
+    {
+        Make(quotient, x.negative != y.negative, std::move(quot));
+    }
+    if (remainder)
+    {
+        Make(remainder, x.negative, std::move(rem));
+    }
+    return jinja2::BigIntStatus::Ok;
+}
+
 inline jinja2::BigIntBackend MakeBackend()
 {
     using jinja2::BigIntBackend;
-    using jinja2::BigIntStatus;
     BigIntBackend backend{};
     backend.structSize = sizeof(BigIntBackend);
     backend.version = 1;
     backend.name = "toy-decimal";
     backend.objectSize = sizeof(ToyInt);
     backend.objectAlign = alignof(ToyInt);
-    backend.destroy = [](const BigIntBackend*, void* obj) noexcept {
-        --LiveObjects();
-        static_cast<ToyInt*>(obj)->~ToyInt();
-    };
-    backend.fromInt64 = [](const BigIntBackend*, void* out, int64_t value) noexcept {
-        // The magnitude of INT64_MIN does not fit int64
-        const auto magnitude = value < 0 ? 0 - static_cast<uint64_t>(value) : static_cast<uint64_t>(value);
-        return Make(out, value < 0, std::to_string(magnitude));
-    };
-    backend.fromDecimal = [](const BigIntBackend*, void* out, const char* digits, size_t size) noexcept {
-        std::string_view text(digits, size);
-        const bool negative = !text.empty() && text.front() == '-';
-        if (negative)
-        {
-            text.remove_prefix(1);
-        }
-        if (text.empty() || text.find_first_not_of("0123456789") != std::string_view::npos)
-        {
-            return BigIntStatus::BadInput;
-        }
-        return Make(out, negative, Trim(std::string(text)));
-    };
-    backend.toInt64 = [](const BigIntBackend*, const void* obj, int64_t* out) noexcept {
-        const auto& val = Get(obj);
-        const std::string limit = val.negative ? "9223372036854775808" : "9223372036854775807";
-        if (CompareMagnitudes(val.magnitude, limit) > 0)
-        {
-            return false;
-        }
-        const auto magnitude = std::stoull(val.magnitude);
-        *out = val.negative ? static_cast<int64_t>(0 - magnitude) : static_cast<int64_t>(magnitude);
-        return true;
-    };
-    backend.toDecimal = [](const BigIntBackend*, const void* obj, void (*sink)(void*, const char*, size_t), void* ctx) noexcept {
-        const auto& val = Get(obj);
-        if (val.negative)
-        {
-            sink(ctx, "-", 1);
-        }
-        sink(ctx, val.magnitude.data(), val.magnitude.size());
-        return BigIntStatus::Ok;
-    };
-    backend.sign = [](const BigIntBackend*, const void* obj) noexcept {
-        const auto& val = Get(obj);
-        return val.magnitude == "0" ? 0 : (val.negative ? -1 : 1);
-    };
-    backend.compare = [](const BigIntBackend*, const void* a, const void* b) noexcept {
-        const auto& x = Get(a);
-        const auto& y = Get(b);
-        if (x.negative != y.negative)
-        {
-            return x.negative ? -1 : 1;
-        }
-        const int cmp = CompareMagnitudes(x.magnitude, y.magnitude);
-        return x.negative ? -cmp : cmp;
-    };
-    backend.bitLength = [](const BigIntBackend*, const void* obj) noexcept {
-        // Through base-2^32 limbs, nine decimal digits at a time
-        const std::string& digits = Get(obj).magnitude;
-        std::vector<uint32_t> limbs;
-        size_t pos = 0;
-        while (pos != digits.size())
-        {
-            const size_t take = std::min<size_t>(9, digits.size() - pos);
-            uint64_t mult = 1;
-            uint64_t carry = 0;
-            for (size_t idx = 0; idx != take; ++idx)
-            {
-                mult *= 10;
-                carry = carry * 10 + static_cast<uint64_t>(digits[pos + idx] - '0');
-            }
-            pos += take;
-            for (auto& limb : limbs)
-            {
-                const uint64_t cur = limb * mult + carry;
-                limb = static_cast<uint32_t>(cur);
-                carry = cur >> 32;
-            }
-            if (carry != 0)
-            {
-                limbs.push_back(static_cast<uint32_t>(carry));
-            }
-        }
-        if (limbs.empty())
-        {
-            return size_t{ 0 };
-        }
-        size_t bits = (limbs.size() - 1) * 32;
-        for (uint32_t top = limbs.back(); top != 0; top >>= 1)
-        {
-            ++bits;
-        }
-        return bits;
-    };
-    backend.negate = [](const BigIntBackend*, void* out, const void* x) noexcept { return Make(out, !Get(x).negative, Get(x).magnitude); };
-    backend.add = [](const BigIntBackend*, void* out, const void* a, const void* b) noexcept { return Sum(out, Get(a), false, Get(b)); };
-    backend.subtract = [](const BigIntBackend*, void* out, const void* a, const void* b) noexcept { return Sum(out, Get(a), true, Get(b)); };
-    backend.multiply = [](const BigIntBackend*, void* out, const void* a, const void* b) noexcept {
-        return Make(out, Get(a).negative != Get(b).negative, MultiplyMagnitudes(Get(a).magnitude, Get(b).magnitude));
-    };
-    backend.divideTruncated = [](const BigIntBackend*, void* quotient, void* remainder, const void* a, const void* b) noexcept {
-        const auto& x = Get(a);
-        const auto& y = Get(b);
-        if (y.magnitude == "0")
-        {
-            return BigIntStatus::DivisionByZero;
-        }
-        auto [quot, rem] = DivideMagnitudes(x.magnitude, y.magnitude);
-        if (quotient)
-        {
-            Make(quotient, x.negative != y.negative, std::move(quot));
-        }
-        if (remainder)
-        {
-            Make(remainder, x.negative, std::move(rem));
-        }
-        return BigIntStatus::Ok;
-    };
+    backend.destroy = Destroy;
+    backend.fromInt64 = FromInt64;
+    backend.fromDecimal = FromDecimal;
+    backend.toInt64 = ToInt64;
+    backend.toDecimal = ToDecimal;
+    backend.sign = Sign;
+    backend.compare = Compare;
+    backend.bitLength = BitLength;
+    backend.negate = Negate;
+    backend.add = Add;
+    backend.subtract = Subtract;
+    backend.multiply = Multiply;
+    backend.divideTruncated = DivideTruncated;
     return backend;
 }
 

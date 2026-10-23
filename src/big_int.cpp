@@ -489,7 +489,7 @@ public:
     BackendObject& operator=(BackendObject&&) = delete;
 
     // Storage for a call that makes the object; null once made, which no call accepts
-    void* Out() noexcept
+    void* Out() noexcept // NOLINT(readability-make-member-function-const): the caller makes the object in it
     {
         assert(!m_made);
         return m_storage.data();
