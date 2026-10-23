@@ -2080,6 +2080,13 @@ std::optional<InternalValue> ParsePythonInt(const std::string& str, int64_t base
     {
         std::string digits;
         std::copy_if(text.begin() + static_cast<std::ptrdiff_t>(pos), text.end(), std::back_inserter(digits), [](char ch) { return ch != '_'; });
+        // Past CPython's digit limit int() raises ValueError, which do_int catches: the caller
+        // goes on to float(), as Jinja2 does
+        const auto significant = digits.size() - std::min(digits.size(), digits.find_first_not_of('0'));
+        if ((base & (base - 1)) != 0 && significant > MaxIntStrDigits)
+        {
+            return std::nullopt;
+        }
         return IntegerFromDigits(digits, static_cast<int>(base), negative);
     }
     return InternalValue(negative ? static_cast<int64_t>(0 - *value) : static_cast<int64_t>(*value));
