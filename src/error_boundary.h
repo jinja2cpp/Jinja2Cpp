@@ -9,6 +9,7 @@
 
 #include <exception>
 #include <new>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -33,24 +34,24 @@ typename BasicErrorInfo<CharT>::Data CopyErrorData(const BasicErrorInfo<SrcCharT
     return errorData;
 }
 
-// The error for the exception being handled (docs/api-2.0.md, 2.1): its code, its what() and,
-// when the engine did not raise it, the exception itself. A thrown ErrorInfo stays as it is;
-// `located` tells whether it has a location of its own, which only a parse error has (the
-// location, else, is for the caller to set). Call it from a catch handler only. std::bad_alloc
-// goes on unchanged, before anything allocates.
+// The error for `exception` (docs/api-2.0.md, 2.1): its code, its what() and, when the engine
+// did not raise it, the exception itself. A thrown ErrorInfo stays as it is; `located` tells
+// whether it has a location of its own, which only a parse error has (the location, else, is
+// for the caller to set). std::bad_alloc goes on unchanged, before anything allocates. Outside a
+// catch handler it needs stack for one throw only (ThrowRenderFailure)
 template<typename CharT>
-typename BasicErrorInfo<CharT>::Data CurrentExceptionToData(bool& located)
+typename BasicErrorInfo<CharT>::Data ExceptionToData(std::exception_ptr exception, bool& located)
 {
     located = false;
     ErrorCode code = ErrorCode::UnexpectedException;
-    const char* message = "unknown exception";
-    // Kept only for an exception raised outside the engine (docs/api-2.0.md, 2.1)
-    std::exception_ptr exception = std::current_exception();
+    // Copied: a rethrown exception may be a copy that ends with its handler
+    std::optional<std::string> message;
+    bool hasMessage = true;
     // The Settings::Limits field a limit names, if any
     const char* limitField = nullptr;
     try
     {
-        throw;
+        std::rethrow_exception(exception);
     }
     catch (const std::bad_alloc&)
     {
@@ -69,6 +70,7 @@ typename BasicErrorInfo<CharT>::Data CurrentExceptionToData(bool& located)
     catch (const HostCallableFailure& failure)
     {
         code = ErrorCode::UserCallableException;
+        // Kept only for an exception raised outside the engine (docs/api-2.0.md, 2.1)
         exception = failure.Exception();
         try
         {
@@ -76,7 +78,6 @@ typename BasicErrorInfo<CharT>::Data CurrentExceptionToData(bool& located)
         }
         catch (const std::exception& ex)
         {
-            // `exception` keeps it, and with it the message, alive
             message = ex.what();
         }
         catch (...) // NOLINT(bugprone-empty-catch): the default message describes it
@@ -103,7 +104,7 @@ typename BasicErrorInfo<CharT>::Data CurrentExceptionToData(bool& located)
     catch (const RecursionLimitError&)
     {
         code = ErrorCode::RecursionLimitExceeded;
-        message = nullptr;
+        hasMessage = false;
         exception = nullptr;
     }
     catch (const ResourceLimitError& ex)
@@ -132,12 +133,11 @@ typename BasicErrorInfo<CharT>::Data CurrentExceptionToData(bool& located)
     catch (...) // NOLINT(bugprone-empty-catch): the defaults above describe it
     {
     }
-    // Still in the caller's handler: the exception, and with it `message`, is alive
     typename BasicErrorInfo<CharT>::Data errorData;
     errorData.code = code;
-    if (message)
+    if (hasMessage)
     {
-        errorData.extraParams.emplace_back(std::string(message));
+        errorData.extraParams.emplace_back(message ? std::move(*message) : std::string("unknown exception"));
     }
     if (limitField)
     {
@@ -145,6 +145,12 @@ typename BasicErrorInfo<CharT>::Data CurrentExceptionToData(bool& located)
     }
     errorData.exception = std::move(exception);
     return errorData;
+}
+// The same for the exception being handled. Call it from a catch handler only
+template<typename CharT>
+typename BasicErrorInfo<CharT>::Data CurrentExceptionToData(bool& located)
+{
+    return ExceptionToData<CharT>(std::current_exception(), located);
 }
 
 // The error a public Load or Render boundary returns for the exception being handled, at the

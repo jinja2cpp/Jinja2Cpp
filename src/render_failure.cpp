@@ -12,7 +12,6 @@
 #include <iterator>
 #include <locale>
 #include <new>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -114,13 +113,13 @@ template ErrorInfoW RenderFailure::ErrorAs<wchar_t>() const;
 
 namespace
 {
-// The RenderFailure of the exception being handled, at `offset` in the source of `origin`, a
-// template of CharT; at the start of no file without an origin
+// The RenderFailure of `failure`, at `offset` in the source of `origin`, a template of CharT; at
+// the start of no file without an origin
 template<typename CharT>
-RenderFailure Locate(const TemplateOrigin* origin, std::uint32_t offset)
+RenderFailure Locate(const std::exception_ptr& failure, const TemplateOrigin* origin, std::uint32_t offset)
 {
     bool located = false;
-    auto errorData = CurrentExceptionToData<CharT>(located);
+    auto errorData = ExceptionToData<CharT>(failure, located);
     if (!located)
     {
         // A thrown error that names a template of its own (one too long to load) keeps the name
@@ -164,30 +163,37 @@ void ThrowRenderFailure(const ArenaView& nodes, const void* child, std::uint32_t
 {
     std::exception_ptr failure = std::move(t_failure);
     t_failure = nullptr;
-    std::optional<RenderFailure> located;
+    // Each throw here is outside any handler, so that the error of a render the stack guard
+    // stopped needs stack for one throw at a time
+    bool passOn = false;
     try
     {
         std::rethrow_exception(failure);
     }
-    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): goes on unchanged below
+    catch (const std::bad_alloc&)
+    {
+        passOn = true;
+    }
+    catch (const RenderFailure&)
+    {
+        // Located by a body inside the statement
+        passOn = true;
+    }
+    catch (...) // NOLINT(bugprone-empty-catch): located below
     {
     }
-    catch (const RenderFailure&) // NOLINT(bugprone-empty-catch): located by a body inside the statement
-    {
-    }
-    catch (...)
-    {
-        // A body runs in the tree it is in, which the render context names: should it ever not,
-        // the error gets no location rather than one in another template
-        const TemplateOrigin* origin = nodes.Holds(child) ? nodes.Origin() : nullptr;
-        located.emplace(origin && origin->isWide ? Locate<wchar_t>(origin, offset) : Locate<char>(origin, offset));
-    }
-    // Out of the handlers
-    if (!located)
+    if (passOn)
     {
         std::rethrow_exception(std::move(failure));
     }
-    throw std::move(*located);
+    // A body runs in the tree it is in, which the render context names: should it ever not, the
+    // error gets no location rather than one in another template
+    const TemplateOrigin* origin = nodes.Holds(child) ? nodes.Origin() : nullptr;
+    if (origin && origin->isWide)
+    {
+        throw Locate<wchar_t>(failure, origin, offset);
+    }
+    throw Locate<char>(failure, origin, offset);
 }
 } // namespace detail
 } // namespace v2

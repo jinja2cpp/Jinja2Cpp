@@ -224,7 +224,7 @@ struct TransInfo
 // statement adds to its body, and a statement's body is made before its parent's goes on, so
 // each body is the run of children from where its statement opened to the end: one list for all
 // of them, not one in each statement on the stack
-class StatementBodies
+class StatementBodies // NOLINT(cppcoreguidelines-pro-type-member-init): m_inPlace is raw storage
 {
 public:
     using Child = NodeRef<IRendererBase>;
