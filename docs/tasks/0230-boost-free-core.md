@@ -42,7 +42,13 @@ Boost only as the optional Boost.JSON backend.
 `boost::container::small_vector` (with `SmallVectorBase` and the doubling growth option)
 and `boost::intrusive_ptr` once, as `Span`, `SmallVector` and `IntrusivePtr` in namespace
 `jinja2`, and every call site uses the aliases. Steps D4 and D5 replace what these headers
-point at.
+point at. Step D2: `RealFileSystem` uses `std::filesystem`, so internal mode no longer
+builds `boost_filesystem` and `boost_atomic` (43 Boost libraries configured instead of 47,
+two static libraries installed instead of four), and the external and Conan modes no longer
+ask for the filesystem component. C++17 cannot convert a `file_time_type`, and its clock's
+epoch differs per standard library, so the modification date subtracts the clocks' current
+difference rounded to whole seconds (the epoch offsets are whole seconds) and keeps whole
+seconds, as Boost's `time_t` and `ConfinedFileSystem` do.
 
 Step D3: the string algorithms, `predef` endian, `iterator_facade` and `unique_any` are
 gone from `src/`. `ListRef::Iterator` defines its own forward-iterator members, the

@@ -187,7 +187,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
-          libboost-dev libboost-filesystem-dev libboost-json-dev nlohmann-json3-dev
+          libboost-dev libboost-json-dev nlohmann-json3-dev
 
     - name: fmt and expected-lite
       if: matrix.mode == 'external'
