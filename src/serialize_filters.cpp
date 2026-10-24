@@ -362,7 +362,8 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         {
             return lead;
         }
-        uint32_t value = lead & (lead >= 0xF0 ? 0x07U : lead >= 0xE0 ? 0x0FU : 0x1FU);
+        uint32_t value = lead & (lead >= 0xF0 ? 0x07U : lead >= 0xE0 ? 0x0FU
+                                                                     : 0x1FU);
         for (size_t idx = 1; idx < ch.size(); ++idx)
         {
             value = (value << 6U) | (static_cast<unsigned char>(ch[idx]) & 0x3FU);
