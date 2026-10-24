@@ -116,11 +116,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0038](0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | parity | medium | done |
 | [0039](0039-float-values-print-widened.md) | C++ `float` values print with their widened digits | parity | medium | open |
 | [0040](0040-parity-shared-files-serialise-merges.md) | Parity PRs collide in shared generated files | process | high | done |
-| [0041](0041-string-literal-escapes.md) | String literal escape sequences | parity | low | open |
+| [0041](0041-string-literal-escapes.md) | String literal escape sequences | parity | low | done |
 | [0042](0042-loop-cycle-magic-number.md) | Global function follow-ups: globals are maps | parity | low | done |
 | [0043](0043-ordered-valuesmap-2-0.md) | Insertion-ordered ValuesMap (2.0.0) | release | medium | done |
 | [0044](0044-lstrip-blocks-leftovers.md) | lstrip_blocks and modifier leftovers | parity | low | done |
-| [0045](0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | parity | low | open |
+| [0045](0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | parity | low | done |
 | [0047](0047-none-leftovers.md) | None and undefined: what 0034 left behind | parity | medium | done |
 | [0048](0048-filter-behaviour-leftovers.md) | Filter behaviour: what 0019 left behind | parity | low | done |
 | [0049](0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | parity | low | open |
@@ -180,7 +180,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0104](0104-fixed-costs-per-render.md) | Fixed allocations per render and per macro call | perf | medium | done |
 | [0105](0105-include-per-render.md) | `include` and `extends` go through the environment's locked cache on every render | perf | medium | done |
 | [0106](0106-percent-format-divergences.md) | `%`-format divergences from Python | parity | low | done |
-| [0107](0107-string-filter-divergences.md) | String filter divergences found by the 0061 differential | parity | low | open |
+| [0107](0107-string-filter-divergences.md) | String filter divergences found by the 0061 differential | parity | low | done |
 | [0108](0108-include-context-copy.md) | `include` copies every scope of the caller | perf | medium | done |
 | [0109](0109-load-costs-round-2.md) | Load costs after 0103: filter construction, wrappers, the lexer | perf | low | done |
 | [0110](0110-namespace-self-reference-leak.md) | A namespace that holds itself leaks | evaluator | high | done |
@@ -283,12 +283,12 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0207](0207-self-frame-leftovers.md) | `self` cases left after 0143 and 0198 | parity | low | done |
 | [0208](0208-macro-value-gaps.md) | Macros as values | parity | low | done |
 | [0209](0209-include-sees-loop.md) | A template included in a loop sees `loop` | parity | low | done |
-| [0210](0210-markup-percent-int-of-string.md) | `%d` and `%f` of a string in Markup's `%` | parity | low | open |
+| [0210](0210-markup-percent-int-of-string.md) | `%d` and `%f` of a string in Markup's `%` | parity | low | done |
 | [0211](0211-self-nested-store-and-globals.md) | `self` stored in a nested scope of a block; globals changed in place | parity | low | open |
 | [0212](0212-objects-as-keys-and-through-callables.md) | Objects as dict keys and through user callables | parity | low | open |
 | [0213](0213-if-condexpr-and-unclosed-raw.md) | An `if` test with a conditional expression, and an unclosed raw block at the end | parity | low | done |
 | [0214](0214-macro-value-leftovers.md) | Macros and methods as values: what 0208 and 0145 left over | parity | low | done |
-| [0215](0215-pprint-width.md) | `pprint` does not wrap at Python's width, and other repr gaps | parity | low | open |
+| [0215](0215-pprint-width.md) | `pprint` does not wrap at Python's width, and other repr gaps | parity | low | done |
 | [0216](0216-volatile-autoescape.md) | `{% autoescape %}` with a runtime value (volatile EvalContext) | parity | low | done |
 | [0219](0219-loop-iteration.md) | Iterating `loop` takes the rest of the loop | parity | low | open |
 | [0220](0220-call-argument-unpacking.md) | `f(*args, **kwargs)` in calls | parity | medium | done |
@@ -362,11 +362,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0288](0288-finalize-autoescape.md) | `finalize` output is not escaped under autoescape | parity | high | done |
 | [0289](0289-flat-concat-chains.md) | `~` chains as one node, as Jinja2's `Concat` | parity | low | done |
 | [0290](0290-codeql-test-suite-cost.md) | Find what in the test suite makes CodeQL's data-flow stage explode | ci | low | open |
-| [0291](0291-fold-chosen-by-foldable-test.md) | Fold a value chosen by a foldable test that is not a literal | parity | low | open |
+| [0291](0291-fold-chosen-by-foldable-test.md) | Fold a value chosen by a foldable test that is not a literal | parity | low | done |
 | [0292](0292-finalize-fold-error-fallback.md) | Evaluate at run time when folding a finalized `{{ }}` raises | parity | low | done |
-| [0293](0293-finalize-gets-undefined.md) | `finalize` gets None for an undefined value | parity | medium | open |
+| [0293](0293-finalize-gets-undefined.md) | `finalize` gets None for an undefined value | parity | medium | done |
 | [0294](0294-positional-after-keyword-syntax-error.md) | A positional argument after a keyword one is a syntax error | parity | low | done |
-| [0295](0295-selectattr-extra-keyword.md) | `selectattr('a', attribute='a')` fails where Python ignores the keyword | parity | low | open |
+| [0295](0295-selectattr-extra-keyword.md) | `selectattr('a', attribute='a')` fails where Python ignores the keyword | parity | low | done |
 | [0296](0296-typed-string-view-dangling.md) | A typed `std::string_view` parameter given the other character width dangles | api | high | open |
 | [0297](0297-in-none-and-modulo-undefined.md) | `x in None` and `'text' % undefined` differ from Python | parity | low | open |
 | [0298](0298-include-of-extending-template-loop.md) | An included template that extends a parent reading `loop` | parity | low | open |
@@ -377,3 +377,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0303](0303-retire-rapidjson-backend.md) | Retire the built-in RapidJSON backend | build | medium | open |
 | [0305](0305-builtin-class-repr.md) | The builtin classes print as `<class 'range'>` | parity | low | open |
 | [0306](0306-filter-test-argument-unpacking.md) | `*args` and `**kwargs` in filter and test calls | parity | low | open |
+| [0307](0307-fold-by-choice-nested.md) | Fold a choice that sits inside another foldable expression | parity | low | open |
+| [0308](0308-divisibleby-non-number.md) | `divisibleby` on a value that is not a number | parity | low | open |
+| [0309](0309-repr-of-template-modules.md) | `pprint` of builtin globals and imported templates | parity | low | open |
+| [0310](0310-undefined-filter-argument-is-omitted.md) | A filter argument given as an undefined value reads as omitted | parity | low | open |
