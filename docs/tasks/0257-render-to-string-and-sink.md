@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: high
 area: api
 depends: [0252, 0076, 0253]
@@ -60,3 +60,5 @@ Expected: one allocation fewer per render, plain_text -8..-15% instructions, lar
   and `RenderSink/plain_text` 717 against `Render/plain_text` 1,041 (-22%, -31%), with no
   allocation; `RenderSink/mitsuhiko_table` peaks at 28,824 B against `Render`'s 373,296 B.
   `ContainerSink<fmt::memory_buffer>` was checked by tests, not measured.
+
+**Closed (2026-10-24).** Merged in #616.

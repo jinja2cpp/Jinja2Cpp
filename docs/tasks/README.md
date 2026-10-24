@@ -28,7 +28,11 @@ be read, linked and edited without merge conflicts on a shared list.
 - Body: **Problem** (the contradiction: what pulls against what), **Proposal** (how to
   resolve it), **Done when** (a check someone else can run), **Next** (what the
   resolution is expected to surface; optional).
-- Close a task by setting `status: done` and linking the PR; keep the file.
+- Close a task by setting `status: done` and linking the PR; keep the file. The PR that
+  finishes a task sets `done` itself. When a PR leaves it `in-progress` (it lands through a
+  train, or its owner waits for the merge), the merge steward sets `status: done` and the
+  `pr` link in the train or index-sync commit for every task that PR's description says it
+  closes, so that a merged task never stays `in-progress`.
 - The index table at the end of this file is generated from the task files by
   `scripts/task_index.py` (title from the `# ` heading, the rest from front matter). PRs
   never edit its rows; the merge steward runs the script after each merge batch.
@@ -247,9 +251,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0175](0175-recursive-loop-filter-leftovers.md) | Recursive loop filter: the outer `loop` at depth > 0, and the legacy `recursive if` order | parity | low | done |
 | [0176](0176-tuple-identity-and-sort-case.md) | A dictsort pair has no identity, and sort folds case inside tuples | parity | low | done |
 | [0177](0177-filters-on-none.md) | Filters that accept None where Python raises | parity | low | done |
-| [0178](0178-arbitrary-precision-integers.md) | Integers of arbitrary size, as Python's `int` | parity | medium | in-progress |
+| [0178](0178-arbitrary-precision-integers.md) | Integers of arbitrary size, as Python's `int` | parity | medium | done |
 | [0179](0179-caller-markup-eval-context.md) | Autoescape has a lexical and a runtime side | parity | low | done |
-| [0180](0180-markup-from-cpp.md) | Markup from C++ | api | low | in-progress |
+| [0180](0180-markup-from-cpp.md) | Markup from C++ | api | low | done |
 | [0181](0181-select-autoescape.md) | Autoescape chosen by template name (`select_autoescape`) | api | low | done |
 | [0182](0182-markup-percent-repr.md) | `%r` and containers in Markup's `%` | parity | low | done |
 | [0183](0183-context-callable-positional-arg.md) | A user callable taking `*context` gets None for a positional argument | api | high | done |
@@ -317,15 +321,15 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0247](0247-rival-benchmark-coverage.md) | Cover the rival engines' own benchmark cases, then close the gaps | perf | high | open |
 | [0248](0248-python-drop-in-replacement.md) | Jinja2C++ as a drop-in replacement for Python Jinja2 in common cases | api | medium | open |
 | [0249](0249-implicit-conversion-sanitizer.md) | Run the sanitizer CI with `-fsanitize=implicit-conversion` | robustness | medium | open |
-| [0250](0250-public-api-error-contract.md) | One error contract for the 2.0 public API | api | high | open |
+| [0250](0250-public-api-error-contract.md) | One error contract for the 2.0 public API | api | high | done |
 | [0251](0251-cycles-through-opaque-objects.md) | Reference cycles through objects the cycle collector cannot follow leak | evaluator | low | open |
 | [0252](0252-public-api-allocator-contract.md) | Allocator and memory contract for the 2.0 public API | api | high | done |
 | [0253](0253-error-contract-types.md) | Error contract P1: public error types and the Load/Render boundary | api | high | done |
 | [0254](0254-render-error-locations.md) | Error contract P2: render errors carry their template location | robustness | high | done |
 | [0255](0255-engine-runtime-error-codes.md) | Error contract P3: the engine's own runtime errors get their own codes | robustness | medium | done |
 | [0256](0256-survive-allocation-failure.md) | Survive allocation failure in Load and Render: remaining coverage | robustness | high | open |
-| [0257](0257-render-to-string-and-sink.md) | `RenderTo` a caller's string or an output sink | api | high | in-progress |
-| [0258](0258-positional-and-keyword-same-arg.md) | A call that gives one argument both positionally and by keyword is accepted | api | low | in-progress |
+| [0257](0257-render-to-string-and-sink.md) | `RenderTo` a caller's string or an output sink | api | high | done |
+| [0258](0258-positional-and-keyword-same-arg.md) | A call that gives one argument both positionally and by keyword is accepted | api | low | done |
 | [0259](0259-vendored-internal-namespaces.md) | Vendored robin_hood and lexertk still live in global namespaces | release | medium | open |
 | [0260](0260-public-headers-iosfwd.md) | Public headers include `<iostream>` where `<iosfwd>` would do | release | low | open |
 | [0261](0261-windows-package-link-check.md) | Run the installed-package test and the ABI link probe on Windows | ci | low | open |
@@ -339,10 +343,10 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0269](0269-public-big-int-value.md) | Public `BigInt` value (0178 phase 1, G1) | api | high | done |
 | [0270](0270-big-int-core-text-form.md) | Big integers in the core, text form (0178 phase 2) | parity | medium | done |
 | [0271](0271-big-int-backend-interface.md) | Big-integer backend interface and overflow promotion (0178 phase 3) | api | medium | done |
-| [0272](0272-big-int-boost-backend.md) | Boost.Multiprecision backend and `JINJA2CPP_WITH_BIGINT` (0178 phase 4) | build | medium | in-progress |
+| [0272](0272-big-int-boost-backend.md) | Boost.Multiprecision backend and `JINJA2CPP_WITH_BIGINT` (0178 phase 4) | build | medium | done |
 | [0273](0273-build-conditional-parity-divergences.md) | Build-conditional parity divergences (0178 phase 0) | parity | medium | done |
 | [0274](0274-self-block-before-parent-pushed.md) | Blocks called through `self` at a child's top level lack the parent's blocks | parity | low | done |
-| [0275](0275-release-thread-caches.md) | `ReleaseThreadCaches()` | api | medium | in-progress |
+| [0275](0275-release-thread-caches.md) | `ReleaseThreadCaches()` | api | medium | done |
 | [0276](0276-memory-contract-docs.md) | User documentation for the memory contract | docs | medium | open |
 | [0277](0277-markup-escape-helper.md) | A public escape helper for Markup | api | low | open |
 | [0278](0278-remove-dead-valueref.md) | Remove the dead ValueRef alternative of InternalValue | internals | low | open |

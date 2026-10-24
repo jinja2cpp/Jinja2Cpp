@@ -1,5 +1,6 @@
 ---
-status: in-progress
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/630
 priority: medium
 area: build
 depends: [0271, 0273]
@@ -36,3 +37,5 @@ row and the `render` fuzz target.
 
 **Left for 0006 (packaging).** The Conan recipe gets an option `bigint=[none, boost]` and the
 vcpkg port a feature `bigint-boost`, both mapping to `-DJINJA2CPP_WITH_BIGINT` (plan section 8).
+
+**Closed (2026-10-24).** Merged in #630 (train 31, #633).

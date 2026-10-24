@@ -1,5 +1,6 @@
 ---
-status: in-progress
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/629
 priority: low
 area: api
 depends: []
@@ -32,3 +33,5 @@ change: Python Jinja2 reports `m('2', '3', a='1')` as "macro 'm' takes no keywor
 (checked with Jinja2 3.1.6), which is what Jinja2C++ already says, so the proposal's "route
 macros through the same check" would have moved them away from Python. Corpus:
 `errors.macro_positional_and_keyword`, `errors.filter_positional_and_keyword`.
+
+**Closed (2026-10-24).** Merged in #629 (train 31, #633).
