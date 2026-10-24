@@ -188,25 +188,29 @@ Result<void, CharT> BasicTemplate<CharT>::RenderGeneric(std::basic_ostream<CharT
 template<typename CharT>
 auto BasicTemplate<CharT>::RenderAsString(const ValuesMap& params) const -> Result<StringType, CharT>
 {
-    StringType buffer;
-    auto result = GetImpl<CharT>(m_impl)->Render(buffer, params);
-    if (result)
+    // Rendered into the returned object itself, one object on every path so that it is elided:
+    // returning a separate buffer moves the string, and GCC may then call libstdc++'s out-of-line
+    // move constructor (+15 Ir per render when an unrelated header change shifted its inlining, #642)
+    Result<StringType, CharT> rendered;
+    if (auto error = GetImpl<CharT>(m_impl)->Render(*rendered, params))
     {
-        return MakeUnexpected(std::move(*result));
+        rendered = MakeUnexpected(std::move(*error));
     }
-    return buffer;
+    return rendered;
 }
 
 template<typename CharT>
 auto BasicTemplate<CharT>::RenderAsStringGeneric(const GenericMap& params) const -> Result<StringType, CharT>
 {
-    StringType buffer;
-    auto result = GetImpl<CharT>(m_impl)->Render(buffer, params);
-    if (result)
+    // Rendered into the returned object itself, one object on every path so that it is elided:
+    // returning a separate buffer moves the string, and GCC may then call libstdc++'s out-of-line
+    // move constructor (+15 Ir per render when an unrelated header change shifted its inlining, #642)
+    Result<StringType, CharT> rendered;
+    if (auto error = GetImpl<CharT>(m_impl)->Render(*rendered, params))
     {
-        return MakeUnexpected(std::move(*result));
+        rendered = MakeUnexpected(std::move(*error));
     }
-    return buffer;
+    return rendered;
 }
 
 template<typename CharT>

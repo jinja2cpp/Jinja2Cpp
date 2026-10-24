@@ -2,6 +2,3 @@
 # Format and kinds: test/parity/README.md.
 
 errors.call_positional_after_keyword    accepts     0294 a positional argument after a keyword one; Jinja2 rejects the call as a syntax error
-errors.if_test_conditional_expression   accepts     0213 an if test takes a conditional expression; Jinja2 parses it without one
-errors.raw_unclosed_at_end              rejects     0213 an unclosed raw block at the end of the template; Jinja2 renders it as empty
-errors.raw_unclosed_minus_space         rejects     0213 an unclosed raw block at the end of the template; Jinja2 renders it as empty
