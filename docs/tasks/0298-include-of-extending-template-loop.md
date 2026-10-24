@@ -9,7 +9,7 @@ shares: []
 # An included template that extends a parent reading `loop`
 
 Found while measuring 0209. `RenderIncludedTemplate` hides the including loop's `loop` from a
-template only when that template names `loop` itself (a flag of its symbol table). A template
+template only when that template names `loop` itself (a flag the parser sets for a read of `loop` outside the template's own loops). A template
 that names nothing but extends a parent which reads `loop` is rendered with `loop` hidden, where
 Jinja2 shows it when the loop's body names `loop`. Asking the parent on every include cost
 +0.66% instructions on Render/inheritance, so 0209 left it.
