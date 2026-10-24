@@ -1,0 +1,5598 @@
+{
+ "generator": "jinja2 3.1.6",
+ "area": "string_filters",
+ "cases": [
+  {
+   "id": "string_filters.m001",
+   "template": "[{{ 'Hello wide World'|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m002",
+   "template": "[{{ 'Hello wide World'|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m003",
+   "template": "[{{ 'Hello wide World'|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[HellowideWorld]"
+  },
+  {
+   "id": "string_filters.m004",
+   "template": "[{{ 'Hello wide World'|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[HellowideWorld]"
+  },
+  {
+   "id": "string_filters.m005",
+   "template": "[{{ 'Hello wide World'|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m006",
+   "template": "[{{ 'Hello wide World'|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m007",
+   "template": "[{{ 'Hello wide World'|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m008",
+   "template": "[{{ 'Hello wide World'|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m009",
+   "template": "[{{ 'Hello wide World'|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m010",
+   "template": "[{{ 'Hello wide World'|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m011",
+   "template": "[{{ 'Hello wide World'|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m012",
+   "template": "[{{ 'Hello wide World'|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m013",
+   "template": "[{{ 'Hello wide World'|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m014",
+   "template": "[{{ 'Hello wide World'|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m015",
+   "template": "[{{ 'Hello wide World'|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m016",
+   "template": "[{{ 'Hello wide World'|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m017",
+   "template": "[{{ 'Hello wide World'|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[       Hello wide World       ]"
+  },
+  {
+   "id": "string_filters.m018",
+   "template": "[{{ 'Hello wide World'|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[       Hello wide World       ]"
+  },
+  {
+   "id": "string_filters.m019",
+   "template": "[{{ 'Hello wide World'|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m020",
+   "template": "[{{ 'Hello wide World'|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m021",
+   "template": "[{{ 'Hello wide World'|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m022",
+   "template": "[{{ 'Hello wide World'|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m023",
+   "template": "[{{ 'Hello wide World'|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[He...]"
+  },
+  {
+   "id": "string_filters.m024",
+   "template": "[{{ 'Hello wide World'|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[He...]"
+  },
+  {
+   "id": "string_filters.m025",
+   "template": "[{{ 'Hello wide World'|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello ...]"
+  },
+  {
+   "id": "string_filters.m026",
+   "template": "[{{ 'Hello wide World'|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello ...]"
+  },
+  {
+   "id": "string_filters.m027",
+   "template": "[{{ 'Hello wide World'|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello]"
+  },
+  {
+   "id": "string_filters.m028",
+   "template": "[{{ 'Hello wide World'|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello]"
+  },
+  {
+   "id": "string_filters.m029",
+   "template": "[{{ 'Hello wide World'|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello Wide World]"
+  },
+  {
+   "id": "string_filters.m030",
+   "template": "[{{ 'Hello wide World'|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello Wide World]"
+  },
+  {
+   "id": "string_filters.m031",
+   "template": "[{{ 'Hello wide World'|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[3]"
+  },
+  {
+   "id": "string_filters.m032",
+   "template": "[{{ 'Hello wide World'|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[3]"
+  },
+  {
+   "id": "string_filters.m033",
+   "template": "[{{ 'Hello wide World'|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello\nwide\nWorld]"
+  },
+  {
+   "id": "string_filters.m034",
+   "template": "[{{ 'Hello wide World'|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello\nwide\nWorld]"
+  },
+  {
+   "id": "string_filters.m035",
+   "template": "[{{ 'Hello wide World'|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello\nwide\nWorld]"
+  },
+  {
+   "id": "string_filters.m036",
+   "template": "[{{ 'Hello wide World'|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello\nwide\nWorld]"
+  },
+  {
+   "id": "string_filters.m037",
+   "template": "[{{ 'Hello wide World'|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  Hello wide World]"
+  },
+  {
+   "id": "string_filters.m038",
+   "template": "[{{ 'Hello wide World'|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  Hello wide World]"
+  },
+  {
+   "id": "string_filters.m039",
+   "template": "[{{ 'Hello wide World'|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m040",
+   "template": "[{{ 'Hello wide World'|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m041",
+   "template": "[{{ 'Hello wide World'|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello%20wide%20World]"
+  },
+  {
+   "id": "string_filters.m042",
+   "template": "[{{ 'Hello wide World'|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello%20wide%20World]"
+  },
+  {
+   "id": "string_filters.m043",
+   "template": "[{{ 'Hello wide World'|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello wide world]"
+  },
+  {
+   "id": "string_filters.m044",
+   "template": "[{{ 'Hello wide World'|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello wide world]"
+  },
+  {
+   "id": "string_filters.m045",
+   "template": "[{{ 'Hello wide World'|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m046",
+   "template": "[{{ 'Hello wide World'|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m047",
+   "template": "[{{ 'Hello wide World'|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m048",
+   "template": "[{{ 'Hello wide World'|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m049",
+   "template": "[{{ 'Hello wide World'|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m050",
+   "template": "[{{ 'Hello wide World'|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m051",
+   "template": "[{{ 'Hello wide World'|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m052",
+   "template": "[{{ 'Hello wide World'|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[Hello wide World]"
+  },
+  {
+   "id": "string_filters.m053",
+   "template": "[{{ 'Hello wide World'|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[16]"
+  },
+  {
+   "id": "string_filters.m054",
+   "template": "[{{ 'Hello wide World'|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[16]"
+  },
+  {
+   "id": "string_filters.m055",
+   "template": "[{{ '  a <b> & c  '|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  X <b> & c  ]"
+  },
+  {
+   "id": "string_filters.m056",
+   "template": "[{{ '  a <b> & c  '|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  X &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m057",
+   "template": "[{{ '  a <b> & c  '|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[a<b>&c]"
+  },
+  {
+   "id": "string_filters.m058",
+   "template": "[{{ '  a <b> & c  '|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[a&lt;b&gt;&amp;c]"
+  },
+  {
+   "id": "string_filters.m059",
+   "template": "[{{ '  a <b> & c  '|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  a >b> & c  ]"
+  },
+  {
+   "id": "string_filters.m060",
+   "template": "[{{ '  a <b> & c  '|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  a &gt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m061",
+   "template": "[{{ '  a <b> & c  '|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  a <b> & c  ]"
+  },
+  {
+   "id": "string_filters.m062",
+   "template": "[{{ '  a <b> & c  '|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  a <b> & c  ]"
+  },
+  {
+   "id": "string_filters.m063",
+   "template": "[{{ '  a <b> & c  '|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m064",
+   "template": "[{{ '  a <b> & c  '|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m065",
+   "template": "[{{ '  a <b> & c  '|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m066",
+   "template": "[{{ '  a <b> & c  '|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m067",
+   "template": "[{{ '  a <b> & c  '|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m068",
+   "template": "[{{ '  a <b> & c  '|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m069",
+   "template": "[{{ '  a <b> & c  '|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  a <b> & c  ]"
+  },
+  {
+   "id": "string_filters.m070",
+   "template": "[{{ '  a <b> & c  '|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m071",
+   "template": "[{{ '  a <b> & c  '|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[          a <b> & c           ]"
+  },
+  {
+   "id": "string_filters.m072",
+   "template": "[{{ '  a <b> & c  '|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[          a &lt;b&gt; &amp; c           ]"
+  },
+  {
+   "id": "string_filters.m073",
+   "template": "[{{ '  a <b> & c  '|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[a <b> & c]"
+  },
+  {
+   "id": "string_filters.m074",
+   "template": "[{{ '  a <b> & c  '|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[a &lt;b&gt; &amp; c]"
+  },
+  {
+   "id": "string_filters.m075",
+   "template": "[{{ '  a <b> & c  '|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<b> & c]"
+  },
+  {
+   "id": "string_filters.m076",
+   "template": "[{{ '  a <b> & c  '|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[&lt;b&gt; &amp; c]"
+  },
+  {
+   "id": "string_filters.m077",
+   "template": "[{{ '  a <b> & c  '|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[ ...]"
+  },
+  {
+   "id": "string_filters.m078",
+   "template": "[{{ '  a <b> & c  '|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[ ...]"
+  },
+  {
+   "id": "string_filters.m079",
+   "template": "[{{ '  a <b> & c  '|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  a <b> & c  ]"
+  },
+  {
+   "id": "string_filters.m080",
+   "template": "[{{ '  a <b> & c  '|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m081",
+   "template": "[{{ '  a <b> & c  '|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  a]"
+  },
+  {
+   "id": "string_filters.m082",
+   "template": "[{{ '  a <b> & c  '|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  a]"
+  },
+  {
+   "id": "string_filters.m083",
+   "template": "[{{ '  a <b> & c  '|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  A <B> & C  ]"
+  },
+  {
+   "id": "string_filters.m084",
+   "template": "[{{ '  a <b> & c  '|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  A &lt;B&gt; &amp; C  ]"
+  },
+  {
+   "id": "string_filters.m085",
+   "template": "[{{ '  a <b> & c  '|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[3]"
+  },
+  {
+   "id": "string_filters.m086",
+   "template": "[{{ '  a <b> & c  '|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[3]"
+  },
+  {
+   "id": "string_filters.m087",
+   "template": "[{{ '  a <b> & c  '|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  a\n<b> &\nc]"
+  },
+  {
+   "id": "string_filters.m088",
+   "template": "[{{ '  a <b> & c  '|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  a\n&lt;b&gt; &amp;\nc]"
+  },
+  {
+   "id": "string_filters.m089",
+   "template": "[{{ '  a <b> & c  '|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  a\n<b> &\nc]"
+  },
+  {
+   "id": "string_filters.m090",
+   "template": "[{{ '  a <b> & c  '|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  a\n&lt;b&gt; &amp;\nc]"
+  },
+  {
+   "id": "string_filters.m091",
+   "template": "[{{ '  a <b> & c  '|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[    a <b> & c  ]"
+  },
+  {
+   "id": "string_filters.m092",
+   "template": "[{{ '  a <b> & c  '|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[    a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m093",
+   "template": "[{{ '  a <b> & c  '|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  a <b> & c  ]"
+  },
+  {
+   "id": "string_filters.m094",
+   "template": "[{{ '  a <b> & c  '|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m095",
+   "template": "[{{ '  a <b> & c  '|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[%20%20a%20%3Cb%3E%20%26%20c%20%20]"
+  },
+  {
+   "id": "string_filters.m096",
+   "template": "[{{ '  a <b> & c  '|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[%20%20a%20%3Cb%3E%20%26%20c%20%20]"
+  },
+  {
+   "id": "string_filters.m097",
+   "template": "[{{ '  a <b> & c  '|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  a <b> & c  ]"
+  },
+  {
+   "id": "string_filters.m098",
+   "template": "[{{ '  a <b> & c  '|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m099",
+   "template": "[{{ '  a <b> & c  '|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[a & c]"
+  },
+  {
+   "id": "string_filters.m100",
+   "template": "[{{ '  a <b> & c  '|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[a &amp; c]"
+  },
+  {
+   "id": "string_filters.m101",
+   "template": "[{{ '  a <b> & c  '|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m102",
+   "template": "[{{ '  a <b> & c  '|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m103",
+   "template": "[{{ '  a <b> & c  '|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m104",
+   "template": "[{{ '  a <b> & c  '|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m105",
+   "template": "[{{ '  a <b> & c  '|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  a <b> & c  ]"
+  },
+  {
+   "id": "string_filters.m106",
+   "template": "[{{ '  a <b> & c  '|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  a &lt;b&gt; &amp; c  ]"
+  },
+  {
+   "id": "string_filters.m107",
+   "template": "[{{ '  a <b> & c  '|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[13]"
+  },
+  {
+   "id": "string_filters.m108",
+   "template": "[{{ '  a <b> & c  '|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[13]"
+  },
+  {
+   "id": "string_filters.m109",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.X.com]"
+  },
+  {
+   "id": "string_filters.m110",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.X.com]"
+  },
+  {
+   "id": "string_filters.m111",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中x-y_zwww.a.com]"
+  },
+  {
+   "id": "string_filters.m112",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中x-y_zwww.a.com]"
+  },
+  {
+   "id": "string_filters.m113",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m114",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m115",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m116",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m117",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中 x-y_z <a href=\"https://www.a.com\" rel=\"noopener\">www.a.com</a>]"
+  },
+  {
+   "id": "string_filters.m118",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中 x-y_z <a href=\"https://www.a.com\" rel=\"noopener\">www.a.com</a>]"
+  },
+  {
+   "id": "string_filters.m119",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中 x-y_z <a href=\"https://www.a.com\" rel=\"noopener\">www.a.com</a>]"
+  },
+  {
+   "id": "string_filters.m120",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中 x-y_z <a href=\"https://www.a.com\" rel=\"noopener\">www.a.com</a>]"
+  },
+  {
+   "id": "string_filters.m121",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中 x-y_z <a href=\"https://www.a.com\" rel=\"nofollow noopener\" target=\"_b\">www.a.com</a>]"
+  },
+  {
+   "id": "string_filters.m122",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中 x-y_z <a href=\"https://www.a.com\" rel=\"nofollow noopener\" target=\"_b\">www.a.com</a>]"
+  },
+  {
+   "id": "string_filters.m123",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m124",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m125",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[      é中 x-y_z www.a.com      ]"
+  },
+  {
+   "id": "string_filters.m126",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[      é中 x-y_z www.a.com      ]"
+  },
+  {
+   "id": "string_filters.m127",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m128",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m129",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m130",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m131",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中...]"
+  },
+  {
+   "id": "string_filters.m132",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中...]"
+  },
+  {
+   "id": "string_filters.m133",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中 x-y...]"
+  },
+  {
+   "id": "string_filters.m134",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中 x-y...]"
+  },
+  {
+   "id": "string_filters.m135",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中]"
+  },
+  {
+   "id": "string_filters.m136",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中]"
+  },
+  {
+   "id": "string_filters.m137",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[É中 X-Y_z Www.a.com]"
+  },
+  {
+   "id": "string_filters.m138",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[É中 X-Y_z Www.a.com]"
+  },
+  {
+   "id": "string_filters.m139",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[6]"
+  },
+  {
+   "id": "string_filters.m140",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[6]"
+  },
+  {
+   "id": "string_filters.m141",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中\nx-y_z \nwww.a.\ncom]"
+  },
+  {
+   "id": "string_filters.m142",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中\nx-y_z \nwww.a.\ncom]"
+  },
+  {
+   "id": "string_filters.m143",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中\nx-y_z\nwww.a.com]"
+  },
+  {
+   "id": "string_filters.m144",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中\nx-y_z\nwww.a.com]"
+  },
+  {
+   "id": "string_filters.m145",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m146",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m147",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m148",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m149",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[%C3%A9%E4%B8%AD%20x-y_z%20www.a.com]"
+  },
+  {
+   "id": "string_filters.m150",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[%C3%A9%E4%B8%AD%20x-y_z%20www.a.com]"
+  },
+  {
+   "id": "string_filters.m151",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[É中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m152",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[É中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m153",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m154",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m155",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m156",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m157",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m158",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m159",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m160",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[é中 x-y_z www.a.com]"
+  },
+  {
+   "id": "string_filters.m161",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[18]"
+  },
+  {
+   "id": "string_filters.m162",
+   "template": "[{{ '\\u00e9\\u4e2d x-y_z www.a.com'|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[18]"
+  },
+  {
+   "id": "string_filters.m163",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://X.org]"
+  },
+  {
+   "id": "string_filters.m164",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://X.org]"
+  },
+  {
+   "id": "string_filters.m165",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</i>http://a.org]"
+  },
+  {
+   "id": "string_filters.m166",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>x</i>http://a.org]"
+  },
+  {
+   "id": "string_filters.m167",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[>i>x>/i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m168",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[&gt;i>x&gt;/i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m169",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m170",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m171",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</i> <a href=\"http://a.org\" rel=\"noopener\">http://a.org</a>]"
+  },
+  {
+   "id": "string_filters.m172",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>x</i> <a href=\"http://a.org\" rel=\"noopener\">http://a.org</a>]"
+  },
+  {
+   "id": "string_filters.m173",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</i> <a href=\"http://a.org\" rel=\"noopener\">http://a.o...</a>]"
+  },
+  {
+   "id": "string_filters.m174",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>x</i> <a href=\"http://a.org\" rel=\"noopener\">http://a.o...</a>]"
+  },
+  {
+   "id": "string_filters.m175",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</i> <a href=\"http://a.org\" rel=\"nofollow noopener\" target=\"_b\">http://a.org</a>]"
+  },
+  {
+   "id": "string_filters.m176",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>x</i> <a href=\"http://a.org\" rel=\"nofollow noopener\" target=\"_b\">http://a.org</a>]"
+  },
+  {
+   "id": "string_filters.m177",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m178",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m179",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[    <i>x</i> http://a.org     ]"
+  },
+  {
+   "id": "string_filters.m180",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[    <i>x</i> http://a.org     ]"
+  },
+  {
+   "id": "string_filters.m181",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m182",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m183",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m184",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m185",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i...]"
+  },
+  {
+   "id": "string_filters.m186",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i...]"
+  },
+  {
+   "id": "string_filters.m187",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</...]"
+  },
+  {
+   "id": "string_filters.m188",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>x</...]"
+  },
+  {
+   "id": "string_filters.m189",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x<]"
+  },
+  {
+   "id": "string_filters.m190",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>x<]"
+  },
+  {
+   "id": "string_filters.m191",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<I>x</i> Http://a.org]"
+  },
+  {
+   "id": "string_filters.m192",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[&lt;I&gt;x&lt;/i&gt; Http://a.org]"
+  },
+  {
+   "id": "string_filters.m193",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[6]"
+  },
+  {
+   "id": "string_filters.m194",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[6]"
+  },
+  {
+   "id": "string_filters.m195",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</\ni> htt\np://a.\norg]"
+  },
+  {
+   "id": "string_filters.m196",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[&lt;i&gt;x&lt;/\ni&gt; htt\np://a.\norg]"
+  },
+  {
+   "id": "string_filters.m197",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</i>\nhttp://a.org]"
+  },
+  {
+   "id": "string_filters.m198",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[&lt;i&gt;x&lt;/i&gt;\nhttp://a.org]"
+  },
+  {
+   "id": "string_filters.m199",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  <i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m200",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  <i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m201",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m202",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m203",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[%3Ci%3Ex%3C/i%3E%20http%3A//a.org]"
+  },
+  {
+   "id": "string_filters.m204",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[%3Ci%3Ex%3C/i%3E%20http%3A//a.org]"
+  },
+  {
+   "id": "string_filters.m205",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m206",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m207",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[x http://a.org]"
+  },
+  {
+   "id": "string_filters.m208",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[x http://a.org]"
+  },
+  {
+   "id": "string_filters.m209",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m210",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m211",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[&lt;i&gt;x&lt;/i&gt; http://a.org]"
+  },
+  {
+   "id": "string_filters.m212",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[&lt;i&gt;x&lt;/i&gt; http://a.org]"
+  },
+  {
+   "id": "string_filters.m213",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m214",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[<i>x</i> http://a.org]"
+  },
+  {
+   "id": "string_filters.m215",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[21]"
+  },
+  {
+   "id": "string_filters.m216",
+   "template": "[{{ ('<i>x</i> http://a.org'|safe)|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[21]"
+  },
+  {
+   "id": "string_filters.m217",
+   "template": "[{{ 12|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m218",
+   "template": "[{{ 12|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m219",
+   "template": "[{{ 12|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m220",
+   "template": "[{{ 12|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m221",
+   "template": "[{{ 12|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m222",
+   "template": "[{{ 12|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m223",
+   "template": "[{{ 12|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m224",
+   "template": "[{{ 12|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m225",
+   "template": "[{{ 12|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m226",
+   "template": "[{{ 12|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m227",
+   "template": "[{{ 12|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m228",
+   "template": "[{{ 12|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m229",
+   "template": "[{{ 12|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m230",
+   "template": "[{{ 12|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m231",
+   "template": "[{{ 12|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  12 ]"
+  },
+  {
+   "id": "string_filters.m232",
+   "template": "[{{ 12|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  12 ]"
+  },
+  {
+   "id": "string_filters.m233",
+   "template": "[{{ 12|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[              12              ]"
+  },
+  {
+   "id": "string_filters.m234",
+   "template": "[{{ 12|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[              12              ]"
+  },
+  {
+   "id": "string_filters.m235",
+   "template": "[{{ 12|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m236",
+   "template": "[{{ 12|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m237",
+   "template": "[{{ 12|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m238",
+   "template": "[{{ 12|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m239",
+   "template": "[{{ 12|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'int' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m240",
+   "template": "[{{ 12|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'int' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m241",
+   "template": "[{{ 12|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'int' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m242",
+   "template": "[{{ 12|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'int' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m243",
+   "template": "[{{ 12|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'int' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m244",
+   "template": "[{{ 12|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'int' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m245",
+   "template": "[{{ 12|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m246",
+   "template": "[{{ 12|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m247",
+   "template": "[{{ 12|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[1]"
+  },
+  {
+   "id": "string_filters.m248",
+   "template": "[{{ 12|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[1]"
+  },
+  {
+   "id": "string_filters.m249",
+   "template": "[{{ 12|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'int' object has no attribute 'splitlines'"
+   }
+  },
+  {
+   "id": "string_filters.m250",
+   "template": "[{{ 12|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'int' object has no attribute 'splitlines'"
+   }
+  },
+  {
+   "id": "string_filters.m251",
+   "template": "[{{ 12|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'int' object has no attribute 'splitlines'"
+   }
+  },
+  {
+   "id": "string_filters.m252",
+   "template": "[{{ 12|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'int' object has no attribute 'splitlines'"
+   }
+  },
+  {
+   "id": "string_filters.m253",
+   "template": "[{{ 12|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'int' and 'str'"
+   }
+  },
+  {
+   "id": "string_filters.m254",
+   "template": "[{{ 12|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'int' and 'str'"
+   }
+  },
+  {
+   "id": "string_filters.m255",
+   "template": "[{{ 12|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'int' and 'str'"
+   }
+  },
+  {
+   "id": "string_filters.m256",
+   "template": "[{{ 12|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'int' and 'str'"
+   }
+  },
+  {
+   "id": "string_filters.m257",
+   "template": "[{{ 12|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m258",
+   "template": "[{{ 12|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m259",
+   "template": "[{{ 12|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m260",
+   "template": "[{{ 12|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m261",
+   "template": "[{{ 12|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m262",
+   "template": "[{{ 12|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m263",
+   "template": "[{{ 12|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m264",
+   "template": "[{{ 12|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m265",
+   "template": "[{{ 12|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m266",
+   "template": "[{{ 12|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m267",
+   "template": "[{{ 12|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m268",
+   "template": "[{{ 12|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m269",
+   "template": "[{{ 12|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'int' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m270",
+   "template": "[{{ 12|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'int' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m271",
+   "template": "[{{ 2.5|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m272",
+   "template": "[{{ 2.5|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m273",
+   "template": "[{{ 2.5|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m274",
+   "template": "[{{ 2.5|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m275",
+   "template": "[{{ 2.5|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m276",
+   "template": "[{{ 2.5|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m277",
+   "template": "[{{ 2.5|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m278",
+   "template": "[{{ 2.5|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m279",
+   "template": "[{{ 2.5|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m280",
+   "template": "[{{ 2.5|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m281",
+   "template": "[{{ 2.5|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m282",
+   "template": "[{{ 2.5|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m283",
+   "template": "[{{ 2.5|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m284",
+   "template": "[{{ 2.5|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m285",
+   "template": "[{{ 2.5|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[ 2.5 ]"
+  },
+  {
+   "id": "string_filters.m286",
+   "template": "[{{ 2.5|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[ 2.5 ]"
+  },
+  {
+   "id": "string_filters.m287",
+   "template": "[{{ 2.5|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[             2.5              ]"
+  },
+  {
+   "id": "string_filters.m288",
+   "template": "[{{ 2.5|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[             2.5              ]"
+  },
+  {
+   "id": "string_filters.m289",
+   "template": "[{{ 2.5|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m290",
+   "template": "[{{ 2.5|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m291",
+   "template": "[{{ 2.5|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m292",
+   "template": "[{{ 2.5|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m293",
+   "template": "[{{ 2.5|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'float' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m294",
+   "template": "[{{ 2.5|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'float' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m295",
+   "template": "[{{ 2.5|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'float' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m296",
+   "template": "[{{ 2.5|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'float' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m297",
+   "template": "[{{ 2.5|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'float' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m298",
+   "template": "[{{ 2.5|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'float' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m299",
+   "template": "[{{ 2.5|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m300",
+   "template": "[{{ 2.5|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m301",
+   "template": "[{{ 2.5|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2]"
+  },
+  {
+   "id": "string_filters.m302",
+   "template": "[{{ 2.5|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2]"
+  },
+  {
+   "id": "string_filters.m303",
+   "template": "[{{ 2.5|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'float' object has no attribute 'splitlines'"
+   }
+  },
+  {
+   "id": "string_filters.m304",
+   "template": "[{{ 2.5|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'float' object has no attribute 'splitlines'"
+   }
+  },
+  {
+   "id": "string_filters.m305",
+   "template": "[{{ 2.5|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'float' object has no attribute 'splitlines'"
+   }
+  },
+  {
+   "id": "string_filters.m306",
+   "template": "[{{ 2.5|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'float' object has no attribute 'splitlines'"
+   }
+  },
+  {
+   "id": "string_filters.m307",
+   "template": "[{{ 2.5|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'float' and 'str'"
+   }
+  },
+  {
+   "id": "string_filters.m308",
+   "template": "[{{ 2.5|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'float' and 'str'"
+   }
+  },
+  {
+   "id": "string_filters.m309",
+   "template": "[{{ 2.5|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'float' and 'str'"
+   }
+  },
+  {
+   "id": "string_filters.m310",
+   "template": "[{{ 2.5|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'float' and 'str'"
+   }
+  },
+  {
+   "id": "string_filters.m311",
+   "template": "[{{ 2.5|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m312",
+   "template": "[{{ 2.5|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m313",
+   "template": "[{{ 2.5|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m314",
+   "template": "[{{ 2.5|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m315",
+   "template": "[{{ 2.5|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m316",
+   "template": "[{{ 2.5|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m317",
+   "template": "[{{ 2.5|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m318",
+   "template": "[{{ 2.5|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m319",
+   "template": "[{{ 2.5|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m320",
+   "template": "[{{ 2.5|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m321",
+   "template": "[{{ 2.5|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m322",
+   "template": "[{{ 2.5|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[2.5]"
+  },
+  {
+   "id": "string_filters.m323",
+   "template": "[{{ 2.5|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'float' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m324",
+   "template": "[{{ 2.5|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'float' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m325",
+   "template": "[{{ none|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m326",
+   "template": "[{{ none|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m327",
+   "template": "[{{ none|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m328",
+   "template": "[{{ none|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m329",
+   "template": "[{{ none|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m330",
+   "template": "[{{ none|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m331",
+   "template": "[{{ none|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m332",
+   "template": "[{{ none|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m333",
+   "template": "[{{ none|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m334",
+   "template": "[{{ none|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m335",
+   "template": "[{{ none|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m336",
+   "template": "[{{ none|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m337",
+   "template": "[{{ none|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m338",
+   "template": "[{{ none|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m339",
+   "template": "[{{ none|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[ None]"
+  },
+  {
+   "id": "string_filters.m340",
+   "template": "[{{ none|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[ None]"
+  },
+  {
+   "id": "string_filters.m341",
+   "template": "[{{ none|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[             None             ]"
+  },
+  {
+   "id": "string_filters.m342",
+   "template": "[{{ none|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[             None             ]"
+  },
+  {
+   "id": "string_filters.m343",
+   "template": "[{{ none|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m344",
+   "template": "[{{ none|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m345",
+   "template": "[{{ none|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m346",
+   "template": "[{{ none|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m347",
+   "template": "[{{ none|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'NoneType' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m348",
+   "template": "[{{ none|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'NoneType' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m349",
+   "template": "[{{ none|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'NoneType' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m350",
+   "template": "[{{ none|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'NoneType' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m351",
+   "template": "[{{ none|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'NoneType' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m352",
+   "template": "[{{ none|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'NoneType' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m353",
+   "template": "[{{ none|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m354",
+   "template": "[{{ none|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m355",
+   "template": "[{{ none|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[1]"
+  },
+  {
+   "id": "string_filters.m356",
+   "template": "[{{ none|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[1]"
+  },
+  {
+   "id": "string_filters.m357",
+   "template": "[{{ none|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'NoneType' object has no attribute 'splitlines'"
+   }
+  },
+  {
+   "id": "string_filters.m358",
+   "template": "[{{ none|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'NoneType' object has no attribute 'splitlines'"
+   }
+  },
+  {
+   "id": "string_filters.m359",
+   "template": "[{{ none|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'NoneType' object has no attribute 'splitlines'"
+   }
+  },
+  {
+   "id": "string_filters.m360",
+   "template": "[{{ none|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'NoneType' object has no attribute 'splitlines'"
+   }
+  },
+  {
+   "id": "string_filters.m361",
+   "template": "[{{ none|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'NoneType' and 'str'"
+   }
+  },
+  {
+   "id": "string_filters.m362",
+   "template": "[{{ none|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'NoneType' and 'str'"
+   }
+  },
+  {
+   "id": "string_filters.m363",
+   "template": "[{{ none|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'NoneType' and 'str'"
+   }
+  },
+  {
+   "id": "string_filters.m364",
+   "template": "[{{ none|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +=: 'NoneType' and 'str'"
+   }
+  },
+  {
+   "id": "string_filters.m365",
+   "template": "[{{ none|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m366",
+   "template": "[{{ none|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m367",
+   "template": "[{{ none|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m368",
+   "template": "[{{ none|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m369",
+   "template": "[{{ none|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m370",
+   "template": "[{{ none|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m371",
+   "template": "[{{ none|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m372",
+   "template": "[{{ none|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m373",
+   "template": "[{{ none|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m374",
+   "template": "[{{ none|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m375",
+   "template": "[{{ none|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m376",
+   "template": "[{{ none|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[None]"
+  },
+  {
+   "id": "string_filters.m377",
+   "template": "[{{ none|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'NoneType' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m378",
+   "template": "[{{ none|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "object of type 'NoneType' has no len()"
+   }
+  },
+  {
+   "id": "string_filters.m379",
+   "template": "[{{ ''|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m380",
+   "template": "[{{ ''|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m381",
+   "template": "[{{ ''|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m382",
+   "template": "[{{ ''|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m383",
+   "template": "[{{ ''|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m384",
+   "template": "[{{ ''|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m385",
+   "template": "[{{ ''|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m386",
+   "template": "[{{ ''|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m387",
+   "template": "[{{ ''|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m388",
+   "template": "[{{ ''|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m389",
+   "template": "[{{ ''|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m390",
+   "template": "[{{ ''|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m391",
+   "template": "[{{ ''|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m392",
+   "template": "[{{ ''|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m393",
+   "template": "[{{ ''|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[     ]"
+  },
+  {
+   "id": "string_filters.m394",
+   "template": "[{{ ''|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[     ]"
+  },
+  {
+   "id": "string_filters.m395",
+   "template": "[{{ ''|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[                              ]"
+  },
+  {
+   "id": "string_filters.m396",
+   "template": "[{{ ''|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[                              ]"
+  },
+  {
+   "id": "string_filters.m397",
+   "template": "[{{ ''|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m398",
+   "template": "[{{ ''|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m399",
+   "template": "[{{ ''|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m400",
+   "template": "[{{ ''|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m401",
+   "template": "[{{ ''|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m402",
+   "template": "[{{ ''|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m403",
+   "template": "[{{ ''|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m404",
+   "template": "[{{ ''|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m405",
+   "template": "[{{ ''|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m406",
+   "template": "[{{ ''|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m407",
+   "template": "[{{ ''|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m408",
+   "template": "[{{ ''|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m409",
+   "template": "[{{ ''|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[0]"
+  },
+  {
+   "id": "string_filters.m410",
+   "template": "[{{ ''|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[0]"
+  },
+  {
+   "id": "string_filters.m411",
+   "template": "[{{ ''|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m412",
+   "template": "[{{ ''|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m413",
+   "template": "[{{ ''|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m414",
+   "template": "[{{ ''|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m415",
+   "template": "[{{ ''|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  ]"
+  },
+  {
+   "id": "string_filters.m416",
+   "template": "[{{ ''|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  ]"
+  },
+  {
+   "id": "string_filters.m417",
+   "template": "[{{ ''|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m418",
+   "template": "[{{ ''|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m419",
+   "template": "[{{ ''|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m420",
+   "template": "[{{ ''|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m421",
+   "template": "[{{ ''|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m422",
+   "template": "[{{ ''|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m423",
+   "template": "[{{ ''|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m424",
+   "template": "[{{ ''|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m425",
+   "template": "[{{ ''|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m426",
+   "template": "[{{ ''|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m427",
+   "template": "[{{ ''|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m428",
+   "template": "[{{ ''|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m429",
+   "template": "[{{ ''|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m430",
+   "template": "[{{ ''|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "string_filters.m431",
+   "template": "[{{ ''|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[0]"
+  },
+  {
+   "id": "string_filters.m432",
+   "template": "[{{ ''|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[0]"
+  },
+  {
+   "id": "string_filters.m433",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m434",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m435",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[onetwo\tthree\nfourfivesixseveneight]"
+  },
+  {
+   "id": "string_filters.m436",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[onetwo\tthree\nfourfivesixseveneight]"
+  },
+  {
+   "id": "string_filters.m437",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m438",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m439",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m440",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m441",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m442",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m443",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m444",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m445",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m446",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m447",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m448",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m449",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m450",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m451",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m452",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m453",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m454",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m455",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[on...]"
+  },
+  {
+   "id": "string_filters.m456",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[on...]"
+  },
+  {
+   "id": "string_filters.m457",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one tw...]"
+  },
+  {
+   "id": "string_filters.m458",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one tw...]"
+  },
+  {
+   "id": "string_filters.m459",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one]"
+  },
+  {
+   "id": "string_filters.m460",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one]"
+  },
+  {
+   "id": "string_filters.m461",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[One Two\tThree\nFour Five Six Seven Eight]"
+  },
+  {
+   "id": "string_filters.m462",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[One Two\tThree\nFour Five Six Seven Eight]"
+  },
+  {
+   "id": "string_filters.m463",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[8]"
+  },
+  {
+   "id": "string_filters.m464",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[8]"
+  },
+  {
+   "id": "string_filters.m465",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one\ntwo\nthree\nfour\nfive\nsix\nseven\neight]"
+  },
+  {
+   "id": "string_filters.m466",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one\ntwo\nthree\nfour\nfive\nsix\nseven\neight]"
+  },
+  {
+   "id": "string_filters.m467",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one\ntwo\nthree\nfour\nfive\nsix\nseven\neight]"
+  },
+  {
+   "id": "string_filters.m468",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one\ntwo\nthree\nfour\nfive\nsix\nseven\neight]"
+  },
+  {
+   "id": "string_filters.m469",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  one two\tthree\n  four five six seven eight]"
+  },
+  {
+   "id": "string_filters.m470",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  one two\tthree\n  four five six seven eight]"
+  },
+  {
+   "id": "string_filters.m471",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one two\tthree\n> four five six seven eight]"
+  },
+  {
+   "id": "string_filters.m472",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one two\tthree\n&gt; four five six seven eight]"
+  },
+  {
+   "id": "string_filters.m473",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one%20two%09three%0Afour%20five%20six%20seven%20eight]"
+  },
+  {
+   "id": "string_filters.m474",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one%20two%09three%0Afour%20five%20six%20seven%20eight]"
+  },
+  {
+   "id": "string_filters.m475",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[One two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m476",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[One two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m477",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one two three four five six seven eight]"
+  },
+  {
+   "id": "string_filters.m478",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one two three four five six seven eight]"
+  },
+  {
+   "id": "string_filters.m479",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m480",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m481",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m482",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m483",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m484",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[one two\tthree\nfour five six seven eight]"
+  },
+  {
+   "id": "string_filters.m485",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[39]"
+  },
+  {
+   "id": "string_filters.m486",
+   "template": "[{{ 'one two\\tthree\\nfour five six seven eight'|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[39]"
+  },
+  {
+   "id": "string_filters.m487",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see http://x.org/X?b=c&d Xnd mXil@x.org]"
+  },
+  {
+   "id": "string_filters.m488",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|replace('a', 'X') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see http://x.org/X?b=c&amp;d Xnd mXil@x.org]"
+  },
+  {
+   "id": "string_filters.m489",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[seehttp://x.org/a?b=c&dandmail@x.org]"
+  },
+  {
+   "id": "string_filters.m490",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|replace(' ', '') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[seehttp://x.org/a?b=c&amp;dandmail@x.org]"
+  },
+  {
+   "id": "string_filters.m491",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m492",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|replace('<', '>') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&amp;d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m493",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m494",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|safe }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m495",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see <a href=\"http://x.org/a?b=c&amp;d\" rel=\"noopener\">http://x.org/a?b=c&amp;d</a> and <a href=\"mailto:mail@x.org\">mail@x.org</a>]"
+  },
+  {
+   "id": "string_filters.m496",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|urlize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see <a href=\"http://x.org/a?b=c&amp;d\" rel=\"noopener\">http://x.org/a?b=c&amp;d</a> and <a href=\"mailto:mail@x.org\">mail@x.org</a>]"
+  },
+  {
+   "id": "string_filters.m497",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see <a href=\"http://x.org/a?b=c&amp;d\" rel=\"noopener\">http://x.o...</a> and <a href=\"mailto:mail@x.org\">mail@x.org</a>]"
+  },
+  {
+   "id": "string_filters.m498",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|urlize(10) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see <a href=\"http://x.org/a?b=c&amp;d\" rel=\"noopener\">http://x.o...</a> and <a href=\"mailto:mail@x.org\">mail@x.org</a>]"
+  },
+  {
+   "id": "string_filters.m499",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see <a href=\"http://x.org/a?b=c&amp;d\" rel=\"nofollow noopener\" target=\"_b\">http://x.org/a?b=c&amp;d</a> and <a href=\"mailto:mail@x.org\">mail@x.org</a>]"
+  },
+  {
+   "id": "string_filters.m500",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|urlize(nofollow=true, target='_b') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see <a href=\"http://x.org/a?b=c&amp;d\" rel=\"nofollow noopener\" target=\"_b\">http://x.org/a?b=c&amp;d</a> and <a href=\"mailto:mail@x.org\">mail@x.org</a>]"
+  },
+  {
+   "id": "string_filters.m501",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m502",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|center(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&amp;d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m503",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m504",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|center(30) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&amp;d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m505",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m506",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|trim }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&amp;d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m507",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m508",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|trim(' a') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&amp;d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m509",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[se...]"
+  },
+  {
+   "id": "string_filters.m510",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|truncate(5) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[se...]"
+  },
+  {
+   "id": "string_filters.m511",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see ht...]"
+  },
+  {
+   "id": "string_filters.m512",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|truncate(9, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see ht...]"
+  },
+  {
+   "id": "string_filters.m513",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see]"
+  },
+  {
+   "id": "string_filters.m514",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|truncate(5, end='') }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see]"
+  },
+  {
+   "id": "string_filters.m515",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[See Http://x.org/a?b=c&d And Mail@x.org]"
+  },
+  {
+   "id": "string_filters.m516",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|title }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[See Http://x.org/a?b=c&amp;d And Mail@x.org]"
+  },
+  {
+   "id": "string_filters.m517",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m518",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|wordcount }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[12]"
+  },
+  {
+   "id": "string_filters.m519",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see ht\ntp://x\n.org/a\n?b=c&d\nand ma\nil@x.o\nrg]"
+  },
+  {
+   "id": "string_filters.m520",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|wordwrap(6) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see ht\ntp://x\n.org/a\n?b=c&amp;d\nand ma\nil@x.o\nrg]"
+  },
+  {
+   "id": "string_filters.m521",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see\nhttp://x.org/a?b=c&d\nand\nmail@x.org]"
+  },
+  {
+   "id": "string_filters.m522",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|wordwrap(6, false) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see\nhttp://x.org/a?b=c&amp;d\nand\nmail@x.org]"
+  },
+  {
+   "id": "string_filters.m523",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[  see http://x.org/a?b=c&d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m524",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|indent(2, true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[  see http://x.org/a?b=c&amp;d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m525",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m526",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|indent('> ', blank=true) }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&amp;d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m527",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see%20http%3A//x.org/a%3Fb%3Dc%26d%20and%20mail%40x.org]"
+  },
+  {
+   "id": "string_filters.m528",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|urlencode }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see%20http%3A//x.org/a%3Fb%3Dc%26d%20and%20mail%40x.org]"
+  },
+  {
+   "id": "string_filters.m529",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[See http://x.org/a?b=c&d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m530",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|capitalize }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[See http://x.org/a?b=c&amp;d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m531",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m532",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|striptags }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&amp;d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m533",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&amp;d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m534",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|escape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&amp;d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m535",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&amp;d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m536",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|forceescape }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&amp;d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m537",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m538",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|string }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[see http://x.org/a?b=c&amp;d and mail@x.org]"
+  },
+  {
+   "id": "string_filters.m539",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": false
+   },
+   "templates": {},
+   "output": "[39]"
+  },
+  {
+   "id": "string_filters.m540",
+   "template": "[{{ 'see http://x.org/a?b=c&d and mail@x.org'|length }}]",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "[39]"
+  }
+ ]
+}

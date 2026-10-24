@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -29,6 +30,14 @@ extern FilterPtr CreateFilter(const std::string& filterName, const CallParamsInf
 
 namespace filters
 {
+// The ASCII text Python's int() and float() parse for a string value of either width, or
+// nullopt for a value that is no string or has characters they reject
+std::optional<std::string> PythonNumberText(const InternalValue& val);
+// Python's int() of such text in base 10 (a big integer beyond int64), or nullopt where it raises
+std::optional<InternalValue> PythonIntOfText(const std::string& text);
+// Python's float() of such text, or nullopt where it raises
+std::optional<double> PythonFloatOfText(const std::string& text);
+
 // The interface first, so that the object starts with it
 class FilterBase : public ExpressionFilter::IExpressionFilter
     , public FunctionBase

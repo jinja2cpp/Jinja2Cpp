@@ -30,3 +30,11 @@ the filter form is not.
 
 **Done when** wide `urlencode` matches narrow and each class of difference is a corpus case
 that matches Python or is listed as deliberate.
+
+**Outcome.** Wide `urlencode` already matched narrow (`filters.urlencode_non_ascii` pins it).
+`replace` now takes the str() of `old` and `new`, inserts around every character for an empty
+`old`, counts as `str.replace` does (`0` replaces none, `none` or a negative count all, a
+float raises) and caps its result; `indent` refuses a float width, `trim` a non-string
+`chars`, `urlize` a string `extra_schemes`, `wordwrap` a non-string value. `wordwrap(0)`,
+`wordwrap(-3)` and `truncate(10, true, 1)` already raised. The differential lives on as the
+`string_filters` parity area: 27 calls on 10 kinds of input, autoescape off and on, all matching.

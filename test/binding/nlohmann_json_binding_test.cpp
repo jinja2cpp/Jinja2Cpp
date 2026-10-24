@@ -61,7 +61,8 @@ True
 100.5
 'Hello World!'
 [1, 2, 3, 4]
-{'message': 'Hello World from Parser!', 'message2': 'Hello World from Parser-123!'}
+{'message': 'Hello World from Parser!',
+ 'message2': 'Hello World from Parser-123!'}
 None)")
 {
     nlohmann::json values = {

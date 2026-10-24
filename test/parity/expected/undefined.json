@@ -1732,6 +1732,31 @@
     "type": "UndefinedError",
     "message": "'nope' is undefined"
    }
+  },
+  {
+   "id": "undefined.debug_finalize_gets_undefined",
+   "template": "{{ nope }}|{{ d.zz }}",
+   "context": {
+    "d": {}
+   },
+   "env": {
+    "finalize": "brackets",
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "[{{ nope }}]|[{{ no such element: dict object['zz'] }}]"
+  },
+  {
+   "id": "undefined.finalize_none_not_undefined",
+   "template": "{{ nope }}|{{ none }}|{{ d.zz }}",
+   "context": {
+    "d": {}
+   },
+   "env": {
+    "finalize": "none_marker"
+   },
+   "templates": {},
+   "output": "|N|"
   }
  ]
 }
