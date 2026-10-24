@@ -355,9 +355,12 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0285](0285-abi-baselines-at-rc.md) | Commit the ABI baselines at the 2.0 RC and turn the abidiff gate on | release | high | open |
 | [0286](0286-fixed-cost-drift-oct-12-19.md) | Fixed-cost drift from feature merges, 2026-10-12 to 2026-10-19 | perf | medium | done |
 | [0287](0287-big-int-radix-conversion-cost.md) | Quadratic radix conversion of big integers near the bit cap | robustness | low | open |
-| [0288](0288-finalize-autoescape.md) | `finalize` output is not escaped under autoescape | parity | medium | open |
+| [0288](0288-finalize-autoescape.md) | `finalize` output is not escaped under autoescape | parity | high | done |
 | [0289](0289-flat-concat-chains.md) | `~` chains as one node, as Jinja2's `Concat` | parity | low | open |
 | [0290](0290-codeql-test-suite-cost.md) | Find what in the test suite makes CodeQL's data-flow stage explode | ci | low | open |
+| [0291](0291-fold-chosen-by-foldable-test.md) | Fold a value chosen by a foldable test that is not a literal | parity | low | open |
+| [0292](0292-finalize-fold-error-fallback.md) | Evaluate at run time when folding a finalized `{{ }}` raises | parity | low | done |
+| [0293](0293-finalize-gets-undefined.md) | `finalize` gets None for an undefined value | parity | medium | open |
 | [0294](0294-positional-after-keyword-syntax-error.md) | A positional argument after a keyword one is a syntax error | parity | low | open |
 | [0295](0295-selectattr-extra-keyword.md) | `selectattr('a', attribute='a')` fails where Python ignores the keyword | parity | low | open |
 | [0298](0298-include-of-extending-template-loop.md) | An included template that extends a parent reading `loop` | parity | low | open |
