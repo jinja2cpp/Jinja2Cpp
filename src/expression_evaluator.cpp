@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <initializer_list>
 #include <iterator>
 #include <memory>

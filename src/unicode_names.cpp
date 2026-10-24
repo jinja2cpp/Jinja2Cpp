@@ -99,7 +99,7 @@ std::optional<char32_t> LookupHangul(std::string_view rest)
     {
         return std::nullopt;
     }
-    return static_cast<char32_t>(0xAC00 + ((*lead * HangulVowels.size() + *vowel) * HangulTrails.size()) + *trail);
+    return static_cast<char32_t>(0xAC00 + (((*lead * HangulVowels.size()) + *vowel) * HangulTrails.size()) + *trail);
 }
 
 std::optional<char32_t> LookupCjkUnified(std::string_view digits)
@@ -125,8 +125,8 @@ std::optional<char32_t> LookupHexNamed(std::string_view digits, const Range* fir
 
 // Words and Names hold entries in byte order with an index of every BlockSize-th one: the
 // entry equal to key, found by a binary search of the index and a walk of one block
-template<std::size_t IndexSize, std::size_t DataSize, typename Compare>
-const std::uint8_t* FindEntry(const std::uint32_t (&index)[IndexSize], const std::uint8_t (&data)[DataSize], const Compare& compare)
+template<std::size_t indexSize, std::size_t dataSize, typename Compare>
+const std::uint8_t* FindEntry(const std::uint32_t (&index)[indexSize], const std::uint8_t (&data)[dataSize], const Compare& compare)
 {
     // The first block whose first entry is above key; the entry is in the block before it
     const auto* block = std::upper_bound(std::begin(index), std::end(index), 0, [&data, &compare](int, std::uint32_t offset) { return compare(data + offset) < 0; });
@@ -265,7 +265,7 @@ std::optional<char32_t> LookupUnicodeName(std::string_view name)
         {
             ch = static_cast<char>(ch - 'a' + 'A');
         }
-        else if (!((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == ' ' || ch == '-'))
+        else if ((ch < 'A' || ch > 'Z') && (ch < '0' || ch > '9') && ch != ' ' && ch != '-')
         {
             return std::nullopt;
         }
