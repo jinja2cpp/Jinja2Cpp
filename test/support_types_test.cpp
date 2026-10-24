@@ -1,9 +1,14 @@
 #include "../src/intrusive_ptr.h"
+#include "../src/small_vector.h"
 #include "../src/span.h"
 
 #include "gtest/gtest.h"
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
+#include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -168,4 +173,211 @@ TEST(IntrusivePtrTest, CountsReferences)
     ptr.reset();
     EXPECT_EQ(destroyed, 2);
 }
+using jinja2::SmallVector;
+using jinja2::SmallVectorBase;
+using jinja2::SmallVectorDoubling;
+
+static_assert(sizeof(SmallVectorBase<int>) == 3 * sizeof(void*));
+static_assert(sizeof(SmallVector<void*, 2>) == 5 * sizeof(void*));
+static_assert(std::is_nothrow_move_constructible_v<SmallVector<std::string, 2>>);
+
+bool IsInside(const void* ptr, const void* object, std::size_t size)
+{
+    const auto addr = reinterpret_cast<std::uintptr_t>(ptr);     // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    const auto first = reinterpret_cast<std::uintptr_t>(object); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    return addr >= first && addr < first + size;
+}
+
+template<typename V>
+bool IsInlineIn(const V& vec)
+{
+    return IsInside(vec.data(), &vec, sizeof(vec)); // NOLINT(clang-analyzer-cplusplus.Move): also asked of moved-from vectors
+}
+
+TEST(SmallVectorTest, GrowsPastInlineBuffer)
+{
+    SmallVector<std::string, 2> vec;
+    EXPECT_TRUE(vec.empty());
+    EXPECT_EQ(vec.capacity(), 2U);
+    vec.push_back("a");
+    vec.emplace_back("b");
+    EXPECT_TRUE(IsInlineIn(vec));
+    // The argument names an element that the growth moves
+    vec.push_back(vec[0]);
+    EXPECT_FALSE(IsInlineIn(vec));
+    EXPECT_EQ(vec.capacity(), 3U);
+    vec.emplace_back(vec.back());
+    EXPECT_EQ(vec.capacity(), 4U);
+    EXPECT_EQ(vec, (SmallVector<std::string, 2>{ "a", "b", "a", "a" }));
+    vec.pop_back();
+    EXPECT_EQ(vec.size(), 3U);
+    EXPECT_EQ(vec.front(), "a");
+    EXPECT_EQ(vec.back(), "a");
+    EXPECT_THROW((void)vec.at(3), std::out_of_range);
+}
+
+TEST(SmallVectorTest, GrowthPolicies)
+{
+    SmallVector<int, 5> slow;
+    SmallVector<int, 5, SmallVectorDoubling> doubling;
+    std::vector<std::size_t> slowCaps;
+    std::vector<std::size_t> doublingCaps;
+    for (int i = 0; i != 40; ++i)
+    {
+        slow.push_back(i);
+        doubling.push_back(i);
+        if (slowCaps.empty() || slowCaps.back() != slow.capacity())
+        {
+            slowCaps.push_back(slow.capacity());
+        }
+        if (doublingCaps.empty() || doublingCaps.back() != doubling.capacity())
+        {
+            doublingCaps.push_back(doubling.capacity());
+        }
+    }
+    EXPECT_EQ(slowCaps, (std::vector<std::size_t>{ 5, 8, 12, 19, 30, 48 }));
+    EXPECT_EQ(doublingCaps, (std::vector<std::size_t>{ 5, 10, 20, 40 }));
+}
+
+TEST(SmallVectorTest, InsertEraseResize)
+{
+    SmallVector<int, 4> vec{ 1, 2, 3 };
+    vec.insert(vec.begin() + 1, 10);
+    EXPECT_EQ(vec, (SmallVector<int, 4>{ 1, 10, 2, 3 }));
+    vec.insert(vec.begin(), vec[3]);
+    EXPECT_EQ(vec, (SmallVector<int, 4>{ 3, 1, 10, 2, 3 }));
+    const std::vector<int> more{ 7, 8 };
+    vec.insert(vec.end() - 1, more.begin(), more.end());
+    EXPECT_EQ(vec, (SmallVector<int, 4>{ 3, 1, 10, 2, 7, 8, 3 }));
+    vec.insert(vec.begin(), 2, vec[2]);
+    EXPECT_EQ(vec, (SmallVector<int, 4>{ 10, 10, 3, 1, 10, 2, 7, 8, 3 }));
+    auto* it = vec.erase(vec.begin() + 1, vec.begin() + 4);
+    EXPECT_EQ(*it, 10);
+    EXPECT_EQ(vec, (SmallVector<int, 4>{ 10, 10, 2, 7, 8, 3 }));
+    vec.erase(vec.begin());
+    EXPECT_EQ(vec, (SmallVector<int, 4>{ 10, 2, 7, 8, 3 }));
+    vec.resize(2);
+    EXPECT_EQ(vec, (SmallVector<int, 4>{ 10, 2 }));
+    vec.resize(4);
+    EXPECT_EQ(vec, (SmallVector<int, 4>{ 10, 2, 0, 0 }));
+    vec.resize(6, 5);
+    EXPECT_EQ(vec, (SmallVector<int, 4>{ 10, 2, 0, 0, 5, 5 }));
+    EXPECT_EQ(std::vector<int>(vec.rbegin(), vec.rend()), (std::vector<int>{ 5, 5, 0, 0, 2, 10 }));
+    vec.clear();
+    EXPECT_TRUE(vec.empty());
+    vec.reserve(20);
+    EXPECT_GE(vec.capacity(), 20U);
+    vec.assign(3, 9);
+    EXPECT_EQ(vec, (SmallVector<int, 4>{ 9, 9, 9 }));
+}
+
+TEST(SmallVectorTest, CopyAndMove)
+{
+    SmallVector<std::string, 2> small{ "x" };
+    SmallVector<std::string, 2> big{ "a", "b", "c" };
+    const auto* bigData = big.data();
+
+    SmallVector<std::string, 2> copy(big);
+    EXPECT_EQ(copy, big);
+    copy = small;
+    EXPECT_EQ(copy, small);
+
+    // A heap buffer moves over whole and the source gets its inline buffer back
+    SmallVector<std::string, 2> moved(std::move(big));
+    EXPECT_EQ(moved.data(), bigData);
+    EXPECT_TRUE(big.empty()); // NOLINT(bugprone-use-after-move, clang-analyzer-cplusplus.Move): moved-from state is specified
+    EXPECT_TRUE(IsInlineIn(big));
+    EXPECT_EQ(big.capacity(), 2U);
+    big.push_back("again");
+    EXPECT_TRUE(IsInlineIn(big));
+
+    // Inline elements move one by one
+    SmallVector<std::string, 2> movedSmall(std::move(small));
+    EXPECT_EQ(movedSmall, (SmallVector<std::string, 2>{ "x" }));
+    EXPECT_TRUE(IsInlineIn(movedSmall));
+
+    moved = std::move(movedSmall);
+    EXPECT_EQ(moved, (SmallVector<std::string, 2>{ "x" }));
+    movedSmall = std::move(copy);
+    EXPECT_EQ(movedSmall, (SmallVector<std::string, 2>{ "x" }));
+}
+
+TEST(SmallVectorTest, ShrinkToFit)
+{
+    SmallVector<int, 3> vec{ 1, 2, 3, 4, 5 };
+    EXPECT_FALSE(IsInlineIn(vec));
+    vec.resize(4);
+    vec.shrink_to_fit();
+    EXPECT_FALSE(IsInlineIn(vec));
+    EXPECT_EQ(vec.capacity(), 4U);
+    vec.resize(2);
+    vec.shrink_to_fit();
+    EXPECT_TRUE(IsInlineIn(vec));
+    EXPECT_EQ(vec.capacity(), 3U);
+    EXPECT_EQ(vec, (SmallVector<int, 3>{ 1, 2 }));
+    vec.clear();
+    vec.shrink_to_fit();
+    EXPECT_TRUE(IsInlineIn(vec));
+}
+
+void AppendThrough(SmallVectorBase<int>& vec, int count)
+{
+    for (int i = 0; i != count; ++i)
+    {
+        vec.push_back(i);
+    }
+}
+
+TEST(SmallVectorTest, CapacityErasedBase)
+{
+    SmallVector<int, 2> two;
+    SmallVector<int, 8> eight;
+    AppendThrough(two, 5);
+    AppendThrough(eight, 5);
+    EXPECT_TRUE(IsInlineIn(eight));
+    EXPECT_FALSE(IsInlineIn(two));
+    EXPECT_TRUE(std::equal(two.begin(), two.end(), eight.begin(), eight.end()));
+    SmallVectorBase<int>& base = eight;
+    base = std::move(static_cast<SmallVectorBase<int>&>(two));
+    EXPECT_EQ(eight.size(), 5U);
+    EXPECT_TRUE(two.empty()); // NOLINT(bugprone-use-after-move, clang-analyzer-cplusplus.Move)
+    two.push_back(1);
+    EXPECT_EQ(two.size(), 1U);
+}
+
+// Copies throw on the third one: a failed growth leaves the vector as it was
+struct ThrowingCopy
+{
+    static inline int copies = 0;
+    int value = 0;
+    explicit ThrowingCopy(int v)
+        : value(v)
+    {
+    }
+    ThrowingCopy(const ThrowingCopy& other)
+        : value(other.value)
+    {
+        if (++copies == 3)
+        {
+            throw std::runtime_error("copy");
+        }
+    }
+    ThrowingCopy& operator=(const ThrowingCopy&) = default;
+    ~ThrowingCopy() = default;
+};
+
+TEST(SmallVectorTest, StrongGuaranteeOnGrowth)
+{
+    SmallVector<ThrowingCopy, 2> vec;
+    vec.emplace_back(1);
+    vec.emplace_back(2);
+    ThrowingCopy::copies = 0;
+    const ThrowingCopy extra(3);
+    EXPECT_THROW(vec.push_back(extra), std::runtime_error);
+    ASSERT_EQ(vec.size(), 2U);
+    EXPECT_EQ(vec[0].value, 1);
+    EXPECT_EQ(vec[1].value, 2);
+    EXPECT_TRUE(IsInlineIn(vec));
+}
+
 } // namespace
