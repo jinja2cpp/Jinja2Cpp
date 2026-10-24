@@ -160,7 +160,13 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
     // The items of a tuple of names are the nodes after it
     const bool allNames = root.size == count + 1 && std::all_of(target.begin() + 1, target.end(), [](const TargetNode& t) { return t.IsPlainName(); });
     const auto map = AsMap(value);
-    // An object (namespace(), cycler(), joiner()) is neither a mapping nor iterable
+    // An object (namespace(), cycler(), joiner()) is neither a mapping nor iterable; `loop`
+    // is iterable
+    if (ListAdapter items; map && map->GetIteration(items))
+    {
+        AssignTo(target, InternalValue(ListAdapter::CreateAdapter(items.ToValueList())), sink, values);
+        return;
+    }
     if (map && map->GetObjectClass())
     {
         throw TemplateRuntimeError("cannot unpack non-iterable "s + map->GetObjectClass() + " object");
@@ -542,6 +548,25 @@ public:
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return true; }
+    // An object, not a mapping: dictsort and items refuse it, pprint prints its repr
+    [[nodiscard]] const char* GetObjectClass() const override { return "LoopContext"; }
+    // Iterating it takes the rest of the loop's own items, each as (item, loop), so that the
+    // running loop goes on after them: Jinja2's LoopContext.__next__ (docs/tasks/0219)
+    [[nodiscard]] bool Iterates() const override { return true; }
+    bool GetIteration(ListAdapter& items) const override
+    {
+        items = ListAdapter::CreateAdapter([state = m_state, loop = InternalValue(MapAdapter(MakeRef<LoopAccessor>(*this)))]() -> std::optional<InternalValue> {
+            state->Peek();
+            if (state->isLast)
+            {
+                return std::nullopt;
+            }
+            state->SetIndex(state->index0 + 1);
+            state->isPeeked = false;
+            return InternalValue(ListAdapter::CreateAdapter(InternalValueList{ state->Item(state->index0), loop }).MarkAsTuple());
+        });
+        return true;
+    }
     [[nodiscard]] const LoopState* State() const { return m_state; }
     [[nodiscard]] const void* GetIdentity() const override { return m_state; }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -1088,6 +1113,13 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         {
             loopRendered = true;
         }
+        // The body took items by iterating `loop` (LoopAccessor::GetIteration): go on after them
+        if (state->index0 != itemIdx)
+        {
+            itemIdx = state->index0;
+            state->Peek();
+            hasItem = !state->isLast;
+        }
     }
     values.ExitScope(state->bodyScope);
 
@@ -1237,6 +1269,8 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
         {
             loopRendered = true;
         }
+        // The body took items by iterating `loop` (LoopAccessor::GetIteration): go on after them
+        itemIdx = state->index0;
         if (!state->isPeeked)
         {
             state->isLast = !fetchNext(state->Item(itemIdx + 1));
@@ -1506,36 +1540,6 @@ void RenderBlockAt(const BlocksStack& stack, std::string_view name, size_t depth
     block.node.RenderBody(os, blockContext, depth);
 }
 
-// Writes to the template's output only until the template extends another one
-class TopLevelWriter : public OutStream::StreamWriter
-{
-public:
-    TopLevelWriter(OutStream& os, const TemplateFrame& frame)
-        : m_os(os)
-        , m_frame(frame)
-    {
-    }
-
-    void WriteBuffer(const void* ptr, size_t length) override
-    {
-        if (!m_frame.parent)
-        {
-            m_os.WriteBuffer(ptr, length);
-        }
-    }
-    void WriteValue(const InternalValue& val) override
-    {
-        if (!m_frame.parent)
-        {
-            m_os.WriteValue(val);
-        }
-    }
-
-private:
-    OutStream& m_os;
-    const TemplateFrame& m_frame;
-};
-
 class TemplateFrameGuard
 {
 public:
@@ -1646,6 +1650,16 @@ LookupResult RenderContext::FindSelf(const std::string& name)
     if (!frame || !frame->blocks || (frame->baseDepth == 0 && !frame->self))
     {
         return FindValue(name);
+    }
+    // A body that stores `self` before reading it has none of its own: Jinja2 reads it from
+    // the context, where a parent finds what its child set
+    if (m_selfDepth > frame->baseDepth ? m_selfFromContext : frame->selfFromContext)
+    {
+        if (auto value = FindValue(name); value || !frame->childSelf)
+        {
+            return value;
+        }
+        return LookupResult(*frame->childSelf);
     }
     // The template's base scope is its own: a `set self` at its top level wins, except in a
     // block, which sets `self` from its own scope up
@@ -1782,6 +1796,7 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
         }
     }
     const size_t prevSelfDepth = values.SetSelfDepth(values.GetScopesCount());
+    const bool prevSelfFromContext = values.SetSelfFromContext(m_selfFromContext);
     auto scope = values.EnterScope();
     if (parentBlock)
     {
@@ -1793,6 +1808,7 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     OutputAutoescapeGuard autoescapeGuard(values, m_autoescape);
     values.Nodes()[m_mainBody].Render(os, values);
     values.ExitScope();
+    values.SetSelfFromContext(prevSelfFromContext);
     values.SetSelfDepth(prevSelfDepth);
 }
 
@@ -1825,10 +1841,25 @@ void TemplateRenderer::RenderNamed(OutStream& os, RenderContext& values, std::st
 void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values, BlocksStack& stack, std::string_view childName)
 {
     // The parent shares the child's top-level scope, but a `self` the child set there is not
-    // the parent's: in Jinja2 `self` is a local of each template's root function
-    values.GetCurrentScope().Erase("self");
-    // Its blocks are on the stack already: `extends` pushed them (ExtendsStatement::Render)
-    RenderBody(os, values, &stack, childName, true);
+    // the parent's: in Jinja2 `self` is a local of each template's root function. It is still
+    // in the context, for a parent with no `self` of its own, and the module's export when the
+    // parent sets none
+    auto scope = values.GetCurrentScope();
+    std::optional<InternalValue> childSelf;
+    if (const auto p = scope.Map().find("self"); p != scope.Map().end())
+    {
+        childSelf.emplace(p->second);
+        scope.Erase("self");
+    }
+    // Its blocks are on the stack already: `extends` pushed them (ExtendsStatement::Render).
+    // A grandparent sees the `self` the first template of the chain set
+    const auto* frame = values.GetTemplateFrame();
+    const ParentRender asParent{ childSelf ? &*childSelf : (frame ? frame->childSelf : nullptr) };
+    RenderBody(os, values, &stack, childName, &asParent);
+    if (childSelf && scope.Map().find("self") == scope.Map().end())
+    {
+        scope["self"] = std::move(*childSelf);
+    }
 }
 
 void TemplateRenderer::RenderAsModule(OutStream& os, RenderContext& values, BlocksStack& stack, std::string_view name)
@@ -1837,7 +1868,7 @@ void TemplateRenderer::RenderAsModule(OutStream& os, RenderContext& values, Bloc
     RenderBody(os, values, &stack, name);
 }
 
-void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name, bool asParent)
+void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name, const ParentRender* asParent)
 {
     // Nothing adds to the stack of a template that extends nothing, so those share one
     static const BlocksStack noBlocks{};
@@ -1854,6 +1885,8 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     frame.extendable = stack;
     frame.baseDepth = values.GetScopesCount();
     frame.name = name;
+    frame.selfFromContext = m_selfFromContext;
+    frame.childSelf = asParent ? asParent->childSelf : nullptr;
     TemplateFrameGuard frameGuard(values, &frame);
 
     if (!m_hasExtends)
@@ -1861,11 +1894,9 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
         values.Nodes()[m_body].Render(os, values);
         return;
     }
-
-    TopLevelWriter writer(os, frame);
-    OutStream topLevelStream(&writer, os.SinkToPassOn());
-    values.Nodes()[m_body].Render(topLevelStream, values);
-
+    // The output tags after an `extends` are dropped or skipped (OutputCheckStatement); what
+    // an include or a call block writes there comes out before the parent's, as in Jinja2
+    values.Nodes()[m_body].Render(os, values);
     if (frame.parent)
     {
         const auto parent = values.GetRendererCallback()->Templates().Resolve(frame.parent);
@@ -2750,6 +2781,15 @@ void AutoescapeStatement::Render(OutStream& os, RenderContext& values)
     values.EnterScope();
     values.Nodes()[m_body].Render(os, values);
     values.ExitScope();
+}
+
+void OutputCheckStatement::Render(OutStream& os, RenderContext& values)
+{
+    if (const auto* frame = values.GetTemplateFrame(); frame && frame->parent)
+    {
+        return;
+    }
+    values.Nodes()[m_output].Render(os, values);
 }
 
 void BindUndefinedStatement::Render(OutStream& /*os*/, RenderContext& values)

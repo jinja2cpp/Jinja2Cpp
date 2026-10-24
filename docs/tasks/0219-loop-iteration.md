@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/643
 priority: low
 area: parity
 depends: [0196]
@@ -31,3 +32,11 @@ non-mapping, and pprint print the loop as the plain repr does. Low value: no tem
 open for something else.
 
 **Done when.** No line of `test/parity/divergences/` names 0219.
+
+**Resolution.** `loop` is an object (`GetObjectClass` is `LoopContext`) that iterates:
+`IMapAccessor::GetIteration` gives a generator of `(item, loop)` tuples that advances the
+shared LoopState, and both loop renderers go on after the items the body took. Its object
+class makes `dictsort` and `items` refuse it and `pprint` print its repr; `is iterable`,
+`list`, unpacking and every filter that converts to a list iterate it. Left: a for loop over
+`loop` fetches one item early (0304), and `loop.cycle|string` prints nothing, a callable repr
+gap that belongs with 0214 (`statements.loop_cycle_string`).

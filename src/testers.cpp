@@ -427,9 +427,15 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
     bool result = false;
     CheckUndefinedUse(seq, UndefinedUse::Operator);
     auto seqKind = Apply<ValueKindGetter>(seq);
+    ListAdapter iteration;
     if (seqKind == TestKind::List || seqKind == TestKind::KVPair)
     {
         result = IsValueInListValue(baseVal, seq);
+    }
+    else if (const auto object = seqKind == TestKind::Object ? AsMap(seq) : std::nullopt; object && object->GetIteration(iteration))
+    {
+        // `loop` iterates, taking the items it passes, as Python's `in` on an iterator does
+        result = IsValueInListValue(baseVal, InternalValue(std::move(iteration)));
     }
     else if (seqKind == TestKind::Map)
     {
@@ -535,11 +541,12 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         break;
     case IsIterableMode:
         result = valKind == TestKind::List || valKind == TestKind::KVPair || valKind == TestKind::Map || valKind == TestKind::String;
-        // Of the objects, only `self` is: Jinja2's TemplateReference has __getitem__
+        // Of the objects, only `self` and `loop` are: Jinja2's TemplateReference has
+        // __getitem__, LoopContext __iter__
         if (valKind == TestKind::Object)
         {
             auto map = AsMap(baseVal);
-            result = map && std::string_view(map->GetObjectClass()) == "TemplateReference";
+            result = map && (std::string_view(map->GetObjectClass()) == "TemplateReference" || map->Iterates());
         }
         break;
     case IsMappingMode:

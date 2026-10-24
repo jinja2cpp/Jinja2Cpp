@@ -428,12 +428,15 @@ public:
     void RenderBody(OutStream& os, RenderContext& values, size_t depth) const;
     // The slots a call of the body takes (0117 P1)
     void SetUnitLayout(UnitLayout layout) { m_unitLayout = layout; }
+    // The body stores `self` before it reads it: it has no `self` of its own (NodeArena::SelfUse)
+    void SetSelfFromContext(bool fromContext) { m_selfFromContext = fromContext; }
 
 private:
     ArenaText m_name;
     bool m_isScoped{};
     bool m_isRequired{};
     bool m_autoescape{};
+    bool m_selfFromContext{};
     NodeRef<IRendererBase> m_mainBody;
     UnitLayout m_unitLayout;
 };
@@ -520,9 +523,12 @@ public:
     // The blocks the template defines, each name once
     void SetBlocks(ArenaSpan<NodeRef<BlockStatement>> blocks) { m_blocks = blocks; }
     void SetHasExtends() { m_hasExtends = true; }
-    // The source has the word `loop` somewhere: only then can the template read the `loop` of an including loop
+    // The source has the word `loop` somewhere, or `extends`: only then can the template (or its
+    // parent) read the `loop` of an including loop
     void SetMentionsLoop() { m_mentionsLoop = true; }
     [[nodiscard]] bool MayReadLoop() const { return m_mentionsLoop; }
+    // The top level stores `self` before it reads it: it has no `self` of its own (NodeArena::SelfUse)
+    void SetSelfFromContext() { m_selfFromContext = true; }
     // The template's autoescape setting (Settings::autoescape or autoescapeSelector)
     void SetAutoescape(bool autoescape) { m_autoescape = autoescape; }
     [[nodiscard]] bool IsAutoescape() const { return m_autoescape; }
@@ -543,14 +549,22 @@ public:
     void PushBlocks(IRendererCallback& callback, const ArenaView& nodes, BlocksStack& stack) const;
 
 private:
+    // A render as a parent (RenderAsParent), in one argument of RenderBody: its seventh, which
+    // goes on the stack
+    struct ParentRender
+    {
+        // A `self` the child set at the top level the parent shares
+        const InternalValue* childSelf = nullptr;
+    };
     // `stack` is null for a template that defines no blocks and extends nothing
-    // `name` is the one `self` prints (TemplateFrame::name); `asParent` for RenderAsParent
-    void RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name, bool asParent = false);
+    // `name` is the one `self` prints (TemplateFrame::name)
+    void RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name, const ParentRender* asParent = nullptr);
 
     NodeRef<ComposedRenderer> m_body;
     ArenaSpan<NodeRef<BlockStatement>> m_blocks;
     bool m_hasExtends = false;
     bool m_mentionsLoop = false;
+    bool m_selfFromContext = false;
     bool m_autoescape = false;
     UnitLayout m_unitLayout;
 };
@@ -986,6 +1000,27 @@ public:
 
 private:
     ArenaSpan<SlotName> m_names;
+};
+
+// An output tag (text, `{{ }}`, `trans`) at a template's top level after an `extends` in an
+// `if`: skipped, not evaluated, once the template has a parent, as Jinja2 guards it with
+// `if parent_template is None` (require_output_check). After a top-level `extends` the
+// parser drops such a tag instead (docs/tasks/0203)
+class OutputCheckStatement final : public Statement
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::OutputCheckStmt;
+    void VisitRefs(detail::RefChecker& refs) const { refs(m_output); }
+
+    explicit OutputCheckStatement(NodeRef<IRendererBase> output)
+        : m_output(output)
+    {
+    }
+
+    void Render(OutStream& os, RenderContext& values) override;
+
+private:
+    NodeRef<IRendererBase> m_output;
 };
 
 } // namespace v2

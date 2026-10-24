@@ -264,7 +264,8 @@ public:
 
     // The root of the tree, resolved through Nodes()
     [[nodiscard]] NodeRef<TemplateRenderer> GetRenderer() const { return m_renderer; }
-    // Whether the template reads a `loop` it does not bind itself (an include of it must hide the including loop)
+    // Whether the template, or a parent it extends, may read a `loop` it does not bind itself
+    // (an include of it must hide the including loop)
     [[nodiscard]] bool MayReadLoop() const { return m_mayReadLoop; }
     // The name `self` prints: the one the template was loaded with, empty (None) without one
     [[nodiscard]] std::string_view SelfName() const { return m_isNamed ? std::string_view(m_templateName) : std::string_view(); }

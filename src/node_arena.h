@@ -109,6 +109,7 @@ enum class NodeKind : std::uint8_t
     FilterStmt,
     AutoescapeStmt,
     BindUndefinedStmt,
+    OutputCheckStmt,
     // Objects the arena moves through their own vptr (ArenaObjectBase)
     FilterObject,
     TesterObject,
@@ -1052,6 +1053,25 @@ public:
     void NoteLoopReadsInFor(std::uint32_t count) { m_loopReadsInFor += count; }
     // The reads of `loop` outside every for loop's body: those of the `loop` somebody else binds
     [[nodiscard]] bool ReadsOuterLoop() const { return m_loopReads != m_loopReadsInFor; }
+    // Which comes first in the body of a block or of the template, outside the blocks in it: a
+    // read of `self` or a store of the name. Jinja2 gives the body a `self` of its own only for
+    // a read (find_undeclared); after a store, `self` is the context's (docs/tasks/0211)
+    enum class SelfUse : std::uint8_t
+    {
+        None,
+        Read,
+        Store
+    };
+    void NoteSelfUse(SelfUse use)
+    {
+        if (m_selfUse == SelfUse::None)
+        {
+            m_selfUse = use;
+        }
+    }
+    [[nodiscard]] SelfUse FirstSelfUse() const { return m_selfUse; }
+    // Starts another body (a block's) with `use`; returns the enclosing body's, to put back
+    SelfUse ExchangeSelfUse(SelfUse use) { return std::exchange(m_selfUse, use); }
 
     template<typename T, typename... Args>
     NodeRef<T> Make(Args&&... args)
@@ -1398,6 +1418,7 @@ private:
     std::uint32_t m_contextNodes = 0;
     std::uint32_t m_loopReads = 0;
     std::uint32_t m_loopReadsInFor = 0;
+    SelfUse m_selfUse = SelfUse::None;
     bool m_sealed = false;
     detail::TemplateOriginPtr m_origin = nullptr;
     // The symbols of the names, while the tree is parsed: a list in place for the first few,
