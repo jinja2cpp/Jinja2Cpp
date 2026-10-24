@@ -295,8 +295,8 @@ struct TemplateModuleState
                 continue;
             }
             // Set again after the import, it is exported (Jinja2's exported_vars)
-            const auto imported = std::find_if(callback->imported.begin(), callback->imported.end(), [&name = name, &value = value](const auto& entry) {
-                return entry.first == name && IsSameImport(entry.second, value);
+            const auto imported = std::find_if(callback->imported.begin(), callback->imported.end(), [&exportName = name, &exportValue = value](const auto& entry) {
+                return entry.first == exportName && IsSameImport(entry.second, exportValue);
             });
             if (imported != callback->imported.end())
             {
