@@ -239,8 +239,8 @@ inline const Value& GetParamValue(const UserCallableParams& params, const ArgInf
     return info.defValue;
 }
 
-// KeepMarkup passes a Markup on as itself, for ArgPromoter to hand to a Markup or a string parameter
-template<typename V, bool KeepMarkup = false>
+// keepMarkup passes a Markup on as itself, for ArgPromoter to hand to a Markup or a string parameter
+template<typename V, bool keepMarkup = false>
 struct ParamUnwrapper
 {
     V* m_visitor{};
@@ -260,7 +260,7 @@ struct ParamUnwrapper
     template<typename CharT>
     static const auto& UnwrapRecursive(const BasicMarkup<CharT>& arg)
     {
-        if constexpr (KeepMarkup)
+        if constexpr (keepMarkup)
         {
             return arg;
         }

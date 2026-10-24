@@ -2,7 +2,6 @@
 
 #include <jinja2cpp/markup.h>
 
-#include <string>
 #include <string_view>
 
 namespace jinja2

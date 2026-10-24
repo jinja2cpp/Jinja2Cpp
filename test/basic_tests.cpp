@@ -1522,11 +1522,12 @@ TEST(ValueApiTest, TypedMarkupParameter)
 {
     auto tag = MakeCallable([](const Markup& text) { return Markup("<b>" + text.str() + "</b>"); }, ArgInfo{ "text" });
     auto wtag = MakeCallable([](const WMarkup& text) { return WMarkup(L"<b>" + text.str() + L"</b>"); }, ArgInfo{ "text" });
+    // NOLINTNEXTLINE(performance-unnecessary-value-param): the by-value parameter is what this row tests
     auto byValue = MakeCallable([](Markup text) { return text.str(); }, ArgInfo{ "text" });
     // A function pointer binds through ArgInfoT<Markup>, the typed path
     auto typed = MakeCallable(+[](const Markup& text) { return Markup("<b>" + text.str() + "</b>"); }, ArgInfo{ "text" });
 
-    auto render = [](const std::string& source, ValuesMap params) {
+    auto render = [](const std::string& source, const ValuesMap& params) {
         Template tpl;
         EXPECT_TRUE(tpl.Load(source));
         return tpl.RenderAsString(params).value();
