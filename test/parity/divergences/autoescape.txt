@@ -1,5 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the autoescape area (cases/autoescape.py).
 # Format and kinds: test/parity/README.md.
 
-autoescape.markup_percent_d_of_string     rejects     0210 %d and %f of a string argument in Markup's % raise; markupsafe's helper converts it with int()/float()
 autoescape.env_on_finalize_folded_choice  output      0291 a folded value chosen by a foldable test that is not a literal is escaped after finalize

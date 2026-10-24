@@ -77,7 +77,8 @@ True
 100.5
 'Hello World!'
 [9, 8, 7, 6, 5, 4, 3, 2, 1]
-{'message': 'Hello World from Parser!', 'message2': 'Hello World from Parser-123!'}
+{'message': 'Hello World from Parser!',
+ 'message2': 'Hello World from Parser-123!'}
 None)")
 {
     auto& values = test.GetJson();

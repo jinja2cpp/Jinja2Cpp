@@ -227,6 +227,13 @@ public:
 private:
     InternalValue Finalize(InternalValue value, RenderContext& values) const
     {
+        // Jinja2 hands finalize the undefined object itself. A host Value cannot hold one, so
+        // the callable gets its str(): empty, DebugUndefined's text, or StrictUndefined's error
+        // (docs/tasks/0293)
+        if (GetIf<UndefinedValue>(&value))
+        {
+            value = TextValue(value, values.GetRendererCallback());
+        }
         CallParams params;
         params.posParams.push_back(std::move(value));
         return GetIf<Callable>(&m_finalize)->GetExpressionCallable()(params, values);

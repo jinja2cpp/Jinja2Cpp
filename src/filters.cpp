@@ -2328,6 +2328,21 @@ std::optional<InternalValue> FloatToInt(double val)
 
 } // namespace
 
+std::optional<std::string> PythonNumberText(const InternalValue& val)
+{
+    return NumberTextOf(val);
+}
+
+std::optional<InternalValue> PythonIntOfText(const std::string& text)
+{
+    return ParsePythonInt(text, 10);
+}
+
+std::optional<double> PythonFloatOfText(const std::string& text)
+{
+    return ParsePythonFloat(text);
+}
+
 InternalValue ValueConverter::FileSizeFormat(const InternalValue& baseVal, RenderContext& context)
 {
     std::optional<double> bytes;

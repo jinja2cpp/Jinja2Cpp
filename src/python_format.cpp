@@ -2,8 +2,10 @@
 
 #include "big_int.h"
 #include "engine_errors.h"
+#include "filters.h"
 #include "internal_value.h"
 #include "markup.h"
+#include "undefined.h"
 #include "value_visitors.h"
 
 #include <fmt/format.h>
@@ -704,6 +706,14 @@ private:
         case 'd':
         case 'i':
         case 'u':
+            if (m_markup)
+            {
+                if (auto converted = HelperInt(arg))
+                {
+                    ConvertInteger(out, *converted, conversion, spec);
+                    break;
+                }
+            }
             ConvertInteger(out, arg, conversion, spec);
             break;
         case 'e':
@@ -712,6 +722,14 @@ private:
         case 'F':
         case 'g':
         case 'G':
+            if (m_markup)
+            {
+                if (auto converted = HelperFloat(arg))
+                {
+                    ConvertFloat(out, InternalValue(*converted), conversion, spec);
+                    break;
+                }
+            }
             ConvertFloat(out, arg, conversion, spec);
             break;
         case 'c':
@@ -726,6 +744,55 @@ private:
             throw TemplateRuntimeError(fmt::format("unsupported format character '{}' (0x{:x}) at index {}", conversion, static_cast<unsigned char>(conversion), directive.index));
         }
     }
+    // markupsafe's _MarkupEscapeHelper converts the argument of %d and %f with int() and float(),
+    // which parse a string (docs/tasks/0210). Nullopt for a number, which converts as it is
+    static bool IsNumber(const InternalValue& arg)
+    {
+        return visitors::IsNumber(arg) || arg.Kind() == ValueKind::BigInt;
+    }
+
+    static std::optional<InternalValue> HelperInt(const InternalValue& arg)
+    {
+        if (IsNumber(arg))
+        {
+            return std::nullopt;
+        }
+        CheckUndefinedUse(arg, UndefinedUse::Arithmetic);
+        if (auto text = filters::PythonNumberText(arg))
+        {
+            if (auto result = filters::PythonIntOfText(*text))
+            {
+                return result;
+            }
+        }
+        if (IsStringValue(arg) || IsStringView(arg))
+        {
+            throw TemplateRuntimeError(fmt::format("invalid literal for int() with base 10: {}", Str(arg, true)));
+        }
+        throw TemplateRuntimeError(fmt::format("int() argument must be a string, a bytes-like object or a real number, not '{}'", TypeName(arg)));
+    }
+
+    static std::optional<double> HelperFloat(const InternalValue& arg)
+    {
+        if (IsNumber(arg))
+        {
+            return std::nullopt;
+        }
+        CheckUndefinedUse(arg, UndefinedUse::Arithmetic);
+        if (auto text = filters::PythonNumberText(arg))
+        {
+            if (auto result = filters::PythonFloatOfText(*text))
+            {
+                return result;
+            }
+        }
+        if (IsStringValue(arg) || IsStringView(arg))
+        {
+            throw TemplateRuntimeError(fmt::format("could not convert string to float: {}", Str(arg, true)));
+        }
+        throw TemplateRuntimeError(fmt::format("float() argument must be a string or a real number, not '{}'", TypeName(arg)));
+    }
+
     // With `escape` (a Markup format) the text is escaped before precision cuts it, except
     // the str() of a Markup argument
     static void ConvertText(std::string& out, const InternalValue& arg, char conversion, const Spec& spec, bool escape)
