@@ -150,7 +150,9 @@ public:
     ParseResult<NodeRef<Expression>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
     // Jinja2's parse_tuple without parentheses: 'a, b' is a tuple, 'a' stays an expression
     ParseResult<NodeRef<Expression>> ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart = true);
-    ParseResult<CallParamsInfo> ParseCallParams(LexScanner& lexer);
+    // allowUnpacking: `*args` and `**kwargs` arguments, which only calls take so far: filters and
+    // tests bind their arguments at Load (docs/tasks/0304)
+    ParseResult<CallParamsInfo> ParseCallParams(LexScanner& lexer, bool allowUnpacking = false);
     ParseResult<NodeRef<ExpressionFilter>> ParseFilterExpression(LexScanner& lexer);
     // Settings::finalize as a callable; undefined if it is not set
     [[nodiscard]] const InternalValue& GetFinalize() const { return m_finalize; }

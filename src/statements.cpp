@@ -2677,7 +2677,7 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     }
 
     auto callParams = helpers::EvaluateCallParams(call.GetParams(), values);
-    callParams.kwParams["caller"s] = MakeCallable(values);
+    helpers::AddCallerParam(callParams, MakeCallable(values));
     if (callable->GetType() == Callable::Type::Expression)
     {
         WriteOutput(os, callable->GetExpressionCallable()(callParams, values), values);

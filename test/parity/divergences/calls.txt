@@ -1,0 +1,7 @@
+# Known divergences of Jinja2C++ from Python Jinja2 in the calls area (cases/calls.py).
+# Format and kinds: test/parity/README.md.
+
+calls.filter_star_args                  rejects     0304 filters bind their arguments at Load, so *args in a filter call is a Load error
+calls.filter_star_kwargs                rejects     0304 filters bind their arguments at Load, so **kwargs in a filter call is a Load error
+calls.test_star_args                    rejects     0304 tests bind their arguments at Load, so *args in a test call is a Load error
+calls.filter_block_star_args            rejects     0304 a filter block binds its arguments at Load, so *args in it is a Load error

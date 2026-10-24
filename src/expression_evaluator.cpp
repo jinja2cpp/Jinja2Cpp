@@ -390,7 +390,8 @@ InternalValue LoopAttrExpression::Evaluate(RenderContext& values)
 
 bool LoopAttrExpression::TryCallCycle(RenderContext& values, const ArenaCallParams& params, InternalValue& result) const
 {
-    if (m_attr != LoopAttr::Cycle || m_subscriptExprs.size() != 1)
+    // loop.cycle(*items) takes the general call
+    if (m_attr != LoopAttr::Cycle || m_subscriptExprs.size() != 1 || params.HasUnpacking())
     {
         return false;
     }
@@ -1744,6 +1745,60 @@ CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context
     return result;
 }
 
+namespace
+{
+// f(*value): its items after the positional arguments. Python iterates an undefined value as
+// empty (StrictUndefined refuses) and raises TypeError for a value that is not iterable
+void AppendUnpackedArgs(const InternalValue& value, std::vector<InternalValue>& posParams)
+{
+    if (value.IsUndefined())
+    {
+        CheckUndefinedUse(value, UndefinedUse::Operator);
+        return;
+    }
+    bool isConverted = false;
+    const auto items = ConvertToList(value, isConverted, false);
+    if (!isConverted)
+    {
+        throw TemplateRuntimeError("Value after * must be an iterable, not "s + Apply<visitors::PythonTypeNameGetter>(value));
+    }
+    for (auto&& item : items)
+    {
+        posParams.push_back(std::forward<decltype(item)>(item));
+    }
+}
+
+[[noreturn]] void ThrowMultipleValues(const std::string& name)
+{
+    throw TemplateRuntimeError("got multiple values for keyword argument '" + name + "'");
+}
+
+// f(**value): its items after the keyword arguments, each name given once. An undefined value
+// fails as Python's Undefined does when its keys are read
+void AddUnpackedKwargs(const InternalValue& value, InternalDict& kwParams)
+{
+    CheckUndefinedUse(value, UndefinedUse::Attribute);
+    const auto map = AsMap(value);
+    if (!map || map->GetObjectClass() || value.IsUndefined())
+    {
+        throw TemplateRuntimeError("argument after ** must be a mapping, not "s + Apply<visitors::PythonTypeNameGetter>(value));
+    }
+    for (auto& [key, item] : map->GetEntries())
+    {
+        if (!IsStringValue(key))
+        {
+            throw TemplateRuntimeError("keywords must be strings");
+        }
+        auto name = AsString(key);
+        if (kwParams.find(name) != kwParams.end())
+        {
+            ThrowMultipleValues(name);
+        }
+        kwParams.emplace(std::move(name), std::move(item));
+    }
+}
+} // namespace
+
 CallParams EvaluateCallParams(const ArenaCallParams& info, RenderContext& context)
 {
     CallParams result;
@@ -1756,13 +1811,31 @@ CallParams EvaluateCallParams(const ArenaCallParams& info, RenderContext& contex
     {
         result.posParams.push_back(nodes[p].Evaluate(context));
     }
+    // Python takes *args before the keywords, wherever it is written
+    if (info.dynArgs)
+    {
+        AppendUnpackedArgs(nodes[info.dynArgs].Evaluate(context), result.posParams);
+    }
 
     for (const auto& param : nodes[info.kwParams])
     {
         result.kwParams[std::string(nodes.Text(param.name))] = nodes[param.value].Evaluate(context);
     }
+    if (info.dynKwargs)
+    {
+        AddUnpackedKwargs(nodes[info.dynKwargs].Evaluate(context), result.kwParams);
+    }
 
     return result;
+}
+
+void AddCallerParam(CallParams& params, InternalValue caller)
+{
+    // `{% call m(**{'caller': x}) %}` passes caller twice
+    if (!params.kwParams.emplace("caller"s, std::move(caller)).second)
+    {
+        ThrowMultipleValues("caller");
+    }
 }
 
 } // namespace helpers
@@ -1780,6 +1853,8 @@ ArenaCallParams ArenaCallParams::Make(NodeArena& nodes, const CallParamsInfo& pa
 {
     ArenaCallParams result;
     result.posParams = nodes.MakeSpan(params.posParams);
+    result.dynArgs = params.dynArgs;
+    result.dynKwargs = params.dynKwargs;
     if (params.kwParams.empty())
     {
         return result;

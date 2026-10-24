@@ -100,12 +100,17 @@ struct CallParamsInfo
 {
     OrderedMap<std::string, NodeRef<Expression>> kwParams;
     std::vector<NodeRef<Expression>> posParams;
+    // f(*args, **kwargs): unpacked when the call is evaluated; null when not written
+    NodeRef<Expression> dynArgs;
+    NodeRef<Expression> dynKwargs;
 };
 
 inline void VisitCallParams(detail::RefChecker& refs, const CallParamsInfo& params)
 {
     refs.All(params.kwParams);
     refs.All(params.posParams);
+    refs(params.dynArgs);
+    refs(params.dynKwargs);
 }
 
 // A keyword argument of a call the tree keeps
@@ -116,11 +121,16 @@ struct ArenaKwParam
 };
 
 // The arguments of a call written in the template, kept in its tree: positional ones in
-// order, keyword ones in the order CallParamsInfo keeps them
+// order, keyword ones in the order CallParamsInfo keeps them, then `*args` and `**kwargs`
 struct ArenaCallParams
 {
     ArenaSpan<NodeRef<Expression>> posParams;
     ArenaSpan<ArenaKwParam> kwParams;
+    NodeRef<Expression> dynArgs;
+    NodeRef<Expression> dynKwargs;
+
+    // Whether the arguments are only known once the call is evaluated
+    [[nodiscard]] bool HasUnpacking() const { return dynArgs || dynKwargs; }
 
     static ArenaCallParams Make(NodeArena& nodes, const CallParamsInfo& params);
     void VisitRefs(detail::RefChecker& refs) const
@@ -130,6 +140,8 @@ struct ArenaCallParams
             r(param.name);
             r(param.value);
         });
+        refs(dynArgs);
+        refs(dynKwargs);
     }
 };
 
@@ -1114,6 +1126,8 @@ ParsedArguments ParseCallParams(const std::vector<ArgumentInfo>& args, const Cal
 ParsedArgumentsInfo ParseCallParamsInfo(const std::vector<ArgumentInfo>& args, const CallParamsInfo& params, bool& isSucceeded);
 CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context);
 CallParams EvaluateCallParams(const ArenaCallParams& info, RenderContext& context);
+// Adds the caller of a `{% call %}` block to the arguments of its call
+void AddCallerParam(CallParams& params, InternalValue caller);
 } // namespace helpers
 } // namespace v2
 } // namespace jinja2

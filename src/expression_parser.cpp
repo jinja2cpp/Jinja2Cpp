@@ -921,7 +921,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseCall(L
 {
     NodeRef<Expression> result;
 
-    ParseResult<CallParamsInfo> params = ParseCallParams(lexer);
+    ParseResult<CallParamsInfo> params = ParseCallParams(lexer, true);
     if (!params)
     {
         return MakeUnexpected(params.error());
@@ -932,7 +932,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseCall(L
     return result;
 }
 
-ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(LexScanner& lexer)
+ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(LexScanner& lexer, bool allowUnpacking)
 {
     CallParamsInfo result;
 
@@ -941,17 +941,29 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
         return result;
     }
 
+    // Jinja2's parse_call_args: positional arguments, then keywords and one `*expr`, then one
+    // `**expr`; anything else out of that order is "invalid syntax for function call expression"
     SiblingOperators siblings(m_operators);
     do
     {
         siblings.Next();
         const auto& tok = lexer.NextToken();
         std::string paramName;
-        if (tok == Token::Identifier && lexer.PeekNextToken() == '=')
+        NodeRef<Expression>* unpacked = nullptr;
+        if (allowUnpacking && (tok == '*' || tok == Token::MulMul))
+        {
+            const bool isKeywords = tok == Token::MulMul;
+            if (result.dynKwargs || (!isKeywords && result.dynArgs))
+            {
+                return MakeParseError(ErrorCode::UnexpectedToken, tok);
+            }
+            unpacked = isKeywords ? &result.dynKwargs : &result.dynArgs;
+        }
+        else if (tok == Token::Identifier && lexer.PeekNextToken() == '=')
         {
             paramName = lexer.GetAsString(tok);
-            // Jinja2: "keyword argument repeated"
-            if (result.kwParams.count(paramName))
+            // Jinja2: "keyword argument repeated"; no keyword after **kwargs
+            if (result.kwParams.count(paramName) || result.dynKwargs)
             {
                 return MakeParseError(ErrorCode::UnexpectedToken, tok);
             }
@@ -959,6 +971,11 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
         }
         else
         {
+            // A positional argument comes before every keyword and unpacked one
+            if (!result.kwParams.empty() || result.dynArgs || result.dynKwargs)
+            {
+                return MakeParseError(ErrorCode::UnexpectedToken, tok);
+            }
             lexer.ReturnToken();
         }
 
@@ -967,7 +984,11 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
         {
             return MakeUnexpected(valueExpr.error());
         }
-        if (paramName.empty())
+        if (unpacked)
+        {
+            *unpacked = *valueExpr;
+        }
+        else if (paramName.empty())
         {
             result.posParams.push_back(*valueExpr);
         }

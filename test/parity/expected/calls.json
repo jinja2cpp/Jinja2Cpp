@@ -1,0 +1,489 @@
+{
+ "generator": "jinja2 3.1.6",
+ "area": "calls",
+ "cases": [
+  {
+   "id": "calls.star_args_after_positional",
+   "template": "{{ range(1, *[4])|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[1, 2, 3]"
+  },
+  {
+   "id": "calls.star_args_string",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(*'xy') }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "x-y"
+  },
+  {
+   "id": "calls.star_args_tuple",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(*(1, 2)) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1-2"
+  },
+  {
+   "id": "calls.star_args_dict_keys",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(*{'p': 1, 'q': 2}) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "p-q"
+  },
+  {
+   "id": "calls.star_args_range",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(*range(2)) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "0-1"
+  },
+  {
+   "id": "calls.star_args_empty",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(1, 2, *[]) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1-2"
+  },
+  {
+   "id": "calls.star_args_trailing_comma",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(*[1, 2],) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1-2"
+  },
+  {
+   "id": "calls.star_args_undefined",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(1, 2, *nothing) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1-2"
+  },
+  {
+   "id": "calls.star_args_undefined_strict",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(1, 2, *nothing) }}",
+   "context": {},
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nothing' is undefined"
+   }
+  },
+  {
+   "id": "calls.star_args_none",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(*none) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Value after * must be an iterable, not NoneType"
+   }
+  },
+  {
+   "id": "calls.star_args_int",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(*1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Value after * must be an iterable, not int"
+   }
+  },
+  {
+   "id": "calls.star_args_namespace",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(*namespace(a=1)) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Value after * must be an iterable, not Namespace"
+   }
+  },
+  {
+   "id": "calls.star_args_after_keyword",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(b=2, *[1]) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1-2"
+  },
+  {
+   "id": "calls.star_args_and_keyword_same_name",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(a=2, *[1]) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "macro 'm' takes no keyword argument 'a'"
+   }
+  },
+  {
+   "id": "calls.star_kwargs_with_positional",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(1, **{'b': 2}) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1-2"
+  },
+  {
+   "id": "calls.star_kwargs_with_keyword",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(a=1, **{'b': 2}) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1-2"
+  },
+  {
+   "id": "calls.star_kwargs_duplicate",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(a=1, **{'a': 2, 'b': 3}) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "jinja2.runtime.Context.call() got multiple values for keyword argument 'a'"
+   }
+  },
+  {
+   "id": "calls.star_kwargs_list",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(**[1, 2]) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "jinja2.runtime.Context.call() argument after ** must be a mapping, not list"
+   }
+  },
+  {
+   "id": "calls.star_kwargs_int",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(**1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "jinja2.runtime.Context.call() argument after ** must be a mapping, not int"
+   }
+  },
+  {
+   "id": "calls.star_kwargs_none",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(**none) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "jinja2.runtime.Context.call() argument after ** must be a mapping, not NoneType"
+   }
+  },
+  {
+   "id": "calls.star_kwargs_undefined",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(1, 2, **nothing) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nothing' is undefined"
+   }
+  },
+  {
+   "id": "calls.star_kwargs_namespace",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(**namespace(a=1, b=2)) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "jinja2.runtime.Context.call() argument after ** must be a mapping, not Namespace"
+   }
+  },
+  {
+   "id": "calls.star_kwargs_non_string_key",
+   "template": "{{ dict(**{1: 2}) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "keywords must be strings"
+   }
+  },
+  {
+   "id": "calls.star_kwargs_into_dict",
+   "template": "{{ dict(b=2, **{'a': 1}) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{'b': 2, 'a': 1}"
+  },
+  {
+   "id": "calls.star_kwargs_from_context",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(**d) }}",
+   "context": {
+    "d": {
+     "a": 1,
+     "b": 2
+    }
+   },
+   "env": {},
+   "templates": {},
+   "output": "1-2"
+  },
+  {
+   "id": "calls.star_both",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(*[1], **{'b': 2}) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1-2"
+  },
+  {
+   "id": "calls.star_both_after_keyword",
+   "template": "{% macro m(a, b, c) %}{{ a }}{{ b }}{{ c }}{% endmacro %}{{ m(c=3, *[1], **{'b': 2}) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "123"
+  },
+  {
+   "id": "calls.forward_varargs_kwargs",
+   "template": "{% macro inner(a, b, c) %}{{ a }}{{ b }}{{ c }}{% endmacro %}{% macro outer() %}{{ inner(*varargs, **kwargs) }}{% endmacro %}{{ outer(1, 2, c=3) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "123"
+  },
+  {
+   "id": "calls.caller_star_varargs",
+   "template": "{% macro m() %}{{ caller(*varargs) }}{% endmacro %}{% call(a, b) m(1, 2) %}{{ a }}{{ b }}{% endcall %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "12"
+  },
+  {
+   "id": "calls.call_block_star_args",
+   "template": "{% macro m(a) %}{{ a }}{{ caller() }}{% endmacro %}{% call m(*[1]) %}x{% endcall %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1x"
+  },
+  {
+   "id": "calls.call_block_kwargs_caller",
+   "template": "{% macro m() %}{{ caller() }}{% endmacro %}{% call m(**{'caller': 1}) %}x{% endcall %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "jinja2.runtime.Context.call() got multiple values for keyword argument 'caller'"
+   }
+  },
+  {
+   "id": "calls.method_star_args",
+   "template": "{{ 'a-b-c'.split(*['-', 1]) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "['a', 'b-c']"
+  },
+  {
+   "id": "calls.method_star_kwargs",
+   "template": "{{ 'a-b-c'.split('-', **{'maxsplit': 1}) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "['a', 'b-c']"
+  },
+  {
+   "id": "calls.loop_cycle_star_args",
+   "template": "{% for i in [1, 2, 3] %}{{ loop.cycle(*['a', 'b']) }}{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "aba"
+  },
+  {
+   "id": "calls.loop_cycle_star_args_empty",
+   "template": "{% for i in [1] %}{{ loop.cycle(*[]) }}{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "no items for cycling given"
+   }
+  },
+  {
+   "id": "calls.filter_star_args",
+   "template": "{{ 'a'|replace(*['a', 'b']) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "b"
+  },
+  {
+   "id": "calls.filter_star_kwargs",
+   "template": "{{ 'a'|replace('a', **{'new': 'b'}) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "b"
+  },
+  {
+   "id": "calls.test_star_args",
+   "template": "{{ 4 is divisibleby(*[2]) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "True"
+  },
+  {
+   "id": "calls.filter_block_star_args",
+   "template": "{% filter replace(*['a', 'b']) %}a{% endfilter %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "b"
+  },
+  {
+   "id": "calls.positional_after_keyword",
+   "template": "{{ range(stop=2, 1) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "invalid syntax for function call expression"
+   }
+  },
+  {
+   "id": "calls.positional_after_keyword_test",
+   "template": "{{ 1 is divisibleby(num=1, 2) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "invalid syntax for function call expression"
+   }
+  },
+  {
+   "id": "calls.positional_after_star_args",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(*[1], 2) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "invalid syntax for function call expression"
+   }
+  },
+  {
+   "id": "calls.positional_after_star_kwargs",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(**{'a': 1}, 2) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "invalid syntax for function call expression"
+   }
+  },
+  {
+   "id": "calls.keyword_after_star_kwargs",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(**{'a': 1}, b=2) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "invalid syntax for function call expression"
+   }
+  },
+  {
+   "id": "calls.star_args_after_star_kwargs",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(**{'a': 1}, *[2]) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "invalid syntax for function call expression"
+   }
+  },
+  {
+   "id": "calls.star_args_twice",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(*[1], *[2]) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "invalid syntax for function call expression"
+   }
+  },
+  {
+   "id": "calls.star_kwargs_twice",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(**{'a': 1}, **{'b': 2}) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "invalid syntax for function call expression"
+   }
+  },
+  {
+   "id": "calls.star_without_value",
+   "template": "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}{{ m(*) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unexpected ')'"
+   }
+  }
+ ]
+}
