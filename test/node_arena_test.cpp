@@ -173,7 +173,7 @@ TEST(NodeArenaTest, SealedTreeIsExact)
     auto first = nodes.Make<ConstantExpression>(InternalValue(int64_t{ 1 }));
     auto second = nodes.Make<ConstantExpression>(InternalValue(int64_t{ 2 }));
     const NodeRef<Expression> exprs[] = { first, second };
-    const auto span = nodes.MakeSpan(boost::span<const NodeRef<Expression>>(exprs));
+    const auto span = nodes.MakeSpan(Span<const NodeRef<Expression>>(exprs));
     const SealedArena sealed = nodes.Seal(span);
 
     const auto view = sealed.View();
@@ -213,7 +213,7 @@ TEST(NodeArenaTest, SealKeepsCleanupOnlyForOwners)
     const NodeRef<Expression> second = MakeConstant(nodes, InternalValue(std::string(40, 'x')));
     const NodeRef<IRendererBase> renderer = nodes.Make<ExpressionRenderer>(first);
     const NodeRef<Expression> exprs[] = { first, second };
-    const auto span = nodes.MakeSpan(boost::span<const NodeRef<Expression>>(exprs));
+    const auto span = nodes.MakeSpan(Span<const NodeRef<Expression>>(exprs));
     const SealedArena tree = nodes.Seal(span, renderer);
 
     // Only the string owns something: the number is kept in its node

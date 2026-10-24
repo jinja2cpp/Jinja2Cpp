@@ -20,7 +20,7 @@
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/value.h>
 
-#include <boost/container/small_vector.hpp>
+#include "small_vector.h"
 #include <algorithm>
 #include <array>
 
@@ -713,7 +713,7 @@ InternalValue ApplyMathOperation(BinaryExpression::Operation oper, const Interna
 
 // The operands of a `~` chain as one string of the template's width, built once
 template<typename CharT>
-InternalValue JoinAsStrings(boost::span<const LookupResult> values)
+InternalValue JoinAsStrings(Span<const LookupResult> values)
 {
     // Strings of the template's width are copied into the result, allocated once (docs/tasks/0151)
     size_t size = 0;
@@ -731,7 +731,7 @@ InternalValue JoinAsStrings(boost::span<const LookupResult> values)
     }
     if (allText)
     {
-        return InternalValue::MakeText<CharT>(size, [&values](boost::span<CharT> chars) {
+        return InternalValue::MakeText<CharT>(size, [&values](Span<CharT> chars) {
             auto out = chars.begin();
             for (const auto& value : values)
             {
@@ -752,11 +752,11 @@ InternalValue JoinAsStrings(boost::span<const LookupResult> values)
 }
 
 // Kept out of line so that the plain join stays small
-JINJA2CPP_NOINLINE_INLINE InternalValue MarkupJoin(boost::span<const LookupResult> values, RenderContext& context)
+JINJA2CPP_NOINLINE_INLINE InternalValue MarkupJoin(Span<const LookupResult> values, RenderContext& context)
 {
     auto* callback = context.GetRendererCallback();
-    boost::container::small_vector<InternalValue, 4> escaped;
-    boost::container::small_vector<LookupResult, 4> parts;
+    SmallVector<InternalValue, 4> escaped;
+    SmallVector<LookupResult, 4> parts;
     escaped.reserve(values.size());
     for (const auto& value : values)
     {
@@ -856,8 +856,8 @@ InternalValue ConcatExpression::Evaluate(RenderContext& context)
     // Eight operands fit without allocating (chat templates join five or six). A constant, or a
     // pure operand after the last impure one (m_lendFrom), is read in place, as BinaryExpression
     // reads its operands; the others are evaluated into `owned`, reserved so that the references stay valid
-    boost::container::small_vector<InternalValue, 8> owned;
-    boost::container::small_vector<LookupResult, 8> values;
+    SmallVector<InternalValue, 8> owned;
+    SmallVector<LookupResult, 8> values;
     owned.reserve(operands.size());
     values.reserve(operands.size());
     bool anyMarkup = false;
@@ -1437,7 +1437,7 @@ struct ArgInfo
     const ArgumentInfo* info = nullptr;
 };
 
-using ArgInfoList = boost::container::small_vector<ArgInfo, 8>;
+using ArgInfoList = SmallVector<ArgInfo, 8>;
 
 // Binds the declared parameter idx: by name for a call made at render, by position in the
 // declaration for one bound at Load
@@ -1783,7 +1783,7 @@ ArenaCallParams ArenaCallParams::Make(NodeArena& nodes, const CallParamsInfo& pa
     {
         return result;
     }
-    boost::container::small_vector<ArenaKwParam, 4> kwParams;
+    SmallVector<ArenaKwParam, 4> kwParams;
     kwParams.reserve(params.kwParams.size());
     for (const auto& [name, expr] : params.kwParams)
     {

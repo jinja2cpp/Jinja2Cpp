@@ -12,8 +12,8 @@
 #include <jinja2cpp/value_ptr.h>
 
 #include <boost/iterator/iterator_facade.hpp>
-#include <boost/core/span.hpp>
-#include <boost/smart_ptr/intrusive_ptr.hpp>
+#include "span.h"
+#include "intrusive_ptr.h"
 #include <fmt/core.h>
 
 #include <cstddef>
@@ -155,14 +155,14 @@ private:
     uint8_t m_flags = 0;
 };
 
-using ValueObjectPtr = boost::intrusive_ptr<const ValueObject>;
+using ValueObjectPtr = IntrusivePtr<const ValueObject>;
 
 // Makes a refcounted object: no call site writes `new`
 template<typename T, typename... Args>
-boost::intrusive_ptr<T> MakeRef(Args&&... args)
+IntrusivePtr<T> MakeRef(Args&&... args)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
-    return boost::intrusive_ptr<T>(new T(std::forward<Args>(args)...));
+    return IntrusivePtr<T>(new T(std::forward<Args>(args)...));
 }
 
 // An object of a type a value holds by reference (a pair, a callable, a renderer)
@@ -206,16 +206,16 @@ public:
     {}
 
     [[nodiscard]] const T& GetValue() const { return m_data->Get(); }
-    [[nodiscard]] const boost::intrusive_ptr<const ValueBox<T>>& GetBox() const& noexcept { return m_data; }
-    [[nodiscard]] boost::intrusive_ptr<const ValueBox<T>> GetBox() && noexcept { return std::move(m_data); }
+    [[nodiscard]] const IntrusivePtr<const ValueBox<T>>& GetBox() const& noexcept { return m_data; }
+    [[nodiscard]] IntrusivePtr<const ValueBox<T>> GetBox() && noexcept { return std::move(m_data); }
 
 private:
     // Out of line: making a pair or callable is rare on hot paths, and inlining the
     // allocation into every function that returns one (loop attributes, filters) pushes
     // those functions past the inliner's budget
-    static JINJA2CPP_COLD_INLINE boost::intrusive_ptr<const ValueBox<T>> Make(T&& value) { return MakeRef<ValueBox<T>>(std::move(value)); }
+    static JINJA2CPP_COLD_INLINE IntrusivePtr<const ValueBox<T>> Make(T&& value) { return MakeRef<ValueBox<T>>(std::move(value)); }
 
-    boost::intrusive_ptr<const ValueBox<T>> m_data;
+    IntrusivePtr<const ValueBox<T>> m_data;
 };
 
 template<typename T>
@@ -548,7 +548,7 @@ struct IListAccessor : ValueObject
     // An accessor with iteration state of its own (a generator, which says so with
     // SetClonesOnCopy) is copied with the list value, so that copies iterate independently;
     // every other accessor is shared
-    [[nodiscard]] virtual boost::intrusive_ptr<const IListAccessor> Clone() const { return nullptr; }
+    [[nodiscard]] virtual IntrusivePtr<const IListAccessor> Clone() const { return nullptr; }
     // The field names of a namedtuple, read by x.name; null for other lists
     [[nodiscard]] virtual const std::vector<std::string>* GetFieldNames() const { return nullptr; }
 };
@@ -678,7 +678,7 @@ public:
     ListAdapter() = default;
     // Copies of the list share the accessor, as names share a Python list, unless it has
     // iteration state of its own (IListAccessor::Clone)
-    explicit ListAdapter(boost::intrusive_ptr<const IListAccessor> accessor) noexcept
+    explicit ListAdapter(IntrusivePtr<const IListAccessor> accessor) noexcept
         : m_accessor(accessor.get())
         , m_owner(std::move(accessor))
     {
@@ -825,7 +825,7 @@ class MapAdapter
 public:
     MapAdapter() = default;
     // Copies of the map share the accessor, as names share a Python dict
-    explicit MapAdapter(boost::intrusive_ptr<const IMapAccessor> accessor) noexcept
+    explicit MapAdapter(IntrusivePtr<const IMapAccessor> accessor) noexcept
         : m_accessor(accessor.get())
         , m_owner(std::move(accessor))
     {
@@ -878,10 +878,10 @@ struct StringObject final : ValueObject
 {
     // An object of `size` characters, which follow it in the same allocation (docs/tasks/0151).
     // The caller writes them before it shares the object
-    static boost::intrusive_ptr<StringObject> Make(size_t size)
+    static IntrusivePtr<StringObject> Make(size_t size)
     {
         // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
-        return boost::intrusive_ptr<StringObject>(new (CharCount{ size }) StringObject(size));
+        return IntrusivePtr<StringObject>(new (CharCount{ size }) StringObject(size));
     }
 
     // The room the characters take after the object
@@ -897,7 +897,7 @@ struct StringObject final : ValueObject
 
     // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast): the characters follow the object, as
     // bytes counted from its start (a char pointer, so that the offset is not scaled)
-    [[nodiscard]] boost::span<CharT> Chars() noexcept { return { reinterpret_cast<CharT*>(reinterpret_cast<unsigned char*>(this) + sizeof(StringObject)), m_size }; }
+    [[nodiscard]] Span<CharT> Chars() noexcept { return { reinterpret_cast<CharT*>(reinterpret_cast<unsigned char*>(this) + sizeof(StringObject)), m_size }; }
     [[nodiscard]] std::basic_string_view<CharT> View() const noexcept
     {
         return { reinterpret_cast<const CharT*>(reinterpret_cast<const unsigned char*>(this) + sizeof(StringObject)), m_size };
@@ -919,7 +919,7 @@ private:
 // int64 an int
 struct BigIntObject final : ValueObject
 {
-    static boost::intrusive_ptr<BigIntObject> Make(std::string_view decimal);
+    static IntrusivePtr<BigIntObject> Make(std::string_view decimal);
 
     struct CharCount
     {
@@ -1011,7 +1011,7 @@ public:
     InternalValue(std::string_view val) { InitView(val); }  // NOLINT(google-explicit-constructor)
     InternalValue(std::wstring_view val) { InitView(val); } // NOLINT(google-explicit-constructor)
 
-    // A string value of `size` characters that `write(boost::span<CharT>)` fills: in the value itself
+    // A string value of `size` characters that `write(Span<CharT>)` fills: in the value itself
     // when short, else in its object, allocated once (docs/tasks/0151)
     template<typename CharT, typename Fn>
     static InternalValue MakeText(size_t size, const Fn& write)
@@ -1020,7 +1020,7 @@ public:
         if (size <= detail::SmallString<CharT>::Capacity)
         {
             detail::SmallString<CharT> small{};
-            write(boost::span<CharT>(small.chars.data(), size));
+            write(Span<CharT>(small.chars.data(), size));
             small.meta = static_cast<uint8_t>(size);
             result.m_imm = small;
         }
@@ -1041,7 +1041,7 @@ public:
         {
             size += part.size();
         }
-        return MakeText<CharT>(size, [parts](boost::span<CharT> chars) {
+        return MakeText<CharT>(size, [parts](Span<CharT> chars) {
             auto out = chars.begin();
             for (const auto& part : parts)
             {
@@ -1276,7 +1276,7 @@ private:
     template<typename CharT>
     JINJA2CPP_OUTLINE_INLINE void InitHeapString(std::basic_string_view<CharT> str)
     {
-        InitHeapString<CharT>(str.size(), [str](boost::span<CharT> chars) { std::copy(str.begin(), str.end(), chars.begin()); });
+        InitHeapString<CharT>(str.size(), [str](Span<CharT> chars) { std::copy(str.begin(), str.end(), chars.begin()); });
     }
 
     template<typename CharT, typename Fn>

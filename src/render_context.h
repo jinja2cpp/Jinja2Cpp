@@ -15,8 +15,8 @@
 
 #include <nonstd/expected.hpp>
 
-#include <boost/container/small_vector.hpp>
-#include <boost/core/span.hpp>
+#include "small_vector.h"
+#include "span.h"
 
 #include <algorithm>
 #include <array>
@@ -1038,7 +1038,7 @@ public:
         slot.Bind(std::forward<Value>(value));
     }
     // Unbinds `slots`, whose names are `names`, forgetting the lookups of each that was bound
-    void UnbindSlots(boost::span<Slot> slots, boost::span<const SlotName> names)
+    void UnbindSlots(Span<Slot> slots, Span<const SlotName> names)
     {
         assert(slots.size() == names.size());
         for (size_t idx = 0; idx != slots.size(); ++idx)
@@ -1452,7 +1452,7 @@ private:
     ScopeStack m_scopes;
     SlotFrame m_frame;
     // The frame views attached to this context's scopes, by scope index
-    boost::container::small_vector<ScopeView, 3> m_views;
+    SmallVector<ScopeView, 3> m_views;
     // Whether lookups take FindValueWithViews: there is a frame view in sight
     bool m_fullWalk = false;
     // Whether a parent this context sees scopes of has frame views. Set once, when the

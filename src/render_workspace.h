@@ -4,8 +4,8 @@
 #include "internal_value.h"
 #include "slot_frame.h"
 
-#include <boost/core/span.hpp>
-#include <boost/smart_ptr/intrusive_ptr.hpp>
+#include "span.h"
+#include "intrusive_ptr.h"
 
 #include <algorithm>
 #include <cassert>
@@ -89,7 +89,7 @@ public:
     // MaxLoopFrames, and reserved, so that putting one back, done on unwinding too, never
     // allocates
     static constexpr std::size_t MaxLoopFrames = 16;
-    std::vector<boost::intrusive_ptr<detail::LoopFrame>>& LoopFrames() { return m_loopFrames; }
+    std::vector<IntrusivePtr<detail::LoopFrame>>& LoopFrames() { return m_loopFrames; }
     // The globals converted last on this thread (template_impl.h)
     std::shared_ptr<const GlobalsSnapshot>& Globals() { return m_globals; }
 
@@ -156,7 +156,7 @@ private:
     {
         auto& chunk = m_chunks[m_current];
         SlotFrame frame;
-        frame.slots = boost::span<Slot>(chunk.slots.get() + chunk.used, layout.size);
+        frame.slots = Span<Slot>(chunk.slots.get() + chunk.used, layout.size);
         frame.handle = { static_cast<std::uint32_t>(m_frames.size()), ++m_lastGeneration };
         frame.unit = layout.id;
         m_frames.push_back({ frame, m_current });
@@ -177,7 +177,7 @@ private:
     std::size_t m_current = 0;
     std::vector<Record> m_frames;
     std::uint32_t m_lastGeneration = 0;
-    std::vector<boost::intrusive_ptr<detail::LoopFrame>> m_loopFrames;
+    std::vector<IntrusivePtr<detail::LoopFrame>> m_loopFrames;
     std::shared_ptr<const GlobalsSnapshot> m_globals;
     // Where the maps live never changes, so that the maps lent to a render stay in place
     // while a render inside it is lent others

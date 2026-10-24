@@ -101,7 +101,7 @@ size_t EscapedHtmlSize(std::basic_string_view<CharT> str)
 
 // Writes the escaped string into chars, of the size EscapedHtmlSize measured
 template<typename CharT>
-void WriteEscapedHtml(std::basic_string_view<CharT> str, boost::span<CharT> chars)
+void WriteEscapedHtml(std::basic_string_view<CharT> str, Span<CharT> chars)
 {
     auto out = chars.begin();
     for (auto ch : str)
@@ -136,7 +136,7 @@ std::basic_string<CharT> EscapeHtml(std::basic_string_view<CharT> str)
         return std::basic_string<CharT>(str);
     }
     std::basic_string<CharT> result(size, CharT{});
-    detail::WriteEscapedHtml(str, boost::span<CharT>(result.data(), result.size()));
+    detail::WriteEscapedHtml(str, Span<CharT>(result.data(), result.size()));
     return result;
 }
 
@@ -170,7 +170,7 @@ inline InternalValue MarkupEscape(const InternalValue& val, IRendererCallback* c
         }
         else
         {
-            result = InternalValue::MakeText<CharT>(size, [text](boost::span<CharT> chars) { detail::WriteEscapedHtml(text, chars); });
+            result = InternalValue::MakeText<CharT>(size, [text](Span<CharT> chars) { detail::WriteEscapedHtml(text, chars); });
         }
         result.SetMarkup();
         return result;

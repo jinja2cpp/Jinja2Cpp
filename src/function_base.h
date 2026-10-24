@@ -5,7 +5,7 @@
 #include "internal_value.h"
 #include "node_arena.h"
 
-#include <boost/core/span.hpp>
+#include "span.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -84,7 +84,7 @@ public:
     {
         if (m_exprs)
         {
-            refs.All(boost::span<const NodeRef<Expression>>(m_exprs.get(), m_table->size()));
+            refs.All(Span<const NodeRef<Expression>>(m_exprs.get(), m_table->size()));
         }
     }
 

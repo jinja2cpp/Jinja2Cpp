@@ -4,7 +4,7 @@
 #include "node_arena.h"
 #include "engine_errors.h"
 
-#include <boost/container/small_vector.hpp>
+#include "small_vector.h"
 
 #include <cassert>
 #include <cstddef>
@@ -162,7 +162,7 @@ private:
         return next;
     }
 
-    boost::container::small_vector<ArenaView, 4> m_slots;
+    SmallVector<ArenaView, 4> m_slots;
     // The slots by tree, once there are more than a scan should look through
     std::unordered_map<const void*, std::uint32_t> m_bySlot;
     std::uint8_t m_generation = 0;

@@ -774,7 +774,7 @@ struct SliceVisitor : public visitors::BaseVisitor<>
             {
                 return InternalValue::FromText(str.substr(static_cast<size_t>(indices.start), indices.count));
             }
-            return InternalValue::MakeText<CharT>(indices.count, [&str, &indices](boost::span<CharT> chars) {
+            return InternalValue::MakeText<CharT>(indices.count, [&str, &indices](Span<CharT> chars) {
                 auto out = chars.begin();
                 for (size_t n = 0; n != indices.count; ++n)
                 {
@@ -1370,7 +1370,7 @@ private:
     // BlockSize items, instead of an adapter allocated for each item each time it is read
     // (docs/tasks/0154). A list of the caller's data is converted for one render or held
     // by the thread's globals, so it is never read by two threads
-    mutable boost::intrusive_ptr<ItemAdapters> m_items;
+    mutable IntrusivePtr<ItemAdapters> m_items;
 };
 
 ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
@@ -1552,7 +1552,7 @@ ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue
         }
         // The generator function carries the iteration state: each copy of the list value
         // gets its own (SetClonesOnCopy), as each copy of the old std::function-held accessor did
-        [[nodiscard]] boost::intrusive_ptr<const IListAccessor> Clone() const override { return MakeRef<Adapter>(*this); }
+        [[nodiscard]] IntrusivePtr<const IListAccessor> Clone() const override { return MakeRef<Adapter>(*this); }
 
     private:
         std::function<std::optional<InternalValue>()> m_fn;

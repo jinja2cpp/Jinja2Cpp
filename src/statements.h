@@ -192,7 +192,7 @@ private:
     ListAdapter CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values, InternalValue outerLoop) const;
     // Moves `items` to the next item the filter keeps and stores it in `item`; false at the
     // end. Runs in the loop's own frame and tree, installed
-    bool FilterInFrame(IListAccessorEnumerator& items, boost::span<Slot> frameSlots, InternalValue& item, RenderContext& values) const;
+    bool FilterInFrame(IListAccessorEnumerator& items, Span<Slot> frameSlots, InternalValue& item, RenderContext& values) const;
 
     AssignTarget m_target;
     NodeRef<Expression> m_value;

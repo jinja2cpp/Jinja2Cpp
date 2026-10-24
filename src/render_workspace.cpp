@@ -2,7 +2,7 @@
 #include "internal_value.h"
 #include "slot_frame.h"
 
-#include <boost/core/span.hpp>
+#include "span.h"
 
 #include <algorithm>
 #include <cassert>
