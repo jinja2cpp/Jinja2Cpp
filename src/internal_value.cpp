@@ -1660,18 +1660,19 @@ InternalValueList ListRef::ToValueList() const
     {
         return result;
     }
-    if (auto size = m_accessor->GetSize())
+    const auto size = m_accessor->GetSize();
+    if (size)
     {
         ReserveHint(result, *size);
-        m_accessor->ForEach([&result](InternalValue&& item) {
-            result.push_back(std::move(item));
-            return true;
-        });
-        return result;
     }
-    // A generator tells no size up front: held to the cap as it grows
-    m_accessor->ForEach([&result](InternalValue&& item) {
-        CheckSequenceSize(result.size() + 1, "a list");
+    // A generator tells no size up front: held to the cap as it grows. One visitor, so that
+    // push_back stays inline
+    const bool checkGrowth = !size;
+    m_accessor->ForEach([&result, checkGrowth](InternalValue&& item) {
+        if (checkGrowth)
+        {
+            CheckSequenceSize(result.size() + 1, "a list");
+        }
         result.push_back(std::move(item));
         return true;
     });

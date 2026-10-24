@@ -421,21 +421,29 @@ bool IsValueInList(const InternalValue& baseVal, const InternalValueList& items)
     return std::any_of(items.begin(), items.end(), [&baseVal](const InternalValue& item) { return IsInEqual(item, baseVal); });
 }
 
+// `in` on an object that iterates (`loop`) takes the items it passes, as Python's `in` on an
+// iterator does; false for an object that does not iterate. Out of line, so that `in` on
+// a list or a map makes no adapter
+JINJA2CPP_COLD_INLINE std::optional<bool> IsValueInIteration(const InternalValue& baseVal, const InternalValue& seq)
+{
+    const auto object = AsMap(seq);
+    ListAdapter iteration;
+    if (!object || !object->GetIteration(iteration))
+    {
+        return std::nullopt;
+    }
+    return IsValueInListValue(baseVal, InternalValue(std::move(iteration)));
+}
+
 // `value in seq`, Python's containment test
 bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
 {
     bool result = false;
     CheckUndefinedUse(seq, UndefinedUse::Operator);
     auto seqKind = Apply<ValueKindGetter>(seq);
-    ListAdapter iteration;
     if (seqKind == TestKind::List || seqKind == TestKind::KVPair)
     {
         result = IsValueInListValue(baseVal, seq);
-    }
-    else if (const auto object = seqKind == TestKind::Object ? AsMap(seq) : std::nullopt; object && object->GetIteration(iteration))
-    {
-        // `loop` iterates, taking the items it passes, as Python's `in` on an iterator does
-        result = IsValueInListValue(baseVal, InternalValue(std::move(iteration)));
     }
     else if (seqKind == TestKind::Map)
     {
@@ -474,6 +482,10 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
     }
     else if (seqKind == TestKind::Integer || seqKind == TestKind::Double || seqKind == TestKind::Boolean || seqKind == TestKind::Object)
     {
+        if (const auto found = seqKind == TestKind::Object ? IsValueInIteration(baseVal, seq) : std::nullopt)
+        {
+            return *found;
+        }
         throw TemplateRuntimeError("argument of type '"s + Apply<visitors::PythonTypeNameGetter>(seq) + "' is not iterable");
     }
     return result;
