@@ -1,10 +1,10 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the calls area (cases/calls.py).
 # Format and kinds: test/parity/README.md.
 
-calls.filter_star_args                  rejects     0304 filters bind their arguments at Load, so *args in a filter call is a Load error
-calls.filter_star_kwargs                rejects     0304 filters bind their arguments at Load, so **kwargs in a filter call is a Load error
-calls.test_star_args                    rejects     0304 tests bind their arguments at Load, so *args in a test call is a Load error
-calls.filter_block_star_args            rejects     0304 a filter block binds its arguments at Load, so *args in it is a Load error
+calls.filter_star_args                  rejects     0306 filters bind their arguments at Load, so *args in a filter call is a Load error
+calls.filter_star_kwargs                rejects     0306 filters bind their arguments at Load, so **kwargs in a filter call is a Load error
+calls.test_star_args                    rejects     0306 tests bind their arguments at Load, so *args in a test call is a Load error
+calls.filter_block_star_args            rejects     0306 a filter block binds its arguments at Load, so *args in it is a Load error
 calls.global_class_str                  output      0305 the builtin classes (range, dict, cycler, joiner, namespace) print nothing; Python prints <class 'range'>
 calls.global_class_xmlattr              output      0305 xmlattr leaves out a builtin class; Python prints its escaped repr
 calls.dunder_call_is_a_bound_method        output      0214 deliberate: f.__call__ is f itself, so it equals f; Python makes a bound method that does not

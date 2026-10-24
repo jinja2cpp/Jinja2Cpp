@@ -43,7 +43,7 @@ CASES = [
     ("method_star_kwargs", "{{ 'a-b-c'.split('-', **{'maxsplit': 1}) }}"),
     ("loop_cycle_star_args", "{% for i in [1, 2, 3] %}{{ loop.cycle(*['a', 'b']) }}{% endfor %}"),
     ("loop_cycle_star_args_empty", "{% for i in [1] %}{{ loop.cycle(*[]) }}{% endfor %}"),
-    # Filters and tests take them too (docs/tasks/0304)
+    # Filters and tests take them too (docs/tasks/0306)
     ("filter_star_args", "{{ 'a'|replace(*['a', 'b']) }}"),
     ("filter_star_kwargs", "{{ 'a'|replace('a', **{'new': 'b'}) }}"),
     ("test_star_args", "{{ 4 is divisibleby(*[2]) }}"),

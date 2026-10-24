@@ -23,4 +23,4 @@ the spliced `CallParams` (as `CallExpression` does through `helpers::EvaluateCal
 extras `map`, `select` and `applymacro` forward (`CallParamsInfo* extras`) must carry values in
 that mode too. Only the unpacking call pays; check `bench/count.py` for the common one.
 
-**Done when.** No line of `test/parity/divergences/` names 0304.
+**Done when.** No line of `test/parity/divergences/` names 0306.
