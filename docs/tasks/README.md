@@ -276,7 +276,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0200](0200-tester-arity.md) | Every built-in test checks its arguments | parity | low | done |
 | [0201](0201-block-reads-root-binding.md) | A block reads the context, not the root's entry binding | parity | low | done |
 | [0202](0202-loop-else-body-frame.md) | A loop's `else` body is a frame of its own | parity | low | done |
-| [0203](0203-output-after-extends-not-evaluated.md) | Output after a top-level extends is not evaluated | parity | low | open |
+| [0203](0203-output-after-extends-not-evaluated.md) | Output after a top-level extends is not evaluated | parity | low | done |
 | [0204](0204-deep-value-check-render-cost.md) | Render cost of the deep-value stack checks and trashcan release (0093) | perf | low | open |
 | [0205](0205-load-drift-0168-0193.md) | Load drift after trains 11 and 12 | perf | medium | done |
 | [0206](0206-call-argument-leftovers.md) | Argument checks that 0200 left over | parity | low | done |
@@ -284,13 +284,13 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0208](0208-macro-value-gaps.md) | Macros as values | parity | low | done |
 | [0209](0209-include-sees-loop.md) | A template included in a loop sees `loop` | parity | low | done |
 | [0210](0210-markup-percent-int-of-string.md) | `%d` and `%f` of a string in Markup's `%` | parity | low | done |
-| [0211](0211-self-nested-store-and-globals.md) | `self` stored in a nested scope of a block; globals changed in place | parity | low | open |
+| [0211](0211-self-nested-store-and-globals.md) | `self` stored in a nested scope of a block; globals changed in place | parity | low | done |
 | [0212](0212-objects-as-keys-and-through-callables.md) | Objects as dict keys and through user callables | parity | low | open |
 | [0213](0213-if-condexpr-and-unclosed-raw.md) | An `if` test with a conditional expression, and an unclosed raw block at the end | parity | low | done |
 | [0214](0214-macro-value-leftovers.md) | Macros and methods as values: what 0208 and 0145 left over | parity | low | done |
 | [0215](0215-pprint-width.md) | `pprint` does not wrap at Python's width, and other repr gaps | parity | low | done |
 | [0216](0216-volatile-autoescape.md) | `{% autoescape %}` with a runtime value (volatile EvalContext) | parity | low | done |
-| [0219](0219-loop-iteration.md) | Iterating `loop` takes the rest of the loop | parity | low | open |
+| [0219](0219-loop-iteration.md) | Iterating `loop` takes the rest of the loop | parity | low | done |
 | [0220](0220-call-argument-unpacking.md) | `f(*args, **kwargs)` in calls | parity | medium | done |
 | [0221](0221-release-acceptance-and-rc-signoff.md) | Define 2.0 release gates and release-candidate signoff | release | high | in-progress |
 | [0222](0222-downstream-1x-migration-trial.md) | Prove a downstream upgrade from 1.3.2 to 2.0 | release | high | open |
@@ -369,12 +369,13 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0295](0295-selectattr-extra-keyword.md) | `selectattr('a', attribute='a')` fails where Python ignores the keyword | parity | low | done |
 | [0296](0296-typed-string-view-dangling.md) | A typed `std::string_view` parameter given the other character width dangles | api | high | open |
 | [0297](0297-in-none-and-modulo-undefined.md) | `x in None` and `'text' % undefined` differ from Python | parity | low | open |
-| [0298](0298-include-of-extending-template-loop.md) | An included template that extends a parent reading `loop` | parity | low | open |
+| [0298](0298-include-of-extending-template-loop.md) | An included template that extends a parent reading `loop` | parity | low | done |
 | [0299](0299-module-exports-skip-imports.md) | A module exports the names its top level imports, and keeps a re-set import hidden | parity | low | open |
 | [0300](0300-module-export-callable-gaps.md) | Callables that do not cross a `Template::MakeModule` export | parity | low | open |
 | [0301](0301-module-call-loads-accumulate.md) | A `Template::MakeModule` module keeps what each of its calls loads | robustness | medium | open |
 | [0302](0302-simdjson-binding.md) | An optional simdjson binding | api | low | open |
 | [0303](0303-retire-rapidjson-backend.md) | Retire the built-in RapidJSON backend | build | medium | open |
+| [0304](0304-loop-over-loop-peeks-early.md) | A for loop over `loop` advances the outer loop early | parity | low | open |
 | [0305](0305-builtin-class-repr.md) | The builtin classes print as `<class 'range'>` | parity | low | open |
 | [0306](0306-filter-test-argument-unpacking.md) | `*args` and `**kwargs` in filter and test calls | parity | low | open |
 | [0307](0307-fold-by-choice-nested.md) | Fold a choice that sits inside another foldable expression | parity | low | open |
