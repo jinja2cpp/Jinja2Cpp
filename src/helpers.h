@@ -2,9 +2,13 @@
 #define JINJA2CPP_SRC_HELPERS_H
 
 
+#include <jinja2cpp/config.h>
+
 #include <cwchar>
+#include <optional>
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <type_traits>
 
 namespace jinja2
@@ -180,6 +184,10 @@ bool ParseHexEscape(It& pos, It last, int count, char32_t& cp)
     return cp <= 0x10FFFF;
 }
 
+// The code point Python's \N{name} names, or nothing (src/unicode_names.cpp). Without
+// JINJA2CPP_WITH_UNICODE_NAMES, always nothing. Exported for the escapes the tests decode
+JINJA2CPP_EXPORT std::optional<char32_t> LookupUnicodeName(std::string_view name);
+
 // The escape after a backslash that first points at, written to out. False if it is malformed
 template<typename CharT, typename It, typename Out>
 bool DecodeEscape(It& first, It last, Out& out)
@@ -214,7 +222,32 @@ bool DecodeEscape(It& first, It last, Out& out)
     }
     else if (ch == 'N')
     {
-        return false;
+        // \N{name}: the name runs to the first '}'
+        if (first == last || *first != '{')
+        {
+            return false;
+        }
+        std::string name;
+        for (++first; first != last && *first != '}'; ++first)
+        {
+            const auto nameCh = static_cast<char32_t>(*first);
+            if (nameCh > 0x7F)
+            {
+                return false;
+            }
+            name.push_back(static_cast<char>(nameCh));
+        }
+        if (first == last)
+        {
+            return false;
+        }
+        ++first;
+        const auto named = LookupUnicodeName(name);
+        if (!named)
+        {
+            return false;
+        }
+        cp = *named;
     }
     else
     {
@@ -253,11 +286,11 @@ bool DecodeEscapes(It first, It last, Out& out)
 //! CompileEscapes replaces escape sequences of a string literal by their meanings, in place.
 /**
  * Decodes what Python's unicode-escape does (Jinja2 applies it to string literals): the
- * single-character escapes, backslash-newline (removed), 1-3 digit octal, \xHH, \uHHHH and \UHHHHHHHH,
+ * single-character escapes, backslash-newline (removed), 1-3 digit octal, \xHH, \uHHHH, \UHHHHHHHH and \N{name},
  * written as UTF-8, UTF-16 or UTF-32 by the size of the character type. Any other escape keeps its
  * backslash. A decoded sequence is never longer than its source, so the output trails the input.
- * \N{name} is not supported and counts as malformed, like a truncated \x, \u or \U or a code point
- * above U+10FFFF.
+ * \N{name} takes the names and aliases Python accepts (src/unicode_names.cpp). An unknown name is
+ * malformed, like a truncated \x, \u or \U or a code point above U+10FFFF.
  *
  * @param[in] first, last Characters with zero or more escape sequences.
  * @param[out] ok Set to false when a sequence is malformed; decoding stops there.

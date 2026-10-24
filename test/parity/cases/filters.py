@@ -272,6 +272,16 @@ CASES = [
     ("min_max_ties", "{% set l = [{'k': 1, 'n': 'a'}, {'k': 1, 'n': 'b'}, {'k': 0, 'n': 'c'}, {'k': 0, 'n': 'd'}] %}{{ (l|max(attribute='k')).n }}{{ (l|min(attribute='k')).n }}{{ ['b', 'B', 'a', 'A']|max }}{{ ['b', 'B', 'a', 'A']|min }}"),
     ("unique_dotted_attribute", "{{ [{'a': {'b': 1}, 'n': 'x'}, {'a': {'b': 1}, 'n': 'y'}]|unique(attribute='a.b')|map(attribute='n')|join }}"),
     ("sort_dotted_attribute", "{{ [{'a': {'b': 2}, 'n': 'x'}, {'a': {'b': 1}, 'n': 'y'}]|sort(attribute='a.b')|map(attribute='n')|join }}"),
+    # Python's select_or_reject: without a test the extra arguments are dropped, with one they
+    # go to the test (docs/tasks/0295, 0045)
+    ("selectattr_extra_keyword", "{% for i in [{'a': 1}, {'a': 0}]|selectattr('a', attribute='a') %}{{ i.a }},{% endfor %}"),
+    ("rejectattr_extra_keyword", "{% for i in [{'a': 1}, {'a': 0}]|rejectattr('a', foo=1) %}{{ i.a }},{% endfor %}"),
+    ("select_extra_keyword", "{% for i in [0, 1, 2]|select(tester='odd') %}{{ i }},{% endfor %}"),
+    ("reject_extra_positional_no_test", "{% for i in [0, 1]|reject() %}{{ i }},{% endfor %}"),
+    ("select_test_keyword_argument", "{% for i in [1, 2, 3, 4]|select('divisibleby', num=2) %}{{ i }},{% endfor %}"),
+    ("selectattr_operator_test_keyword", "{{ users|selectattr('age', 'equalto', other=30)|map(attribute='name')|join(',') }}"),
+    ("select_lazy_errors_on_empty", "[{{ []|select('odd', foo=1)|list|length }}{{ []|selectattr()|list|length }}]"),
+    ("min_max_single_none", "{{ [none]|min }}|{{ [none]|max }}|{{ [{}]|min(attribute='a') }}|{{ [[none], [none]]|min }}"),
     ("selectattr_dotted", "{{ [{'a': {'b': 0} }, {'a': {'b': 1} }]|selectattr('a.b')|list|length }}"),
     ("striptags_more", "[{{ 'a<!-- <b> -->b <br/>c&lt;d&gt; &#65;&#x42;&#67 &nbsp;x &bogus; e  f'|striptags }}]"),
     ("striptags_unclosed", "[{{ 'a <b c<!-- d'|striptags }}]"),

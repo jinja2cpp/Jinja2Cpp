@@ -286,6 +286,7 @@ You can define (via -D command-line CMake option) the following build flags:
     -  `external` In this mode all dependencies should be provided externally. Paths to `boost`, `nonstd-*` libs, etc. should be specified via standard CMake variables (like `CMAKE_PREFIX_PATH` or libname_DIR)
     -  `conan-build` Special mode for building Jinja2C++ via conan recipe.
 -  **JINJA2CPP_WITH_BIGINT** (default `none`) - the big-integer backend every `TemplateEnv` starts with. With `none`, templates print, compare and convert integers of any size, and arithmetic whose result leaves `int64_t` fails with `IntegerOutOfRange`. With `boost`, that arithmetic is exact, as in Python, through Boost.Multiprecision's `cpp_int` (header-only, compiled into the library; consumers need nothing). The installed package reports the choice as `jinja2cpp_BIGINT` (CMake) and `bigint` (pkg-config).
+-  **JINJA2CPP_WITH_UNICODE_NAMES** (default TRUE) - decode `\N{name}` escapes in template string literals, as Python does, with a table of the Unicode 15.0 character names and aliases (about 450 KB of read-only data). With FALSE the table is left out and a `\N{...}` escape is a parse error.
 
 ### Big integers
 Python integers have no size limit. Jinja2C++ computes in `int64_t` and calls a big-integer backend only when a result leaves that range. A backend is a table of plain functions (`jinja2cpp/big_int_backend.h`), so one built separately plugs into a prebuilt library:

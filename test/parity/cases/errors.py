@@ -82,6 +82,22 @@ CASES = [
     ("dictsort_mixed_values", "{{ {'a': 1, 'b': 'x'}|dictsort(by='value')|length }}"),
     ("sort_with_none", "{{ [none, 1]|sort|length }}"),
     ("sort_undefined_attribute", "{{ [{'c': 'b'}, {}]|sort(attribute='c')|length }}"),
+    # min, max, dictsort and groupby order with `<`: None has no order, an undefined key
+    # fails under every Undefined class (docs/tasks/0045)
+    ("min_with_none", "{{ [none, 1]|min }}"),
+    ("max_with_none", "{{ [1, none]|max }}"),
+    ("min_two_nones", "{{ [none, none]|min }}"),
+    ("min_undefined_attribute", "{{ [{'a': 1}, {}]|min(attribute='a') }}"),
+    ("max_undefined_attribute_chainable", "{{ [{}, {'a': 1}]|max(attribute='a') }}", {"env": {"undefined": "chainable"}}),
+    ("max_two_undefined_attributes", "{{ [{}, {}]|max(attribute='a') }}"),
+    ("dictsort_value_none", "{{ {'a': none, 'b': 1}|dictsort(by='value')|length }}"),
+    ("groupby_none_key", "{{ [{'a': none}, {'a': 1}]|groupby('a')|length }}"),
+    ("groupby_undefined_key", "{{ [{'a': 1}, {}]|groupby('a')|length }}"),
+    # select_or_reject: the attribute comes by position only (docs/tasks/0295)
+    ("selectattr_attribute_keyword_only", "{{ [{'a': 1}]|selectattr(attribute='a')|list|length }}"),
+    ("select_test_extra_keyword", "{{ [1, 2]|select('odd', foo=1)|list|length }}"),
+    ("rejectattr_test_extra_keyword", "{{ [{'a': 1}, {'a': 0}]|rejectattr('a', 'odd', foo=1)|list|length }}"),
+    ("select_test_argument_twice", "{{ [1, 2, 3]|select('divisibleby', 2, num=2)|list|length }}"),
     ("missing_endmacro", "{% macro m() %}x"),
     ("missing_endraw", "{% raw %}x"),
     ("int_leading_zero", "{{ 01 }}"),

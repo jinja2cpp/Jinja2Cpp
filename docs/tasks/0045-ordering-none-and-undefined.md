@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0034]
@@ -30,3 +30,8 @@ which lets an empty operand through; the corpus has no case for them yet, so add
 before closing this task.
 
 **Done when.** No line of `test/parity/divergences/` names task 0045, and `ctest -R parity` passes.
+
+**Done.** `CompareForOrder` no longer lets `None` or an undefined operand through: `None`
+is unordered (TypeError) and an undefined key raises UndefinedError under every Undefined
+class, so `min`, `max`, `dictsort` and `groupby` match Python. Cases in `errors.py`
+(`min_with_none` ... `groupby_undefined_key`) and `filters.min_max_single_none`.
