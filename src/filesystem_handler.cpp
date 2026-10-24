@@ -5,10 +5,8 @@
 
 #include "template_path.h"
 
-#include <boost/filesystem/operations.hpp>
-#include <boost/filesystem/path.hpp>
-
 #include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <ios>
 #include <istream>
@@ -163,12 +161,26 @@ std::optional<std::string> FindTemplateFile(const std::string& root, const std::
     {
         return {};
     }
-    boost::system::error_code ec;
-    if (!boost::filesystem::is_regular_file(boost::filesystem::path(*filePath), ec))
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(std::filesystem::path(*filePath), ec))
     {
         return {};
     }
     return filePath;
+}
+// C++17 has no conversion from file_time_type, and its clock's epoch differs between standard
+// libraries (1970 in libc++, 2174 in libstdc++, 1601 in MSVC). The offset between the epochs is a
+// whole number of seconds, so the difference of the two clocks' current times, rounded to seconds,
+// is exact. The result has whole seconds, as Boost's time_t and ConfinedFileSystem give.
+std::chrono::system_clock::time_point ToSystemTime(std::filesystem::file_time_type fileTime)
+{
+    using std::chrono::seconds;
+    using FileClock = std::filesystem::file_time_type::clock;
+    const auto fileNow = FileClock::now().time_since_epoch();
+    const auto systemNow = std::chrono::system_clock::now().time_since_epoch();
+    const auto epochOffset = std::chrono::round<seconds>(fileNow - systemNow);
+    const auto sinceUnixEpoch = std::chrono::floor<seconds>(fileTime.time_since_epoch()) - epochOffset;
+    return std::chrono::system_clock::time_point(std::chrono::duration_cast<std::chrono::system_clock::duration>(sinceUnixEpoch));
 }
 } // namespace
 
@@ -223,14 +235,14 @@ std::optional<std::chrono::system_clock::time_point> RealFileSystem::GetLastModi
         return {};
     }
 
-    boost::system::error_code ec;
-    auto modifyTime = boost::filesystem::last_write_time(boost::filesystem::path(*filePath), ec);
+    std::error_code ec;
+    const auto modifyTime = std::filesystem::last_write_time(std::filesystem::path(*filePath), ec);
     if (ec)
     {
         return {};
     }
 
-    return std::chrono::system_clock::from_time_t(modifyTime);
+    return ToSystemTime(modifyTime);
 }
 CharFileStreamPtr RealFileSystem::OpenByteStream(const std::string& name) const
 {

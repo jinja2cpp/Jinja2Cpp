@@ -15,7 +15,7 @@ if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
     set(_bindings_json "Boost::json")
 endif()
 
-find_package(Boost COMPONENTS algorithm filesystem ${_bindings_find_package_boost} REQUIRED)
+find_package(Boost COMPONENTS algorithm ${_bindings_find_package_boost} REQUIRED)
 
 if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
     find_package(RapidJSON REQUIRED)
@@ -27,6 +27,6 @@ endif()
 # them through Boost::headers.
 # Only expected-lite is public: no public header includes fmt or the JSON libraries, and
 # the tests link nlohmann_json themselves.
-set(JINJA2_PRIVATE_LIBS_INT Boost::headers Boost::filesystem fmt::fmt ${_bindings_json})
+set(JINJA2_PRIVATE_LIBS_INT Boost::headers fmt::fmt ${_bindings_json})
 set(JINJA2_PUBLIC_LIBS_INT nonstd::expected-lite)
 

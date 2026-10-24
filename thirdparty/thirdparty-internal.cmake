@@ -7,9 +7,7 @@ list(APPEND BOOST_INCLUDE_LIBRARIES
     algorithm
     any
     assert
-    atomic
     container
-    filesystem
     json
 )
 
@@ -39,7 +37,6 @@ if(NOT MSVC)
         if(TARGET boost_unordered)
             target_compile_options(boost_unordered INTERFACE -Wno-error=deprecated-declarations)
         endif()
-        target_compile_options(boost_filesystem PRIVATE -Wno-error=deprecated-declarations)
     endif()
 endif()
 

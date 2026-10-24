@@ -683,6 +683,37 @@ TEST_F(RealFsNamesTest, FullFilePath)
     EXPECT_EQ("a.j2", fs.GetFullFilePath("/a.j2"));
 }
 
+// std::filesystem's file clock has a different epoch in each standard library: the date is the
+// file's modification time in whole seconds, the same as ConfinedFileSystem's fstat/GetFileTime
+TEST_F(RealFsNamesTest, LastModificationDate)
+{
+    namespace fs = std::filesystem;
+    using std::chrono::hours;
+    using std::chrono::minutes;
+    using std::chrono::system_clock;
+    const jinja2::RealFileSystem real(m_root);
+    const jinja2::ConfinedFileSystem confined(m_root);
+    const auto now = system_clock::now();
+
+    auto modified = real.GetLastModificationDate("a.j2");
+    ASSERT_TRUE(modified.has_value());
+    EXPECT_EQ(confined.GetLastModificationDate("a.j2"), modified);
+    EXPECT_EQ(modified, real.GetLastModificationDate("a.j2"));
+    EXPECT_LT(*modified, now + minutes(1));
+    EXPECT_GT(*modified, now - minutes(10));
+    EXPECT_EQ(std::chrono::system_clock::duration::zero(), modified->time_since_epoch() % std::chrono::seconds(1));
+
+    // Ten years back: before the epoch of no supported file clock, but far from the file's own time
+    std::error_code ec;
+    fs::last_write_time(m_base / "root" / "sub" / "b.j2", fs::file_time_type::clock::now() - hours(24 * 3653), ec);
+    ASSERT_FALSE(ec) << ec.message();
+    modified = real.GetLastModificationDate("sub/b.j2");
+    ASSERT_TRUE(modified.has_value());
+    EXPECT_EQ(confined.GetLastModificationDate("sub/b.j2"), modified);
+    EXPECT_LT(*modified, now - hours(24 * 3652));
+    EXPECT_GT(*modified, now - hours(24 * 3654));
+}
+
 TEST_F(RealFsNamesTest, SymlinksAreFollowed)
 {
     if (!m_hasSymlink)
