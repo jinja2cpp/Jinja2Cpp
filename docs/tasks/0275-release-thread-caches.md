@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: api
 depends: [0252]
@@ -41,3 +41,5 @@ is allocated only during a destruction nested 64 deep and freed when that destru
 is always empty and unallocated between renders. `LookupCache` keeps no memory to free (128 fixed
 entries) and its stale entries are never used (epochs). Added to the `noexcept` list in
 docs/api-2.0.md section 2 item 6.
+
+**Closed (2026-10-24).** Merged in #616.

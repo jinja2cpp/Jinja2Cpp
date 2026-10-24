@@ -1,5 +1,6 @@
 ---
-status: in-progress
+status: done
+pr: [https://github.com/jinja2cpp/Jinja2Cpp/pull/592, https://github.com/jinja2cpp/Jinja2Cpp/pull/613, https://github.com/jinja2cpp/Jinja2Cpp/pull/620, https://github.com/jinja2cpp/Jinja2Cpp/pull/630]
 priority: medium
 area: parity
 depends: [0015]
@@ -58,3 +59,5 @@ by D2 and only add to the ABI (docs/release-2.0.md D2/D3).
 - Phases: [0269](0269-public-big-int-value.md) (blocks G1), [0270](0270-big-int-core-text-form.md),
   [0271](0271-big-int-backend-interface.md), [0272](0272-big-int-boost-backend.md),
   [0273](0273-build-conditional-parity-divergences.md).
+
+**Closed (2026-10-24).** The revised done-when holds: phases 0269-0273 are done (plan #592; #613, #620, #630), the default build keeps the four arithmetic cases as `@nobigint` lines and `docs/parity.md` calls integers a build option.
