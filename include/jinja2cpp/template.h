@@ -142,6 +142,45 @@ private:
 };
 
 /*!
+ * \brief What a template exports, as Python Jinja2's `Template.module` (\ref BasicTemplate::MakeModule)
+ *
+ * `exports` holds the names the template's top level sets (`set`, `set` blocks, macros, and those
+ * of the templates it extends), but not the ones that start with an underscore, the ones set in a
+ * loop or a `with` block, or the ones an `import` or `from` binds. Values are copies the host
+ * owns; a container that contains itself is cut where it repeats (an empty Value). A macro is a
+ * \ref UserCallable that takes positional arguments as `extraPosArgs` (a \ref ValuesList) and
+ * keyword arguments as `extraKwArgs` (a \ref ValuesMap) or `args`, and returns its output: a
+ * string, or a \ref BasicMarkup "Markup" when the template autoescapes. Its calls run in the
+ * module, which they share and keep alive with the template, so a namespace a macro changes stays
+ * changed for the next call:
+ * ```c++
+ * auto module = tpl.MakeModule().value();
+ * jinja2::UserCallableParams params;
+ * params.extraPosArgs = jinja2::ValuesList{ "World" };
+ * auto text = module.exports["greet"].get<jinja2::UserCallable>().callable(params);
+ * ```
+ * A macro call that fails throws \ref BadResultAccess "BadResultAccess<CharT>" with the error
+ * (a user callable that calls it inside a render passes that error on to the render). Once the
+ * template is loaded again, a call fails with ErrorCode::TemplateExpired. Calls of one module's
+ * macros from several threads take turns; like a render, they must not run while the template
+ * loads. A macro stored in the environment's globals keeps its template, and so the environment,
+ * alive: remove it to free them.
+ */
+template<typename CharT>
+struct BasicTemplateModule
+{
+    //! The exported names and their values
+    ValuesMap exports;
+    //! The output of the template's top level, as Jinja2's `str(module)`
+    std::basic_string<CharT> body;
+};
+
+//! The exports of a template with narrow output
+using TemplateModule = BasicTemplateModule<char>;
+//! The exports of a template with wide output
+using TemplateModuleW = BasicTemplateModule<wchar_t>;
+
+/*!
  * \brief Template object which is used to render templates
  *
  * The main class for rendering templates, instantiated for `char` (\ref Template) and `wchar_t`
@@ -344,6 +383,18 @@ public:
      * @return The names, or the error of the parse (TemplateNotParsed before a successful Load)
      */
     [[nodiscard]] Result<std::vector<std::string>, CharT> FindUndeclaredVariables() const;
+    /*!
+     * \brief Renders the template once and returns what it exports, as Jinja2's `make_module(vars)`
+     *
+     * The template is rendered with `params` on top of the environment's globals, as by \ref Render,
+     * and its top level's names and output are returned (\ref BasicTemplateModule). Without params
+     * this is Jinja2's `Template.module`, except that each call makes a new module.
+     *
+     * @param params  Set of params which the template's top level and its macros see
+     *
+     * @return The module, or the error of the render (TemplateNotParsed before a successful Load)
+     */
+    [[nodiscard]] Result<BasicTemplateModule<CharT>, CharT> MakeModule(const ValuesMap& params = {}) const;
 
     /* !
      * \brief compares to an other object of the same type

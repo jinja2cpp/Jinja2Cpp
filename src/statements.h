@@ -555,6 +555,9 @@ public:
     // With `withContext` the module sees a snapshot of the names `importer` sees now, as
     // Jinja2 does: a name set later is not seen, a namespace changed in place is
     ImportedModule(const RenderContext& importer, bool withContext);
+    // A module made for the host (Template::MakeModule): it sees `names`, then `globals` and
+    // `builtins`, and loads templates through `callback`, which must outlive it
+    ImportedModule(InternalValueMap names, const InternalValueMap& globals, IRendererCallback* callback, const InternalValueMap* builtins);
     ImportedModule(const ImportedModule&) = delete;
     ImportedModule(ImportedModule&&) = delete;
     ImportedModule& operator=(const ImportedModule&) = delete;
@@ -564,8 +567,13 @@ public:
     // Renders the template `tpl` (a TemplateImpl) into the module's context, dropping its output
     template<typename Tpl>
     void Render(const Tpl& tpl);
+    // As above, writing the output to `os` (Template::MakeModule)
+    template<typename Tpl>
+    void Render(const Tpl& tpl, OutStream& os);
     // The names the module's top level set
     [[nodiscard]] const InternalValueMap& Names() const { return m_context.GetCurrentScope(); }
+    // The context the module's macros run in
+    [[nodiscard]] RenderContext& Context() { return m_context; }
 
 private:
     // The importer's names, the external scope of the module's context

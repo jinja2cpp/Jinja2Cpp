@@ -2051,10 +2051,23 @@ ImportedModule::ImportedModule(const RenderContext& importer, bool withContext)
 {
 }
 
+ImportedModule::ImportedModule(InternalValueMap names, const InternalValueMap& globals, IRendererCallback* callback, const InternalValueMap* builtins)
+    : m_importerNames(std::move(names))
+    , m_context(m_importerNames, globals, callback, builtins)
+{
+    // As CloneWith: the template rendered sets its own (Render)
+    m_context.ResetAutoescape(callback->GetSettings().autoescape);
+}
+
 template<typename Tpl>
 void ImportedModule::Render(const Tpl& tpl)
 {
-    auto& callback = *m_context.GetRendererCallback();
+    RenderToString(m_context.GetRendererCallback(), [this, &tpl](OutStream& stream) { Render(tpl, stream); });
+}
+
+template<typename Tpl>
+void ImportedModule::Render(const Tpl& tpl, OutStream& os)
+{
     // The module's macros run in its template, whose blocks their `self` has: its own and,
     // once its top level has run, those of the templates it extends
     m_frame.blocks = &m_blocks;
@@ -2065,10 +2078,12 @@ void ImportedModule::Render(const Tpl& tpl)
     // The module's context is its template's: its macros run with the template's runtime
     // autoescape setting wherever they are called
     m_context.ResetAutoescape(m_context.Nodes()[tpl.GetRenderer()].IsAutoescape());
-    // Only the names the template, and the ones it extends, define are imported, as in
-    // Jinja2; its output is dropped
-    RenderToString(&callback, [this, &tpl](OutStream& stream) { m_context.Nodes()[tpl.GetRenderer()].RenderAsModule(stream, m_context, m_blocks, tpl.SelfName()); });
+    // Only the names the template, and the ones it extends, define are imported, as in Jinja2
+    m_context.Nodes()[tpl.GetRenderer()].RenderAsModule(os, m_context, m_blocks, tpl.SelfName());
 }
+
+template void ImportedModule::Render(const TemplateImpl<char>& tpl, OutStream& os);
+template void ImportedModule::Render(const TemplateImpl<wchar_t>& tpl, OutStream& os);
 
 void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
@@ -2138,6 +2153,7 @@ void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes,
                 continue;
             }
             scope.ForName({ nodes.Text(name.alias), name.aliasHash }) = p->second;
+            values.GetRendererCallback()->ImportBound(values, nodes.Text(name.alias), p->second);
         }
         return;
     }
@@ -2152,7 +2168,9 @@ void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes,
         }
         importedNs[name] = value;
     }
-    values.GetCurrentScope().ForName({ nodes.Text(m_namespace), m_namespaceHash }) = CreateMapAdapter(std::move(importedNs));
+    auto& bound = values.GetCurrentScope().ForName({ nodes.Text(m_namespace), m_namespaceHash });
+    bound = CreateMapAdapter(std::move(importedNs));
+    values.GetRendererCallback()->ImportBound(values, nodes.Text(m_namespace), bound);
 }
 
 MacroStatement::MacroStatement(NodeArena& nodes, std::string_view name, const MacroParamsInfo& params)
