@@ -1,6 +1,7 @@
 ---
-status: open
+status: done
 priority: low
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/628
 area: parity
 touches: [src/renderer.h#FinalizedExpressionRenderer]
 ---
@@ -21,3 +22,7 @@ call gets the int); Jinja2C++ reports "Exception thrown by a user callable: not 
 raises on a string (a third entry in `FINALIZE` / `CustomFinalize`) to pin it.
 
 **Done when.** A parity case with such a finalize matches, narrow and wide.
+
+**Done** in #628 (Codex found it as a regression of 0288): the folded path retries as the
+run-time path when finalize raises a host error or a `TemplateRuntimeError`; the harness has
+a `plus_one` finalize, case `autoescape.env_on_finalize_fold_raises`.

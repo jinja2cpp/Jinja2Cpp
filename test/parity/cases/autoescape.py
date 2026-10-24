@@ -152,6 +152,9 @@ CASES = [
     ("env_on_finalize_order", "{{ '<'|safe }}{{ x|safe }}{{ none }}{{ y }}{{ '<' ~ x }}{{ ['<'][0] }}", {"env": {"autoescape": True, "finalize": "brackets"}, "ctx": {"x": "<", "y": None}}),
     ("env_on_finalize_folded_none", "{{ none }}|{{ y }}|{{ x|safe }}", {"env": {"autoescape": True, "finalize": "none_to_empty"}, "ctx": {"x": "<", "y": None}}),
     ("env_on_finalize_folded_choice", "{{ '<'|safe if 1 > 0 else x }}{{ ('<'|safe) or x }}", {"env": {"autoescape": True, "finalize": "brackets"}, "ctx": {"x": "<"}}),
+    # Folding finalize(escape(1)) raises, so Jinja2 evaluates it at run time (docs/tasks/0292)
+    ("env_on_finalize_fold_raises", "{{ 1 }}{{ 1 + 1 }}{{ x }}", {"env": {"autoescape": True, "finalize": "plus_one"}, "ctx": {"x": 5}}),
+    ("env_on_finalize_raises", "{{ 'a' }}", {"env": {"autoescape": True, "finalize": "plus_one"}}),
     ("env_off_finalize", "{{ '<' }}{{ x }}{{ '<'|safe }}", {"env": {"finalize": "brackets"}, "ctx": {"x": "<"}}),
     ("env_on_trans_finalize", "{% trans %}<b>{{ x }}{% endtrans %}|{% trans %}<i>{% endtrans %}", {"env": {"autoescape": True, "extensions": ["i18n"], "finalize": "brackets"}, "ctx": {"x": "<"}}),
     ("volatile_finalize", "{% autoescape true %}{% autoescape on %}{{ '<' }}{{ x }}{% endautoescape %}{% endautoescape %}|{% autoescape false %}{% autoescape not on %}{{ '<' }}{{ x }}{% endautoescape %}{% endautoescape %}", {"env": {"finalize": "brackets"}, "ctx": {"on": False, "x": "<"}}),

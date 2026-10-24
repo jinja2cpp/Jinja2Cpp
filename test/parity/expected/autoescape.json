@@ -2067,6 +2067,41 @@
    "output": "[<][<]"
   },
   {
+   "id": "autoescape.env_on_finalize_fold_raises",
+   "template": "{{ 1 }}{{ 1 + 1 }}{{ x }}",
+   "context": {
+    "x": 5
+   },
+   "env": {
+    "autoescape": true,
+    "finalize": "plus_one"
+   },
+   "templates": {},
+   "output": "236"
+  },
+  {
+   "id": "autoescape.env_on_finalize_raises",
+   "template": "{{ 'a' }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true,
+    "finalize": "plus_one"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can only concatenate str (not \"int\") to str"
+   }
+  },
+  {
    "id": "autoescape.env_off_finalize",
    "template": "{{ '<' }}{{ x }}{{ '<'|safe }}",
    "context": {

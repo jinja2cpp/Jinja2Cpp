@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_RENDERER_H
 #define JINJA2CPP_SRC_RENDERER_H
 
+#include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "lexertk.h"
@@ -15,6 +16,7 @@
 #include <cstdint>
 #include <memory>
 #include <new>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -205,20 +207,47 @@ public:
         auto value = values.Nodes()[m_expression].Evaluate(values);
         if (m_isFolded && values.IsStaticAutoescape())
         {
-            value = MarkupEscape(value, values.GetRendererCallback());
+            // Jinja2 evaluates the value at run time when finalizing its escaped form raises
+            // (CodeGenerator.visit_Output, docs/tasks/0292)
+            if (auto folded = TryFinalize(MarkupEscape(value, values.GetRendererCallback()), values))
+            {
+                os.WriteValue(*folded);
+                return;
+            }
         }
-        CallParams params;
-        params.posParams.push_back(std::move(value));
-        auto result = GetIf<Callable>(&m_finalize)->GetExpressionCallable()(params, values);
-        if (m_isFolded)
+        else if (m_isFolded)
         {
-            os.WriteValue(result);
+            os.WriteValue(Finalize(std::move(value), values));
             return;
         }
-        WriteOutput(os, result, values);
+        WriteOutput(os, Finalize(std::move(value), values), values);
     }
 
 private:
+    InternalValue Finalize(InternalValue value, RenderContext& values) const
+    {
+        CallParams params;
+        params.posParams.push_back(std::move(value));
+        return GetIf<Callable>(&m_finalize)->GetExpressionCallable()(params, values);
+    }
+
+    // Finalize, or nothing when the callable raises an error of its own or of its call
+    std::optional<InternalValue> TryFinalize(InternalValue value, RenderContext& values) const
+    {
+        try
+        {
+            return Finalize(std::move(value), values);
+        }
+        catch (const detail::HostCallableFailure&)
+        {
+            return std::nullopt;
+        }
+        catch (const TemplateRuntimeError&)
+        {
+            return std::nullopt;
+        }
+    }
+
     InternalValue m_finalize;
     bool m_isFolded;
 };
