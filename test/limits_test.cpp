@@ -424,6 +424,31 @@ TEST_F(LimitsEnvTest, NestedRenderKeepsItsOwnLimits)
     EXPECT_EQ("stopped", free.RenderAsString(params).value());
 }
 
+TEST_F(LimitsEnvTest, UnpackedKeywordsAreHeldToTheSequenceCap)
+{
+    // f(**d) builds a dict of keyword arguments from a host mapping (docs/tasks/0220)
+    ValuesMap big;
+    for (int idx = 0; idx < 2000; ++idx)
+    {
+        big["k" + std::to_string(idx)] = idx;
+    }
+    Settings limited;
+    limited.limits.maxSequenceSize = 1000;
+    TemplateEnv env;
+    env.SetSettings(limited);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% macro m() %}{{ kwargs|length }}{% endmacro %}{{ m(**big) }}").has_value());
+    auto result = tpl.RenderAsString({ { "big", big } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    big.erase("k0");
+    for (int idx = 1000; idx < 2000; ++idx)
+    {
+        big.erase("k" + std::to_string(idx));
+    }
+    EXPECT_EQ("999", tpl.RenderAsString({ { "big", big } }).value());
+}
+
 TEST_F(LimitsEnvTest, FailedRenderLeavesNoLimits)
 {
     // A render that fails on its limits leaves none behind for the next one on the thread

@@ -1768,10 +1768,17 @@ void AppendUnpackedArgs(const InternalValue& value, std::vector<InternalValue>& 
     {
         ReserveHint(posParams, posParams.size() + *size);
     }
+    // An item may borrow from the value, a temporary such as a host callable's result: it keeps
+    // the value alive, as an item read through a subscript does
+    const bool borrows = value.ShouldExtendLifetime();
     for (auto&& item : items)
     {
         CheckSequenceSize(posParams.size() + 1, "a list");
         posParams.push_back(std::forward<decltype(item)>(item));
+        if (borrows)
+        {
+            posParams.back().SetParentData(value);
+        }
     }
 }
 
@@ -1790,8 +1797,15 @@ void AddUnpackedKwargs(const InternalValue& value, InternalDict& kwParams)
     {
         throw TemplateRuntimeError("argument after ** must be a mapping, not "s + Apply<visitors::PythonTypeNameGetter>(value));
     }
+    // The keyword arguments are a dict the template builds, held to the cap as one
+    CheckSequenceSize(static_cast<uint64_t>(kwParams.size()) + map->GetSize(), "a dict");
+    const bool borrows = value.ShouldExtendLifetime();
     for (auto& [key, item] : map->GetEntries())
     {
+        if (borrows)
+        {
+            item.SetParentData(value);
+        }
         if (!IsStringValue(key))
         {
             throw TemplateRuntimeError("keywords must be strings");

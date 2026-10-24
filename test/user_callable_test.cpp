@@ -950,3 +950,32 @@ TEST(UserCallableTestSingle, UnpackedArguments)
         }
     }
 }
+
+// Spliced items that borrow from a temporary keep it alive: a host callable's reflected struct,
+// whose string view reads the struct (docs/tasks/0220)
+TEST(UserCallableTestSingle, UnpackedItemsKeepTheirSource)
+{
+    const std::string text(64, 'x');
+    jinja2::ValuesMap params;
+    params["make"] = MakeCallable([&text] {
+        TestStruct obj;
+        obj.strValue = text;
+        return jinja2::Reflect(std::move(obj));
+    });
+    params["makeList"] = MakeCallable([&text] {
+        std::vector<TestStruct> items(2);
+        items[0].strValue = text;
+        items[1].strValue = text;
+        return jinja2::Reflect(std::move(items));
+    });
+    const char* sources[] = {
+        "{% macro m() %}{{ kwargs.strViewValue }}{% endmacro %}{{ m(**make()) }}",
+        "{% macro m() %}{{ varargs[1].strViewValue }}{% endmacro %}{{ m(*makeList()) }}",
+    };
+    for (const auto* source : sources)
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source;
+        EXPECT_EQ(text, tpl.RenderAsString(params).value()) << source;
+    }
+}
