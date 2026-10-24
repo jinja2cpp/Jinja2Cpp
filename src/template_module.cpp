@@ -1,6 +1,7 @@
 // Template::MakeModule: a template's exports for the host, as Python Jinja2's Template.module
 // and make_module (docs/tasks/0284)
 #include "cycle_collector.h"
+#include "engine_errors.h"
 #include "error_boundary.h"
 #include "expression_evaluator.h"
 #include "internal_value.h"
@@ -10,23 +11,29 @@
 #include "render_context.h"
 #include "render_failure.h"
 #include "statements.h"
+#include "template_env_impl.h"
 #include "template_impl.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/markup.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <new>
 #include <optional>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace jinja2
@@ -46,6 +53,8 @@ class ExportCopier
 public:
     Value Copy(const InternalValue& value)
     {
+        // Nesting comes from the template (a list built in a loop): stop where a render would
+        CheckStack();
         // A string may view the template's source, which a Load replaces, or the module's
         // params: the host gets its own copy, a Markup kept a Markup
         if (auto text = AsStringView<char>(value))
@@ -63,7 +72,7 @@ public:
         if (auto map = AsMap(value))
         {
             // A dict, the template's or the host's, or a namespace; not an object
-            if (map->GetMutableItems() || map->IsNamespace() || (!map->HasAttributes() && !map->GetObjectClass()))
+            if (map->GetMutableItems() != nullptr || map->IsNamespace() || (!map->HasAttributes() && map->GetObjectClass() == nullptr))
             {
                 return CopyMap(*map, value);
             }
@@ -72,20 +81,18 @@ public:
     }
 
 private:
-    // Whether `identity` is a container being copied: the copy reached it again
+    // Starts copying the container `identity`; false when it is being copied already: the copy
+    // reached it again
     bool Enter(const void* identity)
     {
-        if (identity && std::find(m_path.begin(), m_path.end(), identity) != m_path.end())
-        {
-            return false;
-        }
-        m_path.push_back(identity);
-        return true;
+        return identity == nullptr || m_path.insert(identity).second;
     }
+    void Leave(const void* identity) { m_path.erase(identity); }
 
     Value CopyList(const ListRef& list)
     {
-        if (!Enter(list.GetIdentity()))
+        const auto* identity = list.GetIdentity();
+        if (!Enter(identity))
         {
             return Value();
         }
@@ -93,10 +100,11 @@ private:
         ValuesList items;
         list.ForEach([this, &items](InternalValue&& item) {
             CheckSequenceSize(items.size() + 1, "a list");
-            items.push_back(Copy(item));
+            const InternalValue owned(std::move(item));
+            items.push_back(Copy(owned));
             return true;
         });
-        m_path.pop_back();
+        Leave(identity);
         return Value(std::move(items));
     }
 
@@ -104,26 +112,33 @@ private:
     {
         auto entries = map.GetEntries();
         // A ValuesMap has string keys only: a dict with others is passed on as a view
-        const bool stringKeys = std::all_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return GetAsSameString(std::string(), entry.key).has_value(); });
-        if (!stringKeys)
+        std::vector<std::string> keys;
+        keys.reserve(entries.size());
+        for (const auto& entry : entries)
         {
-            return IntValue2Value(value);
+            auto key = GetAsSameString(std::string(), entry.key);
+            if (!key)
+            {
+                return IntValue2Value(value);
+            }
+            keys.push_back(std::move(*key));
         }
-        if (!Enter(map.GetIdentity()))
+        const auto* identity = map.GetIdentity();
+        if (!Enter(identity))
         {
             return Value();
         }
         ValuesMap items;
-        for (const auto& entry : entries)
+        for (std::size_t idx = 0; idx != entries.size(); ++idx)
         {
-            items[*GetAsSameString(std::string(), entry.key)] = Copy(entry.value);
+            items[keys[idx]] = Copy(entries[idx].value);
         }
-        m_path.pop_back();
+        Leave(identity);
         return Value(std::move(items));
     }
 
-    // The containers being copied, outermost first
-    std::vector<const void*> m_path;
+    // The containers being copied
+    std::unordered_set<const void*> m_path;
 };
 
 // Whether `value` is still the object `imported` an import bound: Python's `is`, as `is sameas`
@@ -133,7 +148,7 @@ bool IsSameImport(const InternalValue& imported, const InternalValue& value)
     if (const auto* callable = GetIf<Callable>(&imported))
     {
         const auto* other = GetIf<Callable>(&value);
-        return other && callable->IsSame(*other);
+        return other != nullptr && callable->IsSame(*other);
     }
     if (auto map = AsMap(imported))
     {
@@ -146,7 +161,7 @@ bool IsSameImport(const InternalValue& imported, const InternalValue& value)
         return other && other->GetIdentity() == list->GetIdentity();
     }
     // A scalar has no identity: an equal one counts as the same
-    return !GetIf<Callable>(&value) && !AsMap(value) && !AsList(value) && IntValue2Value(imported) == IntValue2Value(value);
+    return GetIf<Callable>(&value) == nullptr && !AsMap(value) && !AsList(value) && IntValue2Value(imported) == IntValue2Value(value);
 }
 
 // Whether `value`, set under the name with hash `hash`, is only the undefined a frame binds at
@@ -154,7 +169,7 @@ bool IsSameImport(const InternalValue& imported, const InternalValue& value)
 bool IsEntryBinding(const InternalValue& value, std::size_t hash)
 {
     const auto* undefined = GetIf<UndefinedValue>(&value);
-    return undefined && undefined->atEntry && undefined->entryHash == static_cast<std::uint32_t>(hash);
+    return undefined != nullptr && undefined->atEntry && undefined->entryHash == static_cast<std::uint32_t>(hash);
 }
 
 // Calls `callable` on `context` as a call expression does (InvokeCallable in
@@ -288,17 +303,18 @@ struct TemplateModuleState
     std::vector<std::pair<std::string, const InternalValue*>> ExportedNames() const
     {
         std::vector<std::pair<std::string, const InternalValue*>> names;
-        for (const auto& [name, value] : module->Names())
+        const auto& imported = callback.value().imported;
+        for (const auto& [name, value] : module.value().Names())
         {
             if (name.empty() || name[0] == '_' || IsEntryBinding(value, HashedName::Hash(name)))
             {
                 continue;
             }
             // Set again after the import, it is exported (Jinja2's exported_vars)
-            const auto imported = std::find_if(callback->imported.begin(), callback->imported.end(), [&exportName = name, &exportValue = value](const auto& entry) {
+            const auto isImported = std::any_of(imported.begin(), imported.end(), [&exportName = name, &exportValue = value](const auto& entry) {
                 return entry.first == exportName && IsSameImport(entry.second, exportValue);
             });
-            if (imported != callback->imported.end())
+            if (isImported)
             {
                 continue;
             }
@@ -322,13 +338,12 @@ struct TemplateModuleState
     // A host's call of the exported callable `fn`, named `name`, in the module's context
     Value Call(const Callable& fn, const std::string& name, const UserCallableParams& ucParams)
     {
-        const std::lock_guard<std::recursive_mutex> lock(mutex);
+        const std::scoped_lock lock(mutex);
         // The tree the callable runs in was replaced
         if (impl->m_loadGeneration.load(std::memory_order_relaxed) != generation)
         {
             throw BadResultAccess<CharT>(ExpiredError(name));
         }
-        std::optional<BasicErrorInfo<CharT>> error;
         try
         {
             // First, so that it ends last: when nothing of the call holds values any more
@@ -374,13 +389,12 @@ struct TemplateModuleState
         }
         catch (const detail::RenderFailure& failure)
         {
-            error = failure.ErrorAs<CharT>();
+            throw BadResultAccess<CharT>(failure.ErrorAs<CharT>());
         }
         catch (...)
         {
-            error = detail::CurrentExceptionToError<CharT>(impl->m_templateName);
+            throw BadResultAccess<CharT>(detail::CurrentExceptionToError<CharT>(impl->m_templateName));
         }
-        throw BadResultAccess<CharT>(std::move(*error));
     }
 
     std::shared_ptr<const Impl> impl;

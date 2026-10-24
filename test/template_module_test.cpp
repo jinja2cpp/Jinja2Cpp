@@ -11,7 +11,7 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
-#include <memory>
+#include <cstdint>
 #include <string>
 #include <thread>
 #include <utility>
@@ -19,7 +19,6 @@
 
 namespace
 {
-template<typename CharT = char>
 jinja2::Value Call(const jinja2::Value& fn, jinja2::ValuesList pos = {}, jinja2::ValuesMap kw = {})
 {
     jinja2::UserCallableParams params;
@@ -275,10 +274,19 @@ TEST_F(TemplateModuleTest, SelfReferencingContainers)
     EXPECT_TRUE(module.exports["d"].AsMap().at("self").IsNone());
 }
 
+// A value nested deeper than the stack allows fails as a render of it does
+TEST_F(TemplateModuleTest, DeepNesting)
+{
+    auto tpl = Load("{% set ns = namespace(l=[]) %}{% for i in range(100000) %}{% set ns.l = [ns.l] %}{% endfor %}{% set l = ns.l %}");
+    auto module = tpl.MakeModule();
+    ASSERT_FALSE(!!module);
+    EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, module.error().GetCode());
+}
+
 TEST_F(TemplateModuleTest, ConcurrentCalls)
 {
     auto module = Make("{% set ns = namespace(n=0) %}{% macro inc() %}{% set ns.n = ns.n + 1 %}{{ ns.n }}{% endmacro %}{% macro get() %}{{ ns.n }}{% endmacro %}");
-    constexpr int perThread = 200;
+    static constexpr int perThread = 200;
     std::vector<std::thread> threads;
     std::atomic<bool> failed{ false };
     for (int t = 0; t != 4; ++t)

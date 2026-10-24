@@ -2520,11 +2520,11 @@ struct UserCallableBody
         // module's template
         catch (const BadResultAccess<char>& failure)
         {
-            throw failure.error();
+            throw ErrorInfo(failure.error());
         }
         catch (const BadResultAccess<wchar_t>& failure)
         {
-            throw failure.error();
+            throw ErrorInfoW(failure.error());
         }
         catch (...)
         {

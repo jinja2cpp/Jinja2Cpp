@@ -164,7 +164,8 @@ private:
  * template is loaded again, a call fails with ErrorCode::TemplateExpired. Calls of one module's
  * macros from several threads take turns; like a render, they must not run while the template
  * loads. A macro stored in the environment's globals keeps its template, and so the environment,
- * alive: remove it to free them.
+ * alive: remove it to free them. So does one passed to a macro of its own module that stores it
+ * in the module (`{% set ns.f = f %}`): that module is then never freed.
  */
 template<typename CharT>
 struct BasicTemplateModule
