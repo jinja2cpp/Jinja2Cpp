@@ -1498,7 +1498,7 @@ void MapPositionalArgs(ArgInfoList& argsInfo, const P& params, const PosArgRange
 // The parameters after `*args` take keywords only, and so do all of a callable that takes extra
 // positional arguments without declaring `*args` (applymacro's `macro`)
 template<typename Result>
-void CheckMultipleValues(const ArgInfoList& argsInfo, std::size_t posParamsCount, std::size_t eatenPosArgs, Result& result, bool& isSucceeded)
+JINJA2CPP_COLD_INLINE void CheckMultipleValues(const ArgInfoList& argsInfo, std::size_t posParamsCount, std::size_t eatenPosArgs, Result& result, bool& isSucceeded)
 {
     std::size_t varArgs = argsInfo.size();
     std::size_t end = 0;

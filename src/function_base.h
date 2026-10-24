@@ -135,17 +135,18 @@ inline bool FunctionBase::ParseParams(const ArgumentsTable& argsInfo, const Call
     auto parsed = helpers::ParseCallParamsInfo(argsInfo, params, result);
 
     m_argsError.reset();
-    if (parsed.multipleValues)
-    {
-        SetArgumentsError("got multiple values for argument '" + parsed.multipleValues->name + "'");
-    }
-    for (std::size_t idx = 0; !m_argsError && idx < argsInfo.size(); ++idx)
+    for (std::size_t idx = 0; idx < argsInfo.size(); ++idx)
     {
         if (argsInfo[idx].mandatory && !parsed.args[idx])
         {
             SetArgumentsError("missing required argument: '" + argsInfo[idx].name + "'");
             break;
         }
+    }
+    // Python reports it before a missing argument
+    if (parsed.multipleValues)
+    {
+        SetArgumentsError("got multiple values for argument '" + parsed.multipleValues->name + "'");
     }
 
     auto isDeclared = [&argsInfo](const char* name) {
