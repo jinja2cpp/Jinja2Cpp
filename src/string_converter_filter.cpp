@@ -5,6 +5,7 @@
 #include "internal_value.h"
 #include "markup.h"
 #include "render_context.h"
+#include "span.h"
 #include "unicode_case.h"
 #include "undefined.h"
 #include "unicode_tables.h"
@@ -1175,7 +1176,7 @@ JINJA2CPP_ALWAYS_INLINE InternalValue MapCase(std::basic_string_view<CharT> str)
 {
     if (IsAscii(str))
     {
-        return InternalValue::MakeText<CharT>(str.size(), [str](boost::span<CharT> chars) {
+        return InternalValue::MakeText<CharT>(str.size(), [str](Span<CharT> chars) {
             auto out = chars.begin();
             auto it = str.begin();
             if (capitalize && it != str.end())
@@ -1225,7 +1226,7 @@ JINJA2CPP_ALWAYS_INLINE InternalValue TitleCase(std::basic_string_view<CharT> st
 {
     if (IsAscii(str))
     {
-        return InternalValue::MakeText<CharT>(str.size(), [str](boost::span<CharT> chars) {
+        return InternalValue::MakeText<CharT>(str.size(), [str](Span<CharT> chars) {
             auto out = chars.begin();
             bool wordStart = true;
             for (auto ch : str)

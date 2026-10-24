@@ -11,6 +11,7 @@
 #include "recursion_guard.h"
 #include "render_context.h"
 #include "render_failure.h"
+#include "span.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -104,7 +105,7 @@ public:
         }
     }
 
-    [[nodiscard]] boost::span<const Child> Children() const
+    [[nodiscard]] Span<const Child> Children() const
     {
         // NodeArena::MakeWithItems put them one past this node
         return { std::launder(reinterpret_cast<const Child*>(this + 1)), m_count };

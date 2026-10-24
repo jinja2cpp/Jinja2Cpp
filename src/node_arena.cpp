@@ -3,9 +3,8 @@
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "renderer.h"
+#include "span.h"
 #include "statements.h"
-
-#include <boost/core/span.hpp>
 
 #include <algorithm>
 #include <array>
@@ -217,7 +216,7 @@ void NodeArena::MoveNodes(std::byte* base, detail::RefChecker* refs, std::byte* 
     assert(owner == m_owners);
 }
 
-SealedArena NodeArena::SealWith(boost::span<const detail::RootRef> roots)
+SealedArena NodeArena::SealWith(Span<const detail::RootRef> roots)
 {
     assert(!m_sealed);
     // Only the parse interns names: the table goes before the sealed buffer comes

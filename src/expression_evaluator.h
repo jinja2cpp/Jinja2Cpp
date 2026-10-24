@@ -8,10 +8,9 @@
 #include <jinja2cpp/utils/ordered_map.h>
 #include "render_context.h"
 #include "slot_frame.h"
+#include "small_vector.h"
 
 #include <jinja2cpp/value.h>
-
-#include <boost/container/small_vector.hpp>
 
 #include <algorithm>
 #include <array>
@@ -177,7 +176,7 @@ class ArgumentsMap
 {
 public:
     using value_type = std::pair<std::string, V>;
-    using Storage = boost::container::small_vector<value_type, 3>;
+    using Storage = SmallVector<value_type, 3>;
     using iterator = typename Storage::iterator;
     using const_iterator = typename Storage::const_iterator;
 
@@ -469,7 +468,7 @@ protected:
 
     NodeRef<Expression> m_value;
     // Most subscripts are one attribute or item: a.b, x[0]
-    boost::container::small_vector<Index, 1> m_subscriptExprs;
+    SmallVector<Index, 1> m_subscriptExprs;
     // The first index is an attribute name or a constant, so the value it is applied to
     // can be read in place: nothing runs between reading the value and indexing it
     bool m_firstIndexIsPure = false;

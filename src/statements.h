@@ -9,6 +9,7 @@
 #include "template_slots.h"
 #include "renderer.h"
 #include "slot_frame.h"
+#include "span.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -192,7 +193,7 @@ private:
     ListAdapter CreateFilteredAdapter(const ListAdapter& loopItems, RenderContext& values, InternalValue outerLoop) const;
     // Moves `items` to the next item the filter keeps and stores it in `item`; false at the
     // end. Runs in the loop's own frame and tree, installed
-    bool FilterInFrame(IListAccessorEnumerator& items, boost::span<Slot> frameSlots, InternalValue& item, RenderContext& values) const;
+    bool FilterInFrame(IListAccessorEnumerator& items, Span<Slot> frameSlots, InternalValue& item, RenderContext& values) const;
 
     AssignTarget m_target;
     NodeRef<Expression> m_value;

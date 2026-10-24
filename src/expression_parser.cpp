@@ -12,11 +12,11 @@
 #include "recursion_guard.h"
 #include "render_context.h"
 #include "renderer.h"
+#include "small_vector.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/template_env.h>
-#include <boost/container/small_vector.hpp>
 
 #include <algorithm>
 #include <cstdint>
@@ -318,7 +318,7 @@ namespace
 {
 // One `~` run as one node, emptying `operands`. Kept out of ParseBinary: inlined there it grew
 // the function past what the compiler inlines into it, which every expression paid for at Load
-JINJA2CPP_NOINLINE_INLINE NodeRef<Expression> MakeConcat(NodeArena& nodes, boost::container::small_vector_base<NodeRef<Expression>>& operands)
+JINJA2CPP_NOINLINE_INLINE NodeRef<Expression> MakeConcat(NodeArena& nodes, SmallVectorBase<NodeRef<Expression>>& operands)
 {
     // Jinja2 folds a chain of foldable operands into one str
     const bool foldable = std::all_of(operands.begin(), operands.end(), [&nodes](const NodeRef<Expression>& operand) { return nodes[operand].IsFoldable(nodes); });
@@ -344,7 +344,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
     // bind looser (a new call parses `a ~ b` on their right) or tighter (a ~ b * c), so the
     // operands of a run are always next to each other. Its operands are one flat node and
     // count as one operator
-    boost::container::small_vector<NodeRef<Expression>, 4> concat;
+    SmallVector<NodeRef<Expression>, 4> concat;
     auto left = minPrecedence <= Precedence::Not && lexer.PeekNextToken().keyword == Keyword::LogicalNot ? ParseLogicalNot(lexer)
                                                                                                          : ParseUnaryPlusMinus(lexer);
     while (left)
@@ -424,7 +424,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseCompar
                                                                                       bool negated)
 {
     // Most chains are one comparison, which becomes a binary node: no heap list for it
-    boost::container::small_vector<CompareExpression::Operand, 2> operands;
+    SmallVector<CompareExpression::Operand, 2> operands;
     for (;;)
     {
         lexer.EatToken();

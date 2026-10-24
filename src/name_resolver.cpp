@@ -5,6 +5,7 @@
 #include "node_arena.h"
 #include "renderer.h"
 #include "slot_frame.h"
+#include "span.h"
 #include "statements.h"
 
 #include <algorithm>
@@ -108,7 +109,7 @@ void NameResolver::DoAddStore(FrameId frame, std::string_view name, StoreKind ki
     m_stores.push_back(Store{ frame, kind, static_cast<std::uint32_t>(m_reads.size()), name });
 }
 
-void NameResolver::AddStores(FrameId frame, boost::span<const TargetNode> target, const NodeArena& nodes, StoreKind kind)
+void NameResolver::AddStores(FrameId frame, Span<const TargetNode> target, const NodeArena& nodes, StoreKind kind)
 {
     for (const auto& node : target)
     {
@@ -154,7 +155,7 @@ NodeRef<BindUndefinedStatement> NameResolver::MakeEntryBinding(FrameId frameId, 
     // The names the frame stores, first store first: those it stores first outside a branch
     // are the candidates. A name the frame binds as it starts or stores first in a branch is
     // never one: Jinja2 resolves it outward
-    boost::container::small_vector<EntryCandidate, 8> stores;
+    SmallVector<EntryCandidate, 8> stores;
     bool hasCandidate = false;
     for (auto idx = static_cast<std::size_t>(frame.firstStore); idx < m_stores.size(); ++idx)
     {
@@ -171,7 +172,7 @@ NodeRef<BindUndefinedStatement> NameResolver::MakeEntryBinding(FrameId frameId, 
         return {};
     }
     std::sort(stores.begin(), stores.end(), [](const EntryCandidate& lhs, const EntryCandidate& rhs) { return std::tie(lhs.hash, lhs.order) < std::tie(rhs.hash, rhs.order); });
-    boost::container::small_vector<EntryCandidate, 4> candidates;
+    SmallVector<EntryCandidate, 4> candidates;
     for (auto pos = stores.begin(); pos != stores.end(); ++pos)
     {
         auto run = pos;
@@ -210,7 +211,7 @@ NodeRef<BindUndefinedStatement> NameResolver::MakeEntryBinding(FrameId frameId, 
 // A read in a block inside does not count: the block reads the context, passing over the
 // binding at render (RenderContext::PassOverEntryBindings), as does an include or import with
 // context (docs/tasks/0201)
-void NameResolver::MarkCandidateReads(FrameId frameId, boost::span<EntryCandidate> candidates, const NodeArena& nodes) const
+void NameResolver::MarkCandidateReads(FrameId frameId, Span<EntryCandidate> candidates, const NodeArena& nodes) const
 {
     std::uint32_t lastStore = 0;
     for (const auto& candidate : candidates)
@@ -309,7 +310,7 @@ void NameResolver::ResolveEntryBindings(NodeArena& nodes)
                 names.push_back(SlotName{ nodes.MakeText(entry->name), entry->hash });
             }
         }
-        nodes[m_frames[frameId].entry].SetNames(nodes.MakeSpan(boost::span<const SlotName>(names.data(), names.size())));
+        nodes[m_frames[frameId].entry].SetNames(nodes.MakeSpan(Span<const SlotName>(names.data(), names.size())));
         first = last;
     }
 }

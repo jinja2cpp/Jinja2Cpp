@@ -15,6 +15,7 @@
 #include "render_context.h"
 #include "render_failure.h"
 #include "renderer.h"
+#include "small_vector.h"
 #include "statements.h"
 #include "unicode_tables.h"
 #include "value_visitors.h"
@@ -25,7 +26,6 @@
 #include <jinja2cpp/template_env.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/container/small_vector.hpp>
 #include <nonstd/expected.hpp>
 
 #include <algorithm>
@@ -364,13 +364,13 @@ struct StatementInfo
 
 // The statements open at the current tag, the template's root first. Few are open at once,
 // so the stack stays inline; no reference to an entry is kept across a push
-using StatementInfoList = boost::container::small_vector<StatementInfo, 4>;
+using StatementInfoList = SmallVector<StatementInfo, 4>;
 
 // What the template's root learns from its tags: the blocks it defines and whether it
 // extends another. The parse gives them to its TemplateRenderer at the end
 struct TemplateRootInfo
 {
-    boost::container::small_vector<NodeRef<BlockStatement>, 4> blocks;
+    SmallVector<NodeRef<BlockStatement>, 4> blocks;
     bool hasExtends = false;
     // An `extends` at the top level, outside any `if`: Jinja2 compiles no output of the
     // template's body after it (has_known_extends)
@@ -2311,7 +2311,7 @@ private:
     NodeArena& m_nodes;
     const Delimiters& m_delims;
     // Inline room for the lines of small templates
-    boost::container::small_vector<LineInfo, 8, void, boost::container::small_vector_options_t<boost::container::growth_factor<boost::container::growth_factor_100>>> m_lines;
+    SmallVector<LineInfo, 8, SmallVectorDoubling> m_lines;
     StatementInfoList* m_openStatements = nullptr;
     // The children of the open statements' bodies
     StatementBodies m_bodies;

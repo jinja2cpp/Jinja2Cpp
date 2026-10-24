@@ -12,11 +12,10 @@
 #include "recursion_guard.h"
 #include "render_context.h"
 #include "renderer.h"
+#include "small_vector.h"
 #include "statements.h"
 
 #include <jinja2cpp/error_info.h>
-
-#include <boost/container/small_vector.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -513,8 +512,8 @@ private:
 
     LexScanner& m_lexer;
     NodeArena& m_nodes;
-    boost::container::small_vector<TargetNode, 4> m_targets;
-    boost::container::small_vector<HashedName, 4> m_names;
+    SmallVector<TargetNode, 4> m_targets;
+    SmallVector<HashedName, 4> m_names;
     unsigned m_depth = 0;
     bool m_givePlaces = false;
     bool m_namesLoop = false;
@@ -687,7 +686,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndIf(LexScanner&, Statemen
     auto info = PopStatement(statementsInfo);
 
     // From the last branch to the first, as the statement stack holds them
-    boost::container::small_vector<NodeRef<ElseBranchStatement>, 4> elseBranches;
+    SmallVector<NodeRef<ElseBranchStatement>, 4> elseBranches;
 
     auto errorTok = stmtTok;
     while (info.type != StatementInfo::IfStatement)
@@ -1953,7 +1952,7 @@ InternalValue EscapedLiteralValue(std::basic_string_view<CharT> text, const std:
 {
     // Jinja2 applies newline_sequence to the literal newlines of a string before decoding its
     // escapes. Converted on the stack: the value is the one allocation (docs/tasks/0151)
-    boost::container::small_vector<CharT, 256> chars;
+    SmallVector<CharT, 256> chars;
     for (auto ch : text)
     {
         if (ch == '\n')

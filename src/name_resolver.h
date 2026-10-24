@@ -3,9 +3,8 @@
 
 #include "node_arena.h"
 #include "slot_frame.h"
-
-#include <boost/container/small_vector.hpp>
-#include <boost/core/span.hpp>
+#include "small_vector.h"
+#include "span.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -94,8 +93,8 @@ public:
         }
     }
     // The names a `set` or `with` target stores; namespace attributes store none
-    void AddStores(FrameId frame, boost::span<const TargetNode> target, const NodeArena& nodes, StoreKind kind);
-    void AddStores(FrameId frame, boost::span<const TargetNode> target, const NodeArena& nodes) { AddStores(frame, target, nodes, m_inBranch ? StoreKind::Branch : StoreKind::Store); }
+    void AddStores(FrameId frame, Span<const TargetNode> target, const NodeArena& nodes, StoreKind kind);
+    void AddStores(FrameId frame, Span<const TargetNode> target, const NodeArena& nodes) { AddStores(frame, target, nodes, m_inBranch ? StoreKind::Branch : StoreKind::Store); }
 
     [[nodiscard]] FrameId Current() const { return m_current; }
     void SetCurrent(FrameId frame) { m_current = frame; }
@@ -144,7 +143,7 @@ public:
     // declares them. Called after a parse without errors; the views are text of the arena
     [[nodiscard]] std::vector<std::string_view> UndeclaredNames(const NodeArena& nodes) const;
     // The name expressions made where a slot may be bound, in parse order (for the tests)
-    [[nodiscard]] boost::span<const std::pair<NodeRef<ValueRefExpression>, FrameId>> Uses() const { return m_uses; }
+    [[nodiscard]] Span<const std::pair<NodeRef<ValueRefExpression>, FrameId>> Uses() const { return m_uses; }
 
 private:
     enum class Kind : std::uint8_t
@@ -175,7 +174,7 @@ private:
         bool isMacro = false;
         // Resolve: a For frame's names, `loop` first, or a macro's arguments, and their slot
         // range (a macro's from the first slot of its frame)
-        boost::span<const SlotName> binders;
+        Span<const SlotName> binders;
         std::uint32_t offset = 0;
         std::uint32_t size = 0;
         bool isSlotted = false;
@@ -216,7 +215,7 @@ private:
         bool isReadInside = false;
     };
     struct EntryName;
-    void MarkCandidateReads(FrameId frameId, boost::span<EntryCandidate> candidates, const NodeArena& nodes) const;
+    void MarkCandidateReads(FrameId frameId, Span<EntryCandidate> candidates, const NodeArena& nodes) const;
     // Whether `frame` binds `name` as it starts: a loop target, `loop`, a macro's argument
     [[nodiscard]] bool BindsName(FrameId frame, std::string_view name, const NodeArena& nodes) const;
     // What UndeclaredNames looks up for every name, made once so that the check is linear in
@@ -248,10 +247,9 @@ private:
     // The slot `ref` reads, Dynamic when it is looked up by name
     [[nodiscard]] std::pair<SlotIndex, UnitId> Find(const NodeArena& nodes, NodeRef<ValueRefExpression> ref, FrameId frame) const;
 
-    using Doubling = boost::container::small_vector_options_t<boost::container::growth_factor<boost::container::growth_factor_100>>;
     // Inline room for a template with a few loops, so that most parses allocate nothing here
-    boost::container::small_vector<Frame, 8> m_frames;
-    boost::container::small_vector<std::pair<NodeRef<ValueRefExpression>, FrameId>, 16> m_uses;
+    SmallVector<Frame, 8> m_frames;
+    SmallVector<std::pair<NodeRef<ValueRefExpression>, FrameId>, 16> m_uses;
     struct Store
     {
         FrameId frame = NoFrame;
@@ -271,9 +269,9 @@ private:
     // Every name expression made in a frame, in parse order
     // Inline room for a page of expressions, then doubling: most templates read fewer names, and
     // a long one reads thousands (docs/tasks/0205)
-    boost::container::small_vector<std::pair<NodeRef<ValueRefExpression>, FrameId>, 64, void, Doubling> m_reads;
+    SmallVector<std::pair<NodeRef<ValueRefExpression>, FrameId>, 64, SmallVectorDoubling> m_reads;
     // The names stored in frames, in parse order; most templates store a few
-    boost::container::small_vector<Store, 8, void, Doubling> m_stores;
+    SmallVector<Store, 8, SmallVectorDoubling> m_stores;
     std::vector<EntryName> m_entryNames;
     FrameId m_current = NoFrame;
     bool m_inBranch = false;

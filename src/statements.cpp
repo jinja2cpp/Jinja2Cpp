@@ -5,6 +5,7 @@
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
 #include "internal_value.h"
+#include "intrusive_ptr.h"
 #include "lookup_result.h"
 #include "loop_attr.h"
 #include "markup.h"
@@ -15,6 +16,8 @@
 #include "render_workspace.h"
 #include "renderer.h"
 #include "slot_frame.h"
+#include "small_vector.h"
+#include "span.h"
 #include "template_impl.h"
 #include "template_slots.h"
 #include "undefined.h"
@@ -24,9 +27,6 @@
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value.h>
-
-#include <boost/container/small_vector.hpp>
-#include <boost/core/span.hpp>
 
 #include <algorithm>
 #include <array>
@@ -75,7 +75,7 @@ void CheckIterable(const InternalValue& value)
 
 
 // A target as the tree holds it: its root, then its items
-using TargetNodes = boost::span<const TargetNode>;
+using TargetNodes = Span<const TargetNode>;
 
 // The name a target node binds, with its hash, as the tree `nodes` holds it
 HashedName NameOf(const TargetNode& target, const ArenaView& nodes)
@@ -115,7 +115,7 @@ struct ScopeSink
 struct SlotSink
 {
     // The loop's slots, from that of `loop`
-    boost::span<Slot> slots;
+    Span<Slot> slots;
     std::uint16_t shift = 0;
 
     void Set(const TargetNode& target, InternalValue value, RenderContext& values) const { values.BindSlot(slots[target.slot.value + shift], target.hash, std::move(value)); }
@@ -769,7 +769,7 @@ class LoopFramePool
 {
 public:
     // A frame for the loop `id`, the one it ran in last if there is one
-    static boost::intrusive_ptr<LoopFrame> Take(uint64_t id)
+    static IntrusivePtr<LoopFrame> Take(uint64_t id)
     {
         // An inner loop entered again finds its frame on top
         auto& frames = Frames();
@@ -783,7 +783,7 @@ public:
     }
 
 private:
-    JINJA2CPP_NOINLINE_INLINE static boost::intrusive_ptr<LoopFrame> TakeOther(uint64_t id)
+    JINJA2CPP_NOINLINE_INLINE static IntrusivePtr<LoopFrame> TakeOther(uint64_t id)
     {
         auto& frames = Frames();
         if (frames.empty())
@@ -802,7 +802,7 @@ private:
 
 public:
     // Takes the frame back when the loop that ran in it was its only owner
-    JINJA2CPP_NOINLINE_INLINE static void Give(boost::intrusive_ptr<LoopFrame>& frame)
+    JINJA2CPP_NOINLINE_INLINE static void Give(IntrusivePtr<LoopFrame>& frame)
     {
         auto& frames = Frames();
         if (!frame || frame->use_count() != 1 || frames.size() >= RenderWorkspace::MaxLoopFrames)
@@ -816,13 +816,13 @@ public:
 private:
     // At most RenderWorkspace::MaxLoopFrames, deeper than any loop nesting a template has by
     // hand; recursive loops past it allocate
-    static std::vector<boost::intrusive_ptr<LoopFrame>>& Frames() { return RenderWorkspace::ForThisThread().LoopFrames(); }
+    static std::vector<IntrusivePtr<LoopFrame>>& Frames() { return RenderWorkspace::ForThisThread().LoopFrames(); }
 };
 
 // Gives the frame of a loop back to the pool when the loop ends, by any path
 struct LoopFrameReturn
 {
-    explicit LoopFrameReturn(boost::intrusive_ptr<LoopFrame>& loopFrame)
+    explicit LoopFrameReturn(IntrusivePtr<LoopFrame>& loopFrame)
         : frame(loopFrame)
     {
     }
@@ -832,7 +832,7 @@ struct LoopFrameReturn
     LoopFrameReturn& operator=(LoopFrameReturn&&) = delete;
     ~LoopFrameReturn() { LoopFramePool::Give(frame); }
 
-    boost::intrusive_ptr<LoopFrame>& frame;
+    IntrusivePtr<LoopFrame>& frame;
 };
 
 } // namespace
@@ -878,7 +878,7 @@ class SlotsGuard
 {
 public:
     // `names` are those of `slots`, one by one
-    SlotsGuard(RenderContext& values, boost::span<Slot> slots, boost::span<const SlotName> names)
+    SlotsGuard(RenderContext& values, Span<Slot> slots, Span<const SlotName> names)
         : m_values(values)
         , m_slots(slots)
         , m_names(names)
@@ -907,8 +907,8 @@ public:
 
 private:
     RenderContext& m_values;
-    boost::span<Slot> m_slots;
-    boost::span<const SlotName> m_names;
+    Span<Slot> m_slots;
+    Span<const SlotName> m_names;
     size_t m_viewCount;
     bool m_isDone = false;
 };
@@ -1266,7 +1266,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
 ArenaSpan<SlotName> ForStatement::MakeBinderNames(NodeArena& nodes)
 {
     // `loop`, then each target name at the place the parser gave it, met first there
-    boost::container::small_vector<SlotName, 4> names{ SlotName{ nodes.MakeText("loop"), HashedName::Hash("loop") } };
+    SmallVector<SlotName, 4> names{ SlotName{ nodes.MakeText("loop"), HashedName::Hash("loop") } };
     for (const auto& target : nodes[m_target])
     {
         if (target.IsPlainName() && target.slot.value == names.size())
@@ -1332,7 +1332,7 @@ ListAdapter ForStatement::CreateFilteredAdapter(const ListAdapter& loopItems, Re
     });
 }
 
-bool ForStatement::FilterInFrame(IListAccessorEnumerator& items, boost::span<Slot> frameSlots, InternalValue& item, RenderContext& values) const
+bool ForStatement::FilterInFrame(IListAccessorEnumerator& items, Span<Slot> frameSlots, InternalValue& item, RenderContext& values) const
 {
     // The filter's own slots for the target names, seen by name above the loop's
     const auto targets = static_cast<std::uint16_t>(m_slotNames.size() - 1);
@@ -2289,7 +2289,7 @@ MacroStatement::MacroStatement(NodeArena& nodes, ArenaText name, const MacroPara
     , m_nameHash(HashedName::Hash(nodes.Text(name)))
     , m_attributes(std::make_shared<InternalValueMap>())
 {
-    boost::container::small_vector<MacroParam, 8> arenaParams;
+    SmallVector<MacroParam, 8> arenaParams;
     arenaParams.reserve(params.size());
     InternalValueList arguments;
     arguments.reserve(params.size());
@@ -2375,7 +2375,7 @@ void MacroStatement::CompleteAttributes()
 ArenaSpan<SlotName> MacroStatement::MakeBinderNames(NodeArena& nodes) const
 {
     const auto nameOf = [&nodes](std::string_view name) { return SlotName{ nodes.MakeText(name), HashedName::Hash(name) }; };
-    boost::container::small_vector<SlotName, 8> names;
+    SmallVector<SlotName, 8> names;
     for (const auto& p : nodes[m_params])
     {
         names.push_back({ p.name, p.hash });
@@ -2431,10 +2431,10 @@ struct MacroArgBinder
 
     // The tree of the macro, which binding the defaults may switch the context away from
     ArenaView nodes;
-    boost::span<const MacroParam> params;
+    Span<const MacroParam> params;
     const CallParams& callParams;
     bool catchCaller = false;
-    boost::container::small_vector<const InternalValue*, 8> keywordValues;
+    SmallVector<const InternalValue*, 8> keywordValues;
     // The keywords that bind no argument (kwargs), caller left out when the macro catches it
     std::size_t extraKeywords = 0;
 

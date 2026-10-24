@@ -5,6 +5,7 @@
 #include "../src/render_context.h"
 #include "../src/render_workspace.h"
 #include "../src/slot_frame.h"
+#include "../src/span.h"
 #include "../src/value_visitors.h"
 
 #include "gtest/gtest.h"
@@ -75,7 +76,7 @@ public:
         m_tree = std::apply([&nodes, this](auto... text) { return nodes.Seal(m_list, text...); }, texts);
     }
 
-    [[nodiscard]] FrameView For(boost::span<Slot> slots) const { return { slots, m_tree[m_list], m_tree.View() }; }
+    [[nodiscard]] FrameView For(Span<Slot> slots) const { return { slots, m_tree[m_list], m_tree.View() }; }
 
 private:
     SealedArena m_tree;

@@ -1,8 +1,8 @@
 #ifndef JINJA2CPP_SRC_NODE_ARENA_H
 #define JINJA2CPP_SRC_NODE_ARENA_H
 
-#include <boost/container/small_vector.hpp>
-#include <boost/core/span.hpp>
+#include "small_vector.h"
+#include "span.h"
 
 #include <algorithm>
 #include <array>
@@ -543,7 +543,7 @@ private:
     }
 
     template<typename T>
-    boost::span<const T> Items(ArenaSpan<T> list) const noexcept
+    Span<const T> Items(ArenaSpan<T> list) const noexcept
     {
         return { std::launder(reinterpret_cast<const T*>(m_base + list.m_offset)), list.m_size };
     }
@@ -769,7 +769,7 @@ public:
     }
 
     template<typename T>
-    boost::span<const T> operator[](ArenaSpan<T> list) const
+    Span<const T> operator[](ArenaSpan<T> list) const
     {
         if constexpr (NodeRefChecks >= 2)
         {
@@ -777,7 +777,7 @@ public:
         }
         // An empty list has offset 0, which is still inside the buffer: no branch
         assert(list.empty() ? list.m_offset == 0 : InRange(list.m_offset, list.m_size * sizeof(T)));
-        return boost::span<const T>(std::launder(reinterpret_cast<const T*>(m_base + list.m_offset)), list.m_size);
+        return Span<const T>(std::launder(reinterpret_cast<const T*>(m_base + list.m_offset)), list.m_size);
     }
 
     // The node, after checking that the handle points at the start of a node of its type:
@@ -955,7 +955,7 @@ public:
         return View()[ref];
     }
     template<typename T>
-    boost::span<const T> operator[](ArenaSpan<T> list) const
+    Span<const T> operator[](ArenaSpan<T> list) const
     {
         return View()[list];
     }
@@ -1084,7 +1084,7 @@ public:
     // A node followed by a copy of items in the same allocation, wherever the node goes: T
     // is constructed from the item count and reads the items right after itself
     template<typename T, typename Item>
-    NodeRef<T> MakeWithItems(boost::span<const Item> items)
+    NodeRef<T> MakeWithItems(Span<const Item> items)
     {
         return MakeWithItems<T, Item, Item>(items.size(), [items](Item* to, Item* /*extras*/) { std::uninitialized_copy(items.begin(), items.end(), to); }, false);
     }
@@ -1113,7 +1113,7 @@ public:
 
     // A copy of items the arena keeps
     template<typename T>
-    ArenaSpan<T> MakeSpan(boost::span<const T> items)
+    ArenaSpan<T> MakeSpan(Span<const T> items)
     {
         assert(!m_sealed);
         if (items.empty())
@@ -1131,7 +1131,7 @@ public:
         return ArenaSpan<T>(offset, static_cast<std::uint32_t>(items.size()));
     }
     // A copy of characters the arena keeps
-    ArenaText MakeText(std::string_view text) { return MakeSpan(boost::span<const char>(text.data(), text.size())); }
+    ArenaText MakeText(std::string_view text) { return MakeSpan(Span<const char>(text.data(), text.size())); }
     // The symbol of `name`, whose hash is `hash`: made on its first use, with the cache slot
     // newSlot() gives, and the same for every later use. Two names with one hash (which a
     // 64-bit hash makes rare) get two symbols: the second one is not kept
@@ -1194,7 +1194,7 @@ public:
     auto MakeSpan(const Container& items)
     {
         using T = typename Container::value_type;
-        return MakeSpan(boost::span<const T>(items.data(), items.size()));
+        return MakeSpan(Span<const T>(items.data(), items.size()));
     }
 
     template<typename T>
@@ -1218,13 +1218,13 @@ public:
         return *std::launder(reinterpret_cast<T*>(Locate(ref.m_offset)));
     }
     template<typename T>
-    boost::span<const T> operator[](ArenaSpan<T> list) const
+    Span<const T> operator[](ArenaSpan<T> list) const
     {
         if (list.empty())
         {
             return {};
         }
-        return boost::span<const T>(std::launder(reinterpret_cast<const T*>(Locate(list.m_offset))), list.m_size);
+        return Span<const T>(std::launder(reinterpret_cast<const T*>(Locate(list.m_offset))), list.m_size);
     }
 
     // The parse is over: moves every node and list into one buffer of the size they take,
@@ -1235,7 +1235,7 @@ public:
     SealedArena Seal(Roots... roots)
     {
         const std::array<detail::RootRef, sizeof...(Roots)> list{ RootOf(roots)... };
-        return SealWith(boost::span<const detail::RootRef>(list.data(), list.size()));
+        return SealWith(Span<const detail::RootRef>(list.data(), list.size()));
     }
     // The template the sealed tree comes from, for the locations of render errors: `origin`
     // must outlive the tree. Set before Seal
@@ -1261,7 +1261,7 @@ private:
         return { [](detail::RefChecker& refs, std::uint32_t offset, std::uint32_t size) { refs(ArenaSpan<T>(offset, size)); }, list.m_offset, list.m_size };
     }
 
-    SealedArena SealWith(boost::span<const detail::RootRef> roots);
+    SealedArena SealWith(Span<const detail::RootRef> roots);
     // Moves the nodes over their copies in `base`, checking their handles when refs is set.
     // Writes the header offsets of the nodes that own something to `cleanup`
     void MoveNodes(std::byte* base, detail::RefChecker* refs, std::byte* cleanup) const;
@@ -1382,7 +1382,7 @@ private:
 
     // Left uninitialized: Seal copies only the bytes the nodes and lists took
     alignas(Alignment) std::array<std::byte, InlineSize> m_inline; // NOLINT(cppcoreguidelines-pro-type-member-init)
-    boost::container::small_vector<Block, 4> m_blocks;
+    SmallVector<Block, 4> m_blocks;
     std::byte* m_free = m_inline.data();
     std::size_t m_left = InlineSize;
     std::size_t m_nextBlock = InlineSize * 2;

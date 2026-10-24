@@ -3,8 +3,7 @@
 
 #include "internal_value.h"
 #include "node_arena.h"
-
-#include <boost/core/span.hpp>
+#include "span.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -114,7 +113,7 @@ struct FrameHandle
 // The slots of one unit call: a view, valid only inside the call that took it
 struct SlotFrame
 {
-    boost::span<Slot> slots;
+    Span<Slot> slots;
     FrameHandle handle;
     UnitId unit;
 };
@@ -124,8 +123,8 @@ struct SlotFrame
 // of `nodes`, the tree of that statement, which need not be the tree of the running code
 struct FrameView
 {
-    boost::span<Slot> slots;
-    boost::span<const SlotName> names;
+    Span<Slot> slots;
+    Span<const SlotName> names;
     ArenaView nodes;
 
     bool operator==(const FrameView& other) const

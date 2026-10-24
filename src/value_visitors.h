@@ -8,6 +8,7 @@
 #include "make_unexpected.h"
 #include "recursion_guard.h"
 #include "engine_errors.h"
+#include "span.h"
 #include "undefined.h"
 #include "unicode_printable.h"
 
@@ -1713,7 +1714,7 @@ struct BinaryMathOperation : BaseVisitor<>
                                  "a repeated string");
         }
         // Copies the text once, then doubles what is written: log2(count) copies, not count
-        return InternalValue::MakeText<CharT>(text.size() * static_cast<size_t>(count), [text](boost::span<CharT> chars) {
+        return InternalValue::MakeText<CharT>(text.size() * static_cast<size_t>(count), [text](Span<CharT> chars) {
             std::copy(text.begin(), text.end(), chars.begin());
             for (size_t done = text.size(); done < chars.size();)
             {

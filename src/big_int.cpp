@@ -2,6 +2,7 @@
 
 #include "engine_errors.h"
 #include "internal_value.h"
+#include "intrusive_ptr.h"
 #include "recursion_guard.h"
 
 #include <jinja2cpp/big_int_backend.h>
@@ -32,10 +33,10 @@ inline namespace v2
 {
 namespace detail
 {
-boost::intrusive_ptr<BigIntObject> BigIntObject::Make(std::string_view decimal)
+IntrusivePtr<BigIntObject> BigIntObject::Make(std::string_view decimal)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the intrusive pointer from here on
-    boost::intrusive_ptr<BigIntObject> obj(new (CharCount{ decimal.size() }) BigIntObject(decimal.size()));
+    IntrusivePtr<BigIntObject> obj(new (CharCount{ decimal.size() }) BigIntObject(decimal.size()));
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast): the digits follow the object
     std::copy(decimal.begin(), decimal.end(), reinterpret_cast<char*>(obj.get()) + sizeof(BigIntObject));
     return obj;
