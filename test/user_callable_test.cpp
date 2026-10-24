@@ -603,8 +603,8 @@ TEST(EnvCallablesTest, KeptLoopAfterError)
         ASSERT_TRUE(tpl.Load(source).has_value()) << source;
         EXPECT_FALSE(tpl.RenderAsString({}).has_value()) << source;
         EXPECT_TRUE(kept->GetValueByName("last").IsBool()) << source;
-        EXPECT_NO_THROW(kept->GetValueByName("nextitem")) << source;
-        EXPECT_NO_THROW(kept->GetValueByName("length")) << source;
+        EXPECT_NO_THROW(static_cast<void>(kept->GetValueByName("nextitem"))) << source;
+        EXPECT_NO_THROW(static_cast<void>(kept->GetValueByName("length"))) << source;
     }
 }
 
