@@ -23,7 +23,7 @@ int Run(const char* templateDir)
     jinja2::TemplateEnv env;
     env.AddFilesystemHandler(std::string(), std::make_shared<jinja2::RealFileSystem>(templateDir));
     jinja2::Template tpl(&env);
-    // tojson: the JSON binding; format: fmt; the file loader: Boost.Filesystem
+    // tojson: the JSON binding; format: fmt; the file loader: std::filesystem
     auto loaded = tpl.Load("{% include 'hello.j2' %} {{ x | tojson }} {{ 'a%sb' | format(y) }}");
     if (!loaded)
     {

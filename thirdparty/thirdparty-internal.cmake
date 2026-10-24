@@ -39,11 +39,3 @@ if(NOT MSVC)
         endif()
     endif()
 endif()
-
-# install(TARGETS boost_filesystem boost_algorithm
-#        EXPORT InstallTargets
-#        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-#        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-#        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/static
-#        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/boost
-#        )

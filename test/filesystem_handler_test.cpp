@@ -699,9 +699,10 @@ TEST_F(RealFsNamesTest, LastModificationDate)
     ASSERT_TRUE(modified.has_value());
     EXPECT_EQ(confined.GetLastModificationDate("a.j2"), modified);
     EXPECT_EQ(modified, real.GetLastModificationDate("a.j2"));
-    EXPECT_LT(*modified, now + minutes(1));
-    EXPECT_GT(*modified, now - minutes(10));
-    EXPECT_EQ(std::chrono::system_clock::duration::zero(), modified->time_since_epoch() % std::chrono::seconds(1));
+    auto date = modified.value_or(system_clock::time_point());
+    EXPECT_LT(date, now + minutes(1));
+    EXPECT_GT(date, now - minutes(10));
+    EXPECT_EQ(system_clock::duration::zero(), date.time_since_epoch() % std::chrono::seconds(1));
 
     // Ten years back: before the epoch of no supported file clock, but far from the file's own time
     std::error_code ec;
@@ -710,8 +711,9 @@ TEST_F(RealFsNamesTest, LastModificationDate)
     modified = real.GetLastModificationDate("sub/b.j2");
     ASSERT_TRUE(modified.has_value());
     EXPECT_EQ(confined.GetLastModificationDate("sub/b.j2"), modified);
-    EXPECT_LT(*modified, now - hours(24 * 3652));
-    EXPECT_GT(*modified, now - hours(24 * 3654));
+    date = modified.value_or(system_clock::time_point());
+    EXPECT_LT(date, now - hours(24 * 3652));
+    EXPECT_GT(date, now - hours(24 * 3654));
 }
 
 TEST_F(RealFsNamesTest, SymlinksAreFollowed)
