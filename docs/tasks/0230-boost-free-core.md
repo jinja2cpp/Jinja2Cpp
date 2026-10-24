@@ -42,4 +42,24 @@ Boost only as the optional Boost.JSON backend.
 `boost::container::small_vector` (with `SmallVectorBase` and the doubling growth option)
 and `boost::intrusive_ptr` once, as `Span`, `SmallVector` and `IntrusivePtr` in namespace
 `jinja2`, and every call site uses the aliases. Steps D4 and D5 replace what these headers
-point at.
+point at. Step D2: `RealFileSystem` uses `std::filesystem`, so internal mode no longer
+builds `boost_filesystem` and `boost_atomic` (43 Boost libraries configured instead of 47,
+two static libraries installed instead of four), and the external and Conan modes no longer
+ask for the filesystem component. C++17 cannot convert a `file_time_type`, and its clock's
+epoch differs per standard library, so the modification date subtracts the clocks' current
+difference rounded to whole seconds (the epoch offsets are whole seconds) and keeps whole
+seconds, as Boost's `time_t` and `ConfinedFileSystem` do.
+
+Step D3: the string algorithms, `predef` endian, `iterator_facade` and `unique_any` are
+gone from `src/`. `ListRef::Iterator` defines its own forward-iterator members, the
+`{% meta %}` parse result is kept in a `std::shared_ptr<void>`, the RapidJSON binding reads
+`__BYTE_ORDER__` (MSVC targets are little-endian), and `wordcount` classifies through the
+global locale's `ctype` facet as `boost::algorithm::is_alnum` did. A whitespace-only
+`{% meta %}` block is now tested against ASCII whitespace (`\t\n\v\f\r` and space, what the
+classic locale gave for `char`). `replace` with a count no longer searches its own
+replacement again (`'aaa'|replace('a', 'ba', 2)` gave `bbaaa`, Python gives `babaa`) and
+stops at the last occurrence: a count of 10**12 used to loop until killed, and
+`'a'|replace('a', 'ba', 10**12)` grew without bound. Corpus cases
+`filters.replace_count_not_rescanned` and `filters.replace_huge_count`. The Boost component
+lists in CMake (`algorithm any`, internal `BOOST_INCLUDE_LIBRARIES`) still name the two
+libraries; D7 rewrites them with the deps modes, since D2 edits the same lines.

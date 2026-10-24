@@ -222,18 +222,18 @@ std::optional<TargetString> TakeString(InternalValue&& val)
 
 ListRef::Iterator::Iterator() = default;
 
-void ListRef::Iterator::increment()
+void ListRef::Iterator::Increment()
 {
     m_isFinished = !m_iterator || !(*m_iterator)->MoveNext();
     ++m_currentIndex;
     m_currentVal = m_isFinished || !m_iterator ? InternalValue() : (*m_iterator)->GetCurrent();
 }
 
-bool ListRef::Iterator::equal(const Iterator& other) const
+bool ListRef::Iterator::Equal(const Iterator& other) const
 {
     if (!this->m_iterator)
     {
-        return !other.m_iterator ? true : other.equal(*this);
+        return !other.m_iterator ? true : other.Equal(*this);
     }
 
     if (!other.m_iterator)

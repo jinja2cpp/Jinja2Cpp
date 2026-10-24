@@ -25,7 +25,6 @@
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 
-#include <boost/algorithm/string/classification.hpp>
 #include <nonstd/expected.hpp>
 
 #include <algorithm>
@@ -729,7 +728,8 @@ private:
             }
         }
 
-        if (m_currentBlockInfo.type == TextBlockType::RawBlock)
+        // Jinja2 accepts a raw tag that ends the template, its `-%}` whitespace included, as an empty block
+        if (m_currentBlockInfo.type == TextBlockType::RawBlock && m_currentBlockInfo.range.startOffset < m_template->size())
         {
             nonstd::expected<void, ParseError> result =
                 MakeParseError(ErrorCode::ExpectedRawEnd, MakeToken(Token::RawEnd, { m_template->size(), m_template->size() }));
@@ -1668,7 +1668,7 @@ private:
             return;
         }
         auto metadata = std::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size());
-        if (!boost::algorithm::all(metadata, boost::algorithm::is_space()))
+        if (!std::all_of(metadata.begin(), metadata.end(), IsSpace))
         {
             m_metadata = metadata;
         }

@@ -110,7 +110,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: mandatory; phases: build,consumer-link; exposure: link; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: See the boost-* sub-components: 9 libraries are used directly; internal mode pulls 47 and installs all of them (56 MB of headers, 4 static libraries); why: Historically the portability layer for pre-C++17 (any, optional, variant, filesystem, string algorithms); today mostly small utilities that C++17 lacks (span, small_vector, intrusive_ptr, move-only any) plus Boost.JSON as the default metadata parser; lighten: The largest weight by far and the main target. Every directly used piece has a small replacement (see sub-components); a Boost-free core is feasible without behaviour change (docs/tasks/0230); conan: boost/1.91.0; transitive-libraries: algorithm,align,any,array,assert,atomic,bind,compat,concept_check,config,container,container_hash,conversion,core,describe,detail,endian,exception,filesystem,function,function_types,fusion,headers,intrusive,io,iterator,json,move,mp11,mpl,optional,predef,preprocessor,range,regex,scope,smart_ptr,system,throw_exception,tuple,type_index,type_traits,typeof,unordered,utility,variant2,winapi"
+      "comment": "role: mandatory; phases: build,consumer-link; exposure: link; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: See the boost-* sub-components: 8 libraries are used directly; internal mode pulls 43 and installs all of them (53 MB of headers, 2 static libraries); why: Historically the portability layer for pre-C++17 (any, optional, variant, filesystem, string algorithms); today mostly small utilities that C++17 lacks (span, small_vector, intrusive_ptr, move-only any) plus Boost.JSON as the default metadata parser; lighten: The largest weight by far and the main target. Every directly used piece has a small replacement (see sub-components); a Boost-free core is feasible without behaviour change (docs/tasks/0230); conan: boost/1.91.0; transitive-libraries: algorithm,any,array,assert,bind,compat,concept_check,config,container,container_hash,conversion,core,describe,detail,endian,exception,function,function_types,fusion,headers,intrusive,io,iterator,json,move,mp11,mpl,optional,predef,preprocessor,range,regex,smart_ptr,system,throw_exception,tuple,type_index,type_traits,typeof,unordered,utility,variant2,winapi"
     },
     {
       "SPDXID": "SPDXRef-Package-boost-core",
@@ -216,27 +216,6 @@
       ],
       "primaryPackagePurpose": "LIBRARY",
       "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: iterator_facade for one internal iterator (internal_value.h:1250); why: Less boilerplate for a conforming iterator; lighten: Write the iterator by hand (about 40 lines)"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-boost-filesystem",
-      "name": "boost-filesystem",
-      "versionInfo": "1.92.0",
-      "supplier": "Organization: Boost.org",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "homepage": "https://www.boost.org",
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "BSL-1.0",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:github/boostorg/filesystem@boost-1.92.0"
-        }
-      ],
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: mandatory; phases: build,consumer-link,runtime; exposure: link; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: path joining and last_write_time in RealFileSystem (src/filesystem_handler.cpp:131-170); compiled library plus boost_atomic; why: Pre-C++17 history; nothing Boost-specific is used; lighten: Replace with std::filesystem (C++17): removes two compiled libraries; check the file_time_type to time_t conversion and old toolchains needing -lstdc++fs"
     },
     {
       "SPDXID": "SPDXRef-Package-boost-algorithm",
@@ -1055,11 +1034,6 @@
     {
       "spdxElementId": "SPDXRef-Package-boost",
       "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-Package-boost-filesystem"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-boost",
-      "relationshipType": "CONTAINS",
       "relatedSpdxElement": "SPDXRef-Package-boost-algorithm"
     },
     {
@@ -1233,5 +1207,5 @@
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-41a49be67aa2308c"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-dadb2bb609508334"
 }

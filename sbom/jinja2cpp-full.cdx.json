@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:703fd3c2-ba72-5376-92a0-1517ff14c0f1",
+  "serialNumber": "urn:uuid:985eae33-6c96-507c-8ec9-ad8aae49a441",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -241,7 +241,7 @@
         },
         {
           "name": "jinja2cpp:used-for",
-          "value": "See the boost-* sub-components: 9 libraries are used directly; internal mode pulls 47 and installs all of them (56 MB of headers, 4 static libraries)"
+          "value": "See the boost-* sub-components: 8 libraries are used directly; internal mode pulls 43 and installs all of them (53 MB of headers, 2 static libraries)"
         },
         {
           "name": "jinja2cpp:why",
@@ -257,7 +257,7 @@
         },
         {
           "name": "jinja2cpp:transitive-libraries",
-          "value": "algorithm,align,any,array,assert,atomic,bind,compat,concept_check,config,container,container_hash,conversion,core,describe,detail,endian,exception,filesystem,function,function_types,fusion,headers,intrusive,io,iterator,json,move,mp11,mpl,optional,predef,preprocessor,range,regex,scope,smart_ptr,system,throw_exception,tuple,type_index,type_traits,typeof,unordered,utility,variant2,winapi"
+          "value": "algorithm,any,array,assert,bind,compat,concept_check,config,container,container_hash,conversion,core,describe,detail,endian,exception,function,function_types,fusion,headers,intrusive,io,iterator,json,move,mp11,mpl,optional,predef,preprocessor,range,regex,smart_ptr,system,throw_exception,tuple,type_index,type_traits,typeof,unordered,utility,variant2,winapi"
         }
       ],
       "components": [
@@ -548,64 +548,6 @@
             {
               "name": "jinja2cpp:lighten",
               "value": "Write the iterator by hand (about 40 lines)"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "bom-ref": "boost-filesystem",
-          "name": "boost-filesystem",
-          "version": "1.92.0",
-          "supplier": {
-            "name": "Boost.org"
-          },
-          "scope": "required",
-          "licenses": [
-            {
-              "license": {
-                "id": "BSL-1.0"
-              }
-            }
-          ],
-          "purl": "pkg:github/boostorg/filesystem@boost-1.92.0",
-          "externalReferences": [
-            {
-              "type": "website",
-              "url": "https://www.boost.org"
-            }
-          ],
-          "properties": [
-            {
-              "name": "jinja2cpp:role",
-              "value": "mandatory"
-            },
-            {
-              "name": "jinja2cpp:phases",
-              "value": "build,consumer-link,runtime"
-            },
-            {
-              "name": "jinja2cpp:exposure",
-              "value": "link"
-            },
-            {
-              "name": "jinja2cpp:delivery",
-              "value": "fetched"
-            },
-            {
-              "name": "jinja2cpp:selected-by",
-              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
-            },
-            {
-              "name": "jinja2cpp:used-for",
-              "value": "path joining and last_write_time in RealFileSystem (src/filesystem_handler.cpp:131-170); compiled library plus boost_atomic"
-            },
-            {
-              "name": "jinja2cpp:why",
-              "value": "Pre-C++17 history; nothing Boost-specific is used"
-            },
-            {
-              "name": "jinja2cpp:lighten",
-              "value": "Replace with std::filesystem (C++17): removes two compiled libraries; check the file_time_type to time_t conversion and old toolchains needing -lstdc++fs"
             }
           ]
         },
@@ -2849,7 +2791,6 @@
         "boost-smart_ptr",
         "boost-any",
         "boost-iterator",
-        "boost-filesystem",
         "boost-algorithm",
         "boost-predef",
         "boost-json",
