@@ -92,7 +92,7 @@ jobs:
             ':!include/jinja2cpp/binding/rapid_json*' ':!include/jinja2cpp/binding/nlohmann_json*' \
             ':!test/binding/rapid_json*' ':!test/binding/nlohmann_json*' \
             ':!include/jinja2cpp/polymorphic_value/*' ':!src/robin_hood.h' ':!src/lexertk.h' \
-            ':!src/unicode_tables.h' \
+            ':!src/unicode_tables.h' ':!include/jinja2cpp/big_int/boost_cpp_int.h' \
           | python "$TIDY_BIN/clang-tidy-diff.py" -p1 -path build -j "$(nproc)" -quiet \
               -clang-tidy-binary "$CLANG_TIDY" \
               -extra-arg=-Wno-unknown-warning-option \
@@ -120,10 +120,13 @@ jobs:
         # Headers are not in the compile database. The pull-request job analyses a changed
         # header on its own, so check each one that way too (docs/tasks/0085). Skipped:
         # vendored headers and the RapidJSON and nlohmann bindings, which this configuration
-        # does not build.
+        # does not build, and the Boost big-integer adapter: no file in the database that a
+        # header borrows flags from has Multiprecision's include path, so it is analysed
+        # through test/big_int_test.cpp, which includes it (docs/tasks/0272).
         git ls-files 'src/*.h' 'include/jinja2cpp/*.h' \
             ':!src/robin_hood.h' ':!src/lexertk.h' ':!src/unicode_*.h' \
             ':!include/jinja2cpp/polymorphic_value/*' ':!*rapid_json*' ':!*nlohmann_json*' \
+            ':!include/jinja2cpp/big_int/boost_cpp_int.h' \
           | xargs -P "$(nproc)" -n 1 "$CLANG_TIDY" -p build --quiet --extra-arg=-Wno-unknown-warning-option \
           >> tidy.log 2>&1 || status=1
         {

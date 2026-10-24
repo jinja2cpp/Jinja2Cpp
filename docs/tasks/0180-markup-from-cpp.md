@@ -1,5 +1,6 @@
 ---
-status: in-progress
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/590
 priority: low
 area: api
 depends: [0072]
@@ -58,3 +59,5 @@ change the text and keep the safe mark, an autoescape bypass. `Markup` and `WMar
 - Reading a Markup through the wrong accessor (`GetData()` with `std::get<std::string>`)
   fails to find it rather than dropping the flag silently; a visitor with a generic overload
   receives the Markup as its own type.
+
+**Closed (2026-10-24).** Markup on `Value` landed in #590 (train 25, #598); its unit rows are in `test/user_callable_test.cpp`. The escape helper is 0277.

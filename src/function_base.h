@@ -143,6 +143,11 @@ inline bool FunctionBase::ParseParams(const ArgumentsTable& argsInfo, const Call
             break;
         }
     }
+    // Python reports it before a missing argument
+    if (parsed.multipleValues)
+    {
+        SetArgumentsError("got multiple values for argument '" + parsed.multipleValues->name + "'");
+    }
 
     auto isDeclared = [&argsInfo](const char* name) {
         return std::any_of(argsInfo.begin(), argsInfo.end(), [name](auto& arg) { return arg.name == name; });

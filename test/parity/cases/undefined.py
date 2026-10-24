@@ -115,4 +115,7 @@ CASES = [
     ("debug_concat", "{{ 'a' ~ nope }}", DEBUG),
     ("debug_attr", "{{ nope.a }}", DEBUG),
     ("debug_if", "{% if nope %}t{% else %}f{% endif %}{{ nope|default('d') }}", DEBUG),
+    # Settings::finalize gets the undefined value itself (docs/tasks/0293)
+    ("finalize_gets_undefined", "{{ nope }}|{{ d.zz }}", {"env": {"finalize": "brackets"}, "ctx": {"d": {}}}),
+    ("strict_finalize_gets_undefined", "{{ nope }}", {"env": {"finalize": "brackets", "undefined": "strict"}}),
 ]

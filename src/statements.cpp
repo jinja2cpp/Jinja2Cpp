@@ -247,6 +247,8 @@ struct LoopState : ValueObject
     // Set while the loop moves to the next item, which runs the loop filter
     bool isAdvancing = false;
     int level = 0;
+    // Whether the statement's body names `loop` (ForStatement::BodyReadsLoop)
+    bool bodyReadsLoop = false;
     // The previous, current and next items, at index0 % 3 for the current one, so that
     // moving to the next item fetches one value and moves none
     std::array<InternalValue, 3> items;
@@ -540,6 +542,7 @@ public:
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return true; }
+    [[nodiscard]] const LoopState* State() const { return m_state; }
     [[nodiscard]] const void* GetIdentity() const override { return m_state; }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -1017,6 +1020,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     auto state = LoopFramePool::Take(m_loopId);
     const LoopFrameReturn frameReturn{ state };
     state->level = level;
+    state->bodyReadsLoop = m_bodyReadsLoop;
     if (m_isRecursive)
     {
         state->recursiveStatement = this;
@@ -1109,6 +1113,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     // Declared first, so that the loop's slots let go of `loop` before the frame is given back
     auto state = LoopFramePool::Take(m_loopId);
     const LoopFrameReturn frameReturn{ state };
+    state->bodyReadsLoop = m_bodyReadsLoop;
     // `loop`, then the targets; the frame's slots never move during the call
     const auto names = values.Nodes()[m_slotNames];
     const auto frameSlots = values.Frame().slots;
@@ -1822,7 +1827,7 @@ void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values, Bloc
     // The parent shares the child's top-level scope, but a `self` the child set there is not
     // the parent's: in Jinja2 `self` is a local of each template's root function
     values.GetCurrentScope().Erase("self");
-    PushBlocks(*values.GetRendererCallback(), values.Nodes(), stack);
+    // Its blocks are on the stack already: `extends` pushed them (ExtendsStatement::Render)
     RenderBody(os, values, &stack, childName, true);
 }
 
@@ -1846,6 +1851,7 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     AutoescapeGuard autoescapeGuard(values, asParent ? values.IsAutoescape() : m_autoescape, m_autoescape);
     TemplateFrame frame;
     frame.blocks = stack ? stack : &noBlocks;
+    frame.extendable = stack;
     frame.baseDepth = values.GetScopesCount();
     frame.name = name;
     TemplateFrameGuard frameGuard(values, &frame);
@@ -1926,6 +1932,95 @@ void ExtendsStatement::Render(OutStream& /*os*/, RenderContext& values)
     frame->parent = VisitTemplateImpl<TemplateNode<TemplateRenderer>>(tpl, true, [&templates](const auto& tplPtr) {
         return TemplateNode<TemplateRenderer>{ templates.Add(tplPtr->Nodes()), tplPtr->GetRenderer() };
     });
+    // Jinja2 adds the parent's blocks to the context when `extends` runs, so that the rest of the
+    // child's top level (a `self.name()` call) already finds them below the child's own
+    if (frame->extendable)
+    {
+        const auto parent = templates.Resolve(frame->parent);
+        parent.node.PushBlocks(*values.GetRendererCallback(), parent.nodes, *frame->extendable);
+    }
+}
+
+const LoopAccessor* AsLoopAccessor(const InternalValue& value)
+{
+    const auto map = AsMap(value);
+    return map ? dynamic_cast<const LoopAccessor*>(map->GetAccessor()) : nullptr;
+}
+
+bool IsLoopObject(const InternalValue& value)
+{
+    return AsLoopAccessor(value) != nullptr;
+}
+
+// Takes the `loop` of a running for loop out of sight of the template included from it, and puts
+// it back when the include is done
+class LoopHiding
+{
+public:
+    LoopHiding() = default;
+    LoopHiding(const LoopHiding&) = delete;
+    LoopHiding& operator=(const LoopHiding&) = delete;
+    ~LoopHiding()
+    {
+        if (m_binding && m_saved)
+        {
+            *m_binding = std::move(*m_saved);
+        }
+    }
+    // The binding of the loop itself becomes `undefined` in place. The scopes that hold it do not
+    // change while the include renders in a scope of its own
+    void Hide(InternalValue& binding, InternalValue undefined)
+    {
+        m_saved.emplace(std::move(binding));
+        binding = std::move(undefined);
+        m_binding = &binding;
+    }
+
+private:
+    // Empty unless the loop is hidden: most includes hide nothing, and then cost no more than this
+    std::optional<InternalValue> m_saved;
+    InternalValue* m_binding = nullptr;
+};
+
+// `loop` as the included template of `values` sees it. With a `loop` of the same name outside the
+// loop (a render parameter, a global, a top-level set) that one is shadowed in the include's own
+// scope; otherwise the loop's binding is hidden for the length of the include
+void HideIncludingLoop(RenderContext& values, RenderContext& innerContext, LoopHiding& hidden)
+{
+    static const HashedName loopName{ "loop", HashedName::Hash("loop") };
+    const auto found = values.FindValue(loopName);
+    if (!found)
+    {
+        return;
+    }
+    // Jinja2 passes the loop to the include only when the body names `loop`
+    const auto* loopAccessor = AsLoopAccessor(*found);
+    if (!loopAccessor || loopAccessor->State()->bodyReadsLoop)
+    {
+        return;
+    }
+    // The `loop` that is visible to Jinja2 there: an enclosing loop whose body names it, or a
+    // value of that name set outside the loops
+    if (auto outer = values.FindValueWhere("loop"s, [](const InternalValue& value) {
+            const auto* accessor = AsLoopAccessor(value);
+            return !accessor || accessor->State()->bodyReadsLoop;
+        }))
+    {
+        innerContext.GetCurrentScope()["loop"s] = *outer;
+        return;
+    }
+    if (const auto binding = values.FindForWrite("loop"))
+    {
+        // A plain undefined costs no allocation; a policy that tells the name apart (Strict, Debug,
+        // Chainable) needs the name, as a missing `loop` would carry it
+        auto* callback = values.GetRendererCallback();
+        InternalValue undefined;
+        if (callback && callback->GetSettings().undefinedPolicy != UndefinedPolicy::Default)
+        {
+            undefined = MakeUndefined(values, "loop");
+        }
+        hidden.Hide(*binding, std::move(undefined));
+    }
 }
 
 // Renders `tpl` for `include`: the names it sets stay its own
@@ -1939,6 +2034,17 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
         innerContext.NewEvalContext();
         innerContext.PassOverEntryBindings();
         innerContext.EnterScope();
+        // The names of the including loop are visible, `loop` is not (Jinja2's include context
+        // takes the loop's targets, not its LoopContext); a `loop` set outside it is
+        if (tpl.MayReadLoop())
+        {
+            // Declared after the context: the loop is put back once the included template has rendered
+            LoopHiding hidden;
+            HideIncludingLoop(values, innerContext, hidden);
+            innerContext.SetNodes(tpl.Nodes());
+            innerContext.Nodes()[tpl.GetRenderer()].RenderNamed(os, innerContext, tpl.SelfName());
+            return;
+        }
     }
 
     innerContext.SetNodes(tpl.Nodes());
@@ -1973,7 +2079,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     };
 
     // A constant name found in this render is not looked up again
-    const auto* callback = values.GetRendererCallback();
+    auto* callback = values.GetRendererCallback();
     if (m_isConstant)
     {
         if (const auto* tpl = callback->FindLoadedBy(this); tpl && doRender(*tpl))

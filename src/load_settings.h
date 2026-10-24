@@ -103,7 +103,11 @@ struct LoadSettings
         : settings(setts)
         , narrow(setts)
         , wide(setts)
+#ifdef JINJA2CPP_WITH_BIGINT_BOOST
+        , hasRenderLimits(jinja2::HasRenderLimits(setts.limits))
+#else
         , hasRenderLimits(jinja2::HasRenderLimits(setts.limits) || backend != nullptr)
+#endif
         , bigIntBackend(backend)
     {
     }
@@ -125,7 +129,8 @@ struct LoadSettings
     Delimiters<char> narrow;
     Delimiters<wchar_t> wide;
     // Whether a render has a limit of its own to install (RenderLimitsScope): the Load-time limits aside, one of
-    // settings.limits differs from the defaults, or the template has a big-integer backend
+    // settings.limits differs from the defaults, or (outside a -DJINJA2CPP_WITH_BIGINT=boost build, where every
+    // template has one and RenderLimitsScope swaps just the pointer, docs/tasks/0272) the template has a backend
     bool hasRenderLimits;
     // The big-integer arithmetic the template's renders use (TemplateEnv::SetBigIntBackend); null for none
     const BigIntBackend* bigIntBackend;

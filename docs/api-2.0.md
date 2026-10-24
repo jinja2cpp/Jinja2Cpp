@@ -266,8 +266,12 @@ with limits takes.
 integers outside `int64_t` (`big_int_backend.h`: a versioned table of 13 noexcept functions on
 objects of at most 64 bytes). It returns false, changing nothing, for a table the library cannot
 use. A template keeps the backend its environment had when it was made, as it keeps the settings.
-Without a backend (`nullptr`, the default until 0272) such arithmetic fails the render with
+Without a backend (`nullptr`) such arithmetic fails the render with
 `ErrorCode::IntegerOutOfRange`. `GetBigIntBackend()` and `GetBuiltinBigIntBackend()` read it back.
+Every environment starts with the built-in one: none by default, `cpp_int` with
+`-DJINJA2CPP_WITH_BIGINT=boost` (0272). The header-only adapter
+`jinja2cpp/big_int/boost_cpp_int.h` (`BoostCppIntBackend()`) works with any build and is the
+sample for writing a backend over another library.
 Only int64 overflow calls the backend, so int64 arithmetic costs the same with or without one.
 
 ### 3.4 Errors (`error_info.h`, `error_handler.h`)

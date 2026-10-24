@@ -1,11 +1,13 @@
 #include "test_tools.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 
 #include <gtest/gtest.h>
 
+#include <memory>
 #include <string>
 #include <type_traits>
 
@@ -92,4 +94,27 @@ TEST(UndefinedPolicyTest, SettingsCompare)
     Settings strict;
     strict.undefinedPolicy = UndefinedPolicy::Strict;
     EXPECT_FALSE(Settings() == strict);
+}
+
+// The `loop` an include does not see is undefined as a missing name is under the policy
+TEST(UndefinedPolicyTest, IncludeHidesLoopAsUndefined)
+{
+    auto render = [](UndefinedPolicy policy) {
+        auto fs = std::make_shared<MemoryFileSystem>();
+        fs->AddFile("t", "[{{ loop }}]");
+        TemplateEnv env;
+        env.AddFilesystemHandler(std::string(), fs);
+        env.GetSettings().undefinedPolicy = policy;
+        Template tpl(&env);
+        auto loaded = tpl.Load("{% for x in [1] %}{% include 't' %}{% endfor %}");
+        if (!loaded)
+        {
+            return std::string("load error");
+        }
+        auto result = tpl.RenderAsString(ValuesMap{});
+        return result ? result.value() : "error: " + result.error().GetExtraParams()[0].As<std::string>();
+    };
+    EXPECT_EQ("[]", render(UndefinedPolicy::Default));
+    EXPECT_EQ("[{{ loop }}]", render(UndefinedPolicy::Debug));
+    EXPECT_EQ("error: 'loop' is undefined", render(UndefinedPolicy::Strict));
 }

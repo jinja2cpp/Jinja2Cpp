@@ -51,25 +51,29 @@ jobs:
   # by standard, so the ABI is checked once per standard. For the pairwise design those rows
   # count as Release (optimised); the remaining Release rows still meet every standard,
   # compiler, linkage, binding and noderef value on their own.
+  # The built-in big-integer backend (JINJA2CPP_WITH_BIGINT, docs/tasks/0272) is one more
+  # pairwise axis: five rows build `bigint: boost`, so that boost meets every standard,
+  # compiler, build type, linkage, binding and noderef value, the rest keep `none` and still
+  # do too, and one of them checks the installed package.
   linux-build:
-    name: C++${{ matrix.std }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }} json=${{ matrix.bindings }}${{ matrix.noderef == 'OFF' && ' noderef=OFF' || '' }}
+    name: C++${{ matrix.std }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }} json=${{ matrix.bindings }}${{ matrix.noderef == 'OFF' && ' noderef=OFF' || '' }}${{ matrix.bigint && format(' bigint={0}', matrix.bigint) || '' }}
     runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { std: 17, compiler: gcc-12,   config: Release, shared: 'OFF', bindings: boost,    noderef: 'OFF' }
+          - { std: 17, compiler: gcc-12,   config: Release, shared: 'OFF', bindings: boost,    noderef: 'OFF', bigint: boost }
           - { std: 17, compiler: gcc-14,   config: Debug,   shared: 'OFF', bindings: rapid }
           - { std: 17, compiler: clang-18, config: RelWithDebInfo, shared: 'ON', bindings: nlohmann, abi: true }
-          - { std: 17, compiler: clang-20, config: Release, shared: 'OFF', bindings: boost,                    package: 23 }
+          - { std: 17, compiler: clang-20, config: Release, shared: 'OFF', bindings: boost,                    package: 23, bigint: boost }
           - { std: 20, compiler: gcc-12,   config: RelWithDebInfo, shared: 'ON', bindings: rapid,  abi: true }
-          - { std: 20, compiler: gcc-14,   config: Release, shared: 'ON',  bindings: nlohmann }
+          - { std: 20, compiler: gcc-14,   config: Release, shared: 'ON',  bindings: nlohmann, bigint: boost }
           - { std: 20, compiler: clang-18, config: Debug,   shared: 'OFF', bindings: boost }
-          - { std: 20, compiler: clang-20, config: Debug,   shared: 'OFF', bindings: nlohmann, noderef: 'OFF' }
+          - { std: 20, compiler: clang-20, config: Debug,   shared: 'OFF', bindings: nlohmann, noderef: 'OFF', bigint: boost }
           - { std: 23, compiler: gcc-12,   config: Debug,   shared: 'OFF', bindings: nlohmann }
           - { std: 23, compiler: gcc-14,   config: RelWithDebInfo, shared: 'ON', bindings: boost,  noderef: 'OFF', package: 17, abi: true }
-          - { std: 23, compiler: clang-18, config: Release, shared: 'ON',  bindings: rapid,    noderef: 'OFF' }
+          - { std: 23, compiler: clang-18, config: Release, shared: 'ON',  bindings: rapid,    noderef: 'OFF', bigint: boost }
           - { std: 23, compiler: clang-20, config: Debug,   shared: 'ON',  bindings: rapid }
           - { std: 26, compiler: gcc-14,   config: Release, shared: 'OFF', bindings: boost }
           - { std: 26, compiler: clang-20, config: Debug,   shared: 'ON',  bindings: nlohmann }
@@ -84,7 +88,7 @@ jobs:
 
     - uses: ./.github/actions/setup-ccache
       with:
-        key: linux-${{ matrix.compiler }}-${{ matrix.config }}-${{ matrix.std }}-${{ matrix.shared }}-${{ matrix.bindings }}-${{ matrix.noderef || 'default' }}
+        key: linux-${{ matrix.compiler }}-${{ matrix.config }}-${{ matrix.std }}-${{ matrix.shared }}-${{ matrix.bindings }}-${{ matrix.noderef || 'default' }}-${{ matrix.bigint || 'none' }}
 
     - name: Configure
       run: |
@@ -96,6 +100,7 @@ jobs:
           -DJINJA2CPP_WITH_JSON_BINDINGS=${{ matrix.bindings }} \
           -DJINJA2CPP_STRICT_WARNINGS=ON \
           -DJINJA2CPP_NODEREF_CHECKS=${{ matrix.noderef == 'OFF' && 'OFF' || '' }} \
+          -DJINJA2CPP_WITH_BIGINT=${{ matrix.bigint || 'none' }} \
           "-DCMAKE_CXX_FLAGS=${{ startsWith(matrix.compiler, 'gcc') && '-Wno-error=maybe-uninitialized' || '' }}"
 
     - name: Build
@@ -219,7 +224,7 @@ jobs:
           -P test/package/check_package.cmake
 
   sanitizers:
-    name: ${{ matrix.sanitizer }} (${{ matrix.compiler }})
+    name: ${{ matrix.sanitizer }} (${{ matrix.compiler }})${{ matrix.bigint && format(' bigint={0}', matrix.bigint) || '' }}
     runs-on: ubuntu-24.04
 
     strategy:
@@ -228,7 +233,7 @@ jobs:
         # One ASan job takes the nlohmann bindings so reflected JSON runs under the sanitizer too (docs/tasks/0002)
         include:
           - { compiler: clang-18, sanitizer: address+undefined, bindings: nlohmann }
-          - { compiler: gcc-14,   sanitizer: address+undefined, bindings: boost }
+          - { compiler: gcc-14,   sanitizer: address+undefined, bindings: boost, bigint: boost }
           - { compiler: clang-18, sanitizer: thread,            bindings: boost }
 
     env:
@@ -248,7 +253,7 @@ jobs:
 
     - uses: ./.github/actions/setup-ccache
       with:
-        key: sanitizer-${{ matrix.compiler }}-${{ matrix.sanitizer }}-${{ matrix.bindings }}
+        key: sanitizer-${{ matrix.compiler }}-${{ matrix.sanitizer }}-${{ matrix.bindings }}-${{ matrix.bigint || 'none' }}
 
     # Sanitizer instrumentation makes GCC emit false-positive -Wstringop-overflow
     # in libstdc++ atomics; warnings are enforced by the build matrix instead.
@@ -260,6 +265,7 @@ jobs:
           -DJINJA2CPP_CXX_STANDARD=17 \
           -DJINJA2CPP_WITH_SANITIZERS=${{ matrix.sanitizer }} \
           -DJINJA2CPP_WITH_JSON_BINDINGS=${{ matrix.bindings }} \
+          -DJINJA2CPP_WITH_BIGINT=${{ matrix.bigint || 'none' }} \
           -DJINJA2CPP_CHECK_SLOTS=ON \
           -DJINJA2CPP_STRICT_WARNINGS=OFF
 

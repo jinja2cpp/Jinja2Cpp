@@ -2403,6 +2403,11 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
     UserCallableParams result;
 
     ParsedArguments args = helpers::ParseCallParams(argsInfo, params, result.paramsParsed);
+    if (args.multipleValues)
+    {
+        // Python's TypeError; a missing argument still reaches the callable as paramsParsed == false
+        throw TemplateRuntimeError("got multiple values for argument '" + args.multipleValues->name + "'");
+    }
     if (!result.paramsParsed)
     {
         return result;

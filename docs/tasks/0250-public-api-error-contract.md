@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/584
 priority: high
 area: api
 depends: [0172]
@@ -40,3 +41,5 @@ settle it before the 0076 header freeze. Needs an architect plan first.
 
 **Done when.** The plan is decided, the contract is written in `docs/api-2.0.md`, and
 implementation tasks are filed for any API changes it needs.
+
+**Closed (2026-10-24).** The contract is in `docs/api-2.0.md` §2.1 (plan in docs/design/0250-error-contract-plan.md, #584); its phases 0253, 0254 and 0255 are done.

@@ -15,6 +15,7 @@
 #include "testers.h"
 #include "undefined.h"
 #include "unicode_tables.h"
+#include "value_methods.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
@@ -410,7 +411,17 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     // Python's attr reads attributes only: the items of a dict are not attributes, the fields
     // of a reflected object and of an object such as namespace() are
     auto map = AsMap(baseVal);
-    if (map && !map->HasAttributes() && !map->GetObjectClass())
+    const bool isPlainDict = map && !map->HasAttributes() && map->GetObjectClass() == nullptr;
+    // getattr finds the methods of the value (s|attr('lower')), those of a dict before its items
+    const auto attrName = AsString(attrNameVal);
+    if (const auto* method = methods::FindMethod(baseVal, attrName))
+    {
+        if (isPlainDict || !map || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(attrName))
+        {
+            return methods::MakeBoundMethod(baseVal, *method);
+        }
+    }
+    if (isPlainDict)
     {
         return GetArgumentValue("default", context);
     }

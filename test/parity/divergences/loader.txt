@@ -6,4 +6,3 @@ loader.self_of_ended_include_reads_names output   0165 deliberate: a `self` kept
 loader.self_block_with_self_reads_top_level output 0211 a block that stores `self` in a `with` still declares its own `self`; Jinja2 reads the top-level one
 loader.self_block_for_self_reads_top_level output  0211 a block that loops over `self` still declares its own `self`; Jinja2 reads the top-level one
 loader.self_of_ended_scoped_block_loses_loop output 0165 deliberate: a `self` kept past its scoped block loses the loop variable, as a macro kept past its loop does
-loader.self_block_after_extends_at_top_level rejects 0274 `self.b()` at a child's top level after `extends` has no parent block for super(): the parent's blocks are pushed only when it renders

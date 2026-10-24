@@ -7,6 +7,8 @@ include(CMakeFindDependencyMacro)
 set(jinja2cpp_SHARED @JINJA2CPP_BUILD_SHARED_BOOL@)
 set(jinja2cpp_DEPS_MODE "@JINJA2CPP_DEPS_MODE@")
 set(jinja2cpp_JSON_BINDINGS "@JINJA2CPP_WITH_JSON_BINDINGS@")
+# The built-in big-integer backend: none or boost (GetBuiltinBigIntBackend(), docs/tasks/0272)
+set(jinja2cpp_BIGINT "@JINJA2CPP_WITH_BIGINT@")
 
 # Public: <nonstd/expected.hpp> is included by the public headers
 find_dependency(expected-lite CONFIG HINTS "${PACKAGE_PREFIX_DIR}")
