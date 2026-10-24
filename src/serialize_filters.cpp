@@ -112,8 +112,91 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     static std::string Format(const InternalValue& val, const RenderContext* context)
     {
         std::string out;
-        PrettyPrinter(context).FormatTo(out, val, 0, 0, 0);
+        // pprint reads each container more than once: a list that can be read only once is
+        // read into a copy first, so that the value it prints is the one it measured
+        if (HasSinglePassList(val))
+        {
+            PrettyPrinter(context).FormatTo(out, ReadOnce(val), 0, 0, 0);
+        }
+        else
+        {
+            PrettyPrinter(context).FormatTo(out, val, 0, 0, 0);
+        }
         return out;
+    }
+
+    // Whether val holds a list that has no size (a host generator), which reading consumes
+    static bool HasSinglePassList(const InternalValue& val)
+    {
+        CheckStack();
+        if (auto list = AsList(val))
+        {
+            if (list->GetRangeInfo())
+            {
+                return false;
+            }
+            return !list->GetSize() || std::any_of(list->begin(), list->end(), [](const InternalValue& item) { return HasSinglePassList(item); });
+        }
+        if (auto map = AsMap(val); map && !map->GetObjectClass())
+        {
+            const auto entries = map->GetEntries();
+            return std::any_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return HasSinglePassList(entry.key) || HasSinglePassList(entry.value); });
+        }
+        if (const auto* pair = GetIf<KeyValuePair>(&val))
+        {
+            return HasSinglePassList(pair->key) || HasSinglePassList(pair->value);
+        }
+        return false;
+    }
+
+    // A copy of val whose lists and dicts are read once into containers of their own
+    static InternalValue ReadOnce(const InternalValue& val)
+    {
+        CheckStack();
+        if (auto list = AsList(val); list && !list->GetRangeInfo())
+        {
+            InternalValueList items;
+            for (const auto& item : *list)
+            {
+                CheckSequenceSize(items.size() + 1, "a list");
+                items.push_back(ReadOnce(item));
+            }
+            auto copy = ListAdapter::CreateAdapter(std::move(items));
+            if (list->IsTuple())
+            {
+                copy.MarkAsTuple();
+            }
+            return InternalValue(std::move(copy));
+        }
+        if (auto map = AsMap(val); map && !map->GetObjectClass())
+        {
+            TemplateDict copy;
+            for (const auto& entry : map->GetEntries())
+            {
+                copy.Set(ReadOnce(entry.key), ReadOnce(entry.value));
+            }
+            return CreateMapAdapter(std::move(copy));
+        }
+        if (const auto* pair = GetIf<KeyValuePair>(&val))
+        {
+            return InternalValue(KeyValuePair{ ReadOnce(pair->key), ReadOnce(pair->value) });
+        }
+        return val;
+    }
+
+    // Appends text, within the cap on a string's length
+    static void Write(std::string& out, std::string_view text)
+    {
+        CheckSequenceSize(static_cast<uint64_t>(out.size()) + text.size(), "a pprint result");
+        out += text;
+    }
+
+    // Starts a new line at column indent, after `delimiter`
+    static void NewLine(std::string& out, std::string_view delimiter, int64_t indent)
+    {
+        CheckSequenceSize(static_cast<uint64_t>(out.size()) + delimiter.size() + static_cast<uint64_t>(indent), "a pprint result");
+        out += delimiter;
+        out.append(static_cast<size_t>(indent), ' ');
     }
 
     // _format: indent is the column the value starts at, allowance the columns the text
@@ -124,14 +207,14 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         // Markup has a repr of its own, which pprint does not break
         if (val.IsMarkup() || ReprWidthAtMost(val, Width - indent - allowance) <= Width - indent - allowance)
         {
-            out += Print(val, m_context);
+            Write(out, Print(val, m_context));
             return;
         }
         if (auto list = AsList(val))
         {
             if (list->GetRangeInfo())
             {
-                out += Print(val, m_context);
+                Write(out, Print(val, m_context));
                 return;
             }
             const bool isTuple = list->IsTuple();
@@ -144,7 +227,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         {
             if (map->GetObjectClass())
             {
-                out += Print(val, m_context);
+                Write(out, Print(val, m_context));
                 return;
             }
             auto entries = map->GetEntries();
@@ -170,7 +253,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         }
         else
         {
-            out += Print(val, m_context);
+            Write(out, Print(val, m_context));
         }
     }
 
@@ -249,8 +332,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         auto flush = [&](int64_t itemAllowance) {
             if (!first)
             {
-                out += ",\n";
-                out.append(static_cast<size_t>(indent), ' ');
+                NewLine(out, ",\n", indent);
             }
             first = false;
             FormatTo(out, *pending, indent, itemAllowance, level);
@@ -278,13 +360,12 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         {
             const bool last = idx + 1 == entries.size();
             const auto key = Print(entries[idx].key, m_context);
-            out += key;
+            Write(out, key);
             out += ": ";
             FormatTo(out, entries[idx].value, indent + static_cast<int64_t>(CodePointCount(std::string_view(key))) + 2, last ? allowance : 1, level);
             if (!last)
             {
-                out += ",\n";
-                out.append(static_cast<size_t>(indent), ' ');
+                NewLine(out, ",\n", indent);
             }
         }
     }
@@ -419,7 +500,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         if (chunks.size() == 1)
         {
             // Python writes the repr of the last line here, which is that one chunk
-            out += rep;
+            Write(out, rep);
             return;
         }
         out += level == 1 ? "(" : "";
@@ -427,10 +508,9 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         {
             if (idx != 0)
             {
-                out += '\n';
-                out.append(static_cast<size_t>(indent), ' ');
+                NewLine(out, "\n", indent);
             }
-            out += chunks[idx];
+            Write(out, chunks[idx]);
         }
         out += level == 1 ? ")" : "";
     }

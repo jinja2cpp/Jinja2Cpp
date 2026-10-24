@@ -2063,34 +2063,34 @@ TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderCo
         {
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
         }
-        // Any other iterable gives its items (a dict its keys); anything else is no iterable
-        InternalValueList schemes;
+        // Any other iterable gives its items (a dict its keys); anything else is no iterable.
+        // Each is checked as it is read, so a long iterable stops at its first bad item
+        auto addScheme = [&srcStr, &context, &extraSchemes](const InternalValue& scheme) {
+            auto str = GetAsSameString(srcStr, scheme);
+            if (!str || !Urlizer<CharT>::IsValidScheme(*str))
+            {
+                context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+            }
+            CheckSequenceSize(extraSchemes.size() + 1, "a list");
+            extraSchemes.push_back(std::move(*str));
+        };
         if (auto map = AsMap(schemesVal))
         {
-            for (auto& entry : map->GetEntries())
+            for (const auto& entry : map->GetEntries())
             {
-                schemes.push_back(std::move(entry.key));
+                addScheme(entry.key);
             }
         }
         else if (auto list = AsList(schemesVal))
         {
             for (const auto& item : *list)
             {
-                schemes.push_back(item);
+                addScheme(item);
             }
         }
         else if (!IsEmpty(schemesVal) && !GetAsSameString(srcStr, schemesVal))
         {
             throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(schemesVal) + "' object is not iterable");
-        }
-        for (const InternalValue& scheme : schemes)
-        {
-            auto str = GetAsSameString(srcStr, scheme);
-            if (!str || !Urlizer<CharT>::IsValidScheme(*str))
-            {
-                context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
-            }
-            extraSchemes.push_back(*str);
         }
 
         return Urlizer<CharT>(limit, rel, target, std::move(extraSchemes))(srcStr, baseVal.IsMarkup());

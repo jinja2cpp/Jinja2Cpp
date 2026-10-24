@@ -1161,6 +1161,30 @@ TEST(CppOnlyFilters, UnicodeControlsAndErrors)
     EXPECT_EQ(ErrorCode::UnknownFilter, loaded.error().GetCode());
 }
 
+TEST(FilterPprint, ReadsSinglePassListsOnce)
+{
+    // pprint measures a value before it prints it: a host generator is read once, nested or not
+    auto counting = [](int last) {
+        return MakeGenericList([n = 0, last]() mutable -> std::optional<Value> { return n < last ? std::optional<Value>(Value(int64_t{ ++n })) : std::nullopt; });
+    };
+    EXPECT_EQ("[1, 2, 3]", RenderOrError("{{ g|pprint }}", { { "g", counting(3) } }));
+    EXPECT_EQ("{'g': [1, 2, 3]}", RenderOrError("{{ {'g': g}|pprint }}", { { "g", counting(3) } }));
+    std::string wrapped = "[1";
+    for (int n = 2; n <= 30; ++n)
+    {
+        wrapped += ",\n " + std::to_string(n);
+    }
+    EXPECT_EQ(wrapped + "]", RenderOrError("{{ g|pprint }}", { { "g", counting(30) } }));
+}
+
+TEST(FilterPprint, CapsItsResult)
+{
+    // A wide key indents each line of its value by its width: the result stops at the cap
+    EXPECT_NE(RenderOrError("{{ {('x' * 1000000): range(1000)|list}|pprint }}", {}).find("a pprint result of length"), std::string::npos);
+    // urlize checks each extra scheme as it reads it
+    EXPECT_NE(RenderOrError("{{ 'x'|urlize(extra_schemes=range(1000000000)) }}", {}), "x");
+}
+
 TEST(FilterUnicode, PercentAEscapesNonAscii)
 {
     EXPECT_EQ("'\\xe9'", RenderOrError("{{ '%a'|format('\303\251') }}", {}));
