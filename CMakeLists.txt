@@ -426,6 +426,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/recursion_limits_test.cpp
         test/slot_frame_test.cpp
         test/statements_tets.cpp
+        test/support_types_test.cpp
         test/template_api_test.cpp
         test/template_env_test.cpp
         test/template_module_test.cpp

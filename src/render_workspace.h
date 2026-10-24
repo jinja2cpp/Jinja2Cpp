@@ -23,8 +23,8 @@ namespace detail
 {
 struct LoopFrame;
 // A frame is a refcounted ValueObject, as the `loop` value it backs shares it (statements.cpp)
-void intrusive_ptr_add_ref(const LoopFrame* frame) noexcept; // NOLINT(readability-identifier-naming): boost::intrusive_ptr's hook
-void intrusive_ptr_release(const LoopFrame* frame) noexcept; // NOLINT(readability-identifier-naming): boost::intrusive_ptr's hook
+void intrusive_ptr_add_ref(const LoopFrame* frame) noexcept; // NOLINT(readability-identifier-naming): IntrusivePtr's hook
+void intrusive_ptr_release(const LoopFrame* frame) noexcept; // NOLINT(readability-identifier-naming): IntrusivePtr's hook
 } // namespace detail
 
 // What the renders on one thread reuse from one render to the next (docs/design/
