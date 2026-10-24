@@ -319,6 +319,10 @@ CASES = [
     ("loop_iter_twice", "{% for x in [1, 2] %}{{ loop|list|length }}{{ loop|list|length }}{{ loop.index }}{{ loop.last }};{% else %}E{% endfor %}"),
     ("loop_has_no_dict_methods", "{% for x in [1] %}{{ loop.items is defined }}{{ loop['index'] is defined }}{{ loop.keys is defined }}{% endfor %}"),
     ("loop_in_takes_items", "{% for x in [1, 2, 3, 4] %}{{ 'T' if 3 in loop else 'F' }}{{ x }};{% endfor %}"),
+    ("loop_kept_after_break", "{% set ns = namespace() %}{% for x in range(4) %}{% set ns.l = loop %}{% break %}{% endfor %}{{ ns.l|list|length }}{% for y in ns.l %}{{ y[0] }}{% endfor %}", LC),
+    ("loop_kept_after_break_list", "{% set ns = namespace() %}{% for x in [1, 2, 3, 4] %}{% set ns.l = loop %}{% if x == 2 %}{% break %}{% endif %}{% endfor %}{{ ns.l|map(attribute=0)|list }}{{ ns.l.length }}", LC),
+    ("loop_kept_after_break_filtered", "{% set ns = namespace() %}{% for x in [1, 2, 3, 4, 5] if x > 1 %}{% set ns.l = loop %}{% break %}{% endfor %}{{ ns.l|map(attribute=0)|list }}", LC),
+    ("loop_kept_to_end", "{% set ns = namespace() %}{% for x in range(4) %}{% set ns.l = loop %}{% endfor %}{{ ns.l|list|length }}{{ ns.l.last }}"),
     ("loop_pprint", "{% for x in [1, 2] %}{{ loop|pprint }};{% endfor %}"),
     ("loop_cycle_string", "{% for x in [1, 2] %}{{ loop.cycle|string }};{% endfor %}"),
     # Argument unpacking in calls (0220)

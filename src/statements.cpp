@@ -394,8 +394,18 @@ struct LoopState : ValueObject
     {
         if (listSize)
         {
-            return listSize.value();
+            return *listSize;
         }
+        return CollectRest();
+    }
+
+    // Collects the items the loop has not fetched yet into a list of its own, which the loop
+    // then moves through without the filter. For a filtered loop's length, and for a loop
+    // object kept past its statement (`set ns.x = loop`), whose enumerator may run over a
+    // list the statement owned: iterating the object goes on after the item it stopped at.
+    // Returns the loop's length
+    size_t CollectRest()
+    {
         // Collecting the rest from inside the filter would replace the enumerator that is
         // running it. Jinja2 has no `loop` in the filter at all
         Peek();
@@ -403,22 +413,25 @@ struct LoopState : ValueObject
         if (isLast)
         {
             listSize = index0 + 1;
-            return listSize.value();
+            enumerator.reset();
+            lazyFilter = nullptr;
+            return index0 + 1;
         }
 
-        // The rest after the next item, which is fetched; the loop then moves through them
-        // without the filter
+        // The rest after the next item, which is fetched
         InternalValueList rest;
         for (InternalValue item; FetchNext(item);)
         {
+            CheckSequenceSize(rest.size() + 1, "a loop");
             rest.push_back(std::move(item));
         }
 
-        listSize = index0 + rest.size() + 2;
+        const size_t length = index0 + rest.size() + 2;
+        listSize = length;
         indexedList = ListAdapter::CreateAdapter(std::move(rest));
         enumerator = indexedList.GetEnumerator();
         lazyFilter = nullptr;
-        return listSize.value();
+        return length;
     }
 };
 
@@ -1124,12 +1137,13 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     values.ExitScope(state->bodyScope);
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
-    // which needs this render context: collect the rest of the items now
-    // (copies of `loop` and the accessor a GenericMap copies from it all own the state:
-    // more owners than this function and the scope mean it was kept)
-    if (!state->listSize && state->use_count() > 2)
+    // which needs this render context, nor its enumerator, whose list the statement may own:
+    // collect the rest of the items now (copies of `loop` and the accessor a GenericMap
+    // copies from it all own the state: more owners than this function and the scope mean
+    // it was kept)
+    if (state->use_count() > 2)
     {
-        state->GetLength();
+        state->CollectRest();
     }
 
     values.ExitScope(state->loopScope);
@@ -1280,11 +1294,12 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     }
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
-    // which needs this render context: collect the rest of the items now (more owners than
-    // this function and the slot of `loop` mean it was kept)
-    if (!state->listSize && state->use_count() > 2)
+    // which needs this render context, nor its enumerator, whose list the statement may own:
+    // collect the rest of the items now (more owners than this function and the slot of
+    // `loop` mean it was kept)
+    if (state->use_count() > 2)
     {
-        state->GetLength();
+        state->CollectRest();
     }
     state->lazyFilter = nullptr;
 

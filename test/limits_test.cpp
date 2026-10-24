@@ -71,6 +71,10 @@ std::vector<LimitCase> Cases()
         { "RepeatOver", "{{ 'x' * 2000 }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
         { "RepeatAt", "{{ ('x' * 1000)|length }}", [](auto& l) { l.maxSequenceSize = 1000; }, "" },
         { "ListOver", "{{ range(2000)|list|length }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
+        // `loop` iterated or collected: a generator with no size, held to the limit as it grows
+        { "LoopListOver", "{% for x in range(2000) %}{% set rest = loop|list %}{% endfor %}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
+        { "LoopListAt", "{% for x in range(1001) %}{{ loop|list|length }}{% endfor %}", [](auto& l) { l.maxSequenceSize = 1000; }, "" },
+        { "LoopLengthOver", "{% for x in range(2000) if x %}{{ loop.length }}{% endfor %}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
         { "SequenceAboveCap", "{{ ('x' * 1000)|length }}", [](auto& l) { l.maxSequenceSize = UINT64_MAX; }, "" },
         // Past the built-in cap as well: the render's own limit is reported
         { "RepeatAboveCap", "{{ 'x' * 100000000 }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
