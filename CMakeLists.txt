@@ -186,6 +186,7 @@ set(JINJA2CPP_SOURCES
     src/template.cpp
     src/template_dict.cpp
     src/template_env.cpp
+    src/template_module.cpp
     src/template_parser.cpp
     src/tester_factories.cpp
     src/testers.cpp
@@ -428,6 +429,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/statements_tets.cpp
         test/template_api_test.cpp
         test/template_env_test.cpp
+        test/template_module_test.cpp
         test/test_data
         test/test_tools.h
         test/testers_test.cpp

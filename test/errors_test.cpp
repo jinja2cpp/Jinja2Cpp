@@ -642,6 +642,7 @@ static_assert(static_cast<int>(ErrorCode::UserCallableException) == 15);
 static_assert(static_cast<int>(ErrorCode::IntegerOutOfRange) == 16);
 static_assert(static_cast<int>(ErrorCode::TemplateRuntimeError) == 17);
 static_assert(static_cast<int>(ErrorCode::ResourceLimitExceeded) == 18);
+static_assert(static_cast<int>(ErrorCode::TemplateExpired) == 19);
 static_assert(sizeof(ErrorInfo) == sizeof(void*));
 static_assert(sizeof(ErrorInfoW) == sizeof(void*));
 static_assert(std::is_nothrow_default_constructible_v<ErrorInfo>);

@@ -389,7 +389,7 @@ error is compared, not the message or the line.
 | `finalize` | `Settings::finalize`; corpus area `custom` | ✅ | |
 | Template cache, `auto_reload` | `cacheSize`, `autoReload`, `templateLookup` | ✅ | Jinja2 looks a template up on every `include`/`extends`/`import`; the default `TemplateLookup::OncePerRender` does it once per name per render, `EveryUse` matches Jinja2 |
 | `Template.generate`/`stream` | `Render(std::ostream&)` | ✅ | |
-| `Template.module`, `make_module` | none | ❌ | 0284 |
+| `Template.module`, `make_module` | `Template::MakeModule(params)`: `exports` (macros as `UserCallable`s that run in the module) and `body`; a module per call, values copied | ✅ | 0284; gaps 0299, 0300 |
 | `jinja2.meta.find_undeclared_variables` | `Template::FindUndeclaredVariables` (sorted names; `GetMetadata` reads the C++-specific `meta` block) | ✅ | 0236 |
 | Sandbox | ➖ templates reach only what the host passes; `Settings::Limits`/`UntrustedSettings()` and `ConfinedFileSystem` for templates users write, per the [trust model](security.md) | ➖ | 0224 |
 | Async rendering | ➖ | ➖ | |

@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
 priority: low
 area: api
 depends: [0236]
 touches: [include/jinja2cpp/template.h, src/template_impl.h, src/statements.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/634
 ---
 # `Template.module` / `make_module`: a template's exports as a map
 
@@ -22,3 +23,16 @@ template alive (or fail with `TemplateExpired`), plus the module's rendered body
 
 **Done when** the API exists with tests checked against `Template.module` and
 `make_module`, and parity.md's row names it.
+
+**Done (decisions D1-D3 of the plan, /mnt/project-files/release-2.0/0284-plan.md).**
+`Template::MakeModule(params)` returns `BasicTemplateModule{exports, body}`
+(include/jinja2cpp/template.h). The module is an `ImportedModule` (statements.h) rendered on
+a context of its own, with the template's params and a globals snapshot of its own, owned by
+`TemplateModuleState` (src/template_module.cpp) which every exported callable keeps alive
+together with the template (D1a). Calls take the state's recursive mutex and run under a
+CycleCollector and the template's RenderLimitsScope; arguments are copied into owned values,
+results copied out. A later `Load` makes calls fail with `ErrorCode::TemplateExpired` = 19
+(D3), thrown as `BadResultAccess<CharT>` with the full error (D2a); a user callable that calls
+an export inside a render passes that error on (CallHost). Names a top-level `import`/`from`
+binds are not exported (`IRendererCallback::ImportBound`). Gaps: 0299 (re-set imports,
+transitive exports of `import`), 0300 (callables passed in or nested, live values).

@@ -15,6 +15,7 @@
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/template.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value.h>
 #include <jinja2cpp/value_ptr.h>
@@ -2519,6 +2520,16 @@ struct UserCallableBody
         catch (const ErrorInfoW&)
         {
             throw;
+        }
+        // A failed call of a module's macro (Template::MakeModule): its error, located in the
+        // module's template
+        catch (const BadResultAccess<char>& failure)
+        {
+            throw ErrorInfo(failure.error());
+        }
+        catch (const BadResultAccess<wchar_t>& failure)
+        {
+            throw ErrorInfoW(failure.error());
         }
         catch (...)
         {

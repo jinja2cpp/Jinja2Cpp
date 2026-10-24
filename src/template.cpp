@@ -254,6 +254,12 @@ Result<std::vector<std::string>, CharT> BasicTemplate<CharT>::FindUndeclaredVari
 }
 
 template<typename CharT>
+Result<BasicTemplateModule<CharT>, CharT> BasicTemplate<CharT>::MakeModule(const ValuesMap& params) const
+{
+    return TemplateImpl<CharT>::MakeModule(std::static_pointer_cast<const TemplateImpl<CharT>>(m_impl), params);
+}
+
+template<typename CharT>
 bool BasicTemplate<CharT>::IsEqual(const BasicTemplate& other) const
 {
     return m_impl == other.m_impl;

@@ -59,6 +59,7 @@ class TemplateImpl;
 struct BlocksStack;
 class TemplateRenderer;
 class ImportedModule;
+class RenderContext;
 
 // One template's code running, in an inheritance chain: Jinja2's root render function
 struct TemplateFrame
@@ -131,6 +132,10 @@ struct IRendererCallback : IComparable
     virtual void ShareModule(const LoadTemplateResult& tpl, ImportedModule& module) = 0;
     // The module of `tpl` imported without context earlier in this render; null when none
     [[nodiscard]] virtual ImportedModule* FindModule(const LoadTemplateResult& tpl) const = 0;
+    // An `import` or `from` bound `name` to `value` in `values` (ImportStatement): a module made
+    // for the host (Template::MakeModule) does not export a name its top level imports, as
+    // Jinja2 does not
+    virtual void ImportBound(const RenderContext& /*values*/, std::string_view /*name*/, const InternalValue& /*value*/) {}
 };
 
 // The slots where names were last found (docs/tasks/0100 idea 7). An entry holds the slot

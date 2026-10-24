@@ -244,6 +244,10 @@ inline bool operator!=(const SourceLocation& lhs, const SourceLocation& rhs)
     return !(lhs == rhs);
 }
 
+// The state the macros of a Template::MakeModule module share (template_module.cpp)
+template<typename CharT>
+struct TemplateModuleState;
+
 template<typename CharT>
 class TemplateImpl : public ITemplateImpl
 {
@@ -353,8 +357,14 @@ public:
         m_origin.name = &m_templateName;
         m_origin.isWide = std::is_same_v<CharT, wchar_t>;
         m_metadata.reset();
+        // The modules made from the tree this replaced see it gone (TemplateModuleState)
+        m_loadGeneration.fetch_add(1, std::memory_order_relaxed);
         return std::optional<BasicErrorInfo<CharT>>();
     }
+
+    // Template::MakeModule: renders the template, which `self` owns, as a module for the host
+    // (template_module.cpp)
+    static nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params);
 
     // Renders with the params of a ValuesMap or a GenericMap, appending to a string or writing to a
     // host's sink. Rendering reads the template only, so several threads may render one template at once.
@@ -651,6 +661,9 @@ public:
         return true;
     }
 private:
+    template<typename>
+    friend struct TemplateModuleState;
+
     // GetMetadata with m_metadataMutex held
     nonstd::expected<GenericMap, BasicErrorInfo<CharT>> ParseMetadata() const
     {
@@ -940,6 +953,11 @@ private:
     std::string m_templateName;
     bool m_isNamed = false;
     bool m_mayReadLoop = false;
+    // Counts the successful Loads: a module's macro refuses to run in a tree a later Load
+    // replaced (TemplateModuleState). Atomic only so that a misuse is not a data race; 32 bits
+    // fit the padding after the flags, so a template is no bigger, and a module sees a stale
+    // tree as current only after exactly 2^32 more Loads
+    std::atomic<uint32_t> m_loadGeneration{ 0 };
     // Owns the tree
     SealedArena m_nodes;
     NodeRef<TemplateRenderer> m_renderer;
