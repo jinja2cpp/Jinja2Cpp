@@ -88,6 +88,7 @@ TEST(SpanTest, Subviews)
     EXPECT_TRUE(span.first(0).empty());
     EXPECT_EQ(std::vector<int>(span.rbegin(), span.rend()), (std::vector<int>{ 5, 4, 3, 2, 1 }));
     const Span<int> range(vec.data() + 1, vec.data() + 3);
+    EXPECT_TRUE(Span<int>(vec.data(), 0).empty());
     EXPECT_EQ(range.size(), 2U);
     EXPECT_EQ(range[0], 2);
 }
@@ -152,7 +153,7 @@ TEST(IntrusivePtrTest, CountsReferences)
         EXPECT_FALSE(other);
         other = moved;
         EXPECT_EQ(moved->refs, 2);
-        other = other; // NOLINT(misc-redundant-expression): self-assignment keeps the object
+        other = std::as_const(other); // self-assignment keeps the object
         EXPECT_EQ(moved->refs, 2);
         other = nullptr;
         EXPECT_EQ(moved->refs, 1);

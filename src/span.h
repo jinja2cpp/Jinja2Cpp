@@ -78,7 +78,9 @@ public:
         , m_size(size)
     {
     }
-    constexpr Span(T* first, T* last) noexcept
+    // A template, so that a literal 0 count picks the constructor above, as with std::span
+    template<typename P, typename = std::enable_if_t<std::is_same_v<P, T*>>>
+    constexpr Span(P first, P last) noexcept
         : m_data(first)
         , m_size(static_cast<size_type>(last - first))
     {
