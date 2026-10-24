@@ -546,8 +546,7 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         if (valKind == TestKind::Object)
         {
             auto map = AsMap(baseVal);
-            ListAdapter items;
-            result = map && (std::string_view(map->GetObjectClass()) == "TemplateReference" || map->GetIteration(items));
+            result = map && (std::string_view(map->GetObjectClass()) == "TemplateReference" || map->Iterates());
         }
         break;
     case IsMappingMode:

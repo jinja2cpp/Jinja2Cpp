@@ -552,6 +552,7 @@ public:
     [[nodiscard]] const char* GetObjectClass() const override { return "LoopContext"; }
     // Iterating it takes the rest of the loop's own items, each as (item, loop), so that the
     // running loop goes on after them: Jinja2's LoopContext.__next__ (docs/tasks/0219)
+    [[nodiscard]] bool Iterates() const override { return true; }
     bool GetIteration(ListAdapter& items) const override
     {
         items = ListAdapter::CreateAdapter([state = m_state, loop = InternalValue(MapAdapter(MakeRef<LoopAccessor>(*this)))]() -> std::optional<InternalValue> {
