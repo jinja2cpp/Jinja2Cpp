@@ -377,6 +377,8 @@ struct TemplateRootInfo
     // An `extends` at the top level, outside any `if`: Jinja2 compiles no output of the
     // template's body after it (has_known_extends)
     bool knownExtends = false;
+    // A second `extends` after a known one: Jinja2 compiles nothing after it (CompilerExit)
+    bool compilerExit = false;
     // A `{% autoescape %}` with a value that is not constant was parsed: only then can a tag
     // be in volatile code (TemplateParser::IsInVolatileCode)
     bool hasVolatileAutoescape = false;
@@ -419,6 +421,35 @@ struct TemplateRootInfo
     // empty set costs every small template's parse a bucket clear when it is destroyed
     std::optional<std::unordered_set<std::string_view>> names;
 };
+
+// What becomes of an output tag (text, `{{ }}`, `trans`) of the template's body after an
+// `extends`: Jinja2 compiles one in a macro, call block, set block or block; elsewhere it
+// compiles none after a top-level `extends` and guards each after one in an `if`
+// (require_output_check, docs/tasks/0203). Only a tag after an `extends` in the source can
+// run after it: no loop holds one
+enum class OutputCheck
+{
+    None,
+    Drop,
+    Guard
+};
+inline OutputCheck OutputCheckOf(const TemplateRootInfo& root, const StatementInfoList& stack)
+{
+    if (!root.hasExtends)
+    {
+        return OutputCheck::None;
+    }
+    const bool compiled = std::any_of(stack.begin(), stack.end(), [](const StatementInfo& info) {
+        return info.type == StatementInfo::MacroStatement || info.type == StatementInfo::MacroCallStatement || info.type == StatementInfo::SetStatement
+               || info.type == StatementInfo::BlockStatement;
+    });
+    if (compiled)
+    {
+        return OutputCheck::None;
+    }
+    return root.knownExtends ? OutputCheck::Drop : OutputCheck::Guard;
+}
+
 
 // An assignment target, and whether it names `loop`, which a loop may not bind
 struct ParsedTarget
@@ -1674,7 +1705,13 @@ private:
             AppendTransText(*statementsStack.back().trans, range);
             return;
         }
-        m_bodies.Add(MakeRawTextRenderer(range), range.startOffset);
+        const auto check = OutputCheckOf(m_root, statementsStack);
+        if (check == OutputCheck::Drop)
+        {
+            return;
+        }
+        NodeRef<IRendererBase> text = MakeRawTextRenderer(range);
+        m_bodies.Add(check == OutputCheck::Guard ? m_nodes.Make<OutputCheckStatement>(text) : text, range.startOffset);
     }
 
     void FineParseMetaBlock(const TextBlockInfo& block)
@@ -1720,7 +1757,12 @@ private:
         }
         if (parseResult)
         {
-            m_bodies.Add(*parseResult, block.tagStart);
+            // Parsed all the same: Jinja2 reports what does not parse after `extends` too
+            const auto check = OutputCheckOf(m_root, statementsStack);
+            if (check != OutputCheck::Drop)
+            {
+                m_bodies.Add(check == OutputCheck::Guard ? m_nodes.Make<OutputCheckStatement>(*parseResult) : *parseResult, block.tagStart);
+            }
         }
         else
         {
@@ -1812,7 +1854,7 @@ private:
                 break;
             }
         }
-        if (!compiled)
+        if (!compiled || m_root.compilerExit)
         {
             m_unknown.DeferSince(mark);
             return;

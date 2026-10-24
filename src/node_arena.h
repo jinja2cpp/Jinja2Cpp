@@ -109,6 +109,7 @@ enum class NodeKind : std::uint8_t
     FilterStmt,
     AutoescapeStmt,
     BindUndefinedStmt,
+    OutputCheckStmt,
     // Objects the arena moves through their own vptr (ArenaObjectBase)
     FilterObject,
     TesterObject,

@@ -28,7 +28,7 @@ inline namespace v2
 class IRendererBase : public ArenaNode
 {
 public:
-    static constexpr KindRange Family{ NodeKind::ComposedBody, NodeKind::BindUndefinedStmt };
+    static constexpr KindRange Family{ NodeKind::ComposedBody, NodeKind::OutputCheckStmt };
     using FamilyOwner = IRendererBase;
 
     IRendererBase() = default;

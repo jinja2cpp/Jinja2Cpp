@@ -1506,36 +1506,6 @@ void RenderBlockAt(const BlocksStack& stack, std::string_view name, size_t depth
     block.node.RenderBody(os, blockContext, depth);
 }
 
-// Writes to the template's output only until the template extends another one
-class TopLevelWriter : public OutStream::StreamWriter
-{
-public:
-    TopLevelWriter(OutStream& os, const TemplateFrame& frame)
-        : m_os(os)
-        , m_frame(frame)
-    {
-    }
-
-    void WriteBuffer(const void* ptr, size_t length) override
-    {
-        if (!m_frame.parent)
-        {
-            m_os.WriteBuffer(ptr, length);
-        }
-    }
-    void WriteValue(const InternalValue& val) override
-    {
-        if (!m_frame.parent)
-        {
-            m_os.WriteValue(val);
-        }
-    }
-
-private:
-    OutStream& m_os;
-    const TemplateFrame& m_frame;
-};
-
 class TemplateFrameGuard
 {
 public:
@@ -1882,16 +1852,9 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     frame.childSelf = childSelf;
     TemplateFrameGuard frameGuard(values, &frame);
 
-    if (!m_hasExtends)
-    {
-        values.Nodes()[m_body].Render(os, values);
-        return;
-    }
-
-    TopLevelWriter writer(os, frame);
-    OutStream topLevelStream(&writer, os.SinkToPassOn());
-    values.Nodes()[m_body].Render(topLevelStream, values);
-
+    // The output tags after an `extends` are dropped or skipped (OutputCheckStatement); what
+    // an include or a call block writes there comes out before the parent's, as in Jinja2
+    values.Nodes()[m_body].Render(os, values);
     if (frame.parent)
     {
         const auto parent = values.GetRendererCallback()->Templates().Resolve(frame.parent);
@@ -2776,6 +2739,15 @@ void AutoescapeStatement::Render(OutStream& os, RenderContext& values)
     values.EnterScope();
     values.Nodes()[m_body].Render(os, values);
     values.ExitScope();
+}
+
+void OutputCheckStatement::Render(OutStream& os, RenderContext& values)
+{
+    if (const auto* frame = values.GetTemplateFrame(); frame && frame->parent)
+    {
+        return;
+    }
+    values.Nodes()[m_output].Render(os, values);
 }
 
 void BindUndefinedStatement::Render(OutStream& /*os*/, RenderContext& values)

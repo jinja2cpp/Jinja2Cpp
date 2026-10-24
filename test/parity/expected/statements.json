@@ -5153,6 +5153,714 @@
    "output": "True"
   },
   {
+   "id": "statements.extends_output_after_not_evaluated",
+   "template": "{% extends 'a' %}{{ 1/0 }}x{% for i in [1, 2] %}{{ i/0 }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "A"
+  },
+  {
+   "id": "statements.extends_output_after_in_if_not_evaluated",
+   "template": "{% if true %}{% extends 'a' %}{% endif %}{{ 1/0 }}x",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "A"
+  },
+  {
+   "id": "statements.extends_output_in_if_branch_not_taken",
+   "template": "{% if false %}{% extends 'a' %}{% endif %}B{{ 2 }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "B2"
+  },
+  {
+   "id": "statements.extends_output_before_written",
+   "template": "{{ 'pre' }}{% extends 'a' %}post",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "preA"
+  },
+  {
+   "id": "statements.extends_output_after_in_with_autoescape_filter",
+   "template": "{% extends 'a' %}{% with %}{{ 1/0 }}{% endwith %}{% autoescape true %}{{ 1/0 }}{% endautoescape %}{% filter upper %}{{ 1/0 }}x{% endfilter %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "A"
+  },
+  {
+   "id": "statements.extends_output_after_in_if_filter",
+   "template": "{% if true %}{% extends 'a' %}{% endif %}{% filter upper %}{{ 1/0 }}x{% endfilter %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "A"
+  },
+  {
+   "id": "statements.extends_include_after_written",
+   "template": "{% extends 'a' %}{% include 'inc' %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "IA"
+  },
+  {
+   "id": "statements.extends_include_after_in_if_written",
+   "template": "{% if true %}{% extends 'a' %}{% endif %}{% include 'inc' %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "IA"
+  },
+  {
+   "id": "statements.extends_call_block_after_written",
+   "template": "{% extends 'a' %}{% macro m() %}M{{ caller() }}{% endmacro %}{% call m() %}c{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "McA"
+  },
+  {
+   "id": "statements.extends_set_block_after_evaluated",
+   "template": "{% extends 'a' %}{% set x %}{{ 1/0 }}{% endset %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "division by zero"
+   }
+  },
+  {
+   "id": "statements.extends_loop_iter_after_evaluated",
+   "template": "{% extends 'a' %}{% for i in [1/0] %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "division by zero"
+   }
+  },
+  {
+   "id": "statements.extends_if_test_after_evaluated",
+   "template": "{% extends 'a' %}{% if 1/0 %}{% endif %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "division by zero"
+   }
+  },
+  {
+   "id": "statements.extends_call_in_output_after_not_run",
+   "template": "{% set ns = namespace(n=0) %}{% macro inc() %}{% set ns.n = ns.n + 1 %}{% endmacro %}{% if true %}{% extends 'p' %}{% endif %}{{ inc() }}{{ inc() }}{% set n = ns.n %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "p": "[{{ n }}]"
+   },
+   "output": "[0]"
+  },
+  {
+   "id": "statements.extends_twice_rest_not_compiled",
+   "template": "{% extends 'a' %}{% extends 'a' %}{% macro m() %}{{ 1|nonexistent }}{% endmacro %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A"
+   },
+   "error": {
+    "phase": "render",
+    "type": "TemplateRuntimeError",
+    "message": "extended multiple times"
+   }
+  },
+  {
+   "id": "statements.extends_trans_after_not_evaluated",
+   "template": "{% extends 'a' %}{% trans a=1/0 %}{{ a }}{% endtrans %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {
+    "a": "A"
+   },
+   "output": "A"
+  },
+  {
+   "id": "statements.extends_in_if_trans_after_not_evaluated",
+   "template": "{% if true %}{% extends 'a' %}{% endif %}{% trans a=1/0 %}{{ a }}{% endtrans %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {
+    "a": "A"
+   },
+   "output": "A"
+  },
+  {
    "id": "statements.loop_include_extending_parent_reads",
    "template": "{% for x in 'ab' %}{{ loop.index }}{% include 'c' %}|{% endfor %}",
    "context": {

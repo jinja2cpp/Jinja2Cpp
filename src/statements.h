@@ -996,6 +996,27 @@ private:
     ArenaSpan<SlotName> m_names;
 };
 
+// An output tag (text, `{{ }}`, `trans`) at a template's top level after an `extends` in an
+// `if`: skipped, not evaluated, once the template has a parent, as Jinja2 guards it with
+// `if parent_template is None` (require_output_check). After a top-level `extends` the
+// parser drops such a tag instead (docs/tasks/0203)
+class OutputCheckStatement final : public Statement
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::OutputCheckStmt;
+    void VisitRefs(detail::RefChecker& refs) const { refs(m_output); }
+
+    explicit OutputCheckStatement(NodeRef<IRendererBase> output)
+        : m_output(output)
+    {
+    }
+
+    void Render(OutStream& os, RenderContext& values) override;
+
+private:
+    NodeRef<IRendererBase> m_output;
+};
+
 } // namespace v2
 } // namespace jinja2
 

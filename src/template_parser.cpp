@@ -912,6 +912,11 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
 
     auto renderer = m_nodes.Make<ExtendsStatement>(*expr);
     m_bodies.Add(renderer, m_tagOffset);
+    // A second one stops Jinja2's compile: a render fails there, nothing after it is checked
+    if (m_root.knownExtends && statementsInfo.size() == 1)
+    {
+        m_root.compilerExit = true;
+    }
     m_root.hasExtends = true;
     if (statementsInfo.size() == 1)
     {
@@ -1956,7 +1961,13 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     {
         values.push_back(var.second);
     }
-    m_bodies.Add(m_nodes.Make<TransStatement>(m_nodes.MakeSpan(values), output), info.tagOffset);
+    const auto check = OutputCheckOf(m_root, statementsInfo);
+    if (check == OutputCheck::Drop)
+    {
+        return {};
+    }
+    NodeRef<IRendererBase> statement = m_nodes.Make<TransStatement>(m_nodes.MakeSpan(values), output);
+    m_bodies.Add(check == OutputCheck::Guard ? m_nodes.Make<OutputCheckStatement>(statement) : statement, info.tagOffset);
     return {};
 }
 
