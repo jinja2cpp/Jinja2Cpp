@@ -37,7 +37,7 @@ option(JINJA2CPP_BUILD_FUZZERS "Build the libFuzzer targets in fuzz/ (clang only
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
 set(JINJA2CPP_NODEREF_CHECKS "" CACHE STRING "Checks of the handles that link a parse tree: OFF, ON (Seal and cross-template links), FULL (every access); empty picks FULL for Debug, sanitizer and fuzz builds, else ON")
 set_property(CACHE JINJA2CPP_NODEREF_CHECKS PROPERTY STRINGS "" ON FULL OFF)
-option(JINJA2CPP_WITH_UNICODE_NAMES "Decode \\N{name} escapes in string literals with the Unicode name table (about 350 KB of data)" ON)
+option(JINJA2CPP_WITH_UNICODE_NAMES "Decode \\N{name} escapes in string literals with the Unicode name table (about 450 KB of data)" ON)
 option(JINJA2CPP_CHECK_SLOTS "Check every name read from a slot against its lookup by name (always on without NDEBUG)" OFF)
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
 option(JINJA2CPP_PIC "Control -fPIC option for library build" OFF)
