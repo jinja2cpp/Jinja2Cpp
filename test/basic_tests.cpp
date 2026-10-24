@@ -1472,6 +1472,107 @@ TEST(ValueApiTest, MarkupIsImmutableAndMutableAccessDemotesIt)
     EXPECT_EQ("ab", plain.AsString());
 }
 
+// jinja2::Escape is markupsafe.escape (docs/tasks/0277); the expected column is markupsafe 3.0.3's output
+TEST(ValueApiTest, EscapeMatchesMarkupsafe)
+{
+    // clang-format off
+    const struct
+    {
+        std::string_view text;
+        std::string_view escaped;
+    } rows[] = {
+        { "<a&'\">",            "&lt;a&amp;&#39;&#34;&gt;" },
+        { "plain",              "plain" },
+        { "",                   "" },
+        { "\xc3\xa9<\xc3\xbc>", "\xc3\xa9&lt;\xc3\xbc&gt;" },
+        { std::string_view("\0&", 2), std::string_view("\0&amp;", 6) },
+        { "&amp;",              "&amp;amp;" },
+    };
+    // clang-format on
+    for (const auto& row : rows)
+    {
+        SCOPED_TRACE(std::string(row.text));
+        static_assert(std::is_same_v<decltype(Escape(row.text)), Markup>);
+        EXPECT_EQ(Markup(row.escaped), Escape(row.text));
+        const std::wstring wide(row.text.begin(), row.text.end());
+        const std::wstring wideEscaped(row.escaped.begin(), row.escaped.end());
+        EXPECT_EQ(WMarkup(wideEscaped), Escape(std::wstring_view(wide)));
+    }
+    // Long text goes past the thread buffer EscapeHtml uses for short narrow strings
+    const std::string longText(5000, '<');
+    std::string longEscaped;
+    for (std::size_t i = 0; i < longText.size(); ++i)
+    {
+        longEscaped += "&lt;";
+    }
+    EXPECT_EQ(Markup(longEscaped), Escape(longText));
+
+    // Already safe: returned as is, so escaping twice changes nothing
+    EXPECT_EQ(Markup("<b>"), Escape(Markup("<b>")));
+    EXPECT_EQ(WMarkup(L"<b>"), Escape(WMarkup(L"<b>")));
+    EXPECT_EQ(Markup("&lt;"), Escape(Escape("<")));
+    EXPECT_EQ(Markup("&lt;"), Escape(std::string("<")));
+    EXPECT_EQ(WMarkup(L"&lt;"), Escape(L"<"));
+    EXPECT_EQ(Markup("<b>&lt;i&gt;</b>"), Markup(Markup("<b>").str() + Escape("<i>").str() + "</b>"));
+}
+
+// A typed callable parameter of type Markup takes a Markup as is and escapes a plain string (docs/tasks/0277)
+TEST(ValueApiTest, TypedMarkupParameter)
+{
+    auto tag = MakeCallable([](const Markup& text) { return Markup("<b>" + text.str() + "</b>"); }, ArgInfo{ "text" });
+    auto wtag = MakeCallable([](const WMarkup& text) { return WMarkup(L"<b>" + text.str() + L"</b>"); }, ArgInfo{ "text" });
+    // NOLINTNEXTLINE(performance-unnecessary-value-param): the by-value parameter is what this row tests
+    auto byValue = MakeCallable([](Markup text) { return text.str(); }, ArgInfo{ "text" });
+    // A function pointer binds through ArgInfoT<Markup>, the typed path
+    auto typed = MakeCallable(+[](const Markup& text) { return Markup("<b>" + text.str() + "</b>"); }, ArgInfo{ "text" });
+
+    auto render = [](const std::string& source, const ValuesMap& params) {
+        Template tpl;
+        EXPECT_TRUE(tpl.Load(source));
+        return tpl.RenderAsString(params).value();
+    };
+    // clang-format off
+    EXPECT_EQ("<b><i></b>",            render("{{ tag(m) }}",         { { "tag", tag }, { "m", Markup("<i>") } }));
+    EXPECT_EQ("<b>&lt;i&gt;</b>",      render("{{ tag(s) }}",         { { "tag", tag }, { "s", "<i>" } }));
+    EXPECT_EQ("<b>&lt;i&gt;</b>",      render("{{ tag('<i>') }}",     { { "tag", tag } }));
+    EXPECT_EQ("<b><i></b>",            render("{{ tag('<i>'|safe) }}", { { "tag", tag } }));
+    EXPECT_EQ("<b></b>",               render("{{ tag(none) }}",      { { "tag", tag } }));
+    EXPECT_EQ("None",                  render("{{ tag(5) }}",         { { "tag", tag } }));
+    EXPECT_EQ("&lt;i&gt;",             render("{{ by_value(s) }}",    { { "by_value", byValue }, { "s", "<i>" } }));
+    EXPECT_EQ("<i>",                   render("{{ by_value(m) }}",    { { "by_value", byValue }, { "m", Markup("<i>") } }));
+    EXPECT_EQ("<b><i></b>",            render("{{ typed(m) }}",       { { "typed", typed }, { "m", Markup("<i>") } }));
+    EXPECT_EQ("<b>&lt;i&gt;</b>",      render("{{ typed(s) }}",       { { "typed", typed }, { "s", "<i>" } }));
+    EXPECT_EQ("<b>&lt;i&gt;</b>",      render("{{ typed('<i>') }}",   { { "typed", typed } }));
+    EXPECT_EQ("<b></b>",               render("{{ typed(none) }}",    { { "typed", typed } }));
+    EXPECT_EQ("None",                  render("{{ typed(5) }}",       { { "typed", typed } }));
+    // clang-format on
+
+    TemplateW wtpl;
+    ASSERT_TRUE(wtpl.Load(L"{{ tag(s) }}{{ tag(m) }}"));
+    EXPECT_EQ(L"<b>&lt;i&gt;</b><b><i></b>", wtpl.RenderAsString({ { "tag", wtag }, { "s", L"<i>" }, { "m", WMarkup(L"<i>") } }).value());
+
+    // The escaped argument counts against maxSequenceSize: 8 '<' escape to 32 characters, 9 to 36
+    Settings settings;
+    settings.limits.maxSequenceSize = 32;
+    TemplateEnv env;
+    env.SetSettings(settings);
+    for (const auto& callable : { tag, typed })
+    {
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load("{{ f('<' * 8) }}|{{ f('<' * 9) }}"));
+        auto result = tpl.RenderAsString({ { "f", callable } });
+        ASSERT_FALSE(result);
+        EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+        ASSERT_TRUE(tpl.Load("{{ f('<' * 8) }}"));
+        EXPECT_EQ(32U + 7U, tpl.RenderAsString({ { "f", callable } }).value().size());
+    }
+    TemplateW wlimited(&env);
+    ASSERT_TRUE(wlimited.Load(L"{{ f('<' * 9) }}"));
+    auto wresult = wlimited.RenderAsString({ { "f", wtag } });
+    ASSERT_FALSE(wresult);
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, wresult.error().GetCode());
+}
+
 // ToString prints as {{ value }} does, Python str() (decision 3b)
 TEST(ValueApiTest, ToStringPrintsAsTheTemplateDoes)
 {
