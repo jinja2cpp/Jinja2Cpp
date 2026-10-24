@@ -903,8 +903,10 @@ public:
         refs(m_operands);
     }
 
-    explicit ConcatExpression(ArenaSpan<NodeRef<Expression>> operands)
+    // `byRef`: every operand is pure, so none of them can change what another one reads in place
+    ConcatExpression(ArenaSpan<NodeRef<Expression>> operands, bool byRef)
         : m_operands(operands)
+        , m_byRef(byRef)
     {
     }
     InternalValue Evaluate(RenderContext&) override;
@@ -914,7 +916,10 @@ public:
     void SetFolded() { m_folded = true; }
 
 private:
+    InternalValue EvaluatePair(NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr, RenderContext& context) const;
+
     ArenaSpan<NodeRef<Expression>> m_operands;
+    bool m_byRef;
     bool m_folded = false;
 };
 

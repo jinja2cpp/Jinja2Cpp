@@ -22,6 +22,7 @@
 
 #include <boost/container/small_vector.hpp>
 #include <algorithm>
+#include <array>
 
 #include <cmath>
 #include <cstddef>
@@ -712,14 +713,14 @@ InternalValue ApplyMathOperation(BinaryExpression::Operation oper, const Interna
 
 // The operands of a `~` chain as one string of the template's width, built once
 template<typename CharT>
-InternalValue JoinAsStrings(const boost::container::small_vector_base<InternalValue>& values)
+InternalValue JoinAsStrings(boost::span<const LookupResult> values)
 {
     // Strings of the template's width are copied into the result, allocated once (docs/tasks/0151)
     size_t size = 0;
     bool allText = true;
     for (const auto& value : values)
     {
-        if (const auto text = AsStringView<CharT>(value))
+        if (const auto text = AsStringView<CharT>(*value))
         {
             size += text->size();
         }
@@ -734,7 +735,7 @@ InternalValue JoinAsStrings(const boost::container::small_vector_base<InternalVa
             auto out = chars.begin();
             for (const auto& value : values)
             {
-                const auto text = *AsStringView<CharT>(value);
+                const auto text = *AsStringView<CharT>(*value);
                 out = std::copy(text.begin(), text.end(), out);
             }
         });
@@ -745,9 +746,25 @@ InternalValue JoinAsStrings(const boost::container::small_vector_base<InternalVa
     result.reserve(size);
     for (const auto& value : values)
     {
-        Apply<visitors::ValueRenderer<CharT>>(value, result);
+        Apply<visitors::ValueRenderer<CharT>>(*value, result);
     }
     return InternalValue(TargetString(std::move(result)));
+}
+
+// Kept out of line so that the plain join stays small
+JINJA2CPP_NOINLINE_INLINE InternalValue MarkupJoin(boost::span<const LookupResult> values, RenderContext& context)
+{
+    auto* callback = context.GetRendererCallback();
+    boost::container::small_vector<InternalValue, 4> escaped;
+    boost::container::small_vector<LookupResult, 4> parts;
+    escaped.reserve(values.size());
+    for (const auto& value : values)
+    {
+        parts.emplace_back(escaped.emplace_back(MarkupEscape(*value, callback)));
+    }
+    InternalValue result = callback->IsWideTarget() ? JoinAsStrings<wchar_t>(parts) : JoinAsStrings<char>(parts);
+    result.SetMarkup();
+    return result;
 }
 } // namespace
 
@@ -798,39 +815,78 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
     return result;
 }
 
+// `a ~ b`, the common case, without the containers of a longer run: each operand is read in
+// place where it can be, as BinaryExpression::WithLeft does, or lives in a temporary for the call
+InternalValue ConcatExpression::EvaluatePair(NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr, RenderContext& context) const
+{
+    const auto& nodes = context.Nodes();
+    auto withOperand = [this, &nodes, &context](NodeRef<Expression> expr, const auto& f) {
+        if (m_byRef || nodes.Is<ConstantExpression>(expr))
+        {
+            if (const auto value = nodes[expr].EvaluateRef(context))
+            {
+                return f(*value);
+            }
+        }
+        return f(nodes[expr].Evaluate(context));
+    };
+    return withOperand(leftExpr, [&](const InternalValue& left) {
+        CheckUndefinedUse(left, UndefinedUse::Operator);
+        return withOperand(rightExpr, [&](const InternalValue& right) {
+            CheckUndefinedUse(right, UndefinedUse::Operator);
+            const std::array<LookupResult, 2> values{ LookupResult(left), LookupResult(right) };
+            if ((left.IsMarkup() || right.IsMarkup()) && !m_folded && context.IsOutputAutoescape() && !context.IsVolatileAutoescape())
+            {
+                return MarkupJoin(values, context);
+            }
+            return context.GetRendererCallback()->IsWideTarget() ? JoinAsStrings<wchar_t>(values) : JoinAsStrings<char>(values);
+        });
+    });
+}
+
 InternalValue ConcatExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
     const auto operands = context.Nodes()[m_operands];
-    boost::container::small_vector<InternalValue, 4> values;
+    if (operands.size() == 2)
+    {
+        return EvaluatePair(operands[0], operands[1], context);
+    }
+    // Eight operands fit without allocating (chat templates join five or six). A constant, or any
+    // operand when all are pure, is read in place, as BinaryExpression reads its
+    // operands; the others are evaluated into `owned`, reserved so that the references stay valid
+    boost::container::small_vector<InternalValue, 8> owned;
+    boost::container::small_vector<LookupResult, 8> values;
+    owned.reserve(operands.size());
     values.reserve(operands.size());
     bool anyMarkup = false;
     for (const auto operand : operands)
     {
-        auto& value = values.emplace_back(context.Nodes()[operand].Evaluate(context));
+        auto& node = context.Nodes()[operand];
+        LookupResult value;
+        if (m_byRef || context.Nodes().Is<ConstantExpression>(operand))
+        {
+            value = node.EvaluateRef(context);
+        }
+        if (!value)
+        {
+            value = LookupResult(owned.emplace_back(node.Evaluate(context)));
+        }
         // StrictUndefined fails on any operator; the others render as empty text
-        CheckUndefinedUse(value, UndefinedUse::Operator);
-        anyMarkup = anyMarkup || value.IsMarkup();
+        CheckUndefinedUse(*value, UndefinedUse::Operator);
+        anyMarkup = anyMarkup || value->IsMarkup();
+        values.push_back(value);
     }
 
     // Jinja2's markup_join, `~` under autoescape when any operand is Markup: the others are
     // escaped and the result is Markup. Jinja2 3.1.6 joins as str in volatile code: it reads
     // eval_ctx.volatile at run time, which is never set (docs/tasks/0216)
     auto* callback = context.GetRendererCallback();
-    const bool markupJoin = anyMarkup && !m_folded && context.IsOutputAutoescape() && !context.IsVolatileAutoescape();
-    if (markupJoin)
+    if (anyMarkup && !m_folded && context.IsOutputAutoescape() && !context.IsVolatileAutoescape())
     {
-        for (auto& value : values)
-        {
-            value = MarkupEscape(value, callback);
-        }
+        return MarkupJoin(values, context);
     }
-    InternalValue result = callback->IsWideTarget() ? JoinAsStrings<wchar_t>(values) : JoinAsStrings<char>(values);
-    if (markupJoin)
-    {
-        result.SetMarkup();
-    }
-    return result;
+    return callback->IsWideTarget() ? JoinAsStrings<wchar_t>(values) : JoinAsStrings<char>(values);
 }
 
 bool ConcatExpression::IsFoldable(const NodeArena& nodes) const

@@ -314,6 +314,25 @@ ExpressionParser::Precedence Tighter(ExpressionParser::Precedence precedence)
 }
 } // namespace
 
+namespace
+{
+// One `~` run as one node, emptying `operands`. Kept out of ParseBinary: inlined there it grew
+// the function past what the compiler inlines into it, which every expression paid for at Load
+JINJA2CPP_NOINLINE_INLINE NodeRef<Expression> MakeConcat(NodeArena& nodes, boost::container::small_vector_base<NodeRef<Expression>>& operands)
+{
+    // Jinja2 folds a chain of foldable operands into one str
+    const bool foldable = std::all_of(operands.begin(), operands.end(), [&nodes](const NodeRef<Expression>& operand) { return nodes[operand].IsFoldable(nodes); });
+    const bool byRef = std::all_of(operands.begin(), operands.end(), [&nodes](const NodeRef<Expression>& operand) { return nodes[operand].IsPure(nodes); });
+    const auto node = nodes.Make<ConcatExpression>(nodes.MakeSpan(operands), byRef);
+    if (foldable)
+    {
+        nodes[node].SetFolded();
+    }
+    operands.clear();
+    return node;
+}
+} // namespace
+
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary(LexScanner& lexer, Precedence minPrecedence)
 {
     // The operators of one call combine like the old one-function-per-level chains: each
@@ -324,21 +343,6 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
     // operands of a run are always next to each other. Its operands are one flat node and
     // count as one operator
     boost::container::small_vector<NodeRef<Expression>, 4> concat;
-    auto flushConcat = [this, &concat](NodeRef<Expression>& left) {
-        if (concat.empty())
-        {
-            return;
-        }
-        // Jinja2 folds a chain of foldable operands into one str
-        const bool foldable = std::all_of(concat.begin(), concat.end(), [this](const NodeRef<Expression>& operand) { return m_nodes[operand].IsFoldable(m_nodes); });
-        const auto node = m_nodes.Make<ConcatExpression>(m_nodes.MakeSpan(concat));
-        if (foldable)
-        {
-            m_nodes[node].SetFolded();
-        }
-        left = node;
-        concat.clear();
-    };
     auto left = minPrecedence <= Precedence::Not && lexer.PeekNextToken().keyword == Keyword::LogicalNot ? ParseLogicalNot(lexer)
                                                                                                          : ParseUnaryPlusMinus(lexer);
     while (left)
@@ -348,9 +352,9 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
         {
             break;
         }
-        if (op.precedence != Precedence::Concat)
+        if (op.precedence != Precedence::Concat && !concat.empty())
         {
-            flushConcat(*left);
+            *left = MakeConcat(m_nodes, concat);
         }
         if (op.precedence == Precedence::Compare)
         {
@@ -367,23 +371,19 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
         {
             left = std::move(right);
         }
+        // The operands after the first `~` of a run join it flat: the run is one operator
+        else if (op.precedence == Precedence::Concat && !concat.empty() ? !chain.AfterRightFlat(detail::t_parseLimits.maxExpressionOperators)
+                                                                         : !chain.AfterRight(detail::t_parseLimits.maxExpressionOperators))
+        {
+            left = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
+        }
         else if (op.precedence == Precedence::Concat)
         {
-            const bool first = concat.empty();
-            if (first ? !chain.AfterRight(detail::t_parseLimits.maxExpressionOperators) : !chain.AfterRightFlat(detail::t_parseLimits.maxExpressionOperators))
-            {
-                left = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
-                continue;
-            }
-            if (first)
+            if (concat.empty())
             {
                 concat.push_back(*left);
             }
             concat.push_back(*right);
-        }
-        else if (!chain.AfterRight(detail::t_parseLimits.maxExpressionOperators))
-        {
-            left = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }
         else
         {
@@ -391,9 +391,9 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
         }
     }
 
-    if (left)
+    if (left && !concat.empty())
     {
-        flushConcat(*left);
+        *left = MakeConcat(m_nodes, concat);
     }
     return left;
 }
