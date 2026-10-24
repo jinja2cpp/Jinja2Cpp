@@ -195,9 +195,9 @@ bool IsNotIterable(const InternalValue& val)
         return true;
     case ValueKind::Map:
     {
-        // An object such as cycler() is stored as a map but is not iterable
+        // An object such as cycler() is stored as a map but is not iterable; `loop` is
         auto map = AsMap(val);
-        return map && map->GetObjectClass() != nullptr;
+        return map && map->GetObjectClass() != nullptr && !map->Iterates();
     }
     default:
         return false;
@@ -1715,6 +1715,10 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         if (m_params.mode != ValueConverter::ToListMode)
         {
             return InternalValue();
+        }
+        if (ListAdapter items; val.GetIteration(items))
+        {
+            return ListAdapter::CreateAdapter(items.ToValueList());
         }
         if (const char* objectClass = val.GetObjectClass())
         {

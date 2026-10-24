@@ -965,8 +965,16 @@ struct ListConverter : public visitors::BaseVisitor<std::optional<ListAdapter>>
     }
     result_t operator()(const MapRef& map) const
     {
-        // An object such as namespace() is not iterable
-        if (strictConvertion || map.GetObjectClass())
+        if (strictConvertion)
+        {
+            return result_t();
+        }
+        // An object such as namespace() is not iterable, a loop's `loop` is
+        if (ListAdapter items; map.GetIteration(items))
+        {
+            return items;
+        }
+        if (map.GetObjectClass())
         {
             return result_t();
         }
@@ -1652,11 +1660,19 @@ InternalValueList ListRef::ToValueList() const
     {
         return result;
     }
-    if (auto size = m_accessor->GetSize())
+    const auto size = m_accessor->GetSize();
+    if (size)
     {
         ReserveHint(result, *size);
     }
-    m_accessor->ForEach([&result](InternalValue&& item) {
+    // A generator tells no size up front: held to the cap as it grows. One visitor, so that
+    // push_back stays inline
+    const bool checkGrowth = !size;
+    m_accessor->ForEach([&result, checkGrowth](InternalValue&& item) {
+        if (checkGrowth)
+        {
+            CheckSequenceSize(result.size() + 1, "a list");
+        }
         result.push_back(std::move(item));
         return true;
     });

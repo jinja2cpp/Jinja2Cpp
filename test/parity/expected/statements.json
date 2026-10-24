@@ -5153,6 +5153,900 @@
    "output": "True"
   },
   {
+   "id": "statements.extends_output_after_not_evaluated",
+   "template": "{% extends 'a' %}{{ 1/0 }}x{% for i in [1, 2] %}{{ i/0 }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "A"
+  },
+  {
+   "id": "statements.extends_output_after_in_if_not_evaluated",
+   "template": "{% if true %}{% extends 'a' %}{% endif %}{{ 1/0 }}x",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "A"
+  },
+  {
+   "id": "statements.extends_output_in_if_branch_not_taken",
+   "template": "{% if false %}{% extends 'a' %}{% endif %}B{{ 2 }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "B2"
+  },
+  {
+   "id": "statements.extends_output_before_written",
+   "template": "{{ 'pre' }}{% extends 'a' %}post",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "preA"
+  },
+  {
+   "id": "statements.extends_output_after_in_with_autoescape_filter",
+   "template": "{% extends 'a' %}{% with %}{{ 1/0 }}{% endwith %}{% autoescape true %}{{ 1/0 }}{% endautoescape %}{% filter upper %}{{ 1/0 }}x{% endfilter %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "A"
+  },
+  {
+   "id": "statements.extends_output_after_in_if_filter",
+   "template": "{% if true %}{% extends 'a' %}{% endif %}{% filter upper %}{{ 1/0 }}x{% endfilter %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "A"
+  },
+  {
+   "id": "statements.extends_include_after_written",
+   "template": "{% extends 'a' %}{% include 'inc' %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "IA"
+  },
+  {
+   "id": "statements.extends_include_after_in_if_written",
+   "template": "{% if true %}{% extends 'a' %}{% endif %}{% include 'inc' %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "IA"
+  },
+  {
+   "id": "statements.extends_call_block_after_written",
+   "template": "{% extends 'a' %}{% macro m() %}M{{ caller() }}{% endmacro %}{% call m() %}c{% endcall %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "output": "McA"
+  },
+  {
+   "id": "statements.extends_set_block_after_evaluated",
+   "template": "{% extends 'a' %}{% set x %}{{ 1/0 }}{% endset %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "division by zero"
+   }
+  },
+  {
+   "id": "statements.extends_loop_iter_after_evaluated",
+   "template": "{% extends 'a' %}{% for i in [1/0] %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "division by zero"
+   }
+  },
+  {
+   "id": "statements.extends_if_test_after_evaluated",
+   "template": "{% extends 'a' %}{% if 1/0 %}{% endif %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A",
+    "inc": "I"
+   },
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "division by zero"
+   }
+  },
+  {
+   "id": "statements.extends_call_in_output_after_not_run",
+   "template": "{% set ns = namespace(n=0) %}{% macro inc() %}{% set ns.n = ns.n + 1 %}{% endmacro %}{% if true %}{% extends 'p' %}{% endif %}{{ inc() }}{{ inc() }}{% set n = ns.n %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "p": "[{{ n }}]"
+   },
+   "output": "[0]"
+  },
+  {
+   "id": "statements.extends_twice_rest_not_compiled",
+   "template": "{% extends 'a' %}{% extends 'a' %}{% macro m() %}{{ 1|nonexistent }}{% endmacro %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "a": "A"
+   },
+   "error": {
+    "phase": "render",
+    "type": "TemplateRuntimeError",
+    "message": "extended multiple times"
+   }
+  },
+  {
+   "id": "statements.extends_trans_after_not_evaluated",
+   "template": "{% extends 'a' %}{% trans a=1/0 %}{{ a }}{% endtrans %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {
+    "a": "A"
+   },
+   "output": "A"
+  },
+  {
+   "id": "statements.extends_in_if_trans_after_not_evaluated",
+   "template": "{% if true %}{% extends 'a' %}{% endif %}{% trans a=1/0 %}{{ a }}{% endtrans %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "i18n"
+    ]
+   },
+   "templates": {
+    "a": "A"
+   },
+   "output": "A"
+  },
+  {
+   "id": "statements.loop_include_extending_parent_reads",
+   "template": "{% for x in 'ab' %}{{ loop.index }}{% include 'c' %}|{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "c": "{% extends 'p' %}",
+    "p": "[{{ loop.index }}{{ x }}]"
+   },
+   "output": "1[1a]|2[2b]|"
+  },
+  {
+   "id": "statements.loop_include_extending_parent_hidden",
+   "template": "{% for x in 'ab' %}{% include 'c' %}|{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "c": "{% extends 'p' %}",
+    "p": "[{{ loop is defined }}{{ x }}]"
+   },
+   "output": "[Falsea]|[Falseb]|"
+  },
+  {
+   "id": "statements.loop_include_extending_grandparent",
+   "template": "{% for x in 'ab' %}{% include 'c' %}|{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "c": "{% extends 'm' %}",
+    "m": "{% extends 'p' %}",
+    "p": "[{{ loop is defined }}{{ x }}]"
+   },
+   "output": "[Falsea]|[Falseb]|"
+  },
+  {
+   "id": "statements.loop_include_extending_block_reads",
+   "template": "{% for x in 'ab' %}{{ loop.index }}{% include 'c' %}|{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "c": "{% extends 'p' %}{% block b %}<{{ loop.index }}>{% endblock %}",
+    "p": "{% block b %}{% endblock %}"
+   },
+   "output": "1<1>|2<2>|"
+  },
+  {
+   "id": "statements.loop_include_extending_dynamic",
+   "template": "{% for x in 'ab' %}{% include 'c' %}|{% endfor %}",
+   "context": {
+    "n": "p"
+   },
+   "env": {},
+   "templates": {
+    "c": "{% extends n %}",
+    "p": "[{{ loop is defined }}]"
+   },
+   "output": "[False]|[False]|"
+  },
+  {
    "id": "statements.loop_include_restored_after",
    "template": "{% for x in 'ab' %}{% include 't' %}{{ loop.index }}{{ loop.last }}|{% endfor %}",
    "context": {
@@ -11032,8 +11926,8 @@
    }
   },
   {
-   "id": "statements.loop_pprint",
-   "template": "{% for x in [1, 2] %}{{ loop|pprint }}|{{ loop.cycle|string }};{% endfor %}",
+   "id": "statements.loop_object_tests",
+   "template": "{% for x in [1, 2] %}{{ 'T' if loop is mapping else 'F' }}{{ 'T' if loop is iterable else 'F' }}{{ 'T' if loop is sequence else 'F' }}{{ loop|string }}|{{ loop|length }};{% endfor %}",
    "context": {
     "l": [
      3,
@@ -11069,7 +11963,595 @@
    },
    "env": {},
    "templates": {},
-   "output": "<LoopContext 1/2>|<bound method LoopContext.cycle of <LoopContext 1/2>>;<LoopContext 2/2>|<bound method LoopContext.cycle of <LoopContext 2/2>>;"
+   "output": "FTF<LoopContext 1/2>|2;FTF<LoopContext 2/2>|2;"
+  },
+  {
+   "id": "statements.loop_first_takes_one",
+   "template": "{% for x in [1, 2, 3] %}{{ (loop|first)[0] }}.{{ x }};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "No first item, sequence was empty."
+   }
+  },
+  {
+   "id": "statements.loop_items_refused",
+   "template": "{% for x in [1] %}{{ loop|items|list }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Can only get item pairs from a mapping."
+   }
+  },
+  {
+   "id": "statements.loop_tojson_refused",
+   "template": "{% for x in [1] %}{{ loop|tojson }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Object of type LoopContext is not JSON serializable"
+   }
+  },
+  {
+   "id": "statements.loop_iter_inner_body_reads_index",
+   "template": "{% for x in 'abcd' %}{% for y in loop %}{{ y[1].index }}{{ y[0] }}{% if y[0] == 'c' %}{% break %}{% endif %}{% endfor %}{{ loop.index }}{{ x }}{{ loop.last }};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "2b3c3aFalse;4dTrue;"
+  },
+  {
+   "id": "statements.loop_iter_filtered",
+   "template": "{% for x in [1, 2, 3, 4] if x > 1 %}{{ x }}{{ loop|map(attribute=0)|list }}{{ loop.index }};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "2[3, 4]3;"
+  },
+  {
+   "id": "statements.loop_iter_twice",
+   "template": "{% for x in [1, 2] %}{{ loop|list|length }}{{ loop|list|length }}{{ loop.index }}{{ loop.last }};{% else %}E{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "102True;"
+  },
+  {
+   "id": "statements.loop_has_no_dict_methods",
+   "template": "{% for x in [1] %}{{ loop.items is defined }}{{ loop['index'] is defined }}{{ loop.keys is defined }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "FalseTrueFalse"
+  },
+  {
+   "id": "statements.loop_in_takes_items",
+   "template": "{% for x in [1, 2, 3, 4] %}{{ 'T' if 3 in loop else 'F' }}{{ x }};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "F1;"
+  },
+  {
+   "id": "statements.loop_kept_after_break",
+   "template": "{% set ns = namespace() %}{% for x in range(4) %}{% set ns.l = loop %}{% break %}{% endfor %}{{ ns.l|list|length }}{% for y in ns.l %}{{ y[0] }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "3"
+  },
+  {
+   "id": "statements.loop_kept_after_break_list",
+   "template": "{% set ns = namespace() %}{% for x in [1, 2, 3, 4] %}{% set ns.l = loop %}{% if x == 2 %}{% break %}{% endif %}{% endfor %}{{ ns.l|map(attribute=0)|list }}{{ ns.l.length }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "[3, 4]4"
+  },
+  {
+   "id": "statements.loop_kept_after_break_filtered",
+   "template": "{% set ns = namespace() %}{% for x in [1, 2, 3, 4, 5] if x > 1 %}{% set ns.l = loop %}{% break %}{% endfor %}{{ ns.l|map(attribute=0)|list }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "[3, 4, 5]"
+  },
+  {
+   "id": "statements.loop_kept_to_end",
+   "template": "{% set ns = namespace() %}{% for x in range(4) %}{% set ns.l = loop %}{% endfor %}{{ ns.l|list|length }}{{ ns.l.last }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "0True"
+  },
+  {
+   "id": "statements.loop_pprint",
+   "template": "{% for x in [1, 2] %}{{ loop|pprint }};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<LoopContext 1/2>;<LoopContext 2/2>;"
+  },
+  {
+   "id": "statements.loop_cycle_string",
+   "template": "{% for x in [1, 2] %}{{ loop.cycle|string }};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<bound method LoopContext.cycle of <LoopContext 1/2>>;<bound method LoopContext.cycle of <LoopContext 2/2>>;"
   },
   {
    "id": "statements.call_star_args",

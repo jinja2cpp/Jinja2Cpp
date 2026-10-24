@@ -334,6 +334,9 @@ struct StatementInfo
     // Where its opening tag starts in the source
     std::size_t tagOffset = 0;
     NodeRef<IRendererBase> renderer;
+    // A block's: what the enclosing body did with `self` before it (NodeArena::SelfUse). In the
+    // padding after `renderer`, so the struct keeps its size
+    NodeArena::SelfUse outerSelfUse = NodeArena::SelfUse::None;
     // Set on `{% trans %}` only
     std::shared_ptr<TransInfo> trans;
     // The resolver's frame of the body (0117 P1)
@@ -374,6 +377,8 @@ struct TemplateRootInfo
     // An `extends` at the top level, outside any `if`: Jinja2 compiles no output of the
     // template's body after it (has_known_extends)
     bool knownExtends = false;
+    // A second `extends` after a known one: Jinja2 compiles nothing after it (CompilerExit)
+    bool compilerExit = false;
     // A `{% autoescape %}` with a value that is not constant was parsed: only then can a tag
     // be in volatile code (TemplateParser::IsInVolatileCode)
     bool hasVolatileAutoescape = false;
@@ -416,6 +421,38 @@ struct TemplateRootInfo
     // empty set costs every small template's parse a bucket clear when it is destroyed
     std::optional<std::unordered_set<std::string_view>> names;
 };
+
+// What becomes of an output tag (text, `{{ }}`, `trans`) of the template's body after an
+// `extends`: Jinja2 compiles one in a macro, call block, set block or block; elsewhere it
+// compiles none after a top-level `extends` and guards each after one in an `if`
+// (require_output_check, docs/tasks/0203). Only a tag after an `extends` in the source can
+// run after it: no loop holds one
+enum class OutputCheck
+{
+    None,
+    Drop,
+    Guard
+};
+JINJA2CPP_OUTLINE_INLINE OutputCheck OutputCheckAfterExtends(const TemplateRootInfo& root, const StatementInfoList& stack)
+{
+    const bool compiled = std::any_of(stack.begin(), stack.end(), [](const StatementInfo& info) {
+        return info.type == StatementInfo::MacroStatement || info.type == StatementInfo::MacroCallStatement || info.type == StatementInfo::SetStatement
+               || info.type == StatementInfo::BlockStatement;
+    });
+    if (compiled)
+    {
+        return OutputCheck::None;
+    }
+    return root.knownExtends ? OutputCheck::Drop : OutputCheck::Guard;
+}
+
+// The text and expression tags test `hasExtends` themselves, so that the tags of a template
+// with no `extends` keep a straight path at load
+inline OutputCheck OutputCheckOf(const TemplateRootInfo& root, const StatementInfoList& stack)
+{
+    return root.hasExtends ? OutputCheckAfterExtends(root, stack) : OutputCheck::None;
+}
+
 
 // An assignment target, and whether it names `loop`, which a loop may not bind
 struct ParsedTarget
@@ -472,6 +509,15 @@ private:
     ParseResult ParseEndFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseLoopControl(StatementInfoList& statementsInfo, const Token& stmtTok, LoopControl control);
     nonstd::expected<ParsedTarget, ParseError> ParseAssignTarget(LexScanner& lexer, bool withNamespace);
+    // A statement whose names Jinja2 visits before the expressions parsed among them (`with`
+    // targets, macro parameters) stores `self` first when the body named it nowhere `before`
+    void NoteStoresFirst(NodeArena::SelfUse before, bool storesSelf)
+    {
+        if (before == NodeArena::SelfUse::None && storesSelf)
+        {
+            m_nodes.ExchangeSelfUse(NodeArena::SelfUse::Store);
+        }
+    }
     ParseResult ParseAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
@@ -485,8 +531,9 @@ private:
         info.bodyStart = m_bodies.Size();
         statementsInfo.push_back(std::move(info));
     }
-    // The statement on top of the stack, taken off it
-    static StatementInfo PopStatement(StatementInfoList& statementsInfo)
+    // The statement on top of the stack, taken off it. Inlined: outlined, it costs every
+    // closing tag a call and a move of the struct at load
+    JINJA2CPP_HOT_INLINE static StatementInfo PopStatement(StatementInfoList& statementsInfo)
     {
         auto info = std::move(statementsInfo.back());
         statementsInfo.pop_back();
@@ -1632,9 +1679,15 @@ private:
         {
             templateRoot.SetHasExtends();
         }
-        if (m_nodes.ReadsOuterLoop())
+        // A parent it extends may read it, which an include learns only once `extends` has run
+        // (docs/tasks/0298)
+        if (m_nodes.ReadsOuterLoop() || m_root.hasExtends)
         {
             templateRoot.SetMentionsLoop();
+        }
+        if (m_nodes.FirstSelfUse() == NodeArena::SelfUse::Store)
+        {
+            templateRoot.SetSelfFromContext();
         }
         templateRoot.SetBody(m_bodies.Take(m_nodes, 0));
         return nonstd::expected<void, std::vector<ParseError>>();
@@ -1657,7 +1710,22 @@ private:
             AppendTransText(*statementsStack.back().trans, range);
             return;
         }
-        m_bodies.Add(MakeRawTextRenderer(range), range.startOffset);
+        auto check = OutputCheck::None;
+        if (m_root.hasExtends)
+        {
+            check = OutputCheckAfterExtends(m_root, statementsStack);
+            if (check == OutputCheck::Drop)
+            {
+                return;
+            }
+        }
+        // One call: a second makes the compiler outline the function
+        NodeRef<IRendererBase> text = MakeRawTextRenderer(range);
+        if (check == OutputCheck::Guard)
+        {
+            text = m_nodes.Make<OutputCheckStatement>(text);
+        }
+        m_bodies.Add(text, range.startOffset);
     }
 
     void FineParseMetaBlock(const TextBlockInfo& block)
@@ -1703,7 +1771,16 @@ private:
         }
         if (parseResult)
         {
-            m_bodies.Add(*parseResult, block.tagStart);
+            // Parsed all the same: Jinja2 reports what does not parse after `extends` too
+            const auto check = m_root.hasExtends ? OutputCheckAfterExtends(m_root, statementsStack) : OutputCheck::None;
+            if (check == OutputCheck::None)
+            {
+                m_bodies.Add(*parseResult, block.tagStart);
+            }
+            else if (check == OutputCheck::Guard)
+            {
+                m_bodies.Add(m_nodes.Make<OutputCheckStatement>(*parseResult), block.tagStart);
+            }
         }
         else
         {
@@ -1795,7 +1872,7 @@ private:
                 break;
             }
         }
-        if (!compiled)
+        if (!compiled || m_root.compilerExit)
         {
             m_unknown.DeferSince(mark);
             return;

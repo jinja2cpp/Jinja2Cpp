@@ -6,7 +6,5 @@ statements.caller_escapes_its_loop     output      0165 deliberate: a closure ca
 statements.macro_escapes_its_loop      output      0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
 statements.nested_macro_escapes_its_call output    0165 deliberate: a macro that outlives the macro call defining it reads that call's names as undefined
 statements.block_reference_new_each_read output    0214 deliberate: self.b is one stored callable, so it equals itself; Jinja2 allocates a new BlockReference on each read
-statements.loop_iter_list               output      0219 iterating loop yields its attribute names; Jinja2 takes the rest of the loop as (item, loop) pairs
-statements.loop_iter_for                output      0219 iterating loop yields its attribute names; Jinja2 takes the rest of the loop as (item, loop) pairs
-statements.loop_dictsort                accepts     0219 dictsort reads the loop's attributes as a mapping; Jinja2's LoopContext has no items()
-statements.loop_pprint                  output      0219 pprint prints the loop's attribute map and loop.cycle|string nothing; Jinja2 prints <LoopContext 1/2> and the bound method
+statements.loop_cycle_string              output      0214 loop.cycle|string prints nothing; Jinja2 prints the bound method <bound method LoopContext.cycle of <LoopContext 1/2>>
+statements.loop_iter_inner_body_reads_index output    0304 a for loop over `loop` fetches its next item before the body runs, advancing the outer loop early; Jinja2's LoopContext fetches lazily

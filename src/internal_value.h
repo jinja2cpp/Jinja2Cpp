@@ -608,6 +608,11 @@ struct IMapAccessor : ValueObject
     // A for loop's `loop` object puts the attribute `attr` in `value` and returns true when
     // it can be read without the generic lookup (`loop.index`, 0117 P1); others return false
     virtual bool GetLoopAttr(LoopAttr /*attr*/, InternalValue& /*value*/) const { return false; }
+    // An object that iterates otherwise than over keys, a for loop's `loop` (Jinja2's
+    // LoopContext, docs/tasks/0219), puts the rest of its items in `items` and returns true
+    virtual bool GetIteration(ListAdapter& /*items*/) const { return false; }
+    // Whether GetIteration gives items, asked without making them
+    [[nodiscard]] virtual bool Iterates() const { return false; }
 };
 
 // A non-owning view of a list: code outside internal_value.* reads list values through it,
@@ -807,6 +812,9 @@ public:
     [[nodiscard]] GenericMap CreateGenericMap() const { return m_accessor ? m_accessor->CreateGenericMap() : GenericMap(); }
     // See IMapAccessor::GetLoopAttr
     bool GetLoopAttr(LoopAttr attr, InternalValue& value) const { return m_accessor != nullptr && m_accessor->GetLoopAttr(attr, value); }
+    // See IMapAccessor::GetIteration
+    bool GetIteration(ListAdapter& items) const { return m_accessor != nullptr && m_accessor->GetIteration(items); }
+    [[nodiscard]] bool Iterates() const { return m_accessor != nullptr && m_accessor->Iterates(); }
 
     // An owning copy, which shares the map as copying the value does
     [[nodiscard]] MapAdapter ToAdapter() const;
