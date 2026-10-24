@@ -3,6 +3,7 @@
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
+#include <jinja2cpp/user_callable.h>
 
 #include <gtest/gtest.h>
 
@@ -78,6 +79,20 @@ TEST(UndefinedPolicyTest, ConcatChain)
     EXPECT_EQ("error: 'nope' is undefined", Render("{{ nope ~ 'A' ~ 'B' }}", UndefinedPolicy::Strict));
     EXPECT_EQ("error: 'dict object' has no attribute 'zz'", Render("{{ 'A' ~ 'B' ~ d.zz }}", UndefinedPolicy::Strict));
     EXPECT_EQ("AB{{ nope }}A", Render("{{ 'A' ~ 'B' ~ nope ~ 'A' }}", UndefinedPolicy::Debug));
+
+    // Strict fails only once every operand is evaluated, as Jinja2 builds the operand list first
+    for (const std::string source : { "{{ nope ~ f() }}", "{{ nope ~ 'A' ~ f() ~ f() }}" })
+    {
+        SCOPED_TRACE(source);
+        TemplateEnv env;
+        env.GetSettings().undefinedPolicy = UndefinedPolicy::Strict;
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load(source));
+        int calls = 0;
+        auto result = tpl.RenderAsString({ { "f", MakeCallable([&calls]() { return ++calls; }) } });
+        ASSERT_FALSE(result);
+        EXPECT_EQ(source == "{{ nope ~ f() }}" ? 1 : 2, calls);
+    }
 }
 
 TEST(UndefinedPolicyTest, Chainable)

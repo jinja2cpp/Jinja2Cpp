@@ -831,8 +831,9 @@ InternalValue ConcatExpression::EvaluatePair(NodeRef<Expression> leftExpr, NodeR
         return f(nodes[expr].Evaluate(context));
     };
     return withOperand(leftExpr, [&](const InternalValue& left) {
-        CheckUndefinedUse(left, UndefinedUse::Operator);
         return withOperand(rightExpr, [&](const InternalValue& right) {
+            // Both are evaluated first, as Jinja2 builds the operand list before joining it
+            CheckUndefinedUse(left, UndefinedUse::Operator);
             CheckUndefinedUse(right, UndefinedUse::Operator);
             const std::array<LookupResult, 2> values{ LookupResult(left), LookupResult(right) };
             if ((left.IsMarkup() || right.IsMarkup()) && !m_folded && context.IsOutputAutoescape() && !context.IsVolatileAutoescape())
@@ -872,10 +873,15 @@ InternalValue ConcatExpression::Evaluate(RenderContext& context)
         {
             value = LookupResult(owned.emplace_back(node.Evaluate(context)));
         }
-        // StrictUndefined fails on any operator; the others render as empty text
-        CheckUndefinedUse(*value, UndefinedUse::Operator);
         anyMarkup = anyMarkup || value->IsMarkup();
         values.push_back(value);
+    }
+    // StrictUndefined fails on any operator, once every operand is evaluated: Jinja2 builds the
+    // operand list before joining it, so `missing ~ f()` calls f and `missing ~ 1 / 0` fails
+    // dividing. The others render as empty text
+    for (const auto value : values)
+    {
+        CheckUndefinedUse(*value, UndefinedUse::Operator);
     }
 
     // Jinja2's markup_join, `~` under autoescape when any operand is Markup: the others are
