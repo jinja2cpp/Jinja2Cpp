@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/642
 priority: low
 area: parity
 touches: [src/template_parser.cpp, src/template_parser.h, test/parity/divergences/errors.txt]
