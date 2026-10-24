@@ -13,9 +13,6 @@
 
 #include <jinja2cpp/error_info.h>
 
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/replace.hpp>
-
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -23,6 +20,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <locale>
 #include <optional>
 #include <regex>
 #include <sstream>
@@ -32,8 +30,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-
-namespace ba = boost::algorithm;
 
 using namespace std::string_literals;
 

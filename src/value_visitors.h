@@ -19,7 +19,6 @@
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
-#include <boost/algorithm/string/predicate.hpp>
 #include <fmt/format.h>
 #include <fmt/xchar.h>
 

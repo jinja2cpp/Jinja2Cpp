@@ -102,6 +102,16 @@ struct CallParamsInfo
     std::vector<NodeRef<Expression>> posParams;
 };
 
+// The arguments of a call as parsed: f(*args, **kwargs) is unpacked when the call is evaluated,
+// null when not written. Only calls take them, so filters and tests keep CallParamsInfo
+struct CallArgsInfo
+{
+    OrderedMap<std::string, NodeRef<Expression>> kwParams;
+    std::vector<NodeRef<Expression>> posParams;
+    NodeRef<Expression> dynArgs;
+    NodeRef<Expression> dynKwargs;
+};
+
 inline void VisitCallParams(detail::RefChecker& refs, const CallParamsInfo& params)
 {
     refs.All(params.kwParams);
@@ -116,13 +126,20 @@ struct ArenaKwParam
 };
 
 // The arguments of a call written in the template, kept in its tree: positional ones in
-// order, keyword ones in the order CallParamsInfo keeps them
+// order, keyword ones in the order CallParamsInfo keeps them, then `*args` and `**kwargs`
 struct ArenaCallParams
 {
     ArenaSpan<NodeRef<Expression>> posParams;
     ArenaSpan<ArenaKwParam> kwParams;
+    NodeRef<Expression> dynArgs;
+    NodeRef<Expression> dynKwargs;
 
-    static ArenaCallParams Make(NodeArena& nodes, const CallParamsInfo& params);
+    // Whether the arguments are only known once the call is evaluated
+    [[nodiscard]] bool HasUnpacking() const { return dynArgs || dynKwargs; }
+
+    // Params: CallParamsInfo or CallArgsInfo
+    template<typename Params>
+    static ArenaCallParams Make(NodeArena& nodes, const Params& params);
     void VisitRefs(detail::RefChecker& refs) const
     {
         refs(posParams);
@@ -130,6 +147,8 @@ struct ArenaCallParams
             r(param.name);
             r(param.value);
         });
+        refs(dynArgs);
+        refs(dynKwargs);
     }
 };
 
@@ -977,7 +996,8 @@ public:
         m_params.VisitRefs(refs);
     }
 
-    CallExpression(NodeArena& nodes, NodeRef<Expression> valueRef, const CallParamsInfo& params)
+    template<typename Params>
+    CallExpression(NodeArena& nodes, NodeRef<Expression> valueRef, const Params& params)
         : m_valueRef(valueRef)
         , m_params(ArenaCallParams::Make(nodes, params))
         , m_isNamedCallee(nodes.Is<ValueRefExpression>(m_valueRef))
@@ -1114,6 +1134,8 @@ ParsedArguments ParseCallParams(const std::vector<ArgumentInfo>& args, const Cal
 ParsedArgumentsInfo ParseCallParamsInfo(const std::vector<ArgumentInfo>& args, const CallParamsInfo& params, bool& isSucceeded);
 CallParams EvaluateCallParams(const CallParamsInfo& info, RenderContext& context);
 CallParams EvaluateCallParams(const ArenaCallParams& info, RenderContext& context);
+// Adds the caller of a `{% call %}` block to the arguments of its call
+void AddCallerParam(CallParams& params, InternalValue caller);
 } // namespace helpers
 } // namespace v2
 } // namespace jinja2

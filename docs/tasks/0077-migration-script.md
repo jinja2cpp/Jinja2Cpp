@@ -33,6 +33,8 @@ arguments converted"; such templates move to the `'{}'.format(x)` string method.
 rejects too (0094, Ruslan decided 2026-10-12): `{% macro m %}` and `{% call m %}` without
 parentheses (write `m()`), `{'a' = 1}` dict literals (write `{'a': 1}`), and `+}}` (a `+`
 before the end of an expression is the operator; `+%}` on statements is unchanged).
+A positional argument after a keyword one is a syntax error too (0294): `f(a=1, 2)`, and the
+old `applymacro(macro='m', x)` order, become `f(2, a=1)` and `applymacro(x, macro='m')`.
 
 **Done when.** The script migrates a copy of our own 1.x-style tests to warning-free code,
 in CI.

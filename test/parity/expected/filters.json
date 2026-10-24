@@ -7043,6 +7043,138 @@
    "output": "a_b c"
   },
   {
+   "id": "filters.replace_count_not_rescanned",
+   "template": "{{ 'aaa'|replace('a', 'ba', 2) }}|{{ 'abab'|replace('ab', 'aab', 2) }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "babaa|aabaab"
+  },
+  {
+   "id": "filters.replace_huge_count",
+   "template": "{{ 'abc'|replace('z', 'y', 1000000000000) }}|{{ 'a'|replace('a', 'ba', 1000000000000) }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "abc|ba"
+  },
+  {
    "id": "filters.reverse_list",
    "template": "{% for i in l|reverse %}{{ i }},{% endfor %}",
    "context": {

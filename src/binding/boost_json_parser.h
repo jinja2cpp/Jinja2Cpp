@@ -6,9 +6,7 @@
 #include <jinja2cpp/binding/boost_json.h>
 #include <jinja2cpp/value.h>
 
-#include <boost/any.hpp>
-#include <boost/any/unique_any.hpp>
-
+#include <memory>
 #include <string>
 #include <string_view>
 
@@ -18,7 +16,7 @@ inline namespace v2
 {
 
 template<typename CharT>
-nonstd::expected<Value, std::string> Parse(std::basic_string_view<CharT> json, boost::anys::unique_any& metadataJson)
+nonstd::expected<Value, std::string> Parse(std::basic_string_view<CharT> json, std::shared_ptr<void>& metadataJson)
 {
     //intentionally ignore metadataJson
     (void)metadataJson;

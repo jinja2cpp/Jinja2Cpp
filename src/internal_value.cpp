@@ -222,18 +222,18 @@ std::optional<TargetString> TakeString(InternalValue&& val)
 
 ListRef::Iterator::Iterator() = default;
 
-void ListRef::Iterator::increment()
+void ListRef::Iterator::Increment()
 {
     m_isFinished = !m_iterator || !(*m_iterator)->MoveNext();
     ++m_currentIndex;
     m_currentVal = m_isFinished || !m_iterator ? InternalValue() : (*m_iterator)->GetCurrent();
 }
 
-bool ListRef::Iterator::equal(const Iterator& other) const
+bool ListRef::Iterator::Equal(const Iterator& other) const
 {
     if (!this->m_iterator)
     {
-        return !other.m_iterator ? true : other.equal(*this);
+        return !other.m_iterator ? true : other.Equal(*this);
     }
 
     if (!other.m_iterator)
@@ -609,6 +609,11 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     [[nodiscard]] static InternalValue SubscriptCallable(const Callable& callable, const std::string& field)
     {
+        // f.__call__ is the callable itself: m.__call__() calls the macro (docs/tasks/0214)
+        if (field == "__call__")
+        {
+            return InternalValue(callable);
+        }
         const auto& attributes = callable.GetAttributes();
         if (!attributes)
         {
@@ -2561,6 +2566,10 @@ bool Callable::IsSame(const Callable& other) const
     if (m_callable == other.m_callable)
     {
         return true;
+    }
+    if (m_boundSelf)
+    {
+        return m_boundSelf == other.m_boundSelf && m_boundMethod == other.m_boundMethod;
     }
     // Each lookup of a user callable in the context may convert it anew
     if (m_kind != UserCallable || other.m_kind != UserCallable || GetType() != Type::Expression || other.GetType() != Type::Expression)

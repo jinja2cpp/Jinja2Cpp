@@ -13,12 +13,12 @@
 #include <jinja2cpp/value.h>
 #include <jinja2cpp/value_ptr.h>
 
-#include <boost/iterator/iterator_facade.hpp>
 #include <fmt/core.h>
 
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <new>
@@ -1325,12 +1325,14 @@ inline bool operator!=(const InternalValue& lhs, const InternalValue& rhs)
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
 class JINJA2CPP_EXPORT ListRef::Iterator
-    : public boost::iterator_facade<
-          Iterator,
-          const InternalValue,
-          boost::forward_traversal_tag>
 {
 public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = InternalValue;
+    using difference_type = std::ptrdiff_t;
+    using pointer = const InternalValue*;
+    using reference = const InternalValue&;
+
     Iterator();
 
     explicit Iterator(std::optional<ListAccessorEnumeratorPtr>&& iter)
@@ -1339,17 +1341,28 @@ public:
         , m_currentVal(m_isFinished || !m_iterator ? InternalValue() : (*m_iterator)->GetCurrent())
     {}
 
-private:
-    friend class boost::iterator_core_access;
+    reference operator*() const { return m_currentVal; }
+    pointer operator->() const { return &m_currentVal; }
 
-    void increment();
-
-    bool equal(const Iterator& other) const;
-
-    const InternalValue& dereference() const
+    Iterator& operator++()
     {
-        return m_currentVal;
+        Increment();
+        return *this;
     }
+    Iterator operator++(int)
+    {
+        Iterator prev(*this);
+        Increment();
+        return prev;
+    }
+
+    friend bool operator==(const Iterator& lhs, const Iterator& rhs) { return lhs.Equal(rhs); }
+    friend bool operator!=(const Iterator& lhs, const Iterator& rhs) { return !lhs.Equal(rhs); }
+
+private:
+    void Increment();
+
+    bool Equal(const Iterator& other) const;
 
     std::optional<ListAccessorEnumeratorPtr> m_iterator;
     bool m_isFinished = true;
@@ -1729,6 +1742,15 @@ public:
         return m_attributes;
     }
 
+    // A bound method made anew on each read (loop.cycle): equal to another read of the same
+    // method of the same object, as Python's bound methods compare. `self` must stay valid
+    // while the callable lives (it captures the object); `method` is a static name
+    void SetBoundMethod(const void* self, const char* method)
+    {
+        m_boundSelf = self;
+        m_boundMethod = method;
+    }
+
     // Python compares functions and macros by identity: the copies of one callable share its
     // function, and a user callable converted from the same jinja2::UserCallable is the same
     [[nodiscard]] bool IsSame(const Callable& other) const;
@@ -1737,6 +1759,8 @@ private:
     Kind m_kind;
     std::shared_ptr<const CallableHolder> m_callable;
     std::shared_ptr<const InternalValueMap> m_attributes;
+    const void* m_boundSelf = nullptr;
+    const char* m_boundMethod = nullptr;
 };
 
 

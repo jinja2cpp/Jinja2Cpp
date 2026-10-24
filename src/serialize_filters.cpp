@@ -1539,11 +1539,13 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     auto escape = [](const std::string& str) { return EscapeHtml(std::string_view(str)); };
 
     // Port of Jinja2's do_xmlattr: key="escaped str(value)" in the mapping's order, None and
-    // undefined values left out (and callables, which have no str() here)
+    // undefined values left out. A macro prints its repr; other callables have no str() here
+    // (docs/tasks/0305)
     std::string result;
     for (auto& [keyValue, value] : map->GetEntries())
     {
-        if (IsEmpty(value) || GetIf<Callable>(&value))
+        const auto* callable = GetIf<Callable>(&value);
+        if (IsEmpty(value) || (callable && callable->GetKind() != Callable::Macro))
         {
             continue;
         }

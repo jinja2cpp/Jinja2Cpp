@@ -42,7 +42,7 @@ source and committed), `system` (found on the machine), `ci` (GitHub Actions).
 |---|---|---|---|---|---|---|---|
 | expected-lite | 0.10.0 | BSL-1.0 | mandatory | public-api | fetched | `jinja2::Result<T>` in every Load/Render signature; C++17 has no `std::expected` | Keep until a C++23 floor; could be vendored into `include/` |
 | {fmt} | 12.2.0 | MIT | mandatory | link | fetched | Python `str.format`, `%`-formatting and number output with runtime specs and `wchar_t`; `std::format` is C++20 | Keep; header-only mode would drop the link dependency |
-| Boost | 1.92.0 | BSL-1.0 | mandatory | link | fetched | the nine libraries below | Yes, piece by piece (docs/tasks/0230) |
+| Boost | 1.92.0 | BSL-1.0 | mandatory | link | fetched | the eight libraries below | Yes, piece by piece (docs/tasks/0230) |
 | robin-hood-hashing | 3.11.5, modified | MIT | mandatory | internal | vendored | flat hash map for values and scopes, faster than `std::unordered_map` here | Keep the idea; upstream is archived (docs/tasks/0231) |
 | lexertk | unrecorded, modified | MIT | mandatory | internal | vendored | expression tokenizer | Keep; effectively forked code |
 | value_types | 57f2e7a, modified | MIT | mandatory | public-api | vendored | `polymorphic`/`indirect` in `jinja2::v2::detail::xyz`, behind `jinja2::types` (Value, GenericList) | Keep; `std::` at C++26 |
@@ -56,21 +56,15 @@ source and committed), `system` (found on the machine), `ci` (GitHub Actions).
 ### Boost, library by library
 
 Boost is the weight. Internal mode fetches the whole 1.92.0 CMake archive, configures
-47 Boost libraries (the transitive closure of what CMake asks for) and installs all of
-them: 56 MB of headers and four static libraries (`boost_filesystem`, `boost_json`,
-`boost_container`, `boost_atomic`) next to `libjinja2cpp`. What the code actually
-includes is small:
+43 Boost libraries (the transitive closure of what CMake asks for) and installs all of
+them: 53 MB of headers and two static libraries (`boost_json`, `boost_container`) next
+to `libjinja2cpp`. What the code actually includes is small:
 
 | Boost library | Used for | C++17 alternative | Cost to replace |
 |---|---|---|---|
 | core (`span`) | about 57 uses in 14 `src/` files | none before C++20 `std::span` | small: an internal span |
 | container (`small_vector`) | about 27 hot-path uses | none | medium: perf-sensitive, measure with bench/ |
 | smart_ptr (`intrusive_ptr`) | InternalValue payloads (one pointer wide, 0140) | none (`shared_ptr` is two pointers) | small: about 60 lines |
-| any (`unique_any`) | holds the parsed metadata document | `std::any` needs copyable payloads | small |
-| iterator (`iterator_facade`) | one internal iterator | hand-written iterator | small |
-| filesystem | `RealFileSystem`: path joining, `last_write_time` | `std::filesystem` | small; removes two compiled libraries |
-| algorithm (string) | `replace_all`, `is_alnum`, `all(is_space)` | a few lines of `std::string` code | trivial |
-| predef (endian) | RapidJSON's UTF-16/32 choice | compiler macros | trivial |
 | json | the default metadata backend | nlohmann (header-only) or an internal reader | small, behind the existing backend switch |
 
 `lexical_cast`, `numeric_conversion`, `variant` and `optional` are no longer requested
@@ -79,6 +73,10 @@ includes is small:
 `algorithm/string/join.hpp` are gone (docs/tasks/0229). `container` is now requested by
 name: `lexical_cast` used to pull it in, and `small_vector` needs it. `optional` and the
 other leaf libraries still arrive as dependencies of `algorithm`, `any` and `json`.
+`any` (`unique_any`), `iterator` (`iterator_facade`), the string algorithms and `predef`
+endian are no longer used by the code (0230 D3: a `shared_ptr<void>`, a hand-written
+iterator, a few lines of `std::string` code and the compiler's byte-order macros). CMake
+still requests `algorithm` and `any` until D7 rewrites the deps modes.
 
 ## Tests, benchmarks and tooling
 
@@ -101,7 +99,7 @@ other leaf libraries still arrive as dependencies of `algorithm`, `any` and `jso
 | Consumer | Needs |
 |---|---|
 | compiles against the installed headers | expected-lite only (plus the JSON library of a binding header they include) |
-| links the static library | also fmt and the Boost libraries (filesystem, atomic; json and container with the default backend) |
+| links the static library | also fmt and the Boost libraries (json and container with the default backend) |
 | links the shared library built in internal mode | expected-lite only; fmt and Boost are linked in |
 
 ## The contradictions this exposes

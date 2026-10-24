@@ -75,6 +75,10 @@ std::vector<LimitCase> Cases()
         // Past the built-in cap as well: the render's own limit is reported
         { "RepeatAboveCap", "{{ 'x' * 100000000 }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
         { "CenterAboveCap", "{{ 'x'|center(100000000) }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
+        // f(*args) builds the argument list from the iterable (docs/tasks/0220)
+        { "UnpackedArgsOver", "{% macro m() %}{{ varargs|length }}{% endmacro %}{{ m(*range(2000)) }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
+        { "UnpackedArgsAt", "{% macro m() %}{{ varargs|length }}{% endmacro %}{{ m(1, *range(999)) }}", [](auto& l) { l.maxSequenceSize = 1000; }, "" },
+        { "UnpackedGeneratorOver", "{% macro m() %}{{ varargs|length }}{% endmacro %}{{ m(*range(2000)|select) }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
         { "OutputOver", "{% for i in range(2000) %}x{% endfor %}", [](auto& l) { l.maxOutputSize = 1000; }, "maxOutputSize" },
         { "OutputAt", "{% for i in range(1000) %}x{% endfor %}", [](auto& l) { l.maxOutputSize = 1000; }, "" },
         { "OutputLongText", "{{ 'x' * 2000 }}", [](auto& l) { l.maxOutputSize = 1000; }, "maxOutputSize" },
@@ -418,6 +422,55 @@ TEST_F(LimitsEnvTest, NestedRenderKeepsItsOwnLimits)
     Template free(&freeEnv);
     ASSERT_TRUE(free.Load("{{ limitedInner() }}{% for i in range(1000) %}{% endfor %}").has_value());
     EXPECT_EQ("stopped", free.RenderAsString(params).value());
+}
+
+TEST_F(LimitsEnvTest, UnpackedKeywordsAreHeldToTheSequenceCap)
+{
+    // f(**d) builds a dict of keyword arguments from a host mapping (docs/tasks/0220)
+    ValuesMap big;
+    for (int idx = 0; idx < 2000; ++idx)
+    {
+        big["k" + std::to_string(idx)] = idx;
+    }
+    Settings limited;
+    limited.limits.maxSequenceSize = 1000;
+    TemplateEnv env;
+    env.SetSettings(limited);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% macro m() %}{{ kwargs|length }}{% endmacro %}{{ m(**big) }}").has_value());
+    auto result = tpl.RenderAsString({ { "big", big } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    big.erase("k0");
+    for (int idx = 1000; idx < 2000; ++idx)
+    {
+        big.erase("k" + std::to_string(idx));
+    }
+    EXPECT_EQ("999", tpl.RenderAsString({ { "big", big } }).value());
+}
+
+TEST_F(LimitsEnvTest, UnpackedMappingKeysAreHeldToTheSequenceCap)
+{
+    // f(*d) passes a host mapping's keys, checked against the cap before they are copied
+    ValuesMap big;
+    for (int idx = 0; idx < 2000; ++idx)
+    {
+        big["k" + std::to_string(idx)] = idx;
+    }
+    Settings limited;
+    limited.limits.maxSequenceSize = 1000;
+    TemplateEnv env;
+    env.SetSettings(limited);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% macro m() %}{{ varargs|length }}{% endmacro %}{{ m(1, *big) }}").has_value());
+    auto result = tpl.RenderAsString({ { "big", big } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    for (int idx = 999; idx < 2000; ++idx)
+    {
+        big.erase("k" + std::to_string(idx));
+    }
+    EXPECT_EQ("1000", tpl.RenderAsString({ { "big", big } }).value());
 }
 
 TEST_F(LimitsEnvTest, FailedRenderLeavesNoLimits)
