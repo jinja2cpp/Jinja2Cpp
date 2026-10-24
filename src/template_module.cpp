@@ -447,9 +447,9 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
 }
 
 template nonstd::expected<BasicTemplateModule<char>, BasicErrorInfo<char>> TemplateImpl<char>::MakeModule(const std::shared_ptr<const TemplateImpl>& self,
-                                                                                                         const ValuesMap& params);
+                                                                                                          const ValuesMap& params);
 template nonstd::expected<BasicTemplateModule<wchar_t>, BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::MakeModule(const std::shared_ptr<const TemplateImpl>& self,
-                                                                                                                  const ValuesMap& params);
+                                                                                                                   const ValuesMap& params);
 
 } // namespace v2
 } // namespace jinja2
