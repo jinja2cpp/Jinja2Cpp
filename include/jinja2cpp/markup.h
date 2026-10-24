@@ -1,6 +1,8 @@
 #ifndef JINJA2CPP_MARKUP_H
 #define JINJA2CPP_MARKUP_H
 
+#include "config.h"
+
 #include <iosfwd>
 #include <string>
 #include <string_view>
@@ -28,6 +30,15 @@ inline namespace v2
  *  params["banner"] = jinja2::Markup("<b>sale</b>"); // {{ banner }} prints <b>sale</b> even with autoescape on
  *  jinja2::Markup more(markup.str() + "<i>new</i>"); // deliberately marked safe again
  * ```
+ *
+ * To make a Markup from text that is not safe, escape it with \ref Escape, Python's `markupsafe.escape`:
+ *
+ * ```c++
+ *  jinja2::Markup greeting(jinja2::Markup("<b>").str() + jinja2::Escape(name).str() + "</b>");
+ * ```
+ *
+ * There is no `operator+`: Python's `Markup + str` escapes the `str`, but a C++ `+` that silently escapes one side
+ * and not the other reads too much like string concatenation; write the escape.
  *
  * A \ref Value also holds a Markup when a template result or a user callable's return value is Markup in the
  * template (for instance after the `safe` filter), and \ref Value::IsString, \ref Value::AsString and
@@ -117,6 +128,31 @@ private:
 using Markup = BasicMarkup<char>;
 //! Safe wide text, see \ref BasicMarkup
 using WMarkup = BasicMarkup<wchar_t>;
+
+/*!
+ * \brief HTML-escapes `text` into a Markup: Python's `markupsafe.escape`
+ *
+ * Replaces `&`, `<`, `>`, `'` and `"` with `&amp;`, `&lt;`, `&gt;`, `&#39;` and `&#34;`, as `markupsafe.escape`
+ * does, and every other character is kept. An argument that is already a Markup is returned as is (see the
+ * overloads below), so escaping twice is safe.
+ *
+ * Throws std::length_error when the escaped text would be longer than the sequence cap: the render's
+ * Settings::Limits::maxSequenceSize inside a render, which then fails with ErrorCode::ResourceLimitExceeded,
+ * and 2^26 characters outside one.
+ */
+JINJA2CPP_EXPORT Markup Escape(std::string_view text);
+//! \copydoc Escape(std::string_view)
+JINJA2CPP_EXPORT WMarkup Escape(std::wstring_view text);
+//! A Markup is already safe: returned unchanged, as `markupsafe.escape(markup)` returns it
+inline Markup Escape(const Markup& text)
+{
+    return text;
+}
+//! A Markup is already safe: returned unchanged, as `markupsafe.escape(markup)` returns it
+inline WMarkup Escape(const WMarkup& text)
+{
+    return text;
+}
 } // namespace v2
 } // namespace jinja2
 

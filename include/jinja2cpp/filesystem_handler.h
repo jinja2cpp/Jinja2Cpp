@@ -143,8 +143,8 @@ private:
  * This filesystem handler is an interface to the real file system. Root directory for file name mapping provided as a constructor argument. Each name (path) of
  * the file to open is appended to the root directory path and then passed to the stream open methods.
  *
- * Names follow the rules of Python Jinja2's `FileSystemLoader`: a name is split at `/` (on Windows, `\` is a separator too), and a name with a `..` piece is
- * not found. Empty and `.` pieces are skipped, so `/a.j2` and `./a.j2` both name `a.j2` under the root. On Windows a piece holding `\` or `:` is not found.
+ * Names follow the rules of Python Jinja2's `FileSystemLoader`: a name is split at `/`, and a name with a `..` piece is not found. Empty and `.`
+ * pieces are skipped, so `/a.j2` and `./a.j2` both name `a.j2` under the root. On Windows a name holding `\` or `:` is not found.
  * Only regular files are found; symbolic links are followed, as in Python.
  */
 class JINJA2CPP_EXPORT RealFileSystem : public IFilesystemHandler
@@ -217,8 +217,8 @@ private:
  * wherever they point, as Python's `FileSystemLoader` does; this handler opens a file only if it really lies under the root, and the check applies to the
  * file that is actually read, so a link swapped while a template loads cannot reach outside.
  *
- * Names follow the same rules as \ref RealFileSystem (those of Python's `FileSystemLoader`): a name is split at `/` (on Windows, `\` too), and a name with a
- * `..` piece is not found. Empty and `.` pieces are skipped. On Windows a piece holding `\` or `:` is not found. In addition:
+ * Names follow the same rules as \ref RealFileSystem (those of Python's `FileSystemLoader`): a name is split at `/`, and a name with a `..` piece is not
+ * found. Empty and `.` pieces are skipped. On Windows a name holding `\` or `:` is not found. In addition:
  * - The root path itself is trusted: links in it are followed.
  * - Below the root, a symbolic link is followed only while it resolves inside the root. On POSIX systems a link with an absolute target, or one whose
  *   `..` pieces climb above the root, is not found. On Windows the file is opened following links and junctions, and is found only if its final path lies

@@ -27,3 +27,5 @@ operation calls `CheckSequenceSize` before it allocates.
 fails with `ResourceLimitExceeded` (`UnexpectedException` until 0250 P3), never `bad_alloc`.
 
 **Done when.** The rows pass and the limits-on fuzz target (0267) reports no out-of-memory.
+
+**Trust model.** When this lands, update its entry under Known gaps in [docs/security.md](../security.md) (0224).

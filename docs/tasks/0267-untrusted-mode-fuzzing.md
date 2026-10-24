@@ -27,3 +27,5 @@ These are the paths a host rendering user templates exercises.
 
 **Done when.** The targets run in the PR and nightly jobs and the limits-on target fails the job
 on an injected slow seed.
+
+**Trust model.** When this lands, update its entry under Known gaps in [docs/security.md](../security.md) (0224).

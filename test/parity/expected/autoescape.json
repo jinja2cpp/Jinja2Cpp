@@ -1388,6 +1388,23 @@
    "output": "<i>&lt;u&gt;"
   },
   {
+   "id": "autoescape.env_on_concat_markup_middle",
+   "template": "{% set a = '<i>'|safe %}{{ '<' ~ a ~ '>' }}|{{ html ~ html ~ a }}|{{ a ~ html ~ 1 ~ n ~ l }}|{{ '<' ~ 'x' ~ a ~ '>' ~ 1 }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&lt;<i>&gt;|&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;<i>|<i>&lt;b&gt;&amp;&#39;&#34;&lt;/b&gt;1None[&#39;&lt;a&gt;&#39;, &#39;&lt;b&gt;&#39;]|&lt;x<i>&gt;1"
+  },
+  {
    "id": "autoescape.env_on_concat_chain",
    "template": "{% set a = '<i>'|safe %}{{ html ~ a ~ 1 }}|{{ a ~ n ~ [1] }}|{{ (html ~ a) ~ html }}|{{ html|safe ~ 2 * 3 ~ html }}",
    "context": {

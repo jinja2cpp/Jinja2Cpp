@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
 priority: low
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/631
 area: api
 depends: [0180]
-touches: [include/jinja2cpp/markup.h, src/markup.h, test/basic_tests.cpp]
+touches: [include/jinja2cpp/markup.h, include/jinja2cpp/user_callable.h, src/markup.cpp, CMakeLists.txt, test/basic_tests.cpp]
 shares: [docs/api-2.0.md]
 ---
 # A public escape helper for Markup
@@ -33,3 +34,16 @@ its base `std::string`, and there is no implicit string-to-Markup conversion. Ei
 `Markup` parameter take a Markup argument (and reject or escape a plain string, as
 `markupsafe.escape` would), or document that callables needing the flag take
 `UserCallableParams`.
+
+**As built.** `jinja2::Escape(std::string_view)` and `Escape(std::wstring_view)` (exported,
+in `src/markup.cpp` on `EscapeHtml`, so the short narrow case uses the thread buffer) return
+`Markup`/`WMarkup`; inline `Escape(const Markup&)`/`Escape(const WMarkup&)` return the
+argument unchanged. `Markup` gets no `operator+`: a `+` that escapes one side silently reads as
+plain concatenation, so the host writes `Markup(a.str() + Escape(b).str())`. A `Markup` parameter of a
+`MakeCallable` callable (by value or `const&`, on both the lambda path through `ArgPromoter`
+and the function-pointer path through `ArgInfoT`) now takes a Markup argument as is and a
+plain string of its character type escaped, as `markupsafe.escape` would make one; None gives
+an empty Markup, as None gives an empty string to a `std::string` parameter, and any other
+type leaves the call unmade (it returns None), as for other typed parameters. A `std::string`
+parameter still receives a Markup's text. `test/basic_tests.cpp` `EscapeMatchesMarkupsafe` pins the rows against markupsafe
+3.0.3 and `TypedMarkupParameter` covers both character types.

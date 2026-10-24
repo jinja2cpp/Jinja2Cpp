@@ -105,6 +105,26 @@ TEST(AutoescapeTest, EscapesEveryStringKind)
               Render<wchar_t>(wtpl, params, true));
 }
 
+// `~` joins the whole run as markup_join: with any Markup operand the others are escaped,
+// wherever it is (each row compared with Python Jinja2 3.1.6)
+TEST(AutoescapeTest, ConcatChainWithMarkupOperand)
+{
+    ValuesMap params{ { "h", "<h>" }, { "n", Value() } };
+    const std::string safe = "{% set m = '<m>'|safe %}";
+    EXPECT_EQ("&lt;<m>&gt;", Render(safe + "{{ '<' ~ m ~ '>' }}", params, true));
+    EXPECT_EQ("&lt;h&gt;&lt;h&gt;<m>", Render(safe + "{{ h ~ h ~ m }}", params, true));
+    EXPECT_EQ("<m>&lt;h&gt;1None[&#39;&lt;h&gt;&#39;]", Render(safe + "{{ m ~ h ~ 1 ~ n ~ [h] }}", params, true));
+    EXPECT_EQ("&lt;x<m>&gt;1", Render(safe + "{{ '<' ~ 'x' ~ m ~ '>' ~ 1 }}", params, true));
+    EXPECT_EQ("&lt;h&gt;<m>&lt;h&gt;", Render(safe + "{{ (h ~ m) ~ h }}", params, true));
+    EXPECT_EQ("&lt;h&gt;&lt;h&gt;&lt;h&gt;", Render(safe + "{{ h ~ h ~ h }}", params, true));
+    // Without autoescape the operands are joined as they are
+    EXPECT_EQ("<<m>>", Render(safe + "{{ '<' ~ m ~ '>' }}", params, false));
+    // The same in a wide template
+    EXPECT_EQ(L"&lt;<m>&gt;&lt;h&gt;", Render<wchar_t>(L"{% set m = '<m>'|safe %}{{ '<' ~ m ~ '>' ~ h }}", params, true));
+    // A chain of foldable operands is a str, never Markup (Jinja2 folds it at compile time)
+    EXPECT_EQ("&lt;&lt;m&gt;&gt;", Render<char>("{{ '<' ~ '<m>'|safe ~ '>' }}", params, true));
+}
+
 TEST(AutoescapeTest, BlockOverridesSetting)
 {
     ValuesMap params{ { "html", "<b>" } };

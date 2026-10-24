@@ -93,6 +93,7 @@ CASES = [
     ("env_on_caller_markup_call_site", "{% macro w() %}[{{ caller() }}]{% endmacro %}{% autoescape false %}{% call w() %}<{{ html }}>{% endcall %}{% endautoescape %}", AE),
     ("markup_slice", "{{ (html|safe)[0] is escaped }}{{ (html|safe)[1:3] is escaped }}"),
     ("env_on_concat_markup_var", "{% set a = '<i>'|safe %}{{ a ~ '<u>' }}", AE),
+    ("env_on_concat_markup_middle", "{% set a = '<i>'|safe %}{{ '<' ~ a ~ '>' }}|{{ html ~ html ~ a }}|{{ a ~ html ~ 1 ~ n ~ l }}|{{ '<' ~ 'x' ~ a ~ '>' ~ 1 }}", AE),
     ("env_on_concat_chain", "{% set a = '<i>'|safe %}{{ html ~ a ~ 1 }}|{{ a ~ n ~ [1] }}|{{ (html ~ a) ~ html }}|{{ html|safe ~ 2 * 3 ~ html }}", AE),
     ("env_on_concat_folded", "{{ '<i>'|safe ~ '<u>' ~ html }}|{{ ('<i>'|safe ~ '<u>') ~ html }}|{{ ('<i>'|safe)[0] ~ 'x' }}|{{ ['<i>'|safe]|first ~ '<' }}|{{ '<i>'|safe ~ ('<u>', 1)[0] }}", AE),
     ("env_on_concat_not_folded", "{{ ['<i>'|safe]|random ~ '<' }}|{{ '<i>'|safe ~ l|map('upper')|first }}|{% macro m() %}<b>{% endmacro %}{{ m() ~ '<' }}", AE),

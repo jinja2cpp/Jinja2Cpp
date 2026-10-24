@@ -94,6 +94,9 @@ CASES = [
     ("strict_iterate", "{% for i in nope %}{% endfor %}", STRICT),
     ("strict_eq", "{{ nope == 1 }}", STRICT),
     ("strict_concat", "{{ 'a' ~ nope }}", STRICT),
+    # Every operand of a `~` run is evaluated before an undefined one fails, as Jinja2 builds the list first
+    ("strict_concat_evaluates_all", "{{ nope ~ (1 / 0) }}", STRICT),
+    ("strict_concat_run_evaluates_all", "{{ nope ~ 'a' ~ (1 / 0) }}", STRICT),
     ("strict_length", "{{ nope|length }}", STRICT),
     ("strict_not", "{{ not nope }}", STRICT),
     ("strict_in", "{{ 1 in nope }}", STRICT),

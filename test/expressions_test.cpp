@@ -131,6 +131,18 @@ rain)")
 }
 // clang-format on
 
+// A `~` run is one node as Jinja2's Concat; its precedence is unchanged: tighter than `+`,
+// looser than `*`, the filter and comparisons (each row compared with Python Jinja2 3.1.6)
+// clang-format off
+MULTISTR_TEST(ExpressionsMultiStrTest, ConcatChains,
+R"({{ 'a' + 'b' ~ 3 * 2 }}|{{ a ~ b == 'AB' }}|{{ x ~ s | upper }}|{{ not a ~ b }}|{{ 'a' ~ 'b' if c else 'd' }}|{{ 'a' ~ 'b' if nope else 'd' }}|{{ 1 ~ none ~ [1] }}|{{ (a ~ b) ~ (b ~ a) ~ x }}|{{ 1.5 ~ true ~ (1, 2) ~ {'k': 1} }}|{{ s ~ 1 * 2 ~ x }}|{{ a ~ b ~ nope ~ a }})",
+//-----------
+R"(ab6|True|3HELLO|False|ab|d|1None[1]|ABBA3|1.5True(1, 2){'k': 1}|Hello23|ABA)")
+{
+    params = {{"a", "A"}, {"b", "B"}, {"c", true}, {"x", 3}, {"s", "Hello"}};
+}
+// clang-format on
+
 // Names, call arguments, comparison chains and scalar literals live in the template's tree,
 // and the literal `in` lists and `%` formats are prepared at Load (0118 P5b). Names longer
 // than the short-string buffer check that nothing reads a copy that is gone

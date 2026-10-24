@@ -1351,6 +1351,44 @@
    }
   },
   {
+   "id": "undefined.strict_concat_evaluates_all",
+   "template": "{{ nope ~ (1 / 0) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "division by zero"
+   }
+  },
+  {
+   "id": "undefined.strict_concat_run_evaluates_all",
+   "template": "{{ nope ~ 'a' ~ (1 / 0) }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ZeroDivisionError",
+    "message": "division by zero"
+   }
+  },
+  {
    "id": "undefined.strict_length",
    "template": "{{ nope|length }}",
    "context": {
