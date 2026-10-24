@@ -20,9 +20,15 @@
 #if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
 #define JINJA2CPP_TEST_SANITIZED 1
 #endif
+#ifdef __SANITIZE_THREAD__
+#define JINJA2CPP_TEST_TSAN 1
+#endif
 #ifdef __has_feature
 #if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer) || __has_feature(undefined_behavior_sanitizer)
 #define JINJA2CPP_TEST_SANITIZED 1
+#endif
+#if __has_feature(thread_sanitizer)
+#define JINJA2CPP_TEST_TSAN 1
 #endif
 #endif
 
@@ -287,8 +293,11 @@ TEST_F(TemplateModuleTest, SelfReferencingContainers)
 // A value nested deeper than the stack allows fails as a render of it does
 TEST_F(TemplateModuleTest, DeepNesting)
 {
-#ifdef JINJA2CPP_TEST_SANITIZED
-    // LLVM 18's ThreadSanitizer corrupts its trace on a history this long (docs/tasks/0093)
+#ifdef JINJA2CPP_TEST_TSAN
+    // The access history of the whole run, which already has 0093's deep values, makes LLVM
+    // 18's ThreadSanitizer reset its traces and corrupt memory on the CI runners (0093)
+    const std::string levels = "2000";
+#elif defined(JINJA2CPP_TEST_SANITIZED)
     const std::string levels = "20000";
 #else
     const std::string levels = "100000";
