@@ -370,100 +370,104 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         }
     }
 
-    // A string as _pprint_str splits it: its code points, where each starts, and its lines
+    // A string as _pprint_str splits it, read forward by byte offsets, so that it needs no
+    // memory beyond the pieces it writes
     struct PprintText
     {
-        explicit PprintText(std::string_view text)
-            : str(text)
-        {
-            for (size_t pos = 0; pos < str.size();)
-            {
-                const auto next = NextCodePoint(str, pos);
-                offsets.push_back(pos);
-                chars.push_back(DecodeUtf8(str.substr(pos, next - pos)));
-                pos = next;
-            }
-            offsets.push_back(str.size());
-        }
+        // The code point at pos (pos < str.size())
+        [[nodiscard]] uint32_t At(size_t pos) const { return DecodeUtf8(str.substr(pos, NextCodePoint(str, pos) - pos)); }
 
-        [[nodiscard]] std::string Repr(size_t from, size_t to) const { return PrettyPrinter::Repr(str.substr(offsets[from], offsets[to] - offsets[from])); }
+        [[nodiscard]] std::string Repr(size_t from, size_t to) const { return PrettyPrinter::Repr(str.substr(from, to - from)); }
 
-        // str.splitlines(True), as ranges of code points
-        [[nodiscard]] std::vector<std::pair<size_t, size_t>> Lines() const
+        // The end of the line that starts at pos, its line break included (str.splitlines(True))
+        [[nodiscard]] size_t LineEnd(size_t pos) const
         {
-            std::vector<std::pair<size_t, size_t>> lines;
-            size_t lineStart = 0;
-            for (size_t idx = 0; idx < chars.size(); ++idx)
+            while (pos < str.size())
             {
-                if (!IsLineBreak(chars[idx]))
+                const auto cp = At(pos);
+                pos = NextCodePoint(str, pos);
+                if (IsLineBreak(cp))
                 {
-                    continue;
-                }
-                if (chars[idx] == '\r' && idx + 1 < chars.size() && chars[idx + 1] == '\n')
-                {
-                    ++idx;
-                }
-                lines.emplace_back(lineStart, idx + 1);
-                lineStart = idx + 1;
-            }
-            if (lineStart < chars.size())
-            {
-                lines.emplace_back(lineStart, chars.size());
-            }
-            return lines;
-        }
-
-        // The end of the part re.findall(r'\S*\s*', line) finds at start: a word and the
-        // whitespace after it
-        [[nodiscard]] size_t PartEnd(size_t start, size_t to) const
-        {
-            while (start < to && !unicode::IsSpace(chars[start]))
-            {
-                ++start;
-            }
-            while (start < to && unicode::IsSpace(chars[start]))
-            {
-                ++start;
-            }
-            return start;
-        }
-
-        // The pieces of a line too wide for maxWidth: as many whole parts as fit in each, the
-        // last part of the string with `allowance` columns less
-        void SplitLine(std::vector<std::string>& chunks, size_t from, size_t to, int64_t maxWidth, int64_t lastAllowance) const
-        {
-            size_t current = from;
-            size_t currentEnd = from;
-            for (size_t partStart = from; partStart < to;)
-            {
-                const size_t partEnd = PartEnd(partStart, to);
-                if (partEnd == to)
-                {
-                    maxWidth -= lastAllowance;
-                }
-                if (Width(Repr(current, partEnd)) > maxWidth)
-                {
-                    if (currentEnd != current)
+                    if (cp == '\r' && pos < str.size() && str[pos] == '\n')
                     {
-                        chunks.push_back(Repr(current, currentEnd));
+                        ++pos;
                     }
-                    current = partStart;
+                    break;
                 }
-                currentEnd = partEnd;
-                partStart = partEnd;
             }
-            if (currentEnd != current)
+            return pos;
+        }
+
+        // The end of the part re.findall(r'\S*\s*', line) finds at pos: a word and the
+        // whitespace after it
+        [[nodiscard]] size_t PartEnd(size_t pos, size_t to) const
+        {
+            while (pos < to && !unicode::IsSpace(At(pos)))
             {
-                chunks.push_back(Repr(current, currentEnd));
+                pos = NextCodePoint(str, pos);
             }
+            while (pos < to && unicode::IsSpace(At(pos)))
+            {
+                pos = NextCodePoint(str, pos);
+            }
+            return pos;
         }
 
         static int64_t Width(const std::string& repr) { return static_cast<int64_t>(CodePointCount(std::string_view(repr))); }
 
         std::string_view str;
-        std::vector<uint32_t> chars;
-        std::vector<size_t> offsets;
     };
+
+    // The pieces _pprint_str writes, each on a line of its own at column indent, within the cap
+    // on the result (out holds what comes before them)
+    struct PprintChunks
+    {
+        void Add(const std::string& chunk)
+        {
+            if (count != 0)
+            {
+                NewLine(joined, "\n", indent);
+            }
+            CheckSequenceSize(static_cast<uint64_t>(prefix) + joined.size() + chunk.size(), "a pprint result");
+            joined += chunk;
+            ++count;
+        }
+
+        size_t prefix = 0;
+        int64_t indent = 0;
+        std::string joined;
+        size_t count = 0;
+    };
+
+    // The pieces of a line too wide for maxWidth: as many whole parts as fit in each, the
+    // last part of the string with `lastAllowance` columns less
+    static void SplitLine(const PprintText& text, PprintChunks& chunks, size_t from, size_t to, int64_t maxWidth, int64_t lastAllowance)
+    {
+        size_t current = from;
+        size_t currentEnd = from;
+        for (size_t partStart = from; partStart < to;)
+        {
+            const size_t partEnd = text.PartEnd(partStart, to);
+            if (partEnd == to)
+            {
+                maxWidth -= lastAllowance;
+            }
+            if (PprintText::Width(text.Repr(current, partEnd)) > maxWidth)
+            {
+                if (currentEnd != current)
+                {
+                    chunks.Add(text.Repr(current, currentEnd));
+                }
+                current = partStart;
+            }
+            currentEnd = partEnd;
+            partStart = partEnd;
+        }
+        if (currentEnd != current)
+        {
+            chunks.Add(text.Repr(current, currentEnd));
+        }
+    }
 
     // _pprint_str: the lines of the string (str.splitlines(True)), a line wider than the width
     // split after the whitespace of its words, each piece printed as its own repr on a line of
@@ -472,47 +476,42 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     {
         if (str.empty())
         {
-            out += Repr(str);
+            Write(out, Repr(str));
             return;
         }
-        const PprintText text(str);
-        const auto lines = text.Lines();
+        const PprintText text{ str };
         if (level == 1)
         {
             ++indent;
             ++allowance;
         }
         const int64_t maxWidth = Width - indent;
-        std::vector<std::string> chunks;
+        PprintChunks chunks{ out.size() + 2, indent, {}, 0 };
         std::string rep;
-        for (size_t lineIdx = 0; lineIdx != lines.size(); ++lineIdx)
+        for (size_t from = 0; from < str.size();)
         {
-            const auto [from, to] = lines[lineIdx];
-            const bool lastLine = lineIdx + 1 == lines.size();
+            const size_t to = text.LineEnd(from);
+            const bool lastLine = to == str.size();
             rep = text.Repr(from, to);
             if (PprintText::Width(rep) <= maxWidth - (lastLine ? allowance : 0))
             {
-                chunks.push_back(rep);
-                continue;
+                chunks.Add(rep);
             }
-            text.SplitLine(chunks, from, to, maxWidth, lastLine ? allowance : 0);
+            else
+            {
+                SplitLine(text, chunks, from, to, maxWidth, lastLine ? allowance : 0);
+            }
+            from = to;
         }
-        if (chunks.size() == 1)
+        if (chunks.count == 1)
         {
             // Python writes the repr of the last line here, which is that one chunk
             Write(out, rep);
             return;
         }
-        out += level == 1 ? "(" : "";
-        for (size_t idx = 0; idx != chunks.size(); ++idx)
-        {
-            if (idx != 0)
-            {
-                NewLine(out, "\n", indent);
-            }
-            Write(out, chunks[idx]);
-        }
-        out += level == 1 ? ")" : "";
+        Write(out, level == 1 ? "(" : "");
+        Write(out, chunks.joined);
+        Write(out, level == 1 ? ")" : "");
     }
 
     // The value of one UTF-8 character as NextCodePoint delimits it

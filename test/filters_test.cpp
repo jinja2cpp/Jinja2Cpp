@@ -1182,6 +1182,8 @@ TEST(FilterPprint, CapsItsResult)
 {
     // A wide key indents each line of its value by its width: the result stops at the cap
     EXPECT_NE(RenderOrError("{{ {('x' * 1000000): range(1000)|list}|pprint }}", {}).find("a pprint result of length"), std::string::npos);
+    // A string of line breaks becomes a piece per line: the pieces stop at the cap too
+    EXPECT_NE(RenderOrError("{{ ('\\n' * 67108864)|pprint }}", {}).find("a pprint result of length"), std::string::npos);
     // urlize checks each extra scheme as it reads it
     EXPECT_NE(RenderOrError("{{ 'x'|urlize(extra_schemes=range(1000000000)) }}", {}), "x");
 }
