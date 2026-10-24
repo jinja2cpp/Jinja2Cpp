@@ -531,6 +531,12 @@ TEST(BigIntBoost, Operations)
     const std::string_view text = "-18446744073709551616";
     ASSERT_EQ(BigIntStatus::Ok, b->fromDecimal(b, x, text.data(), text.size()));
     ASSERT_EQ(BigIntStatus::Ok, b->fromInt64(b, y, 7));
+    // Only canonical decimal text is taken, though cpp_int itself parses hex, octal and ""
+    for (const std::string_view bad : { "", "-", "0x10", "010", "-01", "+1", "1 2", "1.5" })
+    {
+        alignas(MaxBigIntObjectAlign) unsigned char z[MaxBigIntObjectSize];
+        EXPECT_EQ(BigIntStatus::BadInput, b->fromDecimal(b, z, bad.data(), bad.size())) << bad;
+    }
     EXPECT_EQ(-1, b->sign(b, x));
     EXPECT_EQ(65U, b->bitLength(b, x));
     // compare runs through the template rows (the analyzer misreads cpp_int's limb loop when called here)

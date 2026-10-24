@@ -76,9 +76,11 @@ include (./thirdparty/thirdparty-${JINJA2CPP_DEPS_MODE}.cmake)
 # (docs/tasks/0272). The library compiles it in with -DJINJA2CPP_WITH_BIGINT=boost; the tests
 # check the header-only adapter (jinja2cpp/big_int/boost_cpp_int.h) in every build.
 add_library(jinja2cpp_boost_multiprecision INTERFACE)
-target_compile_definitions(jinja2cpp_boost_multiprecision INTERFACE BOOST_MP_STANDALONE=1)
 if (DEFINED boost_SOURCE_DIR)
-    # The internal mode's Boost release carries every library's headers
+    # The internal mode's Boost release carries every library's headers; standalone mode needs
+    # only Multiprecision's and Config's. An external Boost is used whole, so any release
+    # find_package accepts works, also one older than standalone Multiprecision
+    target_compile_definitions(jinja2cpp_boost_multiprecision INTERFACE BOOST_MP_STANDALONE=1)
     target_include_directories(jinja2cpp_boost_multiprecision SYSTEM INTERFACE
         "${boost_SOURCE_DIR}/libs/multiprecision/include" "${boost_SOURCE_DIR}/libs/config/include")
 else ()

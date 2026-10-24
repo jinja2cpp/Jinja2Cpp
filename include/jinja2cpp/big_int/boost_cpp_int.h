@@ -70,6 +70,19 @@ inline BigIntStatus FromInt64(const BigIntBackend* /*self*/, void* out, int64_t 
 
 inline BigIntStatus FromDecimal(const BigIntBackend* /*self*/, void* out, const char* digits, size_t size) noexcept
 {
+    // Canonical decimal only, as the contract passes: cpp_int would also take "", "-", "0x10" and "010" (octal)
+    const size_t first = size != 0 && digits[0] == '-' ? 1 : 0;
+    if (first == size || (digits[first] == '0' && size - first > 1))
+    {
+        return BigIntStatus::BadInput;
+    }
+    for (size_t i = first; i < size; ++i)
+    {
+        if (digits[i] < '0' || digits[i] > '9')
+        {
+            return BigIntStatus::BadInput;
+        }
+    }
     // cpp_int parses a null-terminated string
     return Make(out, [digits, size] { return Int(std::string(digits, size)); }, BigIntStatus::BadInput);
 }
