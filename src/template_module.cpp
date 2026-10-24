@@ -244,13 +244,20 @@ struct TemplateModuleState
     ~TemplateModuleState()
     {
         // The module's values may hold themselves (`l.append(l)`): a collector frees those
-        // cycles once nothing else holds them, as a render's does when it ends
+        // cycles once nothing else holds them, as a render's does when it ends. Noting them
+        // allocates; when that fails, the cycles noted so far are still freed and the rest leak
         const CycleCollector cycles;
         if (module)
         {
-            for (const auto& [name, value] : module->Names())
+            try
             {
-                CycleCollector::NoteStore(value);
+                for (const auto& [name, value] : module->Names())
+                {
+                    CycleCollector::NoteStore(value);
+                }
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment above says what is lost
+            {
             }
         }
         module.reset();
