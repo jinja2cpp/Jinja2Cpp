@@ -701,6 +701,33 @@
    }
   },
   {
+   "id": "tests.divisibleby_string",
+   "template": "{{ 'a' is divisibleby 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "not all arguments converted during string formatting"
+   }
+  },
+  {
    "id": "tests.divisibleby_arity",
    "template": "{{ 6 is divisibleby() }}",
    "context": {

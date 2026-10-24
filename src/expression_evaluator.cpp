@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
@@ -239,7 +240,35 @@ bool FoldWalkTooDeep()
 {
     return StackNearlyExhausted();
 }
+
+std::uint8_t PrepareOperandFold(const NodeArena& nodes, NodeRef<Expression> expr)
+{
+    return expr ? nodes[expr].PrepareFold(nodes) : std::uint8_t{ 0 };
+}
+
+bool OperandFoldsAt(RenderContext& values, NodeRef<Expression> expr, std::uint8_t fold)
+{
+    return (fold & FoldAlways) != 0 || ((fold & FoldByChoice) != 0 && values.Nodes()[expr].IsFoldableAt(values));
+}
+
+// The truth of a foldable value, or nothing when evaluating it fails: Jinja2 then does not fold
+std::optional<bool> TryFoldTruth(RenderContext& values, NodeRef<Expression> expr)
+{
+    try
+    {
+        return ConvertToBool(values.Nodes()[expr].Evaluate(values));
+    }
+    catch (const std::exception&)
+    {
+        return std::nullopt;
+    }
+}
 } // namespace
+
+std::uint8_t Expression::PrepareFold(const NodeArena& nodes)
+{
+    return IsFoldable(nodes) ? FoldAlways : 0;
+}
 
 bool UnaryExpression::IsFoldable(const NodeArena& nodes) const
 {
@@ -539,6 +568,45 @@ bool BinaryExpression::IsFoldable(const NodeArena& nodes) const
         }
     }
     return nodes[m_leftExpr].IsFoldable(nodes) && nodes[m_rightExpr].IsFoldable(nodes);
+}
+
+std::uint8_t BinaryExpression::PrepareFold(const NodeArena& nodes)
+{
+    if (FoldWalkTooDeep())
+    {
+        return 0;
+    }
+    const bool isLogical = m_oper == LogicalAnd || m_oper == LogicalOr;
+    m_leftFold = PrepareOperandFold(nodes, m_leftExpr);
+    m_rightFold = PrepareOperandFold(nodes, m_rightExpr);
+    // As IsFoldable: a literal left operand that decides `and`/`or`, or two folded operands
+    const auto* left = isLogical ? nodes[m_leftExpr].GetConstant(nodes) : nullptr;
+    if ((left && ConvertToBool(*left) == (m_oper == LogicalOr)) || (m_leftFold == FoldAlways && m_rightFold == FoldAlways))
+    {
+        return FoldAlways;
+    }
+    return m_leftFold != 0 && (isLogical || m_rightFold != 0) ? FoldByChoice : 0;
+}
+
+bool BinaryExpression::IsFoldableAt(RenderContext& values) const
+{
+    if (FoldWalkTooDeep() || !OperandFoldsAt(values, m_leftExpr, m_leftFold))
+    {
+        return false;
+    }
+    if (m_oper == LogicalAnd || m_oper == LogicalOr)
+    {
+        const auto left = TryFoldTruth(values, m_leftExpr);
+        if (!left)
+        {
+            return false;
+        }
+        if (*left == (m_oper == LogicalOr))
+        {
+            return true;
+        }
+    }
+    return OperandFoldsAt(values, m_rightExpr, m_rightFold);
 }
 
 NodeRef<Expression> BinaryExpression::Make(NodeArena& nodes, Operation oper, NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr)
@@ -1149,6 +1217,59 @@ bool IfExpression::IsFoldable(const NodeArena& nodes, NodeRef<Expression> value)
         return chosen && nodes[chosen].IsFoldable(nodes);
     }
     return nodes[m_testExpr].IsFoldable(nodes) && m_altValue && nodes[value].IsFoldable(nodes) && nodes[m_altValue].IsFoldable(nodes);
+}
+
+std::uint8_t IfExpression::PrepareFold(const NodeArena& nodes, NodeRef<Expression> value)
+{
+    if (FoldWalkTooDeep())
+    {
+        return 0;
+    }
+    m_testFold = PrepareOperandFold(nodes, m_testExpr);
+    m_valueFold = PrepareOperandFold(nodes, value);
+    m_altFold = PrepareOperandFold(nodes, m_altValue);
+    // As IsFoldable: a literal test and the branch it picks, or a folded test and two branches
+    if (const auto* test = nodes[m_testExpr].GetConstant(nodes))
+    {
+        return ConvertToBool(*test) ? m_valueFold : m_altFold;
+    }
+    if (m_testFold == FoldAlways && m_altValue && m_valueFold == FoldAlways && m_altFold == FoldAlways)
+    {
+        return FoldAlways;
+    }
+    return m_testFold != 0 && (m_valueFold != 0 || m_altFold != 0) ? FoldByChoice : 0;
+}
+
+bool IfExpression::IsFoldableAt(RenderContext& values, NodeRef<Expression> value) const
+{
+    if (FoldWalkTooDeep() || !OperandFoldsAt(values, m_testExpr, m_testFold))
+    {
+        return false;
+    }
+    const auto test = TryFoldTruth(values, m_testExpr);
+    if (!test)
+    {
+        return false;
+    }
+    return *test ? OperandFoldsAt(values, value, m_valueFold) : (m_altValue && OperandFoldsAt(values, m_altValue, m_altFold));
+}
+
+std::uint8_t FullExpressionEvaluator::PrepareFold(const NodeArena& nodes)
+{
+    if (FoldWalkTooDeep() || !m_expression)
+    {
+        return 0;
+    }
+    return m_tester ? nodes[m_tester].PrepareFold(nodes, m_expression) : nodes[m_expression].PrepareFold(nodes);
+}
+
+bool FullExpressionEvaluator::IsFoldableAt(RenderContext& values) const
+{
+    if (FoldWalkTooDeep() || !m_expression)
+    {
+        return false;
+    }
+    return m_tester ? values.Nodes()[m_tester].IsFoldableAt(values, m_expression) : values.Nodes()[m_expression].IsFoldableAt(values);
 }
 
 bool FullExpressionEvaluator::IsFoldable(const NodeArena& nodes) const

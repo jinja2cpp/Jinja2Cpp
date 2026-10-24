@@ -687,6 +687,17 @@ void CheckListed(const std::string& id, Outcome outcome, const std::string& deta
 }
 
 // The allow-list entry when divergences/ marks id as a crash in this build, so it must not run.
+// A build without the Unicode name table (JINJA2CPP_WITH_UNICODE_NAMES=OFF) rejects every
+// \N{...} escape, so its cases are not compared there
+bool NeedsUnicodeNames([[maybe_unused]] const Json& c)
+{
+#ifdef JINJA2CPP_NO_UNICODE_NAMES
+    return c["template"].get<std::string>().find("\\N") != std::string::npos;
+#else
+    return false;
+#endif
+}
+
 const Divergence* ListedCrash(const std::string& id)
 {
     const auto& divergences = Divergences();
@@ -702,6 +713,10 @@ TEST_P(ParityTest, MatchesPython)
 {
     const auto& id = GetParam().id;
     const auto& c = GetParam().data;
+    if (NeedsUnicodeNames(c))
+    {
+        GTEST_SKIP() << "built without the Unicode name table";
+    }
     if (const auto* crash = ListedCrash(id))
     {
         RecordOutcome(id, "crash");
@@ -739,6 +754,10 @@ TEST_P(ParityWideTest, MatchesNarrow)
     const auto& c = GetParam().data;
     const auto& narrowId = GetParam().id;
     const auto id = "wide." + narrowId;
+    if (NeedsUnicodeNames(c))
+    {
+        GTEST_SKIP() << "built without the Unicode name table";
+    }
     if (const auto* crash = ListedCrash(narrowId))
         GTEST_SKIP() << "crashes Jinja2C++, task " << crash->task << ": " << crash->reason;
     if (const auto* crash = ListedCrash(id))

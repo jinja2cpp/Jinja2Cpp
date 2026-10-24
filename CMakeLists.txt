@@ -37,6 +37,7 @@ option(JINJA2CPP_BUILD_FUZZERS "Build the libFuzzer targets in fuzz/ (clang only
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
 set(JINJA2CPP_NODEREF_CHECKS "" CACHE STRING "Checks of the handles that link a parse tree: OFF, ON (Seal and cross-template links), FULL (every access); empty picks FULL for Debug, sanitizer and fuzz builds, else ON")
 set_property(CACHE JINJA2CPP_NODEREF_CHECKS PROPERTY STRINGS "" ON FULL OFF)
+option(JINJA2CPP_WITH_UNICODE_NAMES "Decode \\N{name} escapes in string literals with the Unicode name table (about 350 KB of data)" ON)
 option(JINJA2CPP_CHECK_SLOTS "Check every name read from a slot against its lookup by name (always on without NDEBUG)" OFF)
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
 option(JINJA2CPP_PIC "Control -fPIC option for library build" OFF)
@@ -191,6 +192,7 @@ set(JINJA2CPP_SOURCES
     src/tester_factories.cpp
     src/testers.cpp
     src/undefined.cpp
+    src/unicode_names.cpp
     src/value.cpp
     src/value_methods.cpp
 )
@@ -321,6 +323,9 @@ target_compile_definitions(
 if (JINJA2CPP_CHECK_SLOTS)
     target_compile_definitions(${LIB_TARGET_NAME} PUBLIC JINJA2CPP_CHECK_SLOTS)
 endif ()
+if (NOT JINJA2CPP_WITH_UNICODE_NAMES)
+    set_source_files_properties(src/unicode_names.cpp PROPERTIES COMPILE_DEFINITIONS JINJA2CPP_NO_UNICODE_NAMES)
+endif ()
 # The level is part of the node layout's checks, so every target that includes src/ takes it
 # from the library; installed consumers never include src/ and never see it
 string(TOUPPER "${JINJA2CPP_NODEREF_CHECKS}" _noderef_checks)
@@ -447,6 +452,9 @@ if (JINJA2CPP_BUILD_TESTS)
         nlohmann_json::nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
     # The Boost big-integer adapter is checked in every build; the built-in one only in boost builds
     target_link_libraries(jinja2cpp_tests jinja2cpp_boost_multiprecision)
+    if (NOT JINJA2CPP_WITH_UNICODE_NAMES)
+        target_compile_definitions(jinja2cpp_tests PRIVATE JINJA2CPP_NO_UNICODE_NAMES)
+    endif ()
     if ("${JINJA2CPP_WITH_BIGINT}" STREQUAL "boost")
         target_compile_definitions(jinja2cpp_tests PRIVATE JINJA2CPP_WITH_BIGINT_BOOST)
     endif ()

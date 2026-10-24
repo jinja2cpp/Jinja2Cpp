@@ -84,20 +84,25 @@ OrderKind GetOrderKind(const InternalValue& val)
 }
 
 // Python's `<` (or `>`) as min and max use it: values that have no order between them,
-// like 1 and 'a' or two dicts, are an error. Undefined values still compare as false.
-// `sort` does not use it: it compares its keys wrapped in lists, testing `==` first.
+// like 1 and 'a', None or two dicts, are an error. Every Undefined class fails `<` with
+// UndefinedError. `sort` does not use it: it compares its keys wrapped in lists, testing
+// `==` first.
 bool CompareForOrder(const InternalValue& left,
                      const InternalValue& right,
                      BinaryExpression::Operation oper,
                      BinaryExpression::CompareType compType)
 {
-    if (!IsEmpty(left) && !IsEmpty(right))
+    for (const auto* operand : { &left, &right })
     {
-        auto kind = GetOrderKind(left);
-        if (kind != GetOrderKind(right) || kind == OrderKind::Unordered)
+        if (const auto* info = GetUndefinedInfo(*operand))
         {
-            throw TemplateRuntimeError("'<' not supported between these values");
+            ThrowUndefined(*info);
         }
+    }
+    auto kind = GetOrderKind(left);
+    if (kind != GetOrderKind(right) || kind == OrderKind::Unordered)
+    {
+        throw TemplateRuntimeError("'<' not supported between these values");
     }
     return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, oper, compType));
 }
@@ -1317,24 +1322,28 @@ StringFormat::StringFormat(const FilterParams& params)
 Tester::Tester(const FilterParams& params, Tester::Mode mode)
     : m_mode(mode)
 {
-    FilterParams newParams;
+    // Python's select_or_reject takes the attribute and the test name by position and passes
+    // the other arguments, keywords included, to the test; without a test it calls bool() and
+    // drops them
+    const bool isAttrMode = mode == SelectAttrMode || mode == RejectAttrMode;
+    const size_t leadCount = std::min(params.posParams.size(), isAttrMode ? size_t{ 2 } : size_t{ 1 });
+    m_hasAttribute = isAttrMode && leadCount > 0;
 
-    if ((mode == RejectMode || mode == SelectMode) && params.kwParams.empty() && params.posParams.empty())
+    FilterParams leadParams;
+    leadParams.posParams.assign(params.posParams.begin(), params.posParams.begin() + static_cast<std::ptrdiff_t>(leadCount));
+    if (isAttrMode)
     {
-        m_noParams = true;
-        return;
-    }
-
-    if (mode == RejectMode || mode == SelectMode)
-    {
-        static const auto args = MakeArgumentsTable({ { "tester", false } });
-        ParseParams(args, params, ExtraArgs::Accept, &m_testingParams);
+        static const auto args = MakeArgumentsTable({ { "attribute", false }, { "tester", false } });
+        ParseParams(args, leadParams);
     }
     else
     {
-        static const auto args = MakeArgumentsTable({ { "attribute", true }, { "tester", false } });
-        ParseParams(args, params, ExtraArgs::Accept, &m_testingParams);
+        static const auto args = MakeArgumentsTable({ { "tester", false } });
+        ParseParams(args, leadParams);
     }
+
+    m_testingParams.posParams.assign(params.posParams.begin() + static_cast<std::ptrdiff_t>(leadCount), params.posParams.end());
+    m_testingParams.kwParams = params.kwParams;
 }
 
 InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& context)
@@ -1372,13 +1381,20 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
 
     InternalValueList resultList;
     ReserveHint(resultList, list.GetSize().value_or(0));
-    auto isSelected = [this, tester, attrName, isBadName, &testerName, &context](const InternalValue& val) {
+    const bool isAttrMode = m_mode == SelectAttrMode || m_mode == RejectAttrMode;
+    auto isSelected = [this, tester, attrName, isAttrMode, isBadName, &testerName, &context](const InternalValue& val) {
+        if (isAttrMode && !m_hasAttribute)
+        {
+            throw TemplateRuntimeError("Missing parameter for attribute name");
+        }
         if (isBadName)
         {
             ThrowNotACallableName("test", testerName);
         }
         InternalValue attrVal;
-        bool isAttr = !IsEmpty(attrName);
+        // An attribute of None is the item itself (_prepare_attribute_parts); an undefined one
+        // is looked up and finds nothing
+        bool isAttr = isAttrMode && !attrName.IsNone();
         if (isAttr)
         {
             attrVal = GetAttributeByPath(val, AttributePath(attrName), InternalValue(), context);

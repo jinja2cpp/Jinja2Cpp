@@ -271,10 +271,11 @@ INSTANTIATE_TEST_SUITE_P(Reject, ListIteratorTest, ::testing::Values(
                                                                                                          "str1, str2, str3, str4"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(RejectAttr, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"reflectedList | rejectattr('boolValue') | map(attribute='strValue')",
                                                                                         "test string 0, test string 2, test string 4, test string 6, test string 8"},
-                            InputOutputPair{"reflectedList | rejectattr(attribute='boolValue') | map(attribute='strValue')",
+                            InputOutputPair{"reflectedList | rejectattr('boolValue', attribute='boolValue') | map(attribute='strValue')",
                                                                                         "test string 0, test string 2, test string 4, test string 6, test string 8"}
                             ));
 
@@ -289,9 +290,10 @@ INSTANTIATE_TEST_SUITE_P(Select, ListIteratorTest, ::testing::Values(
 INSTANTIATE_TEST_SUITE_P(SelectAttr, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"reflectedList | selectattr('boolValue') | map(attribute='strValue')",
                                                                                         "test string 1, test string 3, test string 5, test string 7, test string 9"},
-                            InputOutputPair{"reflectedList | selectattr(attribute='boolValue') | map(attribute='strValue')",
+                            InputOutputPair{"reflectedList | selectattr('boolValue', attribute='boolValue') | map(attribute='strValue')",
                                                                                         "test string 1, test string 3, test string 5, test string 7, test string 9"}
                             ));
+// clang-format on
 
 
 // clang-format off

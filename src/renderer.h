@@ -195,18 +195,28 @@ public:
     static constexpr NodeKind Kind = NodeKind::FinalizedExprRenderer;
     static bool MatchesKind(NodeKind kind) { return kind == Kind; }
 
-    // finalize: Settings::finalize as a callable. isFolded: Jinja2 folds the value
-    FinalizedExpressionRenderer(NodeRef<Expression> expr, InternalValue finalize, bool isFolded)
+    // How Jinja2 folds the value: always, never, or by the side a foldable test picks
+    // (Expression::IsFoldableAt)
+    enum class Fold
+    {
+        Never,
+        Always,
+        ByChoice
+    };
+
+    // finalize: Settings::finalize as a callable
+    FinalizedExpressionRenderer(NodeRef<Expression> expr, InternalValue finalize, Fold fold)
         : ExpressionRenderer(expr)
         , m_finalize(std::move(finalize))
-        , m_isFolded(isFolded)
+        , m_fold(fold)
     {
     }
 
     void Render(OutStream& os, RenderContext& values) override
     {
+        const bool isFolded = m_fold == Fold::Always || (m_fold == Fold::ByChoice && values.Nodes()[m_expression].IsFoldableAt(values));
         auto value = values.Nodes()[m_expression].Evaluate(values);
-        if (m_isFolded && values.IsStaticAutoescape())
+        if (isFolded && values.IsStaticAutoescape())
         {
             // Jinja2 evaluates the value at run time when finalizing its escaped form raises
             // (CodeGenerator.visit_Output, docs/tasks/0292)
@@ -216,7 +226,7 @@ public:
                 return;
             }
         }
-        else if (m_isFolded)
+        else if (isFolded)
         {
             os.WriteValue(Finalize(std::move(value), values));
             return;
@@ -250,7 +260,7 @@ private:
     }
 
     InternalValue m_finalize;
-    bool m_isFolded;
+    Fold m_fold;
 };
 
 // `{{ ... }}` of a value Jinja2 folds, in volatile code (RenderContext::IsVolatileAutoescape):
@@ -262,13 +272,26 @@ public:
     static constexpr NodeKind Kind = NodeKind::StaticExprRenderer;
     static bool MatchesKind(NodeKind kind) { return kind == Kind; }
 
-    using ExpressionRenderer::ExpressionRenderer;
+    // byChoice: the value folds only by the side a foldable test picks (Expression::IsFoldableAt)
+    StaticOutputRenderer(NodeRef<Expression> expr, bool byChoice)
+        : ExpressionRenderer(expr)
+        , m_byChoice(byChoice)
+    {
+    }
 
     void Render(OutStream& os, RenderContext& values) override
     {
+        if (m_byChoice && !values.Nodes()[m_expression].IsFoldableAt(values))
+        {
+            values.Nodes()[m_expression].Render(os, values);
+            return;
+        }
         const OutputAutoescapeGuard autoescapeGuard(values, values.IsStaticAutoescape());
         values.Nodes()[m_expression].Render(os, values);
     }
+
+private:
+    bool m_byChoice;
 };
 
 // finalize: Settings::finalize as a callable, or undefined. isVolatile: in volatile code
@@ -277,11 +300,16 @@ inline NodeRef<IRendererBase> MakeExpressionRenderer(NodeArena& nodes, NodeRef<E
 {
     if (GetIf<Callable>(&finalize))
     {
-        return nodes.Make<FinalizedExpressionRenderer>(expr, finalize, nodes[expr].IsFoldable(nodes));
+        using Fold = FinalizedExpressionRenderer::Fold;
+        const auto fold = nodes[expr].PrepareFold(nodes);
+        return nodes.Make<FinalizedExpressionRenderer>(expr, finalize, fold == FoldAlways ? Fold::Always : (fold == FoldByChoice ? Fold::ByChoice : Fold::Never));
     }
-    if (isVolatile && nodes[expr].IsFoldable(nodes))
+    if (isVolatile)
     {
-        return nodes.Make<StaticOutputRenderer>(expr);
+        if (const auto fold = nodes[expr].PrepareFold(nodes))
+        {
+            return nodes.Make<StaticOutputRenderer>(expr, fold == FoldByChoice);
+        }
     }
     return nodes.Make<ExpressionRenderer>(expr);
 }

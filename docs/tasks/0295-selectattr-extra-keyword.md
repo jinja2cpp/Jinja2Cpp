@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: []
@@ -22,3 +22,10 @@ cases for `selectattr` and `rejectattr` with no test plus an extra keyword, and 
 plus a keyword the test does not accept.
 
 **Done when** those cases match Python in narrow and wide renders.
+
+**Done.** `Tester` binds as `select_or_reject` does: the attribute and the test name only by
+position, every other argument (keywords included) to the test, and none at all without a
+test. A missing attribute fails at the first item ("Missing parameter for attribute name"),
+so `selectattr(attribute='a')`, a Jinja2C++-only spelling, is now an error as in Python; the
+two unit rows that used it pass the attribute by position. Cases: `filters.select*_extra_*`,
+`filters.select_lazy_errors_on_empty` and four in `errors.py`.
