@@ -9,6 +9,7 @@
 #include <jinja2cpp/value.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <optional>
 #include <regex>
