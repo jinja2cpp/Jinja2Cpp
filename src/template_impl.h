@@ -949,6 +949,11 @@ private:
     std::unique_ptr<std::forward_list<std::basic_string<CharT>>> m_convertedTexts;
     std::string m_templateName;
     bool m_isNamed = false;
+    // Counts the successful Loads: a module's macro refuses to run in a tree a later Load
+    // replaced (TemplateModuleState). Atomic only so that a misuse is not a data race; 32 bits
+    // fit the padding after m_isNamed, so a template is no bigger, and a module sees a stale
+    // tree as current only after exactly 2^32 more Loads
+    std::atomic<uint32_t> m_loadGeneration{ 0 };
     // Owns the tree
     SealedArena m_nodes;
     NodeRef<TemplateRenderer> m_renderer;
@@ -970,9 +975,6 @@ private:
     MetadataInfo<CharT> m_metadataInfo;
     // The source and name the tree's render errors are located in; read on an error only
     detail::TemplateOrigin m_origin;
-    // Counts the successful Loads: a module's macro refuses to run in a tree a later Load
-    // replaced (TemplateModuleState). Atomic only so that a misuse is not a data race
-    std::atomic<uint64_t> m_loadGeneration{ 0 };
 };
 
 } // namespace v2

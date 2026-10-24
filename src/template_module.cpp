@@ -406,7 +406,7 @@ struct TemplateModuleState
 
     std::shared_ptr<const Impl> impl;
     // The template's Load count when the module was made (TemplateImpl::m_loadGeneration)
-    uint64_t generation;
+    uint32_t generation;
     // The params, until the module takes them
     InternalValueMap convertedParams;
     GlobalsSnapshot globals;
