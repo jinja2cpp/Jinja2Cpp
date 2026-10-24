@@ -121,4 +121,6 @@ CASES = [
     # Settings::finalize gets the undefined value itself (docs/tasks/0293)
     ("finalize_gets_undefined", "{{ nope }}|{{ d.zz }}", {"env": {"finalize": "brackets"}, "ctx": {"d": {}}}),
     ("strict_finalize_gets_undefined", "{{ nope }}", {"env": {"finalize": "brackets", "undefined": "strict"}}),
+    ("debug_finalize_gets_undefined", "{{ nope }}|{{ d.zz }}", {"env": {"finalize": "brackets", "undefined": "debug"}, "ctx": {"d": {}}}),
+    ("finalize_none_not_undefined", "{{ nope }}|{{ none }}|{{ d.zz }}", {"env": {"finalize": "none_marker"}, "ctx": {"d": {}}}),
 ]

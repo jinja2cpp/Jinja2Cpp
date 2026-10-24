@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/646
 priority: low
 area: parity
 touches: [src/expression_evaluator.cpp#IfExpression, src/expression_evaluator.cpp#BinaryExpression]
@@ -30,3 +31,10 @@ Errors while evaluating mean "not foldable", as in Jinja2.
 
 **Done when.** `autoescape.env_on_finalize_folded_choice` matches and its line is gone from
 `test/parity/divergences/autoescape.txt`.
+
+**Done.** `Expression::PrepareFold` (one walk at Load) says whether a value folds always or
+only by the side a foldable test or `and`/`or` operand picks, and records it per operand;
+`IsFoldableAt` evaluates those tests at render, where they have the value Jinja2 folds.
+`FinalizedExpressionRenderer` and the volatile `StaticOutputRenderer` use it. Cases:
+`autoescape.env_on_finalize_folded_choice*`, `autoescape.volatile_folded_choice`. A choice
+inside a `~` chain or another composite is still run-time: task 0307.

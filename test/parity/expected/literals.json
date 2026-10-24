@@ -243,6 +243,62 @@
    "output": "•"
   },
   {
+   "id": "literals.string_escape_named_kinds",
+   "template": "{{ 'a\\N{latin small letter b}\\N{HYPHEN-MINUS}\\N{lf}\\N{CJK UNIFIED IDEOGRAPH-4E00}\\N{HANGUL SYLLABLE GAGS}\\N{nushu character-1b170}\\N{MAHJONG TILE RED DRAGON}'|length }}|{{ '\\N{SNOWMAN}\\N{BOM}'|list|map('length')|join(',') }}|{{ '\\N{CJK UNIFIED IDEOGRAPH-04E00}' == '\\u4e00' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "8|1,1|True"
+  },
+  {
+   "id": "literals.string_escape_named_unknown",
+   "template": "{{ '\\N{NO SUCH CHARACTER}' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unknown Unicode character name"
+   }
+  },
+  {
+   "id": "literals.string_escape_named_computed_lower",
+   "template": "{{ '\\N{hangul syllable ga}' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unknown Unicode character name"
+   }
+  },
+  {
+   "id": "literals.string_escape_named_unclosed",
+   "template": "{{ '\\N{BULLET' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "malformed \\N character escape"
+   }
+  },
+  {
+   "id": "literals.string_escape_named_no_brace",
+   "template": "{{ '\\NBULLET' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "malformed \\N character escape"
+   }
+  },
+  {
    "id": "literals.string_escape_unknown_keeps_backslash",
    "template": "{{ '\\q\\8\\/' }}",
    "context": {},

@@ -2,3 +2,4 @@
 # Format and kinds: test/parity/README.md.
 
 tests.select_unread_extra_arg           rejects     0101 deliberate: select runs its test eagerly, so an argument error raises though nothing reads the result
+tests.divisibleby_string                accepts     0308 divisibleby of a str answers False; Python's % formatting raises TypeError

@@ -30,6 +30,13 @@ CASES = [
     ("string_escape_hex_octal", r"{{ 'A\x42\u0043\U00000044\105' }}"),
     ("string_escape_control", r"{{ '\a\b\f\v\0' == 'abfv0' }}|{{ '\a\b\f\v\0'|length }}"),
     ("string_escape_named", r"{{ '\N{BULLET}' }}"),
+    # \N{name} takes stored names and aliases in any ASCII case; the computed CJK and Hangul names
+    # only as spelled (docs/tasks/0041)
+    ("string_escape_named_kinds", r"{{ 'a\N{latin small letter b}\N{HYPHEN-MINUS}\N{lf}\N{CJK UNIFIED IDEOGRAPH-4E00}\N{HANGUL SYLLABLE GAGS}\N{nushu character-1b170}\N{MAHJONG TILE RED DRAGON}'|length }}|{{ '\N{SNOWMAN}\N{BOM}'|list|map('length')|join(',') }}|{{ '\N{CJK UNIFIED IDEOGRAPH-04E00}' == '\u4e00' }}"),
+    ("string_escape_named_unknown", r"{{ '\N{NO SUCH CHARACTER}' }}"),
+    ("string_escape_named_computed_lower", r"{{ '\N{hangul syllable ga}' }}"),
+    ("string_escape_named_unclosed", r"{{ '\N{BULLET' }}"),
+    ("string_escape_named_no_brace", r"{{ '\NBULLET' }}"),
     ("string_escape_unknown_keeps_backslash", r"{{ '\q\8\/' }}"),
     ("string_escape_octal_wide", r"{{ '\400'|length }}|{{ '\777'|length }}|{{ '\1012'|length }}"),
     ("string_escape_line_continuation", "{{ 'a\\\nb' }}"),

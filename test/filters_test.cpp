@@ -9,6 +9,7 @@
 #include <jinja2cpp/value.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <optional>
 #include <regex>
@@ -271,10 +272,11 @@ INSTANTIATE_TEST_SUITE_P(Reject, ListIteratorTest, ::testing::Values(
                                                                                                          "str1, str2, str3, str4"}
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(RejectAttr, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"reflectedList | rejectattr('boolValue') | map(attribute='strValue')",
                                                                                         "test string 0, test string 2, test string 4, test string 6, test string 8"},
-                            InputOutputPair{"reflectedList | rejectattr(attribute='boolValue') | map(attribute='strValue')",
+                            InputOutputPair{"reflectedList | rejectattr('boolValue', attribute='boolValue') | map(attribute='strValue')",
                                                                                         "test string 0, test string 2, test string 4, test string 6, test string 8"}
                             ));
 
@@ -289,9 +291,10 @@ INSTANTIATE_TEST_SUITE_P(Select, ListIteratorTest, ::testing::Values(
 INSTANTIATE_TEST_SUITE_P(SelectAttr, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"reflectedList | selectattr('boolValue') | map(attribute='strValue')",
                                                                                         "test string 1, test string 3, test string 5, test string 7, test string 9"},
-                            InputOutputPair{"reflectedList | selectattr(attribute='boolValue') | map(attribute='strValue')",
+                            InputOutputPair{"reflectedList | selectattr('boolValue', attribute='boolValue') | map(attribute='strValue')",
                                                                                         "test string 1, test string 3, test string 5, test string 7, test string 9"}
                             ));
+// clang-format on
 
 
 // clang-format off
@@ -395,16 +398,46 @@ INSTANTIATE_TEST_SUITE_P(DictSort, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(reverse=true, by='value') | pprint", "[('Value', 'ItemValue'), ('key', 'itemName')]"},
                             InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(case_sensitive=true) | pprint", "[('Value', 'ItemValue'), ('key', 'itemName')]"},
                             InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(case_sensitive=true, reverse=true) | pprint", "[('key', 'itemName'), ('Value', 'ItemValue')]"},
-                            InputOutputPair{"simpleMapValue | dictsort | pprint", "[('boolValue', True), ('dblVal', 100.5), ('intVal', 10), ('stringVal', 'string100.5')]"},
+                            InputOutputPair{"simpleMapValue | dictsort | pprint", "[('boolValue', True),\n"
+                                                                                  " ('dblVal', 100.5),\n"
+                                                                                  " ('intVal', 10),\n"
+                                                                                  " ('stringVal', 'string100.5')]"},
     InputOutputPair{
       "reflectedVal | dictsort | pprint",
-      "[('basicCallable', <callable>), ('boolValue', False), ('dblValue', 0.0), ('getInnerStruct', <callable>), ('getInnerStructValue', <callable>), ('innerStruct', "
-      "{'strValue': 'Hello World!'}), ('innerStructList', [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-      "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-      "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}]), ('intEvenValue', 0), ('intValue', 0), ('strValue', 'test string 0'), ('strViewValue', 'test "
-      "string 0'), ('tmpStructList', [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-      "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-      "{'strValue': 'Hello World!'}]), ('wstrValue', 'test string 0'), ('wstrViewValue', 'test string 0')]" }));
+      "[('basicCallable', <callable>),\n"
+      " ('boolValue', False),\n"
+      " ('dblValue', 0.0),\n"
+      " ('getInnerStruct', <callable>),\n"
+      " ('getInnerStructValue', <callable>),\n"
+      " ('innerStruct', {'strValue': 'Hello World!'}),\n"
+      " ('innerStructList',\n"
+      "  [{'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'}]),\n"
+      " ('intEvenValue', 0),\n"
+      " ('intValue', 0),\n"
+      " ('strValue', 'test string 0'),\n"
+      " ('strViewValue', 'test string 0'),\n"
+      " ('tmpStructList',\n"
+      "  [{'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'}]),\n"
+      " ('wstrValue', 'test string 0'),\n"
+      " ('wstrViewValue', 'test string 0')]" }));
 // clang-format on
 
 // clang-format off
@@ -652,7 +685,8 @@ INSTANTIATE_TEST_SUITE_P(Striptags, FilterGenericTest, ::testing::Values(
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(Center, FilterGenericTest, ::testing::Values(
-                            InputOutputPair{" 'x' | center | pprint", "'                                       x                                        '"},
+                            InputOutputPair{" 'x' | center | pprint", "('                                       '\n"
+                                                                      " 'x                                        ')"},
                             InputOutputPair{" 'x' | center(width=5) | pprint", "'  x  '"},
                             InputOutputPair{" 'x' | center(width=0) | pprint", "'x'"},
                             InputOutputPair{" '  x' | center(width=5) | pprint", "'   x '"}
@@ -1128,6 +1162,32 @@ TEST(CppOnlyFilters, UnicodeControlsAndErrors)
     auto loaded = tpl.Load("{{ {'a': 1}|toxml }}");
     ASSERT_FALSE(loaded.has_value());
     EXPECT_EQ(ErrorCode::UnknownFilter, loaded.error().GetCode());
+}
+
+TEST(FilterPprint, ReadsSinglePassListsOnce)
+{
+    // pprint measures a value before it prints it: a host generator is read once, nested or not
+    auto counting = [](int last) {
+        return MakeGenericList([n = 0, last]() mutable -> std::optional<Value> { return n < last ? std::optional<Value>(Value(int64_t{ ++n })) : std::nullopt; });
+    };
+    EXPECT_EQ("[1, 2, 3]", RenderOrError("{{ g|pprint }}", { { "g", counting(3) } }));
+    EXPECT_EQ("{'g': [1, 2, 3]}", RenderOrError("{{ {'g': g}|pprint }}", { { "g", counting(3) } }));
+    std::string wrapped = "[1";
+    for (int n = 2; n <= 30; ++n)
+    {
+        wrapped += ",\n " + std::to_string(n);
+    }
+    EXPECT_EQ(wrapped + "]", RenderOrError("{{ g|pprint }}", { { "g", counting(30) } }));
+}
+
+TEST(FilterPprint, CapsItsResult)
+{
+    // A wide key indents each line of its value by its width: the result stops at the cap
+    EXPECT_NE(RenderOrError("{{ {('x' * 1000000): range(1000)|list}|pprint }}", {}).find("a pprint result of length"), std::string::npos);
+    // A string of line breaks becomes a piece per line: the pieces stop at the cap too
+    EXPECT_NE(RenderOrError("{{ ('\\n' * 67108864)|pprint }}", {}).find("a pprint result of length"), std::string::npos);
+    // urlize checks each extra scheme as it reads it
+    EXPECT_NE(RenderOrError("{{ 'x'|urlize(extra_schemes=range(1000000000)) }}", {}), "x");
 }
 
 TEST(FilterUnicode, PercentAEscapesNonAscii)

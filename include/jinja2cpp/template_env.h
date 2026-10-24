@@ -134,7 +134,9 @@ struct Settings
     //! Prefix of line comments (Jinja2 `line_comment_prefix`): the rest of the line after it is ignored. Empty disables them
     std::string lineCommentPrefix;
     //! Called with the value of every `{{ ... }}` expression before it is printed (Jinja2 `finalize`); its result is
-    //! printed instead. Template text is not passed to it. Not set (no `callable`) by default
+    //! printed instead. Template text is not passed to it. An undefined value is passed as its text: an empty string,
+    //! or `{{ name }}` with \ref UndefinedPolicy::Debug; with \ref UndefinedPolicy::Strict printing it raises before
+    //! the call. Not set (no `callable`) by default
     UserCallable finalize;
     //! HTML-escapes the output of every `{{ }}` unless the value is marked safe (Jinja2 `autoescape`, a bool)
     bool autoescape = false;

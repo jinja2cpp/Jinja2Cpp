@@ -1473,6 +1473,255 @@
    }
   },
   {
+   "id": "errors.min_with_none",
+   "template": "{{ [none, 1]|min }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'int' and 'NoneType'"
+   }
+  },
+  {
+   "id": "errors.max_with_none",
+   "template": "{{ [1, none]|max }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'>' not supported between instances of 'NoneType' and 'int'"
+   }
+  },
+  {
+   "id": "errors.min_two_nones",
+   "template": "{{ [none, none]|min }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'NoneType' and 'NoneType'"
+   }
+  },
+  {
+   "id": "errors.min_undefined_attribute",
+   "template": "{{ [{'a': 1}, {}]|min(attribute='a') }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict object' has no attribute 'a'"
+   }
+  },
+  {
+   "id": "errors.max_undefined_attribute_chainable",
+   "template": "{{ [{}, {'a': 1}]|max(attribute='a') }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict object' has no attribute 'a'"
+   }
+  },
+  {
+   "id": "errors.max_two_undefined_attributes",
+   "template": "{{ [{}, {}]|max(attribute='a') }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict object' has no attribute 'a'"
+   }
+  },
+  {
+   "id": "errors.dictsort_value_none",
+   "template": "{{ {'a': none, 'b': 1}|dictsort(by='value')|length }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'int' and 'NoneType'"
+   }
+  },
+  {
+   "id": "errors.groupby_none_key",
+   "template": "{{ [{'a': none}, {'a': 1}]|groupby('a')|length }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'int' and 'NoneType'"
+   }
+  },
+  {
+   "id": "errors.groupby_undefined_key",
+   "template": "{{ [{'a': 1}, {}]|groupby('a')|length }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict object' has no attribute 'a'"
+   }
+  },
+  {
+   "id": "errors.selectattr_attribute_keyword_only",
+   "template": "{{ [{'a': 1}]|selectattr(attribute='a')|list|length }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "FilterArgumentError",
+    "message": "Missing parameter for attribute name"
+   }
+  },
+  {
+   "id": "errors.select_test_extra_keyword",
+   "template": "{{ [1, 2]|select('odd', foo=1)|list|length }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_odd() got an unexpected keyword argument 'foo'"
+   }
+  },
+  {
+   "id": "errors.rejectattr_test_extra_keyword",
+   "template": "{{ [{'a': 1}, {'a': 0}]|rejectattr('a', 'odd', foo=1)|list|length }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_odd() got an unexpected keyword argument 'foo'"
+   }
+  },
+  {
+   "id": "errors.select_test_argument_twice",
+   "template": "{{ [1, 2, 3]|select('divisibleby', 2, num=2)|list|length }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "test_divisibleby() got multiple values for argument 'num'"
+   }
+  },
+  {
    "id": "errors.missing_endmacro",
    "template": "{% macro m() %}x",
    "context": {

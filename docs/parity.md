@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (2059 templates rendered by both engines, see
+`test/parity/` (2746 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -18,26 +18,28 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 
 | area | cases | match | output | rejects | accepts | unsupported | platform | crash | tasks |
 |---|---|---|---|---|---|---|---|---|---|
-| autoescape | 147 | 145 | 1 | 1 | 0 | 0 | 0 | 0 | 0210, 0291 |
+| autoescape | 158 | 157 | 1 | 0 | 0 | 0 | 0 | 0 | 0307 |
+| calls | 57 | 50 | 3 | 4 | 0 | 0 | 0 | 0 | 0214, 0305, 0306 |
 | custom | 28 | 28 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| errors | 106 | 102 | 0 | 2 | 2 | 0 | 0 | 0 | 0213, 0294 |
-| filters | 333 | 329 | 3 | 1 | 0 | 0 | 0 | 0 | 0101, 0203, 0215 |
+| errors | 129 | 129 | 0 | 0 | 0 | 0 | 0 | 0 |  |
+| filters | 381 | 377 | 2 | 1 | 1 | 0 | 0 | 0 | 0101, 0203, 0309, 0310 |
 | fuzz | 32 | 32 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | globals | 79 | 77 | 1 | 1 | 0 | 0 | 0 | 0 | 0178, 0212 |
 | i18n | 54 | 54 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| literals | 79 | 78 | 0 | 1 | 0 | 0 | 0 | 0 | 0041 |
+| literals | 84 | 84 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | loader | 171 | 166 | 5 | 0 | 0 | 0 | 0 | 0 | 0165, 0211 |
 | methods | 108 | 105 | 2 | 1 | 0 | 0 | 0 | 0 | 0049 |
 | operators | 126 | 123 | 0 | 3 | 0 | 0 | 0 | 0 | 0178 |
 | options | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | output | 38 | 38 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | sequences | 47 | 47 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| statements | 410 | 396 | 9 | 3 | 2 | 0 | 0 | 0 | 0156, 0165, 0214, 0219, 0220 |
+| statements | 410 | 401 | 7 | 0 | 2 | 0 | 0 | 0 | 0156, 0165, 0214, 0219 |
+| string_filters | 540 | 540 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | subscripts | 43 | 43 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| tests | 59 | 58 | 0 | 1 | 0 | 0 | 0 | 0 | 0101 |
-| undefined | 110 | 108 | 1 | 0 | 1 | 0 | 0 | 0 | 0293 |
+| tests | 60 | 58 | 0 | 1 | 1 | 0 | 0 | 0 | 0101, 0308 |
+| undefined | 112 | 112 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | whitespace | 54 | 54 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| **total** | **2059** | **2018** | **22** | **14** | **5** | **0** | **0** | **0** | |
+| **total** | **2746** | **2710** | **21** | **11** | **4** | **0** | **0** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
