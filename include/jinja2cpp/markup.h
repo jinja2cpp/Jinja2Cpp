@@ -135,6 +135,10 @@ using WMarkup = BasicMarkup<wchar_t>;
  * Replaces `&`, `<`, `>`, `'` and `"` with `&amp;`, `&lt;`, `&gt;`, `&#39;` and `&#34;`, as `markupsafe.escape`
  * does, and every other character is kept. An argument that is already a Markup is returned as is (see the
  * overloads below), so escaping twice is safe.
+ *
+ * Throws std::length_error when the escaped text would be longer than the sequence cap: the render's
+ * Settings::Limits::maxSequenceSize inside a render, which then fails with ErrorCode::ResourceLimitExceeded,
+ * and 2^26 characters outside one.
  */
 JINJA2CPP_EXPORT Markup Escape(std::string_view text);
 //! \copydoc Escape(std::string_view)

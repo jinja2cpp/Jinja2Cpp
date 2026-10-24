@@ -1550,6 +1550,27 @@ TEST(ValueApiTest, TypedMarkupParameter)
     TemplateW wtpl;
     ASSERT_TRUE(wtpl.Load(L"{{ tag(s) }}{{ tag(m) }}"));
     EXPECT_EQ(L"<b>&lt;i&gt;</b><b><i></b>", wtpl.RenderAsString({ { "tag", wtag }, { "s", L"<i>" }, { "m", WMarkup(L"<i>") } }).value());
+
+    // The escaped argument counts against maxSequenceSize: 8 '<' escape to 32 characters, 9 to 36
+    Settings settings;
+    settings.limits.maxSequenceSize = 32;
+    TemplateEnv env;
+    env.SetSettings(settings);
+    for (const auto& callable : { tag, typed })
+    {
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load("{{ f('<' * 8) }}|{{ f('<' * 9) }}"));
+        auto result = tpl.RenderAsString({ { "f", callable } });
+        ASSERT_FALSE(result);
+        EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+        ASSERT_TRUE(tpl.Load("{{ f('<' * 8) }}"));
+        EXPECT_EQ(32U + 7U, tpl.RenderAsString({ { "f", callable } }).value().size());
+    }
+    TemplateW wlimited(&env);
+    ASSERT_TRUE(wlimited.Load(L"{{ f('<' * 9) }}"));
+    auto wresult = wlimited.RenderAsString({ { "f", wtag } });
+    ASSERT_FALSE(wresult);
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, wresult.error().GetCode());
 }
 
 // ToString prints as {{ value }} does, Python str() (decision 3b)
