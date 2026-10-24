@@ -144,7 +144,6 @@ if (NOT DEFINED JINJA2_PRIVATE_LIBS_INT)
         Boost::algorithm
         Boost::any
         Boost::container
-        Boost::filesystem
         fmt
     )
 else ()
