@@ -903,10 +903,11 @@ public:
         refs(m_operands);
     }
 
-    // `byRef`: every operand is pure, so none of them can change what another one reads in place
-    ConcatExpression(ArenaSpan<NodeRef<Expression>> operands, bool byRef)
+    // `lendFrom`: the operands from this index on are read in place. They are pure and come
+    // after every operand that is not, so nothing evaluated later changes what they read
+    ConcatExpression(ArenaSpan<NodeRef<Expression>> operands, uint32_t lendFrom)
         : m_operands(operands)
-        , m_byRef(byRef)
+        , m_lendFrom(lendFrom)
     {
     }
     InternalValue Evaluate(RenderContext&) override;
@@ -919,7 +920,7 @@ private:
     InternalValue EvaluatePair(NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr, RenderContext& context) const;
 
     ArenaSpan<NodeRef<Expression>> m_operands;
-    bool m_byRef;
+    uint32_t m_lendFrom;
     bool m_folded = false;
 };
 

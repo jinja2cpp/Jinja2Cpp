@@ -817,11 +817,11 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
 
 // `a ~ b`, the common case, without the containers of a longer run: each operand is read in
 // place where it can be, as BinaryExpression::WithLeft does, or lives in a temporary for the call
-InternalValue ConcatExpression::EvaluatePair(NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr, RenderContext& context) const
+JINJA2CPP_HOT_INLINE InternalValue ConcatExpression::EvaluatePair(NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr, RenderContext& context) const
 {
     const auto& nodes = context.Nodes();
-    auto withOperand = [this, &nodes, &context](NodeRef<Expression> expr, const auto& f) {
-        if (m_byRef || nodes.Is<ConstantExpression>(expr))
+    auto withOperand = [&nodes, &context](NodeRef<Expression> expr, bool lend, const auto& f) {
+        if (lend || nodes.Is<ConstantExpression>(expr))
         {
             if (const auto value = nodes[expr].EvaluateRef(context))
             {
@@ -830,8 +830,8 @@ InternalValue ConcatExpression::EvaluatePair(NodeRef<Expression> leftExpr, NodeR
         }
         return f(nodes[expr].Evaluate(context));
     };
-    return withOperand(leftExpr, [&](const InternalValue& left) {
-        return withOperand(rightExpr, [&](const InternalValue& right) {
+    return withOperand(leftExpr, m_lendFrom == 0, [&](const InternalValue& left) {
+        return withOperand(rightExpr, m_lendFrom <= 1, [&](const InternalValue& right) {
             // Both are evaluated first, as Jinja2 builds the operand list before joining it
             CheckUndefinedUse(left, UndefinedUse::Operator);
             CheckUndefinedUse(right, UndefinedUse::Operator);
@@ -853,19 +853,20 @@ InternalValue ConcatExpression::Evaluate(RenderContext& context)
     {
         return EvaluatePair(operands[0], operands[1], context);
     }
-    // Eight operands fit without allocating (chat templates join five or six). A constant, or any
-    // operand when all are pure, is read in place, as BinaryExpression reads its
-    // operands; the others are evaluated into `owned`, reserved so that the references stay valid
+    // Eight operands fit without allocating (chat templates join five or six). A constant, or a
+    // pure operand after the last impure one (m_lendFrom), is read in place, as BinaryExpression
+    // reads its operands; the others are evaluated into `owned`, reserved so that the references stay valid
     boost::container::small_vector<InternalValue, 8> owned;
     boost::container::small_vector<LookupResult, 8> values;
     owned.reserve(operands.size());
     values.reserve(operands.size());
     bool anyMarkup = false;
-    for (const auto operand : operands)
+    for (uint32_t idx = 0; idx < operands.size(); ++idx)
     {
+        const auto operand = operands[idx];
         auto& node = context.Nodes()[operand];
         LookupResult value;
-        if (m_byRef || context.Nodes().Is<ConstantExpression>(operand))
+        if (idx >= m_lendFrom || context.Nodes().Is<ConstantExpression>(operand))
         {
             value = node.EvaluateRef(context);
         }
