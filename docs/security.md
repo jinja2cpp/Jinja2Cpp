@@ -21,9 +21,15 @@ this page is about those.
 
 **Tier 0.** Data never executes and never names a file: only template text reaches the
 parser, and only names written in the template (or computed from data by template code the
-host wrote) reach the loader. A crash, hang, unbounded allocation or memory error that data
-alone can cause is a security bug. Autoescape protects this data as described in
-[Escaping](#escaping).
+host wrote) reach the loader. A crash or memory error that data alone can cause is a security
+bug. Autoescape protects this data as described in [Escaping](#escaping).
+
+Time and memory in tier 0 grow with the data: a trusted `{{ items|join('') }}` builds a string
+as long as the data it is given. The host bounds the size of the data it passes (or sets
+`Settings::Limits`, which apply in tier 0 too). Beyond that, a hang or an allocation out of
+proportion to the data (a small input that makes the engine build a huge value or loop without
+end) is a security bug, except where [Known gaps](#known-gaps) lists the operation: those gaps
+apply to both tiers.
 
 **Tier 1.** In addition:
 
@@ -38,12 +44,17 @@ alone can cause is a security bug. Autoescape protects this data as described in
   only `std::bad_alloc` passes through, which the contract reserves for real system memory
   exhaustion (until [0263](tasks/0263-per-operation-size-checks.md) lands a template can still
   cause one, see [Known gaps](#known-gaps)).
-- CPU time is bounded by `maxRenderSteps` and `maxRenderTime`, checked between engine steps.
+- Counted render work is bounded by `maxRenderSteps`; wall-clock time by `maxRenderTime`, when
+  the host sets it. Both are checked between engine steps and are cooperative: a step is not a
+  bounded amount of CPU (a filter over a long string is one step), and Load runs under neither.
+  `UntrustedLimits()` sets a step budget but leaves `maxRenderTime` and `maxTemplateSize` unset;
+  set `maxTemplateSize` when template sources come from users, and enforce a host timeout over
+  Load and Render wherever availability matters (see [Containment](#containment)).
 - The template author sees whatever the template renders, and the text of any error the host
   shows them (see [Errors](#errors)).
 
-What tier 1 does not yet deliver is listed under [Known gaps](#known-gaps): until those tasks
-land, the memory one render uses is not bounded by the library alone.
+What the library does not yet deliver is listed under [Known gaps](#known-gaps): until those
+tasks land, the memory one render uses is not bounded by the library alone.
 
 ## Escaping
 
@@ -158,7 +169,7 @@ text; filter it first if it may hold something the author should not see.
 
 ## Known gaps
 
-Tier 1 claims stop here until these tasks land:
+These apply to both tiers. The claims above stop here until these tasks land:
 
 - Not every operation that grows a string or list checks `maxSequenceSize` before
   allocating (`~` and `+` concatenation, list `+`/`extend`, `join`, `replace`, `%` totals,
@@ -178,9 +189,14 @@ Tier 1 claims stop here until these tasks land:
 ## Never promised
 
 - Preempting a running host callable, accessor, reflector or loader.
-- A total memory bound per render without a host allocator or process limits. A host that
-  needs one replaces `operator new` (or the allocator of [0252](design/0252-memory-contract-plan.md))
-  and throws `jinja2::Exception(ErrorCode::ResourceLimitExceeded, message)` from it.
+- A total memory bound per render. Process limits (see [Containment](#containment)) are the
+  way to enforce one. A replaced `operator new` that throws
+  `jinja2::Exception(ErrorCode::ResourceLimitExceeded, message)` is a partial budget only: it
+  sees allocations made through `operator new`, not the thread's list of values waiting to be
+  destroyed (`std::realloc`, grown while deeply nested values are freed), not host code or
+  dependencies that allocate otherwise, and the engine's allocation paths have not been audited
+  for it. The allocator design of [0252](design/0252-memory-contract-plan.md) is a plan, not an
+  implemented mechanism.
 - Process isolation between renders or tenants.
 - Timing and other side channels.
 - XSS safety of a template's own output.

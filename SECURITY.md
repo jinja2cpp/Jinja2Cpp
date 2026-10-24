@@ -24,11 +24,11 @@ example:
 - a template reads a file through `RealFileSystem` or `ConfinedFileSystem` that their name
   rules refuse, or through `ConfinedFileSystem` outside its root;
 - with autoescape on, untrusted string data printed by `{{ }}` breaks out of HTML text or a
-  quoted attribute;
+  quoted plain-text attribute value;
 - a template passes a `Settings::Limits` bound without the render failing.
 
-Behaviour that page lists as never promised or as a known gap is not a vulnerability, though
-a report that a known gap is worse than described is welcome.
+Behaviour that page lists as never promised or as a known gap is not a vulnerability, in
+either tier, though a report that a known gap is worse than described is welcome.
 
 ## Supported versions
 
