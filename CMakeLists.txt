@@ -169,6 +169,7 @@ set(JINJA2CPP_SOURCES
     src/filesystem_handler.cpp
     src/filter_factories.cpp
     src/filters.cpp
+    src/json_reader.cpp
     src/generic_list.cpp
     src/global_functions.cpp
     src/internal_value.cpp
@@ -271,16 +272,18 @@ endif ()
 target_compile_options(${LIB_TARGET_NAME} PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
 
 
+# {% meta %} is read by the library's own JSON reader (src/json_reader.cpp). The JSON binding
+# headers (include/jinja2cpp/binding/) are for consumers; JINJA2CPP_WITH_JSON_BINDINGS picks the
+# one the tests check, so only the tests link its library.
 if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
     set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
-    list(APPEND JINJA2CPP_PRIVATE_LIBS Boost::json)
+    set(JINJA2CPP_JSON_BINDING_LIBS Boost::json)
 elseif("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
     set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_RAPID")
-    list(APPEND JINJA2CPP_PRIVATE_LIBS $<BUILD_INTERFACE:RapidJson>)
+    set(JINJA2CPP_JSON_BINDING_LIBS RapidJson)
 else()
     set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_NLOHMANN")
-    # header-only and private: keep it out of the exported link interface
-    list(APPEND JINJA2CPP_PRIVATE_LIBS $<BUILD_INTERFACE:nlohmann_json::nlohmann_json>)
+    set(JINJA2CPP_JSON_BINDING_LIBS nlohmann_json::nlohmann_json)
 endif()
 
 # The built-in big-integer backend: header-only and private, so consumers need nothing for it
@@ -310,7 +313,6 @@ target_compile_definitions(
     PUBLIC
         -DBOOST_SYSTEM_NO_DEPRECATED
         -DBOOST_ERROR_CODE_HEADER_ONLY
-        ${_bindings_define}
 )
 # Result<T> is expected-lite's own nonstd::expected at every standard (docs/api-2.0.md,
 # decision 4): one type for library and consumers, and Clang 18 with libstdc++ at C++23
@@ -389,9 +391,6 @@ set(JINJA2CPP_PC_REQUIRES_PRIVATE "")
 set(JINJA2CPP_PC_LIBS_PRIVATE "")
 if (JINJA2CPP_DEPS_MODE STREQUAL "internal")
     set(JINJA2CPP_PC_REQUIRES_PRIVATE "fmt")
-    if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
-        set(JINJA2CPP_PC_LIBS_PRIVATE "-lboost_json -lboost_container")
-    endif ()
 endif ()
 configure_file(jinja2cpp.pc.in ${CMAKE_BINARY_DIR}/jinja2cpp.pc @ONLY)
 
@@ -420,6 +419,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/literals_test.cpp
         test/includes_test.cpp
         test/internal_value_test.cpp
+        test/json_reader_test.cpp
         test/macro_test.cpp
         test/output_test.cpp
         test/metadata_test.cpp
@@ -449,7 +449,7 @@ if (JINJA2CPP_BUILD_TESTS)
     add_executable(jinja2cpp_tests ${JINJA2CPP_TEST_SOURCES})
     target_compile_options(jinja2cpp_tests PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
     target_link_libraries(jinja2cpp_tests gtest gmock gtest_main
-        nlohmann_json::nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
+        nlohmann_json::nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS} ${JINJA2CPP_JSON_BINDING_LIBS})
     # The Boost big-integer adapter is checked in every build; the built-in one only in boost builds
     target_link_libraries(jinja2cpp_tests jinja2cpp_boost_multiprecision)
     if (NOT JINJA2CPP_WITH_UNICODE_NAMES)

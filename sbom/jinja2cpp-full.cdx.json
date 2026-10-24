@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:985eae33-6c96-507c-8ec9-ad8aae49a441",
+  "serialNumber": "urn:uuid:fb73a9ee-7fbc-5d90-a7a9-c921481721c7",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -697,7 +697,7 @@
             },
             {
               "name": "jinja2cpp:phases",
-              "value": "build,consumer-link,runtime"
+              "value": "test"
             },
             {
               "name": "jinja2cpp:exposure",
@@ -709,19 +709,19 @@
             },
             {
               "name": "jinja2cpp:selected-by",
-              "value": "JINJA2CPP_WITH_JSON_BINDINGS=boost (the default)"
+              "value": "JINJA2CPP_WITH_JSON_BINDINGS=boost (the default), which picks the binding the tests check"
             },
             {
               "name": "jinja2cpp:used-for",
-              "value": "Parses {% meta %} JSON metadata for Template::GetMetadata (template_impl.h:484-498, binding/boost_json_parser.h); the opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value"
+              "value": "The opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value; only its test (test/binding/boost_json_binding_test.cpp) links Boost.JSON. {% meta %} is read by src/json_reader.cpp since 0230 step D6"
             },
             {
               "name": "jinja2cpp:why",
-              "value": "One of three interchangeable JSON backends; the default because Boost is already required"
+              "value": "One of three opt-in JSON adapter headers; the tested default because Boost is fetched anyway until 0230 step D7"
             },
             {
               "name": "jinja2cpp:lighten",
-              "value": "The heaviest backend (boost_json.a + boost_container.a, about 4.8 MB in a Debug build) for a niche feature (template metadata). An internal minimal JSON reader, or nlohmann as default, would remove both libraries; the adapter headers stay opt-in"
+              "value": "The library no longer links boost_json and boost_container (0230 step D6); step D7 stops fetching them unless this binding is selected"
             }
           ]
         },
@@ -849,15 +849,15 @@
         },
         {
           "name": "jinja2cpp:used-for",
-          "value": "Metadata parser when selected (binding/nlohmann_json_parser.h); opt-in adapter include/jinja2cpp/binding/nlohmann_json.h; test data (tojson, metadata, parity corpus) and bench case files"
+          "value": "Opt-in adapter include/jinja2cpp/binding/nlohmann_json.h; test data (tojson, metadata, parity corpus) and bench case files"
         },
         {
           "name": "jinja2cpp:why",
-          "value": "Header-only JSON backend alternative; the test suite's JSON reader"
+          "value": "Header-only JSON adapter alternative; the test suite's JSON reader"
         },
         {
           "name": "jinja2cpp:lighten",
-          "value": "Header-only, no link cost. The cheapest default backend if Boost.JSON goes"
+          "value": "Header-only, no link cost; tests and adapter only"
         },
         {
           "name": "jinja2cpp:conan",
@@ -937,11 +937,11 @@
         },
         {
           "name": "jinja2cpp:used-for",
-          "value": "Metadata parser when selected (binding/rapid_json_parser.h); opt-in adapter include/jinja2cpp/binding/rapid_json.h"
+          "value": "Opt-in adapter include/jinja2cpp/binding/rapid_json.h and its test"
         },
         {
           "name": "jinja2cpp:why",
-          "value": "Third JSON backend alternative for users who already carry RapidJSON"
+          "value": "Third JSON adapter for users who already carry RapidJSON"
         },
         {
           "name": "jinja2cpp:lighten",
@@ -1326,6 +1326,78 @@
         {
           "name": "jinja2cpp:generator",
           "value": "scripts/gen_html_entities.py"
+        }
+      ]
+    },
+    {
+      "type": "data",
+      "bom-ref": "json-test-suite",
+      "name": "JSONTestSuite",
+      "version": "1ef36fa01286573e846ac449e8683f8833c5b26a",
+      "supplier": {
+        "name": "Nicolas Seriot"
+      },
+      "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "7b5d397edd2d477454805642a08ade55e8a4763515d27af2a4ca31e29e481bdc"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:github/nst/JSONTestSuite@1ef36fa01286573e846ac449e8683f8833c5b26a",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/nst/JSONTestSuite"
+        }
+      ],
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "test"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "test"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "none"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "generated"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "JINJA2CPP_BUILD_TESTS"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "RFC 8259 conformance cases for the {% meta %} JSON reader (test/json_reader_test.cpp)"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "The reader parses template text that may be untrusted (docs/tasks/0230, step D6)"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Test data only, generated into one table from a pinned revision"
+        },
+        {
+          "name": "jinja2cpp:file",
+          "value": "test/json_test_suite_cases.inc sha256:7b5d397edd2d477454805642a08ade55e8a4763515d27af2a4ca31e29e481bdc"
+        },
+        {
+          "name": "jinja2cpp:generator",
+          "value": "scripts/json_test_suite.py"
         }
       ]
     },
@@ -2757,6 +2829,7 @@
         "value-types",
         "unicode-data",
         "html-entities",
+        "json-test-suite",
         "googletest",
         "google-benchmark",
         "inja",

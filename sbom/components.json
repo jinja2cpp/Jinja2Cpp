@@ -171,12 +171,12 @@
       "name": "boost-json",
       "includes": ["boost/json.hpp", "boost/json/visit.hpp"],
       "role": "alternative",
-      "phases": ["build", "consumer-link", "runtime"],
+      "phases": ["test"],
       "exposure": "public-optional",
-      "selected_by": "JINJA2CPP_WITH_JSON_BINDINGS=boost (the default)",
-      "used_for": "Parses {% meta %} JSON metadata for Template::GetMetadata (template_impl.h:484-498, binding/boost_json_parser.h); the opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value",
-      "why": "One of three interchangeable JSON backends; the default because Boost is already required",
-      "lighten": "The heaviest backend (boost_json.a + boost_container.a, about 4.8 MB in a Debug build) for a niche feature (template metadata). An internal minimal JSON reader, or nlohmann as default, would remove both libraries; the adapter headers stay opt-in"
+      "selected_by": "JINJA2CPP_WITH_JSON_BINDINGS=boost (the default), which picks the binding the tests check",
+      "used_for": "The opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value; only its test (test/binding/boost_json_binding_test.cpp) links Boost.JSON. {% meta %} is read by src/json_reader.cpp since 0230 step D6",
+      "why": "One of three opt-in JSON adapter headers; the tested default because Boost is fetched anyway until 0230 step D7",
+      "lighten": "The library no longer links boost_json and boost_container (0230 step D6); step D7 stops fetching them unless this binding is selected"
     },
     {
       "id": "boost-multiprecision",
@@ -208,9 +208,9 @@
       "exposure": "public-optional",
       "selected_by": "JINJA2CPP_WITH_JSON_BINDINGS=nlohmann; also fetched whenever JINJA2CPP_BUILD_TESTS is ON (tests, parity corpus and bench read JSON with it)",
       "conan": "nlohmann_json/3.12.0",
-      "used_for": "Metadata parser when selected (binding/nlohmann_json_parser.h); opt-in adapter include/jinja2cpp/binding/nlohmann_json.h; test data (tojson, metadata, parity corpus) and bench case files",
-      "why": "Header-only JSON backend alternative; the test suite's JSON reader",
-      "lighten": "Header-only, no link cost. The cheapest default backend if Boost.JSON goes"
+      "used_for": "Opt-in adapter include/jinja2cpp/binding/nlohmann_json.h; test data (tojson, metadata, parity corpus) and bench case files",
+      "why": "Header-only JSON adapter alternative; the test suite's JSON reader",
+      "lighten": "Header-only, no link cost; tests and adapter only"
     },
     {
       "id": "rapidjson",
@@ -228,8 +228,8 @@
       "exposure": "public-optional",
       "selected_by": "JINJA2CPP_WITH_JSON_BINDINGS=rapid",
       "conan": "rapidjson/cci.20250205",
-      "used_for": "Metadata parser when selected (binding/rapid_json_parser.h); opt-in adapter include/jinja2cpp/binding/rapid_json.h",
-      "why": "Third JSON backend alternative for users who already carry RapidJSON",
+      "used_for": "Opt-in adapter include/jinja2cpp/binding/rapid_json.h and its test",
+      "why": "Third JSON adapter for users who already carry RapidJSON",
       "lighten": "Header-only. Patched locally, and the conan-build mode takes an unpatched ConanCenter snapshot; upstream has had no release since 2016. A candidate to retire as a built-in backend while keeping the adapter header"
     },
     {
@@ -332,6 +332,26 @@
       "why": "Same entity set as Python's html.unescape",
       "lighten": "Data only; keep",
       "evidence": [{"file": "src/html_entities.h", "contains": ["Python 3.12"]}]
+    },
+    {
+      "id": "json-test-suite",
+      "name": "JSONTestSuite",
+      "version": "1ef36fa01286573e846ac449e8683f8833c5b26a",
+      "license": "MIT",
+      "supplier": "Nicolas Seriot",
+      "url": "https://github.com/nst/JSONTestSuite",
+      "purl": "pkg:github/nst/JSONTestSuite@1ef36fa01286573e846ac449e8683f8833c5b26a",
+      "delivery": "generated",
+      "files": ["test/json_test_suite_cases.inc"],
+      "generators": ["scripts/json_test_suite.py"],
+      "role": "test",
+      "phases": ["test"],
+      "exposure": "none",
+      "selected_by": "JINJA2CPP_BUILD_TESTS",
+      "used_for": "RFC 8259 conformance cases for the {% meta %} JSON reader (test/json_reader_test.cpp)",
+      "why": "The reader parses template text that may be untrusted (docs/tasks/0230, step D6)",
+      "lighten": "Test data only, generated into one table from a pinned revision",
+      "evidence": [{"file": "test/json_test_suite_cases.inc", "contains": ["JSONTestSuite 1ef36fa01286573e846ac449e8683f8833c5b26a"]}]
     },
     {
       "id": "googletest",

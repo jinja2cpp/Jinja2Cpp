@@ -48,9 +48,9 @@ source and committed), `system` (found on the machine), `ci` (GitHub Actions).
 | value_types | 57f2e7a, modified | MIT | mandatory | public-api | vendored | `polymorphic`/`indirect` in `jinja2::v2::detail::xyz`, behind `jinja2::types` (Value, GenericList) | Keep; `std::` at C++26 |
 | Unicode tables | UCD 15.0.0 via Python 3.12 | Unicode-3.0 | mandatory | internal | generated | Python-identical `isprintable`, case mapping, digits without ICU | Data only; acquisition decision open in 0187/0186 |
 | HTML entities | Python 3.12 `html.entities` | PSF-2.0 | mandatory | internal | generated | MarkupSafe-compatible unescape | Data only; keep |
-| Boost.JSON | 1.92.0 | BSL-1.0 | alternative (default) | public-optional | fetched | parses `{% meta %}` JSON for `GetMetadata` | Yes: the heaviest backend for a niche feature |
-| nlohmann_json | 3.12.0 | MIT | alternative, and test | public-optional | fetched | the same, header-only; the tests' JSON reader | The natural default if Boost.JSON goes |
-| RapidJSON | 24b5e7a8, patched | MIT | alternative | public-optional | fetched | the same, for RapidJSON users | Candidate to retire as a built-in backend |
+| Boost.JSON | 1.92.0 | BSL-1.0 | alternative (tested default) | public-optional | fetched | the opt-in adapter `jinja2cpp/binding/boost_json.h` and its test; `{% meta %}` is read by `src/json_reader.cpp` since 0230 step D6 | Done for the library, which no longer links it; D7 stops fetching it unless selected |
+| nlohmann_json | 3.12.0 | MIT | alternative, and test | public-optional | fetched | the same adapter, header-only; the tests' JSON reader | Keep: tests only |
+| RapidJSON | 24b5e7a8, patched | MIT | alternative | public-optional | fetched | the same adapter, for RapidJSON users | Being retired as a built-in backend (0303) |
 | Boost.Multiprecision | 1.92.0 | BSL-1.0 | optional, and test | public-optional | fetched | `cpp_int` behind the built-in big-integer backend with `-DJINJA2CPP_WITH_BIGINT=boost` (off by default) and the opt-in adapter `jinja2cpp/big_int/boost_cpp_int.h`; standalone mode, so only its own and Boost.Config's headers | Header-only and optional; after 0230 it is fetched on its own (docs/design/0178-big-integer-plan.md 8) |
 
 ### Boost, library by library
@@ -62,10 +62,10 @@ to `libjinja2cpp`. What the code actually includes is small:
 
 | Boost library | Used for | C++17 alternative | Cost to replace |
 |---|---|---|---|
-| core (`span`) | about 57 uses in 14 `src/` files | none before C++20 `std::span` | small: an internal span |
-| container (`small_vector`) | about 27 hot-path uses | none | medium: perf-sensitive, measure with bench/ |
-| smart_ptr (`intrusive_ptr`) | InternalValue payloads (one pointer wide, 0140) | none (`shared_ptr` is two pointers) | small: about 60 lines |
-| json | the default metadata backend | nlohmann (header-only) or an internal reader | small, behind the existing backend switch |
+| core (`span`) | about 57 uses in 14 `src/` files | none before C++20 `std::span` | done: `src/span.h` (0230 D4) |
+| container (`small_vector`) | about 27 hot-path uses | none | done: `src/small_vector.h`, bench-gated (0230 D5) |
+| smart_ptr (`intrusive_ptr`) | InternalValue payloads (one pointer wide, 0140) | none (`shared_ptr` is two pointers) | done: `src/intrusive_ptr.h` (0230 D4) |
+| json | the opt-in adapter's test | `src/json_reader.cpp` reads `{% meta %}` | done for the library (0230 D6) |
 
 `lexical_cast`, `numeric_conversion`, `variant` and `optional` are no longer requested
 (nothing includes them since 0071), and the dead includes of `boost/unordered_map.hpp`,

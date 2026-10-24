@@ -97,6 +97,7 @@ Outcome RenderOutcome(const std::uint8_t* data, std::size_t size);
 void FuzzParse(const std::uint8_t* data, std::size_t size);
 void FuzzRender(const std::uint8_t* data, std::size_t size);
 void FuzzRenderWide(const std::uint8_t* data, std::size_t size);
+void FuzzMetadata(const std::uint8_t* data, std::size_t size);
 
 } // namespace jinja2_fuzz
 

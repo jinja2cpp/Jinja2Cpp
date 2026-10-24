@@ -40,7 +40,9 @@ tidy_excludes=(':!src/binding/rapid_json*' ':!src/binding/nlohmann_json*'
   # path; test/big_int_test.cpp covers it (docs/tasks/0272)
   ':!include/jinja2cpp/big_int/boost_cpp_int.h'
   ':!include/jinja2cpp/polymorphic_value/*' ':!src/robin_hood.h' ':!src/lexertk.h'
-  ':!src/unicode_tables.h')
+  ':!src/unicode_tables.h'
+  # Generated test data, included by a test
+  ':!test/*.inc')
 
 # 1. clang-format, as .github/workflows/format-check.yml
 mapfile -t whole < <(changed 'src/**.h' 'src/**.cpp' 'include/**.h')
