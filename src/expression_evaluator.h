@@ -100,7 +100,14 @@ struct CallParamsInfo
 {
     OrderedMap<std::string, NodeRef<Expression>> kwParams;
     std::vector<NodeRef<Expression>> posParams;
-    // f(*args, **kwargs): unpacked when the call is evaluated; null when not written
+};
+
+// The arguments of a call as parsed: f(*args, **kwargs) is unpacked when the call is evaluated,
+// null when not written. Only calls take them, so filters and tests keep CallParamsInfo
+struct CallArgsInfo
+{
+    OrderedMap<std::string, NodeRef<Expression>> kwParams;
+    std::vector<NodeRef<Expression>> posParams;
     NodeRef<Expression> dynArgs;
     NodeRef<Expression> dynKwargs;
 };
@@ -109,8 +116,6 @@ inline void VisitCallParams(detail::RefChecker& refs, const CallParamsInfo& para
 {
     refs.All(params.kwParams);
     refs.All(params.posParams);
-    refs(params.dynArgs);
-    refs(params.dynKwargs);
 }
 
 // A keyword argument of a call the tree keeps
@@ -132,7 +137,9 @@ struct ArenaCallParams
     // Whether the arguments are only known once the call is evaluated
     [[nodiscard]] bool HasUnpacking() const { return dynArgs || dynKwargs; }
 
-    static ArenaCallParams Make(NodeArena& nodes, const CallParamsInfo& params);
+    // Params: CallParamsInfo or CallArgsInfo
+    template<typename Params>
+    static ArenaCallParams Make(NodeArena& nodes, const Params& params);
     void VisitRefs(detail::RefChecker& refs) const
     {
         refs(posParams);
@@ -989,7 +996,8 @@ public:
         m_params.VisitRefs(refs);
     }
 
-    CallExpression(NodeArena& nodes, NodeRef<Expression> valueRef, const CallParamsInfo& params)
+    template<typename Params>
+    CallExpression(NodeArena& nodes, NodeRef<Expression> valueRef, const Params& params)
         : m_valueRef(valueRef)
         , m_params(ArenaCallParams::Make(nodes, params))
         , m_isNamedCallee(nodes.Is<ValueRefExpression>(m_valueRef))

@@ -37,6 +37,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -1855,12 +1856,16 @@ NodeRef<Expression> MakeConstant(NodeArena& nodes, InternalValue constant)
     return nodes.Make<ConstantExpression>(std::move(constant));
 }
 
-ArenaCallParams ArenaCallParams::Make(NodeArena& nodes, const CallParamsInfo& params)
+template<typename Params>
+ArenaCallParams ArenaCallParams::Make(NodeArena& nodes, const Params& params)
 {
     ArenaCallParams result;
     result.posParams = nodes.MakeSpan(params.posParams);
-    result.dynArgs = params.dynArgs;
-    result.dynKwargs = params.dynKwargs;
+    if constexpr (std::is_same_v<Params, CallArgsInfo>)
+    {
+        result.dynArgs = params.dynArgs;
+        result.dynKwargs = params.dynKwargs;
+    }
     if (params.kwParams.empty())
     {
         return result;
@@ -1874,5 +1879,8 @@ ArenaCallParams ArenaCallParams::Make(NodeArena& nodes, const CallParamsInfo& pa
     result.kwParams = nodes.MakeSpan(kwParams);
     return result;
 }
+
+template ArenaCallParams ArenaCallParams::Make(NodeArena& nodes, const CallParamsInfo& params);
+template ArenaCallParams ArenaCallParams::Make(NodeArena& nodes, const CallArgsInfo& params);
 } // namespace v2
 } // namespace jinja2

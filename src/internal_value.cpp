@@ -609,6 +609,11 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     [[nodiscard]] static InternalValue SubscriptCallable(const Callable& callable, const std::string& field)
     {
+        // f.__call__ is the callable itself: m.__call__() calls the macro (docs/tasks/0214)
+        if (field == "__call__")
+        {
+            return InternalValue(callable);
+        }
         const auto& attributes = callable.GetAttributes();
         if (!attributes)
         {
@@ -660,11 +665,6 @@ inline void ResolveCallOperator(InternalValue& result, RenderContext* values)
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values)
 {
-    // f.__call__ is the callable itself: m.__call__() calls the macro (docs/tasks/0214)
-    if (val.Kind() == ValueKind::Callable && IsStringValue(subscript) && AsString(subscript) == "__call__")
-    {
-        return val;
-    }
     auto result = Apply2<SubscriptionVisitor>(val, subscript);
     ResolveCallOperator(result, values);
     return result;

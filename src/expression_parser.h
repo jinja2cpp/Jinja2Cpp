@@ -150,9 +150,11 @@ public:
     ParseResult<NodeRef<Expression>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
     // Jinja2's parse_tuple without parentheses: 'a, b' is a tuple, 'a' stays an expression
     ParseResult<NodeRef<Expression>> ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart = true);
-    // allowUnpacking: `*args` and `**kwargs` arguments, which only calls take so far: filters and
-    // tests bind their arguments at Load (docs/tasks/0306)
-    ParseResult<CallParamsInfo> ParseCallParams(LexScanner& lexer, bool allowUnpacking = false);
+    // The arguments of a filter or test, which bind them at Load and so take no `*args` or
+    // `**kwargs` yet (docs/tasks/0306)
+    ParseResult<CallParamsInfo> ParseCallParams(LexScanner& lexer);
+    // The arguments of a call, `*args` and `**kwargs` included
+    ParseResult<CallArgsInfo> ParseCallArgs(LexScanner& lexer);
     ParseResult<NodeRef<ExpressionFilter>> ParseFilterExpression(LexScanner& lexer);
     // Settings::finalize as a callable; undefined if it is not set
     [[nodiscard]] const InternalValue& GetFinalize() const { return m_finalize; }
@@ -194,6 +196,8 @@ private:
     ParseResult<NodeRef<Expression>> ParseBracedExpressionOrTuple(LexScanner& lexer);
     ParseResult<NodeRef<Expression>> ParseDictionary(LexScanner& lexer);
     ParseResult<NodeRef<Expression>> ParseTuple(LexScanner& lexer);
+    template<typename Params>
+    ParseResult<Params> ParseArguments(LexScanner& lexer);
     ParseResult<NodeRef<Expression>> ParseCall(LexScanner& lexer, NodeRef<Expression> valueRef);
     ParseResult<NodeRef<Expression>> ParseSubscript(LexScanner& lexer, NodeRef<Expression> valueRef);
     NodeRef<SubscriptExpression> MakeSubscript(NodeRef<Expression> value, const std::string& attrName);
