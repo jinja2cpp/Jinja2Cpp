@@ -54,7 +54,9 @@ TEST(Helpers, CompileEscapesPythonSequences)
     EXPECT_EQ(L"\u00e9\x20ac", CompileEscapes(std::wstring{ LR"(\xe9\u20ac)" }));
     // The wide literal is a surrogate pair where wchar_t is 16 bits wide (MSVC) and one code unit elsewhere
     EXPECT_EQ(std::wstring{ L"\U0001F600" }, CompileEscapes(std::wstring{ LR"(\U0001F600)" }));
-    EXPECT_EQ("a\xE2\x80\xA2" "b", CompileEscapes(std::string{ R"(a\N{bullet}b)" }));
+    EXPECT_EQ("a\xE2\x80\xA2"
+              "b",
+              CompileEscapes(std::string{ R"(a\N{bullet}b)" }));
     EXPECT_EQ(std::wstring{ L"\U0001F004" }, CompileEscapes(std::wstring{ LR"(\N{MAHJONG TILE RED DRAGON})" }));
 }
 
