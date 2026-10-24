@@ -1729,6 +1729,15 @@ public:
         return m_attributes;
     }
 
+    // A bound method made anew on each read (loop.cycle): equal to another read of the same
+    // method of the same object, as Python's bound methods compare. `self` must stay valid
+    // while the callable lives (it captures the object); `method` is a static name
+    void SetBoundMethod(const void* self, const char* method)
+    {
+        m_boundSelf = self;
+        m_boundMethod = method;
+    }
+
     // Python compares functions and macros by identity: the copies of one callable share its
     // function, and a user callable converted from the same jinja2::UserCallable is the same
     [[nodiscard]] bool IsSame(const Callable& other) const;
@@ -1737,6 +1746,8 @@ private:
     Kind m_kind;
     std::shared_ptr<const CallableHolder> m_callable;
     std::shared_ptr<const InternalValueMap> m_attributes;
+    const void* m_boundSelf = nullptr;
+    const char* m_boundMethod = nullptr;
 };
 
 

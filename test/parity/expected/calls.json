@@ -484,6 +484,72 @@
     "type": "TemplateSyntaxError",
     "message": "unexpected ')'"
    }
+  },
+  {
+   "id": "calls.macro_dunder_call_subscript",
+   "template": "{% macro m() %}x{% endmacro %}{{ m['__call__']() }}{{ m.__call__.__call__() }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "xx"
+  },
+  {
+   "id": "calls.global_dunder_call",
+   "template": "{{ range.__call__(3)|list }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[0, 1, 2]"
+  },
+  {
+   "id": "calls.loop_method_dunder_call",
+   "template": "{% for i in [1] %}{{ loop.cycle.__call__('a') }}{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "a"
+  },
+  {
+   "id": "calls.loop_methods_compare",
+   "template": "{% for i in [1] %}{{ 'T' if loop.changed == loop.changed else 'F' }}{{ 'T' if loop.cycle == loop.changed else 'F' }}{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "calls.loop_method_of_outer_loop",
+   "template": "{% for i in [1] %}{% set c = loop.cycle %}{% for j in [1] %}{{ 'T' if c == loop.cycle else 'F' }}{% endfor %}{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "F"
+  },
+  {
+   "id": "calls.macro_xmlattr_escaped",
+   "template": "{% macro m() %}x{% endmacro %}{{ dict(a=m, b=1)|xmlattr(false) }}",
+   "context": {},
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "a=\"&lt;Macro &#39;m&#39;&gt;\" b=\"1\""
+  },
+  {
+   "id": "calls.global_class_str",
+   "template": "{{ range }}|{{ dict }}|{{ cycler }}|{{ joiner }}|{{ namespace }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<class 'range'>|<class 'dict'>|<class 'jinja2.utils.Cycler'>|<class 'jinja2.utils.Joiner'>|<class 'jinja2.utils.Namespace'>"
+  },
+  {
+   "id": "calls.global_class_xmlattr",
+   "template": "{{ dict(a=range)|xmlattr }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": " a=\"&lt;class &#39;range&#39;&gt;\""
   }
  ]
 }

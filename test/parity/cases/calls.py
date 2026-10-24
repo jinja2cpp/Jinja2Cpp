@@ -1,5 +1,6 @@
-"""The call protocol: *args and **kwargs in calls (docs/tasks/0220) and the order Jinja2's
-parser allows for the arguments of a call (docs/tasks/0294)."""
+"""The call protocol: *args and **kwargs in calls (docs/tasks/0220), the order Jinja2's
+parser allows for the arguments of a call (docs/tasks/0294) and callables used as values
+(docs/tasks/0214)."""
 M = "{% macro m(a, b) %}{{ a }}-{{ b }}{% endmacro %}"
 CASES = [
     # *args: any iterable, after the positional arguments
@@ -57,4 +58,14 @@ CASES = [
     ("star_args_twice", M + "{{ m(*[1], *[2]) }}"),
     ("star_kwargs_twice", M + "{{ m(**{'a': 1}, **{'b': 2}) }}"),
     ("star_without_value", M + "{{ m(*) }}"),
+    # Callables as values: f.__call__ is a way to call f; reads of one bound method compare equal
+    ("macro_dunder_call_subscript", "{% macro m() %}x{% endmacro %}{{ m['__call__']() }}{{ m.__call__.__call__() }}"),
+    ("global_dunder_call", "{{ range.__call__(3)|list }}"),
+    ("loop_method_dunder_call", "{% for i in [1] %}{{ loop.cycle.__call__('a') }}{% endfor %}"),
+    ("loop_methods_compare", "{% for i in [1] %}{{ 'T' if loop.changed == loop.changed else 'F' }}{{ 'T' if loop.cycle == loop.changed else 'F' }}{% endfor %}"),
+    ("loop_method_of_outer_loop", "{% for i in [1] %}{% set c = loop.cycle %}{% for j in [1] %}{{ 'T' if c == loop.cycle else 'F' }}{% endfor %}{% endfor %}"),
+    ("macro_xmlattr_escaped", "{% macro m() %}x{% endmacro %}{{ dict(a=m, b=1)|xmlattr(false) }}", {"env": {"autoescape": True}}),
+    # The builtin classes print as Python's <class 'range'> (docs/tasks/0305)
+    ("global_class_str", "{{ range }}|{{ dict }}|{{ cycler }}|{{ joiner }}|{{ namespace }}"),
+    ("global_class_xmlattr", "{{ dict(a=range)|xmlattr }}"),
 ]
