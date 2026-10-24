@@ -84,10 +84,11 @@ treats all of them as trusted host code:
 
 `RealFileSystem` follows the name rules of Python's `FileSystemLoader` since 2.0:
 
-- A name is split at `/` (on Windows also at `\`). A name with a `..` piece is not found.
+- A name is split at `/`. A name with a `..` piece is not found.
 - Empty and `.` pieces are skipped, so `/a.j2`, `./a.j2` and `a.j2` name the same file under
-  the root; an absolute host path names a file under the root too, never the host file. On
-  Windows a piece holding `\` or `:` is not found.
+  the root; an absolute host path names a file under the root too, never the host file.
+- On Windows a name holding `\` or `:` is not found: `dir\a.j2` is not another spelling of
+  `dir/a.j2`, and a drive letter never names a host path.
 - A name holding NUL is not found. Only regular files are found: no directories, FIFOs or
   devices.
 - Symbolic links are followed wherever they point, as in Python. A root that holds links the
@@ -127,9 +128,16 @@ Built in, whatever the settings:
 | Items or characters one checked operation builds (`range`, `*`, `center`, `indent`, `tojson`, ...) | 2^26 (`maxSequenceSize` can lower it) | 18 |
 | Width and precision in `%` formatting | clamped to ±2^20 | no error |
 | Width in string methods (`'x'.center(n)`, `ljust`, `zfill`, ...) | 2^28 (Python's `OverflowError`) | `TemplateRuntimeError` (17) |
-| Render nesting (`maxRenderDepth`), expression nesting (`maxExpressionDepth`), operator chains (`maxExpressionOperators`), block nesting (`maxBlockNesting`) | 256, 70, 491, 248, close to where Python Jinja2 stops | 12 |
 | Thread stack | checked in the parser, the evaluator and deep-value walks | 12 |
 | Template that includes, imports or extends itself | refused | 12 |
+
+Nesting is bounded by `Settings::Limits` fields with defaults set close to where Python Jinja2
+stops: render nesting `maxRenderDepth` 256, expression nesting `maxExpressionDepth` 70,
+operator chains `maxExpressionOperators` 491, block nesting `maxBlockNesting` 248, each
+reported as 12. These are defaults, not hard ceilings: a host can raise them, and 0 turns a
+counter off, leaving only the thread stack check (with `maxBlockNesting` 0, deeply nested
+blocks parse in quadratic time, [0282](tasks/0282-settings-limits-followups.md)). Keep the
+defaults, or lower values, for tier 1.
 
 `Settings::Limits` adds bounds that are off by default (see `template_env.h` for each field's
 exact unit): `maxRange`, `maxSequenceSize`, `maxOutputSize`, `maxTemplateSize`,
