@@ -27,7 +27,6 @@
 #include <memory>
 #include <mutex>
 #include <new>
-#include <optional>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
@@ -72,7 +71,8 @@ public:
         if (auto map = AsMap(value))
         {
             // A dict, the template's or the host's, or a namespace; not an object
-            if (map->GetMutableItems() != nullptr || map->IsNamespace() || (!map->HasAttributes() && map->GetObjectClass() == nullptr))
+            const bool isDict = map->GetMutableItems() != nullptr || map->IsNamespace() || (!map->HasAttributes() && map->GetObjectClass() == nullptr);
+            if (isDict)
             {
                 return CopyMap(*map, value);
             }
@@ -277,9 +277,9 @@ struct TemplateModuleState
             }
         }
 
-        callback.emplace(impl.get());
+        callback = std::make_unique<Callback>(impl.get());
         callback->SetGlobals(&globals);
-        module.emplace(std::move(convertedParams), globals.values, &*callback, &GetBuiltinGlobals(impl->m_settings->settings.extensions.i18n));
+        module = std::make_unique<ImportedModule>(std::move(convertedParams), globals.values, callback.get(), &GetBuiltinGlobals(impl->m_settings->settings.extensions.i18n));
         callback->moduleContext = &module->Context();
 
         std::basic_string<CharT> body;
@@ -303,8 +303,8 @@ struct TemplateModuleState
     std::vector<std::pair<std::string, const InternalValue*>> ExportedNames() const
     {
         std::vector<std::pair<std::string, const InternalValue*>> names;
-        const auto& imported = callback.value().imported;
-        for (const auto& [name, value] : module.value().Names())
+        const auto& imported = callback->imported;
+        for (const auto& [name, value] : module->Names())
         {
             if (name.empty() || name[0] == '_' || IsEntryBinding(value, HashedName::Hash(name)))
             {
@@ -403,9 +403,9 @@ struct TemplateModuleState
     // The params, until the module takes them
     InternalValueMap convertedParams;
     GlobalsSnapshot globals;
-    std::optional<Callback> callback;
+    std::unique_ptr<Callback> callback;
     // The module's context, where the macros were defined; after the callback, which it uses
-    std::optional<ImportedModule> module;
+    std::unique_ptr<ImportedModule> module;
     // Calls of the exports take turns: the context is not shared by concurrent calls
     std::recursive_mutex mutex;
 };

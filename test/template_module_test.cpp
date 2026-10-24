@@ -164,7 +164,8 @@ TEST_F(TemplateModuleTest, KeptArgumentIsOwned)
     {
         std::string arg(64, 'a');
         Call(module.exports["keep"], { arg });
-        Call(module.exports["keep"], { jinja2::ValuesList{ std::string(40, 'b') } });
+        // A Value holding a list: `{ ValuesList{...} }` would copy the list itself under Clang
+        Call(module.exports["keep"], jinja2::ValuesList{ jinja2::Value(jinja2::ValuesList{ std::string(40, 'b') }) });
     }
     EXPECT_EQ("['" + std::string(40, 'b') + "']" + std::string(64, 'a') + ",['" + std::string(40, 'b') + "']", Call(module.exports["get"]).AsString());
 }
