@@ -180,6 +180,26 @@ TEST_F(TemplateModuleTest, ExportOutlivesTemplate)
     EXPECT_EQ("Hello, World!", Call(m, { "World" }).AsString());
 }
 
+// An exported value owns its text and items: the template's source, the params and the
+// module are gone when it is read (ASan)
+TEST_F(TemplateModuleTest, ExportedValuesAreOwned)
+{
+    jinja2::ValuesMap exports;
+    {
+        jinja2::Template tpl(&m_env);
+        ASSERT_TRUE(!!tpl.Load("{% set lit = 'a literal of the source' %}{% set p = param %}{% set m = map %}{% set l = list %}"));
+        jinja2::ValuesMap params{ { "param", std::string(48, 'p') },
+                                  { "map", jinja2::ValuesMap{ { "k", std::string(48, 'v') } } },
+                                  { "list", jinja2::ValuesList{ std::string(48, 'i') } } };
+        exports = tpl.MakeModule(params).value().exports;
+        ASSERT_TRUE(!!tpl.Load("{{ 'another source' }}"));
+    }
+    EXPECT_EQ("a literal of the source", exports["lit"].AsString());
+    EXPECT_EQ(std::string(48, 'p'), exports["p"].AsString());
+    EXPECT_EQ(std::string(48, 'v'), exports["m"].AsMap().at("k").AsString());
+    EXPECT_EQ(std::string(48, 'i'), exports["l"].AsList().at(0).AsString());
+}
+
 TEST_F(TemplateModuleTest, LoadExpiresModule)
 {
     jinja2::Template tpl(&m_env);

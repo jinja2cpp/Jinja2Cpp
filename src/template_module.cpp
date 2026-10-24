@@ -38,20 +38,32 @@ namespace
 {
 // Copies a value of the module into one the host owns, so that nothing the host keeps refers
 // to the module's context or is changed by a later macro call. Lists, dicts and namespaces are
-// copied item by item; a container that contains itself is cut where it repeats. Other objects
-// (a host's GenericMap, a cycler) keep their own state and are passed on as views
+// copied item by item; a container that contains itself is cut where it repeats. Objects (a
+// host's reflected object, a cycler) keep their own state and are passed on as views, which own
+// what they view: the module converts its params and globals by value (TemplateModuleState)
 class ExportCopier
 {
 public:
     Value Copy(const InternalValue& value)
     {
+        // A string may view the template's source, which a Load replaces, or the module's
+        // params: the host gets its own copy, a Markup kept a Markup
+        if (auto text = AsStringView<char>(value))
+        {
+            return value.IsMarkup() ? Value(Markup(*text)) : Value(std::string(*text));
+        }
+        if (auto text = AsStringView<wchar_t>(value))
+        {
+            return value.IsMarkup() ? Value(WMarkup(*text)) : Value(std::wstring(*text));
+        }
         if (auto list = AsList(value))
         {
             return CopyList(*list);
         }
         if (auto map = AsMap(value))
         {
-            if (map->GetMutableItems() || map->IsNamespace())
+            // A dict, the template's or the host's, or a namespace; not an object
+            if (map->GetMutableItems() || map->IsNamespace() || (!map->HasAttributes() && !map->GetObjectClass()))
             {
                 return CopyMap(*map, value);
             }
@@ -198,8 +210,11 @@ struct TemplateModuleState
     TemplateModuleState(std::shared_ptr<const Impl> tpl, const ValuesMap& params)
         : impl(std::move(tpl))
         , generation(impl->m_loadGeneration.load(std::memory_order_relaxed))
-        , paramSource(params)
     {
+        for (const auto& [name, value] : params)
+        {
+            convertedParams[name] = visit(visitors::InputValueConvertor(true, false), value.GetData());
+        }
     }
     TemplateModuleState(const TemplateModuleState&) = delete;
     TemplateModuleState(TemplateModuleState&&) = delete;
@@ -231,7 +246,9 @@ struct TemplateModuleState
     std::basic_string<CharT> Render()
     {
         // The globals converted for this module alone: a render's are shared with the thread's
-        // later renders, which may change a value in place (GlobalsSnapshot)
+        // later renders, which may change a value in place (GlobalsSnapshot). The params and
+        // globals are converted by value, so that an exported view (of a host's map, say)
+        // owns what it views and outlives the module
         if (auto* env = impl->m_env)
         {
             auto& envImpl = *detail::TemplateEnvAccess::GetImpl(*env);
@@ -241,17 +258,13 @@ struct TemplateModuleState
             }
             for (const auto& [name, value] : *globals.source)
             {
-                globals.values[name] = visit(visitors::InputValueConvertor(false, true), value.GetData());
+                globals.values[name] = visit(visitors::InputValueConvertor(true, false), value.GetData());
             }
-        }
-        for (const auto& [name, value] : paramSource)
-        {
-            convertedParams[name] = visit(visitors::InputValueConvertor(false, true), value.GetData());
         }
 
         callback.emplace(impl.get());
         callback->SetGlobals(&globals);
-        module.emplace(convertedParams, globals.values, &*callback, &GetBuiltinGlobals(impl->m_settings->settings.extensions.i18n));
+        module.emplace(std::move(convertedParams), globals.values, &*callback, &GetBuiltinGlobals(impl->m_settings->settings.extensions.i18n));
         callback->moduleContext = &module->Context();
 
         std::basic_string<CharT> body;
@@ -373,8 +386,7 @@ struct TemplateModuleState
     std::shared_ptr<const Impl> impl;
     // The template's Load count when the module was made (TemplateImpl::m_loadGeneration)
     uint64_t generation;
-    // Converted by reference: they live as long as the module
-    ValuesMap paramSource;
+    // The params, until the module takes them
     InternalValueMap convertedParams;
     GlobalsSnapshot globals;
     std::optional<Callback> callback;
