@@ -2156,16 +2156,16 @@ InternalValue StringConverter::MapChars(const InternalValue& baseVal) const
 
 int64_t StringConverter::WordCount(const InternalValue& baseVal)
 {
-    auto isAlNum = ba::is_alnum();
+    // Jinja2 counts the matches of \w+ in the str() of the value, by code point
     int64_t wc = 0;
-    ApplyStringConverter<GenericStringEncoder>(baseVal, [isDelim = true, &wc, &isAlNum](auto ch, auto&&) mutable {
-        if (isDelim && isAlNum(ch))
-        {
-            isDelim = false;
-            wc++;
-            return;
-        }
-        isDelim = !isAlNum(ch);
+    ApplyStringConverter(baseVal, [&wc](auto srcStr) -> TargetString {
+        bool inWord = false;
+        ForEachCodePoint(srcStr, [&wc, &inWord](auto ch) {
+            const bool isWord = unicode::IsWordChar(CodePointValue(ch));
+            wc += isWord && !inWord ? 1 : 0;
+            inWord = isWord;
+        });
+        return {};
     });
     return wc;
 }

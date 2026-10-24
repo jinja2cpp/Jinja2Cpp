@@ -393,5 +393,6 @@ CASES = [
     ("wordcount_non_string", "{{ 'a b'|wordcount }}|{{ 123|wordcount }}|{{ none|wordcount }}"),
     ("wordwrap_non_string", "{{ 12|wordwrap(6) }}"),
     ("wordwrap_none", "{{ none|wordwrap(6, false) }}"),
+    ("wordcount_unicode_underscore", "{{ '\u00e9\u4e2d x-y_z w\u00e9b 3.5'|wordcount }}|{{ '\U0001f600 a\u00b2b'|wordcount }}"),
     ("title_punctuation", "{{ 'hello-world foo_bar'|title }}|{{ 123|title }}"),
 ]
