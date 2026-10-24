@@ -4,7 +4,7 @@ priority: low
 area: api
 depends: [0236]
 touches: [include/jinja2cpp/template.h, src/template_impl.h, src/statements.cpp]
-pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/TBD
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/634
 ---
 # `Template.module` / `make_module`: a template's exports as a map
 

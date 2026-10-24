@@ -11,7 +11,7 @@ one `RendererCallback`, which lives as long as the module. Whatever a call loads
 callback's `LoadedTemplates` until the module is freed: the `ImportedModule` of an
 `{% import ... with context %}` in a macro body (a new one per call) and the results kept in
 `replaced`. A host that keeps one module and calls it per request grows without bound. The
-verifier of #TBD measured `{% macro m() %}{% import 'lib' as l with context %}{{ l.x() }}{% include 'lib' %}{% endmacro %}`
+verifier of #634 measured `{% macro m() %}{% import 'lib' as l with context %}{{ l.x() }}{% include 'lib' %}{% endmacro %}`
 at 11.9 MB RSS after 1k calls, 60 MB after 20k and 212 MB after 80k; a plain `{% import 'lib' as l %}`
 (shared without context) stays flat at about 9 MB.
 
