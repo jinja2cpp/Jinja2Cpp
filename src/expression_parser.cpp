@@ -373,7 +373,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
         }
         // The operands after the first `~` of a run join it flat: the run is one operator
         else if (op.precedence == Precedence::Concat && !concat.empty() ? !chain.AfterRightFlat(detail::t_parseLimits.maxExpressionOperators)
-                                                                         : !chain.AfterRight(detail::t_parseLimits.maxExpressionOperators))
+                                                                        : !chain.AfterRight(detail::t_parseLimits.maxExpressionOperators))
         {
             left = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }
