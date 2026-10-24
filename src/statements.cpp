@@ -1850,8 +1850,10 @@ void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values, Bloc
         childSelf.emplace(p->second);
         scope.Erase("self");
     }
-    // Its blocks are on the stack already: `extends` pushed them (ExtendsStatement::Render)
-    RenderBody(os, values, &stack, childName, true, childSelf ? &*childSelf : nullptr);
+    // Its blocks are on the stack already: `extends` pushed them (ExtendsStatement::Render).
+    // A grandparent sees the `self` the first template of the chain set
+    const auto* frame = values.GetTemplateFrame();
+    RenderBody(os, values, &stack, childName, true, childSelf ? &*childSelf : (frame ? frame->childSelf : nullptr));
     if (childSelf && scope.Map().find("self") == scope.Map().end())
     {
         scope["self"] = std::move(*childSelf);

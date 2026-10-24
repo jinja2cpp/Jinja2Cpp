@@ -12262,6 +12262,46 @@
    "output": "FalseTrueFalse"
   },
   {
+   "id": "statements.loop_in_takes_items",
+   "template": "{% for x in [1, 2, 3, 4] %}{{ 'T' if 3 in loop else 'F' }}{{ x }};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "F1;"
+  },
+  {
    "id": "statements.loop_pprint",
    "template": "{% for x in [1, 2] %}{{ loop|pprint }};{% endfor %}",
    "context": {

@@ -318,6 +318,7 @@ CASES = [
     ("loop_iter_filtered", "{% for x in [1, 2, 3, 4] if x > 1 %}{{ x }}{{ loop|map(attribute=0)|list }}{{ loop.index }};{% endfor %}"),
     ("loop_iter_twice", "{% for x in [1, 2] %}{{ loop|list|length }}{{ loop|list|length }}{{ loop.index }}{{ loop.last }};{% else %}E{% endfor %}"),
     ("loop_has_no_dict_methods", "{% for x in [1] %}{{ loop.items is defined }}{{ loop['index'] is defined }}{{ loop.keys is defined }}{% endfor %}"),
+    ("loop_in_takes_items", "{% for x in [1, 2, 3, 4] %}{{ 'T' if 3 in loop else 'F' }}{{ x }};{% endfor %}"),
     ("loop_pprint", "{% for x in [1, 2] %}{{ loop|pprint }};{% endfor %}"),
     ("loop_cycle_string", "{% for x in [1, 2] %}{{ loop.cycle|string }};{% endfor %}"),
     # Argument unpacking in calls (0220)

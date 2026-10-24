@@ -301,6 +301,8 @@ CASES = [
      {"templates": {**T, "pc.j2": "{% block b %}{% endblock %}|{% block c %}C{% endblock %}"}}),
     ("self_after_extends_in_include", "{% set ns = namespace(s=none) %}{% include 'ie.j2' %}{{ ns.s.c() }}",
      {"templates": {**T, "pc.j2": "{% block b %}{% endblock %}|{% block c %}C{% endblock %}", "ie.j2": "{% extends 'pc.j2' %}{% set ns.s = self %}"}}),
+    ("self_child_set_seen_by_grandparent", "{% extends 'g1.j2' %}{% set self = 3 %}",
+     {"templates": {**T, "g1.j2": "{% extends 'g2.j2' %}{% block a %}A{% endblock %}", "g2.j2": "{% with self = 8 %}{% endwith %}[{{ self }}]{% block a %}{% endblock %}"}}),
     ("module_extends_set_self_exported", "{% import 'mes.j2' as m %}{{ m.self }}",
      {"templates": {**T, "pc.j2": "P", "mes.j2": "{% extends 'pc.j2' %}{% set self = 5 %}"}}),
     ("self_scoped_block_chain_passes_names", "{% for v in [1, 2] %}{% block b scoped %}{{ self.c() }}{% endblock %}{% endfor %}{% block c scoped %}<{{ v }}{{ self.d() }}>{% endblock %}{% block d %}({{ v }}){% endblock %}", L),
