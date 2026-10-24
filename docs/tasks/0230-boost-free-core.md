@@ -72,3 +72,15 @@ hooks. Unit tests in `test/support_types_test.cpp`. Swap and move use plain assi
 rather than `std::swap`/`std::exchange`: with those, GCC inlined less around moves of
 `InternalValue` and allocation-heavy renders ran up to 0.5% more instructions; written as
 Boost writes them, every benchmark is within 0.15% of master.
+
+Step D5: `src/small_vector.h` defines `SmallVector`, `SmallVectorBase` and
+`SmallVectorDoubling` itself, with Boost's layout (pointer, size and capacity, then the
+inline buffer at the next offset aligned for `T`, which is how the base tells it from a heap
+buffer) and growth (1.6x, or 2x with `SmallVectorDoubling`). Growth keeps the strong
+guarantee and is safe against an argument that names an element; `shrink_to_fit` moves the
+elements back inline when they fit. The growth options are part of `SmallVectorBase`'s
+type, as in Boost. Two things the instruction counts asked for: moving a vector whose
+elements are inline moves them with one `uninitialized_move` (the general move assignment
+made parse up to 0.9% slower), and the growth paths are not inlined (inlined, they used up
+GCC's inlining budget in `statements.cpp`, and `InternalValue`'s copy assignment went out of
+line in the loop body). Against D4: Load -0.27% on average, every benchmark within +0.2%.
