@@ -26,3 +26,8 @@ does. Unit rows in `test/filters_test.cpp` and `test/user_callable_test.cpp` tha
 reflected structs will change with it.
 
 **Done when.** `filters.pprint_wraps_long` and `filters.pprint_python_types` match and their divergences lines are deleted.
+
+**Outcome.** `filters.pprint` ports `PrettyPrinter._format` (lists, tuples, dicts, dictsort
+pairs and strings) and prints a range as `range(0, 3)`; int dict keys already printed unquoted.
+Left over: `loop` printing its map is 0219; builtin globals and imported
+templates are 0304 (`filters.pprint_global_and_module`).

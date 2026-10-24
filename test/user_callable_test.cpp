@@ -437,10 +437,16 @@ INSTANTIATE_TEST_SUITE_P(ListParamConvert, UserCallableParamConvertTest, ::testi
                             InputOutputPair{"GListFn([1, 2, 3, 4] | sort)","[1, 2, 3, 4]"},
                             InputOutputPair{"GListFn(intList | sort)",     "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"},
                             InputOutputPair{"GListFn(reflectedVal.tmpStructList)",
-                                            "[{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-                                             "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-                                             "{'strValue': 'Hello World!'}]"},
+                                            "[{'strValue': 'Hello World!'},\n"
+                                            " {'strValue': 'Hello World!'},\n"
+                                            " {'strValue': 'Hello World!'},\n"
+                                            " {'strValue': 'Hello World!'},\n"
+                                            " {'strValue': 'Hello World!'},\n"
+                                            " {'strValue': 'Hello World!'},\n"
+                                            " {'strValue': 'Hello World!'},\n"
+                                            " {'strValue': 'Hello World!'},\n"
+                                            " {'strValue': 'Hello World!'},\n"
+                                            " {'strValue': 'Hello World!'}]"},
                             InputOutputPair{"GListFn(reflectedIntVector | sort)", "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"},
                             InputOutputPair{"GListFn(range(10) | sort)", "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"},
                             InputOutputPair{"GListFn({'name': 'itemName', 'val': 'itemValue'} | list) | sort", "['name', 'val']"},
@@ -453,18 +459,45 @@ INSTANTIATE_TEST_SUITE_P(MapParamConvert, UserCallableParamConvertTest, ::testin
                             InputOutputPair{"GMapFn()",                   "{}"},
                             InputOutputPair{"GMapFn({'key': 10})",         "{'key': 10}"},
                             InputOutputPair{"GMapFn(simpleMapValue) | dictsort",
-                                            "[('boolValue', True), ('dblVal', 100.5), ('intVal', 10), ('stringVal', 'string100.5')]"},
+                                            "[('boolValue', True),\n"
+                                            " ('dblVal', 100.5),\n"
+                                            " ('intVal', 10),\n"
+                                            " ('stringVal', 'string100.5')]"},
                             InputOutputPair{"GMapFn(reflectedVal) | dictsort",
-                                            "[('basicCallable', <callable>), ('boolValue', False), ('dblValue', 0.0), ('getInnerStruct', <callable>), ('getInnerStructValue', <callable>), ('innerStruct', {'strValue': 'Hello World!'}), "
-                                            "('innerStructList', [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}]), ('intEvenValue', 0), ('intValue', 0), "
-                                     "('strValue', 'test string 0'), ('strViewValue', 'test string 0'), ('tmpStructList', [{'strValue': 'Hello World!'}, "
-                                     "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-                                            "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}]), "
-                                     "('wstrValue', 'test string 0'), ('wstrViewValue', 'test string 0')]" },
+                                            "[('basicCallable', <callable>),\n"
+                                            " ('boolValue', False),\n"
+                                            " ('dblValue', 0.0),\n"
+                                            " ('getInnerStruct', <callable>),\n"
+                                            " ('getInnerStructValue', <callable>),\n"
+                                            " ('innerStruct', {'strValue': 'Hello World!'}),\n"
+                                            " ('innerStructList',\n"
+                                            "  [{'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'}]),\n"
+                                            " ('intEvenValue', 0),\n"
+                                            " ('intValue', 0),\n"
+                                            " ('strValue', 'test string 0'),\n"
+                                            " ('strViewValue', 'test string 0'),\n"
+                                            " ('tmpStructList',\n"
+                                            "  [{'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'},\n"
+                                            "   {'strValue': 'Hello World!'}]),\n"
+                                            " ('wstrValue', 'test string 0'),\n"
+                                            " ('wstrViewValue', 'test string 0')]" },
                     InputOutputPair{"GMapFn(reflectedVal.innerStruct) | dictsort", "[('strValue', 'Hello World!')]"}
                             ));
 // clang-format on
@@ -539,7 +572,8 @@ TEST(EnvCallablesTest, Finalize)
     env.SetSettings(settings);
     Template tpl(&env);
     ASSERT_TRUE(tpl.Load("{{ none }}{{ 1 }}{{ missing }}").has_value());
-    EXPECT_EQ("-1-", tpl.RenderAsString({}).value());
+    // An undefined value is not None: finalize gets its text, an empty string (docs/tasks/0293)
+    EXPECT_EQ("-1", tpl.RenderAsString({}).value());
 }
 
 // What a callable throws reaches the caller as it was thrown, under UserCallableException (docs/tasks/0254)

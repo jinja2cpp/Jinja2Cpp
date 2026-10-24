@@ -13,6 +13,7 @@
 #include "template_dict.h"
 #include "undefined.h"
 #include "unicode_printable.h"
+#include "unicode_tables.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
@@ -106,10 +107,284 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         return val.IsMarkup() && IsStringValue(val) ? "Markup(" + text + ")" : text;
     }
 
+    // Python's pprint.pformat: the repr of a value when it fits in 80 columns, else a list,
+    // tuple, dict or string broken over lines as pprint.PrettyPrinter._format breaks it
+    static std::string Format(const InternalValue& val, const RenderContext* context)
+    {
+        std::string out;
+        PrettyPrinter(context).FormatTo(out, val, 0, 0, 0);
+        return out;
+    }
+
+    // _format: indent is the column the value starts at, allowance the columns the text
+    // after it on its last line takes, level its nesting (1 for the value pformat prints)
+    void FormatTo(std::string& out, const InternalValue& val, int64_t indent, int64_t allowance, int level) const
+    {
+        CheckStack();
+        auto rep = Print(val, m_context);
+        if (static_cast<int64_t>(CodePointCount(std::string_view(rep))) <= Width - indent - allowance || val.IsMarkup())
+        {
+            // Markup has a repr of its own, which pprint does not break
+            out += rep;
+            return;
+        }
+        if (auto list = AsList(val))
+        {
+            if (list->GetRangeInfo())
+            {
+                out += rep;
+                return;
+            }
+            const bool isTuple = list->IsTuple();
+            std::string_view end = isTuple ? (list->GetSize() == 1 ? ",)" : ")") : "]";
+            out += isTuple ? '(' : '[';
+            FormatItems(out, *list, indent, allowance + static_cast<int64_t>(end.size()), level + 1);
+            out += end;
+        }
+        else if (auto map = AsMap(val))
+        {
+            if (map->GetObjectClass())
+            {
+                out += rep;
+                return;
+            }
+            auto entries = map->GetEntries();
+            SortEntriesByKey(entries);
+            out += '{';
+            FormatDictItems(out, entries, indent, allowance + 1, level + 1);
+            out += '}';
+        }
+        else if (const auto* pair = GetIf<KeyValuePair>(&val))
+        {
+            out += '(';
+            const std::vector<InternalValue> items{ pair->key, pair->value };
+            FormatItems(out, items, indent, allowance + 1, level + 1);
+            out += ')';
+        }
+        else if (auto narrow = AsStringView<char>(val))
+        {
+            FormatString(out, *narrow, indent, allowance, level + 1);
+        }
+        else if (auto wide = AsStringView<wchar_t>(val))
+        {
+            FormatString(out, ConvertString<std::string>(*wide), indent, allowance, level + 1);
+        }
+        else
+        {
+            out += rep;
+        }
+    }
+
+    // _format_items: one item per line, each indented one column past the opening bracket
+    template<typename Items>
+    void FormatItems(std::string& out, const Items& items, int64_t indent, int64_t allowance, int level) const
+    {
+        ++indent;
+        const InternalValue* pending = nullptr;
+        // An item of a lazily evaluated list lives only for its step, so it is copied
+        std::optional<InternalValue> held;
+        bool first = true;
+        auto flush = [&](int64_t itemAllowance) {
+            if (!first)
+            {
+                out += ",\n";
+                out.append(static_cast<size_t>(indent), ' ');
+            }
+            first = false;
+            FormatTo(out, *pending, indent, itemAllowance, level);
+        };
+        for (const auto& item : items)
+        {
+            if (pending)
+            {
+                flush(1);
+            }
+            held = item;
+            pending = &*held;
+        }
+        if (pending)
+        {
+            flush(allowance);
+        }
+    }
+
+    // _format_dict_items: `key: value` per line; a value goes on past its key's repr
+    void FormatDictItems(std::string& out, const std::vector<KeyValuePair>& entries, int64_t indent, int64_t allowance, int level) const
+    {
+        ++indent;
+        for (size_t idx = 0; idx != entries.size(); ++idx)
+        {
+            const bool last = idx + 1 == entries.size();
+            const auto key = Print(entries[idx].key, m_context);
+            out += key;
+            out += ": ";
+            FormatTo(out, entries[idx].value, indent + static_cast<int64_t>(CodePointCount(std::string_view(key))) + 2, last ? allowance : 1, level);
+            if (!last)
+            {
+                out += ",\n";
+                out.append(static_cast<size_t>(indent), ' ');
+            }
+        }
+    }
+
+    // _pprint_str: the lines of the string (str.splitlines(True)), a line wider than the width
+    // split after the whitespace of its words, each piece printed as its own repr on a line of
+    // its own; the value pformat prints is parenthesized
+    static void FormatString(std::string& out, std::string_view str, int64_t indent, int64_t allowance, int level)
+    {
+        if (str.empty())
+        {
+            out += Repr(str);
+            return;
+        }
+        // The code points of str and where each starts
+        std::vector<uint32_t> chars;
+        std::vector<size_t> offsets;
+        for (size_t pos = 0; pos < str.size();)
+        {
+            const auto next = NextCodePoint(str, pos);
+            offsets.push_back(pos);
+            chars.push_back(DecodeUtf8(str.substr(pos, next - pos)));
+            pos = next;
+        }
+        offsets.push_back(str.size());
+        const auto text = [&](size_t from, size_t to) { return str.substr(offsets[from], offsets[to] - offsets[from]); };
+        const auto width = [](const std::string& repr) { return static_cast<int64_t>(CodePointCount(std::string_view(repr))); };
+
+        std::vector<std::pair<size_t, size_t>> lines;
+        size_t lineStart = 0;
+        for (size_t idx = 0; idx < chars.size(); ++idx)
+        {
+            if (!IsLineBreak(chars[idx]))
+            {
+                continue;
+            }
+            if (chars[idx] == '\r' && idx + 1 < chars.size() && chars[idx + 1] == '\n')
+            {
+                ++idx;
+            }
+            lines.emplace_back(lineStart, idx + 1);
+            lineStart = idx + 1;
+        }
+        if (lineStart < chars.size())
+        {
+            lines.emplace_back(lineStart, chars.size());
+        }
+
+        if (level == 1)
+        {
+            ++indent;
+            ++allowance;
+        }
+        const int64_t maxWidth = Width - indent;
+        int64_t maxWidth1 = maxWidth;
+        std::vector<std::string> chunks;
+        std::string rep;
+        for (size_t lineIdx = 0; lineIdx != lines.size(); ++lineIdx)
+        {
+            const auto [from, to] = lines[lineIdx];
+            const bool lastLine = lineIdx + 1 == lines.size();
+            rep = Repr(text(from, to));
+            if (lastLine)
+            {
+                maxWidth1 -= allowance;
+            }
+            if (width(rep) <= maxWidth1)
+            {
+                chunks.push_back(rep);
+                continue;
+            }
+            // The parts re.findall(r'\S*\s*', line) finds: a word and the whitespace after it
+            int64_t maxWidth2 = maxWidth;
+            size_t current = from;
+            size_t currentEnd = from;
+            for (size_t partStart = from; partStart < to;)
+            {
+                size_t partEnd = partStart;
+                while (partEnd < to && !unicode::IsSpace(chars[partEnd]))
+                {
+                    ++partEnd;
+                }
+                while (partEnd < to && unicode::IsSpace(chars[partEnd]))
+                {
+                    ++partEnd;
+                }
+                if (partEnd == to && lastLine)
+                {
+                    maxWidth2 -= allowance;
+                }
+                if (width(Repr(text(current, partEnd))) > maxWidth2)
+                {
+                    if (currentEnd != current)
+                    {
+                        chunks.push_back(Repr(text(current, currentEnd)));
+                    }
+                    current = partStart;
+                }
+                currentEnd = partEnd;
+                partStart = partEnd;
+            }
+            if (currentEnd != current)
+            {
+                chunks.push_back(Repr(text(current, currentEnd)));
+            }
+        }
+        if (chunks.size() == 1)
+        {
+            // Python writes the repr of the last line here, which is that one chunk
+            out += rep;
+            return;
+        }
+        if (level == 1)
+        {
+            out += '(';
+        }
+        for (size_t idx = 0; idx != chunks.size(); ++idx)
+        {
+            if (idx != 0)
+            {
+                out += '\n';
+                out.append(static_cast<size_t>(indent), ' ');
+            }
+            out += chunks[idx];
+        }
+        if (level == 1)
+        {
+            out += ')';
+        }
+    }
+
+    // The value of one UTF-8 character as NextCodePoint delimits it
+    static uint32_t DecodeUtf8(std::string_view ch)
+    {
+        const auto lead = static_cast<unsigned char>(ch[0]);
+        if (lead < 0x80 || ch.size() == 1)
+        {
+            return lead;
+        }
+        uint32_t value = lead & (lead >= 0xF0 ? 0x07U : lead >= 0xE0 ? 0x0FU : 0x1FU);
+        for (size_t idx = 1; idx < ch.size(); ++idx)
+        {
+            value = (value << 6U) | (static_cast<unsigned char>(ch[idx]) & 0x3FU);
+        }
+        return value;
+    }
+
+    // The line boundaries of str.splitlines()
+    static bool IsLineBreak(uint32_t cp) { return (cp >= 0x0A && cp <= 0x0D) || (cp >= 0x1C && cp <= 0x1E) || cp == 0x85 || cp == 0x2028 || cp == 0x2029; }
+
+    static constexpr int64_t Width = 80;
+
     std::string operator()(const ListRef& list) const
     {
         CheckStack();
         std::string str;
+        if (list.GetRangeInfo())
+        {
+            // A range prints as its repr: range(0, 3)
+            visitors::ValueRenderer<char>(str, true)(list);
+            return str;
+        }
         auto os = std::back_inserter(str);
 
         // A tuple prints as Python's: (a, b), and (a,) with one item
@@ -229,7 +504,7 @@ PrettyPrint::PrettyPrint(const FilterParams& params)
 
 InternalValue PrettyPrint::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return PrettyPrinter::Print(baseVal, &context);
+    return PrettyPrinter::Format(baseVal, &context);
 }
 
 Serialize::Serialize(const FilterParams& params, const Serialize::Mode mode)

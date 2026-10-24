@@ -395,16 +395,46 @@ INSTANTIATE_TEST_SUITE_P(DictSort, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(reverse=true, by='value') | pprint", "[('Value', 'ItemValue'), ('key', 'itemName')]"},
                             InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(case_sensitive=true) | pprint", "[('Value', 'ItemValue'), ('key', 'itemName')]"},
                             InputOutputPair{"{'key': 'itemName', 'Value': 'ItemValue'} | dictsort(case_sensitive=true, reverse=true) | pprint", "[('key', 'itemName'), ('Value', 'ItemValue')]"},
-                            InputOutputPair{"simpleMapValue | dictsort | pprint", "[('boolValue', True), ('dblVal', 100.5), ('intVal', 10), ('stringVal', 'string100.5')]"},
+                            InputOutputPair{"simpleMapValue | dictsort | pprint", "[('boolValue', True),\n"
+                                                                                  " ('dblVal', 100.5),\n"
+                                                                                  " ('intVal', 10),\n"
+                                                                                  " ('stringVal', 'string100.5')]"},
     InputOutputPair{
       "reflectedVal | dictsort | pprint",
-      "[('basicCallable', <callable>), ('boolValue', False), ('dblValue', 0.0), ('getInnerStruct', <callable>), ('getInnerStructValue', <callable>), ('innerStruct', "
-      "{'strValue': 'Hello World!'}), ('innerStructList', [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-      "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-      "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}]), ('intEvenValue', 0), ('intValue', 0), ('strValue', 'test string 0'), ('strViewValue', 'test "
-      "string 0'), ('tmpStructList', [{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-      "{'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, {'strValue': 'Hello World!'}, "
-      "{'strValue': 'Hello World!'}]), ('wstrValue', 'test string 0'), ('wstrViewValue', 'test string 0')]" }));
+      "[('basicCallable', <callable>),\n"
+      " ('boolValue', False),\n"
+      " ('dblValue', 0.0),\n"
+      " ('getInnerStruct', <callable>),\n"
+      " ('getInnerStructValue', <callable>),\n"
+      " ('innerStruct', {'strValue': 'Hello World!'}),\n"
+      " ('innerStructList',\n"
+      "  [{'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'}]),\n"
+      " ('intEvenValue', 0),\n"
+      " ('intValue', 0),\n"
+      " ('strValue', 'test string 0'),\n"
+      " ('strViewValue', 'test string 0'),\n"
+      " ('tmpStructList',\n"
+      "  [{'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'},\n"
+      "   {'strValue': 'Hello World!'}]),\n"
+      " ('wstrValue', 'test string 0'),\n"
+      " ('wstrViewValue', 'test string 0')]" }));
 // clang-format on
 
 // clang-format off
@@ -652,7 +682,8 @@ INSTANTIATE_TEST_SUITE_P(Striptags, FilterGenericTest, ::testing::Values(
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(Center, FilterGenericTest, ::testing::Values(
-                            InputOutputPair{" 'x' | center | pprint", "'                                       x                                        '"},
+                            InputOutputPair{" 'x' | center | pprint", "('                                       '\n"
+                                                                      " 'x                                        ')"},
                             InputOutputPair{" 'x' | center(width=5) | pprint", "'  x  '"},
                             InputOutputPair{" 'x' | center(width=0) | pprint", "'x'"},
                             InputOutputPair{" '  x' | center(width=5) | pprint", "'   x '"}

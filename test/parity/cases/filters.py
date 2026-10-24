@@ -104,6 +104,13 @@ CASES = [
     ("pprint_string_repr", "{{ \"it's\"|pprint }}|{{ 'a\\nb'|pprint }}"),
     ("pprint_wraps_long", "{{ range(30)|list|pprint }}"),
     ("pprint_python_types", "{{ 1.0|pprint }}|{{ {1: 2}|pprint }}|{{ range(3)|pprint }}"),
+    # pprint.PrettyPrinter._format: nested containers, long strings split at words (docs/tasks/0215)
+    ("pprint_wraps_nested", "{{ {'b': range(12)|list, 'a': {'x': 'y' * 70, 'z': (1, 'w' * 75)}, 'c': [('k', 'v' * 80)]}|pprint }}"),
+    ("pprint_wraps_string", "{{ ('lorem ipsum dolor ' * 9)|pprint }}|{{ ['lorem ipsum dolor ' * 9]|pprint }}|{{ ('a\nb ' * 30 ~ 'x' * 90)|pprint }}"),
+    ("pprint_wraps_quotes_unicode", "{{ (\"it's \" * 20 ~ '\u00e9\u4e2d ' * 25)|pprint }}|{{ ['\u00e9' * 79]|pprint }}|{{ ['\u00e9' * 78]|pprint }}"),
+    ("pprint_wraps_tuple_markup", "{{ ('x' * 90,)|pprint }}|{{ [('<i>' * 30)|safe]|pprint }}|{{ [range(40), namespace(a='q' * 80)]|pprint }}"),
+    ("pprint_global_and_module", "{% import 'lib' as m %}{{ range|pprint }}|{{ m|pprint }}|{{ range }}|{{ m }}|{{ dict|pprint }}", {"templates": {"lib": "{% set x = 1 %}"}}),
+    ("pprint_wraps_dictsort", "{{ {'k1': 'v' * 40, 'k2': 'w' * 40}|dictsort|pprint }}|{{ {'k': ''}|pprint }}|{{ [''] * 30|pprint }}"),
     ("reject", "{% for i in l|reject('odd') %}{{ i }},{% endfor %}"),
     ("rejectattr", "{{ users|rejectattr('age', 'gt', 26)|map(attribute='name')|join(',') }}"),
     ("rejectattr_truthy", "{{ users|rejectattr('city')|map(attribute='name')|join(',') }}"),
