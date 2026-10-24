@@ -66,8 +66,15 @@ struct TemplateFrame
     const BlocksStack* blocks = nullptr;
     // The same stack where `extends` may add the parent's blocks to it; null for a template that extends nothing
     BlocksStack* extendable = nullptr;
+    // A parent's: the `self` its child set at their shared top level, which a parent with no
+    // `self` of its own reads (RenderAsParent)
+    const InternalValue* childSelf = nullptr;
     // Set by `extends`; from then on this template's top-level output is dropped
     TemplateNode<TemplateRenderer> parent;
+    // The top level has no `self` of its own: it reads the name as any other (NodeArena::SelfUse).
+    // In the padding after `parent`: a field that grows the zeroed part of the frame turns its
+    // initialisation in TemplateRenderer::RenderBody into a `rep stos`, a dozen instructions
+    bool selfFromContext = false;
     // Scopes visible to the template's top level, and so to unscoped blocks
     size_t baseDepth = 0;
     // The template's `self`, made when a name first asks for it (docs/tasks/0139)
@@ -79,11 +86,6 @@ struct TemplateFrame
     // The frame this one was entered from (an importer, for a macro it imported); only
     // compared, so that `self` finds the template it came from
     TemplateFrame* outer = nullptr;
-    // The top level has no `self` of its own: it reads the name as any other (NodeArena::SelfUse)
-    bool selfFromContext = false;
-    // A parent's: the `self` its child set at their shared top level, which a parent with no
-    // `self` of its own reads (RenderAsParent)
-    const InternalValue* childSelf = nullptr;
 };
 
 

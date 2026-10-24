@@ -1854,7 +1854,8 @@ void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values, Bloc
     // Its blocks are on the stack already: `extends` pushed them (ExtendsStatement::Render).
     // A grandparent sees the `self` the first template of the chain set
     const auto* frame = values.GetTemplateFrame();
-    RenderBody(os, values, &stack, childName, true, childSelf ? &*childSelf : (frame ? frame->childSelf : nullptr));
+    const ParentRender asParent{ childSelf ? &*childSelf : (frame ? frame->childSelf : nullptr) };
+    RenderBody(os, values, &stack, childName, &asParent);
     if (childSelf && scope.Map().find("self") == scope.Map().end())
     {
         scope["self"] = std::move(*childSelf);
@@ -1867,7 +1868,7 @@ void TemplateRenderer::RenderAsModule(OutStream& os, RenderContext& values, Bloc
     RenderBody(os, values, &stack, name);
 }
 
-void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name, bool asParent, const InternalValue* childSelf)
+void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name, const ParentRender* asParent)
 {
     // Nothing adds to the stack of a template that extends nothing, so those share one
     static const BlocksStack noBlocks{};
@@ -1885,9 +1886,14 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     frame.baseDepth = values.GetScopesCount();
     frame.name = name;
     frame.selfFromContext = m_selfFromContext;
-    frame.childSelf = childSelf;
+    frame.childSelf = asParent ? asParent->childSelf : nullptr;
     TemplateFrameGuard frameGuard(values, &frame);
 
+    if (!m_hasExtends)
+    {
+        values.Nodes()[m_body].Render(os, values);
+        return;
+    }
     // The output tags after an `extends` are dropped or skipped (OutputCheckStatement); what
     // an include or a call block writes there comes out before the parent's, as in Jinja2
     values.Nodes()[m_body].Render(os, values);

@@ -549,10 +549,16 @@ public:
     void PushBlocks(IRendererCallback& callback, const ArenaView& nodes, BlocksStack& stack) const;
 
 private:
+    // A render as a parent (RenderAsParent), in one argument of RenderBody: its seventh, which
+    // goes on the stack
+    struct ParentRender
+    {
+        // A `self` the child set at the top level the parent shares
+        const InternalValue* childSelf = nullptr;
+    };
     // `stack` is null for a template that defines no blocks and extends nothing
-    // `name` is the one `self` prints (TemplateFrame::name); `asParent` for RenderAsParent
-    // `childSelf` is a `self` the child set at the top level the parent shares (RenderAsParent)
-    void RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name, bool asParent = false, const InternalValue* childSelf = nullptr);
+    // `name` is the one `self` prints (TemplateFrame::name)
+    void RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name, const ParentRender* asParent = nullptr);
 
     NodeRef<ComposedRenderer> m_body;
     ArenaSpan<NodeRef<BlockStatement>> m_blocks;

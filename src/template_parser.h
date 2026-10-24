@@ -335,6 +335,9 @@ struct StatementInfo
     // Where its opening tag starts in the source
     std::size_t tagOffset = 0;
     NodeRef<IRendererBase> renderer;
+    // A block's: what the enclosing body did with `self` before it (NodeArena::SelfUse). In the
+    // padding after `renderer`, so the struct keeps its size
+    NodeArena::SelfUse outerSelfUse = NodeArena::SelfUse::None;
     // Set on `{% trans %}` only
     std::shared_ptr<TransInfo> trans;
     // The resolver's frame of the body (0117 P1)
@@ -342,8 +345,6 @@ struct StatementInfo
     // A macro's or call block's: the tree's marks before its parameters, less what the tags
     // between them and its body made (MacroStatement::SetBodyMarks)
     NodeArena::ContextMarks marks;
-    // A block's: what the enclosing body did with `self` before it (NodeArena::SelfUse)
-    NodeArena::SelfUse outerSelfUse = NodeArena::SelfUse::None;
 
     // Whether the body of a statement of `type` is a frame of the resolver of its own
     static bool OwnsFrame(Type type)
@@ -433,12 +434,8 @@ enum class OutputCheck
     Drop,
     Guard
 };
-inline OutputCheck OutputCheckOf(const TemplateRootInfo& root, const StatementInfoList& stack)
+JINJA2CPP_OUTLINE_INLINE OutputCheck OutputCheckAfterExtends(const TemplateRootInfo& root, const StatementInfoList& stack)
 {
-    if (!root.hasExtends)
-    {
-        return OutputCheck::None;
-    }
     const bool compiled = std::any_of(stack.begin(), stack.end(), [](const StatementInfo& info) {
         return info.type == StatementInfo::MacroStatement || info.type == StatementInfo::MacroCallStatement || info.type == StatementInfo::SetStatement
                || info.type == StatementInfo::BlockStatement;
@@ -448,6 +445,13 @@ inline OutputCheck OutputCheckOf(const TemplateRootInfo& root, const StatementIn
         return OutputCheck::None;
     }
     return root.knownExtends ? OutputCheck::Drop : OutputCheck::Guard;
+}
+
+// The text and expression tags test `hasExtends` themselves, so that the tags of a template
+// with no `extends` keep a straight path at load
+inline OutputCheck OutputCheckOf(const TemplateRootInfo& root, const StatementInfoList& stack)
+{
+    return root.hasExtends ? OutputCheckAfterExtends(root, stack) : OutputCheck::None;
 }
 
 
@@ -528,8 +532,9 @@ private:
         info.bodyStart = m_bodies.Size();
         statementsInfo.push_back(std::move(info));
     }
-    // The statement on top of the stack, taken off it
-    static StatementInfo PopStatement(StatementInfoList& statementsInfo)
+    // The statement on top of the stack, taken off it. Inlined: outlined, it costs every
+    // closing tag a call and a move of the struct at load
+    JINJA2CPP_HOT_INLINE static StatementInfo PopStatement(StatementInfoList& statementsInfo)
     {
         auto info = std::move(statementsInfo.back());
         statementsInfo.pop_back();
@@ -1705,13 +1710,22 @@ private:
             AppendTransText(*statementsStack.back().trans, range);
             return;
         }
-        const auto check = OutputCheckOf(m_root, statementsStack);
-        if (check == OutputCheck::Drop)
+        auto check = OutputCheck::None;
+        if (m_root.hasExtends)
         {
-            return;
+            check = OutputCheckAfterExtends(m_root, statementsStack);
+            if (check == OutputCheck::Drop)
+            {
+                return;
+            }
         }
+        // One call: a second makes the compiler outline the function
         NodeRef<IRendererBase> text = MakeRawTextRenderer(range);
-        m_bodies.Add(check == OutputCheck::Guard ? m_nodes.Make<OutputCheckStatement>(text) : text, range.startOffset);
+        if (check == OutputCheck::Guard)
+        {
+            text = m_nodes.Make<OutputCheckStatement>(text);
+        }
+        m_bodies.Add(text, range.startOffset);
     }
 
     void FineParseMetaBlock(const TextBlockInfo& block)
@@ -1758,10 +1772,14 @@ private:
         if (parseResult)
         {
             // Parsed all the same: Jinja2 reports what does not parse after `extends` too
-            const auto check = OutputCheckOf(m_root, statementsStack);
-            if (check != OutputCheck::Drop)
+            const auto check = m_root.hasExtends ? OutputCheckAfterExtends(m_root, statementsStack) : OutputCheck::None;
+            if (check == OutputCheck::None)
             {
-                m_bodies.Add(check == OutputCheck::Guard ? m_nodes.Make<OutputCheckStatement>(*parseResult) : *parseResult, block.tagStart);
+                m_bodies.Add(*parseResult, block.tagStart);
+            }
+            else if (check == OutputCheck::Guard)
+            {
+                m_bodies.Add(m_nodes.Make<OutputCheckStatement>(*parseResult), block.tagStart);
             }
         }
         else
