@@ -277,6 +277,9 @@ struct LoopState : ValueObject
     std::shared_ptr<size_t> cyclePosition;
     // Whether the item after the current one is fetched, isLast telling if there is one
     bool isPeeked = false;
+    // Whether the enumerator runs over indexedList, the rest the state collected
+    // (CollectRest), and not over a list of the statement
+    bool ownsRest = false;
     // A filtered loop over slots fetches its next item lazily, as Jinja2's LoopContext:
     // when the body is done with the current one, or earlier when the body reads `last`,
     // `nextitem`, `length` or `revindex` (docs/tasks/0091, 0154). So a namespace the body
@@ -384,6 +387,21 @@ struct LoopState : ValueObject
         lastChanged = nullptr;
         cyclePosition = nullptr;
         isPeeked = false;
+        ownsRest = false;
+        lazyFilter = nullptr;
+        lazyContext = nullptr;
+        lazyNodes = ArenaView();
+    }
+
+    // A loop object kept past a statement that ended without collecting its rest (an error
+    // thrown in the body) can no longer fetch: its enumerator may run over a list the
+    // statement owned, its filter in the render that failed
+    void LetGoOfStatement()
+    {
+        if (!ownsRest)
+        {
+            enumerator.reset();
+        }
         lazyFilter = nullptr;
         lazyContext = nullptr;
         lazyNodes = ArenaView();
@@ -430,6 +448,7 @@ struct LoopState : ValueObject
         listSize = length;
         indexedList = ListAdapter::CreateAdapter(std::move(rest));
         enumerator = indexedList.GetEnumerator();
+        ownsRest = true;
         lazyFilter = nullptr;
         return length;
     }
@@ -842,8 +861,18 @@ public:
     // Takes the frame back when the loop that ran in it was its only owner
     JINJA2CPP_NOINLINE_INLINE static void Give(IntrusivePtr<LoopFrame>& frame)
     {
+        if (!frame)
+        {
+            return;
+        }
+        // Kept past the loop (ForStatement's collection of the rest, or an error)
+        if (frame->use_count() != 1)
+        {
+            frame->LetGoOfStatement();
+            return;
+        }
         auto& frames = Frames();
-        if (!frame || frame->use_count() != 1 || frames.size() >= RenderWorkspace::MaxLoopFrames)
+        if (frames.size() >= RenderWorkspace::MaxLoopFrames)
         {
             return;
         }

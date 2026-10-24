@@ -586,6 +586,26 @@ TEST(EnvCallablesTest, KeptFilteredLoop)
     EXPECT_EQ("135|3", tpl.RenderAsString({}).value());
 }
 
+TEST(EnvCallablesTest, KeptLoopAfterError)
+{
+    // A loop kept by a callable when its body fails can no longer fetch: its enumerator ran
+    // over the statement's range, which the error unwound
+    auto kept = std::make_shared<GenericMap>();
+    TemplateEnv env;
+    env.AddGlobal("keep", MakeCallable([kept](const GenericMap& v) { *kept = v; return std::string(); }, ArgInfo{ "v" }));
+    env.AddGlobal("raise", MakeCallable([]() -> Value { throw std::out_of_range("raised"); }));
+    for (const auto* source : { "{% for x in range(4) %}{{ keep(loop) }}{% set t = loop|first %}{{ raise() }}{% endfor %}",
+                                "{% for x in range(8) if x > 1 %}{{ keep(loop) }}{% set t = loop|first %}{{ raise() }}{% endfor %}" })
+    {
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source;
+        EXPECT_FALSE(tpl.RenderAsString({}).has_value()) << source;
+        EXPECT_TRUE(kept->GetValueByName("last").IsBool()) << source;
+        EXPECT_NO_THROW(kept->GetValueByName("nextitem")) << source;
+        EXPECT_NO_THROW(kept->GetValueByName("length")) << source;
+    }
+}
+
 // A reflected record for OwnedUserDataTest: its nested items are reflected from pointers
 // into the record (docs/tasks/0125)
 struct OwnedRec
