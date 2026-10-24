@@ -1500,10 +1500,6 @@ void MapPositionalArgs(ArgInfoList& argsInfo, const P& params, const PosArgRange
 template<typename Result>
 void CheckMultipleValues(const ArgInfoList& argsInfo, std::size_t posParamsCount, std::size_t eatenPosArgs, Result& result, bool& isSucceeded)
 {
-    if (posParamsCount == 0)
-    {
-        return;
-    }
     std::size_t varArgs = argsInfo.size();
     std::size_t end = 0;
     for (std::size_t idx = 0; idx != argsInfo.size(); ++idx)
@@ -1605,7 +1601,11 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
     int firstMandatoryIdx = MapKeywordArgs(args, params, argsInfo, result);
     auto posArgRange = FindPosArgRange(argsInfo, params.posParams.size(), firstMandatoryIdx);
     MapPositionalArgs(argsInfo, params, posArgRange, result);
-    CheckMultipleValues(argsInfo, params.posParams.size(), posArgRange.eatenPosArgs, result, isSucceeded);
+    // Only a call with both kinds of argument can name one parameter twice
+    if (!params.posParams.empty() && !params.kwParams.empty())
+    {
+        CheckMultipleValues(argsInfo, params.posParams.size(), posArgRange.eatenPosArgs, result, isSucceeded);
+    }
     FillDefaultArgs(argsInfo, result, isSucceeded);
     FillExtraArgs(argsInfo, params, posArgRange.eatenPosArgs, result);
 
