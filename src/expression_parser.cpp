@@ -387,7 +387,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
         }
         else
         {
-            left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, op.operation, *left, *right));
+            *left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, op.operation, *left, *right));
         }
     }
 
