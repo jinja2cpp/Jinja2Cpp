@@ -37,6 +37,13 @@ sees the change, and the outer render sees the inner one's.
 **Proposal.** The parser marks a block whose body stores `self` only in nested scopes
 (`with`, `for`, macro params are not nested for this); for such a block FindSelf skips the
 block's own depth and reads the template's top level. The globals item needs a decision on
-whether a render may change environment globals at all; it is likely to stay deliberate.
+whether a render may change environment globals at all.
+
+**Decision (Ruslan, 2026-10-24).** A render does not change environment globals. A global the
+template changes in place is changed for that render (and renders nested inside it) only. This
+is a deliberate divergence: Jinja2 lets one render leak state into every later render of the
+environment, while each Jinja2C++ render works on its own snapshot of the globals.
+Record it among the deliberate divergences in docs/parity.md (with 0235). This task's
+remaining work is the `self` items above.
 
 **Done when** no line of `test/parity/divergences/` names 0211.
