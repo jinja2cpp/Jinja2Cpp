@@ -83,9 +83,9 @@ MULTISTR_TEST(FilterGenericTestSingle, ApplyMacroTest,
               R"(
 {% macro test(str, extra='') %}{{ (str ~ extra) | upper }}{% endmacro %}
 {{ 'Hello World!' | applymacro(macro='test') }}
-{{ 'Hello' | applymacro(macro='test', ' World!') }}
+{{ 'Hello' | applymacro(' World!', macro='test') }}
 {{ ['str1', 'str2', 'str3'] | map('applymacro', macro='test') | join(', ') }}
-{{ ['str1', 'str2', 'str3'] | map('applymacro', macro='test', '-') | join(', ') }}
+{{ ['str1', 'str2', 'str3'] | map('applymacro', '-', macro='test') | join(', ') }}
 )",
               //-------------
               R"(
@@ -125,7 +125,7 @@ INSTANTIATE_TEST_SUITE_P(StringJoin, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"['str1', 'str2', 'str3'] | join(' ')",              "str1 str2 str3"},
                             InputOutputPair{"['str1', 'str2', 'str3'] | join(d='-')",            "str1-str2-str3"},
                             InputOutputPair{"reflectedList | join('-', attribute='strValue')",   "test string 0-test string 1-test string 2-test string 3-test string 4-test string 5-test string 6-test string 7-test string 8-test string 9"},
-                            InputOutputPair{"reflectedList | join(attribute='strValue', '-')",   "test string 0-test string 1-test string 2-test string 3-test string 4-test string 5-test string 6-test string 7-test string 8-test string 9"},
+                            InputOutputPair{"reflectedList | join('-', attribute='strValue')",   "test string 0-test string 1-test string 2-test string 3-test string 4-test string 5-test string 6-test string 7-test string 8-test string 9"},
                             InputOutputPair{"reflectedList | join(attribute='strValue', d='-')", "test string 0-test string 1-test string 2-test string 3-test string 4-test string 5-test string 6-test string 7-test string 8-test string 9"}
                             ));
 // clang-format on

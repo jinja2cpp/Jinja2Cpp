@@ -7,7 +7,7 @@ here (docs/tasks/0233); before, `camelize`, `underscorize`, `escapecpp`, `toxml`
 
 | Filter | Output |
 |---|---|
-| `applymacro(macro=name, ...)` | The value passed to the macro `name`, with the other arguments |
+| `applymacro(..., macro=name)` | The value passed to the macro `name`, with the other arguments; `macro` is a keyword argument, written after the positional ones |
 | `camelize(upper_first=true)` | An identifier in CamelCase |
 | `underscorize` | An identifier in snake_case |
 | `escapecpp` | The text escaped for a C++ string literal |

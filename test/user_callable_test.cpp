@@ -370,7 +370,7 @@ INSTANTIATE_TEST_SUITE_P(VarKwArgsParamsConvert, UserCallableParamConvertTest, :
                             InputOutputPair{"VarKwArgsFn()",                   "{}"},
                             InputOutputPair{"VarKwArgsFn(arg1=10, arg2='abc', arg3=false) | dictsort",
                                             "[('arg1', 10), ('arg2', 'abc'), ('arg3', False)]"},
-                            InputOutputPair{"VarKwArgsFn(arg1=10.123, arg2=(1, 2, 3), 1) | dictsort",
+                            InputOutputPair{"VarKwArgsFn(1, arg1=10.123, arg2=(1, 2, 3)) | dictsort",
                                             "[('arg1', 10.123), ('arg2', [1, 2, 3])]"}
                             ));
 // clang-format on
@@ -469,18 +469,20 @@ INSTANTIATE_TEST_SUITE_P(MapParamConvert, UserCallableParamConvertTest, ::testin
                             ));
 // clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(UserDefinedFilter, UserCallableFilterTest, ::testing::Values(
                             InputOutputPair{"'Hello World' | surround",                   ">>> Hello World <<<"},
                             InputOutputPair{"'Hello World' | surround(before='### ')",    "### Hello World <<<"},
                             InputOutputPair{"'Hello World' | surround(after=' ###', before='### ')",    "### Hello World ###"},
                             InputOutputPair{"'Hello World' | surround('### ', ' ###')",    "### Hello World ###"},
-                            InputOutputPair{"'Hello World' | joiner(delim=', ', '1', '2', '3')", "Hello World, 1, 2, 3"},
-                            InputOutputPair{"'Hello World' | joiner(delim=', ', '1', '2', '3')", "Hello World, 1, 2, 3"},
+                            InputOutputPair{"'Hello World' | joiner('1', '2', '3', delim=', ')", "Hello World, 1, 2, 3"},
+                            InputOutputPair{"'Hello World' | joiner(delim=', ')", "Hello World"},
                             InputOutputPair{"('A', 'B', 'C') | map('surround', before='> ', after=' <') | pprint", "['> A <', '> B <', '> C <']"},
                             InputOutputPair{"'str1' if 'str1' is tester('str1') else 'str2'", "str1"},
                             InputOutputPair{"'str1' if 'str3' is tester(pattern='str1') else 'str2'", "str2"},
                             InputOutputPair{"('str1', 'A', 'str1', 'B', 'str1', 'C') | select('tester', 'str1') | map('surround', before='> ', after=' <') | pprint", "['> str1 <', '> str1 <', '> str1 <']"}
                             ));
+// clang-format on
 
 
 // Filters and tests added to the environment (Jinja2 env.filters, env.tests) and Settings::finalize
@@ -859,5 +861,121 @@ TEST(UserCallableTestSingle, PositionalAndKeywordForOneParameter)
             const std::string message = row.argument ? std::string("got multiple values for argument '") + row.argument + "'" : "takes no keyword argument 'a'";
             EXPECT_NE(std::string::npos, error.find(message)) << source << ": " << error;
         }
+    }
+}
+
+// f(*args, **kwargs) (docs/tasks/0220): the unpacked items reach a host callable as if written
+// out, from template and host values alike, and Python's TypeErrors name what does not fit
+TEST(UserCallableTestSingle, UnpackedArguments)
+{
+    jinja2::ValuesMap params;
+    params["f"] = MakeCallable([](const std::string& a, const std::string& b, const std::string& c) { return a + b + c; }, ArgInfo{ "a" }, ArgInfo{ "b" }, ArgInfo{ "c" });
+    params["v"] = MakeCallable([](const std::string& a, const ValuesList& rest) { return a + std::to_string(rest.size()); }, ArgInfo{ "a" }, ArgInfo{ "*args" });
+    params["hl"] = ValuesList{ "1", "2" };
+    params["hm"] = ValuesMap{ { "b", "2" }, { "c", "3" } };
+    struct Row
+    {
+        const char* source;
+        const char* expected; // nullptr: the render fails with `message`
+        const char* message;
+    };
+    const Row rows[] = {
+        { "{{ f(*['1', '2', '3']) }}", "123", nullptr },
+        { "{{ f('1', *['2'], c='3') }}", "123", nullptr },
+        { "{{ f(c='3', *hl) }}", "123", nullptr },
+        { "{{ f('1', **hm) }}", "123", nullptr },
+        { "{{ f(*hl, **{'c': '3'}) }}", "123", nullptr },
+        { "{{ v(*'abc') }}", "a2", nullptr },
+        { "{{ v(*hl, *[]) }}", nullptr, nullptr },
+        { "{{ f(*1) }}", nullptr, "Value after * must be an iterable, not int" },
+        { "{{ f(**hl) }}", nullptr, "argument after ** must be a mapping, not list" },
+        { "{{ f(b='x', **hm) }}", nullptr, "got multiple values for keyword argument 'b'" },
+        { "{{ f(**{1: 2}) }}", nullptr, "keywords must be strings" },
+        { "{{ f('1', '2', a='x', *[]) }}", nullptr, "got multiple values for argument 'a'" },
+        { "{% macro m() %}{{ caller() }}{% endmacro %}{% call m(**{'caller': 1}) %}x{% endcall %}", nullptr, "got multiple values for keyword argument 'caller'" },
+    };
+    for (const auto& row : rows)
+    {
+        for (const bool wide : { false, true })
+        {
+            const std::string source = row.source;
+            std::string loadError;
+            std::string error;
+            std::string output;
+            if (wide)
+            {
+                TemplateW tpl;
+                if (auto loaded = tpl.Load(std::wstring(source.begin(), source.end())); !loaded)
+                {
+                    loadError = ConvertString<std::string>(loaded.error().ToString());
+                }
+                else if (auto result = tpl.RenderAsString(params))
+                {
+                    output = ConvertString<std::string>(result.value());
+                }
+                else
+                {
+                    error = ConvertString<std::string>(result.error().ToString());
+                }
+            }
+            else
+            {
+                Template tpl;
+                if (auto loaded = tpl.Load(source); !loaded)
+                {
+                    loadError = loaded.error().ToString();
+                }
+                else if (auto result = tpl.RenderAsString(params))
+                {
+                    output = result.value();
+                }
+                else
+                {
+                    error = result.error().ToString();
+                }
+            }
+            if (!row.expected && !row.message)
+            {
+                // A second *args is a syntax error, as in Jinja2
+                EXPECT_FALSE(loadError.empty()) << source;
+                continue;
+            }
+            ASSERT_TRUE(loadError.empty()) << source << ": " << loadError;
+            if (row.expected)
+            {
+                EXPECT_EQ(row.expected, output) << source << " " << error;
+                continue;
+            }
+            EXPECT_NE(std::string::npos, error.find(row.message)) << source << ": " << error;
+        }
+    }
+}
+
+// Spliced items that borrow from a temporary keep it alive: a host callable's reflected struct,
+// whose string view reads the struct (docs/tasks/0220)
+TEST(UserCallableTestSingle, UnpackedItemsKeepTheirSource)
+{
+    const std::string text(64, 'x');
+    jinja2::ValuesMap params;
+    params["make"] = MakeCallable([&text] {
+        TestStruct obj;
+        obj.strValue = text;
+        return jinja2::Reflect(std::move(obj));
+    });
+    params["makeList"] = MakeCallable([&text] {
+        std::vector<TestStruct> items(2);
+        items[0].strValue = text;
+        items[1].strValue = text;
+        return jinja2::Reflect(std::move(items));
+    });
+    const char* sources[] = {
+        "{% macro m() %}{{ kwargs.strViewValue }}{% endmacro %}{{ m(**make()) }}",
+        "{% macro m() %}{{ varargs[1].strViewValue }}{% endmacro %}{{ m(*makeList()) }}",
+    };
+    for (const auto* source : sources)
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load(source).has_value()) << source;
+        EXPECT_EQ(text, tpl.RenderAsString(params).value()) << source;
     }
 }
