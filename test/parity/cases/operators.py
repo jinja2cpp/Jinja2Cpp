@@ -120,6 +120,7 @@ CASES = [
     ("precedence_not_compare_and", "{{ 'T' if not x == 3 and x else 'F' }}|{{ 'T' if not not x else 'F' }}|{{ 'T' if not x + 1 else 'F' }}"),
     ("precedence_arith_mix", "{{ 1 + 2 * 3 - 8 / 4 // 1 % 3 ** 2 }}|{{ 10 - 2 - 3 }}|{{ 64 / 4 / 2 }}|{{ 2 * 3 ** 2 * 2 }}"),
     ("precedence_concat_mix", "{{ s ~ 1 * 2 ~ y }}|{{ s + s ~ s }}"),
+    ("concat_chain_mixed", "{{ s + 'b' ~ x * 2 ~ y }}|{{ s ~ x ~ s | upper ~ n ~ l }}|{{ s ~ 'b' == 'Hellob' ~ '' }}|{{ not s ~ x }}|{{ 'a' ~ 'b' ~ s if x else 'd' }}|{{ (s ~ x) ~ (x ~ s) ~ nope ~ y }}"),
     ("precedence_compare_operands", "{{ 'T' if x + 1 == 2 * 2 > x - 1 else 'F' }}|{{ 'T' if x - 3 not in l and 2 in l else 'F' }}"),
     ("precedence_unary_filter", "{{ -x|abs + 1 }}|{{ - - x }}|{{ 2 ** -x|abs }}"),
     ("not_after_binary_operator", "{{ x + not z }}"),

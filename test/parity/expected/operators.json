@@ -2585,6 +2585,28 @@
    "output": "Hello22.5|HelloHelloHello"
   },
   {
+   "id": "operators.concat_chain_mixed",
+   "template": "{{ s + 'b' ~ x * 2 ~ y }}|{{ s ~ x ~ s | upper ~ n ~ l }}|{{ s ~ 'b' == 'Hellob' ~ '' }}|{{ not s ~ x }}|{{ 'a' ~ 'b' ~ s if x else 'd' }}|{{ (s ~ x) ~ (x ~ s) ~ nope ~ y }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "Hellob62.5|Hello3HELLONone[3, 1, 2]|True|False|abHello|Hello33Hello2.5"
+  },
+  {
    "id": "operators.precedence_compare_operands",
    "template": "{{ 'T' if x + 1 == 2 * 2 > x - 1 else 'F' }}|{{ 'T' if x - 3 not in l and 2 in l else 'F' }}",
    "context": {

@@ -18,6 +18,7 @@
 #include <jinja2cpp/template_env.h>
 #include <boost/container/small_vector.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -313,15 +314,37 @@ ExpressionParser::Precedence Tighter(ExpressionParser::Precedence precedence)
 }
 } // namespace
 
+namespace
+{
+// One `~` run as one node, emptying `operands`. Kept out of ParseBinary: inlined there it grew
+// the function past what the compiler inlines into it, which every expression paid for at Load
+JINJA2CPP_NOINLINE_INLINE NodeRef<Expression> MakeConcat(NodeArena& nodes, boost::container::small_vector_base<NodeRef<Expression>>& operands)
+{
+    // Jinja2 folds a chain of foldable operands into one str
+    const bool foldable = std::all_of(operands.begin(), operands.end(), [&nodes](const NodeRef<Expression>& operand) { return nodes[operand].IsFoldable(nodes); });
+    // The pure operands after the last one that is not are read in place
+    const auto lastImpure = std::find_if(operands.rbegin(), operands.rend(), [&nodes](const NodeRef<Expression>& operand) { return !nodes[operand].IsPure(nodes); });
+    const auto lendFrom = static_cast<uint32_t>(operands.rend() - lastImpure);
+    const auto node = nodes.Make<ConcatExpression>(nodes.MakeSpan(operands), lendFrom);
+    if (foldable)
+    {
+        nodes[node].SetFolded();
+    }
+    operands.clear();
+    return node;
+}
+} // namespace
+
 ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary(LexScanner& lexer, Precedence minPrecedence)
 {
     // The operators of one call combine like the old one-function-per-level chains: each
     // right operand starts counting from where this call started (OperatorChain)
     OperatorChain chain(m_operators);
-    // The `~` of one call make one chain, as Jinja2's Concat node: the operators around `~`
-    // bind looser (a new call parses `a ~ b` on their right) or tighter (a ~ b * c)
-    boost::container::small_vector<NodeRef<BinaryExpression>, 4> concats;
-    bool concatFoldable = true;
+    // The `~` of one call make one run, as Jinja2's Concat node: the operators around `~`
+    // bind looser (a new call parses `a ~ b` on their right) or tighter (a ~ b * c), so the
+    // operands of a run are always next to each other. Its operands are one flat node and
+    // count as one operator
+    boost::container::small_vector<NodeRef<Expression>, 4> concat;
     auto left = minPrecedence <= Precedence::Not && lexer.PeekNextToken().keyword == Keyword::LogicalNot ? ParseLogicalNot(lexer)
                                                                                                          : ParseUnaryPlusMinus(lexer);
     while (left)
@@ -330,6 +353,10 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
         if (op.precedence < minPrecedence)
         {
             break;
+        }
+        if (op.precedence != Precedence::Concat && !concat.empty())
+        {
+            *left = MakeConcat(m_nodes, concat);
         }
         if (op.precedence == Precedence::Compare)
         {
@@ -346,31 +373,29 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
         {
             left = std::move(right);
         }
-        else if (!chain.AfterRight(detail::t_parseLimits.maxExpressionOperators))
+        // The operands after the first `~` of a run join it flat: the run is one operator
+        else if (op.precedence == Precedence::Concat && !concat.empty() ? !chain.AfterRightFlat(detail::t_parseLimits.maxExpressionOperators)
+                                                                        : !chain.AfterRight(detail::t_parseLimits.maxExpressionOperators))
         {
             left = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }
+        else if (op.precedence == Precedence::Concat)
+        {
+            if (concat.empty())
+            {
+                concat.push_back(*left);
+            }
+            concat.push_back(*right);
+        }
         else
         {
-            if (op.operation == BinaryExpression::StringConcat)
-            {
-                concatFoldable = concatFoldable && (!concats.empty() || m_nodes[*left].IsFoldable(m_nodes)) && m_nodes[*right].IsFoldable(m_nodes);
-            }
-            left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, op.operation, *left, *right));
-            if (op.operation == BinaryExpression::StringConcat)
-            {
-                concats.push_back(m_nodes.As<BinaryExpression>(*left));
-            }
+            *left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, op.operation, *left, *right));
         }
     }
 
-    // Jinja2 folds a chain of foldable operands into one str
-    if (left && concatFoldable)
+    if (left && !concat.empty())
     {
-        for (const auto concat : concats)
-        {
-            m_nodes[concat].SetFolded();
-        }
+        *left = MakeConcat(m_nodes, concat);
     }
     return left;
 }

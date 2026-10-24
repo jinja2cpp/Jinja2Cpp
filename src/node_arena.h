@@ -78,6 +78,7 @@ enum class NodeKind : std::uint8_t
     InLiteralExpr,
     ConstFormatExpr,
     CompareExpr,
+    ConcatExpr,
     SliceExpr,
     CallExpr,
     FilterChain,
@@ -1005,6 +1006,7 @@ constexpr bool NeedsNoContext(NodeKind kind)
     case NodeKind::InLiteralExpr:
     case NodeKind::ConstFormatExpr:
     case NodeKind::CompareExpr:
+    case NodeKind::ConcatExpr:
     case NodeKind::SliceExpr:
     case NodeKind::IfExpr:
     case NodeKind::ComposedBody:

@@ -4,6 +4,7 @@
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
+#include <jinja2cpp/user_callable.h>
 
 #include <gtest/gtest.h>
 
@@ -69,6 +70,31 @@ TEST(UndefinedPolicyTest, Strict)
     EXPECT_EQ("error: 'a_long_undefined_name_x' is undefined", Render("{{ a_long_undefined_name_x }}", policy));
     EXPECT_EQ("error: 'dict object' has no attribute 'zz'", Render("{{ d.zz ~ 'x' }}", policy));
     EXPECT_EQ("FalseTrue|d|1", Render("{{ nope is defined }}{{ nope is undefined }}|{{ nope|default('d') }}|{{ d.a }}", policy));
+}
+
+TEST(UndefinedPolicyTest, ConcatChain)
+{
+    // An undefined operand of a `~` run renders as nothing, or fails for Strict
+    EXPECT_EQ("ABA", Render("{{ 'A' ~ 'B' ~ nope ~ 'A' }}"));
+    EXPECT_EQ("[A][B]", Render("[{{ nope ~ 'A' ~ d.zz }}][{{ 'B' ~ nope }}]"));
+    EXPECT_EQ("error: 'nope' is undefined", Render("{{ 'A' ~ 'B' ~ nope ~ 'A' }}", UndefinedPolicy::Strict));
+    EXPECT_EQ("error: 'nope' is undefined", Render("{{ nope ~ 'A' ~ 'B' }}", UndefinedPolicy::Strict));
+    EXPECT_EQ("error: 'dict object' has no attribute 'zz'", Render("{{ 'A' ~ 'B' ~ d.zz }}", UndefinedPolicy::Strict));
+    EXPECT_EQ("AB{{ nope }}A", Render("{{ 'A' ~ 'B' ~ nope ~ 'A' }}", UndefinedPolicy::Debug));
+
+    // Strict fails only once every operand is evaluated, as Jinja2 builds the operand list first
+    for (const std::string source : { "{{ nope ~ f() }}", "{{ nope ~ 'A' ~ f() ~ f() }}" })
+    {
+        SCOPED_TRACE(source);
+        TemplateEnv env;
+        env.GetSettings().undefinedPolicy = UndefinedPolicy::Strict;
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load(source));
+        int calls = 0;
+        auto result = tpl.RenderAsString({ { "f", MakeCallable([&calls]() { return ++calls; }) } });
+        ASSERT_FALSE(result);
+        EXPECT_EQ(source == "{{ nope ~ f() }}" ? 1 : 2, calls);
+    }
 }
 
 TEST(UndefinedPolicyTest, Chainable)
