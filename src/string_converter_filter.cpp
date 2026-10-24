@@ -13,9 +13,6 @@
 
 #include <jinja2cpp/error_info.h>
 
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/replace.hpp>
-
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -23,6 +20,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <locale>
 #include <optional>
 #include <regex>
 #include <sstream>
@@ -32,8 +30,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-
-namespace ba = boost::algorithm;
 
 using namespace std::string_literals;
 
@@ -1794,18 +1790,25 @@ InternalValue StringConverter::ApplyReplace(const InternalValue& baseVal, Render
         auto oldStr = GetAsSameString(srcStr, oldVal).value_or(emptyStr);
         auto newStr = GetAsSameString(srcStr, newVal).value_or(emptyStr);
         auto count = ConvertToInt(this->GetArgumentValue("count", context));
-        auto str = std::basic_string(srcStr);
-        if (count == 0)
+        if (oldStr.empty())
         {
-            ba::replace_all(str, oldStr, newStr);
+            return std::basic_string<CharT>(srcStr);
         }
-        else
+        // Like str.replace: non-overlapping occurrences, left to right, so a replacement is never
+        // searched again and a huge count stops at the last occurrence. count == 0 replaces all of them
+        std::basic_string<CharT> str;
+        size_t from = 0;
+        for (int64_t n = 0; count == 0 || n < count; ++n)
         {
-            for (int64_t n = 0; n < count; ++n)
+            auto pos = srcStr.find(oldStr, from);
+            if (pos == decltype(srcStr)::npos)
             {
-                ba::replace_first(str, oldStr, newStr);
+                break;
             }
+            str.append(srcStr.substr(from, pos - from)).append(newStr);
+            from = pos + oldStr.size();
         }
+        str.append(srcStr.substr(from));
         return str;
     });
     InternalValue replaced(std::move(result));
@@ -2064,7 +2067,8 @@ InternalValue StringConverter::MapChars(const InternalValue& baseVal) const
 
 int64_t StringConverter::WordCount(const InternalValue& baseVal)
 {
-    auto isAlNum = ba::is_alnum();
+    // The global locale's classification, as boost::algorithm::is_alnum did (Python counts \w+ runs: 0107)
+    auto isAlNum = [locale = std::locale()](auto ch) { return std::use_facet<std::ctype<decltype(ch)>>(locale).is(std::ctype_base::alnum, ch); };
     int64_t wc = 0;
     ApplyStringConverter<GenericStringEncoder>(baseVal, [isDelim = true, &wc, &isAlNum](auto ch, auto&&) mutable {
         if (isDelim && isAlNum(ch))

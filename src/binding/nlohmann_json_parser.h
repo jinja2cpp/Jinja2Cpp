@@ -4,9 +4,7 @@
 #include <jinja2cpp/binding/nlohmann_json.h>
 #include "../make_unexpected.h"
 
-#include <boost/any.hpp>
-#include <boost/any/unique_any.hpp>
-
+#include <memory>
 #include <new>
 
 namespace jinja2
@@ -15,7 +13,7 @@ inline namespace v2
 {
 
 template<typename CharT>
-nonstd::expected<Value, std::string> Parse(std::basic_string_view<CharT> json, boost::anys::unique_any& metadataJson)
+nonstd::expected<Value, std::string> Parse(std::basic_string_view<CharT> json, std::shared_ptr<void>& metadataJson)
 {
     //intentionally ignore metadataJson
     (void)metadataJson;

@@ -65,10 +65,6 @@ to `libjinja2cpp`. What the code actually includes is small:
 | core (`span`) | about 57 uses in 14 `src/` files | none before C++20 `std::span` | small: an internal span |
 | container (`small_vector`) | about 27 hot-path uses | none | medium: perf-sensitive, measure with bench/ |
 | smart_ptr (`intrusive_ptr`) | InternalValue payloads (one pointer wide, 0140) | none (`shared_ptr` is two pointers) | small: about 60 lines |
-| any (`unique_any`) | holds the parsed metadata document | `std::any` needs copyable payloads | small |
-| iterator (`iterator_facade`) | one internal iterator | hand-written iterator | small |
-| algorithm (string) | `replace_all`, `is_alnum`, `all(is_space)` | a few lines of `std::string` code | trivial |
-| predef (endian) | RapidJSON's UTF-16/32 choice | compiler macros | trivial |
 | json | the default metadata backend | nlohmann (header-only) or an internal reader | small, behind the existing backend switch |
 
 `lexical_cast`, `numeric_conversion`, `variant` and `optional` are no longer requested
@@ -77,6 +73,10 @@ to `libjinja2cpp`. What the code actually includes is small:
 `algorithm/string/join.hpp` are gone (docs/tasks/0229). `container` is now requested by
 name: `lexical_cast` used to pull it in, and `small_vector` needs it. `optional` and the
 other leaf libraries still arrive as dependencies of `algorithm`, `any` and `json`.
+`any` (`unique_any`), `iterator` (`iterator_facade`), the string algorithms and `predef`
+endian are no longer used by the code (0230 D3: a `shared_ptr<void>`, a hand-written
+iterator, a few lines of `std::string` code and the compiler's byte-order macros). CMake
+still requests `algorithm` and `any` until D7 rewrites the deps modes.
 
 ## Tests, benchmarks and tooling
 

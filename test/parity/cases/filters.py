@@ -109,6 +109,9 @@ CASES = [
     ("rejectattr_truthy", "{{ users|rejectattr('city')|map(attribute='name')|join(',') }}"),
     ("replace", "{{ 'a b c'|replace(' ', '_') }}"),
     ("replace_count", "{{ 'a b c'|replace(' ', '_', 1) }}"),
+    # A replacement is not searched again, and a huge count stops at the last occurrence (0230 D3)
+    ("replace_count_not_rescanned", "{{ 'aaa'|replace('a', 'ba', 2) }}|{{ 'abab'|replace('ab', 'aab', 2) }}"),
+    ("replace_huge_count", "{{ 'abc'|replace('z', 'y', 1000000000000) }}|{{ 'a'|replace('a', 'ba', 1000000000000) }}"),
     ("reverse_list", "{% for i in l|reverse %}{{ i }},{% endfor %}"),
     ("reverse_string", "{{ s|reverse }}"),
     # The keys of dict.items() are plain strings, which reverse also turns into strings
