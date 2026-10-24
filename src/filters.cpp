@@ -1392,7 +1392,9 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
             ThrowNotACallableName("test", testerName);
         }
         InternalValue attrVal;
-        bool isAttr = !IsEmpty(attrName);
+        // An attribute of None is the item itself (_prepare_attribute_parts); an undefined one
+        // is looked up and finds nothing
+        bool isAttr = isAttrMode && !attrName.IsNone();
         if (isAttr)
         {
             attrVal = GetAttributeByPath(val, AttributePath(attrName), InternalValue(), context);

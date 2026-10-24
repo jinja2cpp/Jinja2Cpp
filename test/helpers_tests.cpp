@@ -54,16 +54,21 @@ TEST(Helpers, CompileEscapesPythonSequences)
     EXPECT_EQ(L"\u00e9\x20ac", CompileEscapes(std::wstring{ LR"(\xe9\u20ac)" }));
     // The wide literal is a surrogate pair where wchar_t is 16 bits wide (MSVC) and one code unit elsewhere
     EXPECT_EQ(std::wstring{ L"\U0001F600" }, CompileEscapes(std::wstring{ LR"(\U0001F600)" }));
+#ifndef JINJA2CPP_NO_UNICODE_NAMES
     EXPECT_EQ("a\xE2\x80\xA2"
               "b",
               CompileEscapes(std::string{ R"(a\N{bullet}b)" }));
     EXPECT_EQ(std::wstring{ L"\U0001F004" }, CompileEscapes(std::wstring{ LR"(\N{MAHJONG TILE RED DRAGON})" }));
+#endif
 }
 
 // Python's \N{name}: stored names and aliases ignore ASCII case, the computed CJK and Hangul
 // names do not (CPython's unicodedata._getcode)
 TEST(Helpers, LookupUnicodeName)
 {
+#ifdef JINJA2CPP_NO_UNICODE_NAMES
+    GTEST_SKIP() << "built without the Unicode name table";
+#endif
     using detail::LookupUnicodeName;
     const std::pair<const char*, char32_t> found[] = {
         { "BULLET", 0x2022 },

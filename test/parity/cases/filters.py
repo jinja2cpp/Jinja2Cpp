@@ -281,6 +281,7 @@ CASES = [
     ("select_test_keyword_argument", "{% for i in [1, 2, 3, 4]|select('divisibleby', num=2) %}{{ i }},{% endfor %}"),
     ("selectattr_operator_test_keyword", "{{ users|selectattr('age', 'equalto', other=30)|map(attribute='name')|join(',') }}"),
     ("select_lazy_errors_on_empty", "[{{ []|select('odd', foo=1)|list|length }}{{ []|selectattr()|list|length }}]"),
+    ("selectattr_none_or_undefined_attribute", "{{ [{'a': 1}, {'a': 0}, {}]|selectattr(none)|list|length }}{{ [{'a': 1}, {'a': 0}]|rejectattr(nosuch)|list|length }}{{ [{'a': 1}]|selectattr(nosuch, 'none')|list|length }}"),
     ("min_max_single_none", "{{ [none]|min }}|{{ [none]|max }}|{{ [{}]|min(attribute='a') }}|{{ [[none], [none]]|min }}"),
     ("selectattr_dotted", "{{ [{'a': {'b': 0} }, {'a': {'b': 1} }]|selectattr('a.b')|list|length }}"),
     ("striptags_more", "[{{ 'a<!-- <b> -->b <br/>c&lt;d&gt; &#65;&#x42;&#67 &nbsp;x &bogus; e  f'|striptags }}]"),

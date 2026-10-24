@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <iterator>
 #include <string>
+#include <vector>
 #endif
 
 #include <optional>
@@ -169,7 +170,7 @@ struct WordOrder
 // Orders a name of Names, by its codes, against the codes looked up
 struct NameOrder
 {
-    const std::basic_string<std::uint8_t>& key;
+    const std::vector<std::uint8_t>& key;
 
     static const std::uint8_t* CodesEnd(const std::uint8_t* codes)
     {
@@ -183,8 +184,12 @@ struct NameOrder
     int operator()(const std::uint8_t* entry) const
     {
         const auto* codes = entry + 3;
-        const std::basic_string_view<std::uint8_t> name(codes, static_cast<std::size_t>(CodesEnd(codes) - codes));
-        return std::basic_string_view<std::uint8_t>(key).compare(name);
+        const auto* end = CodesEnd(codes);
+        if (std::lexicographical_compare(key.begin(), key.end(), codes, end))
+        {
+            return -1;
+        }
+        return std::equal(key.begin(), key.end(), codes, end) ? 0 : 1;
     }
     static const std::uint8_t* Next(const std::uint8_t* entry) { return CodesEnd(entry + 3); }
 };
@@ -204,7 +209,7 @@ std::optional<unsigned> FindWord(std::string_view word)
 // A stored name, by the codes of its words
 std::optional<char32_t> LookupStored(std::string_view name)
 {
-    std::basic_string<std::uint8_t> key;
+    std::vector<std::uint8_t> key;
     while (true)
     {
         const auto space = name.find(' ');

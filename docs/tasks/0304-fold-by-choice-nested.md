@@ -9,7 +9,7 @@ touches: [src/expression_evaluator.cpp#ConcatExpression, src/expression_parser.c
 
 Found while fixing 0291. Jinja2 folds `value if test else alt` and `and`/`or` by the side a
 foldable test picks, at any depth: `('<' if 1 > 0 else x) ~ ''` folds, because `Concat.as_const`
-folds each operand. 0291 decides that at render time (`Expression::PrepareFoldByChoice` and
+folds each operand. 0291 decides that at render time (`Expression::PrepareFold` and
 `IsFoldableAt`) only for the conditional, `and`/`or` and the other binary operators, nested in
 each other. A `~` chain, a unary operator, a subscript, a slice, a comparison, an `is` test, a
 tuple, list or dict literal or a filter whose operand folds only by such a choice is treated as
