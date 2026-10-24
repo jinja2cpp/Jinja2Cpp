@@ -295,7 +295,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0221](0221-release-acceptance-and-rc-signoff.md) | Define 2.0 release gates and release-candidate signoff | release | high | in-progress |
 | [0222](0222-downstream-1x-migration-trial.md) | Prove a downstream upgrade from 1.3.2 to 2.0 | release | high | open |
 | [0223](0223-embedding-lifecycle-integration-tests.md) | Test embedding behavior across lifetime, cache and callback boundaries | robustness | high | open |
-| [0224](0224-template-trust-and-loader-boundary.md) | Define the template trust model and filesystem-loader boundary | robustness | high | open |
+| [0224](0224-template-trust-and-loader-boundary.md) | Define the template trust model and filesystem-loader boundary | robustness | high | done |
 | [0225](0225-release-artifact-consumer-gate.md) | Validate the release source artifact from a clean downstream consumer | release | high | open |
 | [0226](0226-license-metadata-and-distribution.md) | Reconcile package license metadata and ship required notices | release | high | open |
 | [0227](0227-supported-docs-and-example-surface.md) | Choose and verify the documentation and examples supported for 2.0 | release | high | open |
