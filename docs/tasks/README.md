@@ -114,7 +114,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0036](0036-non-string-mapping-keys.md) | Mapping keys that are not strings | parity | low | done |
 | [0037](0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups from 0016 | parity | medium | done |
 | [0038](0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | parity | medium | done |
-| [0039](0039-float-values-print-widened.md) | C++ `float` values print with their widened digits | parity | low | open |
+| [0039](0039-float-values-print-widened.md) | C++ `float` values print with their widened digits | parity | medium | open |
 | [0040](0040-parity-shared-files-serialise-merges.md) | Parity PRs collide in shared generated files | process | high | done |
 | [0041](0041-string-literal-escapes.md) | String literal escape sequences | parity | low | open |
 | [0042](0042-loop-cycle-magic-number.md) | Global function follow-ups: globals are maps | parity | low | done |
@@ -370,3 +370,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0296](0296-typed-string-view-dangling.md) | A typed `std::string_view` parameter given the other character width dangles | api | high | open |
 | [0297](0297-in-none-and-modulo-undefined.md) | `x in None` and `'text' % undefined` differ from Python | parity | low | open |
 | [0298](0298-include-of-extending-template-loop.md) | An included template that extends a parent reading `loop` | parity | low | open |
+| [0302](0302-simdjson-binding.md) | An optional simdjson binding | api | low | open |
+| [0303](0303-retire-rapidjson-backend.md) | Retire the built-in RapidJSON backend | build | medium | open |
