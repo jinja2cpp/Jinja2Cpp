@@ -3,6 +3,7 @@
 #include "../src/node_arena.h"
 #include "../src/renderer.h"
 #include "../src/slot_frame.h"
+#include "../src/span.h"
 #include "../src/statements.h"
 #include "../src/template_impl.h"
 #include "../src/template_slots.h"

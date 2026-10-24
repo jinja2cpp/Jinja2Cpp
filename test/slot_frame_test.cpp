@@ -5,6 +5,7 @@
 #include "../src/render_context.h"
 #include "../src/render_workspace.h"
 #include "../src/slot_frame.h"
+#include "../src/span.h"
 #include "../src/value_visitors.h"
 
 #include "gtest/gtest.h"

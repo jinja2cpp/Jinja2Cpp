@@ -1,8 +1,10 @@
 #ifndef JINJA2CPP_SRC_INTERNAL_VALUE_H
 #define JINJA2CPP_SRC_INTERNAL_VALUE_H
 
+#include "intrusive_ptr.h"
 #include "loop_attr.h"
 #include "recursion_guard.h"
+#include "span.h"
 
 #include <jinja2cpp/config.h>
 #include <jinja2cpp/generic_list.h>
@@ -12,8 +14,6 @@
 #include <jinja2cpp/value_ptr.h>
 
 #include <boost/iterator/iterator_facade.hpp>
-#include "span.h"
-#include "intrusive_ptr.h"
 #include <fmt/core.h>
 
 #include <cstddef>

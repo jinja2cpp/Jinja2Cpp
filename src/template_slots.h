@@ -3,7 +3,6 @@
 
 #include "node_arena.h"
 #include "engine_errors.h"
-
 #include "small_vector.h"
 
 #include <cassert>

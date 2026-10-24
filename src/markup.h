@@ -4,6 +4,7 @@
 #include "internal_value.h"
 #include "out_stream.h"
 #include "render_context.h"
+#include "span.h"
 
 #include <algorithm>
 #include <cstdint>

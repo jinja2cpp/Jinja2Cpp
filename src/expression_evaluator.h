@@ -8,10 +8,9 @@
 #include <jinja2cpp/utils/ordered_map.h>
 #include "render_context.h"
 #include "slot_frame.h"
+#include "small_vector.h"
 
 #include <jinja2cpp/value.h>
-
-#include "small_vector.h"
 
 #include <algorithm>
 #include <array>

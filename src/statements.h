@@ -9,6 +9,7 @@
 #include "template_slots.h"
 #include "renderer.h"
 #include "slot_frame.h"
+#include "span.h"
 
 #include <cstddef>
 #include <cstdint>

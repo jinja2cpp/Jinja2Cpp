@@ -12,11 +12,11 @@
 #include "recursion_guard.h"
 #include "render_context.h"
 #include "renderer.h"
+#include "small_vector.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/template_env.h>
-#include "small_vector.h"
 
 #include <algorithm>
 #include <cstdint>

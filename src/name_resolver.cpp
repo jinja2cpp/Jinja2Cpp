@@ -5,6 +5,7 @@
 #include "node_arena.h"
 #include "renderer.h"
 #include "slot_frame.h"
+#include "span.h"
 #include "statements.h"
 
 #include <algorithm>

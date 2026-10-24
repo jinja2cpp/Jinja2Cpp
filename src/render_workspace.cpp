@@ -2,8 +2,6 @@
 #include "internal_value.h"
 #include "slot_frame.h"
 
-#include "span.h"
-
 #include <algorithm>
 #include <cassert>
 #include <cstddef>

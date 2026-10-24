@@ -8,6 +8,7 @@
 #include "make_unexpected.h"
 #include "recursion_guard.h"
 #include "engine_errors.h"
+#include "span.h"
 #include "undefined.h"
 #include "unicode_printable.h"
 

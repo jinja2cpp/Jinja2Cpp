@@ -3,9 +3,8 @@
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "renderer.h"
-#include "statements.h"
-
 #include "span.h"
+#include "statements.h"
 
 #include <algorithm>
 #include <array>

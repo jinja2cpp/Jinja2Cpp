@@ -36,3 +36,10 @@ binding headers stay as they are; simdjson gets one too (0302).
 **Done when.** The default configuration builds and installs with no Boost at all,
 render/load benchmarks show no regression beyond noise, and sbom/components.json lists
 Boost only as the optional Boost.JSON backend.
+
+**Progress.** Step D1 (backlog proposal 2026-10-24, section A): `src/span.h`,
+`src/small_vector.h` and `src/intrusive_ptr.h` name `boost::span`,
+`boost::container::small_vector` (with `SmallVectorBase` and the doubling growth option)
+and `boost::intrusive_ptr` once, as `Span`, `SmallVector` and `IntrusivePtr` in namespace
+`jinja2`, and every call site uses the aliases. Steps D4 and D5 replace what these headers
+point at.

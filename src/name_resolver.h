@@ -3,7 +3,6 @@
 
 #include "node_arena.h"
 #include "slot_frame.h"
-
 #include "small_vector.h"
 #include "span.h"
 

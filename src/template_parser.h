@@ -15,6 +15,7 @@
 #include "render_context.h"
 #include "render_failure.h"
 #include "renderer.h"
+#include "small_vector.h"
 #include "statements.h"
 #include "unicode_tables.h"
 #include "value_visitors.h"
@@ -25,7 +26,6 @@
 #include <jinja2cpp/template_env.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include "small_vector.h"
 #include <nonstd/expected.hpp>
 
 #include <algorithm>

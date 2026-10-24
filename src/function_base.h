@@ -4,7 +4,6 @@
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "node_arena.h"
-
 #include "span.h"
 
 #include <algorithm>

@@ -5,6 +5,7 @@
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
 #include "internal_value.h"
+#include "intrusive_ptr.h"
 #include "lookup_result.h"
 #include "loop_attr.h"
 #include "markup.h"
@@ -15,6 +16,8 @@
 #include "render_workspace.h"
 #include "renderer.h"
 #include "slot_frame.h"
+#include "small_vector.h"
+#include "span.h"
 #include "template_impl.h"
 #include "template_slots.h"
 #include "undefined.h"
@@ -24,9 +27,6 @@
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value.h>
-
-#include "small_vector.h"
-#include "span.h"
 
 #include <algorithm>
 #include <array>

@@ -2,10 +2,9 @@
 #define JINJA2CPP_SRC_RENDER_WORKSPACE_H
 
 #include "internal_value.h"
-#include "slot_frame.h"
-
-#include "span.h"
 #include "intrusive_ptr.h"
+#include "slot_frame.h"
+#include "span.h"
 
 #include <algorithm>
 #include <cassert>

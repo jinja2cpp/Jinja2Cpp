@@ -1,4 +1,5 @@
 #include "../src/internal_value.h"
+#include "../src/span.h"
 #include "../src/template_dict.h"
 #include "../src/value_visitors.h"
 

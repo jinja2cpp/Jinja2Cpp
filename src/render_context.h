@@ -6,6 +6,8 @@
 #include "node_arena.h"
 #include "robin_hood.h"
 #include "slot_frame.h"
+#include "small_vector.h"
+#include "span.h"
 #include "template_slots.h"
 
 #include <jinja2cpp/error_info.h>
@@ -14,9 +16,6 @@
 #include <jinja2cpp/value.h>
 
 #include <nonstd/expected.hpp>
-
-#include "small_vector.h"
-#include "span.h"
 
 #include <algorithm>
 #include <array>

@@ -11,6 +11,8 @@
 #include "python_format.h"
 #include "recursion_guard.h"
 #include "render_context.h"
+#include "small_vector.h"
+#include "span.h"
 #include "template_dict.h"
 #include "testers.h"
 #include "undefined.h"
@@ -20,7 +22,6 @@
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/value.h>
 
-#include "small_vector.h"
 #include <algorithm>
 #include <array>
 

@@ -5,6 +5,7 @@
 #include "internal_value.h"
 #include "markup.h"
 #include "render_context.h"
+#include "span.h"
 #include "unicode_case.h"
 #include "undefined.h"
 #include "unicode_tables.h"

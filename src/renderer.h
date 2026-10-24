@@ -11,6 +11,7 @@
 #include "recursion_guard.h"
 #include "render_context.h"
 #include "render_failure.h"
+#include "span.h"
 
 #include <cstddef>
 #include <cstdint>
