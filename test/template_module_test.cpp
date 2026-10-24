@@ -290,6 +290,43 @@ TEST_F(TemplateModuleTest, SelfReferencingContainers)
     EXPECT_TRUE(module.exports["d"].AsMap().at("self").IsNone());
 }
 
+// A dict with keys that are not strings is copied as its public view spells them, as str()
+// does, and a cycle through it is cut too (Codex review of #634)
+TEST_F(TemplateModuleTest, NonStringKeys)
+{
+    auto module = Make("{% set e = {1: 'x', none: 'y'} %}{% set d = {1: 0} %}{{ d.update({2: d}) }}");
+    EXPECT_EQ("1,None", Names(module.exports["e"].AsMap()));
+    EXPECT_EQ("x", module.exports["e"].AsMap().at("1").AsString());
+    const auto& dict = module.exports["d"].AsMap();
+    EXPECT_EQ("1,2", Names(dict));
+    EXPECT_EQ(jinja2::Value(int64_t{ 0 }), dict.at("1"));
+    EXPECT_TRUE(dict.at("2").IsNone());
+}
+
+// maxOutputSize bounds the module's body and each macro call's output; copying the exports
+// after the body never reads the body's registration after it is gone (Codex review of #634)
+TEST_F(TemplateModuleTest, OutputLimit)
+{
+    jinja2::Settings settings;
+    settings.limits.maxOutputSize = 4;
+    m_env.SetSettings(settings);
+    auto module = Make("{% set x = [1, {'a': 2}] %}{% macro m(n) %}{{ '1' * n }}{% endmacro %}abc");
+    EXPECT_EQ("abc", module.body);
+    EXPECT_EQ("1111", Call(module.exports["m"], { 4 }).AsString());
+    try
+    {
+        Call(module.exports["m"], { 5 });
+        FAIL() << "expected ResourceLimitExceeded";
+    }
+    catch (const jinja2::BadResultAccess<>& failure)
+    {
+        EXPECT_EQ(jinja2::ErrorCode::ResourceLimitExceeded, failure.error().GetCode()) << failure.error().ToString();
+    }
+    auto over = Load("{% set x = 1 %}12345").MakeModule();
+    ASSERT_FALSE(!!over);
+    EXPECT_EQ(jinja2::ErrorCode::ResourceLimitExceeded, over.error().GetCode());
+}
+
 // A value nested deeper than the stack allows fails as a render of it does
 TEST_F(TemplateModuleTest, DeepNesting)
 {

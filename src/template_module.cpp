@@ -11,6 +11,7 @@
 #include "render_context.h"
 #include "render_failure.h"
 #include "statements.h"
+#include "template_dict.h"
 #include "template_env_impl.h"
 #include "template_impl.h"
 #include "value_visitors.h"
@@ -74,7 +75,7 @@ public:
             const bool isDict = map->GetMutableItems() != nullptr || map->IsNamespace() || (!map->HasAttributes() && map->GetObjectClass() == nullptr);
             if (isDict)
             {
-                return CopyMap(*map, value);
+                return CopyMap(*map);
             }
         }
         return IntValue2Value(value);
@@ -108,30 +109,21 @@ private:
         return Value(std::move(items));
     }
 
-    Value CopyMap(const MapRef& map, const InternalValue& value)
+    Value CopyMap(const MapRef& map)
     {
-        auto entries = map.GetEntries();
-        // A ValuesMap has string keys only: a dict with others is passed on as a view
-        std::vector<std::string> keys;
-        keys.reserve(entries.size());
-        for (const auto& entry : entries)
-        {
-            auto key = GetAsSameString(std::string(), entry.key);
-            if (!key)
-            {
-                return IntValue2Value(value);
-            }
-            keys.push_back(std::move(*key));
-        }
         const auto* identity = map.GetIdentity();
         if (!Enter(identity))
         {
             return Value();
         }
+        // A ValuesMap has string keys only: another key is spelled as str() spells it, as the
+        // public view of such a dict has it (SharedDictAdapter::CreateSnapshot), and keys that
+        // spell alike collapse into the first one's position with the later value
         ValuesMap items;
-        for (std::size_t idx = 0; idx != entries.size(); ++idx)
+        for (const auto& entry : map.GetEntries())
         {
-            items[keys[idx]] = Copy(entries[idx].value);
+            auto key = GetAsSameString(std::string(), entry.key);
+            items[key ? std::move(*key) : DictKeyText(entry.key)] = Copy(entry.value);
         }
         Leave(identity);
         return Value(std::move(items));
@@ -173,14 +165,28 @@ bool IsEntryBinding(const InternalValue& value, std::size_t hash)
 }
 
 // Calls `callable` on `context` as a call expression does (InvokeCallable in
-// expression_evaluator.cpp): a macro's output is Markup when the module autoescapes
-InternalValue InvokeInModule(RenderContext& context, const Callable& callable, const CallParams& params)
+// expression_evaluator.cpp): a macro's output is Markup when the module autoescapes. A macro
+// renders into `output`, within maxOutputSize when `limitOutput`; `output` stays registered
+// with the limits, so it must outlive their scope
+template<typename CharT>
+InternalValue InvokeInModule(RenderContext& context, const Callable& callable, const CallParams& params, std::basic_string<CharT>& output, bool limitOutput)
 {
     if (callable.GetType() == Callable::Type::Expression)
     {
         return callable.GetExpressionCallable()(params, context);
     }
-    InternalValue result(RenderToString(context.GetRendererCallback(), [&](OutStream& stream) { callable.GetStatementCallable()(params, stream, context); }));
+    OutStream stream(output);
+    if (limitOutput)
+    {
+        LimitRenderOutput(output, 0);
+    }
+    callable.GetStatementCallable()(params, stream, context);
+    stream.Flush();
+    if (limitOutput)
+    {
+        CheckRenderOutput();
+    }
+    InternalValue result(std::move(output));
     result.SetMarkup(context.IsAutoescape());
     return result;
 }
@@ -257,8 +263,9 @@ struct TemplateModuleState
         return RenderLimitsScope(settings.hasRenderLimits ? &settings.settings.limits : nullptr, settings.bigIntBackend);
     }
 
-    // Renders the template's top level into the module; returns its output
-    std::basic_string<CharT> Render()
+    // Renders the template's top level into the module and its output into `body`, which
+    // stays registered with the limits, so it must outlive their scope
+    void Render(std::basic_string<CharT>& body)
     {
         // The globals converted for this module alone: a render's are shared with the thread's
         // later renders, which may change a value in place (GlobalsSnapshot). The params and
@@ -282,7 +289,6 @@ struct TemplateModuleState
         module = std::make_unique<ImportedModule>(std::move(convertedParams), globals.values, callback.get(), &GetBuiltinGlobals(impl->m_settings->settings.extensions.i18n));
         callback->moduleContext = &module->Context();
 
-        std::basic_string<CharT> body;
         OutStream stream(body);
         if (impl->m_settings->hasRenderLimits)
         {
@@ -295,7 +301,6 @@ struct TemplateModuleState
             CheckRenderOutput();
             detail::PollDeadline();
         }
-        return body;
     }
 
     // The names the module exports, in name order: what its top level set, but not the names
@@ -348,6 +353,8 @@ struct TemplateModuleState
         {
             // First, so that it ends last: when nothing of the call holds values any more
             const CycleCollector cycles;
+            // Before the limits, which keep a pointer to it
+            std::basic_string<CharT> output;
             const auto limitsScope = MakeLimitsScope();
             CallParams callParams;
             if (const auto* posArgs = ucParams.extraPosArgs.GetIf<ValuesList>())
@@ -376,7 +383,7 @@ struct TemplateModuleState
             {
                 callParams.kwParams[argName] = OwnedArgument(arg);
             }
-            auto result = ExportCopier().Copy(InvokeInModule(module->Context(), fn, callParams));
+            auto result = ExportCopier().Copy(InvokeInModule(module->Context(), fn, callParams, output, impl->m_settings->hasRenderLimits));
             if (impl->m_settings->hasRenderLimits)
             {
                 detail::PollDeadline();
@@ -444,7 +451,8 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
     {
         const CycleCollector cycles;
         const auto limitsScope = state->MakeLimitsScope();
-        result.body = state->Render();
+        // Into result.body, which outlives the limits that keep a pointer to it
+        state->Render(result.body);
         const std::vector<ArgInfo> argsInfo{ ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) };
         for (const auto& [name, value] : state->ExportedNames())
         {
