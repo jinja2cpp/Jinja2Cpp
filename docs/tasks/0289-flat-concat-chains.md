@@ -1,6 +1,7 @@
 ---
-status: in-progress
+status: done
 priority: low
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/632
 area: parity
 depends: [0098]
 touches: [src/expression_parser.cpp, src/expression_evaluator.h, src/expression_evaluator.cpp, src/node_arena.h, src/node_arena.cpp, src/recursion_guard.h, test/recursion_limits_test.cpp, test/expressions_test.cpp, test/autoescape_test.cpp, test/undefined_test.cpp, test/node_arena_test.cpp, test/parity/cases/operators.py, test/parity/cases/autoescape.py, test/parity/cases/undefined.py, test/parity/expected/operators.json, test/parity/expected/autoescape.json, test/parity/expected/undefined.json]

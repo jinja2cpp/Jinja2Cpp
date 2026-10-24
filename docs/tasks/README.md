@@ -348,7 +348,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0274](0274-self-block-before-parent-pushed.md) | Blocks called through `self` at a child's top level lack the parent's blocks | parity | low | done |
 | [0275](0275-release-thread-caches.md) | `ReleaseThreadCaches()` | api | medium | done |
 | [0276](0276-memory-contract-docs.md) | User documentation for the memory contract | docs | medium | open |
-| [0277](0277-markup-escape-helper.md) | A public escape helper for Markup | api | low | open |
+| [0277](0277-markup-escape-helper.md) | A public escape helper for Markup | api | low | done |
 | [0278](0278-remove-dead-valueref.md) | Remove the dead ValueRef alternative of InternalValue | internals | low | open |
 | [0279](0279-nlohmann-destructor-allocates.md) | nlohmann::json destruction allocates, so OOM there terminates | robustness | low | open |
 | [0280](0280-urlize-markup-input.md) | urlize escapes Markup input | filters | low | done |
@@ -360,11 +360,13 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0286](0286-fixed-cost-drift-oct-12-19.md) | Fixed-cost drift from feature merges, 2026-10-12 to 2026-10-19 | perf | medium | done |
 | [0287](0287-big-int-radix-conversion-cost.md) | Quadratic radix conversion of big integers near the bit cap | robustness | low | open |
 | [0288](0288-finalize-autoescape.md) | `finalize` output is not escaped under autoescape | parity | high | done |
-| [0289](0289-flat-concat-chains.md) | `~` chains as one node, as Jinja2's `Concat` | parity | low | open |
+| [0289](0289-flat-concat-chains.md) | `~` chains as one node, as Jinja2's `Concat` | parity | low | done |
 | [0290](0290-codeql-test-suite-cost.md) | Find what in the test suite makes CodeQL's data-flow stage explode | ci | low | open |
 | [0291](0291-fold-chosen-by-foldable-test.md) | Fold a value chosen by a foldable test that is not a literal | parity | low | open |
 | [0292](0292-finalize-fold-error-fallback.md) | Evaluate at run time when folding a finalized `{{ }}` raises | parity | low | done |
 | [0293](0293-finalize-gets-undefined.md) | `finalize` gets None for an undefined value | parity | medium | open |
 | [0294](0294-positional-after-keyword-syntax-error.md) | A positional argument after a keyword one is a syntax error | parity | low | open |
 | [0295](0295-selectattr-extra-keyword.md) | `selectattr('a', attribute='a')` fails where Python ignores the keyword | parity | low | open |
+| [0296](0296-typed-string-view-dangling.md) | A typed `std::string_view` parameter given the other character width dangles | api | high | open |
+| [0297](0297-in-none-and-modulo-undefined.md) | `x in None` and `'text' % undefined` differ from Python | parity | low | open |
 | [0298](0298-include-of-extending-template-loop.md) | An included template that extends a parent reading `loop` | parity | low | open |
