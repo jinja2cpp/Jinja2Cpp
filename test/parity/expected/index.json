@@ -1,6 +1,7 @@
 {
  "areas": [
   "autoescape",
+  "calls",
   "custom",
   "errors",
   "filters",

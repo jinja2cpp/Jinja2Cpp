@@ -450,7 +450,7 @@ void AssignLoopTarget(TargetNodes target, const InternalValue& item, ScopeRef sc
 // loop.changed(*values): whether the values differ from those of the previous call
 Callable MakeLoopChanged(const std::shared_ptr<std::optional<InternalValueList>>& lastChanged)
 {
-    return Callable(Callable::GlobalFunc, [lastChanged](const CallParams& params, RenderContext&) -> InternalValue {
+    Callable result(Callable::GlobalFunc, [lastChanged](const CallParams& params, RenderContext&) -> InternalValue {
         if (!params.kwParams.empty())
         {
             throw TemplateRuntimeError("changed() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
@@ -467,6 +467,9 @@ Callable MakeLoopChanged(const std::shared_ptr<std::optional<InternalValueList>>
         last = params.posParams;
         return true;
     });
+    // Each read of loop.changed is a new callable; reads on one loop compare equal
+    result.SetBoundMethod(lastChanged.get(), "changed");
+    return result;
 }
 // loop.cycle(*values): the value at the loop's position when it is called, as Jinja2's
 // bound method, so a callable stored on one item cycles with the loop on later ones, and
@@ -474,7 +477,8 @@ Callable MakeLoopChanged(const std::shared_ptr<std::optional<InternalValueList>>
 // lookups that inline LoopAccessor::GetProperty small (Render/for_loop_vars)
 JINJA2CPP_NOINLINE_INLINE Callable MakeLoopCycle(LoopState& state)
 {
-    return Callable(Callable::GlobalFunc, [position = std::shared_ptr<const size_t>(state.CyclePosition())](const CallParams& params, RenderContext&) -> InternalValue {
+    auto position = state.CyclePosition();
+    Callable result(Callable::GlobalFunc, [position = std::shared_ptr<const size_t>(position)](const CallParams& params, RenderContext&) -> InternalValue {
         if (!params.kwParams.empty())
         {
             throw TemplateRuntimeError("LoopContext.cycle() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
@@ -486,6 +490,8 @@ JINJA2CPP_NOINLINE_INLINE Callable MakeLoopCycle(LoopState& state)
         }
         return args[*position % args.size()];
     });
+    result.SetBoundMethod(position.get(), "cycle");
+    return result;
 }
 
 // The `loop` object. As in Jinja2's LoopContext, its attributes are computed from the
@@ -2677,7 +2683,7 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     }
 
     auto callParams = helpers::EvaluateCallParams(call.GetParams(), values);
-    callParams.kwParams["caller"s] = MakeCallable(values);
+    helpers::AddCallerParam(callParams, MakeCallable(values));
     if (callable->GetType() == Callable::Type::Expression)
     {
         WriteOutput(os, callable->GetExpressionCallable()(callParams, values), values);
