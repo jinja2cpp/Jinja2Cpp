@@ -1750,6 +1750,184 @@
    "output": ""
   },
   {
+   "id": "errors.elif_test_conditional_expression",
+   "template": "{% if 0 %}{% elif 1 if x else 2 %}a{% endif %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of statement block', got 'if'"
+   }
+  },
+  {
+   "id": "errors.if_test_tuple_conditional_expression",
+   "template": "{% if 1, 2 if x else 3 %}a{% endif %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of statement block', got 'if'"
+   }
+  },
+  {
+   "id": "errors.if_test_parenthesized_conditional",
+   "template": "{% if (1 if x else 2) %}a{% endif %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "output": "a"
+  },
+  {
+   "id": "errors.if_line_statement_conditional_expression",
+   "template": "% if 1 if x else 2\na\n% endif\n",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {
+    "line_statement_prefix": "%"
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "expected token 'end of statement block', got 'if'"
+   }
+  },
+  {
+   "id": "errors.raw_unclosed_after_text",
+   "template": "a{% raw %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "output": "a"
+  },
+  {
+   "id": "errors.raw_unclosed_after_raw",
+   "template": "{% raw %}{% endraw %}{% raw %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "output": ""
+  },
+  {
+   "id": "errors.raw_unclosed_trailing_newline",
+   "template": "{% raw %}\n",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "output": ""
+  },
+  {
+   "id": "errors.raw_unclosed_kept_newline",
+   "template": "{% raw %}\n",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {
+    "keep_trailing_newline": true
+   },
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Missing end of raw directive"
+   }
+  },
+  {
+   "id": "errors.raw_unclosed_space",
+   "template": "{% raw %} ",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Missing end of raw directive"
+   }
+  },
+  {
+   "id": "errors.raw_unclosed_in_for",
+   "template": "{% for i in l %}{% raw %}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "Unexpected end of template. Jinja was looking for the following tags: 'endfor' or 'else'. The innermost block that needs to be closed is 'for'."
+   }
+  },
+  {
    "id": "errors.repeated_kwarg_filter",
    "template": "{{ l|tojson(indent=1, indent=2) }}",
    "context": {

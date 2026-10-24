@@ -728,7 +728,8 @@ private:
             }
         }
 
-        if (m_currentBlockInfo.type == TextBlockType::RawBlock)
+        // Jinja2 accepts a raw tag that ends the template, its `-%}` whitespace included, as an empty block
+        if (m_currentBlockInfo.type == TextBlockType::RawBlock && m_currentBlockInfo.range.startOffset < m_template->size())
         {
             nonstd::expected<void, ParseError> result =
                 MakeParseError(ErrorCode::ExpectedRawEnd, MakeToken(Token::RawEnd, { m_template->size(), m_template->size() }));
