@@ -1,4 +1,3 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the literals area (cases/literals.py).
 # Format and kinds: test/parity/README.md.
 
-literals.string_escape_named            rejects     0041 \N{name} needs the Unicode name table; it is rejected as malformed (documented divergence)

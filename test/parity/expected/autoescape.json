@@ -2048,6 +2048,28 @@
    "output": "&lt;&lt;"
   },
   {
+   "id": "autoescape.volatile_folded_choice",
+   "template": "{% autoescape on %}{{ '<' if 1 > 0 else x }}{{ (1 > 0) and '<' }}{{ '<' if x else x }}{% endautoescape %}",
+   "context": {
+    "on": true,
+    "x": "<"
+   },
+   "env": {},
+   "templates": {},
+   "output": "<<&lt;"
+  },
+  {
+   "id": "autoescape.volatile_folded_choice_nested",
+   "template": "{% autoescape on %}{{ ('<' if 1 > 0 else x) ~ '' }}{{ ('<' if 1 > 0 else x)|lower }}{{ -(1 if 1 > 0 else x) }}{% endautoescape %}",
+   "context": {
+    "on": true,
+    "x": "<"
+   },
+   "env": {},
+   "templates": {},
+   "output": "<&lt;-1"
+  },
+  {
    "id": "autoescape.volatile_folded_output",
    "template": "{% autoescape on %}{{ '<' }}{{ x }}{{ '<' ~ 'a' }}{{ '<'|upper }}{{ ['<'][0] }}{{ '<' if 1 is odd }}{{ ('<', 1)[0] ~ x }}{% endautoescape %}",
    "context": {
@@ -2215,6 +2237,46 @@
   {
    "id": "autoescape.env_on_finalize_folded_choice",
    "template": "{{ '<'|safe if 1 > 0 else x }}{{ ('<'|safe) or x }}",
+   "context": {
+    "x": "<"
+   },
+   "env": {
+    "autoescape": true,
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[<][<]"
+  },
+  {
+   "id": "autoescape.env_on_finalize_folded_choice_more",
+   "template": "{{ '<'|e if ('<'|e) is escaped }}{{ x if 1 > 2 else '<'|safe }}{{ (0 > 1) and x }}{{ (1 > 0) and '<'|safe }}{{ (x if 1 > 2 else ('<'|safe) or x) if 1 > 0 else x }}{{ ('<'|safe) and x }}",
+   "context": {
+    "x": "<"
+   },
+   "env": {
+    "autoescape": true,
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[&lt;][<][False][<][<][&lt;]"
+  },
+  {
+   "id": "autoescape.env_on_finalize_folded_choice_none",
+   "template": "{{ none if 1 > 0 }}|{{ none if 1 > 0 else x }}|{{ (1 > 0) and none }}|{{ y if 1 > 0 }}",
+   "context": {
+    "x": "<",
+    "y": null
+   },
+   "env": {
+    "autoescape": true,
+    "finalize": "none_to_empty"
+   },
+   "templates": {},
+   "output": "None|None|None|"
+  },
+  {
+   "id": "autoescape.env_on_finalize_folded_choice_static_off",
+   "template": "{% autoescape false %}{{ '<'|safe if 1 > 0 else x }}{{ (1 > 0) and '<' }}{% endautoescape %}",
    "context": {
     "x": "<"
    },

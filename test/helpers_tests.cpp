@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <new>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -53,11 +54,65 @@ TEST(Helpers, CompileEscapesPythonSequences)
     EXPECT_EQ(L"\u00e9\x20ac", CompileEscapes(std::wstring{ LR"(\xe9\u20ac)" }));
     // The wide literal is a surrogate pair where wchar_t is 16 bits wide (MSVC) and one code unit elsewhere
     EXPECT_EQ(std::wstring{ L"\U0001F600" }, CompileEscapes(std::wstring{ LR"(\U0001F600)" }));
+#ifndef JINJA2CPP_NO_UNICODE_NAMES
+    EXPECT_EQ("a\xE2\x80\xA2"
+              "b",
+              CompileEscapes(std::string{ R"(a\N{bullet}b)" }));
+    EXPECT_EQ(std::wstring{ L"\U0001F004" }, CompileEscapes(std::wstring{ LR"(\N{MAHJONG TILE RED DRAGON})" }));
+#endif
+}
+
+// Python's \N{name}: stored names and aliases ignore ASCII case, the computed CJK and Hangul
+// names do not (CPython's unicodedata._getcode)
+TEST(Helpers, LookupUnicodeName)
+{
+#ifdef JINJA2CPP_NO_UNICODE_NAMES
+    GTEST_SKIP() << "built without the Unicode name table";
+#endif
+    using detail::LookupUnicodeName;
+    const std::pair<const char*, char32_t> found[] = {
+        { "BULLET", 0x2022 },
+        { "bullet", 0x2022 },
+        { "Latin Small Letter A", 0x61 },
+        { "HYPHEN-MINUS", 0x2D },
+        { "TIBETAN MARK BSKA- SHOG GI MGO RGYAN", 0xFD0 },
+        { "MAHJONG TILE RED DRAGON", 0x1F004 },
+        { "EGYPTIAN HIEROGLYPH A001", 0x13000 },
+        { "SPACE", 0x20 },
+        { "BOM", 0xFEFF },
+        { "lf", 0x0A },
+        { "NULL", 0x00 },
+        { "LATIN CAPITAL LETTER GHA", 0x1A2 },
+        { "LATIN CAPITAL LETTER OI", 0x1A2 },
+        { "CJK UNIFIED IDEOGRAPH-4E00", 0x4E00 },
+        { "CJK UNIFIED IDEOGRAPH-04E00", 0x4E00 },
+        { "CJK UNIFIED IDEOGRAPH-323AF", 0x323AF },
+        { "cjk compatibility ideograph-f900", 0xF900 },
+        { "NUSHU CHARACTER-1b170", 0x1B170 },
+        { "KHITAN SMALL SCRIPT CHARACTER-18B00", 0x18B00 },
+        { "HANGUL SYLLABLE GA", 0xAC00 },
+        { "HANGUL SYLLABLE A", 0xC544 },
+        { "HANGUL SYLLABLE GGAGG", 0xAE4E },
+        { "HANGUL SYLLABLE GAGS", 0xAC03 },
+        { "HANGUL SYLLABLE HIH", 0xD7A3 },
+        { "HANGUL CHOSEONG KIYEOK", 0x1100 },
+    };
+    for (const auto& [name, cp] : found)
+    {
+        EXPECT_EQ(std::optional<char32_t>(cp), LookupUnicodeName(name)) << name;
+    }
+    for (const char* name : { "", " BULLET", "BULLET ", "LATIN  SMALL LETTER A", "BULLET\t", "cjk unified ideograph-4e00", "CJK UNIFIED IDEOGRAPH-4e00",
+                              "CJK UNIFIED IDEOGRAPH-4E0", "CJK UNIFIED IDEOGRAPH-004E00", "CJK UNIFIED IDEOGRAPH-A000", "CJK UNIFIED IDEOGRAPH-",
+                              "hangul syllable ga", "HANGUL SYLLABLE", "HANGUL SYLLABLE GAX", "HANGUL SYLLABLE GaG", "TANGUT IDEOGRAPH-17000",
+                              "CJK COMPATIBILITY IDEOGRAPH-0F900", "LATIN CAPITAL LETTER A WITH MACRON AND GRAVE", "U+0041", "<control>" })
+    {
+        EXPECT_FALSE(LookupUnicodeName(name).has_value()) << name;
+    }
 }
 
 TEST(Helpers, CompileEscapesRejectsMalformed)
 {
-    for (const char* text : { R"(\x)", R"(\x4)", R"(\x4g)", R"(\u123)", R"(\U0001F60)", R"(\U00110000)", R"(\N{BULLET})", R"(ab\N)" })
+    for (const char* text : { R"(\x)", R"(\x4)", R"(\x4g)", R"(\u123)", R"(\U0001F60)", R"(\U00110000)", R"(ab\N)", R"(\N{BULLET)", R"(\NBULLET)", R"(\N{})", R"(\N{NO SUCH NAME})", R"(\N{ BULLET})" })
     {
         bool ok = true;
         CompileEscapes(std::string{ text }, &ok);

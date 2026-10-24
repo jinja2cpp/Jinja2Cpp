@@ -32,6 +32,8 @@ CASES = [
     # A copy of a computed list (range, map) is the same object, as a Python name is
     ("sameas_arity", "{{ 1 is sameas() }}"),
     ("sameas_extra_arg", "{{ 1 is sameas(1, 2) }}"),
+    # value % num == 0: a str is formatted, which fails without a format spec (docs/tasks/0308)
+    ("divisibleby_string", "{{ 'a' is divisibleby 2 }}"),
     ("divisibleby_arity", "{{ 6 is divisibleby() }}"),
     ("divisibleby_extra_arg", "{{ 6 is divisibleby(3, 2) }}"),
     ("in_arity", "{{ 1 is in() }}"),

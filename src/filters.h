@@ -290,7 +290,7 @@ public:
 private:
     Mode m_mode;
     FilterParams m_testingParams;
-    bool m_noParams = false;
+    bool m_hasAttribute = false;
 };
 
 class ValueConverter : public FilterBase

@@ -1,4 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the autoescape area (cases/autoescape.py).
 # Format and kinds: test/parity/README.md.
 
-autoescape.env_on_finalize_folded_choice  output      0291 a folded value chosen by a foldable test that is not a literal is escaped after finalize
+autoescape.volatile_folded_choice_nested  output      0307 a choice folded inside a ~ chain is escaped by the runtime setting in volatile code
