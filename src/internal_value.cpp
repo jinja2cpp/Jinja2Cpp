@@ -960,8 +960,16 @@ struct ListConverter : public visitors::BaseVisitor<std::optional<ListAdapter>>
     }
     result_t operator()(const MapRef& map) const
     {
-        // An object such as namespace() is not iterable
-        if (strictConvertion || map.GetObjectClass())
+        if (strictConvertion)
+        {
+            return result_t();
+        }
+        // An object such as namespace() is not iterable, a loop's `loop` is
+        if (ListAdapter items; map.GetIteration(items))
+        {
+            return items;
+        }
+        if (map.GetObjectClass())
         {
             return result_t();
         }

@@ -29,3 +29,12 @@ are not reported (`{% extends B %}{% extends B %}{% macro m() %}{{ 1|f }}{% endm
 loads in Jinja2, fails in Jinja2C++; it fails at render in both). And Jinja2's i18n turns a
 first `trans` variable that is a call into an assignment it compiles even after a known
 extends (`{% extends B %}{% trans a=m(1|f) %}...` fails to load in Jinja2, loads here).
+
+**Resolution.** The parser drops an output tag (text, `{{ }}`, `trans`) of the body after a
+top-level `extends` and wraps one after an `extends` in an `if` in an OutputCheckStatement,
+which skips it once the template has a parent; tags in a macro, call block, set block or
+block are kept (Jinja2's require_output_check). TopLevelWriter is gone, so an include or call
+block after `extends` writes its output before the parent's, as in Jinja2. A second
+top-level `extends` defers the load-time checks of the rest (CompilerExit). Left: the
+first `trans` variable that is a call is still dropped with its `trans` after a known
+`extends`, where Jinja2 compiles and runs it as an assignment; rare enough to leave.

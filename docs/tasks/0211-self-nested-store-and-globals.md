@@ -47,3 +47,12 @@ Record it among the deliberate divergences in docs/parity.md (with 0235). This t
 remaining work is the `self` items above.
 
 **Done when** no line of `test/parity/divergences/` names 0211.
+
+**Resolution.** The parser records, per block and for the template's top level, whether a
+read of `self` or a store of it comes first (NodeArena::SelfUse, in Jinja2's visit order:
+`with` targets and macro parameters before their values and defaults); a body that stores
+first has no `self` of its own and FindSelf reads the name as any other. RenderAsParent keeps
+the `self` a child set at their shared top level for a parent that reads it from the context,
+and puts it back after the parent for a module's export. The `self` of an extending
+template's top level already had the parent-only blocks (0274); cases pin it. `cycler()` is
+not iterable in Jinja2 either (Cycler has `__next__`, no `__iter__`), so nothing to do there.

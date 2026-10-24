@@ -160,7 +160,13 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
     // The items of a tuple of names are the nodes after it
     const bool allNames = root.size == count + 1 && std::all_of(target.begin() + 1, target.end(), [](const TargetNode& t) { return t.IsPlainName(); });
     const auto map = AsMap(value);
-    // An object (namespace(), cycler(), joiner()) is neither a mapping nor iterable
+    // An object (namespace(), cycler(), joiner()) is neither a mapping nor iterable; `loop`
+    // is iterable
+    if (ListAdapter items; map && map->GetIteration(items))
+    {
+        AssignTo(target, InternalValue(ListAdapter::CreateAdapter(items.ToValueList())), sink, values);
+        return;
+    }
     if (map && map->GetObjectClass())
     {
         throw TemplateRuntimeError("cannot unpack non-iterable "s + map->GetObjectClass() + " object");
@@ -542,6 +548,24 @@ public:
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return true; }
+    // An object, not a mapping: dictsort and items refuse it, pprint prints its repr
+    [[nodiscard]] const char* GetObjectClass() const override { return "LoopContext"; }
+    // Iterating it takes the rest of the loop's own items, each as (item, loop), so that the
+    // running loop goes on after them: Jinja2's LoopContext.__next__ (docs/tasks/0219)
+    bool GetIteration(ListAdapter& items) const override
+    {
+        items = ListAdapter::CreateAdapter([state = m_state, loop = InternalValue(MapAdapter(MakeRef<LoopAccessor>(*this)))]() -> std::optional<InternalValue> {
+            state->Peek();
+            if (state->isLast)
+            {
+                return std::nullopt;
+            }
+            state->SetIndex(state->index0 + 1);
+            state->isPeeked = false;
+            return InternalValue(ListAdapter::CreateAdapter(InternalValueList{ state->Item(state->index0), loop }).MarkAsTuple());
+        });
+        return true;
+    }
     [[nodiscard]] const LoopState* State() const { return m_state; }
     [[nodiscard]] const void* GetIdentity() const override { return m_state; }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -1088,6 +1112,13 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         {
             loopRendered = true;
         }
+        // The body took items by iterating `loop` (LoopAccessor::GetIteration): go on after them
+        if (state->index0 != itemIdx)
+        {
+            itemIdx = state->index0;
+            state->Peek();
+            hasItem = !state->isLast;
+        }
     }
     values.ExitScope(state->bodyScope);
 
@@ -1237,6 +1268,8 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
         {
             loopRendered = true;
         }
+        // The body took items by iterating `loop` (LoopAccessor::GetIteration): go on after them
+        itemIdx = state->index0;
         if (!state->isPeeked)
         {
             state->isLast = !fetchNext(state->Item(itemIdx + 1));

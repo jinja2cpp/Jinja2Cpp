@@ -535,11 +535,13 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         break;
     case IsIterableMode:
         result = valKind == TestKind::List || valKind == TestKind::KVPair || valKind == TestKind::Map || valKind == TestKind::String;
-        // Of the objects, only `self` is: Jinja2's TemplateReference has __getitem__
+        // Of the objects, only `self` and `loop` are: Jinja2's TemplateReference has
+        // __getitem__, LoopContext __iter__
         if (valKind == TestKind::Object)
         {
             auto map = AsMap(baseVal);
-            result = map && std::string_view(map->GetObjectClass()) == "TemplateReference";
+            ListAdapter items;
+            result = map && (std::string_view(map->GetObjectClass()) == "TemplateReference" || map->GetIteration(items));
         }
         break;
     case IsMappingMode:

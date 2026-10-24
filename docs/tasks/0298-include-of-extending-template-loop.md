@@ -20,3 +20,10 @@ flag the loader computes for the parent chain when the child is loaded.
 
 **Done when.** `{% for x in 'a' %}{{ loop.index }}{% include 'child' %}{% endfor %}` with `child` =
 `{% extends 'parent' %}` and `parent` = `{{ loop.index }}` matches Jinja2.
+
+**Resolution.** The case was the other way round: a template that names nothing was rendered
+with the including loop visible, so a parent that reads `loop` saw it where Jinja2 hides it
+(the loop's body does not name `loop`). A template that extends now counts as one that may
+read the including loop (TemplateRenderer::SetMentionsLoop), so the include hides it unless
+the including body names `loop`. Cost: one lookup of `loop` per include of an extending
+template from inside a loop.
