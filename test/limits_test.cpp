@@ -449,6 +449,30 @@ TEST_F(LimitsEnvTest, UnpackedKeywordsAreHeldToTheSequenceCap)
     EXPECT_EQ("999", tpl.RenderAsString({ { "big", big } }).value());
 }
 
+TEST_F(LimitsEnvTest, UnpackedMappingKeysAreHeldToTheSequenceCap)
+{
+    // f(*d) passes a host mapping's keys, checked against the cap before they are copied
+    ValuesMap big;
+    for (int idx = 0; idx < 2000; ++idx)
+    {
+        big["k" + std::to_string(idx)] = idx;
+    }
+    Settings limited;
+    limited.limits.maxSequenceSize = 1000;
+    TemplateEnv env;
+    env.SetSettings(limited);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% macro m() %}{{ varargs|length }}{% endmacro %}{{ m(1, *big) }}").has_value());
+    auto result = tpl.RenderAsString({ { "big", big } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    for (int idx = 999; idx < 2000; ++idx)
+    {
+        big.erase("k" + std::to_string(idx));
+    }
+    EXPECT_EQ("1000", tpl.RenderAsString({ { "big", big } }).value());
+}
+
 TEST_F(LimitsEnvTest, FailedRenderLeavesNoLimits)
 {
     // A render that fails on its limits leaves none behind for the next one on the thread

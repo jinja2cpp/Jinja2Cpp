@@ -1757,6 +1757,11 @@ void AppendUnpackedArgs(const InternalValue& value, std::vector<InternalValue>& 
         CheckUndefinedUse(value, UndefinedUse::Operator);
         return;
     }
+    // A mapping converts to its keys all at once: check its size before they are copied
+    if (const auto map = AsMap(value); map && !map->GetObjectClass())
+    {
+        CheckSequenceSize(uint64_t{ posParams.size() } + map->GetSize(), "a list");
+    }
     bool isConverted = false;
     const auto items = ConvertToList(value, isConverted, false);
     if (!isConverted)
