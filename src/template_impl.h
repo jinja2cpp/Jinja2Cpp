@@ -52,9 +52,6 @@
 #include "jinja2cpp/binding/rapid_json.h"
 #endif
 
-#include <boost/any.hpp>
-#include <boost/any/unique_any.hpp>
-#include <boost/predef/other/endian.h>
 #include <nonstd/expected.hpp>
 
 #include <list>
@@ -974,7 +971,7 @@ private:
     };
     mutable OutputSizeHint m_outputSizeHint;
     mutable std::optional<GenericMap> m_metadata;
-    mutable boost::anys::unique_any m_metadataJson;
+    mutable std::shared_ptr<void> m_metadataJson;
     mutable std::string m_metadataSource;
     mutable std::mutex m_metadataMutex;
     MetadataInfo<CharT> m_metadataInfo;

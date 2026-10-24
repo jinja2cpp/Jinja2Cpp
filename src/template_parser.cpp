@@ -613,7 +613,8 @@ StatementsParser::ParseResult StatementsParser::ParseIf(LexScanner& lexer, State
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     // Jinja2 checks the filters and tests of the condition when they run, as those of the branches
     CheckGuard deferred(m_unknown, UnknownCallables::Check::Deferred);
-    auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
+    // Jinja2 parses the test without a conditional expression: `{% if 1 if x else 2 %}` is an error
+    auto valueExpr = exprParser.ParseTupleOrExpression(lexer, false);
     if (!valueExpr)
     {
         return MakeParseError(ErrorCode::ExpectedExpression, pivotTok);
@@ -667,7 +668,7 @@ StatementsParser::ParseResult StatementsParser::ParseElIf(LexScanner& lexer, Sta
 
     const auto& pivotTok = lexer.PeekNextToken();
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
-    auto valueExpr = exprParser.ParseTupleOrExpression(lexer);
+    auto valueExpr = exprParser.ParseTupleOrExpression(lexer, false);
     if (!valueExpr)
     {
         return MakeParseError(ErrorCode::ExpectedExpression, pivotTok);

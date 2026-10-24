@@ -5,11 +5,6 @@ statements.call_block_dict              accepts     0156 deliberate: Jinja2 cann
 statements.caller_escapes_its_loop     output      0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
 statements.macro_escapes_its_loop      output      0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
 statements.nested_macro_escapes_its_call output    0165 deliberate: a macro that outlives the macro call defining it reads that call's names as undefined
-statements.macro_dunder_call            rejects     0214 a macro has no __call__ attribute
-statements.macro_xmlattr                output      0214 xmlattr prints nothing for a macro value; Jinja2 prints its escaped repr
-statements.block_reference_new_each_read output    0214 self.b is one stored callable, so it equals itself; Jinja2 makes a new BlockReference on each read
-statements.loop_method_equals_itself   output      0214 each read of loop.cycle makes a new callable; Python's bound methods of one object compare equal
-statements.call_star_args               rejects     0220 *args in a call is a Load error; Jinja2 unpacks it into positional arguments
-statements.call_star_kwargs             rejects     0220 **kwargs in a call is a Load error; Jinja2 unpacks it into keyword arguments
+statements.block_reference_new_each_read output    0214 deliberate: self.b is one stored callable, so it equals itself; Jinja2 allocates a new BlockReference on each read
 statements.loop_cycle_string              output      0214 loop.cycle|string prints nothing; Jinja2 prints the bound method <bound method LoopContext.cycle of <LoopContext 1/2>>
 statements.loop_iter_inner_body_reads_index output    0304 a for loop over `loop` fetches its next item before the body runs, advancing the outer loop early; Jinja2's LoopContext fetches lazily

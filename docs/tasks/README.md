@@ -286,12 +286,12 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0210](0210-markup-percent-int-of-string.md) | `%d` and `%f` of a string in Markup's `%` | parity | low | open |
 | [0211](0211-self-nested-store-and-globals.md) | `self` stored in a nested scope of a block; globals changed in place | parity | low | open |
 | [0212](0212-objects-as-keys-and-through-callables.md) | Objects as dict keys and through user callables | parity | low | open |
-| [0213](0213-if-condexpr-and-unclosed-raw.md) | An `if` test with a conditional expression, and an unclosed raw block at the end | parity | low | open |
-| [0214](0214-macro-value-leftovers.md) | Macros and methods as values: what 0208 and 0145 left over | parity | low | open |
+| [0213](0213-if-condexpr-and-unclosed-raw.md) | An `if` test with a conditional expression, and an unclosed raw block at the end | parity | low | done |
+| [0214](0214-macro-value-leftovers.md) | Macros and methods as values: what 0208 and 0145 left over | parity | low | done |
 | [0215](0215-pprint-width.md) | `pprint` does not wrap at Python's width, and other repr gaps | parity | low | open |
 | [0216](0216-volatile-autoescape.md) | `{% autoescape %}` with a runtime value (volatile EvalContext) | parity | low | done |
 | [0219](0219-loop-iteration.md) | Iterating `loop` takes the rest of the loop | parity | low | open |
-| [0220](0220-call-argument-unpacking.md) | `f(*args, **kwargs)` in calls | parity | medium | open |
+| [0220](0220-call-argument-unpacking.md) | `f(*args, **kwargs)` in calls | parity | medium | done |
 | [0221](0221-release-acceptance-and-rc-signoff.md) | Define 2.0 release gates and release-candidate signoff | release | high | in-progress |
 | [0222](0222-downstream-1x-migration-trial.md) | Prove a downstream upgrade from 1.3.2 to 2.0 | release | high | open |
 | [0223](0223-embedding-lifecycle-integration-tests.md) | Test embedding behavior across lifetime, cache and callback boundaries | robustness | high | open |
@@ -365,7 +365,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0291](0291-fold-chosen-by-foldable-test.md) | Fold a value chosen by a foldable test that is not a literal | parity | low | open |
 | [0292](0292-finalize-fold-error-fallback.md) | Evaluate at run time when folding a finalized `{{ }}` raises | parity | low | done |
 | [0293](0293-finalize-gets-undefined.md) | `finalize` gets None for an undefined value | parity | medium | open |
-| [0294](0294-positional-after-keyword-syntax-error.md) | A positional argument after a keyword one is a syntax error | parity | low | open |
+| [0294](0294-positional-after-keyword-syntax-error.md) | A positional argument after a keyword one is a syntax error | parity | low | done |
 | [0295](0295-selectattr-extra-keyword.md) | `selectattr('a', attribute='a')` fails where Python ignores the keyword | parity | low | open |
 | [0296](0296-typed-string-view-dangling.md) | A typed `std::string_view` parameter given the other character width dangles | api | high | open |
 | [0297](0297-in-none-and-modulo-undefined.md) | `x in None` and `'text' % undefined` differ from Python | parity | low | open |
@@ -375,3 +375,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0301](0301-module-call-loads-accumulate.md) | A `Template::MakeModule` module keeps what each of its calls loads | robustness | medium | open |
 | [0302](0302-simdjson-binding.md) | An optional simdjson binding | api | low | open |
 | [0303](0303-retire-rapidjson-backend.md) | Retire the built-in RapidJSON backend | build | medium | open |
+| [0305](0305-builtin-class-repr.md) | The builtin classes print as `<class 'range'>` | parity | low | open |
+| [0306](0306-filter-test-argument-unpacking.md) | `*args` and `**kwargs` in filter and test calls | parity | low | open |

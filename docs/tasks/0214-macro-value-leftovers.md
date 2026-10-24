@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/645
 priority: low
 area: parity
 touches: [src/filters.cpp, src/expression_evaluator.cpp, src/statements.cpp]
@@ -24,4 +25,14 @@ divergences line:
 
 Block references ignoring their arguments (`{{ self.b(1) }}`) belongs with 0198.
 
-**Done when.** No divergences line names 0214 and `ctest -R parity` passes.
+**Decision (2026-10-24, 0220 PR).** `self.b == self.b` stays True, as a deliberate divergence:
+matching Jinja2 means allocating a new callable on every read of `self.b`, `self.b()` calls
+included, for an identity check no template relies on. Its divergences line says
+`deliberate`. The other four are fixed: `xmlattr` prints a macro's repr, `f.__call__` is `f`,
+and `loop.cycle`/`loop.changed` compare equal across reads of one loop
+(`Callable::SetBoundMethod`); the corpus pins them in `calls.*`. `f.__call__` is `f` itself rather
+than a bound method, so `m.__call__ == m` is True and it prints as `m` does; also deliberate
+(`calls.dunder_call_is_a_bound_method`).
+
+**Done when.** The only divergences lines naming 0214 are the deliberate ones and `ctest -R parity`
+passes.
