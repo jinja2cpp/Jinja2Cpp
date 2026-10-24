@@ -61,3 +61,8 @@ gives the private reporting channel (GitHub private vulnerability reporting, whi
 admin has to enable), supported versions, a 90-day disclosure target and GHSA/CVE. The loader
 probes are the `RealFsNamesTest` and `ConfinedFsTest` rows (#589, #615); the Sandbox row of
 docs/parity.md links the page.
+
+**Decided (Ruslan 2026-10-24).** Security fixes go to the latest 2.x minor release only; 1.x gets
+none. Release step for 2.0.0: publish one GitHub security advisory (with a CVE) stating that 1.x
+`RealFileSystem` opened names with `../` pieces outside its root, fixed in 2.0.0; the remedy is to
+upgrade or to vet template names.
