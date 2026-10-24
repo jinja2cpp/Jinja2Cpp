@@ -292,19 +292,24 @@ TEST_P(UserCallableFilterTest, Test)
                                       ArgInfoT<const std::string&>{ "val" },
                                       ArgInfoT<const std::string&>{ "before", false, ">>> " },
                                       ArgInfoT<const std::string&>{ "after", false, " <<<" });
-    params["joiner"] = MakeCallable([](const std::string& delim, const ValuesList& items) {
-            std::ostringstream os;
-            bool isFirst = true;
-            for (const auto& v : items)
+    params["joiner"] = MakeCallable([](const ValuesList& items, const std::string& delim) {
+        std::ostringstream os;
+        bool isFirst = true;
+        for (const auto& v : items)
+        {
+            if (isFirst)
             {
-                if (isFirst)
-                    isFirst = false;
-                else
-                    os << delim;
-                os << ToString(v);
+                isFirst = false;
             }
-            return os.str();
-        }, ArgInfo{"delim"}, ArgInfo{"*args"});
+            else
+            {
+                os << delim;
+            }
+            os << ToString(v);
+        }
+        return os.str();
+    },
+                                    ArgInfo{ "*args" }, ArgInfo{ "delim" });
     params["tester"] = MakeCallable([](const std::string& testValue, const std::string& pattern) {
         return testValue == pattern;
         }, ArgInfo{"testVal"}, ArgInfo{"pattern"});
@@ -781,4 +786,78 @@ TEST(MarkupValueTest, RoundTripsThroughTheContext)
     Template tpl;
     ASSERT_TRUE(tpl.Load("{{ echo(short) is escaped }} {{ echo(long) is escaped }} {{ echo(short|string) is escaped }} {{ echo('<') is escaped }}").has_value());
     EXPECT_EQ("True True True False", tpl.RenderAsString(params).value());
+}
+
+// A call that gives one parameter both by position and by keyword fails, as Python's TypeError
+// "got multiple values for argument" (docs/tasks/0258); macros already reject it with
+// Python's own message, "takes no keyword argument"
+TEST(UserCallableTestSingle, PositionalAndKeywordForOneParameter)
+{
+    jinja2::ValuesMap params;
+    params["f"] = MakeCallable([](const std::string& a, const std::string& b, const std::string& c) { return a + b + c; }, ArgInfo{ "a" }, ArgInfo{ "b" }, ArgInfo{ "c" });
+    params["v"] = MakeCallable([](const std::string& a, const ValuesList& rest) { return a + std::to_string(rest.size()); }, ArgInfo{ "a" }, ArgInfo{ "*args" });
+    params["k"] = MakeCallable([](const ValuesList& rest, const std::string& sep) { return std::to_string(rest.size()) + sep; }, ArgInfo{ "*args" }, ArgInfo{ "sep" });
+    struct Row
+    {
+        const char* source;
+        const char* expected; // nullptr: the render fails naming the argument
+        const char* argument;
+    };
+    const Row rows[] = {
+        { "{{ f('2', '3', a='1') }}", nullptr, "a" },
+        { "{{ f('1', '2', b='x') }}", nullptr, "b" },
+        { "{{ v('1', '2', '3', a='x') }}", nullptr, "a" },
+        { "{{ f('1', '2', c='3') }}", "123", nullptr },
+        { "{{ f('1', b='2', c='3') }}", "123", nullptr },
+        { "{{ f(c='3', b='2', a='1') }}", "123", nullptr },
+        { "{{ v('1', '2', '3') }}", "12", nullptr },
+        // A parameter after *args takes keywords only
+        { "{{ k('1', '2', sep='x') }}", "2x", nullptr },
+        { "{% macro m(a, b, c) %}{{ a }}{{ b }}{{ c }}{% endmacro %}{{ m('2', '3', a='1') }}", nullptr, nullptr },
+    };
+    for (const auto& row : rows)
+    {
+        for (const bool wide : { false, true })
+        {
+            const std::string source = row.source;
+            std::string error;
+            std::string output;
+            if (wide)
+            {
+                TemplateW tpl;
+                ASSERT_TRUE(tpl.Load(std::wstring(source.begin(), source.end()))) << source;
+                auto result = tpl.RenderAsString(params);
+                if (result)
+                {
+                    output = ConvertString<std::string>(result.value());
+                }
+                else
+                {
+                    error = ConvertString<std::string>(result.error().ToString());
+                }
+            }
+            else
+            {
+                Template tpl;
+                ASSERT_TRUE(tpl.Load(source)) << source;
+                auto result = tpl.RenderAsString(params);
+                if (result)
+                {
+                    output = result.value();
+                }
+                else
+                {
+                    error = result.error().ToString();
+                }
+            }
+            if (row.expected)
+            {
+                EXPECT_EQ(row.expected, output) << source << " " << error;
+                continue;
+            }
+            EXPECT_FALSE(error.empty()) << source << " rendered " << output;
+            const std::string message = row.argument ? std::string("got multiple values for argument '") + row.argument + "'" : "takes no keyword argument 'a'";
+            EXPECT_NE(std::string::npos, error.find(message)) << source << ": " << error;
+        }
+    }
 }

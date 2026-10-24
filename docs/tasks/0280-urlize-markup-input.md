@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: filters
 depends: []
@@ -19,3 +19,7 @@ unchanged). Found by the 0180 verifier with a host `jinja2::Markup` value; the t
 **Done when.** A parity case in `test/parity/cases/filters.py` with autoescape on,
 `{{ '<b>x</b> http://a.b'|safe|urlize }}`, matches Jinja2, and the escaped form for a plain
 string still matches.
+
+**Progress.** The urlizer skips its escape step for a Markup input, as `markupsafe.escape` does.
+Cases `autoescape.env_on_urlize_markup` and `autoescape.env_off_urlize_markup` pin it, with the escaped
+form of a plain string beside it.

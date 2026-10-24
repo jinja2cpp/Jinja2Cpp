@@ -230,6 +230,8 @@ struct ParsedArgumentsInfo
     std::vector<NodeRef<Expression>> args;
     OrderedMap<std::string, NodeRef<Expression>> extraKwArgs;
     std::vector<NodeRef<Expression>> extraPosArgs;
+    // The parameter the call gives both by position and by keyword (docs/tasks/0258), or null
+    const ArgumentInfo* multipleValues = nullptr;
 };
 
 struct ParsedArguments
@@ -237,6 +239,8 @@ struct ParsedArguments
     ArgumentsMap<InternalValue> args;
     InternalDict extraKwArgs;
     std::vector<InternalValue> extraPosArgs;
+    // The parameter the call gives both by position and by keyword (docs/tasks/0258), or null
+    const ArgumentInfo* multipleValues = nullptr;
 
     InternalValue operator[](std::string_view name) const
     {
@@ -315,7 +319,17 @@ public:
 
     // A reference to the variable `name`, which the tree keeps
     // Every use of a name in a tree shares its symbol, and so its lookup cache entry
-    static NodeRef<ValueRefExpression> Make(NodeArena& nodes, std::string_view name) { return nodes.Make<ValueRefExpression>(InternName(nodes, name)); }
+    static NodeRef<ValueRefExpression> Make(NodeArena& nodes, std::string_view name)
+    {
+        const auto symbol = InternName(nodes, name);
+        // The hash is at hand; another name of the same hash only makes a loop count as reading `loop`
+        static const auto loopHash = HashedName::Hash("loop");
+        if (symbol.hash == loopHash)
+        {
+            nodes.NoteLoopRead();
+        }
+        return nodes.Make<ValueRefExpression>(symbol);
+    }
 
     explicit ValueRefExpression(const ArenaSymbol& symbol)
         : m_valueName(symbol.text)

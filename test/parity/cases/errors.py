@@ -37,6 +37,11 @@ CASES = [
     ("loop_recursive_extra_arg", "{% for a in [[1]] recursive %}{{ loop(a, 1) }}{% endfor %}"),
     ("loop_recursive_unknown_keyword", "{% for a in [[1]] recursive %}{{ loop(var=a) }}{% endfor %}"),
     ("loop_recursive_iterable_twice", "{% for a in [[1]] recursive %}{{ loop(a, iterable=a) }}{% endfor %}"),
+    # One parameter given by position and by keyword (docs/tasks/0258)
+    ("macro_positional_and_keyword", "{% macro m(a, b) %}{{ a }}{{ b }}{% endmacro %}{{ m(1, 2, a=3) }}"),
+    ("filter_positional_and_keyword", "{{ s|replace('a', 'b', old='a') }}"),
+    # A positional argument after a keyword one is a syntax error in Jinja2 (docs/tasks/0294)
+    ("call_positional_after_keyword", "{{ s|replace(new='b', 'a') }}"),
     ("assign_to_literal", "{% set 1 = 2 %}"),
     ("set_no_value", "{% set a %}"),
     ("macro_no_name", "{% macro () %}{% endmacro %}"),

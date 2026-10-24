@@ -285,6 +285,21 @@ You can define (via -D command-line CMake option) the following build flags:
     -  `external-boost` In this mode Jinja2C++ build script uses only `boost` as an externally-provided dependency. All other dependencies are taken from subprojects.
     -  `external` In this mode all dependencies should be provided externally. Paths to `boost`, `nonstd-*` libs, etc. should be specified via standard CMake variables (like `CMAKE_PREFIX_PATH` or libname_DIR)
     -  `conan-build` Special mode for building Jinja2C++ via conan recipe.
+-  **JINJA2CPP_WITH_BIGINT** (default `none`) - the big-integer backend every `TemplateEnv` starts with. With `none`, templates print, compare and convert integers of any size, and arithmetic whose result leaves `int64_t` fails with `IntegerOutOfRange`. With `boost`, that arithmetic is exact, as in Python, through Boost.Multiprecision's `cpp_int` (header-only, compiled into the library; consumers need nothing). The installed package reports the choice as `jinja2cpp_BIGINT` (CMake) and `bigint` (pkg-config).
+
+### Big integers
+Python integers have no size limit. Jinja2C++ computes in `int64_t` and calls a big-integer backend only when a result leaves that range. A backend is a table of plain functions (`jinja2cpp/big_int_backend.h`), so one built separately plugs into a prebuilt library:
+
+```c++
+#include <jinja2cpp/big_int/boost_cpp_int.h> // needs the Boost.Multiprecision and Boost.Config headers
+
+jinja2::TemplateEnv env;
+env.SetBigIntBackend(jinja2::BoostCppIntBackend()); // or the library's built-in one, or your own
+jinja2::Template tpl(&env);
+tpl.Load("{{ 2 ** 100 }}"); // renders 1267650600228229401496703205376
+```
+
+`jinja2cpp/big_int/boost_cpp_int.h` is also the sample for writing a backend over another library. `env.SetBigIntBackend(nullptr)` turns big-integer arithmetic off for one environment.
 
 
 ### Build with C++17 standard enabled

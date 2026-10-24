@@ -448,12 +448,6 @@ void ThrowIndexOverflow()
     throw IntegerOutOfRangeError("cannot fit 'int' into an index-sized integer");
 }
 
-const BigIntBackend* GetBuiltinBigIntBackend() noexcept
-{
-    // -DJINJA2CPP_WITH_BIGINT=boost compiles one in (docs/tasks/0272)
-    return nullptr;
-}
-
 bool IsUsableBigIntBackend(const BigIntBackend& backend) noexcept
 {
     // Version 1 ends with divideTruncated: a larger table is a later version's, read as far as v1 goes

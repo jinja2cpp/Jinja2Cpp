@@ -2,6 +2,8 @@ prefix=${pcfiledir}/@JINJA2CPP_PC_PREFIX_REL@
 exec_prefix=${prefix}
 libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
 includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+# The built-in big-integer backend: none or boost
+bigint=@JINJA2CPP_WITH_BIGINT@
 
 Name: jinja2cpp
 Description: C++ implementation of the Jinja2 template engine

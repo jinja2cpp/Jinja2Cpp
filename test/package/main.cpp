@@ -37,7 +37,29 @@ int Run(const char* templateDir)
         return 1;
     }
     std::cout << out.value() << "\n";
-    return out.value() == "Hello pkg! [1, \"s\"] a42b" ? 0 : 2;
+    if (out.value() != "Hello pkg! [1, \"s\"] a42b")
+    {
+        return 2;
+    }
+    // The built-in big-integer backend matches jinja2cpp_BIGINT (docs/tasks/0272)
+    const auto* backend = jinja2::GetBuiltinBigIntBackend();
+    jinja2::Template big;
+    if (!big.Load("{{ 2 ** 64 }}"))
+    {
+        return 5;
+    }
+    const auto product = big.RenderAsString({});
+#ifdef EXPECT_BIGINT_BOOST
+    const bool asBuilt = backend != nullptr && std::string(backend->name) == "boost-cpp_int" && product.has_value() && product.value() == "18446744073709551616";
+#else
+    const bool asBuilt = backend == nullptr && !product.has_value() && product.error().GetCode() == jinja2::ErrorCode::IntegerOutOfRange;
+#endif
+    if (!asBuilt)
+    {
+        std::cerr << "big-integer backend " << (backend ? backend->name : "none") << " does not match the package\n";
+        return 6;
+    }
+    return 0;
 }
 } // namespace
 

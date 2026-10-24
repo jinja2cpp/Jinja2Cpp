@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: filters
 depends: []
@@ -19,3 +19,6 @@ documented divergence (the address is not stable anyway).
 
 **Done when.** `{{ ('abc'|attr('lower'))() }}` renders `abc` (parity case in
 `test/parity/cases/methods.py`), and `x|attr('missing')` stays undefined.
+
+**Progress.** `attr` finds the value's method as `.` does (a dict's methods before its items, as
+`getattr` does). Cases `methods.attr_method_call`, `attr_method_callable` and `attr_dict_method_before_key`.

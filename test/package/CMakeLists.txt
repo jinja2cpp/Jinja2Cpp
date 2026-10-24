@@ -3,13 +3,18 @@ cmake_minimum_required(VERSION 3.23)
 project(jinja2cpp_package_consumer CXX)
 
 find_package(jinja2cpp ${JINJA2CPP_EXPECT_VERSION} REQUIRED)
+# The built-in big-integer backend the library was configured with (docs/tasks/0272)
+if (NOT jinja2cpp_BIGINT STREQUAL JINJA2CPP_EXPECT_BIGINT)
+    message(FATAL_ERROR "jinja2cpp_BIGINT is '${jinja2cpp_BIGINT}', the build used '${JINJA2CPP_EXPECT_BIGINT}'")
+endif ()
 
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/templates/hello.j2 "Hello {{ name }}!")
 
 foreach (_target consumer consumer_compat)
     add_executable(${_target} main.cpp)
     target_compile_definitions(${_target} PRIVATE
-        $<$<BOOL:${JINJA2CPP_EXPECT_SHARED}>:EXPECT_SHARED>)
+        $<$<BOOL:${JINJA2CPP_EXPECT_SHARED}>:EXPECT_SHARED>
+        $<$<STREQUAL:${jinja2cpp_BIGINT},boost>:EXPECT_BIGINT_BOOST>)
 endforeach ()
 target_link_libraries(consumer PRIVATE jinja2cpp::jinja2cpp)
 target_link_libraries(consumer_compat PRIVATE jinja2cpp)
@@ -43,9 +48,14 @@ if (JINJA2CPP_CHECK_PKGCONFIG AND PKG_CONFIG_FOUND AND NOT WIN32 AND (JINJA2CPP_
     if (NOT J2C_VERSION STREQUAL jinja2cpp_VERSION)
         message(FATAL_ERROR "pkg-config version ${J2C_VERSION} != CMake package version ${jinja2cpp_VERSION}")
     endif ()
+    pkg_get_variable(J2C_BIGINT jinja2cpp bigint)
+    if (NOT J2C_BIGINT STREQUAL jinja2cpp_BIGINT)
+        message(FATAL_ERROR "pkg-config bigint '${J2C_BIGINT}' != CMake package '${jinja2cpp_BIGINT}'")
+    endif ()
     add_executable(consumer_pc main.cpp)
     target_compile_definitions(consumer_pc PRIVATE
-        $<$<BOOL:${JINJA2CPP_EXPECT_SHARED}>:EXPECT_SHARED>)
+        $<$<BOOL:${JINJA2CPP_EXPECT_SHARED}>:EXPECT_SHARED>
+        $<$<STREQUAL:${J2C_BIGINT},boost>:EXPECT_BIGINT_BOOST>)
     if (JINJA2CPP_EXPECT_SHARED)
         target_compile_options(consumer_pc PRIVATE ${J2C_CFLAGS})
         target_link_libraries(consumer_pc PRIVATE ${J2C_LDFLAGS})

@@ -5,7 +5,6 @@ statements.call_block_dict              accepts     0156 deliberate: Jinja2 cann
 statements.caller_escapes_its_loop     output      0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
 statements.macro_escapes_its_loop      output      0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
 statements.nested_macro_escapes_its_call output    0165 deliberate: a macro that outlives the macro call defining it reads that call's names as undefined
-statements.loop_not_visible_in_include  output      0209 a template included in a loop sees `loop`; Jinja2 only the loop target names
 statements.macro_dunder_call            rejects     0214 a macro has no __call__ attribute
 statements.macro_xmlattr                output      0214 xmlattr prints nothing for a macro value; Jinja2 prints its escaped repr
 statements.block_reference_new_each_read output    0214 self.b is one stored callable, so it equals itself; Jinja2 makes a new BlockReference on each read

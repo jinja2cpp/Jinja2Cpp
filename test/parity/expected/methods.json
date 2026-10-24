@@ -2110,6 +2110,60 @@
    }
   },
   {
+   "id": "methods.attr_method_call",
+   "template": "{{ ('ABC'|attr('lower'))() }}|{{ ([1]|attr('index'))(1) }}|{{ (({'a': 1})|attr('keys'))()|list }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "abc|0|['a']"
+  },
+  {
+   "id": "methods.attr_method_callable",
+   "template": "{{ 'T' if 'abc'|attr('upper') is callable else 'F' }}{{ 'T' if 'abc'|attr('missing') is defined else 'F' }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "TF"
+  },
+  {
+   "id": "methods.attr_dict_method_before_key",
+   "template": "{{ 'T' if dd|attr('items') is callable else 'F' }}",
+   "context": {
+    "dd": {
+     "items": "own"
+    }
+   },
+   "env": {},
+   "templates": {},
+   "output": "T"
+  },
+  {
    "id": "methods.loop_attr_not_dict_method",
    "template": "{% for i in [1] %}{{ loop.items is defined }}{% endfor %}",
    "context": {

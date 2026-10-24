@@ -529,9 +529,10 @@ public:
         }
     }
 
-    String operator()(View text) const
+    // A Markup text is already escaped, as markupsafe.escape leaves it alone
+    String operator()(View text, bool isMarkup) const
     {
-        auto escaped = EscapeHtml(text);
+        auto escaped = isMarkup ? String(text) : EscapeHtml(text);
         auto chars = SplitCodePoints(View(escaped));
         String result;
         for (size_t pos = 0; pos < chars.size();)
@@ -1953,7 +1954,7 @@ TargetString StringConverter::ApplyIndent(const InternalValue& baseVal, RenderCo
 
 TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderContext& context)
 {
-    return ApplyStringConverter(baseVal, [this, &context](auto srcStr) -> TargetString {
+    return ApplyStringConverter(baseVal, [this, &context, &baseVal](auto srcStr) -> TargetString {
         using CharT = typename decltype(srcStr)::value_type;
         using String = std::basic_string<CharT>;
         auto limitVal = this->GetArgumentValue("trim_url_limit", context);
@@ -1999,7 +2000,7 @@ TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderCo
             extraSchemes.push_back(*str);
         }
 
-        return Urlizer<CharT>(limit, rel, target, std::move(extraSchemes))(srcStr);
+        return Urlizer<CharT>(limit, rel, target, std::move(extraSchemes))(srcStr, baseVal.IsMarkup());
     });
 }
 

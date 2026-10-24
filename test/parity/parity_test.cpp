@@ -8,6 +8,7 @@
 #include <exception>
 #include <ios>
 #include <istream>
+#include <jinja2cpp/big_int_backend.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
@@ -90,10 +91,10 @@ const std::set<std::string>& KnownFeatures()
 }
 
 // The features of this build, recorded in the JINJA2CPP_PARITY_RESULTS header.
-// "bigint" joins once the suite's default env has an arithmetic backend (tasks 0271, 0272).
+// "bigint": the suite's default env has an arithmetic backend (-DJINJA2CPP_WITH_BIGINT, task 0272).
 const std::set<std::string>& BuildFeatures()
 {
-    static const std::set<std::string> features;
+    static const std::set<std::string> features = jinja2::GetBuiltinBigIntBackend() ? std::set<std::string>{ "bigint" } : std::set<std::string>{};
     return features;
 }
 
@@ -445,6 +446,7 @@ const std::map<std::string, jinja2::UserCallable>& CustomFinalize()
     static const std::map<std::string, jinja2::UserCallable> finalize = {
         { "none_to_empty", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return p["v"].IsNone() ? jinja2::Value(std::string()) : p["v"]; }, { { "v", true } } } },
         { "brackets", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return StrLike(p["v"], "[" + StrOf(p["v"]) + "]"); }, { { "v", true } } } },
+        { "plus_one", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return IntOf(p["v"]) + 1; }, { { "v", true } } } },
     };
     return finalize;
 }
