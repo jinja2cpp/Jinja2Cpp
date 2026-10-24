@@ -942,6 +942,36 @@ enum class CallArgKind
     Kwargs
 };
 
+// `*expr` or `**expr`: one of each, and no `*` after `**`
+std::optional<CallArgKind> ClassifyUnpacked(const Token& tok, const CallArgsInfo& params)
+{
+    if (tok == Token::MulMul)
+    {
+        return params.dynKwargs ? std::nullopt : std::optional(CallArgKind::Kwargs);
+    }
+    return params.dynKwargs || params.dynArgs ? std::nullopt : std::optional(CallArgKind::Args);
+}
+
+bool HasUnpacked(const CallParamsInfo& /*params*/)
+{
+    return false;
+}
+
+bool HasUnpacked(const CallArgsInfo& params)
+{
+    return params.dynArgs || params.dynKwargs;
+}
+
+bool HasUnpackedKeywords(const CallParamsInfo& /*params*/)
+{
+    return false;
+}
+
+bool HasUnpackedKeywords(const CallArgsInfo& params)
+{
+    return static_cast<bool>(params.dynKwargs);
+}
+
 // The kind of argument `tok` starts, as Jinja2's parse_call_args orders them: positional
 // arguments, then keywords and one `*expr`, then one `**expr`. Nothing where it is out of that
 // order ("invalid syntax for function call expression") or a keyword is repeated; a keyword's
@@ -949,38 +979,20 @@ enum class CallArgKind
 template<typename Params>
 std::optional<CallArgKind> ClassifyCallArg(const Token& tok, LexScanner& lexer, const Params& params, std::string& name)
 {
-    constexpr bool Unpacks = std::is_same_v<Params, CallArgsInfo>;
-    bool unpacked = false;
-    if constexpr (Unpacks)
+    if constexpr (std::is_same_v<Params, CallArgsInfo>)
     {
         if (tok == '*' || tok == Token::MulMul)
         {
-            if (tok == Token::MulMul)
-            {
-                return params.dynKwargs ? std::nullopt : std::optional(CallArgKind::Kwargs);
-            }
-            return params.dynKwargs || params.dynArgs ? std::nullopt : std::optional(CallArgKind::Args);
+            return ClassifyUnpacked(tok, params);
         }
-        unpacked = params.dynArgs || params.dynKwargs;
     }
     if (tok == Token::Identifier && lexer.PeekNextToken() == '=')
     {
         name = lexer.GetAsString(tok);
         // No keyword after **kwargs
-        if constexpr (Unpacks)
-        {
-            if (params.dynKwargs)
-            {
-                return std::nullopt;
-            }
-        }
-        return params.kwParams.count(name) != 0 ? std::nullopt : std::optional(CallArgKind::Keyword);
+        return HasUnpackedKeywords(params) || params.kwParams.count(name) != 0 ? std::nullopt : std::optional(CallArgKind::Keyword);
     }
-    if (!params.kwParams.empty() || unpacked)
-    {
-        return std::nullopt;
-    }
-    return CallArgKind::Positional;
+    return !params.kwParams.empty() || HasUnpacked(params) ? std::nullopt : std::optional(CallArgKind::Positional);
 }
 } // namespace
 
