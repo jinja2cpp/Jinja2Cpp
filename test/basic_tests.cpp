@@ -1472,7 +1472,6 @@ TEST(ValueApiTest, MarkupIsImmutableAndMutableAccessDemotesIt)
     EXPECT_EQ("ab", plain.AsString());
 }
 
-// ToString prints as {{ value }} does, Python str() (decision 3b)
 // jinja2::Escape is markupsafe.escape (docs/tasks/0277); the expected column is markupsafe 3.0.3's output
 TEST(ValueApiTest, EscapeMatchesMarkupsafe)
 {
@@ -1553,6 +1552,7 @@ TEST(ValueApiTest, TypedMarkupParameter)
     EXPECT_EQ(L"<b>&lt;i&gt;</b><b><i></b>", wtpl.RenderAsString({ { "tag", wtag }, { "s", L"<i>" }, { "m", WMarkup(L"<i>") } }).value());
 }
 
+// ToString prints as {{ value }} does, Python str() (decision 3b)
 TEST(ValueApiTest, ToStringPrintsAsTheTemplateDoes)
 {
     const ValuesList values{ 5,
