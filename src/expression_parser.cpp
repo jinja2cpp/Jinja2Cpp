@@ -958,7 +958,7 @@ std::optional<CallArgKind> ClassifyCallArg(const Token& tok, LexScanner& lexer, 
     if (tok == Token::Identifier && lexer.PeekNextToken() == '=')
     {
         // No keyword after **kwargs
-        if (params.kwParams.count(lexer.GetAsString(tok)) || params.dynKwargs)
+        if (params.kwParams.count(lexer.GetAsString(tok)) != 0 || params.dynKwargs)
         {
             return std::nullopt;
         }
