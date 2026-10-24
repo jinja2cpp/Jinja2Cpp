@@ -588,6 +588,12 @@ StatementsParser::ParseResult StatementsParser::ParseEndFor(LexScanner&, Stateme
     auto& renderer = m_nodes.Get<ForStatement>(info.renderer);
     renderer.SetMainBody(TakeBody(info));
     renderer.SetBodyReadsLoop(renderer.IsRecursive() || bodyEndReads != info.marks.loopReads);
+    // An included template reads the loop it is included from only outside its own loops' bodies
+    const bool inFor = std::any_of(statementsInfo.begin(), statementsInfo.end(), [](const StatementInfo& outer) { return outer.type == StatementInfo::ForStatement; });
+    if (!inFor)
+    {
+        m_nodes.NoteLoopReadsInFor(bodyEndReads - info.marks.loopReads);
+    }
     if (elseRenderer)
     {
         renderer.SetElseBody(elseRenderer);

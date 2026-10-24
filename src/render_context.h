@@ -856,16 +856,16 @@ public:
             });
         if (!result)
         {
-            const auto external = m_externalScope->find(name);
-            if (external != m_externalScope->end() && accepts(external->second))
+            const auto* external = FindIn(*m_externalScope, hashed);
+            if (external && accepts(external->second))
             {
                 result = external->second;
             }
         }
         if (!result)
         {
-            const auto global = m_globalScope->find(name);
-            if (global != m_globalScope->end() && accepts(global->second))
+            const auto* global = FindIn(*m_globalScope, hashed);
+            if (global && accepts(global->second))
             {
                 result = global->second;
             }

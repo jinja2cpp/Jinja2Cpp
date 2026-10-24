@@ -1046,6 +1046,10 @@ public:
     };
     [[nodiscard]] ContextMarks Marks() const { return { m_nameRefs, m_contextNodes, m_loopReads }; }
     void NoteLoopRead() { ++m_loopReads; }
+    // `count` of the reads of `loop` lie in the body of an outermost for loop, where the loop's own `loop` is read
+    void NoteLoopReadsInFor(std::uint32_t count) { m_loopReadsInFor += count; }
+    // The reads of `loop` outside every for loop's body: those of the `loop` somebody else binds
+    [[nodiscard]] bool ReadsOuterLoop() const { return m_loopReads != m_loopReadsInFor; }
 
     template<typename T, typename... Args>
     NodeRef<T> Make(Args&&... args)
@@ -1126,16 +1130,6 @@ public:
     }
     // A copy of characters the arena keeps
     ArenaText MakeText(std::string_view text) { return MakeSpan(boost::span<const char>(text.data(), text.size())); }
-    // Whether a symbol of this hash was made: a name used somewhere in the tree (it may also be
-    // another name of the same hash, which is rare)
-    [[nodiscard]] bool HasSymbol(std::size_t hash)
-    {
-        if (!m_heapSymbols)
-        {
-            return std::any_of(m_inlineSymbols.begin(), m_inlineSymbols.begin() + m_symbolCount, [hash](const SymbolEntry& e) { return e.hash == hash; });
-        }
-        return FindSymbol(hash)->chars != nullptr;
-    }
     // The symbol of `name`, whose hash is `hash`: made on its first use, with the cache slot
     // newSlot() gives, and the same for every later use. Two names with one hash (which a
     // 64-bit hash makes rare) get two symbols: the second one is not kept
@@ -1401,6 +1395,7 @@ private:
     std::uint32_t m_nameRefs = 0;
     std::uint32_t m_contextNodes = 0;
     std::uint32_t m_loopReads = 0;
+    std::uint32_t m_loopReadsInFor = 0;
     bool m_sealed = false;
     detail::TemplateOriginPtr m_origin = nullptr;
     // The symbols of the names, while the tree is parsed: a list in place for the first few,

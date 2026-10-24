@@ -1954,22 +1954,23 @@ public:
     LoopHiding& operator=(const LoopHiding&) = delete;
     ~LoopHiding()
     {
-        if (m_binding)
+        if (m_binding && m_saved)
         {
-            *m_binding = std::move(m_saved);
+            *m_binding = std::move(*m_saved);
         }
     }
-    // The binding of the loop itself becomes undefined in place, which costs no allocation. The
-    // scopes that hold it do not change while the include renders in a scope of its own
-    void Hide(InternalValue& binding)
+    // The binding of the loop itself becomes `undefined` in place. The scopes that hold it do not
+    // change while the include renders in a scope of its own
+    void Hide(InternalValue& binding, InternalValue undefined)
     {
-        m_saved = std::move(binding);
-        binding = InternalValue();
+        m_saved.emplace(std::move(binding));
+        binding = std::move(undefined);
         m_binding = &binding;
     }
 
 private:
-    InternalValue m_saved;
+    // Empty unless the loop is hidden: most includes hide nothing, and then cost no more than this
+    std::optional<InternalValue> m_saved;
     InternalValue* m_binding = nullptr;
 };
 
@@ -2002,7 +2003,15 @@ void HideIncludingLoop(RenderContext& values, RenderContext& innerContext, LoopH
     }
     if (const auto binding = values.FindForWrite("loop"))
     {
-        hidden.Hide(*binding);
+        // A plain undefined costs no allocation; a policy that tells the name apart (Strict, Debug,
+        // Chainable) needs the name, as a missing `loop` would carry it
+        auto* callback = values.GetRendererCallback();
+        InternalValue undefined;
+        if (callback && callback->GetSettings().undefinedPolicy != UndefinedPolicy::Default)
+        {
+            undefined = MakeUndefined(values, "loop");
+        }
+        hidden.Hide(*binding, std::move(undefined));
     }
 }
 
@@ -2011,8 +2020,6 @@ template<typename CharT>
 void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values)
 {
     RenderContext innerContext = values.Clone(withContext);
-    // Declared after the context: the loop is put back once the included template has rendered
-    LoopHiding hidden;
     if (withContext)
     {
         // Jinja2 renders it in a new Context, with an EvalContext of its own
@@ -2021,9 +2028,14 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
         innerContext.EnterScope();
         // The names of the including loop are visible, `loop` is not (Jinja2's include context
         // takes the loop's targets, not its LoopContext); a `loop` set outside it is
-        if (tpl.Nodes()[tpl.GetRenderer()].MayReadLoop())
+        if (tpl.MayReadLoop())
         {
+            // Declared after the context: the loop is put back once the included template has rendered
+            LoopHiding hidden;
             HideIncludingLoop(values, innerContext, hidden);
+            innerContext.SetNodes(tpl.Nodes());
+            innerContext.Nodes()[tpl.GetRenderer()].RenderNamed(os, innerContext, tpl.SelfName());
+            return;
         }
     }
 
@@ -2059,7 +2071,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     };
 
     // A constant name found in this render is not looked up again
-    const auto* callback = values.GetRendererCallback();
+    auto* callback = values.GetRendererCallback();
     if (m_isConstant)
     {
         if (const auto* tpl = callback->FindLoadedBy(this); tpl && doRender(*tpl))

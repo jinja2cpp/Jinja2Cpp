@@ -317,11 +317,14 @@ public:
     // Every use of a name in a tree shares its symbol, and so its lookup cache entry
     static NodeRef<ValueRefExpression> Make(NodeArena& nodes, std::string_view name)
     {
-        if (name == "loop")
+        const auto symbol = InternName(nodes, name);
+        // The hash is at hand; another name of the same hash only makes a loop count as reading `loop`
+        static const auto loopHash = HashedName::Hash("loop");
+        if (symbol.hash == loopHash)
         {
             nodes.NoteLoopRead();
         }
-        return nodes.Make<ValueRefExpression>(InternName(nodes, name));
+        return nodes.Make<ValueRefExpression>(symbol);
     }
 
     explicit ValueRefExpression(const ArenaSymbol& symbol)
