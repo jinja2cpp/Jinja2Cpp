@@ -355,7 +355,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0281](0281-attr-bound-method.md) | attr() of a method renders empty | filters | low | done |
 | [0282](0282-settings-limits-followups.md) | `Settings::Limits` follow-ups (0262 leftovers) | api | low | open |
 | [0283](0283-cycle-collector-oom-leaks.md) | Reference cycles leak when an allocation fails during a render | robustness | low | open |
-| [0284](0284-template-module.md) | `Template.module` / `make_module`: a template's exports as a map | api | low | open |
+| [0284](0284-template-module.md) | `Template.module` / `make_module`: a template's exports as a map | api | low | done |
 | [0285](0285-abi-baselines-at-rc.md) | Commit the ABI baselines at the 2.0 RC and turn the abidiff gate on | release | high | open |
 | [0286](0286-fixed-cost-drift-oct-12-19.md) | Fixed-cost drift from feature merges, 2026-10-12 to 2026-10-19 | perf | medium | done |
 | [0287](0287-big-int-radix-conversion-cost.md) | Quadratic radix conversion of big integers near the bit cap | robustness | low | open |
@@ -370,5 +370,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0296](0296-typed-string-view-dangling.md) | A typed `std::string_view` parameter given the other character width dangles | api | high | open |
 | [0297](0297-in-none-and-modulo-undefined.md) | `x in None` and `'text' % undefined` differ from Python | parity | low | open |
 | [0298](0298-include-of-extending-template-loop.md) | An included template that extends a parent reading `loop` | parity | low | open |
+| [0299](0299-module-exports-skip-imports.md) | A module exports the names its top level imports, and keeps a re-set import hidden | parity | low | open |
+| [0300](0300-module-export-callable-gaps.md) | Callables that do not cross a `Template::MakeModule` export | parity | low | open |
+| [0301](0301-module-call-loads-accumulate.md) | A `Template::MakeModule` module keeps what each of its calls loads | robustness | medium | open |
 | [0302](0302-simdjson-binding.md) | An optional simdjson binding | api | low | open |
 | [0303](0303-retire-rapidjson-backend.md) | Retire the built-in RapidJSON backend | build | medium | open |
