@@ -101,6 +101,9 @@ struct ArgPromoter<std::basic_string<CharT>, void>
         return m_convertedStr.value();
     }
 
+    //! A Markup parameter gets the string escaped, as `markupsafe.escape` would make one (docs/tasks/0277)
+    operator BasicMarkup<CharT>() const { return Escape(string_view(*m_ptr)); } // NOLINT(google-explicit-constructor)
+
     const string* m_ptr;
     mutable std::optional<other_string> m_convertedStr;
 };
@@ -131,7 +134,42 @@ struct ArgPromoter<std::basic_string_view<CharT>, void>
         return m_convertedStr.value();
     }
 
+    //! A Markup parameter gets the string escaped, as `markupsafe.escape` would make one (docs/tasks/0277)
+    operator BasicMarkup<CharT>() const { return Escape(*m_ptr); } // NOLINT(google-explicit-constructor)
+
     const string_view* m_ptr;
+    mutable std::optional<other_string> m_convertedStr;
+};
+
+// A Markup argument fills a Markup parameter as is and a string parameter with its text
+template<typename CharT>
+struct ArgPromoter<BasicMarkup<CharT>, void>
+{
+    using markup = BasicMarkup<CharT>;
+    using string = std::basic_string<CharT>;
+    using string_view = std::basic_string_view<CharT>;
+    using other_string = std::conditional_t<std::is_same_v<CharT, char>, std::wstring, std::string>;
+    using other_string_view = std::conditional_t<std::is_same_v<CharT, char>, std::wstring_view, std::string_view>;
+
+    ArgPromoter(const markup* text) // NOLINT(google-explicit-constructor)
+        : m_ptr(text)
+    {
+    }
+
+    operator const markup&() const { return *m_ptr; }       // NOLINT(google-explicit-constructor)
+    operator const string&() const { return m_ptr->str(); } // NOLINT(google-explicit-constructor)
+    operator string_view() const { return *m_ptr; }         // NOLINT(google-explicit-constructor)
+    operator other_string() const                           // NOLINT(google-explicit-constructor)
+    {
+        return ConvertString<other_string>(m_ptr->str());
+    }
+    operator other_string_view() const // NOLINT(google-explicit-constructor)
+    {
+        m_convertedStr = ConvertString<other_string>(m_ptr->str());
+        return m_convertedStr.value();
+    }
+
+    const markup* m_ptr;
     mutable std::optional<other_string> m_convertedStr;
 };
 
@@ -201,7 +239,8 @@ inline const Value& GetParamValue(const UserCallableParams& params, const ArgInf
     return info.defValue;
 }
 
-template<typename V>
+// KeepMarkup passes a Markup on as itself, for ArgPromoter to hand to a Markup or a string parameter
+template<typename V, bool KeepMarkup = false>
 struct ParamUnwrapper
 {
     V* m_visitor{};
@@ -219,9 +258,16 @@ struct ParamUnwrapper
 
     // A Markup reaches a typed parameter as the string it is; UserCallableParams keep the flag
     template<typename CharT>
-    static const std::basic_string<CharT>& UnwrapRecursive(const BasicMarkup<CharT>& arg)
+    static const auto& UnwrapRecursive(const BasicMarkup<CharT>& arg)
     {
-        return arg.str();
+        if constexpr (KeepMarkup)
+        {
+            return arg;
+        }
+        else
+        {
+            return arg.str();
+        }
     }
 
     template<typename T>
@@ -243,7 +289,7 @@ template<typename Fn, typename... ArgDescr>
 Value InvokeUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&&... ad)
 {
     auto invoker = UCInvoker<Fn>(fn, params);
-    return std::visit(ParamUnwrapper<UCInvoker<Fn>>(&invoker), GetParamValue(params, ad).GetData()...);
+    return std::visit(ParamUnwrapper<UCInvoker<Fn>, true>(&invoker), GetParamValue(params, ad).GetData()...);
 }
 
 template<typename T>
@@ -313,12 +359,54 @@ struct TypedParamUnwrapper
     }
 };
 
+template<typename T>
+struct IsMarkupParam : std::false_type
+{
+};
+
+template<typename CharT>
+struct IsMarkupParam<BasicMarkup<CharT>> : std::true_type
+{
+};
+
+// A Markup parameter takes a Markup argument as is and a string of its character type escaped, as
+// `markupsafe.escape` would make one (docs/tasks/0277); None gives an empty Markup, anything else no value
+template<typename T>
+struct MarkupParamUnwrapper
+{
+    using ValueType = typename TypedParam<T>::decayed_t;
+    using CharT = typename ValueType::value_type;
+    TypedParam<T>* param;
+    explicit MarkupParamUnwrapper(TypedParam<T>& p)
+        : param(&p)
+    {
+    }
+
+    void operator()(const ValueType& val) const { param->SetPointer(&val); }
+    void operator()(const std::basic_string<CharT>& val) const { param->SetValue(Escape(std::basic_string_view<CharT>(val))); }
+    void operator()(std::basic_string_view<CharT> val) const { param->SetValue(Escape(val)); }
+    void operator()(const NoneValue&) const { param->SetValue(ValueType()); }
+
+    template<typename U>
+    void operator()(const U&) const
+    {
+    }
+};
+
 template<typename T, typename V>
 auto TypedUnwrapParam(const V& value)
 {
     TypedParam<T> param;
-    TypedParamUnwrapper<T> visitor(param);
-    std::visit(ParamUnwrapper<TypedParamUnwrapper<T>>(&visitor), value);
+    if constexpr (IsMarkupParam<std::decay_t<T>>::value)
+    {
+        // Not through ParamUnwrapper, which hands a Markup over as its string and would drop the flag
+        std::visit(MarkupParamUnwrapper<T>(param), value);
+    }
+    else
+    {
+        TypedParamUnwrapper<T> visitor(param);
+        std::visit(ParamUnwrapper<TypedParamUnwrapper<T>>(&visitor), value);
+    }
     return param;
 }
 

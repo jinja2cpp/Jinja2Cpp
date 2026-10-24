@@ -165,6 +165,7 @@ set(JINJA2CPP_SOURCES
     src/global_functions.cpp
     src/internal_value.cpp
     src/lexer.cpp
+    src/markup.cpp
     src/name_resolver.cpp
     src/node_arena.cpp
     src/out_stream.cpp
