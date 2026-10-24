@@ -63,3 +63,12 @@ stops at the last occurrence: a count of 10**12 used to loop until killed, and
 `filters.replace_count_not_rescanned` and `filters.replace_huge_count`. The Boost component
 lists in CMake (`algorithm any`, internal `BOOST_INCLUDE_LIBRARIES`) still name the two
 libraries; D7 rewrites them with the deps modes, since D2 edits the same lines.
+
+Step D4: `src/span.h` and `src/intrusive_ptr.h` define `Span` and `IntrusivePtr`
+themselves. `Span` is the dynamic-extent part of `std::span` (no call site used a fixed
+extent) with element access, `first`, `last` and `subspan` checked by assertions outside
+`NDEBUG`; `IntrusivePtr` calls the same `intrusive_ptr_add_ref`/`intrusive_ptr_release`
+hooks. Unit tests in `test/support_types_test.cpp`. Swap and move use plain assignments
+rather than `std::swap`/`std::exchange`: with those, GCC inlined less around moves of
+`InternalValue` and allocation-heavy renders ran up to 0.5% more instructions; written as
+Boost writes them, every benchmark is within 0.15% of master.
