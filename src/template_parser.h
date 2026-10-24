@@ -25,7 +25,6 @@
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 
-#include <boost/algorithm/string/classification.hpp>
 #include <nonstd/expected.hpp>
 
 #include <algorithm>
@@ -1668,7 +1667,7 @@ private:
             return;
         }
         auto metadata = std::basic_string_view<CharT>(m_template->data() + range.startOffset, range.size());
-        if (!boost::algorithm::all(metadata, boost::algorithm::is_space()))
+        if (!std::all_of(metadata.begin(), metadata.end(), IsSpace))
         {
             m_metadata = metadata;
         }
