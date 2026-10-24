@@ -548,6 +548,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
         const auto name = lexer.GetAsView(tok);
         if (name == "self")
         {
+            m_nodes.NoteSelfUse(NodeArena::SelfUse::Read);
             value = SelfRefExpression::Make(m_nodes);
             break;
         }

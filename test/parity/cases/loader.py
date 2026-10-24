@@ -281,6 +281,28 @@ CASES = [
     ("self_is_iterable", "{{ 'T' if self is iterable else 'F' }}", L),
     ("self_block_with_self_reads_top_level", "{% set self = 1 %}{% block b %}{% with self = 4 %}{% endwith %}{{ 'T' if self is number else 'F' }}{% endblock %}", L),
     ("self_block_for_self_reads_top_level", "{% set self = 1 %}{% block b %}{% for self in [4] %}{% endfor %}{{ 'T' if self is number else 'F' }}{% endblock %}", L),
+    # docs/tasks/0211: a block declares `self` when the body reads it before anything stores it
+    # (Jinja2's find_undeclared); otherwise `self` is the context's, wherever the block reads it
+    ("self_block_store_first_no_top_level", "{% block b %}{% with self = 4 %}{% endwith %}[{{ self }}]{% endblock %}", L),
+    ("self_block_load_before_nested_store", "{% set self = 1 %}{% block b %}{{ 'T' if self is number else 'F' }}{% with self = 4 %}{% endwith %}{% endblock %}", L),
+    ("self_block_macro_param_store", "{% set self = 1 %}{% block b %}{% macro m(self) %}{% endmacro %}{{ self }}{% endblock %}", L),
+    ("self_block_store_in_loop_body", "{% set self = 1 %}{% block b %}{% for x in [1] %}{% set self = 3 %}{% endfor %}{{ self }}{% endblock %}", L),
+    ("self_block_store_in_untaken_if", "{% set self = 1 %}{% block b %}{% if false %}{% set self = 3 %}{% endif %}{{ self }}{% endblock %}", L),
+    ("self_block_store_then_own_set", "{% set self = 1 %}{% block b %}{% with self = 4 %}{% endwith %}{% set self = 3 %}{{ self }}{% endblock %}", L),
+    ("self_block_store_first_read_in_with", "{% set self = 1 %}{% block b %}{% with self = 4 %}{% endwith %}{% with %}{{ self }}{% endwith %}{% endblock %}", L),
+    ("self_block_with_target_before_value", "{% set self = 1 %}{% block b %}{% with a = self, self = 4 %}{% endwith %}{{ self }}{% endblock %}", L),
+    ("self_block_store_first_in_macro", "{% set self = 1 %}{% block b %}{% with self = 4 %}{% endwith %}{% macro m() %}{{ self }}{% endmacro %}{{ m() }}{% endblock %}", L),
+    ("self_block_nested_block_own_decl", "{% set self = 1 %}{% block b %}{% with self = 4 %}{% endwith %}{% block c %}{{ self is number }}{% endblock %}{{ self }}{% endblock %}", L),
+    ("self_block_store_first_set_later", "{% block b %}{% with self = 4 %}{% endwith %}[{{ self }}]{% endblock %}{% set self = 2 %}{{ self.b() }}", L),
+    ("self_scoped_block_store_first_loop_target", "{% for self in [7] %}{% block b scoped %}{% with self = 4 %}{% endwith %}{{ self }}{% endblock %}{% endfor %}", L),
+    # A `self` taken at the top level of an extending template has the parent's blocks; a
+    # module that extends exports its top-level `set self`
+    ("self_after_extends_taken_parent_block", "{% extends 'pc.j2' %}{% set x = self %}{% block b %}{{ x.c() }}{% endblock %}",
+     {"templates": {**T, "pc.j2": "{% block b %}{% endblock %}|{% block c %}C{% endblock %}"}}),
+    ("self_after_extends_in_include", "{% set ns = namespace(s=none) %}{% include 'ie.j2' %}{{ ns.s.c() }}",
+     {"templates": {**T, "pc.j2": "{% block b %}{% endblock %}|{% block c %}C{% endblock %}", "ie.j2": "{% extends 'pc.j2' %}{% set ns.s = self %}"}}),
+    ("module_extends_set_self_exported", "{% import 'mes.j2' as m %}{{ m.self }}",
+     {"templates": {**T, "pc.j2": "P", "mes.j2": "{% extends 'pc.j2' %}{% set self = 5 %}"}}),
     ("self_scoped_block_chain_passes_names", "{% for v in [1, 2] %}{% block b scoped %}{{ self.c() }}{% endblock %}{% endfor %}{% block c scoped %}<{{ v }}{{ self.d() }}>{% endblock %}{% block d %}({{ v }}){% endblock %}", L),
     ("self_taken_in_with_called_after", "{% set v = 'main' %}{% set ns = namespace(s=none) %}{% block b %}[{{ v }}]{% endblock %}{% with x = 1 %}{% set ns.s = self %}{% endwith %}{{ ns.s.b() }}", MODULES2),
     # idtracking (docs/tasks/0168): an include or import with context before the store sees the

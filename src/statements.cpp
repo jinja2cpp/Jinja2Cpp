@@ -1647,6 +1647,16 @@ LookupResult RenderContext::FindSelf(const std::string& name)
     {
         return FindValue(name);
     }
+    // A body that stores `self` before reading it has none of its own: Jinja2 reads it from
+    // the context, where a parent finds what its child set
+    if (m_selfDepth > frame->baseDepth ? m_selfFromContext : frame->selfFromContext)
+    {
+        if (auto value = FindValue(name); value || !frame->childSelf)
+        {
+            return value;
+        }
+        return LookupResult(*frame->childSelf);
+    }
     // The template's base scope is its own: a `set self` at its top level wins, except in a
     // block, which sets `self` from its own scope up
     if (const auto value = FindInScopesFrom(name, frame->baseDepth == 0 ? m_selfDepth : std::max(frame->baseDepth - 1, m_selfDepth)))
@@ -1782,6 +1792,7 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
         }
     }
     const size_t prevSelfDepth = values.SetSelfDepth(values.GetScopesCount());
+    const bool prevSelfFromContext = values.SetSelfFromContext(m_selfFromContext);
     auto scope = values.EnterScope();
     if (parentBlock)
     {
@@ -1793,6 +1804,7 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     OutputAutoescapeGuard autoescapeGuard(values, m_autoescape);
     values.Nodes()[m_mainBody].Render(os, values);
     values.ExitScope();
+    values.SetSelfFromContext(prevSelfFromContext);
     values.SetSelfDepth(prevSelfDepth);
 }
 
@@ -1825,10 +1837,22 @@ void TemplateRenderer::RenderNamed(OutStream& os, RenderContext& values, std::st
 void TemplateRenderer::RenderAsParent(OutStream& os, RenderContext& values, BlocksStack& stack, std::string_view childName)
 {
     // The parent shares the child's top-level scope, but a `self` the child set there is not
-    // the parent's: in Jinja2 `self` is a local of each template's root function
-    values.GetCurrentScope().Erase("self");
+    // the parent's: in Jinja2 `self` is a local of each template's root function. It is still
+    // in the context, for a parent with no `self` of its own, and the module's export when the
+    // parent sets none
+    auto scope = values.GetCurrentScope();
+    std::optional<InternalValue> childSelf;
+    if (const auto p = scope.Map().find("self"); p != scope.Map().end())
+    {
+        childSelf.emplace(p->second);
+        scope.Erase("self");
+    }
     // Its blocks are on the stack already: `extends` pushed them (ExtendsStatement::Render)
-    RenderBody(os, values, &stack, childName, true);
+    RenderBody(os, values, &stack, childName, true, childSelf ? &*childSelf : nullptr);
+    if (childSelf && scope.Map().find("self") == scope.Map().end())
+    {
+        scope["self"] = std::move(*childSelf);
+    }
 }
 
 void TemplateRenderer::RenderAsModule(OutStream& os, RenderContext& values, BlocksStack& stack, std::string_view name)
@@ -1837,7 +1861,7 @@ void TemplateRenderer::RenderAsModule(OutStream& os, RenderContext& values, Bloc
     RenderBody(os, values, &stack, name);
 }
 
-void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name, bool asParent)
+void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksStack* stack, std::string_view name, bool asParent, const InternalValue* childSelf)
 {
     // Nothing adds to the stack of a template that extends nothing, so those share one
     static const BlocksStack noBlocks{};
@@ -1854,6 +1878,8 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     frame.extendable = stack;
     frame.baseDepth = values.GetScopesCount();
     frame.name = name;
+    frame.selfFromContext = m_selfFromContext;
+    frame.childSelf = childSelf;
     TemplateFrameGuard frameGuard(values, &frame);
 
     if (!m_hasExtends)

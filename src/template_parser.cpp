@@ -491,6 +491,10 @@ private:
                 item.slot = PlaceOf(item);
             }
             m_namesLoop = m_namesLoop || name == "loop";
+            if (name == "self")
+            {
+                m_nodes.NoteSelfUse(NodeArena::SelfUse::Store);
+            }
         }
         m_targets.push_back(item);
         return {};
@@ -843,6 +847,8 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
 
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::BlockStatement, stmtTok, m_tagOffset);
     statementInfo.frame = m_names.PushUnit(m_names.Current(), blockRenderer);
+    // A block is a body of its own for `self`: the enclosing one does not see into it
+    statementInfo.outerSelfUse = m_nodes.ExchangeSelfUse(NodeArena::SelfUse::None);
     statementInfo.renderer = std::move(blockRenderer);
     Push(statementsInfo, std::move(statementInfo));
     return ParseResult();
@@ -870,6 +876,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndBlock(LexScanner& lexer,
     }
 
     blockStmt.SetMainBody(TakeBody(info));
+    blockStmt.SetSelfFromContext(m_nodes.ExchangeSelfUse(info.outerSelfUse) == NodeArena::SelfUse::Store);
     m_bodies.Add(info.renderer, info.tagOffset);
 
     return ParseResult();
@@ -988,6 +995,7 @@ void MarkDefaultsReferringToArgs(MacroParamsInfo& items, const std::vector<Macro
 nonstd::expected<MacroParamsInfo, ParseError> StatementsParser::ParseMacroParams(LexScanner& lexer)
 {
     MacroParamsInfo items;
+    const auto selfBefore = m_nodes.FirstSelfUse();
 
     if (lexer.EatIfEqual(')'))
     {
@@ -1074,6 +1082,8 @@ nonstd::expected<MacroParamsInfo, ParseError> StatementsParser::ParseMacroParams
     }
 
     MarkDefaultsReferringToArgs(items, defaultTokens, lexer);
+    // Jinja2 visits the parameters before the defaults
+    NoteStoresFirst(selfBefore, std::any_of(items.begin(), items.end(), [](const MacroParamInfo& p) { return p.paramName == "self"; }));
 
     return items;
 }
@@ -1539,6 +1549,8 @@ StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, State
 StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     std::vector<NamedExpr> vars;
+    // Jinja2 visits all the targets before the values (NoteStoresFirst)
+    const auto selfBefore = m_nodes.FirstSelfUse();
 
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
     while (lexer.PeekNextToken() == Token::Identifier)
@@ -1572,6 +1584,7 @@ StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, Sta
     {
         return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, ',');
     }
+    NoteStoresFirst(selfBefore, std::any_of(vars.begin(), vars.end(), [this](const NamedExpr& var) { return m_nodes.Text(var.name) == "self"; }));
 
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::WithStatement, stmtTok, m_tagOffset);
     statementInfo.frame = m_names.PushWith(m_names.Current());

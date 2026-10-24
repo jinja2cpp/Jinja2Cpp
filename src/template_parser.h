@@ -342,6 +342,8 @@ struct StatementInfo
     // A macro's or call block's: the tree's marks before its parameters, less what the tags
     // between them and its body made (MacroStatement::SetBodyMarks)
     NodeArena::ContextMarks marks;
+    // A block's: what the enclosing body did with `self` before it (NodeArena::SelfUse)
+    NodeArena::SelfUse outerSelfUse = NodeArena::SelfUse::None;
 
     // Whether the body of a statement of `type` is a frame of the resolver of its own
     static bool OwnsFrame(Type type)
@@ -473,6 +475,15 @@ private:
     ParseResult ParseEndFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseLoopControl(StatementInfoList& statementsInfo, const Token& stmtTok, LoopControl control);
     nonstd::expected<ParsedTarget, ParseError> ParseAssignTarget(LexScanner& lexer, bool withNamespace);
+    // A statement whose names Jinja2 visits before the expressions parsed among them (`with`
+    // targets, macro parameters) stores `self` first when the body named it nowhere `before`
+    void NoteStoresFirst(NodeArena::SelfUse before, bool storesSelf)
+    {
+        if (before == NodeArena::SelfUse::None && storesSelf)
+        {
+            m_nodes.ExchangeSelfUse(NodeArena::SelfUse::Store);
+        }
+    }
     ParseResult ParseAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
@@ -1632,9 +1643,15 @@ private:
         {
             templateRoot.SetHasExtends();
         }
-        if (m_nodes.ReadsOuterLoop())
+        // A parent it extends may read it, which an include learns only once `extends` has run
+        // (docs/tasks/0298)
+        if (m_nodes.ReadsOuterLoop() || m_root.hasExtends)
         {
             templateRoot.SetMentionsLoop();
+        }
+        if (m_nodes.FirstSelfUse() == NodeArena::SelfUse::Store)
+        {
+            templateRoot.SetSelfFromContext();
         }
         templateRoot.SetBody(m_bodies.Take(m_nodes, 0));
         return nonstd::expected<void, std::vector<ParseError>>();

@@ -5153,6 +5153,192 @@
    "output": "True"
   },
   {
+   "id": "statements.loop_include_extending_parent_reads",
+   "template": "{% for x in 'ab' %}{{ loop.index }}{% include 'c' %}|{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "c": "{% extends 'p' %}",
+    "p": "[{{ loop.index }}{{ x }}]"
+   },
+   "output": "1[1a]|2[2b]|"
+  },
+  {
+   "id": "statements.loop_include_extending_parent_hidden",
+   "template": "{% for x in 'ab' %}{% include 'c' %}|{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "c": "{% extends 'p' %}",
+    "p": "[{{ loop is defined }}{{ x }}]"
+   },
+   "output": "[Falsea]|[Falseb]|"
+  },
+  {
+   "id": "statements.loop_include_extending_grandparent",
+   "template": "{% for x in 'ab' %}{% include 'c' %}|{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "c": "{% extends 'm' %}",
+    "m": "{% extends 'p' %}",
+    "p": "[{{ loop is defined }}{{ x }}]"
+   },
+   "output": "[Falsea]|[Falseb]|"
+  },
+  {
+   "id": "statements.loop_include_extending_block_reads",
+   "template": "{% for x in 'ab' %}{{ loop.index }}{% include 'c' %}|{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {
+    "c": "{% extends 'p' %}{% block b %}<{{ loop.index }}>{% endblock %}",
+    "p": "{% block b %}{% endblock %}"
+   },
+   "output": "1<1>|2<2>|"
+  },
+  {
+   "id": "statements.loop_include_extending_dynamic",
+   "template": "{% for x in 'ab' %}{% include 'c' %}|{% endfor %}",
+   "context": {
+    "n": "p"
+   },
+   "env": {},
+   "templates": {
+    "c": "{% extends n %}",
+    "p": "[{{ loop is defined }}]"
+   },
+   "output": "[False]|[False]|"
+  },
+  {
    "id": "statements.loop_include_restored_after",
    "template": "{% for x in 'ab' %}{% include 't' %}{{ loop.index }}{{ loop.last }}|{% endfor %}",
    "context": {

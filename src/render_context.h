@@ -79,6 +79,11 @@ struct TemplateFrame
     // The frame this one was entered from (an importer, for a macro it imported); only
     // compared, so that `self` finds the template it came from
     TemplateFrame* outer = nullptr;
+    // The top level has no `self` of its own: it reads the name as any other (NodeArena::SelfUse)
+    bool selfFromContext = false;
+    // A parent's: the `self` its child set at their shared top level, which a parent with no
+    // `self` of its own reads (RenderAsParent)
+    const InternalValue* childSelf = nullptr;
 };
 
 
@@ -477,6 +482,7 @@ public:
         , m_parent(other.m_parent)
         , m_parentDepth(other.m_parentDepth)
         , m_selfDepth(other.m_selfDepth)
+        , m_selfFromContext(other.m_selfFromContext)
         , m_scopes(other.m_scopes)
         , m_frame(other.m_frame)
         , m_views(other.m_views)
@@ -527,6 +533,7 @@ public:
         , m_parent(&other)
         , m_parentDepth(std::min(depth, other.GetScopesCount()))
         , m_selfDepth(std::min(other.m_selfDepth, m_parentDepth))
+        , m_selfFromContext(other.m_selfFromContext)
         , m_frame(other.m_frame)
         , m_inheritsViews(other.m_inheritsViews || !other.m_views.empty())
         , m_hasEntryBindings(other.m_hasEntryBindings)
@@ -728,9 +735,12 @@ public:
     // wins, else the template itself, made on first use (Jinja2's TemplateReference). Defined
     // with TemplateFrame in statements.cpp
     LookupResult FindSelf(const std::string& name);
-    // A block body sets `self` only in its own scopes, from `depth` up: in Jinja2 every block
-    // function declares `self`, which hides the template's top-level `set self`. Returns the
-    // depth it replaces
+    // Whether the block running in the scopes from the self depth up has no `self` of its own
+    // (BlockStatement::SetSelfFromContext); returns the previous setting
+    bool SetSelfFromContext(bool fromContext) { return std::exchange(m_selfFromContext, fromContext); }
+    // A block body sets `self` only in its own scopes, from `depth` up: in Jinja2 a block
+    // function that reads `self` declares it, which hides the template's top-level `set self`.
+    // Returns the depth it replaces
     size_t SetSelfDepth(size_t depth)
     {
         std::swap(depth, m_selfDepth);
@@ -1445,6 +1455,8 @@ private:
     size_t m_parentDepth{};
     // The scopes below it do not set `self` (SetSelfDepth)
     size_t m_selfDepth{};
+    // Read by FindSelf in a block (SetSelfFromContext)
+    bool m_selfFromContext = false;
     // The `self` of the block call this context runs, when it sees more than its template's
     // top level (FindSelf); not copied
     std::unique_ptr<InternalValue> m_blockSelf;

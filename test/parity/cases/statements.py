@@ -136,6 +136,12 @@ CASES = [
     ("loop_include_nested_loops", "{% for x in [1, 2] %}{% for y in 'ab' %}{% include 't' %}|{% endfor %}{% endfor %}", {"templates": {"t": "{{ loop is defined }}{{ x }}{{ y }}"}}),
     ("loop_include_own_loop", "{% for x in [1, 2] %}{% include 't' %}|{% endfor %}", {"templates": {"t": "{% for z in 'ab' %}{{ loop.index }}{{ z }}{% endfor %}{{ loop is defined }}"}}),
     ("loop_include_set_loop_kept", "{% set loop = 5 %}{% for x in [1] %}{% include 't' %}{% endfor %}", {"templates": {"t": "{{ loop is defined }}"}}),
+    # An included template that extends a parent reading `loop` (docs/tasks/0298)
+    ("loop_include_extending_parent_reads", "{% for x in 'ab' %}{{ loop.index }}{% include 'c' %}|{% endfor %}", {"templates": {"c": "{% extends 'p' %}", "p": "[{{ loop.index }}{{ x }}]"}}),
+    ("loop_include_extending_parent_hidden", "{% for x in 'ab' %}{% include 'c' %}|{% endfor %}", {"templates": {"c": "{% extends 'p' %}", "p": "[{{ loop is defined }}{{ x }}]"}}),
+    ("loop_include_extending_grandparent", "{% for x in 'ab' %}{% include 'c' %}|{% endfor %}", {"templates": {"c": "{% extends 'm' %}", "m": "{% extends 'p' %}", "p": "[{{ loop is defined }}{{ x }}]"}}),
+    ("loop_include_extending_block_reads", "{% for x in 'ab' %}{{ loop.index }}{% include 'c' %}|{% endfor %}", {"templates": {"c": "{% extends 'p' %}{% block b %}<{{ loop.index }}>{% endblock %}", "p": "{% block b %}{% endblock %}"}}),
+    ("loop_include_extending_dynamic", "{% for x in 'ab' %}{% include 'c' %}|{% endfor %}", {"ctx": {"n": "p"}, "templates": {"c": "{% extends n %}", "p": "[{{ loop is defined }}]"}}),
     ("loop_include_restored_after", "{% for x in 'ab' %}{% include 't' %}{{ loop.index }}{{ loop.last }}|{% endfor %}", {"templates": {"t": "{{ loop is defined }}"}}),
     ("loop_include_twice_in_loop", "{% for x in 'ab' %}{% include 't' %}{% include 't' %}{{ loop.index }}|{% endfor %}", {"templates": {"t": "{{ loop is defined }}"}}),
     ("loop_include_outer_body_reads_loop", "{% for x in 'ab' %}{% for y in 'c' %}{% include 't' %}{% endfor %}{{ loop.index }}|{% endfor %}", {"templates": {"t": "{{ loop is defined }}"}}),
