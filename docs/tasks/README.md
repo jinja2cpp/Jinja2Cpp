@@ -278,7 +278,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0206](0206-call-argument-leftovers.md) | Argument checks that 0200 left over | parity | low | done |
 | [0207](0207-self-frame-leftovers.md) | `self` cases left after 0143 and 0198 | parity | low | done |
 | [0208](0208-macro-value-gaps.md) | Macros as values | parity | low | done |
-| [0209](0209-include-sees-loop.md) | A template included in a loop sees `loop` | parity | low | open |
+| [0209](0209-include-sees-loop.md) | A template included in a loop sees `loop` | parity | low | done |
 | [0210](0210-markup-percent-int-of-string.md) | `%d` and `%f` of a string in Markup's `%` | parity | low | open |
 | [0211](0211-self-nested-store-and-globals.md) | `self` stored in a nested scope of a block; globals changed in place | parity | low | open |
 | [0212](0212-objects-as-keys-and-through-callables.md) | Objects as dict keys and through user callables | parity | low | open |
@@ -324,8 +324,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0254](0254-render-error-locations.md) | Error contract P2: render errors carry their template location | robustness | high | done |
 | [0255](0255-engine-runtime-error-codes.md) | Error contract P3: the engine's own runtime errors get their own codes | robustness | medium | done |
 | [0256](0256-survive-allocation-failure.md) | Survive allocation failure in Load and Render: remaining coverage | robustness | high | open |
-| [0257](0257-render-to-string-and-sink.md) | `RenderTo` a caller's string or an output sink | api | high | open |
-| [0258](0258-positional-and-keyword-same-arg.md) | A call that gives one argument both positionally and by keyword is accepted | api | low | open |
+| [0257](0257-render-to-string-and-sink.md) | `RenderTo` a caller's string or an output sink | api | high | in-progress |
+| [0258](0258-positional-and-keyword-same-arg.md) | A call that gives one argument both positionally and by keyword is accepted | api | low | in-progress |
 | [0259](0259-vendored-internal-namespaces.md) | Vendored robin_hood and lexertk still live in global namespaces | release | medium | open |
 | [0260](0260-public-headers-iosfwd.md) | Public headers include `<iostream>` where `<iosfwd>` would do | release | low | open |
 | [0261](0261-windows-package-link-check.md) | Run the installed-package test and the ABI link probe on Windows | ci | low | open |
@@ -339,22 +339,28 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0269](0269-public-big-int-value.md) | Public `BigInt` value (0178 phase 1, G1) | api | high | done |
 | [0270](0270-big-int-core-text-form.md) | Big integers in the core, text form (0178 phase 2) | parity | medium | done |
 | [0271](0271-big-int-backend-interface.md) | Big-integer backend interface and overflow promotion (0178 phase 3) | api | medium | done |
-| [0272](0272-big-int-boost-backend.md) | Boost.Multiprecision backend and `JINJA2CPP_WITH_BIGINT` (0178 phase 4) | build | medium | open |
+| [0272](0272-big-int-boost-backend.md) | Boost.Multiprecision backend and `JINJA2CPP_WITH_BIGINT` (0178 phase 4) | build | medium | in-progress |
 | [0273](0273-build-conditional-parity-divergences.md) | Build-conditional parity divergences (0178 phase 0) | parity | medium | done |
-| [0274](0274-self-block-before-parent-pushed.md) | Blocks called through `self` at a child's top level lack the parent's blocks | parity | low | open |
-| [0275](0275-release-thread-caches.md) | `ReleaseThreadCaches()` | api | medium | open |
+| [0274](0274-self-block-before-parent-pushed.md) | Blocks called through `self` at a child's top level lack the parent's blocks | parity | low | done |
+| [0275](0275-release-thread-caches.md) | `ReleaseThreadCaches()` | api | medium | in-progress |
 | [0276](0276-memory-contract-docs.md) | User documentation for the memory contract | docs | medium | open |
 | [0277](0277-markup-escape-helper.md) | A public escape helper for Markup | api | low | open |
 | [0278](0278-remove-dead-valueref.md) | Remove the dead ValueRef alternative of InternalValue | internals | low | open |
 | [0279](0279-nlohmann-destructor-allocates.md) | nlohmann::json destruction allocates, so OOM there terminates | robustness | low | open |
-| [0280](0280-urlize-markup-input.md) | urlize escapes Markup input | filters | low | open |
-| [0281](0281-attr-bound-method.md) | attr() of a method renders empty | filters | low | open |
+| [0280](0280-urlize-markup-input.md) | urlize escapes Markup input | filters | low | done |
+| [0281](0281-attr-bound-method.md) | attr() of a method renders empty | filters | low | done |
 | [0282](0282-settings-limits-followups.md) | `Settings::Limits` follow-ups (0262 leftovers) | api | low | open |
 | [0283](0283-cycle-collector-oom-leaks.md) | Reference cycles leak when an allocation fails during a render | robustness | low | open |
 | [0284](0284-template-module.md) | `Template.module` / `make_module`: a template's exports as a map | api | low | open |
 | [0285](0285-abi-baselines-at-rc.md) | Commit the ABI baselines at the 2.0 RC and turn the abidiff gate on | release | high | open |
 | [0286](0286-fixed-cost-drift-oct-12-19.md) | Fixed-cost drift from feature merges, 2026-10-12 to 2026-10-19 | perf | medium | done |
 | [0287](0287-big-int-radix-conversion-cost.md) | Quadratic radix conversion of big integers near the bit cap | robustness | low | open |
-| [0288](0288-finalize-autoescape.md) | `finalize` output is not escaped under autoescape | parity | medium | open |
+| [0288](0288-finalize-autoescape.md) | `finalize` output is not escaped under autoescape | parity | high | done |
 | [0289](0289-flat-concat-chains.md) | `~` chains as one node, as Jinja2's `Concat` | parity | low | open |
 | [0290](0290-codeql-test-suite-cost.md) | Find what in the test suite makes CodeQL's data-flow stage explode | ci | low | open |
+| [0291](0291-fold-chosen-by-foldable-test.md) | Fold a value chosen by a foldable test that is not a literal | parity | low | open |
+| [0292](0292-finalize-fold-error-fallback.md) | Evaluate at run time when folding a finalized `{{ }}` raises | parity | low | done |
+| [0293](0293-finalize-gets-undefined.md) | `finalize` gets None for an undefined value | parity | medium | open |
+| [0294](0294-positional-after-keyword-syntax-error.md) | A positional argument after a keyword one is a syntax error | parity | low | open |
+| [0295](0295-selectattr-extra-keyword.md) | `selectattr('a', attribute='a')` fails where Python ignores the keyword | parity | low | open |
+| [0298](0298-include-of-extending-template-loop.md) | An included template that extends a parent reading `loop` | parity | low | open |

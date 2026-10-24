@@ -956,6 +956,38 @@
    "output": "see &lt;http://a.b&gt;"
   },
   {
+   "id": "autoescape.env_on_urlize_markup",
+   "template": "{{ '<b>x</b> http://a.b'|safe|urlize }}|{{ '<b>x</b> http://a.b'|urlize }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "<b>x</b> http://a.b|&lt;b&gt;x&lt;/b&gt; http://a.b"
+  },
+  {
+   "id": "autoescape.env_off_urlize_markup",
+   "template": "{{ '<b>x</b> http://a.b'|safe|urlize }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<b>x</b> http://a.b"
+  },
+  {
    "id": "autoescape.env_on_list",
    "template": "{{ l }}",
    "context": {
@@ -2024,6 +2056,123 @@
    },
    "templates": {},
    "output": "[&lt;][&lt;][&lt;][&lt;]"
+  },
+  {
+   "id": "autoescape.env_on_finalize_order",
+   "template": "{{ '<'|safe }}{{ x|safe }}{{ none }}{{ y }}{{ '<' ~ x }}{{ ['<'][0] }}",
+   "context": {
+    "x": "<",
+    "y": null
+   },
+   "env": {
+    "autoescape": true,
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[<][&lt;][None][None][&lt;&lt;][&lt;]"
+  },
+  {
+   "id": "autoescape.env_on_finalize_folded_none",
+   "template": "{{ none }}|{{ y }}|{{ x|safe }}",
+   "context": {
+    "x": "<",
+    "y": null
+   },
+   "env": {
+    "autoescape": true,
+    "finalize": "none_to_empty"
+   },
+   "templates": {},
+   "output": "None||<"
+  },
+  {
+   "id": "autoescape.env_on_finalize_folded_choice",
+   "template": "{{ '<'|safe if 1 > 0 else x }}{{ ('<'|safe) or x }}",
+   "context": {
+    "x": "<"
+   },
+   "env": {
+    "autoescape": true,
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[<][<]"
+  },
+  {
+   "id": "autoescape.env_on_finalize_fold_raises",
+   "template": "{{ 1 }}{{ 1 + 1 }}{{ x }}",
+   "context": {
+    "x": 5
+   },
+   "env": {
+    "autoescape": true,
+    "finalize": "plus_one"
+   },
+   "templates": {},
+   "output": "236"
+  },
+  {
+   "id": "autoescape.env_on_finalize_raises",
+   "template": "{{ 'a' }}",
+   "context": {
+    "html": "<b>&'\"</b>",
+    "n": null,
+    "l": [
+     "<a>",
+     "<b>"
+    ]
+   },
+   "env": {
+    "autoescape": true,
+    "finalize": "plus_one"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can only concatenate str (not \"int\") to str"
+   }
+  },
+  {
+   "id": "autoescape.env_off_finalize",
+   "template": "{{ '<' }}{{ x }}{{ '<'|safe }}",
+   "context": {
+    "x": "<"
+   },
+   "env": {
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[<][<][<]"
+  },
+  {
+   "id": "autoescape.env_on_trans_finalize",
+   "template": "{% trans %}<b>{{ x }}{% endtrans %}|{% trans %}<i>{% endtrans %}",
+   "context": {
+    "x": "<"
+   },
+   "env": {
+    "autoescape": true,
+    "extensions": [
+     "i18n"
+    ],
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[&lt;b&gt;&amp;lt;]|[&lt;i&gt;]"
+  },
+  {
+   "id": "autoescape.volatile_finalize",
+   "template": "{% autoescape true %}{% autoescape on %}{{ '<' }}{{ x }}{% endautoescape %}{% endautoescape %}|{% autoescape false %}{% autoescape not on %}{{ '<' }}{{ x }}{% endautoescape %}{% endautoescape %}",
+   "context": {
+    "on": false,
+    "x": "<"
+   },
+   "env": {
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[&lt;][<]|[<][&lt;]"
   },
   {
    "id": "autoescape.env_on_import_in_autoescape_block",

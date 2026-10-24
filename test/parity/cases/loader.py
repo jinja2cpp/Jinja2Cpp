@@ -293,4 +293,11 @@ CASES = [
     # the child's block, whose super() is the parent's (docs/tasks/0274)
     ("self_block_after_extends_at_top_level", "{% extends 'a.txt' %}{% block b1 %}C{{ super() }}{% endblock %}{{ self.b1() }}",
      {"templates": {"a.txt": "{% block b1 %}A{% endblock %}"}}),
+    # Python skips an output node after `extends` but runs a `set`, so the value is observable
+    ("self_block_after_extends_set", "{% extends 'a.txt' %}{% block b1 %}C{{ super() }}{% endblock %}{% set x = self.b1() %}",
+     {"templates": {"a.txt": "{{ x }}|{% block b1 %}A{% endblock %}"}}),
+    ("self_block_after_extends_parent_only_block", "{% extends 'a.txt' %}{% set x = self.b1() ~ self.b2() %}",
+     {"templates": {"a.txt": "{{ x }}|{% block b1 %}A{% endblock %}{% block b2 %}[{{ 1 + 1 }}]{% endblock %}"}}),
+    ("self_block_before_extends", "{% set x = self.b1() %}{% extends 'a.txt' %}{% block b1 %}C{% endblock %}",
+     {"templates": {"a.txt": "{{ x }}|{% block b1 %}A{% endblock %}"}}),
 ]

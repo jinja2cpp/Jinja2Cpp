@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: []
@@ -19,3 +19,10 @@ Jinja2 adds a parent's blocks to `context.blocks` when `extends` runs. 0211 list
 gap for a `self` stored at the top level and called later.
 
 **Done when.** The case renders `CA` and its line leaves `test/parity/divergences/loader.txt`.
+
+**Progress.** `ExtendsStatement::Render` pushes the parent's blocks onto the child's stack when `extends`
+runs (`TemplateFrame::extendable`), as Jinja2 adds `parent_template.blocks` to `context.blocks`; `RenderAsParent`
+no longer pushes them. A grandparent's blocks are pushed when the parent's own `extends` runs, as in Jinja2.
+Cases `loader.self_block_after_extends_set`, `_parent_only_block` and `self_block_before_extends` observe the
+value through a `set`, which Python runs after `extends`. Python skips the *output* nodes there, so
+`{{ self.b1() }}` as an output is never evaluated; Jinja2C++ still evaluates and drops it (task 0203).

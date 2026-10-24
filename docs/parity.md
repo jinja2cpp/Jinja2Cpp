@@ -4,7 +4,7 @@ How far Jinja2C++ is from Python [Jinja2](https://jinja.palletsprojects.com/) 3.
 area, and which task in `docs/tasks/` closes each gap.
 
 Every statement marked with a case id is backed by the differential corpus in
-`test/parity/` (2022 templates rendered by both engines, see
+`test/parity/` (2055 templates rendered by both engines, see
 [test/parity/README.md](../test/parity/README.md)); `ctest -R parity` re-checks all of
 them. Statements in the last section (API level) are read from the headers and are not
 corpus-checked yet.
@@ -18,26 +18,26 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 
 | area | cases | match | output | rejects | accepts | unsupported | platform | crash | tasks |
 |---|---|---|---|---|---|---|---|---|---|
-| autoescape | 136 | 134 | 1 | 1 | 0 | 0 | 0 | 0 | 0210, 0288 |
+| autoescape | 146 | 144 | 1 | 1 | 0 | 0 | 0 | 0 | 0210, 0291 |
 | custom | 28 | 28 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| errors | 103 | 100 | 0 | 2 | 1 | 0 | 0 | 0 | 0213 |
+| errors | 106 | 102 | 0 | 2 | 2 | 0 | 0 | 0 | 0213, 0294 |
 | filters | 333 | 329 | 3 | 1 | 0 | 0 | 0 | 0 | 0101, 0203, 0215 |
 | fuzz | 32 | 32 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | globals | 79 | 77 | 1 | 1 | 0 | 0 | 0 | 0 | 0178, 0212 |
 | i18n | 54 | 54 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | literals | 79 | 78 | 0 | 1 | 0 | 0 | 0 | 0 | 0041 |
-| loader | 168 | 162 | 5 | 1 | 0 | 0 | 0 | 0 | 0165, 0211, 0274 |
-| methods | 105 | 102 | 2 | 1 | 0 | 0 | 0 | 0 | 0049 |
-| operators | 125 | 122 | 0 | 3 | 0 | 0 | 0 | 0 | 0015 |
+| loader | 171 | 166 | 5 | 0 | 0 | 0 | 0 | 0 | 0165, 0211 |
+| methods | 108 | 105 | 2 | 1 | 0 | 0 | 0 | 0 | 0049 |
+| operators | 125 | 122 | 0 | 3 | 0 | 0 | 0 | 0 | 0178 |
 | options | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | output | 38 | 38 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | sequences | 47 | 47 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| statements | 398 | 383 | 10 | 3 | 2 | 0 | 0 | 0 | 0156, 0165, 0209, 0214, 0219, 0220 |
+| statements | 410 | 396 | 9 | 3 | 2 | 0 | 0 | 0 | 0156, 0165, 0214, 0219, 0220 |
 | subscripts | 43 | 43 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | tests | 59 | 58 | 0 | 1 | 0 | 0 | 0 | 0 | 0101 |
-| undefined | 106 | 106 | 0 | 0 | 0 | 0 | 0 | 0 |  |
+| undefined | 108 | 106 | 1 | 0 | 1 | 0 | 0 | 0 | 0293 |
 | whitespace | 54 | 54 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| **total** | **2022** | **1982** | **22** | **15** | **3** | **0** | **0** | **0** | |
+| **total** | **2055** | **2014** | **22** | **14** | **5** | **0** | **0** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment
@@ -117,7 +117,7 @@ repr look the same.
 | `none`/`None` | ✅ | `none_lower`, `none_title` | |
 | `1_000`, `0x1F`, `0o17`, `0b101` | ✅ | `int_underscore`, `int_hex`, ... | |
 | Exponent floats `1e3` | 🟡 prints `1000` | `float_exponent` | 0012 |
-| Integers beyond 64 bits | 🟡 deliberate: a literal beyond int64 becomes a float, arithmetic overflow raises | `int_big` | 0015 |
+| Integers beyond 64 bits | ✅ printed, compared and converted exactly; arithmetic past int64 is exact with a big-integer backend and raises without one (build option, see Big integers) | `int_big` | 0178 |
 | Adjacent strings `'a' 'b'` | ✅ | `string_adjacent_concat` | |
 | List literals, trailing comma | 🟡 parse; print as empty | `list_trailing_comma` | 0012 |
 | Tuple literals `(1, 2)`, `(1,)`, `()` | ✅ | `tuple`, `tuple_single`, `tuple_empty` | |
@@ -146,7 +146,7 @@ repr look the same.
 | `//`, `%` with negatives floor (ints and floats) | ✅ | `floordiv_negative`, `mod_negative` | |
 | `**` right-associative | ✅ | `pow_right_assoc` | |
 | Division by zero raises | ✅ | `div_by_zero`, `floordiv_by_zero`, `mod_by_zero` | |
-| Big integers | 🟡 deliberate: integers are int64 and overflow raises an error instead of growing | `int_overflow_mul`, `int_big_pow` | 0015 |
+| Big integers | 🟡 build option: exact with a backend (`-DJINJA2CPP_WITH_BIGINT=boost`, or `TemplateEnv::SetBigIntBackend`); the default build raises IntegerOutOfRange when arithmetic leaves int64 | `int_overflow_mul`, `int_big_pow` | 0178 |
 | `str * int`, `int * str`, `bool` as an int (`1 + true`) | ✅ | `string_times`, `int_times_string`, `int_plus_bool` | |
 | `list + list`, `list * int` | 🟡 compute; print empty | `list_plus`, `list_times` | 0012 |
 | Type errors raise (`str + int`, `1 < 'a'`, `x()` on a number) | ✅ | `string_plus_int`, `compare_mixed_types`, `errors.call_non_callable` | |

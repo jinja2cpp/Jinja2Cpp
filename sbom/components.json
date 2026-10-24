@@ -191,6 +191,20 @@
       "lighten": "The heaviest backend (boost_json.a + boost_container.a, about 4.8 MB in a Debug build) for a niche feature (template metadata). An internal minimal JSON reader, or nlohmann as default, would remove both libraries; the adapter headers stay opt-in"
     },
     {
+      "id": "boost-multiprecision",
+      "parent": "boost",
+      "name": "boost-multiprecision",
+      "includes": ["boost/multiprecision/cpp_int.hpp"],
+      "role": "optional",
+      "also_roles": ["test"],
+      "phases": ["build", "test"],
+      "exposure": "public-optional",
+      "selected_by": "JINJA2CPP_WITH_BIGINT=boost (default none) compiles it into src/big_int_builtin.cpp; the tests always build the adapter. Standalone mode (BOOST_MP_STANDALONE): only Multiprecision and Config headers, taken from the Boost release of the deps mode",
+      "used_for": "cpp_int behind the built-in big-integer backend (exact integer arithmetic beyond int64, docs/tasks/0272); the opt-in header-only adapter include/jinja2cpp/big_int/boost_cpp_int.h is also the sample backend",
+      "why": "A mature header-only arbitrary-precision integer; the library calls a backend only through the BigIntBackend table (include/jinja2cpp/big_int_backend.h), so any library can replace it at run time",
+      "lighten": "Header-only, no link cost, off by default. After 0230 drops Boost from the core, fetch boostorg/multiprecision and boostorg/config on their own (docs/design/0178-big-integer-plan.md section 8)"
+    },
+    {
       "id": "nlohmann-json",
       "name": "nlohmann_json",
       "version": "3.12.0",

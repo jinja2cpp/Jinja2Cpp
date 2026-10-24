@@ -1,3 +1,5 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the undefined area (cases/undefined.py).
 # Format and kinds: test/parity/README.md.
 
+undefined.finalize_gets_undefined         output      0293 finalize gets None for an undefined value
+undefined.strict_finalize_gets_undefined  accepts     0293 with finalize set, a strict undefined is passed on as None

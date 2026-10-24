@@ -34,19 +34,20 @@ concurrency:
 
 jobs:
   windows-msvc-build:
-    name: MSVC C++${{ matrix.std }} ${{ matrix.build-config }} runtime=${{ matrix.build-runtime || 'default' }} shared=${{ matrix.build-shared }}
+    name: MSVC C++${{ matrix.std }} ${{ matrix.build-config }} runtime=${{ matrix.build-runtime || 'default' }} shared=${{ matrix.build-shared }}${{ matrix.bigint && format(' bigint={0}', matrix.bigint) || '' }}
     runs-on: windows-latest
 
     # One job per MSVC standard; build type, linkage and CRT rotate across them so each
     # value is built at least once. JINJA2CPP_BUILD_SHARED=ON forces the /MD runtime
-    # (CMakeLists.txt), so /MT can only be exercised by a static build.
+    # (CMakeLists.txt), so /MT can only be exercised by a static build. The shared job also
+    # builds the Boost big-integer backend into the DLL (JINJA2CPP_WITH_BIGINT, docs/tasks/0272).
     # CMake maps C++23 to /std:c++latest until MSVC ships a stable /std:c++23.
     strategy:
       fail-fast: false
       matrix:
         include:
           - { build-platform: x64, std: 17, build-runtime: /MT, build-config: Release, build-shared: FALSE }
-          - { build-platform: x64, std: 20, build-runtime: "",  build-config: Debug,   build-shared: TRUE }
+          - { build-platform: x64, std: 20, build-runtime: "",  build-config: Debug,   build-shared: TRUE,  bigint: boost }
           - { build-platform: x64, std: 23, build-runtime: /MD, build-config: Debug,   build-shared: FALSE }
 
     steps:
@@ -60,13 +61,13 @@ jobs:
 
     - uses: ./.github/actions/setup-ccache
       with:
-        key: windows-msvc-${{ matrix.std }}-${{ matrix.build-config }}-${{ matrix.build-shared }}
+        key: windows-msvc-${{ matrix.std }}-${{ matrix.build-config }}-${{ matrix.build-shared }}-${{ matrix.bigint || 'none' }}
 
     - name: Build
       shell: cmd
       env:
         INPUT_COMPILER: ${{ matrix.compiler }}
-        INPUT_BASE_FLAGS: -DJINJA2CPP_CXX_STANDARD=${{ matrix.std }}
+        INPUT_BASE_FLAGS: -DJINJA2CPP_CXX_STANDARD=${{ matrix.std }} -DJINJA2CPP_WITH_BIGINT=${{ matrix.bigint || 'none' }}
         INPUT_BUILD_CONFIG: ${{ matrix.build-config }}
         INPUT_BUILD_SHARED: ${{ matrix.build-shared }}
         INPUT_EXTRA_FLAGS: ${{ matrix.extra_flags }}
