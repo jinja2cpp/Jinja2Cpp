@@ -446,6 +446,7 @@ const std::map<std::string, jinja2::UserCallable>& CustomFinalize()
     static const std::map<std::string, jinja2::UserCallable> finalize = {
         { "none_to_empty", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return p["v"].IsNone() ? jinja2::Value(std::string()) : p["v"]; }, { { "v", true } } } },
         { "brackets", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return StrLike(p["v"], "[" + StrOf(p["v"]) + "]"); }, { { "v", true } } } },
+        { "plus_one", { [](const jinja2::UserCallableParams& p) -> jinja2::Value { return IntOf(p["v"]) + 1; }, { { "v", true } } } },
     };
     return finalize;
 }

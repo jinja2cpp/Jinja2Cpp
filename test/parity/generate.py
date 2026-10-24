@@ -55,6 +55,7 @@ TESTS = {
 FINALIZE = {
     "none_to_empty": lambda v: "" if v is None else v,
     "brackets": lambda v: f"[{v}]",
+    "plus_one": lambda v: v + 1,  # raises unless v is a number
 }
 UNDEFINED = {"default": jinja2.Undefined, "strict": jinja2.StrictUndefined,
              "chainable": jinja2.ChainableUndefined, "debug": jinja2.DebugUndefined}
