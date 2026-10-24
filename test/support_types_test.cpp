@@ -338,12 +338,14 @@ TEST(SmallVectorTest, CapacityErasedBase)
     EXPECT_TRUE(IsInlineIn(eight));
     EXPECT_FALSE(IsInlineIn(two));
     EXPECT_TRUE(std::equal(two.begin(), two.end(), eight.begin(), eight.end()));
+    // Copy assignment works through the base; move assignment needs the SmallVector type
+    static_assert(!std::is_move_assignable_v<SmallVectorBase<int>>);
+    eight.clear();
     SmallVectorBase<int>& base = eight;
-    base = std::move(static_cast<SmallVectorBase<int>&>(two));
+    base = static_cast<const SmallVectorBase<int>&>(two);
     EXPECT_EQ(eight.size(), 5U);
-    EXPECT_TRUE(two.empty()); // NOLINT(bugprone-use-after-move, clang-analyzer-cplusplus.Move)
-    two.push_back(1);
-    EXPECT_EQ(two.size(), 1U);
+    EXPECT_TRUE(std::equal(two.begin(), two.end(), eight.begin(), eight.end()));
+    EXPECT_THROW(eight.reserve(SmallVectorBase<int>::max_size() + 1), std::length_error);
 }
 
 // Copies throw on the third one: a failed growth leaves the vector as it was

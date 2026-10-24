@@ -69,15 +69,8 @@ public:
         }
         return *this;
     }
-    // Steals a heap buffer; moves the elements of an inline one
-    SmallVectorBase& operator=(SmallVectorBase&& other) noexcept(std::is_nothrow_move_constructible_v<T> && std::is_nothrow_move_assignable_v<T>)
-    {
-        if (this != &other)
-        {
-            MoveFrom(other, 0);
-        }
-        return *this;
-    }
+    // Moving needs the source's inline capacity, which only SmallVector knows
+    SmallVectorBase& operator=(SmallVectorBase&& other) = delete;
     SmallVectorBase& operator=(std::initializer_list<T> values)
     {
         assign(values.begin(), values.end());
@@ -219,6 +212,10 @@ public:
 
     void reserve(size_type capacity)
     {
+        if (capacity > max_size())
+        {
+            throw std::length_error("SmallVector: too many elements");
+        }
         if (capacity > m_capacity)
         {
             Reallocate(capacity);
@@ -317,7 +314,6 @@ protected:
     }
 
     // Leaves `other` empty, with `otherInlineCapacity` as the capacity of its inline buffer
-    // (0 when not known: it then allocates on its next insertion)
     void MoveFrom(SmallVectorBase& other, size_type otherInlineCapacity)
     {
         if (!other.IsInline())
