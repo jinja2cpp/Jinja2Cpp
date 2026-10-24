@@ -300,7 +300,7 @@ struct TemplateModuleState
 
     // The names the module exports, in name order: what its top level set, but not the names
     // that start with an underscore, the ones it imported or those bound at entry only
-    std::vector<std::pair<std::string, const InternalValue*>> ExportedNames() const
+    [[nodiscard]] std::vector<std::pair<std::string, const InternalValue*>> ExportedNames() const
     {
         std::vector<std::pair<std::string, const InternalValue*>> names;
         const auto& imported = callback->imported;
