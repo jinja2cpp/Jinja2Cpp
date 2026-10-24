@@ -1586,7 +1586,7 @@ void FillExtraArgs(const ArgInfoList& argsInfo, const P& params, std::size_t eat
 } // namespace
 
 template<typename Result, typename T, typename P>
-Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
+JINJA2CPP_HOT_INLINE Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
 {
     ArgInfoList argsInfo(args.size());
 
