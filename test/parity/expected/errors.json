@@ -649,6 +649,63 @@
    }
   },
   {
+   "id": "errors.macro_positional_and_keyword",
+   "template": "{% macro m(a, b) %}{{ a }}{{ b }}{% endmacro %}{{ m(1, 2, a=3) }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "macro 'm' takes no keyword argument 'a'"
+   }
+  },
+  {
+   "id": "errors.filter_positional_and_keyword",
+   "template": "{{ s|replace('a', 'b', old='a') }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "do_replace() got multiple values for argument 'old'"
+   }
+  },
+  {
+   "id": "errors.call_positional_after_keyword",
+   "template": "{{ s|replace(new='b', 'a') }}",
+   "context": {
+    "x": 3,
+    "l": [
+     1,
+     2
+    ],
+    "s": "abc"
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "invalid syntax for function call expression"
+   }
+  },
+  {
    "id": "errors.assign_to_literal",
    "template": "{% set 1 = 2 %}",
    "context": {

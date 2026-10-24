@@ -230,6 +230,8 @@ struct ParsedArgumentsInfo
     std::vector<NodeRef<Expression>> args;
     OrderedMap<std::string, NodeRef<Expression>> extraKwArgs;
     std::vector<NodeRef<Expression>> extraPosArgs;
+    // The parameter the call gives both by position and by keyword (docs/tasks/0258), or null
+    const ArgumentInfo* multipleValues = nullptr;
 };
 
 struct ParsedArguments
@@ -237,6 +239,8 @@ struct ParsedArguments
     ArgumentsMap<InternalValue> args;
     InternalDict extraKwArgs;
     std::vector<InternalValue> extraPosArgs;
+    // The parameter the call gives both by position and by keyword (docs/tasks/0258), or null
+    const ArgumentInfo* multipleValues = nullptr;
 
     InternalValue operator[](std::string_view name) const
     {

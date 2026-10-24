@@ -119,14 +119,16 @@ TEST_P(ListSliceTest, Test)
     PerformBothTests(source, testParam.result);
 }
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(StringJoin, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"['str1', 'str2', 'str3'] | join",                   "str1str2str3"},
                             InputOutputPair{"['str1', 'str2', 'str3'] | join(' ')",              "str1 str2 str3"},
                             InputOutputPair{"['str1', 'str2', 'str3'] | join(d='-')",            "str1-str2-str3"},
-                            InputOutputPair{"reflectedList | join(d='-', 'strValue')",           "test string 0-test string 1-test string 2-test string 3-test string 4-test string 5-test string 6-test string 7-test string 8-test string 9"},
+                            InputOutputPair{"reflectedList | join('-', attribute='strValue')",   "test string 0-test string 1-test string 2-test string 3-test string 4-test string 5-test string 6-test string 7-test string 8-test string 9"},
                             InputOutputPair{"reflectedList | join(attribute='strValue', '-')",   "test string 0-test string 1-test string 2-test string 3-test string 4-test string 5-test string 6-test string 7-test string 8-test string 9"},
                             InputOutputPair{"reflectedList | join(attribute='strValue', d='-')", "test string 0-test string 1-test string 2-test string 3-test string 4-test string 5-test string 6-test string 7-test string 8-test string 9"}
                             ));
+// clang-format on
 
 INSTANTIATE_TEST_SUITE_P(Sort, ListIteratorTest, ::testing::Values(
                             InputOutputPair{"['str1', 'str2', 'str3'] | sort",                                    "str1, str2, str3"},
@@ -523,12 +525,14 @@ INSTANTIATE_TEST_SUITE_P(WordCount, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"wstringValue | trim", "'hello world'"}*/
                             ));
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(Replace, FilterGenericTest, ::testing::Values(
                             InputOutputPair{"'Hello World' | replace('Hello', 'Goodbye') | pprint", "'Goodbye World'"},
                             InputOutputPair{"'Hello World' | replace(old='l', new='L') | pprint", "'HeLLo WorLd'"},
-                            InputOutputPair{"'Hello World' | replace(old='l', new='L', 2) | pprint", "'HeLLo World'"},
+                            InputOutputPair{"'Hello World' | replace('l', 'L', count=2) | pprint", "'HeLLo World'"},
                             InputOutputPair{"'Hello World' | replace('l', 'L', count=1) | pprint", "'HeLlo World'"}
                             ));
+// clang-format on
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(Truncate, FilterGenericTest, ::testing::Values(

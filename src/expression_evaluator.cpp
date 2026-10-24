@@ -1492,6 +1492,43 @@ void MapPositionalArgs(ArgInfoList& argsInfo, const P& params, const PosArgRange
     }
 }
 
+// Python binds the positional arguments first, in order: a keyword naming a parameter that a
+// positional argument passed over, or any one before `*args` when positional arguments are left
+// over for it, gives that parameter two values (TypeError "got multiple values for argument").
+// The parameters after `*args` take keywords only, and so do all of a callable that takes extra
+// positional arguments without declaring `*args` (applymacro's `macro`)
+template<typename Result>
+JINJA2CPP_COLD_INLINE void CheckMultipleValues(const ArgInfoList& argsInfo, std::size_t posParamsCount, std::size_t eatenPosArgs, Result& result, bool& isSucceeded)
+{
+    std::size_t varArgs = argsInfo.size();
+    std::size_t end = 0;
+    for (std::size_t idx = 0; idx != argsInfo.size(); ++idx)
+    {
+        if (argsInfo[idx].state == Ignored && argsInfo[idx].info->name == "*args")
+        {
+            varArgs = std::min(varArgs, idx);
+        }
+        if (argsInfo[idx].state == Positional)
+        {
+            end = idx + 1;
+        }
+    }
+    if (eatenPosArgs < posParamsCount && varArgs != argsInfo.size())
+    {
+        end = varArgs;
+    }
+    end = std::min(end, varArgs);
+    for (std::size_t idx = 0; idx != end; ++idx)
+    {
+        if (argsInfo[idx].state == Keyword)
+        {
+            result.multipleValues = argsInfo[idx].info;
+            isSucceeded = false;
+            return;
+        }
+    }
+}
+
 // Fill default arguments (if missing) and check for mandatory. A call bound at Load leaves
 // them unbound: whoever reads the parameter takes the default from the declaration, so no
 // node is made for it
@@ -1549,7 +1586,7 @@ void FillExtraArgs(const ArgInfoList& argsInfo, const P& params, std::size_t eat
 } // namespace
 
 template<typename Result, typename T, typename P>
-Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
+JINJA2CPP_HOT_INLINE Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
 {
     ArgInfoList argsInfo(args.size());
 
@@ -1564,6 +1601,11 @@ Result ParseCallParamsImpl(const T& args, const P& params, bool& isSucceeded)
     int firstMandatoryIdx = MapKeywordArgs(args, params, argsInfo, result);
     auto posArgRange = FindPosArgRange(argsInfo, params.posParams.size(), firstMandatoryIdx);
     MapPositionalArgs(argsInfo, params, posArgRange, result);
+    // Only a call with both kinds of argument can name one parameter twice
+    if (!params.posParams.empty() && !params.kwParams.empty())
+    {
+        CheckMultipleValues(argsInfo, params.posParams.size(), posArgRange.eatenPosArgs, result, isSucceeded);
+    }
     FillDefaultArgs(argsInfo, result, isSucceeded);
     FillExtraArgs(argsInfo, params, posArgRange.eatenPosArgs, result);
 
