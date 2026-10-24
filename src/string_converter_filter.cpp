@@ -1838,8 +1838,7 @@ InternalValue StringConverter::ApplyReplace(const InternalValue& baseVal, Render
             newVal = MarkupEscape(newVal, callback);
         }
     }
-    // str.replace's count: None (Jinja2's default, -1), a negative count or one past int64
-    // replaces every one
+    // str.replace's count: None (Jinja2's default, -1) or a negative count replaces every one
     const auto countVal = GetArgumentValue("count", context);
     uint64_t count = std::numeric_limits<uint64_t>::max();
     if (const auto* intVal = GetIf<int64_t>(&countVal))
@@ -1850,7 +1849,11 @@ InternalValue StringConverter::ApplyReplace(const InternalValue& baseVal, Render
     {
         count = *boolVal ? 1 : 0;
     }
-    else if (!IsEmpty(countVal) && countVal.Kind() != ValueKind::BigInt)
+    else if (countVal.Kind() == ValueKind::BigInt)
+    {
+        throw TemplateRuntimeError("Python int too large to convert to C ssize_t");
+    }
+    else if (!IsEmpty(countVal))
     {
         throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(countVal) + "' object cannot be interpreted as an integer");
     }
@@ -2060,9 +2063,27 @@ TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderCo
         {
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
         }
-        bool isList = false;
-        auto schemes = ConvertToList(schemesVal, isList);
-        for (const InternalValue& scheme : isList ? schemes : ListAdapter::CreateAdapter(InternalValueList()))
+        // Any other iterable gives its items (a dict its keys); anything else is no iterable
+        InternalValueList schemes;
+        if (auto map = AsMap(schemesVal))
+        {
+            for (auto& entry : map->GetEntries())
+            {
+                schemes.push_back(std::move(entry.key));
+            }
+        }
+        else if (auto list = AsList(schemesVal))
+        {
+            for (const auto& item : *list)
+            {
+                schemes.push_back(item);
+            }
+        }
+        else if (!IsEmpty(schemesVal) && !GetAsSameString(srcStr, schemesVal))
+        {
+            throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(schemesVal) + "' object is not iterable");
+        }
+        for (const InternalValue& scheme : schemes)
         {
             auto str = GetAsSameString(srcStr, scheme);
             if (!str || !Urlizer<CharT>::IsValidScheme(*str))

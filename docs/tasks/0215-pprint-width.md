@@ -30,4 +30,4 @@ reflected structs will change with it.
 **Outcome.** `filters.pprint` ports `PrettyPrinter._format` (lists, tuples, dicts, dictsort
 pairs and strings) and prints a range as `range(0, 3)`; int dict keys already printed unquoted.
 Left over: `loop` printing its map is 0219; builtin globals and imported
-templates are 0304 (`filters.pprint_global_and_module`).
+templates are 0309 (after 0305) (`filters.pprint_global_and_module`).

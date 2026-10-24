@@ -121,18 +121,17 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     void FormatTo(std::string& out, const InternalValue& val, int64_t indent, int64_t allowance, int level) const
     {
         CheckStack();
-        auto rep = Print(val, m_context);
-        if (static_cast<int64_t>(CodePointCount(std::string_view(rep))) <= Width - indent - allowance || val.IsMarkup())
+        // Markup has a repr of its own, which pprint does not break
+        if (val.IsMarkup() || ReprWidthAtMost(val, Width - indent - allowance) <= Width - indent - allowance)
         {
-            // Markup has a repr of its own, which pprint does not break
-            out += rep;
+            out += Print(val, m_context);
             return;
         }
         if (auto list = AsList(val))
         {
             if (list->GetRangeInfo())
             {
-                out += rep;
+                out += Print(val, m_context);
                 return;
             }
             const bool isTuple = list->IsTuple();
@@ -145,7 +144,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         {
             if (map->GetObjectClass())
             {
-                out += rep;
+                out += Print(val, m_context);
                 return;
             }
             auto entries = map->GetEntries();
@@ -171,8 +170,71 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         }
         else
         {
-            out += rep;
+            out += Print(val, m_context);
         }
+    }
+
+    // The width of the one-line repr of val, or more than limit once it is known to exceed it:
+    // every level of a nested value asks, so it must not print the whole value each time
+    [[nodiscard]] int64_t ReprWidthAtMost(const InternalValue& val, int64_t limit) const
+    {
+        CheckStack();
+        if (limit < 0)
+        {
+            return limit + 1;
+        }
+        if (auto list = AsList(val); list && !list->GetRangeInfo())
+        {
+            return ItemsWidthAtMost(*list, limit);
+        }
+        if (auto map = AsMap(val); map && !map->GetObjectClass())
+        {
+            return EntriesWidthAtMost(map->GetEntries(), limit);
+        }
+        if (const auto* pair = GetIf<KeyValuePair>(&val))
+        {
+            return AddWidth(AddWidth(4, pair->key, limit), pair->value, limit);
+        }
+        // A string's repr is at least its characters and the quotes
+        const auto narrow = AsStringView<char>(val);
+        const auto wide = AsStringView<wchar_t>(val);
+        const auto chars = narrow ? CodePointCount(*narrow) : wide ? CodePointCount(*wide)
+                                                                   : 0;
+        if (static_cast<int64_t>(chars) + 2 > limit)
+        {
+            return limit + 1;
+        }
+        return static_cast<int64_t>(CodePointCount(std::string_view(Print(val, m_context))));
+    }
+
+    // width plus the repr width of item, while width is within limit
+    [[nodiscard]] int64_t AddWidth(int64_t width, const InternalValue& item, int64_t limit) const { return width > limit ? width : width + ReprWidthAtMost(item, limit - width); }
+
+    // [a, b], (a, b) or (a,)
+    [[nodiscard]] int64_t ItemsWidthAtMost(const ListRef& list, int64_t limit) const
+    {
+        int64_t width = 2;
+        size_t count = 0;
+        for (const auto& item : list)
+        {
+            width = AddWidth(width + (count++ != 0 ? 2 : 0), item, limit);
+            if (width > limit)
+            {
+                return width;
+            }
+        }
+        return width + (list.IsTuple() && count == 1 ? 1 : 0);
+    }
+
+    // {k: v, k: v}
+    [[nodiscard]] int64_t EntriesWidthAtMost(const std::vector<KeyValuePair>& entries, int64_t limit) const
+    {
+        int64_t width = 2;
+        for (size_t idx = 0; idx != entries.size() && width <= limit; ++idx)
+        {
+            width = AddWidth(AddWidth(width + (idx != 0 ? 2 : 0), entries[idx].key, limit) + 2, entries[idx].value, limit);
+        }
+        return width;
     }
 
     // _format_items: one item per line, each indented one column past the opening bracket
