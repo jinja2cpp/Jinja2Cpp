@@ -34,19 +34,20 @@ concurrency:
 
 jobs:
   macos-build:
-    name: ${{ matrix.os }} AppleClang C++${{ matrix.cxx-standard }} ${{ matrix.build-config }}
+    name: ${{ matrix.os }} AppleClang C++${{ matrix.cxx-standard }} ${{ matrix.build-config }}${{ matrix.bigint && format(' bigint={0}', matrix.bigint) || '' }}
     runs-on: ${{ matrix.os }}
 
     # Release builds every standard, on both runner images; one Debug build on the newest
     # image and AppleClang. Debug adds the full node reference checks, which the Linux
-    # Debug rows cover, and macOS has 5 runners to share (docs/tasks/0162).
+    # Debug rows cover, and macOS has 5 runners to share (docs/tasks/0162). One Release build
+    # has the Boost big-integer backend built in (JINJA2CPP_WITH_BIGINT, docs/tasks/0272).
     strategy:
       fail-fast: false
       matrix:
         include:
           - { os: macos-14, cxx-standard: 17, build-config: Release }
           - { os: macos-14, cxx-standard: 23, build-config: Release }
-          - { os: macos-15, cxx-standard: 20, build-config: Release }
+          - { os: macos-15, cxx-standard: 20, build-config: Release, bigint: boost }
           - { os: macos-15, cxx-standard: 20, build-config: Debug }
 
     steps:
@@ -54,14 +55,15 @@ jobs:
 
     - uses: ./.github/actions/setup-ccache
       with:
-        key: macos-${{ matrix.os }}-${{ matrix.cxx-standard }}-${{ matrix.build-config }}
+        key: macos-${{ matrix.os }}-${{ matrix.cxx-standard }}-${{ matrix.build-config }}-${{ matrix.bigint || 'none' }}
 
     - name: Configure
       run: |
         cmake -S . -B .build \
           -DCMAKE_BUILD_TYPE=${{ matrix.build-config }} \
           -DJINJA2CPP_DEPS_MODE=internal \
-          -DJINJA2CPP_CXX_STANDARD=${{ matrix.cxx-standard }}
+          -DJINJA2CPP_CXX_STANDARD=${{ matrix.cxx-standard }} \
+          -DJINJA2CPP_WITH_BIGINT=${{ matrix.bigint || 'none' }}
 
     - name: Build
       run: cmake --build .build --parallel

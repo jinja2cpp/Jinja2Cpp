@@ -117,7 +117,7 @@ repr look the same.
 | `none`/`None` | ✅ | `none_lower`, `none_title` | |
 | `1_000`, `0x1F`, `0o17`, `0b101` | ✅ | `int_underscore`, `int_hex`, ... | |
 | Exponent floats `1e3` | 🟡 prints `1000` | `float_exponent` | 0012 |
-| Integers beyond 64 bits | 🟡 deliberate: a literal beyond int64 becomes a float, arithmetic overflow raises | `int_big` | 0015 |
+| Integers beyond 64 bits | ✅ printed, compared and converted exactly; arithmetic past int64 is exact with a big-integer backend and raises without one (build option, see Big integers) | `int_big` | 0178 |
 | Adjacent strings `'a' 'b'` | ✅ | `string_adjacent_concat` | |
 | List literals, trailing comma | 🟡 parse; print as empty | `list_trailing_comma` | 0012 |
 | Tuple literals `(1, 2)`, `(1,)`, `()` | ✅ | `tuple`, `tuple_single`, `tuple_empty` | |
@@ -146,7 +146,7 @@ repr look the same.
 | `//`, `%` with negatives floor (ints and floats) | ✅ | `floordiv_negative`, `mod_negative` | |
 | `**` right-associative | ✅ | `pow_right_assoc` | |
 | Division by zero raises | ✅ | `div_by_zero`, `floordiv_by_zero`, `mod_by_zero` | |
-| Big integers | 🟡 deliberate: integers are int64 and overflow raises an error instead of growing | `int_overflow_mul`, `int_big_pow` | 0015 |
+| Big integers | 🟡 build option: exact with a backend (`-DJINJA2CPP_WITH_BIGINT=boost`, or `TemplateEnv::SetBigIntBackend`); the default build raises IntegerOutOfRange when arithmetic leaves int64 | `int_overflow_mul`, `int_big_pow` | 0178 |
 | `str * int`, `int * str`, `bool` as an int (`1 + true`) | ✅ | `string_times`, `int_times_string`, `int_plus_bool` | |
 | `list + list`, `list * int` | 🟡 compute; print empty | `list_plus`, `list_times` | 0012 |
 | Type errors raise (`str + int`, `1 < 'a'`, `x()` on a number) | ✅ | `string_plus_int`, `compare_mixed_types`, `errors.call_non_callable` | |
