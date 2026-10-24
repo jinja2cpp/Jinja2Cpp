@@ -13,6 +13,7 @@
 #include "template_dict.h"
 #include "undefined.h"
 #include "unicode_printable.h"
+#include "unicode_tables.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
@@ -106,10 +107,445 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         return val.IsMarkup() && IsStringValue(val) ? "Markup(" + text + ")" : text;
     }
 
+    // Python's pprint.pformat: the repr of a value when it fits in 80 columns, else a list,
+    // tuple, dict or string broken over lines as pprint.PrettyPrinter._format breaks it
+    static std::string Format(const InternalValue& val, const RenderContext* context)
+    {
+        std::string out;
+        // pprint reads each container more than once: a list that can be read only once is
+        // read into a copy first, so that the value it prints is the one it measured
+        if (HasSinglePassList(val))
+        {
+            PrettyPrinter(context).FormatTo(out, ReadOnce(val), 0, 0, 0);
+        }
+        else
+        {
+            PrettyPrinter(context).FormatTo(out, val, 0, 0, 0);
+        }
+        return out;
+    }
+
+    // Whether val holds a list that has no size (a host generator), which reading consumes
+    static bool HasSinglePassList(const InternalValue& val)
+    {
+        CheckStack();
+        if (auto list = AsList(val))
+        {
+            if (list->GetRangeInfo())
+            {
+                return false;
+            }
+            return !list->GetSize() || std::any_of(list->begin(), list->end(), [](const InternalValue& item) { return HasSinglePassList(item); });
+        }
+        if (auto map = AsMap(val); map && !map->GetObjectClass())
+        {
+            const auto entries = map->GetEntries();
+            return std::any_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return HasSinglePassList(entry.key) || HasSinglePassList(entry.value); });
+        }
+        if (const auto* pair = GetIf<KeyValuePair>(&val))
+        {
+            return HasSinglePassList(pair->key) || HasSinglePassList(pair->value);
+        }
+        return false;
+    }
+
+    // A copy of val whose lists and dicts are read once into containers of their own
+    static InternalValue ReadOnce(const InternalValue& val)
+    {
+        CheckStack();
+        if (auto list = AsList(val); list && !list->GetRangeInfo())
+        {
+            InternalValueList items;
+            for (const auto& item : *list)
+            {
+                CheckSequenceSize(items.size() + 1, "a list");
+                items.push_back(ReadOnce(item));
+            }
+            auto copy = ListAdapter::CreateAdapter(std::move(items));
+            if (list->IsTuple())
+            {
+                copy.MarkAsTuple();
+            }
+            return InternalValue(std::move(copy));
+        }
+        if (auto map = AsMap(val); map && !map->GetObjectClass())
+        {
+            TemplateDict copy;
+            for (const auto& entry : map->GetEntries())
+            {
+                copy.Set(ReadOnce(entry.key), ReadOnce(entry.value));
+            }
+            return CreateMapAdapter(std::move(copy));
+        }
+        if (const auto* pair = GetIf<KeyValuePair>(&val))
+        {
+            return InternalValue(KeyValuePair{ ReadOnce(pair->key), ReadOnce(pair->value) });
+        }
+        return val;
+    }
+
+    // Appends text, within the cap on a string's length
+    static void Write(std::string& out, std::string_view text)
+    {
+        CheckSequenceSize(static_cast<uint64_t>(out.size()) + text.size(), "a pprint result");
+        out += text;
+    }
+
+    // Starts a new line at column indent, after `delimiter`
+    static void NewLine(std::string& out, std::string_view delimiter, int64_t indent)
+    {
+        CheckSequenceSize(static_cast<uint64_t>(out.size()) + delimiter.size() + static_cast<uint64_t>(indent), "a pprint result");
+        out += delimiter;
+        out.append(static_cast<size_t>(indent), ' ');
+    }
+
+    // _format: indent is the column the value starts at, allowance the columns the text
+    // after it on its last line takes, level its nesting (1 for the value pformat prints)
+    void FormatTo(std::string& out, const InternalValue& val, int64_t indent, int64_t allowance, int level) const
+    {
+        CheckStack();
+        // Markup has a repr of its own, which pprint does not break
+        if (val.IsMarkup() || ReprWidthAtMost(val, Width - indent - allowance) <= Width - indent - allowance)
+        {
+            Write(out, Print(val, m_context));
+            return;
+        }
+        if (auto list = AsList(val))
+        {
+            if (list->GetRangeInfo())
+            {
+                Write(out, Print(val, m_context));
+                return;
+            }
+            const bool isTuple = list->IsTuple();
+            std::string_view end = isTuple ? (list->GetSize() == 1 ? ",)" : ")") : "]";
+            out += isTuple ? '(' : '[';
+            FormatItems(out, *list, indent, allowance + static_cast<int64_t>(end.size()), level + 1);
+            out += end;
+        }
+        else if (auto map = AsMap(val))
+        {
+            if (map->GetObjectClass())
+            {
+                Write(out, Print(val, m_context));
+                return;
+            }
+            auto entries = map->GetEntries();
+            SortEntriesByKey(entries);
+            out += '{';
+            FormatDictItems(out, entries, indent, allowance + 1, level + 1);
+            out += '}';
+        }
+        else if (const auto* pair = GetIf<KeyValuePair>(&val))
+        {
+            out += '(';
+            const std::vector<InternalValue> items{ pair->key, pair->value };
+            FormatItems(out, items, indent, allowance + 1, level + 1);
+            out += ')';
+        }
+        else if (auto narrow = AsStringView<char>(val))
+        {
+            FormatString(out, *narrow, indent, allowance, level + 1);
+        }
+        else if (auto wide = AsStringView<wchar_t>(val))
+        {
+            FormatString(out, ConvertString<std::string>(*wide), indent, allowance, level + 1);
+        }
+        else
+        {
+            Write(out, Print(val, m_context));
+        }
+    }
+
+    // The width of the one-line repr of val, or more than limit once it is known to exceed it:
+    // every level of a nested value asks, so it must not print the whole value each time
+    [[nodiscard]] int64_t ReprWidthAtMost(const InternalValue& val, int64_t limit) const
+    {
+        CheckStack();
+        if (limit < 0)
+        {
+            return limit + 1;
+        }
+        if (auto list = AsList(val); list && !list->GetRangeInfo())
+        {
+            return ItemsWidthAtMost(*list, limit);
+        }
+        if (auto map = AsMap(val); map && !map->GetObjectClass())
+        {
+            return EntriesWidthAtMost(map->GetEntries(), limit);
+        }
+        if (const auto* pair = GetIf<KeyValuePair>(&val))
+        {
+            return AddWidth(AddWidth(4, pair->key, limit), pair->value, limit);
+        }
+        // A string's repr is at least its characters and the quotes
+        const auto narrow = AsStringView<char>(val);
+        const auto wide = AsStringView<wchar_t>(val);
+        const auto chars = narrow ? CodePointCount(*narrow) : wide ? CodePointCount(*wide)
+                                                                   : 0;
+        if (static_cast<int64_t>(chars) + 2 > limit)
+        {
+            return limit + 1;
+        }
+        return static_cast<int64_t>(CodePointCount(std::string_view(Print(val, m_context))));
+    }
+
+    // width plus the repr width of item, while width is within limit
+    [[nodiscard]] int64_t AddWidth(int64_t width, const InternalValue& item, int64_t limit) const { return width > limit ? width : width + ReprWidthAtMost(item, limit - width); }
+
+    // [a, b], (a, b) or (a,)
+    [[nodiscard]] int64_t ItemsWidthAtMost(const ListRef& list, int64_t limit) const
+    {
+        int64_t width = 2;
+        size_t count = 0;
+        for (const auto& item : list)
+        {
+            width = AddWidth(width + (count++ != 0 ? 2 : 0), item, limit);
+            if (width > limit)
+            {
+                return width;
+            }
+        }
+        return width + (list.IsTuple() && count == 1 ? 1 : 0);
+    }
+
+    // {k: v, k: v}
+    [[nodiscard]] int64_t EntriesWidthAtMost(const std::vector<KeyValuePair>& entries, int64_t limit) const
+    {
+        int64_t width = 2;
+        for (size_t idx = 0; idx != entries.size() && width <= limit; ++idx)
+        {
+            width = AddWidth(AddWidth(width + (idx != 0 ? 2 : 0), entries[idx].key, limit) + 2, entries[idx].value, limit);
+        }
+        return width;
+    }
+
+    // _format_items: one item per line, each indented one column past the opening bracket
+    template<typename Items>
+    void FormatItems(std::string& out, const Items& items, int64_t indent, int64_t allowance, int level) const
+    {
+        ++indent;
+        const InternalValue* pending = nullptr;
+        // An item of a lazily evaluated list lives only for its step, so it is copied
+        std::optional<InternalValue> held;
+        bool first = true;
+        auto flush = [&](int64_t itemAllowance) {
+            if (!first)
+            {
+                NewLine(out, ",\n", indent);
+            }
+            first = false;
+            FormatTo(out, *pending, indent, itemAllowance, level);
+        };
+        for (const auto& item : items)
+        {
+            if (pending)
+            {
+                flush(1);
+            }
+            held = item;
+            pending = &*held;
+        }
+        if (pending)
+        {
+            flush(allowance);
+        }
+    }
+
+    // _format_dict_items: `key: value` per line; a value goes on past its key's repr
+    void FormatDictItems(std::string& out, const std::vector<KeyValuePair>& entries, int64_t indent, int64_t allowance, int level) const
+    {
+        ++indent;
+        for (size_t idx = 0; idx != entries.size(); ++idx)
+        {
+            const bool last = idx + 1 == entries.size();
+            const auto key = Print(entries[idx].key, m_context);
+            Write(out, key);
+            out += ": ";
+            FormatTo(out, entries[idx].value, indent + static_cast<int64_t>(CodePointCount(std::string_view(key))) + 2, last ? allowance : 1, level);
+            if (!last)
+            {
+                NewLine(out, ",\n", indent);
+            }
+        }
+    }
+
+    // A string as _pprint_str splits it, read forward by byte offsets, so that it needs no
+    // memory beyond the pieces it writes
+    struct PprintText
+    {
+        // The code point at pos (pos < str.size())
+        [[nodiscard]] uint32_t At(size_t pos) const { return DecodeUtf8(str.substr(pos, NextCodePoint(str, pos) - pos)); }
+
+        [[nodiscard]] std::string Repr(size_t from, size_t to) const { return PrettyPrinter::Repr(str.substr(from, to - from)); }
+
+        // The end of the line that starts at pos, its line break included (str.splitlines(True))
+        [[nodiscard]] size_t LineEnd(size_t pos) const
+        {
+            while (pos < str.size())
+            {
+                const auto cp = At(pos);
+                pos = NextCodePoint(str, pos);
+                if (IsLineBreak(cp))
+                {
+                    if (cp == '\r' && pos < str.size() && str[pos] == '\n')
+                    {
+                        ++pos;
+                    }
+                    break;
+                }
+            }
+            return pos;
+        }
+
+        // The end of the part re.findall(r'\S*\s*', line) finds at pos: a word and the
+        // whitespace after it
+        [[nodiscard]] size_t PartEnd(size_t pos, size_t to) const
+        {
+            while (pos < to && !unicode::IsSpace(At(pos)))
+            {
+                pos = NextCodePoint(str, pos);
+            }
+            while (pos < to && unicode::IsSpace(At(pos)))
+            {
+                pos = NextCodePoint(str, pos);
+            }
+            return pos;
+        }
+
+        static int64_t Width(const std::string& repr) { return static_cast<int64_t>(CodePointCount(std::string_view(repr))); }
+
+        std::string_view str;
+    };
+
+    // The pieces _pprint_str writes, each on a line of its own at column indent, within the cap
+    // on the result (out holds what comes before them)
+    struct PprintChunks
+    {
+        void Add(const std::string& chunk)
+        {
+            if (count != 0)
+            {
+                NewLine(joined, "\n", indent);
+            }
+            CheckSequenceSize(static_cast<uint64_t>(prefix) + joined.size() + chunk.size(), "a pprint result");
+            joined += chunk;
+            ++count;
+        }
+
+        size_t prefix = 0;
+        int64_t indent = 0;
+        std::string joined;
+        size_t count = 0;
+    };
+
+    // The pieces of a line too wide for maxWidth: as many whole parts as fit in each, the
+    // last part of the string with `lastAllowance` columns less
+    static void SplitLine(const PprintText& text, PprintChunks& chunks, size_t from, size_t to, int64_t maxWidth, int64_t lastAllowance)
+    {
+        size_t current = from;
+        size_t currentEnd = from;
+        for (size_t partStart = from; partStart < to;)
+        {
+            const size_t partEnd = text.PartEnd(partStart, to);
+            if (partEnd == to)
+            {
+                maxWidth -= lastAllowance;
+            }
+            if (PprintText::Width(text.Repr(current, partEnd)) > maxWidth)
+            {
+                if (currentEnd != current)
+                {
+                    chunks.Add(text.Repr(current, currentEnd));
+                }
+                current = partStart;
+            }
+            currentEnd = partEnd;
+            partStart = partEnd;
+        }
+        if (currentEnd != current)
+        {
+            chunks.Add(text.Repr(current, currentEnd));
+        }
+    }
+
+    // _pprint_str: the lines of the string (str.splitlines(True)), a line wider than the width
+    // split after the whitespace of its words, each piece printed as its own repr on a line of
+    // its own; the value pformat prints is parenthesized
+    static void FormatString(std::string& out, std::string_view str, int64_t indent, int64_t allowance, int level)
+    {
+        if (str.empty())
+        {
+            Write(out, Repr(str));
+            return;
+        }
+        const PprintText text{ str };
+        if (level == 1)
+        {
+            ++indent;
+            ++allowance;
+        }
+        const int64_t maxWidth = Width - indent;
+        PprintChunks chunks{ out.size() + 2, indent, {}, 0 };
+        std::string rep;
+        for (size_t from = 0; from < str.size();)
+        {
+            const size_t to = text.LineEnd(from);
+            const bool lastLine = to == str.size();
+            rep = text.Repr(from, to);
+            if (PprintText::Width(rep) <= maxWidth - (lastLine ? allowance : 0))
+            {
+                chunks.Add(rep);
+            }
+            else
+            {
+                SplitLine(text, chunks, from, to, maxWidth, lastLine ? allowance : 0);
+            }
+            from = to;
+        }
+        if (chunks.count == 1)
+        {
+            // Python writes the repr of the last line here, which is that one chunk
+            Write(out, rep);
+            return;
+        }
+        Write(out, level == 1 ? "(" : "");
+        Write(out, chunks.joined);
+        Write(out, level == 1 ? ")" : "");
+    }
+
+    // The value of one UTF-8 character as NextCodePoint delimits it
+    static uint32_t DecodeUtf8(std::string_view ch)
+    {
+        const auto lead = static_cast<unsigned char>(ch[0]);
+        if (lead < 0x80 || ch.size() == 1)
+        {
+            return lead;
+        }
+        uint32_t value = lead & (lead >= 0xF0 ? 0x07U : lead >= 0xE0 ? 0x0FU
+                                                                     : 0x1FU);
+        for (size_t idx = 1; idx < ch.size(); ++idx)
+        {
+            value = (value << 6U) | (static_cast<unsigned char>(ch[idx]) & 0x3FU);
+        }
+        return value;
+    }
+
+    // The line boundaries of str.splitlines()
+    static bool IsLineBreak(uint32_t cp) { return (cp >= 0x0A && cp <= 0x0D) || (cp >= 0x1C && cp <= 0x1E) || cp == 0x85 || cp == 0x2028 || cp == 0x2029; }
+
+    static constexpr int64_t Width = 80;
+
     std::string operator()(const ListRef& list) const
     {
         CheckStack();
         std::string str;
+        if (list.GetRangeInfo())
+        {
+            // A range prints as its repr: range(0, 3)
+            visitors::ValueRenderer<char>(str, true)(list);
+            return str;
+        }
         auto os = std::back_inserter(str);
 
         // A tuple prints as Python's: (a, b), and (a,) with one item
@@ -229,7 +665,7 @@ PrettyPrint::PrettyPrint(const FilterParams& params)
 
 InternalValue PrettyPrint::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    return PrettyPrinter::Print(baseVal, &context);
+    return PrettyPrinter::Format(baseVal, &context);
 }
 
 Serialize::Serialize(const FilterParams& params, const Serialize::Mode mode)

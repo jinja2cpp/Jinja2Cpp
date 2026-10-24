@@ -461,6 +461,57 @@ inline bool IsLineBreak(uint32_t cp)
     return (cp >= 0x0A && cp <= 0x0D) || (cp >= 0x1C && cp <= 0x1E) || cp == 0x85 || cp == 0x2028 || cp == 0x2029;
 }
 
+// Python's str.replace(old, new, count): an empty old inserts new before every character and
+// at the end. The result is capped like any other sequence
+template<typename CharT>
+std::basic_string<CharT> PythonReplace(std::basic_string_view<CharT> str, std::basic_string_view<CharT> oldStr, std::basic_string_view<CharT> newStr, uint64_t count)
+{
+    std::basic_string<CharT> result;
+    auto append = [&result](std::basic_string_view<CharT> part) {
+        CheckSequenceSize(static_cast<uint64_t>(result.size()) + part.size(), "a replaced string");
+        result.append(part);
+    };
+    uint64_t done = 0;
+    size_t pos = 0;
+    if (oldStr.empty())
+    {
+        for (;;)
+        {
+            if (done < count)
+            {
+                append(newStr);
+                ++done;
+            }
+            if (pos == str.size())
+            {
+                break;
+            }
+            if (done >= count)
+            {
+                append(str.substr(pos));
+                break;
+            }
+            const auto next = NextCodePoint(str, pos);
+            append(str.substr(pos, next - pos));
+            pos = next;
+        }
+        return result;
+    }
+    for (; done < count; ++done)
+    {
+        const auto found = str.find(oldStr, pos);
+        if (found == std::basic_string_view<CharT>::npos)
+        {
+            break;
+        }
+        append(str.substr(pos, found - pos));
+        append(newStr);
+        pos = found + oldStr.size();
+    }
+    append(str.substr(pos));
+    return result;
+}
+
 // Port of Jinja2's do_indent
 template<typename CharT>
 std::basic_string<CharT> Indent(std::basic_string_view<CharT> text, const std::basic_string<CharT>& indention, bool first, bool blank)
@@ -1671,7 +1722,7 @@ StringConverter::StringConverter(const FilterParams& params, StringConverter::Mo
     {
     case ReplaceMode:
     {
-        static const auto args = MakeArgumentsTable({ { "old", true }, { "new", true }, { "count", false, static_cast<int64_t>(0) } });
+        static const auto args = MakeArgumentsTable({ { "old", true }, { "new", true }, { "count", false } });
         ParseParams(args, params);
         break;
     }
@@ -1783,33 +1834,39 @@ InternalValue StringConverter::ApplyReplace(const InternalValue& baseVal, Render
             newVal = MarkupEscape(newVal, callback);
         }
     }
-    result = ApplyStringConverter(srcVal, [this, &context, &oldVal, &newVal](auto srcStr) -> TargetString {
-        std::decay_t<decltype(srcStr)> emptyStrView;
-        using CharT = typename decltype(emptyStrView)::value_type;
-        std::basic_string<CharT> emptyStr;
-        auto oldStr = GetAsSameString(srcStr, oldVal).value_or(emptyStr);
-        auto newStr = GetAsSameString(srcStr, newVal).value_or(emptyStr);
-        auto count = ConvertToInt(this->GetArgumentValue("count", context));
-        if (oldStr.empty())
-        {
-            return std::basic_string<CharT>(srcStr);
-        }
-        // Like str.replace: non-overlapping occurrences, left to right, so a replacement is never
-        // searched again and a huge count stops at the last occurrence. count == 0 replaces all of them
-        std::basic_string<CharT> str;
-        size_t from = 0;
-        for (int64_t n = 0; count == 0 || n < count; ++n)
-        {
-            auto pos = srcStr.find(oldStr, from);
-            if (pos == decltype(srcStr)::npos)
+    // str.replace's count: None (Jinja2's default, -1) or a negative count replaces every one
+    const auto countVal = GetArgumentValue("count", context);
+    uint64_t count = std::numeric_limits<uint64_t>::max();
+    if (const auto* intVal = GetIf<int64_t>(&countVal))
+    {
+        count = *intVal < 0 ? count : static_cast<uint64_t>(*intVal);
+    }
+    else if (const auto* boolVal = GetIf<bool>(&countVal))
+    {
+        count = *boolVal ? 1 : 0;
+    }
+    else if (countVal.Kind() == ValueKind::BigInt)
+    {
+        throw TemplateRuntimeError("Python int too large to convert to C ssize_t");
+    }
+    else if (!IsEmpty(countVal))
+    {
+        throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(countVal) + "' object cannot be interpreted as an integer");
+    }
+    result = ApplyStringConverter(srcVal, [&context, &oldVal, &newVal, count](auto srcStr) -> TargetString {
+        using CharT = typename decltype(srcStr)::value_type;
+        using String = std::basic_string<CharT>;
+        // Jinja2 replaces the str() of old and new
+        auto strOf = [&context, &srcStr](const InternalValue& val) -> String {
+            if (auto str = GetAsSameString(srcStr, val))
             {
-                break;
+                return std::move(*str);
             }
-            str.append(srcStr.substr(from, pos - from)).append(newStr);
-            from = pos + oldStr.size();
-        }
-        str.append(srcStr.substr(from));
-        return str;
+            return std::visit([](const auto& text) { return ConvertString<String>(text); }, context.GetRendererCallback()->GetAsTargetString(val));
+        };
+        const auto oldStr = strOf(oldVal);
+        const auto newStr = strOf(newVal);
+        return PythonReplace<CharT>(srcStr, oldStr, newStr, count);
     });
     InternalValue replaced(std::move(result));
     replaced.SetMarkup(isMarkup);
@@ -1946,6 +2003,11 @@ TargetString StringConverter::ApplyIndent(const InternalValue& baseVal, RenderCo
         }
         else
         {
+            // " " * width: an int or a bool, not a float or anything else
+            if (!GetIf<int64_t>(&width) && !GetIf<bool>(&width) && width.Kind() != ValueKind::BigInt)
+            {
+                throw TemplateRuntimeError("can't multiply sequence by non-int of type '"s + Apply<visitors::PythonTypeNameGetter>(width) + "'");
+            }
             const auto spaces = static_cast<uint64_t>(std::max<int64_t>(0, ConvertToInt(width)));
             checkSize(spaces);
             indention = std::basic_string<CharT>(static_cast<size_t>(spaces), ' ');
@@ -1992,16 +2054,39 @@ TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderCo
 
         std::vector<String> extraSchemes;
         auto schemesVal = this->GetArgumentValue("extra_schemes", context);
-        bool isList = false;
-        auto schemes = ConvertToList(schemesVal, isList);
-        for (const InternalValue& scheme : isList ? schemes : ListAdapter::CreateAdapter(InternalValueList()))
+        // A string is iterated too, one scheme per character, none of them valid
+        if (auto text = GetAsSameString(srcStr, schemesVal); text && !text->empty())
         {
+            context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
+        }
+        // Any other iterable gives its items (a dict its keys); anything else is no iterable.
+        // Each is checked as it is read, so a long iterable stops at its first bad item
+        auto addScheme = [&srcStr, &context, &extraSchemes](const InternalValue& scheme) {
             auto str = GetAsSameString(srcStr, scheme);
             if (!str || !Urlizer<CharT>::IsValidScheme(*str))
             {
                 context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
             }
-            extraSchemes.push_back(*str);
+            CheckSequenceSize(extraSchemes.size() + 1, "a list");
+            extraSchemes.push_back(std::move(*str));
+        };
+        if (auto map = AsMap(schemesVal))
+        {
+            for (const auto& entry : map->GetEntries())
+            {
+                addScheme(entry.key);
+            }
+        }
+        else if (auto list = AsList(schemesVal))
+        {
+            for (const auto& item : *list)
+            {
+                addScheme(item);
+            }
+        }
+        else if (!IsEmpty(schemesVal) && !GetAsSameString(srcStr, schemesVal))
+        {
+            throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(schemesVal) + "' object is not iterable");
         }
 
         return Urlizer<CharT>(limit, rel, target, std::move(extraSchemes))(srcStr, baseVal.IsMarkup());
@@ -2067,17 +2152,16 @@ InternalValue StringConverter::MapChars(const InternalValue& baseVal) const
 
 int64_t StringConverter::WordCount(const InternalValue& baseVal)
 {
-    // The global locale's classification, as boost::algorithm::is_alnum did (Python counts \w+ runs: 0107)
-    auto isAlNum = [locale = std::locale()](auto ch) { return std::use_facet<std::ctype<decltype(ch)>>(locale).is(std::ctype_base::alnum, ch); };
+    // Jinja2 counts the matches of \w+ in the str() of the value, by code point
     int64_t wc = 0;
-    ApplyStringConverter<GenericStringEncoder>(baseVal, [isDelim = true, &wc, &isAlNum](auto ch, auto&&) mutable {
-        if (isDelim && isAlNum(ch))
-        {
-            isDelim = false;
-            wc++;
-            return;
-        }
-        isDelim = !isAlNum(ch);
+    ApplyStringConverter(baseVal, [&wc](auto srcStr) -> TargetString {
+        bool inWord = false;
+        ForEachCodePoint(srcStr, [&wc, &inWord](auto ch) {
+            const bool isWord = unicode::IsWordChar(CodePointValue(ch));
+            wc += isWord && !inWord ? 1 : 0;
+            inWord = isWord;
+        });
+        return {};
     });
     return wc;
 }
@@ -2110,7 +2194,12 @@ InternalValue StringConverter::Convert(const InternalValue& baseVal, RenderConte
     {
     case TrimMode:
         return ConvertText(baseVal, [this, &context](auto srcStr) {
-            auto chars = GetAsSameString(srcStr, this->GetArgumentValue("chars", context));
+            const auto charsVal = this->GetArgumentValue("chars", context);
+            auto chars = GetAsSameString(srcStr, charsVal);
+            if (!chars && !IsEmpty(charsVal))
+            {
+                throw TemplateRuntimeError("strip arg must be None or str");
+            }
             return InternalValue::FromText(PythonStrip(srcStr, chars));
         });
     case TitleMode:
@@ -2167,6 +2256,11 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
             throw TemplateRuntimeError("'" + typeName + "' object has no attribute 'splitlines'");
         }
         throw TemplateRuntimeError("unsupported operand type(s) for +=: '" + typeName + "' and 'str'");
+    }
+    else if (m_mode == WordWrapMode && !GetAsSameString(std::string(), baseVal))
+    {
+        // wordwrap calls the value's splitlines(), which only a string has
+        throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object has no attribute 'splitlines'");
     }
     switch (m_mode)
     {

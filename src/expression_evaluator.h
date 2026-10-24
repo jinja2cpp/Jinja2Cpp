@@ -61,6 +61,14 @@ public:
     // operators, subscripts and the filters that do not need the context, on such
     // operands. A `~` chain of these is joined with str(), which drops Markup
     [[nodiscard]] virtual bool IsFoldable(const NodeArena& /*nodes*/) const { return false; }
+    // Jinja2 also evaluates a foldable test, or the left operand of `and`/`or`, when it
+    // compiles the template and folds by the side it picks (CondExpr.as_const). Such a test has
+    // the same value on every render, so the render decides it. PrepareFold, at Load, is
+    // IsFoldable that also says whether the value may fold by such a choice (FoldBits), and
+    // records that of the operands in one walk; then IsFoldableAt evaluates the tests. An
+    // error while evaluating one means not foldable, as in Jinja2
+    virtual std::uint8_t PrepareFold(const NodeArena& nodes);
+    [[nodiscard]] virtual bool IsFoldableAt(RenderContext& /*values*/) const { return false; }
     virtual void Render(OutStream& stream, RenderContext& values);
 protected:
     // Only the arena moves a node, when it seals the tree into one buffer
@@ -71,6 +79,13 @@ protected:
 };
 
 using Expression = ExpressionEvaluatorBase;
+
+// What Expression::PrepareFold says of a value: Jinja2 folds it always, or by a choice
+enum FoldBits : std::uint8_t
+{
+    FoldAlways = 1,
+    FoldByChoice = 2
+};
 
 struct CallParams
 {
@@ -321,6 +336,8 @@ public:
     [[nodiscard]] bool IsPure(const NodeArena& nodes) const override { return m_expression && !m_tester && nodes[m_expression].IsPure(nodes); }
     [[nodiscard]] const InternalValue* GetConstant(const NodeArena& nodes) const override { return m_expression && !m_tester ? nodes[m_expression].GetConstant(nodes) : nullptr; }
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
+    std::uint8_t PrepareFold(const NodeArena& nodes) override;
+    [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
     void Render(OutStream& stream, RenderContext& values) override;
 private:
     NodeRef<Expression> m_expression;
@@ -828,6 +845,8 @@ public:
     // The operator applied to evaluated operands (not `and`/`or`)
     InternalValue Apply(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context) const;
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
+    std::uint8_t PrepareFold(const NodeArena& nodes) override;
+    [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
 
 protected:
     // Nothing destroys an operation through this base; a plain one owns nothing, so the
@@ -851,6 +870,9 @@ private:
     // of the template contends on (docs/tasks/0149)
     bool m_leftByRef = false;
     bool m_rightByRef = false;
+    // How each operand folds (FoldBits), recorded by PrepareFold
+    std::uint8_t m_leftFold = 0;
+    std::uint8_t m_rightFold = 0;
 };
 
 // `x in [1, 2]` with a literal of scalar constants: the items, built once. They are never
@@ -1115,6 +1137,9 @@ public:
     // `value if test else alt` folds when Jinja2 can fold the test and the branch it picks;
     // a test that is not a literal needs both branches
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes, NodeRef<Expression> value) const;
+    // Expression::PrepareFold and IsFoldableAt of `value if test else alt`
+    std::uint8_t PrepareFold(const NodeArena& nodes, NodeRef<Expression> value);
+    [[nodiscard]] bool IsFoldableAt(RenderContext& values, NodeRef<Expression> value) const;
     [[nodiscard]] NodeRef<Expression> GetAltValue() const { return m_altValue; }
 
     void SetAltValue(NodeRef<Expression> altValue)
@@ -1125,6 +1150,10 @@ public:
 private:
     NodeRef<Expression> m_testExpr;
     NodeRef<Expression> m_altValue;
+    // How the test, the value and the alternative fold (FoldBits), by PrepareFold
+    std::uint8_t m_testFold = 0;
+    std::uint8_t m_valueFold = 0;
+    std::uint8_t m_altFold = 0;
 };
 
 namespace helpers
