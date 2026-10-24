@@ -932,6 +932,46 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseCall(L
     return result;
 }
 
+namespace
+{
+enum class CallArgKind
+{
+    Positional,
+    Keyword,
+    Args,
+    Kwargs
+};
+
+// The kind of argument `tok` starts, as Jinja2's parse_call_args orders them: positional
+// arguments, then keywords and one `*expr`, then one `**expr`. Nothing where it is out of that
+// order ("invalid syntax for function call expression") or a keyword is repeated
+std::optional<CallArgKind> ClassifyCallArg(const Token& tok, LexScanner& lexer, const CallParamsInfo& params, bool allowUnpacking)
+{
+    if (allowUnpacking && (tok == '*' || tok == Token::MulMul))
+    {
+        if (tok == Token::MulMul)
+        {
+            return params.dynKwargs ? std::nullopt : std::optional(CallArgKind::Kwargs);
+        }
+        return params.dynKwargs || params.dynArgs ? std::nullopt : std::optional(CallArgKind::Args);
+    }
+    if (tok == Token::Identifier && lexer.PeekNextToken() == '=')
+    {
+        // No keyword after **kwargs
+        if (params.kwParams.count(lexer.GetAsString(tok)) || params.dynKwargs)
+        {
+            return std::nullopt;
+        }
+        return CallArgKind::Keyword;
+    }
+    if (!params.kwParams.empty() || params.dynArgs || params.dynKwargs)
+    {
+        return std::nullopt;
+    }
+    return CallArgKind::Positional;
+}
+} // namespace
+
 ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(LexScanner& lexer, bool allowUnpacking)
 {
     CallParamsInfo result;
@@ -941,41 +981,24 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
         return result;
     }
 
-    // Jinja2's parse_call_args: positional arguments, then keywords and one `*expr`, then one
-    // `**expr`; anything else out of that order is "invalid syntax for function call expression"
     SiblingOperators siblings(m_operators);
     do
     {
         siblings.Next();
         const auto& tok = lexer.NextToken();
-        std::string paramName;
-        NodeRef<Expression>* unpacked = nullptr;
-        if (allowUnpacking && (tok == '*' || tok == Token::MulMul))
+        const auto kind = ClassifyCallArg(tok, lexer, result, allowUnpacking);
+        if (!kind)
         {
-            const bool isKeywords = tok == Token::MulMul;
-            if (result.dynKwargs || (!isKeywords && result.dynArgs))
-            {
-                return MakeParseError(ErrorCode::UnexpectedToken, tok);
-            }
-            unpacked = isKeywords ? &result.dynKwargs : &result.dynArgs;
+            return MakeParseError(ErrorCode::UnexpectedToken, tok);
         }
-        else if (tok == Token::Identifier && lexer.PeekNextToken() == '=')
+        std::string paramName;
+        if (*kind == CallArgKind::Keyword)
         {
             paramName = lexer.GetAsString(tok);
-            // Jinja2: "keyword argument repeated"; no keyword after **kwargs
-            if (result.kwParams.count(paramName) || result.dynKwargs)
-            {
-                return MakeParseError(ErrorCode::UnexpectedToken, tok);
-            }
             lexer.EatToken();
         }
-        else
+        else if (*kind == CallArgKind::Positional)
         {
-            // A positional argument comes before every keyword and unpacked one
-            if (!result.kwParams.empty() || result.dynArgs || result.dynKwargs)
-            {
-                return MakeParseError(ErrorCode::UnexpectedToken, tok);
-            }
             lexer.ReturnToken();
         }
 
@@ -984,17 +1007,20 @@ ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(
         {
             return MakeUnexpected(valueExpr.error());
         }
-        if (unpacked)
+        switch (*kind)
         {
-            *unpacked = *valueExpr;
-        }
-        else if (paramName.empty())
-        {
+        case CallArgKind::Positional:
             result.posParams.push_back(*valueExpr);
-        }
-        else
-        {
+            break;
+        case CallArgKind::Keyword:
             result.kwParams[paramName] = *valueExpr;
+            break;
+        case CallArgKind::Args:
+            result.dynArgs = *valueExpr;
+            break;
+        case CallArgKind::Kwargs:
+            result.dynKwargs = *valueExpr;
+            break;
         }
 
         // A trailing comma ends the arguments: f(a, ) is f(a)

@@ -469,6 +469,7 @@ INSTANTIATE_TEST_SUITE_P(MapParamConvert, UserCallableParamConvertTest, ::testin
                             ));
 // clang-format on
 
+// clang-format off
 INSTANTIATE_TEST_SUITE_P(UserDefinedFilter, UserCallableFilterTest, ::testing::Values(
                             InputOutputPair{"'Hello World' | surround",                   ">>> Hello World <<<"},
                             InputOutputPair{"'Hello World' | surround(before='### ')",    "### Hello World <<<"},
@@ -481,6 +482,7 @@ INSTANTIATE_TEST_SUITE_P(UserDefinedFilter, UserCallableFilterTest, ::testing::V
                             InputOutputPair{"'str1' if 'str3' is tester(pattern='str1') else 'str2'", "str2"},
                             InputOutputPair{"('str1', 'A', 'str1', 'B', 'str1', 'C') | select('tester', 'str1') | map('surround', before='> ', after=' <') | pprint", "['> str1 <', '> str1 <', '> str1 <']"}
                             ));
+// clang-format on
 
 
 // Filters and tests added to the environment (Jinja2 env.filters, env.tests) and Settings::finalize

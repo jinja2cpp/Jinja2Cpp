@@ -1762,8 +1762,14 @@ void AppendUnpackedArgs(const InternalValue& value, std::vector<InternalValue>& 
     {
         throw TemplateRuntimeError("Value after * must be an iterable, not "s + Apply<visitors::PythonTypeNameGetter>(value));
     }
+    // The arguments are a sequence the template builds: f(*range(10**9)) is held to the cap
+    if (const auto size = items.GetSize())
+    {
+        ReserveHint(posParams, posParams.size() + *size);
+    }
     for (auto&& item : items)
     {
+        CheckSequenceSize(posParams.size() + 1, "a list");
         posParams.push_back(std::forward<decltype(item)>(item));
     }
 }

@@ -75,6 +75,10 @@ std::vector<LimitCase> Cases()
         // Past the built-in cap as well: the render's own limit is reported
         { "RepeatAboveCap", "{{ 'x' * 100000000 }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
         { "CenterAboveCap", "{{ 'x'|center(100000000) }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
+        // f(*args) builds the argument list from the iterable (docs/tasks/0220)
+        { "UnpackedArgsOver", "{% macro m() %}{{ varargs|length }}{% endmacro %}{{ m(*range(2000)) }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
+        { "UnpackedArgsAt", "{% macro m() %}{{ varargs|length }}{% endmacro %}{{ m(1, *range(999)) }}", [](auto& l) { l.maxSequenceSize = 1000; }, "" },
+        { "UnpackedGeneratorOver", "{% macro m() %}{{ varargs|length }}{% endmacro %}{{ m(*range(2000)|select) }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
         { "OutputOver", "{% for i in range(2000) %}x{% endfor %}", [](auto& l) { l.maxOutputSize = 1000; }, "maxOutputSize" },
         { "OutputAt", "{% for i in range(1000) %}x{% endfor %}", [](auto& l) { l.maxOutputSize = 1000; }, "" },
         { "OutputLongText", "{{ 'x' * 2000 }}", [](auto& l) { l.maxOutputSize = 1000; }, "maxOutputSize" },
