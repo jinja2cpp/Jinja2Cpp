@@ -36,4 +36,4 @@ only by the side a foldable test or `and`/`or` operand picks, and records it per
 `IsFoldableAt` evaluates those tests at render, where they have the value Jinja2 folds.
 `FinalizedExpressionRenderer` and the volatile `StaticOutputRenderer` use it. Cases:
 `autoescape.env_on_finalize_folded_choice*`, `autoescape.volatile_folded_choice`. A choice
-inside a `~` chain or another composite is still run-time: task 0304.
+inside a `~` chain or another composite is still run-time: task 0307.

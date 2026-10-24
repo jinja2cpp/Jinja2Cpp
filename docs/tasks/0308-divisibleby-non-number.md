@@ -17,4 +17,4 @@ Case: `tests.divisibleby_string`.
 **Proposal.** Compute the test with the evaluator's `%` (`BinaryExpression::DivRemainder`,
 which already implements str formatting and the TypeErrors) and compare the result with 0.
 
-**Done when.** No line of `test/parity/divergences/` names task 0305, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0308, and `ctest -R parity` passes.

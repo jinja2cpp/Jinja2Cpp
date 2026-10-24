@@ -24,4 +24,4 @@ Case: `autoescape.volatile_folded_choice_nested` (Python `<&lt;-1`, Jinja2C++ `&
 record and check their operands the way `BinaryExpression` does, and make the concat chain's
 Markup drop follow `IsFoldableAt` when its operands fold by choice.
 
-**Done when.** No line of `test/parity/divergences/` names task 0304, and `ctest -R parity` passes.
+**Done when.** No line of `test/parity/divergences/` names task 0307, and `ctest -R parity` passes.
