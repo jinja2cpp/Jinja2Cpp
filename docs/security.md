@@ -50,9 +50,11 @@ land, the memory one render uses is not bounded by the library alone.
 Autoescape is off by default, as in Python; `UntrustedSettings()` turns it on, and
 `Settings::autoescapeSelector` chooses it per template name like Python's `select_autoescape`.
 With autoescape on, string data printed by `{{ }}` is escaped for `& < > " '`, which makes it
-safe in HTML text and in quoted attribute values. It is not safe inside `<script>` or `<style>`,
-in unquoted attributes, or as a URL (`javascript:`); `|tojson` escapes `< > & '` for embedding
-JSON in HTML.
+safe in HTML text and in quoted values of attributes that hold plain text (`title`, `alt`,
+`value`, `class`, ...). It cannot make data safe where the browser interprets the value as code
+or markup: inside `<script>` or `<style>`, in event-handler attributes (`onclick`), `style` or
+`srcdoc`, in unquoted attributes, or as a URL (`href="javascript:..."`). `|tojson` escapes
+`< > & '` for embedding JSON in HTML.
 
 Autoescape protects against untrusted *data*, not untrusted *templates*: a template author can
 always print raw HTML with `|safe`, `{% autoescape false %}` or by writing it as template text.
