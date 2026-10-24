@@ -831,6 +831,49 @@ public:
             names.emplace(name, value);
         }
     }
+    // The innermost value of `name` among the scopes, the external scope and the globals for which `accepts`
+    // is true: a lookup that passes over the values it refuses (the `loop` of an including loop)
+    template<typename Accepts>
+    [[nodiscard]] std::optional<InternalValue> FindValueWhere(const std::string& name, const Accepts& accepts) const
+    {
+        std::optional<InternalValue> result;
+        const auto hashed = ToHashedName(name);
+        VisitScopes(
+            *this,
+            [&](const InternalValueMap* scope, size_t /*depth*/) {
+                const auto* p = FindIn(*scope, hashed);
+                if (p && accepts(p->second))
+                {
+                    result = p->second;
+                }
+                return result.has_value();
+            },
+            [&](const FrameView& view, size_t /*depth*/) {
+                const auto idx = FindInView(view, hashed);
+                if (idx != view.names.size() && view.slots[idx].IsBound() && accepts(static_cast<const InternalValue&>(view.slots[idx])))
+                {
+                    result = static_cast<const InternalValue&>(view.slots[idx]);
+                }
+                return result.has_value();
+            });
+        if (!result)
+        {
+            const auto* external = FindIn(*m_externalScope, hashed);
+            if (external && accepts(external->second))
+            {
+                result = external->second;
+            }
+        }
+        if (!result)
+        {
+            const auto* global = FindIn(*m_globalScope, hashed);
+            if (global && accepts(global->second))
+            {
+                result = global->second;
+            }
+        }
+        return result;
+    }
     // The scopes this context sees, its parents' included
     [[nodiscard]] size_t GetScopesCount() const
     {

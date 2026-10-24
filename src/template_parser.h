@@ -1632,6 +1632,10 @@ private:
         {
             templateRoot.SetHasExtends();
         }
+        if (m_nodes.ReadsOuterLoop())
+        {
+            templateRoot.SetMentionsLoop();
+        }
         templateRoot.SetBody(m_bodies.Take(m_nodes, 0));
         return nonstd::expected<void, std::vector<ParseError>>();
     }

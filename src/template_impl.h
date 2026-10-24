@@ -260,6 +260,8 @@ public:
 
     // The root of the tree, resolved through Nodes()
     [[nodiscard]] NodeRef<TemplateRenderer> GetRenderer() const { return m_renderer; }
+    // Whether the template reads a `loop` it does not bind itself (an include of it must hide the including loop)
+    [[nodiscard]] bool MayReadLoop() const { return m_mayReadLoop; }
     // The name `self` prints: the one the template was loaded with, empty (None) without one
     [[nodiscard]] std::string_view SelfName() const { return m_isNamed ? std::string_view(m_templateName) : std::string_view(); }
     [[nodiscard]] const ArenaView& Nodes() const { return m_nodes.View(); }
@@ -335,6 +337,7 @@ public:
             auto metadataInfo = parser.GetMetadataInfo();
             m_nodes = std::move(sealed);
             m_renderer = *parseResult;
+            m_mayReadLoop = m_nodes[m_renderer].MayReadLoop();
             m_convertedTexts = std::move(convertedTexts);
             m_metadataInfo = std::move(metadataInfo);
         }
@@ -936,6 +939,7 @@ private:
     std::unique_ptr<std::forward_list<std::basic_string<CharT>>> m_convertedTexts;
     std::string m_templateName;
     bool m_isNamed = false;
+    bool m_mayReadLoop = false;
     // Owns the tree
     SealedArena m_nodes;
     NodeRef<TemplateRenderer> m_renderer;
