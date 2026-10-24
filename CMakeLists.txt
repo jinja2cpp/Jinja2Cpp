@@ -445,7 +445,7 @@ if (JINJA2CPP_BUILD_TESTS)
     # The Boost big-integer adapter is checked in every build; the built-in one only in boost builds
     target_link_libraries(jinja2cpp_tests jinja2cpp_boost_multiprecision)
     if ("${JINJA2CPP_WITH_BIGINT}" STREQUAL "boost")
-        target_compile_definitions(jinja2cpp_tests PRIVATE JINJA2CPP_TEST_BIGINT_BOOST)
+        target_compile_definitions(jinja2cpp_tests PRIVATE JINJA2CPP_WITH_BIGINT_BOOST)
     endif ()
 
     set_target_properties(jinja2cpp_tests PROPERTIES

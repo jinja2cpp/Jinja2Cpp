@@ -570,7 +570,7 @@ TEST(BigIntBuiltin, MatchesTheBuildOption)
 {
     const auto* builtin = GetBuiltinBigIntBackend();
     EXPECT_EQ(builtin, TemplateEnv().GetBigIntBackend());
-#ifdef JINJA2CPP_TEST_BIGINT_BOOST
+#ifdef JINJA2CPP_WITH_BIGINT_BOOST
     ASSERT_NE(nullptr, builtin);
     EXPECT_EQ(std::string_view("boost-cpp_int"), builtin->name);
     CheckBackendRendersAsPython(builtin);

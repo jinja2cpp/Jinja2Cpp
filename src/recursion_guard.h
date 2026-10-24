@@ -109,8 +109,9 @@ struct RenderLimits
     bool sinkOutput = false;
     // Whether a limit is set: a render without limits inside one with them installs these defaults
     bool active = false;
-    // Whether a render installed these for its limits: a render without limits inside one with
-    // them installs the defaults
+    // Whether a render installed these for its limits (outside a -DJINJA2CPP_WITH_BIGINT=boost
+    // build, also for its big-integer backend): a render without either inside one with them
+    // installs the defaults
     bool scoped = false;
     bool hasDeadline = false;
     // steady_clock ticks since its epoch: a time_point's constructor is not noexcept, which a
@@ -131,9 +132,10 @@ void InstallRenderLimits(const RenderLimits& limits);
 class RenderLimitsScope
 {
 public:
-    // `limits` is null when the render has no limits; `bigInts` is its big-integer backend, or null.
-    // A backend alone swaps one pointer: in a -DJINJA2CPP_WITH_BIGINT=boost build every render has
-    // one, and installing the default limits for it cost a short render 17% (docs/tasks/0272)
+    // `limits` is null when the render has neither limits nor, outside a -DJINJA2CPP_WITH_BIGINT=boost build,
+    // a big-integer backend; `bigInts` is its backend, or null. In a boost build every render has one, and
+    // installing the default limits for it cost a short render 17%, so there a backend alone swaps one
+    // pointer; the default build keeps its fast path free of it (docs/tasks/0272)
     RenderLimitsScope(const Settings::Limits* limits, const BigIntBackend* bigInts)
     {
         auto& state = detail::t_renderLimits;
@@ -142,9 +144,11 @@ public:
             Install(limits, bigInts);
             return;
         }
+#ifdef JINJA2CPP_WITH_BIGINT_BOOST
         // Unconditional: cheaper than testing whether either pointer is set
         m_savedBigInts = state.bigInts;
         state.bigInts = bigInts;
+#endif
     }
     ~RenderLimitsScope()
     {
@@ -153,7 +157,9 @@ public:
             detail::InstallRenderLimits(*m_saved);
             return;
         }
+#ifdef JINJA2CPP_WITH_BIGINT_BOOST
         detail::t_renderLimits.bigInts = m_savedBigInts;
+#endif
     }
     RenderLimitsScope(const RenderLimitsScope&) = delete;
     RenderLimitsScope& operator=(const RenderLimitsScope&) = delete;
@@ -164,8 +170,10 @@ private:
     void Install(const Settings::Limits* limits, const BigIntBackend* bigInts);
 
     std::optional<detail::RenderLimits> m_saved;
+#ifdef JINJA2CPP_WITH_BIGINT_BOOST
     // The backend of the render this one interrupts, when this one installs no limits
     const BigIntBackend* m_savedBigInts = nullptr;
+#endif
 };
 
 // Whether a template loaded with these limits renders with any (RenderLimitsScope): the
