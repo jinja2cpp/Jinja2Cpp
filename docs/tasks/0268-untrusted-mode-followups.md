@@ -22,3 +22,5 @@ gets a design:
   as Python's decode with `errors='replace'`).
 - **`maxIntegerDigits`** if the 0178 big-integer backend lands; it then has to go into
   `Settings::Limits` before the freeze instead (CPython caps int-to-str at 4300 digits).
+
+**Trust model.** When this lands, update its entry under Known gaps in [docs/security.md](../security.md) (0224).

@@ -31,3 +31,5 @@ interesting direction.
 **Done when.** Default builds carry the flags on GCC, Clang and MSVC with the bench delta
 recorded, the macro family replaces ad-hoc internal asserts, and the C++26 row exercises the
 contracts mapping where the compiler supports it.
+
+**Trust model.** When this lands, update its entry under Known gaps in [docs/security.md](../security.md) (0224).

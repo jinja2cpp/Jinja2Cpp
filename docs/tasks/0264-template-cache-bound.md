@@ -23,3 +23,5 @@ path (a mutex member would change the class layout).
 (counting handler); a TSan row with two threads loading a wide-stored file through the narrow API.
 
 **Done when.** Both rows pass, the TSan job included.
+
+**Trust model.** When this lands, update its entry under Known gaps in [docs/security.md](../security.md) (0224).
