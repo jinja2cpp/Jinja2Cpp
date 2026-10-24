@@ -61,6 +61,7 @@ CASES = [
     # Callables as values: f.__call__ is a way to call f; reads of one bound method compare equal
     ("macro_dunder_call_subscript", "{% macro m() %}x{% endmacro %}{{ m['__call__']() }}{{ m.__call__.__call__() }}"),
     ("global_dunder_call", "{{ range.__call__(3)|list }}"),
+    ("dunder_call_is_a_bound_method", "{% macro m() %}x{% endmacro %}{{ 'T' if m.__call__ == m else 'F' }}"),
     ("loop_method_dunder_call", "{% for i in [1] %}{{ loop.cycle.__call__('a') }}{% endfor %}"),
     ("loop_methods_compare", "{% for i in [1] %}{{ 'T' if loop.changed == loop.changed else 'F' }}{{ 'T' if loop.cycle == loop.changed else 'F' }}{% endfor %}"),
     ("loop_method_of_outer_loop", "{% for i in [1] %}{% set c = loop.cycle %}{% for j in [1] %}{{ 'T' if c == loop.cycle else 'F' }}{% endfor %}{% endfor %}"),

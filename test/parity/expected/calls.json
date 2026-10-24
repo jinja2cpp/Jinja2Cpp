@@ -502,6 +502,14 @@
    "output": "[0, 1, 2]"
   },
   {
+   "id": "calls.dunder_call_is_a_bound_method",
+   "template": "{% macro m() %}x{% endmacro %}{{ 'T' if m.__call__ == m else 'F' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "F"
+  },
+  {
    "id": "calls.loop_method_dunder_call",
    "template": "{% for i in [1] %}{{ loop.cycle.__call__('a') }}{% endfor %}",
    "context": {},
