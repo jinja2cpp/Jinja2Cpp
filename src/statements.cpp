@@ -1949,34 +1949,28 @@ bool IsLoopObject(const InternalValue& value)
 class LoopHiding
 {
 public:
-    explicit LoopHiding(RenderContext& values)
-        : m_values(values)
-    {
-    }
+    LoopHiding() = default;
     LoopHiding(const LoopHiding&) = delete;
     LoopHiding& operator=(const LoopHiding&) = delete;
     ~LoopHiding()
     {
-        if (m_isHidden)
+        if (m_binding)
         {
-            if (const auto slot = m_values.FindForWrite("loop"))
-            {
-                *slot = std::move(m_saved);
-            }
+            *m_binding = std::move(m_saved);
         }
     }
-    // The binding of the loop itself becomes undefined in place, which costs no allocation
+    // The binding of the loop itself becomes undefined in place, which costs no allocation. The
+    // scopes that hold it do not change while the include renders in a scope of its own
     void Hide(InternalValue& binding)
     {
         m_saved = std::move(binding);
         binding = InternalValue();
-        m_isHidden = true;
+        m_binding = &binding;
     }
 
 private:
-    RenderContext& m_values;
     InternalValue m_saved;
-    bool m_isHidden = false;
+    InternalValue* m_binding = nullptr;
 };
 
 // `loop` as the included template of `values` sees it. With a `loop` of the same name outside the
@@ -2018,7 +2012,7 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
 {
     RenderContext innerContext = values.Clone(withContext);
     // Declared after the context: the loop is put back once the included template has rendered
-    LoopHiding hidden(values);
+    LoopHiding hidden;
     if (withContext)
     {
         // Jinja2 renders it in a new Context, with an EvalContext of its own
