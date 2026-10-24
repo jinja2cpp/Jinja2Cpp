@@ -235,12 +235,14 @@ TEST_F(RecursionLimitsTest, LongChains)
     // Operands nest under their operator, not under each other
     EXPECT_EQ(Repeat("1", 300), Render("{{ x|string" + Repeat(" ~ x|string", 299) + " }}", { { "x", 1 } }));
     EXPECT_EQ("600", Render("{{ (1 + 1)" + Repeat(" + (1 + 1)", 299) + " }}"));
+    // A `~` run is one node, as Jinja2's Concat: Python renders chains of 20000 and more
+    EXPECT_EQ(Repeat("a", 20001), Render("{{ " + Repeat("'a' ~ ", 20000) + "'a' }}"));
+    EXPECT_EQ(Repeat("1", 20001), Render("{{ " + Repeat("x ~ ", 20000) + "x }}", { { "x", 1 } }));
 
     const std::string templates[] = {
         "{{ " + Repeat("1 + ", 20000) + "1 }}",
         "{{ " + Repeat("1 * ", 20000) + "1 }}",
         "{{ " + Repeat("1 and ", 20000) + "1 }}",
-        "{{ " + Repeat("'a' ~ ", 20000) + "'a' }}",
         "{{ x" + Repeat("|abs", 20000) + " }}",
         "{{ x" + Repeat(".a", 20000) + " }}",
         "{{ x" + Repeat("[0]", 20000) + " }}",

@@ -796,9 +796,6 @@ public:
     // The operator applied to evaluated operands (not `and`/`or`)
     InternalValue Apply(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context) const;
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
-    // A `~` chain Jinja2 folds when the template is compiled joins with str(), never with
-    // markup_join (set on each `~` of the chain, ExpressionParser::ParseBinary)
-    void SetFolded() { m_folded = true; }
 
 protected:
     // Nothing destroys an operation through this base; a plain one owns nothing, so the
@@ -822,7 +819,6 @@ private:
     // of the template contends on (docs/tasks/0149)
     bool m_leftByRef = false;
     bool m_rightByRef = false;
-    bool m_folded = false;
 };
 
 // `x in [1, 2]` with a literal of scalar constants: the items, built once. They are never
@@ -894,6 +890,32 @@ public:
 private:
     NodeRef<Expression> m_first;
     Operands m_operands;
+};
+
+// A run of `~`, a ~ b ~ c, as Jinja2's Concat node: every operand is evaluated once and the
+// result is built once, so a chain neither nests nor copies its text once per operator
+class ConcatExpression final : public Expression
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::ConcatExpr;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_operands);
+    }
+
+    explicit ConcatExpression(ArenaSpan<NodeRef<Expression>> operands)
+        : m_operands(operands)
+    {
+    }
+    InternalValue Evaluate(RenderContext&) override;
+    [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
+    // A chain Jinja2 folds when the template is compiled joins with str(), never with
+    // markup_join (ExpressionParser::ParseBinary)
+    void SetFolded() { m_folded = true; }
+
+private:
+    ArenaSpan<NodeRef<Expression>> m_operands;
+    bool m_folded = false;
 };
 
 // value[start:stop:step]; omitted parts are null

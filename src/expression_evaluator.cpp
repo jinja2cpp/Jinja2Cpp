@@ -710,47 +710,44 @@ InternalValue ApplyMathOperation(BinaryExpression::Operation oper, const Interna
     return result;
 }
 
-// a ~ b: both operands as strings of the template's width
-JINJA2CPP_ALWAYS_INLINE InternalValue ConcatAsStrings(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
+// The operands of a `~` chain as one string of the template's width, built once
+template<typename CharT>
+InternalValue JoinAsStrings(const boost::container::small_vector_base<InternalValue>& values)
 {
-    // Two strings of the template's width are copied into the result, allocated once
-    // (docs/tasks/0151)
-    auto concat = [&leftVal, &rightVal](auto tag) -> std::optional<InternalValue> {
-        using CharT = decltype(tag);
-        auto left = AsStringView<CharT>(leftVal);
-        auto right = left ? AsStringView<CharT>(rightVal) : std::nullopt;
-        if (!right)
+    // Strings of the template's width are copied into the result, allocated once (docs/tasks/0151)
+    size_t size = 0;
+    bool allText = true;
+    for (const auto& value : values)
+    {
+        if (const auto text = AsStringView<CharT>(value))
         {
-            return std::nullopt;
+            size += text->size();
         }
-        return InternalValue::FromText<CharT>({ *left, *right });
-    };
-    if (auto result = context.GetRendererCallback()->IsWideTarget() ? concat(wchar_t{}) : concat(char{}))
+        else
+        {
+            allText = false;
+        }
+    }
+    if (allText)
     {
-        return std::move(*result);
+        return InternalValue::MakeText<CharT>(size, [&values](boost::span<CharT> chars) {
+            auto out = chars.begin();
+            for (const auto& value : values)
+            {
+                const auto text = *AsStringView<CharT>(value);
+                out = std::copy(text.begin(), text.end(), out);
+            }
+        });
     }
 
-    // The right operand is rendered straight onto the left one's text
-    auto result = context.GetRendererCallback()->GetAsTargetString(leftVal);
-    if (auto* str = std::get_if<std::string>(&result))
+    // The others are rendered straight onto the text before them
+    std::basic_string<CharT> result;
+    result.reserve(size);
+    for (const auto& value : values)
     {
-        Apply<visitors::ValueRenderer<char>>(rightVal, *str);
+        Apply<visitors::ValueRenderer<CharT>>(value, result);
     }
-    else
-    {
-        Apply<visitors::ValueRenderer<wchar_t>>(rightVal, std::get<std::wstring>(result));
-    }
-    return InternalValue(std::move(result));
-}
-
-// Jinja2's markup_join, `~` under autoescape when either side is Markup: the other one is
-// escaped and the result is Markup. Kept apart so that the plain concatenation stays inlined
-JINJA2CPP_NOINLINE_INLINE InternalValue MarkupJoin(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
-{
-    auto* callback = context.GetRendererCallback();
-    InternalValue result = ConcatAsStrings(MarkupEscape(leftVal, callback), MarkupEscape(rightVal, callback), context);
-    result.SetMarkup();
-    return result;
+    return InternalValue(TargetString(std::move(result)));
 }
 } // namespace
 
@@ -795,17 +792,55 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
         result = testers::IsValueIn(leftVal, rightVal);
         break;
     }
-    case jinja2::BinaryExpression::StringConcat:
-        // Jinja2 3.1.6 joins as str in volatile code: it reads eval_ctx.volatile at run time,
-        // which is never set (docs/tasks/0216)
-        result = !m_folded && context.IsOutputAutoescape() && !context.IsVolatileAutoescape() && (leftVal.IsMarkup() || rightVal.IsMarkup())
-                     ? MarkupJoin(leftVal, rightVal, context)
-                     : ConcatAsStrings(leftVal, rightVal, context);
-        break;
     default:
         break;
     }
     return result;
+}
+
+InternalValue ConcatExpression::Evaluate(RenderContext& context)
+{
+    CheckStack();
+    const auto operands = context.Nodes()[m_operands];
+    boost::container::small_vector<InternalValue, 4> values;
+    values.reserve(operands.size());
+    bool anyMarkup = false;
+    for (const auto operand : operands)
+    {
+        auto& value = values.emplace_back(context.Nodes()[operand].Evaluate(context));
+        // StrictUndefined fails on any operator; the others render as empty text
+        CheckUndefinedUse(value, UndefinedUse::Operator);
+        anyMarkup = anyMarkup || value.IsMarkup();
+    }
+
+    // Jinja2's markup_join, `~` under autoescape when any operand is Markup: the others are
+    // escaped and the result is Markup. Jinja2 3.1.6 joins as str in volatile code: it reads
+    // eval_ctx.volatile at run time, which is never set (docs/tasks/0216)
+    auto* callback = context.GetRendererCallback();
+    const bool markupJoin = anyMarkup && !m_folded && context.IsOutputAutoescape() && !context.IsVolatileAutoescape();
+    if (markupJoin)
+    {
+        for (auto& value : values)
+        {
+            value = MarkupEscape(value, callback);
+        }
+    }
+    InternalValue result = callback->IsWideTarget() ? JoinAsStrings<wchar_t>(values) : JoinAsStrings<char>(values);
+    if (markupJoin)
+    {
+        result.SetMarkup();
+    }
+    return result;
+}
+
+bool ConcatExpression::IsFoldable(const NodeArena& nodes) const
+{
+    if (FoldWalkTooDeep())
+    {
+        return false;
+    }
+    const auto operands = nodes[m_operands];
+    return std::all_of(operands.begin(), operands.end(), [&nodes](const NodeRef<Expression>& operand) { return nodes[operand].IsFoldable(nodes); });
 }
 
 InternalValue CompareExpression::Evaluate(RenderContext& context)

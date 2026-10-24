@@ -69,6 +69,17 @@ TEST(UndefinedPolicyTest, Strict)
     EXPECT_EQ("FalseTrue|d|1", Render("{{ nope is defined }}{{ nope is undefined }}|{{ nope|default('d') }}|{{ d.a }}", policy));
 }
 
+TEST(UndefinedPolicyTest, ConcatChain)
+{
+    // An undefined operand of a `~` run renders as nothing, or fails for Strict
+    EXPECT_EQ("ABA", Render("{{ 'A' ~ 'B' ~ nope ~ 'A' }}"));
+    EXPECT_EQ("[A][B]", Render("[{{ nope ~ 'A' ~ d.zz }}][{{ 'B' ~ nope }}]"));
+    EXPECT_EQ("error: 'nope' is undefined", Render("{{ 'A' ~ 'B' ~ nope ~ 'A' }}", UndefinedPolicy::Strict));
+    EXPECT_EQ("error: 'nope' is undefined", Render("{{ nope ~ 'A' ~ 'B' }}", UndefinedPolicy::Strict));
+    EXPECT_EQ("error: 'dict object' has no attribute 'zz'", Render("{{ 'A' ~ 'B' ~ d.zz }}", UndefinedPolicy::Strict));
+    EXPECT_EQ("AB{{ nope }}A", Render("{{ 'A' ~ 'B' ~ nope ~ 'A' }}", UndefinedPolicy::Debug));
+}
+
 TEST(UndefinedPolicyTest, Chainable)
 {
     const auto policy = UndefinedPolicy::Chainable;

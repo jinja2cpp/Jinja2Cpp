@@ -335,6 +335,14 @@ public:
         return m_counter <= limit;
     }
 
+    // After the operand of an operator that joins a flat run with the one before (`~` operands
+    // are one node, not nested): the run is no deeper than its deepest operand
+    [[nodiscard]] bool AfterRightFlat(unsigned limit)
+    {
+        m_counter = std::max(m_left, m_counter);
+        return m_counter <= limit;
+    }
+
 private:
     unsigned& m_counter;
     unsigned m_base;

@@ -18,6 +18,7 @@
 #include <jinja2cpp/template_env.h>
 #include <boost/container/small_vector.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -318,10 +319,26 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
     // The operators of one call combine like the old one-function-per-level chains: each
     // right operand starts counting from where this call started (OperatorChain)
     OperatorChain chain(m_operators);
-    // The `~` of one call make one chain, as Jinja2's Concat node: the operators around `~`
-    // bind looser (a new call parses `a ~ b` on their right) or tighter (a ~ b * c)
-    boost::container::small_vector<NodeRef<BinaryExpression>, 4> concats;
-    bool concatFoldable = true;
+    // The `~` of one call make one run, as Jinja2's Concat node: the operators around `~`
+    // bind looser (a new call parses `a ~ b` on their right) or tighter (a ~ b * c), so the
+    // operands of a run are always next to each other. Its operands are one flat node and
+    // count as one operator
+    boost::container::small_vector<NodeRef<Expression>, 4> concat;
+    auto flushConcat = [this, &concat](NodeRef<Expression>& left) {
+        if (concat.empty())
+        {
+            return;
+        }
+        // Jinja2 folds a chain of foldable operands into one str
+        const bool foldable = std::all_of(concat.begin(), concat.end(), [this](const NodeRef<Expression>& operand) { return m_nodes[operand].IsFoldable(m_nodes); });
+        const auto node = m_nodes.Make<ConcatExpression>(m_nodes.MakeSpan(concat));
+        if (foldable)
+        {
+            m_nodes[node].SetFolded();
+        }
+        left = node;
+        concat.clear();
+    };
     auto left = minPrecedence <= Precedence::Not && lexer.PeekNextToken().keyword == Keyword::LogicalNot ? ParseLogicalNot(lexer)
                                                                                                          : ParseUnaryPlusMinus(lexer);
     while (left)
@@ -330,6 +347,10 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
         if (op.precedence < minPrecedence)
         {
             break;
+        }
+        if (op.precedence != Precedence::Concat)
+        {
+            flushConcat(*left);
         }
         if (op.precedence == Precedence::Compare)
         {
@@ -346,31 +367,33 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseBinary
         {
             left = std::move(right);
         }
+        else if (op.precedence == Precedence::Concat)
+        {
+            const bool first = concat.empty();
+            if (first ? !chain.AfterRight(detail::t_parseLimits.maxExpressionOperators) : !chain.AfterRightFlat(detail::t_parseLimits.maxExpressionOperators))
+            {
+                left = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
+                continue;
+            }
+            if (first)
+            {
+                concat.push_back(*left);
+            }
+            concat.push_back(*right);
+        }
         else if (!chain.AfterRight(detail::t_parseLimits.maxExpressionOperators))
         {
             left = MakeParseError(ErrorCode::RecursionLimitExceeded, tok);
         }
         else
         {
-            if (op.operation == BinaryExpression::StringConcat)
-            {
-                concatFoldable = concatFoldable && (!concats.empty() || m_nodes[*left].IsFoldable(m_nodes)) && m_nodes[*right].IsFoldable(m_nodes);
-            }
             left = NodeRef<Expression>(BinaryExpression::Make(m_nodes, op.operation, *left, *right));
-            if (op.operation == BinaryExpression::StringConcat)
-            {
-                concats.push_back(m_nodes.As<BinaryExpression>(*left));
-            }
         }
     }
 
-    // Jinja2 folds a chain of foldable operands into one str
-    if (left && concatFoldable)
+    if (left)
     {
-        for (const auto concat : concats)
-        {
-            m_nodes[concat].SetFolded();
-        }
+        flushConcat(*left);
     }
     return left;
 }

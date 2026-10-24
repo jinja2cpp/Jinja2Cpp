@@ -842,7 +842,7 @@ TEST(NodeArenaTest, EveryNodeClassHasItsOwnKind)
     const int mismatches = CountAllKindMismatches<
         FullExpressionEvaluator, ValueRefExpression, SelfRefExpression, SubscriptExpression, LoopAttrExpression, FilteredExpression, ConstantExpression,
         ScalarConstantExpression, TupleCreator, DictCreator, UnaryExpression, IsExpression, BinaryExpression, InLiteralExpression, ConstFormatExpression,
-        CompareExpression, SliceExpression, CallExpression,
+        CompareExpression, ConcatExpression, SliceExpression, CallExpression,
         ExpressionFilter, IfExpression, ComposedRenderer, RawTextRenderer, ExpressionRenderer, FinalizedExpressionRenderer, TemplateRenderer,
         ForStatement, IfStatement, ElseBranchStatement, SetLineStatement, SetRawBlockStatement, SetFilteredBlockStatement, BlockStatement,
         ExtendsStatement, IncludeStatement, ImportStatement, MacroStatement, MacroCallStatement, DoStatement, TransStatement,
