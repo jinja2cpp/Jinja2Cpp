@@ -368,3 +368,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0294](0294-positional-after-keyword-syntax-error.md) | A positional argument after a keyword one is a syntax error | parity | low | open |
 | [0295](0295-selectattr-extra-keyword.md) | `selectattr('a', attribute='a')` fails where Python ignores the keyword | parity | low | open |
 | [0298](0298-include-of-extending-template-loop.md) | An included template that extends a parent reading `loop` | parity | low | open |
+| [0302](0302-simdjson-binding.md) | An optional simdjson binding | api | low | open |
