@@ -748,7 +748,7 @@ private:
     // which parse a string (docs/tasks/0210). Nullopt for a number, which converts as it is
     static bool IsNumber(const InternalValue& arg)
     {
-        return GetIf<int64_t>(&arg) || GetIf<double>(&arg) || GetIf<bool>(&arg) || arg.Kind() == ValueKind::BigInt;
+        return visitors::IsNumber(arg) || arg.Kind() == ValueKind::BigInt;
     }
 
     static std::optional<InternalValue> HelperInt(const InternalValue& arg)

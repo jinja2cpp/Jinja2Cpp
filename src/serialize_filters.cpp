@@ -227,6 +227,101 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
         }
     }
 
+    // A string as _pprint_str splits it: its code points, where each starts, and its lines
+    struct PprintText
+    {
+        explicit PprintText(std::string_view text)
+            : str(text)
+        {
+            for (size_t pos = 0; pos < str.size();)
+            {
+                const auto next = NextCodePoint(str, pos);
+                offsets.push_back(pos);
+                chars.push_back(DecodeUtf8(str.substr(pos, next - pos)));
+                pos = next;
+            }
+            offsets.push_back(str.size());
+        }
+
+        [[nodiscard]] std::string Repr(size_t from, size_t to) const { return PrettyPrinter::Repr(str.substr(offsets[from], offsets[to] - offsets[from])); }
+
+        // str.splitlines(True), as ranges of code points
+        [[nodiscard]] std::vector<std::pair<size_t, size_t>> Lines() const
+        {
+            std::vector<std::pair<size_t, size_t>> lines;
+            size_t lineStart = 0;
+            for (size_t idx = 0; idx < chars.size(); ++idx)
+            {
+                if (!IsLineBreak(chars[idx]))
+                {
+                    continue;
+                }
+                if (chars[idx] == '\r' && idx + 1 < chars.size() && chars[idx + 1] == '\n')
+                {
+                    ++idx;
+                }
+                lines.emplace_back(lineStart, idx + 1);
+                lineStart = idx + 1;
+            }
+            if (lineStart < chars.size())
+            {
+                lines.emplace_back(lineStart, chars.size());
+            }
+            return lines;
+        }
+
+        // The end of the part re.findall(r'\S*\s*', line) finds at start: a word and the
+        // whitespace after it
+        [[nodiscard]] size_t PartEnd(size_t start, size_t to) const
+        {
+            while (start < to && !unicode::IsSpace(chars[start]))
+            {
+                ++start;
+            }
+            while (start < to && unicode::IsSpace(chars[start]))
+            {
+                ++start;
+            }
+            return start;
+        }
+
+        // The pieces of a line too wide for maxWidth: as many whole parts as fit in each, the
+        // last part of the string with `allowance` columns less
+        void SplitLine(std::vector<std::string>& chunks, size_t from, size_t to, int64_t maxWidth, int64_t lastAllowance) const
+        {
+            size_t current = from;
+            size_t currentEnd = from;
+            for (size_t partStart = from; partStart < to;)
+            {
+                const size_t partEnd = PartEnd(partStart, to);
+                if (partEnd == to)
+                {
+                    maxWidth -= lastAllowance;
+                }
+                if (Width(Repr(current, partEnd)) > maxWidth)
+                {
+                    if (currentEnd != current)
+                    {
+                        chunks.push_back(Repr(current, currentEnd));
+                    }
+                    current = partStart;
+                }
+                currentEnd = partEnd;
+                partStart = partEnd;
+            }
+            if (currentEnd != current)
+            {
+                chunks.push_back(Repr(current, currentEnd));
+            }
+        }
+
+        static int64_t Width(const std::string& repr) { return static_cast<int64_t>(CodePointCount(std::string_view(repr))); }
+
+        std::string_view str;
+        std::vector<uint32_t> chars;
+        std::vector<size_t> offsets;
+    };
+
     // _pprint_str: the lines of the string (str.splitlines(True)), a line wider than the width
     // split after the whitespace of its words, each piece printed as its own repr on a line of
     // its own; the value pformat prints is parenthesized
@@ -237,97 +332,27 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             out += Repr(str);
             return;
         }
-        // The code points of str and where each starts
-        std::vector<uint32_t> chars;
-        std::vector<size_t> offsets;
-        for (size_t pos = 0; pos < str.size();)
-        {
-            const auto next = NextCodePoint(str, pos);
-            offsets.push_back(pos);
-            chars.push_back(DecodeUtf8(str.substr(pos, next - pos)));
-            pos = next;
-        }
-        offsets.push_back(str.size());
-        const auto text = [&](size_t from, size_t to) { return str.substr(offsets[from], offsets[to] - offsets[from]); };
-        const auto width = [](const std::string& repr) { return static_cast<int64_t>(CodePointCount(std::string_view(repr))); };
-
-        std::vector<std::pair<size_t, size_t>> lines;
-        size_t lineStart = 0;
-        for (size_t idx = 0; idx < chars.size(); ++idx)
-        {
-            if (!IsLineBreak(chars[idx]))
-            {
-                continue;
-            }
-            if (chars[idx] == '\r' && idx + 1 < chars.size() && chars[idx + 1] == '\n')
-            {
-                ++idx;
-            }
-            lines.emplace_back(lineStart, idx + 1);
-            lineStart = idx + 1;
-        }
-        if (lineStart < chars.size())
-        {
-            lines.emplace_back(lineStart, chars.size());
-        }
-
+        const PprintText text(str);
+        const auto lines = text.Lines();
         if (level == 1)
         {
             ++indent;
             ++allowance;
         }
         const int64_t maxWidth = Width - indent;
-        int64_t maxWidth1 = maxWidth;
         std::vector<std::string> chunks;
         std::string rep;
         for (size_t lineIdx = 0; lineIdx != lines.size(); ++lineIdx)
         {
             const auto [from, to] = lines[lineIdx];
             const bool lastLine = lineIdx + 1 == lines.size();
-            rep = Repr(text(from, to));
-            if (lastLine)
-            {
-                maxWidth1 -= allowance;
-            }
-            if (width(rep) <= maxWidth1)
+            rep = text.Repr(from, to);
+            if (PprintText::Width(rep) <= maxWidth - (lastLine ? allowance : 0))
             {
                 chunks.push_back(rep);
                 continue;
             }
-            // The parts re.findall(r'\S*\s*', line) finds: a word and the whitespace after it
-            int64_t maxWidth2 = maxWidth;
-            size_t current = from;
-            size_t currentEnd = from;
-            for (size_t partStart = from; partStart < to;)
-            {
-                size_t partEnd = partStart;
-                while (partEnd < to && !unicode::IsSpace(chars[partEnd]))
-                {
-                    ++partEnd;
-                }
-                while (partEnd < to && unicode::IsSpace(chars[partEnd]))
-                {
-                    ++partEnd;
-                }
-                if (partEnd == to && lastLine)
-                {
-                    maxWidth2 -= allowance;
-                }
-                if (width(Repr(text(current, partEnd))) > maxWidth2)
-                {
-                    if (currentEnd != current)
-                    {
-                        chunks.push_back(Repr(text(current, currentEnd)));
-                    }
-                    current = partStart;
-                }
-                currentEnd = partEnd;
-                partStart = partEnd;
-            }
-            if (currentEnd != current)
-            {
-                chunks.push_back(Repr(text(current, currentEnd)));
-            }
+            text.SplitLine(chunks, from, to, maxWidth, lastLine ? allowance : 0);
         }
         if (chunks.size() == 1)
         {
@@ -335,10 +360,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             out += rep;
             return;
         }
-        if (level == 1)
-        {
-            out += '(';
-        }
+        out += level == 1 ? "(" : "";
         for (size_t idx = 0; idx != chunks.size(); ++idx)
         {
             if (idx != 0)
@@ -348,10 +370,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
             }
             out += chunks[idx];
         }
-        if (level == 1)
-        {
-            out += ')';
-        }
+        out += level == 1 ? ")" : "";
     }
 
     // The value of one UTF-8 character as NextCodePoint delimits it
