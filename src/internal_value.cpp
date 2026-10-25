@@ -1322,8 +1322,8 @@ InternalValue LendOwnedItem(const std::shared_ptr<T>& owner, const Value& item)
     return visit(visitors::InputValueConvertor(true, false), item.GetData());
 }
 
-// A container item of a global keeps the global's owner; a generic container is copied, which
-// shares its accessor (defined after the adapters)
+// An item of a global: a list or map keeps the global's owner, anything else is copied (a
+// generic container's copy shares its accessor); defined after the adapters
 InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value& item);
 
 // Borrows the item when the caller owns the storage for the whole render (ByRef, ByHeldRef)
@@ -1336,22 +1336,22 @@ InternalValue LendItem([[maybe_unused]] const Holder<T>& holder, const Value& it
     }
     else
     {
-        // Scalars, the usual items of user data, skip the convertor's visit. The exact
-        // std::get_if<std::string> leaves a Markup to the convertor: do not switch it to GetIf<std::string>
-        if (const auto* s = std::get_if<std::string>(&item.GetData()))
-        {
-            return InternalValue(TargetStringView(std::string_view(*s)));
-        }
-        if (const auto* i = std::get_if<int64_t>(&item.GetData()))
-        {
-            return InternalValue(*i);
-        }
         if constexpr (std::is_same_v<Holder<T>, ByHeldRef<T>>)
         {
             return LendHeldItem(holder.GetOwner(), item);
         }
         else
         {
+            // Scalars, the usual items of user data, skip the convertor's visit. The exact
+            // std::get_if<std::string> leaves a Markup to the convertor: do not switch it to GetIf<std::string>
+            if (const auto* s = std::get_if<std::string>(&item.GetData()))
+            {
+                return InternalValue(TargetStringView(std::string_view(*s)));
+            }
+            if (const auto* i = std::get_if<int64_t>(&item.GetData()))
+            {
+                return InternalValue(*i);
+            }
             return Value2IntValue(item);
         }
     }
@@ -1385,7 +1385,16 @@ public:
             // exact std::get_if<std::string> leaves a Markup to the convertor
             if (const auto* s = std::get_if<std::string>(&item.GetData()))
             {
-                return InternalValue(TargetStringView(std::string_view(*s)));
+                // A global's text is copied: a view kept in a value the template made, or by
+                // the host, would not keep the globals map (docs/tasks/0318)
+                if constexpr (std::is_same_v<Holder<ValuesList>, ByHeldRef<ValuesList>>)
+                {
+                    return InternalValue(*s);
+                }
+                else
+                {
+                    return InternalValue(TargetStringView(std::string_view(*s)));
+                }
             }
             if (const auto* i = std::get_if<int64_t>(&item.GetData()))
             {
@@ -2148,7 +2157,7 @@ private:
 template<template<typename> class Holder, typename T>
 InternalValue LendKey([[maybe_unused]] const Holder<T>& holder, const std::string& key)
 {
-    if constexpr (LendsViews<Holder>)
+    if constexpr (std::is_same_v<Holder<T>, ByRef<T>>)
     {
         return InternalValue(TargetStringView(std::string_view(key)));
     }
@@ -2290,6 +2299,14 @@ MapAdapter LendNestedMap(std::shared_ptr<ValuesMap> map)
 
 InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value& item)
 {
+    if (const auto* text = std::get_if<std::string>(&item.GetData()))
+    {
+        return InternalValue(*text);
+    }
+    if (const auto* i = std::get_if<int64_t>(&item.GetData()))
+    {
+        return InternalValue(*i);
+    }
     if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&item.GetData()))
     {
         return InternalValue(ListAdapter(MakeRef<ValuesListAdapter<ByHeldRef>>(ByHeldRef<ValuesList>(**list, owner))));
@@ -2298,25 +2315,13 @@ InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value
     {
         return InternalValue(MapAdapter(MakeRef<ValuesMapAdapter<ByHeldRef>>(ByHeldRef<ValuesMap>(**map, owner))));
     }
-    // A generic container by value: the copy shares the host's accessor, not the global's storage
-    return visit(visitors::InputValueConvertor(true, true), item.GetData());
+    // By value: a generic container's copy shares the host's accessor, not the global's storage,
+    // and text is copied
+    return visit(visitors::InputValueConvertor(true, false), item.GetData());
 }
 
 InternalValue LendGlobal(const Value& value, const std::shared_ptr<const void>& owner)
 {
-    if (const auto* s = std::get_if<std::string>(&value.GetData()))
-    {
-        // Copied once for the snapshot: a view of it would not keep the map
-        return InternalValue(*s);
-    }
-    if (const auto* s = std::get_if<std::wstring>(&value.GetData()))
-    {
-        return InternalValue(*s);
-    }
-    if (const auto* i = std::get_if<int64_t>(&value.GetData()))
-    {
-        return InternalValue(*i);
-    }
     return LendHeldItem(owner, value);
 }
 

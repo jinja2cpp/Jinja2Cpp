@@ -1085,3 +1085,47 @@ TEST(UserCallableTestSingle, KeptGlobalsOutliveTheirSnapshot)
     EXPECT_EQ("[" + quoted + ", " + quoted + "]", show(kept[7]));
     EXPECT_TRUE(made == "{'l': " + listText + ", 'm': " + mapText + "}" || made == "{'m': " + mapText + ", 'l': " + listText + "}") << made;
 }
+
+// Each item kept alone, so that no other kept value holds the globals for it
+TEST(UserCallableTestSingle, KeptGlobalItemsOutliveTheirSnapshot)
+{
+    const std::string text(40, 'g');
+    const std::vector<std::pair<std::string, std::string>> rows = {
+        { "{{ keep(list[0]) }}", text },
+        { "{{ keep([list[0]]) }}", "['" + text + "']" },
+        { "{{ keep(list[1:2]) }}", "['" + text + "k']" },
+        { "{% for k, v in map|dictsort %}{{ keep([k, v]) }}{% endfor %}", "['" + text + "k', '" + text + "v']" },
+        { "{% for b in list|batch(1) %}{% if loop.first %}{{ keep(b) }}{% endif %}{% endfor %}", "['" + text + "']" },
+        { "{{ keep(list|select|first) }}", text },
+        { "{{ keep(map|list) }}", "['" + text + "k']" },
+    };
+    for (const auto& [source, expected] : rows)
+    {
+        SCOPED_TRACE(source);
+        Value kept;
+        TemplateEnv env;
+        env.AddGlobal("list", ValuesList{ text, text + "k" });
+        env.AddGlobal("map", ValuesMap{ { text + "k", text + "v" } });
+        env.AddGlobal("keep", UserCallable{ [&kept](const UserCallableParams& p) {
+                                               // The first render's value only
+                                               if (kept.IsNone())
+                                               {
+                                                   kept = p["v"];
+                                               }
+                                               return Value(std::string());
+                                           },
+                                            { ArgInfo{ "v" } } });
+        Template tpl(&env);
+        ASSERT_TRUE(!!tpl.Load(source));
+        ASSERT_TRUE(!!tpl.RenderAsString({}));
+        env.AddGlobal("list", ValuesList{ "x", "y" });
+        env.AddGlobal("map", ValuesMap{ { "x", "y" } });
+        // Renders again to drop the old snapshot
+        ASSERT_TRUE(!!tpl.RenderAsString({}));
+        EXPECT_TRUE(ReleaseThreadCaches());
+
+        Template print;
+        ASSERT_TRUE(!!print.Load("{{ v }}"));
+        EXPECT_EQ(expected, print.RenderAsString({ { "v", kept } }).value());
+    }
+}

@@ -20,10 +20,11 @@ the globals keeps the globals map alive (contract 3.10, values item 2).
 **Done when.** The snapshot converts a global with `LendGlobal`: lists and maps borrow through
 `ByHeldRef`, which holds the globals map (`shared_ptr`) and passes it to the adapters of their
 nested lists and maps; generic containers are copied (which shares the host's accessor); strings
-are copied once per snapshot instead of viewed. The per-item render path is unchanged (views of
-items, cached nested adapters). Row: `UserCallableTestSingle.KeptGlobalsOutliveTheirSnapshot`.
+are copied once per snapshot instead of viewed. String items and keys of a held list or map
+are copied when read (a view kept alone, as in `keep(g[0])` or `keep([k, v])` of a dictsort,
+would not hold the map); integers and nested containers are as before. Rows:
+`UserCallableTestSingle.KeptGlobalsOutliveTheirSnapshot` and
+`UserCallableTestSingle.KeptGlobalItemsOutliveTheirSnapshot`.
 
-**Limits.** A string item of a global list is still lent as a view (a `Value` holding a
-`string_view` after the conversion for the host), valid while the list that lent it lives, the
-generic-list rule of `value.h`. Params stay borrowed (contract 3.10, values item 1). 0049 P2
+**Limits.** Params stay borrowed (contract 3.10, values item 1). 0049 P2
 promotes the same adapters to cells and its P4 restore path must keep `ByHeldRef`'s owner.
