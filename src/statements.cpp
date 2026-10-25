@@ -515,7 +515,10 @@ Callable MakeLoopChanged(const InternalValue& lastChanged)
 {
     Callable result(Callable::GlobalFunc, BoundMethodCall{ lastChanged, &CallLoopChanged });
     // Each read of loop.changed is a new callable; reads on one loop compare equal
-    result.SetBoundMethod(AsList(lastChanged)->GetIdentity(), "changed");
+    if (const auto list = AsList(lastChanged))
+    {
+        result.SetBoundMethod(list->GetIdentity(), "changed");
+    }
     return result;
 }
 // loop.cycle(*values): the value at the loop's position when it is called, as Jinja2's
