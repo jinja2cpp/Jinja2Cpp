@@ -386,7 +386,7 @@ public:
         static_assert(std::is_same_v<Target, std::basic_string<CharT>> || std::is_same_v<Target, BasicOutputSink<CharT>>);
         std::optional<BasicErrorInfo<CharT>> normalResult;
         auto& workspace = RenderWorkspace::ForThisThread();
-        // Last: frees this template if a Load replaced it during the render (docs/tasks/0317)
+        // Last: frees this template if a Load replaced it during the render (docs/tasks/0321)
         const ReleaseRetired releaseRetired(workspace);
 
         if (!m_renderer)

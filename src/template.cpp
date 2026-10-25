@@ -79,7 +79,7 @@ private:
 
 // Parses into a new template and puts it in place of `impl` only if parsing succeeds. Copies of
 // the object, the environment's cache, renders and modules keep the tree they had, as a Python
-// Template is immutable (docs/tasks/0317). A render does not hold its template: the cost would
+// Template is immutable (docs/tasks/0321). A render does not hold its template: the cost would
 // be on every render, for a Load from host code it calls (RenderWorkspace::Retire)
 template<typename CharT>
 std::optional<BasicErrorInfo<CharT>> LoadNew(std::shared_ptr<ITemplateImpl>& impl, std::basic_string<CharT>&& source, std::string&& name)

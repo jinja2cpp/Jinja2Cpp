@@ -124,7 +124,7 @@ public:
         m_lentMaps = outer;
     }
     // Keeps a template that a Load replaced while a render runs on this thread, which may be
-    // the template it renders, until the outermost render ends (docs/tasks/0317)
+    // the template it renders, until the outermost render ends (docs/tasks/0321)
     void Retire(std::shared_ptr<const void> replaced)
     {
         if (m_lentMaps != 0)

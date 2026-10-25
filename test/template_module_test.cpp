@@ -216,7 +216,7 @@ TEST_F(TemplateModuleTest, ExportedValuesAreOwned)
 }
 
 // A module keeps the tree it was made from: Load replaces the template, not the module's tree
-// (docs/tasks/0317, which reverses the second half of 0284 D1a)
+// (docs/tasks/0321, which reverses the second half of 0284 D1a)
 TEST_F(TemplateModuleTest, LoadKeepsModule)
 {
     jinja2::Template tpl(&m_env);

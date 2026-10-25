@@ -309,7 +309,7 @@ TEST(TemplateApiTest, FailedReloadKeepsPreviousTemplate)
 
 // Load replaces the template for that object only: copies, the environment's cache, the
 // includes of the name and modules keep the tree they had, as Python's Template objects are
-// immutable (docs/tasks/0317, embedding contract 3.1.5)
+// immutable (docs/tasks/0321, embedding contract 3.1.5)
 TEST(TemplateApiTest, LoadReplacesOnlyThisObject)
 {
     Template a;
@@ -348,7 +348,7 @@ TEST(TemplateApiTest, LoadReplacesOnlyThisObject)
 }
 
 // A host callable loads the template that is rendering: the render finishes on the tree it
-// started with, and the next render uses the new one (docs/tasks/0317, contract 3.3; ASan)
+// started with, and the next render uses the new one (docs/tasks/0321, contract 3.3; ASan)
 TEST(TemplateApiTest, LoadOfTheRenderingTemplateFromACallable)
 {
     Template tpl;
