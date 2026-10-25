@@ -820,11 +820,12 @@ private:
         }
         // Ends what the call that took `mark` added: the modules it imported, but those shared
         // without context, which see nothing of the call and stay for the module's life, as
-        // Jinja2 keeps a template's default module, and those in `kept`, which such a module's
+        // Jinja2 keeps a template's default module, and those `isKept` names, which such a module's
         // top level imported. The trees stay too: what a module's macro
         // stored views its tree. What still refers to an ended module does so through its
         // anchor (ClosureSite), which a module made in the call marks as ending with it
-        void EndCall(const CallMark& mark, const std::vector<const ImportedModule*>& kept) noexcept
+        template<typename IsKept>
+        void EndCall(const CallMark& mark, const IsKept& isKept) noexcept
         {
             if (!m_loaded)
             {
@@ -837,7 +838,7 @@ private:
             {
                 auto& module = modules[p];
                 const bool isShared = std::any_of(shared.begin(), shared.end(), [&module](const auto& entry) { return entry.second == module.get(); });
-                if (isShared || std::find(kept.begin(), kept.end(), module.get()) != kept.end())
+                if (isShared || isKept(module.get()))
                 {
                     continue;
                 }

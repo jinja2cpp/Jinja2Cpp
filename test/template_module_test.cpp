@@ -402,6 +402,21 @@ TEST_F(TemplateModuleTest, SharedModuleKeepsItsImports)
     }
 }
 
+// A module shared on keeps what it imported when a module that imported it fails: D7 after
+// `bad` failed, as in Jinja2 3.1.6 (Codex review of #667)
+TEST_F(TemplateModuleTest, FailedImporterLeavesSharedModuleWhole)
+{
+    AddFile("dep", "{% set dv = 7 %}{% macro m() %}D{{ dv }}{% endmacro %}");
+    AddFile("good", "{% import 'dep' as d with context %}{% macro gm() %}{{ d.m() }}{% endmacro %}");
+    AddFile("bad", "{% import 'good' as g %}{{ 1 // 0 }}");
+    auto module = Make("{% macro f() %}{% import 'bad' as b %}{% endmacro %}{% macro m() %}{% import 'good' as g %}{{ g.gm() }}{% endmacro %}");
+    for (int i = 0; i != 2; ++i)
+    {
+        EXPECT_THROW(Call(module.exports["f"]), jinja2::BadResultAccess<>);
+        EXPECT_EQ("D7", Call(module.exports["m"]).AsString());
+    }
+}
+
 // A macro of a module a call imported with context, stored by that call, runs within it; a
 // later call of it fails, naming the export called, as the module ended with the call. A
 // documented divergence: Jinja2 keeps the module while the macro reaches it and prints AM

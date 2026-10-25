@@ -234,20 +234,29 @@ struct TemplateModuleState
         void LeaveSharedModule(std::size_t token, bool shared) override
         {
             --sharedDepth;
-            // A module that failed is not shared: what it imported ends with the call too
-            if (!shared)
+            const auto from = kept.begin() + static_cast<std::ptrdiff_t>(token);
+            if (shared)
             {
-                kept.resize(token);
+                // What it imported is its own from now on, even if a module importing it fails
+                std::for_each(from, kept.end(), [](KeptModule& entry) { entry.owned = true; });
+                return;
             }
+            // A module that failed is not shared: what it imported ends with the call too, but
+            // what a module it imported that was shared imported
+            kept.erase(std::remove_if(from, kept.end(), [](const KeptModule& entry) { return !entry.owned; }), kept.end());
         }
         ImportedModule& AddModule(std::unique_ptr<ImportedModule> newModule) override
         {
             auto& added = Impl::RendererCallback::AddModule(std::move(newModule));
             if (sharedDepth != 0)
             {
-                kept.push_back(&added);
+                kept.push_back({ &added, false });
             }
             return added;
+        }
+        [[nodiscard]] bool IsKept(const ImportedModule* candidate) const
+        {
+            return std::any_of(kept.begin(), kept.end(), [candidate](const KeptModule& entry) { return entry.module == candidate; });
         }
 
         const RenderContext* moduleContext = nullptr;
@@ -256,9 +265,14 @@ struct TemplateModuleState
         // The host's calls running, nested when a host callable calls the module again
         std::size_t calls = 0;
         // The top levels of modules imported without context rendering, and the modules they
-        // imported, which EndCall keeps
+        // imported, which EndCall keeps; `owned` once the module that imported it is shared
         std::size_t sharedDepth = 0;
-        std::vector<const ImportedModule*> kept;
+        struct KeptModule
+        {
+            const ImportedModule* module;
+            bool owned;
+        };
+        std::vector<KeptModule> kept;
     };
 
     // One host's call of an export: what it loads into the module's callback ends with it,
@@ -282,7 +296,8 @@ struct TemplateModuleState
         {
             --m_callback.calls;
             m_callback.sharedDepth = m_sharedDepth;
-            m_callback.EndCall(m_mark, m_callback.kept);
+            const auto& owner = m_callback;
+            m_callback.EndCall(m_mark, [&owner](const ImportedModule* candidate) { return owner.IsKept(candidate); });
         }
 
     private:
