@@ -489,6 +489,7 @@ TEST_F(ModuleCallTest, CallSucceedsOrThrowsBadAlloc)
     for (; n != maxAllocations; ++n)
     {
         bool fired = false;
+        bool threw = false;
         std::string result;
         OnFreshThread([&] {
             const Injection injection(n);
@@ -498,13 +499,17 @@ TEST_F(ModuleCallTest, CallSucceedsOrThrowsBadAlloc)
             }
             catch (const std::bad_alloc&)
             {
+                threw = true;
             }
             fired = Injection::Fired();
         });
         ASSERT_EQ("X3", Call(m)) << "allocation " << n;
+        if (!threw)
+        {
+            ASSERT_EQ("X3", result) << "allocation " << n;
+        }
         if (!fired)
         {
-            ASSERT_EQ("X3", result);
             break;
         }
     }
