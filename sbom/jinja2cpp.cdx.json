@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:87fcaf38-0e4e-541c-89b5-0c1a8aca1418",
+  "serialNumber": "urn:uuid:cd54d91d-1e9e-5c85-ad0f-53a6f97804f5",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -701,7 +701,7 @@
         },
         {
           "name": "jinja2cpp:file",
-          "value": "src/unicode_case.h sha256:6e6bc5f2a2b505fa82477a2f88c0f8a77e2d2adc2e7e136e869bae9a15fe2243"
+          "value": "src/unicode_case.h sha256:4da4af9a02a71f4324af6d601beda5dc7f2765d8d594a6c9e568b6089827d22d"
         },
         {
           "name": "jinja2cpp:generator",
