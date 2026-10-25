@@ -194,6 +194,8 @@ const char* CodeDescription(ErrorCode code) noexcept
         return "resource limit exceeded";
     case ErrorCode::TemplateExpired:
         return "template expired";
+    case ErrorCode::DataReadError:
+        return "data read error";
     case ErrorCode::ExpectedStringLiteral:
         return "string literal expected";
     case ErrorCode::ExpectedIdentifier:
@@ -326,6 +328,9 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const BasicErrorInfo<Char
         break;
     case ErrorCode::TemplateExpired:
         fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("The template of macro '{}' was loaded again since its module was made").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
+        break;
+    case ErrorCode::DataReadError:
+        fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("Data read error: {}").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
         break;
     case ErrorCode::YetUnsupported:
         fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("This feature has not been supported yet").GetValue<CharT>());

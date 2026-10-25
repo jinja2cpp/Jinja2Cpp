@@ -575,12 +575,29 @@ struct Reflector<const T* const&>
     }
 };
 
+template<typename T, typename = void>
+struct HasSharedCreateFromPtr : std::false_type
+{
+};
+template<typename T>
+struct HasSharedCreateFromPtr<T, std::void_t<decltype(jinja2::Reflector<T>::CreateFromPtr(std::declval<const std::shared_ptr<T>&>()))>> : std::true_type
+{
+};
+
+// Shares the object when its reflector takes a shared_ptr, as the rvalue overload does, so the view keeps it alive
 template<typename T>
 struct Reflector<const std::shared_ptr<T>&>
 {
     static auto Create(const std::shared_ptr<T>& val)
     {
-        return jinja2::Reflector<T>::CreateFromPtr(val.get());
+        if constexpr (HasSharedCreateFromPtr<T>::value)
+        {
+            return jinja2::Reflector<T>::CreateFromPtr(val);
+        }
+        else
+        {
+            return jinja2::Reflector<T>::CreateFromPtr(val.get());
+        }
     }
 };
 
