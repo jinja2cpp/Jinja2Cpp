@@ -313,7 +313,8 @@ TEST_P(UserCallableParamConvertTest, Test)
     params["ReturnWStringViewPtrFn"] = MakeCallable(&ReturnWStringViewPtrFn, ArgInfo{ "val" });
     params["ReturnStringViewFn"] = MakeCallable([](std::string_view val) { return val; }, ArgInfo{ "val" });
     params["ReturnWStringViewFn"] = MakeCallable([](std::wstring_view val) { return val; }, ArgInfo{ "val" });
-    params["RvalueStringViewFn"] = MakeCallable([](std::string_view&& val) { return std::string(std::move(val)); }, ArgInfo{ "val" });
+    // NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved): the row checks that an rvalue view binds
+    params["RvalueStringViewFn"] = MakeCallable([](std::string_view&& val) { return std::string(val); }, ArgInfo{ "val" });
     params["longString"] = std::string(40, 'n');
     params["longWString"] = std::wstring(40, L'w');
     params["markupValue"] = Markup("<b>");
