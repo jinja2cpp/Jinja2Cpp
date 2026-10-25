@@ -316,14 +316,28 @@ TEST(ExpressionTest, SelfContainingContainers)
     EXPECT_EQ("True", render("{% set ns = namespace() %}{% macro m() %}{{ ns.s is sameas ns }}{% endmacro %}{% set ns.m = m %}{% set ns.s = ns %}{{ ns.m() }}"));
 }
 
-// The collector cannot follow a bound method's receiver, so that cycle is refused (docs/tasks/0049)
-TEST(ExpressionTest, CycleThroughBoundMethodIsRefused)
+// Cycles through objects other than lists, dicts and namespaces: a bound method, a loop object
+// kept past its loop, a cycler, a groupby namedtuple, a key-value pair. Python frees them, and
+// so does the render's collector (docs/tasks/0251): the sanitizer configuration fails on a leak
+TEST(ExpressionTest, CyclesThroughObjects)
 {
     TemplateEnv env;
     env.GetSettings().extensions.doStatement = true;
-    Template tpl(&env);
-    ASSERT_TRUE(tpl.Load("{% set x = [] %}{% do x.append(x.append) %}{{ x }}"));
-    EXPECT_FALSE(tpl.RenderAsString(ValuesMap{}).has_value());
+    auto render = [&env](const std::string& source) {
+        Template tpl(&env);
+        EXPECT_TRUE(tpl.Load(source).has_value()) << source;
+        auto result = tpl.RenderAsString(ValuesMap{});
+        EXPECT_TRUE(result.has_value()) << source;
+        return result ? result.value() : std::string();
+    };
+    EXPECT_EQ("1", render("{% set x = [] %}{% do x.append(x.append) %}{{ x|length }}"));
+    EXPECT_EQ("1", render("{% set ns = namespace() %}{% for i in [ns] %}{% set ns.x = loop %}{% endfor %}{{ ns.x.length }}"));
+    EXPECT_EQ("True", render("{% set ns = namespace() %}{% set ns.c = cycler(ns) %}{{ ns.c.next() is sameas ns }}"));
+    EXPECT_EQ("1", render("{% set ns = namespace() %}{% set ns.l = [ns]|groupby('x') %}{{ ns.l|length }}"));
+    EXPECT_EQ("1", render("{% set ns = namespace() %}{% set ns.l = [ns] %}{% set ns.f = ns.l.append %}{{ ns.l|length }}"));
+    EXPECT_EQ("1", render("{% set l = [] %}{% set d = dict(a=l) %}{% for p in d|dictsort %}{% do l.append(p) %}{% endfor %}{{ l|length }}"));
+    // A cycler keeps its position through the collector's view of it
+    EXPECT_EQ("a,b,a|1|b", render("{% set c = cycler('a', 'b') %}{{ c.next() }},{{ c.next() }},{{ c.next() }}|{{ c.pos }}|{{ c.current }}"));
 }
 
 // Freeing a cycle releases what it holds, and a list the caller still holds keeps its items

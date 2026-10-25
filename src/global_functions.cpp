@@ -242,6 +242,56 @@ void CheckNoArguments(const CallParams& params, const char* method)
     }
 }
 
+// A cycler's position and items, kept as a list [pos, *items] that its methods and properties
+// hold as their receiver (BoundMethodCall): the cycle collector sees the items there, which
+// a lambda's captures would hide (docs/tasks/0251). Empty once the collector freed the cycler
+InternalValueList& CyclerState(const InternalValue& state)
+{
+    return *AsList(state)->GetMutableItems();
+}
+
+size_t CyclerPos(const InternalValueList& state)
+{
+    return static_cast<size_t>(*GetIf<int64_t>(state.data()));
+}
+
+InternalValue CyclerPosProperty(const InternalValue& self, const CallParams&, RenderContext&)
+{
+    const auto& state = CyclerState(self);
+    return state.empty() ? InternalValue() : state[0];
+}
+
+InternalValue CyclerCurrent(const InternalValue& self, const CallParams&, RenderContext&)
+{
+    const auto& state = CyclerState(self);
+    return state.size() < 2 ? InternalValue() : state[CyclerPos(state) + 1];
+}
+
+InternalValue CyclerNext(const InternalValue& self, const CallParams& callParams, RenderContext&)
+{
+    CheckNoArguments(callParams, "Cycler.next");
+    auto& state = CyclerState(self);
+    if (state.size() < 2)
+    {
+        return InternalValue();
+    }
+    const auto pos = CyclerPos(state);
+    auto result = state[pos + 1];
+    state[0] = static_cast<int64_t>((pos + 1) % (state.size() - 1));
+    return result;
+}
+
+InternalValue CyclerReset(const InternalValue& self, const CallParams& callParams, RenderContext&)
+{
+    CheckNoArguments(callParams, "Cycler.reset");
+    auto& state = CyclerState(self);
+    if (!state.empty())
+    {
+        state[0] = int64_t{ 0 };
+    }
+    return InternalValue(NoneValue());
+}
+
 // cycler(*items): next(), reset(), current, items, pos
 InternalValue CallCycler(const CallParams& params, RenderContext&)
 {
@@ -254,29 +304,18 @@ InternalValue CallCycler(const CallParams& params, RenderContext&)
         throw TemplateRuntimeError("at least one item has to be provided");
     }
 
-    struct State
-    {
-        InternalValueList items;
-        size_t pos = 0;
-    };
-    auto state = std::make_shared<State>();
-    state->items = params.posParams;
+    InternalValueList stateItems;
+    stateItems.reserve(params.posParams.size() + 1);
+    stateItems.emplace_back(int64_t{ 0 });
+    stateItems.insert(stateItems.end(), params.posParams.begin(), params.posParams.end());
+    const InternalValue state = ListAdapter::CreateAdapter(std::move(stateItems));
 
     InternalValueMap cycler;
-    cycler["items"] = ListAdapter::CreateAdapter(InternalValueList(state->items)).MarkAsTuple();
-    cycler["pos"] = MakeDynamicProperty([state](const CallParams&, RenderContext&) { return InternalValue(static_cast<int64_t>(state->pos)); });
-    cycler["current"] = MakeDynamicProperty([state](const CallParams&, RenderContext&) { return state->items[state->pos]; });
-    cycler["next"] = MakeFunction([state](const CallParams& callParams, RenderContext&) {
-        CheckNoArguments(callParams, "Cycler.next");
-        auto result = state->items[state->pos];
-        state->pos = (state->pos + 1) % state->items.size();
-        return result;
-    });
-    cycler["reset"] = MakeFunction([state](const CallParams& callParams, RenderContext&) {
-        CheckNoArguments(callParams, "Cycler.reset");
-        state->pos = 0;
-        return InternalValue(NoneValue());
-    });
+    cycler["items"] = ListAdapter::CreateAdapter(InternalValueList(params.posParams)).MarkAsTuple();
+    cycler["pos"] = MakeDynamicProperty(BoundMethodCall{ state, &CyclerPosProperty });
+    cycler["current"] = MakeDynamicProperty(BoundMethodCall{ state, &CyclerCurrent });
+    cycler["next"] = MakeFunction(BoundMethodCall{ state, &CyclerNext });
+    cycler["reset"] = MakeFunction(BoundMethodCall{ state, &CyclerReset });
     return CreateObjectAdapter(std::move(cycler), "Cycler");
 }
 

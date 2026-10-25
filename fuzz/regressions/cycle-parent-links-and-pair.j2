@@ -1,0 +1,1 @@
+{% set root = [] %}{% for i in range(5000) %}{% set d = {} %}{% do d.update(r=root) %}{% do root.append(d) %}{% endfor %}{% set l = [] %}{% set p = dict(a=l) %}{% for q in p|dictsort %}{% do l.append(q) %}{% endfor %}{{ root|length }}

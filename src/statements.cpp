@@ -1,6 +1,5 @@
 #include "statements.h"
 
-#include "cycle_collector.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
@@ -140,13 +139,8 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
         {
             throw TemplateRuntimeError("cannot assign attribute on non-namespace object");
         }
-        // The store may close a reference cycle, which the render frees when it ends. Unlike
-        // the list and dict methods it walks nothing: `set ns.v = [ns.v]` in a loop would make
-        // that quadratic (fuzz/regressions/deep-nested-value.j2)
-        if (value.Kind() == ValueKind::List || value.Kind() == ValueKind::Map)
-        {
-            CycleCollector::NoteStore(*found);
-        }
+        // The store may close a reference cycle, which the render frees when it ends
+        methods::NoteContainerStore(*found, value);
         ns->SetValue(std::string(nodes.Text(root.attr)), value);
         return;
     }
@@ -750,6 +744,31 @@ namespace detail
 // finds its names and their nodes in place
 struct LoopFrame : LoopState
 {
+    LoopFrame() noexcept { SetTraversable(); }
+
+    // A loop object the template keeps past its loop (`set ns.x = loop`) holds the list and
+    // the items, which may hold it back (docs/tasks/0251). The items loop.changed keeps are
+    // shared with its callables, unseen
+    void Traverse(const TraverseFn& fn) const override
+    {
+        if (const auto* list = indexedList.Ref().GetOwner())
+        {
+            fn(list);
+        }
+        for (const auto& item : items)
+        {
+            TraverseValue(item, fn);
+        }
+        for (const auto& entry : loopScope)
+        {
+            TraverseValue(entry.second, fn);
+        }
+        for (const auto& entry : bodyScope)
+        {
+            TraverseValue(entry.second, fn);
+        }
+    }
+
     LoopAccessor accessor{ this };
     // The loop whose names the scopes hold (ForStatement::m_loopId); 0 for none
     uint64_t loopId = 0;

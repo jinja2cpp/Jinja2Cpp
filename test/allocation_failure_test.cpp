@@ -418,5 +418,10 @@ INSTANTIATE_TEST_SUITE_P(Templates,
                                                "3{\"k\": [1, \"two\", 3.5]}Hello, Ann!" },
                                          Case{ "{% include 'header.j2' %}{% from 'macros.j2' import item %}{% for i in items[:2] %}{{ item(i) }}{% endfor %}",
                                                "<h1>REPORT</h1>[1], [2], " },
-                                         Case{ "{% extends 'base.j2' %}{% block body %}{{ super() }}+{{ title }}{% endblock %}", "<base+Report>" }));
+                                         Case{ "{% extends 'base.j2' %}{% block body %}{{ super() }}+{{ title }}{% endblock %}", "<base+Report>" },
+                                         // Reference cycles, freed when the render ends: none leaks when an
+                                         // allocation fails (docs/tasks/0283, LeakSanitizer in the sanitizer job)
+                                         Case{ "{% set ns = namespace(l=[]) %}{% set ns.self = ns %}{% set l = [1] %}{{ l.append(l) or '' }}"
+                                               "{% set ns.c = cycler(ns) %}{% set ns.f = ns.l.append %}{{ l|length }}",
+                                               "2" }));
 } // namespace
