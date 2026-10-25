@@ -242,6 +242,57 @@ void CheckNoArguments(const CallParams& params, const char* method)
     }
 }
 
+// A cycler's position and items, kept as a list [pos, *items] that its methods and properties
+// hold as their receiver (and a joiner's state likewise) (BoundMethodCall): the cycle collector sees the items there, which
+// a lambda's captures would hide (docs/tasks/0251). Empty once the collector freed the cycler
+InternalValueList* CyclerState(const InternalValue& state)
+{
+    const auto list = AsList(state);
+    return list ? list->GetMutableItems() : nullptr;
+}
+
+size_t CyclerPos(const InternalValueList& state)
+{
+    return static_cast<size_t>(*GetIf<int64_t>(state.data()));
+}
+
+InternalValue CyclerPosProperty(const InternalValue& self, const CallParams&, RenderContext&)
+{
+    const auto* state = CyclerState(self);
+    return state && !state->empty() ? (*state)[0] : InternalValue();
+}
+
+InternalValue CyclerCurrent(const InternalValue& self, const CallParams&, RenderContext&)
+{
+    const auto* state = CyclerState(self);
+    return state && state->size() > 1 ? (*state)[CyclerPos(*state) + 1] : InternalValue();
+}
+
+InternalValue CyclerNext(const InternalValue& self, const CallParams& callParams, RenderContext&)
+{
+    CheckNoArguments(callParams, "Cycler.next");
+    auto* state = CyclerState(self);
+    if (!state || state->size() < 2)
+    {
+        return InternalValue();
+    }
+    const auto pos = CyclerPos(*state);
+    auto result = (*state)[pos + 1];
+    (*state)[0] = static_cast<int64_t>((pos + 1) % (state->size() - 1));
+    return result;
+}
+
+InternalValue CyclerReset(const InternalValue& self, const CallParams& callParams, RenderContext&)
+{
+    CheckNoArguments(callParams, "Cycler.reset");
+    auto* state = CyclerState(self);
+    if (state && !state->empty())
+    {
+        (*state)[0] = int64_t{ 0 };
+    }
+    return InternalValue(NoneValue());
+}
+
 // cycler(*items): next(), reset(), current, items, pos
 InternalValue CallCycler(const CallParams& params, RenderContext&)
 {
@@ -254,48 +305,47 @@ InternalValue CallCycler(const CallParams& params, RenderContext&)
         throw TemplateRuntimeError("at least one item has to be provided");
     }
 
-    struct State
-    {
-        InternalValueList items;
-        size_t pos = 0;
-    };
-    auto state = std::make_shared<State>();
-    state->items = params.posParams;
+    InternalValueList stateItems;
+    stateItems.reserve(params.posParams.size() + 1);
+    stateItems.emplace_back(int64_t{ 0 });
+    stateItems.insert(stateItems.end(), params.posParams.begin(), params.posParams.end());
+    const InternalValue state = ListAdapter::CreateAdapter(std::move(stateItems));
 
     InternalValueMap cycler;
-    cycler["items"] = ListAdapter::CreateAdapter(InternalValueList(state->items)).MarkAsTuple();
-    cycler["pos"] = MakeDynamicProperty([state](const CallParams&, RenderContext&) { return InternalValue(static_cast<int64_t>(state->pos)); });
-    cycler["current"] = MakeDynamicProperty([state](const CallParams&, RenderContext&) { return state->items[state->pos]; });
-    cycler["next"] = MakeFunction([state](const CallParams& callParams, RenderContext&) {
-        CheckNoArguments(callParams, "Cycler.next");
-        auto result = state->items[state->pos];
-        state->pos = (state->pos + 1) % state->items.size();
-        return result;
-    });
-    cycler["reset"] = MakeFunction([state](const CallParams& callParams, RenderContext&) {
-        CheckNoArguments(callParams, "Cycler.reset");
-        state->pos = 0;
-        return InternalValue(NoneValue());
-    });
+    cycler["items"] = ListAdapter::CreateAdapter(InternalValueList(params.posParams)).MarkAsTuple();
+    cycler["pos"] = MakeDynamicProperty(BoundMethodCall{ state, &CyclerPosProperty });
+    cycler["current"] = MakeDynamicProperty(BoundMethodCall{ state, &CyclerCurrent });
+    cycler["next"] = MakeFunction(BoundMethodCall{ state, &CyclerNext });
+    cycler["reset"] = MakeFunction(BoundMethodCall{ state, &CyclerReset });
     return CreateObjectAdapter(std::move(cycler), "Cycler");
 }
 
 // joiner(sep=', '): a callable that returns '' the first time, then sep
+// A joiner's state, the list [used, sep] its call holds as its receiver, where the cycle
+// collector sees the separator (docs/tasks/0251)
+InternalValue CallJoinerObject(const InternalValue& self, const CallParams& callParams, RenderContext&)
+{
+    CheckNoArguments(callParams, "Joiner.__call__");
+    auto* state = CyclerState(self);
+    if (!state || state->size() != 2)
+    {
+        return InternalValue();
+    }
+    if (ConvertToBool((*state)[0]))
+    {
+        return (*state)[1];
+    }
+    (*state)[0] = true;
+    return InternalValue(std::string());
+}
+
 InternalValue CallJoiner(const CallParams& params, RenderContext&)
 {
     auto args = ParseArgs({ { "sep", false, ", "s } }, params, "joiner");
-    auto used = std::make_shared<bool>(false);
+    const InternalValue state = ListAdapter::CreateAdapter(InternalValueList{ InternalValue(false), args["sep"] });
     InternalValueMap joiner;
     joiner["sep"] = args["sep"];
-    joiner["operator()"] = MakeFunction([used, sep = args["sep"]](const CallParams& callParams, RenderContext&) {
-        CheckNoArguments(callParams, "Joiner.__call__");
-        if (*used)
-        {
-            return sep;
-        }
-        *used = true;
-        return InternalValue(std::string());
-    });
+    joiner["operator()"] = MakeFunction(BoundMethodCall{ state, &CallJoinerObject });
     return CreateObjectAdapter(std::move(joiner), "Joiner");
 }
 

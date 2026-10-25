@@ -1,6 +1,5 @@
 #include "statements.h"
 
-#include "cycle_collector.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
@@ -140,13 +139,8 @@ void AssignTo(TargetNodes target, InternalValue value, Sink& sink, RenderContext
         {
             throw TemplateRuntimeError("cannot assign attribute on non-namespace object");
         }
-        // The store may close a reference cycle, which the render frees when it ends. Unlike
-        // the list and dict methods it walks nothing: `set ns.v = [ns.v]` in a loop would make
-        // that quadratic (fuzz/regressions/deep-nested-value.j2)
-        if (value.Kind() == ValueKind::List || value.Kind() == ValueKind::Map)
-        {
-            CycleCollector::NoteStore(*found);
-        }
+        // The store may close a reference cycle, which the render frees when it ends
+        methods::NoteContainerStore(*found, value);
         ns->SetValue(std::string(nodes.Text(root.attr)), value);
         return;
     }
@@ -269,8 +263,9 @@ struct LoopState : ValueObject
     bool recursiveAutoescape = false;
     // Whether the loop is in volatile code (RenderContext::IsVolatileAutoescape)
     bool recursiveVolatile = false;
-    // The arguments of the last loop.changed() call, made on first use
-    std::shared_ptr<std::optional<InternalValueList>> lastChanged;
+    // The arguments of the last loop.changed() call, made on first use: a list [called,
+    // *args] its callables hold as their receiver, where the cycle collector sees them
+    InternalValue lastChanged;
     // index0 for the callables loop.cycle made, kept up to date once one is made. They
     // share this, not the state: a loop object kept past the loop collects the rest of a
     // filtered loop, which a callable that cycles needs not
@@ -384,7 +379,12 @@ struct LoopState : ValueObject
         }
         recursiveStatement = nullptr;
         recursiveNodes = ArenaView();
-        lastChanged = nullptr;
+        // Most loops never read loop.changed: the reset is out of line, so that its temporary
+        // gives this function no stack frame to guard
+        if (!lastChanged.IsUndefined())
+        {
+            DropLastChanged();
+        }
         cyclePosition = nullptr;
         isPeeked = false;
         ownsRest = false;
@@ -392,6 +392,8 @@ struct LoopState : ValueObject
         lazyContext = nullptr;
         lazyNodes = ArenaView();
     }
+
+    JINJA2CPP_NOINLINE_INLINE void DropLastChanged() { lastChanged = InternalValue(); }
 
     // A loop object kept past a statement that ended without collecting its rest (an error
     // thrown in the body) can no longer fetch: its enumerator may run over a list the
@@ -485,28 +487,50 @@ void AssignLoopTarget(TargetNodes target, const InternalValue& item, ScopeRef sc
     AssignTo(target, item, scope, values);
 }
 
-// loop.changed(*values): whether the values differ from those of the previous call
-Callable MakeLoopChanged(const std::shared_ptr<std::optional<InternalValueList>>& lastChanged)
+// loop.changed(*values): whether the values differ from those of the previous call, kept in
+// `state`, the list [called, *args] (LoopState::lastChanged)
+InternalValue CallLoopChanged(const InternalValue& state, const CallParams& params, RenderContext&)
 {
-    Callable result(Callable::GlobalFunc, [lastChanged](const CallParams& params, RenderContext&) -> InternalValue {
-        if (!params.kwParams.empty())
-        {
-            throw TemplateRuntimeError("changed() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
-        }
-        auto isEqual = [](const InternalValue& lhs, const InternalValue& rhs) {
-            return ConvertToBool(Apply2<visitors::BinaryMathOperation>(lhs, rhs, BinaryExpression::LogicalEq));
-        };
-        auto& last = *lastChanged;
-        const auto& args = params.posParams;
-        if (last && last->size() == args.size() && std::equal(last->begin(), last->end(), args.begin(), isEqual))
-        {
-            return false;
-        }
-        last = params.posParams;
-        return true;
-    });
+    if (!params.kwParams.empty())
+    {
+        throw TemplateRuntimeError("changed() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
+    }
+    const auto list = AsList(state);
+    auto* last = list ? list->GetMutableItems() : nullptr;
+    // Emptied only by the cycle collector, once nothing can call this
+    if (!last || last->empty())
+    {
+        return InternalValue();
+    }
+    auto isEqual = [](const InternalValue& lhs, const InternalValue& rhs) {
+        return ConvertToBool(Apply2<visitors::BinaryMathOperation>(lhs, rhs, BinaryExpression::LogicalEq));
+    };
+    const auto& args = params.posParams;
+    if (ConvertToBool(last->front()) && last->size() == args.size() + 1 && std::equal(args.begin(), args.end(), last->begin() + 1, isEqual))
+    {
+        return false;
+    }
+    // In place: a loop calling with as many values each time allocates nothing past the first call
+    last->resize(args.size() + 1);
+    last->front() = true;
+    std::copy(args.begin(), args.end(), last->begin() + 1);
+    return true;
+}
+
+// Out of line, as MakeLoopCycle: inlined, it grows the frame of every loop attribute lookup
+JINJA2CPP_NOINLINE_INLINE Callable MakeLoopChanged(LoopState& state)
+{
+    if (state.lastChanged.IsUndefined())
+    {
+        state.lastChanged = ListAdapter::CreateAdapter(InternalValueList{ InternalValue(false) });
+    }
+    const auto& lastChanged = state.lastChanged;
+    Callable result(Callable::GlobalFunc, BoundMethodCall{ lastChanged, &CallLoopChanged });
     // Each read of loop.changed is a new callable; reads on one loop compare equal
-    result.SetBoundMethod(lastChanged.get(), "changed");
+    if (const auto list = AsList(lastChanged))
+    {
+        result.SetBoundMethod(list->GetIdentity(), "changed");
+    }
     return result;
 }
 // loop.cycle(*values): the value at the loop's position when it is called, as Jinja2's
@@ -716,11 +740,7 @@ private:
         case Property::Cycle:
             return MakeLoopCycle(state);
         case Property::Changed:
-            if (!state.lastChanged)
-            {
-                state.lastChanged = std::make_shared<std::optional<InternalValueList>>();
-            }
-            return MakeLoopChanged(state.lastChanged);
+            return MakeLoopChanged(state);
         case Property::Call:
             if (!state.recursiveStatement)
             {
@@ -750,6 +770,31 @@ namespace detail
 // finds its names and their nodes in place
 struct LoopFrame : LoopState
 {
+    LoopFrame() noexcept { SetTraversable(); }
+
+    // A loop object the template keeps past its loop (`set ns.x = loop`) holds the list and
+    // the items, which may hold it back (docs/tasks/0251)
+    void Traverse(const TraverseFn& fn) const override
+    {
+        TraverseValue(lastChanged, fn);
+        if (const auto* list = indexedList.Ref().GetOwner())
+        {
+            fn(list);
+        }
+        for (const auto& item : items)
+        {
+            TraverseValue(item, fn);
+        }
+        for (const auto& entry : loopScope)
+        {
+            TraverseValue(entry.second, fn);
+        }
+        for (const auto& entry : bodyScope)
+        {
+            TraverseValue(entry.second, fn);
+        }
+    }
+
     LoopAccessor accessor{ this };
     // The loop whose names the scopes hold (ForStatement::m_loopId); 0 for none
     uint64_t loopId = 0;

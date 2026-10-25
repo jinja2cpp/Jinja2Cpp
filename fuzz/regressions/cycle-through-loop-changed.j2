@@ -1,0 +1,1 @@
+{% set ns = namespace() %}{% for i in [1, 2] %}{{ loop.changed(ns) }}{% set ns.lp = loop %}{% endfor %}

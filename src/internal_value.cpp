@@ -133,6 +133,16 @@ public:
     {
         SetAnchor();
         SetClonesOnCopy(m_inner && m_inner->ClonesOnCopy());
+        SetTraversable();
+    }
+
+    void Traverse(const TraverseFn& fn) const override
+    {
+        if (m_inner)
+        {
+            fn(m_inner.get());
+        }
+        TraverseValue(m_parent, fn);
     }
 
     [[nodiscard]] const ValueObjectPtr& Inner() const noexcept { return m_inner; }
@@ -155,6 +165,11 @@ ValueObjectPtr OwnObject(const ValueObjectPtr& obj)
     return anchor ? anchor->Inner() : obj;
 }
 } // namespace
+
+ValueObjectPtr OwnObjectOf(const InternalValue& val)
+{
+    return OwnObject(detail::InternalValueAccess::ObjectPtr(val));
+}
 
 void InternalValue::SetParentData(const InternalValue& val)
 {
@@ -1398,6 +1413,7 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
         explicit Adapter(InternalValueList&& values)
             : m_values(std::make_shared<InternalValueList>(std::move(values)))
         {
+            SetTraversable();
         }
 
         [[nodiscard]] size_t GetItemsCountImpl() const { return m_values->size(); }
@@ -1425,6 +1441,23 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
         [[nodiscard]] GenericList CreateGenericList() const override
         {
             return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
+        }
+        void Traverse(const TraverseFn& fn) const override
+        {
+            if (OwnsMutableItemsAlone())
+            {
+                for (const auto& item : *m_values)
+                {
+                    TraverseValue(item, fn);
+                }
+            }
+        }
+        void Clear() const noexcept override
+        {
+            if (OwnsMutableItemsAlone())
+            {
+                m_values->clear();
+            }
         }
 
     private:
@@ -1710,6 +1743,7 @@ public:
         : m_items(std::move(items))
         , m_fieldNames(std::move(fieldNames))
     {
+        SetTraversable();
     }
 
     [[nodiscard]] std::optional<size_t> GetSize() const override { return m_items.GetSize(); }
@@ -1722,6 +1756,13 @@ public:
     [[nodiscard]] const RangeInfo* GetRangeInfo() const override { return m_items.GetRangeInfo(); }
     [[nodiscard]] InternalValueList* GetMutableItems() const override { return m_items.GetMutableItems(); }
     [[nodiscard]] const std::vector<std::string>* GetFieldNames() const override { return m_fieldNames.get(); }
+    void Traverse(const TraverseFn& fn) const override
+    {
+        if (const auto* items = m_items.Ref().GetOwner())
+        {
+            fn(items);
+        }
+    }
 
 private:
     [[nodiscard]] const IListAccessor* Accessor() const { return m_items.GetAccessor(); }
@@ -1807,6 +1848,22 @@ public:
     explicit InternalValueMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
+        if constexpr (OwnsValues)
+        {
+            this->SetTraversable();
+        }
+    }
+
+    // A copy (CreateGenericMap) copies values held ByVal: the adapter alone holds them
+    void Traverse(const TraverseFn& fn) const override
+    {
+        if constexpr (OwnsValues)
+        {
+            for (const auto& entry : m_values.Get())
+            {
+                TraverseValue(entry.second, fn);
+            }
+        }
     }
 
     [[nodiscard]] size_t GetSize() const override { return m_values.Get().size(); }
@@ -1870,6 +1927,8 @@ public:
         return m_values == val->m_values;
     }
 protected:
+    static constexpr bool OwnsValues = std::is_same_v<Holder<Map>, ByVal<Map>>;
+
     // Mutable for SetValue, the one writer (IMapAccessor::SetValue)
     mutable Holder<Map> m_values;
 };
@@ -1882,6 +1941,7 @@ public:
     explicit SharedDictAdapter(TemplateDict&& values)
         : m_values(std::move(values))
     {
+        this->SetTraversable();
     }
 
     [[nodiscard]] size_t GetSize() const override { return m_values.Get().size(); }
@@ -1958,6 +2018,27 @@ public:
     [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
     [[nodiscard]] TemplateDict* GetMutableItems() const override { return &m_values.Get(); }
     [[nodiscard]] bool OwnsMutableItemsAlone() const override { return m_values.IsUnique(); }
+    void Traverse(const TraverseFn& fn) const override
+    {
+        if (!OwnsMutableItemsAlone())
+        {
+            return;
+        }
+        const auto& vals = m_values.Get();
+        for (const auto& entry : vals)
+        {
+            TraverseValue(entry.second, fn);
+        }
+        // A key that is not a string keeps its first spelling, a tuple that can hold a container
+        vals.ForEachKeyValue([&fn](const InternalValue& key) { TraverseValue(key, fn); });
+    }
+    void Clear() const noexcept override
+    {
+        if (OwnsMutableItemsAlone())
+        {
+            m_values.Get().Clear();
+        }
+    }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::MethodsFirst; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
@@ -2027,6 +2108,15 @@ public:
         , m_className(className)
         , m_reprArgument(std::move(reprArgument))
     {
+    }
+
+    void Traverse(const TraverseFn& fn) const override
+    {
+        InternalValueMapAdapter::Traverse(fn);
+        if (m_reprArgument)
+        {
+            TraverseValue(*m_reprArgument, fn);
+        }
     }
 
     [[nodiscard]] const char* GetObjectClass() const override { return m_className; }
@@ -2576,6 +2666,34 @@ InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const Use
 }
 
 } // namespace visitors
+
+void TraverseBoxed(const KeyValuePair& pair, const TraverseFn& fn)
+{
+    TraverseValue(pair.key, fn);
+    TraverseValue(pair.value, fn);
+}
+
+void TraverseBoxed(const Callable& callable, const TraverseFn& fn)
+{
+    // Another copy of the callable would hold them too, unseen
+    if (callable.m_callable.use_count() == 1)
+    {
+        if (const auto* fnCall = std::get_if<Callable::ExpressionCallable>(callable.m_callable.get()))
+        {
+            if (const auto* bound = fnCall->target<BoundMethodCall>())
+            {
+                TraverseValue(bound->self, fn);
+            }
+        }
+    }
+    if (callable.m_attributes && callable.m_attributes.use_count() == 1)
+    {
+        for (const auto& entry : *callable.m_attributes)
+        {
+            TraverseValue(entry.second, fn);
+        }
+    }
+}
 
 bool Callable::IsSame(const Callable& other) const
 {

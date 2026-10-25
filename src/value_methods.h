@@ -53,12 +53,10 @@ InternalValue MakeMutable(const InternalValue& value);
 bool IsMutable(const InternalValue& value);
 // Whether a method of this name changes its receiver for some value kind
 bool IsMutatingName(std::string_view name);
-// Called before `item` is stored in `container`, a list or dict the template owns whose
-// items are `storage`. A store that may close a reference cycle is noted for the
-// render's CycleCollector, which frees cycles of lists, dicts and namespaces (docs/tasks/
-// 0110). One through a bound method's receiver or a key-value pair it cannot follow, so
-// that store raises (a deliberate divergence from Python, docs/tasks/0049).
-void NoteContainerStore(const InternalValue& container, const void* storage, const InternalValue& item);
+// Called before `item` is stored in `container`, a list or dict the template owns. A store
+// that may close a reference cycle is noted for the render's CycleCollector, which frees
+// the cycles when the render ends (docs/tasks/0110, 0251)
+void NoteContainerStore(const InternalValue& container, const InternalValue& item);
 // container[key] = value for a list or dict the template owns
 void StoreItem(const InternalValue& container, const InternalValue& key, InternalValue value);
 bool IsContainer(const InternalValue& value);
