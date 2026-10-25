@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Generate src/unicode_case.h: the full Unicode case mappings of str.upper(), str.lower()
-and str.title()'s per-character titlecase, plus the Cased and Case_Ignorable sets that
-decide Python's Final_Sigma rule.
+and str.title()'s per-character titlecase, the Cased and Case_Ignorable sets that
+decide Python's Final_Sigma rule, and the Uppercase, Lowercase and titlecase sets that
+str.swapcase(), str.title() and the str.is*() case tests look at.
 
 The data is read from the Python that runs this script (unicodedata.unidata_version,
 written into the header), so it matches that Python's str methods. Regenerate with
@@ -79,6 +80,20 @@ def case_ignorable(cp):
     return not 0xD800 <= cp <= 0xDFFF and not cased(cp) and ("A" + chr(cp) + "Σ").lower()[-1] == "ς"
 
 
+def is_upper(cp):
+    # str.isupper() of one character is CPython's _PyUnicode_IsUppercase
+    return not 0xD800 <= cp <= 0xDFFF and chr(cp).isupper()
+
+
+def is_lower(cp):
+    return not 0xD800 <= cp <= 0xDFFF and chr(cp).islower()
+
+
+def is_title(cp):
+    # str.istitle() of one character is true for titlecase and uppercase characters
+    return not 0xD800 <= cp <= 0xDFFF and chr(cp).istitle() and not chr(cp).isupper()
+
+
 def run_table(name, comment, runs):
     body = "\n".join("    {{ 0x{:04X}, 0x{:04X}, {}, {} }},".format(f, l, s, d) for f, l, s, d in runs)
     return "// {}\nconstexpr CaseRun {}Runs[] = {{\n{}\n}};\n".format(comment, name, body)
@@ -133,6 +148,13 @@ inline size_t ToTitle(uint32_t cp, uint32_t (&out)[3]) { return MapCase(TitleRun
 // The Cased (and not Case_Ignorable) and Case_Ignorable sets of CPython's Final_Sigma rule
 inline bool IsCased(uint32_t cp) { return InRanges(CasedRanges, cp); }
 inline bool IsCaseIgnorable(uint32_t cp) { return InRanges(CaseIgnorableRanges, cp); }
+
+// CPython's Uppercase, Lowercase and titlecase character tests; a character is cased (the
+// Cased property, case-ignorable or not) when it is one of the three
+inline bool IsUppercase(uint32_t cp) { return InRanges(UppercaseRanges, cp); }
+inline bool IsLowercase(uint32_t cp) { return InRanges(LowercaseRanges, cp); }
+inline bool IsTitlecase(uint32_t cp) { return InRanges(TitlecaseRanges, cp); }
+inline bool IsCasedChar(uint32_t cp) { return IsUppercase(cp) || IsLowercase(cp) || IsTitlecase(cp); }
 """
 
 
@@ -153,6 +175,9 @@ def main():
         parts.append(multi_table(name, "str.{}() of one code point, longer results".format(name.lower()), multi))
     parts.append(range_table("Cased", "Cased and not Case_Ignorable", ranges(cased)))
     parts.append(range_table("CaseIgnorable", "Case_Ignorable (cased or not)", ranges(case_ignorable)))
+    parts.append(range_table("Uppercase", "Uppercase: str.isupper() of one character", ranges(is_upper)))
+    parts.append(range_table("Lowercase", "Lowercase: str.islower() of one character", ranges(is_lower)))
+    parts.append(range_table("Titlecase", "Titlecase: str.istitle() of one character that is not uppercase", ranges(is_title)))
     parts.append(HELPERS)
     parts.append("} // namespace unicode\n} // namespace v2\n} // namespace jinja2\n\n#endif // JINJA2CPP_SRC_UNICODE_CASE_H\n")
     target = ROOT / "src" / "unicode_case.h"
