@@ -34,7 +34,7 @@ enum class JsonKind : std::uint8_t
     Null,
     Bool,
     Int,  //!< fits `int64_t`
-    UInt, //!< fits `uint64_t` and not `int64_t`
+    UInt, //!< read with `AsUInt`; values above INT64_MAX become \ref BigInt
     Double,
     String,
     Array,

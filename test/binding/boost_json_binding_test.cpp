@@ -6,10 +6,13 @@
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
+#include "conformance.h"
+
 #include <gtest/gtest.h>
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 
 using BoostJsonTest = BasicTemplateRenderer;
@@ -234,3 +237,26 @@ TEST(BoostJsonUnsignedTest, UnsignedAboveInt64MaxIsBigInt)
     EXPECT_EQ("18446744073709551615", big.AsBigInt().ToString());
     EXPECT_EQ("9223372036854775807|18446744073709551615", tpl.RenderAsString(params).value());
 }
+
+namespace
+{
+// Boost.JSON keeps the document order, and its parser keeps the last value of a repeated key
+struct BoostJson
+{
+    using Json = boost::json::value;
+    // The suite's deep rows nest past Boost's default parser depth (32)
+    static Json Parse(std::string_view text)
+    {
+        boost::json::parse_options options;
+        options.max_depth = 4096;
+        return boost::json::parse(boost::json::string_view(text.data(), text.size()), {}, options);
+    }
+    static constexpr bool kSortedKeys = false;
+    static constexpr bool kViewable = true;
+    static constexpr bool kBigIntText = false;
+    static constexpr bool kViewDuplicateKeys = false;
+};
+} // namespace
+
+static_assert(jinja2::IsJsonViewable<boost::json::value> && jinja2::IsJsonCopyable<boost::json::value>);
+INSTANTIATE_TYPED_TEST_SUITE_P(Boost, JsonConformance, ::testing::Types<BoostJson>);
