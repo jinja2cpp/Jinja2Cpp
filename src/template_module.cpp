@@ -240,9 +240,9 @@ struct TemplateModuleState
                 kept.resize(token);
             }
         }
-        ImportedModule& AddModule(std::unique_ptr<ImportedModule> module) override
+        ImportedModule& AddModule(std::unique_ptr<ImportedModule> newModule) override
         {
-            auto& added = Impl::RendererCallback::AddModule(std::move(module));
+            auto& added = Impl::RendererCallback::AddModule(std::move(newModule));
             if (sharedDepth != 0)
             {
                 kept.push_back(&added);
@@ -270,6 +270,7 @@ struct TemplateModuleState
         explicit CallScope(Callback& callback)
             : m_callback(callback)
             , m_mark(callback.MarkCall())
+            , m_sharedDepth(std::exchange(callback.sharedDepth, 0))
         {
             ++m_callback.calls;
         }
@@ -280,12 +281,16 @@ struct TemplateModuleState
         ~CallScope()
         {
             --m_callback.calls;
+            m_callback.sharedDepth = m_sharedDepth;
             m_callback.EndCall(m_mark, m_callback.kept);
         }
 
     private:
         Callback& m_callback;
         typename Callback::CallMark m_mark;
+        // A call made from a shared module's top level (a host callable there) imports for
+        // itself: its modules end with it
+        std::size_t m_sharedDepth;
     };
 
     TemplateModuleState(std::shared_ptr<const Impl> tpl, const ValuesMap& params)
