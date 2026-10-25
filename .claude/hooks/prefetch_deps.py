@@ -29,7 +29,8 @@ ARCHIVE_RE = re.compile(
 
 
 def pins(repo_root):
-    # thirdparty/CMakeLists.txt pins standalone Boost.Multiprecision and Boost.Config
+    # thirdparty/CMakeLists.txt pins standalone Boost.Multiprecision and Boost.Config,
+    # googletest and google benchmark (archive URLs with URL_HASH, literal tags)
     for cmake_file in ("thirdparty/internal_deps.cmake", "thirdparty/CMakeLists.txt"):
         text = (repo_root / cmake_file).read_text()
         for name, body in DECLARE_RE.findall(text):

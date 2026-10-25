@@ -1,8 +1,8 @@
 ---
-status: open
+status: done
 priority: low
 area: build
-touches: [conanfile.txt, thirdparty/CMakeLists.txt, .github/workflows/, sbom/components.json]
+touches: [conanfile.txt, thirdparty/CMakeLists.txt, .github/workflows/, .github/actions/, sbom/components.json, scripts/sbom.py, .claude/hooks/prefetch_deps.py]
 ---
 # Dependency pins disagree across modes and some are mutable
 
@@ -26,3 +26,17 @@ PR; `scripts/sbom.py --check` verifies the pins it records.
 
 **Done when.** Each dependency has one version across modes or a recorded reason, tests
 and actions are pinned immutably, and the SBOM check passes.
+
+**Progress (0230 step D7c).** Done. Every `uses:` in the workflows and the local composite
+action is a 40-character commit SHA with a `# vX.Y.Z` comment (decision R7: GitHub-owned
+actions included; the newest release of the major that was referenced). PyYAML is
+`pyyaml==6.0.3`. googletest v1.18.0 and benchmark v1.9.5 are `URL` archives with
+`URL_HASH`, written as literals; the hashes come from `git archive | gzip -n -6`, a method
+checked first against fmt 12.2.0's existing pin, and the prefetch hook already clones them
+because it scans `thirdparty/CMakeLists.txt`. The Conan pins that differ from internal mode
+stay, each with its reason in `conanfile.txt` and a `conan_why` in components.json
+(expected-lite 0.9.0 and Boost 1.91.0 are ConanCenter's newest; RapidJSON cci.20250205 is
+the same commit and the local patches only touch CMake). `scripts/sbom.py --check` now fails
+a conan version that differs without `conan_why`, and compares every workflow `uses:` with
+the `sha` and release tag of its `gha-*` component. Nothing refreshes the SHAs yet: a
+Dependabot `github-actions` entry is a follow-up.

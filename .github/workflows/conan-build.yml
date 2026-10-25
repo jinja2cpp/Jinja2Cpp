@@ -46,7 +46,7 @@ jobs:
         build-config: [Release]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
     - name: Install toolchain
       uses: ./.github/actions/install-toolchain
@@ -66,7 +66,7 @@ jobs:
         conan profile show
 
     - name: Cache Conan packages
-      uses: actions/cache@v4
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: ~/.conan2/p
         key: conan-${{ runner.os }}-gcc-14-cxx17-${{ matrix.build-config }}-${{ hashFiles('conanfile.txt') }}

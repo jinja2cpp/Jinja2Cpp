@@ -26,6 +26,7 @@
       "exposure": "public-api",
       "selected_by": "always",
       "conan": "expected-lite/0.9.0",
+      "conan_why": "ConanCenter has expected-lite 0.9.0 at most (checked 2026-10-24); conan-build stays one version behind until 0.10.0 is published there",
       "used_for": "nonstd::expected behind jinja2::Result<T> in every Load/Render signature (include/jinja2cpp/template.h, template_env.h); make_unexpected in parsers and bindings",
       "why": "C++17 has no std::expected; the 2.0 API returns Result<T> (docs/api-2.0.md decision 4), and Clang 18 + libstdc++ at C++23 ships <expected> without std::expected",
       "lighten": "Keep until a C++23 floor. Header-only and small; could be vendored into include/ so consumers need nothing extra, at the cost of an ODR clash with a consumer's own expected-lite of another version",
@@ -72,6 +73,7 @@
       "exposure": "public-optional",
       "selected_by": "JINJA2CPP_WITH_JSON_BINDINGS=boost with JINJA2CPP_BUILD_TESTS: internal mode fetches the release for the Boost.JSON adapter test and never installs it; external, external-boost and conan-build find a system Boost >= 1.75 (Conan: header-only) only when a Boost piece is selected",
       "conan": "boost/1.91.0",
+      "conan_why": "ConanCenter has Boost 1.91.0 at most (checked 2026-10-24); conanfile.txt takes it header_only, and Boost is only an optional adapter dependency and test-only (0230)",
       "transitive_libraries": ["assert", "compat", "config", "container", "container_hash", "core", "describe", "endian", "headers", "intrusive", "json", "move", "mp11", "predef", "system", "throw_exception", "variant2", "winapi"],
       "used_for": "The opt-in adapters only: Boost.JSON for the binding test, and Multiprecision with Config (boost-multiprecision, boost-config, fetched on their own) for the bigint=boost backend and the adapter test. The library links no Boost and the installed package never names it (0230 D7a)",
       "why": "The adapter headers jinja2cpp/binding/boost_json.h and jinja2cpp/big_int/boost_cpp_int.h are public opt-in API, so CI keeps testing them",
@@ -163,9 +165,10 @@
       "exposure": "public-optional",
       "selected_by": "JINJA2CPP_WITH_JSON_BINDINGS=rapid",
       "conan": "rapidjson/cci.20250205",
+      "conan_why": "cci.20250205 is commit 24b5e7a8 (same sha256 as the internal archive); the two local patches only change RapidJSON's CMake install, policy, gtest and config-file rules, which the header-only Conan package does not use, so it needs neither",
       "used_for": "Opt-in adapter include/jinja2cpp/binding/rapid_json.h and its test",
       "why": "Third JSON adapter for users who already carry RapidJSON",
-      "lighten": "Header-only. Patched locally, and the conan-build mode takes an unpatched ConanCenter snapshot; upstream has had no release since 2016. A candidate to retire as a built-in backend while keeping the adapter header"
+      "lighten": "Header-only. Patched locally (CMake files only), and the conan-build mode takes the same commit unpatched from ConanCenter; upstream has had no release since 2016. A candidate to retire as a built-in backend while keeping the adapter header"
     },
     {
       "id": "robin-hood-hashing",
@@ -297,15 +300,15 @@
       "url": "https://github.com/google/googletest",
       "purl": "pkg:github/google/googletest@v1.18.0",
       "delivery": "fetched",
-      "source": {"git": "https://github.com/google/googletest.git", "tag": "v1.18.0"},
+      "source": {"url": "https://github.com/google/googletest/archive/refs/tags/v1.18.0.tar.gz", "sha256": "6e3191c1455468b3fc35a417fb565c1c5071aee1b7e7f85e30cf48a98d37d8b5"},
       "role": "test",
       "phases": ["test"],
       "exposure": "none",
       "selected_by": "JINJA2CPP_BUILD_TESTS (ON for the main project); a system GTest is preferred",
       "used_for": "The jinja2cpp_tests binary",
       "why": "Unit and corpus tests",
-      "lighten": "Test-only. Fetched by a mutable git tag, not a hash",
-      "evidence": [{"file": "thirdparty/CMakeLists.txt", "contains": ["https://github.com/google/googletest.git", "JINJA2CPP_GTEST_TAG \"v1.18.0\"", "INSTALL_GTEST OFF"]}]
+      "lighten": "Test-only. Fetched as an archive pinned by SHA-256",
+      "evidence": [{"file": "thirdparty/CMakeLists.txt", "contains": ["googletest/archive/refs/tags/v1.18.0.tar.gz", "6e3191c1455468b3fc35a417fb565c1c5071aee1b7e7f85e30cf48a98d37d8b5", "INSTALL_GTEST OFF"]}]
     },
     {
       "id": "google-benchmark",
@@ -316,15 +319,15 @@
       "url": "https://github.com/google/benchmark",
       "purl": "pkg:github/google/benchmark@v1.9.5",
       "delivery": "fetched",
-      "source": {"git": "https://github.com/google/benchmark.git", "tag": "v1.9.5"},
+      "source": {"url": "https://github.com/google/benchmark/archive/refs/tags/v1.9.5.tar.gz", "sha256": "9631341c82bac4a288bef951f8b26b41f69021794184ece969f8473977eaa340"},
       "role": "optional",
       "phases": ["dev"],
       "exposure": "none",
       "selected_by": "JINJA2CPP_BUILD_BENCHMARKS (OFF)",
       "used_for": "bench/ suite",
       "why": "Performance tracking against Python Jinja2 and the baseline",
-      "lighten": "Dev-only",
-      "evidence": [{"file": "thirdparty/CMakeLists.txt", "contains": ["https://github.com/google/benchmark.git", "GIT_TAG v1.9.5"]}]
+      "lighten": "Dev-only. Fetched as an archive pinned by SHA-256",
+      "evidence": [{"file": "thirdparty/CMakeLists.txt", "contains": ["benchmark/archive/refs/tags/v1.9.5.tar.gz", "9631341c82bac4a288bef951f8b26b41f69021794184ece969f8473977eaa340"]}]
     },
     {
       "id": "inja",
@@ -600,12 +603,12 @@
       "why": "Left over from before cmake/coverage.cmake",
       "lighten": "Delete (owned by docs/tasks/0010, which lists the file in its touches)"
     },
-    {"id": "gha-checkout", "name": "actions/checkout", "version": "v4", "license": "MIT", "supplier": "GitHub", "url": "https://github.com/actions/checkout", "purl": "pkg:githubactions/actions/checkout@v4", "delivery": "ci", "role": "tooling", "phases": ["ci"], "exposure": "none", "action": "actions/checkout@v4", "used_for": "CI", "why": "CI", "lighten": "Pinned by a mutable tag, not a commit SHA"},
-    {"id": "gha-setup-python", "name": "actions/setup-python", "version": "v5", "license": "MIT", "supplier": "GitHub", "url": "https://github.com/actions/setup-python", "purl": "pkg:githubactions/actions/setup-python@v5", "delivery": "ci", "role": "tooling", "phases": ["ci"], "exposure": "none", "action": "actions/setup-python@v5", "used_for": "CI", "why": "CI", "lighten": "Pinned by a mutable tag, not a commit SHA"},
-    {"id": "gha-upload-artifact", "name": "actions/upload-artifact", "version": "v4", "license": "MIT", "supplier": "GitHub", "url": "https://github.com/actions/upload-artifact", "purl": "pkg:githubactions/actions/upload-artifact@v4", "delivery": "ci", "role": "tooling", "phases": ["ci"], "exposure": "none", "action": "actions/upload-artifact@v4", "used_for": "CI", "why": "CI", "lighten": "Pinned by a mutable tag, not a commit SHA"},
-    {"id": "gha-cache", "name": "actions/cache", "version": "v4", "license": "MIT", "supplier": "GitHub", "url": "https://github.com/actions/cache", "purl": "pkg:githubactions/actions/cache@v4", "delivery": "ci", "role": "tooling", "phases": ["ci"], "exposure": "none", "action": "actions/cache@v4", "action_aliases": ["actions/cache/restore@v4", "actions/cache/save@v4"], "used_for": "CI", "why": "CI", "lighten": "Pinned by a mutable tag, not a commit SHA"},
-    {"id": "gha-codeql", "name": "github/codeql-action", "version": "v4", "license": "MIT", "supplier": "GitHub", "url": "https://github.com/github/codeql-action", "purl": "pkg:githubactions/github/codeql-action@v4", "delivery": "ci", "role": "tooling", "phases": ["ci"], "exposure": "none", "action": "github/codeql-action/init@v4", "action_aliases": ["github/codeql-action/analyze@v4"], "used_for": "CodeQL analysis", "why": "CI", "lighten": "Pinned by a mutable tag, not a commit SHA"},
-    {"id": "gha-ccache-action", "name": "hendrikmuhs/ccache-action", "version": "v1.2", "license": "MIT", "supplier": "Hendrik Muhs", "url": "https://github.com/hendrikmuhs/ccache-action", "purl": "pkg:githubactions/hendrikmuhs/ccache-action@v1.2", "delivery": "ci", "role": "tooling", "phases": ["ci"], "exposure": "none", "action": "hendrikmuhs/ccache-action@v1.2", "used_for": "Compiler cache in CI (.github/actions/setup-ccache)", "why": "CI", "lighten": "Third-party action pinned by a mutable tag; runs with the workflow token"},
-    {"id": "gha-msvc-dev-cmd", "name": "ilammy/msvc-dev-cmd", "version": "v1", "license": "MIT", "supplier": "ilammy", "url": "https://github.com/ilammy/msvc-dev-cmd", "purl": "pkg:githubactions/ilammy/msvc-dev-cmd@v1", "delivery": "ci", "role": "tooling", "phases": ["ci"], "exposure": "none", "action": "ilammy/msvc-dev-cmd@v1", "used_for": "MSVC environment on Windows runners", "why": "CI", "lighten": "Third-party action pinned by a mutable tag; runs with the workflow token"}
+    {"id": "gha-checkout", "name": "actions/checkout", "version": "v4.4.0", "license": "MIT", "supplier": "GitHub", "url": "https://github.com/actions/checkout", "purl": "pkg:githubactions/actions/checkout@v4.4.0", "delivery": "ci", "role": "tooling", "phases": ["ci"], "exposure": "none", "action": "actions/checkout", "sha": "11d5960a326750d5838078e36cf38b85af677262", "used_for": "CI", "why": "CI", "lighten": "Pinned by commit SHA with the release tag in a comment"},
+    {"id": "gha-setup-python", "name": "actions/setup-python", "version": "v5.6.0", "license": "MIT", "supplier": "GitHub", "url": "https://github.com/actions/setup-python", "purl": "pkg:githubactions/actions/setup-python@v5.6.0", "delivery": "ci", "role": "tooling", "phases": ["ci"], "exposure": "none", "action": "actions/setup-python", "sha": "a26af69be951a213d495a4c3e4e4022e16d87065", "used_for": "CI", "why": "CI", "lighten": "Pinned by commit SHA with the release tag in a comment"},
+    {"id": "gha-upload-artifact", "name": "actions/upload-artifact", "version": "v4.6.2", "license": "MIT", "supplier": "GitHub", "url": "https://github.com/actions/upload-artifact", "purl": "pkg:githubactions/actions/upload-artifact@v4.6.2", "delivery": "ci", "role": "tooling", "phases": ["ci"], "exposure": "none", "action": "actions/upload-artifact", "sha": "ea165f8d65b6e75b540449e92b4886f43607fa02", "used_for": "CI", "why": "CI", "lighten": "Pinned by commit SHA with the release tag in a comment"},
+    {"id": "gha-cache", "name": "actions/cache", "version": "v4.3.0", "license": "MIT", "supplier": "GitHub", "url": "https://github.com/actions/cache", "purl": "pkg:githubactions/actions/cache@v4.3.0", "delivery": "ci", "role": "tooling", "phases": ["ci"], "exposure": "none", "action": "actions/cache", "sha": "0057852bfaa89a56745cba8c7296529d2fc39830", "action_aliases": ["actions/cache/restore", "actions/cache/save"], "used_for": "CI", "why": "CI", "lighten": "Pinned by commit SHA with the release tag in a comment"},
+    {"id": "gha-codeql", "name": "github/codeql-action", "version": "v4.39.1", "license": "MIT", "supplier": "GitHub", "url": "https://github.com/github/codeql-action", "purl": "pkg:githubactions/github/codeql-action@v4.39.1", "delivery": "ci", "role": "tooling", "phases": ["ci"], "exposure": "none", "action": "github/codeql-action/init", "sha": "9b3254085494b55a0f7c4c2b3d2d52cc712ce370", "action_aliases": ["github/codeql-action/analyze"], "used_for": "CodeQL analysis", "why": "CI", "lighten": "Pinned by commit SHA with the release tag in a comment"},
+    {"id": "gha-ccache-action", "name": "hendrikmuhs/ccache-action", "version": "v1.2.24", "license": "MIT", "supplier": "Hendrik Muhs", "url": "https://github.com/hendrikmuhs/ccache-action", "purl": "pkg:githubactions/hendrikmuhs/ccache-action@v1.2.24", "delivery": "ci", "role": "tooling", "phases": ["ci"], "exposure": "none", "action": "hendrikmuhs/ccache-action", "sha": "f09c25b45002a07be2955cbe52e8cee55643f89d", "used_for": "Compiler cache in CI (.github/actions/setup-ccache)", "why": "CI", "lighten": "Pinned by commit SHA with the release tag in a comment; third-party, runs with the workflow token"},
+    {"id": "gha-msvc-dev-cmd", "name": "ilammy/msvc-dev-cmd", "version": "v1.13.0", "license": "MIT", "supplier": "ilammy", "url": "https://github.com/ilammy/msvc-dev-cmd", "purl": "pkg:githubactions/ilammy/msvc-dev-cmd@v1.13.0", "delivery": "ci", "role": "tooling", "phases": ["ci"], "exposure": "none", "action": "ilammy/msvc-dev-cmd", "sha": "0b201ec74fa43914dc39ae48a89fd1d8cb592756", "used_for": "MSVC environment on Windows runners", "why": "CI", "lighten": "Pinned by commit SHA with the release tag in a comment; third-party, runs with the workflow token"}
   ]
 }

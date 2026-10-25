@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:c5dffeda-35b0-5967-a8f4-ddf8a1d9b9f1",
+  "serialNumber": "urn:uuid:04381e71-6faf-5da3-80aa-52d9184a7849",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -110,6 +110,10 @@
         {
           "name": "jinja2cpp:conan",
           "value": "expected-lite/0.9.0"
+        },
+        {
+          "name": "jinja2cpp:conan-why",
+          "value": "ConanCenter has expected-lite 0.9.0 at most (checked 2026-10-24); conan-build stays one version behind until 0.10.0 is published there"
         }
       ]
     },
@@ -258,6 +262,10 @@
         {
           "name": "jinja2cpp:conan",
           "value": "boost/1.91.0"
+        },
+        {
+          "name": "jinja2cpp:conan-why",
+          "value": "ConanCenter has Boost 1.91.0 at most (checked 2026-10-24); conanfile.txt takes it header_only, and Boost is only an optional adapter dependency and test-only (0230)"
         },
         {
           "name": "jinja2cpp:transitive-libraries",
@@ -629,11 +637,15 @@
         },
         {
           "name": "jinja2cpp:lighten",
-          "value": "Header-only. Patched locally, and the conan-build mode takes an unpatched ConanCenter snapshot; upstream has had no release since 2016. A candidate to retire as a built-in backend while keeping the adapter header"
+          "value": "Header-only. Patched locally (CMake files only), and the conan-build mode takes the same commit unpatched from ConanCenter; upstream has had no release since 2016. A candidate to retire as a built-in backend while keeping the adapter header"
         },
         {
           "name": "jinja2cpp:conan",
           "value": "rapidjson/cci.20250205"
+        },
+        {
+          "name": "jinja2cpp:conan-why",
+          "value": "cci.20250205 is commit 24b5e7a8 (same sha256 as the internal archive); the two local patches only change RapidJSON's CMake install, policy, gtest and config-file rules, which the header-only Conan package does not use, so it needs neither"
         }
       ]
     },
@@ -1094,6 +1106,12 @@
         "name": "Google"
       },
       "scope": "excluded",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6e3191c1455468b3fc35a417fb565c1c5071aee1b7e7f85e30cf48a98d37d8b5"
+        }
+      ],
       "licenses": [
         {
           "license": {
@@ -1108,9 +1126,8 @@
           "url": "https://github.com/google/googletest"
         },
         {
-          "type": "vcs",
-          "url": "https://github.com/google/googletest.git",
-          "comment": "v1.18.0"
+          "type": "distribution",
+          "url": "https://github.com/google/googletest/archive/refs/tags/v1.18.0.tar.gz"
         }
       ],
       "properties": [
@@ -1144,7 +1161,7 @@
         },
         {
           "name": "jinja2cpp:lighten",
-          "value": "Test-only. Fetched by a mutable git tag, not a hash"
+          "value": "Test-only. Fetched as an archive pinned by SHA-256"
         }
       ]
     },
@@ -1157,6 +1174,12 @@
         "name": "Google"
       },
       "scope": "optional",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "9631341c82bac4a288bef951f8b26b41f69021794184ece969f8473977eaa340"
+        }
+      ],
       "licenses": [
         {
           "license": {
@@ -1171,9 +1194,8 @@
           "url": "https://github.com/google/benchmark"
         },
         {
-          "type": "vcs",
-          "url": "https://github.com/google/benchmark.git",
-          "comment": "v1.9.5"
+          "type": "distribution",
+          "url": "https://github.com/google/benchmark/archive/refs/tags/v1.9.5.tar.gz"
         }
       ],
       "properties": [
@@ -1207,7 +1229,7 @@
         },
         {
           "name": "jinja2cpp:lighten",
-          "value": "Dev-only"
+          "value": "Dev-only. Fetched as an archive pinned by SHA-256"
         }
       ]
     },
@@ -2096,7 +2118,7 @@
       "type": "application",
       "bom-ref": "gha-checkout",
       "name": "actions/checkout",
-      "version": "v4",
+      "version": "v4.4.0",
       "supplier": {
         "name": "GitHub"
       },
@@ -2108,7 +2130,7 @@
           }
         }
       ],
-      "purl": "pkg:githubactions/actions/checkout@v4",
+      "purl": "pkg:githubactions/actions/checkout@v4.4.0",
       "externalReferences": [
         {
           "type": "website",
@@ -2146,7 +2168,11 @@
         },
         {
           "name": "jinja2cpp:lighten",
-          "value": "Pinned by a mutable tag, not a commit SHA"
+          "value": "Pinned by commit SHA with the release tag in a comment"
+        },
+        {
+          "name": "jinja2cpp:sha",
+          "value": "11d5960a326750d5838078e36cf38b85af677262"
         }
       ]
     },
@@ -2154,7 +2180,7 @@
       "type": "application",
       "bom-ref": "gha-setup-python",
       "name": "actions/setup-python",
-      "version": "v5",
+      "version": "v5.6.0",
       "supplier": {
         "name": "GitHub"
       },
@@ -2166,7 +2192,7 @@
           }
         }
       ],
-      "purl": "pkg:githubactions/actions/setup-python@v5",
+      "purl": "pkg:githubactions/actions/setup-python@v5.6.0",
       "externalReferences": [
         {
           "type": "website",
@@ -2204,7 +2230,11 @@
         },
         {
           "name": "jinja2cpp:lighten",
-          "value": "Pinned by a mutable tag, not a commit SHA"
+          "value": "Pinned by commit SHA with the release tag in a comment"
+        },
+        {
+          "name": "jinja2cpp:sha",
+          "value": "a26af69be951a213d495a4c3e4e4022e16d87065"
         }
       ]
     },
@@ -2212,7 +2242,7 @@
       "type": "application",
       "bom-ref": "gha-upload-artifact",
       "name": "actions/upload-artifact",
-      "version": "v4",
+      "version": "v4.6.2",
       "supplier": {
         "name": "GitHub"
       },
@@ -2224,7 +2254,7 @@
           }
         }
       ],
-      "purl": "pkg:githubactions/actions/upload-artifact@v4",
+      "purl": "pkg:githubactions/actions/upload-artifact@v4.6.2",
       "externalReferences": [
         {
           "type": "website",
@@ -2262,7 +2292,11 @@
         },
         {
           "name": "jinja2cpp:lighten",
-          "value": "Pinned by a mutable tag, not a commit SHA"
+          "value": "Pinned by commit SHA with the release tag in a comment"
+        },
+        {
+          "name": "jinja2cpp:sha",
+          "value": "ea165f8d65b6e75b540449e92b4886f43607fa02"
         }
       ]
     },
@@ -2270,7 +2304,7 @@
       "type": "application",
       "bom-ref": "gha-cache",
       "name": "actions/cache",
-      "version": "v4",
+      "version": "v4.3.0",
       "supplier": {
         "name": "GitHub"
       },
@@ -2282,7 +2316,7 @@
           }
         }
       ],
-      "purl": "pkg:githubactions/actions/cache@v4",
+      "purl": "pkg:githubactions/actions/cache@v4.3.0",
       "externalReferences": [
         {
           "type": "website",
@@ -2320,7 +2354,11 @@
         },
         {
           "name": "jinja2cpp:lighten",
-          "value": "Pinned by a mutable tag, not a commit SHA"
+          "value": "Pinned by commit SHA with the release tag in a comment"
+        },
+        {
+          "name": "jinja2cpp:sha",
+          "value": "0057852bfaa89a56745cba8c7296529d2fc39830"
         }
       ]
     },
@@ -2328,7 +2366,7 @@
       "type": "application",
       "bom-ref": "gha-codeql",
       "name": "github/codeql-action",
-      "version": "v4",
+      "version": "v4.39.1",
       "supplier": {
         "name": "GitHub"
       },
@@ -2340,7 +2378,7 @@
           }
         }
       ],
-      "purl": "pkg:githubactions/github/codeql-action@v4",
+      "purl": "pkg:githubactions/github/codeql-action@v4.39.1",
       "externalReferences": [
         {
           "type": "website",
@@ -2378,7 +2416,11 @@
         },
         {
           "name": "jinja2cpp:lighten",
-          "value": "Pinned by a mutable tag, not a commit SHA"
+          "value": "Pinned by commit SHA with the release tag in a comment"
+        },
+        {
+          "name": "jinja2cpp:sha",
+          "value": "9b3254085494b55a0f7c4c2b3d2d52cc712ce370"
         }
       ]
     },
@@ -2386,7 +2428,7 @@
       "type": "application",
       "bom-ref": "gha-ccache-action",
       "name": "hendrikmuhs/ccache-action",
-      "version": "v1.2",
+      "version": "v1.2.24",
       "supplier": {
         "name": "Hendrik Muhs"
       },
@@ -2398,7 +2440,7 @@
           }
         }
       ],
-      "purl": "pkg:githubactions/hendrikmuhs/ccache-action@v1.2",
+      "purl": "pkg:githubactions/hendrikmuhs/ccache-action@v1.2.24",
       "externalReferences": [
         {
           "type": "website",
@@ -2436,7 +2478,11 @@
         },
         {
           "name": "jinja2cpp:lighten",
-          "value": "Third-party action pinned by a mutable tag; runs with the workflow token"
+          "value": "Pinned by commit SHA with the release tag in a comment; third-party, runs with the workflow token"
+        },
+        {
+          "name": "jinja2cpp:sha",
+          "value": "f09c25b45002a07be2955cbe52e8cee55643f89d"
         }
       ]
     },
@@ -2444,7 +2490,7 @@
       "type": "application",
       "bom-ref": "gha-msvc-dev-cmd",
       "name": "ilammy/msvc-dev-cmd",
-      "version": "v1",
+      "version": "v1.13.0",
       "supplier": {
         "name": "ilammy"
       },
@@ -2456,7 +2502,7 @@
           }
         }
       ],
-      "purl": "pkg:githubactions/ilammy/msvc-dev-cmd@v1",
+      "purl": "pkg:githubactions/ilammy/msvc-dev-cmd@v1.13.0",
       "externalReferences": [
         {
           "type": "website",
@@ -2494,7 +2540,11 @@
         },
         {
           "name": "jinja2cpp:lighten",
-          "value": "Third-party action pinned by a mutable tag; runs with the workflow token"
+          "value": "Pinned by commit SHA with the release tag in a comment; third-party, runs with the workflow token"
+        },
+        {
+          "name": "jinja2cpp:sha",
+          "value": "0b201ec74fa43914dc39ae48a89fd1d8cb592756"
         }
       ]
     }
