@@ -317,9 +317,19 @@ struct Ref
 template<typename J>
 Value MakeValue(const Ref<J>& ref);
 
+template<typename N, typename = void>
+struct IsEqualityComparable : std::false_type
+{
+};
+template<typename N>
+struct IsEqualityComparable<N, std::enable_if_t<std::is_same_v<decltype(std::declval<const N&>() == std::declval<const N&>()), bool>>> : std::true_type
+{
+};
+
 template<typename J>
 bool SameNode(const NodeOf<J>& a, const NodeOf<J>& b)
 {
+    static_assert(std::disjunction_v<HasSameNode<J>, IsEqualityComparable<NodeOf<J>>>, "JsonTraits<Json>::Node needs operator== or JsonTraits<Json>::SameNode");
     if constexpr (HasSameNode<J>::value)
     {
         return Traits<J>::SameNode(a, b);
@@ -579,8 +589,19 @@ inline std::string FormatPath(const std::vector<PathStep>& innermostFirst)
             if (ch == '"' || ch == '\\')
             {
                 result += '\\';
+                result += ch;
             }
-            result += ch;
+            else if (static_cast<unsigned char>(ch) < 0x20)
+            {
+                constexpr std::string_view hex = "0123456789abcdef";
+                result += "\\u00";
+                result += hex[(static_cast<unsigned char>(ch) >> 4) & 0xF];
+                result += hex[static_cast<unsigned char>(ch) & 0xF];
+            }
+            else
+            {
+                result += ch;
+            }
         }
         result += "\"]";
     }
@@ -627,7 +648,7 @@ public:
     }
 
 private:
-    void Fail(const Node& node, std::string message, const char* limit)
+    void Fail([[maybe_unused]] const Node& node, std::string message, const char* limit)
     {
         if (m_failed)
         {
@@ -644,7 +665,7 @@ private:
 
     // Stores the value of a traits call returning `T` or `JsonResult<T>`; false after a failure
     template<typename R, typename V>
-    bool Load(R&& result, V& out, const Node& node)
+    bool Load(R&& result, V& out, [[maybe_unused]] const Node& node)
     {
         if constexpr (IsResult<std::decay_t<R>>::value)
         {
@@ -882,7 +903,8 @@ namespace detail
  * A document taken by value or as an rvalue is owned by the view and shared by every copy of the \ref Value and
  * every item it hands out (a non-const lvalue is copied first); a const reference or a pointer borrows it, so the
  * caller keeps it alive; a `std::shared_ptr` shares it. A scalar document is copied out at once. A handle type
- * (`JsonTraits::IsHandle`) is always borrowed: use \ref ReflectJson to give it an owner. References and const types
+ * (`JsonTraits::IsHandle`) is always borrowed: use \ref ReflectJson to give it an owner. A const document cannot be
+ * moved in and `std::shared_ptr<const Json>` is not accepted: reflect it by const reference, or share a non-const one. References and const types
  * are excluded: `Reflector<T&>` and `Reflector<const T&>` route here through `Reflector<T>`.
  */
 template<typename Json>

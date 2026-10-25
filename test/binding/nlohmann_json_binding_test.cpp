@@ -420,6 +420,17 @@ TEST(ToyStreamJsonTest, LimitErrorsShowTheOffset)
     EXPECT_NE(std::string::npos, str.GetLocationDescr().find("(char 7)")) << str.GetLocationDescr();
 }
 
+// Keys that are not identifiers are quoted in the path, with quotes, backslashes and control characters escaped
+TEST(ToyStreamJsonTest, PathQuotesOddKeys)
+{
+    const jinja2::JsonCopyLimits cap3{ 128, 3 };
+    EXPECT_EQ(R"($["a b"][0])", Param(CopyError(ToyStream::Parse(R"({"a b":[[1,2,3,4]]})"), cap3), 2));
+    EXPECT_EQ(R"($[""])", Param(CopyError(ToyStream::Parse(R"({"":[1,2,3,4]})"), cap3), 2));
+    EXPECT_EQ(R"($["q\"\\"])", Param(CopyError(ToyStream::Parse(R"({"q\"\\":[1,2,3,4]})"), cap3), 2));
+    EXPECT_EQ(R"($["a\u000ab"])", Param(CopyError(ToyStream::Parse(R"({"a\nb":[1,2,3,4]})"), cap3), 2));
+    EXPECT_EQ(R"($["1x"]._y2)", Param(CopyError(ToyStream::Parse(R"({"1x":{"_y2":[1,2,3,4]}})"), cap3), 2));
+}
+
 // A traits error reads as "Data read error:" in the text of the error
 TEST(ToyStreamJsonTest, ErrorTextNamesTheKind)
 {
