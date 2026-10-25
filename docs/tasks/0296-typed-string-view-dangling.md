@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: high
 area: api
 depends: []
@@ -27,3 +27,12 @@ whole call, and confirm it stays safe.
 **Done when** a function-pointer callable with `std::string_view` and with `std::wstring_view`
 parameters, given narrow and wide strings, Markup and WMarkup, passes under ASan, with rows in
 `test/user_callable_test.cpp`.
+
+**Resolution.** `TypedParam` of a `std::basic_string_view` owns an optional converted string.
+`TypedParamUnwrapper` converts text of the other width (a string or a string view; a Markup
+reaches it as its string) into that storage instead of going through `Promote`, and `GetValue`
+makes the view from the storage and returns it by value, so the view survives the move of the
+param into the argument tuple, which lives until `std::apply` returns. The lambda path
+(`UCInvoker`) was already safe: its promoters are temporaries of the full-expression that calls
+the function. Rows: `StringViewPointerParamConvert` (by-value and `const&` view parameters,
+narrow and wide, short and long strings, Markup and WMarkup). Found on the way: 0317.

@@ -292,15 +292,46 @@ Value InvokeUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&&..
     return std::visit(ParamUnwrapper<UCInvoker<Fn>, true>(&invoker), GetParamValue(params, ad).GetData()...);
 }
 
+// A view parameter given text of the other width needs the converted string to outlive the call
+template<typename T>
+struct ConvertedTextStorage
+{
+    struct NoStorage
+    {
+    };
+    using type = NoStorage;
+    static constexpr bool isView = false;
+};
+
+template<typename CharT>
+struct ConvertedTextStorage<std::basic_string_view<CharT>>
+{
+    using type = std::optional<std::basic_string<CharT>>;
+    static constexpr bool isView = true;
+};
+
 template<typename T>
 struct TypedParam
 {
     using decayed_t = std::decay_t<T>;
+    using storage_t = typename ConvertedTextStorage<decayed_t>::type;
+    static constexpr bool isView = ConvertedTextStorage<decayed_t>::isView;
     std::variant<NoneValue, decayed_t, const decayed_t*> data;
+    // Owned by the param, which the caller keeps until the function returns; the view is made in
+    // GetValue, so moving the param (and the string's small buffer) is safe (docs/tasks/0296)
+    storage_t converted;
 
     [[nodiscard]] bool HasValue() const { return data.index() != 0; }
-    [[nodiscard]] T GetValue() const
+    // A view comes back by value, so a `const std::string_view&` parameter binds to a view of `converted`
+    [[nodiscard]] std::conditional_t<isView, decayed_t, T> GetValue() const
     {
+        if constexpr (isView)
+        {
+            if (converted)
+            {
+                return decayed_t(*converted);
+            }
+        }
         if (data.index() == 1)
         {
             return std::get<decayed_t>(data);
@@ -311,6 +342,28 @@ struct TypedParam
     void SetPointer(const decayed_t* ptr) { data = ptr; }
 
     void SetValue(decayed_t&& val) { data = std::move(val); }
+
+    template<typename String>
+    void SetConverted(String&& str)
+    {
+        converted = std::forward<String>(str);
+        data = decayed_t();
+    }
+};
+
+template<typename T, typename CharT>
+struct IsOtherWidthText : std::false_type
+{
+};
+
+template<typename OtherCharT, typename CharT>
+struct IsOtherWidthText<std::basic_string<OtherCharT>, CharT> : std::bool_constant<!std::is_same_v<OtherCharT, CharT>>
+{
+};
+
+template<typename OtherCharT, typename CharT>
+struct IsOtherWidthText<std::basic_string_view<OtherCharT>, CharT> : std::bool_constant<!std::is_same_v<OtherCharT, CharT>>
+{
 };
 
 template<typename T>
@@ -350,6 +403,16 @@ struct TypedParamUnwrapper
     template<typename U>
     auto operator()(const U& v) -> std::enable_if_t<PromoteTester<U>::value && !std::is_same_v<std::decay_t<U>, ValueType>>
     {
+        if constexpr (TypedParam<T>::isView)
+        {
+            using CharT = typename ValueType::value_type;
+            if constexpr (IsOtherWidthText<std::decay_t<U>, CharT>::value)
+            {
+                // Promote(v) would view a string its temporary promoter owns
+                param->SetConverted(ConvertString<std::basic_string<CharT>>(v));
+                return;
+            }
+        }
         param->SetValue(Promote(v));
     }
 

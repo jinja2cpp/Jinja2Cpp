@@ -233,6 +233,28 @@ Hello World!
     EXPECT_EQ(1L, reflected.innerStruct.use_count());
 }
 
+// Function pointers take the typed path (ArgInfoT); a view parameter given the other width keeps
+// the converted text alive for the call (docs/tasks/0296)
+std::string StringViewPtrFn(std::string_view val)
+{
+    return std::string(val);
+}
+
+std::wstring WStringViewPtrFn(std::wstring_view val)
+{
+    return std::wstring(val);
+}
+
+std::string ConstStringViewPtrFn(const std::string_view& val)
+{
+    return std::string(val);
+}
+
+std::wstring ConstWStringViewPtrFn(const std::wstring_view& val)
+{
+    return std::wstring(val);
+}
+
 struct UserCallableParamConvertTestTag;
 using UserCallableParamConvertTest = InputOutputPairTest<UserCallableParamConvertTestTag>;
 
@@ -273,6 +295,14 @@ TEST_P(UserCallableParamConvertTest, Test)
                                            ArgInfo{ "*context" },
                                            ArgInfo{ "a" },
                                            ArgInfo{ "b" });
+    params["StringViewPtrFn"] = MakeCallable(&StringViewPtrFn, ArgInfo{ "val" });
+    params["WStringViewPtrFn"] = MakeCallable(&WStringViewPtrFn, ArgInfo{ "val" });
+    params["ConstStringViewPtrFn"] = MakeCallable(&ConstStringViewPtrFn, ArgInfo{ "val" });
+    params["ConstWStringViewPtrFn"] = MakeCallable(&ConstWStringViewPtrFn, ArgInfo{ "val" });
+    params["longString"] = std::string(40, 'n');
+    params["longWString"] = std::wstring(40, L'w');
+    params["markupValue"] = Markup("<b>");
+    params["wmarkupValue"] = WMarkup(L"<w>");
     params["test_value"] = 100500;
 
     PerformBothTests(source, testParam.result, params);
@@ -417,6 +447,41 @@ INSTANTIATE_TEST_SUITE_P(StringViewParamConvert, UserCallableParamConvertTest, :
                             InputOutputPair{"StringViewFn(stringValue)", "'rain'"},
                             InputOutputPair{"StringViewFn(wstringValue)", "'  hello world '"},
                             InputOutputPair{"StringViewFn('<i>'|safe)", "'<i>'"}
+                            ));
+
+INSTANTIATE_TEST_SUITE_P(StringViewPointerParamConvert, UserCallableParamConvertTest, ::testing::Values(
+                            InputOutputPair{"StringViewPtrFn('Hello World')", "'Hello World'"},
+                            InputOutputPair{"StringViewPtrFn(stringValue)", "'rain'"},
+                            InputOutputPair{"StringViewPtrFn(wstringValue)", "'  hello world '"},
+                            InputOutputPair{"StringViewPtrFn(longString)", "'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn'"},
+                            InputOutputPair{"StringViewPtrFn(longWString)", "'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww'"},
+                            InputOutputPair{"StringViewPtrFn('<i>'|safe)", "'<i>'"},
+                            InputOutputPair{"StringViewPtrFn(markupValue)", "'<b>'"},
+                            InputOutputPair{"StringViewPtrFn(wmarkupValue)", "'<w>'"},
+                            InputOutputPair{"WStringViewPtrFn('Hello World')", "'Hello World'"},
+                            InputOutputPair{"WStringViewPtrFn(stringValue)", "'rain'"},
+                            InputOutputPair{"WStringViewPtrFn(wstringValue)", "'  hello world '"},
+                            InputOutputPair{"WStringViewPtrFn(longString)", "'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn'"},
+                            InputOutputPair{"WStringViewPtrFn(longWString)", "'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww'"},
+                            InputOutputPair{"WStringViewPtrFn('<i>'|safe)", "'<i>'"},
+                            InputOutputPair{"WStringViewPtrFn(markupValue)", "'<b>'"},
+                            InputOutputPair{"WStringViewPtrFn(wmarkupValue)", "'<w>'"},
+                            InputOutputPair{"ConstStringViewPtrFn('Hello World')", "'Hello World'"},
+                            InputOutputPair{"ConstStringViewPtrFn(stringValue)", "'rain'"},
+                            InputOutputPair{"ConstStringViewPtrFn(wstringValue)", "'  hello world '"},
+                            InputOutputPair{"ConstStringViewPtrFn(longString)", "'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn'"},
+                            InputOutputPair{"ConstStringViewPtrFn(longWString)", "'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww'"},
+                            InputOutputPair{"ConstStringViewPtrFn('<i>'|safe)", "'<i>'"},
+                            InputOutputPair{"ConstStringViewPtrFn(markupValue)", "'<b>'"},
+                            InputOutputPair{"ConstStringViewPtrFn(wmarkupValue)", "'<w>'"},
+                            InputOutputPair{"ConstWStringViewPtrFn('Hello World')", "'Hello World'"},
+                            InputOutputPair{"ConstWStringViewPtrFn(stringValue)", "'rain'"},
+                            InputOutputPair{"ConstWStringViewPtrFn(wstringValue)", "'  hello world '"},
+                            InputOutputPair{"ConstWStringViewPtrFn(longString)", "'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn'"},
+                            InputOutputPair{"ConstWStringViewPtrFn(longWString)", "'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww'"},
+                            InputOutputPair{"ConstWStringViewPtrFn('<i>'|safe)", "'<i>'"},
+                            InputOutputPair{"ConstWStringViewPtrFn(markupValue)", "'<b>'"},
+                            InputOutputPair{"ConstWStringViewPtrFn(wmarkupValue)", "'<w>'"}
                             ));
 
 INSTANTIATE_TEST_SUITE_P(WStringViewParamConvert, UserCallableParamConvertTest, ::testing::Values(
