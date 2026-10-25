@@ -32,14 +32,34 @@ view that answers repeated lookups.
   Boost release tarball) runs on PRs that touch the bindings, `json_adapter.h` or
   `reflected_value.h`, and nightly on master.
 
-**Proposal.** The architect plan (`/mnt/project-files/0311/plan.md`) fixes the contract,
-the steps and the open decisions. In outline:
+**Plan decisions (Ruslan, 2026-10-25, on the architect plan `/mnt/project-files/0311/plan.md`).**
+1. Any type with `JsonTraits` reflects through a partial specialisation of
+   `detail::Reflector`; there is no declaration macro, and an explicit `Reflector<T>` wins.
+2. The binding headers move to `bindings/<library>/include/jinja2cpp/binding/` in S5; the
+   include path stays `jinja2cpp/binding/<library>.h`.
+3. A traits failure in `ToValue` reports a new `ErrorCode::DataReadError` (appended);
+   limits report `ResourceLimitExceeded`.
+4. Every Conan `with_<library>` option defaults to False.
+5. `Reflect(non-const lvalue)` keeps copying the document into an owned view, shared by
+   every copy of the `Value`; `Reflect(std::as_const(doc))` and `Reflect(&doc)` borrow.
+6. The view copies strings per access in 2.0; zero-copy strings need a lifetime proof
+   and are a later perf task.
+7. `JINJA2CPP_WITH_JSON_BINDINGS` warns that it is ignored; `rapid` is a `FATAL_ERROR`
+   naming the migration entry.
+8. `JsonKind::BigInt` with an optional `AsBigIntText` is part of the 2.0 contract.
+9. `ToValue` errors name the JSON path where the walk stopped (`$.items[3].tags`,
+   `locationDescr = "JSON"`); an optional `JsonTraits::Location(Node)` adds a byte offset,
+   reported as `(char N)` like Python's `JSONDecodeError`.
+10. RapidJSON is deleted, not rewritten (0303): MIGRATION.md carries a user
+    `JsonTraits<rapidjson::Value>` instead.
+
+**Proposal.** In outline (steps S1-S8 in the plan):
 - `json_adapter.h`: `JsonKind`, the traits contract with capability detection, one
   generic view adapter and one `ToValue` with sequence-size and nesting limits; integers
   above `int64_t` become `BigInt` (0178).
 - nlohmann, Boost.JSON (and simdjson, 0302) as thin traits specialisations under
   `bindings/<library>/`, keeping the include paths `jinja2cpp/binding/<library>.h`.
-  RapidJSON follows 0303.
+  RapidJSON is deleted by 0303 before S5, so it never becomes a component.
 - `test/binding/conformance.h`: one typed suite every binding instantiates, for both the
   view and the copy.
 - Packaging: `JINJA2CPP_WITH_JSON_BINDINGS` is removed, `JINJA2CPP_TEST_BINDINGS`
