@@ -36,6 +36,10 @@ public:
     // The document's one value; with objectOnly, which must be an object
     nonstd::expected<Value, std::string> ReadDocument(bool objectOnly)
     {
+        if (m_text.substr(0, 3) == "\xEF\xBB\xBF")
+        {
+            return MakeUnexpected(Message("Unexpected UTF-8 BOM (decode using utf-8-sig)", 0));
+        }
         SkipWhitespace();
         if (objectOnly && (m_pos == m_text.size() || m_text[m_pos] != '{'))
         {
@@ -67,26 +71,32 @@ private:
         return false;
     }
 
-    // Python's format: "<message>: line 1 column 5 (char 4)", the column counted in bytes
+    // Python's format: "<message>: line 1 column 5 (char 4)", column and offset counted in code points
     [[nodiscard]] std::string Message(std::string_view message, std::size_t pos) const
     {
         std::size_t line = 1;
-        std::size_t lineStart = 0;
+        std::size_t chars = 0;
+        std::size_t lineStartChars = 0;
         for (std::size_t i = 0; i != pos; ++i)
         {
-            if (m_text[i] == '\n')
+            const auto byte = static_cast<unsigned char>(m_text[i]);
+            if ((byte & 0xC0U) != 0x80U)
+            {
+                ++chars;
+            }
+            if (byte == '\n')
             {
                 ++line;
-                lineStart = i + 1;
+                lineStartChars = chars;
             }
         }
         std::string result(message);
         result += ": line ";
         result += std::to_string(line);
         result += " column ";
-        result += std::to_string(pos - lineStart + 1);
+        result += std::to_string(chars - lineStartChars + 1);
         result += " (char ";
-        result += std::to_string(pos);
+        result += std::to_string(chars);
         result += ')';
         return result;
     }
@@ -224,13 +234,8 @@ private:
             {
                 return Fail("Expecting ',' delimiter", m_pos);
             }
-            const std::size_t comma = m_pos;
             ++m_pos;
             SkipWhitespace();
-            if (m_pos != m_text.size() && m_text[m_pos] == '}')
-            {
-                return Fail("Illegal trailing comma before end of object", comma);
-            }
         }
     }
 
@@ -267,13 +272,8 @@ private:
             {
                 return Fail("Expecting ',' delimiter", m_pos);
             }
-            const std::size_t comma = m_pos;
             ++m_pos;
             SkipWhitespace();
-            if (m_pos != m_text.size() && m_text[m_pos] == ']')
-            {
-                return Fail("Illegal trailing comma before end of array", comma);
-            }
         }
     }
 
@@ -575,12 +575,13 @@ private:
     static double ToDouble(std::string_view number)
     {
         std::string text(number);
-        const char point = *std::localeconv()->decimal_point;
-        for (char& ch : text)
+        const std::string_view point = std::localeconv()->decimal_point;
+        if (point != ".")
         {
-            if (ch == '.')
+            const auto dot = text.find('.');
+            if (dot != std::string::npos)
             {
-                ch = point;
+                text.replace(dot, 1, point);
             }
         }
         // An exponent out of range gives HUGE_VAL (inf) or 0, as Python's float() does

@@ -487,7 +487,7 @@
       "checksums": [
         {
           "algorithm": "SHA256",
-          "checksumValue": "7b5d397edd2d477454805642a08ade55e8a4763515d27af2a4ca31e29e481bdc"
+          "checksumValue": "b5954c89c70406f00d2e734c2fa2a141f06779eae35c6276ae0dc2b7ccfa75f0"
         }
       ],
       "homepage": "https://github.com/nst/JSONTestSuite",
@@ -502,7 +502,7 @@
         }
       ],
       "primaryPackagePurpose": "FILE",
-      "comment": "role: test; phases: test; exposure: none; delivery: generated; selected-by: JINJA2CPP_BUILD_TESTS; used-for: RFC 8259 conformance cases for the {% meta %} JSON reader (test/json_reader_test.cpp); why: The reader parses template text that may be untrusted (docs/tasks/0230, step D6); lighten: Test data only, generated into one table from a pinned revision; file: test/json_test_suite_cases.inc sha256:7b5d397edd2d477454805642a08ade55e8a4763515d27af2a4ca31e29e481bdc; generator: scripts/json_test_suite.py"
+      "comment": "role: test; phases: test; exposure: none; delivery: generated; selected-by: JINJA2CPP_BUILD_TESTS; used-for: RFC 8259 conformance cases for the {% meta %} JSON reader (test/json_reader_test.cpp); why: The reader parses template text that may be untrusted (docs/tasks/0230, step D6); lighten: Test data only, generated into one table from a pinned revision; file: test/json_test_suite_cases.inc sha256:b5954c89c70406f00d2e734c2fa2a141f06779eae35c6276ae0dc2b7ccfa75f0; generator: scripts/json_test_suite.py"
     },
     {
       "SPDXID": "SPDXRef-Package-googletest",
@@ -1239,5 +1239,5 @@
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-773a96efb3bffa0d"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-cd25c07fc9f9d221"
 }

@@ -127,14 +127,16 @@ TEST(JsonReaderTest, BuildsValues)
     EXPECT_TRUE(std::isinf(huge.value().As<double>()));
 }
 
-// The messages and positions Python's json.loads reports for the same text
+// The messages and positions Python's json.loads (3.12, the pinned oracle) reports for the same text
 TEST(JsonReaderTest, ErrorsReadAsPythons)
 {
     const std::pair<const char*, const char*> cases[] = {
         // NOLINT(cppcoreguidelines-avoid-c-arrays, modernize-avoid-c-arrays)
         { R"({"a" 1})", "Expecting ':' delimiter: line 1 column 6 (char 5)" },
-        { R"({"a":1,})", "Illegal trailing comma before end of object: line 1 column 7 (char 6)" },
-        { R"({"a":[1,]})", "Illegal trailing comma before end of array: line 1 column 8 (char 7)" },
+        { R"({"a":1,})", "Expecting property name enclosed in double quotes: line 1 column 8 (char 7)" },
+        { R"({"a":[1,]})", "Expecting value: line 1 column 9 (char 8)" },
+        { "{\"\xc3\xa9\": x}", "Expecting value: line 1 column 7 (char 6)" },
+        { "\xef\xbb\xbf{}", "Unexpected UTF-8 BOM (decode using utf-8-sig): line 1 column 1 (char 0)" },
         { R"({"a":tru})", "Expecting value: line 1 column 6 (char 5)" },
         { R"({"a":"abc)", "Unterminated string starting at: line 1 column 6 (char 5)" },
         { R"({"a":1} x)", "Extra data: line 1 column 9 (char 8)" },

@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:fb73a9ee-7fbc-5d90-a7a9-c921481721c7",
+  "serialNumber": "urn:uuid:cb2233ae-f9d1-5fb2-8cff-2ccfe5e8ce3e",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -1341,7 +1341,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "7b5d397edd2d477454805642a08ade55e8a4763515d27af2a4ca31e29e481bdc"
+          "content": "b5954c89c70406f00d2e734c2fa2a141f06779eae35c6276ae0dc2b7ccfa75f0"
         }
       ],
       "licenses": [
@@ -1393,7 +1393,7 @@
         },
         {
           "name": "jinja2cpp:file",
-          "value": "test/json_test_suite_cases.inc sha256:7b5d397edd2d477454805642a08ade55e8a4763515d27af2a4ca31e29e481bdc"
+          "value": "test/json_test_suite_cases.inc sha256:b5954c89c70406f00d2e734c2fa2a141f06779eae35c6276ae0dc2b7ccfa75f0"
         },
         {
           "name": "jinja2cpp:generator",
