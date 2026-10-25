@@ -68,19 +68,21 @@ struct GlobalsSnapshot
     InternalValueMap values;
 };
 
-// Releases, when it goes out of scope, the templates a Load replaced during the outermost render
-class ReleaseRetired
+// Marks a render running on the thread for its whole scope; the outermost one releases, as it
+// ends, the templates a Load replaced during it (docs/tasks/0321)
+class RenderScope
 {
 public:
-    explicit ReleaseRetired(RenderWorkspace& workspace) noexcept
+    explicit RenderScope(RenderWorkspace& workspace) noexcept
         : m_workspace(workspace)
     {
+        m_workspace.BeginRender();
     }
-    JINJA2CPP_ALWAYS_INLINE ~ReleaseRetired() { m_workspace.ReleaseRetired(); }
-    ReleaseRetired(const ReleaseRetired&) = delete;
-    ReleaseRetired(ReleaseRetired&&) = delete;
-    ReleaseRetired& operator=(const ReleaseRetired&) = delete;
-    ReleaseRetired& operator=(ReleaseRetired&&) = delete;
+    JINJA2CPP_ALWAYS_INLINE ~RenderScope() { m_workspace.EndRender(); }
+    RenderScope(const RenderScope&) = delete;
+    RenderScope(RenderScope&&) = delete;
+    RenderScope& operator=(const RenderScope&) = delete;
+    RenderScope& operator=(RenderScope&&) = delete;
 
 private:
     RenderWorkspace& m_workspace;
@@ -386,8 +388,9 @@ public:
         static_assert(std::is_same_v<Target, std::basic_string<CharT>> || std::is_same_v<Target, BasicOutputSink<CharT>>);
         std::optional<BasicErrorInfo<CharT>> normalResult;
         auto& workspace = RenderWorkspace::ForThisThread();
-        // Last: frees this template if a Load replaced it during the render (docs/tasks/0321)
-        const ReleaseRetired releaseRetired(workspace);
+        // Ends last, after the error conversion: frees this template if a Load replaced it
+        // during the render (docs/tasks/0321)
+        const RenderScope renderScope(workspace);
 
         if (!m_renderer)
         {

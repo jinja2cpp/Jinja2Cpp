@@ -13,6 +13,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -368,6 +369,49 @@ TEST(TemplateApiTest, LoadOfTheRenderingTemplateFromACallable)
     ASSERT_TRUE(!!tpl.Load(oldText + "{{ reload() }}" + oldText));
     ASSERT_TRUE(!!tpl.RenderTo(out, params));
     EXPECT_EQ(oldText + "|" + oldText, out);
+}
+
+// Host code may run after the render's statements: a host exception's what(), read when the
+// error is made, loads the template that is rendering. The render still ends on its own template
+// (Codex review of #665; ASan)
+TEST(TemplateApiTest, LoadFromAHostExceptionOfTheRenderingTemplate)
+{
+    Template tpl;
+    struct LoadingFailure final : std::exception
+    {
+        explicit LoadingFailure(Template* t)
+            : tpl(t)
+        {
+        }
+        [[nodiscard]] const char* what() const noexcept override
+        {
+            (void)tpl->Load(std::string(100, 'n'));
+            return "failed";
+        }
+        Template* tpl;
+    };
+    struct ThrowingAccessor final : IMapItemAccessor
+    {
+        explicit ThrowingAccessor(Template* t)
+            : tpl(t)
+        {
+        }
+        [[nodiscard]] size_t GetSize() const override { return 1; }
+        [[nodiscard]] bool HasValue(const std::string& /*name*/) const override { return true; }
+        [[nodiscard]] Value GetValueByName(const std::string& /*name*/) const override { throw LoadingFailure(tpl); }
+        [[nodiscard]] std::vector<std::string> GetKeys() const override { return { "x" }; }
+        [[nodiscard]] bool IsEqual(const IComparable& other) const override { return this == &other; }
+        Template* tpl;
+    };
+    const ThrowingAccessor accessor(&tpl);
+    const GenericMap params([&accessor]() -> const IMapItemAccessor* { return &accessor; });
+    // Named, long enough to be outside the small-string buffer: the error copies the name
+    const std::string name = "a template whose name the error copies.j2";
+    ASSERT_TRUE(!!tpl.Load("{{ x }}", name));
+    auto result = tpl.RenderAsString(params);
+    ASSERT_FALSE(!!result);
+    EXPECT_EQ(name, result.error().GetErrorLocation().fileName);
+    EXPECT_EQ(std::string(100, 'n'), tpl.RenderAsString(ValuesMap{}).value());
 }
 
 TEST(TemplateApiTest, MetadataStaysValidAcrossCalls)

@@ -123,21 +123,23 @@ public:
         }
         m_lentMaps = outer;
     }
+    // A render on this thread starts and ends: from its first statement to its last, error
+    // conversion included, which may run host code (a host exception's what())
+    void BeginRender() noexcept { ++m_renders; }
+    void EndRender() noexcept
+    {
+        if (--m_renders == 0 && !m_retired.empty())
+        {
+            ReleaseRetiredTemplates();
+        }
+    }
     // Keeps a template that a Load replaced while a render runs on this thread, which may be
     // the template it renders, until the outermost render ends (docs/tasks/0321)
     void Retire(std::shared_ptr<const void> replaced)
     {
-        if (m_lentMaps != 0)
+        if (m_renders != 0)
         {
             m_retired.push_back(std::move(replaced));
-        }
-    }
-    // At the very end of each render, once it no longer uses its template
-    void ReleaseRetired() noexcept
-    {
-        if (m_lentMaps == 0 && !m_retired.empty())
-        {
-            ReleaseRetiredTemplates();
         }
     }
 
@@ -202,6 +204,8 @@ private:
     // while a render inside it is lent others
     std::vector<std::unique_ptr<RenderMaps>> m_maps;
     std::size_t m_lentMaps = 0;
+    // The renders running on this thread, and the templates replaced during them
+    std::size_t m_renders = 0;
     std::vector<std::shared_ptr<const void>> m_retired;
 };
 } // namespace v2
