@@ -382,3 +382,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0308](0308-divisibleby-non-number.md) | `divisibleby` on a value that is not a number | parity | low | open |
 | [0309](0309-repr-of-template-modules.md) | `pprint` of builtin globals and imported templates | parity | low | open |
 | [0310](0310-undefined-filter-argument-is-omitted.md) | A filter argument given as an undefined value reads as omitted | parity | low | open |
+| [0311](0311-json-bindings-as-components.md) | JSON bindings as components on a public adapter contract | build | high | in-progress |
