@@ -301,9 +301,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0227](0227-supported-docs-and-example-surface.md) | Choose and verify the documentation and examples supported for 2.0 | release | high | open |
 | [0228](0228-task-number-uniqueness.md) | Two task files can share a number | agents | medium | done |
 | [0229](0229-unused-boost-components.md) | Drop the Boost libraries and includes nothing uses | build | low | done |
-| [0230](0230-boost-free-core.md) | A Boost-free core | build | medium | open |
+| [0230](0230-boost-free-core.md) | A Boost-free core | build | medium | done |
 | [0231](0231-robin-hood-successor.md) | robin_hood's upstream is archived | perf | high | open |
-| [0232](0232-dependency-pin-drift.md) | Dependency pins disagree across modes and some are mutable | build | low | open |
+| [0232](0232-dependency-pin-drift.md) | Dependency pins disagree across modes and some are mutable | build | low | done |
 | [0233](0233-cpp-only-filter-stubs.md) | C++-only filters `camelize`, `underscorize`, `escapecpp`, `toxml`, `toyaml` do nothing | api | medium | done |
 | [0234](0234-github-tracker-cleanup.md) | Close GitHub issues that master already fixes, before 2.0 | release | medium | open |
 | [0235](0235-parity-feature-rows-drift.md) | `docs/parity.md` feature rows contradict master | parity | medium | open |

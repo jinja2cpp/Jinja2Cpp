@@ -1,5 +1,6 @@
 ---
 status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/655
 priority: low
 area: build
 touches: [conanfile.txt, thirdparty/CMakeLists.txt, .github/workflows/, .github/actions/, sbom/components.json, scripts/sbom.py, .claude/hooks/prefetch_deps.py]
