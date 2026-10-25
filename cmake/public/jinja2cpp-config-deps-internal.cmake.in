@@ -1,4 +1,3 @@
-# fmt and Boost were built with Jinja2C++ and installed next to it
+# fmt was built with Jinja2C++ and installed next to it (also by the deprecated external-boost
+# mode). check_package.cmake fails if an installed config names any other dependency (0230).
 find_dependency(fmt @JINJA2CPP_FMT_VERSION@ CONFIG HINTS "${PACKAGE_PREFIX_DIR}")
-find_dependency(Boost @JINJA2CPP_BOOST_VERSION@ EXACT CONFIG HINTS "${PACKAGE_PREFIX_DIR}"
-    COMPONENTS @JINJA2CPP_BOOST_COMPONENTS@)

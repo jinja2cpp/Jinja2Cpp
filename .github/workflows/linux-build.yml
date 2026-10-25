@@ -55,6 +55,8 @@ jobs:
   # pairwise axis: five rows build `bigint: boost`, so that boost meets every standard,
   # compiler, build type, linkage, binding and noderef value, the rest keep `none` and still
   # do too, and one of them checks the installed package.
+  # The `boost-free` job sits outside the matrix: the defaults with tests OFF fetch and
+  # install no Boost at all (docs/tasks/0230); the matrix rows test the Boost adapters.
   linux-build:
     name: C++${{ matrix.std }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }} json=${{ matrix.bindings }}${{ matrix.noderef == 'OFF' && ' noderef=OFF' || '' }}${{ matrix.bigint && format(' bigint={0}', matrix.bigint) || '' }}
     runs-on: ubuntu-24.04
@@ -158,18 +160,20 @@ jobs:
           -P test/package/check_package.cmake
 
   # The external dependency modes take Boost (and, for external, fmt, expected-lite and
-  # nlohmann_json) from the system instead of building them (docs/tasks/0163). Ubuntu's
-  # Boost is built with b2, so this also covers the Boost::headers fallback.
+  # nlohmann_json) from the system instead of building them (docs/tasks/0163). The library
+  # links no Boost (0230): the tests take Boost.JSON for the boost binding and Multiprecision
+  # through Boost::headers, which a b2-built Ubuntu Boost provides. external-boost is a
+  # deprecated alias of internal, kept until 3.0.
   external-deps:
-    name: deps=${{ matrix.mode }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }}
+    name: deps=${{ matrix.mode }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }} json=${{ matrix.bindings }}
     runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { mode: external,       compiler: gcc-14,   config: Release, shared: 'OFF' }
-          - { mode: external-boost, compiler: clang-20, config: Debug,   shared: 'ON' }
+          - { mode: external,       compiler: gcc-14,   config: Release, shared: 'OFF', bindings: boost }
+          - { mode: external-boost, compiler: clang-20, config: Debug,   shared: 'ON',  bindings: boost }
 
     steps:
     - uses: actions/checkout@v4
@@ -208,6 +212,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DJINJA2CPP_DEPS_MODE=${{ matrix.mode }} \
           -DJINJA2CPP_BUILD_SHARED=${{ matrix.shared }} \
+          -DJINJA2CPP_WITH_JSON_BINDINGS=${{ matrix.bindings }} \
           -DJINJA2CPP_STRICT_WARNINGS=ON \
           "-DCMAKE_CXX_FLAGS=${{ startsWith(matrix.compiler, 'gcc') && '-Wno-error=maybe-uninitialized' || '' }}"
 
@@ -221,6 +226,47 @@ jobs:
       run: |
         cmake -DBUILD_DIR=.build -DPREFIX="$RUNNER_TEMP/jinja2cpp" -DCONFIG=${{ matrix.config }} \
           -DCONSUMER_STD=20 -DEXPECT_SHARED=${{ matrix.shared }} \
+          -P test/package/check_package.cmake
+
+  # The default configuration without tests builds and installs with no Boost at all
+  # (docs/tasks/0230): nothing of Boost is fetched, and check_package.cmake fails when the
+  # install carries Boost or its CMake files name it.
+  boost-free:
+    name: Boost-free default (gcc-14, tests OFF)
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install toolchain
+      uses: ./.github/actions/install-toolchain
+      with:
+        compiler: gcc-14
+
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: boost-free-gcc-14
+
+    - name: Configure
+      run: |
+        cmake -S . -B .build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_TESTS=OFF \
+          -DCMAKE_CXX_FLAGS=-Wno-error=maybe-uninitialized
+
+    - name: Build
+      run: cmake --build .build --parallel
+
+    - name: No Boost fetched
+      run: |
+        ls .build/_deps
+        if ls .build/_deps | grep -qi boost; then
+          echo "::error::the default build fetched Boost"
+          exit 1
+        fi
+
+    - name: Installed package
+      run: |
+        cmake -DBUILD_DIR=.build -DPREFIX="$RUNNER_TEMP/jinja2cpp" -DCONFIG=Release \
+          -DCONSUMER_STD=17 -DEXPECT_SHARED=OFF \
           -P test/package/check_package.cmake
 
   sanitizers:

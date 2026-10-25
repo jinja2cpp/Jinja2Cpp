@@ -4,29 +4,29 @@ find_package(expected-lite REQUIRED)
 
 find_package(fmt REQUIRED)
 
+# The JSON libraries are for the tests only: the library reads {% meta %} itself (0230 D6)
 if (JINJA2CPP_BUILD_TESTS)
     find_package(nlohmann_json REQUIRED)
-endif()
+    if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
+        find_package(RapidJSON REQUIRED)
+        add_library(RapidJson INTERFACE)
+        target_link_libraries(RapidJson INTERFACE rapidjson)
+    endif ()
+endif ()
 
-set(_bindings_json)
-set(_bindings_find_package_boost)
-if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
-    set(_bindings_find_package_boost "json")
-    set(_bindings_json "Boost::json")
-endif()
+# The library links no Boost (docs/tasks/0230). conanfile.txt asks for a header-only Boost:
+# Boost::headers carries Multiprecision for -DJINJA2CPP_WITH_BIGINT=boost and the tests'
+# adapter check. Only the Boost.JSON adapter test needs a compiled library.
+if (JINJA2CPP_BUILD_TESTS OR "${JINJA2CPP_WITH_BIGINT}" STREQUAL "boost")
+    find_package(Boost REQUIRED)
+    if (JINJA2CPP_BUILD_TESTS AND "${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost" AND NOT TARGET Boost::json)
+        message(FATAL_ERROR "The Boost.JSON adapter test (JINJA2CPP_WITH_JSON_BINDINGS=boost) needs a compiled "
+            "Boost.JSON, and conanfile.txt asks for a header-only Boost: install with "
+            "`-o boost/*:header_only=False`, or configure with -DJINJA2CPP_WITH_JSON_BINDINGS=nlohmann")
+    endif ()
+endif ()
 
-find_package(Boost COMPONENTS algorithm ${_bindings_find_package_boost} REQUIRED)
-
-if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
-    find_package(RapidJSON REQUIRED)
-    # header-only: keep it out of the exported link interface
-    set(_bindings_json $<BUILD_INTERFACE:rapidjson>)
-endif()
-
-# The header-only libraries have no Conan components of their own; Conan's Boost exposes
-# them through Boost::headers.
-# Only expected-lite is public: no public header includes fmt or the JSON libraries, and
-# the tests link nlohmann_json themselves.
-set(JINJA2_PRIVATE_LIBS_INT Boost::headers fmt::fmt ${_bindings_json})
+# Only expected-lite is public: no public header includes fmt, and the tests link their
+# JSON library themselves.
+set(JINJA2_PRIVATE_LIBS_INT fmt::fmt)
 set(JINJA2_PUBLIC_LIBS_INT nonstd::expected-lite)
-

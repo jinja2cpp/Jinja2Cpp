@@ -110,154 +110,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: mandatory; phases: build,consumer-link; exposure: link; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: See the boost-* sub-components: 8 libraries are used directly; internal mode pulls 43 and installs all of them (53 MB of headers, 2 static libraries); why: Historically the portability layer for pre-C++17 (any, optional, variant, filesystem, string algorithms); today mostly small utilities that C++17 lacks (span, small_vector, intrusive_ptr, move-only any) plus Boost.JSON as the default metadata parser; lighten: The largest weight by far and the main target. Every directly used piece has a small replacement (see sub-components); a Boost-free core is feasible without behaviour change (docs/tasks/0230); conan: boost/1.91.0; transitive-libraries: algorithm,any,array,assert,bind,compat,concept_check,config,container,container_hash,conversion,core,describe,detail,endian,exception,function,function_types,fusion,headers,intrusive,io,iterator,json,move,mp11,mpl,optional,predef,preprocessor,range,regex,smart_ptr,system,throw_exception,tuple,type_index,type_traits,typeof,unordered,utility,variant2,winapi"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-boost-core",
-      "name": "boost-core",
-      "versionInfo": "1.92.0",
-      "supplier": "Organization: Boost.org",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "homepage": "https://www.boost.org",
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "BSL-1.0",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:github/boostorg/core@boost-1.92.0"
-        }
-      ],
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: boost::span over node arrays, arguments and slots (about 57 uses in 14 src/ files: node_arena.h, statements.cpp, render_context.h); why: std::span is C++20; lighten: Replace with a 50-line internal span (or std::span behind a C++20 switch)"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-boost-container",
-      "name": "boost-container",
-      "versionInfo": "1.92.0",
-      "supplier": "Organization: Boost.org",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "homepage": "https://www.boost.org",
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "BSL-1.0",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:github/boostorg/container@boost-1.92.0"
-        }
-      ],
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: mandatory; phases: build,consumer-link; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: small_vector in parsers, evaluator, name resolver and render context (about 27 uses in 10 src/ files); header-only use, but the internal modes build and link boost_container.a (named explicitly since lexical_cast stopped pulling it in); why: Inline-storage vector that avoids heap allocations on hot paths (perf track 0117/0118); lighten: Header-only use; replaceable by an internal small_vector, but it is perf-sensitive, so measure with bench/ (Cachegrind gate) before swapping"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-boost-smart-ptr",
-      "name": "boost-smart_ptr",
-      "versionInfo": "1.92.0",
-      "supplier": "Organization: Boost.org",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "homepage": "https://www.boost.org",
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "BSL-1.0",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:github/boostorg/smart_ptr@boost-1.92.0"
-        }
-      ],
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: intrusive_ptr for InternalValue's shared payloads and the render workspace (internal_value.h, render_workspace.h; about 26 uses); why: One pointer wide with the count inside the object, which the 32-byte InternalValue layout (0140) relies on; std::shared_ptr is two pointers; lighten: Replace with an internal intrusive_ptr (about 60 lines)"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-boost-any",
-      "name": "boost-any",
-      "versionInfo": "1.92.0",
-      "supplier": "Organization: Boost.org",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "homepage": "https://www.boost.org",
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "BSL-1.0",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:github/boostorg/any@boost-1.92.0"
-        }
-      ],
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: boost::anys::unique_any holds the parsed JSON metadata document of whichever JSON backend is compiled in (template_impl.h:801, binding/*_parser.h); boost::any_cast in rapid_json_parser.h; why: Move-only type erasure; std::any requires copyable payloads; lighten: Replace with std::unique_ptr to a small polymorphic holder, or drop when metadata parsing gets one fixed parser"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-boost-iterator",
-      "name": "boost-iterator",
-      "versionInfo": "1.92.0",
-      "supplier": "Organization: Boost.org",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "homepage": "https://www.boost.org",
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "BSL-1.0",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:github/boostorg/iterator@boost-1.92.0"
-        }
-      ],
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: iterator_facade for one internal iterator (internal_value.h:1250); why: Less boilerplate for a conforming iterator; lighten: Write the iterator by hand (about 40 lines)"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-boost-algorithm",
-      "name": "boost-algorithm",
-      "versionInfo": "1.92.0",
-      "supplier": "Organization: Boost.org",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "homepage": "https://www.boost.org",
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "BSL-1.0",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:github/boostorg/algorithm@boost-1.92.0"
-        }
-      ],
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: replace_all/replace_first and is_alnum in string_converter_filter.cpp, all()+is_space in template_parser.h; why: Convenience string helpers; lighten: Replace with a few lines of std::string code"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-boost-predef",
-      "name": "boost-predef",
-      "versionInfo": "1.92.0",
-      "supplier": "Organization: Boost.org",
-      "downloadLocation": "NOASSERTION",
-      "filesAnalyzed": false,
-      "homepage": "https://www.boost.org",
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "BSL-1.0",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:github/boostorg/predef@boost-1.92.0"
-        }
-      ],
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75); used-for: BOOST_ENDIAN_BIG_BYTE to pick RapidJSON's UTF-16/32 encoding (rapid_json_parser.h:29), included from template_impl.h; why: Byte order detection before C++20 std::endian; lighten: Replace with a compiler-macro check (__BYTE_ORDER__ / _WIN32)"
+      "comment": "role: alternative; phases: test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=boost with JINJA2CPP_BUILD_TESTS: internal mode fetches the release for the Boost.JSON adapter test and never installs it; external, external-boost and conan-build find a system Boost >= 1.75 (Conan: header-only) only when a Boost piece is selected; also-roles: test; used-for: The opt-in adapters only: Boost.JSON for the binding test, and Multiprecision with Config (boost-multiprecision, boost-config, fetched on their own) for the bigint=boost backend and the adapter test. The library links no Boost and the installed package never names it (0230 D7a); why: The adapter headers jinja2cpp/binding/boost_json.h and jinja2cpp/big_int/boost_cpp_int.h are public opt-in API, so CI keeps testing them; lighten: Done (docs/tasks/0230): span, small_vector, intrusive_ptr, unique_any, iterator_facade, the string algorithms, endian, filesystem and Boost.JSON metadata parsing have own replacements; scripts/sbom.py --check keeps <boost/ out of every other file; conan: boost/1.91.0; transitive-libraries: assert,compat,config,container,container_hash,core,describe,endian,headers,intrusive,json,move,mp11,predef,system,throw_exception,variant2,winapi"
     },
     {
       "SPDXID": "SPDXRef-Package-boost-json",
@@ -278,7 +131,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: alternative; phases: test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=boost (the default), which picks the binding the tests check; used-for: The opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value; only its test (test/binding/boost_json_binding_test.cpp) links Boost.JSON. {% meta %} is read by src/json_reader.cpp since 0230 step D6; why: One of three opt-in JSON adapter headers; the tested default because Boost is fetched anyway until 0230 step D7; lighten: The library no longer links boost_json and boost_container (0230 step D6); step D7 stops fetching them unless this binding is selected"
+      "comment": "role: alternative; phases: test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=boost (the default) with JINJA2CPP_BUILD_TESTS, which picks the binding the tests check; also-roles: test; used-for: The opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value; only its test (test/binding/boost_json_binding_test.cpp) links Boost.JSON. {% meta %} is read by src/json_reader.cpp since 0230 step D6; why: One of three opt-in JSON adapter headers; still the tested default until 0230 step D7b; lighten: Done: only its test fetches and links it (0230 D6, D7a)"
     },
     {
       "SPDXID": "SPDXRef-Package-nlohmann-json",
@@ -474,44 +327,9 @@
       "relatedSpdxElement": "SPDXRef-Package-fmt"
     },
     {
-      "spdxElementId": "SPDXRef-Package-jinja2cpp",
-      "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-Package-boost"
-    },
-    {
       "spdxElementId": "SPDXRef-Package-boost",
-      "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-Package-boost-core"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-boost",
-      "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-Package-boost-container"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-boost",
-      "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-Package-boost-smart-ptr"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-boost",
-      "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-Package-boost-any"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-boost",
-      "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-Package-boost-iterator"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-boost",
-      "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-Package-boost-algorithm"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-boost",
-      "relationshipType": "CONTAINS",
-      "relatedSpdxElement": "SPDXRef-Package-boost-predef"
+      "relationshipType": "OPTIONAL_DEPENDENCY_OF",
+      "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
     },
     {
       "spdxElementId": "SPDXRef-Package-boost",
@@ -554,5 +372,5 @@
       "relatedSpdxElement": "SPDXRef-Package-html-entities"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-library-c70db129574489ca"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-library-48a2e1279c31ce71"
 }

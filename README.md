@@ -139,10 +139,14 @@ Every pull request is built and tested with:
 | Windows | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-windows-build/badge.svg)](https://github.com/jinja2cpp/Jinja2Cpp/actions?query=workflow%3ACI-windows-build) |
 
 ## Build and install
-Jinja2C++ has several external dependencies:
--  `boost` library (at least version 1.75)
+Jinja2C++ has two external dependencies:
 -  `nonstd::expected-lite` [https://github.com/martinmoene/expected-lite](https://github.com/martinmoene/expected-lite)
 -  `fmtlib::fmt` [https://github.com/fmtlib/fmt](https://github.com/fmtlib/fmt)
+
+Boost is used only by opt-in pieces: Boost.Multiprecision (with Boost.Config) for
+`-DJINJA2CPP_WITH_BIGINT=boost` and the `jinja2cpp/big_int/boost_cpp_int.h` adapter, and
+Boost.JSON for the `jinja2cpp/binding/boost_json.h` adapter. The tests fetch what they check;
+the library links no Boost and its package never asks for it.
 
 Why each dependency is needed, which are optional, and the CycloneDX and SPDX SBOMs installed with
 the package: [docs/dependencies.md](docs/dependencies.md).
@@ -195,8 +199,8 @@ target_link_libraries(my_app PRIVATE jinja2cpp::jinja2cpp)
 
 The target carries everything the library was built with: the include directories, the
 C++17 floor, `JINJA2CPP_LINK_AS_SHARED` for a shared build, the `expected-lite` selection
-and, for a static build, the libraries it depends on (fmt and Boost, installed next to
-it in the default internal dependencies mode). The un-namespaced `jinja2cpp` target of
+and, for a static build, the library it depends on (fmt, installed next to it in the
+default internal dependencies mode). The un-namespaced `jinja2cpp` target of
 1.x still works. The install layout changed in 2.0: the package lives in
 `lib/cmake/jinja2cpp` (was `lib/jinja2cpp`), the static library in `lib` (was
 `lib/static`) and `jinja2cpp.pc` in `lib/pkgconfig` (was `share/pkgconfig`). Without CMake, use `pkg-config --cflags --libs jinja2cpp`
@@ -281,9 +285,9 @@ You can define (via -D command-line CMake option) the following build flags:
 -  **JINJA2CPP_STRICT_WARNINGS** (default TRUE) - Enable strict mode compile-warnings(-Wall -Werror, etc).
 -  **JINJA2CPP_MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
 -  **JINJA2CPP_DEPS_MODE** (default "internal") - modes for dependency handling. Following values possible:
-    -  `internal` In this mode Jinja2C++ build script uses dependencies (include `boost`) shipped as subprojects. Nothing needs to be provided externally.
-    -  `external-boost` In this mode Jinja2C++ build script uses only `boost` as an externally-provided dependency. All other dependencies are taken from subprojects.
-    -  `external` In this mode all dependencies should be provided externally. Paths to `boost`, `nonstd-*` libs, etc. should be specified via standard CMake variables (like `CMAKE_PREFIX_PATH` or libname_DIR)
+    -  `internal` In this mode Jinja2C++ build script uses dependencies shipped as subprojects. Nothing needs to be provided externally.
+    -  `external-boost` Deprecated, removed in 3.0: the same as `internal`, except that the opt-in Boost pieces (big-integer backend, adapter tests) take Boost from `find_package`.
+    -  `external` In this mode all dependencies should be provided externally. Paths to `fmt`, `nonstd-*` libs and, for the opt-in Boost pieces, `boost` should be specified via standard CMake variables (like `CMAKE_PREFIX_PATH` or libname_DIR)
     -  `conan-build` Special mode for building Jinja2C++ via conan recipe.
 -  **JINJA2CPP_WITH_BIGINT** (default `none`) - the big-integer backend every `TemplateEnv` starts with. With `none`, templates print, compare and convert integers of any size, and arithmetic whose result leaves `int64_t` fails with `IntegerOutOfRange`. With `boost`, that arithmetic is exact, as in Python, through Boost.Multiprecision's `cpp_int` (header-only, compiled into the library; consumers need nothing). The installed package reports the choice as `jinja2cpp_BIGINT` (CMake) and `bigint` (pkg-config).
 -  **JINJA2CPP_WITH_UNICODE_NAMES** (default TRUE) - decode `\N{name}` escapes in template string literals, as Python does, with a table of the Unicode 15.0 character names and aliases (about 450 KB of read-only data). With FALSE the table is left out and a `\N{...}` escape is a parse error.
@@ -376,6 +380,15 @@ Thanks to **@martinus** for the fast hash maps implementation.
   The library's SOVERSION is now 2.
 - `jinja2::Reflect` accepts `nlohmann::ordered_json` (nlohmann 3.9 and later), whose objects
   keep document order; `nlohmann::json` objects iterate sorted, as before.
+
+- Boost is no longer a dependency of the library (docs/tasks/0230). The installed package
+  names no Boost in any dependencies mode: the internal mode no longer installs Boost's
+  headers and libraries next to Jinja2C++, the installed CMake config no longer calls
+  `find_dependency(Boost)`, and the exported target no longer defines
+  `BOOST_SYSTEM_NO_DEPRECATED` and `BOOST_ERROR_CODE_HEADER_ONLY`. A consumer that used the
+  Boost installed with Jinja2C++, or relied on those defines, must provide them itself. The
+  `external-boost` dependencies mode is deprecated (it now builds as `internal`), and Conan
+  builds use a header-only Boost.
 
 #### Changes and improvements
 - Boost.Regex is no longer a dependency, so external and Conan Boost builds need no compiled

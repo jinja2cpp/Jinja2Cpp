@@ -23,7 +23,8 @@ FetchContent_MakeAvailable(fmt)
 set(JINJA2CPP_FMT_VERSION 12.2.0)
 jinja2cpp_mark_system("${fmt_SOURCE_DIR}")
 
-if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
+# The JSON libraries are for the tests only: the library reads {% meta %} itself (0230 D6)
+if(JINJA2CPP_BUILD_TESTS AND "${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
 
 set (RAPIDJSON_BUILD_DOC OFF CACHE BOOL "" FORCE)
 set (RAPIDJSON_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -52,7 +53,7 @@ target_include_directories(RapidJson SYSTEM
 
 endif()
 
-if (JINJA2CPP_BUILD_TESTS OR "${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "nlohmann")
+if (JINJA2CPP_BUILD_TESTS)
     set (JSON_BuildTests OFF CACHE BOOL "" FORCE)
     set (JSON_Install OFF CACHE BOOL "" FORCE)
     set (JSON_MultipleHeaders ON CACHE BOOL "" FORCE)

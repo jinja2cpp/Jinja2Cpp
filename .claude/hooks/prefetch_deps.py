@@ -3,7 +3,8 @@
 
 Cloud sessions can clone public GitHub repositories, but their egress proxy
 refuses GitHub *archive* downloads (https://github.com/<o>/<r>/archive/...),
-which is how thirdparty/internal_deps.cmake pins most dependencies. This script
+which is how thirdparty/internal_deps.cmake and thirdparty/CMakeLists.txt pin
+most dependencies. This script
 reads the pins from the CMake files, clones each one at the pinned tag/commit
 and writes a CMake initial-cache script that points FetchContent at the clones
 via FETCHCONTENT_SOURCE_DIR_<NAME>. Boost (a release asset, which downloads
@@ -28,7 +29,8 @@ ARCHIVE_RE = re.compile(
 
 
 def pins(repo_root):
-    for cmake_file in ("thirdparty/internal_deps.cmake",):
+    # thirdparty/CMakeLists.txt pins standalone Boost.Multiprecision and Boost.Config
+    for cmake_file in ("thirdparty/internal_deps.cmake", "thirdparty/CMakeLists.txt"):
         text = (repo_root / cmake_file).read_text()
         for name, body in DECLARE_RE.findall(text):
             m = ARCHIVE_RE.search(body)

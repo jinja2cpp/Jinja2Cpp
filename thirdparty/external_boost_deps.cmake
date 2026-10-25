@@ -1,10 +1,10 @@
-# Boost from the system (external and external-boost modes, docs/tasks/0163). A Boost built
-# with CMake (1.82+) defines a target per header-only library; one built with b2 only offers
-# Boost::headers for them, so ask for the compiled libraries first and fall back to it.
-if (JINJA2CPP_VERBOSE)
-    set (FIND_BOOST_PACKAGE_QUIET)
-else ()
-    set (FIND_BOOST_PACKAGE_QUIET QUIET)
+# Boost from the system (external and external-boost modes, docs/tasks/0163). The library
+# links no Boost (docs/tasks/0230): only the opt-in Boost adapters use it. Boost.Multiprecision
+# (with -DJINJA2CPP_WITH_BIGINT=boost, and for the tests' adapter check) takes Boost::headers
+# when a Boost is found, else its standalone pins (thirdparty/CMakeLists.txt); the Boost.JSON
+# adapter test needs the compiled Boost.JSON.
+if (NOT JINJA2CPP_BUILD_TESTS AND NOT "${JINJA2CPP_WITH_BIGINT}" STREQUAL "boost")
+    return()
 endif ()
 
 if (MSVC)
@@ -19,31 +19,12 @@ if (MSVC)
     endif ()
 endif ()
 
-set(_jinja2cpp_boost_compiled)
-if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
-    list(APPEND _jinja2cpp_boost_compiled json)
-endif ()
-set(_jinja2cpp_boost_header_only algorithm any)
-
-find_package(Boost 1.75 CONFIG ${FIND_BOOST_PACKAGE_QUIET}
-    COMPONENTS ${_jinja2cpp_boost_compiled} ${_jinja2cpp_boost_header_only})
-# A b2-built config may report the header-only components found without defining targets
-set(_jinja2cpp_boost_per_library ${Boost_FOUND})
-foreach (_lib IN LISTS _jinja2cpp_boost_header_only)
-    if (NOT TARGET Boost::${_lib})
-        set(_jinja2cpp_boost_per_library FALSE)
-    endif ()
-endforeach ()
-if (_jinja2cpp_boost_per_library)
-    set(JINJA2CPP_BOOST_COMPONENTS ${_jinja2cpp_boost_compiled} ${_jinja2cpp_boost_header_only})
-    set(JINJA2CPP_BOOST_LIBS)
-    foreach (_lib IN LISTS _jinja2cpp_boost_header_only)
-        list(APPEND JINJA2CPP_BOOST_LIBS Boost::${_lib})
-    endforeach ()
+if (JINJA2CPP_BUILD_TESTS AND "${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
+    find_package(Boost 1.75 CONFIG REQUIRED COMPONENTS json)
+elseif ("${JINJA2CPP_WITH_BIGINT}" STREQUAL "boost")
+    find_package(Boost 1.75 CONFIG REQUIRED)
+elseif (JINJA2CPP_VERBOSE)
+    find_package(Boost 1.75 CONFIG)
 else ()
-    find_package(Boost 1.75 CONFIG REQUIRED COMPONENTS ${_jinja2cpp_boost_compiled})
-    # Quoted: an empty list must stay defined, or the installed config asks for algorithm and any
-    set(JINJA2CPP_BOOST_COMPONENTS "${_jinja2cpp_boost_compiled}")
-    set(JINJA2CPP_BOOST_LIBS Boost::headers)
+    find_package(Boost 1.75 CONFIG QUIET)
 endif ()
-set(JINJA2CPP_BOOST_VERSION ${Boost_VERSION})

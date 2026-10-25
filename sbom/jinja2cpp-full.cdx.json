@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:cb2233ae-f9d1-5fb2-8cff-2ccfe5e8ce3e",
+  "serialNumber": "urn:uuid:c5dffeda-35b0-5967-a8f4-ddf8a1d9b9f1",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -193,7 +193,7 @@
       "supplier": {
         "name": "Boost.org"
       },
-      "scope": "required",
+      "scope": "optional",
       "hashes": [
         {
           "alg": "SHA-256",
@@ -221,15 +221,15 @@
       "properties": [
         {
           "name": "jinja2cpp:role",
-          "value": "mandatory"
+          "value": "alternative"
         },
         {
           "name": "jinja2cpp:phases",
-          "value": "build,consumer-link"
+          "value": "test"
         },
         {
           "name": "jinja2cpp:exposure",
-          "value": "link"
+          "value": "public-optional"
         },
         {
           "name": "jinja2cpp:delivery",
@@ -237,19 +237,23 @@
         },
         {
           "name": "jinja2cpp:selected-by",
-          "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
+          "value": "JINJA2CPP_WITH_JSON_BINDINGS=boost with JINJA2CPP_BUILD_TESTS: internal mode fetches the release for the Boost.JSON adapter test and never installs it; external, external-boost and conan-build find a system Boost >= 1.75 (Conan: header-only) only when a Boost piece is selected"
+        },
+        {
+          "name": "jinja2cpp:also-roles",
+          "value": "test"
         },
         {
           "name": "jinja2cpp:used-for",
-          "value": "See the boost-* sub-components: 8 libraries are used directly; internal mode pulls 43 and installs all of them (53 MB of headers, 2 static libraries)"
+          "value": "The opt-in adapters only: Boost.JSON for the binding test, and Multiprecision with Config (boost-multiprecision, boost-config, fetched on their own) for the bigint=boost backend and the adapter test. The library links no Boost and the installed package never names it (0230 D7a)"
         },
         {
           "name": "jinja2cpp:why",
-          "value": "Historically the portability layer for pre-C++17 (any, optional, variant, filesystem, string algorithms); today mostly small utilities that C++17 lacks (span, small_vector, intrusive_ptr, move-only any) plus Boost.JSON as the default metadata parser"
+          "value": "The adapter headers jinja2cpp/binding/boost_json.h and jinja2cpp/big_int/boost_cpp_int.h are public opt-in API, so CI keeps testing them"
         },
         {
           "name": "jinja2cpp:lighten",
-          "value": "The largest weight by far and the main target. Every directly used piece has a small replacement (see sub-components); a Boost-free core is feasible without behaviour change (docs/tasks/0230)"
+          "value": "Done (docs/tasks/0230): span, small_vector, intrusive_ptr, unique_any, iterator_facade, the string algorithms, endian, filesystem and Boost.JSON metadata parsing have own replacements; scripts/sbom.py --check keeps <boost/ out of every other file"
         },
         {
           "name": "jinja2cpp:conan",
@@ -257,416 +261,10 @@
         },
         {
           "name": "jinja2cpp:transitive-libraries",
-          "value": "algorithm,any,array,assert,bind,compat,concept_check,config,container,container_hash,conversion,core,describe,detail,endian,exception,function,function_types,fusion,headers,intrusive,io,iterator,json,move,mp11,mpl,optional,predef,preprocessor,range,regex,smart_ptr,system,throw_exception,tuple,type_index,type_traits,typeof,unordered,utility,variant2,winapi"
+          "value": "assert,compat,config,container,container_hash,core,describe,endian,headers,intrusive,json,move,mp11,predef,system,throw_exception,variant2,winapi"
         }
       ],
       "components": [
-        {
-          "type": "library",
-          "bom-ref": "boost-core",
-          "name": "boost-core",
-          "version": "1.92.0",
-          "supplier": {
-            "name": "Boost.org"
-          },
-          "scope": "required",
-          "licenses": [
-            {
-              "license": {
-                "id": "BSL-1.0"
-              }
-            }
-          ],
-          "purl": "pkg:github/boostorg/core@boost-1.92.0",
-          "externalReferences": [
-            {
-              "type": "website",
-              "url": "https://www.boost.org"
-            }
-          ],
-          "properties": [
-            {
-              "name": "jinja2cpp:role",
-              "value": "mandatory"
-            },
-            {
-              "name": "jinja2cpp:phases",
-              "value": "build"
-            },
-            {
-              "name": "jinja2cpp:exposure",
-              "value": "internal"
-            },
-            {
-              "name": "jinja2cpp:delivery",
-              "value": "fetched"
-            },
-            {
-              "name": "jinja2cpp:selected-by",
-              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
-            },
-            {
-              "name": "jinja2cpp:used-for",
-              "value": "boost::span over node arrays, arguments and slots (about 57 uses in 14 src/ files: node_arena.h, statements.cpp, render_context.h)"
-            },
-            {
-              "name": "jinja2cpp:why",
-              "value": "std::span is C++20"
-            },
-            {
-              "name": "jinja2cpp:lighten",
-              "value": "Replace with a 50-line internal span (or std::span behind a C++20 switch)"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "bom-ref": "boost-container",
-          "name": "boost-container",
-          "version": "1.92.0",
-          "supplier": {
-            "name": "Boost.org"
-          },
-          "scope": "required",
-          "licenses": [
-            {
-              "license": {
-                "id": "BSL-1.0"
-              }
-            }
-          ],
-          "purl": "pkg:github/boostorg/container@boost-1.92.0",
-          "externalReferences": [
-            {
-              "type": "website",
-              "url": "https://www.boost.org"
-            }
-          ],
-          "properties": [
-            {
-              "name": "jinja2cpp:role",
-              "value": "mandatory"
-            },
-            {
-              "name": "jinja2cpp:phases",
-              "value": "build,consumer-link"
-            },
-            {
-              "name": "jinja2cpp:exposure",
-              "value": "internal"
-            },
-            {
-              "name": "jinja2cpp:delivery",
-              "value": "fetched"
-            },
-            {
-              "name": "jinja2cpp:selected-by",
-              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
-            },
-            {
-              "name": "jinja2cpp:used-for",
-              "value": "small_vector in parsers, evaluator, name resolver and render context (about 27 uses in 10 src/ files); header-only use, but the internal modes build and link boost_container.a (named explicitly since lexical_cast stopped pulling it in)"
-            },
-            {
-              "name": "jinja2cpp:why",
-              "value": "Inline-storage vector that avoids heap allocations on hot paths (perf track 0117/0118)"
-            },
-            {
-              "name": "jinja2cpp:lighten",
-              "value": "Header-only use; replaceable by an internal small_vector, but it is perf-sensitive, so measure with bench/ (Cachegrind gate) before swapping"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "bom-ref": "boost-smart_ptr",
-          "name": "boost-smart_ptr",
-          "version": "1.92.0",
-          "supplier": {
-            "name": "Boost.org"
-          },
-          "scope": "required",
-          "licenses": [
-            {
-              "license": {
-                "id": "BSL-1.0"
-              }
-            }
-          ],
-          "purl": "pkg:github/boostorg/smart_ptr@boost-1.92.0",
-          "externalReferences": [
-            {
-              "type": "website",
-              "url": "https://www.boost.org"
-            }
-          ],
-          "properties": [
-            {
-              "name": "jinja2cpp:role",
-              "value": "mandatory"
-            },
-            {
-              "name": "jinja2cpp:phases",
-              "value": "build"
-            },
-            {
-              "name": "jinja2cpp:exposure",
-              "value": "internal"
-            },
-            {
-              "name": "jinja2cpp:delivery",
-              "value": "fetched"
-            },
-            {
-              "name": "jinja2cpp:selected-by",
-              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
-            },
-            {
-              "name": "jinja2cpp:used-for",
-              "value": "intrusive_ptr for InternalValue's shared payloads and the render workspace (internal_value.h, render_workspace.h; about 26 uses)"
-            },
-            {
-              "name": "jinja2cpp:why",
-              "value": "One pointer wide with the count inside the object, which the 32-byte InternalValue layout (0140) relies on; std::shared_ptr is two pointers"
-            },
-            {
-              "name": "jinja2cpp:lighten",
-              "value": "Replace with an internal intrusive_ptr (about 60 lines)"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "bom-ref": "boost-any",
-          "name": "boost-any",
-          "version": "1.92.0",
-          "supplier": {
-            "name": "Boost.org"
-          },
-          "scope": "required",
-          "licenses": [
-            {
-              "license": {
-                "id": "BSL-1.0"
-              }
-            }
-          ],
-          "purl": "pkg:github/boostorg/any@boost-1.92.0",
-          "externalReferences": [
-            {
-              "type": "website",
-              "url": "https://www.boost.org"
-            }
-          ],
-          "properties": [
-            {
-              "name": "jinja2cpp:role",
-              "value": "mandatory"
-            },
-            {
-              "name": "jinja2cpp:phases",
-              "value": "build"
-            },
-            {
-              "name": "jinja2cpp:exposure",
-              "value": "internal"
-            },
-            {
-              "name": "jinja2cpp:delivery",
-              "value": "fetched"
-            },
-            {
-              "name": "jinja2cpp:selected-by",
-              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
-            },
-            {
-              "name": "jinja2cpp:used-for",
-              "value": "boost::anys::unique_any holds the parsed JSON metadata document of whichever JSON backend is compiled in (template_impl.h:801, binding/*_parser.h); boost::any_cast in rapid_json_parser.h"
-            },
-            {
-              "name": "jinja2cpp:why",
-              "value": "Move-only type erasure; std::any requires copyable payloads"
-            },
-            {
-              "name": "jinja2cpp:lighten",
-              "value": "Replace with std::unique_ptr to a small polymorphic holder, or drop when metadata parsing gets one fixed parser"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "bom-ref": "boost-iterator",
-          "name": "boost-iterator",
-          "version": "1.92.0",
-          "supplier": {
-            "name": "Boost.org"
-          },
-          "scope": "required",
-          "licenses": [
-            {
-              "license": {
-                "id": "BSL-1.0"
-              }
-            }
-          ],
-          "purl": "pkg:github/boostorg/iterator@boost-1.92.0",
-          "externalReferences": [
-            {
-              "type": "website",
-              "url": "https://www.boost.org"
-            }
-          ],
-          "properties": [
-            {
-              "name": "jinja2cpp:role",
-              "value": "mandatory"
-            },
-            {
-              "name": "jinja2cpp:phases",
-              "value": "build"
-            },
-            {
-              "name": "jinja2cpp:exposure",
-              "value": "internal"
-            },
-            {
-              "name": "jinja2cpp:delivery",
-              "value": "fetched"
-            },
-            {
-              "name": "jinja2cpp:selected-by",
-              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
-            },
-            {
-              "name": "jinja2cpp:used-for",
-              "value": "iterator_facade for one internal iterator (internal_value.h:1250)"
-            },
-            {
-              "name": "jinja2cpp:why",
-              "value": "Less boilerplate for a conforming iterator"
-            },
-            {
-              "name": "jinja2cpp:lighten",
-              "value": "Write the iterator by hand (about 40 lines)"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "bom-ref": "boost-algorithm",
-          "name": "boost-algorithm",
-          "version": "1.92.0",
-          "supplier": {
-            "name": "Boost.org"
-          },
-          "scope": "required",
-          "licenses": [
-            {
-              "license": {
-                "id": "BSL-1.0"
-              }
-            }
-          ],
-          "purl": "pkg:github/boostorg/algorithm@boost-1.92.0",
-          "externalReferences": [
-            {
-              "type": "website",
-              "url": "https://www.boost.org"
-            }
-          ],
-          "properties": [
-            {
-              "name": "jinja2cpp:role",
-              "value": "mandatory"
-            },
-            {
-              "name": "jinja2cpp:phases",
-              "value": "build"
-            },
-            {
-              "name": "jinja2cpp:exposure",
-              "value": "internal"
-            },
-            {
-              "name": "jinja2cpp:delivery",
-              "value": "fetched"
-            },
-            {
-              "name": "jinja2cpp:selected-by",
-              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
-            },
-            {
-              "name": "jinja2cpp:used-for",
-              "value": "replace_all/replace_first and is_alnum in string_converter_filter.cpp, all()+is_space in template_parser.h"
-            },
-            {
-              "name": "jinja2cpp:why",
-              "value": "Convenience string helpers"
-            },
-            {
-              "name": "jinja2cpp:lighten",
-              "value": "Replace with a few lines of std::string code"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "bom-ref": "boost-predef",
-          "name": "boost-predef",
-          "version": "1.92.0",
-          "supplier": {
-            "name": "Boost.org"
-          },
-          "scope": "required",
-          "licenses": [
-            {
-              "license": {
-                "id": "BSL-1.0"
-              }
-            }
-          ],
-          "purl": "pkg:github/boostorg/predef@boost-1.92.0",
-          "externalReferences": [
-            {
-              "type": "website",
-              "url": "https://www.boost.org"
-            }
-          ],
-          "properties": [
-            {
-              "name": "jinja2cpp:role",
-              "value": "mandatory"
-            },
-            {
-              "name": "jinja2cpp:phases",
-              "value": "build"
-            },
-            {
-              "name": "jinja2cpp:exposure",
-              "value": "internal"
-            },
-            {
-              "name": "jinja2cpp:delivery",
-              "value": "fetched"
-            },
-            {
-              "name": "jinja2cpp:selected-by",
-              "value": "always (internal mode builds it; external, external-boost and conan-build find a system Boost >= 1.75)"
-            },
-            {
-              "name": "jinja2cpp:used-for",
-              "value": "BOOST_ENDIAN_BIG_BYTE to pick RapidJSON's UTF-16/32 encoding (rapid_json_parser.h:29), included from template_impl.h"
-            },
-            {
-              "name": "jinja2cpp:why",
-              "value": "Byte order detection before C++20 std::endian"
-            },
-            {
-              "name": "jinja2cpp:lighten",
-              "value": "Replace with a compiler-macro check (__BYTE_ORDER__ / _WIN32)"
-            }
-          ]
-        },
         {
           "type": "library",
           "bom-ref": "boost-json",
@@ -709,7 +307,11 @@
             },
             {
               "name": "jinja2cpp:selected-by",
-              "value": "JINJA2CPP_WITH_JSON_BINDINGS=boost (the default), which picks the binding the tests check"
+              "value": "JINJA2CPP_WITH_JSON_BINDINGS=boost (the default) with JINJA2CPP_BUILD_TESTS, which picks the binding the tests check"
+            },
+            {
+              "name": "jinja2cpp:also-roles",
+              "value": "test"
             },
             {
               "name": "jinja2cpp:used-for",
@@ -717,11 +319,11 @@
             },
             {
               "name": "jinja2cpp:why",
-              "value": "One of three opt-in JSON adapter headers; the tested default because Boost is fetched anyway until 0230 step D7"
+              "value": "One of three opt-in JSON adapter headers; still the tested default until 0230 step D7b"
             },
             {
               "name": "jinja2cpp:lighten",
-              "value": "The library no longer links boost_json and boost_container (0230 step D6); step D7 stops fetching them unless this binding is selected"
+              "value": "Done: only its test fetches and links it (0230 D6, D7a)"
             }
           ]
         },
@@ -734,6 +336,12 @@
             "name": "Boost.org"
           },
           "scope": "optional",
+          "hashes": [
+            {
+              "alg": "SHA-256",
+              "content": "9da997843edd802f9d5e25d53872a7676330f31a52a5e47a418d1c94ba3b01d0"
+            }
+          ],
           "licenses": [
             {
               "license": {
@@ -746,6 +354,10 @@
             {
               "type": "website",
               "url": "https://www.boost.org"
+            },
+            {
+              "type": "distribution",
+              "url": "https://github.com/boostorg/multiprecision/archive/refs/tags/boost-1.92.0.tar.gz"
             }
           ],
           "properties": [
@@ -767,7 +379,7 @@
             },
             {
               "name": "jinja2cpp:selected-by",
-              "value": "JINJA2CPP_WITH_BIGINT=boost (default none) compiles it into src/big_int_builtin.cpp; the tests always build the adapter. Standalone mode (BOOST_MP_STANDALONE): only Multiprecision and Config headers, taken from the Boost release of the deps mode"
+              "value": "JINJA2CPP_WITH_BIGINT=boost (default none) compiles it into src/big_int_builtin.cpp; builds with tests ON build the adapter. Standalone mode (BOOST_MP_STANDALONE): boostorg/multiprecision and boostorg/config fetched on their own, or the headers of a Boost release the build already has (internal mode with the boost binding, a found Boost::headers)"
             },
             {
               "name": "jinja2cpp:also-roles",
@@ -783,7 +395,79 @@
             },
             {
               "name": "jinja2cpp:lighten",
-              "value": "Header-only, no link cost, off by default. After 0230 drops Boost from the core, fetch boostorg/multiprecision and boostorg/config on their own (docs/design/0178-big-integer-plan.md section 8)"
+              "value": "Header-only, no link cost, off by default, and fetched on its own since 0230 D7a (docs/design/0178-big-integer-plan.md section 8)"
+            }
+          ]
+        },
+        {
+          "type": "library",
+          "bom-ref": "boost-config",
+          "name": "boost-config",
+          "version": "1.92.0",
+          "supplier": {
+            "name": "Boost.org"
+          },
+          "scope": "optional",
+          "hashes": [
+            {
+              "alg": "SHA-256",
+              "content": "b4171037f13373203ba79cbc141d612982052283e696a315185ab5bea46102a0"
+            }
+          ],
+          "licenses": [
+            {
+              "license": {
+                "id": "BSL-1.0"
+              }
+            }
+          ],
+          "purl": "pkg:github/boostorg/config@boost-1.92.0",
+          "externalReferences": [
+            {
+              "type": "website",
+              "url": "https://www.boost.org"
+            },
+            {
+              "type": "distribution",
+              "url": "https://github.com/boostorg/config/archive/refs/tags/boost-1.92.0.tar.gz"
+            }
+          ],
+          "properties": [
+            {
+              "name": "jinja2cpp:role",
+              "value": "optional"
+            },
+            {
+              "name": "jinja2cpp:phases",
+              "value": "build,test"
+            },
+            {
+              "name": "jinja2cpp:exposure",
+              "value": "public-optional"
+            },
+            {
+              "name": "jinja2cpp:delivery",
+              "value": "fetched"
+            },
+            {
+              "name": "jinja2cpp:selected-by",
+              "value": "JINJA2CPP_WITH_BIGINT=boost (default none) compiles it into src/big_int_builtin.cpp; builds with tests ON build the adapter. Standalone mode (BOOST_MP_STANDALONE): boostorg/multiprecision and boostorg/config fetched on their own, or the headers of a Boost release the build already has (internal mode with the boost binding, a found Boost::headers)"
+            },
+            {
+              "name": "jinja2cpp:also-roles",
+              "value": "test"
+            },
+            {
+              "name": "jinja2cpp:used-for",
+              "value": "The configuration headers standalone Boost.Multiprecision needs besides its own"
+            },
+            {
+              "name": "jinja2cpp:why",
+              "value": "Multiprecision's only dependency in standalone mode"
+            },
+            {
+              "name": "jinja2cpp:lighten",
+              "value": "Goes with boost-multiprecision"
             }
           ]
         }
@@ -2859,15 +2543,9 @@
     {
       "ref": "boost",
       "dependsOn": [
-        "boost-core",
-        "boost-container",
-        "boost-smart_ptr",
-        "boost-any",
-        "boost-iterator",
-        "boost-algorithm",
-        "boost-predef",
         "boost-json",
-        "boost-multiprecision"
+        "boost-multiprecision",
+        "boost-config"
       ]
     }
   ]

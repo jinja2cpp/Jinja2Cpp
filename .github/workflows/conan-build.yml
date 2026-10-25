@@ -83,6 +83,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ matrix.build-config }} \
           -DJINJA2CPP_DEPS_MODE=conan-build \
           -DJINJA2CPP_CXX_STANDARD=17 \
+          -DJINJA2CPP_WITH_JSON_BINDINGS=nlohmann \
           -DJINJA2CPP_STRICT_WARNINGS=ON \
           -DCMAKE_CXX_FLAGS=-Wno-error=maybe-uninitialized
 
@@ -92,7 +93,7 @@ jobs:
     - name: Test
       run: ctest --test-dir .build --output-on-failure
 
-    # The installed package finds fmt and Boost through the consumer's own Conan toolchain
+    # The installed package finds fmt through the consumer's own Conan toolchain
     # (docs/tasks/0068)
     - name: Installed package
       run: |

@@ -74,17 +74,41 @@ include (./thirdparty/thirdparty-${JINJA2CPP_DEPS_MODE}.cmake)
 
 # Boost.Multiprecision in standalone mode, which needs only Boost.Config besides itself
 # (docs/tasks/0272). The library compiles it in with -DJINJA2CPP_WITH_BIGINT=boost; the tests
-# check the header-only adapter (jinja2cpp/big_int/boost_cpp_int.h) in every build.
-add_library(jinja2cpp_boost_multiprecision INTERFACE)
-if (DEFINED boost_SOURCE_DIR)
-    # The internal mode's Boost release carries every library's headers; standalone mode needs
-    # only Multiprecision's and Config's. An external Boost is used whole, so any release
-    # find_package accepts works, also one older than standalone Multiprecision
-    target_compile_definitions(jinja2cpp_boost_multiprecision INTERFACE BOOST_MP_STANDALONE=1)
-    target_include_directories(jinja2cpp_boost_multiprecision SYSTEM INTERFACE
-        "${boost_SOURCE_DIR}/libs/multiprecision/include" "${boost_SOURCE_DIR}/libs/config/include")
-else ()
-    target_link_libraries(jinja2cpp_boost_multiprecision INTERFACE Boost::headers)
+# check the header-only adapter (jinja2cpp/big_int/boost_cpp_int.h) in every build. Nothing
+# else needs it, so the default build fetches no Boost (docs/tasks/0230).
+if (JINJA2CPP_BUILD_TESTS OR "${JINJA2CPP_WITH_BIGINT}" STREQUAL "boost")
+    add_library(jinja2cpp_boost_multiprecision INTERFACE)
+    if (DEFINED boost_SOURCE_DIR)
+        # The internal mode's Boost release, fetched for the Boost.JSON adapter test, carries
+        # every library's headers; standalone mode needs only Multiprecision's and Config's
+        target_compile_definitions(jinja2cpp_boost_multiprecision INTERFACE BOOST_MP_STANDALONE=1)
+        target_include_directories(jinja2cpp_boost_multiprecision SYSTEM INTERFACE
+            "${boost_SOURCE_DIR}/libs/multiprecision/include" "${boost_SOURCE_DIR}/libs/config/include")
+    elseif (TARGET Boost::headers)
+        # A Boost found by the external or Conan modes is used whole, so any release
+        # find_package accepts works, also one older than standalone Multiprecision
+        target_link_libraries(jinja2cpp_boost_multiprecision INTERFACE Boost::headers)
+    else ()
+        # The two libraries on their own. Their CMakeLists want other Boost targets, so
+        # SOURCE_SUBDIR names a directory they lack and FetchContent only unpacks them.
+        include(FetchContent)
+        FetchContent_Declare(
+            boost_multiprecision
+            URL https://github.com/boostorg/multiprecision/archive/refs/tags/boost-1.92.0.tar.gz
+            URL_HASH SHA256=9da997843edd802f9d5e25d53872a7676330f31a52a5e47a418d1c94ba3b01d0
+            SOURCE_SUBDIR jinja2cpp-headers-only
+        )
+        FetchContent_Declare(
+            boost_config
+            URL https://github.com/boostorg/config/archive/refs/tags/boost-1.92.0.tar.gz
+            URL_HASH SHA256=b4171037f13373203ba79cbc141d612982052283e696a315185ab5bea46102a0
+            SOURCE_SUBDIR jinja2cpp-headers-only
+        )
+        FetchContent_MakeAvailable(boost_multiprecision boost_config)
+        target_compile_definitions(jinja2cpp_boost_multiprecision INTERFACE BOOST_MP_STANDALONE=1)
+        target_include_directories(jinja2cpp_boost_multiprecision SYSTEM INTERFACE
+            "${boost_multiprecision_SOURCE_DIR}/include" "${boost_config_SOURCE_DIR}/include")
+    endif ()
 endif ()
 
 if(JINJA2CPP_BUILD_TESTS)
@@ -141,9 +165,6 @@ endif()
 
 if (NOT DEFINED JINJA2_PRIVATE_LIBS_INT)
     set(JINJA2CPP_PRIVATE_LIBS ${JINJA2CPP_PRIVATE_LIBS}
-        Boost::algorithm
-        Boost::any
-        Boost::container
         fmt
     )
 else ()

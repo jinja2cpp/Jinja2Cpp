@@ -35,7 +35,8 @@ binding headers stay as they are; simdjson gets one too (0302).
 
 **Done when.** The default configuration builds and installs with no Boost at all,
 render/load benchmarks show no regression beyond noise, and sbom/components.json lists
-Boost only as the optional Boost.JSON backend.
+Boost only as the opt-in adapters: Boost.JSON for the binding test, and Multiprecision (with
+Config) for the `bigint=boost` backend and the adapter test.
 
 **Progress.** Step D1 (backlog proposal 2026-10-24, section A): `src/span.h`,
 `src/small_vector.h` and `src/intrusive_ptr.h` name `boost::span`,
@@ -101,3 +102,25 @@ with the nlohmann backend an allocation failure while reading ended in `std::ter
 every `y_` accepted, every `n_` rejected, `i_` numbers accepted and other `i_` cases rejected)
 and the Python messages; fuzz target `jinja2cpp_fuzz_metadata`. Lone surrogates are
 rejected where Python accepts them: a UTF-8 string cannot hold one.
+
+Step D7a (plan `0230-d7/d7-plan.md`, decisions R1, R4, R5 and R6): Boost leaves the build
+interface. The library links no Boost target in any deps mode, and the installed package
+names no Boost: the deps configs keep only `find_dependency(fmt)`, the exported target lost
+the PUBLIC `BOOST_SYSTEM_NO_DEPRECATED`/`BOOST_ERROR_CODE_HEADER_ONLY` defines, and internal
+mode sets `BOOST_SKIP_INSTALL_RULES`. Internal mode fetches the Boost release only for tests
+with `JINJA2CPP_WITH_JSON_BINDINGS=boost` (Boost.JSON alone in `BOOST_INCLUDE_LIBRARIES`).
+Multiprecision and Config come from their own pinned archives (boostorg/multiprecision and
+boostorg/config at boost-1.92.0, `SOURCE_SUBDIR` set to a missing directory so FetchContent
+only unpacks them), used only with tests ON or `bigint=boost`; a fetched Boost release or a
+found `Boost::headers` is reused instead. The external modes look for Boost only when a
+Boost piece is selected; `external-boost` is a deprecated alias of internal until 3.0 and
+installs internal's config. `conanfile.txt` asks for a header-only Boost, and conan-build
+with the boost binding and tests fails with a message naming `boost/*:header_only=False`.
+The JSON libraries are fetched or found only for the tests, and conan-build no longer puts
+the binding library in the library's private libraries (a D6 leftover). Guards:
+`check_package.cmake` fails when an install carries Boost headers, libraries or CMake
+configs, or when an installed `jinja2cpp-*.cmake` names Boost; `scripts/sbom.py --check`
+fails when a file other than the two adapter headers, `src/big_int_builtin.cpp` and the
+Boost.JSON binding test names `<boost/`; a `boost-free` Linux job builds the defaults with
+tests OFF, asserts that nothing of Boost was fetched and checks the install. The cloud
+prefetch hook also clones the pins in `thirdparty/CMakeLists.txt`.
