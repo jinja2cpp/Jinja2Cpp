@@ -65,6 +65,11 @@ inline namespace v2
  * and define only one method: `GetAccessors`. This method returns the unordered map object which maps field name (as a string) to the corresponded field
  * accessor. And field accessor here is a lambda object which takes the reflected object reference and returns the value of the field from it.
  *
+ * Ownership follows the argument, as for JSON documents (docs/api-2.0.md, 3.10): a non-const lvalue is copied into an
+ * owned view that every copy of the returned `Value` shares; `Reflect(std::as_const(x))`, a `const T&` and a pointer
+ * borrow, so `x` must outlive every use of the value; an rvalue and a `shared_ptr` own (a `const shared_ptr<T>&`
+ * shares the object when the reflector takes a `shared_ptr`).
+ *
  * @tparam T Type of value to reflect
  * @param val Value to reflect
  *

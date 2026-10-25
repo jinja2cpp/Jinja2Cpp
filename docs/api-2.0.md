@@ -379,6 +379,107 @@ section 2.1 (0250).
 - **User-facing text:** README "Memory and threads" and Doxygen notes
   ([0276](tasks/0276-memory-contract-docs.md)).
 
+### 3.10 Embedding lifecycle
+
+Decided by Ruslan 2026-10-25 (task 0223, decisions D1-D7 of its plan). What a host may rely on
+when templates, environments, renders, modules and callbacks overlap in time. The scenario suite
+is `test/embedding_lifecycle_test.cpp`; it runs in the sanitizer jobs (ASan/UBSan/LSan, TSan).
+The ownership graph: a template holds its environment's state, so the state outlives the
+`TemplateEnv` object (`~TemplateEnv` empties the caches and stops caching); copies of a template
+share one loaded template; a render holds the template it renders, every template it includes,
+extends or imports, and its snapshot of the globals.
+
+**Caching.**
+1. `LoadTemplate(name)` returns the cached template while one is cached. With `autoReload` it
+   first asks the handler for the file's time; a handler that gives none (`MemoryFileSystem`)
+   never reloads. A reload makes a **new** template: templates the host holds, renders in flight
+   and modules made earlier keep the old one, as Python's `get_template` returns a new object.
+2. `cacheSize` is on/off until [0264](tasks/0264-template-cache-bound.md) adds the LRU; an
+   eviction then follows the rule of a reload.
+3. `include`, `extends` and `import` go through the same cache. `TemplateLookup::OncePerRender`
+   (the default) looks a name up once per render; `EveryUse` looks it up on each use and keeps
+   every version it got until the render ends.
+4. After the `TemplateEnv` object is destroyed nothing is cached: each lookup opens and parses
+   the file, and the parse is freed when the render that made it ends.
+5. **(D1)** `Load` replaces the template for that `Template` object only. Copies, the
+   environment's cache entry, running renders and modules keep the template they had
+   ([0321](tasks/0321-load-copies-on-write.md); this reverses the second half of 0284 D1a: a
+   module no longer expires).
+
+**Threads.**
+1. The `const` members of a template (renders, metadata, `MakeModule`,
+   `FindUndeclaredVariables`) may run on many threads at once. Each render needs its own
+   params, output and sink.
+2. `Load` and `LoadFromFile` must not run concurrently with another call on the **same object**;
+   copies and the cache are other objects (D1).
+3. **(D2)** `LoadTemplate`, `LoadTemplateW` and `FromString` may run concurrently with each
+   other, with renders and with changes to globals, filters, tests and translations.
+4. Configuration (`SetSettings`, the mutable `GetSettings()`, `AddFilesystemHandler`,
+   `SetBigIntBackend`) is synchronised with nothing: not with loads, not with renders of the
+   environment's templates (which read the handlers and `autoReload` when they include), not
+   with other configuration. Configure first, as in Jinja2.
+5. Globals, filters, tests and translations may change at any time. A render works on the
+   snapshot of the globals it took when it started (D22); a nested render on the same thread
+   sees what the outer one changed in place (0211). A filter or test change affects templates
+   loaded afterwards.
+6. Host code (callables, filters, tests, `finalize`, gettext callables, the autoescape selector,
+   reflected accessors, filesystem handlers, sinks) runs on the rendering thread, and on several
+   threads at once when renders do: it must be thread-safe the way the host uses it. The
+   library's handlers are safe for concurrent loads; `MemoryFileSystem::AddFile` concurrent with
+   loads is not. A sink belongs to one render.
+7. Calls of one module's macros take turns (a recursive mutex), so a macro may call back into
+   its own module.
+8. `ReleaseThreadCaches()` acts on the calling thread only, and refuses while a render runs
+   there.
+
+**Reentrancy (host code a render calls, same thread).** Allowed: render any template, the same
+one included, within the nested-render limits of [security.md](security.md); `LoadTemplate`,
+`FromString`; change globals, filters, tests or translations (the running render keeps its
+snapshot); call module macros; `ReleaseThreadCaches()` (returns `false`); destroy the
+`TemplateEnv` object (the render keeps the state); `Load` on the rendering template (D1: the
+render finishes on the template it started with); throw (2.1). **(D4)** Not allowed, and not
+detected: configuration calls (threads, item 4) and destroying the `Template` object whose
+render is running (the C++ rule for a member call). Both are undefined behaviour.
+
+**Values crossing the boundary.**
+1. The render borrows the params map and everything in it for the duration of the call. Host
+   data reflected by `const&`, by pointer or as a `string_view` must stay alive and unchanged
+   while any value that refers to it is in use: the render, and any copy the host kept, module
+   exports included.
+2. **(D3)** A value a callable receives (`args`, `extraPosArgs`, `extraKwArgs`) stays valid
+   after the call, except where it refers to data the host lent (item 1). That includes a list
+   or map that came from the globals: it keeps the globals it was read from
+   ([0318](tasks/0318-kept-globals-keep-their-snapshot.md)). `context` is valid during the call
+   only.
+3. A value a callable returns is taken over by the library; borrowed host data inside it
+   follows item 1.
+4. A thrown exception becomes the error of 2.1; the environment, the template and the thread
+   caches stay usable (3.9).
+5. `MetadataInfo::metadata` stays valid while the template is alive and not reloaded;
+   `GetMetadata()` returns a self-contained map.
+6. Module exports are owned by the host. Macros keep their module, template and environment
+   alive. A list item read from an export is a view into that list (the generic-list rule of
+   `value.h`).
+7. **(D6)** One rule for structs and JSON documents (0311 decision 5): `Reflect` of a non-const
+   lvalue copies into an owned view that every copy of the `Value` shares;
+   `Reflect(std::as_const(x))`, `Reflect(const T&)` and `Reflect(&x)` borrow;
+   `Reflect(std::move(x))` and `Reflect(shared_ptr)` own, and so does a `const shared_ptr<T>&`
+   whose reflector takes a `shared_ptr`. A handle type (`JsonTraits::IsHandle`) always borrows;
+   `ReflectJson` gives it an owner.
+8. A macro or `caller` given to a host callable arrives as `None` until
+   [0300](tasks/0300-module-export-callable-gaps.md).
+
+**Destruction order.** Supported in any order: the environment before its templates (they keep
+rendering, uncached); templates before their modules; environment, templates and handler before
+an `ErrorInfo` (from the same module, 2.1); the environment during a render it runs; a thread
+exiting with caches. The host keeps alive: a handler passed by reference and a `BigIntBackend`,
+for as long as any template of the environment; lent data (values, item 1); and it calls
+`ReleaseThreadCaches()` on pool threads before the environment's globals must be gone (each
+thread keeps the last globals it rendered with) and before a plugin is unloaded.
+**(D5)** Anything stored in the globals that holds a template of the same environment (a module
+macro, a callable capturing a template or module) keeps the environment alive until
+`RemoveGlobal` removes it; destroying the `TemplateEnv` object does not break that cycle.
+
 ## 4. The 2.0 `Value`, in code
 
 The shape of the largest change, to judge the result rather than the rows:

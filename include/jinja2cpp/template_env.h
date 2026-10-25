@@ -353,7 +353,9 @@ public:
      *
      * In case of specified file present in any of the registered handlers, template is loaded and parsed. If any
      * error occurred during the loading or parsing detailed diagnostic will be returned.
-     * Method is thread-unsafe. It's dangerous to add new filesystem handlers and load templates simultaneously.
+     * May run concurrently with other loads, \ref FromString, renders and changes to the globals, filters, tests and
+     * translations, and from host code a render calls. Not with configuration: \ref SetSettings, the mutable
+     * \ref GetSettings, \ref AddFilesystemHandler, \ref SetBigIntBackend (docs/api-2.0.md, 3.10).
      *
      * @param fileName Template name to load
      *
@@ -365,7 +367,9 @@ public:
      *
      * In case of specified file present in any of the registered handlers, template is loaded and parsed. If any
      * error occurred during the loading or parsing detailed diagnostic will be returned.
-     * Method is thread-unsafe. It's dangerous to add new filesystem handlers and load templates simultaneously.
+     * May run concurrently with other loads, \ref FromString, renders and changes to the globals, filters, tests and
+     * translations, and from host code a render calls. Not with configuration: \ref SetSettings, the mutable
+     * \ref GetSettings, \ref AddFilesystemHandler, \ref SetBigIntBackend (docs/api-2.0.md, 3.10).
      *
      * @param fileName Template name to load
      *
@@ -376,7 +380,7 @@ public:
      * \brief Parse a template from a string within this environment (Jinja2 `env.from_string`)
      *
      * The template is not cached and is not reachable by name from other templates; it can `include`, `extends` and
-     * `import` templates of the environment's filesystem handlers.
+     * `import` templates of the environment's filesystem handlers. Thread-safe as \ref LoadTemplate is.
      *
      * @param source Template source
      * @param name   Name the template reports in errors; "noname.j2tpl" if empty
