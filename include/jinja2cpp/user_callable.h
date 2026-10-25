@@ -300,14 +300,14 @@ struct ConvertedTextStorage
     {
     };
     using type = NoStorage;
-    static constexpr bool isView = false;
+    static constexpr bool IsView = false;
 };
 
 template<typename CharT>
 struct ConvertedTextStorage<std::basic_string_view<CharT>>
 {
     using type = std::optional<std::basic_string<CharT>>;
-    static constexpr bool isView = true;
+    static constexpr bool IsView = true;
 };
 
 template<typename T>
@@ -315,7 +315,7 @@ struct TypedParam
 {
     using decayed_t = std::decay_t<T>;
     using storage_t = typename ConvertedTextStorage<decayed_t>::type;
-    static constexpr bool isView = ConvertedTextStorage<decayed_t>::isView;
+    static constexpr bool IsView = ConvertedTextStorage<decayed_t>::IsView;
     std::variant<NoneValue, decayed_t, const decayed_t*> data;
     // Owned by the param, which the caller keeps until the function returns; the view is made in
     // GetValue, so moving the param (and the string's small buffer) is safe (docs/tasks/0296)
@@ -323,9 +323,9 @@ struct TypedParam
 
     [[nodiscard]] bool HasValue() const { return data.index() != 0; }
     // A view comes back by value, so a `const std::string_view&` parameter binds to a view of `converted`
-    [[nodiscard]] std::conditional_t<isView, decayed_t, T> GetValue() const
+    [[nodiscard]] std::conditional_t<IsView, decayed_t, T> GetValue() const
     {
-        if constexpr (isView)
+        if constexpr (IsView)
         {
             if (converted)
             {
@@ -403,7 +403,7 @@ struct TypedParamUnwrapper
     template<typename U>
     auto operator()(const U& v) -> std::enable_if_t<PromoteTester<U>::value && !std::is_same_v<std::decay_t<U>, ValueType>>
     {
-        if constexpr (TypedParam<T>::isView)
+        if constexpr (TypedParam<T>::IsView)
         {
             using CharT = typename ValueType::value_type;
             if constexpr (IsOtherWidthText<std::decay_t<U>, CharT>::value)
