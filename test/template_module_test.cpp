@@ -375,6 +375,72 @@ TEST_F(TemplateModuleTest, ConcurrentCalls)
     EXPECT_EQ(std::to_string(4 * perThread), Call(module.exports["get"]).AsString());
 }
 
+// What a call imports with context ends with the call (docs/tasks/0301). A module imported
+// without context is shared by the calls, as Jinja2 keeps a template's default module: its
+// namespace counts on, 1 then 2 in Jinja2 3.1.6
+TEST_F(TemplateModuleTest, CallsShareModulesImportedWithoutContext)
+{
+    AddFile("cnt", "{% set ns = namespace(n=0) %}{% macro inc() %}{% set ns.n = ns.n + 1 %}{{ ns.n }}{% endmacro %}");
+    auto module = Make("{% macro m() %}{% import 'cnt' as c %}{{ c.inc() }}{% import 'cnt' as c with context %}{{ c.inc() }}{% endmacro %}");
+    EXPECT_EQ("11", Call(module.exports["m"]).AsString());
+    EXPECT_EQ("21", Call(module.exports["m"]).AsString());
+}
+
+// A macro of a module a call imported with context, stored by that call, runs within it; a
+// later call of it fails, naming the export called, as the module ended with the call. A
+// documented divergence: Jinja2 keeps the module while the macro reaches it and prints AM
+TEST_F(TemplateModuleTest, MacroStoredAcrossCallsExpires)
+{
+    auto module = Make(
+        "{% set ns = namespace() %}"
+        "{% macro keep() %}{% import 'a' as a with context %}{% set ns.f = a.am %}{% set ns.g = a.am.__call__ %}{{ ns.f() }}{{ ns.g() }}{% endmacro %}"
+        "{% macro use(name) %}{{ ns[name]() }}{% endmacro %}");
+    EXPECT_EQ("AMAM", Call(module.exports["keep"]).AsString());
+    for (const char* name : { "f", "g" })
+    {
+        try
+        {
+            Call(module.exports["use"], { std::string(name) });
+            FAIL() << "expected TemplateExpired for ns." << name;
+        }
+        catch (const jinja2::BadResultAccess<>& failure)
+        {
+            EXPECT_EQ(jinja2::ErrorCode::TemplateExpired, failure.error().GetCode());
+            ASSERT_EQ(2u, failure.error().GetExtraParams().size());
+            EXPECT_EQ(jinja2::Value(std::string("use")), failure.error().GetExtraParams()[0]);
+            EXPECT_EQ("noname.j2tpl:1:1: error: Macro 'use' called a macro of a module that ended with an earlier call", failure.error().ToString().substr(0, failure.error().ToString().find('\n')));
+        }
+    }
+    // Stored again, it runs again
+    EXPECT_EQ("AMAM", Call(module.exports["keep"]).AsString());
+}
+
+// A host callable that calls the module again: the inner call ends only what it imported
+TEST_F(TemplateModuleTest, NestedCallEndsItsOwnModules)
+{
+    jinja2::TemplateModule module;
+    const jinja2::ValuesMap params{ { "again", jinja2::MakeCallable([&module]() { return Call(module.exports["inner"]); }) } };
+    module = Make("{% macro inner() %}{% import 'a' as a with context %}<{{ a.am() }}>{% endmacro %}"
+                  "{% macro outer() %}{% import 'a' as a with context %}{{ again() }}{{ a.am() }}{{ again() }}{{ a.ac }}{% endmacro %}",
+                  params);
+    EXPECT_EQ("<AM>AM<AM>1", Call(module.exports["outer"]).AsString());
+    EXPECT_EQ("<AM>AM<AM>1", Call(module.exports["outer"]).AsString());
+}
+
+// A call that fails ends what it imported and the scopes its body pushed on the module's
+// context; the next one runs as the first
+TEST_F(TemplateModuleTest, FailedCallEndsItsModules)
+{
+    auto module = Make("{% set x = 'top' %}{% set ns = namespace() %}"
+                       "{% macro m(fail, x='arg') %}{% import 'a' as a with context %}{% set ns.f = a.am %}{{ a.am() }}{% for i in [1] %}{% set x = 'loop' %}{% if fail %}{{ 1 // 0 }}{% endif %}{% endfor %}{{ x }}{% endmacro %}"
+                       "{% macro use() %}{{ ns.f() }}{% endmacro %}{% macro top() %}{{ x }}{% endmacro %}");
+    EXPECT_THROW(Call(module.exports["m"], { true }), jinja2::BadResultAccess<>);
+    EXPECT_EQ("top", Call(module.exports["top"]).AsString());
+    EXPECT_THROW(Call(module.exports["use"]), jinja2::BadResultAccess<>);
+    EXPECT_EQ("AMarg", Call(module.exports["m"], { false }).AsString());
+    EXPECT_EQ("top", Call(module.exports["top"]).AsString());
+}
+
 TEST_F(TemplateModuleTest, Wide)
 {
     jinja2::TemplateW tpl(&m_env);
@@ -383,4 +449,20 @@ TEST_F(TemplateModuleTest, Wide)
     EXPECT_EQ(L"body", module.body);
     EXPECT_EQ("m,x", Names(module.exports));
     EXPECT_EQ(L"[w]", Call(module.exports["m"], { std::wstring(L"w") }).AsWString());
+
+    // A macro stored across calls expires there too (docs/tasks/0301)
+    ASSERT_TRUE(!!tpl.Load(L"{% set ns = namespace() %}{% macro keep() %}{% import 'a' as a with context %}{% set ns.f = a.am %}{{ ns.f() }}{% endmacro %}"
+                           L"{% macro use() %}{{ ns.f() }}{% endmacro %}"));
+    auto stored = tpl.MakeModule().value();
+    EXPECT_EQ(L"AM", Call(stored.exports["keep"]).AsWString());
+    try
+    {
+        Call(stored.exports["use"]);
+        FAIL() << "expected TemplateExpired";
+    }
+    catch (const jinja2::BadResultAccess<wchar_t>& failure)
+    {
+        EXPECT_EQ(jinja2::ErrorCode::TemplateExpired, failure.error().GetCode());
+        EXPECT_EQ(2u, failure.error().GetExtraParams().size());
+    }
 }

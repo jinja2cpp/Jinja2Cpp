@@ -223,9 +223,41 @@ struct TemplateModuleState
             }
         }
 
+        // The modules a call imports with context end with it (CallScope)
+        [[nodiscard]] bool ModulesEndWithCall() const override { return calls != 0; }
+
         const RenderContext* moduleContext = nullptr;
         // The names the top level imported, with the values imported
         std::vector<std::pair<std::string, InternalValue>> imported;
+        // The host's calls running, nested when a host callable calls the module again
+        std::size_t calls = 0;
+    };
+
+    // One host's call of an export: what it loads into the module's callback ends with it,
+    // so that a module called once per request does not grow (docs/tasks/0301). A nested
+    // call ends only what it added itself
+    class CallScope
+    {
+    public:
+        explicit CallScope(Callback& callback)
+            : m_callback(callback)
+            , m_mark(callback.MarkCall())
+        {
+            ++m_callback.calls;
+        }
+        CallScope(const CallScope&) = delete;
+        CallScope(CallScope&&) = delete;
+        CallScope& operator=(const CallScope&) = delete;
+        CallScope& operator=(CallScope&&) = delete;
+        ~CallScope()
+        {
+            --m_callback.calls;
+            m_callback.EndCall(m_mark);
+        }
+
+    private:
+        Callback& m_callback;
+        typename Callback::CallMark m_mark;
     };
 
     TemplateModuleState(std::shared_ptr<const Impl> tpl, const ValuesMap& params)
@@ -336,7 +368,19 @@ struct TemplateModuleState
         return names;
     }
 
-    [[nodiscard]] BasicErrorInfo<CharT> ExpiredError(const std::string& name) const
+    // A macro the call `name` called ran in a module that ended with an earlier call
+    // (ClosureSite::Resolve), which reports it without a name
+    [[nodiscard]] BasicErrorInfo<CharT> Named(BasicErrorInfo<CharT> error, const std::string& name) const
+    {
+        if (error.GetCode() != ErrorCode::TemplateExpired || !error.GetExtraParams().empty())
+        {
+            return error;
+        }
+        return ExpiredError(name, true);
+    }
+
+    // `ended`: a module made by an earlier call had ended, not the tree replaced
+    [[nodiscard]] BasicErrorInfo<CharT> ExpiredError(const std::string& name, bool ended = false) const
     {
         typename BasicErrorInfo<CharT>::Data errorData;
         errorData.code = ErrorCode::TemplateExpired;
@@ -344,6 +388,10 @@ struct TemplateModuleState
         errorData.srcLoc.line = 1;
         errorData.srcLoc.col = 1;
         errorData.extraParams.emplace_back(name);
+        if (ended)
+        {
+            errorData.extraParams.emplace_back(std::string("ended"));
+        }
         return BasicErrorInfo<CharT>(std::move(errorData));
     }
 
@@ -360,6 +408,11 @@ struct TemplateModuleState
         {
             // First, so that it ends last: when nothing of the call holds values any more
             const CycleCollector cycles;
+            // Then what the call loads, which its collector sees go
+            const CallScope callScope(*callback);
+            // Then the module's context as the call found it, which a failed call would leave
+            // with its scopes pushed
+            const HomeCall::Restore restore(module->Context());
             // Before the limits, which keep a pointer to it
             std::basic_string<CharT> output;
             const auto limitsScope = MakeLimitsScope();
@@ -403,11 +456,11 @@ struct TemplateModuleState
         }
         catch (const detail::RenderFailure& failure)
         {
-            throw BadResultAccess<CharT>(failure.ErrorAs<CharT>());
+            throw BadResultAccess<CharT>(Named(failure.ErrorAs<CharT>(), name));
         }
         catch (...)
         {
-            throw BadResultAccess<CharT>(detail::CurrentExceptionToError<CharT>(impl->m_templateName));
+            throw BadResultAccess<CharT>(Named(detail::CurrentExceptionToError<CharT>(impl->m_templateName), name));
         }
     }
 

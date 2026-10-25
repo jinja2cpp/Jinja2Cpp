@@ -1762,6 +1762,7 @@ BlocksStack::~BlocksStack()
 
 ClosureSite::ClosureSite(RenderContext& context, size_t depth)
     : m_home(context.Anchor())
+    , m_endsWithCall(context.m_endsWithCall)
 {
     m_depth = static_cast<uint32_t>(depth);
     m_serial = context.SerialBelow(depth);
@@ -2299,6 +2300,12 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     }
     // Owned by the render, so that its macros find their names wherever they are called
     auto& module = callback.AddModule(std::make_unique<ImportedModule>(values, m_withContext));
+    // Made by a host's call of a module's macro, it ends with that call (docs/tasks/0301);
+    // one imported without context is shared on for the module's life
+    if (m_withContext && callback.ModulesEndWithCall())
+    {
+        module.Context().SetEndsWithCall();
+    }
     VisitTemplateImpl<bool>(tpl, true, [&module](const auto& tplPtr) {
         module.Render(*tplPtr);
         return true;

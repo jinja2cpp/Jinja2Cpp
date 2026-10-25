@@ -327,7 +327,18 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const BasicErrorInfo<Char
         fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("Resource limit exceeded: {}").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
         break;
     case ErrorCode::TemplateExpired:
-        fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("The template of macro '{}' was loaded again since its module was made").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
+        if (errInfo.GetExtraParams().empty())
+        {
+            fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("A macro ran in a module that has ended").GetValue<CharT>());
+        }
+        else if (errInfo.GetExtraParams().size() > 1)
+        {
+            fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("Macro '{}' called a macro of a module that ended with an earlier call").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
+        }
+        else
+        {
+            fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("The template of macro '{}' was loaded again since its module was made").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
+        }
         break;
     case ErrorCode::DataReadError:
         fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("Data read error: {}").GetValue<CharT>(), errInfo.GetExtraParams()[0]);

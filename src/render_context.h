@@ -138,6 +138,9 @@ struct IRendererCallback : IComparable
     virtual void ShareModule(const LoadTemplateResult& tpl, ImportedModule& module) = 0;
     // The module of `tpl` imported without context earlier in this render; null when none
     [[nodiscard]] virtual ImportedModule* FindModule(const LoadTemplateResult& tpl) const = 0;
+    // Whether a module imported with context now ends with the host's call that imports it,
+    // not with the render: a call of a Template::MakeModule export (docs/tasks/0301)
+    [[nodiscard]] virtual bool ModulesEndWithCall() const { return false; }
     // An `import` or `from` bound `name` to `value` in `values` (ImportStatement): a module made
     // for the host (Template::MakeModule) does not export a name its top level imports, as
     // Jinja2 does not
@@ -740,6 +743,10 @@ public:
     // Whether the block running in the scopes from the self depth up has no `self` of its own
     // (BlockStatement::SetSelfFromContext); returns the previous setting
     bool SetSelfFromContext(bool fromContext) { return std::exchange(m_selfFromContext, fromContext); }
+    // The context is an imported module's that ends with the host's call that imports it
+    // (IRendererCallback::ModulesEndWithCall): a closure defined here and called after that
+    // call fails with TemplateExpired (ClosureSite::Resolve)
+    void SetEndsWithCall() { m_endsWithCall = true; }
     // A block body sets `self` only in its own scopes, from `depth` up: in Jinja2 a block
     // function that reads `self` declares it, which hides the template's top-level `set self`.
     // Returns the depth it replaces
@@ -1459,6 +1466,9 @@ private:
     size_t m_selfDepth{};
     // Read by FindSelf in a block (SetSelfFromContext)
     bool m_selfFromContext = false;
+    // An imported module's context that ends with the host's call that made it, before the
+    // render (SetEndsWithCall); not copied
+    bool m_endsWithCall = false;
     // The `self` of the block call this context runs, when it sees more than its template's
     // top level (FindSelf); not copied
     std::unique_ptr<InternalValue> m_blockSelf;
@@ -1684,7 +1694,8 @@ public:
     //    so that the names of the ended frame read as undefined;
     // 4. ended (the include, `with` or block defining it is over): the body runs on the
     //    caller with every scope hidden, seeing the params, globals and built-ins only. An
-    //    imported module's context lives as long as the render (docs/tasks/0167)
+    //    imported module's context lives as long as the render (docs/tasks/0167). One that
+    //    ended with the host's call that made it (docs/tasks/0301) fails with TemplateExpired
     [[nodiscard]] ClosureHome Resolve(RenderContext& caller) const
     {
         ClosureHome home;
@@ -1698,6 +1709,10 @@ public:
             home.context = home.lock.get();
             if (!home.context)
             {
+                if (m_endsWithCall)
+                {
+                    ThrowEndedWithCall(caller);
+                }
                 return Ended(caller);
             }
         }
@@ -1731,6 +1746,13 @@ private:
     [[nodiscard]] bool IsDefinedIn(const RenderContext& caller) const { return caller.m_anchor && HasOwner(caller.m_anchor); }
     // IsDefinedIn for a site defined somewhere, whose reference is not empty
     [[nodiscard]] bool HasOwner(const std::shared_ptr<RenderContext>& anchor) const { return !m_home.owner_before(anchor) && !anchor.owner_before(m_home); }
+    // The home was a module that ended with the host's call that made it: its names are gone,
+    // and a body that saw none of them would print them as undefined. Without a name, which
+    // the module call that reports it adds (TemplateModuleState::Call)
+    JINJA2CPP_NOINLINE_INLINE static void ThrowEndedWithCall(RenderContext& caller)
+    {
+        caller.GetRendererCallback()->ThrowRuntimeError(ErrorCode::TemplateExpired, {});
+    }
     [[nodiscard]] static ClosureHome Ended(RenderContext& caller)
     {
         ClosureHome home;
@@ -1776,6 +1798,8 @@ private:
         Active = 2
     };
     mutable uint8_t m_state = 0;
+    // Defined in a module that ends with the host's call that made it (RenderContext::SetEndsWithCall)
+    bool m_endsWithCall = false;
 };
 
 // What a HomeCall that switches the home saves; at namespace scope, as Clang does not take
@@ -1844,6 +1868,34 @@ public:
             Leave(*m_context, *m_saved);
         }
     }
+
+    // Leaves a context as it was, on any exit: the scopes and views a body pushed, its loop
+    // control, template frame, autoescape mode and epoch. For a host's call of a module's
+    // macro, which runs on the module's context outside any render: a body left by an
+    // exception leaves its scopes there, which nothing else would end (docs/tasks/0301)
+    class Restore
+    {
+    public:
+        explicit Restore(RenderContext& context)
+            : m_context(context)
+        {
+            m_saved.scopes = context.m_scopes.size();
+            m_saved.epoch = context.m_epoch;
+            m_saved.bodyEpoch = context.m_epoch;
+            m_saved.templateFrame = context.m_templateFrame;
+            m_saved.loopControl = context.m_loopControl;
+            m_saved.autoescape = context.m_autoescapeModes;
+        }
+        Restore(const Restore&) = delete;
+        Restore(Restore&&) = delete;
+        Restore& operator=(const Restore&) = delete;
+        Restore& operator=(Restore&&) = delete;
+        ~Restore() { Leave(m_context, m_saved); } // NOLINT(bugprone-exception-escape): Leave frees memory only
+
+    private:
+        RenderContext& m_context;
+        HomeCallSaved m_saved;
+    };
 
     // Where the body runs
     [[nodiscard]] RenderContext& Context() const { return *m_context; }
