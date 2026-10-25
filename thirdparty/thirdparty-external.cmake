@@ -4,7 +4,8 @@ message(STATUS "'external' dependencies mode selected for Jinja2Cpp. All depende
 find_package(expected-lite CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 
-if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
+# The JSON libraries are for the tests only: the library reads {% meta %} itself (0230 D6)
+if (JINJA2CPP_BUILD_TESTS AND "${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
     # Jinja2C++ builds its own RapidJSON with patches (internal_deps.cmake); a system copy
     # needs the same fixes
     find_package(RapidJSON CONFIG REQUIRED)
@@ -16,11 +17,11 @@ if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
     endif ()
 endif ()
 
-if (JINJA2CPP_BUILD_TESTS OR "${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "nlohmann")
+if (JINJA2CPP_BUILD_TESTS)
     find_package(nlohmann_json 3 CONFIG REQUIRED)
 endif ()
 
 include (./thirdparty/external_boost_deps.cmake)
 
-set(JINJA2_PRIVATE_LIBS_INT ${JINJA2CPP_BOOST_LIBS} fmt::fmt)
+set(JINJA2_PRIVATE_LIBS_INT fmt::fmt)
 set(JINJA2_PUBLIC_LIBS_INT nonstd::expected-lite)

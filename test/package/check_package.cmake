@@ -36,6 +36,23 @@ string(REGEX REPLACE ".*=" "" _bigint "${_bigint}")
 
 run(${CMAKE_COMMAND} --install "${BUILD_DIR}" --prefix "${PREFIX}" --config ${CONFIG})
 file(TOUCH "${PREFIX}/.jinja2cpp-check-package")
+# The package names no Boost in any deps mode or configuration (docs/tasks/0230): nothing of
+# Boost is installed, and the installed CMake files never ask for it
+file(GLOB _boost_installed "${PREFIX}/include/boost" "${PREFIX}/*/cmake/Boost*" "${PREFIX}/*/cmake/boost*"
+    "${PREFIX}/lib/*/cmake/Boost*" "${PREFIX}/lib/*/cmake/boost*" "${PREFIX}/*/*boost_*")
+if (_boost_installed)
+    message(FATAL_ERROR "the install carries Boost: ${_boost_installed}")
+endif ()
+file(GLOB_RECURSE _jinja2cpp_cmake "${PREFIX}/*/jinja2cpp-*.cmake")
+if (NOT _jinja2cpp_cmake)
+    message(FATAL_ERROR "no jinja2cpp-*.cmake installed under ${PREFIX}")
+endif ()
+foreach (_file IN LISTS _jinja2cpp_cmake)
+    file(STRINGS "${_file}" _boost_lines REGEX "Boost")
+    if (_boost_lines)
+        message(FATAL_ERROR "${_file} names Boost:\n${_boost_lines}")
+    endif ()
+endforeach ()
 # The version file accepts the same major version and rejects the next and previous ones
 file(GLOB _verfile "${PREFIX}/*/cmake/jinja2cpp/jinja2cpp-config-version.cmake" "${PREFIX}/lib/*/cmake/jinja2cpp/jinja2cpp-config-version.cmake")
 string(REGEX MATCH "^[0-9]+" _major "${_ver}")

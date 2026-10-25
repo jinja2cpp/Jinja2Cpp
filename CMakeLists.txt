@@ -30,7 +30,7 @@ set_property(CACHE JINJA2CPP_WITH_BIGINT PROPERTY STRINGS ${JINJA2CPP_WITH_BIGIN
 if (NOT JINJA2CPP_WITH_BIGINT IN_LIST JINJA2CPP_WITH_BIGINT_SUPPORTED_BACKENDS)
     message(FATAL_ERROR "JINJA2CPP_WITH_BIGINT must be one of ${JINJA2CPP_WITH_BIGINT_SUPPORTED_BACKENDS}, not '${JINJA2CPP_WITH_BIGINT}'")
 endif ()
-set (JINJA2CPP_DEPS_MODE "internal" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'interal' is default.")
+set (JINJA2CPP_DEPS_MODE "internal" CACHE STRING "Jinja2Cpp dependency management mode (internal | external | external-boost | conan-build). See documentation for details. 'internal' is default; 'external-boost' is deprecated.")
 option(JINJA2CPP_BUILD_TESTS "Build Jinja2Cpp unit tests" ${JINJA2CPP_IS_MAIN_PROJECT})
 option(JINJA2CPP_BUILD_BENCHMARKS "Build the Google Benchmark suite in bench/ (needs JINJA2CPP_BUILD_TESTS)" OFF)
 option(JINJA2CPP_BUILD_FUZZERS "Build the libFuzzer targets in fuzz/ (clang only)" OFF)
@@ -55,6 +55,12 @@ endif ()
 
 if (NOT JINJA2CPP_DEPS_MODE)
     set(JINJA2CPP_DEPS_MODE "internal")
+endif ()
+# external-boost builds and installs what internal does (a deprecated alias, docs/tasks/0230)
+if (JINJA2CPP_DEPS_MODE STREQUAL "external-boost")
+    set(JINJA2CPP_CONFIG_DEPS_MODE "internal")
+else ()
+    set(JINJA2CPP_CONFIG_DEPS_MODE "${JINJA2CPP_DEPS_MODE}")
 endif ()
 
 if (JINJA2CPP_IS_MAIN_PROJECT OR NOT CMAKE_CXX_STANDARD)
@@ -308,12 +314,6 @@ target_include_directories(
         $<INSTALL_INTERFACE:include>
 )
 
-target_compile_definitions(
-        ${LIB_TARGET_NAME}
-    PUBLIC
-        -DBOOST_SYSTEM_NO_DEPRECATED
-        -DBOOST_ERROR_CODE_HEADER_ONLY
-)
 # Result<T> is expected-lite's own nonstd::expected at every standard (docs/api-2.0.md,
 # decision 4): one type for library and consumers, and Clang 18 with libstdc++ at C++23
 # has an <expected> header but no std::expected in it.
@@ -362,7 +362,7 @@ set_target_properties(${LIB_TARGET_NAME} PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON
 )
-# Nor do the static dependencies linked into it (fmt, Boost in the internal mode)
+# Nor do the static dependencies linked into it (fmt in the internal mode)
 if (JINJA2CPP_BUILD_SHARED AND UNIX AND NOT APPLE)
     target_link_options(${LIB_TARGET_NAME} PRIVATE "LINKER:--exclude-libs,ALL")
 endif ()
@@ -389,7 +389,7 @@ if (JINJA2CPP_BUILD_SHARED)
 endif ()
 set(JINJA2CPP_PC_REQUIRES_PRIVATE "")
 set(JINJA2CPP_PC_LIBS_PRIVATE "")
-if (JINJA2CPP_DEPS_MODE STREQUAL "internal")
+if (JINJA2CPP_CONFIG_DEPS_MODE STREQUAL "internal")
     set(JINJA2CPP_PC_REQUIRES_PRIVATE "fmt")
 endif ()
 configure_file(jinja2cpp.pc.in ${CMAKE_BINARY_DIR}/jinja2cpp.pc @ONLY)
@@ -450,7 +450,8 @@ if (JINJA2CPP_BUILD_TESTS)
     target_compile_options(jinja2cpp_tests PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
     target_link_libraries(jinja2cpp_tests gtest gmock gtest_main
         nlohmann_json::nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS} ${JINJA2CPP_JSON_BINDING_LIBS})
-    # The Boost big-integer adapter is checked in every build; the built-in one only in boost builds
+    # The Boost big-integer adapter is checked in every build (standalone Multiprecision, see
+    # thirdparty/CMakeLists.txt); the built-in one only in boost builds
     target_link_libraries(jinja2cpp_tests jinja2cpp_boost_multiprecision)
     if (NOT JINJA2CPP_WITH_UNICODE_NAMES)
         target_compile_definitions(jinja2cpp_tests PRIVATE JINJA2CPP_NO_UNICODE_NAMES)
@@ -537,8 +538,6 @@ if (JINJA2CPP_BUILD_TESTS)
     target_compile_definitions(jinja2cpp_tests
         PUBLIC
             -DJINJA2CPP_PARITY_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test/parity"
-            -DBOOST_SYSTEM_NO_DEPRECATED
-            -DBOOST_ERROR_CODE_HEADER_ONLY
             ${_bindings_define}
     )
 
@@ -599,27 +598,18 @@ if(JINJA2CPP_INSTALL)
     else ()
         set(JINJA2CPP_BUILD_SHARED_BOOL FALSE)
     endif ()
-    if (NOT JINJA2CPP_BUILD_SHARED OR BUILD_SHARED_LIBS OR NOT JINJA2CPP_DEPS_MODE STREQUAL "internal")
+    if (NOT JINJA2CPP_BUILD_SHARED OR BUILD_SHARED_LIBS OR NOT JINJA2CPP_CONFIG_DEPS_MODE STREQUAL "internal")
         set(JINJA2CPP_EXPORT_PRIVATE_DEPS TRUE)
     else ()
         set(JINJA2CPP_EXPORT_PRIVATE_DEPS FALSE)
     endif ()
-    # The external modes record the components their Boost provides
-    if (NOT DEFINED JINJA2CPP_BOOST_COMPONENTS)
-        set(JINJA2CPP_BOOST_COMPONENTS algorithm any)
-        if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
-            list(APPEND JINJA2CPP_BOOST_COMPONENTS json)
-        endif ()
-    endif ()
-    string(REPLACE ";" " " JINJA2CPP_BOOST_COMPONENTS "${JINJA2CPP_BOOST_COMPONENTS}")
-
     configure_package_config_file(
         cmake/public/jinja2cpp-config.cmake.in
         ${CMAKE_CURRENT_BINARY_DIR}/cmake/config/jinja2cpp-config.cmake
         INSTALL_DESTINATION ${JINJA2CPP_INSTALL_CONFIG_DIR}
     )
     configure_file(
-        cmake/public/jinja2cpp-config-deps-${JINJA2CPP_DEPS_MODE}.cmake.in
+        cmake/public/jinja2cpp-config-deps-${JINJA2CPP_CONFIG_DEPS_MODE}.cmake.in
         ${CMAKE_CURRENT_BINARY_DIR}/cmake/config/jinja2cpp-config-deps.cmake
         @ONLY
     )

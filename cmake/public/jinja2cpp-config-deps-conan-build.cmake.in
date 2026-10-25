@@ -1,3 +1,3 @@
-# Conan provides fmt and Boost; the consumer's toolchain file points find_package at them
+# Conan provides fmt; the consumer's toolchain file points find_package at it. It is the
+# only private dependency (docs/tasks/0230).
 find_dependency(fmt CONFIG)
-find_dependency(Boost CONFIG)
