@@ -278,7 +278,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: alternative; phases: build,consumer-link,runtime; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=boost (the default); used-for: Parses {% meta %} JSON metadata for Template::GetMetadata (template_impl.h:484-498, binding/boost_json_parser.h); the opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value; why: One of three interchangeable JSON backends; the default because Boost is already required; lighten: The heaviest backend (boost_json.a + boost_container.a, about 4.8 MB in a Debug build) for a niche feature (template metadata). An internal minimal JSON reader, or nlohmann as default, would remove both libraries; the adapter headers stay opt-in"
+      "comment": "role: alternative; phases: test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=boost (the default), which picks the binding the tests check; used-for: The opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value; only its test (test/binding/boost_json_binding_test.cpp) links Boost.JSON. {% meta %} is read by src/json_reader.cpp since 0230 step D6; why: One of three opt-in JSON adapter headers; the tested default because Boost is fetched anyway until 0230 step D7; lighten: The library no longer links boost_json and boost_container (0230 step D6); step D7 stops fetching them unless this binding is selected"
     },
     {
       "SPDXID": "SPDXRef-Package-nlohmann-json",
@@ -305,7 +305,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: alternative; phases: build,test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=nlohmann; also fetched whenever JINJA2CPP_BUILD_TESTS is ON (tests, parity corpus and bench read JSON with it); also-roles: test; used-for: Metadata parser when selected (binding/nlohmann_json_parser.h); opt-in adapter include/jinja2cpp/binding/nlohmann_json.h; test data (tojson, metadata, parity corpus) and bench case files; why: Header-only JSON backend alternative; the test suite's JSON reader; lighten: Header-only, no link cost. The cheapest default backend if Boost.JSON goes; conan: nlohmann_json/3.12.0"
+      "comment": "role: alternative; phases: build,test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=nlohmann; also fetched whenever JINJA2CPP_BUILD_TESTS is ON (tests, parity corpus and bench read JSON with it); also-roles: test; used-for: Opt-in adapter include/jinja2cpp/binding/nlohmann_json.h; test data (tojson, metadata, parity corpus) and bench case files; why: Header-only JSON adapter alternative; the test suite's JSON reader; lighten: Header-only, no link cost; tests and adapter only; conan: nlohmann_json/3.12.0"
     },
     {
       "SPDXID": "SPDXRef-Package-rapidjson",
@@ -332,7 +332,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: alternative; phases: build; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=rapid; used-for: Metadata parser when selected (binding/rapid_json_parser.h); opt-in adapter include/jinja2cpp/binding/rapid_json.h; why: Third JSON backend alternative for users who already carry RapidJSON; lighten: Header-only. Patched locally, and the conan-build mode takes an unpatched ConanCenter snapshot; upstream has had no release since 2016. A candidate to retire as a built-in backend while keeping the adapter header; conan: rapidjson/cci.20250205"
+      "comment": "role: alternative; phases: build; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=rapid; used-for: Opt-in adapter include/jinja2cpp/binding/rapid_json.h and its test; why: Third JSON adapter for users who already carry RapidJSON; lighten: Header-only. Patched locally, and the conan-build mode takes an unpatched ConanCenter snapshot; upstream has had no release since 2016. A candidate to retire as a built-in backend while keeping the adapter header; conan: rapidjson/cci.20250205"
     },
     {
       "SPDXID": "SPDXRef-Package-robin-hood-hashing",
@@ -554,5 +554,5 @@
       "relatedSpdxElement": "SPDXRef-Package-html-entities"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-library-9728d3aefc64c976"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-library-c70db129574489ca"
 }

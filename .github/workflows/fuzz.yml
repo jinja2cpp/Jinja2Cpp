@@ -50,7 +50,8 @@ jobs:
       matrix:
         # render runs with the Boost big-integer backend, so that `**` and the size caps on
         # big values are fuzzed too (docs/tasks/0272); render_wide keeps the default none
-        target: [parse, render, render_wide]
+        # metadata reads {% meta %} JSON (docs/tasks/0230, step D6)
+        target: [parse, render, render_wide, metadata]
 
     env:
       FUZZ_MODE: ${{ github.event_name == 'pull_request' && 'replay' || 'generate' }}

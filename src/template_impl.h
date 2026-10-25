@@ -4,6 +4,7 @@
 #include "cycle_collector.h"
 #include "error_boundary.h"
 #include "internal_value.h"
+#include "json_reader.h"
 #include "load_settings.h"
 #include "make_unexpected.h"
 #include "node_arena.h"
@@ -40,17 +41,6 @@
 #include <utility>
 #include <variant>
 #include <vector>
-
-#ifdef JINJA2CPP_WITH_JSON_BINDINGS_BOOST
-#include "binding/boost_json_parser.h"
-#include "jinja2cpp/binding/boost_json.h"
-#elif JINJA2CPP_WITH_JSON_BINDINGS_NLOHMANN
-#include "binding/nlohmann_json_parser.h"
-#include "jinja2cpp/binding/nlohmann_json.h"
-#else
-#include "binding/rapid_json_parser.h"
-#include "jinja2cpp/binding/rapid_json.h"
-#endif
 
 #include <nonstd/expected.hpp>
 
@@ -649,9 +639,6 @@ public:
         {
             return false;
         }
-        // m_metadataJson - only for persistence purposes
-        //if (m_metadataJson != other.m_metadataJson)
-        //    return false;
         if (m_metadataInfo != other.m_metadataInfo)
         {
             return false;
@@ -680,8 +667,8 @@ private:
 
         if (m_metadataInfo.metadataType == "json")
         {
-            // The JSON bindings parse narrow strings; wide metadata is converted first and kept,
-            // since the parsed document may refer to its source
+            // Read as UTF-8: wide metadata is converted first
+            std::string converted;
             std::string_view narrowMetadata;
             if constexpr (std::is_same_v<CharT, char>)
             {
@@ -689,19 +676,21 @@ private:
             }
             else
             {
-                m_metadataSource = ConvertString<std::string>(metadataString);
-                narrowMetadata = m_metadataSource;
+                converted = ConvertString<std::string>(metadataString);
+                narrowMetadata = converted;
             }
-            auto result = Parse<char>(narrowMetadata, m_metadataJson);
+            JsonReadLimits limits;
+            limits.maxSequenceSize = m_settings->settings.limits.maxSequenceSize;
+            auto result = ReadJsonObject(narrowMetadata, limits);
             if (!result)
             {
                 typename BasicErrorInfo<CharT>::Data errorData;
                 errorData.code = ErrorCode::MetadataParseError;
                 errorData.srcLoc = m_metadataInfo.location;
-                errorData.extraParams.push_back(Value(result.error()));
+                errorData.extraParams.push_back(Value(std::move(result.error())));
                 return MakeUnexpected(BasicErrorInfo<CharT>(errorData));
             }
-            m_metadata = std::move(std::get<GenericMap>(result.value().GetData()));
+            m_metadata = Value(std::move(result.value())).ToGenericMap();
             // Copied first: expected's converting constructor is noexcept (see GetMetadataRaw)
             GenericMap metadata = m_metadata.value();
             return metadata;
@@ -971,8 +960,6 @@ private:
     };
     mutable OutputSizeHint m_outputSizeHint;
     mutable std::optional<GenericMap> m_metadata;
-    mutable std::shared_ptr<void> m_metadataJson;
-    mutable std::string m_metadataSource;
     mutable std::mutex m_metadataMutex;
     MetadataInfo<CharT> m_metadataInfo;
     // The source and name the tree's render errors are located in; read on an error only

@@ -57,6 +57,7 @@ void RunFile(const std::filesystem::path& path)
     jinja2_fuzz::FuzzParse(data, bytes.size());
     jinja2_fuzz::FuzzRender(data, bytes.size());
     jinja2_fuzz::FuzzRenderWide(data, bytes.size());
+    jinja2_fuzz::FuzzMetadata(data, bytes.size());
 }
 
 } // namespace

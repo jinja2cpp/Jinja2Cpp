@@ -35,7 +35,7 @@ if (JINJA2CPP_BUILD_FUZZERS)
     # libFuzzer runtime (it brings its own main).
     target_compile_options(${LIB_TARGET_NAME} PRIVATE -fsanitize=fuzzer-no-link)
     target_compile_options(jinja2cpp_fuzz_targets PRIVATE -fsanitize=fuzzer-no-link)
-    foreach (_target parse render render_wide)
+    foreach (_target parse render render_wide metadata)
         add_executable(jinja2cpp_fuzz_${_target} ${_fuzz_dir}/fuzz_${_target}.cpp)
         target_link_libraries(jinja2cpp_fuzz_${_target} jinja2cpp_fuzz_targets)
         target_compile_options(jinja2cpp_fuzz_${_target} PRIVATE -fsanitize=fuzzer)

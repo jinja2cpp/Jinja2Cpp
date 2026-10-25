@@ -84,3 +84,20 @@ elements are inline moves them with one `uninitialized_move` (the general move a
 made parse up to 0.9% slower), and the growth paths are not inlined (inlined, they used up
 GCC's inlining budget in `statements.cpp`, and `InternalValue`'s copy assignment went out of
 line in the loop body). Against D4: Load -0.27% on average, every benchmark within +0.2%.
+
+Step D6: `{% meta %}` is read by `src/json_reader.cpp`, whatever
+`JINJA2CPP_WITH_JSON_BINDINGS` says; that option now only picks the adapter header the tests
+check, and only the tests link its library (the library and its pkg-config file no longer
+name Boost.JSON). The reader is RFC 8259 and builds `Value`s directly: UTF-8 checked, an
+integer that fits as `int64_t` and other numbers as `double` (an exponent out of range gives
+inf, as Python's), a repeated key keeping its first position and last value. It bounds
+nesting at 128 and each array, object and string at `Settings::Limits::maxSequenceSize`
+(the built-in cap by default), and its messages are Python's `json.JSONDecodeError`'s with
+line, column and offset. A top level that is not an object is now a `MetadataParseError`;
+before, `GetMetadata` threw `std::bad_variant_access` for `{% meta %}[1]{% endmeta %}`, and
+with the nlohmann backend an allocation failure while reading ended in `std::terminate`
+(0279; `AllocationFailureTest.MetadataSucceedsOrThrowsBadAlloc` no longer skips it). Tests:
+`test/json_reader_test.cpp` runs JSONTestSuite (generated table, `scripts/json_test_suite.py`;
+every `y_` accepted, every `n_` rejected, `i_` numbers accepted and other `i_` cases rejected)
+and the Python messages; fuzz target `jinja2cpp_fuzz_metadata`. Lone surrogates are
+rejected where Python accepts them: a UTF-8 string cannot hold one.

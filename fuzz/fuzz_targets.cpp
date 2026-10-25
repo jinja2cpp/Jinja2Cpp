@@ -163,4 +163,27 @@ void FuzzRenderWide(const std::uint8_t* data, std::size_t size)
     (void)LoadAndRender(DecodeUtf8(data, size));
 }
 
+void FuzzMetadata(const std::uint8_t* data, std::size_t size)
+{
+    if (size > MaxInputSize)
+    {
+        return;
+    }
+    // The input is the text of a {% meta %} block, read by the library's JSON reader
+    // (docs/tasks/0230, step D6) with default and with untrusted limits
+    const std::string source = "{% meta %}" + std::string(reinterpret_cast<const char*>(data), size) + "{% endmeta %}";
+    jinja2::TemplateEnv env;
+    jinja2::Settings settings;
+    settings.limits = jinja2::UntrustedLimits();
+    env.SetSettings(settings);
+    for (jinja2::TemplateEnv* owner : { static_cast<jinja2::TemplateEnv*>(nullptr), &env })
+    {
+        jinja2::Template tpl(owner);
+        if (tpl.Load(source))
+        {
+            (void)tpl.GetMetadata();
+        }
+    }
+}
+
 } // namespace jinja2_fuzz
