@@ -3146,6 +3146,52 @@
    "env": {},
    "templates": {},
    "output": "ssa|T|T|F"
+  },
+  {
+   "id": "methods.str_format_attr_is_not_item",
+   "template": "{{ '{x.y}'.format(x={'y': 1}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'dict' object has no attribute 'y'"
+   }
+  },
+  {
+   "id": "methods.str_format_ascii_conversion",
+   "template": "{{ '{!a}'.format('é') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "'\\xe9'"
   }
  ]
 }

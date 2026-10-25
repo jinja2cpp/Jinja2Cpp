@@ -149,4 +149,6 @@ CASES = [
     # 0317: Unicode digit and numeric classes, str methods not implemented yet
     ('str_digit_numeric_unicode', "{{ 'T' if '²'.isdigit() else 'F' }}{{ 'T' if '½'.isnumeric() else 'F' }}{{ 'T' if 'Ⅷ'.isnumeric() else 'F' }}{{ 'T' if '²'.isdecimal() else 'F' }}"),
     ('str_casefold_isascii', "{{ 'ßA'.casefold() }}|{{ 'T' if 'ab'.isascii() else 'F' }}|{{ 'T' if 'a1'.isidentifier() else 'F' }}|{{ 'T' if 'a\\n'.isprintable() else 'F' }}"),
+    ('str_format_attr_is_not_item', "{{ '{x.y}'.format(x={'y': 1}) }}"),
+    ('str_format_ascii_conversion', "{{ '{!a}'.format('é') }}"),
 ]
