@@ -503,11 +503,10 @@ InternalValue CallLoopChanged(const InternalValue& state, const CallParams& para
     {
         return false;
     }
-    InternalValueList called;
-    called.reserve(args.size() + 1);
-    called.emplace_back(true);
-    called.insert(called.end(), args.begin(), args.end());
-    *last = std::move(called);
+    // In place: a loop calling with as many values each time allocates nothing past the first call
+    last->resize(args.size() + 1);
+    last->front() = true;
+    std::copy(args.begin(), args.end(), last->begin() + 1);
     return true;
 }
 
