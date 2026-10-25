@@ -115,7 +115,7 @@ copy path (the test target links `jinja2cpp::nlohmann_json` whatever
 binding (its conformance traits, nlohmann's pointer overloads of `Reflect`); their rendering
 rows were covered by the suite, which took over the two it lacked (an attribute of a JSON
 null is undefined; `Find`/`HasValue` and the 1.x accessor on a null member). The view pass
-of the corpus is 0320. 0302 follows on the components.
+of the corpus is 0322. 0302 follows on the components.
 
 **Next.** 0302 is rebased onto the contract (a dom view and copy, an on-demand copy).
 Installing the conformance suite for third-party traits authors, and a `FromValue`
