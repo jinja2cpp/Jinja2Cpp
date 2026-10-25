@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:5f24e191-9ae6-5ce6-94ec-d01286a517bc",
+  "serialNumber": "urn:uuid:c942662f-ce4d-598f-a521-2b3dfac9692c",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -110,6 +110,10 @@
         {
           "name": "jinja2cpp:conan",
           "value": "expected-lite/0.9.0"
+        },
+        {
+          "name": "jinja2cpp:conan-why",
+          "value": "ConanCenter has expected-lite 0.9.0 at most (checked 2026-10-24); conan-build stays one version behind until 0.10.0 is published there"
         }
       ]
     },
@@ -258,6 +262,10 @@
         {
           "name": "jinja2cpp:conan",
           "value": "boost/1.91.0"
+        },
+        {
+          "name": "jinja2cpp:conan-why",
+          "value": "ConanCenter has Boost 1.91.0 at most (checked 2026-10-24); conanfile.txt takes it header_only, and Boost is only an optional adapter dependency and test-only (0230)"
         },
         {
           "name": "jinja2cpp:transitive-libraries",
@@ -485,11 +493,15 @@
         },
         {
           "name": "jinja2cpp:lighten",
-          "value": "Header-only. Patched locally, and the conan-build mode takes an unpatched ConanCenter snapshot; upstream has had no release since 2016. A candidate to retire as a built-in backend while keeping the adapter header"
+          "value": "Header-only. Patched locally (CMake files only), and the conan-build mode takes the same commit unpatched from ConanCenter; upstream has had no release since 2016. A candidate to retire as a built-in backend while keeping the adapter header"
         },
         {
           "name": "jinja2cpp:conan",
           "value": "rapidjson/cci.20250205"
+        },
+        {
+          "name": "jinja2cpp:conan-why",
+          "value": "cci.20250205 is commit 24b5e7a8 (same sha256 as the internal archive); the two local patches only change RapidJSON's CMake install, policy, gtest and config-file rules, which the header-only Conan package does not use, so it needs neither"
         }
       ]
     },

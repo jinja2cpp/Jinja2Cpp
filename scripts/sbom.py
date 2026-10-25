@@ -103,7 +103,7 @@ def classification(comp):
     ]
     if comp.get("also_roles"):
         props.append(("also-roles", ",".join(comp["also_roles"])))
-    for key in ("used_for", "why", "lighten", "modified", "conan"):
+    for key in ("used_for", "why", "lighten", "modified", "conan", "conan_why", "sha"):
         if comp.get(key):
             props.append((key.replace("_", "-"), comp[key]))
     for path, digest in file_hashes(comp):
@@ -359,8 +359,13 @@ def audit(data, by_id):
         line = line.strip()
         if line.startswith("["):
             section = line
-        elif line and section == "[requires]" and line not in conans:
+        elif line and not line.startswith("#") and section == "[requires]" and line not in conans:
             problems.append(f"conanfile.txt: {line} is not the `conan` field of any component")
+    for comp in comps:
+        # One version across deps modes, or a recorded reason (docs/tasks/0232)
+        conan = comp.get("conan")
+        if conan and conan.partition("/")[2] != str(comp.get("version", "")).lstrip("v") and not comp.get("conan_why"):
+            problems.append(f"{comp['id']}: conan {conan} differs from version {comp.get('version')} and has no `conan_why`")
     purls = {c.get("purl") for c in comps}
     for rel, path in repo_files("**/requirements*.txt"):
         for line in path.read_text(encoding="utf-8").splitlines():
@@ -370,17 +375,28 @@ def audit(data, by_id):
                 if f"pkg:pypi/{name.lower()}@{ver}" not in purls:
                     problems.append(f"{rel}: {line} is not in components.json")
 
-    # Every GitHub Action outside this repository
-    actions = set()
+    # Every GitHub Action outside this repository, pinned by the commit SHA and release tag
+    # components.json records (docs/tasks/0232)
+    actions = {}
     for comp in comps:
         if comp.get("action"):
-            actions.add(comp["action"])
-            actions.update(comp.get("action_aliases", []))
+            if not re.fullmatch(r"[0-9a-f]{40}", comp.get("sha", "")):
+                problems.append(f"{comp['id']}: action needs a 40-character `sha`")
+            for name in [comp["action"]] + comp.get("action_aliases", []):
+                actions[name] = comp
+    use_re = r"^\s*(?:-\s*)?uses:\s*([^\s#@]+)@(\S+)(?:[ \t]+#[ \t]*(\S+))?"
     for rel, path in repo_files(".github/**/*.yml", ".github/**/*.yaml"):
-        for match in re.finditer(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", path.read_text(encoding="utf-8"), re.M):
-            used = match.group(1)
-            if not used.startswith("./") and used not in actions:
+        for match in re.finditer(use_re, path.read_text(encoding="utf-8"), re.M):
+            used, ref, tag = match.groups()
+            if used.startswith("./"):
+                continue
+            comp = actions.get(used)
+            if not comp:
                 problems.append(f"{rel}: action {used} is not in components.json")
+            elif ref != comp.get("sha"):
+                problems.append(f"{rel}: {used}@{ref} is not pinned to the commit {comp.get('sha')} ({comp['version']})")
+            elif tag != comp["version"]:
+                problems.append(f"{rel}: {used} needs the comment `# {comp['version']}`, found {tag!r}")
 
     # Every Boost header the code includes belongs to a listed Boost library
     # and only the opt-in Boost adapters include Boost at all (docs/tasks/0230)

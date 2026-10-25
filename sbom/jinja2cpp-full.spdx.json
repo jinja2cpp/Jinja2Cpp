@@ -56,7 +56,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: mandatory; phases: build,consumer-build; exposure: public-api; delivery: fetched; selected-by: always; used-for: nonstd::expected behind jinja2::Result<T> in every Load/Render signature (include/jinja2cpp/template.h, template_env.h); make_unexpected in parsers and bindings; why: C++17 has no std::expected; the 2.0 API returns Result<T> (docs/api-2.0.md decision 4), and Clang 18 + libstdc++ at C++23 ships <expected> without std::expected; lighten: Keep until a C++23 floor. Header-only and small; could be vendored into include/ so consumers need nothing extra, at the cost of an ODR clash with a consumer's own expected-lite of another version; conan: expected-lite/0.9.0"
+      "comment": "role: mandatory; phases: build,consumer-build; exposure: public-api; delivery: fetched; selected-by: always; used-for: nonstd::expected behind jinja2::Result<T> in every Load/Render signature (include/jinja2cpp/template.h, template_env.h); make_unexpected in parsers and bindings; why: C++17 has no std::expected; the 2.0 API returns Result<T> (docs/api-2.0.md decision 4), and Clang 18 + libstdc++ at C++23 ships <expected> without std::expected; lighten: Keep until a C++23 floor. Header-only and small; could be vendored into include/ so consumers need nothing extra, at the cost of an ODR clash with a consumer's own expected-lite of another version; conan: expected-lite/0.9.0; conan-why: ConanCenter has expected-lite 0.9.0 at most (checked 2026-10-24); conan-build stays one version behind until 0.10.0 is published there"
     },
     {
       "SPDXID": "SPDXRef-Package-fmt",
@@ -110,7 +110,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: alternative; phases: test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=boost with JINJA2CPP_BUILD_TESTS: internal mode fetches the release for the Boost.JSON adapter test and never installs it; external, external-boost and conan-build find a system Boost >= 1.75 (Conan: header-only) only when a Boost piece is selected; also-roles: test; used-for: The opt-in adapters only: Boost.JSON for the binding test, and Multiprecision with Config (boost-multiprecision, boost-config, fetched on their own) for the bigint=boost backend and the adapter test. The library links no Boost and the installed package never names it (0230 D7a); why: The adapter headers jinja2cpp/binding/boost_json.h and jinja2cpp/big_int/boost_cpp_int.h are public opt-in API, so CI keeps testing them; lighten: Done (docs/tasks/0230): span, small_vector, intrusive_ptr, unique_any, iterator_facade, the string algorithms, endian, filesystem and Boost.JSON metadata parsing have own replacements; scripts/sbom.py --check keeps <boost/ out of every other file; conan: boost/1.91.0; transitive-libraries: assert,compat,config,container,container_hash,core,describe,endian,headers,intrusive,json,move,mp11,predef,system,throw_exception,variant2,winapi"
+      "comment": "role: alternative; phases: test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=boost with JINJA2CPP_BUILD_TESTS: internal mode fetches the release for the Boost.JSON adapter test and never installs it; external, external-boost and conan-build find a system Boost >= 1.75 (Conan: header-only) only when a Boost piece is selected; also-roles: test; used-for: The opt-in adapters only: Boost.JSON for the binding test, and Multiprecision with Config (boost-multiprecision, boost-config, fetched on their own) for the bigint=boost backend and the adapter test. The library links no Boost and the installed package never names it (0230 D7a); why: The adapter headers jinja2cpp/binding/boost_json.h and jinja2cpp/big_int/boost_cpp_int.h are public opt-in API, so CI keeps testing them; lighten: Done (docs/tasks/0230): span, small_vector, intrusive_ptr, unique_any, iterator_facade, the string algorithms, endian, filesystem and Boost.JSON metadata parsing have own replacements; scripts/sbom.py --check keeps <boost/ out of every other file; conan: boost/1.91.0; conan-why: ConanCenter has Boost 1.91.0 at most (checked 2026-10-24); conanfile.txt takes it header_only, and Boost is only an optional adapter dependency and test-only (0230); transitive-libraries: assert,compat,config,container,container_hash,core,describe,endian,headers,intrusive,json,move,mp11,predef,system,throw_exception,variant2,winapi"
     },
     {
       "SPDXID": "SPDXRef-Package-boost-json",
@@ -239,7 +239,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: alternative; phases: build; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=rapid; used-for: Opt-in adapter include/jinja2cpp/binding/rapid_json.h and its test; why: Third JSON adapter for users who already carry RapidJSON; lighten: Header-only. Patched locally, and the conan-build mode takes an unpatched ConanCenter snapshot; upstream has had no release since 2016. A candidate to retire as a built-in backend while keeping the adapter header; conan: rapidjson/cci.20250205"
+      "comment": "role: alternative; phases: build; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=rapid; used-for: Opt-in adapter include/jinja2cpp/binding/rapid_json.h and its test; why: Third JSON adapter for users who already carry RapidJSON; lighten: Header-only. Patched locally (CMake files only), and the conan-build mode takes the same commit unpatched from ConanCenter; upstream has had no release since 2016. A candidate to retire as a built-in backend while keeping the adapter header; conan: rapidjson/cci.20250205; conan-why: cci.20250205 is commit 24b5e7a8 (same sha256 as the internal archive); the two local patches only change RapidJSON's CMake install, policy, gtest and config-file rules, which the header-only Conan package does not use, so it needs neither"
     },
     {
       "SPDXID": "SPDXRef-Package-robin-hood-hashing",
@@ -395,8 +395,14 @@
       "name": "googletest",
       "versionInfo": "v1.18.0",
       "supplier": "Organization: Google",
-      "downloadLocation": "git+https://github.com/google/googletest.git@v1.18.0",
+      "downloadLocation": "https://github.com/google/googletest/archive/refs/tags/v1.18.0.tar.gz",
       "filesAnalyzed": false,
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "6e3191c1455468b3fc35a417fb565c1c5071aee1b7e7f85e30cf48a98d37d8b5"
+        }
+      ],
       "homepage": "https://github.com/google/googletest",
       "licenseConcluded": "NOASSERTION",
       "licenseDeclared": "BSD-3-Clause",
@@ -409,15 +415,21 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: test; phases: test; exposure: none; delivery: fetched; selected-by: JINJA2CPP_BUILD_TESTS (ON for the main project); a system GTest is preferred; used-for: The jinja2cpp_tests binary; why: Unit and corpus tests; lighten: Test-only. Fetched by a mutable git tag, not a hash"
+      "comment": "role: test; phases: test; exposure: none; delivery: fetched; selected-by: JINJA2CPP_BUILD_TESTS (ON for the main project); a system GTest is preferred; used-for: The jinja2cpp_tests binary; why: Unit and corpus tests; lighten: Test-only. Fetched as an archive pinned by SHA-256"
     },
     {
       "SPDXID": "SPDXRef-Package-google-benchmark",
       "name": "benchmark",
       "versionInfo": "v1.9.5",
       "supplier": "Organization: Google",
-      "downloadLocation": "git+https://github.com/google/benchmark.git@v1.9.5",
+      "downloadLocation": "https://github.com/google/benchmark/archive/refs/tags/v1.9.5.tar.gz",
       "filesAnalyzed": false,
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "9631341c82bac4a288bef951f8b26b41f69021794184ece969f8473977eaa340"
+        }
+      ],
       "homepage": "https://github.com/google/benchmark",
       "licenseConcluded": "NOASSERTION",
       "licenseDeclared": "Apache-2.0",
@@ -430,7 +442,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: optional; phases: dev; exposure: none; delivery: fetched; selected-by: JINJA2CPP_BUILD_BENCHMARKS (OFF); used-for: bench/ suite; why: Performance tracking against Python Jinja2 and the baseline; lighten: Dev-only"
+      "comment": "role: optional; phases: dev; exposure: none; delivery: fetched; selected-by: JINJA2CPP_BUILD_BENCHMARKS (OFF); used-for: bench/ suite; why: Performance tracking against Python Jinja2 and the baseline; lighten: Dev-only. Fetched as an archive pinned by SHA-256"
     },
     {
       "SPDXID": "SPDXRef-Package-inja",
@@ -753,7 +765,7 @@
     {
       "SPDXID": "SPDXRef-Package-gha-checkout",
       "name": "actions/checkout",
-      "versionInfo": "v4",
+      "versionInfo": "v4.4.0",
       "supplier": "Organization: GitHub",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
@@ -765,16 +777,16 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:githubactions/actions/checkout@v4"
+          "referenceLocator": "pkg:githubactions/actions/checkout@v4.4.0"
         }
       ],
       "primaryPackagePurpose": "APPLICATION",
-      "comment": "role: tooling; phases: ci; exposure: none; delivery: ci; selected-by: always; used-for: CI; why: CI; lighten: Pinned by a mutable tag, not a commit SHA"
+      "comment": "role: tooling; phases: ci; exposure: none; delivery: ci; selected-by: always; used-for: CI; why: CI; lighten: Pinned by commit SHA with the release tag in a comment; sha: 11d5960a326750d5838078e36cf38b85af677262"
     },
     {
       "SPDXID": "SPDXRef-Package-gha-setup-python",
       "name": "actions/setup-python",
-      "versionInfo": "v5",
+      "versionInfo": "v5.6.0",
       "supplier": "Organization: GitHub",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
@@ -786,16 +798,16 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:githubactions/actions/setup-python@v5"
+          "referenceLocator": "pkg:githubactions/actions/setup-python@v5.6.0"
         }
       ],
       "primaryPackagePurpose": "APPLICATION",
-      "comment": "role: tooling; phases: ci; exposure: none; delivery: ci; selected-by: always; used-for: CI; why: CI; lighten: Pinned by a mutable tag, not a commit SHA"
+      "comment": "role: tooling; phases: ci; exposure: none; delivery: ci; selected-by: always; used-for: CI; why: CI; lighten: Pinned by commit SHA with the release tag in a comment; sha: a26af69be951a213d495a4c3e4e4022e16d87065"
     },
     {
       "SPDXID": "SPDXRef-Package-gha-upload-artifact",
       "name": "actions/upload-artifact",
-      "versionInfo": "v4",
+      "versionInfo": "v4.6.2",
       "supplier": "Organization: GitHub",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
@@ -807,16 +819,16 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:githubactions/actions/upload-artifact@v4"
+          "referenceLocator": "pkg:githubactions/actions/upload-artifact@v4.6.2"
         }
       ],
       "primaryPackagePurpose": "APPLICATION",
-      "comment": "role: tooling; phases: ci; exposure: none; delivery: ci; selected-by: always; used-for: CI; why: CI; lighten: Pinned by a mutable tag, not a commit SHA"
+      "comment": "role: tooling; phases: ci; exposure: none; delivery: ci; selected-by: always; used-for: CI; why: CI; lighten: Pinned by commit SHA with the release tag in a comment; sha: ea165f8d65b6e75b540449e92b4886f43607fa02"
     },
     {
       "SPDXID": "SPDXRef-Package-gha-cache",
       "name": "actions/cache",
-      "versionInfo": "v4",
+      "versionInfo": "v4.3.0",
       "supplier": "Organization: GitHub",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
@@ -828,16 +840,16 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:githubactions/actions/cache@v4"
+          "referenceLocator": "pkg:githubactions/actions/cache@v4.3.0"
         }
       ],
       "primaryPackagePurpose": "APPLICATION",
-      "comment": "role: tooling; phases: ci; exposure: none; delivery: ci; selected-by: always; used-for: CI; why: CI; lighten: Pinned by a mutable tag, not a commit SHA"
+      "comment": "role: tooling; phases: ci; exposure: none; delivery: ci; selected-by: always; used-for: CI; why: CI; lighten: Pinned by commit SHA with the release tag in a comment; sha: 0057852bfaa89a56745cba8c7296529d2fc39830"
     },
     {
       "SPDXID": "SPDXRef-Package-gha-codeql",
       "name": "github/codeql-action",
-      "versionInfo": "v4",
+      "versionInfo": "v4.39.1",
       "supplier": "Organization: GitHub",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
@@ -849,16 +861,16 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:githubactions/github/codeql-action@v4"
+          "referenceLocator": "pkg:githubactions/github/codeql-action@v4.39.1"
         }
       ],
       "primaryPackagePurpose": "APPLICATION",
-      "comment": "role: tooling; phases: ci; exposure: none; delivery: ci; selected-by: always; used-for: CodeQL analysis; why: CI; lighten: Pinned by a mutable tag, not a commit SHA"
+      "comment": "role: tooling; phases: ci; exposure: none; delivery: ci; selected-by: always; used-for: CodeQL analysis; why: CI; lighten: Pinned by commit SHA with the release tag in a comment; sha: 9b3254085494b55a0f7c4c2b3d2d52cc712ce370"
     },
     {
       "SPDXID": "SPDXRef-Package-gha-ccache-action",
       "name": "hendrikmuhs/ccache-action",
-      "versionInfo": "v1.2",
+      "versionInfo": "v1.2.24",
       "supplier": "Organization: Hendrik Muhs",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
@@ -870,16 +882,16 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:githubactions/hendrikmuhs/ccache-action@v1.2"
+          "referenceLocator": "pkg:githubactions/hendrikmuhs/ccache-action@v1.2.24"
         }
       ],
       "primaryPackagePurpose": "APPLICATION",
-      "comment": "role: tooling; phases: ci; exposure: none; delivery: ci; selected-by: always; used-for: Compiler cache in CI (.github/actions/setup-ccache); why: CI; lighten: Third-party action pinned by a mutable tag; runs with the workflow token"
+      "comment": "role: tooling; phases: ci; exposure: none; delivery: ci; selected-by: always; used-for: Compiler cache in CI (.github/actions/setup-ccache); why: CI; lighten: Pinned by commit SHA with the release tag in a comment; third-party, runs with the workflow token; sha: f09c25b45002a07be2955cbe52e8cee55643f89d"
     },
     {
       "SPDXID": "SPDXRef-Package-gha-msvc-dev-cmd",
       "name": "ilammy/msvc-dev-cmd",
-      "versionInfo": "v1",
+      "versionInfo": "v1.13.0",
       "supplier": "Organization: ilammy",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
@@ -891,11 +903,11 @@
         {
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
-          "referenceLocator": "pkg:githubactions/ilammy/msvc-dev-cmd@v1"
+          "referenceLocator": "pkg:githubactions/ilammy/msvc-dev-cmd@v1.13.0"
         }
       ],
       "primaryPackagePurpose": "APPLICATION",
-      "comment": "role: tooling; phases: ci; exposure: none; delivery: ci; selected-by: always; used-for: MSVC environment on Windows runners; why: CI; lighten: Third-party action pinned by a mutable tag; runs with the workflow token"
+      "comment": "role: tooling; phases: ci; exposure: none; delivery: ci; selected-by: always; used-for: MSVC environment on Windows runners; why: CI; lighten: Pinned by commit SHA with the release tag in a comment; third-party, runs with the workflow token; sha: 0b201ec74fa43914dc39ae48a89fd1d8cb592756"
     }
   ],
   "relationships": [
@@ -1095,5 +1107,5 @@
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-71c996409c5e9454"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-97a03352953c1b64"
 }

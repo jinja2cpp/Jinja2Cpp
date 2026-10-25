@@ -124,3 +124,5 @@ fails when a file other than the two adapter headers, `src/big_int_builtin.cpp` 
 Boost.JSON binding test names `<boost/`; a `boost-free` Linux job builds the defaults with
 tests OFF, asserts that nothing of Boost was fetched and checks the install. The cloud
 prefetch hook also clones the pins in `thirdparty/CMakeLists.txt`.
+
+Step D7c (task 0232): dependency pins are immutable. Actions are pinned by commit SHA, googletest and benchmark by archive hash, and every Conan version that differs from internal mode carries a recorded reason checked by `scripts/sbom.py`.

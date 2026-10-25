@@ -81,7 +81,7 @@ jobs:
           - { std: 26, compiler: clang-20, config: Debug,   shared: 'ON',  bindings: nlohmann }
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
     - name: Install toolchain
       uses: ./.github/actions/install-toolchain
@@ -125,7 +125,7 @@ jobs:
 
     - name: Previous ABI dump
       if: matrix.abi && github.event_name == 'pull_request'
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: .abi-base
         key: abi-cxx${{ matrix.std }}-${{ github.event.pull_request.base.sha }}
@@ -140,14 +140,14 @@ jobs:
       run: mkdir -p .abi-base && cp .abi/*.abi .abi-base/
 
     - if: matrix.abi && github.event_name == 'push'
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: .abi-base
         key: abi-cxx${{ matrix.std }}-${{ github.sha }}
 
     # also when the report fails: its message points at this dump
     - if: ${{ !cancelled() && matrix.abi }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: abi-cxx${{ matrix.std }}
         path: .abi/
@@ -176,7 +176,7 @@ jobs:
           - { mode: external-boost, compiler: clang-20, config: Debug,   shared: 'ON',  bindings: boost }
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
     - name: Install toolchain
       uses: ./.github/actions/install-toolchain
@@ -236,7 +236,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
     - name: Install toolchain
       uses: ./.github/actions/install-toolchain
@@ -290,7 +290,7 @@ jobs:
       GTEST_BRIEF: 1
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
     - name: Install toolchain
       uses: ./.github/actions/install-toolchain
@@ -327,7 +327,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
     - name: Install toolchain
       uses: ./.github/actions/install-toolchain
@@ -366,7 +366,7 @@ jobs:
           echo '```'
         } >> "$GITHUB_STEP_SUMMARY"
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: coverage-info
         path: coverage.info

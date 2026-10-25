@@ -83,7 +83,7 @@ deprecated alias of `internal`, removed in 3.0.
 
 | Component | Version | Licence | Role | Notes |
 |---|---|---|---|---|
-| googletest | v1.18.0 | BSD-3-Clause | test | git tag, not a hash; no longer installed with the package (it was, in internal mode) |
+| googletest | v1.18.0 | BSD-3-Clause | test | archive pinned by SHA-256; no longer installed with the package (it was, in internal mode) |
 | Python Jinja2 / MarkupSafe | 3.1.6 / 3.0.3 | BSD-3-Clause | test | the oracle; its expectations are committed, so builds never need it |
 | google benchmark | v1.9.5 | Apache-2.0 | optional | `JINJA2CPP_BUILD_BENCHMARKS` |
 | inja, minja | 3.5.0, 143465a | MIT | optional | `JINJA2CPP_BENCH_WITH_OTHER_ENGINES` |
@@ -91,8 +91,8 @@ deprecated alias of `internal`, removed in 3.0.
 | gperftools | system | BSD-3-Clause | optional | `JINJA2CPP_BENCH_WITH_GPERFTOOLS` |
 | Conan | 2.x | MIT | optional | `JINJA2CPP_DEPS_MODE=conan-build` |
 | CMake | 3.23+ | BSD-3-Clause | tooling | required to build |
-| CPython, clang-tidy, clang-format, PyYAML | 3.12, 22.1.8, 18, unpinned | various | tooling | CI and scripts only |
-| GitHub Actions | tags | MIT | tooling | seven actions, all pinned by mutable tags; two are third-party (`hendrikmuhs/ccache-action`, `ilammy/msvc-dev-cmd`) |
+| CPython, clang-tidy, clang-format, PyYAML | 3.12, 22.1.8, 18, 6.0.3 | various | tooling | CI and scripts only |
+| GitHub Actions | commit SHAs | MIT | tooling | seven actions, each pinned by commit SHA with its release tag in a comment (`sha` in components.json, checked by `sbom.py --check`); two are third-party (`hendrikmuhs/ccache-action`, `ilammy/msvc-dev-cmd`) |
 | CodeCoverage.cmake (Lars Bilke) | vendored | BSD-3-Clause | redundant | `cmake/code_coverage.cmake`, included by nothing (0010 owns the file) |
 
 ## What a consumer actually needs
@@ -127,9 +127,11 @@ deprecated alias of `internal`, removed in 3.0.
 5. **Pins that disagree.** Conan mode builds against expected-lite 0.9.0, a header-only
    Boost 1.91.0 (tests and `bigint=boost` only) and an unpatched RapidJSON while internal
    mode uses 0.10.0, 1.92.0 and a patched
-   commit; googletest, benchmark and every GitHub Action are pinned by mutable tags
-   (docs/tasks/0232). The audit in `scripts/sbom.py --check` makes such drift visible but
-   records it rather than resolving it.
+   commit. ConanCenter has no newer expected-lite or Boost, and the RapidJSON patches only
+   touch CMake files, so each difference carries a `conan_why` in components.json and a
+   comment in `conanfile.txt`; `scripts/sbom.py --check` fails a difference without one
+   (docs/tasks/0232). googletest, benchmark and every GitHub Action are now pinned
+   immutably (SHA-256 or commit SHA).
 
 Distribution notices for the redistributed code (fmt and expected-lite in an
 internal-mode install, Boost.Multiprecision compiled into a `bigint=boost` build, value_types in the installed headers) are docs/tasks/0226.
