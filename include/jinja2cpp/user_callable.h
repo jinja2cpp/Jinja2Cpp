@@ -121,8 +121,8 @@ struct ArgPromoter<std::basic_string_view<CharT>, void>
     {
     }
 
+    // No `operator string_view`: next to this one it made a by-value `std::string_view` parameter ambiguous
     operator const string_view&() const { return *m_ptr; }                   // NOLINT(google-explicit-constructor)
-    operator string_view() const { return *m_ptr; }                          // NOLINT(google-explicit-constructor)
     operator string() const { return string(m_ptr->begin(), m_ptr->end()); } // NOLINT(google-explicit-constructor)
     operator other_string() const                                            // NOLINT(google-explicit-constructor)
     {
@@ -180,6 +180,22 @@ auto Promote(Arg&& arg)
     return ArgPromoter<std::decay_t<Arg>>(&arg);
 }
 
+// A returned view may point into an argument, which dies when the call returns, so the result
+// keeps its own copy of the text (docs/tasks/0296)
+template<typename R>
+Value MakeCallResult(R&& result)
+{
+    using ResultT = std::decay_t<R>;
+    if constexpr (std::is_same_v<ResultT, std::string_view> || std::is_same_v<ResultT, std::wstring_view>)
+    {
+        return Value(std::basic_string<typename ResultT::value_type>(result));
+    }
+    else
+    {
+        return Value(std::forward<R>(result));
+    }
+}
+
 template<typename Fn>
 struct UCInvoker
 {
@@ -205,7 +221,7 @@ struct UCInvoker
     // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): Promote takes each argument's address
     auto operator()(Args&&... args) const -> std::enable_if_t<CanBeCalled<FuncTester<Args...>>::value, Value>
     {
-        return Value(fn(Promote(args)...));
+        return MakeCallResult(fn(Promote(args)...));
     }
 
     template<typename... Args>
@@ -450,6 +466,12 @@ struct MarkupParamUnwrapper
     void operator()(std::basic_string_view<CharT> val) const { param->SetValue(Escape(val)); }
     void operator()(const NoneValue&) const { param->SetValue(ValueType()); }
 
+    // Text of the other width is converted first: a Markup stays a Markup, a string is escaped
+    using OtherCharT = std::conditional_t<std::is_same_v<CharT, char>, wchar_t, char>;
+    void operator()(const BasicMarkup<OtherCharT>& val) const { param->SetValue(ValueType(ConvertString<std::basic_string<CharT>>(val.str()))); }
+    void operator()(const std::basic_string<OtherCharT>& val) const { param->SetValue(Escape(ConvertString<std::basic_string<CharT>>(val))); }
+    void operator()(std::basic_string_view<OtherCharT> val) const { param->SetValue(Escape(ConvertString<std::basic_string<CharT>>(val))); }
+
     template<typename U>
     void operator()(const U&) const
     {
@@ -486,7 +508,7 @@ Value InvokeTypedUserCallable(Fn&& fn, const UserCallableParams& params, ArgDesc
                 return Value();
             }
 
-            return Value(fn(args.GetValue()...));
+            return MakeCallResult(fn(args.GetValue()...));
         },
         typedParams);
 }

@@ -245,6 +245,16 @@ std::wstring WStringViewPtrFn(std::wstring_view val)
     return std::wstring(val);
 }
 
+std::string_view ReturnStringViewPtrFn(std::string_view val)
+{
+    return val;
+}
+
+std::wstring_view ReturnWStringViewPtrFn(std::wstring_view val)
+{
+    return val;
+}
+
 std::string ConstStringViewPtrFn(const std::string_view& val)
 {
     return std::string(val);
@@ -299,6 +309,10 @@ TEST_P(UserCallableParamConvertTest, Test)
     params["WStringViewPtrFn"] = MakeCallable(&WStringViewPtrFn, ArgInfo{ "val" });
     params["ConstStringViewPtrFn"] = MakeCallable(&ConstStringViewPtrFn, ArgInfo{ "val" });
     params["ConstWStringViewPtrFn"] = MakeCallable(&ConstWStringViewPtrFn, ArgInfo{ "val" });
+    params["ReturnStringViewPtrFn"] = MakeCallable(&ReturnStringViewPtrFn, ArgInfo{ "val" });
+    params["ReturnWStringViewPtrFn"] = MakeCallable(&ReturnWStringViewPtrFn, ArgInfo{ "val" });
+    params["ReturnStringViewFn"] = MakeCallable([](std::string_view val) { return val; }, ArgInfo{ "val" });
+    params["ReturnWStringViewFn"] = MakeCallable([](std::wstring_view val) { return val; }, ArgInfo{ "val" });
     params["longString"] = std::string(40, 'n');
     params["longWString"] = std::wstring(40, L'w');
     params["markupValue"] = Markup("<b>");
@@ -482,6 +496,27 @@ INSTANTIATE_TEST_SUITE_P(StringViewPointerParamConvert, UserCallableParamConvert
                             InputOutputPair{"ConstWStringViewPtrFn('<i>'|safe)", "'<i>'"},
                             InputOutputPair{"ConstWStringViewPtrFn(markupValue)", "'<b>'"},
                             InputOutputPair{"ConstWStringViewPtrFn(wmarkupValue)", "'<w>'"}
+                            ));
+
+// A returned view is copied: it may view an argument, which dies with the call; a lambda takes a
+// view by value (docs/tasks/0296)
+INSTANTIATE_TEST_SUITE_P(StringViewResultConvert, UserCallableParamConvertTest, ::testing::Values(
+                            InputOutputPair{"ReturnStringViewPtrFn(longString)", "'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn'"},
+                            InputOutputPair{"ReturnStringViewPtrFn(longWString)", "'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww'"},
+                            InputOutputPair{"ReturnStringViewPtrFn(longString ~ 'x')", "'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnx'"},
+                            InputOutputPair{"ReturnStringViewPtrFn(wstringValue)", "'  hello world '"},
+                            InputOutputPair{"ReturnWStringViewPtrFn(longString)", "'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn'"},
+                            InputOutputPair{"ReturnWStringViewPtrFn(longWString)", "'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww'"},
+                            InputOutputPair{"ReturnWStringViewPtrFn(longString ~ 'x')", "'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnx'"},
+                            InputOutputPair{"ReturnWStringViewPtrFn(wstringValue)", "'  hello world '"},
+                            InputOutputPair{"ReturnStringViewFn(longString)", "'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn'"},
+                            InputOutputPair{"ReturnStringViewFn(longWString)", "'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww'"},
+                            InputOutputPair{"ReturnStringViewFn(longString ~ 'x')", "'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnx'"},
+                            InputOutputPair{"ReturnStringViewFn(wstringValue)", "'  hello world '"},
+                            InputOutputPair{"ReturnWStringViewFn(longString)", "'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn'"},
+                            InputOutputPair{"ReturnWStringViewFn(longWString)", "'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww'"},
+                            InputOutputPair{"ReturnWStringViewFn(longString ~ 'x')", "'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnx'"},
+                            InputOutputPair{"ReturnWStringViewFn(wstringValue)", "'  hello world '"}
                             ));
 
 INSTANTIATE_TEST_SUITE_P(WStringViewParamConvert, UserCallableParamConvertTest, ::testing::Values(
@@ -815,6 +850,16 @@ INSTANTIATE_TEST_SUITE_P(Escapes, OwnedUserDataTest, ::testing::Values(
                             InputOutputPair{ "{% set r = rrecs() | sort(attribute='name') %}{{ r | map(attribute='words') | map('join') | join('|') }}", "YX|X" }));
 // clang-format on
 
+Markup MarkupIdentity(const Markup& v)
+{
+    return v;
+}
+
+WMarkup WMarkupIdentity(const WMarkup& v)
+{
+    return v;
+}
+
 // Markup from C++ (docs/tasks/0180): the expected outputs are Python Jinja2's, with markupsafe.Markup
 // values for x, heap, l[0], m.k and the callable results
 struct MarkupRow
@@ -842,6 +887,9 @@ protected:
         params["ident"] = UserCallable([](const UserCallableParams& p) { return p["v"]; }, { ArgInfo{ "v" } });
         params["kind"] = UserCallable([](const UserCallableParams& p) { return Value(p["v"].IsMarkup() || p["v"].IsWMarkup() ? "markup" : "string"); }, { ArgInfo{ "v" } });
         params["typed"] = MakeCallable([](const std::string& v) { return v; }, ArgInfo{ "v" });
+        params["ws"] = std::wstring(L"<i>");
+        params["typedMarkup"] = MakeCallable(&MarkupIdentity, ArgInfo{ "v" });
+        params["typedWMarkup"] = MakeCallable(&WMarkupIdentity, ArgInfo{ "v" });
         return params;
     }
 
@@ -895,7 +943,10 @@ INSTANTIATE_TEST_SUITE_P(Markup, MarkupTest, ::testing::Values(
     MarkupRow{ "{{ x|replace('b','i') }}", "<i>", "<i>" },
     MarkupRow{ "{{ x|string }}", "<b>", "<b>" },
     // A typed std::string parameter receives the text of a Markup, escaped again when it comes back as a plain string
-    MarkupRow{ "{{ typed(x) }}", "&lt;b&gt;", "<b>" }
+    MarkupRow{ "{{ typed(x) }}", "&lt;b&gt;", "<b>" },
+    // A typed Markup parameter given text of the other width converts it: a Markup stays one, a string is escaped (docs/tasks/0296)
+    MarkupRow{ "{{ typedMarkup(x) }}|{{ typedMarkup(wx) }}|{{ typedMarkup(s) }}|{{ typedMarkup(ws) }}", "<b>|<b>|&lt;i&gt;|&lt;i&gt;", "<b>|<b>|&lt;i&gt;|&lt;i&gt;" },
+    MarkupRow{ "{{ typedWMarkup(x) }}|{{ typedWMarkup(wx) }}|{{ typedWMarkup(s) }}|{{ typedWMarkup(ws) }}", "<b>|<b>|&lt;i&gt;|&lt;i&gt;", "<b>|<b>|&lt;i&gt;|&lt;i&gt;" }
 ));
 // clang-format on
 
