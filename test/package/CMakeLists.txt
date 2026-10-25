@@ -40,10 +40,10 @@ set_tests_properties(abi_probe_v1_does_not_link PROPERTIES PASS_REGULAR_EXPRESSI
 
 # check_package.cmake points PKG_CONFIG_PATH at the install and turns this on. pkg-config
 # lists the private dependencies of a static build only in the internal deps mode, where
-# it knows them.
+# it knows them (external-boost installs the internal mode's pkg-config file).
 option(JINJA2CPP_CHECK_PKGCONFIG "Also build a consumer from jinja2cpp.pc" OFF)
 find_package(PkgConfig QUIET)
-if (JINJA2CPP_CHECK_PKGCONFIG AND PKG_CONFIG_FOUND AND NOT WIN32 AND (JINJA2CPP_EXPECT_SHARED OR jinja2cpp_DEPS_MODE STREQUAL "internal"))
+if (JINJA2CPP_CHECK_PKGCONFIG AND PKG_CONFIG_FOUND AND NOT WIN32 AND (JINJA2CPP_EXPECT_SHARED OR jinja2cpp_DEPS_MODE MATCHES "^(internal|external-boost)$"))
     pkg_check_modules(J2C REQUIRED jinja2cpp)
     if (NOT J2C_VERSION STREQUAL jinja2cpp_VERSION)
         message(FATAL_ERROR "pkg-config version ${J2C_VERSION} != CMake package version ${jinja2cpp_VERSION}")
