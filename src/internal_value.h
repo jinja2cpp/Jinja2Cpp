@@ -93,7 +93,7 @@ JINJA2CPP_EXPORT void DestroyValueObject(const ValueObject* obj) noexcept;
 
 // The base of every object a value owns: a long string, a list or map accessor, a pair, a
 // callable, the info of an undefined value. Values share such objects through one
-// boost::intrusive_ptr (docs/tasks/0140), so the rest of a value is trivially copyable and
+// IntrusivePtr (docs/tasks/0140), so the rest of a value is trivially copyable and
 // copying it is a memcpy plus, for an owning value, one reference count increment. The
 // objects are immutable once shared, apart from state their classes mark mutable; the count
 // is atomic, as templates and their constants are shared by concurrent renders.
@@ -132,7 +132,7 @@ public:
     // value it was taken from alive
     [[nodiscard]] bool IsAnchor() const noexcept { return (m_flags & AnchorFlag) != 0; }
 
-    // boost::intrusive_ptr's hooks
+    // IntrusivePtr's hooks
     // NOLINTNEXTLINE(readability-identifier-naming)
     friend void intrusive_ptr_add_ref(const ValueObject* obj) noexcept { obj->m_refCount.fetch_add(1, std::memory_order_relaxed); }
     // NOLINTNEXTLINE(readability-identifier-naming)
