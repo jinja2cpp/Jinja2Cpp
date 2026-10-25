@@ -336,6 +336,8 @@ TEST(ExpressionTest, CyclesThroughObjects)
     EXPECT_EQ("1", render("{% set ns = namespace() %}{% set ns.l = [ns]|groupby('x') %}{{ ns.l|length }}"));
     EXPECT_EQ("1", render("{% set ns = namespace() %}{% set ns.l = [ns] %}{% set ns.f = ns.l.append %}{{ ns.l|length }}"));
     EXPECT_EQ("1", render("{% set l = [] %}{% set d = dict(a=l) %}{% for p in d|dictsort %}{% do l.append(p) %}{% endfor %}{{ l|length }}"));
+    EXPECT_EQ("True", render("{% set ns = namespace() %}{% set ns.j = joiner(ns) %}{{ ns.j() }}{{ ns.j() is sameas ns }}"));
+    EXPECT_EQ("TrueFalse", render("{% set ns = namespace() %}{% for i in [1, 1] %}{{ loop.changed(ns) }}{% set ns.lp = loop %}{% endfor %}"));
     // A cycler keeps its position through the collector's view of it
     EXPECT_EQ("a,b,a|1|b", render("{% set c = cycler('a', 'b') %}{{ c.next() }},{{ c.next() }},{{ c.next() }}|{{ c.pos }}|{{ c.current }}"));
 }

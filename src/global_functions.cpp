@@ -243,7 +243,7 @@ void CheckNoArguments(const CallParams& params, const char* method)
 }
 
 // A cycler's position and items, kept as a list [pos, *items] that its methods and properties
-// hold as their receiver (BoundMethodCall): the cycle collector sees the items there, which
+// hold as their receiver (and a joiner's state likewise) (BoundMethodCall): the cycle collector sees the items there, which
 // a lambda's captures would hide (docs/tasks/0251). Empty once the collector freed the cycler
 InternalValueList* CyclerState(const InternalValue& state)
 {
@@ -321,21 +321,31 @@ InternalValue CallCycler(const CallParams& params, RenderContext&)
 }
 
 // joiner(sep=', '): a callable that returns '' the first time, then sep
+// A joiner's state, the list [used, sep] its call holds as its receiver, where the cycle
+// collector sees the separator (docs/tasks/0251)
+InternalValue CallJoinerObject(const InternalValue& self, const CallParams& callParams, RenderContext&)
+{
+    CheckNoArguments(callParams, "Joiner.__call__");
+    auto* state = CyclerState(self);
+    if (!state || state->size() != 2)
+    {
+        return InternalValue();
+    }
+    if (ConvertToBool((*state)[0]))
+    {
+        return (*state)[1];
+    }
+    (*state)[0] = true;
+    return InternalValue(std::string());
+}
+
 InternalValue CallJoiner(const CallParams& params, RenderContext&)
 {
     auto args = ParseArgs({ { "sep", false, ", "s } }, params, "joiner");
-    auto used = std::make_shared<bool>(false);
+    const InternalValue state = ListAdapter::CreateAdapter(InternalValueList{ InternalValue(false), args["sep"] });
     InternalValueMap joiner;
     joiner["sep"] = args["sep"];
-    joiner["operator()"] = MakeFunction([used, sep = args["sep"]](const CallParams& callParams, RenderContext&) {
-        CheckNoArguments(callParams, "Joiner.__call__");
-        if (*used)
-        {
-            return sep;
-        }
-        *used = true;
-        return InternalValue(std::string());
-    });
+    joiner["operator()"] = MakeFunction(BoundMethodCall{ state, &CallJoinerObject });
     return CreateObjectAdapter(std::move(joiner), "Joiner");
 }
 
