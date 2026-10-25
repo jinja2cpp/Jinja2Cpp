@@ -8,5 +8,5 @@ statements.nested_macro_escapes_its_call output    0165 deliberate: a macro that
 statements.block_reference_new_each_read output    0214 deliberate: self.b is one stored callable, so it equals itself; Jinja2 allocates a new BlockReference on each read
 statements.loop_cycle_string              output      0214 loop.cycle|string prints nothing; Jinja2 prints the bound method <bound method LoopContext.cycle of <LoopContext 1/2>>
 statements.loop_iter_inner_body_reads_index output    0304 a for loop over `loop` fetches its next item before the body runs, advancing the outer loop early; Jinja2's LoopContext fetches lazily
-statements.macro_closure_outlives_outer_call  output      0322 a macro defined in a macro loses the outer call's names once that call returned
+statements.macro_closure_outlives_outer_call  output      0326 a macro defined in a macro loses the outer call's names once that call returned
 statements.stored_self_sees_includer_names  output      0323 a `self` an include stored does not see names the includer set
