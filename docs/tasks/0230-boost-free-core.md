@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/650, https://github.com/jinja2cpp/Jinja2Cpp/pull/652, https://github.com/jinja2cpp/Jinja2Cpp/pull/654, https://github.com/jinja2cpp/Jinja2Cpp/pull/655
 priority: medium
 area: build
 touches: [src/, thirdparty/, CMakeLists.txt, cmake/public/, sbom/components.json]
