@@ -67,8 +67,9 @@ postponed list in section 5. On 2026-10-18 that is 69 open tasks (this one inclu
 | Windows | MSVC (windows-latest) x64 | 17, 20, 23 (`/std:c++latest`) | /MT, /MD, DLL | `windows-build.yml` |
 | macOS | AppleClang, macOS 14 and 15 | 17, 20, 23 | static | `macos-build.yml` |
 
-JSON bindings: boost (default), nlohmann, rapid, all in the Linux matrix. "Supported" for
-2.0 means this table; anything else is best effort. D9 asks to confirm it.
+JSON bindings: boost (default) and nlohmann, both in the Linux matrix; the built-in
+RapidJSON binding is retired (D20, [0303](tasks/0303-retire-rapidjson-backend.md)).
+"Supported" for 2.0 means this table; anything else is best effort. D9 asks to confirm it.
 
 ## 3. Gates
 

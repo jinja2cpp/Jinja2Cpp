@@ -60,7 +60,7 @@ Useful configurations (see `.github/workflows/` for the actual CI matrix):
 |---|---|
 | Language standard | `-DJINJA2CPP_CXX_STANDARD=17`, `20`, `23` or `26` |
 | Address/undefined sanitizers | `-DJINJA2CPP_WITH_SANITIZERS=address+undefined -DCMAKE_BUILD_TYPE=RelWithDebInfo` |
-| JSON bindings | `-DJINJA2CPP_WITH_JSON_BINDINGS=boost`, `nlohmann` or `rapid` |
+| JSON bindings | `-DJINJA2CPP_WITH_JSON_BINDINGS=boost` or `nlohmann` |
 | Shared library | `-DJINJA2CPP_BUILD_SHARED=ON` |
 | Node reference checks | `-DJINJA2CPP_NODEREF_CHECKS=OFF`, `ON` (Release default), `FULL` (Debug/sanitizer/fuzz default) |
 | Coverage | `-DJINJA2CPP_WITH_COVERAGE=ON` (GCC/Clang, Debug) |

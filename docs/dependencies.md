@@ -49,7 +49,6 @@ source and committed), `system` (found on the machine), `ci` (GitHub Actions).
 | HTML entities | Python 3.12 `html.entities` | PSF-2.0 | mandatory | internal | generated | MarkupSafe-compatible unescape | Data only; keep |
 | Boost.JSON | 1.92.0 | BSL-1.0 | alternative (tested default), and test | public-optional | fetched | the opt-in adapter `jinja2cpp/binding/boost_json.h` and its test; `{% meta %}` is read by `src/json_reader.cpp` since 0230 step D6 | Done: the Boost release is fetched only for this test (tests ON with `JINJA2CPP_WITH_JSON_BINDINGS=boost`) and never installed (0230 D7a) |
 | nlohmann_json | 3.12.0 | MIT | alternative, and test | public-optional | fetched | the same adapter, header-only; the tests' JSON reader | Keep: tests only |
-| RapidJSON | 24b5e7a8, patched | MIT | alternative | public-optional | fetched | the same adapter, for RapidJSON users | Being retired as a built-in backend (0303) |
 | Boost.Multiprecision | 1.92.0 | BSL-1.0 | optional, and test | public-optional | fetched | `cpp_int` behind the built-in big-integer backend with `-DJINJA2CPP_WITH_BIGINT=boost` (off by default) and the opt-in adapter `jinja2cpp/big_int/boost_cpp_int.h`; standalone mode, so only its own and Boost.Config's headers | Done: fetched on its own with Boost.Config (boostorg/multiprecision and boostorg/config at boost-1.92.0, pinned by hash), only with tests ON or `bigint=boost` (0230 D7a) |
 
 ### Boost, library by library
@@ -125,10 +124,8 @@ deprecated alias of `internal`, removed in 3.0.
    records what changed; robin_hood's upstream being archived is the first place where
    the fork has to be paid for (docs/tasks/0231).
 5. **Pins that disagree.** Conan mode builds against expected-lite 0.9.0, a header-only
-   Boost 1.91.0 (tests and `bigint=boost` only) and an unpatched RapidJSON while internal
-   mode uses 0.10.0, 1.92.0 and a patched
-   commit. ConanCenter has no newer expected-lite or Boost, and the RapidJSON patches only
-   touch CMake files, so each difference carries a `conan_why` in components.json and a
+   Boost 1.91.0 (tests and `bigint=boost` only) while internal mode uses 0.10.0 and
+   1.92.0. ConanCenter has no newer expected-lite or Boost, so each difference carries a `conan_why` in components.json and a
    comment in `conanfile.txt`; `scripts/sbom.py --check` fails a difference without one
    (docs/tasks/0232). googletest, benchmark and every GitHub Action are now pinned
    immutably (SHA-256 or commit SHA).

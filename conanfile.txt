@@ -8,10 +8,6 @@ boost/1.91.0
 expected-lite/0.9.0
 fmt/12.2.0
 nlohmann_json/3.12.0
-# RapidJSON: cci.20250205 is the commit internal mode pins (24b5e7a8, same sha256). Internal
-# mode's two patches only change RapidJSON's CMake files, which this header-only package
-# does not use, so none is needed here.
-rapidjson/cci.20250205
 
 [options]
 # Boost is only Multiprecision for -DJINJA2CPP_WITH_BIGINT=boost and the tests (docs/tasks/0230)
