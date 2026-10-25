@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -93,6 +94,8 @@ TEST(SpanTest, Subviews)
     EXPECT_EQ(range[0], 2);
 }
 
+// The objects live in a pool the test owns and release only records the destruction: had
+// it deleted them, GCC 12 warns (-Wuse-after-free) on reads the counts rule out
 struct Counted
 {
     virtual ~Counted() = default;
@@ -107,7 +110,6 @@ struct Counted
         if (--obj->refs == 0)
         {
             ++*obj->destroyed;
-            delete obj; // NOLINT(cppcoreguidelines-owning-memory)
         }
     }
 };
@@ -116,11 +118,13 @@ struct CountedChild : Counted
 {
 };
 
-IntrusivePtr<Counted> MakeCounted(int& destroyed)
+using CountedPool = std::vector<std::unique_ptr<CountedChild>>;
+
+IntrusivePtr<Counted> MakeCounted(CountedPool& pool, int& destroyed)
 {
-    auto* obj = new CountedChild; // NOLINT(cppcoreguidelines-owning-memory): owned by the pointer
-    obj->destroyed = &destroyed;
-    return IntrusivePtr<Counted>(obj);
+    pool.push_back(std::make_unique<CountedChild>());
+    pool.back()->destroyed = &destroyed;
+    return IntrusivePtr<Counted>(pool.back().get());
 }
 
 static_assert(sizeof(IntrusivePtr<Counted>) == sizeof(void*));
@@ -131,9 +135,10 @@ static_assert(!std::is_convertible_v<Counted*, IntrusivePtr<Counted>>);
 
 TEST(IntrusivePtrTest, CountsReferences)
 {
+    CountedPool pool;
     int destroyed = 0;
     {
-        auto ptr = MakeCounted(destroyed);
+        auto ptr = MakeCounted(pool, destroyed);
         EXPECT_EQ(ptr->refs, 1);
         {
             const auto copy = ptr; // NOLINT(performance-unnecessary-copy-initialization): counts the copy
@@ -170,7 +175,7 @@ TEST(IntrusivePtrTest, CountsReferences)
     }
     EXPECT_EQ(destroyed, 1);
 
-    auto ptr = MakeCounted(destroyed);
+    auto ptr = MakeCounted(pool, destroyed);
     ptr.reset();
     EXPECT_EQ(destroyed, 2);
 }
