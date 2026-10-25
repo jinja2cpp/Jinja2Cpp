@@ -374,7 +374,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0300](0300-module-export-callable-gaps.md) | Callables that do not cross a `Template::MakeModule` export | parity | low | open |
 | [0301](0301-module-call-loads-accumulate.md) | A `Template::MakeModule` module keeps what each of its calls loads | robustness | medium | open |
 | [0302](0302-simdjson-binding.md) | An optional simdjson binding | api | low | open |
-| [0303](0303-retire-rapidjson-backend.md) | Retire the built-in RapidJSON backend | build | medium | open |
+| [0303](0303-retire-rapidjson-backend.md) | Retire the built-in RapidJSON backend | build | medium | done |
 | [0304](0304-loop-over-loop-peeks-early.md) | A for loop over `loop` advances the outer loop early | parity | low | open |
 | [0305](0305-builtin-class-repr.md) | The builtin classes print as `<class 'range'>` | parity | low | open |
 | [0306](0306-filter-test-argument-unpacking.md) | `*args` and `**kwargs` in filter and test calls | parity | low | open |
