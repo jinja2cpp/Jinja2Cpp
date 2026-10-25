@@ -9,6 +9,8 @@
 
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/binding/nlohmann_json.h>
+#include <jinja2cpp/json_adapter.h>
+#include <jinja2cpp/reflected_value.h>
 
 #include "conformance.h"
 

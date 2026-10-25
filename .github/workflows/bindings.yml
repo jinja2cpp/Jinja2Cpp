@@ -20,6 +20,8 @@ on:
       - 'test/binding/**'
       - 'test/package/**'
       - 'cmake/public/**'
+      - 'thirdparty/**'
+      - 'CMakeLists.txt'
       - '.github/workflows/bindings.yml'
   schedule:
     - cron: '41 2 * * *'

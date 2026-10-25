@@ -75,9 +75,16 @@ jinja2cpp_add_binding(NAME boost_json
     PC_LIBS "-lboost_json -lboost_container")
 
 # Header-only. In the build tree it takes the headers the build already uses for the
-# built-in backend (thirdparty/CMakeLists.txt): standalone Multiprecision or Boost::headers.
+# built-in backend or the tests (thirdparty/CMakeLists.txt): standalone Multiprecision or
+# Boost::headers. A build with neither, such as an add_subdirectory consumer's with tests off
+# and no built-in backend, falls back to Boost::headers, as the installed component does.
+if (TARGET jinja2cpp_boost_mp_headers)
+    set(_jinja2cpp_mp_build_target jinja2cpp_boost_mp_headers)
+else ()
+    set(_jinja2cpp_mp_build_target Boost::headers)
+endif ()
 jinja2cpp_add_binding(NAME boost_multiprecision
     DESCRIPTION "Boost.Multiprecision big integers"
     FIND Boost 1.75 CONFIG
     TARGETS Boost::headers
-    BUILD_TARGETS jinja2cpp_boost_mp_headers)
+    BUILD_TARGETS ${_jinja2cpp_mp_build_target})
