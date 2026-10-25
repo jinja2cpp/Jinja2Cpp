@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <memory>
-#include <new>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -171,6 +170,7 @@ void CycleCollector::CollectOnce()
     {
         visit(candidate.get());
     }
+    // NOLINTNEXTLINE(modernize-loop-convert): Traverse appends to `order`, which a range-for would not see
     for (size_t next = 0; next != order.size(); ++next)
     {
         order[next]->object->Traverse(visit);

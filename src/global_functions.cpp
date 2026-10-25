@@ -245,9 +245,10 @@ void CheckNoArguments(const CallParams& params, const char* method)
 // A cycler's position and items, kept as a list [pos, *items] that its methods and properties
 // hold as their receiver (BoundMethodCall): the cycle collector sees the items there, which
 // a lambda's captures would hide (docs/tasks/0251). Empty once the collector freed the cycler
-InternalValueList& CyclerState(const InternalValue& state)
+InternalValueList* CyclerState(const InternalValue& state)
 {
-    return *AsList(state)->GetMutableItems();
+    const auto list = AsList(state);
+    return list ? list->GetMutableItems() : nullptr;
 }
 
 size_t CyclerPos(const InternalValueList& state)
@@ -257,37 +258,37 @@ size_t CyclerPos(const InternalValueList& state)
 
 InternalValue CyclerPosProperty(const InternalValue& self, const CallParams&, RenderContext&)
 {
-    const auto& state = CyclerState(self);
-    return state.empty() ? InternalValue() : state[0];
+    const auto* state = CyclerState(self);
+    return state && !state->empty() ? (*state)[0] : InternalValue();
 }
 
 InternalValue CyclerCurrent(const InternalValue& self, const CallParams&, RenderContext&)
 {
-    const auto& state = CyclerState(self);
-    return state.size() < 2 ? InternalValue() : state[CyclerPos(state) + 1];
+    const auto* state = CyclerState(self);
+    return state && state->size() > 1 ? (*state)[CyclerPos(*state) + 1] : InternalValue();
 }
 
 InternalValue CyclerNext(const InternalValue& self, const CallParams& callParams, RenderContext&)
 {
     CheckNoArguments(callParams, "Cycler.next");
-    auto& state = CyclerState(self);
-    if (state.size() < 2)
+    auto* state = CyclerState(self);
+    if (!state || state->size() < 2)
     {
         return InternalValue();
     }
-    const auto pos = CyclerPos(state);
-    auto result = state[pos + 1];
-    state[0] = static_cast<int64_t>((pos + 1) % (state.size() - 1));
+    const auto pos = CyclerPos(*state);
+    auto result = (*state)[pos + 1];
+    (*state)[0] = static_cast<int64_t>((pos + 1) % (state->size() - 1));
     return result;
 }
 
 InternalValue CyclerReset(const InternalValue& self, const CallParams& callParams, RenderContext&)
 {
     CheckNoArguments(callParams, "Cycler.reset");
-    auto& state = CyclerState(self);
-    if (!state.empty())
+    auto* state = CyclerState(self);
+    if (state && !state->empty())
     {
-        state[0] = int64_t{ 0 };
+        (*state)[0] = int64_t{ 0 };
     }
     return InternalValue(NoneValue());
 }
