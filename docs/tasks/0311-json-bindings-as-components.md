@@ -1,5 +1,6 @@
 ---
-status: in-progress
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/658, https://github.com/jinja2cpp/Jinja2Cpp/pull/661, https://github.com/jinja2cpp/Jinja2Cpp/pull/664
 priority: high
 area: build
 depends: [0230]
