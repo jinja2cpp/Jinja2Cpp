@@ -160,10 +160,9 @@ private:
  * auto text = module.exports["greet"].get<jinja2::UserCallable>().callable(params);
  * ```
  * A macro call that fails throws \ref BadResultAccess "BadResultAccess<CharT>" with the error
- * (a user callable that calls it inside a render passes that error on to the render). Once the
- * template is loaded again, a call fails with ErrorCode::TemplateExpired. Calls of one module's
- * macros from several threads take turns; like a render, they must not run while the template
- * loads. A macro stored in the environment's globals keeps its template, and so the environment,
+ * (a user callable that calls it inside a render passes that error on to the render). The module
+ * keeps the template it was made from: loading the template again does not change it. Calls of one
+ * module's macros from several threads take turns. A macro stored in the environment's globals keeps its template, and so the environment,
  * alive: remove it to free them. So does one passed to a macro of its own module that stores it
  * in the module (`{% set ns.f = f %}`): that module is then never freed.
  */
@@ -197,8 +196,13 @@ using TemplateModuleW = BasicTemplateModule<wchar_t>;
  * ```
  *
  * Thread safety: the `const` members (rendering and metadata access) may be called on one template
- * from several threads at once. `Load` and `LoadFromFile` replace the template and must not run
- * concurrently with any other call on the same object. Copies share the loaded template.
+ * from several threads at once. `Load` and `LoadFromFile` must not run concurrently with any other
+ * call on the same object.
+ *
+ * Copies share the loaded template until one of them loads again: `Load` replaces the template for
+ * that object only. Other copies, the environment's cache, renders already running (including the
+ * one of a host callable that calls `Load`) and modules keep the template they had, as a Python
+ * `Template` is immutable.
  */
 template<typename CharT>
 class BasicTemplate

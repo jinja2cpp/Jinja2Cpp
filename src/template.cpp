@@ -33,6 +33,14 @@ auto GetImpl(const std::shared_ptr<ITemplateImpl>& impl)
     return static_cast<TemplateImpl<CharT>*>(impl.get());
 }
 
+// A render holds the template it renders: a Load on the same object, from host code the render
+// calls, replaces this object's tree and leaves the render's (docs/tasks/0317)
+template<typename CharT>
+auto PinImpl(const std::shared_ptr<ITemplateImpl>& impl)
+{
+    return std::static_pointer_cast<const TemplateImpl<CharT>>(impl);
+}
+
 template<typename CharT>
 Result<void, CharT> ToResult(std::optional<BasicErrorInfo<CharT>> error)
 {
@@ -77,6 +85,27 @@ private:
     bool m_succeeded = false;
 };
 
+// Parses into a new template and puts it in place of `impl` only if parsing succeeds. Copies of
+// the object, the environment's cache, renders and modules keep the tree they had, as a Python
+// Template is immutable (docs/tasks/0317)
+template<typename CharT>
+std::optional<BasicErrorInfo<CharT>> LoadNew(std::shared_ptr<ITemplateImpl>& impl, std::basic_string<CharT> source, std::string name)
+{
+    auto* current = GetImpl<CharT>(impl);
+    // The first Load of a template no other object holds yet (as LoadTemplate's) parses in place
+    if (!current->GetRenderer() && impl.use_count() == 1)
+    {
+        return current->Load(std::move(source), std::move(name));
+    }
+    auto loaded = std::make_shared<TemplateImpl<CharT>>(*current, nullptr);
+    auto error = loaded->Load(std::move(source), std::move(name));
+    if (!error)
+    {
+        impl = std::move(loaded);
+    }
+    return error;
+}
+
 template<typename CharT>
 struct FileStream;
 
@@ -110,7 +139,7 @@ Result<void, CharT> BasicTemplate<CharT>::Load(StringViewType source, std::strin
     {
         return ToResult(std::optional(impl->SourceTooLongError(name)));
     }
-    return ToResult(impl->Load(StringType(source), std::move(name)));
+    return ToResult(LoadNew<CharT>(m_impl, StringType(source), std::move(name)));
 }
 
 template<typename CharT>
@@ -135,7 +164,7 @@ Result<void, CharT> BasicTemplate<CharT>::Load(std::basic_istream<CharT>& stream
         }
     }
 
-    return ToResult(impl->Load(std::move(t), std::move(name)));
+    return ToResult(LoadNew<CharT>(m_impl, std::move(t), std::move(name)));
 }
 
 template<typename CharT>
@@ -161,7 +190,7 @@ template<typename CharT>
 Result<void, CharT> BasicTemplate<CharT>::Render(std::basic_ostream<CharT>& os, const ValuesMap& params) const
 {
     StringType buffer;
-    auto result = GetImpl<CharT>(m_impl)->Render(buffer, params);
+    auto result = PinImpl<CharT>(m_impl)->Render(buffer, params);
 
     if (!result)
     {
@@ -175,7 +204,7 @@ template<typename CharT>
 Result<void, CharT> BasicTemplate<CharT>::RenderGeneric(std::basic_ostream<CharT>& os, const GenericMap& params) const
 {
     StringType buffer;
-    auto result = GetImpl<CharT>(m_impl)->Render(buffer, params);
+    auto result = PinImpl<CharT>(m_impl)->Render(buffer, params);
 
     if (!result)
     {
@@ -192,7 +221,7 @@ auto BasicTemplate<CharT>::RenderAsString(const ValuesMap& params) const -> Resu
     // returning a separate buffer moves the string, and GCC may then call libstdc++'s out-of-line
     // move constructor (+15 Ir per render when an unrelated header change shifted its inlining, #642)
     Result<StringType, CharT> rendered;
-    if (auto error = GetImpl<CharT>(m_impl)->Render(*rendered, params))
+    if (auto error = PinImpl<CharT>(m_impl)->Render(*rendered, params))
     {
         rendered = MakeUnexpected(std::move(*error));
     }
@@ -206,7 +235,7 @@ auto BasicTemplate<CharT>::RenderAsStringGeneric(const GenericMap& params) const
     // returning a separate buffer moves the string, and GCC may then call libstdc++'s out-of-line
     // move constructor (+15 Ir per render when an unrelated header change shifted its inlining, #642)
     Result<StringType, CharT> rendered;
-    if (auto error = GetImpl<CharT>(m_impl)->Render(*rendered, params))
+    if (auto error = PinImpl<CharT>(m_impl)->Render(*rendered, params))
     {
         rendered = MakeUnexpected(std::move(*error));
     }
@@ -217,26 +246,26 @@ template<typename CharT>
 Result<void, CharT> BasicTemplate<CharT>::RenderTo(StringType& out, const ValuesMap& params) const
 {
     TruncateOnError guard(out);
-    return ToResult(guard.Done(GetImpl<CharT>(m_impl)->Render(out, params)));
+    return ToResult(guard.Done(PinImpl<CharT>(m_impl)->Render(out, params)));
 }
 
 template<typename CharT>
 Result<void, CharT> BasicTemplate<CharT>::RenderToGeneric(StringType& out, const GenericMap& params) const
 {
     TruncateOnError guard(out);
-    return ToResult(guard.Done(GetImpl<CharT>(m_impl)->Render(out, params)));
+    return ToResult(guard.Done(PinImpl<CharT>(m_impl)->Render(out, params)));
 }
 
 template<typename CharT>
 Result<void, CharT> BasicTemplate<CharT>::RenderTo(BasicOutputSink<CharT>& sink, const ValuesMap& params) const
 {
-    return ToResult(GetImpl<CharT>(m_impl)->Render(sink, params));
+    return ToResult(PinImpl<CharT>(m_impl)->Render(sink, params));
 }
 
 template<typename CharT>
 Result<void, CharT> BasicTemplate<CharT>::RenderToGeneric(BasicOutputSink<CharT>& sink, const GenericMap& params) const
 {
-    return ToResult(GetImpl<CharT>(m_impl)->Render(sink, params));
+    return ToResult(PinImpl<CharT>(m_impl)->Render(sink, params));
 }
 
 template<typename CharT>

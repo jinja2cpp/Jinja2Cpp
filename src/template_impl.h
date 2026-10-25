@@ -248,6 +248,14 @@ public:
         , m_settings(env ? detail::TemplateEnvAccess::GetImpl(*env)->GetLoadSettings() : detail::DefaultLoadSettings())
     {
     }
+    // An empty template with the environment and settings of `prototype`, for BasicTemplate::Load
+    // to parse into: a Load never changes a tree that copies, the cache, renders or modules hold
+    explicit TemplateImpl(const TemplateImpl& prototype, std::nullptr_t /*empty*/)
+        : m_envHandle(detail::TemplateEnvAccess::MakeHandle(prototype.m_env))
+        , m_env(prototype.m_env ? &m_envHandle : nullptr)
+        , m_settings(prototype.m_settings)
+    {
+    }
 
     // The root of the tree, resolved through Nodes()
     [[nodiscard]] NodeRef<TemplateRenderer> GetRenderer() const { return m_renderer; }
@@ -345,8 +353,6 @@ public:
         m_origin.name = &m_templateName;
         m_origin.isWide = std::is_same_v<CharT, wchar_t>;
         m_metadata.reset();
-        // The modules made from the tree this replaced see it gone (TemplateModuleState)
-        m_loadGeneration.fetch_add(1, std::memory_order_relaxed);
         return std::optional<BasicErrorInfo<CharT>>();
     }
 
@@ -1000,11 +1006,6 @@ private:
     std::string m_templateName;
     bool m_isNamed = false;
     bool m_mayReadLoop = false;
-    // Counts the successful Loads: a module's macro refuses to run in a tree a later Load
-    // replaced (TemplateModuleState). Atomic only so that a misuse is not a data race; 32 bits
-    // fit the padding after the flags, so a template is no bigger, and a module sees a stale
-    // tree as current only after exactly 2^32 more Loads
-    std::atomic<uint32_t> m_loadGeneration{ 0 };
     // Owns the tree
     SealedArena m_nodes;
     NodeRef<TemplateRenderer> m_renderer;

@@ -264,6 +264,7 @@ TEST(TemplateApiTest, GlobalsChangedWhileRendering)
     EXPECT_EQ(0, bad.load());
 }
 
+// Equal while the objects share one loaded template: a copy, until one of them loads again
 TEST(TemplateApiTest, EqualityComparesTheSharedTemplate)
 {
     Template a;
@@ -304,6 +305,69 @@ TEST(TemplateApiTest, FailedReloadKeepsPreviousTemplate)
     auto unloaded = never.RenderAsString({});
     ASSERT_FALSE(!!unloaded);
     EXPECT_EQ(ErrorCode::TemplateNotParsed, unloaded.error().GetCode());
+}
+
+// Load replaces the template for that object only: copies, the environment's cache, the
+// includes of the name and modules keep the tree they had, as Python's Template objects are
+// immutable (docs/tasks/0317, embedding contract 3.1.5)
+TEST(TemplateApiTest, LoadReplacesOnlyThisObject)
+{
+    Template a;
+    ASSERT_TRUE(!!a.Load("old {{ x }}"));
+    Template b = a;
+    ASSERT_TRUE(!!a.Load("new {{ x }}"));
+    EXPECT_TRUE(a != b);
+    EXPECT_EQ("new 1", a.RenderAsString({ { "x", 1 } }).value());
+    EXPECT_EQ("old 2", b.RenderAsString({ { "x", 2 } }).value());
+
+    // The cache: Load on a template LoadTemplate returned
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("part.j2", "cached{% macro m() %}macro{% endmacro %}");
+    fs->AddFile("main.j2", "[{% include 'part.j2' %}]");
+    TemplateEnv env;
+    env.AddFilesystemHandler({}, fs);
+    auto cached = env.LoadTemplate("part.j2").value();
+    auto module = cached.MakeModule().value();
+    auto host = env.LoadTemplate("part.j2").value();
+    ASSERT_TRUE(host == cached);
+    ASSERT_TRUE(!!host.Load("host's{% macro m() %}host's macro{% endmacro %}"));
+    EXPECT_EQ("host's", host.RenderAsString({}).value());
+    EXPECT_EQ("cached", env.LoadTemplate("part.j2").value().RenderAsString({}).value());
+    EXPECT_EQ("[cached]", env.LoadTemplate("main.j2").value().RenderAsString({}).value());
+    // A module made before the Load keeps working on its tree
+    UserCallableParams noArgs;
+    EXPECT_EQ("macro", module.exports["m"].As<UserCallable>().callable(noArgs).AsString());
+    EXPECT_EQ("host's macro", host.MakeModule().value().exports["m"].As<UserCallable>().callable(noArgs).AsString());
+
+    TemplateW wide;
+    ASSERT_TRUE(!!wide.Load(L"old"));
+    TemplateW wideCopy = wide;
+    ASSERT_TRUE(!!wide.Load(L"new"));
+    EXPECT_EQ(L"new", wide.RenderAsString({}).value());
+    EXPECT_EQ(L"old", wideCopy.RenderAsString({}).value());
+}
+
+// A host callable loads the template that is rendering: the render finishes on the tree it
+// started with, and the next render uses the new one (docs/tasks/0317, contract 3.3; ASan)
+TEST(TemplateApiTest, LoadOfTheRenderingTemplateFromACallable)
+{
+    Template tpl;
+    std::vector<bool> loaded;
+    ValuesMap params{ { "reload", MakeCallable([&tpl, &loaded]() {
+                            // Long enough to be outside the small-string buffer
+                            loaded.push_back(!!tpl.Load(std::string(100, 'n') + "{{ reload() }}"));
+                            return Value(std::string("|"));
+                        }) } };
+    const std::string oldText(100, 'o');
+    ASSERT_TRUE(!!tpl.Load(oldText + "{% for i in range(3) %}{{ reload() }}{{ i }}{% endfor %}" + oldText));
+    EXPECT_EQ(oldText + "|0|1|2" + oldText, tpl.RenderAsString(params).value());
+    EXPECT_EQ((std::vector<bool>{ true, true, true }), loaded);
+    EXPECT_EQ(std::string(100, 'n') + "|", tpl.RenderAsString(params).value());
+
+    std::string out;
+    ASSERT_TRUE(!!tpl.Load(oldText + "{{ reload() }}" + oldText));
+    ASSERT_TRUE(!!tpl.RenderTo(out, params));
+    EXPECT_EQ(oldText + "|" + oldText, out);
 }
 
 TEST(TemplateApiTest, MetadataStaysValidAcrossCalls)

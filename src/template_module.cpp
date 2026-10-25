@@ -310,7 +310,6 @@ struct TemplateModuleState
 
     TemplateModuleState(std::shared_ptr<const Impl> tpl, const ValuesMap& params)
         : impl(std::move(tpl))
-        , generation(impl->m_loadGeneration.load(std::memory_order_relaxed))
     {
         for (const auto& [name, value] : params)
         {
@@ -424,11 +423,11 @@ struct TemplateModuleState
         {
             return error;
         }
-        return ExpiredError(name, true);
+        return ExpiredError(name);
     }
 
-    // `ended`: a module made by an earlier call had ended, not the tree replaced
-    [[nodiscard]] BasicErrorInfo<CharT> ExpiredError(const std::string& name, bool ended = false) const
+    // A macro of a module that ended with an earlier call, called through `name`
+    [[nodiscard]] BasicErrorInfo<CharT> ExpiredError(const std::string& name) const
     {
         typename BasicErrorInfo<CharT>::Data errorData;
         errorData.code = ErrorCode::TemplateExpired;
@@ -436,10 +435,7 @@ struct TemplateModuleState
         errorData.srcLoc.line = 1;
         errorData.srcLoc.col = 1;
         errorData.extraParams.emplace_back(name);
-        if (ended)
-        {
-            errorData.extraParams.emplace_back(std::string("ended"));
-        }
+        errorData.extraParams.emplace_back(std::string("ended"));
         return BasicErrorInfo<CharT>(std::move(errorData));
     }
 
@@ -447,11 +443,6 @@ struct TemplateModuleState
     Value Call(const Callable& fn, const std::string& name, const UserCallableParams& ucParams)
     {
         const std::scoped_lock lock(mutex);
-        // The tree the callable runs in was replaced
-        if (impl->m_loadGeneration.load(std::memory_order_relaxed) != generation)
-        {
-            throw BadResultAccess<CharT>(ExpiredError(name));
-        }
         try
         {
             // First, so that it ends last: when nothing of the call holds values any more
@@ -513,8 +504,6 @@ struct TemplateModuleState
     }
 
     std::shared_ptr<const Impl> impl;
-    // The template's Load count when the module was made (TemplateImpl::m_loadGeneration)
-    uint32_t generation;
     // The params, until the module takes them
     InternalValueMap convertedParams;
     GlobalsSnapshot globals;

@@ -47,7 +47,7 @@ enum class ErrorCode
     IntegerOutOfRange = 16,        //!< Python's OverflowError for an integer: template arithmetic whose result is outside the `int64_t` range and has no big-integer backend, or an integer too big for a size or an index. ExtraParams[0] contains the message
     TemplateRuntimeError = 17,     //!< An operation of the template failed (Python's TypeError, ValueError, ...). ExtraParams[0] contains the message
     ResourceLimitExceeded = 18,    //!< A limit was passed: one of Settings::Limits, a built-in cap or a host's budget. ExtraParams[0] contains the message, ExtraParams[1] (for Settings::Limits) the name of the limit (`"maxRenderSteps"`)
-    TemplateExpired = 19,          //!< A macro of a \ref BasicTemplateModule was called after its template was loaded again, which replaced the tree the macro runs in, or it called a macro an earlier call stored, whose module ended with that call (docs/tasks/0301). ExtraParams[0] contains the macro's name; ExtraParams[1], in the second case, is "ended"
+    TemplateExpired = 19,          //!< A macro of a \ref BasicTemplateModule called a macro an earlier call stored, whose module ended with that call (docs/tasks/0301). ExtraParams[0] contains the macro's name, ExtraParams[1] is "ended". A Load no longer ends a module (docs/tasks/0321)
     DataReadError = 20,            //!< \ref ToValue could not read a JSON document: its JsonTraits reported an error. ExtraParams[0] contains the message, ExtraParams[1] the JSON path of the value
     ExpectedStringLiteral = 1001,  //!< String literal expected
     ExpectedIdentifier = 1002,     //!< Identifier expected
