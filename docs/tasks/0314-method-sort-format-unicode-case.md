@@ -5,6 +5,7 @@ area: parity
 depends: [0020]
 touches: [src/value_methods.cpp#StrOps, src/value_methods.cpp#ListMethods, src/case_mapping.h, src/unicode_case.h, scripts/gen_unicode_case.py]
 shares: [src/string_converter_filter.cpp, test/parity/cases/methods.py, test/parity/divergences/methods.txt]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/662
 ---
 # Methods 0020 left out: list.sort, nested format fields, Unicode case
 
