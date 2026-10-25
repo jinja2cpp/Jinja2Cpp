@@ -312,12 +312,11 @@ struct ToyStream
     static constexpr bool kSortedKeys = false;
     static constexpr bool kViewable = false;
     static constexpr bool kBigIntText = true;
-    static constexpr bool kViewDuplicateKeys = true;
 };
 } // namespace
 
 using ConformingBindings = ::testing::Types<NlohmannSorted, NlohmannOrdered, ToyView, ToyStream>;
-INSTANTIATE_TYPED_TEST_SUITE_P(Nlohmann, JsonConformance, ConformingBindings);
+INSTANTIATE_TYPED_TEST_SUITE_P(Nlohmann, JsonConformance, ConformingBindings, JsonBindingNames);
 
 namespace
 {

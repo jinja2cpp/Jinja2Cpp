@@ -10,7 +10,7 @@
 //       static constexpr bool kSortedKeys = false;        // objects iterate in key order (nlohmann::json)
 //       static constexpr bool kViewable = true;           // false for copy-only traits: the view modes are skipped
 //       static constexpr bool kBigIntText = false;        // integers beyond uint64 are exact (JsonKind::BigInt)
-//       static constexpr bool kViewDuplicateKeys = false; // the view of {"a":1,"a":2} lists the key twice
+//       static constexpr bool kViewDuplicateKeys = false; // the view of {"a":1,"a":2} lists the key twice (viewable only)
 //   };
 //   INSTANTIATE_TYPED_TEST_SUITE_P(Nlohmann, JsonConformance, ::testing::Types<NlohmannOrdered>);
 //
@@ -911,6 +911,16 @@ TYPED_TEST_P(JsonConformance, DeepViewRendersOrFailsCleanly)
         }
     });
 }
+
+// Test names for INSTANTIATE_TYPED_TEST_SUITE_P: clang's -Wpedantic rejects the macro without its optional argument
+struct JsonBindingNames
+{
+    template<typename B>
+    static std::string GetName(int idx)
+    {
+        return std::to_string(idx);
+    }
+};
 
 REGISTER_TYPED_TEST_SUITE_P(JsonConformance, Scalars, BigIntegers, Nesting, KeyOrder, MissingKeysAndIndexes, EmptyContainers, NullMemberAndNullItem, Strings, IterationAndFilters, EnumeratorPastTheEnd, Equality, LifetimeInTemplates, LifetimeOfItemsWithoutEngine, ConcurrentRenders, CopyLimits, RepeatedKeys, DeepViewRendersOrFailsCleanly);
 

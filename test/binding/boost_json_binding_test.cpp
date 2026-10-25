@@ -260,4 +260,4 @@ struct BoostJson
 } // namespace
 
 static_assert(jinja2::IsJsonViewable<boost::json::value> && jinja2::IsJsonCopyable<boost::json::value>);
-INSTANTIATE_TYPED_TEST_SUITE_P(Boost, JsonConformance, ::testing::Types<BoostJson>);
+INSTANTIATE_TYPED_TEST_SUITE_P(Boost, JsonConformance, ::testing::Types<BoostJson>, JsonBindingNames);
