@@ -79,6 +79,16 @@ runs on a touching PR and nightly; `JINJA2CPP_WITH_JSON_BINDINGS` no longer exis
 MIGRATION.md says what replaces it; the view path shows no instruction-count regression
 against the old bindings in `bench/count.py`.
 
+**Progress.** S1 and S2 (one PR): `include/jinja2cpp/json_adapter.h`, the nlohmann and
+Boost.JSON bindings as traits, `ErrorCode::DataReadError` (20), and the conformance suite
+(`test/binding/conformance.h`) on nlohmann `json` and `ordered_json`, Boost.JSON, and two
+toy traits in `test/binding/toy_json.h` (Qt-style view traits; forward-only traits with
+`JsonResult`, `Location` and big-integer text). The toys are instantiated in
+`nlohmann_json_binding_test.cpp` until S5 can add `test/binding/json_adapter_test.cpp` to
+the test list. Choices made in S1: `ToValue` errors carry the path as the last ExtraParam
+and `GetLocationDescr()` reads `JSON $.path (char N)`; the optional `Elements()` range is
+left for 0302 (simdjson dom) to add if it needs one. Next: 0303 after 0230 D7a, then S5.
+
 **Next.** 0302 is rebased onto the contract (a dom view and copy, an on-demand copy).
 Installing the conformance suite for third-party traits authors, and a `FromValue`
 direction (Value back to a JSON document), are likely follow-ups.

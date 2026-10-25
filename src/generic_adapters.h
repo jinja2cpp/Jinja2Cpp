@@ -116,6 +116,11 @@ public:
 
         [[nodiscard]] typename BaseClass::ValueType GetCurrent() const override
         {
+            // Before the first MoveNext or after the last one: the list's GetItem need not check bounds
+            if (!this->m_list || this->m_curItem >= this->CurrentSize())
+            {
+                return Value();
+            }
             auto indexer = this->m_list->GetIndexer();
             if (!indexer)
             {

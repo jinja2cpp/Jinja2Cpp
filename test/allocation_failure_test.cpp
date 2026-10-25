@@ -7,12 +7,16 @@
 // Windows DLL build the library keeps its CRT's operator new, so the tests skip there.
 
 #include <jinja2cpp/filesystem_handler.h>
+#include <jinja2cpp/json_adapter.h>
+#include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
 #include <gtest/gtest.h>
+
+#include "binding/toy_json.h"
 
 #include <atomic>
 #include <csignal>
@@ -339,6 +343,69 @@ TEST_F(AllocationFailureTest, MetadataSucceedsOrThrowsBadAlloc)
     RecordProperty("allocations", static_cast<int>(n));
     EXPECT_LT(0, n) << "no allocation reached the injection";
     EXPECT_LT(n, maxAllocations);
+}
+
+// A big integer read from JSON text either arrives exact or the copy or the view throws std::bad_alloc; running out
+// of memory is never reported as a malformed integer (DataReadError) or read as none (task 0311)
+TEST(JsonAllocationFailureTest, BigIntegerIsExactOrThrowsBadAlloc)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    const std::string text = "[123456789012345678901234567890123456789012345678901234567890]";
+    const std::string digits = text.substr(1, text.size() - 2);
+    for (const bool view : { false, true })
+    {
+        SCOPED_TRACE(view ? "Reflect" : "ToValue");
+        long n = 0;
+        for (; n < maxAllocations; ++n)
+        {
+            ToyStreamDoc stream(toyjson::Parser(text, true).Parse());
+            ToyViewDoc doc(toyjson::Parser(text, true).Parse());
+            bool threw = false;
+            bool fired = false;
+            std::string read;
+            std::string failure;
+            OnFreshThread([&] {
+                Injection injection(n);
+                try
+                {
+                    if (view)
+                    {
+                        const Value item = Reflect(&doc).ToGenericList().GetAccessor()->GetIndexer()->GetItemByIndex(0);
+                        read = item.IsBigInt() ? item.AsBigInt().ToString() : "<not a BigInt>";
+                    }
+                    else
+                    {
+                        auto copy = ToValue(stream);
+                        if (copy)
+                        {
+                            const Value& item = copy->AsList()[0];
+                            read = item.IsBigInt() ? item.AsBigInt().ToString() : "<not a BigInt>";
+                        }
+                        else
+                        {
+                            failure = copy.error().ToString();
+                        }
+                    }
+                }
+                catch (const std::bad_alloc&)
+                {
+                    threw = true;
+                }
+                fired = Injection::Fired();
+            });
+            if (!threw)
+            {
+                ASSERT_EQ("", failure) << "allocation " << n;
+                ASSERT_EQ(digits, read) << "allocation " << n;
+            }
+            if (!fired)
+            {
+                break;
+            }
+        }
+        EXPECT_LT(0, n) << "no allocation reached the injection";
+        EXPECT_LT(n, maxAllocations);
+    }
 }
 
 INSTANTIATE_TEST_SUITE_P(Templates,

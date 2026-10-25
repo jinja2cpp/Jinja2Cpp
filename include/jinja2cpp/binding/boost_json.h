@@ -1,255 +1,100 @@
 #ifndef JINJA2CPP_BINDING_BOOST_JSON_H
 #define JINJA2CPP_BINDING_BOOST_JSON_H
 
-#include <jinja2cpp/generic_list.h>
-#include <jinja2cpp/reflected_value.h>
-#include <jinja2cpp/utils/i_comparable.h>
-#include <jinja2cpp/value.h>
-
 #include <boost/json.hpp>
-#include <boost/json/visit.hpp>
+
+#include <jinja2cpp/json_adapter.h>
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
-#include <string>
 #include <string_view>
-#include <utility>
-#include <vector>
 
 namespace jinja2
 {
 inline namespace v2
 {
-namespace detail
+
+/*!
+ * \brief JsonTraits of boost::json::value
+ *
+ * Objects keep the document order, as a Python dict from `json.loads` does. Boost.JSON's parser keeps the last value
+ * of a repeated key.
+ */
+template<>
+struct JsonTraits<boost::json::value> : DomJsonTraits<boost::json::value>
 {
-
-class BoostJsonObjectAccessor
-    : public IMapItemAccessor
-    , public ReflectedDataHolder<boost::json::value>
-{
-    struct SizeVisitor
+    static JsonKind Kind(Node node)
     {
-        size_t operator()(std::nullptr_t) { return {}; }
-        size_t operator()(bool) { return 1; }
-        size_t operator()(std::int64_t) { return 1; }
-        size_t operator()(std::uint64_t) { return 1; }
-        size_t operator()(double) { return 1; }
-        size_t operator()(const boost::json::string&) { return 1; }
-        size_t operator()(const boost::json::array& val) { return val.size(); }
-        size_t operator()(const boost::json::object& val) { return val.size(); }
-        template<typename T>
-        size_t operator()(const T& /*val*/)
+        switch (node.get().kind())
         {
-            return 0;
+        case boost::json::kind::bool_:
+            return JsonKind::Bool;
+        case boost::json::kind::int64:
+            return JsonKind::Int;
+        case boost::json::kind::uint64:
+            return JsonKind::UInt;
+        case boost::json::kind::double_:
+            return JsonKind::Double;
+        case boost::json::kind::string:
+            return JsonKind::String;
+        case boost::json::kind::array:
+            return JsonKind::Array;
+        case boost::json::kind::object:
+            return JsonKind::Object;
+        default:
+            return JsonKind::Null;
         }
-    };
-
-public:
-    using ReflectedDataHolder<boost::json::value>::ReflectedDataHolder;
-    ~BoostJsonObjectAccessor() override = default;
-
-    [[nodiscard]] size_t GetSize() const override
+    }
+    static bool AsBool(Node node) { return node.get().get_bool(); }
+    static std::int64_t AsInt(Node node) { return node.get().get_int64(); }
+    static std::uint64_t AsUInt(Node node) { return node.get().get_uint64(); }
+    static double AsDouble(Node node) { return node.get().get_double(); }
+    static std::string_view AsString(Node node)
     {
-        const auto* j = this->GetValue();
-        if (!j)
+        const auto& str = node.get().get_string();
+        return { str.data(), str.size() };
+    }
+    static std::size_t Size(Node node)
+    {
+        const auto& val = node.get();
+        if (const auto* arr = val.if_array())
         {
-            return {};
+            return arr->size();
         }
-        // simulate nlohmann semantics
-        SizeVisitor sv;
-        return boost::json::visit(sv, *j);
+        if (const auto* obj = val.if_object())
+        {
+            return obj->size();
+        }
+        return 0;
     }
-
-    [[nodiscard]] bool Contains(std::string_view name) const override
+    static Node At(Node node, std::size_t idx) { return std::cref(node.get().get_array()[idx]); }
+    static std::optional<Node> Find(Node node, std::string_view name)
     {
-        const auto* obj = AsObject();
-        return obj ? obj->contains(boost::json::string_view(name.data(), name.size())) : false;
-    }
-
-    [[nodiscard]] std::optional<Value> Find(std::string_view name) const override
-    {
-        const auto* obj = AsObject();
-        const auto* val = obj ? obj->if_contains(boost::json::string_view(name.data(), name.size())) : nullptr;
-        if (!val)
+        const auto* obj = node.get().if_object();
+        const auto* item = obj ? obj->if_contains(boost::json::string_view(name.data(), name.size())) : nullptr;
+        if (!item)
         {
             return std::nullopt;
         }
-        return Reflect(*val);
+        return std::cref(*item);
     }
-
-    [[nodiscard]] bool EmptyIsNone() const override { return true; }
-
-    [[nodiscard]] std::vector<std::string> GetKeys() const override
+    template<typename F>
+    static void ForEachMember(Node node, F onMember)
     {
-        const auto* j = this->GetValue();
-        if (!j)
+        for (const auto& member : node.get().get_object())
         {
-            return {};
+            const auto key = member.key();
+            if (!onMember(std::string_view(key.data(), key.size()), std::cref(member.value())))
+            {
+                break;
+            }
         }
-        const auto* obj = j->if_object();
-        if (!obj)
-        {
-            return {};
-        }
-        std::vector<std::string> result;
-        result.reserve(obj->size());
-        for (const auto& item : *obj)
-        {
-            result.emplace_back(item.key());
-        }
-        return result;
-    }
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const BoostJsonObjectAccessor*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        return this->GetValue() == val->GetValue();
-    }
-
-private:
-    [[nodiscard]] const boost::json::object* AsObject() const
-    {
-        const auto* j = this->GetValue();
-        return j ? j->if_object() : nullptr;
-    }
-};
-
-struct BoostJsonArrayAccessor
-    : IListItemAccessor
-    , IIndexBasedAccessor
-    , ReflectedDataHolder<boost::json::array>
-{
-    using ReflectedDataHolder<boost::json::array>::ReflectedDataHolder;
-
-    [[nodiscard]] std::optional<size_t> GetSize() const override
-    {
-        const auto* j = this->GetValue();
-        return j ? j->size() : std::optional<size_t>();
-    }
-
-    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return this; }
-
-    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override
-    {
-        using Enum = Enumerator<typename boost::json::array::const_iterator>;
-        const auto* j = this->GetValue();
-        if (!j)
-        {
-            return {};
-        }
-        return jinja2::ListEnumeratorPtr{ types::in_place_type_t<Enum>{}, j->begin(), j->end() };
-    }
-
-    [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
-    {
-        const auto* j = this->GetValue();
-        if (!j)
-        {
-            return Value();
-        }
-
-        return Reflect((*j)[static_cast<std::size_t>(idx)]);
-    }
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const BoostJsonArrayAccessor*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        return GetValue() == val->GetValue();
-    }
-};
-
-} // namespace detail
-
-template<>
-struct Reflector<boost::json::value>
-{
-    static Value Create(boost::json::value val)
-    {
-        Value result;
-        switch (val.kind())
-        {
-        default: // unreachable()?
-        case boost::json::kind::null:
-            break;
-        case boost::json::kind::bool_:
-            result = val.get_bool();
-            break;
-        case boost::json::kind::int64:
-            result = val.get_int64();
-            break;
-        case boost::json::kind::uint64:
-            result = Value(val.get_uint64());
-            break;
-        case boost::json::kind::double_:
-            result = val.get_double();
-            break;
-        case boost::json::kind::string:
-            result = std::string(val.get_string());
-            break;
-        case boost::json::kind::array:
-        {
-            auto array = val.get_array();
-            result = GenericList([accessor = detail::BoostJsonArrayAccessor(std::move(array))]() { return &accessor; });
-            break;
-        }
-        case boost::json::kind::object:
-        {
-            auto obj = val.get_object();
-            result = GenericMap([accessor = detail::BoostJsonObjectAccessor(std::move(val))]() { return &accessor; });
-            break;
-        }
-        }
-        return result;
-    }
-
-    static Value CreateFromPtr(const boost::json::value* val)
-    {
-        Value result;
-        switch (val->kind())
-        {
-        default: // unreachable()?
-        case boost::json::kind::null:
-            break;
-        case boost::json::kind::bool_:
-            result = val->get_bool();
-            break;
-        case boost::json::kind::int64:
-            result = val->get_int64();
-            break;
-        case boost::json::kind::uint64:
-            result = Value(val->get_uint64());
-            break;
-        case boost::json::kind::double_:
-            result = val->get_double();
-            break;
-        case boost::json::kind::string:
-            result = std::string(val->get_string());
-            break;
-        case boost::json::kind::array:
-        {
-            auto array = val->get_array();
-            result = GenericList([accessor = detail::BoostJsonArrayAccessor(std::move(array))]() { return &accessor; });
-            break;
-        }
-        case boost::json::kind::object:
-        {
-            result = GenericMap([accessor = detail::BoostJsonObjectAccessor(val)]() { return &accessor; });
-            break;
-        }
-        }
-        return result;
     }
 };
 
 } // namespace v2
 } // namespace jinja2
 
-#endif //  JINJA2CPP_BINDING_BOOST_JSON_H
+#endif // JINJA2CPP_BINDING_BOOST_JSON_H
