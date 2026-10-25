@@ -408,6 +408,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/basic_tests.cpp
         test/big_int_test.cpp
         test/containers_api_test.cpp
+        test/embedding_lifecycle_test.cpp
         test/errors_test.cpp
         test/expressions_test.cpp
         test/extends_test.cpp
