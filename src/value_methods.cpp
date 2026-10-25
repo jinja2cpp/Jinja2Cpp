@@ -9,6 +9,7 @@
 #include "markup.h"
 #include "render_context.h"
 #include "template_dict.h"
+#include "unicode_case.h"
 #include "unicode_tables.h"
 #include "value_visitors.h"
 
@@ -1463,49 +1464,60 @@ struct StrOps
             Raise("expected '}' before end of string");
         }
         field.name = str.substr(nameStart, pos - 1 - nameStart);
-        if (stop == '!')
+        if (stop == '!' && !ParseConversion(str, pos, field))
         {
-            if (pos >= str.size())
-            {
-                Raise("end of string while looking for conversion specifier");
-            }
-            field.conversion = str[pos++];
-            if (pos < str.size())
-            {
-                auto ch = str[pos++];
-                if (ch == '}')
-                {
-                    return field;
-                }
-                if (ch != ':')
-                {
-                    Raise("expected ':' after conversion specifier");
-                }
-            }
-            stop = ':';
+            return field;
         }
-        if (stop == ':')
+        if (stop == '!' || stop == ':')
         {
-            // The spec ends at the '}' that balances the field's '{'
-            const auto specStart = pos;
-            size_t depth = 1;
-            while (pos < str.size())
-            {
-                auto ch = str[pos++];
-                if (ch == '{')
-                {
-                    field.nestedSpec = true;
-                    ++depth;
-                }
-                else if (ch == '}' && --depth == 0)
-                {
-                    field.spec = str.substr(specStart, pos - 1 - specStart);
-                    return field;
-                }
-            }
-            Raise("unmatched '{' in format spec");
+            ParseSpec(str, pos, field);
         }
         return field;
+    }
+
+    // The conversion after '!'; false when the field ends right after it ('{!r}')
+    static bool ParseConversion(View str, size_t& pos, Field& field)
+    {
+        if (pos >= str.size())
+        {
+            Raise("end of string while looking for conversion specifier");
+        }
+        field.conversion = str[pos++];
+        if (pos < str.size())
+        {
+            auto ch = str[pos++];
+            if (ch == '}')
+            {
+                return false;
+            }
+            if (ch != ':')
+            {
+                Raise("expected ':' after conversion specifier");
+            }
+        }
+        return true;
+    }
+
+    // The spec after ':', which ends at the '}' that balances the field's '{'
+    static void ParseSpec(View str, size_t& pos, Field& field)
+    {
+        const auto specStart = pos;
+        size_t depth = 1;
+        while (pos < str.size())
+        {
+            auto ch = str[pos++];
+            if (ch == '{')
+            {
+                field.nestedSpec = true;
+                ++depth;
+            }
+            else if (ch == '}' && --depth == 0)
+            {
+                field.spec = str.substr(specStart, pos - 1 - specStart);
+                return;
+            }
+        }
+        Raise("unmatched '{' in format spec");
     }
 
     // One replacement field. Its value is looked up first, then the nested fields of its spec
@@ -2071,7 +2083,11 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     }
     const auto* keyFn = ArgOrNone(params, 0, "key");
     const auto* reverseArg = Arg(params, 0, "reverse");
-    const bool reverse = reverseArg && ConvertToBool(*reverseArg);
+    bool reverse = false;
+    if (reverseArg)
+    {
+        reverse = ConvertToBool(*reverseArg);
+    }
 
     auto& items = MutableItems(self);
     InternalValueList values;
@@ -2080,6 +2096,15 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     {
         InternalValueList& items;
         InternalValueList& values;
+        Restore(InternalValueList& listItems, InternalValueList& taken)
+            : items(listItems)
+            , values(taken)
+        {
+        }
+        Restore(const Restore&) = delete;
+        Restore(Restore&&) = delete;
+        Restore& operator=(const Restore&) = delete;
+        Restore& operator=(Restore&&) = delete;
         ~Restore()
         {
             // Whatever a key call put into the list meanwhile is dropped, as in CPython
