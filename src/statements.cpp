@@ -379,7 +379,12 @@ struct LoopState : ValueObject
         }
         recursiveStatement = nullptr;
         recursiveNodes = ArenaView();
-        lastChanged = InternalValue();
+        // Most loops never read loop.changed: the reset is out of line, so that its temporary
+        // gives this function no stack frame to guard
+        if (!lastChanged.IsUndefined())
+        {
+            DropLastChanged();
+        }
         cyclePosition = nullptr;
         isPeeked = false;
         ownsRest = false;
@@ -387,6 +392,8 @@ struct LoopState : ValueObject
         lazyContext = nullptr;
         lazyNodes = ArenaView();
     }
+
+    JINJA2CPP_NOINLINE_INLINE void DropLastChanged() { lastChanged = InternalValue(); }
 
     // A loop object kept past a statement that ended without collecting its rest (an error
     // thrown in the body) can no longer fetch: its enumerator may run over a list the
@@ -510,8 +517,14 @@ InternalValue CallLoopChanged(const InternalValue& state, const CallParams& para
     return true;
 }
 
-Callable MakeLoopChanged(const InternalValue& lastChanged)
+// Out of line, as MakeLoopCycle: inlined, it grows the frame of every loop attribute lookup
+JINJA2CPP_NOINLINE_INLINE Callable MakeLoopChanged(LoopState& state)
 {
+    if (state.lastChanged.IsUndefined())
+    {
+        state.lastChanged = ListAdapter::CreateAdapter(InternalValueList{ InternalValue(false) });
+    }
+    const auto& lastChanged = state.lastChanged;
     Callable result(Callable::GlobalFunc, BoundMethodCall{ lastChanged, &CallLoopChanged });
     // Each read of loop.changed is a new callable; reads on one loop compare equal
     if (const auto list = AsList(lastChanged))
@@ -727,11 +740,7 @@ private:
         case Property::Cycle:
             return MakeLoopCycle(state);
         case Property::Changed:
-            if (state.lastChanged.IsUndefined())
-            {
-                state.lastChanged = ListAdapter::CreateAdapter(InternalValueList{ InternalValue(false) });
-            }
-            return MakeLoopChanged(state.lastChanged);
+            return MakeLoopChanged(state);
         case Property::Call:
             if (!state.recursiveStatement)
             {
