@@ -21,16 +21,30 @@ if (DEFINED JINJA2CPP_USE_REGEX)
     message(DEPRECATION "JINJA2CPP_USE_REGEX is deprecated and ignored: Jinja2Cpp no longer uses Boost.Regex")
     unset(JINJA2CPP_USE_REGEX CACHE)
 endif ()
-set(JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS boost nlohmann)
-set(JINJA2CPP_WITH_JSON_BINDINGS boost CACHE STRING "JSON binding the tests check (boost|nlohmann). 'boost' is default.")
-set_property(CACHE JINJA2CPP_WITH_JSON_BINDINGS PROPERTY STRINGS ${JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS})
-if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
-    # The built-in RapidJSON binding is retired in 2.0 (docs/tasks/0303)
-    message(FATAL_ERROR "JINJA2CPP_WITH_JSON_BINDINGS=rapid is no longer supported: Jinja2C++ 2.0 has no built-in "
-        "RapidJSON binding. See \"RapidJSON binding removed\" in MIGRATION.md for a JsonTraits specialisation "
-        "that keeps Reflect working with your own RapidJSON, or use -DJINJA2CPP_WITH_JSON_BINDINGS=nlohmann")
-elseif (NOT JINJA2CPP_WITH_JSON_BINDINGS IN_LIST JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS)
-    message(FATAL_ERROR "JINJA2CPP_WITH_JSON_BINDINGS must be one of ${JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS}, not '${JINJA2CPP_WITH_JSON_BINDINGS}'")
+# Every JSON binding is installed as a component (docs/tasks/0311); this list picks the ones
+# the tests check and whose library the build therefore fetches or finds
+set(JINJA2CPP_SUPPORTED_TEST_BINDINGS nlohmann_json boost_json)
+set(JINJA2CPP_TEST_BINDINGS nlohmann_json CACHE STRING "JSON bindings the tests check, a list of ${JINJA2CPP_SUPPORTED_TEST_BINDINGS}. 'nlohmann_json' is default.")
+foreach (_binding IN LISTS JINJA2CPP_TEST_BINDINGS)
+    if (_binding MATCHES "^rapid")
+        # The built-in RapidJSON binding is retired in 2.0 (docs/tasks/0303)
+        message(FATAL_ERROR "JINJA2CPP_TEST_BINDINGS: Jinja2C++ 2.0 has no built-in RapidJSON binding. See "
+            "\"RapidJSON binding removed\" in MIGRATION.md for a JsonTraits specialisation that keeps Reflect "
+            "working with your own RapidJSON")
+    elseif (NOT _binding IN_LIST JINJA2CPP_SUPPORTED_TEST_BINDINGS)
+        message(FATAL_ERROR "JINJA2CPP_TEST_BINDINGS entries are ${JINJA2CPP_SUPPORTED_TEST_BINDINGS}, not '${_binding}'")
+    endif ()
+endforeach ()
+if (DEFINED JINJA2CPP_WITH_JSON_BINDINGS)
+    if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
+        message(FATAL_ERROR "JINJA2CPP_WITH_JSON_BINDINGS=rapid is no longer supported: Jinja2C++ 2.0 has no built-in "
+            "RapidJSON binding. See \"RapidJSON binding removed\" in MIGRATION.md for a JsonTraits specialisation "
+            "that keeps Reflect working with your own RapidJSON")
+    endif ()
+    message(WARNING "JINJA2CPP_WITH_JSON_BINDINGS is ignored: every JSON binding is installed as a package "
+        "component (see \"JSON bindings are package components\" in MIGRATION.md); JINJA2CPP_TEST_BINDINGS "
+        "picks the ones the tests check")
+    unset(JINJA2CPP_WITH_JSON_BINDINGS CACHE)
 endif ()
 set(JINJA2CPP_WITH_BIGINT_SUPPORTED_BACKENDS none boost)
 set(JINJA2CPP_WITH_BIGINT none CACHE STRING "Built-in big-integer backend (none|boost): with 'boost', integer arithmetic beyond int64 is exact by default (docs/tasks/0272). 'none' is default.")
@@ -286,20 +300,13 @@ endif ()
 target_compile_options(${LIB_TARGET_NAME} PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
 
 
-# {% meta %} is read by the library's own JSON reader (src/json_reader.cpp). The JSON binding
-# headers (include/jinja2cpp/binding/) are for consumers; JINJA2CPP_WITH_JSON_BINDINGS picks the
-# one the tests check, so only the tests link its library.
-if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
-    set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
-    set(JINJA2CPP_JSON_BINDING_LIBS Boost::json)
-else()
-    set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_NLOHMANN")
-    set(JINJA2CPP_JSON_BINDING_LIBS nlohmann_json::nlohmann_json)
-endif()
-
 # The built-in big-integer backend: header-only and private, so consumers need nothing for it
 if ("${JINJA2CPP_WITH_BIGINT}" STREQUAL "boost")
-    list(APPEND JINJA2CPP_PRIVATE_LIBS $<BUILD_INTERFACE:jinja2cpp_boost_multiprecision>)
+    # The adapter header is the jinja2cpp::boost_multiprecision component, which links the
+    # library, so the library takes its include directory rather than the target
+    list(APPEND JINJA2CPP_PRIVATE_LIBS $<BUILD_INTERFACE:jinja2cpp_boost_mp_headers>)
+    target_include_directories(${LIB_TARGET_NAME} PRIVATE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/bindings/boost_multiprecision/include>)
     target_compile_definitions(${LIB_TARGET_NAME} PRIVATE JINJA2CPP_WITH_BIGINT_BOOST)
 endif()
 message(STATUS "Jinja2C++ built-in big-integer backend: ${JINJA2CPP_WITH_BIGINT}")
@@ -399,6 +406,9 @@ if (JINJA2CPP_CONFIG_DEPS_MODE STREQUAL "internal")
 endif ()
 configure_file(jinja2cpp.pc.in ${CMAKE_BINARY_DIR}/jinja2cpp.pc @ONLY)
 
+set(JINJA2CPP_INSTALL_CONFIG_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/jinja2cpp")
+add_subdirectory(bindings)
+
 if (JINJA2CPP_BUILD_TESTS)
     enable_testing()
 
@@ -454,10 +464,17 @@ if (JINJA2CPP_BUILD_TESTS)
     add_executable(jinja2cpp_tests ${JINJA2CPP_TEST_SOURCES})
     target_compile_options(jinja2cpp_tests PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
     target_link_libraries(jinja2cpp_tests gtest gmock gtest_main
-        nlohmann_json::nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS} ${JINJA2CPP_JSON_BINDING_LIBS})
+        nlohmann_json::nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
     # The Boost big-integer adapter is checked in every build (standalone Multiprecision, see
     # thirdparty/CMakeLists.txt); the built-in one only in boost builds
-    target_link_libraries(jinja2cpp_tests jinja2cpp_boost_multiprecision)
+    target_link_libraries(jinja2cpp_tests jinja2cpp::boost_multiprecision)
+    # The JSON adapter contract on toy traits, in every build; each binding in
+    # JINJA2CPP_TEST_BINDINGS runs the same conformance suite (docs/tasks/0311)
+    target_sources(jinja2cpp_tests PRIVATE test/binding/json_adapter_test.cpp)
+    foreach (_binding IN LISTS JINJA2CPP_TEST_BINDINGS)
+        target_sources(jinja2cpp_tests PRIVATE test/binding/${_binding}_binding_test.cpp)
+        target_link_libraries(jinja2cpp_tests jinja2cpp::${_binding})
+    endforeach ()
     if (NOT JINJA2CPP_WITH_UNICODE_NAMES)
         target_compile_definitions(jinja2cpp_tests PRIVATE JINJA2CPP_NO_UNICODE_NAMES)
     endif ()
@@ -514,29 +531,13 @@ if (JINJA2CPP_BUILD_TESTS)
         set_target_properties(jinja2cpp_alloc_tests PROPERTIES
                 CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
                 CXX_STANDARD_REQUIRED ON)
-        target_compile_definitions(jinja2cpp_alloc_tests PRIVATE ${_bindings_define})
         # After the parity run, whose output would push this one out of the CI log tail
         add_test(NAME jinja2cpp_alloc_tests COMMAND jinja2cpp_alloc_tests)
     endif()
 
-    if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
-        set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
-        target_sources(jinja2cpp_tests
-            PRIVATE
-                test/binding/boost_json_binding_test.cpp
-        )
-    endif()
-    if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "nlohmann")
-        set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_NLOHMANN")
-        target_sources(jinja2cpp_tests
-            PRIVATE
-                test/binding/nlohmann_json_binding_test.cpp
-        )
-    endif()
     target_compile_definitions(jinja2cpp_tests
         PUBLIC
             -DJINJA2CPP_PARITY_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test/parity"
-            ${_bindings_define}
     )
 
 endif ()
@@ -552,7 +553,6 @@ endif ()
 # The package is generated by install(EXPORT) (docs/tasks/0068); cmake/public/ only adds
 # the find_dependency calls for what the exported targets refer to.
 if(JINJA2CPP_INSTALL)
-    set(JINJA2CPP_INSTALL_CONFIG_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/jinja2cpp")
     install(
         TARGETS
             ${LIB_TARGET_NAME}

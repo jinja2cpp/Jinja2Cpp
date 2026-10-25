@@ -33,17 +33,16 @@ changed() { git diff --name-only --diff-filter=d "$base" -- "$@"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 fmt=clang-format-18; have $fmt || fmt=clang-format
-tidy_excludes=(':!include/jinja2cpp/binding/nlohmann_json*' ':!test/binding/nlohmann_json*'
-  # A header borrows the flags of a similar file, none of which has Multiprecision's include
-  # path; test/big_int_test.cpp covers it (docs/tasks/0272)
-  ':!include/jinja2cpp/big_int/boost_cpp_int.h'
+# The default build tests the nlohmann_json binding only, so the Boost components have no
+# include path (docs/tasks/0311); test/big_int_test.cpp covers the big-integer adapter (0272)
+tidy_excludes=(':!bindings/boost_*' ':!test/binding/boost_json*'
   ':!include/jinja2cpp/polymorphic_value/*' ':!src/robin_hood.h' ':!src/lexertk.h'
   ':!src/unicode_tables.h'
   # Generated test data, included by a test
   ':!test/*.inc')
 
 # 1. clang-format, as .github/workflows/format-check.yml
-mapfile -t whole < <(changed 'src/**.h' 'src/**.cpp' 'include/**.h')
+mapfile -t whole < <(changed 'src/**.h' 'src/**.cpp' 'include/**.h' 'bindings/**.h')
 if [ ${#whole[@]} -gt 0 ] && ! $fmt --dry-run --Werror "${whole[@]}" > /tmp/preflight-format.log 2>&1; then
   head -20 /tmp/preflight-format.log
   record FAIL "clang-format: src/include files (run: $fmt -i <file>)"
@@ -59,7 +58,7 @@ fi
 
 # 2. clang-tidy on changed lines, as .github/workflows/clang-tidy.yml
 tidy_dir=$(python3 -c 'import clang_tidy, os; print(os.path.join(os.path.dirname(clang_tidy.__file__), "data", "bin"))' 2>/dev/null)
-if [ -z "$(changed src include test)" ]; then
+if [ -z "$(changed src include bindings test)" ]; then
   record SKIP "clang-tidy: no C++ changes"
 elif [ -z "$tidy_dir" ]; then
   record FAIL "clang-tidy: needs 'pip install clang-tidy==22.1.8'"
@@ -71,7 +70,7 @@ else
   [ -f "$build/CMakeCache.txt" ] && init=()
   cmake -S . -B "$build" -G Ninja "${init[@]}" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON >/dev/null 2>&1 \
     || record WARN "cmake configure of $build failed"
-  git diff -U0 --no-color "$base" -- src include test "${tidy_excludes[@]}" \
+  git diff -U0 --no-color "$base" -- src include bindings test "${tidy_excludes[@]}" \
     | python3 "$tidy_dir/clang-tidy-diff.py" -p1 -path "$build" -j "$(nproc)" -quiet \
         -clang-tidy-binary "$tidy_dir/clang-tidy" -extra-arg=-Wno-unknown-warning-option \
         -extra-arg=-I"$(realpath "$build")/generated/include" \
@@ -94,7 +93,7 @@ fi
 
 # 3. CodeQL cpp/suspicious-add-sizeof: pointer + sizeof(...) on added lines. A heuristic;
 # CodeQL flags it unless the pointer is char-sized, so name the byte offset instead.
-hits=$(git diff -U0 "$base" -- src include | grep -E '^\+[^+]' \
+hits=$(git diff -U0 "$base" -- src include bindings | grep -E '^\+[^+]' \
   | grep -nE '[]A-Za-z0-9_)] *[-+] *sizeof *\(|sizeof *\([^)]*\) *[-+] *[A-Za-z0-9_(]|[-+] *[A-Za-z0-9_.]+ *\* *sizeof *\(' || true)
 if [ -n "$hits" ]; then
   echo "$hits"
@@ -108,7 +107,7 @@ if [ -n "$(changed docs/tasks)" ]; then
   if python3 scripts/task_batches.py >/dev/null; then record PASS "task files parse"
   else record FAIL "task files: scripts/task_batches.py fails"; fi
   if [ -n "$(changed docs/tasks/README.md)" ] && [ -n "$(changed 'docs/tasks/0*.md')" ] \
-     && [ -n "$(changed src include test)" ]; then
+     && [ -n "$(changed src include bindings test)" ]; then
     record WARN "code PR edits docs/tasks/README.md: leave the index to scripts/task_index.py"
   fi
 fi

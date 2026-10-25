@@ -1,0 +1,265 @@
+name: CI-bindings
+
+# Full validation of the package components (docs/tasks/0311, decision B5): every JSON
+# binding and the Boost big-integer adapter, on Linux under the sanitizers, MSVC with the
+# static CRT, Apple Clang, a system (b2-built) Boost, and an install consumed through every
+# component. The default jobs test only the nlohmann_json binding and the toy traits, so this
+# runs on pull requests that touch the bindings or the contract they implement, nightly on
+# master, and on demand. The merge steward checks the nightly status before stacking a train.
+
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - 'bindings/**'
+      - 'include/jinja2cpp/json_adapter.h'
+      - 'include/jinja2cpp/reflected_value.h'
+      - 'include/jinja2cpp/big_int_backend.h'
+      - 'test/binding/**'
+      - 'test/package/**'
+      - 'cmake/public/**'
+      - '.github/workflows/bindings.yml'
+  schedule:
+    - cron: '41 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TEST_BINDINGS: nlohmann_json;boost_json
+  # The binding tests: the conformance suite on every binding and the toys, the per-binding
+  # rows and the big-integer adapter
+  BINDING_TESTS: '*Json*:*BigInt*'
+
+jobs:
+  sanitizers:
+    name: bindings ${{ matrix.sanitizer }} (${{ matrix.compiler }})
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Lifetimes of reflected items (docs/tasks/0125), with the Boost backend built in
+          - { compiler: gcc-14,   sanitizer: address+undefined, bigint: boost }
+          # The conformance suite's concurrent renders of one borrowed view
+          - { compiler: clang-18, sanitizer: thread,            bigint: none }
+
+    env:
+      ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:detect_stack_use_after_return=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    - name: Install toolchain
+      uses: ./.github/actions/install-toolchain
+      with:
+        compiler: ${{ matrix.compiler }}
+
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: bindings-${{ matrix.compiler }}-${{ matrix.sanitizer }}
+
+    # As in linux-build.yml: sanitizer instrumentation makes GCC emit false-positive
+    # -Wstringop-overflow (also inside boost::json); warnings are enforced elsewhere
+    - name: Configure
+      run: |
+        cmake -S . -B .build -G Ninja \
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DJINJA2CPP_DEPS_MODE=internal \
+          -DJINJA2CPP_CXX_STANDARD=17 \
+          -DJINJA2CPP_WITH_SANITIZERS=${{ matrix.sanitizer }} \
+          "-DJINJA2CPP_TEST_BINDINGS=${TEST_BINDINGS}" \
+          -DJINJA2CPP_WITH_BIGINT=${{ matrix.bigint }} \
+          -DJINJA2CPP_STRICT_WARNINGS=OFF
+
+    - name: Build
+      run: cmake --build .build --parallel --target jinja2cpp_tests
+
+    - name: Test
+      run: .build/jinja2cpp_tests "--gtest_filter=${BINDING_TESTS}"
+
+  msvc:
+    name: bindings MSVC C++17 Release /MT static
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    - name: Setup MSVC
+      uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+      with:
+        arch: x64
+
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: bindings-windows-msvc
+
+    - name: Build
+      shell: cmd
+      run: |
+        cmake -S . -B .build -G Ninja -DCMAKE_POLICY_DEFAULT_CMP0141=NEW -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_MSVC_RUNTIME_TYPE=/MT -DJINJA2CPP_DEPS_MODE=internal -DJINJA2CPP_BUILD_SHARED=FALSE -DJINJA2CPP_CXX_STANDARD=17 "-DJINJA2CPP_TEST_BINDINGS=%TEST_BINDINGS%"
+        cmake --build .build --config Release --parallel --target jinja2cpp_tests
+
+    - name: Test
+      shell: cmd
+      run: .build\jinja2cpp_tests.exe "--gtest_filter=%BINDING_TESTS%"
+
+  macos:
+    name: bindings macos-14 AppleClang C++17 Release
+    runs-on: macos-14
+
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    - name: Install Ninja
+      env:
+        HOMEBREW_NO_AUTO_UPDATE: 1
+        HOMEBREW_NO_INSTALL_CLEANUP: 1
+      run: |
+        command -v ninja >/dev/null || brew install ninja
+        ninja --version
+
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: bindings-macos-14
+        max-size: 500M
+
+    - name: Configure
+      run: |
+        cmake -S . -B .build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DJINJA2CPP_DEPS_MODE=internal \
+          -DJINJA2CPP_CXX_STANDARD=17 \
+          "-DJINJA2CPP_TEST_BINDINGS=${TEST_BINDINGS}"
+
+    - name: Build
+      run: cmake --build .build --parallel --target jinja2cpp_tests
+
+    - name: Test
+      run: .build/jinja2cpp_tests "--gtest_filter=${BINDING_TESTS}"
+
+  # Boost and nlohmann_json from Ubuntu (Boost.JSON built by b2, not by Boost's CMake), then
+  # the install consumed through every component, by find_package and by pkg-config (shared:
+  # a static library's pkg-config file lists its private dependencies only in internal mode)
+  system-deps-and-package:
+    name: bindings system Boost and nlohmann_json, package components (gcc-14)
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    - name: Install toolchain
+      uses: ./.github/actions/install-toolchain
+      with:
+        compiler: gcc-14
+
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: bindings-system-gcc-14
+
+    - name: System dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          libboost-dev libboost-json-dev libboost-container-dev nlohmann-json3-dev
+
+    - name: fmt and expected-lite
+      run: |
+        git clone --depth 1 --branch 12.2.0 https://github.com/fmtlib/fmt.git "$RUNNER_TEMP/fmt"
+        cmake -S "$RUNNER_TEMP/fmt" -B "$RUNNER_TEMP/fmt/build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+          -DFMT_TEST=OFF -DFMT_DOC=OFF
+        cmake --build "$RUNNER_TEMP/fmt/build"
+        sudo cmake --install "$RUNNER_TEMP/fmt/build"
+        git clone --depth 1 --branch v0.10.0 https://github.com/nonstd-lite/expected-lite.git "$RUNNER_TEMP/expected-lite"
+        cmake -S "$RUNNER_TEMP/expected-lite" -B "$RUNNER_TEMP/expected-lite/build" -G Ninja \
+          -DEXPECTED_LITE_OPT_BUILD_TESTS=OFF -DEXPECTED_LITE_OPT_BUILD_EXAMPLES=OFF
+        sudo cmake --install "$RUNNER_TEMP/expected-lite/build"
+
+    - name: Configure
+      run: |
+        cmake -S . -B .build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DJINJA2CPP_DEPS_MODE=external \
+          -DJINJA2CPP_BUILD_SHARED=ON \
+          "-DJINJA2CPP_TEST_BINDINGS=${TEST_BINDINGS}" \
+          -DJINJA2CPP_STRICT_WARNINGS=ON \
+          -DCMAKE_CXX_FLAGS=-Wno-error=maybe-uninitialized
+
+    - name: Build
+      run: cmake --build .build --parallel --target jinja2cpp_tests
+
+    - name: Test
+      run: .build/jinja2cpp_tests "--gtest_filter=${BINDING_TESTS}"
+
+    - name: Installed package, every component
+      run: |
+        cmake -DBUILD_DIR=.build -DPREFIX="$RUNNER_TEMP/jinja2cpp" -DCONFIG=Release \
+          -DCONSUMER_STD=17 -DEXPECT_SHARED=ON \
+          "-DCOMPONENTS=nlohmann_json;boost_json;boost_multiprecision" \
+          -P test/package/check_package.cmake
+
+  # clang-tidy on the changed lines of the components and their tests, in a configuration
+  # that gives every component its include path (the clang-tidy workflow has nlohmann only)
+  clang-tidy:
+    name: bindings clang-tidy (changed lines)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    env:
+      CLANG_TIDY_VERSION: 22.1.8
+
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      with:
+        fetch-depth: 0
+
+    - name: Install toolchain
+      uses: ./.github/actions/install-toolchain
+      with:
+        compiler: clang-18
+
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      with:
+        python-version: '3.12'
+
+    - name: Install clang-tidy
+      run: |
+        python -m pip install "clang-tidy==${CLANG_TIDY_VERSION}" pyyaml==6.0.3
+        bin="$(python -c 'import clang_tidy, os; print(os.path.join(os.path.dirname(clang_tidy.__file__), "data", "bin"))')"
+        echo "TIDY_BIN=$bin" >> "$GITHUB_ENV"
+        echo "CLANG_TIDY=$(command -v clang-tidy)" >> "$GITHUB_ENV"
+
+    - name: Configure
+      run: |
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+          -DJINJA2CPP_DEPS_MODE=internal \
+          -DJINJA2CPP_CXX_STANDARD=17 \
+          "-DJINJA2CPP_TEST_BINDINGS=${TEST_BINDINGS}" \
+          -DJINJA2CPP_WITH_BIGINT=boost
+
+    - name: clang-tidy on changed lines
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        set -o pipefail
+        status=0
+        git diff -U0 --no-color "$BASE_SHA" -- bindings test/binding \
+          | python "$TIDY_BIN/clang-tidy-diff.py" -p1 -path build -j "$(nproc)" -quiet \
+              -clang-tidy-binary "$CLANG_TIDY" \
+              -extra-arg=-Wno-unknown-warning-option \
+              -extra-arg=-I"$GITHUB_WORKSPACE/build/generated/include" \
+          | tee tidy.log || status=$?
+        grep -E '^/[^ ]+:[0-9]+:[0-9]+: (warning|error): ' tidy.log | sort -u \
+          | sed -E "s#^$GITHUB_WORKSPACE/##; s#^([^:]+):([0-9]+):([0-9]+): (warning|error): (.*)#::\4 file=\1,line=\2,col=\3::\5#" || true
+        exit "$status"

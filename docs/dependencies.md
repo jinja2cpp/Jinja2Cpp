@@ -29,7 +29,7 @@ the static library), `runtime` (a shared dependency loaded at run time), `test`,
 
 **Exposure**: who can see it. `public-api` (its types are in the headers every consumer
 includes), `public-optional` (only in an opt-in header such as
-`jinja2cpp/binding/nlohmann_json.h`), `link` (not in headers, but a static consumer must
+`jinja2cpp/binding/nlohmann_json.h`, part of a package component, docs/tasks/0311), `link` (not in headers, but a static consumer must
 link it), `internal` (compiled in, invisible), `none`.
 
 **Delivery**: how it arrives. `fetched` (FetchContent, pinned by hash or tag),
@@ -47,9 +47,9 @@ source and committed), `system` (found on the machine), `ci` (GitHub Actions).
 | value_types | 57f2e7a, modified | MIT | mandatory | public-api | vendored | `polymorphic`/`indirect` in `jinja2::v2::detail::xyz`, behind `jinja2::types` (Value, GenericList) | Keep; `std::` at C++26 |
 | Unicode tables | UCD 15.0.0 via Python 3.12 | Unicode-3.0 | mandatory | internal | generated | Python-identical `isprintable`, case mapping, digits without ICU | Data only; acquisition decision open in 0187/0186 |
 | HTML entities | Python 3.12 `html.entities` | PSF-2.0 | mandatory | internal | generated | MarkupSafe-compatible unescape | Data only; keep |
-| Boost.JSON | 1.92.0 | BSL-1.0 | alternative (tested default), and test | public-optional | fetched | the opt-in adapter `jinja2cpp/binding/boost_json.h` and its test; `{% meta %}` is read by `src/json_reader.cpp` since 0230 step D6 | Done: the Boost release is fetched only for this test (tests ON with `JINJA2CPP_WITH_JSON_BINDINGS=boost`) and never installed (0230 D7a) |
-| nlohmann_json | 3.12.0 | MIT | alternative, and test | public-optional | fetched | the same adapter, header-only; the tests' JSON reader | Keep: tests only |
-| Boost.Multiprecision | 1.92.0 | BSL-1.0 | optional, and test | public-optional | fetched | `cpp_int` behind the built-in big-integer backend with `-DJINJA2CPP_WITH_BIGINT=boost` (off by default) and the opt-in adapter `jinja2cpp/big_int/boost_cpp_int.h`; standalone mode, so only its own and Boost.Config's headers | Done: fetched on its own with Boost.Config (boostorg/multiprecision and boostorg/config at boost-1.92.0, pinned by hash), only with tests ON or `bigint=boost` (0230 D7a) |
+| Boost.JSON | 1.92.0 | BSL-1.0 | alternative, and test | public-optional | fetched | the component `jinja2cpp::boost_json` (`jinja2cpp/binding/boost_json.h`) and its test; `{% meta %}` is read by `src/json_reader.cpp` since 0230 step D6 | Done: the Boost release is fetched only for this test (tests ON with `boost_json` in `JINJA2CPP_TEST_BINDINGS`, which bindings.yml sets) and never installed (0230 D7a, 0311) |
+| nlohmann_json | 3.12.0 | MIT | alternative, and test | public-optional | fetched | the component `jinja2cpp::nlohmann_json`, header-only, the binding the default CI jobs test; the tests' JSON reader | Keep: tests only |
+| Boost.Multiprecision | 1.92.0 | BSL-1.0 | optional, and test | public-optional | fetched | `cpp_int` behind the built-in big-integer backend with `-DJINJA2CPP_WITH_BIGINT=boost` (off by default) and the component `jinja2cpp::boost_multiprecision` (`jinja2cpp/big_int/boost_cpp_int.h`); standalone mode, so only its own and Boost.Config's headers | Done: fetched on its own with Boost.Config (boostorg/multiprecision and boostorg/config at boost-1.92.0, pinned by hash), only with tests ON or `bigint=boost` (0230 D7a) |
 
 ### Boost, library by library
 
@@ -70,11 +70,12 @@ code used now has a replacement:
 What is left are the opt-in pieces in the table above. With the defaults and tests OFF,
 nothing of Boost is fetched; with tests ON, the default build fetches only standalone
 Multiprecision and Config, and the full Boost release comes in only for the Boost.JSON
-adapter test, with its install rules off (`BOOST_SKIP_INSTALL_RULES`). `scripts/sbom.py
---check` fails when any other file than the two adapter headers, `src/big_int_builtin.cpp`
-and `test/binding/boost_json_binding_test.cpp` names `<boost/...>`, and
-`test/package/check_package.cmake` fails when an install carries Boost or its CMake files
-name it. The external modes find a system Boost only when a Boost piece is selected, and
+binding test, with its install rules off (`BOOST_SKIP_INSTALL_RULES`). `scripts/sbom.py
+--check` fails when any other file than the Boost components (`bindings/boost_*`),
+`src/big_int_builtin.cpp` and `test/binding/boost_json_binding_test.cpp` names
+`<boost/...>`, and `test/package/check_package.cmake` fails when an install carries Boost or
+nlohmann_json, or the core package's CMake files find or link them; only a component's own
+deps file finds its library, when a consumer asks for the component (0311). The external modes find a system Boost only when a Boost piece is selected, and
 Conan asks for a header-only Boost (`boost/*:header_only=True`); `external-boost` is a
 deprecated alias of `internal`, removed in 3.0.
 
@@ -98,7 +99,7 @@ deprecated alias of `internal`, removed in 3.0.
 
 | Consumer | Needs |
 |---|---|
-| compiles against the installed headers | expected-lite only (plus the JSON library of a binding header they include) |
+| compiles against the installed headers | expected-lite only (plus the library of a component they link, such as nlohmann_json for `jinja2cpp::nlohmann_json`) |
 | links the static library | also fmt |
 | links the shared library built in internal mode | expected-lite only; fmt is linked in |
 

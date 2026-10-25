@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:7ebc96e4-0108-57ae-937c-a9847827a4ff",
+  "serialNumber": "urn:uuid:51f1dbbd-4152-54ba-a328-0f80d4033466",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -241,7 +241,7 @@
         },
         {
           "name": "jinja2cpp:selected-by",
-          "value": "JINJA2CPP_WITH_JSON_BINDINGS=boost with JINJA2CPP_BUILD_TESTS: internal mode fetches the release for the Boost.JSON adapter test and never installs it; external, external-boost and conan-build find a system Boost >= 1.75 (Conan: header-only) only when a Boost piece is selected"
+          "value": "boost_json in JINJA2CPP_TEST_BINDINGS (default nlohmann_json) with JINJA2CPP_BUILD_TESTS: internal mode fetches the release for the Boost.JSON binding test and never installs it; external, external-boost and conan-build find a system Boost >= 1.75 (Conan: header-only) only when a Boost piece is selected. Consumers: the components jinja2cpp::boost_json and jinja2cpp::boost_multiprecision find it when requested (docs/tasks/0311)"
         },
         {
           "name": "jinja2cpp:also-roles",
@@ -249,11 +249,11 @@
         },
         {
           "name": "jinja2cpp:used-for",
-          "value": "The opt-in adapters only: Boost.JSON for the binding test, and Multiprecision with Config (boost-multiprecision, boost-config, fetched on their own) for the bigint=boost backend and the adapter test. The library links no Boost and the installed package never names it (0230 D7a)"
+          "value": "The opt-in components only: Boost.JSON for the boost_json binding and its test, and Multiprecision with Config (boost-multiprecision, boost-config, fetched on their own) for the bigint=boost backend and the boost_multiprecision adapter. The library links no Boost and the core package never names it (0230 D7a); only a Boost component's own files find Boost (0311)"
         },
         {
           "name": "jinja2cpp:why",
-          "value": "The adapter headers jinja2cpp/binding/boost_json.h and jinja2cpp/big_int/boost_cpp_int.h are public opt-in API, so CI keeps testing them"
+          "value": "The components jinja2cpp::boost_json and jinja2cpp::boost_multiprecision (bindings/boost_*) are public opt-in API, so CI keeps testing them (bindings.yml)"
         },
         {
           "name": "jinja2cpp:lighten",
@@ -315,7 +315,7 @@
             },
             {
               "name": "jinja2cpp:selected-by",
-              "value": "JINJA2CPP_WITH_JSON_BINDINGS=boost (the default) with JINJA2CPP_BUILD_TESTS, which picks the binding the tests check"
+              "value": "component jinja2cpp::boost_json; fetched when JINJA2CPP_TEST_BINDINGS lists boost_json (bindings.yml does, the default jobs do not)"
             },
             {
               "name": "jinja2cpp:also-roles",
@@ -323,11 +323,11 @@
             },
             {
               "name": "jinja2cpp:used-for",
-              "value": "The opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value; only its test (test/binding/boost_json_binding_test.cpp) links Boost.JSON. {% meta %} is read by src/json_reader.cpp since 0230 step D6"
+              "value": "The opt-in component jinja2cpp::boost_json (bindings/boost_json/include/jinja2cpp/binding/boost_json.h) gives boost::json::value JsonTraits; only its consumers and its test (test/binding/boost_json_binding_test.cpp) link Boost.JSON. {% meta %} is read by src/json_reader.cpp since 0230 step D6"
             },
             {
               "name": "jinja2cpp:why",
-              "value": "One of two opt-in JSON adapter headers; still the tested default until 0230 step D7b"
+              "value": "One of the shipped JSON bindings (docs/tasks/0311); users of other libraries write their own JsonTraits"
             },
             {
               "name": "jinja2cpp:lighten",
@@ -387,7 +387,7 @@
             },
             {
               "name": "jinja2cpp:selected-by",
-              "value": "JINJA2CPP_WITH_BIGINT=boost (default none) compiles it into src/big_int_builtin.cpp; builds with tests ON build the adapter. Standalone mode (BOOST_MP_STANDALONE): boostorg/multiprecision and boostorg/config fetched on their own, or the headers of a Boost release the build already has (internal mode with the boost binding, a found Boost::headers)"
+              "value": "JINJA2CPP_WITH_BIGINT=boost (default none) compiles it into src/big_int_builtin.cpp; builds with tests ON build the adapter. Standalone mode (BOOST_MP_STANDALONE): boostorg/multiprecision and boostorg/config fetched on their own, or the headers of a Boost release the build already has (internal mode with boost_json in JINJA2CPP_TEST_BINDINGS, a found Boost::headers)"
             },
             {
               "name": "jinja2cpp:also-roles",
@@ -395,7 +395,7 @@
             },
             {
               "name": "jinja2cpp:used-for",
-              "value": "cpp_int behind the built-in big-integer backend (exact integer arithmetic beyond int64, docs/tasks/0272); the opt-in header-only adapter include/jinja2cpp/big_int/boost_cpp_int.h is also the sample backend"
+              "value": "cpp_int behind the built-in big-integer backend (exact integer arithmetic beyond int64, docs/tasks/0272); the opt-in header-only component jinja2cpp::boost_multiprecision (bindings/boost_multiprecision/include/jinja2cpp/big_int/boost_cpp_int.h) is also the sample backend"
             },
             {
               "name": "jinja2cpp:why",
@@ -459,7 +459,7 @@
             },
             {
               "name": "jinja2cpp:selected-by",
-              "value": "JINJA2CPP_WITH_BIGINT=boost (default none) compiles it into src/big_int_builtin.cpp; builds with tests ON build the adapter. Standalone mode (BOOST_MP_STANDALONE): boostorg/multiprecision and boostorg/config fetched on their own, or the headers of a Boost release the build already has (internal mode with the boost binding, a found Boost::headers)"
+              "value": "JINJA2CPP_WITH_BIGINT=boost (default none) compiles it into src/big_int_builtin.cpp; builds with tests ON build the adapter. Standalone mode (BOOST_MP_STANDALONE): boostorg/multiprecision and boostorg/config fetched on their own, or the headers of a Boost release the build already has (internal mode with boost_json in JINJA2CPP_TEST_BINDINGS, a found Boost::headers)"
             },
             {
               "name": "jinja2cpp:also-roles",
@@ -533,7 +533,7 @@
         },
         {
           "name": "jinja2cpp:selected-by",
-          "value": "JINJA2CPP_WITH_JSON_BINDINGS=nlohmann; also fetched whenever JINJA2CPP_BUILD_TESTS is ON (tests, parity corpus and bench read JSON with it)"
+          "value": "component jinja2cpp::nlohmann_json, found when a consumer requests it; fetched whenever JINJA2CPP_BUILD_TESTS is ON (the default JINJA2CPP_TEST_BINDINGS, tests, parity corpus and bench read JSON with it)"
         },
         {
           "name": "jinja2cpp:also-roles",
@@ -541,11 +541,11 @@
         },
         {
           "name": "jinja2cpp:used-for",
-          "value": "Opt-in adapter include/jinja2cpp/binding/nlohmann_json.h; test data (tojson, metadata, parity corpus) and bench case files"
+          "value": "Opt-in component jinja2cpp::nlohmann_json (bindings/nlohmann_json/include/jinja2cpp/binding/nlohmann_json.h); test data (tojson, metadata, parity corpus) and bench case files"
         },
         {
           "name": "jinja2cpp:why",
-          "value": "Header-only JSON adapter alternative; the test suite's JSON reader"
+          "value": "Header-only JSON binding, the one the default CI jobs test; the test suite's JSON reader"
         },
         {
           "name": "jinja2cpp:lighten",
