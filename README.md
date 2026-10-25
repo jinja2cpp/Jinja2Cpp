@@ -145,8 +145,13 @@ Jinja2C++ has two external dependencies:
 
 Boost is used only by opt-in pieces: Boost.Multiprecision (with Boost.Config) for
 `-DJINJA2CPP_WITH_BIGINT=boost` and the `jinja2cpp/big_int/boost_cpp_int.h` adapter, and
-Boost.JSON for the `jinja2cpp/binding/boost_json.h` adapter. The tests fetch what they check;
-the library links no Boost and its package never asks for it.
+Boost.JSON for the `jinja2cpp/binding/boost_json.h` binding. The tests fetch what they check;
+the library links no Boost and its core package never asks for it.
+
+The JSON bindings and the big-integer adapter are header-only components of the package, each
+bringing its own library (`find_package(jinja2cpp COMPONENTS nlohmann_json)` and
+`jinja2cpp::nlohmann_json`, or `pkg-config jinja2cpp-nlohmann_json`); also `boost_json` and
+`boost_multiprecision`. Every component is installed; see [MIGRATION.md](MIGRATION.md).
 
 Why each dependency is needed, which are optional, and the CycloneDX and SPDX SBOMs installed with
 the package: [docs/dependencies.md](docs/dependencies.md).
@@ -289,6 +294,7 @@ You can define (via -D command-line CMake option) the following build flags:
     -  `external-boost` Deprecated, removed in 3.0: the same as `internal`, except that the opt-in Boost pieces (big-integer backend, adapter tests) take Boost from `find_package`.
     -  `external` In this mode all dependencies should be provided externally. Paths to `fmt`, `nonstd-*` libs and, for the opt-in Boost pieces, `boost` should be specified via standard CMake variables (like `CMAKE_PREFIX_PATH` or libname_DIR)
     -  `conan-build` Special mode for building Jinja2C++ via conan recipe.
+-  **JINJA2CPP_TEST_BINDINGS** (default `nlohmann_json`) - the JSON bindings the tests check, a list of `nlohmann_json` and `boost_json`; it decides which JSON libraries the build fetches or finds. Every binding is installed as a package component whatever this lists.
 -  **JINJA2CPP_WITH_BIGINT** (default `none`) - the big-integer backend every `TemplateEnv` starts with. With `none`, templates print, compare and convert integers of any size, and arithmetic whose result leaves `int64_t` fails with `IntegerOutOfRange`. With `boost`, that arithmetic is exact, as in Python, through Boost.Multiprecision's `cpp_int` (header-only, compiled into the library; consumers need nothing). The installed package reports the choice as `jinja2cpp_BIGINT` (CMake) and `bigint` (pkg-config).
 -  **JINJA2CPP_WITH_UNICODE_NAMES** (default TRUE) - decode `\N{name}` escapes in template string literals, as Python does, with a table of the Unicode 15.0 character names and aliases (about 450 KB of read-only data). With FALSE the table is left out and a `\N{...}` escape is a parse error.
 

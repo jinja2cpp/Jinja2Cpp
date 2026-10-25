@@ -2,7 +2,9 @@
 cmake_minimum_required(VERSION 3.23)
 project(jinja2cpp_package_consumer CXX)
 
-find_package(jinja2cpp ${JINJA2CPP_EXPECT_VERSION} REQUIRED)
+# check_package.cmake separates the components with commas
+string(REPLACE "," ";" JINJA2CPP_EXPECT_COMPONENTS "${JINJA2CPP_EXPECT_COMPONENTS}")
+find_package(jinja2cpp ${JINJA2CPP_EXPECT_VERSION} REQUIRED COMPONENTS ${JINJA2CPP_EXPECT_COMPONENTS})
 # The built-in big-integer backend the library was configured with (docs/tasks/0272)
 if (NOT jinja2cpp_BIGINT STREQUAL JINJA2CPP_EXPECT_BIGINT)
     message(FATAL_ERROR "jinja2cpp_BIGINT is '${jinja2cpp_BIGINT}', the build used '${JINJA2CPP_EXPECT_BIGINT}'")
@@ -22,6 +24,15 @@ target_link_libraries(consumer_compat PRIVATE jinja2cpp)
 enable_testing()
 add_test(NAME consumer COMMAND consumer ${CMAKE_CURRENT_BINARY_DIR}/templates)
 add_test(NAME consumer_compat COMMAND consumer_compat ${CMAKE_CURRENT_BINARY_DIR}/templates)
+
+# A component brings its header and its library (docs/tasks/0311)
+foreach (_comp IN LISTS JINJA2CPP_EXPECT_COMPONENTS)
+    string(TOUPPER "${_comp}" _upper)
+    add_executable(component_${_comp} component_consumer.cpp)
+    target_compile_definitions(component_${_comp} PRIVATE CONSUMER_${_upper})
+    target_link_libraries(component_${_comp} PRIVATE jinja2cpp::${_comp})
+    add_test(NAME component_${_comp} COMMAND component_${_comp})
+endforeach ()
 
 # A program built against 1.x headers must fail to link with this library, not misbehave:
 # the inline namespace v2 is in every mangled name (docs/tasks/0076). abi_probe_v2 is the
@@ -65,4 +76,20 @@ if (JINJA2CPP_CHECK_PKGCONFIG AND PKG_CONFIG_FOUND AND NOT WIN32 AND (JINJA2CPP_
         target_link_libraries(consumer_pc PRIVATE ${J2C_STATIC_LDFLAGS})
     endif ()
     add_test(NAME consumer_pc COMMAND consumer_pc ${CMAKE_CURRENT_BINARY_DIR}/templates)
+    # jinja2cpp-<component>.pc requires jinja2cpp and the component's library
+    foreach (_comp IN LISTS JINJA2CPP_EXPECT_COMPONENTS)
+        string(TOUPPER "${_comp}" _upper)
+        pkg_check_modules(J2C_${_upper} REQUIRED jinja2cpp-${_comp})
+        add_executable(component_${_comp}_pc component_consumer.cpp)
+        target_compile_definitions(component_${_comp}_pc PRIVATE CONSUMER_${_upper})
+        if (JINJA2CPP_EXPECT_SHARED)
+            target_compile_options(component_${_comp}_pc PRIVATE ${J2C_${_upper}_CFLAGS})
+            target_link_libraries(component_${_comp}_pc PRIVATE ${J2C_${_upper}_LDFLAGS})
+            set_target_properties(component_${_comp}_pc PROPERTIES BUILD_RPATH "${J2C_LIBDIR}")
+        else ()
+            target_compile_options(component_${_comp}_pc PRIVATE ${J2C_${_upper}_STATIC_CFLAGS})
+            target_link_libraries(component_${_comp}_pc PRIVATE ${J2C_${_upper}_STATIC_LDFLAGS})
+        endif ()
+        add_test(NAME component_${_comp}_pc COMMAND component_${_comp}_pc)
+    endforeach ()
 endif ()

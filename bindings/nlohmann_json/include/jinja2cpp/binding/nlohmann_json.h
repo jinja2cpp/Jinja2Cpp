@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
-#include <string>
+#include <string> // IWYU pragma: keep (Key() before nlohmann_json 3.11)
 #include <string_view>
 
 namespace jinja2

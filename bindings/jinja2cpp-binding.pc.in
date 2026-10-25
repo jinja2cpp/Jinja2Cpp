@@ -1,0 +1,9 @@
+prefix=${pcfiledir}/@JINJA2CPP_PC_PREFIX_REL@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: jinja2cpp-@JINJA2CPP_BINDING_NAME@
+Description: Jinja2C++ binding of @JINJA2CPP_BINDING_DESCRIPTION@ (header-only)
+Version: @PROJECT_VERSION@
+Requires: @JINJA2CPP_BINDING_PC_REQUIRES@
+Libs: @JINJA2CPP_BINDING_PC_LIBS@
+Cflags: -I${includedir}

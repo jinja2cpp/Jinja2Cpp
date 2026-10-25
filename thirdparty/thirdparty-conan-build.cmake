@@ -11,13 +11,13 @@ endif ()
 
 # The library links no Boost (docs/tasks/0230). conanfile.txt asks for a header-only Boost:
 # Boost::headers carries Multiprecision for -DJINJA2CPP_WITH_BIGINT=boost and the tests'
-# adapter check. Only the Boost.JSON adapter test needs a compiled library.
+# adapter check. Only the Boost.JSON binding test needs a compiled library.
 if (JINJA2CPP_BUILD_TESTS OR "${JINJA2CPP_WITH_BIGINT}" STREQUAL "boost")
     find_package(Boost REQUIRED)
-    if (JINJA2CPP_BUILD_TESTS AND "${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost" AND NOT TARGET Boost::json)
-        message(FATAL_ERROR "The Boost.JSON adapter test (JINJA2CPP_WITH_JSON_BINDINGS=boost) needs a compiled "
+    if (JINJA2CPP_BUILD_TESTS AND "boost_json" IN_LIST JINJA2CPP_TEST_BINDINGS AND NOT TARGET Boost::json)
+        message(FATAL_ERROR "The Boost.JSON binding test (boost_json in JINJA2CPP_TEST_BINDINGS) needs a compiled "
             "Boost.JSON, and conanfile.txt asks for a header-only Boost: install with "
-            "`-o boost/*:header_only=False`, or configure with -DJINJA2CPP_WITH_JSON_BINDINGS=nlohmann")
+            "`-o boost/*:header_only=False`, or leave boost_json out of JINJA2CPP_TEST_BINDINGS")
     endif ()
 endif ()
 

@@ -42,13 +42,13 @@ PHASES = {"build", "consumer-build", "consumer-link", "runtime", "test", "dev", 
 EXPOSURES = {"public-api", "public-optional", "link", "internal", "none"}
 DELIVERIES = {"fetched", "vendored", "generated", "system", "ci"}
 # The only files that may include Boost: the library is Boost-free (docs/tasks/0230), and
-# these are the opt-in adapters, the optional big-integer backend and the adapter test
+# these are the Boost components (bindings/boost_*, docs/tasks/0311), the optional
+# big-integer backend and the Boost.JSON binding test
 BOOST_ALLOWED = {
     "src/big_int_builtin.cpp",
-    "include/jinja2cpp/binding/boost_json.h",
-    "include/jinja2cpp/big_int/boost_cpp_int.h",
     "test/binding/boost_json_binding_test.cpp",
 }
+BOOST_ALLOWED_PREFIXES = ("bindings/boost_",)
 
 
 def load():
@@ -401,12 +401,13 @@ def audit(data, by_id):
     # Every Boost header the code includes belongs to a listed Boost library
     # and only the opt-in Boost adapters include Boost at all (docs/tasks/0230)
     headers = {h for c in comps for h in c.get("includes", [])}
-    for rel, path in repo_files("src/**/*", "include/**/*", "test/**/*", "fuzz/**/*", "bench/**/*"):
+    for rel, path in repo_files("src/**/*", "include/**/*", "bindings/**/*", "test/**/*", "fuzz/**/*", "bench/**/*"):
         if path.suffix not in (".h", ".hpp", ".cpp", ".cc"):
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
-        if "<boost/" in text and rel not in BOOST_ALLOWED:
-            problems.append(f"{rel}: names <boost/...>; only {', '.join(sorted(BOOST_ALLOWED))} may (0230)")
+        if "<boost/" in text and rel not in BOOST_ALLOWED and not rel.startswith(BOOST_ALLOWED_PREFIXES):
+            allowed = ", ".join(sorted(BOOST_ALLOWED) + [p + "*" for p in BOOST_ALLOWED_PREFIXES])
+            problems.append(f"{rel}: names <boost/...>; only {allowed} may (0230)")
         for header in re.findall(r"#\s*include\s*<(boost/[^>]+)>", text):
             if header not in headers:
                 problems.append(f"{rel}: <{header}> is not in the `includes` of any boost-* component")
