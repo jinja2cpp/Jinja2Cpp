@@ -22,9 +22,7 @@ and export the `JINJA2CPP_CMAKE_INIT` it prints.
 When archive downloads are blocked in that runner, the hook supplies an initial
 cache for new build directories:
 `cmake -S . -B build-x -G Ninja -C "$JINJA2CPP_CMAKE_INIT" ...`.
-In Claude Code on the web, `-DJINJA2CPP_WITH_JSON_BINDINGS=rapid` still needs an
-archive download (patched RapidJSON) and does not configure, and ConanCenter is
-blocked, so Conan builds run only in CI.
+In Claude Code on the web ConanCenter is blocked, so Conan builds run only in CI.
 Keep strict warnings and TLS/checksum verification enabled, as in AGENTS.md.
 
 ## Agent roles

@@ -1,9 +1,10 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/659
 priority: medium
 area: build
 depends: [0230, 0311]
-touches: [include/jinja2cpp/binding/rapid_json.h, src/binding/rapid_json_parser.h, test/binding/rapid_json_binding_test.cpp, cmake/patches/rapid_json_improvements.patch, thirdparty/internal_deps.cmake, thirdparty/thirdparty-conan-build.cmake, thirdparty/thirdparty-external.cmake]
+touches: [include/jinja2cpp/binding/rapid_json.h, test/binding/rapid_json_binding_test.cpp, cmake/patches/rapid_json_improvements.patch, cmake/patches/0001-fix-custom_command-error.patch, thirdparty/internal_deps.cmake, thirdparty/thirdparty-conan-build.cmake, thirdparty/thirdparty-external.cmake]
 shares: [CMakeLists.txt, .github/workflows/linux-build.yml, .github/workflows/clang-tidy.yml, conanfile.txt, sbom/components.json, docs/dependencies.md, MIGRATION.md]
 ---
 # Retire the built-in RapidJSON backend

@@ -7,11 +7,6 @@ find_package(fmt REQUIRED)
 # The JSON libraries are for the tests only: the library reads {% meta %} itself (0230 D6)
 if (JINJA2CPP_BUILD_TESTS)
     find_package(nlohmann_json REQUIRED)
-    if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
-        find_package(RapidJSON REQUIRED)
-        add_library(RapidJson INTERFACE)
-        target_link_libraries(RapidJson INTERFACE rapidjson)
-    endif ()
 endif ()
 
 # The library links no Boost (docs/tasks/0230). conanfile.txt asks for a header-only Boost:

@@ -33,9 +33,7 @@ changed() { git diff --name-only --diff-filter=d "$base" -- "$@"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 fmt=clang-format-18; have $fmt || fmt=clang-format
-tidy_excludes=(':!src/binding/rapid_json*' ':!src/binding/nlohmann_json*'
-  ':!include/jinja2cpp/binding/rapid_json*' ':!include/jinja2cpp/binding/nlohmann_json*'
-  ':!test/binding/rapid_json*' ':!test/binding/nlohmann_json*'
+tidy_excludes=(':!include/jinja2cpp/binding/nlohmann_json*' ':!test/binding/nlohmann_json*'
   # A header borrows the flags of a similar file, none of which has Multiprecision's include
   # path; test/big_int_test.cpp covers it (docs/tasks/0272)
   ':!include/jinja2cpp/big_int/boost_cpp_int.h'

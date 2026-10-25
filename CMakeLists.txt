@@ -21,9 +21,17 @@ if (DEFINED JINJA2CPP_USE_REGEX)
     message(DEPRECATION "JINJA2CPP_USE_REGEX is deprecated and ignored: Jinja2Cpp no longer uses Boost.Regex")
     unset(JINJA2CPP_USE_REGEX CACHE)
 endif ()
-set(JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS boost nlohmann rapid)
-set(JINJA2CPP_WITH_JSON_BINDINGS boost CACHE STRING "Build with json support(boost|rapid|nlohmann) for serialization operations, like tojson filter. 'boost' is default.")
+set(JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS boost nlohmann)
+set(JINJA2CPP_WITH_JSON_BINDINGS boost CACHE STRING "JSON binding the tests check (boost|nlohmann). 'boost' is default.")
 set_property(CACHE JINJA2CPP_WITH_JSON_BINDINGS PROPERTY STRINGS ${JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS})
+if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
+    # The built-in RapidJSON binding is retired in 2.0 (docs/tasks/0303)
+    message(FATAL_ERROR "JINJA2CPP_WITH_JSON_BINDINGS=rapid is no longer supported: Jinja2C++ 2.0 has no built-in "
+        "RapidJSON binding. See \"RapidJSON binding removed\" in MIGRATION.md for a JsonTraits specialisation "
+        "that keeps Reflect working with your own RapidJSON, or use -DJINJA2CPP_WITH_JSON_BINDINGS=nlohmann")
+elseif (NOT JINJA2CPP_WITH_JSON_BINDINGS IN_LIST JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS)
+    message(FATAL_ERROR "JINJA2CPP_WITH_JSON_BINDINGS must be one of ${JINJA2CPP_WITH_JSON_SUPPORTED_BINDINGS}, not '${JINJA2CPP_WITH_JSON_BINDINGS}'")
+endif ()
 set(JINJA2CPP_WITH_BIGINT_SUPPORTED_BACKENDS none boost)
 set(JINJA2CPP_WITH_BIGINT none CACHE STRING "Built-in big-integer backend (none|boost): with 'boost', integer arithmetic beyond int64 is exact by default (docs/tasks/0272). 'none' is default.")
 set_property(CACHE JINJA2CPP_WITH_BIGINT PROPERTY STRINGS ${JINJA2CPP_WITH_BIGINT_SUPPORTED_BACKENDS})
@@ -284,9 +292,6 @@ target_compile_options(${LIB_TARGET_NAME} PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
 if ("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
     set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_BOOST")
     set(JINJA2CPP_JSON_BINDING_LIBS Boost::json)
-elseif("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
-    set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_RAPID")
-    set(JINJA2CPP_JSON_BINDING_LIBS RapidJson)
 else()
     set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_NLOHMANN")
     set(JINJA2CPP_JSON_BINDING_LIBS nlohmann_json::nlohmann_json)
@@ -519,13 +524,6 @@ if (JINJA2CPP_BUILD_TESTS)
         target_sources(jinja2cpp_tests
             PRIVATE
                 test/binding/boost_json_binding_test.cpp
-        )
-    endif()
-    if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "rapid")
-        set(_bindings_define "-DJINJA2CPP_WITH_JSON_BINDINGS_RAPID")
-        target_sources(jinja2cpp_tests
-            PRIVATE
-                test/binding/rapid_json_binding_test.cpp
         )
     endif()
     if("${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "nlohmann")

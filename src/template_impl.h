@@ -551,7 +551,7 @@ public:
     nonstd::expected<GenericMap, BasicErrorInfo<CharT>> GetMetadata() const
     {
         // The JSON document is parsed once and kept in the template: the returned maps may refer to
-        // it (the RapidJSON binding does), so it must outlive every map handed out
+        // it, so it must outlive every map handed out
         std::scoped_lock lock(m_metadataMutex);
         try
         {

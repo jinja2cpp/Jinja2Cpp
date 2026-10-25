@@ -131,7 +131,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: alternative; phases: test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=boost (the default) with JINJA2CPP_BUILD_TESTS, which picks the binding the tests check; also-roles: test; used-for: The opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value; only its test (test/binding/boost_json_binding_test.cpp) links Boost.JSON. {% meta %} is read by src/json_reader.cpp since 0230 step D6; why: One of three opt-in JSON adapter headers; still the tested default until 0230 step D7b; lighten: Done: only its test fetches and links it (0230 D6, D7a)"
+      "comment": "role: alternative; phases: test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=boost (the default) with JINJA2CPP_BUILD_TESTS, which picks the binding the tests check; also-roles: test; used-for: The opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value; only its test (test/binding/boost_json_binding_test.cpp) links Boost.JSON. {% meta %} is read by src/json_reader.cpp since 0230 step D6; why: One of two opt-in JSON adapter headers; still the tested default until 0230 step D7b; lighten: Done: only its test fetches and links it (0230 D6, D7a)"
     },
     {
       "SPDXID": "SPDXRef-Package-boost-multiprecision",
@@ -213,33 +213,6 @@
       ],
       "primaryPackagePurpose": "LIBRARY",
       "comment": "role: alternative; phases: build,test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=nlohmann; also fetched whenever JINJA2CPP_BUILD_TESTS is ON (tests, parity corpus and bench read JSON with it); also-roles: test; used-for: Opt-in adapter include/jinja2cpp/binding/nlohmann_json.h; test data (tojson, metadata, parity corpus) and bench case files; why: Header-only JSON adapter alternative; the test suite's JSON reader; lighten: Header-only, no link cost; tests and adapter only; conan: nlohmann_json/3.12.0"
-    },
-    {
-      "SPDXID": "SPDXRef-Package-rapidjson",
-      "name": "RapidJSON",
-      "versionInfo": "24b5e7a8b27f42fa16b96fc70aade9106cf7102f",
-      "supplier": "Organization: Tencent",
-      "downloadLocation": "https://github.com/Tencent/rapidjson/archive/24b5e7a8b27f42fa16b96fc70aade9106cf7102f.tar.gz",
-      "filesAnalyzed": false,
-      "checksums": [
-        {
-          "algorithm": "SHA256",
-          "checksumValue": "2d2601a82d2d3b7e143a3c8d43ef616671391034bc46891a9816b79cf2d3e7a8"
-        }
-      ],
-      "homepage": "https://github.com/Tencent/rapidjson",
-      "licenseConcluded": "NOASSERTION",
-      "licenseDeclared": "MIT",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:github/Tencent/rapidjson@24b5e7a8b27f42fa16b96fc70aade9106cf7102f"
-        }
-      ],
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: alternative; phases: build; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=rapid; used-for: Opt-in adapter include/jinja2cpp/binding/rapid_json.h and its test; why: Third JSON adapter for users who already carry RapidJSON; lighten: Header-only. Patched locally (CMake files only), and the conan-build mode takes the same commit unpatched from ConanCenter; upstream has had no release since 2016. A candidate to retire as a built-in backend while keeping the adapter header; conan: rapidjson/cci.20250205; conan-why: cci.20250205 is commit 24b5e7a8 (same sha256 as the internal archive); the two local patches only change RapidJSON's CMake install, policy, gtest and config-file rules, which the header-only Conan package does not use, so it needs neither"
     },
     {
       "SPDXID": "SPDXRef-Package-robin-hood-hashing",
@@ -952,11 +925,6 @@
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
     },
     {
-      "spdxElementId": "SPDXRef-Package-rapidjson",
-      "relationshipType": "OPTIONAL_DEPENDENCY_OF",
-      "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
-    },
-    {
       "spdxElementId": "SPDXRef-Package-jinja2cpp",
       "relationshipType": "CONTAINS",
       "relatedSpdxElement": "SPDXRef-Package-robin-hood-hashing"
@@ -1107,5 +1075,5 @@
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-97a03352953c1b64"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-16fec67bdd75d5f9"
 }

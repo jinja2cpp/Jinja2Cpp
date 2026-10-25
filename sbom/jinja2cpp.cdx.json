@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:c942662f-ce4d-598f-a521-2b3dfac9692c",
+  "serialNumber": "urn:uuid:87fcaf38-0e4e-541c-89b5-0c1a8aca1418",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -327,7 +327,7 @@
             },
             {
               "name": "jinja2cpp:why",
-              "value": "One of three opt-in JSON adapter headers; still the tested default until 0230 step D7b"
+              "value": "One of two opt-in JSON adapter headers; still the tested default until 0230 step D7b"
             },
             {
               "name": "jinja2cpp:lighten",
@@ -410,98 +410,6 @@
         {
           "name": "jinja2cpp:conan",
           "value": "nlohmann_json/3.12.0"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "rapidjson",
-      "name": "RapidJSON",
-      "version": "24b5e7a8b27f42fa16b96fc70aade9106cf7102f",
-      "supplier": {
-        "name": "Tencent"
-      },
-      "scope": "optional",
-      "hashes": [
-        {
-          "alg": "SHA-256",
-          "content": "2d2601a82d2d3b7e143a3c8d43ef616671391034bc46891a9816b79cf2d3e7a8"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ],
-      "purl": "pkg:github/Tencent/rapidjson@24b5e7a8b27f42fa16b96fc70aade9106cf7102f",
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://github.com/Tencent/rapidjson"
-        },
-        {
-          "type": "distribution",
-          "url": "https://github.com/Tencent/rapidjson/archive/24b5e7a8b27f42fa16b96fc70aade9106cf7102f.tar.gz"
-        }
-      ],
-      "pedigree": {
-        "patches": [
-          {
-            "type": "unofficial",
-            "diff": {
-              "url": "cmake/patches/rapid_json_improvements.patch"
-            }
-          },
-          {
-            "type": "unofficial",
-            "diff": {
-              "url": "cmake/patches/0001-fix-custom_command-error.patch"
-            }
-          }
-        ]
-      },
-      "properties": [
-        {
-          "name": "jinja2cpp:role",
-          "value": "alternative"
-        },
-        {
-          "name": "jinja2cpp:phases",
-          "value": "build"
-        },
-        {
-          "name": "jinja2cpp:exposure",
-          "value": "public-optional"
-        },
-        {
-          "name": "jinja2cpp:delivery",
-          "value": "fetched"
-        },
-        {
-          "name": "jinja2cpp:selected-by",
-          "value": "JINJA2CPP_WITH_JSON_BINDINGS=rapid"
-        },
-        {
-          "name": "jinja2cpp:used-for",
-          "value": "Opt-in adapter include/jinja2cpp/binding/rapid_json.h and its test"
-        },
-        {
-          "name": "jinja2cpp:why",
-          "value": "Third JSON adapter for users who already carry RapidJSON"
-        },
-        {
-          "name": "jinja2cpp:lighten",
-          "value": "Header-only. Patched locally (CMake files only), and the conan-build mode takes the same commit unpatched from ConanCenter; upstream has had no release since 2016. A candidate to retire as a built-in backend while keeping the adapter header"
-        },
-        {
-          "name": "jinja2cpp:conan",
-          "value": "rapidjson/cci.20250205"
-        },
-        {
-          "name": "jinja2cpp:conan-why",
-          "value": "cci.20250205 is commit 24b5e7a8 (same sha256 as the internal archive); the two local patches only change RapidJSON's CMake install, policy, gtest and config-file rules, which the header-only Conan package does not use, so it needs neither"
         }
       ]
     },
@@ -890,7 +798,6 @@
         "fmt",
         "boost",
         "nlohmann-json",
-        "rapidjson",
         "robin-hood-hashing",
         "lexertk",
         "value-types",

@@ -66,17 +66,17 @@ jobs:
       matrix:
         include:
           - { std: 17, compiler: gcc-12,   config: Release, shared: 'OFF', bindings: boost,    noderef: 'OFF', bigint: boost }
-          - { std: 17, compiler: gcc-14,   config: Debug,   shared: 'OFF', bindings: rapid }
+          - { std: 17, compiler: gcc-14,   config: Debug,   shared: 'OFF', bindings: nlohmann }
           - { std: 17, compiler: clang-18, config: RelWithDebInfo, shared: 'ON', bindings: nlohmann, abi: true }
           - { std: 17, compiler: clang-20, config: Release, shared: 'OFF', bindings: boost,                    package: 23, bigint: boost }
-          - { std: 20, compiler: gcc-12,   config: RelWithDebInfo, shared: 'ON', bindings: rapid,  abi: true }
+          - { std: 20, compiler: gcc-12,   config: RelWithDebInfo, shared: 'ON', bindings: boost,  abi: true }
           - { std: 20, compiler: gcc-14,   config: Release, shared: 'ON',  bindings: nlohmann, bigint: boost }
           - { std: 20, compiler: clang-18, config: Debug,   shared: 'OFF', bindings: boost }
           - { std: 20, compiler: clang-20, config: Debug,   shared: 'OFF', bindings: nlohmann, noderef: 'OFF', bigint: boost }
           - { std: 23, compiler: gcc-12,   config: Debug,   shared: 'OFF', bindings: nlohmann }
           - { std: 23, compiler: gcc-14,   config: RelWithDebInfo, shared: 'ON', bindings: boost,  noderef: 'OFF', package: 17, abi: true }
-          - { std: 23, compiler: clang-18, config: Release, shared: 'ON',  bindings: rapid,    noderef: 'OFF', bigint: boost }
-          - { std: 23, compiler: clang-20, config: Debug,   shared: 'ON',  bindings: rapid }
+          - { std: 23, compiler: clang-18, config: Release, shared: 'ON',  bindings: nlohmann, noderef: 'OFF', bigint: boost }
+          - { std: 23, compiler: clang-20, config: Debug,   shared: 'ON',  bindings: boost }
           - { std: 26, compiler: gcc-14,   config: Release, shared: 'OFF', bindings: boost }
           - { std: 26, compiler: clang-20, config: Debug,   shared: 'ON',  bindings: nlohmann }
 

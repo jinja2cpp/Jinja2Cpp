@@ -36,7 +36,7 @@ def pins(repo_root):
         for name, body in DECLARE_RE.findall(text):
             m = ARCHIVE_RE.search(body)
             if not m or "PATCH_COMMAND" in body:
-                # Release assets (Boost) download fine; patched deps (RapidJSON)
+                # Release assets (Boost) download fine; a patched dependency
                 # must go through FetchContent so the patch is applied.
                 continue
             owner, repo, ref = m.groups()
