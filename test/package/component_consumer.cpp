@@ -3,7 +3,7 @@
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/value.h>
 
-#if defined(CONSUMER_NLOHMANN_JSON)
+#ifdef CONSUMER_NLOHMANN_JSON
 #include <jinja2cpp/binding/nlohmann_json.h>
 #elif defined(CONSUMER_BOOST_JSON)
 #include <jinja2cpp/binding/boost_json.h>
@@ -19,7 +19,7 @@
 
 int main()
 {
-#if defined(CONSUMER_BOOST_MULTIPRECISION)
+#ifdef CONSUMER_BOOST_MULTIPRECISION
     jinja2::TemplateEnv env;
     env.SetBigIntBackend(jinja2::BoostCppIntBackend());
     jinja2::Template tpl(&env);
@@ -30,7 +30,7 @@ int main()
     auto out = tpl.RenderAsString({});
     const std::string expected = "1180591620717411303424";
 #else
-#if defined(CONSUMER_NLOHMANN_JSON)
+#ifdef CONSUMER_NLOHMANN_JSON
     const auto data = nlohmann::json::parse(R"({"name": "json", "items": [1, 2, 3]})");
 #else
     const auto data = boost::json::parse(R"({"name": "json", "items": [1, 2, 3]})");

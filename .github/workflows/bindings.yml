@@ -176,8 +176,9 @@ jobs:
     - name: fmt and expected-lite
       run: |
         git clone --depth 1 --branch 12.2.0 https://github.com/fmtlib/fmt.git "$RUNNER_TEMP/fmt"
+        # PIC: the shared jinja2cpp links this static fmt
         cmake -S "$RUNNER_TEMP/fmt" -B "$RUNNER_TEMP/fmt/build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
-          -DFMT_TEST=OFF -DFMT_DOC=OFF
+          -DFMT_TEST=OFF -DFMT_DOC=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON
         cmake --build "$RUNNER_TEMP/fmt/build"
         sudo cmake --install "$RUNNER_TEMP/fmt/build"
         git clone --depth 1 --branch v0.10.0 https://github.com/nonstd-lite/expected-lite.git "$RUNNER_TEMP/expected-lite"
@@ -254,7 +255,9 @@ jobs:
       run: |
         set -o pipefail
         status=0
-        git diff -U0 --no-color "$BASE_SHA" -- bindings test/binding \
+        # The big-integer adapter on its own borrows flags without Multiprecision's include
+        # path; test/big_int_test.cpp, which includes it, covers it (docs/tasks/0272)
+        git diff -U0 --no-color "$BASE_SHA" -- bindings test/binding ':!bindings/boost_multiprecision/*' \
           | python "$TIDY_BIN/clang-tidy-diff.py" -p1 -path build -j "$(nproc)" -quiet \
               -clang-tidy-binary "$CLANG_TIDY" \
               -extra-arg=-Wno-unknown-warning-option \

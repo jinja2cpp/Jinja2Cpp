@@ -156,7 +156,8 @@ foreach (_probe "nlohmann_json;FAIL;needs nlohmann_json::nlohmann_json" "optiona
     list(GET _probe 2 _message)
     file(REMOVE_RECURSE "${PREFIX}-probe/build")
     execute_process(COMMAND ${CMAKE_COMMAND} -S "${PREFIX}-probe/src" -B "${PREFIX}-probe/build" -G Ninja
-        "-DCMAKE_PREFIX_PATH=${PREFIX}" -DPROBE=${_what} -DCMAKE_DISABLE_FIND_PACKAGE_nlohmann_json=ON ${CONSUMER_ARGS}
+        "-DCMAKE_PREFIX_PATH=${PREFIX}" -DCMAKE_BUILD_TYPE=${CONFIG} -DPROBE=${_what}
+        -DCMAKE_DISABLE_FIND_PACKAGE_nlohmann_json=ON ${CONSUMER_ARGS}
         RESULT_VARIABLE _rc OUTPUT_VARIABLE _out ERROR_VARIABLE _out)
     if (_rc EQUAL 0)
         set(_got OK)

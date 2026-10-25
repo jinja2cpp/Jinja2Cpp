@@ -38,8 +38,9 @@ fmt=clang-format-18; have $fmt || fmt=clang-format
 tidy_excludes=(':!bindings/boost_*' ':!test/binding/boost_json*'
   ':!include/jinja2cpp/polymorphic_value/*' ':!src/robin_hood.h' ':!src/lexertk.h'
   ':!src/unicode_tables.h'
-  # Generated test data, included by a test
-  ':!test/*.inc')
+  # Generated test data, included by a test; the installed-package consumers, which
+  # check_package.cmake builds outside this build's compile database
+  ':!test/*.inc' ':!test/package/*')
 
 # 1. clang-format, as .github/workflows/format-check.yml
 mapfile -t whole < <(changed 'src/**.h' 'src/**.cpp' 'include/**.h' 'bindings/**.h')
