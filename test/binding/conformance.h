@@ -849,6 +849,9 @@ TYPED_TEST_P(JsonConformance, CopyLimits)
     ExpectFailure(jinja2::ToValue(TypeP::Parse(R"({"a":{"p":1,"q":2,"r":3,"s":4}})"), three), { ErrorCode::ResourceLimitExceeded, "maxSequenceSize", "$.a" });
     ExpectFailure(jinja2::ToValue(TypeP::Parse(R"({"a":["xyz","abcd"]})"), three), { ErrorCode::ResourceLimitExceeded, "maxSequenceSize", "$.a[1]" });
     ExpectFailure(jinja2::ToValue(TypeP::Parse(R"({"a b":"abcd"})"), three), { ErrorCode::ResourceLimitExceeded, "maxSequenceSize", "$[\"a b\"]" });
+    // A key is a string too: it is checked before it is copied, and the path names the object that holds it
+    ExpectFailure(jinja2::ToValue(TypeP::Parse(R"({"abcd":0})"), three), { ErrorCode::ResourceLimitExceeded, "maxSequenceSize", "$" });
+    ExpectFailure(jinja2::ToValue(TypeP::Parse(R"({"a":{"abcd":0}})"), three), { ErrorCode::ResourceLimitExceeded, "maxSequenceSize", "$.a" });
     ExpectFailure(jinja2::ToValue(TypeP::Parse(R"([[1,2,3,4]])"), three), { ErrorCode::ResourceLimitExceeded, "maxSequenceSize", "$[0]" });
     ExpectFailure(jinja2::ToValue(TypeP::Parse(R"({"x":[{"k\"q":"abcd"}]})"), three), { ErrorCode::ResourceLimitExceeded, "maxSequenceSize", R"($.x[0]["k\"q"])" });
     ExpectFailure(jinja2::ToValue(TypeP::Parse(R"({"1x":[true]})"), JsonCopyLimits{ 1, 0 }), { ErrorCode::ResourceLimitExceeded, "maxDepth", "$[\"1x\"]" });

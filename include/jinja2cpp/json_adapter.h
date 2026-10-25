@@ -758,7 +758,13 @@ private:
                     Fail(node, "a JSON object has more members than maxSequenceSize (" + std::to_string(m_cap) + ")", "maxSequenceSize");
                     return false;
                 }
-                std::string name{ std::string_view(key) };
+                const std::string_view keyText(key);
+                if (keyText.size() > m_cap)
+                {
+                    Fail(node, "a JSON object key is longer than maxSequenceSize (" + std::to_string(m_cap) + ")", "maxSequenceSize");
+                    return false;
+                }
+                std::string name{ keyText };
                 Value item = Copy(child, depth + 1);
                 if (m_failed)
                 {
