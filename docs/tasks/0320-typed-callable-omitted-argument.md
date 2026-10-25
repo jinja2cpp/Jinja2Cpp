@@ -22,5 +22,11 @@ default is passed default-constructed (the lambda path's current behaviour, leas
 existing hosts), or a missing argument raises an error for both. Then make the other path follow
 it and add `()` rows for the function-pointer callables in `StringViewPointerParamConvert`.
 
+**Related difference (0296 verifier).** A typed `Markup`/`WMarkup` parameter now converts text
+of the other width (0296). A lambda with a `const Markup&` parameter on the `UCInvoker` path still
+renders None for a wide string or a WMarkup argument, since `ArgPromoter` has no conversion to
+the other width's Markup. Bring it in line in the same change, with a `MarkupTest` row for a
+lambda.
+
 **Done when** a lambda and a function pointer with the same signature render the same for an
 omitted argument, with rows for both in `test/user_callable_test.cpp`.

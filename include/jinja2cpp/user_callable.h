@@ -121,8 +121,9 @@ struct ArgPromoter<std::basic_string_view<CharT>, void>
     {
     }
 
-    // No `operator string_view`: next to this one it made a by-value `std::string_view` parameter ambiguous
-    operator const string_view&() const { return *m_ptr; }                   // NOLINT(google-explicit-constructor)
+    // No `operator const string_view&`: next to `operator string_view` it made a by-value view parameter
+    // ambiguous, and a `string_view&&` one cannot bind its lvalue
+    operator string_view() const { return *m_ptr; }                          // NOLINT(google-explicit-constructor)
     operator string() const { return string(m_ptr->begin(), m_ptr->end()); } // NOLINT(google-explicit-constructor)
     operator other_string() const                                            // NOLINT(google-explicit-constructor)
     {

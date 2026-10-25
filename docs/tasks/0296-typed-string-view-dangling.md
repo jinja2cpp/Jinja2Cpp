@@ -43,8 +43,8 @@ Fixed on the way, found by the verifier:
   returned view into an owned string (`MakeCallResult`). Rows: `StringViewResultConvert`.
 - A lambda taking a view by value, given a string the host passed in, rendered None: the
   promoter of a view had both `operator string_view` and `operator const string_view&`, which
-  made the conversion ambiguous, and `FuncTester` then skipped the call. The by-value operator is
-  gone.
+  made the conversion ambiguous, and `FuncTester` then skipped the call. The reference operator is
+  gone, so a `std::string_view&&` parameter binds too.
 - A typed `Markup` parameter given text of the other width got no value. It now converts the
   text: a WMarkup stays a Markup, a wide string is escaped (rows in `MarkupTest`).
 

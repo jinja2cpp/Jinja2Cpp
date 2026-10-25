@@ -313,6 +313,7 @@ TEST_P(UserCallableParamConvertTest, Test)
     params["ReturnWStringViewPtrFn"] = MakeCallable(&ReturnWStringViewPtrFn, ArgInfo{ "val" });
     params["ReturnStringViewFn"] = MakeCallable([](std::string_view val) { return val; }, ArgInfo{ "val" });
     params["ReturnWStringViewFn"] = MakeCallable([](std::wstring_view val) { return val; }, ArgInfo{ "val" });
+    params["RvalueStringViewFn"] = MakeCallable([](std::string_view&& val) { return std::string(val); }, ArgInfo{ "val" });
     params["longString"] = std::string(40, 'n');
     params["longWString"] = std::wstring(40, L'w');
     params["markupValue"] = Markup("<b>");
@@ -516,7 +517,9 @@ INSTANTIATE_TEST_SUITE_P(StringViewResultConvert, UserCallableParamConvertTest, 
                             InputOutputPair{"ReturnWStringViewFn(longString)", "'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn'"},
                             InputOutputPair{"ReturnWStringViewFn(longWString)", "'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww'"},
                             InputOutputPair{"ReturnWStringViewFn(longString ~ 'x')", "'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnx'"},
-                            InputOutputPair{"ReturnWStringViewFn(wstringValue)", "'  hello world '"}
+                            InputOutputPair{"ReturnWStringViewFn(wstringValue)", "'  hello world '"},
+                            InputOutputPair{"RvalueStringViewFn(stringValue)", "'rain'"},
+                            InputOutputPair{"RvalueStringViewFn(wstringValue)", "'  hello world '"}
                             ));
 
 INSTANTIATE_TEST_SUITE_P(WStringViewParamConvert, UserCallableParamConvertTest, ::testing::Values(
