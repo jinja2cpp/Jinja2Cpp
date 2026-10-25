@@ -63,7 +63,7 @@ extern const InternalValueMap& GetBuiltinGlobals(bool withI18n);
 struct GlobalsSnapshot
 {
     uint64_t generation = 0;
-    // The converted values refer to it
+    // The converted values refer to it, and their lists and maps share it (LendGlobal)
     std::shared_ptr<const ValuesMap> source;
     InternalValueMap values;
 };
@@ -112,9 +112,11 @@ inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::Templat
             snapshot->generation = env.globalsGeneration.load(std::memory_order_relaxed);
             snapshot->source = env.globalValues;
         }
+        // The values keep the map: a host callable or a value the template made may keep one
+        // after the global is replaced and this snapshot goes
         for (const auto& [name, value] : *snapshot->source)
         {
-            snapshot->values[name] = visit(visitors::InputValueConvertor(false, true), value.GetData());
+            snapshot->values[name] = LendGlobal(value, snapshot->source);
         }
         cached = std::move(snapshot);
     }
