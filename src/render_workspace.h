@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace jinja2
@@ -122,6 +123,24 @@ public:
         }
         m_lentMaps = outer;
     }
+    // Keeps a template that a Load replaced while a render runs on this thread, which may be
+    // the template it renders, until the outermost render ends (docs/tasks/0317)
+    void Retire(std::shared_ptr<const void> replaced)
+    {
+        if (m_lentMaps != 0)
+        {
+            m_retired.push_back(std::move(replaced));
+        }
+    }
+    // At the very end of each render, once it no longer uses its template
+    void ReleaseRetired() noexcept
+    {
+        if (m_lentMaps == 0 && !m_retired.empty())
+        {
+            ReleaseRetiredTemplates();
+        }
+    }
+
     // The tables kept for the next render have at most 1024 buckets: about 800 names. A
     // bigger one is let go, so that one huge render does not hold memory on the thread
     static constexpr std::size_t MaxMapMask = 1023;
@@ -166,6 +185,7 @@ private:
     // when none has
     SlotFrame TakeFromNextChunk(UnitLayout layout);
     RenderMaps& LendNewMaps();
+    void ReleaseRetiredTemplates() noexcept;
     static void EmptyMaps(RenderMaps& maps, bool keepTables) noexcept;
 
     // The smallest chunk: a template with a few nested loops and macros fits in it
@@ -182,6 +202,7 @@ private:
     // while a render inside it is lent others
     std::vector<std::unique_ptr<RenderMaps>> m_maps;
     std::size_t m_lentMaps = 0;
+    std::vector<std::shared_ptr<const void>> m_retired;
 };
 } // namespace v2
 } // namespace jinja2

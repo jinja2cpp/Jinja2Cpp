@@ -17,14 +17,16 @@ object in place:
 - `Load` on any copy makes the macros of every module made from any copy fail with
   `TemplateExpired`.
 
-**Decision.** 0223 D1(a), approved by Ruslan 2026-10-25: copy on load, and a render pins its
+**Decision.** 0223 D1(a), approved by Ruslan 2026-10-25: copy on load, and a render keeps its
 root. Python's `Template` objects are immutable, so this is also the parity behaviour. It
 reverses the second half of 0284 D1a: a module keeps its tree instead of expiring.
 
 **Done when.** `Load` parses into a new template and puts it in place for that object only when
 the parse succeeds (the first Load of a template no other object holds parses in place, as
-`LoadTemplate`'s does); each render holds the template it renders; the module load generation
-is gone. Rows: `TemplateApiTest.LoadReplacesOnlyThisObject` (0223 A5),
+`LoadTemplate`'s does); a template a Load replaces while a render runs on the thread stays in
+the thread's workspace until the outermost render ends (`RenderWorkspace::Retire`), so renders
+hold nothing extra; the module load generation is gone. Rows: `TemplateApiTest.LoadReplacesOnlyThisObject` (0223 A5),
 `TemplateApiTest.LoadOfTheRenderingTemplateFromACallable` (0223 D5),
 `TemplateModuleTest.LoadKeepsModule`. `ErrorCode::TemplateExpired` stays for 0300 and 0301.
-The `bench/count.py` Render gate holds (the pin is one `shared_ptr` copy per render).
+The `bench/count.py` gate holds. A `shared_ptr` copy per render, as the plan proposed, cost
+30-36 instructions and failed the +3% gate on the small templates.

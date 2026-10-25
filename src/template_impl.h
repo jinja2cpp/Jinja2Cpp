@@ -68,12 +68,30 @@ struct GlobalsSnapshot
     InternalValueMap values;
 };
 
+// Releases, when it goes out of scope, the templates a Load replaced during the outermost render
+class ReleaseRetired
+{
+public:
+    explicit ReleaseRetired(RenderWorkspace& workspace) noexcept
+        : m_workspace(workspace)
+    {
+    }
+    JINJA2CPP_ALWAYS_INLINE ~ReleaseRetired() { m_workspace.ReleaseRetired(); }
+    ReleaseRetired(const ReleaseRetired&) = delete;
+    ReleaseRetired(ReleaseRetired&&) = delete;
+    ReleaseRetired& operator=(const ReleaseRetired&) = delete;
+    ReleaseRetired& operator=(ReleaseRetired&&) = delete;
+
+private:
+    RenderWorkspace& m_workspace;
+};
+
 // The maps a RenderWorkspace lends a render, returned emptied when they go out of scope
 class WorkspaceMaps
 {
 public:
-    WorkspaceMaps()
-        : m_workspace(RenderWorkspace::ForThisThread())
+    explicit WorkspaceMaps(RenderWorkspace& workspace)
+        : m_workspace(workspace)
         , m_maps(m_workspace.LendMaps())
     {
     }
@@ -367,6 +385,9 @@ public:
     {
         static_assert(std::is_same_v<Target, std::basic_string<CharT>> || std::is_same_v<Target, BasicOutputSink<CharT>>);
         std::optional<BasicErrorInfo<CharT>> normalResult;
+        auto& workspace = RenderWorkspace::ForThisThread();
+        // Last: frees this template if a Load replaced it during the render (docs/tasks/0317)
+        const ReleaseRetired releaseRetired(workspace);
 
         if (!m_renderer)
         {
@@ -387,7 +408,7 @@ public:
             const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr, m_settings->bigIntBackend);
             // The tables of the params and the top scope are lent by the thread's workspace and
             // go back to it, emptied, when the render ends (docs/tasks/0160)
-            const WorkspaceMaps maps;
+            const WorkspaceMaps maps(workspace);
             auto& intParams = maps.Params();
 
             auto convertParam = [&intParams](const std::string& name, const Value& value) {

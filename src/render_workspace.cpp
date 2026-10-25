@@ -95,6 +95,13 @@ bool RenderWorkspace::ReleaseThisThread() noexcept
     return workspace->ReleaseCaches();
 }
 
+void RenderWorkspace::ReleaseRetiredTemplates() noexcept
+{
+    // Moved out first: a template's destructor may render, and retire another one
+    const auto retired = std::move(m_retired);
+    m_retired.clear();
+}
+
 void RenderWorkspace::EmptyMaps(RenderMaps& maps, bool keepTables) noexcept
 {
     for (auto* map : { &maps.params, &maps.topScope })
