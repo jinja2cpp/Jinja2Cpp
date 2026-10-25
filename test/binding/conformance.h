@@ -497,7 +497,7 @@ inline void ExpectFailure(const nonstd::expected<jinja2::Value, jinja2::ErrorInf
 
 // Makes the owned and the shared view of a document
 template<typename B>
-std::vector<std::function<jinja2::Value()>> OwningFactories(std::string text)
+std::vector<std::function<jinja2::Value()>> OwningFactories(const std::string& text)
 {
     using Json = typename B::Json;
     return { [text] { return jinja2::Reflect(B::Parse(text)); }, [text] { return jinja2::Reflect(std::make_shared<Json>(B::Parse(text))); } };
@@ -767,9 +767,10 @@ TYPED_TEST_P(JsonConformance, LifetimeOfItemsWithoutEngine)
 
             int64_t sum = 0;
             int count = 0;
-            while ((*enumerator)->MoveNext())
+            jinja2::ListEnumeratorPtr& items = enumerator.value();
+            while (items->MoveNext())
             {
-                sum += (*enumerator)->GetCurrent().AsInt();
+                sum += items->GetCurrent().AsInt();
                 ++count;
             }
             EXPECT_EQ(3, count);
@@ -800,6 +801,7 @@ TYPED_TEST_P(JsonConformance, ConcurrentRenders)
             constexpr int kRenders = 200;
             std::vector<std::vector<std::string>> outputs(kThreads);
             std::vector<std::thread> threads;
+            threads.reserve(kThreads);
             for (std::size_t n = 0; n < kThreads; ++n)
             {
                 threads.emplace_back([&, n] {

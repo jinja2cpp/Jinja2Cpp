@@ -806,50 +806,58 @@ private:
             return Load(T::AsDouble(node), val, node) ? Value(val) : Value();
         }
         case JsonKind::String:
-        {
-            typename ResultValue<decltype(T::AsString(node))>::type str{};
-            if (!Load(T::AsString(node), str, node))
-            {
-                return Value();
-            }
-            if (StringLength(str) > m_cap)
-            {
-                Fail(node, "a JSON string is longer than maxSequenceSize (" + std::to_string(m_cap) + ")", "maxSequenceSize");
-                return Value();
-            }
-            return StringValue(std::move(str));
-        }
+            return CopyString(node);
         case JsonKind::BigInt:
-            if constexpr (HasBigIntText<J>::value)
-            {
-                std::string_view text;
-                if (!Load(T::AsBigIntText(node), text, node))
-                {
-                    return Value();
-                }
-                if (text.size() > m_cap)
-                {
-                    Fail(node, "a JSON integer is longer than maxSequenceSize (" + std::to_string(m_cap) + ")", "maxSequenceSize");
-                    return Value();
-                }
-                auto val = BigIntValue(text);
-                if (!val)
-                {
-                    Fail(node, "the JSON traits gave an integer that is not [-]digits", nullptr);
-                    return Value();
-                }
-                return std::move(*val);
-            }
-            else
-            {
-                Fail(node, "the JSON traits report a big integer and have no AsBigIntText", nullptr);
-                return Value();
-            }
+            return CopyBigInt(node);
         default:
             break;
         }
         Fail(node, "the JSON traits report an unknown kind of value", nullptr);
         return Value();
+    }
+
+    Value CopyString(const Node& node)
+    {
+        typename ResultValue<decltype(T::AsString(node))>::type str{};
+        if (!Load(T::AsString(node), str, node))
+        {
+            return Value();
+        }
+        if (StringLength(str) > m_cap)
+        {
+            Fail(node, "a JSON string is longer than maxSequenceSize (" + std::to_string(m_cap) + ")", "maxSequenceSize");
+            return Value();
+        }
+        return StringValue(std::move(str));
+    }
+
+    Value CopyBigInt(const Node& node)
+    {
+        if constexpr (HasBigIntText<J>::value)
+        {
+            std::string_view text;
+            if (!Load(T::AsBigIntText(node), text, node))
+            {
+                return Value();
+            }
+            if (text.size() > m_cap)
+            {
+                Fail(node, "a JSON integer is longer than maxSequenceSize (" + std::to_string(m_cap) + ")", "maxSequenceSize");
+                return Value();
+            }
+            auto val = BigIntValue(text);
+            if (!val)
+            {
+                Fail(node, "the JSON traits gave an integer that is not [-]digits", nullptr);
+                return Value();
+            }
+            return std::move(*val);
+        }
+        else
+        {
+            Fail(node, "the JSON traits report a big integer and have no AsBigIntText", nullptr);
+            return Value();
+        }
     }
 
     std::uint64_t m_cap;
