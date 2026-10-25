@@ -398,9 +398,8 @@ inline void RenderBoth(const jinja2::ValuesMap& params, const char* tpl, const s
 }
 
 // Calls fn(const Value& j) with the document in every way in: a borrowed view, an owned view, a shared view and a copy
-// NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): called for each mode, never moved
 template<typename B, typename Fn>
-void ForEachMode(std::string_view text, int modes, Fn&& fn)
+void ForEachMode(std::string_view text, int modes, const Fn& fn)
 {
     using Json = typename B::Json;
     if constexpr (B::kViewable)
@@ -672,8 +671,9 @@ TYPED_TEST_P(JsonConformance, IterationAndFilters)
 
 TYPED_TEST_P(JsonConformance, EnumeratorPastTheEnd)
 {
-    // The enumerator of a view gives an empty Value before the first and past the last item (the interface's contract)
-    jc::ForEachMode<TypeParam>(R"({"l":[3,1,2]})", jc::kViewModes, [](const jinja2::Value& j) {
+    // The enumerator gives an empty Value before the first and past the last item, for a view and for the copy's
+    // ValuesList (whose enumerator read past the end before 0311)
+    jc::ForEachMode<TypeParam>(R"({"l":[3,1,2]})", jc::kAllModes, [](const jinja2::Value& j) {
         const jinja2::GenericList list = j.ToGenericMap().GetValueByName("l").ToGenericList();
         auto created = list.GetAccessor()->CreateEnumerator();
         ASSERT_TRUE(created.has_value());

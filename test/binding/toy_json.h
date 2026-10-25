@@ -479,9 +479,8 @@ struct JsonTraits<ToyViewDoc>
         }
         return std::nullopt;
     }
-    // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): called in a loop, never moved
     template<typename F>
-    static void ForEachMember(Node node, F&& onMember)
+    static void ForEachMember(Node node, F onMember)
     {
         for (const auto& member : std::get<toyjson::Object>(node.value->data))
         {
@@ -528,9 +527,8 @@ struct JsonTraits<ToyStreamDoc>
     }
     static JsonResult<std::string_view> AsBigIntText(Node node) { return std::string_view(std::get<toyjson::BigIntText>(node.value->data).digits); }
 
-    // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): called in a loop, never moved
     template<typename F>
-    static JsonResult<void> ForEachMember(Node node, F&& onMember)
+    static JsonResult<void> ForEachMember(Node node, F onMember)
     {
         for (const auto& member : std::get<toyjson::Object>(node.value->data))
         {
@@ -545,9 +543,8 @@ struct JsonTraits<ToyStreamDoc>
         }
         return {};
     }
-    // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): called in a loop, never moved
     template<typename F>
-    static JsonResult<void> ForEachElement(Node node, F&& onElement)
+    static JsonResult<void> ForEachElement(Node node, F onElement)
     {
         for (const auto& item : std::get<toyjson::Array>(node.value->data))
         {

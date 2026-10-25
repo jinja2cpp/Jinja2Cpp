@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -76,7 +77,7 @@ struct NlohmannJsonTraits : DomJsonTraits<Json>
     }
 
     template<typename F>
-    static void ForEachMember(Node node, F&& onMember)
+    static void ForEachMember(Node node, F onMember)
     {
         const Json& obj = node.get();
         for (auto item = obj.begin(); item != obj.end(); ++item)

@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string_view>
 
@@ -80,7 +81,7 @@ struct JsonTraits<boost::json::value> : DomJsonTraits<boost::json::value>
         return std::cref(*item);
     }
     template<typename F>
-    static void ForEachMember(Node node, F&& onMember)
+    static void ForEachMember(Node node, F onMember)
     {
         for (const auto& member : node.get().get_object())
         {

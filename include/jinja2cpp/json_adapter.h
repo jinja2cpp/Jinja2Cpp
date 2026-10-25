@@ -5,10 +5,12 @@
 // (jinja2cpp/binding/<library>.h, or the user's own) specialises JsonTraits, and Reflect and ToValue then work for
 // that library's value type.
 
+#include <jinja2cpp/big_int.h>
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/value.h>
+#include <jinja2cpp/value_ptr.h>
 
 #include <nonstd/expected.hpp>
 
@@ -60,7 +62,7 @@ using JsonResult = nonstd::expected<T, std::string>;
  * static std::int64_t AsInt(Node);
  * static double AsDouble(Node);
  * static S AsString(Node);                        // S: std::string_view, std::string, std::wstring(_view)
- * template<class F> static R ForEachMember(Node, F&& f);  // calls f(key, Node) -> bool for each member of an
+ * template<class F> static R ForEachMember(Node, F f);  // calls f(key, Node) -> bool for each member of an
  *                                                 // object in the library's order and stops when it returns false;
  *                                                 // key: std::string_view or std::string, valid during the call
  * ```
@@ -68,7 +70,7 @@ using JsonResult = nonstd::expected<T, std::string>;
  * ```c++
  * static std::uint64_t AsUInt(Node);              // when Kind can return UInt
  * static std::string_view AsBigIntText(Node);     // when Kind can return BigInt: [-]digits
- * template<class F> static R ForEachElement(Node, F&& f); // f(Node) -> bool per item of an array; built from
+ * template<class F> static R ForEachElement(Node, F f); // f(Node) -> bool per item of an array; built from
  *                                                 // Size and At when absent
  * static std::optional<std::uint64_t> Location(Node);     // byte offset of the value in the input, for errors
  * static bool SameNode(Node, Node);               // identity, for IComparable; operator== when absent
@@ -119,9 +121,7 @@ struct JsonCopyLimits
     std::uint64_t maxSequenceSize = 0;
 };
 
-namespace detail
-{
-namespace json
+namespace detail::json
 {
 template<typename T>
 struct IsResult : std::false_type
@@ -264,8 +264,7 @@ template<typename J>
 struct IsHandle<J, std::enable_if_t<Traits<J>::IsHandle>> : std::true_type
 {
 };
-} // namespace json
-} // namespace detail
+} // namespace detail::json
 
 //! JsonTraits<Json> support \ref Reflect, a view that reads the document in place
 template<typename Json>
@@ -305,9 +304,7 @@ nonstd::expected<Value, ErrorInfo> ToValue(Json&& doc, const JsonCopyLimits& lim
 template<typename Json>
 Value ReflectJson(std::shared_ptr<const void> owner, const Json& node);
 
-namespace detail
-{
-namespace json
+namespace detail::json
 {
 //! A node, and the owner that keeps its document alive (empty when the caller does)
 template<typename J>
@@ -389,9 +386,9 @@ public:
     {
     }
 
-    size_t GetSize() const override { return Traits<J>::Size(m_ref.node); }
-    bool Contains(std::string_view name) const override { return Traits<J>::Find(m_ref.node, name).has_value(); }
-    std::optional<Value> Find(std::string_view name) const override
+    [[nodiscard]] size_t GetSize() const override { return Traits<J>::Size(m_ref.node); }
+    [[nodiscard]] bool Contains(std::string_view name) const override { return Traits<J>::Find(m_ref.node, name).has_value(); }
+    [[nodiscard]] std::optional<Value> Find(std::string_view name) const override
     {
         auto child = Traits<J>::Find(m_ref.node, name);
         if (!child)
@@ -400,7 +397,7 @@ public:
         }
         return MakeValue<J>(Ref<J>{ *child, m_ref.owner });
     }
-    std::vector<std::string> GetKeys() const override
+    [[nodiscard]] std::vector<std::string> GetKeys() const override
     {
         std::vector<std::string> keys;
         keys.reserve(Traits<J>::Size(m_ref.node));
@@ -411,8 +408,8 @@ public:
         return keys;
     }
     // A null member is none and a missing key undefined, as in Python
-    bool EmptyIsNone() const override { return true; }
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool EmptyIsNone() const override { return true; }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const ObjectAccessor*>(&other);
         return val && SameNode<J>(m_ref.node, val->m_ref.node);
@@ -447,7 +444,7 @@ public:
         m_cur = m_next++;
         return true;
     }
-    Value GetCurrent() const override
+    [[nodiscard]] Value GetCurrent() const override
     {
         if (m_cur >= m_size)
         {
@@ -455,9 +452,9 @@ public:
         }
         return MakeValue<J>(Ref<J>{ Traits<J>::At(m_ref.node, m_cur), m_ref.owner });
     }
-    ListEnumeratorPtr Clone() const override { return ListEnumeratorPtr(types::in_place_type_t<ArrayEnumerator>{}, *this); }
+    [[nodiscard]] ListEnumeratorPtr Clone() const override { return ListEnumeratorPtr(types::in_place_type_t<ArrayEnumerator>{}, *this); }
     ListEnumeratorPtr Move() override { return ListEnumeratorPtr(types::in_place_type_t<ArrayEnumerator>{}, std::move(*this)); }
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const ArrayEnumerator*>(&other);
         return val && SameNode<J>(m_ref.node, val->m_ref.node) && m_cur == val->m_cur && m_next == val->m_next;
@@ -480,14 +477,14 @@ public:
     {
     }
 
-    std::optional<size_t> GetSize() const override { return Traits<J>::Size(m_ref.node); }
-    const IIndexBasedAccessor* GetIndexer() const override { return this; }
-    std::optional<ListEnumeratorPtr> CreateEnumerator() const override
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return Traits<J>::Size(m_ref.node); }
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return this; }
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override
     {
         return ListEnumeratorPtr(types::in_place_type_t<ArrayEnumerator<J>>{}, m_ref);
     }
     // Bounds-checked: C++ callers reach it directly, not only through the engine
-    Value GetItemByIndex(int64_t idx) const override
+    [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
     {
         if (idx < 0 || static_cast<std::uint64_t>(idx) >= Traits<J>::Size(m_ref.node))
         {
@@ -495,7 +492,7 @@ public:
         }
         return MakeValue<J>(Ref<J>{ Traits<J>::At(m_ref.node, static_cast<std::size_t>(idx)), m_ref.owner });
     }
-    bool IsEqual(const IComparable& other) const override
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const ArrayAccessor*>(&other);
         return val && SameNode<J>(m_ref.node, val->m_ref.node);
@@ -667,7 +664,7 @@ private:
 
     // Runs a ForEach* call returning void, bool or JsonResult<void>
     template<typename Fn>
-    void Iterate(const Node& node, Fn&& fn)
+    void Iterate(const Node& node, const Fn& fn)
     {
         using R = decltype(fn());
         if constexpr (IsResult<R>::value)
@@ -685,7 +682,7 @@ private:
     }
 
     template<typename F>
-    void ForEachElement(const Node& node, F&& onItem)
+    void ForEachElement(const Node& node, const F& onItem)
     {
         if constexpr (HasForEachElement<J>::value)
         {
@@ -763,6 +760,23 @@ private:
         }
         switch (kind)
         {
+        case JsonKind::Array:
+        case JsonKind::Object:
+            if (depth >= m_maxDepth)
+            {
+                Fail(node, "JSON nests deeper than maxDepth (" + std::to_string(m_maxDepth) + ")", "maxDepth");
+                return Value();
+            }
+            return kind == JsonKind::Array ? CopyArray(node, depth) : CopyObject(node, depth);
+        default:
+            return CopyScalar(node, kind);
+        }
+    }
+
+    Value CopyScalar(const Node& node, JsonKind kind)
+    {
+        switch (kind)
+        {
         case JsonKind::Null:
             return Value();
         case JsonKind::Bool:
@@ -831,14 +845,8 @@ private:
                 Fail(node, "the JSON traits report a big integer and have no AsBigIntText", nullptr);
                 return Value();
             }
-        case JsonKind::Array:
-        case JsonKind::Object:
-            if (depth >= m_maxDepth)
-            {
-                Fail(node, "JSON nests deeper than maxDepth (" + std::to_string(m_maxDepth) + ")", "maxDepth");
-                return Value();
-            }
-            return kind == JsonKind::Array ? CopyArray(node, depth) : CopyObject(node, depth);
+        default:
+            break;
         }
         Fail(node, "the JSON traits report an unknown kind of value", nullptr);
         return Value();
@@ -855,7 +863,10 @@ private:
 
 template<typename Json>
 using EnableReflector = std::enable_if_t<!std::is_reference_v<Json> && !std::is_const_v<Json> && HasCore<Json>::value>;
-} // namespace json
+} // namespace detail::json
+
+namespace detail
+{
 
 /*!
  * \brief Reflect for every type with JsonTraits
@@ -915,8 +926,9 @@ struct Reflector<Json, json::EnableReflector<Json>>
 };
 } // namespace detail
 
+// Root takes the document by reference (non-const for forward-only traits), so it is not forwarded
 template<typename Json>
-nonstd::expected<Value, ErrorInfo> ToValue(Json&& doc, const JsonCopyLimits& limits)
+nonstd::expected<Value, ErrorInfo> ToValue(Json&& doc, const JsonCopyLimits& limits) // NOLINT(cppcoreguidelines-missing-std-forward)
 {
     static_assert(IsJsonCopyable<Json>, "jinja2::ToValue needs JsonTraits<Json> with Kind, the As* getters, ForEachMember, and ForEachElement or Size and At");
     detail::json::Copier<Json> copier(limits);
