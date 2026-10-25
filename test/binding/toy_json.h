@@ -457,6 +457,7 @@ struct JsonTraits<ToyViewDoc>
     static std::uint64_t AsUInt(Node node) { return std::get<std::uint64_t>(node.value->data); }
     static double AsDouble(Node node) { return std::get<double>(node.value->data); }
     static std::string AsString(Node node) { return std::get<std::string>(node.value->data); }
+    static std::string_view AsBigIntText(Node node) { return std::get<toyjson::BigIntText>(node.value->data).digits; }
 
     static std::size_t Size(Node node)
     {

@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <new>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -111,10 +112,14 @@ struct DomJsonTraits
 //! The built-in cap on the items of one array or object and the characters of one string (the engine's own cap)
 inline constexpr std::uint64_t JsonDefaultMaxSequenceSize = std::uint64_t{ 1 } << 26;
 
+//! The ceiling of JsonCopyLimits::maxDepth: the copy recurses once per level (several frames, about 1 KB of stack in
+//! a debug build), and this keeps it well inside a 1 MB thread stack whatever the host configures
+inline constexpr std::size_t JsonMaxCopyDepth = 512;
+
 //! Bounds of \ref ToValue, for documents that may be untrusted
 struct JsonCopyLimits
 {
-    //! Arrays and objects open at once; the copy recurses once per level
+    //! Arrays and objects open at once; a larger value than JsonMaxCopyDepth is lowered to it
     std::size_t maxDepth = 128;
     //! Items of one array, members of one object, code units of one string; 0 means JsonDefaultMaxSequenceSize,
     //! and a larger value is lowered to it
@@ -371,13 +376,19 @@ std::size_t StringLength(const S& str)
     }
 }
 
-//! A JsonKind::BigInt from its text; an integer that fits `int64_t` is stored as one
+//! A JsonKind::BigInt from its text; an integer that fits `int64_t` is stored as one. The value is
+//! empty when the text is not `[-]digits`; throws std::bad_alloc when there is no memory for a valid one
 inline std::optional<Value> BigIntValue(std::string_view text)
 {
+    const std::string_view digits = !text.empty() && text.front() == '-' ? text.substr(1) : text;
+    if (digits.empty() || !std::all_of(digits.begin(), digits.end(), [](char ch) { return ch >= '0' && ch <= '9'; }))
+    {
+        return std::nullopt;
+    }
     BigInt big;
     if (!BigInt::TryParse(text, big))
     {
-        return std::nullopt;
+        throw std::bad_alloc(); // TryParse is noexcept and fails a valid text only when out of memory
     }
     int64_t small = 0;
     if (big.ToInt64(small))
@@ -619,7 +630,7 @@ class Copier
 public:
     explicit Copier(const JsonCopyLimits& limits)
         : m_cap(limits.maxSequenceSize != 0 ? std::min(limits.maxSequenceSize, JsonDefaultMaxSequenceSize) : JsonDefaultMaxSequenceSize)
-        , m_maxDepth(limits.maxDepth)
+        , m_maxDepth(std::min(limits.maxDepth, JsonMaxCopyDepth))
     {
     }
 

@@ -841,6 +841,10 @@ TYPED_TEST_P(JsonConformance, CopyLimits)
     ExpectFailure(jinja2::ToValue(TypeP::Parse(jc::Nest(129))), { ErrorCode::ResourceLimitExceeded, "maxDepth", jc::DeepPath(128) });
     ExpectFailure(jinja2::ToValue(TypeP::Parse(jc::Nest(5)), JsonCopyLimits{ 4, 0 }), { ErrorCode::ResourceLimitExceeded, "maxDepth", jc::DeepPath(4) });
     ExpectFailure(jinja2::ToValue(TypeP::Parse(R"({"a":{"b":[{"c":1}]}})"), JsonCopyLimits{ 3, 0 }), { ErrorCode::ResourceLimitExceeded, "maxDepth", "$.a.b[0]" });
+    // A raised maxDepth stops at JsonMaxCopyDepth, so the recursion stays inside a small thread stack
+    EXPECT_TRUE(jinja2::ToValue(TypeP::Parse(jc::Nest(jinja2::JsonMaxCopyDepth)), JsonCopyLimits{ 100000, 0 }).has_value());
+    ExpectFailure(jinja2::ToValue(TypeP::Parse(jc::Nest(jinja2::JsonMaxCopyDepth + 1)), JsonCopyLimits{ 100000, 0 }),
+                  { ErrorCode::ResourceLimitExceeded, "maxDepth", jc::DeepPath(jinja2::JsonMaxCopyDepth) });
 
     // Items of one array, members of one object and code units of one string
     const JsonCopyLimits three{ 128, 3 };
