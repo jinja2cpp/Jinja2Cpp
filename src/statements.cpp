@@ -2301,20 +2301,49 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     // Owned by the render, so that its macros find their names wherever they are called
     auto& module = callback.AddModule(std::make_unique<ImportedModule>(values, m_withContext));
     // Made by a host's call of a module's macro, it ends with that call (docs/tasks/0301);
-    // one imported without context is shared on for the module's life
-    if (m_withContext && callback.ModulesEndWithCall())
+    // one imported without context is shared on for the module's life, and so is what its
+    // top level imports
+    if (m_withContext)
     {
-        module.Context().SetEndsWithCall();
+        if (callback.ModulesEndWithCall())
+        {
+            module.Context().SetEndsWithCall();
+        }
+        VisitTemplateImpl<bool>(tpl, true, [&module](const auto& tplPtr) {
+            module.Render(*tplPtr);
+            return true;
+        });
+        ImportNames(values, nodes, module.Names());
+        return;
     }
+    class SharedModuleScope
+    {
+    public:
+        explicit SharedModuleScope(IRendererCallback& owner)
+            : m_callback(owner)
+            , m_token(owner.EnterSharedModule())
+        {
+        }
+        SharedModuleScope(const SharedModuleScope&) = delete;
+        SharedModuleScope(SharedModuleScope&&) = delete;
+        SharedModuleScope& operator=(const SharedModuleScope&) = delete;
+        SharedModuleScope& operator=(SharedModuleScope&&) = delete;
+        ~SharedModuleScope() { m_callback.LeaveSharedModule(m_token, m_shared); }
+        void Shared() { m_shared = true; }
+
+    private:
+        IRendererCallback& m_callback;
+        std::size_t m_token;
+        bool m_shared = false;
+    };
+    SharedModuleScope scope(callback);
     VisitTemplateImpl<bool>(tpl, true, [&module](const auto& tplPtr) {
         module.Render(*tplPtr);
         return true;
     });
     // Shared once complete: a module that imports itself recurses, as in Jinja2
-    if (!m_withContext)
-    {
-        callback.ShareModule(tpl, module);
-    }
+    callback.ShareModule(tpl, module);
+    scope.Shared();
     ImportNames(values, nodes, module.Names());
 }
 

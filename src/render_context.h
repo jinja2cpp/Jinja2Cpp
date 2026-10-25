@@ -141,6 +141,11 @@ struct IRendererCallback : IComparable
     // Whether a module imported with context now ends with the host's call that imports it,
     // not with the render: a call of a Template::MakeModule export (docs/tasks/0301)
     [[nodiscard]] virtual bool ModulesEndWithCall() const { return false; }
+    // A module imported without context renders its top level, which is shared on: what it
+    // imports with context lives as long as it does, not with the call (docs/tasks/0301).
+    // Returns a token for LeaveSharedModule, told whether the module was shared
+    virtual std::size_t EnterSharedModule() { return 0; }
+    virtual void LeaveSharedModule(std::size_t /*token*/, bool /*shared*/) {}
     // An `import` or `from` bound `name` to `value` in `values` (ImportStatement): a module made
     // for the host (Template::MakeModule) does not export a name its top level imports, as
     // Jinja2 does not

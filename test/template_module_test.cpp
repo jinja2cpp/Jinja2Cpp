@@ -386,6 +386,22 @@ TEST_F(TemplateModuleTest, CallsShareModulesImportedWithoutContext)
     EXPECT_EQ("21", Call(module.exports["m"]).AsString());
 }
 
+// What a shared module's top level imports with context lives as long as that module does:
+// 5CM5 on every call, as in Jinja2 3.1.6 (the 0301 verifier)
+TEST_F(TemplateModuleTest, SharedModuleKeepsItsImports)
+{
+    AddFile("c", "{% macro cm() %}CM{{ cv }}{% endmacro %}{% set cv = 5 %}");
+    AddFile("b", "{% import 'c' as c with context %}{% macro bm() %}{{ c.cm() }}{% endmacro %}{% set cx = c.cv %}");
+    // A module that fails is not shared: what it imported ends with the call
+    AddFile("bad", "{% import 'c' as c with context %}{{ 1 // 0 }}");
+    auto module = Make("{% macro m() %}{% import 'b' as b %}{{ b.cx }}{{ b.bm() }}{% endmacro %}{% macro f() %}{% import 'bad' as x %}{% endmacro %}");
+    for (int i = 0; i != 3; ++i)
+    {
+        EXPECT_EQ("5CM5", Call(module.exports["m"]).AsString());
+        EXPECT_THROW(Call(module.exports["f"]), jinja2::BadResultAccess<>);
+    }
+}
+
 // A macro of a module a call imported with context, stored by that call, runs within it; a
 // later call of it fails, naming the export called, as the module ended with the call. A
 // documented divergence: Jinja2 keeps the module while the macro reaches it and prints AM

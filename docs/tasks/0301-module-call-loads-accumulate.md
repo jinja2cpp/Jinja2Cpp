@@ -36,7 +36,9 @@ and a plain import were flat.
 `modules` and `invalidNames` (the error results of non-string names, split out of
 `replaced`) and ends what the call added, newest first, except modules shared without
 context, which stay for the module's life as Jinja2 keeps a template's default module
-(D3). Trees stay: a stored macro views its tree. A module a call imports with context marks
+(D3), and the modules such a module's top level imports (`IRendererCallback::EnterSharedModule`;
+found by the verifier: they had ended with the call while the shared module's macros still
+ran in them). Trees stay: a stored macro views its tree. A module a call imports with context marks
 its context (`RenderContext::SetEndsWithCall`); a closure defined there and called after
 the call fails with `TemplateExpired`, extra params `[export name, "ended"]` (D2a), where
 Jinja2 keeps the module alive and prints the macro's output. `HomeCall::Restore` puts the

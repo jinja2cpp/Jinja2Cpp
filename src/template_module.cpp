@@ -223,14 +223,42 @@ struct TemplateModuleState
             }
         }
 
-        // The modules a call imports with context end with it (CallScope)
-        [[nodiscard]] bool ModulesEndWithCall() const override { return calls != 0; }
+        // The modules a call imports with context end with it (CallScope), but those a module
+        // shared without context imports, which live as long as it does
+        [[nodiscard]] bool ModulesEndWithCall() const override { return calls != 0 && sharedDepth == 0; }
+        std::size_t EnterSharedModule() override
+        {
+            ++sharedDepth;
+            return kept.size();
+        }
+        void LeaveSharedModule(std::size_t token, bool shared) override
+        {
+            --sharedDepth;
+            // A module that failed is not shared: what it imported ends with the call too
+            if (!shared)
+            {
+                kept.resize(token);
+            }
+        }
+        ImportedModule& AddModule(std::unique_ptr<ImportedModule> module) override
+        {
+            auto& added = Impl::RendererCallback::AddModule(std::move(module));
+            if (sharedDepth != 0)
+            {
+                kept.push_back(&added);
+            }
+            return added;
+        }
 
         const RenderContext* moduleContext = nullptr;
         // The names the top level imported, with the values imported
         std::vector<std::pair<std::string, InternalValue>> imported;
         // The host's calls running, nested when a host callable calls the module again
         std::size_t calls = 0;
+        // The top levels of modules imported without context rendering, and the modules they
+        // imported, which EndCall keeps
+        std::size_t sharedDepth = 0;
+        std::vector<const ImportedModule*> kept;
     };
 
     // One host's call of an export: what it loads into the module's callback ends with it,
@@ -252,7 +280,7 @@ struct TemplateModuleState
         ~CallScope()
         {
             --m_callback.calls;
-            m_callback.EndCall(m_mark);
+            m_callback.EndCall(m_mark, m_callback.kept);
         }
 
     private:

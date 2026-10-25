@@ -429,6 +429,7 @@ protected:
     {
         auto fs = std::make_shared<MemoryFileSystem>();
         fs->AddFile("lib", "{% macro x() %}X{% endmacro %}{% set v = [1, 2, 3] %}");
+        fs->AddFile("fails", "{% import 'lib' as l with context %}{{ 1 // 0 }}");
         m_env.AddFilesystemHandler(std::string(), fs);
         EXPECT_TRUE(!!m_tpl.Load("{% macro m() %}" + body + "{% endmacro %}"));
         auto module = m_tpl.MakeModule();
@@ -451,6 +452,8 @@ TEST_F(ModuleCallTest, CallsStayFlat)
     for (const char* body : { "{% import 'lib' as l with context %}{{ l.x() }}{% include 'lib' %}",
                               "{% import 'lib' as l %}{{ l.x() }}",
                               "{% from 'lib' import x with context %}{{ x() }}",
+                              // A module shared without context whose top level fails each time
+                              "{% import 'fails' as f %}",
                               // A call that fails leaves no scope on the module's context
                               "{% for i in [1] %}{% set q = 2 %}{{ 1 // 0 }}{% endfor %}",
                               // An invalid name fails each call, with nothing kept
