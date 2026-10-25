@@ -21,7 +21,8 @@ struct JsonReadLimits
 {
     // Arrays and objects open at once
     std::size_t maxDepth = 128;
-    // Items of one array or object and UTF-8 bytes of one string; 0 keeps MaxSequenceSize
+    // Items of one array or object, UTF-8 bytes of one string and characters of one number;
+    // 0 keeps MaxSequenceSize
     std::uint64_t maxSequenceSize = 0;
 };
 

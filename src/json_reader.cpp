@@ -556,6 +556,11 @@ private:
         const std::size_t integerEnd = pos;
         pos = SkipFractionAndExponent(pos);
         const std::string_view number = m_text.substr(start, pos - start);
+        if (number.size() > m_maxItems)
+        {
+            // ToDouble copies the digits, so a number is bounded as a string is
+            return Fail("Number too long", start);
+        }
         m_pos = pos;
         if (pos == integerEnd)
         {

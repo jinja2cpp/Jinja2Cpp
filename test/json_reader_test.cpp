@@ -171,6 +171,8 @@ TEST(JsonReaderTest, SequenceLimit)
     EXPECT_EQ(ReadJsonObject(R"({"a": [1, 2, 3, 4]})", limits).error(), "Too many items: line 1 column 17 (char 16)");
     EXPECT_EQ(ReadJsonObject(R"({"a": 1, "b": 2, "c": 3, "d": 4})", limits).error(), "Too many items: line 1 column 32 (char 31)");
     EXPECT_EQ(ReadJsonObject(R"({"a": "abcd"})", limits).error(), "String too long: line 1 column 7 (char 6)");
+    EXPECT_EQ(ReadJsonObject(R"({"a": 1.25})", limits).error(), "Number too long: line 1 column 7 (char 6)");
+    EXPECT_TRUE(ReadJsonObject(R"({"a": 1.5})", limits).has_value());
 }
 
 TEST(JsonReaderTest, TemplateMetadata)
