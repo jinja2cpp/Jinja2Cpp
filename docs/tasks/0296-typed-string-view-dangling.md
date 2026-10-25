@@ -35,4 +35,4 @@ makes the view from the storage and returns it by value, so the view survives th
 param into the argument tuple, which lives until `std::apply` returns. The lambda path
 (`UCInvoker`) was already safe: its promoters are temporaries of the full-expression that calls
 the function. Rows: `StringViewPointerParamConvert` (by-value and `const&` view parameters,
-narrow and wide, short and long strings, Markup and WMarkup). Found on the way: 0317.
+narrow and wide, short and long strings, Markup and WMarkup). Found on the way: 0320.
