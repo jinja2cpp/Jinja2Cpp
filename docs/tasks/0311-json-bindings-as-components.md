@@ -106,8 +106,16 @@ find_package and pkg-config, on touching PRs and nightly. `check_package.cmake` 
 every component is installed, that the core package files find no Boost or nlohmann_json,
 the REQUIRED/OPTIONAL/unknown component probes and, in the Boost-free job, the
 nlohmann_json component of an install built without any JSON library. MIGRATION.md has the
-entry. Next: S7 (the parity corpus through `ToValue`) and S8 (trim per-binding rows the
-conformance suite covers), then 0302 on the components.
+entry.
+
+S7 and S8: the parity corpus copies each case's context through the binding's
+`jinja2::ToValue(ordered_json)` instead of its own converter, so every corpus case checks the
+copy path (the test target links `jinja2cpp::nlohmann_json` whatever
+`JINJA2CPP_TEST_BINDINGS` lists). The per-binding files keep only what is specific to a
+binding (its conformance traits, nlohmann's pointer overloads of `Reflect`); their rendering
+rows were covered by the suite, which took over the two it lacked (an attribute of a JSON
+null is undefined; `Find`/`HasValue` and the 1.x accessor on a null member). The view pass
+of the corpus is 0322. 0302 follows on the components.
 
 **Next.** 0302 is rebased onto the contract (a dom view and copy, an on-demand copy).
 Installing the conformance suite for third-party traits authors, and a `FromValue`

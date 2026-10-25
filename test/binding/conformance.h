@@ -218,6 +218,9 @@ inline const std::vector<Row>& NullsRows()
         { "repr", R"J2({"x":null,"l":[1,null,3],"o":{"n":null}})J2",
           R"J2({{ j }}|{{ j|tojson }})J2",
           R"J2({'x': None, 'l': [1, None, 3], 'o': {'n': None}}|{"l": [1, null, 3], "o": {"n": null}, "x": null})J2", R"J2({'l': [1, None, 3], 'o': {'n': None}, 'x': None}|{"l": [1, null, 3], "o": {"n": null}, "x": null})J2", nullptr },
+        { "attribute", R"J2({"x":null,"l":[1,null,3],"o":{"n":null}})J2",
+          R"J2([{{ j.x.attr }}]|[{{ j.l[1].attr }}]|{{ j.x.attr is defined }}|{{ j.o.n.k|default('d') }})J2",
+          R"J2([]|[]|False|d)J2", nullptr, nullptr },
     };
     return rows;
 }
@@ -621,6 +624,12 @@ TYPED_TEST_P(JsonConformance, NullMemberAndNullItem)
         EXPECT_TRUE(map.HasValue("x")); // present, though null
         EXPECT_FALSE(map.HasValue("y"));
         EXPECT_TRUE(map.GetValueByName("x").IsNone());
+        EXPECT_TRUE(map.Find("x").has_value());
+        EXPECT_FALSE(map.Find("y").has_value());
+        // The 1.x lookup still answers through the 2.0 one
+        EXPECT_TRUE(map.GetAccessor()->HasValue("x"));
+        EXPECT_FALSE(map.GetAccessor()->HasValue("y"));
+        EXPECT_TRUE(map.GetAccessor()->GetValueByName("y").IsNone());
         const jinja2::Value list = map.GetValueByName("l");
         EXPECT_EQ(3u, list.ToGenericList().GetSize().value_or(0));
         EXPECT_TRUE(list.ToGenericList().GetAccessor()->GetIndexer()->GetItemByIndex(1).IsNone());

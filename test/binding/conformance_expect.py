@@ -93,6 +93,7 @@ ROWS = {
          "{{ j.l }}|{{ j.l[1] is none }}|{{ j.l[1] is defined }}|{% for v in j.l %}{{ v is none }},{% endfor %}|{{ j.l|length }}"),
         ("default", NULLS, "{{ j.x|default('d') }}|{{ j.y|default('d') }}|{{ j.x|default('d', true) }}"),
         ("repr", NULLS, "{{ j }}|{{ j|tojson }}"),
+        ("attribute", NULLS, "[{{ j.x.attr }}]|[{{ j.l[1].attr }}]|{{ j.x.attr is defined }}|{{ j.o.n.k|default('d') }}"),
     ],
     "Strings": [
         ("escapes", '{"e":"a\\"b\\\\c\\/d\\n\\t","c":"\\u0001"}', "{{ j.e|length }}|{{ j.e|tojson }}|{{ j.c|length }}"),

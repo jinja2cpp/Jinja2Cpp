@@ -9,7 +9,9 @@
 #include <ios>
 #include <istream>
 #include <jinja2cpp/big_int_backend.h>
+#include <jinja2cpp/binding/nlohmann_json.h>
 #include <jinja2cpp/filesystem_handler.h>
+#include <jinja2cpp/json_adapter.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 
@@ -345,42 +347,6 @@ std::string ToUtf8(const std::wstring& from)
     return WideToUtf8(from);
 }
 
-// Strings stay UTF-8 in both runs, so the wide run renders narrow context values in a wide
-// template and exercises jinja2::ConvertString (docs/tasks/0035).
-jinja2::Value ToValue(const Json& j)
-{
-    switch (j.type())
-    {
-    case Json::value_t::boolean:
-        return j.get<bool>();
-    case Json::value_t::number_integer:
-        return j.get<int64_t>();
-    case Json::value_t::number_unsigned:
-        // Above INT64_MAX it becomes a jinja2::BigInt (docs/tasks/0270)
-        return jinja2::Value(j.get<uint64_t>());
-    case Json::value_t::number_float:
-        return j.get<double>();
-    case Json::value_t::string:
-        return j.get<std::string>();
-    case Json::value_t::array:
-    {
-        jinja2::ValuesList list;
-        for (const auto& item : j)
-            list.push_back(ToValue(item));
-        return jinja2::Value(std::move(list));
-    }
-    case Json::value_t::object:
-    {
-        jinja2::ValuesMap map;
-        for (auto it = j.begin(); it != j.end(); ++it)
-            map[it.key()] = ToValue(it.value());
-        return jinja2::Value(std::move(map));
-    }
-    default:
-        return jinja2::Value();
-    }
-}
-
 // The filters, tests and finalize functions a case can register by name ("filters", "tests" and
 // "finalize" env options), each the counterpart of the Python function of that name in
 // generate.py. They take the ints and strings of the corpus, narrow or wide.
@@ -574,9 +540,19 @@ Result RenderCpp(const Json& c, const jinja2::Settings& settings)
         fs->AddFile(it.key(), FromUtf8<CharT>(it.value().get<std::string>()));
     env.AddFilesystemHandler(std::string(), fs);
 
+    // The context goes through the library's own copy (docs/tasks/0311), so the whole corpus checks it. Strings stay
+    // UTF-8 in both runs, so the wide run renders narrow context values in a wide template and exercises
+    // jinja2::ConvertString (docs/tasks/0035).
     jinja2::ValuesMap params;
     for (auto it = c["context"].begin(); it != c["context"].end(); ++it)
-        params[it.key()] = ToValue(it.value());
+    {
+        auto value = jinja2::ToValue(it.value());
+        if (!value)
+        {
+            return { false, "context: " + value.error().ToString() };
+        }
+        params[it.key()] = std::move(*value);
+    }
 
     try
     {

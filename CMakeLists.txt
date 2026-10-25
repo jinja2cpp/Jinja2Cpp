@@ -463,8 +463,10 @@ if (JINJA2CPP_BUILD_TESTS)
     )
     add_executable(jinja2cpp_tests ${JINJA2CPP_TEST_SOURCES})
     target_compile_options(jinja2cpp_tests PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
+    # The parity corpus reads its cases with nlohmann::json and copies each context through the
+    # binding's ToValue, whatever JINJA2CPP_TEST_BINDINGS lists
     target_link_libraries(jinja2cpp_tests gtest gmock gtest_main
-        nlohmann_json::nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
+        jinja2cpp::nlohmann_json ${LIB_TARGET_NAME} ${EXTRA_TEST_LIBS} ${JINJA2CPP_PRIVATE_LIBS})
     # The Boost big-integer adapter is checked in every build (standalone Multiprecision, see
     # thirdparty/CMakeLists.txt); the built-in one only in boost builds
     target_link_libraries(jinja2cpp_tests jinja2cpp::boost_multiprecision)
