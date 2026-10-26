@@ -257,10 +257,6 @@ public:
             Finish();
         }
     }
-    // Whether the render wrote to the host's data: an export of a container then copies what
-    // it reaches (IntValue2Value), since a view would read the host's data again once the
-    // render ends and the cells are gone
-    [[nodiscard]] bool HasCells() const noexcept { return m_cells && !m_cells->empty(); }
 
 private:
     friend class CellLink;

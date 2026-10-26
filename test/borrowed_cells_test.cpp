@@ -104,10 +104,26 @@ TEST(BorrowedCellsSingle, HostCallableSeesTheWrite)
     EXPECT_EQ("2|2", Render("{% set y = l %}{% set _ = y.append(1) %}{{ size(l) }}|{{ size(y) }}", params));
 }
 
-// A value the host keeps past the render shows the render's writes, also to a nested container:
-// its export copies them while the render has cells, and a view would read the host's data
-// again once they are gone
-TEST(BorrowedCellsSingle, KeptValueKeepsTheWrites)
+// A container handed to the host is a view: while the render runs it shows the render's later
+// writes, nested ones too
+TEST(BorrowedCellsSingle, KeptValueSeesLaterWritesDuringTheRender)
+{
+    Value kept;
+    ValuesMap params{ { "l", ValuesList{ Value(ValuesList{ 1 }) } } };
+    params["keep"] = UserCallable(
+        [&kept](const UserCallableParams& p) {
+            kept = p["v"];
+            return Value();
+        },
+        { ArgInfo{ "v" } });
+    params["show"] = UserCallable([&kept](const UserCallableParams&) { return kept; }, {});
+    EXPECT_EQ("None[[1, 2], 3]", Render("{{ keep(l) }}{% set _ = l[0].append(2) %}{% set _ = l.append(3) %}{{ show() }}", params));
+}
+
+// After the render, a kept host container the render wrote reads the host's data again: the
+// host's data is never written and the render's cells are gone. Python keeps the writes
+// (`[1, 2]|[1, 2]`); what the host should keep is docs/tasks/0331
+TEST(BorrowedCellsSingle, KeptValueAfterTheRenderReadsTheHostData)
 {
     Value nested;
     Value direct;
@@ -121,12 +137,14 @@ TEST(BorrowedCellsSingle, KeptValueKeepsTheWrites)
         },
         { ArgInfo{ "nested" }, ArgInfo{ "direct" } });
     EXPECT_EQ("None", Render("{% set _ = l[0].append(2) %}{{ keep({'saved': l}, l[0]) }}", params));
-    EXPECT_EQ("[1, 2]|[1, 2]", Render("{{ n.saved[0] }}|{{ d }}", ValuesMap{ { "n", nested }, { "d", direct } }));
+    // `l` reads the host's data (and params must outlive it); `l[0]` was read from the render's
+    // copy, which the kept value now holds alone
+    EXPECT_EQ("[1]|[1, 2]", Render("{{ n.saved[0] }}|{{ d }}", ValuesMap{ { "n", nested }, { "d", direct } }));
     // The host's data is not written
     EXPECT_EQ("[[1]]", Render("{{ l }}", params));
 }
 
-// The copy of an export stops at a cycle, which stays a view
+// An export of a cycle is a view of it
 TEST(BorrowedCellsSingle, ExportOfACycle)
 {
     ValuesMap params{ { "l", ValuesList{ 3 } } };

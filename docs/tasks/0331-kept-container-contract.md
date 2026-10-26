@@ -20,10 +20,23 @@ immutable or host-owned value the host gets, when it gets it, and at what cost.
 
 Since 0049 P2 the host's data is never written (D2): a render that writes to it works on a
 per-render copy (a `BorrowedCell`), and the render's end detaches its adapters from the
-cells. P2 ships the behaviour of fabf26e (see 0049): a container handed out before the
-render wrote to any host data is a view, which reads the host's data again after the render;
-one handed out after such a write is a deep copy made at the call. Both are defensible as
-values; the copy's cost and its timing are not (below).
+cells. A container the render hands to a callable is a view at every call, as on master
+(0049). While the render runs the host sees the render's writes through it; after the render
+a host container the template wrote reads the host's original data, because the cell is gone.
+On master the write had made the template's variable a copy, which the kept value shared and
+which kept the writes, so this is a regression against master for that case
+(`h.append(3)`, `keep([h])`, `h.append(4)`: master and Python keep `[[1, 2, 3, 4]]`, P2 reads
+`[[1, 2]]` after the render). The host must also keep its params alive while it holds a kept
+view. Master needed that only for a kept value the render never wrote; a written one held the
+template's copy, so freeing the params after the render is now a use-after-free where master
+was safe (a callable that renders an inner template with local params and returns the
+argument it kept, `p.cpp` case 12 of the verifier).
+
+**Target.** When the render ends, snapshot the containers that are both written (they have a
+cell) and kept (handed to a callable while the render ran): the kept view then reads an
+immutable copy of the render's final state that the host owns, instead of the host's
+original, and outlives the params as master's copy did. A container that was only written, or only kept, costs nothing; a call costs no
+copy. The snapshot is taken once, on the render's thread, before the cells are freed.
 
 **Constraints, first one first.**
 1. No shared mutable state: what the host keeps is never written by a render after the
@@ -38,7 +51,7 @@ values; the copy's cost and its timing are not (below).
    more than master (`l.append(idl(l))`, `keep(l)` after `l.append(l)`).
 5. D2: the host's data is never written.
 
-**Designs tried in #673, each blocked by the verifier.**
+**Designs tried in #673, each rejected.**
 
 1. Freeze at the render's end (852bc26, 079a6d2, 8a03956). The render kept export slots
    and, when it ended, walked what the host kept and copied it. The walk did not end when a
@@ -55,20 +68,20 @@ values; the copy's cost and its timing are not (below).
    cell its owner had freed. The cell copy it makes costs about 100 Ir per int element and
    270 Ir per dict item: +34% on a render of a 10k-int list that iterates it once
    (`bench/count.py`).
-3. Copy at the call (fabf26e, what P2 ships). While the render has cells, an export copies
+3. Copy at the call (fabf26e, removed from P2 again). While the render has cells, an export copies
    the render's view down to its nested containers (`CopyForExport`). It is safe across
    threads, but it copies on every call, also for a callable that only reads its argument:
    after one write to host data, calling a callable with a 100k-item host list costs about
    40 ms a call (master: microseconds). It also copies a list the template made, so a
    callable that returns its argument gives back a copy (`a.append(id(a))` appends a copy;
-   master and Python append `a` itself).
+   master and Python append `a` itself). Rejected for the per-call cost.
 
-**Directions to evaluate.** Freeze on hand-out instead of at the end: the host gets the
-render's container behind a reference-counted immutable snapshot, shared with the render
-until the render's next write to it, which copies (copy on write, so a read-only callable
-copies nothing and the render pays only when it writes after a hand-out). Or give the host a
-view during the call and a snapshot only when the host keeps the value past the call, which
-needs a hook on the host side that `Value` does not have today.
+**Open points for the design.** How the render records "kept" without growing `CellLink`
+(a per-render list of the cells whose adapters were exported, filled only when a cell exists,
+is one way); how the kept view finds its snapshot after the render (the export's adapter holds
+the cell's link, so the snapshot can replace the cell's data instead of being detached); and
+how the snapshot bounds cycles and depth, where design 1 failed (walk only the written cells,
+never what the host made of the value).
 
 **Done when.** An architect design picks one contract and records it, and the divergence
 from Python, in `docs/api-2.0.md`; the implementation passes the five constraints with

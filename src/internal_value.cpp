@@ -2,7 +2,6 @@
 
 #include "big_int.h"
 #include "borrowed_cells.h"
-#include "cycle_collector.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
@@ -2933,129 +2932,14 @@ MapAdapter CreateMapAdapter(ValuesMap&& values)
     return MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<BySharedVal>>>(std::move(values)));
 }
 
-namespace
-{
-// The containers an export copies now, outermost first: a container met again is a cycle,
-// which keeps its view
-thread_local std::vector<const void*> t_exportPath;
-
-class ExportStep
-{
-public:
-    explicit ExportStep(const void* identity)
-    {
-        const auto& path = t_exportPath;
-        // At most this deep, and not into a cycle or past the stack's reserve: the rest stays a view
-        constexpr size_t maxDepth = 256;
-        m_entered = path.size() < maxDepth && !StackNearlyExhausted() && (identity == nullptr || std::find(path.begin(), path.end(), identity) == path.end());
-        if (m_entered)
-        {
-            t_exportPath.push_back(identity);
-        }
-    }
-    ~ExportStep()
-    {
-        if (m_entered)
-        {
-            t_exportPath.pop_back();
-        }
-    }
-    ExportStep(const ExportStep&) = delete;
-    ExportStep(ExportStep&&) = delete;
-    ExportStep& operator=(const ExportStep&) = delete;
-    ExportStep& operator=(ExportStep&&) = delete;
-
-    [[nodiscard]] bool Entered() const noexcept { return m_entered; }
-
-private:
-    bool m_entered;
-};
-
-// Whether an export copies the containers it reaches: the running render wrote to the host's
-// data, whose cells it detaches when it ends. A view kept by the host (a user callable that
-// stores its argument) would then read the host's data again under a container the render
-// changed, nested or not (docs/tasks/0049)
-bool ExportCopies()
-{
-    const auto* cells = CycleCollector::CurrentCells();
-    return cells != nullptr && cells->HasCells();
-}
-
-JINJA2CPP_CELL_NOINLINE std::optional<Value> CopyForExport(const ListRef& list)
-{
-    // A range or a list of unknown length stays a view
-    const auto size = list.GetSize();
-    if (list.GetRangeInfo() || !size)
-    {
-        return std::nullopt;
-    }
-    const ExportStep step(list.GetIdentity());
-    if (!step.Entered())
-    {
-        return std::nullopt;
-    }
-    ValuesList items;
-    items.reserve(*size);
-    list.ForEach([&items](InternalValue&& item) {
-        const InternalValue held(std::move(item));
-        items.push_back(IntValue2Value(held));
-        return true;
-    });
-    // The same kind of value as the view: a callable that takes a GenericList takes it
-    return Value(LendNestedList(std::make_shared<ValuesList>(std::move(items))).Ref().CreateGenericList());
-}
-
-JINJA2CPP_CELL_NOINLINE std::optional<Value> CopyForExport(const MapRef& map)
-{
-    // A namespace, a loop or a host object stays a view: the keys and items its view reads
-    const auto* accessor = map.GetAccessor();
-    if (!accessor || map.IsNamespace() || map.Iterates() || map.GetObjectClass())
-    {
-        return std::nullopt;
-    }
-    const ExportStep step(map.GetIdentity());
-    if (!step.Entered())
-    {
-        return std::nullopt;
-    }
-    ValuesMap items;
-    for (auto& key : accessor->GetKeys())
-    {
-        auto item = IntValue2Value(accessor->GetItem(key));
-        items.emplace(std::move(key), std::move(item));
-    }
-    return Value(LendNestedMap(std::make_shared<ValuesMap>(std::move(items))).CreateGenericMap());
-}
-} // namespace
-
 struct OutputValueConvertor
 {
     using result_t = Value;
 
     result_t operator()(const UndefinedValue&) const { return result_t(); }
     result_t operator()(const NoneValue&) const { return result_t(); }
-    result_t operator()(const MapRef& adapter) const
-    {
-        if (JINJA2CPP_CELL_UNLIKELY(ExportCopies()))
-        {
-            if (auto copy = CopyForExport(adapter))
-            {
-                return std::move(*copy);
-            }
-        }
-        return result_t(adapter.CreateGenericMap());
-    }
-    result_t operator()(const ListRef& adapter) const
-    {
-        if (JINJA2CPP_CELL_UNLIKELY(ExportCopies()))
-        {
-            if (auto copy = CopyForExport(adapter))
-            {
-                return std::move(*copy);
-            }
-        }
-        return result_t(adapter.CreateGenericList());
-    }
+    result_t operator()(const MapRef& adapter) const { return result_t(adapter.CreateGenericMap()); }
+    result_t operator()(const ListRef& adapter) const { return result_t(adapter.CreateGenericList()); }
     result_t operator()(const ValueRef& ref) const { return ref.get(); }
     result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", IntValue2Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }
     result_t operator()(const Callable&) const { return result_t(); }
