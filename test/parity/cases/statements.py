@@ -491,4 +491,8 @@ CASES = [
     ('loop_else_set_keeps_outer_target', '{% for x in [1] %}{% for j in e %}{% else %}{% set x = 2 %}{{ x }}{% endfor %}{{ x }}{% endfor %}'),
     ('for_dict_int_keys', "{% for k in {1: 'a', 2: 'b'} %}{{ k + 1 }}{% endfor %}|{% for k, v in {2: 'a'}.items() %}{{ k }}{{ v }}{% endfor %}|{% for k, v in {20: 'x', 10: 'y'}|dictsort %}{{ k }}{% endfor %}"),
     ('for_dict_tuple_key_unpack', "{% for k, v in {(1, 2): 'a'}.items() %}{{ k[0] }}{{ k[1] }}{{ v }}{% endfor %}"),
+    # A macro defined in a macro keeps the outer call's names after it returned (0326); a stored
+    # `self` sees what the includer set (0323)
+    ("macro_closure_outlives_outer_call", "{% set ns = namespace(f=none) %}{% macro outer(n) %}{% macro inner(k) %}{{ n }}{{ k }}{% endmacro %}{% set ns.f = inner %}{% endmacro %}{{ outer('captured') }}|{{ ns.f('k') }}"),
+    ("stored_self_sees_includer_names", "{% set ns = namespace(s=none) %}{% set x = 'X' %}{% include 'inc' %}|{{ ns.s.blk() }}", {"templates": {"inc": "{% block blk %}B{{ x }}{% endblock %}{% set ns.s = self %}"}}),
 ]
