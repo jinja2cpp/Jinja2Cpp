@@ -1423,7 +1423,8 @@ struct BinaryMathOperation : BaseVisitor<>
         return rem;
     }
 
-    ResultType operator()(int64_t left, int64_t right) const { return ApplyToInts(left, right); }
+    // Forced inline too: an out-of-line copy from one translation unit served every visit (0318 cost +0.9% on int_arith)
+    JINJA2CPP_HOT_INLINE ResultType operator()(int64_t left, int64_t right) const { return ApplyToInts(left, right); }
 
     // The int64_t overload, forced inline into ApplyToNumbers (the fast path of every binary operator)
     [[nodiscard]] JINJA2CPP_HOT_INLINE ResultType ApplyToInts(int64_t left, int64_t right) const

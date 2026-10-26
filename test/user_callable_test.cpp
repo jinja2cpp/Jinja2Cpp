@@ -1033,3 +1033,99 @@ TEST(UserCallableTestSingle, UnpackedItemsKeepTheirSource)
         EXPECT_EQ(text, tpl.RenderAsString(params).value()) << source;
     }
 }
+
+// A value a host callable receives stays valid after the call, a list or map that came from the
+// environment's globals included: it keeps the globals it was read from when the host replaces
+// the global and the next render drops the old snapshot (docs/tasks/0318, 0223 probe 15; ASan)
+TEST(UserCallableTestSingle, KeptGlobalsOutliveTheirSnapshot)
+{
+    const std::string text(40, 'g');
+    std::vector<Value> kept;
+    TemplateEnv env;
+    env.AddGlobal("list", ValuesList{ text, 2, ValuesList{ text + "n" } });
+    // One key a map: ValuesMap does not keep the order
+    env.AddGlobal("map", ValuesMap{ { "nested", ValuesMap{ { "n", text } } } });
+    env.AddGlobal("str", text);
+    env.AddGlobal("keep", UserCallable{ [&kept](const UserCallableParams& p) {
+                                           kept.push_back(p["v"]);
+                                           return Value(std::string());
+                                       },
+                                        { ArgInfo{ "v" } } });
+    Template tpl(&env);
+    // The globals themselves, an item of each, and a value the template made that holds them
+    ASSERT_TRUE(!!tpl.Load("{{ keep(list) }}{{ keep(map) }}{{ keep(str) }}{{ keep(list[2]) }}{{ keep(map.nested) }}"
+                           "{% for l in [list] %}{{ keep(l) }}{% endfor %}{{ keep({'l': list, 'm': map}) }}{{ keep([list[0], map.nested.n]) }}"));
+    ASSERT_TRUE(!!tpl.RenderAsString({}));
+    ASSERT_EQ(8u, kept.size());
+
+    // Same shape, so that the template renders again
+    env.AddGlobal("list", ValuesList{ "x", 3, ValuesList{ "y" } });
+    env.AddGlobal("map", ValuesMap{ { "nested", ValuesMap{ { "n", "z" } } } });
+    env.AddGlobal("str", std::string("short"));
+    ASSERT_TRUE(!!tpl.RenderAsString({}));
+    ASSERT_EQ(16u, kept.size());
+    kept.resize(8);
+    EXPECT_TRUE(ReleaseThreadCaches());
+
+    // Printed by a template of no environment, which reads each one whole
+    Template print;
+    ASSERT_TRUE(!!print.Load("{{ v }}"));
+    auto show = [&print](const Value& v) { return print.RenderAsString({ { "v", v } }).value(); };
+    const std::string quoted = "'" + text + "'";
+    const std::string nested = "'" + text + "n'";
+    const std::string listText = "[" + quoted + ", 2, [" + nested + "]]";
+    const std::string mapText = "{'nested': {'n': " + quoted + "}}";
+    EXPECT_EQ(listText, show(kept[0]));
+    EXPECT_EQ(mapText, show(kept[1]));
+    EXPECT_EQ(text, show(kept[2]));
+    EXPECT_EQ("[" + nested + "]", show(kept[3]));
+    EXPECT_EQ("{'n': " + quoted + "}", show(kept[4]));
+    EXPECT_EQ(listText, show(kept[5]));
+    const auto made = show(kept[6]);
+    EXPECT_EQ("[" + quoted + ", " + quoted + "]", show(kept[7]));
+    EXPECT_TRUE(made == "{'l': " + listText + ", 'm': " + mapText + "}" || made == "{'m': " + mapText + ", 'l': " + listText + "}") << made;
+}
+
+// Each item kept alone, so that no other kept value holds the globals for it
+TEST(UserCallableTestSingle, KeptGlobalItemsOutliveTheirSnapshot)
+{
+    const std::string text(40, 'g');
+    const std::vector<std::pair<std::string, std::string>> rows = {
+        { "{{ keep(list[0]) }}", text },
+        { "{{ keep([list[0]]) }}", "['" + text + "']" },
+        { "{{ keep(list[1:2]) }}", "['" + text + "k']" },
+        { "{% for k, v in map|dictsort %}{{ keep([k, v]) }}{% endfor %}", "['" + text + "k', '" + text + "v']" },
+        { "{% for b in list|batch(1) %}{% if loop.first %}{{ keep(b) }}{% endif %}{% endfor %}", "['" + text + "']" },
+        { "{{ keep(list|select|first) }}", text },
+        { "{{ keep(map|list) }}", "['" + text + "k']" },
+    };
+    for (const auto& [source, expected] : rows)
+    {
+        SCOPED_TRACE(source);
+        Value kept;
+        TemplateEnv env;
+        env.AddGlobal("list", ValuesList{ text, text + "k" });
+        env.AddGlobal("map", ValuesMap{ { text + "k", text + "v" } });
+        env.AddGlobal("keep", UserCallable{ [&kept](const UserCallableParams& p) {
+                                               // The first render's value only
+                                               if (kept.IsNone())
+                                               {
+                                                   kept = p["v"];
+                                               }
+                                               return Value(std::string());
+                                           },
+                                            { ArgInfo{ "v" } } });
+        Template tpl(&env);
+        ASSERT_TRUE(!!tpl.Load(source));
+        ASSERT_TRUE(!!tpl.RenderAsString({}));
+        env.AddGlobal("list", ValuesList{ "x", "y" });
+        env.AddGlobal("map", ValuesMap{ { "x", "y" } });
+        // Renders again to drop the old snapshot
+        ASSERT_TRUE(!!tpl.RenderAsString({}));
+        EXPECT_TRUE(ReleaseThreadCaches());
+
+        Template print;
+        ASSERT_TRUE(!!print.Load("{{ v }}"));
+        EXPECT_EQ(expected, print.RenderAsString({ { "v", kept } }).value());
+    }
+}

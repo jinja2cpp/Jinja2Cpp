@@ -1945,6 +1945,9 @@ ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool stri
 static_assert(std::is_nothrow_move_constructible_v<InternalValue>);
 static_assert(std::is_nothrow_move_assignable_v<InternalValue>);
 Value IntValue2Value(const InternalValue& val);
+// An environment's global for the snapshot of the globals (template_impl.h): a list or map borrows
+// the global's storage and keeps `owner`, the globals map, alive; a string is copied (docs/tasks/0318)
+InternalValue LendGlobal(const Value& value, const std::shared_ptr<const void>& owner);
 Value OptIntValue2Value(std::optional<InternalValue> val);
 
 } // namespace v2

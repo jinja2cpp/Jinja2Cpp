@@ -1106,6 +1106,34 @@ private:
     T m_val;
 };
 
+// Borrows data that `owner` keeps alive: an environment's global, whose map the thread's
+// snapshot of the globals shares. A value made from it, kept by a host callable or in a value the
+// template made, keeps the map when the global is replaced and the snapshot goes (docs/tasks/0318)
+template<typename T>
+class ByHeldRef
+{
+public:
+    ByHeldRef(const T& val, std::shared_ptr<const void> owner)
+        : m_val(&val)
+        , m_owner(std::move(owner))
+    {
+    }
+
+    [[nodiscard]] const T& Get() const { return *m_val; }
+    [[nodiscard]] const std::shared_ptr<const void>& GetOwner() const { return m_owner; }
+    [[nodiscard]] bool ShouldExtendLifetime() const { return false; }
+    bool operator==(const ByHeldRef<T>& other) const { return m_val == other.m_val; }
+    bool operator!=(const ByHeldRef<T>& other) const { return !(*this == other); }
+
+private:
+    const T* m_val;
+    std::shared_ptr<const void> m_owner;
+};
+
+// Whether a holder lends the items of data the caller keeps for the whole render (as views)
+template<template<typename> class Holder>
+constexpr bool LendsViews = std::is_same_v<Holder<int>, ByRef<int>> || std::is_same_v<Holder<int>, ByHeldRef<int>>;
+
 template<typename T>
 class BySharedVal
 {
@@ -1309,7 +1337,11 @@ InternalValue LendOwnedItem(const std::shared_ptr<T>& owner, const Value& item)
     return visit(visitors::InputValueConvertor(true, false), item.GetData());
 }
 
-// Borrows the item when the caller owns the storage for the whole render (ByRef)
+// An item of a global: a list or map keeps the global's owner, anything else is copied (a
+// generic container's copy shares its accessor); defined after the adapters
+InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value& item);
+
+// Borrows the item when the caller owns the storage for the whole render (ByRef, ByHeldRef)
 template<template<typename> class Holder, typename T>
 InternalValue LendItem([[maybe_unused]] const Holder<T>& holder, const Value& item)
 {
@@ -1319,20 +1351,29 @@ InternalValue LendItem([[maybe_unused]] const Holder<T>& holder, const Value& it
     }
     else
     {
-        // Scalars, the usual items of user data, skip the convertor's visit. The exact
-        // std::get_if<std::string> leaves a Markup to the convertor: do not switch it to GetIf<std::string>
-        if (const auto* s = std::get_if<std::string>(&item.GetData()))
+        if constexpr (std::is_same_v<Holder<T>, ByHeldRef<T>>)
         {
-            return InternalValue(TargetStringView(std::string_view(*s)));
+            return LendHeldItem(holder.GetOwner(), item);
         }
-        if (const auto* i = std::get_if<int64_t>(&item.GetData()))
+        else
         {
-            return InternalValue(*i);
+            // Scalars, the usual items of user data, skip the convertor's visit. The exact
+            // std::get_if<std::string> leaves a Markup to the convertor: do not switch it to GetIf<std::string>
+            if (const auto* s = std::get_if<std::string>(&item.GetData()))
+            {
+                return InternalValue(TargetStringView(std::string_view(*s)));
+            }
+            if (const auto* i = std::get_if<int64_t>(&item.GetData()))
+            {
+                return InternalValue(*i);
+            }
+            return Value2IntValue(item);
         }
-        return Value2IntValue(item);
     }
 }
 
+// held: the items of a global (ByHeldRef), which keep its owner
+template<bool held>
 struct ItemAdapters;
 
 template<template<typename> class Holder>
@@ -1355,13 +1396,22 @@ public:
     [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const
     {
         const auto& item = m_values.Get()[static_cast<size_t>(idx)];
-        if constexpr (std::is_same_v<Holder<ValuesList>, ByRef<ValuesList>>)
+        if constexpr (LendsViews<Holder>)
         {
             // LendItem's scalars first, as there: a map is the less common item. As there, the
             // exact std::get_if<std::string> leaves a Markup to the convertor
             if (const auto* s = std::get_if<std::string>(&item.GetData()))
             {
-                return InternalValue(TargetStringView(std::string_view(*s)));
+                // A global's text is copied: a view kept in a value the template made, or by
+                // the host, would not keep the globals map (docs/tasks/0318)
+                if constexpr (std::is_same_v<Holder<ValuesList>, ByHeldRef<ValuesList>>)
+                {
+                    return InternalValue(*s);
+                }
+                else
+                {
+                    return InternalValue(TargetStringView(std::string_view(*s)));
+                }
             }
             if (const auto* i = std::get_if<int64_t>(&item.GetData()))
             {
@@ -1400,7 +1450,7 @@ private:
     // BlockSize items, instead of an adapter allocated for each item each time it is read
     // (docs/tasks/0154). A list of the caller's data is converted for one render or held
     // by the thread's globals, so it is never read by two threads
-    mutable IntrusivePtr<ItemAdapters> m_items;
+    mutable IntrusivePtr<ItemAdapters<std::is_same_v<Holder<ValuesList>, ByHeldRef<ValuesList>>>> m_items;
 };
 
 ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
@@ -2277,10 +2327,14 @@ private:
     Holder<ValuesMap> m_values;
 };
 
-// One object for the block: a lent item's value shares it (docs/tasks/0154, 0140)
+// One object for the block: a lent item's value shares it (docs/tasks/0154, 0140). The items of
+// a global are a type of their own, so the larger held adapters do not widen every block (0318)
+template<bool held>
 struct ItemAdapters final : ValueObject
 {
-    using Adapter = std::variant<std::monostate, ValuesListAdapter<ByRef>, ValuesMapAdapter<ByRef>>;
+    using Adapter = std::conditional_t<held,
+                                       std::variant<std::monostate, ValuesListAdapter<ByHeldRef>, ValuesMapAdapter<ByHeldRef>>,
+                                       std::variant<std::monostate, ValuesListAdapter<ByRef>, ValuesMapAdapter<ByRef>>>;
     // Items per block: the list keeps only the block of the items it reads now, so a long list
     // holds a bounded number of adapters; a block an item was kept from stays with that item
     static constexpr size_t BlockSize = 256;
@@ -2301,18 +2355,30 @@ template<template<typename> class Holder>
 template<typename T>
 InternalValue ValuesListAdapter<Holder>::LendNested(size_t idx, const T& container) const
 {
-    using AdapterType = std::conditional_t<std::is_same_v<T, ValuesList>, ValuesListAdapter<ByRef>, ValuesMapAdapter<ByRef>>;
+    // A global's items keep its owner (ByHeldRef); the caller's params are borrowed (ByRef)
+    using ItemHolder = std::conditional_t<std::is_same_v<Holder<T>, ByHeldRef<T>>, ByHeldRef<T>, ByRef<T>>;
+    using AdapterType = std::conditional_t<std::is_same_v<T, ValuesList>,
+                                           std::conditional_t<std::is_same_v<ItemHolder, ByRef<T>>, ValuesListAdapter<ByRef>, ValuesListAdapter<ByHeldRef>>,
+                                           std::conditional_t<std::is_same_v<ItemHolder, ByRef<T>>, ValuesMapAdapter<ByRef>, ValuesMapAdapter<ByHeldRef>>>;
     using ResultType = std::conditional_t<std::is_same_v<T, ValuesList>, ListAdapter, MapAdapter>;
     if (!m_items || idx < m_items->first || idx - m_items->first >= m_items->size)
     {
-        const auto first = idx - (idx % ItemAdapters::BlockSize);
-        m_items = MakeRef<ItemAdapters>(first, std::min(ItemAdapters::BlockSize, m_values.Get().size() - first));
+        using Block = typename decltype(m_items)::element_type;
+        const auto first = idx - (idx % Block::BlockSize);
+        m_items = MakeRef<Block>(first, std::min(Block::BlockSize, m_values.Get().size() - first));
     }
     auto& slot = m_items->adapters[idx - m_items->first];
     auto* adapter = std::get_if<AdapterType>(&slot);
     if (!adapter)
     {
-        adapter = &slot.template emplace<AdapterType>(ByRef<T>(container));
+        if constexpr (std::is_same_v<ItemHolder, ByRef<T>>)
+        {
+            adapter = &slot.template emplace<AdapterType>(ByRef<T>(container));
+        }
+        else
+        {
+            adapter = &slot.template emplace<AdapterType>(ByHeldRef<T>(container, m_values.GetOwner()));
+        }
     }
     // Owned by the block: the item outlives the list adapter if the template keeps it
     return InternalValue(ResultType(adapter, ValueObjectPtr(m_items)));
@@ -2326,6 +2392,34 @@ ListAdapter LendNestedList(std::shared_ptr<ValuesList> list)
 MapAdapter LendNestedMap(std::shared_ptr<ValuesMap> map)
 {
     return MapAdapter(MakeRef<ValuesMapAdapter<BySharedVal>>(BySharedVal<ValuesMap>(std::move(map))));
+}
+
+InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value& item)
+{
+    if (const auto* text = std::get_if<std::string>(&item.GetData()))
+    {
+        return InternalValue(*text);
+    }
+    if (const auto* i = std::get_if<int64_t>(&item.GetData()))
+    {
+        return InternalValue(*i);
+    }
+    if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&item.GetData()))
+    {
+        return InternalValue(ListAdapter(MakeRef<ValuesListAdapter<ByHeldRef>>(ByHeldRef<ValuesList>(**list, owner))));
+    }
+    if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&item.GetData()))
+    {
+        return InternalValue(MapAdapter(MakeRef<ValuesMapAdapter<ByHeldRef>>(ByHeldRef<ValuesMap>(**map, owner))));
+    }
+    // By value: a generic container's copy shares the host's accessor, not the global's storage,
+    // and text is copied
+    return visit(visitors::InputValueConvertor(true, false), item.GetData());
+}
+
+InternalValue LendGlobal(const Value& value, const std::shared_ptr<const void>& owner)
+{
+    return LendHeldItem(owner, value);
 }
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values)
