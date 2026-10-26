@@ -85,6 +85,14 @@ bool LoadsInPlace(const std::shared_ptr<ITemplateImpl>& impl)
     return !GetImpl<CharT>(impl)->GetRenderer() && impl.use_count() == 1;
 }
 
+// The Load that replaces the template, out of the first Load's path; returns the result itself,
+// so that Load only jumps to it
+template<typename CharT, typename Source>
+JINJA2CPP_COLD_INLINE Result<void, CharT> LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, Source&& source, std::string&& name)
+{
+    return ToResult(TemplateImpl<CharT>::LoadReplacing(impl, std::forward<Source>(source), std::move(name)));
+}
+
 template<typename CharT>
 struct FileStream;
 
@@ -122,7 +130,7 @@ Result<void, CharT> BasicTemplate<CharT>::Load(StringViewType source, std::strin
     {
         return ToResult(impl->Load(StringType(source), std::move(name)));
     }
-    return ToResult(TemplateImpl<CharT>::LoadReplacing(m_impl, source, name));
+    return LoadReplacing<CharT>(m_impl, source, std::move(name));
 }
 
 template<typename CharT>
@@ -152,7 +160,7 @@ Result<void, CharT> BasicTemplate<CharT>::Load(std::basic_istream<CharT>& stream
     {
         return ToResult(GetImpl<CharT>(m_impl)->Load(std::move(t), std::move(name)));
     }
-    return ToResult(TemplateImpl<CharT>::LoadReplacing(m_impl, std::move(t), name));
+    return LoadReplacing<CharT>(m_impl, std::move(t), std::move(name));
 }
 
 template<typename CharT>

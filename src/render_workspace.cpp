@@ -57,7 +57,7 @@ RenderWorkspace::RenderMaps& RenderWorkspace::LendNewMaps()
 
 bool RenderWorkspace::ReleaseCaches() noexcept
 {
-    if (t_renders != 0 || m_lentMaps != 0 || !m_frames.empty())
+    if (s_renders != 0 || m_lentMaps != 0 || !m_frames.empty())
     {
         return false;
     }

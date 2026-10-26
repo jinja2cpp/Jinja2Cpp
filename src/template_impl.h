@@ -374,9 +374,9 @@ public:
     // succeeds. Copies, the environment's cache, renders and modules keep the tree they had, as a
     // Python Template is immutable (docs/tasks/0321). Out of line (template_module.cpp), so that
     // the first Load of a template, which parses in place, pays nothing for it
-    static std::optional<BasicErrorInfo<CharT>> LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string<CharT>&& source, std::string& name);
+    static std::optional<BasicErrorInfo<CharT>> LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string<CharT>&& source, std::string&& name);
     // The same for a source the caller has not copied yet: the copy is made out of its path
-    static std::optional<BasicErrorInfo<CharT>> LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string_view<CharT> source, std::string& name);
+    static std::optional<BasicErrorInfo<CharT>> LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string_view<CharT> source, std::string&& name);
 
     // Template::MakeModule: renders the template, which `self` owns, as a module for the host
     // (template_module.cpp)

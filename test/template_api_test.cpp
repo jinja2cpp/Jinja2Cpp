@@ -421,26 +421,31 @@ TEST(TemplateApiTest, LoadFromAHostExceptionOfTheRenderingTemplate)
 TEST(TemplateApiTest, LoadFromTheStreamOfALoad)
 {
     Template tpl;
-    struct LoadingBuffer final : std::streambuf
+    class LoadingBuffer final : public std::streambuf
     {
+    public:
         explicit LoadingBuffer(Template* t)
-            : tpl(t)
+            : m_tpl(t)
         {
         }
+
+    protected:
         int_type underflow() override
         {
-            if (done)
+            if (m_done)
             {
                 return traits_type::eof();
             }
-            done = true;
-            (void)tpl->Load(std::string(100, 'i'));
-            setg(text.data(), text.data(), text.data() + text.size());
-            return traits_type::to_int_type(text[0]);
+            m_done = true;
+            (void)m_tpl->Load(std::string(100, 'i'));
+            setg(m_text.data(), m_text.data(), m_text.data() + m_text.size());
+            return traits_type::to_int_type(m_text[0]);
         }
-        Template* tpl;
-        std::string text = std::string(100, 's');
-        bool done = false;
+
+    private:
+        Template* m_tpl;
+        std::string m_text = std::string(100, 's');
+        bool m_done = false;
     };
     ASSERT_TRUE(!!tpl.Load(std::string(100, 'o')));
     LoadingBuffer buffer(&tpl);

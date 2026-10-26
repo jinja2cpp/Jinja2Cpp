@@ -28,6 +28,7 @@
 #include <memory>
 #include <mutex>
 #include <new>
+#include <optional>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
@@ -578,7 +579,7 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
 }
 
 template<typename CharT>
-std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string<CharT>&& source, std::string& name)
+std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string<CharT>&& source, std::string&& name)
 {
     auto loaded = std::make_shared<TemplateImpl>(*static_cast<TemplateImpl*>(impl.get()), nullptr);
     auto error = loaded->Load(std::move(source), std::move(name));
@@ -593,15 +594,15 @@ std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::LoadReplacing(std::sha
 }
 
 template<typename CharT>
-std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string_view<CharT> source, std::string& name)
+std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string_view<CharT> source, std::string&& name)
 {
-    return LoadReplacing(impl, std::basic_string<CharT>(source), name);
+    return LoadReplacing(impl, std::basic_string<CharT>(source), std::move(name));
 }
 
-template std::optional<BasicErrorInfo<char>> TemplateImpl<char>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::string&& source, std::string& name);
-template std::optional<BasicErrorInfo<char>> TemplateImpl<char>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::string_view source, std::string& name);
-template std::optional<BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::wstring_view source, std::string& name);
-template std::optional<BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::wstring&& source, std::string& name);
+template std::optional<BasicErrorInfo<char>> TemplateImpl<char>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::string&& source, std::string&& name);
+template std::optional<BasicErrorInfo<char>> TemplateImpl<char>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::string_view source, std::string&& name);
+template std::optional<BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::wstring_view source, std::string&& name);
+template std::optional<BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::wstring&& source, std::string&& name);
 
 template nonstd::expected<BasicTemplateModule<char>, BasicErrorInfo<char>> TemplateImpl<char>::MakeModule(const std::shared_ptr<const TemplateImpl>& self,
                                                                                                           const ValuesMap& params);

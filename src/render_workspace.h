@@ -127,15 +127,15 @@ public:
     // conversion included, which may run host code (a host exception's what()). The count is a
     // thread_local of its own, constant-initialized, so that a render pays one add and one
     // subtraction for it, with no initialization check and no compare
-    static void BeginRender() noexcept { ++t_renders; }
-    static void EndRender() noexcept { --t_renders; }
+    static void BeginRender() noexcept { ++s_renders; }
+    static void EndRender() noexcept { --s_renders; }
     // Keeps a template that a Load replaced while a render runs on this thread, which may be
     // the template it renders (docs/tasks/0321). They are freed by the first Load on the thread
     // outside a render, ReleaseThreadCaches or the thread's end, not when the render ends, so
     // that a render pays no compare for them: a Load from host code a render calls is rare
     void Retire(std::shared_ptr<const void> replaced)
     {
-        if (t_renders != 0)
+        if (s_renders != 0)
         {
             m_retired.push_back(std::move(replaced));
         }
@@ -207,7 +207,7 @@ private:
     std::vector<std::unique_ptr<RenderMaps>> m_maps;
     std::size_t m_lentMaps = 0;
     // The renders running on this thread
-    static inline thread_local std::size_t t_renders = 0;
+    static inline thread_local std::size_t s_renders = 0;
     // The templates a Load replaced during a render on this thread
     std::vector<std::shared_ptr<const void>> m_retired;
 };
