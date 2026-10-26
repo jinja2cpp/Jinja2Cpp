@@ -87,7 +87,15 @@ size_t EncodedUnits(uint32_t cp)
 {
     if (sizeof(CharT) == 1)
     {
-        return cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+        if (cp < 0x80)
+        {
+            return 1;
+        }
+        if (cp < 0x800)
+        {
+            return 2;
+        }
+        return cp < 0x10000 ? 3 : 4;
     }
     return sizeof(CharT) == 2 && cp >= 0x10000 ? 2 : 1;
 }
