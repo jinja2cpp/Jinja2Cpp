@@ -920,8 +920,8 @@ struct ValuesMap : OrderedMap<std::string, Value>
  *
  * The callable may keep the values it receives after it returns, except where they refer to data the host lent the
  * render: the params map and host data reflected by `const&`, by pointer or as a `string_view` stay borrowed.
- * \ref context is valid during the call only (docs/api-2.0.md, 3.10). Until task 0318 lands, a list or map that came
- * from the environment's globals is borrowed too: it is valid until the globals change and the thread's next render.
+ * \ref context is valid during the call only (docs/api-2.0.md, 3.10). A list or map that came from the environment's
+ * globals keeps the globals it was read from (task 0318).
  */
 struct UserCallableParams
 {

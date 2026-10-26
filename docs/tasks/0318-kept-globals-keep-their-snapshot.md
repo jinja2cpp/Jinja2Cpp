@@ -1,5 +1,6 @@
 ---
-status: in-progress
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/672
 priority: high
 area: robustness
 touches: [src/internal_value.cpp, src/internal_value.h, src/template_impl.h, test/user_callable_test.cpp]
