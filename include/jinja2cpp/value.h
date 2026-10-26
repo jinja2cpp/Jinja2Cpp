@@ -918,10 +918,10 @@ struct ValuesMap : OrderedMap<std::string, Value>
  * This structure prepared by the Jinja2C++ engine and filled by information about call parameters gathered from the
  * call context. See documentation for \ref UserCallable for detailed information
  *
- * The callable may keep the values it receives after it returns, lists and maps that came from the environment's
- * globals included, except where they refer to data the host lent the render: the params map and host data reflected
- * by `const&`, by pointer or as a `string_view` stay borrowed. \ref context is valid during the call only
- * (docs/api-2.0.md, 3.10).
+ * The callable may keep the values it receives after it returns, except where they refer to data the host lent the
+ * render: the params map and host data reflected by `const&`, by pointer or as a `string_view` stay borrowed.
+ * \ref context is valid during the call only (docs/api-2.0.md, 3.10). Until task 0318 lands, a list or map that came
+ * from the environment's globals is borrowed too: it is valid until the globals change and the thread's next render.
  */
 struct UserCallableParams
 {
