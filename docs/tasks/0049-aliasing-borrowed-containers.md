@@ -72,7 +72,9 @@ would. When a render that wrote to the host's data ends, the containers the host
 become a copy of what they show then, down to their nested containers (`ExportSlot`,
 `FreezeExports`): a view would read the host's data again once the cells are detached, so a
 nested write would revert under a kept container (review of #673). Only kept containers are
-copied, once each, at the render's end. A range, a list of unknown length, a namespace, a loop,
+copied, one copy per container shared by its slots, at the render's end. A container the host
+gives back to the render (`id(l)` returning its argument) is the render's own container again,
+as in Python, so `l.append(id(l))` is a self-append the collector frees. A range, a list of unknown length, a namespace, a loop,
 a host object, a dict with keys that are not text, a cycle, anything deeper than 256 containers,
 and a container whose copy throws (out of memory, a host accessor) stay views.
 

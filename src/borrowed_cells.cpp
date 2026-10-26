@@ -151,15 +151,32 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     return true;
 }
 
-void BorrowedCells::AddExport(IntrusivePtr<ExportSlot> slot)
+void BorrowedCells::AddExport(const IntrusivePtr<ExportSlot>& slot)
 {
     if (m_exports.size() >= m_pruneAt)
     {
-        m_exports.erase(std::remove_if(m_exports.begin(), m_exports.end(), [](const IntrusivePtr<ExportSlot>& kept) { return kept->use_count() == 1; }),
+        m_exports.erase(std::remove_if(m_exports.begin(), m_exports.end(),
+                                       [this](const IntrusivePtr<ExportSlot>& kept) {
+                                           if (kept->use_count() != 1)
+                                           {
+                                               return false;
+                                           }
+                                           m_exportsByAccessor.erase(kept->LiveAccessor());
+                                           return true;
+                                       }),
                         m_exports.end());
         m_pruneAt = std::max(MinPruneAt, 2 * m_exports.size());
     }
-    m_exports.push_back(std::move(slot));
+    m_exports.push_back(slot);
+    try
+    {
+        m_exportsByAccessor[slot->LiveAccessor()] = slot.get();
+    }
+    catch (...)
+    {
+        m_exports.pop_back();
+        throw;
+    }
 }
 
 void BorrowedCells::Finish() noexcept
@@ -169,6 +186,7 @@ void BorrowedCells::Finish() noexcept
     {
         FreezeExports(*this, m_exports);
     }
+    m_exportsByAccessor.clear();
     m_exports.clear();
     m_pruneAt = MinPruneAt;
     if (!m_cells)

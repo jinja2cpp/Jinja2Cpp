@@ -39,6 +39,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -2428,6 +2429,31 @@ private:
     std::optional<InternalValue> m_reprArgument;
 };
 
+namespace
+{
+// The render's own container, when `val` is one the render handed out (ExportSlot)
+JINJA2CPP_CELL_NOINLINE const InternalValue* ReturnedExport(const Value& val)
+{
+    const auto* cells = CycleCollector::CurrentCells();
+    if (!cells || !cells->HasExports())
+    {
+        return nullptr;
+    }
+    const void* accessor = nullptr;
+    if (const auto* list = std::get_if<GenericList>(&val.GetData()))
+    {
+        accessor = list->GetAccessor();
+    }
+    else
+    {
+        accessor = std::get<GenericMap>(val.GetData()).GetAccessor();
+    }
+    const auto* slot = cells->FindExport(accessor);
+    return slot ? &slot->View() : nullptr;
+}
+
+} // namespace
+
 InternalValue Value2IntValue(const Value& val)
 {
     return std::visit(visitors::InputValueConvertor(false, true), val.GetData());
@@ -2937,6 +2963,12 @@ namespace
 {
 // Set while FreezeExports runs: an export then copies the containers it reaches
 thread_local bool t_freezing = false;
+// Set when a copy left a container a view (a cycle, the depth): the frozen copy could then hold
+// its own slot, a cycle the collector cannot see, so the slot stays a view
+thread_local bool t_copyKeptAView = false;
+// The copy of each container FreezeExports made, by identity: the slots of one container share
+// it, as Python's names share the object (null: it stays a view)
+thread_local std::unordered_map<const void*, std::optional<Value>>* t_frozenCopies = nullptr;
 // The containers an export copies now, outermost first: a container met again is a cycle,
 // which keeps its view
 thread_local std::vector<const void*> t_exportPath;
@@ -2953,6 +2985,10 @@ public:
         if (m_entered)
         {
             t_exportPath.push_back(identity);
+        }
+        else
+        {
+            t_copyKeptAView = true;
         }
     }
     ~ExportStep()
@@ -3047,19 +3083,58 @@ public:
     }
 
     [[nodiscard]] const Generic& Current() const noexcept { return m_frozen ? *m_frozen : m_live; }
+    [[nodiscard]] const InternalValue& View() const noexcept override { return m_view; }
+    [[nodiscard]] const void* LiveAccessor() const noexcept override { return m_live.GetAccessor(); }
 
     void Freeze() override
     {
-        // A copy of what the view shows now, nested containers too (OutputValueConvertor)
-        auto copy = IntValue2Value(m_view);
-        if (auto* generic = std::get_if<Generic>(&copy.GetData()))
+        const auto* identity = Identity();
+        auto& copies = *t_frozenCopies;
+        auto found = identity ? copies.find(identity) : copies.end();
+        if (found == copies.end())
         {
-            // The view stays: the host may hold an accessor it gave
-            m_frozen = std::move(*generic);
+            // A copy of what the view shows now, nested containers too (OutputValueConvertor)
+            t_copyKeptAView = false;
+            auto copy = IntValue2Value(m_view);
+            std::optional<Value> frozen;
+            if (!t_copyKeptAView)
+            {
+                frozen = std::move(copy);
+            }
+            if (!identity)
+            {
+                Take(frozen);
+                return;
+            }
+            found = copies.emplace(identity, std::move(frozen)).first;
         }
+        Take(found->second);
     }
 
 private:
+    [[nodiscard]] const void* Identity() const
+    {
+        if constexpr (std::is_same_v<Generic, GenericList>)
+        {
+            const auto list = AsList(m_view);
+            return list ? list->GetIdentity() : nullptr;
+        }
+        else
+        {
+            const auto map = AsMap(m_view);
+            return map ? map->GetIdentity() : nullptr;
+        }
+    }
+    void Take(const std::optional<Value>& frozen)
+    {
+        if (const auto* generic = frozen ? std::get_if<Generic>(&frozen->GetData()) : nullptr)
+        {
+            // The view stays: the host may hold an accessor it gave
+            m_frozen = *generic;
+        }
+    }
+
+
     InternalValue m_view;
     Generic m_live;
     std::optional<Generic> m_frozen;
@@ -3085,6 +3160,8 @@ void FreezeExports(BorrowedCells& cells, const std::vector<IntrusivePtr<ExportSl
     // The views find this render's cells (CellLink::Find), and an export copies what it reaches
     const CycleCollector scope(cells);
     const FreezeScope freezing;
+    std::unordered_map<const void*, std::optional<Value>> copies;
+    t_frozenCopies = &copies;
     for (const auto& slot : slots)
     {
         // Held by the registry alone: the host let it go
@@ -3100,6 +3177,7 @@ void FreezeExports(BorrowedCells& cells, const std::vector<IntrusivePtr<ExportSl
         {
         }
     }
+    t_frozenCopies = nullptr;
 }
 
 struct OutputValueConvertor
@@ -3318,7 +3396,11 @@ struct UserCallableBody
     InternalValue operator()(const CallParams& params, RenderContext& context) const
     {
         auto ucParams = PrepareUserCallableParams(params, context, argsInfo);
-        auto result = Value2IntValue(CallHost(ucParams));
+        auto hostResult = CallHost(ucParams);
+        // A container the render handed to the host, given back, is the render's own one
+        const auto& data = hostResult.GetData();
+        const auto* own = std::holds_alternative<GenericList>(data) || std::holds_alternative<GenericMap>(data) ? ReturnedExport(hostResult) : nullptr;
+        auto result = own ? *own : Value2IntValue(std::move(hostResult));
         AfterHostCall();
         return result;
     }

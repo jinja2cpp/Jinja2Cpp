@@ -165,8 +165,34 @@ TEST(BorrowedCellsSingle, KeptDictWithNumberKeys)
             return kept;
         },
         { ArgInfo{ "value" } });
-    EXPECT_EQ("{'1': 'a', 'x': 'b'}", Render("{% set _ = l.append(1) %}{{ keep({1: 'a', 'x': 'b'}) }}", params));
+    // What comes back is the render's own dict, as in Python
+    EXPECT_EQ("{1: 'a', 'x': 'b'}", Render("{% set _ = l.append(1) %}{{ keep({1: 'a', 'x': 'b'}) }}", params));
     EXPECT_EQ("{'1': 'a', 'x': 'b'}", Render("{{ k }}", ValuesMap{ { "k", kept } }));
+}
+
+// A list that holds its own export through a callable stays a view at the render's end: its copy
+// would hold its own slot, a cycle the collector cannot see (LSan)
+TEST(BorrowedCellsSingle, ExportInACycleIsFreed)
+{
+    ValuesMap params{ { "l", ValuesList{ Value(ValuesList{ 1 }) } }, { "d", ValuesMap{ { "a", 1 } } } };
+    params["id"] = UserCallable([](const UserCallableParams& p) { return p["value"]; }, { ArgInfo{ "value" } });
+    EXPECT_EQ("2|2", Render("{% set _ = l[0].append(2) %}{% set _ = l.append(id(l)) %}{{ l | length }}|{% set _ = d.update(s=id(d)) %}{{ d | length }}", params));
+}
+
+// The slots of one container share its copy at the render's end, as Python's names share the object
+TEST(BorrowedCellsSingle, KeptSlotsOfOneContainer)
+{
+    ValuesList kept;
+    ValuesMap params{ { "l", ValuesList{ Value(ValuesList{ 1 }) } } };
+    params["keep"] = UserCallable(
+        [&kept](const UserCallableParams& p) {
+            kept.push_back(p["value"]);
+            return Value();
+        },
+        { ArgInfo{ "value" } });
+    EXPECT_EQ("", Render("{% set _ = l[0].append(2) %}{% for i in range(3) %}{% set _ = keep(l) %}{% endfor %}", params));
+    ASSERT_EQ(3U, kept.size());
+    EXPECT_EQ("[[1, 2]]|[[1, 2]]|[[1, 2]]", Render("{{ k[0] }}|{{ k[1] }}|{{ k[2] }}", ValuesMap{ { "k", kept } }));
 }
 
 TEST(BorrowedCellsSingle, SelfAppendIsFreed)

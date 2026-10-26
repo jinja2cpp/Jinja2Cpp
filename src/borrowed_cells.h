@@ -250,6 +250,10 @@ public:
     // Called with the render's cells still attached; throws when the copy cannot be made, and
     // the container then stays a view
     virtual void Freeze() = 0;
+    // The render's container
+    [[nodiscard]] virtual const InternalValue& View() const noexcept = 0;
+    // The accessor the host's container gives while the render runs (FindExport)
+    [[nodiscard]] virtual const void* LiveAccessor() const noexcept = 0;
 };
 
 // Freezes the slots the host still holds (internal_value.cpp); runs with `cells` as the
@@ -279,7 +283,15 @@ public:
     [[nodiscard]] bool HasCells() const noexcept { return m_cells && !m_cells->empty(); }
 
     // Keeps `slot` until the render ends (ExportSlot)
-    void AddExport(IntrusivePtr<ExportSlot> slot);
+    void AddExport(const IntrusivePtr<ExportSlot>& slot);
+    // The slot whose host container gives `accessor`, or null: a container the render handed out
+    // that comes back (`id(l)` returning l) is the render's own one, as in Python
+    [[nodiscard]] const ExportSlot* FindExport(const void* accessor) const
+    {
+        const auto found = m_exportsByAccessor.find(accessor);
+        return found != m_exportsByAccessor.end() ? found->second : nullptr;
+    }
+    [[nodiscard]] bool HasExports() const noexcept { return !m_exports.empty(); }
 
 private:
     friend class CellLink;
@@ -293,6 +305,7 @@ private:
     // The containers the render handed out; the ones nothing else holds are dropped when there
     // are this many, as the collector drops its candidates
     std::vector<IntrusivePtr<ExportSlot>> m_exports;
+    robin_hood::unordered_flat_map<const void*, const ExportSlot*> m_exportsByAccessor;
     static constexpr size_t MinPruneAt = 64;
     size_t m_pruneAt = MinPruneAt;
 };
