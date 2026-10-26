@@ -3160,8 +3160,17 @@ void FreezeExports(BorrowedCells& cells, const std::vector<IntrusivePtr<ExportSl
     // The views find this render's cells (CellLink::Find), and an export copies what it reaches
     const CycleCollector scope(cells);
     const FreezeScope freezing;
-    std::unordered_map<const void*, std::optional<Value>> copies;
-    t_frozenCopies = &copies;
+    // Made in the try: MSVC's map allocates as it is made
+    std::optional<std::unordered_map<const void*, std::optional<Value>>> copies;
+    try
+    {
+        copies.emplace();
+    }
+    catch (...) // NOLINT(bugprone-empty-catch): out of memory: the containers stay views
+    {
+        return;
+    }
+    t_frozenCopies = &*copies;
     for (const auto& slot : slots)
     {
         // Held by the registry alone: the host let it go
