@@ -372,7 +372,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0298](0298-include-of-extending-template-loop.md) | An included template that extends a parent reading `loop` | parity | low | done |
 | [0299](0299-module-exports-skip-imports.md) | A module exports the names its top level imports, and keeps a re-set import hidden | parity | low | open |
 | [0300](0300-module-export-callable-gaps.md) | Callables that do not cross a `Template::MakeModule` export | parity | low | open |
-| [0301](0301-module-call-loads-accumulate.md) | A `Template::MakeModule` module keeps what each of its calls loads | robustness | medium | open |
+| [0301](0301-module-call-loads-accumulate.md) | A `Template::MakeModule` module keeps what each of its calls loads | robustness | medium | done |
 | [0302](0302-simdjson-binding.md) | An optional simdjson binding | api | low | open |
 | [0303](0303-retire-rapidjson-backend.md) | Retire the built-in RapidJSON backend | build | medium | done |
 | [0304](0304-loop-over-loop-peeks-early.md) | A for loop over `loop` advances the outer loop early | parity | low | open |
@@ -383,4 +383,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0309](0309-repr-of-template-modules.md) | `pprint` of builtin globals and imported templates | parity | low | open |
 | [0310](0310-undefined-filter-argument-is-omitted.md) | A filter argument given as an undefined value reads as omitted | parity | low | open |
 | [0311](0311-json-bindings-as-components.md) | JSON bindings as components on a public adapter contract | build | high | done |
+| [0312](0312-module-kept-while-stored-macro-reaches-it.md) | A macro a module call stores keeps its module, as in Jinja2 | parity | low | open |
+| [0313](0313-module-keeps-every-use-reloads.md) | A module keeps every tree `TemplateLookup::EveryUse` reloads | robustness | low | open |
 | [0322](0322-parity-corpus-through-reflect.md) | Run the parity corpus with the context as a JSON view | parity | low | open |
