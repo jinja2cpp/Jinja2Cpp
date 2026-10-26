@@ -121,6 +121,22 @@ struct CaseChars
 
 using CaseFn = size_t (*)(uint32_t, uint32_t (&)[3]);
 
+// A mapping can lengthen the string ('\u0390'.upper() is three code points), so every append
+// of a case-mapped result, changed characters or not, is held to the sequence limit first
+template<typename CharT>
+void CheckCaseMappedSize(const std::basic_string<CharT>& out, size_t units)
+{
+    CheckSequenceSize(static_cast<uint64_t>(out.size()) + units, "a case-mapped string");
+}
+
+// The character idx as it is
+template<typename CharT>
+void AppendUnchanged(std::basic_string<CharT>& out, const CaseChars<CharT>& chars, size_t idx)
+{
+    CheckCaseMappedSize(out, chars.views[idx].size());
+    out.append(chars.views[idx].begin(), chars.views[idx].end());
+}
+
 template<typename CharT>
 void AppendMapped(std::basic_string<CharT>& out, const CaseChars<CharT>& chars, size_t idx, CaseFn map)
 {
@@ -128,17 +144,15 @@ void AppendMapped(std::basic_string<CharT>& out, const CaseChars<CharT>& chars, 
     auto count = map(chars.cps[idx], mapped);
     if (count == 1 && mapped[0] == chars.cps[idx])
     {
-        out.append(chars.views[idx].begin(), chars.views[idx].end());
+        AppendUnchanged(out, chars, idx);
         return;
     }
-    // A mapping can lengthen the string ('\u0390'.upper() is three code points), so the result
-    // is held to the sequence limit before it grows
     size_t units = 0;
     for (size_t n = 0; n != count; ++n)
     {
         units += EncodedUnits<CharT>(mapped[n]);
     }
-    CheckSequenceSize(static_cast<uint64_t>(out.size()) + units, "a case-mapped string");
+    CheckCaseMappedSize(out, units);
     for (size_t n = 0; n != count; ++n)
     {
         AppendCodePoint(out, mapped[n]);
@@ -172,6 +186,7 @@ void AppendLowerChar(std::basic_string<CharT>& out, const CaseChars<CharT>& char
 {
     if (chars.cps[idx] == 0x3A3)
     {
+        CheckCaseMappedSize(out, EncodedUnits<CharT>(0x3C3U));
         AppendCodePoint(out, IsFinalSigma(chars.cps, begin, end, idx) ? 0x3C2U : 0x3C3U);
     }
     else
@@ -244,7 +259,7 @@ std::basic_string<CharT> SwapcaseUnicode(std::basic_string_view<CharT> str)
         }
         else
         {
-            result.append(chars.views[idx].begin(), chars.views[idx].end());
+            AppendUnchanged(result, chars, idx);
         }
     }
     return result;

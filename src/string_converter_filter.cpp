@@ -1103,7 +1103,7 @@ JINJA2CPP_OUTLINE_INLINE InternalValue TitleCaseUnicode(std::basic_string_view<C
     {
         if (isDelim(idx))
         {
-            result.append(chars.views[idx].begin(), chars.views[idx].end());
+            AppendUnchanged(result, chars, idx);
             ++idx;
             continue;
         }
@@ -1231,6 +1231,7 @@ InternalValue Underscorize(std::basic_string_view<CharT> str)
     {
         if (!result.empty())
         {
+            CheckCaseMappedSize(result, 1);
             result.push_back('_');
         }
         AppendLower(result, chars, begin, begin, end);
