@@ -4,10 +4,12 @@
 #include "internal_value.h"
 #include "intrusive_ptr.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <memory>
 #include <utility>
+#include <vector>
 
 namespace jinja2
 {
@@ -149,8 +151,30 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     return true;
 }
 
+void BorrowedCells::AddExport(IntrusivePtr<ExportSlot> slot)
+{
+    if (m_exports.size() >= m_pruneAt)
+    {
+        m_exports.erase(std::remove_if(m_exports.begin(), m_exports.end(), [](const IntrusivePtr<ExportSlot>& kept) { return kept->use_count() == 1; }),
+                        m_exports.end());
+        m_pruneAt = std::max(MinPruneAt, 2 * m_exports.size());
+    }
+    m_exports.push_back(std::move(slot));
+}
+
 void BorrowedCells::Finish() noexcept
 {
+    // Frozen while the cells are attached; without a cell the views read what the host has
+    if (HasCells())
+    {
+        FreezeExports(*this, m_exports);
+    }
+    m_exports.clear();
+    m_pruneAt = MinPruneAt;
+    if (!m_cells)
+    {
+        return;
+    }
     // Detached first, while the table holds every cell: freeing a cell frees values that may
     // hold adapters attached to another one
     for (const auto& [identity, cell] : *m_cells)

@@ -66,12 +66,15 @@ host's data now copies it, as Python does. `methods.context_alias` and
 `methods.operand_changed_by_call` match; rows `methods.alias_*` and test/borrowed_cells_test.cpp
 pin the rest.
 
-A value exported while the render has cells (an argument of a user callable, which the host may
-keep) is a copy of the render's view, down to its nested containers: a view would read the host's
-data again once the cells are detached, so a nested write would revert under a kept container
-(review of #673). The copy is a snapshot: a later write in the same render does not reach it. A
-range, a list of unknown length, a namespace, a loop, a host object, a cycle and anything deeper
-than 256 containers stay views.
+A container a render hands out (an argument of a user callable, which the host may keep) is a
+view while the render runs, so the host sees the render's later writes, as Python's object
+would. When a render that wrote to the host's data ends, the containers the host still holds
+become a copy of what they show then, down to their nested containers (`ExportSlot`,
+`FreezeExports`): a view would read the host's data again once the cells are detached, so a
+nested write would revert under a kept container (review of #673). Only kept containers are
+copied, once each, at the render's end. A range, a list of unknown length, a namespace, a loop,
+a host object, a dict with keys that are not text, a cycle, anything deeper than 256 containers,
+and a container whose copy throws (out of memory, a host accessor) stay views.
 
 Perf: an item adapter in a block (`ItemAdapters`) has a `CellLink` whose destructor does
 nothing; the block releases its slots, and skips that when no cell existed since it was made

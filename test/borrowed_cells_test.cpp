@@ -134,6 +134,41 @@ TEST(BorrowedCellsSingle, ExportOfACycle)
     EXPECT_EQ("2|2", Render("{% set _ = l.append(l) %}{{ size(l) }}|{{ size(l[1]) }}", params));
 }
 
+// The host's container is the render's while the render runs, as Python's object is: a write
+// after the call reaches it, and it keeps what it showed when the render ended
+TEST(BorrowedCellsSingle, KeptValueSeesLaterWrites)
+{
+    Value kept;
+    ValuesMap params{ { "l", ValuesList{ Value(ValuesList{ 1 }), Value(ValuesList{ 2 }) } } };
+    params["keep"] = UserCallable(
+        [&kept](const UserCallableParams& p) {
+            kept = p["value"];
+            return Value();
+        },
+        { ArgInfo{ "value" } });
+    params["show"] = UserCallable([&kept](const UserCallableParams& /*p*/) { return kept; }, {});
+    EXPECT_EQ("None[[1, 9, 7], [2]]", Render("{% set _ = l[0].append(9) %}{{ keep(l) }}{% set _ = l[0].append(7) %}{{ show() }}", params));
+    EXPECT_EQ("[[1, 9, 7], [2]]", Render("{{ k }}", ValuesMap{ { "k", kept } }));
+    // Kept before the first write
+    EXPECT_EQ("None", Render("{{ keep(l) }}{% set _ = l[1].append(3) %}", params));
+    EXPECT_EQ("[[1], [2, 3]]", Render("{{ k }}", ValuesMap{ { "k", kept } }));
+}
+
+// A dict with keys that are not text stays a view: a ValuesMap copy would lose its items
+TEST(BorrowedCellsSingle, KeptDictWithNumberKeys)
+{
+    Value kept;
+    ValuesMap params{ { "l", ValuesList{ 1 } } };
+    params["keep"] = UserCallable(
+        [&kept](const UserCallableParams& p) {
+            kept = p["value"];
+            return kept;
+        },
+        { ArgInfo{ "value" } });
+    EXPECT_EQ("{'1': 'a', 'x': 'b'}", Render("{% set _ = l.append(1) %}{{ keep({1: 'a', 'x': 'b'}) }}", params));
+    EXPECT_EQ("{'1': 'a', 'x': 'b'}", Render("{{ k }}", ValuesMap{ { "k", kept } }));
+}
+
 TEST(BorrowedCellsSingle, SelfAppendIsFreed)
 {
     // The cell holds the adapter that holds the cell: the render's end breaks the cycle (LSan)

@@ -2935,6 +2935,8 @@ MapAdapter CreateMapAdapter(ValuesMap&& values)
 
 namespace
 {
+// Set while FreezeExports runs: an export then copies the containers it reaches
+thread_local bool t_freezing = false;
 // The containers an export copies now, outermost first: a container met again is a cycle,
 // which keeps its view
 thread_local std::vector<const void*> t_exportPath;
@@ -2970,16 +2972,6 @@ public:
 private:
     bool m_entered;
 };
-
-// Whether an export copies the containers it reaches: the running render wrote to the host's
-// data, whose cells it detaches when it ends. A view kept by the host (a user callable that
-// stores its argument) would then read the host's data again under a container the render
-// changed, nested or not (docs/tasks/0049)
-bool ExportCopies()
-{
-    const auto* cells = CycleCollector::CurrentCells();
-    return cells != nullptr && cells->HasCells();
-}
 
 JINJA2CPP_CELL_NOINLINE std::optional<Value> CopyForExport(const ListRef& list)
 {
@@ -3019,14 +3011,96 @@ JINJA2CPP_CELL_NOINLINE std::optional<Value> CopyForExport(const MapRef& map)
         return std::nullopt;
     }
     ValuesMap items;
-    for (auto& key : accessor->GetKeys())
+    for (auto& [key, item] : accessor->GetEntries())
     {
-        auto item = IntValue2Value(accessor->GetItem(key));
-        items.emplace(std::move(key), std::move(item));
+        // A dict with a key that is not text (`{1: 'a'}`) stays a view: a ValuesMap has text keys
+        if (key.Kind() != ValueKind::String)
+        {
+            return std::nullopt;
+        }
+        items.emplace(AsString(key), IntValue2Value(item));
     }
     return Value(LendNestedMap(std::make_shared<ValuesMap>(std::move(items))).CreateGenericMap());
 }
+
+class FreezeScope
+{
+public:
+    FreezeScope() noexcept { t_freezing = true; }
+    ~FreezeScope() { t_freezing = false; }
+    FreezeScope(const FreezeScope&) = delete;
+    FreezeScope(FreezeScope&&) = delete;
+    FreezeScope& operator=(const FreezeScope&) = delete;
+    FreezeScope& operator=(FreezeScope&&) = delete;
+};
+
+// The slot of a list (GenericList) or dict (GenericMap) a render handed out (ExportSlot): the
+// host's container reads Current
+template<typename Generic>
+class ExportedContainer final : public ExportSlot
+{
+public:
+    ExportedContainer(InternalValue view, Generic live)
+        : m_view(std::move(view))
+        , m_live(std::move(live))
+    {
+    }
+
+    [[nodiscard]] const Generic& Current() const noexcept { return m_frozen ? *m_frozen : m_live; }
+
+    void Freeze() override
+    {
+        // A copy of what the view shows now, nested containers too (OutputValueConvertor)
+        auto copy = IntValue2Value(m_view);
+        if (auto* generic = std::get_if<Generic>(&copy.GetData()))
+        {
+            // The view stays: the host may hold an accessor it gave
+            m_frozen = std::move(*generic);
+        }
+    }
+
+private:
+    InternalValue m_view;
+    Generic m_live;
+    std::optional<Generic> m_frozen;
+};
+
+// Hands out a container while a render runs (ExportSlot)
+template<typename Generic, typename Accessor>
+JINJA2CPP_CELL_NOINLINE Value Export(BorrowedCells& cells, const InternalValue& val, Value live)
+{
+    auto* generic = std::get_if<Generic>(&live.GetData());
+    if (!generic)
+    {
+        return live;
+    }
+    auto slot = MakeRef<ExportedContainer<Generic>>(val, std::move(*generic));
+    cells.AddExport(slot);
+    return Value(Generic([slot]() -> const Accessor* { return slot->Current().GetAccessor(); }));
+}
 } // namespace
+
+void FreezeExports(BorrowedCells& cells, const std::vector<IntrusivePtr<ExportSlot>>& slots) noexcept
+{
+    // The views find this render's cells (CellLink::Find), and an export copies what it reaches
+    const CycleCollector scope(cells);
+    const FreezeScope freezing;
+    for (const auto& slot : slots)
+    {
+        // Held by the registry alone: the host let it go
+        if (slot->use_count() == 1)
+        {
+            continue;
+        }
+        try
+        {
+            slot->Freeze();
+        }
+        catch (...) // NOLINT(bugprone-empty-catch): out of memory or a host accessor that threw: the container stays a view
+        {
+        }
+    }
+}
 
 struct OutputValueConvertor
 {
@@ -3036,7 +3110,7 @@ struct OutputValueConvertor
     result_t operator()(const NoneValue&) const { return result_t(); }
     result_t operator()(const MapRef& adapter) const
     {
-        if (JINJA2CPP_CELL_UNLIKELY(ExportCopies()))
+        if (JINJA2CPP_CELL_UNLIKELY(t_freezing))
         {
             if (auto copy = CopyForExport(adapter))
             {
@@ -3047,7 +3121,7 @@ struct OutputValueConvertor
     }
     result_t operator()(const ListRef& adapter) const
     {
-        if (JINJA2CPP_CELL_UNLIKELY(ExportCopies()))
+        if (JINJA2CPP_CELL_UNLIKELY(t_freezing))
         {
             if (auto copy = CopyForExport(adapter))
             {
@@ -3119,6 +3193,18 @@ Value IntValue2Value(const InternalValue& val)
         if (auto text = AsStringView<wchar_t>(val))
         {
             return isMarkup ? Value(WMarkup(*text)) : Value(std::wstring(*text));
+        }
+    }
+    const auto kind = val.Kind();
+    if ((kind == ValueKind::List || kind == ValueKind::Map) && !t_freezing)
+    {
+        // Inside a render: a slot, which a write to the host's data makes a copy when the render
+        // ends (ExportSlot, docs/tasks/0049)
+        if (auto* cells = CycleCollector::CellsForWrite())
+        {
+            auto live = Apply<OutputValueConvertor>(val);
+            return kind == ValueKind::List ? Export<GenericList, IListItemAccessor>(*cells, val, std::move(live))
+                                           : Export<GenericMap, IMapItemAccessor>(*cells, val, std::move(live));
         }
     }
     return Apply<OutputValueConvertor>(val);

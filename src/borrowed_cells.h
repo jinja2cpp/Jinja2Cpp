@@ -239,6 +239,23 @@ public:
 // and releases its own before it walks: what detaching the adapters frees needs no walk. A render
 // started inside another one on the same thread (a user callable rendering a template) has its
 // own: it sees the outer render's cells only through the values passed to it, as in Python
+// A container a running render handed out (a user callable's argument, docs/tasks/0049): a view
+// while the render runs, so that the host sees the render's later writes, as Python's object
+// would show them. Freeze, at the end of a render that wrote to the host's data, turns one the
+// host still holds into a copy of what it shows then, since the cells it reads go with the render.
+// Defined in internal_value.cpp (ExportedContainer)
+class ExportSlot : public ValueObject
+{
+public:
+    // Called with the render's cells still attached; throws when the copy cannot be made, and
+    // the container then stays a view
+    virtual void Freeze() = 0;
+};
+
+// Freezes the slots the host still holds (internal_value.cpp); runs with `cells` as the
+// registry of the running render, whose cells are still attached
+void FreezeExports(BorrowedCells& cells, const std::vector<IntrusivePtr<ExportSlot>>& slots) noexcept;
+
 class BorrowedCells
 {
 public:
@@ -249,18 +266,20 @@ public:
     BorrowedCells& operator=(const BorrowedCells&) = delete;
     BorrowedCells& operator=(BorrowedCells&&) = delete;
 
-    // Detaches every adapter from its cell and frees the cells
+    // Freezes the exports the host still holds, then detaches every adapter from its cell and
+    // frees the cells
     void Release() noexcept
     {
-        if (m_cells)
+        if (m_cells || !m_exports.empty())
         {
             Finish();
         }
     }
-    // Whether the render wrote to the host's data: an export of a container then copies what
-    // it reaches (IntValue2Value), since a view would read the host's data again once the
-    // render ends and the cells are gone
+    // Whether the render wrote to the host's data
     [[nodiscard]] bool HasCells() const noexcept { return m_cells && !m_cells->empty(); }
+
+    // Keeps `slot` until the render ends (ExportSlot)
+    void AddExport(IntrusivePtr<ExportSlot> slot);
 
 private:
     friend class CellLink;
@@ -271,6 +290,11 @@ private:
     void Finish() noexcept;
 
     std::unique_ptr<Table> m_cells;
+    // The containers the render handed out; the ones nothing else holds are dropped when there
+    // are this many, as the collector drops its candidates
+    std::vector<IntrusivePtr<ExportSlot>> m_exports;
+    static constexpr size_t MinPruneAt = 64;
+    size_t m_pruneAt = MinPruneAt;
 };
 
 } // namespace v2
