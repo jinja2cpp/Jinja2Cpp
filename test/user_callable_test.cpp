@@ -433,7 +433,7 @@ INSTANTIATE_TEST_SUITE_P(ListParamConvert, UserCallableParamConvertTest, ::testi
                             InputOutputPair{"GListFn([1, 2, 3, 4])",       "[1, 2, 3, 4]"},
                             InputOutputPair{"GListFn(intList)",            "[9, 0, 8, 1, 7, 2, 6, 3, 5, 4]"},
                             InputOutputPair{"GListFn(reflectedIntVector)", "[9, 0, 8, 1, 7, 2, 6, 3, 5, 4]"},
-                            InputOutputPair{"GListFn(range(10))", "range(0, 10)"}, // given back, it is the range itself, as in Python (0049)
+                            InputOutputPair{"GListFn(range(10))", "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"},
                             InputOutputPair{"GListFn([1, 2, 3, 4] | sort)","[1, 2, 3, 4]"},
                             InputOutputPair{"GListFn(intList | sort)",     "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"},
                             InputOutputPair{"GListFn(reflectedVal.tmpStructList)",

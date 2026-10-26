@@ -3,13 +3,12 @@
 #include "cycle_collector.h"
 #include "internal_value.h"
 #include "intrusive_ptr.h"
+#include "template_dict.h" // IWYU pragma: keep (the range-for over a TemplateDict)
 
-#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <memory>
 #include <utility>
-#include <vector>
 
 namespace jinja2
 {
@@ -151,47 +150,92 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     return true;
 }
 
-void BorrowedCells::AddExport(const IntrusivePtr<ExportSlot>& slot)
+namespace
 {
-    if (m_exports.size() >= m_pruneAt)
+// The cell of `item` in `cells`, when it is an adapter of the host's data that has one
+template<typename Table>
+const BorrowedCell* CellOfItem(const Table& cells, const InternalValue& item)
+{
+    const void* identity = nullptr;
+    bool isList = false;
+    if (auto list = AsList(item))
     {
-        m_exports.erase(std::remove_if(m_exports.begin(), m_exports.end(),
-                                       [this](const IntrusivePtr<ExportSlot>& kept) {
-                                           if (kept->use_count() != 1)
-                                           {
-                                               return false;
-                                           }
-                                           m_exportsByAccessor.erase(kept->LiveAccessor());
-                                           return true;
-                                       }),
-                        m_exports.end());
-        m_pruneAt = std::max(MinPruneAt, 2 * m_exports.size());
+        const auto* accessor = list->GetAccessor();
+        if (!accessor || !accessor->IsBorrowed())
+        {
+            return nullptr;
+        }
+        identity = accessor->GetIdentity();
+        isList = true;
     }
-    m_exports.push_back(slot);
-    try
+    else if (auto map = AsMap(item))
     {
-        m_exportsByAccessor[slot->LiveAccessor()] = slot.get();
+        const auto* accessor = map->GetAccessor();
+        if (!accessor || !accessor->IsBorrowed())
+        {
+            return nullptr;
+        }
+        identity = accessor->GetIdentity();
     }
-    catch (...)
+    else
     {
-        m_exports.pop_back();
-        throw;
+        return nullptr;
+    }
+    const auto found = cells.find(identity);
+    return found != cells.end() && found->second->IsList() == isList ? found->second.get() : nullptr;
+}
+
+} // namespace
+
+void BorrowedCells::Relink() noexcept
+{
+    // One pass over the items the cells hold: an item of an item is a cell's item itself when
+    // the render wrote to it, and an adapter whose data has no cell reads the host's data, as
+    // the render did
+    for (const auto& [identity, cell] : *m_cells)
+    {
+        try
+        {
+            // Noted first, as a write notes its receiver: the list may hold itself, given back
+            // by a callable (`l.append(id(l))`), or come to through this pass (`l.append(l)`).
+            // A write through an adapter noted the adapter, which does not show the cell
+            CycleCollector::NoteStore(cell->Storage());
+        }
+        catch (...) // NOLINT(bugprone-empty-catch): out of memory: its items stay views of the host's data
+        {
+            continue;
+        }
+        if (cell->IsList())
+        {
+            for (auto& item : cell->Items())
+            {
+                if (const auto* found = CellOfItem(*m_cells, item))
+                {
+                    item = found->Storage();
+                }
+            }
+        }
+        else if (auto* items = cell->Map().GetMutableItems())
+        {
+            for (auto& entry : *items)
+            {
+                if (const auto* found = CellOfItem(*m_cells, entry.second))
+                {
+                    entry.second = found->Storage();
+                }
+            }
+        }
     }
 }
 
 void BorrowedCells::Finish() noexcept
 {
-    // Frozen while the cells are attached; without a cell the views read what the host has
-    if (HasCells())
+    // While the cells are attached and the table holds them: a list the host keeps then holds
+    // the render's other copies, not adapters that read the host's data again
+    if (m_exported)
     {
-        FreezeExports(*this, m_exports);
-    }
-    m_exportsByAccessor.clear();
-    m_exports.clear();
-    m_pruneAt = MinPruneAt;
-    if (!m_cells)
-    {
-        return;
+        m_exported = false;
+        Relink();
     }
     // Detached first, while the table holds every cell: freeing a cell frees values that may
     // hold adapters attached to another one

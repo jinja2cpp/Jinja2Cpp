@@ -27,7 +27,11 @@ struct Node
 
 void CycleCollector::Finish() noexcept
 {
+    // Current again while the cells go: what they point at each other notes its stores here
+    // (BorrowedCells::Relink)
+    s_current = this;
     m_notes->cells.Release();
+    s_current = m_outer;
     if (!m_outer)
     {
         Collect();

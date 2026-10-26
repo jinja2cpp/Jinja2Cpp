@@ -25,6 +25,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -2345,19 +2346,19 @@ bool IsMutable(const InternalValue& value)
     return false;
 }
 
-InternalValue MakeMutable(const InternalValue& value)
+namespace
 {
-    if (IsMutable(value))
-    {
-        return value;
-    }
+// The template's own copy of the items of a list or dict it cannot change; none for a tuple,
+// a range and the other values
+std::optional<InternalValue> MutableCopy(const InternalValue& value)
+{
     bool extendLifetime = value.ShouldExtendLifetime();
     if (auto list = AsList(value))
     {
         // Tuples and ranges are never changed in place: only their read-only methods exist
         if (list->IsTuple() || list->GetRangeInfo())
         {
-            return value;
+            return std::nullopt;
         }
         auto items = list->ToValueList();
         if (extendLifetime)
@@ -2367,10 +2368,7 @@ InternalValue MakeMutable(const InternalValue& value)
                 item.SetParentData(value);
             }
         }
-        InternalValue copy(ListAdapter::CreateAdapter(std::move(items)));
-        // The host's list becomes the copy for every name of it in the render (docs/tasks/0049)
-        const auto* accessor = list->GetAccessor();
-        return accessor && accessor->AdoptCopy(value, copy) ? value : copy;
+        return InternalValue(ListAdapter::CreateAdapter(std::move(items)));
     }
     if (auto map = AsMap(value))
     {
@@ -2383,11 +2381,60 @@ InternalValue MakeMutable(const InternalValue& value)
             }
             items.Set(key, std::move(item));
         }
-        InternalValue copy(CreateMapAdapter(std::move(items)));
-        const auto* accessor = map->GetAccessor();
-        return accessor && accessor->AdoptCopy(value, copy) ? value : copy;
+        return InternalValue(CreateMapAdapter(std::move(items)));
     }
-    return value;
+    return std::nullopt;
+}
+
+// The host's list or dict becomes `copy` for every name of it in the render (docs/tasks/0049)
+bool AdoptCopy(const InternalValue& value, const InternalValue& copy)
+{
+    if (auto list = AsList(value))
+    {
+        const auto* accessor = list->GetAccessor();
+        return accessor != nullptr && accessor->AdoptCopy(value, copy);
+    }
+    if (auto map = AsMap(value))
+    {
+        const auto* accessor = map->GetAccessor();
+        return accessor != nullptr && accessor->AdoptCopy(value, copy);
+    }
+    return false;
+}
+} // namespace
+
+InternalValue MakeMutable(const InternalValue& value)
+{
+    if (IsMutable(value))
+    {
+        return value;
+    }
+    auto copy = MutableCopy(value);
+    if (!copy)
+    {
+        return value;
+    }
+    if (AdoptCopy(value, *copy))
+    {
+        return value;
+    }
+    return std::move(*copy);
+}
+
+bool PromoteBorrowed(const InternalValue& value)
+{
+    if (IsMutable(value))
+    {
+        return true;
+    }
+    auto copy = MutableCopy(value);
+    if (!copy)
+    {
+        return false;
+    }
+    // Noted as a write notes its receiver: the copy may come to hold itself through the host
+    CycleCollector::NoteStore(*copy);
+    return AdoptCopy(value, *copy);
 }
 
 void ThrowNoAttribute(const InternalValue& obj, const std::string& name)
