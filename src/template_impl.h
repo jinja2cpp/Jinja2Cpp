@@ -68,6 +68,19 @@ struct GlobalsSnapshot
     InternalValueMap values;
 };
 
+// Marks a render running on the thread for its whole scope: a Load meanwhile keeps the template
+// it replaces in the thread's workspace (RenderWorkspace::Retire, docs/tasks/0321)
+class RenderScope
+{
+public:
+    JINJA2CPP_ALWAYS_INLINE RenderScope() noexcept { RenderWorkspace::BeginRender(); }
+    JINJA2CPP_ALWAYS_INLINE ~RenderScope() { RenderWorkspace::EndRender(); }
+    RenderScope(const RenderScope&) = delete;
+    RenderScope(RenderScope&&) = delete;
+    RenderScope& operator=(const RenderScope&) = delete;
+    RenderScope& operator=(RenderScope&&) = delete;
+};
+
 // The maps a RenderWorkspace lends a render, returned emptied when they go out of scope
 class WorkspaceMaps
 {
@@ -250,6 +263,14 @@ public:
         , m_settings(env ? detail::TemplateEnvAccess::GetImpl(*env)->GetLoadSettings() : detail::DefaultLoadSettings())
     {
     }
+    // An empty template with the environment and settings of `prototype`, for BasicTemplate::Load
+    // to parse into: a Load never changes a tree that copies, the cache, renders or modules hold
+    explicit TemplateImpl(const TemplateImpl& prototype, std::nullptr_t /*empty*/)
+        : m_envHandle(detail::TemplateEnvAccess::MakeHandle(prototype.m_env))
+        , m_env(prototype.m_env ? &m_envHandle : nullptr)
+        , m_settings(prototype.m_settings)
+    {
+    }
 
     // The root of the tree, resolved through Nodes()
     [[nodiscard]] NodeRef<TemplateRenderer> GetRenderer() const { return m_renderer; }
@@ -347,10 +368,17 @@ public:
         m_origin.name = &m_templateName;
         m_origin.isWide = std::is_same_v<CharT, wchar_t>;
         m_metadata.reset();
-        // The modules made from the tree this replaced see it gone (TemplateModuleState)
-        m_loadGeneration.fetch_add(1, std::memory_order_relaxed);
         return std::optional<BasicErrorInfo<CharT>>();
     }
+
+    // BasicTemplate::Load of a template another object may hold: parses into a new template with
+    // this one's environment and settings, and puts it in place of `impl` only if parsing
+    // succeeds. Copies, the environment's cache, renders and modules keep the tree they had, as a
+    // Python Template is immutable (docs/tasks/0321). Out of line (template_module.cpp), so that
+    // the first Load of a template, which parses in place, pays nothing for it
+    static std::optional<BasicErrorInfo<CharT>> LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string<CharT>&& source, std::string&& name);
+    // The same for a source the caller has not copied yet: the copy is made out of its path
+    static std::optional<BasicErrorInfo<CharT>> LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string_view<CharT> source, std::string&& name);
 
     // Template::MakeModule: renders the template, which `self` owns, as a module for the host
     // (template_module.cpp)
@@ -363,6 +391,9 @@ public:
     {
         static_assert(std::is_same_v<Target, std::basic_string<CharT>> || std::is_same_v<Target, BasicOutputSink<CharT>>);
         std::optional<BasicErrorInfo<CharT>> normalResult;
+        // Ends last, after the error conversion: until then a Load on this thread keeps the
+        // template it replaces, which may be this one (docs/tasks/0321)
+        const RenderScope renderScope;
 
         if (!m_renderer)
         {
@@ -1002,11 +1033,6 @@ private:
     std::string m_templateName;
     bool m_isNamed = false;
     bool m_mayReadLoop = false;
-    // Counts the successful Loads: a module's macro refuses to run in a tree a later Load
-    // replaced (TemplateModuleState). Atomic only so that a misuse is not a data race; 32 bits
-    // fit the padding after the flags, so a template is no bigger, and a module sees a stale
-    // tree as current only after exactly 2^32 more Loads
-    std::atomic<uint32_t> m_loadGeneration{ 0 };
     // Owns the tree
     SealedArena m_nodes;
     NodeRef<TemplateRenderer> m_renderer;

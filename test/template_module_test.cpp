@@ -215,28 +215,24 @@ TEST_F(TemplateModuleTest, ExportedValuesAreOwned)
     EXPECT_EQ(std::string(48, 'i'), exports["l"].AsList().at(0).AsString());
 }
 
-TEST_F(TemplateModuleTest, LoadExpiresModule)
+// A module keeps the tree it was made from: Load replaces the template, not the module's tree
+// (docs/tasks/0321, which reverses the second half of 0284 D1a)
+TEST_F(TemplateModuleTest, LoadKeepsModule)
 {
     jinja2::Template tpl(&m_env);
     ASSERT_TRUE(!!tpl.Load("{% macro m() %}old{% endmacro %}"));
     auto module = tpl.MakeModule().value();
     EXPECT_EQ("old", Call(module.exports["m"]).AsString());
     ASSERT_TRUE(!!tpl.Load("{% macro m() %}new{% endmacro %}"));
-    try
-    {
-        Call(module.exports["m"]);
-        FAIL() << "expected TemplateExpired";
-    }
-    catch (const jinja2::BadResultAccess<>& failure)
-    {
-        EXPECT_EQ(jinja2::ErrorCode::TemplateExpired, failure.error().GetCode());
-        EXPECT_EQ(jinja2::Value(std::string("m")), failure.error().GetExtraParams()[0]);
-    }
+    EXPECT_EQ("old", Call(module.exports["m"]).AsString());
     EXPECT_EQ("new", Call(tpl.MakeModule().value().exports["m"]).AsString());
     // A failed Load keeps the tree, and the modules made from it
     auto current = tpl.MakeModule().value();
     EXPECT_FALSE(!!tpl.Load("{% macro %}"));
     EXPECT_EQ("new", Call(current.exports["m"]).AsString());
+    // The module outlives the template object
+    tpl = jinja2::Template();
+    EXPECT_EQ("old", Call(module.exports["m"]).AsString());
 }
 
 TEST_F(TemplateModuleTest, Errors)
