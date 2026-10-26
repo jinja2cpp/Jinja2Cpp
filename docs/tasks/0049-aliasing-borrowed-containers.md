@@ -66,6 +66,13 @@ host's data now copies it, as Python does. `methods.context_alias` and
 `methods.operand_changed_by_call` match; rows `methods.alias_*` and test/borrowed_cells_test.cpp
 pin the rest.
 
+A value exported while the render has cells (an argument of a user callable, which the host may
+keep) is a copy of the render's view, down to its nested containers: a view would read the host's
+data again once the cells are detached, so a nested write would revert under a kept container
+(review of #673). The copy is a snapshot: a later write in the same render does not reach it. A
+range, a list of unknown length, a namespace, a loop, a host object, a cycle and anything deeper
+than 256 containers stay views.
+
 Left for later phases:
 - the loop rows (`pop` in a loop over context data, `loop.length` after an append): P3;
 - a JSON value read twice gives two accessors (`{% set y = j.a %}{% do j.a.append(2) %}{{ y }}`

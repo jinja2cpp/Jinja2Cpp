@@ -104,6 +104,36 @@ TEST(BorrowedCellsSingle, HostCallableSeesTheWrite)
     EXPECT_EQ("2|2", Render("{% set y = l %}{% set _ = y.append(1) %}{{ size(l) }}|{{ size(y) }}", params));
 }
 
+// A value the host keeps past the render shows the render's writes, also to a nested container:
+// its export copies them while the render has cells, and a view would read the host's data
+// again once they are gone
+TEST(BorrowedCellsSingle, KeptValueKeepsTheWrites)
+{
+    Value nested;
+    Value direct;
+    // The inner list as a Value: a ValuesList braced in a ValuesList is a copy of it for clang
+    ValuesMap params{ { "l", ValuesList{ Value(ValuesList{ 1 }) } } };
+    params["keep"] = UserCallable(
+        [&nested, &direct](const UserCallableParams& p) {
+            nested = p["nested"];
+            direct = p["direct"];
+            return Value();
+        },
+        { ArgInfo{ "nested" }, ArgInfo{ "direct" } });
+    EXPECT_EQ("None", Render("{% set _ = l[0].append(2) %}{{ keep({'saved': l}, l[0]) }}", params));
+    EXPECT_EQ("[1, 2]|[1, 2]", Render("{{ n.saved[0] }}|{{ d }}", ValuesMap{ { "n", nested }, { "d", direct } }));
+    // The host's data is not written
+    EXPECT_EQ("[[1]]", Render("{{ l }}", params));
+}
+
+// The copy of an export stops at a cycle, which stays a view
+TEST(BorrowedCellsSingle, ExportOfACycle)
+{
+    ValuesMap params{ { "l", ValuesList{ 3 } } };
+    params["size"] = MakeCallable([](const GenericList& list) { return static_cast<int64_t>(list.GetSize().value_or(0)); }, ArgInfo{ "list" });
+    EXPECT_EQ("2|2", Render("{% set _ = l.append(l) %}{{ size(l) }}|{{ size(l[1]) }}", params));
+}
+
 TEST(BorrowedCellsSingle, SelfAppendIsFreed)
 {
     // The cell holds the adapter that holds the cell: the render's end breaks the cycle (LSan)
