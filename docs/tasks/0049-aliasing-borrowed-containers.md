@@ -50,3 +50,27 @@ Keep the read path free of allocations for templates that never mutate.
 
 **Done when.** No line of `test/parity/divergences/` names 0049, and an ASan/LSan run of
 the corpus is clean.
+
+**Plan.** Approved 2026-10-25 (D1-D8), `/mnt/project-files/release-2.0/0049-plan.md`; phases
+P1 (collector, #663, done), P2 (borrowed cells), P3 (loops, folds 0304), P4 (0212 keys and
+callables), P5 (JSON identity and unpacking).
+
+**P2, borrowed cells.** An adapter of the host's data (`ValuesListAdapter`, `ValuesMapAdapter`,
+`GenericListAdapter`, `GenericMapAdapter`) carries a `CellLink` (src/borrowed_cells.h). The first
+write copies the data into a `BorrowedCell` that the render's registry (`BorrowedCells`, one per
+render and one per template module) keys by the data's identity; the writing adapter and every
+other adapter of the same data read the cell from then on (a global epoch tells them to look).
+The host's data is never written (D2), and the registry detaches its adapters when the render
+ends, so the thread's globals read their own data again in the next render. `list()` of the
+host's data now copies it, as Python does. `methods.context_alias` and
+`methods.operand_changed_by_call` match; rows `methods.alias_*` and test/borrowed_cells_test.cpp
+pin the rest.
+
+Left for later phases:
+- the loop rows (`pop` in a loop over context data, `loop.length` after an append): P3;
+- a JSON value read twice gives two accessors (`{% set y = j.a %}{% do j.a.append(2) %}{{ y }}`
+  prints `[1]`, Python `[1, 2]`): the binding has no stable identity until P5's `IJsonNode`
+  marker (plan section 9);
+- the write-back of a copy into its variable or owner (`EvaluateMutableRoot`,
+  `EvaluateIndices(forMutation)`) stays for the containers that are not the host's data (a
+  context map of the engine, a computed list), and stores the same value back for a cell.

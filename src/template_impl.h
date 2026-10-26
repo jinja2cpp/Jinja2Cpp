@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_TEMPLATE_IMPL_H
 #define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
+#include "borrowed_cells.h"
 #include "cycle_collector.h"
 #include "error_boundary.h"
 #include "internal_value.h"
@@ -379,6 +380,10 @@ public:
         {
             // First, so that it ends last: when nothing of the render holds values any more
             const CycleCollector cycles;
+            // Next, so that it ends before the collector runs: the render's copies of the
+            // host's data, which it detaches from the adapters that outlive it (docs/tasks/0049)
+            BorrowedCells cells;
+            const BorrowedCells::Use useCells(cells);
             // Before anything else the render does, the conversion of the params included
             const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr, m_settings->bigIntBackend);
             // The tables of the params and the top scope are lent by the thread's workspace and

@@ -1711,7 +1711,16 @@ ListRef ListOf(const InternalValue& self)
 InternalValueList& MutableItems(const InternalValue& self)
 {
     auto* items = ListOf(self).GetMutableItems();
-    // The call path makes the receiver mutable first (MakeMutable)
+    // The call path makes the receiver mutable first (MakeMutable); a bound method kept its
+    // receiver as it was read (`set f = l.append`), and a list of the host's data takes its copy
+    // only now (docs/tasks/0049)
+    if (!items)
+    {
+        if (IsMutable(MakeMutable(self)))
+        {
+            items = ListOf(self).GetMutableItems();
+        }
+    }
     if (!items)
     {
         Raise("this list cannot be changed");
@@ -1878,6 +1887,14 @@ MapRef MapOf(const InternalValue& self)
 TemplateDict& MutableDict(const InternalValue& self)
 {
     auto* items = MapOf(self).GetMutableItems();
+    // As MutableItems does for a list
+    if (!items)
+    {
+        if (IsMutable(MakeMutable(self)))
+        {
+            items = MapOf(self).GetMutableItems();
+        }
+    }
     if (!items)
     {
         Raise("this dict cannot be changed");
@@ -2350,7 +2367,10 @@ InternalValue MakeMutable(const InternalValue& value)
                 item.SetParentData(value);
             }
         }
-        return ListAdapter::CreateAdapter(std::move(items));
+        InternalValue copy(ListAdapter::CreateAdapter(std::move(items)));
+        // The host's list becomes the copy for every name of it in the render (docs/tasks/0049)
+        const auto* accessor = list->GetAccessor();
+        return accessor && accessor->AdoptCopy(value, copy) ? value : copy;
     }
     if (auto map = AsMap(value))
     {
@@ -2363,7 +2383,9 @@ InternalValue MakeMutable(const InternalValue& value)
             }
             items.Set(key, std::move(item));
         }
-        return CreateMapAdapter(std::move(items));
+        InternalValue copy(CreateMapAdapter(std::move(items)));
+        const auto* accessor = map->GetAccessor();
+        return accessor && accessor->AdoptCopy(value, copy) ? value : copy;
     }
     return value;
 }

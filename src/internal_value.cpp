@@ -1,6 +1,7 @@
 #include "internal_value.h"
 
 #include "big_int.h"
+#include "borrowed_cells.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
@@ -1283,9 +1284,20 @@ public:
     {
     }
 
-    [[nodiscard]] std::optional<size_t> GetSize() const override { return m_values.Get().GetSize(); }
+    [[nodiscard]] std::optional<size_t> GetSize() const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Items().size();
+        }
+        return m_values.Get().GetSize();
+    }
     [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
     {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return CellItem(*cell, idx);
+        }
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
         const auto* indexer = accessor->GetIndexer();
         if (!indexer)
@@ -1297,8 +1309,19 @@ public:
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     [[nodiscard]] const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
+    [[nodiscard]] InternalValueList* GetMutableItems() const override
+    {
+        const auto* cell = m_link.Get(*this);
+        return cell ? &cell->Items() : nullptr;
+    }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy); }
+    [[nodiscard]] bool IsBorrowed() const override { return true; }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
     {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->List().CreateListAccessorEnumerator();
+        }
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
         if (!accessor)
         {
@@ -1308,12 +1331,17 @@ public:
     }
     [[nodiscard]] GenericList CreateGenericList() const override
     {
-        // return m_values.Get();
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->List().CreateGenericList();
+        }
         return GenericList([list = m_values]() -> const IListItemAccessor* { return list.Get().GetAccessor(); });
     }
 
 private:
     Holder<GenericList> m_values;
+    // The render's copy of the list once the render wrote to it (docs/tasks/0049)
+    CellLink m_link;
 };
 
 ListAdapter LendNestedList(std::shared_ptr<ValuesList> list);
@@ -1376,6 +1404,17 @@ InternalValue LendItem([[maybe_unused]] const Holder<T>& holder, const Value& it
 template<bool held>
 struct ItemAdapters;
 
+// An item of the cell of a borrowed list: it can shrink while it is iterated (pop() in a loop body)
+std::optional<InternalValue> CellItem(const BorrowedCell& cell, int64_t idx)
+{
+    const auto& items = cell.Items();
+    if (idx < 0 || static_cast<size_t>(idx) >= items.size())
+    {
+        return std::nullopt;
+    }
+    return items[static_cast<size_t>(idx)];
+}
+
 template<template<typename> class Holder>
 class ValuesListAdapter final : public IndexedListAccessorImpl<ValuesListAdapter<Holder>>
 {
@@ -1387,14 +1426,29 @@ public:
     {
     }
 
-    [[nodiscard]] size_t GetItemsCountImpl() const { return m_values.Get().size(); }
+    [[nodiscard]] size_t GetItemsCountImpl() const
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Items().size();
+        }
+        return m_values.Get().size();
+    }
     [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
     {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return CellItem(*cell, idx);
+        }
         return LendItem(m_values, m_values.Get()[static_cast<size_t>(idx)]);
     }
     // The item an enumeration reads
     [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const
     {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return CellItem(*cell, idx).value_or(InternalValue());
+        }
         const auto& item = m_values.Get()[static_cast<size_t>(idx)];
         if constexpr (LendsViews<Holder>)
         {
@@ -1434,9 +1488,19 @@ public:
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
+    [[nodiscard]] InternalValueList* GetMutableItems() const override
+    {
+        const auto* cell = m_link.Get(*this);
+        return cell ? &cell->Items() : nullptr;
+    }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy); }
+    [[nodiscard]] bool IsBorrowed() const override { return true; }
     [[nodiscard]] GenericList CreateGenericList() const override
     {
-        // return m_values.Get();
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->List().CreateGenericList();
+        }
         return GenericList([list = *this]() -> const IListItemAccessor* { return &list; });
     }
 
@@ -1446,6 +1510,8 @@ private:
     [[nodiscard]] InternalValue LendNested(size_t idx, const T& container) const;
 
     Holder<ValuesList> m_values;
+    // The render's copy of the list once the render wrote to it (docs/tasks/0049)
+    CellLink m_link;
     // The adapters of the list and map items read lately, made in blocks of ItemAdapters::
     // BlockSize items, instead of an adapter allocated for each item each time it is read
     // (docs/tasks/0154). A list of the caller's data is converted for one render or held
@@ -2203,12 +2269,30 @@ public:
     {
     }
 
-    [[nodiscard]] size_t GetSize() const override { return m_values.Get().GetSize(); }
-    [[nodiscard]] bool HasValue(const std::string& name) const override { return m_values.Get().HasValue(name); }
+    [[nodiscard]] size_t GetSize() const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetSize();
+        }
+        return m_values.Get().GetSize();
+    }
+    [[nodiscard]] bool HasValue(const std::string& name) const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().HasValue(name);
+        }
+        return m_values.Get().HasValue(name);
+    }
     // One lookup; an absent item reads as Undefined, and so does an empty Value unless the accessor
     // says an empty Value is a real null (JSON), which is None
     [[nodiscard]] InternalValue GetItem(const std::string& name) const override
     {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetItem(name);
+        }
         auto val = m_values.Get().Find(name);
         if (!val)
         {
@@ -2222,13 +2306,54 @@ public:
 
         return LendGenericItem(GenericOwner(m_values), std::move(*val));
     }
-    [[nodiscard]] std::vector<std::string> GetKeys() const override { return m_values.Get().GetKeys(); }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetKeys();
+        }
+        return m_values.Get().GetKeys();
+    }
+    [[nodiscard]] std::vector<KeyValuePair> GetEntries() const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetEntries();
+        }
+        return IMapAccessor::GetEntries();
+    }
+    [[nodiscard]] InternalValueList GetKeyValues() const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetKeyValues();
+        }
+        return IMapAccessor::GetKeyValues();
+    }
+    [[nodiscard]] std::optional<InternalValue> FindItem(const InternalValue& key) const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().FindItem(key);
+        }
+        return IMapAccessor::FindItem(key);
+    }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     [[nodiscard]] bool HasAttributes() const override { return true; }
     [[nodiscard]] const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
+    [[nodiscard]] TemplateDict* GetMutableItems() const override
+    {
+        const auto* cell = m_link.Get(*this);
+        return cell ? cell->Map().GetMutableItems() : nullptr;
+    }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy); }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysFirst; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().CreateGenericMap();
+        }
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return accessor.m_values.Get().GetAccessor(); });
     }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -2242,6 +2367,8 @@ public:
     }
 private:
     Holder<GenericMap> m_values;
+    // The render's copy of the map once the render wrote to it (docs/tasks/0049)
+    CellLink m_link;
 };
 
 // A key of user data as LendItem lends its string items: a view while the data outlives the
@@ -2270,10 +2397,28 @@ public:
     {
     }
 
-    [[nodiscard]] size_t GetSize() const override { return m_values.Get().size(); }
-    [[nodiscard]] bool HasValue(const std::string& name) const override { return m_values.Get().count(name) != 0; }
+    [[nodiscard]] size_t GetSize() const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetSize();
+        }
+        return m_values.Get().size();
+    }
+    [[nodiscard]] bool HasValue(const std::string& name) const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().HasValue(name);
+        }
+        return m_values.Get().count(name) != 0;
+    }
     [[nodiscard]] InternalValue GetItem(const std::string& name) const override
     {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetItem(name);
+        }
         auto& vals = m_values.Get();
         auto p = vals.find(name);
         if (p == vals.end())
@@ -2285,6 +2430,10 @@ public:
     }
     [[nodiscard]] std::vector<std::string> GetKeys() const override
     {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetKeys();
+        }
         std::vector<std::string> result;
 
         for (const auto& [key, value] : m_values.Get())
@@ -2296,6 +2445,10 @@ public:
     }
     [[nodiscard]] std::vector<KeyValuePair> GetEntries() const override
     {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetEntries();
+        }
         std::vector<KeyValuePair> result;
         result.reserve(m_values.Get().size());
 
@@ -2306,12 +2459,38 @@ public:
 
         return result;
     }
+    [[nodiscard]] InternalValueList GetKeyValues() const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetKeyValues();
+        }
+        return IMapAccessor::GetKeyValues();
+    }
+    [[nodiscard]] std::optional<InternalValue> FindItem(const InternalValue& key) const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().FindItem(key);
+        }
+        return IMapAccessor::FindItem(key);
+    }
     // A mapping passed in the context is a Python dict to the template
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::MethodsFirst; }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
+    [[nodiscard]] TemplateDict* GetMutableItems() const override
+    {
+        const auto* cell = m_link.Get(*this);
+        return cell ? cell->Map().GetMutableItems() : nullptr;
+    }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy); }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().CreateGenericMap();
+        }
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -2325,6 +2504,8 @@ public:
     }
 private:
     Holder<ValuesMap> m_values;
+    // The render's copy of the map once the render wrote to it (docs/tasks/0049)
+    CellLink m_link;
 };
 
 // One object for the block: a lent item's value shares it (docs/tasks/0154, 0140). The items of

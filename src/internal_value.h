@@ -584,6 +584,14 @@ struct IListAccessor : ValueObject
     // Whether this accessor alone holds the items GetMutableItems returns, so that releasing
     // them through it cannot change a list anything else sees (CycleCollector, docs/tasks/0110)
     [[nodiscard]] virtual bool OwnsMutableItemsAlone() const { return false; }
+    // A list of the host's data takes `copy`, the template's copy of its items, as the render's
+    // cell that every adapter of the same data reads and writes from now on, and GetMutableItems
+    // gives its items; false for the other lists, and outside a render (docs/tasks/0049).
+    // `self` is the value whose accessor this is
+    virtual bool AdoptCopy(const InternalValue& /*self*/, const InternalValue& /*copy*/) const { return false; }
+    // Whether the list is the host's data, which a write in the render changes for every name of
+    // it (AdoptCopy), so that list() must copy it
+    [[nodiscard]] virtual bool IsBorrowed() const { return false; }
     // An accessor with iteration state of its own (a generator, which says so with
     // SetClonesOnCopy) is copied with the list value, so that copies iterate independently;
     // every other accessor is shared
@@ -634,6 +642,8 @@ struct IMapAccessor : ValueObject
     [[nodiscard]] virtual TemplateDict* GetMutableItems() const { return nullptr; }
     // See IListAccessor::OwnsMutableItemsAlone
     [[nodiscard]] virtual bool OwnsMutableItemsAlone() const { return false; }
+    // See IListAccessor::AdoptCopy
+    virtual bool AdoptCopy(const InternalValue& /*self*/, const InternalValue& /*copy*/) const { return false; }
     // How x.name resolves against Python's dict methods (items, get, ...)
     [[nodiscard]] virtual MapAttrPolicy GetAttrPolicy() const { return MapAttrPolicy::KeysOnly; }
     // A namespace() object, the only one `set obj.attr = ...` can change
