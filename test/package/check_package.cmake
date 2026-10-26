@@ -1,6 +1,7 @@
 # Installs a configured Jinja2C++ build and builds, links and runs test/package against it.
 #   cmake -DBUILD_DIR=<build> -DPREFIX=<scratch prefix> [-DCONFIG=Release] [-DCONSUMER_STD=17]
 #         [-DEXPECT_SHARED=ON] [-DDEPS_PREFIX=<prefix of external deps>] [-DCONSUMER_ARGS=...]
+#         [-DCOMPONENTS=<components the consumer links; default nlohmann_json when the build has tests>]
 #         -P test/package/check_package.cmake
 foreach (_var BUILD_DIR PREFIX)
     if (NOT DEFINED ${_var})
@@ -19,7 +20,7 @@ file(GLOB _existing "${PREFIX}/*")
 if (_existing AND NOT EXISTS "${PREFIX}/.jinja2cpp-check-package")
     message(FATAL_ERROR "${PREFIX} is not empty and was not made by check_package.cmake")
 endif ()
-file(REMOVE_RECURSE "${PREFIX}" "${PREFIX}-consumer")
+file(REMOVE_RECURSE "${PREFIX}" "${PREFIX}-consumer" "${PREFIX}-probe" "${PREFIX}-nlohmann")
 
 function(run)
     message(STATUS "> ${ARGN}")
@@ -33,25 +34,53 @@ file(STRINGS "${BUILD_DIR}/CMakeCache.txt" _ver REGEX "^CMAKE_PROJECT_VERSION:")
 string(REGEX REPLACE ".*=" "" _ver "${_ver}")
 file(STRINGS "${BUILD_DIR}/CMakeCache.txt" _bigint REGEX "^JINJA2CPP_WITH_BIGINT:")
 string(REGEX REPLACE ".*=" "" _bigint "${_bigint}")
+file(STRINGS "${BUILD_DIR}/CMakeCache.txt" _tests REGEX "^JINJA2CPP_BUILD_TESTS:")
+string(REGEX REPLACE ".*=" "" _tests "${_tests}")
+# The package components are the directories of bindings/ (docs/tasks/0311)
+file(GLOB _components LIST_DIRECTORIES true RELATIVE "${_src}/../../bindings" "${_src}/../../bindings/*")
+list(FILTER _components EXCLUDE REGEX "\\.")
 
 run(${CMAKE_COMMAND} --install "${BUILD_DIR}" --prefix "${PREFIX}" --config ${CONFIG})
 file(TOUCH "${PREFIX}/.jinja2cpp-check-package")
-# The package names no Boost in any deps mode or configuration (docs/tasks/0230): nothing of
-# Boost is installed, and the installed CMake files never ask for it
+# The package carries no Boost and no JSON library in any deps mode or configuration
+# (docs/tasks/0230, 0311): nothing of them is installed, and the core package's CMake files
+# never ask for them. Only a component's own files find its dependency.
 file(GLOB _boost_installed "${PREFIX}/include/boost" "${PREFIX}/*/cmake/Boost*" "${PREFIX}/*/cmake/boost*"
-    "${PREFIX}/lib/*/cmake/Boost*" "${PREFIX}/lib/*/cmake/boost*" "${PREFIX}/*/*boost_*")
+    "${PREFIX}/lib/*/cmake/Boost*" "${PREFIX}/lib/*/cmake/boost*" "${PREFIX}/*/*boost_*"
+    "${PREFIX}/include/nlohmann" "${PREFIX}/*/cmake/nlohmann*" "${PREFIX}/lib/*/cmake/nlohmann*"
+    "${PREFIX}/*/pkgconfig/nlohmann*")
 if (_boost_installed)
-    message(FATAL_ERROR "the install carries Boost: ${_boost_installed}")
+    message(FATAL_ERROR "the install carries Boost or nlohmann_json: ${_boost_installed}")
 endif ()
 file(GLOB_RECURSE _jinja2cpp_cmake "${PREFIX}/*/jinja2cpp-*.cmake")
 if (NOT _jinja2cpp_cmake)
     message(FATAL_ERROR "no jinja2cpp-*.cmake installed under ${PREFIX}")
 endif ()
 foreach (_file IN LISTS _jinja2cpp_cmake)
-    file(STRINGS "${_file}" _boost_lines REGEX "Boost")
-    if (_boost_lines)
-        message(FATAL_ERROR "${_file} names Boost:\n${_boost_lines}")
+    get_filename_component(_name "${_file}" NAME)
+    set(_core TRUE)
+    foreach (_comp IN LISTS _components)
+        if (_name MATCHES "^jinja2cpp-${_comp}-")
+            set(_core FALSE)
+        endif ()
+    endforeach ()
+    if (_core)
+        # The core config lists the component names; it must not find or link their libraries
+        file(STRINGS "${_file}" _boost_lines REGEX "Boost|find_(package|dependency)\\(nlohmann|nlohmann_json::")
+        if (_boost_lines)
+            message(FATAL_ERROR "${_file} names Boost or nlohmann_json:\n${_boost_lines}")
+        endif ()
     endif ()
+endforeach ()
+# Every component is installed, whatever the build tested
+foreach (_comp IN LISTS _components)
+    foreach (_pattern "*/cmake/jinja2cpp/jinja2cpp-${_comp}-targets.cmake" "*/cmake/jinja2cpp/jinja2cpp-${_comp}-deps.cmake"
+            "*/pkgconfig/jinja2cpp-${_comp}.pc")
+        file(GLOB _found "${PREFIX}/${_pattern}" "${PREFIX}/lib/${_pattern}")
+        if (NOT _found)
+            message(FATAL_ERROR "component ${_comp}: nothing matches ${PREFIX}/${_pattern}")
+        endif ()
+    endforeach ()
 endforeach ()
 # The version file accepts the same major version and rejects the next and previous ones
 file(GLOB _verfile "${PREFIX}/*/cmake/jinja2cpp/jinja2cpp-config-version.cmake" "${PREFIX}/lib/*/cmake/jinja2cpp/jinja2cpp-config-version.cmake")
@@ -106,11 +135,82 @@ if (DEPS_PREFIX)
     # through the environment: a ';' list would be split by execute_process
     set(ENV{CMAKE_PREFIX_PATH} "${DEPS_PREFIX}")
 endif ()
+
+# A component without its dependency: REQUIRED fails and names what is missing, OPTIONAL
+# still gives the core target, and an unknown component fails (docs/tasks/0311)
+file(WRITE "${PREFIX}-probe/src/CMakeLists.txt" [=[
+cmake_minimum_required(VERSION 3.23)
+project(jinja2cpp_component_probe CXX)
+if (PROBE STREQUAL "optional")
+    find_package(jinja2cpp REQUIRED OPTIONAL_COMPONENTS nlohmann_json)
+    if (NOT TARGET jinja2cpp::jinja2cpp OR TARGET jinja2cpp::nlohmann_json OR jinja2cpp_nlohmann_json_FOUND)
+        message(FATAL_ERROR "OPTIONAL_COMPONENTS: core ${jinja2cpp_FOUND}, component ${jinja2cpp_nlohmann_json_FOUND}")
+    endif ()
+else ()
+    find_package(jinja2cpp REQUIRED COMPONENTS ${PROBE})
+endif ()
+]=])
+foreach (_probe "nlohmann_json;FAIL;needs nlohmann_json::nlohmann_json" "optional;OK;needs nlohmann_json::nlohmann_json" "nosuch;FAIL;has no component 'nosuch'")
+    list(GET _probe 0 _what)
+    list(GET _probe 1 _want)
+    list(GET _probe 2 _message)
+    file(REMOVE_RECURSE "${PREFIX}-probe/build")
+    execute_process(COMMAND ${CMAKE_COMMAND} -S "${PREFIX}-probe/src" -B "${PREFIX}-probe/build" -G Ninja
+        "-DCMAKE_PREFIX_PATH=${PREFIX}" -DCMAKE_BUILD_TYPE=${CONFIG} -DPROBE=${_what}
+        -DCMAKE_DISABLE_FIND_PACKAGE_nlohmann_json=ON ${CONSUMER_ARGS}
+        RESULT_VARIABLE _rc OUTPUT_VARIABLE _out ERROR_VARIABLE _out)
+    if (_rc EQUAL 0)
+        set(_got OK)
+    else ()
+        set(_got FAIL)
+    endif ()
+    if (_got STREQUAL _want AND _out MATCHES "${_message}")
+        message(STATUS "component probe ${_what}: ${_want}")
+    else ()
+        message(FATAL_ERROR "component probe ${_what}: want ${_want} '${_message}', got ${_rc}:\n${_out}")
+    endif ()
+endforeach ()
+
+# A build with tests has nlohmann_json, so the consumer also builds against the
+# jinja2cpp::nlohmann_json component: from the system or Conan in the external modes, else
+# from the source the build fetched, installed next to (not into) the package
+set(_expect_components "${COMPONENTS}")
+if (_tests AND NOT DEFINED COMPONENTS)
+    set(_expect_components nlohmann_json)
+    file(STRINGS "${BUILD_DIR}/CMakeCache.txt" _nlohmann_src REGEX "^FETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON:")
+    string(REGEX REPLACE "^[^=]*=" "" _nlohmann_src "${_nlohmann_src}")
+    if (NOT _nlohmann_src AND EXISTS "${BUILD_DIR}/_deps/nlohmann_json-src/CMakeLists.txt")
+        set(_nlohmann_src "${BUILD_DIR}/_deps/nlohmann_json-src")
+    endif ()
+    if (_nlohmann_src)
+        run(${CMAKE_COMMAND} -S "${_nlohmann_src}" -B "${PREFIX}-nlohmann/build" -G Ninja
+            -DJSON_BuildTests=OFF -DJSON_Install=ON "-DCMAKE_INSTALL_PREFIX=${PREFIX}-nlohmann")
+        run(${CMAKE_COMMAND} --install "${PREFIX}-nlohmann/build")
+        if (CMAKE_HOST_WIN32)
+            set(_sep ";")
+        else ()
+            set(_sep ":")
+        endif ()
+        if (DEFINED ENV{CMAKE_PREFIX_PATH} AND NOT "$ENV{CMAKE_PREFIX_PATH}" STREQUAL "")
+            set(ENV{CMAKE_PREFIX_PATH} "$ENV{CMAKE_PREFIX_PATH}${_sep}${PREFIX}-nlohmann")
+        else ()
+            set(ENV{CMAKE_PREFIX_PATH} "${PREFIX}-nlohmann")
+        endif ()
+        file(GLOB_RECURSE _nlohmann_pc LIST_DIRECTORIES true "${PREFIX}-nlohmann/*/pkgconfig")
+        list(FILTER _nlohmann_pc INCLUDE REGEX "pkgconfig$")
+        foreach (_dir IN LISTS _nlohmann_pc)
+            set(ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:${_dir}")
+        endforeach ()
+    endif ()
+endif ()
+
+# commas: run() would split a ';' list into separate arguments
+string(REPLACE ";" "," _expect_components "${_expect_components}")
 run(${CMAKE_COMMAND} -S "${_src}" -B "${PREFIX}-consumer" -G Ninja
     "-DCMAKE_PREFIX_PATH=${PREFIX}" -DCMAKE_BUILD_TYPE=${CONFIG}
     -DCMAKE_CXX_STANDARD=${CONSUMER_STD} -DCMAKE_CXX_STANDARD_REQUIRED=ON
     -DJINJA2CPP_EXPECT_VERSION=${_ver} -DJINJA2CPP_EXPECT_SHARED=${EXPECT_SHARED}
-    -DJINJA2CPP_EXPECT_BIGINT=${_bigint}
+    -DJINJA2CPP_EXPECT_BIGINT=${_bigint} "-DJINJA2CPP_EXPECT_COMPONENTS=${_expect_components}"
     -DJINJA2CPP_CHECK_PKGCONFIG=ON
     ${CONSUMER_ARGS})
 run(${CMAKE_COMMAND} --build "${PREFIX}-consumer" --config ${CONFIG})

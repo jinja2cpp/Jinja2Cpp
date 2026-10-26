@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep every `namespace jinja2` in include/ and src/ inside the inline ABI namespace (docs/tasks/0076).
+"""Keep every `namespace jinja2` in include/, bindings/ and src/ inside the inline ABI namespace (docs/tasks/0076).
 
     scripts/abi_namespace.py            # rewrite the files in place
     scripts/abi_namespace.py --check    # list what would change, exit 1 if anything would
@@ -34,7 +34,7 @@ import sys
 TAG = "v2"
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ROOTS = ("include", "src")
+ROOTS = ("include", "bindings", "src")
 OPENING = re.compile(r"^namespace jinja2(?P<nested>(?:::\w+)*)(?P<brace>\s*\{)?\s*$")
 ANY_OPENING = re.compile(r"(?<!using )\bnamespace\s+jinja2\b")
 INLINE = re.compile(r"^inline namespace (?P<tag>v\d+)(?P<brace>\s*\{)?\s*$")

@@ -121,7 +121,8 @@ struct ArgPromoter<std::basic_string_view<CharT>, void>
     {
     }
 
-    operator const string_view&() const { return *m_ptr; }                   // NOLINT(google-explicit-constructor)
+    // No `operator const string_view&`: next to `operator string_view` it made a by-value view parameter
+    // ambiguous, and a `string_view&&` one cannot bind its lvalue
     operator string_view() const { return *m_ptr; }                          // NOLINT(google-explicit-constructor)
     operator string() const { return string(m_ptr->begin(), m_ptr->end()); } // NOLINT(google-explicit-constructor)
     operator other_string() const                                            // NOLINT(google-explicit-constructor)
@@ -180,6 +181,22 @@ auto Promote(Arg&& arg)
     return ArgPromoter<std::decay_t<Arg>>(&arg);
 }
 
+// A returned view may point into an argument, which dies when the call returns, so the result
+// keeps its own copy of the text (docs/tasks/0296)
+template<typename R>
+Value MakeCallResult(R&& result)
+{
+    using ResultT = std::decay_t<R>;
+    if constexpr (std::is_same_v<ResultT, std::string_view> || std::is_same_v<ResultT, std::wstring_view>)
+    {
+        return Value(std::basic_string<typename ResultT::value_type>(result));
+    }
+    else
+    {
+        return Value(std::forward<R>(result));
+    }
+}
+
 template<typename Fn>
 struct UCInvoker
 {
@@ -205,7 +222,7 @@ struct UCInvoker
     // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): Promote takes each argument's address
     auto operator()(Args&&... args) const -> std::enable_if_t<CanBeCalled<FuncTester<Args...>>::value, Value>
     {
-        return Value(fn(Promote(args)...));
+        return MakeCallResult(fn(Promote(args)...));
     }
 
     template<typename... Args>
@@ -292,15 +309,46 @@ Value InvokeUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&&..
     return std::visit(ParamUnwrapper<UCInvoker<Fn>, true>(&invoker), GetParamValue(params, ad).GetData()...);
 }
 
+// A view parameter given text of the other width needs the converted string to outlive the call
+template<typename T>
+struct ConvertedTextStorage
+{
+    struct NoStorage
+    {
+    };
+    using type = NoStorage;
+    static constexpr bool IsView = false;
+};
+
+template<typename CharT>
+struct ConvertedTextStorage<std::basic_string_view<CharT>>
+{
+    using type = std::optional<std::basic_string<CharT>>;
+    static constexpr bool IsView = true;
+};
+
 template<typename T>
 struct TypedParam
 {
     using decayed_t = std::decay_t<T>;
+    using storage_t = typename ConvertedTextStorage<decayed_t>::type;
+    static constexpr bool IsView = ConvertedTextStorage<decayed_t>::IsView;
     std::variant<NoneValue, decayed_t, const decayed_t*> data;
+    // Owned by the param, which the caller keeps until the function returns; the view is made in
+    // GetValue, so moving the param (and the string's small buffer) is safe (docs/tasks/0296)
+    storage_t converted;
 
     [[nodiscard]] bool HasValue() const { return data.index() != 0; }
-    [[nodiscard]] T GetValue() const
+    // A view comes back by value, so a `const std::string_view&` parameter binds to a view of `converted`
+    [[nodiscard]] std::conditional_t<IsView, decayed_t, T> GetValue() const
     {
+        if constexpr (IsView)
+        {
+            if (converted)
+            {
+                return decayed_t(*converted);
+            }
+        }
         if (data.index() == 1)
         {
             return std::get<decayed_t>(data);
@@ -311,6 +359,28 @@ struct TypedParam
     void SetPointer(const decayed_t* ptr) { data = ptr; }
 
     void SetValue(decayed_t&& val) { data = std::move(val); }
+
+    template<typename String>
+    void SetConverted(String&& str)
+    {
+        converted = std::forward<String>(str);
+        data = decayed_t();
+    }
+};
+
+template<typename T, typename CharT>
+struct IsOtherWidthText : std::false_type
+{
+};
+
+template<typename OtherCharT, typename CharT>
+struct IsOtherWidthText<std::basic_string<OtherCharT>, CharT> : std::bool_constant<!std::is_same_v<OtherCharT, CharT>>
+{
+};
+
+template<typename OtherCharT, typename CharT>
+struct IsOtherWidthText<std::basic_string_view<OtherCharT>, CharT> : std::bool_constant<!std::is_same_v<OtherCharT, CharT>>
+{
 };
 
 template<typename T>
@@ -350,6 +420,16 @@ struct TypedParamUnwrapper
     template<typename U>
     auto operator()(const U& v) -> std::enable_if_t<PromoteTester<U>::value && !std::is_same_v<std::decay_t<U>, ValueType>>
     {
+        if constexpr (TypedParam<T>::IsView)
+        {
+            using CharT = typename ValueType::value_type;
+            if constexpr (IsOtherWidthText<std::decay_t<U>, CharT>::value)
+            {
+                // Promote(v) would view a string its temporary promoter owns
+                param->SetConverted(ConvertString<std::basic_string<CharT>>(v));
+                return;
+            }
+        }
         param->SetValue(Promote(v));
     }
 
@@ -387,6 +467,12 @@ struct MarkupParamUnwrapper
     void operator()(std::basic_string_view<CharT> val) const { param->SetValue(Escape(val)); }
     void operator()(const NoneValue&) const { param->SetValue(ValueType()); }
 
+    // Text of the other width is converted first: a Markup stays a Markup, a string is escaped
+    using OtherCharT = std::conditional_t<std::is_same_v<CharT, char>, wchar_t, char>;
+    void operator()(const BasicMarkup<OtherCharT>& val) const { param->SetValue(ValueType(ConvertString<std::basic_string<CharT>>(val.str()))); }
+    void operator()(const std::basic_string<OtherCharT>& val) const { param->SetValue(Escape(ConvertString<std::basic_string<CharT>>(val))); }
+    void operator()(std::basic_string_view<OtherCharT> val) const { param->SetValue(Escape(ConvertString<std::basic_string<CharT>>(val))); }
+
     template<typename U>
     void operator()(const U&) const
     {
@@ -423,7 +509,7 @@ Value InvokeTypedUserCallable(Fn&& fn, const UserCallableParams& params, ArgDesc
                 return Value();
             }
 
-            return Value(fn(args.GetValue()...));
+            return MakeCallResult(fn(args.GetValue()...));
         },
         typedParams);
 }

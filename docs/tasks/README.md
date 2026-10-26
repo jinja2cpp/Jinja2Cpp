@@ -322,7 +322,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0248](0248-python-drop-in-replacement.md) | Jinja2C++ as a drop-in replacement for Python Jinja2 in common cases | api | medium | open |
 | [0249](0249-implicit-conversion-sanitizer.md) | Run the sanitizer CI with `-fsanitize=implicit-conversion` | robustness | medium | open |
 | [0250](0250-public-api-error-contract.md) | One error contract for the 2.0 public API | api | high | done |
-| [0251](0251-cycles-through-opaque-objects.md) | Reference cycles through objects the cycle collector cannot follow leak | evaluator | low | open |
+| [0251](0251-cycles-through-opaque-objects.md) | Reference cycles through objects the cycle collector cannot follow leak | evaluator | low | done |
 | [0252](0252-public-api-allocator-contract.md) | Allocator and memory contract for the 2.0 public API | api | high | done |
 | [0253](0253-error-contract-types.md) | Error contract P1: public error types and the Load/Render boundary | api | high | done |
 | [0254](0254-render-error-locations.md) | Error contract P2: render errors carry their template location | robustness | high | done |
@@ -354,7 +354,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0280](0280-urlize-markup-input.md) | urlize escapes Markup input | filters | low | done |
 | [0281](0281-attr-bound-method.md) | attr() of a method renders empty | filters | low | done |
 | [0282](0282-settings-limits-followups.md) | `Settings::Limits` follow-ups (0262 leftovers) | api | low | open |
-| [0283](0283-cycle-collector-oom-leaks.md) | Reference cycles leak when an allocation fails during a render | robustness | low | open |
+| [0283](0283-cycle-collector-oom-leaks.md) | Reference cycles leak when an allocation fails during a render | robustness | low | done |
 | [0284](0284-template-module.md) | `Template.module` / `make_module`: a template's exports as a map | api | low | done |
 | [0285](0285-abi-baselines-at-rc.md) | Commit the ABI baselines at the 2.0 RC and turn the abidiff gate on | release | high | open |
 | [0286](0286-fixed-cost-drift-oct-12-19.md) | Fixed-cost drift from feature merges, 2026-10-12 to 2026-10-19 | perf | medium | done |
@@ -372,7 +372,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0298](0298-include-of-extending-template-loop.md) | An included template that extends a parent reading `loop` | parity | low | done |
 | [0299](0299-module-exports-skip-imports.md) | A module exports the names its top level imports, and keeps a re-set import hidden | parity | low | open |
 | [0300](0300-module-export-callable-gaps.md) | Callables that do not cross a `Template::MakeModule` export | parity | low | open |
-| [0301](0301-module-call-loads-accumulate.md) | A `Template::MakeModule` module keeps what each of its calls loads | robustness | medium | open |
+| [0301](0301-module-call-loads-accumulate.md) | A `Template::MakeModule` module keeps what each of its calls loads | robustness | medium | done |
 | [0302](0302-simdjson-binding.md) | An optional simdjson binding | api | low | open |
 | [0303](0303-retire-rapidjson-backend.md) | Retire the built-in RapidJSON backend | build | medium | done |
 | [0304](0304-loop-over-loop-peeks-early.md) | A for loop over `loop` advances the outer loop early | parity | low | open |
@@ -382,4 +382,14 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0308](0308-divisibleby-non-number.md) | `divisibleby` on a value that is not a number | parity | low | open |
 | [0309](0309-repr-of-template-modules.md) | `pprint` of builtin globals and imported templates | parity | low | open |
 | [0310](0310-undefined-filter-argument-is-omitted.md) | A filter argument given as an undefined value reads as omitted | parity | low | open |
-| [0311](0311-json-bindings-as-components.md) | JSON bindings as components on a public adapter contract | build | high | in-progress |
+| [0311](0311-json-bindings-as-components.md) | JSON bindings as components on a public adapter contract | build | high | done |
+| [0312](0312-module-kept-while-stored-macro-reaches-it.md) | A macro a module call stores keeps its module, as in Jinja2 | parity | low | open |
+| [0313](0313-module-keeps-every-use-reloads.md) | A module keeps every tree `TemplateLookup::EveryUse` reloads | robustness | low | open |
+| [0318](0318-kept-globals-keep-their-snapshot.md) | A list or map from the globals keeps the globals it was read from | robustness | high | done |
+| [0319](0319-makecallable-value-parameter.md) | MakeCallable with a Value parameter does not compile | api | medium | open |
+| [0322](0322-parity-corpus-through-reflect.md) | Run the parity corpus with the context as a JSON view | parity | low | open |
+| [0323](0323-stored-self-sees-includer-names.md) | A `self` an include stored does not see the names the includer set | parity | low | open |
+| [0324](0324-nested-render-sees-global-changed-in-place.md) | A nested render does not see a global the outer render changed in place | robustness | medium | open |
+| [0325](0325-autoreload-date-before-read.md) | A reload can cache the new date with the old text | robustness | low | open |
+| [0326](0326-nested-macro-closure-after-outer-call.md) | A macro defined in a macro loses the outer call's names after that call returned | parity | medium | open |
+| [0327](0327-change-globals-use-count-race.md) | Changing a global can race with a render that just dropped the globals map | robustness | medium | open |

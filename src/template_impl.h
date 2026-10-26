@@ -63,9 +63,22 @@ extern const InternalValueMap& GetBuiltinGlobals(bool withI18n);
 struct GlobalsSnapshot
 {
     uint64_t generation = 0;
-    // The converted values refer to it
+    // The converted values refer to it, and their lists and maps share it (LendGlobal)
     std::shared_ptr<const ValuesMap> source;
     InternalValueMap values;
+};
+
+// Marks a render running on the thread for its whole scope: a Load meanwhile keeps the template
+// it replaces in the thread's workspace (RenderWorkspace::Retire, docs/tasks/0321)
+class RenderScope
+{
+public:
+    JINJA2CPP_ALWAYS_INLINE RenderScope() noexcept { RenderWorkspace::BeginRender(); }
+    JINJA2CPP_ALWAYS_INLINE ~RenderScope() { RenderWorkspace::EndRender(); }
+    RenderScope(const RenderScope&) = delete;
+    RenderScope(RenderScope&&) = delete;
+    RenderScope& operator=(const RenderScope&) = delete;
+    RenderScope& operator=(RenderScope&&) = delete;
 };
 
 // The maps a RenderWorkspace lends a render, returned emptied when they go out of scope
@@ -112,9 +125,11 @@ inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::Templat
             snapshot->generation = env.globalsGeneration.load(std::memory_order_relaxed);
             snapshot->source = env.globalValues;
         }
+        // The values keep the map: a host callable or a value the template made may keep one
+        // after the global is replaced and this snapshot goes
         for (const auto& [name, value] : *snapshot->source)
         {
-            snapshot->values[name] = visit(visitors::InputValueConvertor(false, true), value.GetData());
+            snapshot->values[name] = LendGlobal(value, snapshot->source);
         }
         cached = std::move(snapshot);
     }
@@ -248,6 +263,14 @@ public:
         , m_settings(env ? detail::TemplateEnvAccess::GetImpl(*env)->GetLoadSettings() : detail::DefaultLoadSettings())
     {
     }
+    // An empty template with the environment and settings of `prototype`, for BasicTemplate::Load
+    // to parse into: a Load never changes a tree that copies, the cache, renders or modules hold
+    explicit TemplateImpl(const TemplateImpl& prototype, std::nullptr_t /*empty*/)
+        : m_envHandle(detail::TemplateEnvAccess::MakeHandle(prototype.m_env))
+        , m_env(prototype.m_env ? &m_envHandle : nullptr)
+        , m_settings(prototype.m_settings)
+    {
+    }
 
     // The root of the tree, resolved through Nodes()
     [[nodiscard]] NodeRef<TemplateRenderer> GetRenderer() const { return m_renderer; }
@@ -345,10 +368,17 @@ public:
         m_origin.name = &m_templateName;
         m_origin.isWide = std::is_same_v<CharT, wchar_t>;
         m_metadata.reset();
-        // The modules made from the tree this replaced see it gone (TemplateModuleState)
-        m_loadGeneration.fetch_add(1, std::memory_order_relaxed);
         return std::optional<BasicErrorInfo<CharT>>();
     }
+
+    // BasicTemplate::Load of a template another object may hold: parses into a new template with
+    // this one's environment and settings, and puts it in place of `impl` only if parsing
+    // succeeds. Copies, the environment's cache, renders and modules keep the tree they had, as a
+    // Python Template is immutable (docs/tasks/0321). Out of line (template_module.cpp), so that
+    // the first Load of a template, which parses in place, pays nothing for it
+    static std::optional<BasicErrorInfo<CharT>> LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string<CharT>&& source, std::string&& name);
+    // The same for a source the caller has not copied yet: the copy is made out of its path
+    static std::optional<BasicErrorInfo<CharT>> LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string_view<CharT> source, std::string&& name);
 
     // Template::MakeModule: renders the template, which `self` owns, as a module for the host
     // (template_module.cpp)
@@ -361,6 +391,9 @@ public:
     {
         static_assert(std::is_same_v<Target, std::basic_string<CharT>> || std::is_same_v<Target, BasicOutputSink<CharT>>);
         std::optional<BasicErrorInfo<CharT>> normalResult;
+        // Ends last, after the error conversion: until then a Load on this thread keeps the
+        // template it replaces, which may be this one (docs/tasks/0321)
+        const RenderScope renderScope;
 
         if (!m_renderer)
         {
@@ -797,7 +830,7 @@ private:
             if (!name)
             {
                 CountTemplateLoad();
-                return Loaded().replaced.emplace_back(m_host->LoadTemplate(fileName));
+                return Loaded().invalidNames.emplace_back(m_host->LoadTemplate(fileName));
             }
             return LoadTemplate(name.value());
         }
@@ -805,6 +838,64 @@ private:
         [[noreturn]] void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) override
         {
             m_host->ThrowRuntimeError(code, std::move(extraParams));
+        }
+
+        // What a host's call of a module's macro has added so far (Template::MakeModule,
+        // docs/tasks/0301)
+        struct CallMark
+        {
+            std::size_t modules = 0;
+            std::size_t invalidNames = 0;
+        };
+        [[nodiscard]] CallMark MarkCall() const noexcept
+        {
+            return m_loaded ? CallMark{ m_loaded->modules.size(), m_loaded->invalidNames.size() } : CallMark{};
+        }
+        // Ends what the call that took `mark` added: the modules it imported, but those shared
+        // without context, which see nothing of the call and stay for the module's life, as
+        // Jinja2 keeps a template's default module, and those `isKept` names, which such a module's
+        // top level imported. The trees stay too: what a module's macro
+        // stored views its tree. What still refers to an ended module does so through its
+        // anchor (ClosureSite), which a module made in the call marks as ending with it
+        template<typename IsKept>
+        void EndCall(const CallMark& mark, const IsKept& isKept) noexcept
+        {
+            if (!m_loaded)
+            {
+                return;
+            }
+            auto& modules = m_loaded->modules;
+            const auto& shared = m_loaded->sharedModules;
+            // The newest first, as a render ends them
+            for (auto p = modules.size(); p-- > mark.modules;)
+            {
+                auto& module = modules[p];
+                const bool isShared = std::any_of(shared.begin(), shared.end(), [&module](const auto& entry) { return entry.second == module.get(); });
+                if (isShared || isKept(module.get()))
+                {
+                    continue;
+                }
+                // Its values may hold themselves: the call's collector frees those cycles. Noting
+                // them allocates; when that fails, the rest of the module's cycles leak
+                try
+                {
+                    for (const auto& [name, value] : module->Names())
+                    {
+                        CycleCollector::NoteStore(value);
+                    }
+                }
+                catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment above says what is lost
+                {
+                }
+                module.reset();
+            }
+            modules.erase(std::remove(modules.begin() + static_cast<std::ptrdiff_t>(mark.modules), modules.end(), nullptr), modules.end());
+            // Errors only, which the statement that looked them up has thrown
+            auto& invalid = m_loaded->invalidNames;
+            while (invalid.size() > mark.invalidNames)
+            {
+                invalid.pop_back();
+            }
         }
 
         TemplateSlots& Templates() override { return Loaded().templates; }
@@ -900,8 +991,10 @@ private:
             JINJA2CPP_NOINLINE_INLINE ~LoadedTemplates() = default;
 
             std::unordered_map<std::string, LoadedTemplate> byName;
-            // Results that are not the first for their name: templates reloaded during the render and invalid names
+            // Results that are not the first for their name: templates reloaded during the render
             std::list<LoadTemplateResult> replaced;
+            // The errors of names that are not strings, which no statement keeps past its throw
+            std::list<LoadTemplateResult> invalidNames;
             // The trees of the templates above, and of the rendered one, that handles link to
             TemplateSlots templates;
             // What each `include` of a constant name loaded (FindLoadedBy). A render has few
@@ -940,11 +1033,6 @@ private:
     std::string m_templateName;
     bool m_isNamed = false;
     bool m_mayReadLoop = false;
-    // Counts the successful Loads: a module's macro refuses to run in a tree a later Load
-    // replaced (TemplateModuleState). Atomic only so that a misuse is not a data race; 32 bits
-    // fit the padding after the flags, so a template is no bigger, and a module sees a stale
-    // tree as current only after exactly 2^32 more Loads
-    std::atomic<uint32_t> m_loadGeneration{ 0 };
     // Owns the tree
     SealedArena m_nodes;
     NodeRef<TemplateRenderer> m_renderer;

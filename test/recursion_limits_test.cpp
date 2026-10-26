@@ -526,13 +526,15 @@ void StoreDeepValues(TemplateEnv* env)
         EXPECT_EQ(expected, result ? result.value() : result.error().ToString()) << source.substr(source.size() - 30);
     }
 
-    // The receiver at the bottom of a deep value: a plain cycle is kept (the render frees it at
-    // its end), one through a bound method is still refused
+    // The receiver at the bottom of a deep value: the cycle is kept, also through a bound
+    // method, and the render frees it at its end with a walk that does not recurse (docs/tasks/0251)
     const std::string deepList = "{% set x = [] %}{% set ns = namespace(v=[x]) %}{% for i in range(" + std::string(DeepLevels) + ") %}{% set ns.v = [ns.v] %}{% endfor %}";
     const std::string deepDict = "{% set x = {} %}{% set ns = namespace(v={'a': x}) %}{% for i in range(" + std::string(DeepLevels) + ") %}{% set ns.v = {'a': ns.v} %}{% endfor %}";
     const std::pair<std::string, std::string> cycles[] = {
         { deepList + "{% set _ = x.append(ns.v) %}{{ x|length }}", "1" },
         { deepDict + "{% set _ = x.update(y=ns.v) %}{{ x|length }}", "1" },
+        { deepList + "{% set _ = x.append(ns.v.append) %}{{ x|length }}", "1" },
+        { deepDict + "{% set _ = x.update(y=ns.v.update) %}{{ x|length }}", "1" },
     };
     for (const auto& [source, expected] : cycles)
     {
@@ -540,18 +542,6 @@ void StoreDeepValues(TemplateEnv* env)
         ASSERT_TRUE(tpl.Load(source).has_value()) << source.substr(source.size() - 30);
         auto result = tpl.RenderAsString({});
         EXPECT_EQ(expected, result ? result.value() : result.error().ToString()) << source.substr(source.size() - 30);
-    }
-    const std::string refused[] = {
-        deepList + "{% set _ = x.append(ns.v.append) %}",
-        deepDict + "{% set _ = x.update(y=ns.v.update) %}",
-    };
-    for (const auto& source : refused)
-    {
-        Template tpl(env);
-        ASSERT_TRUE(tpl.Load(source).has_value()) << source.substr(source.size() - 30);
-        auto result = tpl.RenderAsString({});
-        ASSERT_FALSE(result.has_value()) << source.substr(source.size() - 30);
-        EXPECT_NE(std::string::npos, result.error().ToString().find("cannot contain itself")) << result.error().ToString();
     }
 }
 

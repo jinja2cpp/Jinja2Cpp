@@ -3,8 +3,8 @@ message(STATUS "'internal' dependencies mode selected for Jinja2Cpp. All depende
 include (./thirdparty/internal_deps.cmake)
 
 # The library links no Boost (docs/tasks/0230). The Boost release is fetched only for the
-# Boost.JSON adapter test, and never installed: the package names no Boost.
-if (JINJA2CPP_BUILD_TESTS AND "${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
+# Boost.JSON binding test, and never installed: the core package names no Boost.
+if (JINJA2CPP_BUILD_TESTS AND "boost_json" IN_LIST JINJA2CPP_TEST_BINDINGS)
     set(BOOST_ENABLE_CMAKE ON)
     list(APPEND BOOST_INCLUDE_LIBRARIES json)
 

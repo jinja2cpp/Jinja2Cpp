@@ -34,3 +34,13 @@ using the existing sanitizer CI. Keep Python-only parity cases in the corpus.
 the existing test runner, and the supported sanitizer configurations pass. Newly
 found engine defects receive separate tasks and minimal reproducers; do not hide
 them behind skips or turn this task into a rewrite of ownership/scoping.
+
+**Progress (2026-10-25).** Contract: `docs/api-2.0.md` §3.10 (decisions D1-D7 of
+/mnt/project-files/release-2.0/0223-plan.md, approved by Ruslan 2026-10-25), with notes in
+`template_env.h`, `value.h` and `reflected_value.h`. Suite: `test/embedding_lifecycle_test.cpp`,
+30 rows (A1-A4, B1-B6, C1-C6, D1-D4, E1, E2, E4-E6, F1-F5). The rows that fail on master land
+with their fixes: A5 and D5 with 0321 (copy on load), E3 with 0318 (globals keep their snapshot),
+A6 and C7 with 0264. Found while writing the suite: 0319 (`MakeCallable` with a `Value`
+parameter), 0326 (nested macro closure, F5), 0323 (stored `self` and the includer's names, F2),
+0324 (nested render and a global changed in place, F6), 0325 (reload date read after the text,
+C6).

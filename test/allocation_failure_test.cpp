@@ -41,6 +41,8 @@ namespace
 std::atomic<long> g_countdown{ -1 };
 // The countdown last armed, for the crash report below
 std::atomic<long> g_armed{ -1 };
+// The allocations not freed yet, for the steady-state checks
+std::atomic<long> g_live{ 0 };
 
 // MSVC's checked iterators (_ITERATOR_DEBUG_LEVEL above 0) give every container a heap proxy, made
 // in noexcept constructors such as basic_string(), so failing one ends in std::terminate. A
@@ -63,9 +65,19 @@ void* Allocate(std::size_t size)
     }
     if (void* p = std::malloc(size == 0 ? 1 : size))
     {
+        g_live.fetch_add(1, std::memory_order_relaxed);
         return p;
     }
     throw std::bad_alloc();
+}
+
+void Release(void* p) noexcept
+{
+    if (p)
+    {
+        g_live.fetch_sub(1, std::memory_order_relaxed);
+        std::free(p);
+    }
 }
 } // namespace
 
@@ -95,27 +107,27 @@ void* operator new[](std::size_t size, const std::nothrow_t& tag) noexcept
 }
 void operator delete(void* p, const std::nothrow_t& /*tag*/) noexcept
 {
-    std::free(p);
+    Release(p);
 }
 void operator delete[](void* p, const std::nothrow_t& /*tag*/) noexcept
 {
-    std::free(p);
+    Release(p);
 }
 void operator delete(void* p) noexcept
 {
-    std::free(p);
+    Release(p);
 }
 void operator delete[](void* p) noexcept
 {
-    std::free(p);
+    Release(p);
 }
 void operator delete(void* p, std::size_t /*size*/) noexcept
 {
-    std::free(p);
+    Release(p);
 }
 void operator delete[](void* p, std::size_t /*size*/) noexcept
 {
-    std::free(p);
+    Release(p);
 }
 // NOLINTEND(cppcoreguidelines-no-malloc)
 
@@ -408,6 +420,106 @@ TEST(JsonAllocationFailureTest, BigIntegerIsExactOrThrowsBadAlloc)
     }
 }
 
+// A module the host keeps and calls once per request: what a call imports with context ends
+// with the call, so the module stops growing after its first calls (docs/tasks/0301)
+class ModuleCallTest : public AllocationFailureTest
+{
+protected:
+    jinja2::TemplateModule MakeModule(const std::string& body)
+    {
+        auto fs = std::make_shared<MemoryFileSystem>();
+        fs->AddFile("lib", "{% macro x() %}X{% endmacro %}{% set v = [1, 2, 3] %}");
+        fs->AddFile("fails", "{% import 'lib' as l with context %}{{ 1 // 0 }}");
+        m_env.AddFilesystemHandler(std::string(), fs);
+        EXPECT_TRUE(!!m_tpl.Load("{% macro m() %}" + body + "{% endmacro %}"));
+        auto module = m_tpl.MakeModule();
+        EXPECT_TRUE(!!module);
+        return module ? std::move(*module) : jinja2::TemplateModule{};
+    }
+
+    static std::string Call(const jinja2::Value& fn)
+    {
+        const jinja2::UserCallableParams params;
+        return fn.As<jinja2::UserCallable>().callable(params).AsString();
+    }
+
+    Template m_tpl{ &m_env };
+};
+
+TEST_F(ModuleCallTest, CallsStayFlat)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    for (const char* body : { "{% import 'lib' as l with context %}{{ l.x() }}{% include 'lib' %}",
+                              "{% import 'lib' as l %}{{ l.x() }}",
+                              "{% from 'lib' import x with context %}{{ x() }}",
+                              // A module shared without context whose top level fails each time
+                              "{% import 'fails' as f %}",
+                              // A call that fails leaves no scope on the module's context
+                              "{% for i in [1] %}{% set q = 2 %}{{ 1 // 0 }}{% endfor %}",
+                              // An invalid name fails each call, with nothing kept
+                              "{% include 42 %}" })
+    {
+        auto module = MakeModule(body);
+        const auto& m = module.exports["m"];
+        const auto callMany = [&m](int count) {
+            for (int i = 0; i != count; ++i)
+            {
+                try
+                {
+                    Call(m);
+                }
+                catch (const jinja2::BadResultAccess<>&) // NOLINT(bugprone-empty-catch): the failing case fails every call
+                {
+                }
+            }
+        };
+        callMany(100);
+        const long before = g_live.load(std::memory_order_relaxed);
+        callMany(2000);
+        // Each call kept about 30 allocations before 0301
+        EXPECT_LE(g_live.load(std::memory_order_relaxed) - before, 16) << body;
+    }
+}
+
+// A call that fails at any allocation ends what it imported, and the module goes on working
+TEST_F(ModuleCallTest, CallSucceedsOrThrowsBadAlloc)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    auto module = MakeModule("{% set ns = namespace() %}{% import 'lib' as l with context %}{% set ns.f = l.x %}{{ ns.f() }}{{ l.v|length }}");
+    const auto& m = module.exports["m"];
+    ASSERT_EQ("X3", Call(m));
+    long n = 0;
+    for (; n != maxAllocations; ++n)
+    {
+        bool fired = false;
+        bool threw = false;
+        std::string result;
+        OnFreshThread([&] {
+            const Injection injection(n);
+            try
+            {
+                result = Call(m);
+            }
+            catch (const std::bad_alloc&)
+            {
+                threw = true;
+            }
+            fired = Injection::Fired();
+        });
+        ASSERT_EQ("X3", Call(m)) << "allocation " << n;
+        if (!threw)
+        {
+            ASSERT_EQ("X3", result) << "allocation " << n;
+        }
+        if (!fired)
+        {
+            break;
+        }
+    }
+    EXPECT_LT(0, n) << "no allocation reached the injection";
+    EXPECT_LT(n, maxAllocations);
+}
+
 INSTANTIATE_TEST_SUITE_P(Templates,
                          AllocationFailureTest,
                          testing::Values(Case{ "Hello, {{ user.name }}!", "Hello, Ann!" },
@@ -418,5 +530,10 @@ INSTANTIATE_TEST_SUITE_P(Templates,
                                                "3{\"k\": [1, \"two\", 3.5]}Hello, Ann!" },
                                          Case{ "{% include 'header.j2' %}{% from 'macros.j2' import item %}{% for i in items[:2] %}{{ item(i) }}{% endfor %}",
                                                "<h1>REPORT</h1>[1], [2], " },
-                                         Case{ "{% extends 'base.j2' %}{% block body %}{{ super() }}+{{ title }}{% endblock %}", "<base+Report>" }));
+                                         Case{ "{% extends 'base.j2' %}{% block body %}{{ super() }}+{{ title }}{% endblock %}", "<base+Report>" },
+                                         // Reference cycles, freed when the render ends: none leaks when an
+                                         // allocation fails (docs/tasks/0283, LeakSanitizer in the sanitizer job)
+                                         Case{ "{% set ns = namespace(l=[]) %}{% set ns.self = ns %}{% set l = [1] %}{{ l.append(l) or '' }}"
+                                               "{% set ns.c = cycler(ns) %}{% set ns.f = ns.l.append %}{{ l|length }}",
+                                               "2" }));
 } // namespace

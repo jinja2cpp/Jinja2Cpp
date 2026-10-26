@@ -14,6 +14,7 @@ on:
     paths:
       - 'src/**'
       - 'include/**'
+      - 'bindings/**'
       - 'test/**'
       - '.clang-tidy'
       - 'test/.clang-tidy'
@@ -80,17 +81,18 @@ jobs:
       run: |
         set -o pipefail
         status=0
-        # The JSON binding headers other than the configured one (boost) have no include
-        # path in this build, so clang-tidy can only report "file not found" for them.
+        # The Boost components (bindings/boost_*) and the Boost.JSON binding test have no
+        # include path in this build, which tests the nlohmann_json binding only, so
+        # clang-tidy can only report "file not found" for them (docs/tasks/0311).
         # Vendored headers stay out, as in ExcludeHeaderFilterRegex: clang-tidy-diff
         # checks a changed header as its own file, past the header filter.
         # A header borrows the flags of the most similar file in the database, which can be a
         # dependency's source file, so the generated include directory (jinja2cpp/version.h)
         # is passed explicitly.
-        git diff -U0 --no-color "$BASE_SHA" -- src include test \
-            ':!include/jinja2cpp/binding/nlohmann_json*' ':!test/binding/nlohmann_json*' \
+        git diff -U0 --no-color "$BASE_SHA" -- src include bindings test \
+            ':!bindings/boost_*' ':!test/binding/boost_json*' \
             ':!include/jinja2cpp/polymorphic_value/*' ':!src/robin_hood.h' ':!src/lexertk.h' \
-            ':!src/unicode_tables.h' ':!include/jinja2cpp/big_int/boost_cpp_int.h' ':!test/*.inc' \
+            ':!src/unicode_tables.h' ':!test/*.inc' ':!test/package/*' \
           | python "$TIDY_BIN/clang-tidy-diff.py" -p1 -path build -j "$(nproc)" -quiet \
               -clang-tidy-binary "$CLANG_TIDY" \
               -extra-arg=-Wno-unknown-warning-option \
@@ -117,14 +119,13 @@ jobs:
           "$GITHUB_WORKSPACE/(src|test)/.*\.cpp$" > tidy.log 2>&1 || status=$?
         # Headers are not in the compile database. The pull-request job analyses a changed
         # header on its own, so check each one that way too (docs/tasks/0085). Skipped:
-        # vendored headers and the nlohmann binding, which this configuration does not
-        # build, and the Boost big-integer adapter: no file in the database that a
-        # header borrows flags from has Multiprecision's include path, so it is analysed
-        # through test/big_int_test.cpp, which includes it (docs/tasks/0272).
-        git ls-files 'src/*.h' 'include/jinja2cpp/*.h' \
+        # vendored headers and the Boost components, which this configuration does not
+        # give an include path: the big-integer adapter is analysed through
+        # test/big_int_test.cpp, which includes it (docs/tasks/0272), and Boost.JSON in
+        # bindings.yml (docs/tasks/0311).
+        git ls-files 'src/*.h' 'include/jinja2cpp/*.h' 'bindings/nlohmann_json/*.h' \
             ':!src/robin_hood.h' ':!src/lexertk.h' ':!src/unicode_*.h' \
-            ':!include/jinja2cpp/polymorphic_value/*' ':!*nlohmann_json*' \
-            ':!include/jinja2cpp/big_int/boost_cpp_int.h' \
+            ':!include/jinja2cpp/polymorphic_value/*' \
           | xargs -P "$(nproc)" -n 1 "$CLANG_TIDY" -p build --quiet --extra-arg=-Wno-unknown-warning-option \
           >> tidy.log 2>&1 || status=1
         {

@@ -1,10 +1,11 @@
 ---
-status: in-progress
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/658, https://github.com/jinja2cpp/Jinja2Cpp/pull/661, https://github.com/jinja2cpp/Jinja2Cpp/pull/664
 priority: high
 area: build
 depends: [0230]
-touches: [include/jinja2cpp/json_adapter.h, include/jinja2cpp/binding/, bindings/, test/binding/, cmake/public/, .github/workflows/bindings.yml]
-shares: [CMakeLists.txt, thirdparty/internal_deps.cmake, thirdparty/thirdparty-conan-build.cmake, conanfile.txt, sbom/components.json, docs/dependencies.md, docs/release-2.0.md, MIGRATION.md, include/jinja2cpp/reflected_value.h]
+touches: [include/jinja2cpp/json_adapter.h, include/jinja2cpp/binding/, bindings/, test/binding/, cmake/public/, test/package/, .github/workflows/bindings.yml]
+shares: [CMakeLists.txt, .github/workflows/linux-build.yml, .github/workflows/clang-tidy.yml, .github/workflows/format-check.yml, .github/workflows/conan-build.yml, scripts/preflight.sh, scripts/sbom.py, scripts/abi_namespace.py, bench/CMakeLists.txt, README.md, AGENTS.md, thirdparty/CMakeLists.txt, thirdparty/thirdparty-internal.cmake, thirdparty/external_boost_deps.cmake, thirdparty/internal_deps.cmake, thirdparty/thirdparty-conan-build.cmake, conanfile.txt, sbom/components.json, docs/dependencies.md, docs/release-2.0.md, MIGRATION.md, include/jinja2cpp/reflected_value.h]
 ---
 # JSON bindings as components on a public adapter contract
 
@@ -87,7 +88,35 @@ toy traits in `test/binding/toy_json.h` (Qt-style view traits; forward-only trai
 `nlohmann_json_binding_test.cpp` until S5 can add `test/binding/json_adapter_test.cpp` to
 the test list. Choices made in S1: `ToValue` errors carry the path as the last ExtraParam
 and `GetLocationDescr()` reads `JSON $.path (char N)`; the optional `Elements()` range is
-left for 0302 (simdjson dom) to add if it needs one. Next: 0303 after 0230 D7a, then S5.
+left for 0302 (simdjson dom) to add if it needs one. 0303 then deleted RapidJSON.
+
+S5 (bindings as components): the headers moved to `bindings/<component>/include/` with
+their include paths kept; `bindings/CMakeLists.txt` makes each one an INTERFACE target
+`jinja2cpp::<component>` (`nlohmann_json`, `boost_json`, `boost_multiprecision`) with its own
+export set, deps file and `jinja2cpp-<component>.pc`, and every component is installed.
+`jinja2cpp-config.cmake` resolves `COMPONENTS` (unknown or unfound components fail `REQUIRED`
+with a message, `OPTIONAL_COMPONENTS` keeps the core) and appends the dependency's targets
+after finding them, because an exported link to the build's own fetched nlohmann_json would
+have to be exported too. `JINJA2CPP_WITH_JSON_BINDINGS` is gone (a warning; `rapid` is an
+error) and `JINJA2CPP_TEST_BINDINGS` (default `nlohmann_json`) picks the bindings the tests
+check; the toy instantiations moved to `test/binding/json_adapter_test.cpp`, built always.
+CI: the binding axis left `linux-build.yml`; `bindings.yml` runs every binding on Linux
+ASan/UBSan and TSan, MSVC /MT, macOS 14, Ubuntu's b2-built Boost, a changed-line clang-tidy
+with every component configured, and an install consumed through each component by
+find_package and pkg-config, on touching PRs and nightly. `check_package.cmake` checks that
+every component is installed, that the core package files find no Boost or nlohmann_json,
+the REQUIRED/OPTIONAL/unknown component probes and, in the Boost-free job, the
+nlohmann_json component of an install built without any JSON library. MIGRATION.md has the
+entry.
+
+S7 and S8: the parity corpus copies each case's context through the binding's
+`jinja2::ToValue(ordered_json)` instead of its own converter, so every corpus case checks the
+copy path (the test target links `jinja2cpp::nlohmann_json` whatever
+`JINJA2CPP_TEST_BINDINGS` lists). The per-binding files keep only what is specific to a
+binding (its conformance traits, nlohmann's pointer overloads of `Reflect`); their rendering
+rows were covered by the suite, which took over the two it lacked (an attribute of a JSON
+null is undefined; `Find`/`HasValue` and the 1.x accessor on a null member). The view pass
+of the corpus is 0322. 0302 follows on the components.
 
 **Next.** 0302 is rebased onto the contract (a dom view and copy, an on-demand copy).
 Installing the conformance suite for third-party traits authors, and a `FromValue`

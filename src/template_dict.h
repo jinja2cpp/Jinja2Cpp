@@ -99,6 +99,18 @@ public:
     // The key of a stored entry as a template value: the string, or the first spelling of a
     // non-string key. An entry that starts with the mark and has no spelling reads as a plain string
     [[nodiscard]] InternalValue KeyOf(const std::string& stored) const;
+    // Passes fn the first spelling of each key that is not a string (the cycle collector's walk)
+    template<typename Fn>
+    void ForEachKeyValue(const Fn& fn) const
+    {
+        if (m_keys)
+        {
+            for (const auto& entry : *m_keys)
+            {
+                fn(entry.second);
+            }
+        }
+    }
 
     // Dicts are equal when they hold the same entries, in any order. Tokens are canonical, so
     // comparing the entries compares the keys

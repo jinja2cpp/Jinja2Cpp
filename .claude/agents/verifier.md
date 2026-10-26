@@ -38,6 +38,6 @@ Check, and report each item as pass/fail with evidence (command + output excerpt
    class templates do not reach members a given specialisation cannot compile (MSVC
    instantiates more eagerly); no unused private field (Apple Clang warns); wide-string
    expectations do not depend on the C library's locale (macOS differs for non-ASCII).
-   If `include/jinja2cpp/binding/` or reflection changed, also build with
-   `-DJINJA2CPP_WITH_JSON_BINDINGS=nlohmann`.
+   If `bindings/`, `json_adapter.h` or reflection changed, also build with
+   `-DJINJA2CPP_TEST_BINDINGS="nlohmann_json;boost_json"` (CI runs that in bindings.yml).
 Finish with a verdict: ready, or the list of blocking findings.

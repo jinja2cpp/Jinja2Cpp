@@ -2,7 +2,7 @@
 # links no Boost (docs/tasks/0230): only the opt-in Boost adapters use it. Boost.Multiprecision
 # (with -DJINJA2CPP_WITH_BIGINT=boost, and for the tests' adapter check) takes Boost::headers
 # when a Boost is found, else its standalone pins (thirdparty/CMakeLists.txt); the Boost.JSON
-# adapter test needs the compiled Boost.JSON.
+# binding test (boost_json in JINJA2CPP_TEST_BINDINGS) needs the compiled Boost.JSON.
 if (NOT JINJA2CPP_BUILD_TESTS AND NOT "${JINJA2CPP_WITH_BIGINT}" STREQUAL "boost")
     return()
 endif ()
@@ -19,7 +19,7 @@ if (MSVC)
     endif ()
 endif ()
 
-if (JINJA2CPP_BUILD_TESTS AND "${JINJA2CPP_WITH_JSON_BINDINGS}" STREQUAL "boost")
+if (JINJA2CPP_BUILD_TESTS AND "boost_json" IN_LIST JINJA2CPP_TEST_BINDINGS)
     find_package(Boost 1.75 CONFIG REQUIRED COMPONENTS json)
 elseif ("${JINJA2CPP_WITH_BIGINT}" STREQUAL "boost")
     find_package(Boost 1.75 CONFIG REQUIRED)

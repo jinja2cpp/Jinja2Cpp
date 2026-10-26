@@ -81,6 +81,11 @@ private:
 
 class ValueObject;
 
+template<typename Fn>
+class FunctionRef;
+// Called with each object an object holds a reference to (ValueObject::Traverse)
+using TraverseFn = FunctionRef<void(const ValueObject*)>;
+
 namespace detail
 {
 // Deletes an object whose last reference went. A value nested as deep as a loop iterates
@@ -131,6 +136,20 @@ public:
     // The object InternalValue::SetParentData makes: it keeps the value's own object and the
     // value it was taken from alive
     [[nodiscard]] bool IsAnchor() const noexcept { return (m_flags & AnchorFlag) != 0; }
+    // Whether Traverse may visit something: the cycle collector skips the other objects
+    // (strings, numbers, host adapters) without a call
+    [[nodiscard]] bool IsTraversable() const noexcept { return (m_flags & TraverseFlag) != 0; }
+
+    // The cycle collector's view of the object (docs/tasks/0251), as CPython's tp_traverse
+    // and tp_clear: Traverse passes fn each object this one holds a reference to, once per
+    // reference, and only the references the object alone holds: one that another object
+    // shares unseen (a std::function capture, storage another accessor shares) is left
+    // out, so that what it reaches counts as held from outside. Clear drops the values of
+    // an object that owns mutable storage alone (a list, dict or namespace the template
+    // made), which breaks a cycle through it; the other objects keep theirs. Both run at
+    // the end of a render, with no other code using the objects
+    virtual void Traverse(const TraverseFn& /*fn*/) const {}
+    virtual void Clear() const noexcept {}
 
     // IntrusivePtr's hooks
     // NOLINTNEXTLINE(readability-identifier-naming)
@@ -147,10 +166,13 @@ public:
 protected:
     void SetClonesOnCopy(bool clones = true) noexcept { m_flags = clones ? static_cast<uint8_t>(m_flags | CloneFlag) : static_cast<uint8_t>(m_flags & ~CloneFlag); }
     void SetAnchor() noexcept { m_flags |= AnchorFlag; }
+    // Set by the constructor of a class whose Traverse visits something
+    void SetTraversable() noexcept { m_flags |= TraverseFlag; }
 
 private:
     static constexpr uint8_t CloneFlag = 1;
     static constexpr uint8_t AnchorFlag = 2;
+    static constexpr uint8_t TraverseFlag = 4;
     mutable std::atomic<unsigned> m_refCount{ 0 };
     uint8_t m_flags = 0;
 };
@@ -165,6 +187,13 @@ IntrusivePtr<T> MakeRef(Args&&... args)
     return IntrusivePtr<T>(new T(std::forward<Args>(args)...));
 }
 
+struct KeyValuePair;
+class Callable;
+
+// What a boxed pair or callable holds, for ValueBox::Traverse (internal_value.cpp)
+void TraverseBoxed(const KeyValuePair& pair, const TraverseFn& fn);
+void TraverseBoxed(const Callable& callable, const TraverseFn& fn);
+
 // An object of a type a value holds by reference (a pair, a callable, a renderer)
 template<typename T>
 class ValueBox final : public ValueObject
@@ -173,11 +202,26 @@ public:
     explicit ValueBox(T&& value)
         : m_value(std::move(value))
     {
+        if constexpr (IsTraversed)
+        {
+            SetTraversable();
+        }
     }
 
     [[nodiscard]] const T& Get() const noexcept { return m_value; }
 
+    void Traverse(const TraverseFn& fn) const override
+    {
+        if constexpr (IsTraversed)
+        {
+            TraverseBoxed(m_value, fn);
+        }
+    }
+
 private:
+    // A renderer holds no template value
+    static constexpr bool IsTraversed = std::is_same_v<T, KeyValuePair> || std::is_same_v<T, Callable>;
+
     T m_value;
 };
 
@@ -232,9 +276,7 @@ class ListAdapter;
 class MapAdapter;
 class RenderContext;
 class OutStream;
-class Callable;
 struct CallParams;
-struct KeyValuePair;
 class IRendererBase;
 
 // What a missing name, attribute or item evaluates to (Python's Undefined). It is the
@@ -496,10 +538,7 @@ struct RangeInfo
 };
 
 // A non-owning reference to a callable: a callback that does not outlive the call, without
-// the allocation and indirection of std::function
-template<typename Fn>
-class FunctionRef;
-
+// the allocation and indirection of std::function (declared above ValueObject)
 template<typename R, typename... Args>
 class FunctionRef<R(Args...)>
 {
@@ -1322,6 +1361,19 @@ struct InternalValueAccess
 };
 } // namespace detail
 
+// Passes fn the object `val` holds a reference to, if any (ValueObject::Traverse)
+inline void TraverseValue(const InternalValue& val, const TraverseFn& fn)
+{
+    if (const auto* obj = detail::InternalValueAccess::Object(val))
+    {
+        fn(obj);
+    }
+}
+
+// The object `val` owns, without the anchor SetParentData gave it: the container a write
+// changes (CycleCollector::NoteStore)
+ValueObjectPtr OwnObjectOf(const InternalValue& val);
+
 inline bool operator==(const InternalValue& lhs, const InternalValue& rhs)
 {
     return lhs.IsEqual(rhs);
@@ -1764,11 +1816,26 @@ public:
     [[nodiscard]] bool IsSame(const Callable& other) const;
 
 private:
+    // Visits the receiver of a bound method and the attributes, when this callable alone holds them
+    friend void TraverseBoxed(const Callable& callable, const TraverseFn& fn);
+
     Kind m_kind;
     std::shared_ptr<const CallableHolder> m_callable;
     std::shared_ptr<const InternalValueMap> m_attributes;
     const void* m_boundSelf = nullptr;
     const char* m_boundMethod = nullptr;
+};
+
+// The function of a method bound to its receiver (methods::MakeBoundMethod): a type of its
+// own, so that the cycle collector finds the receiver it holds (TraverseBoxed)
+struct BoundMethodCall
+{
+    using Method = InternalValue (*)(const InternalValue& self, const CallParams& params, RenderContext& context);
+
+    InternalValue operator()(const CallParams& params, RenderContext& context) const { return invoke(self, params, context); }
+
+    InternalValue self;
+    Method invoke;
 };
 
 
@@ -1878,6 +1945,9 @@ ListAdapter ConvertToList(const InternalValue& val, bool& isConverted, bool stri
 static_assert(std::is_nothrow_move_constructible_v<InternalValue>);
 static_assert(std::is_nothrow_move_assignable_v<InternalValue>);
 Value IntValue2Value(const InternalValue& val);
+// An environment's global for the snapshot of the globals (template_impl.h): a list or map borrows
+// the global's storage and keeps `owner`, the globals map, alive; a string is copied (docs/tasks/0318)
+InternalValue LendGlobal(const Value& value, const std::shared_ptr<const void>& owner);
 Value OptIntValue2Value(std::optional<InternalValue> val);
 
 } // namespace v2

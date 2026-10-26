@@ -1,0 +1,13 @@
+# Finds what the jinja2cpp::@JINJA2CPP_BINDING_NAME@ component links (docs/tasks/0311). Included by
+# jinja2cpp-config.cmake only when a consumer asks for the component. QUIET and not
+# find_dependency: find_dependency would return() from the whole config file, and a missed
+# OPTIONAL_COMPONENTS entry must not cost the consumer the core target.
+find_package(@JINJA2CPP_BINDING_FIND@ QUIET)
+set(_jinja2cpp_component_links @JINJA2CPP_BINDING_TARGETS@)
+set(_jinja2cpp_component_missing "")
+foreach (_jinja2cpp_dep IN LISTS _jinja2cpp_component_links)
+    if (NOT TARGET ${_jinja2cpp_dep})
+        list(APPEND _jinja2cpp_component_missing ${_jinja2cpp_dep})
+    endif ()
+endforeach ()
+unset(_jinja2cpp_dep)

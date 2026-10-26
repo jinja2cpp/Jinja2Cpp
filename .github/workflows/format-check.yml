@@ -25,12 +25,13 @@ jobs:
     - name: Install clang-format
       run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends clang-format-18
 
-    # src/ and include/ were formatted in one mechanical commit (docs/tasks/0009), so
-    # they are checked whole; vendored files are skipped through .clang-format-ignore.
+    # src/ and include/ were formatted in one mechanical commit (docs/tasks/0009), so they
+    # are checked whole, as is bindings/ (headers moved out of include/ by 0311); vendored
+    # files are skipped through .clang-format-ignore.
     - name: Check formatting of src/ and include/
-      run: git ls-files 'src/**.h' 'src/**.cpp' 'include/**.h' | xargs clang-format-18 --dry-run --Werror
+      run: git ls-files 'src/**.h' 'src/**.cpp' 'include/**.h' 'bindings/**.h' | xargs clang-format-18 --dry-run --Werror
 
-    # Every namespace jinja2 in src/ and include/ opens inline namespace v2, the ABI tag
+    # Every namespace jinja2 in src/, include/ and bindings/ opens inline namespace v2, the ABI tag
     # (docs/tasks/0076); the nm test checks the symbols, this also covers header-only code
     - name: Check the inline ABI namespace
       run: python3 scripts/abi_namespace.py --check

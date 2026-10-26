@@ -110,7 +110,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: alternative; phases: test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=boost with JINJA2CPP_BUILD_TESTS: internal mode fetches the release for the Boost.JSON adapter test and never installs it; external, external-boost and conan-build find a system Boost >= 1.75 (Conan: header-only) only when a Boost piece is selected; also-roles: test; used-for: The opt-in adapters only: Boost.JSON for the binding test, and Multiprecision with Config (boost-multiprecision, boost-config, fetched on their own) for the bigint=boost backend and the adapter test. The library links no Boost and the installed package never names it (0230 D7a); why: The adapter headers jinja2cpp/binding/boost_json.h and jinja2cpp/big_int/boost_cpp_int.h are public opt-in API, so CI keeps testing them; lighten: Done (docs/tasks/0230): span, small_vector, intrusive_ptr, unique_any, iterator_facade, the string algorithms, endian, filesystem and Boost.JSON metadata parsing have own replacements; scripts/sbom.py --check keeps <boost/ out of every other file; conan: boost/1.91.0; conan-why: ConanCenter has Boost 1.91.0 at most (checked 2026-10-24); conanfile.txt takes it header_only, and Boost is only an optional adapter dependency and test-only (0230); transitive-libraries: assert,compat,config,container,container_hash,core,describe,endian,headers,intrusive,json,move,mp11,predef,system,throw_exception,variant2,winapi"
+      "comment": "role: alternative; phases: test; exposure: public-optional; delivery: fetched; selected-by: boost_json in JINJA2CPP_TEST_BINDINGS (default nlohmann_json) with JINJA2CPP_BUILD_TESTS: internal mode fetches the release for the Boost.JSON binding test and never installs it; external, external-boost and conan-build find a system Boost >= 1.75 (Conan: header-only) only when a Boost piece is selected. Consumers: the components jinja2cpp::boost_json and jinja2cpp::boost_multiprecision find it when requested (docs/tasks/0311); also-roles: test; used-for: The opt-in components only: Boost.JSON for the boost_json binding and its test, and Multiprecision with Config (boost-multiprecision, boost-config, fetched on their own) for the bigint=boost backend and the boost_multiprecision adapter. The library links no Boost and the core package never names it (0230 D7a); only a Boost component's own files find Boost (0311); why: The components jinja2cpp::boost_json and jinja2cpp::boost_multiprecision (bindings/boost_*) are public opt-in API, so CI keeps testing them (bindings.yml); lighten: Done (docs/tasks/0230): span, small_vector, intrusive_ptr, unique_any, iterator_facade, the string algorithms, endian, filesystem and Boost.JSON metadata parsing have own replacements; scripts/sbom.py --check keeps <boost/ out of every other file; conan: boost/1.91.0; conan-why: ConanCenter has Boost 1.91.0 at most (checked 2026-10-24); conanfile.txt takes it header_only, and Boost is only an optional adapter dependency and test-only (0230); transitive-libraries: assert,compat,config,container,container_hash,core,describe,endian,headers,intrusive,json,move,mp11,predef,system,throw_exception,variant2,winapi"
     },
     {
       "SPDXID": "SPDXRef-Package-boost-json",
@@ -131,7 +131,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: alternative; phases: test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=boost (the default) with JINJA2CPP_BUILD_TESTS, which picks the binding the tests check; also-roles: test; used-for: The opt-in adapter header include/jinja2cpp/binding/boost_json.h converts boost::json::value to jinja2::Value; only its test (test/binding/boost_json_binding_test.cpp) links Boost.JSON. {% meta %} is read by src/json_reader.cpp since 0230 step D6; why: One of two opt-in JSON adapter headers; still the tested default until 0230 step D7b; lighten: Done: only its test fetches and links it (0230 D6, D7a)"
+      "comment": "role: alternative; phases: test; exposure: public-optional; delivery: fetched; selected-by: component jinja2cpp::boost_json; fetched when JINJA2CPP_TEST_BINDINGS lists boost_json (bindings.yml does, the default jobs do not); also-roles: test; used-for: The opt-in component jinja2cpp::boost_json (bindings/boost_json/include/jinja2cpp/binding/boost_json.h) gives boost::json::value JsonTraits; only its consumers and its test (test/binding/boost_json_binding_test.cpp) link Boost.JSON. {% meta %} is read by src/json_reader.cpp since 0230 step D6; why: One of the shipped JSON bindings (docs/tasks/0311); users of other libraries write their own JsonTraits; lighten: Done: only its test fetches and links it (0230 D6, D7a)"
     },
     {
       "SPDXID": "SPDXRef-Package-nlohmann-json",
@@ -158,7 +158,7 @@
         }
       ],
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "role: alternative; phases: build,test; exposure: public-optional; delivery: fetched; selected-by: JINJA2CPP_WITH_JSON_BINDINGS=nlohmann; also fetched whenever JINJA2CPP_BUILD_TESTS is ON (tests, parity corpus and bench read JSON with it); also-roles: test; used-for: Opt-in adapter include/jinja2cpp/binding/nlohmann_json.h; test data (tojson, metadata, parity corpus) and bench case files; why: Header-only JSON adapter alternative; the test suite's JSON reader; lighten: Header-only, no link cost; tests and adapter only; conan: nlohmann_json/3.12.0"
+      "comment": "role: alternative; phases: build,test; exposure: public-optional; delivery: fetched; selected-by: component jinja2cpp::nlohmann_json, found when a consumer requests it; fetched whenever JINJA2CPP_BUILD_TESTS is ON (the default JINJA2CPP_TEST_BINDINGS, tests, parity corpus and bench read JSON with it); also-roles: test; used-for: Opt-in component jinja2cpp::nlohmann_json (bindings/nlohmann_json/include/jinja2cpp/binding/nlohmann_json.h); test data (tojson, metadata, parity corpus) and bench case files; why: Header-only JSON binding, the one the default CI jobs test; the test suite's JSON reader; lighten: Header-only, no link cost; tests and adapter only; conan: nlohmann_json/3.12.0"
     },
     {
       "SPDXID": "SPDXRef-Package-robin-hood-hashing",
@@ -340,5 +340,5 @@
       "relatedSpdxElement": "SPDXRef-Package-html-entities"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-library-6aa706988fcb61cf"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-library-1e458a1e12c96c4d"
 }

@@ -28,6 +28,7 @@
 #include <memory>
 #include <mutex>
 #include <new>
+#include <optional>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
@@ -223,14 +224,93 @@ struct TemplateModuleState
             }
         }
 
+        // The modules a call imports with context end with it (CallScope), but those a module
+        // shared without context imports, which live as long as it does
+        [[nodiscard]] bool ModulesEndWithCall() const override { return calls != 0 && sharedDepth == 0; }
+        std::size_t EnterSharedModule() override
+        {
+            ++sharedDepth;
+            return kept.size();
+        }
+        void LeaveSharedModule(std::size_t token, bool shared) override
+        {
+            --sharedDepth;
+            const auto from = kept.begin() + static_cast<std::ptrdiff_t>(token);
+            if (shared)
+            {
+                // What it imported is its own from now on, even if a module importing it fails
+                std::for_each(from, kept.end(), [](KeptModule& entry) { entry.owned = true; });
+                return;
+            }
+            // A module that failed is not shared: what it imported ends with the call too, but
+            // what a module it imported that was shared imported
+            kept.erase(std::remove_if(from, kept.end(), [](const KeptModule& entry) { return !entry.owned; }), kept.end());
+        }
+        ImportedModule& AddModule(std::unique_ptr<ImportedModule> newModule) override
+        {
+            auto& added = Impl::RendererCallback::AddModule(std::move(newModule));
+            if (sharedDepth != 0)
+            {
+                kept.push_back({ &added, false });
+            }
+            return added;
+        }
+        [[nodiscard]] bool IsKept(const ImportedModule* candidate) const
+        {
+            return std::any_of(kept.begin(), kept.end(), [candidate](const KeptModule& entry) { return entry.module == candidate; });
+        }
+
         const RenderContext* moduleContext = nullptr;
         // The names the top level imported, with the values imported
         std::vector<std::pair<std::string, InternalValue>> imported;
+        // The host's calls running, nested when a host callable calls the module again
+        std::size_t calls = 0;
+        // The top levels of modules imported without context rendering, and the modules they
+        // imported, which EndCall keeps; `owned` once the module that imported it is shared
+        std::size_t sharedDepth = 0;
+        struct KeptModule
+        {
+            const ImportedModule* module;
+            bool owned;
+        };
+        std::vector<KeptModule> kept;
+    };
+
+    // One host's call of an export: what it loads into the module's callback ends with it,
+    // so that a module called once per request does not grow (docs/tasks/0301). A nested
+    // call ends only what it added itself
+    class CallScope
+    {
+    public:
+        explicit CallScope(Callback& callback)
+            : m_callback(callback)
+            , m_mark(callback.MarkCall())
+            , m_sharedDepth(std::exchange(callback.sharedDepth, 0))
+        {
+            ++m_callback.calls;
+        }
+        CallScope(const CallScope&) = delete;
+        CallScope(CallScope&&) = delete;
+        CallScope& operator=(const CallScope&) = delete;
+        CallScope& operator=(CallScope&&) = delete;
+        ~CallScope()
+        {
+            --m_callback.calls;
+            m_callback.sharedDepth = m_sharedDepth;
+            const auto& owner = m_callback;
+            m_callback.EndCall(m_mark, [&owner](const ImportedModule* candidate) { return owner.IsKept(candidate); });
+        }
+
+    private:
+        Callback& m_callback;
+        typename Callback::CallMark m_mark;
+        // A call made from a shared module's top level (a host callable there) imports for
+        // itself: its modules end with it
+        std::size_t m_sharedDepth;
     };
 
     TemplateModuleState(std::shared_ptr<const Impl> tpl, const ValuesMap& params)
         : impl(std::move(tpl))
-        , generation(impl->m_loadGeneration.load(std::memory_order_relaxed))
     {
         for (const auto& [name, value] : params)
         {
@@ -336,6 +416,18 @@ struct TemplateModuleState
         return names;
     }
 
+    // A macro the call `name` called ran in a module that ended with an earlier call
+    // (ClosureSite::Resolve), which reports it without a name
+    [[nodiscard]] BasicErrorInfo<CharT> Named(BasicErrorInfo<CharT> error, const std::string& name) const
+    {
+        if (error.GetCode() != ErrorCode::TemplateExpired || !error.GetExtraParams().empty())
+        {
+            return error;
+        }
+        return ExpiredError(name);
+    }
+
+    // A macro of a module that ended with an earlier call, called through `name`
     [[nodiscard]] BasicErrorInfo<CharT> ExpiredError(const std::string& name) const
     {
         typename BasicErrorInfo<CharT>::Data errorData;
@@ -344,6 +436,7 @@ struct TemplateModuleState
         errorData.srcLoc.line = 1;
         errorData.srcLoc.col = 1;
         errorData.extraParams.emplace_back(name);
+        errorData.extraParams.emplace_back(std::string("ended"));
         return BasicErrorInfo<CharT>(std::move(errorData));
     }
 
@@ -351,15 +444,15 @@ struct TemplateModuleState
     Value Call(const Callable& fn, const std::string& name, const UserCallableParams& ucParams)
     {
         const std::scoped_lock lock(mutex);
-        // The tree the callable runs in was replaced
-        if (impl->m_loadGeneration.load(std::memory_order_relaxed) != generation)
-        {
-            throw BadResultAccess<CharT>(ExpiredError(name));
-        }
         try
         {
             // First, so that it ends last: when nothing of the call holds values any more
             const CycleCollector cycles;
+            // Then what the call loads, which its collector sees go
+            const CallScope callScope(*callback);
+            // Then the module's context as the call found it, which a failed call would leave
+            // with its scopes pushed
+            const HomeCall::Restore restore(module->Context());
             // Before the limits, which keep a pointer to it
             std::basic_string<CharT> output;
             const auto limitsScope = MakeLimitsScope();
@@ -403,17 +496,15 @@ struct TemplateModuleState
         }
         catch (const detail::RenderFailure& failure)
         {
-            throw BadResultAccess<CharT>(failure.ErrorAs<CharT>());
+            throw BadResultAccess<CharT>(Named(failure.ErrorAs<CharT>(), name));
         }
         catch (...)
         {
-            throw BadResultAccess<CharT>(detail::CurrentExceptionToError<CharT>(impl->m_templateName));
+            throw BadResultAccess<CharT>(Named(detail::CurrentExceptionToError<CharT>(impl->m_templateName), name));
         }
     }
 
     std::shared_ptr<const Impl> impl;
-    // The template's Load count when the module was made (TemplateImpl::m_loadGeneration)
-    uint32_t generation;
     // The params, until the module takes them
     InternalValueMap convertedParams;
     GlobalsSnapshot globals;
@@ -486,6 +577,32 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
     }
     return result;
 }
+
+template<typename CharT>
+std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string<CharT>&& source, std::string&& name)
+{
+    auto loaded = std::make_shared<TemplateImpl>(*static_cast<TemplateImpl*>(impl.get()), nullptr);
+    auto error = loaded->Load(std::move(source), std::move(name));
+    if (!error)
+    {
+        // A render on this thread (one that called the host code loading now) may be rendering
+        // the template this replaces: the workspace keeps it (RenderWorkspace::Retire)
+        RenderWorkspace::ForThisThread().Retire(impl);
+        impl = std::move(loaded);
+    }
+    return error;
+}
+
+template<typename CharT>
+std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string_view<CharT> source, std::string&& name)
+{
+    return LoadReplacing(impl, std::basic_string<CharT>(source), std::move(name));
+}
+
+template std::optional<BasicErrorInfo<char>> TemplateImpl<char>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::string&& source, std::string&& name);
+template std::optional<BasicErrorInfo<char>> TemplateImpl<char>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::string_view source, std::string&& name);
+template std::optional<BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::wstring_view source, std::string&& name);
+template std::optional<BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::wstring&& source, std::string&& name);
 
 template nonstd::expected<BasicTemplateModule<char>, BasicErrorInfo<char>> TemplateImpl<char>::MakeModule(const std::shared_ptr<const TemplateImpl>& self,
                                                                                                           const ValuesMap& params);
