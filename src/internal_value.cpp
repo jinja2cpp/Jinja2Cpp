@@ -1472,18 +1472,23 @@ public:
         return HostCurrentItem(idx);
     }
 
-    // The step an enumeration starts with: the host's size, unless the list may have a cell,
-    // which the first step then looks up (Restep)
-    [[nodiscard]] CellStep FirstStep() const
+    // Sets the step an enumeration starts with: the host's size, unless the list may have a
+    // cell, which the first step then looks up (Restep). In place: a rebound enumerator keeps
+    // its step, whose cell is most often already empty
+    void FirstStep(CellStep& step) const
     {
-        CellStep step;
-        const auto epoch = detail::g_cellEpoch.load(std::memory_order_relaxed);
-        if (!m_link.MayHaveCell(epoch))
+        if (JINJA2CPP_CELL_UNLIKELY(step.cell))
         {
-            step.epoch = epoch;
-            step.size = m_values.Get().size();
+            step.cell = nullptr;
         }
-        return step;
+        const auto epoch = detail::g_cellEpoch.load(std::memory_order_relaxed);
+        if (m_link.MayHaveCell(epoch))
+        {
+            step.epoch = CellStep::Recheck;
+            return;
+        }
+        step.epoch = epoch;
+        step.size = m_values.Get().size();
     }
 
     // An enumeration that checks the epoch once a step (CellStep)
@@ -1494,8 +1499,8 @@ public:
 
         explicit StepEnumerator(const ValuesListAdapter* list)
             : BaseClass(list)
-            , m_step(list->FirstStep())
         {
+            list->FirstStep(m_step);
         }
 
         // Called by MoveNext before each item
@@ -1511,13 +1516,15 @@ public:
             const auto* values = static_cast<const ValuesListAdapter*>(list);
             this->m_list = values;
             this->m_curItem = this->InvalidIndex;
-            m_step = values ? values->FirstStep() : CellStep();
-            // The host's size when the first step has it; m_maxItems only tells two enumerators apart
-            this->m_maxItems = 0;
-            if (values)
+            if (!values)
             {
-                this->m_maxItems = m_step.epoch != CellStep::Recheck ? m_step.size : values->GetItemsCountImpl();
+                m_step = CellStep();
+                this->m_maxItems = 0;
+                return true;
             }
+            values->FirstStep(m_step);
+            // The host's size when the first step has it; m_maxItems only tells two enumerators apart
+            this->m_maxItems = m_step.epoch != CellStep::Recheck ? m_step.size : values->GetItemsCountImpl();
             return true;
         }
         [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
