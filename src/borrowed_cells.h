@@ -6,6 +6,7 @@
 #include "robin_hood.h"
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <type_traits>
@@ -91,12 +92,14 @@ private:
     const BorrowedCell* Find(const IMapAccessor& self) const;
     const BorrowedCell* Find(const void* identity, bool isList) const;
     void Link(const BorrowedCell& cell) const;
-    void Unlink() const noexcept;
+    // Below BorrowedCell, with the destructor
+    inline void Unlink() const noexcept;
 
     // An epoch the counter skips: the value of m_seenEpoch while the adapter is attached
     static constexpr uint32_t Attached = UINT32_MAX;
 
-    mutable IntrusivePtr<const BorrowedCell> m_cell;
+    // Not owned: the registry keeps each cell until it has detached every link to it
+    mutable const BorrowedCell* m_cell = nullptr;
     // The epoch of the last look, or Attached
     mutable uint32_t m_seenEpoch = 0;
     // The position of this link in the cell's list of links
@@ -140,6 +143,34 @@ private:
     // The adapters attached to the cell, which the registry detaches when the render ends
     mutable std::vector<const CellLink*> m_links;
 };
+
+// What an enumeration of the host's list knows between two moves of the epoch: whether the list
+// has a cell, and its size when it has none. A step then costs one load and a compare, and the
+// item it reads needs no check of its own (docs/tasks/0049)
+struct CellStep
+{
+    // Never an epoch: a step of a new enumeration, or of a list with a cell, whose size is live
+    static constexpr uint32_t Recheck = UINT32_MAX;
+
+    IntrusivePtr<const BorrowedCell> cell;
+    size_t size = 0;
+    uint32_t epoch = Recheck;
+
+    [[nodiscard]] bool IsCurrent() const noexcept { return epoch == detail::g_cellEpoch.load(std::memory_order_relaxed); }
+};
+
+// Inline, as the destructor: an adapter's destructor that calls nothing has no vtable to set
+// up, and the blocks of item adapters free many of them (Render/for_filter_if)
+inline void CellLink::Unlink() const noexcept
+{
+    auto& links = m_cell->m_links;
+    const auto* last = links.back();
+    links[m_linkIndex] = last;
+    last->m_linkIndex = m_linkIndex;
+    links.pop_back();
+    m_cell = nullptr;
+    m_seenEpoch = 0;
+}
 
 inline CellLink::~CellLink()
 {

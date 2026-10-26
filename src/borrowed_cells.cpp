@@ -51,7 +51,7 @@ BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, bool isL
     }
 }
 
-// The registry detaches every link before it lets go of its cells, and a link holds its cell
+// The registry detaches every link before it lets go of its cells
 BorrowedCell::~BorrowedCell() = default;
 
 const BorrowedCell* CellLink::Find(const IListAccessor& self) const
@@ -69,7 +69,7 @@ const BorrowedCell* CellLink::Find(const void* identity, bool isList) const
     // A cell stays until its render detaches it, also while a render nested in it runs
     if (m_cell)
     {
-        return m_cell.get();
+        return m_cell;
     }
     // Read first: a promotion after this read moves the epoch again
     m_seenEpoch = detail::g_cellEpoch.load(std::memory_order_relaxed);
@@ -83,7 +83,7 @@ const BorrowedCell* CellLink::Find(const void* identity, bool isList) const
     {
         Link(*found->second);
     }
-    return m_cell.get();
+    return m_cell;
 }
 
 void CellLink::Link(const BorrowedCell& cell) const
@@ -91,19 +91,8 @@ void CellLink::Link(const BorrowedCell& cell) const
     // Pushed first: when it cannot be, the adapter stays detached
     cell.m_links.push_back(this);
     m_linkIndex = static_cast<uint32_t>(cell.m_links.size() - 1);
-    m_cell = IntrusivePtr<const BorrowedCell>(&cell);
+    m_cell = &cell;
     m_seenEpoch = Attached;
-}
-
-void CellLink::Unlink() const noexcept
-{
-    auto& links = m_cell->m_links;
-    const auto* last = links.back();
-    links[m_linkIndex] = last;
-    last->m_linkIndex = m_linkIndex;
-    links.pop_back();
-    m_cell = nullptr;
-    m_seenEpoch = 0;
 }
 
 bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage) const

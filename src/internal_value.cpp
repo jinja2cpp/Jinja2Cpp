@@ -1454,6 +1454,103 @@ public:
         }
         return HostCurrentItem(idx);
     }
+    // The size of the list at a step of an enumeration, and the item it reads
+    [[nodiscard]] size_t StepSize(CellStep& step) const
+    {
+        if (JINJA2CPP_CELL_UNLIKELY(!step.IsCurrent()))
+        {
+            return Restep(step);
+        }
+        return step.size;
+    }
+    [[nodiscard]] InternalValue StepItem(const CellStep& step, int64_t idx) const
+    {
+        if (JINJA2CPP_CELL_UNLIKELY(step.cell))
+        {
+            return CellItem(*step.cell, idx).value_or(InternalValue());
+        }
+        return HostCurrentItem(idx);
+    }
+
+    // The step an enumeration starts with: the host's size, unless the list may have a cell,
+    // which the first step then looks up (Restep)
+    [[nodiscard]] CellStep FirstStep() const
+    {
+        CellStep step;
+        const auto epoch = detail::g_cellEpoch.load(std::memory_order_relaxed);
+        if (!m_link.MayHaveCell())
+        {
+            step.epoch = epoch;
+            step.size = m_values.Get().size();
+        }
+        return step;
+    }
+
+    // An enumeration that checks the epoch once a step (CellStep)
+    class StepEnumerator final : public IndexedEnumeratorImpl<StepEnumerator, ValuesListAdapter, InternalValue, IListAccessorEnumerator>
+    {
+    public:
+        using BaseClass = IndexedEnumeratorImpl<StepEnumerator, ValuesListAdapter, InternalValue, IListAccessorEnumerator>;
+
+        explicit StepEnumerator(const ValuesListAdapter* list)
+            : BaseClass(list)
+            , m_step(list->FirstStep())
+        {
+        }
+
+        // Called by MoveNext before each item
+        [[nodiscard]] size_t CurrentSize() const { return this->m_list->StepSize(m_step); }
+        [[nodiscard]] InternalValue GetCurrent() const override { return this->m_list->StepItem(m_step, static_cast<int64_t>(this->m_curItem)); }
+        bool Rebind(const IListAccessor* list) override
+        {
+            // Only a list of the same final type: the enumerator reads it through ValuesListAdapter
+            if (list && typeid(*list) != typeid(ValuesListAdapter))
+            {
+                return false;
+            }
+            const auto* values = static_cast<const ValuesListAdapter*>(list);
+            this->m_list = values;
+            this->m_curItem = this->InvalidIndex;
+            m_step = values ? values->FirstStep() : CellStep();
+            this->m_maxItems = values ? values->GetItemsCountImpl() : 0;
+            return true;
+        }
+        [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
+        {
+            auto result = std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<StepEnumerator>{}, *this);
+            return result;
+        }
+        std::optional<ListAccessorEnumeratorPtr> Transfer() override
+        {
+            auto result = std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<StepEnumerator>{}, std::move(*this));
+            this->m_list = nullptr;
+            this->m_curItem = this->InvalidIndex;
+            this->m_maxItems = 0;
+            m_step = CellStep();
+            return result;
+        }
+
+    private:
+        mutable CellStep m_step;
+    };
+
+    [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
+    {
+        return ListAccessorEnumeratorPtr(types::in_place_type_t<StepEnumerator>{}, StepEnumerator(this));
+    }
+    void ForEach(IListAccessor::ItemVisitor fn) const override
+    {
+        CellStep step;
+        // The size is read at each step: the list can get a cell, and the cell change, while fn runs
+        for (size_t idx = 0; idx < StepSize(step); ++idx)
+        {
+            if (!fn(StepItem(step, static_cast<int64_t>(idx))))
+            {
+                return;
+            }
+        }
+    }
+
     [[nodiscard]] InternalValue HostCurrentItem(int64_t idx) const
     {
         const auto& item = m_values.Get()[static_cast<size_t>(idx)];
@@ -1516,6 +1613,22 @@ private:
     {
         const auto* cell = m_link.Get(*this);
         return cell ? cell->Items().size() : m_values.Get().size();
+    }
+    // The size at a step whose epoch moved, or of a list with a cell
+    JINJA2CPP_CELL_NOINLINE size_t Restep(CellStep& step) const
+    {
+        // Read first: a promotion after this read moves the epoch again
+        const auto epoch = detail::g_cellEpoch.load(std::memory_order_relaxed);
+        step.cell = IntrusivePtr<const BorrowedCell>(m_link.Get(*this));
+        if (step.cell)
+        {
+            // The cell can change at any step: its size is read at each one
+            step.epoch = CellStep::Recheck;
+            return step.cell->Items().size();
+        }
+        step.epoch = epoch;
+        step.size = m_values.Get().size();
+        return step.size;
     }
     JINJA2CPP_CELL_NOINLINE InternalValue CellOrHostCurrentItem(int64_t idx) const
     {
@@ -2310,22 +2423,11 @@ public:
     // says an empty Value is a real null (JSON), which is None
     [[nodiscard]] InternalValue GetItem(const std::string& name) const override
     {
-        if (const auto* cell = m_link.Get(*this))
+        if (JINJA2CPP_CELL_UNLIKELY(m_link.MayHaveCell()))
         {
-            return cell->Map().GetItem(name);
+            return CellOrHostItem(name);
         }
-        auto val = m_values.Get().Find(name);
-        if (!val)
-        {
-            return InternalValue();
-        }
-        if (val->IsNone())
-        {
-            const auto* accessor = m_values.Get().GetAccessor();
-            return accessor && accessor->EmptyIsNone() ? InternalValue(NoneValue{}) : InternalValue();
-        }
-
-        return LendGenericItem(GenericOwner(m_values), std::move(*val));
+        return HostItem(name);
     }
     [[nodiscard]] std::vector<std::string> GetKeys() const override
     {
@@ -2387,6 +2489,30 @@ public:
         return m_values == val->m_values;
     }
 private:
+    [[nodiscard]] InternalValue HostItem(const std::string& name) const
+    {
+        auto val = m_values.Get().Find(name);
+        if (!val)
+        {
+            return InternalValue();
+        }
+        if (val->IsNone())
+        {
+            const auto* accessor = m_values.Get().GetAccessor();
+            return accessor && accessor->EmptyIsNone() ? InternalValue(NoneValue{}) : InternalValue();
+        }
+
+        return LendGenericItem(GenericOwner(m_values), std::move(*val));
+    }
+    JINJA2CPP_CELL_NOINLINE InternalValue CellOrHostItem(const std::string& name) const
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetItem(name);
+        }
+        return HostItem(name);
+    }
+
     Holder<GenericMap> m_values;
     // The render's copy of the map once the render wrote to it (docs/tasks/0049)
     CellLink m_link;
@@ -2563,7 +2689,9 @@ struct ItemAdapters final : ValueObject
     static constexpr size_t BlockSize = 256;
 
     ItemAdapters(size_t firstItem, size_t count)
-        : adapters(std::make_unique<Adapter[]>(count))
+        // Default-initialised: value-initialising would zero each slot before its variant
+        // sets the index (Render/for_filter_if)
+        : adapters(new Adapter[count])
         , first(firstItem)
         , size(count)
     {
