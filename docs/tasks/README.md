@@ -385,8 +385,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0311](0311-json-bindings-as-components.md) | JSON bindings as components on a public adapter contract | build | high | done |
 | [0312](0312-module-kept-while-stored-macro-reaches-it.md) | A macro a module call stores keeps its module, as in Jinja2 | parity | low | open |
 | [0313](0313-module-keeps-every-use-reloads.md) | A module keeps every tree `TemplateLookup::EveryUse` reloads | robustness | low | open |
+| [0314](0314-method-sort-format-unicode-case.md) | Methods 0020 left out: list.sort, nested format fields, Unicode case | parity | low | done |
+| [0317](0317-str-numeric-classes-and-missing-methods.md) | str methods: Unicode digit and numeric classes, casefold, isascii, isidentifier, isprintable, format leftovers | parity | low | open |
 | [0318](0318-kept-globals-keep-their-snapshot.md) | A list or map from the globals keeps the globals it was read from | robustness | high | done |
 | [0319](0319-makecallable-value-parameter.md) | MakeCallable with a Value parameter does not compile | api | medium | open |
+| [0321](0321-load-copies-on-write.md) | Load replaces the template for its own object only | robustness | high | done |
 | [0322](0322-parity-corpus-through-reflect.md) | Run the parity corpus with the context as a JSON view | parity | low | open |
 | [0323](0323-stored-self-sees-includer-names.md) | A `self` an include stored does not see the names the includer set | parity | low | open |
 | [0324](0324-nested-render-sees-global-changed-in-place.md) | A nested render does not see a global the outer render changed in place | robustness | medium | open |
