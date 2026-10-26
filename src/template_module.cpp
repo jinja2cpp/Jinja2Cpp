@@ -577,6 +577,32 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
     return result;
 }
 
+template<typename CharT>
+std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string<CharT>&& source, std::string& name)
+{
+    auto loaded = std::make_shared<TemplateImpl>(*static_cast<TemplateImpl*>(impl.get()), nullptr);
+    auto error = loaded->Load(std::move(source), std::move(name));
+    if (!error)
+    {
+        // A render on this thread (one that called the host code loading now) may be rendering
+        // the template this replaces: the workspace keeps it (RenderWorkspace::Retire)
+        RenderWorkspace::ForThisThread().Retire(impl);
+        impl = std::move(loaded);
+    }
+    return error;
+}
+
+template<typename CharT>
+std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string_view<CharT> source, std::string& name)
+{
+    return LoadReplacing(impl, std::basic_string<CharT>(source), name);
+}
+
+template std::optional<BasicErrorInfo<char>> TemplateImpl<char>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::string&& source, std::string& name);
+template std::optional<BasicErrorInfo<char>> TemplateImpl<char>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::string_view source, std::string& name);
+template std::optional<BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::wstring_view source, std::string& name);
+template std::optional<BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::wstring&& source, std::string& name);
+
 template nonstd::expected<BasicTemplateModule<char>, BasicErrorInfo<char>> TemplateImpl<char>::MakeModule(const std::shared_ptr<const TemplateImpl>& self,
                                                                                                           const ValuesMap& params);
 template nonstd::expected<BasicTemplateModule<wchar_t>, BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::MakeModule(const std::shared_ptr<const TemplateImpl>& self,

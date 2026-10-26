@@ -14,9 +14,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <istream>
 #include <memory>
 #include <optional>
 #include <sstream>
+#include <streambuf>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -412,6 +414,39 @@ TEST(TemplateApiTest, LoadFromAHostExceptionOfTheRenderingTemplate)
     ASSERT_FALSE(!!result);
     EXPECT_EQ(name, result.error().GetErrorLocation().fileName);
     EXPECT_EQ(std::string(100, 'n'), tpl.RenderAsString(ValuesMap{}).value());
+}
+
+// A stream's buffer is host code: reading it loads the same template again, which replaces the
+// template the outer Load started with. The outer Load still ends well (Codex review of #665; ASan)
+TEST(TemplateApiTest, LoadFromTheStreamOfALoad)
+{
+    Template tpl;
+    struct LoadingBuffer final : std::streambuf
+    {
+        explicit LoadingBuffer(Template* t)
+            : tpl(t)
+        {
+        }
+        int_type underflow() override
+        {
+            if (done)
+            {
+                return traits_type::eof();
+            }
+            done = true;
+            (void)tpl->Load(std::string(100, 'i'));
+            setg(text.data(), text.data(), text.data() + text.size());
+            return traits_type::to_int_type(text[0]);
+        }
+        Template* tpl;
+        std::string text = std::string(100, 's');
+        bool done = false;
+    };
+    ASSERT_TRUE(!!tpl.Load(std::string(100, 'o')));
+    LoadingBuffer buffer(&tpl);
+    std::istream stream(&buffer);
+    ASSERT_TRUE(!!tpl.Load(stream));
+    EXPECT_EQ(std::string(100, 's'), tpl.RenderAsString({}).value());
 }
 
 TEST(TemplateApiTest, MetadataStaysValidAcrossCalls)

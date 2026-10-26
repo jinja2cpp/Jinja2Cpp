@@ -451,7 +451,9 @@ using TemplateW = BasicTemplate<wchar_t>;
  *
  * Each thread that renders keeps reusable memory: slot and loop frames, the tables of the params,
  * an escape buffer, and the globals of the last \ref TemplateEnv it rendered with, which keeps
- * them (and what their callables capture) alive after that environment is destroyed. This frees
+ * them (and what their callables capture) alive after that environment is destroyed. A template
+ * that a Load called from a render replaced is kept too, until the next Load on the thread
+ * outside a render. This frees
  * them on the calling thread: before an idle pool thread parks, or before a plugin is unloaded.
  * The next render on the thread allocates them again.
  *

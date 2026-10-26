@@ -124,22 +124,24 @@ public:
         m_lentMaps = outer;
     }
     // A render on this thread starts and ends: from its first statement to its last, error
-    // conversion included, which may run host code (a host exception's what())
-    void BeginRender() noexcept { ++m_renders; }
-    void EndRender() noexcept
-    {
-        if (--m_renders == 0 && !m_retired.empty())
-        {
-            ReleaseRetiredTemplates();
-        }
-    }
+    // conversion included, which may run host code (a host exception's what()). The count is a
+    // thread_local of its own, constant-initialized, so that a render pays one add and one
+    // subtraction for it, with no initialization check and no compare
+    static void BeginRender() noexcept { ++t_renders; }
+    static void EndRender() noexcept { --t_renders; }
     // Keeps a template that a Load replaced while a render runs on this thread, which may be
-    // the template it renders, until the outermost render ends (docs/tasks/0321)
+    // the template it renders (docs/tasks/0321). They are freed by the first Load on the thread
+    // outside a render, ReleaseThreadCaches or the thread's end, not when the render ends, so
+    // that a render pays no compare for them: a Load from host code a render calls is rare
     void Retire(std::shared_ptr<const void> replaced)
     {
-        if (m_renders != 0)
+        if (t_renders != 0)
         {
             m_retired.push_back(std::move(replaced));
+        }
+        else if (!m_retired.empty())
+        {
+            ReleaseRetired();
         }
     }
 
@@ -151,9 +153,9 @@ public:
     static constexpr std::size_t MaxKeptMaps = 4;
 
     // Frees what the workspace keeps for the next render: slot chunks, the frames of finished
-    // loops, the globals of the last environment and the tables of the params (ReleaseThreadCaches,
-    // docs/tasks/0275). Refuses, and frees nothing, while a render runs on the thread: it holds
-    // frames or maps lent from here
+    // loops, the globals of the last environment, the tables of the params and the templates a
+    // Load replaced during a render (ReleaseThreadCaches, docs/tasks/0275 and 0321). Refuses, and
+    // frees nothing, while a render runs on the thread: it holds frames or maps lent from here
     bool ReleaseCaches() noexcept;
     // ReleaseCaches on this thread's workspace. Out of line here, so that ForThisThread stays
     // inline where renders use it
@@ -187,7 +189,7 @@ private:
     // when none has
     SlotFrame TakeFromNextChunk(UnitLayout layout);
     RenderMaps& LendNewMaps();
-    void ReleaseRetiredTemplates() noexcept;
+    void ReleaseRetired() noexcept;
     static void EmptyMaps(RenderMaps& maps, bool keepTables) noexcept;
 
     // The smallest chunk: a template with a few nested loops and macros fits in it
@@ -204,8 +206,9 @@ private:
     // while a render inside it is lent others
     std::vector<std::unique_ptr<RenderMaps>> m_maps;
     std::size_t m_lentMaps = 0;
-    // The renders running on this thread, and the templates replaced during them
-    std::size_t m_renders = 0;
+    // The renders running on this thread
+    static inline thread_local std::size_t t_renders = 0;
+    // The templates a Load replaced during a render on this thread
     std::vector<std::shared_ptr<const void>> m_retired;
 };
 } // namespace v2

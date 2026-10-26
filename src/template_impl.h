@@ -68,32 +68,25 @@ struct GlobalsSnapshot
     InternalValueMap values;
 };
 
-// Marks a render running on the thread for its whole scope; the outermost one releases, as it
-// ends, the templates a Load replaced during it (docs/tasks/0321)
+// Marks a render running on the thread for its whole scope: a Load meanwhile keeps the template
+// it replaces in the thread's workspace (RenderWorkspace::Retire, docs/tasks/0321)
 class RenderScope
 {
 public:
-    explicit RenderScope(RenderWorkspace& workspace) noexcept
-        : m_workspace(workspace)
-    {
-        m_workspace.BeginRender();
-    }
-    JINJA2CPP_ALWAYS_INLINE ~RenderScope() { m_workspace.EndRender(); }
+    JINJA2CPP_ALWAYS_INLINE RenderScope() noexcept { RenderWorkspace::BeginRender(); }
+    JINJA2CPP_ALWAYS_INLINE ~RenderScope() { RenderWorkspace::EndRender(); }
     RenderScope(const RenderScope&) = delete;
     RenderScope(RenderScope&&) = delete;
     RenderScope& operator=(const RenderScope&) = delete;
     RenderScope& operator=(RenderScope&&) = delete;
-
-private:
-    RenderWorkspace& m_workspace;
 };
 
 // The maps a RenderWorkspace lends a render, returned emptied when they go out of scope
 class WorkspaceMaps
 {
 public:
-    explicit WorkspaceMaps(RenderWorkspace& workspace)
-        : m_workspace(workspace)
+    WorkspaceMaps()
+        : m_workspace(RenderWorkspace::ForThisThread())
         , m_maps(m_workspace.LendMaps())
     {
     }
@@ -376,6 +369,15 @@ public:
         return std::optional<BasicErrorInfo<CharT>>();
     }
 
+    // BasicTemplate::Load of a template another object may hold: parses into a new template with
+    // this one's environment and settings, and puts it in place of `impl` only if parsing
+    // succeeds. Copies, the environment's cache, renders and modules keep the tree they had, as a
+    // Python Template is immutable (docs/tasks/0321). Out of line (template_module.cpp), so that
+    // the first Load of a template, which parses in place, pays nothing for it
+    static std::optional<BasicErrorInfo<CharT>> LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string<CharT>&& source, std::string& name);
+    // The same for a source the caller has not copied yet: the copy is made out of its path
+    static std::optional<BasicErrorInfo<CharT>> LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string_view<CharT> source, std::string& name);
+
     // Template::MakeModule: renders the template, which `self` owns, as a module for the host
     // (template_module.cpp)
     static nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params);
@@ -387,10 +389,9 @@ public:
     {
         static_assert(std::is_same_v<Target, std::basic_string<CharT>> || std::is_same_v<Target, BasicOutputSink<CharT>>);
         std::optional<BasicErrorInfo<CharT>> normalResult;
-        auto& workspace = RenderWorkspace::ForThisThread();
-        // Ends last, after the error conversion: frees this template if a Load replaced it
-        // during the render (docs/tasks/0321)
-        const RenderScope renderScope(workspace);
+        // Ends last, after the error conversion: until then a Load on this thread keeps the
+        // template it replaces, which may be this one (docs/tasks/0321)
+        const RenderScope renderScope;
 
         if (!m_renderer)
         {
@@ -411,7 +412,7 @@ public:
             const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr, m_settings->bigIntBackend);
             // The tables of the params and the top scope are lent by the thread's workspace and
             // go back to it, emptied, when the render ends (docs/tasks/0160)
-            const WorkspaceMaps maps(workspace);
+            const WorkspaceMaps maps;
             auto& intParams = maps.Params();
 
             auto convertParam = [&intParams](const std::string& name, const Value& value) {

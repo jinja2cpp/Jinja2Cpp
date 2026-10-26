@@ -57,7 +57,7 @@ RenderWorkspace::RenderMaps& RenderWorkspace::LendNewMaps()
 
 bool RenderWorkspace::ReleaseCaches() noexcept
 {
-    if (m_lentMaps != 0 || !m_frames.empty())
+    if (t_renders != 0 || m_lentMaps != 0 || !m_frames.empty())
     {
         return false;
     }
@@ -67,6 +67,8 @@ bool RenderWorkspace::ReleaseCaches() noexcept
     const auto frames = std::move(m_frames);
     const auto maps = std::move(m_maps);
     const auto globals = std::move(m_globals);
+    const auto retired = std::move(m_retired);
+    m_retired.clear();
     m_chunks.clear();
     m_frames.clear();
     m_maps.clear();
@@ -95,9 +97,9 @@ bool RenderWorkspace::ReleaseThisThread() noexcept
     return workspace->ReleaseCaches();
 }
 
-void RenderWorkspace::ReleaseRetiredTemplates() noexcept
+void RenderWorkspace::ReleaseRetired() noexcept
 {
-    // Moved out first: a template's destructor may render, and retire another one
+    // Moved out first: a template's destructor may load, and retire another one
     const auto retired = std::move(m_retired);
     m_retired.clear();
 }

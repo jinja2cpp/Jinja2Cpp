@@ -77,29 +77,12 @@ private:
     bool m_succeeded = false;
 };
 
-// Parses into a new template and puts it in place of `impl` only if parsing succeeds. Copies of
-// the object, the environment's cache, renders and modules keep the tree they had, as a Python
-// Template is immutable (docs/tasks/0321). A render does not hold its template: the cost would
-// be on every render, for a Load from host code it calls (RenderWorkspace::Retire)
+// The first Load of a template no other object holds yet (as LoadTemplate's) parses in place:
+// no copy, the cache, render or module can see it change
 template<typename CharT>
-std::optional<BasicErrorInfo<CharT>> LoadNew(std::shared_ptr<ITemplateImpl>& impl, std::basic_string<CharT>&& source, std::string&& name)
+bool LoadsInPlace(const std::shared_ptr<ITemplateImpl>& impl)
 {
-    auto* current = GetImpl<CharT>(impl);
-    // The first Load of a template no other object holds yet (as LoadTemplate's) parses in place
-    if (!current->GetRenderer() && impl.use_count() == 1)
-    {
-        return current->Load(std::move(source), std::move(name));
-    }
-    auto loaded = std::make_shared<TemplateImpl<CharT>>(*current, nullptr);
-    auto error = loaded->Load(std::move(source), std::move(name));
-    if (!error)
-    {
-        // A render on this thread (one that called the host code loading now) may be rendering
-        // the template this replaces: it stays until that render ends
-        RenderWorkspace::ForThisThread().Retire(impl);
-        impl = std::move(loaded);
-    }
-    return error;
+    return !GetImpl<CharT>(impl)->GetRenderer() && impl.use_count() == 1;
 }
 
 template<typename CharT>
@@ -135,13 +118,16 @@ Result<void, CharT> BasicTemplate<CharT>::Load(StringViewType source, std::strin
     {
         return ToResult(std::optional(impl->SourceTooLongError(name)));
     }
-    return ToResult(LoadNew<CharT>(m_impl, StringType(source), std::move(name)));
+    if (LoadsInPlace<CharT>(m_impl))
+    {
+        return ToResult(impl->Load(StringType(source), std::move(name)));
+    }
+    return ToResult(TemplateImpl<CharT>::LoadReplacing(m_impl, source, name));
 }
 
 template<typename CharT>
 Result<void, CharT> BasicTemplate<CharT>::Load(std::basic_istream<CharT>& stream, std::string name)
 {
-    auto* impl = GetImpl<CharT>(m_impl);
     StringType t;
 
     while (stream.good() && !stream.eof())
@@ -153,14 +139,20 @@ Result<void, CharT> BasicTemplate<CharT>::Load(std::basic_istream<CharT>& stream
         {
             t.append(buff, buff + read);
         }
-        // Stops reading a source past maxTemplateSize
+        // Stops reading a source past maxTemplateSize. Looked up after each read: the stream's
+        // buffer is host code, which may load this template again and replace what it held
+        const auto* impl = GetImpl<CharT>(m_impl);
         if (impl->SourceTooLong(t.size()))
         {
             return ToResult(std::optional(impl->SourceTooLongError(name)));
         }
     }
 
-    return ToResult(LoadNew<CharT>(m_impl, std::move(t), std::move(name)));
+    if (LoadsInPlace<CharT>(m_impl))
+    {
+        return ToResult(GetImpl<CharT>(m_impl)->Load(std::move(t), std::move(name)));
+    }
+    return ToResult(TemplateImpl<CharT>::LoadReplacing(m_impl, std::move(t), name));
 }
 
 template<typename CharT>
