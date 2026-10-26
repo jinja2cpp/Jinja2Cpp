@@ -1357,6 +1357,8 @@ InternalValue LendItem([[maybe_unused]] const Holder<T>& holder, const Value& it
     }
 }
 
+// held: the items of a global (ByHeldRef), which keep its owner
+template<bool held>
 struct ItemAdapters;
 
 template<template<typename> class Holder>
@@ -1433,7 +1435,7 @@ private:
     // BlockSize items, instead of an adapter allocated for each item each time it is read
     // (docs/tasks/0154). A list of the caller's data is converted for one render or held
     // by the thread's globals, so it is never read by two threads
-    mutable IntrusivePtr<ItemAdapters> m_items;
+    mutable IntrusivePtr<ItemAdapters<std::is_same_v<Holder<ValuesList>, ByHeldRef<ValuesList>>>> m_items;
 };
 
 ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
@@ -2235,10 +2237,14 @@ private:
     Holder<ValuesMap> m_values;
 };
 
-// One object for the block: a lent item's value shares it (docs/tasks/0154, 0140)
+// One object for the block: a lent item's value shares it (docs/tasks/0154, 0140). The items of
+// a global are a type of their own, so the larger held adapters do not widen every block (0318)
+template<bool held>
 struct ItemAdapters final : ValueObject
 {
-    using Adapter = std::variant<std::monostate, ValuesListAdapter<ByRef>, ValuesMapAdapter<ByRef>, ValuesListAdapter<ByHeldRef>, ValuesMapAdapter<ByHeldRef>>;
+    using Adapter = std::conditional_t<held,
+                                       std::variant<std::monostate, ValuesListAdapter<ByHeldRef>, ValuesMapAdapter<ByHeldRef>>,
+                                       std::variant<std::monostate, ValuesListAdapter<ByRef>, ValuesMapAdapter<ByRef>>>;
     // Items per block: the list keeps only the block of the items it reads now, so a long list
     // holds a bounded number of adapters; a block an item was kept from stays with that item
     static constexpr size_t BlockSize = 256;
@@ -2267,8 +2273,9 @@ InternalValue ValuesListAdapter<Holder>::LendNested(size_t idx, const T& contain
     using ResultType = std::conditional_t<std::is_same_v<T, ValuesList>, ListAdapter, MapAdapter>;
     if (!m_items || idx < m_items->first || idx - m_items->first >= m_items->size)
     {
-        const auto first = idx - (idx % ItemAdapters::BlockSize);
-        m_items = MakeRef<ItemAdapters>(first, std::min(ItemAdapters::BlockSize, m_values.Get().size() - first));
+        using Block = typename decltype(m_items)::element_type;
+        const auto first = idx - (idx % Block::BlockSize);
+        m_items = MakeRef<Block>(first, std::min(Block::BlockSize, m_values.Get().size() - first));
     }
     auto& slot = m_items->adapters[idx - m_items->first];
     auto* adapter = std::get_if<AdapterType>(&slot);
