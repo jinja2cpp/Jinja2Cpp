@@ -78,6 +78,11 @@ std::vector<LimitCase> Cases()
         { "SequenceAboveCap", "{{ ('x' * 1000)|length }}", [](auto& l) { l.maxSequenceSize = UINT64_MAX; }, "" },
         // Past the built-in cap as well: the render's own limit is reported
         { "RepeatAboveCap", "{{ 'x' * 100000000 }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
+        // A case mapping can lengthen a string: U+0390 (two UTF-8 bytes) uppercases to six
+        { "CaseMethodOver", "{{ ('\xce\x90' * 400).upper() }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
+        { "CaseMethodAt", "{{ ('\xce\x90' * 100).upper()|length }}", [](auto& l) { l.maxSequenceSize = 1000; }, "" },
+        { "CaseFilterOver", "{{ ('\xce\x90' * 400)|upper }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
+        { "CaseTitleOver", "{{ ('\xce\x90 ' * 300).title() }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
         { "CenterAboveCap", "{{ 'x'|center(100000000) }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
         // f(*args) builds the argument list from the iterable (docs/tasks/0220)
         { "UnpackedArgsOver", "{% macro m() %}{{ varargs|length }}{% endmacro %}{{ m(*range(2000)) }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },

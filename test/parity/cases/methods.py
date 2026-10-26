@@ -131,6 +131,8 @@ CASES = [
     ('list_sort_key_not_callable', '{% set q = [3, 1] %}{% do q.sort(key=1) %}', {"env": {"extensions": ["do"]}}),
     ('list_sort_key_sees_empty_list', "{% set q = [3, 1, 2] %}{% macro k(x) %}{{ q|length }}{% endmacro %}{% do q.sort(key=k) %}{{ q }}", {"env": {"extensions": ["do"]}}),
     ('list_sort_modified_by_key', "{% set q = [3, 1, 2] %}{% macro k(x) %}{% do q.append(x) %}{{ x }}{% endmacro %}{% do q.sort(key=k) %}{{ q }}", {"env": {"extensions": ["do"]}}),
+    ('list_sort_modified_and_restored_by_key', "{% set q = [2, 1] %}{% macro k(x) %}{% do q.append(9) %}{% do q.pop() %}{{ x }}{% endmacro %}{% do q.sort(key=k) %}{{ q }}", {"env": {"extensions": ["do"]}}),
+    ('list_sort_nested_sort_in_key', "{% set q = [2, 1] %}{% macro k(x) %}{% do q.sort() %}{% do q.clear() %}{{ x }}{% endmacro %}{% do q.sort(key=k) %}{{ q }}", {"env": {"extensions": ["do"]}}),
     ('list_sort_reverse_truthy', "{% set q = [1, 3, 2] %}{% do q.sort(reverse='x') %}{{ q }}{% do q.sort(reverse=0) %}{{ q }}", {"env": {"extensions": ["do"]}}),
     ('tuple_has_no_sort', "{{ 'T' if (1, 2).sort is defined else 'F' }}"),
     ('str_format_nested', "{{ '{:{}}'.format(1, 5) }}|{{ '{:{w}.{p}f}'.format(3.14159, w=8, p=2) }}|{{ '{0:{1}{2}}'.format('x', '>', 4) }}|{{ '{:{}}x{:{}}'.format(1, 3, 2, 4) }}|{{ '{!r:{}}'.format('a', 5) }}"),

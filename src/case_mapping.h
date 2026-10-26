@@ -81,6 +81,17 @@ void AppendCodePoint(std::basic_string<CharT>& out, uint32_t cp)
     }
 }
 
+// How many code units AppendCodePoint writes for cp
+template<typename CharT>
+size_t EncodedUnits(uint32_t cp)
+{
+    if (sizeof(CharT) == 1)
+    {
+        return cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+    }
+    return sizeof(CharT) == 2 && cp >= 0x10000 ? 2 : 1;
+}
+
 // The code points of a string with the characters they came from, so that characters a case
 // mapping leaves alone are copied as they are
 template<typename CharT>
@@ -112,6 +123,14 @@ void AppendMapped(std::basic_string<CharT>& out, const CaseChars<CharT>& chars, 
         out.append(chars.views[idx].begin(), chars.views[idx].end());
         return;
     }
+    // A mapping can lengthen the string ('\u0390'.upper() is three code points), so the result
+    // is held to the sequence limit before it grows
+    size_t units = 0;
+    for (size_t n = 0; n != count; ++n)
+    {
+        units += EncodedUnits<CharT>(mapped[n]);
+    }
+    CheckSequenceSize(static_cast<uint64_t>(out.size()) + units, "a case-mapped string");
     for (size_t n = 0; n != count; ++n)
     {
         AppendCodePoint(out, mapped[n]);

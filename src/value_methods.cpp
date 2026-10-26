@@ -2141,7 +2141,9 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     {
         sorted.push_back(std::move(values[idx]));
     }
-    const bool modified = !items.empty();
+    // CPython's allocated == -1 sentinel: the list was left with no storage, and any change
+    // that put an item in it gave it some, even when a later pop emptied it again
+    const bool modified = items.capacity() != 0;
     values.clear();
     items = std::move(sorted);
     if (modified)
