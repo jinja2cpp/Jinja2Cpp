@@ -1478,7 +1478,7 @@ public:
     {
         CellStep step;
         const auto epoch = detail::g_cellEpoch.load(std::memory_order_relaxed);
-        if (!m_link.MayHaveCell())
+        if (!m_link.MayHaveCell(epoch))
         {
             step.epoch = epoch;
             step.size = m_values.Get().size();
@@ -1512,7 +1512,12 @@ public:
             this->m_list = values;
             this->m_curItem = this->InvalidIndex;
             m_step = values ? values->FirstStep() : CellStep();
-            this->m_maxItems = values ? values->GetItemsCountImpl() : 0;
+            // The host's size when the first step has it; m_maxItems only tells two enumerators apart
+            this->m_maxItems = 0;
+            if (values)
+            {
+                this->m_maxItems = m_step.epoch != CellStep::Recheck ? m_step.size : values->GetItemsCountImpl();
+            }
             return true;
         }
         [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override

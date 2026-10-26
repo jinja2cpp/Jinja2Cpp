@@ -78,6 +78,8 @@ public:
     // call a JINJA2CPP_CELL_NOINLINE member for the rest, so that their own code stays small
     // enough to keep what they inline (the string view of an item, Render/many_tags)
     [[nodiscard]] bool MayHaveCell() const noexcept { return detail::g_cellEpoch.load(std::memory_order_relaxed) != m_seenEpoch; }
+    // The same for an epoch the caller read
+    [[nodiscard]] bool MayHaveCell(uint32_t epoch) const noexcept { return epoch != m_seenEpoch; }
 
     // Attaches the adapter to a new cell holding `storage` (a list or dict the template owns,
     // the copy of the adapter's items) for the data `self` names; false outside a render, where
