@@ -21,8 +21,10 @@ class BorrowedCells;
 
 #ifdef _MSC_VER
 #define JINJA2CPP_CELL_UNLIKELY(cond) (cond)
+#define JINJA2CPP_CELL_NOINLINE __declspec(noinline)
 #else
 #define JINJA2CPP_CELL_UNLIKELY(cond) __builtin_expect(static_cast<bool>(cond), 0)
+#define JINJA2CPP_CELL_NOINLINE __attribute__((noinline))
 #endif
 
 namespace detail
@@ -56,17 +58,24 @@ public:
     ~CellLink();
 
     // The cell of `self`'s data in the running render, or null while the render has not
-    // written to it. One relaxed load and a compare unless a promotion happened since the last
-    // read through this adapter
+    // written to it: one relaxed load and a compare while no promotion happened since the last
+    // read through this adapter. An attached adapter never matches the epoch, so that its reads
+    // take the call (Find), and the reads of the others carry no more than the compare
     template<typename Accessor>
     [[nodiscard]] const BorrowedCell* Get(const Accessor& self) const
     {
-        if (JINJA2CPP_CELL_UNLIKELY(detail::g_cellEpoch.load(std::memory_order_relaxed) != m_seenEpoch))
+        if (JINJA2CPP_CELL_UNLIKELY(MayHaveCell()))
         {
-            Resync(self.GetIdentity(), std::is_base_of_v<IListAccessor, Accessor>);
+            using Base = std::conditional_t<std::is_base_of_v<IListAccessor, Accessor>, IListAccessor, IMapAccessor>;
+            return Find(static_cast<const Base&>(self));
         }
-        return m_cell.get();
+        return nullptr;
     }
+
+    // Whether Get may return a cell. The hottest reads (an item of a list or map) test it and
+    // call a JINJA2CPP_CELL_NOINLINE member for the rest, so that their own code stays small
+    // enough to keep what they inline (the string view of an item, Render/many_tags)
+    [[nodiscard]] bool MayHaveCell() const noexcept { return detail::g_cellEpoch.load(std::memory_order_relaxed) != m_seenEpoch; }
 
     // Attaches the adapter to a new cell holding `storage` (a list or dict the template owns,
     // the copy of the adapter's items) for the data `self` names; false outside a render, where
@@ -77,11 +86,18 @@ private:
     friend class BorrowedCell;
     friend class BorrowedCells;
 
-    void Resync(const void* identity, bool isList) const;
+    // Out of line, in borrowed_cells.cpp: the reads that call them stay small
+    const BorrowedCell* Find(const IListAccessor& self) const;
+    const BorrowedCell* Find(const IMapAccessor& self) const;
+    const BorrowedCell* Find(const void* identity, bool isList) const;
     void Link(const BorrowedCell& cell) const;
     void Unlink() const noexcept;
 
+    // An epoch the counter skips: the value of m_seenEpoch while the adapter is attached
+    static constexpr uint32_t Attached = UINT32_MAX;
+
     mutable IntrusivePtr<const BorrowedCell> m_cell;
+    // The epoch of the last look, or Attached
     mutable uint32_t m_seenEpoch = 0;
     // The position of this link in the cell's list of links
     mutable uint32_t m_linkIndex = 0;
@@ -134,29 +150,14 @@ inline CellLink::~CellLink()
 }
 
 // The cells of one render, made on its first write to the host's data (docs/tasks/0049), or of
-// one template module, whose values live across its calls. A render started inside another one
-// on the same thread (a user callable rendering a template) has its own: it sees the outer
-// render's cells only through the values passed to it, as in Python. Made after the
-// CycleCollector, so that it ends first: what it frees when it detaches its adapters needs no walk
+// one template module, whose values live across its calls. The render's CycleCollector holds the
+// registry in use (CycleCollector::CurrentCells), so that finding it costs a render nothing more,
+// and releases its own before it walks: what detaching the adapters frees needs no walk. A render
+// started inside another one on the same thread (a user callable rendering a template) has its
+// own: it sees the outer render's cells only through the values passed to it, as in Python
 class BorrowedCells
 {
 public:
-    // The registry that promotions and adapters on this thread use while it lives
-    class Use
-    {
-    public:
-        // Inline: every render makes one, and most promote nothing (docs/tasks/0138)
-        explicit Use(BorrowedCells& cells) noexcept { s_current = &cells; }
-        ~Use() { s_current = m_outer; }
-        Use(const Use&) = delete;
-        Use(Use&&) = delete;
-        Use& operator=(const Use&) = delete;
-        Use& operator=(Use&&) = delete;
-
-    private:
-        BorrowedCells* m_outer = s_current;
-    };
-
     BorrowedCells() noexcept = default;
     ~BorrowedCells() { Release(); }
     BorrowedCells(const BorrowedCells&) = delete;
@@ -180,9 +181,6 @@ private:
     using Table = robin_hood::unordered_flat_map<const void*, IntrusivePtr<const BorrowedCell>>;
 
     void Finish() noexcept;
-
-    // The registry in use on this thread, or null
-    static inline thread_local BorrowedCells* s_current = nullptr;
 
     std::unique_ptr<Table> m_cells;
 };

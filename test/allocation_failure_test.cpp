@@ -535,5 +535,10 @@ INSTANTIATE_TEST_SUITE_P(Templates,
                                          // allocation fails (docs/tasks/0283, LeakSanitizer in the sanitizer job)
                                          Case{ "{% set ns = namespace(l=[]) %}{% set ns.self = ns %}{% set l = [1] %}{{ l.append(l) or '' }}"
                                                "{% set ns.c = cycler(ns) %}{% set ns.f = ns.l.append %}{{ l|length }}",
-                                               "2" }));
+                                               "2" },
+                                         // Writes to the host's data through its aliases, and a cycle through
+                                         // its cell (docs/tasks/0049)
+                                         Case{ "{% set y = items %}{% set r = user.roles %}{{ y.append(6) or '' }}{{ r.append('ops') or '' }}"
+                                               "{% set f = user.update %}{{ f(x=1) or '' }}{{ items.append(items) or '' }}{{ items|length }}{{ user.roles|length }}{{ user.x }}",
+                                               "731" }));
 } // namespace

@@ -1,5 +1,6 @@
 #include "borrowed_cells.h"
 
+#include "cycle_collector.h"
 #include "internal_value.h"
 #include "intrusive_ptr.h"
 
@@ -22,7 +23,13 @@ namespace
 {
 uint32_t NextEpoch() noexcept
 {
-    return detail::g_cellEpoch.fetch_add(1, std::memory_order_relaxed) + 1;
+    auto epoch = detail::g_cellEpoch.fetch_add(1, std::memory_order_relaxed) + 1;
+    // Past the attached mark and the epoch of a new adapter: the counter skips both
+    while (epoch == UINT32_MAX || epoch == 0)
+    {
+        epoch = detail::g_cellEpoch.fetch_add(1, std::memory_order_relaxed) + 1;
+    }
+    return epoch;
 }
 } // namespace
 
@@ -47,25 +54,36 @@ BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, bool isL
 // The registry detaches every link before it lets go of its cells, and a link holds its cell
 BorrowedCell::~BorrowedCell() = default;
 
-void CellLink::Resync(const void* identity, bool isList) const
+const BorrowedCell* CellLink::Find(const IListAccessor& self) const
 {
-    // Read first: a promotion after this read moves the epoch again
-    m_seenEpoch = detail::g_cellEpoch.load(std::memory_order_relaxed);
+    return Find(self.GetIdentity(), true);
+}
+
+const BorrowedCell* CellLink::Find(const IMapAccessor& self) const
+{
+    return Find(self.GetIdentity(), false);
+}
+
+const BorrowedCell* CellLink::Find(const void* identity, bool isList) const
+{
     // A cell stays until its render detaches it, also while a render nested in it runs
     if (m_cell)
     {
-        return;
+        return m_cell.get();
     }
-    const auto* cells = BorrowedCells::s_current;
+    // Read first: a promotion after this read moves the epoch again
+    m_seenEpoch = detail::g_cellEpoch.load(std::memory_order_relaxed);
+    const auto* cells = CycleCollector::CurrentCells();
     if (!cells || !cells->m_cells)
     {
-        return;
+        return nullptr;
     }
     const auto found = cells->m_cells->find(identity);
     if (found != cells->m_cells->end() && found->second->IsList() == isList)
     {
         Link(*found->second);
     }
+    return m_cell.get();
 }
 
 void CellLink::Link(const BorrowedCell& cell) const
@@ -74,6 +92,7 @@ void CellLink::Link(const BorrowedCell& cell) const
     cell.m_links.push_back(this);
     m_linkIndex = static_cast<uint32_t>(cell.m_links.size() - 1);
     m_cell = IntrusivePtr<const BorrowedCell>(&cell);
+    m_seenEpoch = Attached;
 }
 
 void CellLink::Unlink() const noexcept
@@ -84,12 +103,13 @@ void CellLink::Unlink() const noexcept
     last->m_linkIndex = m_linkIndex;
     links.pop_back();
     m_cell = nullptr;
+    m_seenEpoch = 0;
 }
 
 bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage) const
 {
-    auto* cells = BorrowedCells::s_current;
-    if (!cells || !identity)
+    auto* cells = identity ? CycleCollector::CellsForWrite() : nullptr;
+    if (!cells)
     {
         return false;
     }
@@ -127,7 +147,7 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
         throw;
     }
     // The other adapters of the same data look the cell up on their next read
-    m_seenEpoch = NextEpoch();
+    NextEpoch();
     return true;
 }
 
@@ -140,6 +160,7 @@ void BorrowedCells::Finish() noexcept
         for (const auto* link : cell->m_links)
         {
             link->m_cell = nullptr;
+            link->m_seenEpoch = 0;
         }
         cell->m_links.clear();
     }

@@ -27,6 +27,7 @@ struct Node
 
 void CycleCollector::Finish() noexcept
 {
+    m_notes->cells.Release();
     if (!m_outer)
     {
         Collect();
@@ -44,6 +45,24 @@ void CycleCollector::Finish() noexcept
         // What the outer one did not take is collected here: the render that made it ended
         Collect();
     }
+}
+
+BorrowedCells* CycleCollector::CellsForWrite()
+{
+    auto* collector = s_current;
+    if (!collector)
+    {
+        return nullptr;
+    }
+    if (collector->m_external)
+    {
+        return collector->m_external;
+    }
+    if (!collector->m_notes)
+    {
+        collector->m_notes = std::make_unique<Notes>();
+    }
+    return &collector->m_notes->cells;
 }
 
 void CycleCollector::NoteStore(const InternalValue& container)

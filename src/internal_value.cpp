@@ -1428,27 +1428,34 @@ public:
 
     [[nodiscard]] size_t GetItemsCountImpl() const
     {
-        if (const auto* cell = m_link.Get(*this))
+        if (JINJA2CPP_CELL_UNLIKELY(m_link.MayHaveCell()))
         {
-            return cell->Items().size();
+            return CellOrHostCount();
         }
         return m_values.Get().size();
     }
     [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
     {
-        if (const auto* cell = m_link.Get(*this))
+        if (JINJA2CPP_CELL_UNLIKELY(m_link.MayHaveCell()))
         {
-            return CellItem(*cell, idx);
+            if (const auto* cell = m_link.Get(*this))
+            {
+                return CellItem(*cell, idx);
+            }
         }
         return LendItem(m_values, m_values.Get()[static_cast<size_t>(idx)]);
     }
     // The item an enumeration reads
     [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const
     {
-        if (const auto* cell = m_link.Get(*this))
+        if (JINJA2CPP_CELL_UNLIKELY(m_link.MayHaveCell()))
         {
-            return CellItem(*cell, idx).value_or(InternalValue());
+            return CellOrHostCurrentItem(idx);
         }
+        return HostCurrentItem(idx);
+    }
+    [[nodiscard]] InternalValue HostCurrentItem(int64_t idx) const
+    {
         const auto& item = m_values.Get()[static_cast<size_t>(idx)];
         if constexpr (LendsViews<Holder>)
         {
@@ -1505,6 +1512,20 @@ public:
     }
 
 private:
+    JINJA2CPP_CELL_NOINLINE size_t CellOrHostCount() const
+    {
+        const auto* cell = m_link.Get(*this);
+        return cell ? cell->Items().size() : m_values.Get().size();
+    }
+    JINJA2CPP_CELL_NOINLINE InternalValue CellOrHostCurrentItem(int64_t idx) const
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return CellItem(*cell, idx).value_or(InternalValue());
+        }
+        return HostCurrentItem(idx);
+    }
+
     // A list or map item of the caller's list, lent from the block of adapters the list keeps
     template<typename T>
     [[nodiscard]] InternalValue LendNested(size_t idx, const T& container) const;
@@ -2407,26 +2428,19 @@ public:
     }
     [[nodiscard]] bool HasValue(const std::string& name) const override
     {
-        if (const auto* cell = m_link.Get(*this))
+        if (JINJA2CPP_CELL_UNLIKELY(m_link.MayHaveCell()))
         {
-            return cell->Map().HasValue(name);
+            return CellOrHostHasValue(name);
         }
         return m_values.Get().count(name) != 0;
     }
     [[nodiscard]] InternalValue GetItem(const std::string& name) const override
     {
-        if (const auto* cell = m_link.Get(*this))
+        if (JINJA2CPP_CELL_UNLIKELY(m_link.MayHaveCell()))
         {
-            return cell->Map().GetItem(name);
+            return CellOrHostItem(name);
         }
-        auto& vals = m_values.Get();
-        auto p = vals.find(name);
-        if (p == vals.end())
-        {
-            return InternalValue();
-        }
-
-        return LendItem(m_values, p->second);
+        return HostItem(name);
     }
     [[nodiscard]] std::vector<std::string> GetKeys() const override
     {
@@ -2503,6 +2517,34 @@ public:
         return m_values == val->m_values;
     }
 private:
+    [[nodiscard]] InternalValue HostItem(const std::string& name) const
+    {
+        auto& vals = m_values.Get();
+        auto p = vals.find(name);
+        if (p == vals.end())
+        {
+            return InternalValue();
+        }
+
+        return LendItem(m_values, p->second);
+    }
+    JINJA2CPP_CELL_NOINLINE InternalValue CellOrHostItem(const std::string& name) const
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetItem(name);
+        }
+        return HostItem(name);
+    }
+    JINJA2CPP_CELL_NOINLINE bool CellOrHostHasValue(const std::string& name) const
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().HasValue(name);
+        }
+        return m_values.Get().count(name) != 0;
+    }
+
     Holder<ValuesMap> m_values;
     // The render's copy of the map once the render wrote to it (docs/tasks/0049)
     CellLink m_link;
