@@ -57,6 +57,13 @@ MULTISTR_TEST(BorrowedCellsTest, NestedItemReadTwice, R"({% set a = nd.k %}{% se
     params = Messages();
 }
 
+// A loop over the host's list that appends to it: the enumerator finds the cell at the next step
+// and reads its size at each one from then on (CellStep::Recheck)
+MULTISTR_TEST(BorrowedCellsTest, LoopSeesItsOwnAppend, R"({% for x in l %}{% set _ = l.append(x) if loop.index < 3 %}{{ x }},{% endfor %})", R"(3,1,2,3,1,)")
+{
+    params = { { "l", ValuesList{ 3, 1, 2 } } };
+}
+
 TEST(BorrowedCellsSingle, HostDataIsNotWritten)
 {
     const auto params = Messages();
