@@ -1,5 +1,6 @@
 #include <jinja2cpp/template.h>
 
+#include "internal_value.h"
 #include "make_unexpected.h"
 #include "markup.h"
 #include "render_workspace.h"
