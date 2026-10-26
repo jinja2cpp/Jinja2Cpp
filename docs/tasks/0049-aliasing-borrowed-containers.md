@@ -73,6 +73,13 @@ data again once the cells are detached, so a nested write would revert under a k
 range, a list of unknown length, a namespace, a loop, a host object, a cycle and anything deeper
 than 256 containers stay views.
 
+Perf: an item adapter in a block (`ItemAdapters`) has a `CellLink` whose destructor does
+nothing; the block releases its slots, and skips that when no cell existed since it was made
+(`QuietEpoch`). An adapter on its own is an `OwnedAdapter`, which only adds a destructor that
+releases the link, so the adapter's code is compiled once. A map item of the caller's
+data skips the convertor's visit (`LendMapItem`). Every host-data row is within +1% of master
+c39c06a (`bench/count.py`, convert and reflect).
+
 Left for later phases:
 - the loop rows (`pop` in a loop over context data, `loop.length` after an append): P3;
 - a JSON value read twice gives two accessors (`{% set y = j.a %}{% do j.a.append(2) %}{{ y }}`

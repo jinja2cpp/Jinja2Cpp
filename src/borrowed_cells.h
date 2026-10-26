@@ -34,6 +34,9 @@ namespace detail
 // made a cell, in any thread, so that an adapter learns that its data may have a cell with one
 // load and a compare (CellLink::Get). Defined in borrowed_cells.cpp
 extern std::atomic<uint32_t> g_cellEpoch;
+// The cells that exist now, in any thread's registry; with the epoch it tells a block of item
+// adapters that none of its slots can have a cell (QuietEpoch)
+extern std::atomic<uint32_t> g_liveCells;
 } // namespace detail
 
 // The part of an adapter of the host's data (a list or map lent by reference, docs/tasks/0115)
@@ -47,6 +50,11 @@ extern std::atomic<uint32_t> g_cellEpoch;
 //
 // A copy of the adapter (one handed to the host) starts detached and finds the cell again
 // while the render runs. Adapters of the host's data are read by one thread (internal_value.cpp)
+//
+// The destructor does not detach: the owner of the adapter calls Release first. An adapter on
+// its own does that as it goes (AutoCellLink, OwnedAdapter in internal_value.cpp); a block of
+// item adapters (ItemAdapters) releases its slots itself, so that freeing an item that never had
+// a cell calls nothing
 class CellLink
 {
 public:
@@ -57,7 +65,10 @@ public:
     // An adapter given other data: its cell is not of that data, so it detaches
     CellLink& operator=(const CellLink& other) noexcept;
     CellLink& operator=(CellLink&& other) noexcept;
-    ~CellLink();
+    ~CellLink() = default;
+
+    // Detaches the adapter from its cell, before the adapter goes
+    inline void Release() const noexcept;
 
     // The cell of `self`'s data in the running render, or null while the render has not
     // written to it: one relaxed load and a compare while no promotion happened since the last
@@ -95,7 +106,7 @@ private:
     const BorrowedCell* Find(const IMapAccessor& self) const;
     const BorrowedCell* Find(const void* identity, bool isList) const;
     void Link(const BorrowedCell& cell) const;
-    // Below BorrowedCell, with the destructor
+    // Below BorrowedCell, with Release
     inline void Unlink() const noexcept;
 
     // An epoch the counter skips: the value of m_seenEpoch while the adapter is attached
@@ -162,8 +173,16 @@ struct CellStep
     [[nodiscard]] bool IsCurrent() const noexcept { return epoch == detail::g_cellEpoch.load(std::memory_order_relaxed); }
 };
 
-// Inline, as the destructor: an adapter's destructor that calls nothing has no vtable to set
-// up, and the blocks of item adapters free many of them (Render/for_filter_if)
+// The epoch, if no cell exists now, else CellStep::Recheck, which the epoch never is: while the
+// epoch keeps this value, no adapter made since can have been attached to a cell. Read in this
+// order: a cell is counted before its promotion moves the epoch (CellLink::Adopt)
+inline uint32_t QuietEpoch() noexcept
+{
+    const auto epoch = detail::g_cellEpoch.load(std::memory_order_relaxed);
+    return detail::g_liveCells.load(std::memory_order_relaxed) == 0 ? epoch : CellStep::Recheck;
+}
+
+// Inline, as Release, which the destructors of the adapters call
 inline void CellLink::Unlink() const noexcept
 {
     auto& links = m_cell->m_links;
@@ -193,13 +212,26 @@ inline CellLink& CellLink::operator=(CellLink&& other) noexcept
     return *this;
 }
 
-inline CellLink::~CellLink()
+inline void CellLink::Release() const noexcept
 {
     if (m_cell)
     {
         Unlink();
     }
 }
+
+// The link of an adapter that is never an item in a block (the generic containers' adapters):
+// it detaches when the adapter goes
+class AutoCellLink : public CellLink
+{
+public:
+    AutoCellLink() = default;
+    AutoCellLink(const AutoCellLink&) = default;
+    AutoCellLink(AutoCellLink&&) noexcept = default;
+    AutoCellLink& operator=(const AutoCellLink&) = default;
+    AutoCellLink& operator=(AutoCellLink&&) noexcept = default;
+    ~AutoCellLink() { Release(); }
+};
 
 // The cells of one render, made on its first write to the host's data (docs/tasks/0049), or of
 // one template module, whose values live across its calls. The render's CycleCollector holds the

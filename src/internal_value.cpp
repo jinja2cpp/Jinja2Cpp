@@ -1342,7 +1342,7 @@ public:
 private:
     Holder<GenericList> m_values;
     // The render's copy of the list once the render wrote to it (docs/tasks/0049)
-    CellLink m_link;
+    AutoCellLink m_link;
 };
 
 ListAdapter LendNestedList(std::shared_ptr<ValuesList> list);
@@ -1370,6 +1370,10 @@ InternalValue LendOwnedItem(const std::shared_ptr<T>& owner, const Value& item)
 // generic container's copy shares its accessor); defined after the adapters
 InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value& item);
 
+// A map item of the caller's data, as the convertor makes it, without the convertor's visit
+// (Render/chat_llama); defined after the adapters
+JINJA2CPP_CELL_NOINLINE InternalValue LendMapItem(const ValuesMap& map);
+
 // Borrows the item when the caller owns the storage for the whole render (ByRef, ByHeldRef)
 template<template<typename> class Holder, typename T>
 InternalValue LendItem([[maybe_unused]] const Holder<T>& holder, const Value& item)
@@ -1396,6 +1400,10 @@ InternalValue LendItem([[maybe_unused]] const Holder<T>& holder, const Value& it
             {
                 return InternalValue(*i);
             }
+            if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&item.GetData()))
+            {
+                return LendMapItem(**map);
+            }
             return Value2IntValue(item);
         }
     }
@@ -1416,8 +1424,28 @@ std::optional<InternalValue> CellItem(const BorrowedCell& cell, int64_t idx)
     return items[static_cast<size_t>(idx)];
 }
 
+// An adapter of the host's data on its own (MakeRef, the copy in a GenericList or GenericMap): it
+// detaches from its cell when it goes. An item in a block of item adapters is the adapter itself,
+// whose destructor does nothing, as the block releases its slots (ItemAdapters); one type for
+// both keeps one copy of the adapter's code (Render/chat_llama)
+template<typename Adapter>
+class OwnedAdapter final : public Adapter
+{
+public:
+    template<typename U, typename = std::enable_if_t<!std::is_same_v<std::decay_t<U>, OwnedAdapter>>>
+    explicit OwnedAdapter(U&& values)
+        : Adapter(std::forward<U>(values))
+    {
+    }
+    OwnedAdapter(const OwnedAdapter&) = default;
+    OwnedAdapter(OwnedAdapter&&) noexcept = default;
+    OwnedAdapter& operator=(const OwnedAdapter&) = default;
+    OwnedAdapter& operator=(OwnedAdapter&&) noexcept = default;
+    ~OwnedAdapter() override { this->ReleaseLink(); }
+};
+
 template<template<typename> class Holder>
-class ValuesListAdapter final : public IndexedListAccessorImpl<ValuesListAdapter<Holder>>
+class ValuesListAdapter : public IndexedListAccessorImpl<ValuesListAdapter<Holder>>
 {
 public:
     // Constrained: an unconstrained U&& would take a copy of a non-const adapter
@@ -1426,6 +1454,10 @@ public:
         : m_values(std::forward<U>(values))
     {
     }
+
+    // Detaches the adapter from its cell: the block of item adapters calls it before it frees
+    // the slot (ItemAdapters), as OwnedAdapter's destructor does
+    void ReleaseLink() const noexcept { m_link.Release(); }
 
     [[nodiscard]] size_t GetItemsCountImpl() const
     {
@@ -1509,8 +1541,9 @@ public:
         [[nodiscard]] InternalValue GetCurrent() const override { return this->m_list->StepItem(m_step, static_cast<int64_t>(this->m_curItem)); }
         bool Rebind(const IListAccessor* list) override
         {
-            // Only a list of the same final type: the enumerator reads it through ValuesListAdapter
-            if (list && typeid(*list) != typeid(ValuesListAdapter))
+            // Only a list of the same final type, an item in a block or one on its own: the
+            // enumerator reads it through ValuesListAdapter
+            if (list && typeid(*list) != typeid(ValuesListAdapter) && typeid(*list) != typeid(OwnedAdapter<ValuesListAdapter>))
             {
                 return false;
             }
@@ -1618,7 +1651,8 @@ public:
         {
             return cell->List().CreateGenericList();
         }
-        return GenericList([list = *this]() -> const IListItemAccessor* { return &list; });
+        // An adapter on its own, whatever this one is: the copy lives in the GenericList
+        return GenericList([list = OwnedAdapter<ValuesListAdapter>(m_values)]() -> const IListItemAccessor* { return &list; });
     }
 
 private:
@@ -1737,7 +1771,7 @@ ListAdapter ListAdapter::CreateAdapter(const GenericList& values)
 
 ListAdapter ListAdapter::CreateAdapter(const ValuesList& values)
 {
-    return ListAdapter(MakeRef<ValuesListAdapter<ByRef>>(values));
+    return ListAdapter(MakeRef<OwnedAdapter<ValuesListAdapter<ByRef>>>(values));
 }
 
 ListAdapter ListAdapter::CreateAdapter(GenericList&& values)
@@ -1747,7 +1781,7 @@ ListAdapter ListAdapter::CreateAdapter(GenericList&& values)
 
 ListAdapter ListAdapter::CreateAdapter(ValuesList&& values)
 {
-    return ListAdapter(MakeRef<ValuesListAdapter<BySharedVal>>(std::move(values)));
+    return ListAdapter(MakeRef<OwnedAdapter<ValuesListAdapter<BySharedVal>>>(std::move(values)));
 }
 
 ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue>()> fn)
@@ -2528,7 +2562,7 @@ private:
 
     Holder<GenericMap> m_values;
     // The render's copy of the map once the render wrote to it (docs/tasks/0049)
-    CellLink m_link;
+    AutoCellLink m_link;
 };
 
 // A key of user data as LendItem lends its string items: a view while the data outlives the
@@ -2556,6 +2590,10 @@ public:
         : m_values(std::forward<U>(values))
     {
     }
+
+    // Detaches the adapter from its cell: the block of item adapters calls it before it frees
+    // the slot (ItemAdapters), as OwnedAdapter's destructor does
+    void ReleaseLink() const noexcept { m_link.Release(); }
 
     [[nodiscard]] size_t GetSize() const override
     {
@@ -2644,7 +2682,8 @@ public:
         {
             return cell->Map().CreateGenericMap();
         }
-        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
+        // An adapter on its own, whatever this one is: the copy lives in the GenericMap
+        return GenericMap([accessor = OwnedAdapter<ValuesMapAdapter>(m_values)]() -> const IMapItemAccessor* { return &accessor; });
     }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -2691,12 +2730,16 @@ private:
 
 // One object for the block: a lent item's value shares it (docs/tasks/0154, 0140). The items of
 // a global are a type of their own, so the larger held adapters do not widen every block (0318)
+//
+// The adapters in a block are not OwnedAdapter: their CellLink's destructor does nothing and the
+// block releases the slots that have a cell, so that freeing an item without one calls nothing
+// (Render/for_filter_if)
 template<bool held>
 struct ItemAdapters final : ValueObject
 {
-    using Adapter = std::conditional_t<held,
-                                       std::variant<std::monostate, ValuesListAdapter<ByHeldRef>, ValuesMapAdapter<ByHeldRef>>,
-                                       std::variant<std::monostate, ValuesListAdapter<ByRef>, ValuesMapAdapter<ByRef>>>;
+    using List = std::conditional_t<held, ValuesListAdapter<ByHeldRef>, ValuesListAdapter<ByRef>>;
+    using Map = std::conditional_t<held, ValuesMapAdapter<ByHeldRef>, ValuesMapAdapter<ByRef>>;
+    using Adapter = std::variant<std::monostate, List, Map>;
     // Items per block: the list keeps only the block of the items it reads now, so a long list
     // holds a bounded number of adapters; a block an item was kept from stays with that item
     static constexpr size_t BlockSize = 256;
@@ -2707,12 +2750,45 @@ struct ItemAdapters final : ValueObject
         : adapters(new Adapter[count])
         , first(firstItem)
         , size(count)
+        , quietEpoch(QuietEpoch())
     {
+    }
+    ~ItemAdapters() override
+    {
+        // No slot can have a cell when no cell existed as the block was made and none was made
+        // since, which would have moved the epoch
+        if (quietEpoch == detail::g_cellEpoch.load(std::memory_order_relaxed))
+        {
+            return;
+        }
+        for (size_t idx = 0; idx < size; ++idx)
+        {
+            Release(adapters[idx]);
+        }
+    }
+    ItemAdapters(const ItemAdapters&) = delete;
+    ItemAdapters(ItemAdapters&&) = delete;
+    ItemAdapters& operator=(const ItemAdapters&) = delete;
+    ItemAdapters& operator=(ItemAdapters&&) = delete;
+
+    // Detaches the adapter in `slot` from its cell, before the slot is freed or reused
+    static void Release(const Adapter& slot) noexcept
+    {
+        if (const auto* map = std::get_if<Map>(&slot))
+        {
+            map->ReleaseLink();
+        }
+        else if (const auto* list = std::get_if<List>(&slot))
+        {
+            list->ReleaseLink();
+        }
     }
 
     std::unique_ptr<Adapter[]> adapters;
     size_t first;
     size_t size;
+    // The epoch as the block was made, or CellStep::Recheck if a cell existed then
+    uint32_t quietEpoch;
 };
 
 template<template<typename> class Holder>
@@ -2721,13 +2797,11 @@ InternalValue ValuesListAdapter<Holder>::LendNested(size_t idx, const T& contain
 {
     // A global's items keep its owner (ByHeldRef); the caller's params are borrowed (ByRef)
     using ItemHolder = std::conditional_t<std::is_same_v<Holder<T>, ByHeldRef<T>>, ByHeldRef<T>, ByRef<T>>;
-    using AdapterType = std::conditional_t<std::is_same_v<T, ValuesList>,
-                                           std::conditional_t<std::is_same_v<ItemHolder, ByRef<T>>, ValuesListAdapter<ByRef>, ValuesListAdapter<ByHeldRef>>,
-                                           std::conditional_t<std::is_same_v<ItemHolder, ByRef<T>>, ValuesMapAdapter<ByRef>, ValuesMapAdapter<ByHeldRef>>>;
+    using Block = typename decltype(m_items)::element_type;
+    using AdapterType = std::conditional_t<std::is_same_v<T, ValuesList>, typename Block::List, typename Block::Map>;
     using ResultType = std::conditional_t<std::is_same_v<T, ValuesList>, ListAdapter, MapAdapter>;
     if (!m_items || idx < m_items->first || idx - m_items->first >= m_items->size)
     {
-        using Block = typename decltype(m_items)::element_type;
         const auto first = idx - (idx % Block::BlockSize);
         m_items = MakeRef<Block>(first, std::min(Block::BlockSize, m_values.Get().size() - first));
     }
@@ -2735,6 +2809,9 @@ InternalValue ValuesListAdapter<Holder>::LendNested(size_t idx, const T& contain
     auto* adapter = std::get_if<AdapterType>(&slot);
     if (!adapter)
     {
+        // A slot is only ever one kind of item, as the host's data does not change; released
+        // all the same, as the block's destructor would
+        Block::Release(slot);
         if constexpr (std::is_same_v<ItemHolder, ByRef<T>>)
         {
             adapter = &slot.template emplace<AdapterType>(ByRef<T>(container));
@@ -2750,12 +2827,17 @@ InternalValue ValuesListAdapter<Holder>::LendNested(size_t idx, const T& contain
 
 ListAdapter LendNestedList(std::shared_ptr<ValuesList> list)
 {
-    return ListAdapter(MakeRef<ValuesListAdapter<BySharedVal>>(BySharedVal<ValuesList>(std::move(list))));
+    return ListAdapter(MakeRef<OwnedAdapter<ValuesListAdapter<BySharedVal>>>(BySharedVal<ValuesList>(std::move(list))));
 }
 
 MapAdapter LendNestedMap(std::shared_ptr<ValuesMap> map)
 {
-    return MapAdapter(MakeRef<ValuesMapAdapter<BySharedVal>>(BySharedVal<ValuesMap>(std::move(map))));
+    return MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<BySharedVal>>>(BySharedVal<ValuesMap>(std::move(map))));
+}
+
+JINJA2CPP_CELL_NOINLINE InternalValue LendMapItem(const ValuesMap& map)
+{
+    return InternalValue(MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<ByRef>>>(map)));
 }
 
 InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value& item)
@@ -2770,11 +2852,11 @@ InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value
     }
     if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&item.GetData()))
     {
-        return InternalValue(ListAdapter(MakeRef<ValuesListAdapter<ByHeldRef>>(ByHeldRef<ValuesList>(**list, owner))));
+        return InternalValue(ListAdapter(MakeRef<OwnedAdapter<ValuesListAdapter<ByHeldRef>>>(ByHeldRef<ValuesList>(**list, owner))));
     }
     if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&item.GetData()))
     {
-        return InternalValue(MapAdapter(MakeRef<ValuesMapAdapter<ByHeldRef>>(ByHeldRef<ValuesMap>(**map, owner))));
+        return InternalValue(MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<ByHeldRef>>>(ByHeldRef<ValuesMap>(**map, owner))));
     }
     // By value: a generic container's copy shares the host's accessor, not the global's storage,
     // and text is copied
@@ -2843,12 +2925,12 @@ MapAdapter CreateMapAdapter(GenericMap&& values)
 
 MapAdapter CreateMapAdapter(const ValuesMap& values)
 {
-    return MapAdapter(MakeRef<ValuesMapAdapter<ByRef>>(values));
+    return MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<ByRef>>>(values));
 }
 
 MapAdapter CreateMapAdapter(ValuesMap&& values)
 {
-    return MapAdapter(MakeRef<ValuesMapAdapter<BySharedVal>>(std::move(values)));
+    return MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<BySharedVal>>>(std::move(values)));
 }
 
 namespace

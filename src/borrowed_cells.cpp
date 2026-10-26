@@ -17,6 +17,7 @@ inline namespace v2
 namespace detail
 {
 std::atomic<uint32_t> g_cellEpoch{ 0 };
+std::atomic<uint32_t> g_liveCells{ 0 };
 } // namespace detail
 
 namespace
@@ -141,6 +142,8 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
         cells->m_cells->erase(identity);
         throw;
     }
+    // Counted before the epoch moves (QuietEpoch)
+    detail::g_liveCells.fetch_add(1, std::memory_order_relaxed);
     // The other adapters of the same data look the cell up on their next read
     NextEpoch();
     return true;
@@ -159,7 +162,9 @@ void BorrowedCells::Finish() noexcept
         }
         cell->m_links.clear();
     }
+    const auto count = static_cast<uint32_t>(m_cells->size());
     m_cells.reset();
+    detail::g_liveCells.fetch_sub(count, std::memory_order_relaxed);
     // An adapter that read a cell of this render, or found none while it ran, looks again
     NextEpoch();
 }
