@@ -385,4 +385,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0311](0311-json-bindings-as-components.md) | JSON bindings as components on a public adapter contract | build | high | done |
 | [0312](0312-module-kept-while-stored-macro-reaches-it.md) | A macro a module call stores keeps its module, as in Jinja2 | parity | low | open |
 | [0313](0313-module-keeps-every-use-reloads.md) | A module keeps every tree `TemplateLookup::EveryUse` reloads | robustness | low | open |
+| [0318](0318-kept-globals-keep-their-snapshot.md) | A list or map from the globals keeps the globals it was read from | robustness | high | done |
+| [0319](0319-makecallable-value-parameter.md) | MakeCallable with a Value parameter does not compile | api | medium | open |
 | [0322](0322-parity-corpus-through-reflect.md) | Run the parity corpus with the context as a JSON view | parity | low | open |
+| [0323](0323-stored-self-sees-includer-names.md) | A `self` an include stored does not see the names the includer set | parity | low | open |
+| [0324](0324-nested-render-sees-global-changed-in-place.md) | A nested render does not see a global the outer render changed in place | robustness | medium | open |
+| [0325](0325-autoreload-date-before-read.md) | A reload can cache the new date with the old text | robustness | low | open |
+| [0326](0326-nested-macro-closure-after-outer-call.md) | A macro defined in a macro loses the outer call's names after that call returned | parity | medium | open |
+| [0327](0327-change-globals-use-count-race.md) | Changing a global can race with a render that just dropped the globals map | robustness | medium | open |
