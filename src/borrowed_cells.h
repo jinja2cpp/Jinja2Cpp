@@ -54,8 +54,9 @@ public:
     // A copy is another adapter: detached
     CellLink(const CellLink& /*other*/) noexcept {}
     CellLink(CellLink&& /*other*/) noexcept {}
-    CellLink& operator=(const CellLink& /*other*/) noexcept { return *this; }
-    CellLink& operator=(CellLink&& /*other*/) noexcept { return *this; }
+    // An adapter given other data: its cell is not of that data, so it detaches
+    CellLink& operator=(const CellLink& other) noexcept;
+    CellLink& operator=(CellLink&& other) noexcept;
     ~CellLink();
 
     // The cell of `self`'s data in the running render, or null while the render has not
@@ -170,6 +171,24 @@ inline void CellLink::Unlink() const noexcept
     links.pop_back();
     m_cell = nullptr;
     m_seenEpoch = 0;
+}
+
+inline CellLink& CellLink::operator=(const CellLink& other) noexcept
+{
+    if (this != &other && m_cell)
+    {
+        Unlink();
+    }
+    return *this;
+}
+
+inline CellLink& CellLink::operator=(CellLink&& other) noexcept
+{
+    if (this != &other && m_cell)
+    {
+        Unlink();
+    }
+    return *this;
 }
 
 inline CellLink::~CellLink()

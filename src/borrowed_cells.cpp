@@ -23,13 +23,19 @@ namespace
 {
 uint32_t NextEpoch() noexcept
 {
-    auto epoch = detail::g_cellEpoch.fetch_add(1, std::memory_order_relaxed) + 1;
-    // Past the attached mark and the epoch of a new adapter: the counter skips both
-    while (epoch == UINT32_MAX || epoch == 0)
+    // Past the attached mark and the epoch of a new adapter: the counter never holds either,
+    // also not for a moment while another thread reads it
+    auto epoch = detail::g_cellEpoch.load(std::memory_order_relaxed);
+    uint32_t next = 0;
+    do
     {
-        epoch = detail::g_cellEpoch.fetch_add(1, std::memory_order_relaxed) + 1;
-    }
-    return epoch;
+        next = epoch + 1;
+        while (next == UINT32_MAX || next == 0)
+        {
+            ++next;
+        }
+    } while (!detail::g_cellEpoch.compare_exchange_weak(epoch, next, std::memory_order_relaxed));
+    return next;
 }
 } // namespace
 
