@@ -51,10 +51,6 @@ InternalValue MakeBoundMethod(const InternalValue& self, const MethodInfo& metho
 // from. Anything else is returned unchanged.
 InternalValue MakeMutable(const InternalValue& value);
 bool IsMutable(const InternalValue& value);
-// Gives a list or dict of the host's data its cell in the running render, the way a write
-// does (MakeMutable), so that every name of it reads the render's copy; false when it stays as
-// it is (a tuple, a range, outside a render). True for a list or dict the template owns
-bool PromoteBorrowed(const InternalValue& value);
 // Whether a method of this name changes its receiver for some value kind
 bool IsMutatingName(std::string_view name);
 // Called before `item` is stored in `container`, a list or dict the template owns. A store

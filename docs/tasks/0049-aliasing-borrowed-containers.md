@@ -66,20 +66,15 @@ host's data now copies it, as Python does. `methods.context_alias` and
 `methods.operand_changed_by_call` match; rows `methods.alias_*` and test/borrowed_cells_test.cpp
 pin the rest.
 
-A container a render hands out (an argument of a user callable, which the host may keep) is
-one of the render's own objects; nothing is walked or copied when the render ends. A list or
-dict of the host's data handed out gets its cell, as a write would give it one (`PromoteForExport`,
-`methods::PromoteBorrowed`), and the host holds the cell's list or dict itself, so it sees the
-render's writes before and after the call and keeps them after the render. A list or dict the
-template made hands itself out, not a copy (`RenderOwnedAccessor`), and one a user callable gives
-back is that object again, as in Python: `id(a) is sameas a` holds for a list of the template, and
-`l.append(id(l))` is a self-append the collector frees. When a render that handed out a cell's
-list or dict ends, the items of its cells that are adapters of host data with a cell of their own
-become that cell's list or dict (`BorrowedCells::Relink`, one pass), so a kept list shows a nested
-write and `l.append(l)` holds itself; the collector, current again while the cells go, frees the
-cycles nothing else holds. A range, a tuple, a list of unknown length, a view of a container of
-the template, and a container whose host accessor throws stay as they are. A dict with keys that
-are not text reaches the host as a copy with text keys (D13), as on master.
+A container the render hands to a user callable (an argument, which the host may keep) is a
+view while the render has not written to the host's data: during the render it shows the
+render's writes, and after the render a container the render wrote to reads the host's data
+again, as on master. Once the render has a cell, a list or dict it hands out is a copy of the
+render's view, down to its nested containers (`CopyForExport`). The copy keeps the writes made
+before the call, but a later write in the same render does not reach it, and it is made on
+every call, also for a list the template built and for a callable that only reads it. A range,
+a list of unknown length, a namespace, a loop, a host object, a cycle and anything deeper than
+256 containers stay views. What the host should keep, and at what cost, is task 0331.
 
 Perf: an item adapter in a block (`ItemAdapters`) has a `CellLink` whose destructor does
 nothing; the block releases its slots, and skips that when no cell existed since it was made
@@ -96,11 +91,5 @@ Left for later phases:
 - the write-back of a copy into its variable or owner (`EvaluateMutableRoot`,
   `EvaluateIndices(forMutation)`) stays for the containers that are not the host's data (a
   context map of the engine, a computed list), and stores the same value back for a cell.
-- a host container the render wrote to, nested in a list or dict of the template the host keeps
-  (`keep([h])`, then `h.append(1)`, or `keep({'saved': l})` after `l[0].append(2)`), reads the
-  host's data after the render: only the cells' own items are pointed at the render's copies;
-- `id(l) is sameas l` for the host's data is false (the callable gives back the cell's list, the
-  name is an adapter of the host's data): P4;
-- a cycle through a list the host makes (`l.append(idl(l))`, where `idl` wraps its argument in a
-  new host list) leaks, as on master (0251; master leaks 440 B for that shape), and a cycle the
-  host keeps (`keep(l)` after `l.append(l)`) lives until the host breaks it.
+- what a host callable keeps of a container the render hands it (a view or a copy at the call
+  today, with the regressions against master listed in 0331): 0331, designed before or with P4.

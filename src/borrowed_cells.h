@@ -249,8 +249,7 @@ public:
     BorrowedCells& operator=(const BorrowedCells&) = delete;
     BorrowedCells& operator=(BorrowedCells&&) = delete;
 
-    // Gives the cells' lists and dicts the render handed to the host their final items, then
-    // detaches every adapter from its cell and frees the cells
+    // Detaches every adapter from its cell and frees the cells
     void Release() noexcept
     {
         if (m_cells)
@@ -258,9 +257,10 @@ public:
             Finish();
         }
     }
-    // A cell's list or dict was handed to the host (IntValue2Value): the host may keep it past
-    // the render, so Release points its items at the render's other cells (Relink)
-    void NoteExport() noexcept { m_exported = true; }
+    // Whether the render wrote to the host's data: an export of a container then copies what
+    // it reaches (IntValue2Value), since a view would read the host's data again once the
+    // render ends and the cells are gone
+    [[nodiscard]] bool HasCells() const noexcept { return m_cells && !m_cells->empty(); }
 
 private:
     friend class CellLink;
@@ -269,12 +269,8 @@ private:
     using Table = robin_hood::unordered_flat_map<const void*, IntrusivePtr<const BorrowedCell>>;
 
     void Finish() noexcept;
-    // An item of a cell's list or dict that is an adapter of the host's data with a cell of its
-    // own becomes that cell's list or dict, the one the host sees after the render
-    void Relink() noexcept;
 
     std::unique_ptr<Table> m_cells;
-    bool m_exported = false;
 };
 
 } // namespace v2

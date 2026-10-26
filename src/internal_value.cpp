@@ -12,7 +12,6 @@
 #include "span.h"
 #include "template_dict.h"
 #include "undefined.h"
-#include "value_methods.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/exception.h>
@@ -1227,24 +1226,6 @@ InternalValue LendGenericItem(const std::shared_ptr<const void>& owner, Value&& 
     return Value2IntValue(std::move(item));
 }
 
-// A list or dict the template owns that hands itself to the host: CreateGenericList and
-// CreateGenericMap give the object, which the host then sees change as the template's names
-// of it do. A user callable that gives it back gives the template that object again, as a
-// Python callable returns the object it was given (RenderOwnedValueOf, docs/tasks/0049)
-class RenderOwnedAccessor
-{
-public:
-    [[nodiscard]] virtual InternalValue OwnValue() const = 0;
-
-protected:
-    RenderOwnedAccessor() = default;
-    RenderOwnedAccessor(const RenderOwnedAccessor&) = default;
-    RenderOwnedAccessor(RenderOwnedAccessor&&) = default;
-    RenderOwnedAccessor& operator=(const RenderOwnedAccessor&) = default;
-    RenderOwnedAccessor& operator=(RenderOwnedAccessor&&) = default;
-    ~RenderOwnedAccessor() = default;
-};
-
 template<template<typename> class Holder>
 class GenericListAdapter : public IListAccessor
 {
@@ -1336,7 +1317,6 @@ public:
     }
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy); }
     [[nodiscard]] bool IsBorrowed() const override { return true; }
-    [[nodiscard]] bool ViewsRenderOwned() const override { return !m_link.Get(*this) && dynamic_cast<const RenderOwnedAccessor*>(m_values.Get().GetAccessor()) != nullptr; }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
     {
         if (const auto* cell = m_link.Get(*this))
@@ -1725,7 +1705,6 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
     // The items are shared by every copy of the list, as a Python list is shared by its
     // names: an append() through one is seen through all, and `a is sameas b` holds
     class Adapter final : public IndexedListAccessorImpl<Adapter>
-        , public RenderOwnedAccessor
     {
     public:
         explicit Adapter(InternalValueList&& values)
@@ -1753,18 +1732,13 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
             return (*m_values)[static_cast<size_t>(idx)];
         }
         [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
-        // The accessor the host's list gives (CreateGenericList), so that a view of that list in
-        // a host value (GenericListAdapter) has the identity of this one: printing sees the cycle
-        [[nodiscard]] const void* GetIdentity() const override { return static_cast<const IListItemAccessor*>(this); }
+        [[nodiscard]] const void* GetIdentity() const override { return m_values.get(); }
         [[nodiscard]] InternalValueList* GetMutableItems() const override { return m_values.get(); }
         [[nodiscard]] bool OwnsMutableItemsAlone() const override { return m_values.use_count() == 1; }
-        // The list itself, not a copy that shares its items: a copy would make the items look
-        // shared to the collector (OwnsMutableItemsAlone), which would then not walk them
         [[nodiscard]] GenericList CreateGenericList() const override
         {
-            return GenericList([self = IntrusivePtr<const Adapter>(this)]() -> const IListItemAccessor* { return self.get(); });
+            return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
         }
-        [[nodiscard]] InternalValue OwnValue() const override { return InternalValue(ListAdapter(IntrusivePtr<const IListAccessor>(this))); }
         void Traverse(const TraverseFn& fn) const override
         {
             if (OwnsMutableItemsAlone())
@@ -2164,7 +2138,6 @@ std::optional<InternalValue> IMapAccessor::FindItem(const InternalValue& key) co
 
 template<template<typename> class Holder, bool canModify, typename Map = InternalValueMap>
 class InternalValueMapAdapter : public MapAccessorImpl<InternalValueMapAdapter<Holder, canModify, Map>>
-    , public RenderOwnedAccessor
 {
 public:
     // Constrained: an unconstrained U&& would take a copy of a non-const adapter
@@ -2237,14 +2210,10 @@ public:
         return false;
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
-    // The map itself (RenderOwnedAccessor), also for a class derived from this one
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
-        return GenericMap([self = IntrusivePtr<const InternalValueMapAdapter>(this)]() -> const IMapItemAccessor* { return self.get(); });
+        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
-    [[nodiscard]] InternalValue OwnValue() const override { return InternalValue(MapAdapter(IntrusivePtr<const IMapAccessor>(this))); }
-    // The accessor the host's map gives (CreateGenericMap), as for a list of the template
-    [[nodiscard]] const void* GetIdentity() const override { return static_cast<const IMapItemAccessor*>(this); }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const InternalValueMapAdapter*>(&other);
@@ -2264,7 +2233,6 @@ protected:
 // A dict the template owns (dict literals, kwargs, dict()): shared like a Python dict, and keyed
 // like one (TemplateDict). A string key costs one lookup as in any other map
 class SharedDictAdapter : public MapAccessorImpl<SharedDictAdapter>
-    , public RenderOwnedAccessor
 {
 public:
     explicit SharedDictAdapter(TemplateDict&& values)
@@ -2344,8 +2312,7 @@ public:
         }
         return m_values == val->m_values;
     }
-    // The accessor the host's map gives (CreateGenericMap), as for a list of the template
-    [[nodiscard]] const void* GetIdentity() const override { return static_cast<const IMapItemAccessor*>(this); }
+    [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
     [[nodiscard]] TemplateDict* GetMutableItems() const override { return &m_values.Get(); }
     [[nodiscard]] bool OwnsMutableItemsAlone() const override { return m_values.IsUnique(); }
     void Traverse(const TraverseFn& fn) const override
@@ -2370,16 +2337,14 @@ public:
         }
     }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::MethodsFirst; }
-    // The dict itself (RenderOwnedAccessor), also for a namespace
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
         if (auto snapshot = CreateSnapshot())
         {
             return std::move(*snapshot);
         }
-        return GenericMap([self = IntrusivePtr<const SharedDictAdapter>(this)]() -> const IMapItemAccessor* { return self.get(); });
+        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
-    [[nodiscard]] InternalValue OwnValue() const override { return InternalValue(MapAdapter(IntrusivePtr<const IMapAccessor>(this))); }
 
 protected:
     // The public map has string keys only (D13: docs/release-2.0.md, docs/tasks/0036). A dict
@@ -2421,6 +2386,14 @@ public:
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysOnly; }
     [[nodiscard]] bool IsNamespace() const override { return true; }
     [[nodiscard]] const char* GetObjectClass() const override { return "Namespace"; }
+    [[nodiscard]] GenericMap CreateGenericMap() const override
+    {
+        if (auto snapshot = CreateSnapshot())
+        {
+            return std::move(*snapshot);
+        }
+        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
+    }
 };
 
 // An object of a Python class whose attributes are kept as a map (cycler(), joiner(), `self`)
@@ -2445,6 +2418,10 @@ public:
 
     [[nodiscard]] const char* GetObjectClass() const override { return m_className; }
     [[nodiscard]] const InternalValue* GetReprArgument() const override { return m_reprArgument ? &*m_reprArgument : nullptr; }
+    [[nodiscard]] GenericMap CreateGenericMap() const override
+    {
+        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
+    }
 
 private:
     const char* m_className;
@@ -2540,8 +2517,6 @@ public:
         return cell ? cell->Map().GetMutableItems() : nullptr;
     }
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy); }
-    [[nodiscard]] bool IsBorrowed() const override { return true; }
-    [[nodiscard]] bool ViewsRenderOwned() const override { return !m_link.Get(*this) && dynamic_cast<const RenderOwnedAccessor*>(m_values.Get().GetAccessor()) != nullptr; }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysFirst; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
@@ -2701,7 +2676,6 @@ public:
         return cell ? cell->Map().GetMutableItems() : nullptr;
     }
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy); }
-    [[nodiscard]] bool IsBorrowed() const override { return true; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
         if (const auto* cell = m_link.Get(*this))
@@ -2959,14 +2933,129 @@ MapAdapter CreateMapAdapter(ValuesMap&& values)
     return MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<BySharedVal>>>(std::move(values)));
 }
 
+namespace
+{
+// The containers an export copies now, outermost first: a container met again is a cycle,
+// which keeps its view
+thread_local std::vector<const void*> t_exportPath;
+
+class ExportStep
+{
+public:
+    explicit ExportStep(const void* identity)
+    {
+        const auto& path = t_exportPath;
+        // At most this deep, and not into a cycle or past the stack's reserve: the rest stays a view
+        constexpr size_t maxDepth = 256;
+        m_entered = path.size() < maxDepth && !StackNearlyExhausted() && (identity == nullptr || std::find(path.begin(), path.end(), identity) == path.end());
+        if (m_entered)
+        {
+            t_exportPath.push_back(identity);
+        }
+    }
+    ~ExportStep()
+    {
+        if (m_entered)
+        {
+            t_exportPath.pop_back();
+        }
+    }
+    ExportStep(const ExportStep&) = delete;
+    ExportStep(ExportStep&&) = delete;
+    ExportStep& operator=(const ExportStep&) = delete;
+    ExportStep& operator=(ExportStep&&) = delete;
+
+    [[nodiscard]] bool Entered() const noexcept { return m_entered; }
+
+private:
+    bool m_entered;
+};
+
+// Whether an export copies the containers it reaches: the running render wrote to the host's
+// data, whose cells it detaches when it ends. A view kept by the host (a user callable that
+// stores its argument) would then read the host's data again under a container the render
+// changed, nested or not (docs/tasks/0049)
+bool ExportCopies()
+{
+    const auto* cells = CycleCollector::CurrentCells();
+    return cells != nullptr && cells->HasCells();
+}
+
+JINJA2CPP_CELL_NOINLINE std::optional<Value> CopyForExport(const ListRef& list)
+{
+    // A range or a list of unknown length stays a view
+    const auto size = list.GetSize();
+    if (list.GetRangeInfo() || !size)
+    {
+        return std::nullopt;
+    }
+    const ExportStep step(list.GetIdentity());
+    if (!step.Entered())
+    {
+        return std::nullopt;
+    }
+    ValuesList items;
+    items.reserve(*size);
+    list.ForEach([&items](InternalValue&& item) {
+        const InternalValue held(std::move(item));
+        items.push_back(IntValue2Value(held));
+        return true;
+    });
+    // The same kind of value as the view: a callable that takes a GenericList takes it
+    return Value(LendNestedList(std::make_shared<ValuesList>(std::move(items))).Ref().CreateGenericList());
+}
+
+JINJA2CPP_CELL_NOINLINE std::optional<Value> CopyForExport(const MapRef& map)
+{
+    // A namespace, a loop or a host object stays a view: the keys and items its view reads
+    const auto* accessor = map.GetAccessor();
+    if (!accessor || map.IsNamespace() || map.Iterates() || map.GetObjectClass())
+    {
+        return std::nullopt;
+    }
+    const ExportStep step(map.GetIdentity());
+    if (!step.Entered())
+    {
+        return std::nullopt;
+    }
+    ValuesMap items;
+    for (auto& key : accessor->GetKeys())
+    {
+        auto item = IntValue2Value(accessor->GetItem(key));
+        items.emplace(std::move(key), std::move(item));
+    }
+    return Value(LendNestedMap(std::make_shared<ValuesMap>(std::move(items))).CreateGenericMap());
+}
+} // namespace
+
 struct OutputValueConvertor
 {
     using result_t = Value;
 
     result_t operator()(const UndefinedValue&) const { return result_t(); }
     result_t operator()(const NoneValue&) const { return result_t(); }
-    result_t operator()(const MapRef& adapter) const { return result_t(adapter.CreateGenericMap()); }
-    result_t operator()(const ListRef& adapter) const { return result_t(adapter.CreateGenericList()); }
+    result_t operator()(const MapRef& adapter) const
+    {
+        if (JINJA2CPP_CELL_UNLIKELY(ExportCopies()))
+        {
+            if (auto copy = CopyForExport(adapter))
+            {
+                return std::move(*copy);
+            }
+        }
+        return result_t(adapter.CreateGenericMap());
+    }
+    result_t operator()(const ListRef& adapter) const
+    {
+        if (JINJA2CPP_CELL_UNLIKELY(ExportCopies()))
+        {
+            if (auto copy = CopyForExport(adapter))
+            {
+                return std::move(*copy);
+            }
+        }
+        return result_t(adapter.CreateGenericList());
+    }
     result_t operator()(const ValueRef& ref) const { return ref.get(); }
     result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", IntValue2Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }
     result_t operator()(const Callable&) const { return result_t(); }
@@ -3005,54 +3094,6 @@ struct OutputValueConvertor
     bool m_byValue;
 };
 
-namespace
-{
-// Whether `val` is a list or dict of the host's data that PromoteForExport promotes
-bool IsBorrowedForExport(const InternalValue& val)
-{
-    if (auto list = AsList(val))
-    {
-        const auto* accessor = list->GetAccessor();
-        // A list of unknown length stays a view: reading it out may not end. A view of the
-        // template's own list gives that list, which a copy would only hide
-        return accessor != nullptr && accessor->IsBorrowed() && !accessor->ViewsRenderOwned() && accessor->GetSize();
-    }
-    if (auto map = AsMap(val))
-    {
-        const auto* accessor = map->GetAccessor();
-        return accessor != nullptr && accessor->IsBorrowed() && !accessor->ViewsRenderOwned();
-    }
-    return false;
-}
-
-// A list or dict of the host's data handed to the host inside a render gets its cell, as a
-// write gives it one: the host then holds the render's copy (CreateGenericList and
-// CreateGenericMap give it), which shows the render's writes before and after the call and
-// keeps them once the render ends (docs/tasks/0049). Ranges and tuples stay views
-JINJA2CPP_CELL_NOINLINE void PromoteForExport(const InternalValue& val)
-{
-    try
-    {
-        if (!IsBorrowedForExport(val))
-        {
-            return;
-        }
-        auto* cells = CycleCollector::CellsForWrite();
-        if (cells && methods::PromoteBorrowed(val))
-        {
-            cells->NoteExport();
-        }
-    }
-    catch (const std::bad_alloc&)
-    {
-        throw;
-    }
-    catch (...) // NOLINT(bugprone-empty-catch): a host accessor that throws: the host gets its own data, as it gave it
-    {
-    }
-}
-} // namespace
-
 Value OptIntValue2Value(std::optional<InternalValue> val)
 {
     if (val)
@@ -3079,11 +3120,6 @@ Value IntValue2Value(const InternalValue& val)
         {
             return isMarkup ? Value(WMarkup(*text)) : Value(std::wstring(*text));
         }
-    }
-    const auto kind = val.Kind();
-    if (kind == ValueKind::List || kind == ValueKind::Map)
-    {
-        PromoteForExport(val);
     }
     return Apply<OutputValueConvertor>(val);
 }
@@ -3186,25 +3222,6 @@ namespace visitors
 
 namespace
 {
-// The template's own list or dict, when the host's value is one it handed out (RenderOwnedAccessor)
-JINJA2CPP_CELL_NOINLINE std::optional<InternalValue> RenderOwnedValueOf(const Value& val)
-{
-    const RenderOwnedAccessor* own = nullptr;
-    if (const auto* list = std::get_if<GenericList>(&val.GetData()))
-    {
-        own = dynamic_cast<const RenderOwnedAccessor*>(list->GetAccessor());
-    }
-    else if (const auto* map = std::get_if<GenericMap>(&val.GetData()))
-    {
-        own = dynamic_cast<const RenderOwnedAccessor*>(map->GetAccessor());
-    }
-    if (!own)
-    {
-        return std::nullopt;
-    }
-    return own->OwnValue();
-}
-
 // The function of a callable converted from a jinja2::UserCallable, which Callable::IsSame
 // reads the identity of
 struct UserCallableBody
@@ -3215,11 +3232,7 @@ struct UserCallableBody
     InternalValue operator()(const CallParams& params, RenderContext& context) const
     {
         auto ucParams = PrepareUserCallableParams(params, context, argsInfo);
-        auto hostResult = CallHost(ucParams);
-        // A list or dict of the template given back is that object again, as in Python
-        const auto& data = hostResult.GetData();
-        auto own = std::holds_alternative<GenericList>(data) || std::holds_alternative<GenericMap>(data) ? RenderOwnedValueOf(hostResult) : std::nullopt;
-        auto result = own ? std::move(*own) : Value2IntValue(std::move(hostResult));
+        auto result = Value2IntValue(CallHost(ucParams));
         AfterHostCall();
         return result;
     }

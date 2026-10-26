@@ -3,7 +3,6 @@
 #include "cycle_collector.h"
 #include "internal_value.h"
 #include "intrusive_ptr.h"
-#include "template_dict.h" // IWYU pragma: keep (the range-for over a TemplateDict)
 
 #include <atomic>
 #include <cstdint>
@@ -150,93 +149,8 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     return true;
 }
 
-namespace
-{
-// The cell of `item` in `cells`, when it is an adapter of the host's data that has one
-template<typename Table>
-const BorrowedCell* CellOfItem(const Table& cells, const InternalValue& item)
-{
-    const void* identity = nullptr;
-    bool isList = false;
-    if (auto list = AsList(item))
-    {
-        const auto* accessor = list->GetAccessor();
-        if (!accessor || !accessor->IsBorrowed())
-        {
-            return nullptr;
-        }
-        identity = accessor->GetIdentity();
-        isList = true;
-    }
-    else if (auto map = AsMap(item))
-    {
-        const auto* accessor = map->GetAccessor();
-        if (!accessor || !accessor->IsBorrowed())
-        {
-            return nullptr;
-        }
-        identity = accessor->GetIdentity();
-    }
-    else
-    {
-        return nullptr;
-    }
-    const auto found = cells.find(identity);
-    return found != cells.end() && found->second->IsList() == isList ? found->second.get() : nullptr;
-}
-
-} // namespace
-
-void BorrowedCells::Relink() noexcept
-{
-    // One pass over the items the cells hold: an item of an item is a cell's item itself when
-    // the render wrote to it, and an adapter whose data has no cell reads the host's data, as
-    // the render did
-    for (const auto& [identity, cell] : *m_cells)
-    {
-        try
-        {
-            // Noted first, as a write notes its receiver: the list may hold itself, given back
-            // by a callable (`l.append(id(l))`), or come to through this pass (`l.append(l)`).
-            // A write through an adapter noted the adapter, which does not show the cell
-            CycleCollector::NoteStore(cell->Storage());
-        }
-        catch (...) // NOLINT(bugprone-empty-catch): out of memory: its items stay views of the host's data
-        {
-            continue;
-        }
-        if (cell->IsList())
-        {
-            for (auto& item : cell->Items())
-            {
-                if (const auto* found = CellOfItem(*m_cells, item))
-                {
-                    item = found->Storage();
-                }
-            }
-        }
-        else if (auto* items = cell->Map().GetMutableItems())
-        {
-            for (auto& entry : *items)
-            {
-                if (const auto* found = CellOfItem(*m_cells, entry.second))
-                {
-                    entry.second = found->Storage();
-                }
-            }
-        }
-    }
-}
-
 void BorrowedCells::Finish() noexcept
 {
-    // While the cells are attached and the table holds them: a list the host keeps then holds
-    // the render's other copies, not adapters that read the host's data again
-    if (m_exported)
-    {
-        m_exported = false;
-        Relink();
-    }
     // Detached first, while the table holds every cell: freeing a cell frees values that may
     // hold adapters attached to another one
     for (const auto& [identity, cell] : *m_cells)

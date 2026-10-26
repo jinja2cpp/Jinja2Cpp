@@ -592,9 +592,6 @@ struct IListAccessor : ValueObject
     // Whether the list is the host's data, which a write in the render changes for every name of
     // it (AdoptCopy), so that list() must copy it
     [[nodiscard]] virtual bool IsBorrowed() const { return false; }
-    // Whether the list is a view of a list of the template that the host held (a user
-    // callable's value): handed out, it gives that list, so it needs no cell (docs/tasks/0049)
-    [[nodiscard]] virtual bool ViewsRenderOwned() const { return false; }
     // An accessor with iteration state of its own (a generator, which says so with
     // SetClonesOnCopy) is copied with the list value, so that copies iterate independently;
     // every other accessor is shared
@@ -647,10 +644,6 @@ struct IMapAccessor : ValueObject
     [[nodiscard]] virtual bool OwnsMutableItemsAlone() const { return false; }
     // See IListAccessor::AdoptCopy
     virtual bool AdoptCopy(const InternalValue& /*self*/, const InternalValue& /*copy*/) const { return false; }
-    // See IListAccessor::IsBorrowed
-    [[nodiscard]] virtual bool IsBorrowed() const { return false; }
-    // See IListAccessor::ViewsRenderOwned
-    [[nodiscard]] virtual bool ViewsRenderOwned() const { return false; }
     // How x.name resolves against Python's dict methods (items, get, ...)
     [[nodiscard]] virtual MapAttrPolicy GetAttrPolicy() const { return MapAttrPolicy::KeysOnly; }
     // A namespace() object, the only one `set obj.attr = ...` can change
