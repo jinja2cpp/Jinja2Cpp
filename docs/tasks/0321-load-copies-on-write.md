@@ -1,5 +1,6 @@
 ---
-status: in-progress
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/665
 priority: high
 area: robustness
 touches: [src/template.cpp, src/template_impl.h, src/template_module.cpp, include/jinja2cpp/template.h, include/jinja2cpp/error_info.h, test/template_api_test.cpp, test/template_module_test.cpp]
