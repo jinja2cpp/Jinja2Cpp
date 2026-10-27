@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: api
 depends: []
@@ -30,3 +30,11 @@ lambda.
 
 **Done when** a lambda and a function pointer with the same signature render the same for an
 omitted argument, with rows for both in `test/user_callable_test.cpp`.
+
+**Resolution** (with 0334, same PR). Contract: an omitted argument without a default reaches the
+function default-constructed, as None does, on both paths. The cause on the typed path was overload
+resolution, not the contract: `TypedParamUnwrapper`'s non-const template overload beat its const
+`NoneValue` overload, so None left the parameter empty. All its overloads are const now. Lambdas
+with readable parameter types now go through the same per-argument path (0334), so a `const Markup&`
+lambda parameter converts text of the other width as the typed one does. Rows: `StringViewPtrFn()`,
+`WStringViewPtrFn()`, `fptr4`/`f5` in `PerArgumentDispatch`, `lambdaMarkup` in `MarkupTest`.
