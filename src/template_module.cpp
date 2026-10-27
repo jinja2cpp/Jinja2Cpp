@@ -29,6 +29,7 @@
 #include <memory>
 #include <mutex>
 #include <new>
+#include <optional>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
@@ -311,7 +312,6 @@ struct TemplateModuleState
 
     TemplateModuleState(std::shared_ptr<const Impl> tpl, const ValuesMap& params)
         : impl(std::move(tpl))
-        , generation(impl->m_loadGeneration.load(std::memory_order_relaxed))
     {
         for (const auto& [name, value] : params)
         {
@@ -428,11 +428,11 @@ struct TemplateModuleState
         {
             return error;
         }
-        return ExpiredError(name, true);
+        return ExpiredError(name);
     }
 
-    // `ended`: a module made by an earlier call had ended, not the tree replaced
-    [[nodiscard]] BasicErrorInfo<CharT> ExpiredError(const std::string& name, bool ended = false) const
+    // A macro of a module that ended with an earlier call, called through `name`
+    [[nodiscard]] BasicErrorInfo<CharT> ExpiredError(const std::string& name) const
     {
         typename BasicErrorInfo<CharT>::Data errorData;
         errorData.code = ErrorCode::TemplateExpired;
@@ -440,10 +440,7 @@ struct TemplateModuleState
         errorData.srcLoc.line = 1;
         errorData.srcLoc.col = 1;
         errorData.extraParams.emplace_back(name);
-        if (ended)
-        {
-            errorData.extraParams.emplace_back(std::string("ended"));
-        }
+        errorData.extraParams.emplace_back(std::string("ended"));
         return BasicErrorInfo<CharT>(std::move(errorData));
     }
 
@@ -451,11 +448,6 @@ struct TemplateModuleState
     Value Call(const Callable& fn, const std::string& name, const UserCallableParams& ucParams)
     {
         const std::scoped_lock lock(mutex);
-        // The tree the callable runs in was replaced
-        if (impl->m_loadGeneration.load(std::memory_order_relaxed) != generation)
-        {
-            throw BadResultAccess<CharT>(ExpiredError(name));
-        }
         try
         {
             // First, so that it ends last: when nothing of the call holds values any more
@@ -517,8 +509,6 @@ struct TemplateModuleState
     }
 
     std::shared_ptr<const Impl> impl;
-    // The template's Load count when the module was made (TemplateImpl::m_loadGeneration)
-    uint32_t generation;
     // The params, until the module takes them
     InternalValueMap convertedParams;
     GlobalsSnapshot globals;
@@ -594,6 +584,32 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
     }
     return result;
 }
+
+template<typename CharT>
+std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string<CharT>&& source, std::string&& name)
+{
+    auto loaded = std::make_shared<TemplateImpl>(*static_cast<TemplateImpl*>(impl.get()), nullptr);
+    auto error = loaded->Load(std::move(source), std::move(name));
+    if (!error)
+    {
+        // A render on this thread (one that called the host code loading now) may be rendering
+        // the template this replaces: the workspace keeps it (RenderWorkspace::Retire)
+        RenderWorkspace::ForThisThread().Retire(impl);
+        impl = std::move(loaded);
+    }
+    return error;
+}
+
+template<typename CharT>
+std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::basic_string_view<CharT> source, std::string&& name)
+{
+    return LoadReplacing(impl, std::basic_string<CharT>(source), std::move(name));
+}
+
+template std::optional<BasicErrorInfo<char>> TemplateImpl<char>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::string&& source, std::string&& name);
+template std::optional<BasicErrorInfo<char>> TemplateImpl<char>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::string_view source, std::string&& name);
+template std::optional<BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::wstring_view source, std::string&& name);
+template std::optional<BasicErrorInfo<wchar_t>> TemplateImpl<wchar_t>::LoadReplacing(std::shared_ptr<ITemplateImpl>& impl, std::wstring&& source, std::string&& name);
 
 template nonstd::expected<BasicTemplateModule<char>, BasicErrorInfo<char>> TemplateImpl<char>::MakeModule(const std::shared_ptr<const TemplateImpl>& self,
                                                                                                           const ValuesMap& params);

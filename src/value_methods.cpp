@@ -1,6 +1,7 @@
 #include "value_methods.h"
 
 #include "big_int.h"
+#include "case_mapping.h"
 #include "cycle_collector.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
@@ -8,6 +9,7 @@
 #include "markup.h"
 #include "render_context.h"
 #include "template_dict.h"
+#include "unicode_case.h"
 #include "unicode_tables.h"
 #include "value_visitors.h"
 
@@ -25,6 +27,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <memory>
+#include <numeric>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -170,33 +173,7 @@ InternalValue MakeTuple(InternalValueList items)
 // ---------------------------------------------------------------------------------------
 // str
 
-inline uint32_t CodePointOf(std::string_view ch)
-{
-    auto lead = static_cast<unsigned char>(ch[0]);
-    if (lead < 0x80 || ch.size() == 1)
-    {
-        return lead;
-    }
-    uint32_t value = lead & (lead >= 0xF0 ? 0x07 : lead >= 0xE0 ? 0x0F
-                                                                : 0x1F);
-    for (size_t n = 1; n < ch.size(); ++n)
-    {
-        value = (value << 6) | (static_cast<unsigned char>(ch[n]) & 0x3F);
-    }
-    return value;
-}
-
-inline uint32_t CodePointOf(std::wstring_view ch)
-{
-    auto unit = CodeUnit(ch[0]);
-    if (ch.size() == 2 && unit >= 0xD800 && unit <= 0xDBFF)
-    {
-        return 0x10000 + ((unit - 0xD800) << 10) + (CodeUnit(ch[1]) - 0xDC00);
-    }
-    return unit;
-}
-
-// Case mapping covers ASCII, as the upper, lower and title filters do
+// The ASCII fast paths of the case methods; other strings take case_mapping.h's full mappings
 inline bool IsAsciiUpper(uint32_t cp)
 {
     return cp >= 'A' && cp <= 'Z';
@@ -254,22 +231,20 @@ struct StrOps
         return static_cast<size_t>(p - chars.begin());
     }
 
+    static bool IsAscii(View self)
+    {
+        return std::all_of(self.begin(), self.end(), [](CharT ch) { return CodeUnit(ch) < 0x80; });
+    }
+
+    // fn of each character of an ASCII string
     template<typename Fn>
     static Str MapChars(View self, const Fn& fn)
     {
         Str result;
         result.reserve(self.size());
-        for (auto ch : SplitCodePoints(self))
+        for (auto ch : self)
         {
-            auto cp = CodePointOf(ch);
-            if (cp < 0x80)
-            {
-                result.push_back(static_cast<CharT>(fn(cp)));
-            }
-            else
-            {
-                result.append(ch.begin(), ch.end());
-            }
+            result.push_back(static_cast<CharT>(fn(CodeUnit(ch))));
         }
         return result;
     }
@@ -277,16 +252,28 @@ struct StrOps
     static InternalValue Upper(View self, const CallParams& params, RenderContext&)
     {
         CheckArgs(params, "upper", 0, 0);
+        if (!IsAscii(self))
+        {
+            return Result(UpperUnicode(self));
+        }
         return Result(MapChars(self, [](uint32_t cp) { return IsAsciiLower(cp) ? cp - 32 : cp; }));
     }
     static InternalValue Lower(View self, const CallParams& params, RenderContext&)
     {
         CheckArgs(params, "lower", 0, 0);
+        if (!IsAscii(self))
+        {
+            return Result(LowerUnicode(self));
+        }
         return Result(MapChars(self, [](uint32_t cp) { return IsAsciiUpper(cp) ? cp + 32 : cp; }));
     }
     static InternalValue Swapcase(View self, const CallParams& params, RenderContext&)
     {
         CheckArgs(params, "swapcase", 0, 0);
+        if (!IsAscii(self))
+        {
+            return Result(SwapcaseUnicode(self));
+        }
         return Result(MapChars(self, [](uint32_t cp) {
             if (IsAsciiUpper(cp))
             {
@@ -298,32 +285,28 @@ struct StrOps
     static InternalValue Title(View self, const CallParams& params, RenderContext&)
     {
         CheckArgs(params, "title", 0, 0);
-        bool prevCased = false;
-        Str result;
-        for (auto ch : SplitCodePoints(self))
+        if (!IsAscii(self))
         {
-            auto cp = CodePointOf(ch);
-            if (cp < 0x80)
-            {
-                bool isCased = IsAsciiUpper(cp) || IsAsciiLower(cp);
-                if (isCased)
-                {
-                    cp = prevCased ? (IsAsciiUpper(cp) ? cp + 32 : cp) : (IsAsciiLower(cp) ? cp - 32 : cp);
-                }
-                prevCased = isCased;
-                result.push_back(static_cast<CharT>(cp));
-            }
-            else
-            {
-                prevCased = IsAlphaCp(cp);
-                result.append(ch.begin(), ch.end());
-            }
+            return Result(PythonTitleUnicode(self));
         }
-        return Result(std::move(result));
+        bool prevCased = false;
+        return Result(MapChars(self, [&prevCased](uint32_t cp) {
+            bool isCased = IsAsciiUpper(cp) || IsAsciiLower(cp);
+            if (isCased)
+            {
+                cp = prevCased ? (IsAsciiUpper(cp) ? cp + 32 : cp) : (IsAsciiLower(cp) ? cp - 32 : cp);
+            }
+            prevCased = isCased;
+            return cp;
+        }));
     }
     static InternalValue Capitalize(View self, const CallParams& params, RenderContext&)
     {
         CheckArgs(params, "capitalize", 0, 0);
+        if (!IsAscii(self))
+        {
+            return Result(CapitalizeUnicode(self));
+        }
         bool first = true;
         return Result(MapChars(self, [&first](uint32_t cp) {
             auto mapped = first ? (IsAsciiLower(cp) ? cp - 32 : cp) : (IsAsciiUpper(cp) ? cp + 32 : cp);
@@ -336,7 +319,7 @@ struct StrOps
     {
         CheckArgs(params, name, 0, 1);
         auto chars = SplitCodePoints(self);
-        std::function<bool(View)> isStripped = [](View ch) { return unicode::IsSpace(CodePointOf(ch)); };
+        std::function<bool(View)> isStripped = [](View ch) { return unicode::IsSpace(CodePointValue(ch)); };
         Str stripChars;
         Chars stripSet;
         if (const auto* arg = ArgOrNone(params, 0))
@@ -375,7 +358,7 @@ struct StrOps
     // str.split() without a separator, from the left
     static std::vector<Str> SplitWhitespace(const Chars& chars, int64_t maxSplit)
     {
-        auto isSpace = [&chars](size_t idx) { return unicode::IsSpace(CodePointOf(chars[idx])); };
+        auto isSpace = [&chars](size_t idx) { return unicode::IsSpace(CodePointValue(chars[idx])); };
         std::vector<Str> parts;
         size_t pos = 0;
         while (true)
@@ -407,7 +390,7 @@ struct StrOps
     // str.rsplit() without a separator
     static std::vector<Str> RsplitWhitespace(const Chars& chars, int64_t maxSplit)
     {
-        auto isSpace = [&chars](size_t idx) { return unicode::IsSpace(CodePointOf(chars[idx])); };
+        auto isSpace = [&chars](size_t idx) { return unicode::IsSpace(CodePointValue(chars[idx])); };
         std::vector<Str> parts;
         size_t pos = chars.size();
         while (true)
@@ -513,14 +496,14 @@ struct StrOps
         size_t start = 0;
         for (size_t pos = 0; pos < chars.size(); ++pos)
         {
-            auto cp = CodePointOf(chars[pos]);
+            auto cp = CodePointValue(chars[pos]);
             bool isBreak = (cp >= 0x0A && cp <= 0x0D) || (cp >= 0x1C && cp <= 0x1E) || cp == 0x85 || cp == 0x2028 || cp == 0x2029;
             if (!isBreak)
             {
                 continue;
             }
             size_t end = pos + 1;
-            if (cp == '\r' && end < chars.size() && CodePointOf(chars[end]) == '\n')
+            if (cp == '\r' && end < chars.size() && CodePointValue(chars[end]) == '\n')
             {
                 ++end;
             }
@@ -748,7 +731,7 @@ struct StrOps
         {
             return InternalValue(false);
         }
-        return InternalValue(std::all_of(chars.begin(), chars.end(), [&pred](View ch) { return pred(CodePointOf(ch)); }));
+        return InternalValue(std::all_of(chars.begin(), chars.end(), [&pred](View ch) { return pred(CodePointValue(ch)); }));
     }
     static InternalValue Isdigit(View self, const CallParams& params, RenderContext&) { return AllChars(self, params, "isdigit", unicode::IsDecimal); }
     static InternalValue Isdecimal(View self, const CallParams& params, RenderContext&) { return AllChars(self, params, "isdecimal", unicode::IsDecimal); }
@@ -760,23 +743,58 @@ struct StrOps
     }
     static InternalValue Isspace(View self, const CallParams& params, RenderContext&) { return AllChars(self, params, "isspace", unicode::IsSpace); }
 
+    // CPython's unicode_isupper and unicode_islower: no character of the other case or
+    // titlecase, and at least one of the asked case
     static InternalValue CaseCheck(View self, const CallParams& params, const char* name, bool upper)
     {
         CheckArgs(params, name, 0, 0);
         bool hasCased = false;
         for (auto ch : SplitCodePoints(self))
         {
-            auto cp = CodePointOf(ch);
-            if (upper ? IsAsciiLower(cp) : IsAsciiUpper(cp))
+            auto cp = CodePointValue(ch);
+            if ((upper ? unicode::IsLowercase(cp) : unicode::IsUppercase(cp)) || unicode::IsTitlecase(cp))
             {
                 return InternalValue(false);
             }
-            hasCased = hasCased || IsAsciiUpper(cp) || IsAsciiLower(cp);
+            hasCased = hasCased || (upper ? unicode::IsUppercase(cp) : unicode::IsLowercase(cp));
         }
         return InternalValue(hasCased);
     }
     static InternalValue Isupper(View self, const CallParams& params, RenderContext&) { return CaseCheck(self, params, "isupper", true); }
     static InternalValue Islower(View self, const CallParams& params, RenderContext&) { return CaseCheck(self, params, "islower", false); }
+    // CPython's unicode_istitle: uppercase and titlecase characters only start a run of cased
+    // characters, lowercase ones only continue one
+    static InternalValue Istitle(View self, const CallParams& params, RenderContext&)
+    {
+        CheckArgs(params, "istitle", 0, 0);
+        bool hasCased = false;
+        bool prevCased = false;
+        for (auto ch : SplitCodePoints(self))
+        {
+            auto cp = CodePointValue(ch);
+            if (unicode::IsUppercase(cp) || unicode::IsTitlecase(cp))
+            {
+                if (prevCased)
+                {
+                    return InternalValue(false);
+                }
+                prevCased = hasCased = true;
+            }
+            else if (unicode::IsLowercase(cp))
+            {
+                if (!prevCased)
+                {
+                    return InternalValue(false);
+                }
+                prevCased = hasCased = true;
+            }
+            else
+            {
+                prevCased = false;
+            }
+        }
+        return InternalValue(hasCased);
+    }
 
     static InternalValue Zfill(View self, const CallParams& params, RenderContext&)
     {
@@ -907,21 +925,21 @@ struct StrOps
         FormatSpec spec;
         auto chars = SplitCodePoints(text);
         size_t pos = 0;
-        if (chars.size() >= 2 && IsAlign(CodePointOf(chars[1])))
+        if (chars.size() >= 2 && IsAlign(CodePointValue(chars[1])))
         {
             spec.fill = Str(chars[0].begin(), chars[0].end());
             spec.align = chars[1][0];
             pos = 2;
         }
-        else if (!chars.empty() && IsAlign(CodePointOf(chars[0])))
+        else if (!chars.empty() && IsAlign(CodePointValue(chars[0])))
         {
             spec.align = chars[0][0];
             pos = 1;
         }
-        auto peek = [&]() -> uint32_t { return pos < chars.size() ? CodePointOf(chars[pos]) : 0; };
+        auto peek = [&]() -> uint32_t { return pos < chars.size() ? CodePointValue(chars[pos]) : 0; };
         if (peek() == '+' || peek() == '-' || peek() == ' ')
         {
-            spec.sign = CodePointOf(chars[pos++]);
+            spec.sign = CodePointValue(chars[pos++]);
         }
         if (peek() == '#')
         {
@@ -941,14 +959,14 @@ struct StrOps
             int64_t value = 0;
             while (peek() >= '0' && peek() <= '9')
             {
-                value = WidthArg((value * 10) + (CodePointOf(chars[pos++]) - '0'));
+                value = WidthArg((value * 10) + (CodePointValue(chars[pos++]) - '0'));
             }
             return value;
         };
         spec.width = readNumber();
         if (peek() == ',' || peek() == '_')
         {
-            spec.grouping = CodePointOf(chars[pos++]);
+            spec.grouping = CodePointValue(chars[pos++]);
         }
         if (peek() == '.')
         {
@@ -961,7 +979,7 @@ struct StrOps
         }
         if (pos < chars.size())
         {
-            spec.type = CodePointOf(chars[pos++]);
+            spec.type = CodePointValue(chars[pos++]);
         }
         if (pos != chars.size())
         {
@@ -1402,42 +1420,129 @@ struct StrOps
         return value;
     }
 
-    // One replacement field (the text between the braces): name[!conversion][:spec]
-    // escape: Markup's format() (markupsafe's EscapeFormatter), which escapes each field after
-    // formatting it and takes Markup fields as they are
-    static Str ReplaceField(View field, const CallParams& params, FieldNumbering& numbering, RenderContext& context, bool escape)
+    // A replacement field, parsed: name[!conversion][:spec]
+    struct Field
     {
-        View spec;
-        auto colon = field.find(':');
-        if (colon != View::npos)
-        {
-            spec = field.substr(colon + 1);
-            field = field.substr(0, colon);
-        }
+        View name;
         CharT conversion = 0;
-        auto bang = field.find('!');
-        if (bang != View::npos)
+        View spec;
+        // The spec holds fields of its own ('{:{}}')
+        bool nestedSpec = false;
+    };
+
+    // CPython's parse_field on the text after a field's '{'; pos ends after its '}'. A '}' or
+    // ':' inside [key] belongs to the key.
+    static Field ParseField(View str, size_t& pos)
+    {
+        Field field;
+        const auto nameStart = pos;
+        CharT stop = 0;
+        while (pos < str.size())
         {
-            if (bang + 2 != field.size())
+            auto ch = str[pos++];
+            if (ch == '{')
+            {
+                Raise("unexpected '{' in field name");
+            }
+            if (ch == '[')
+            {
+                while (pos < str.size() && str[pos] != ']')
+                {
+                    ++pos;
+                }
+            }
+            else if (ch == '}' || ch == ':' || ch == '!')
+            {
+                stop = ch;
+                break;
+            }
+        }
+        if (stop == 0)
+        {
+            Raise("expected '}' before end of string");
+        }
+        field.name = str.substr(nameStart, pos - 1 - nameStart);
+        if (stop == '!' && !ParseConversion(str, pos, field))
+        {
+            return field;
+        }
+        if (stop == '!' || stop == ':')
+        {
+            ParseSpec(str, pos, field);
+        }
+        return field;
+    }
+
+    // The conversion after '!'; false when the field ends right after it ('{!r}')
+    static bool ParseConversion(View str, size_t& pos, Field& field)
+    {
+        if (pos >= str.size())
+        {
+            Raise("end of string while looking for conversion specifier");
+        }
+        field.conversion = str[pos++];
+        if (pos < str.size())
+        {
+            auto ch = str[pos++];
+            if (ch == '}')
+            {
+                return false;
+            }
+            if (ch != ':')
             {
                 Raise("expected ':' after conversion specifier");
             }
-            conversion = field[bang + 1];
-            field = field.substr(0, bang);
         }
+        return true;
+    }
 
-        // The first name, then .attr and [key] parts
-        auto nameEnd = field.find_first_of(Ascii(".["));
-        auto first = field.substr(0, nameEnd == View::npos ? field.size() : nameEnd);
-        auto rest = nameEnd == View::npos ? View() : field.substr(nameEnd);
-        auto value = ApplyAccessors(LookupArg(first, params, numbering), rest, context);
-        if (conversion == 'r' || conversion == 's' || conversion == 'a')
+    // The spec after ':', which ends at the '}' that balances the field's '{'
+    static void ParseSpec(View str, size_t& pos, Field& field)
+    {
+        const auto specStart = pos;
+        size_t depth = 1;
+        while (pos < str.size())
         {
-            value = TargetString(ToStr(value, conversion != 's'));
+            auto ch = str[pos++];
+            if (ch == '{')
+            {
+                field.nestedSpec = true;
+                ++depth;
+            }
+            else if (ch == '}' && --depth == 0)
+            {
+                field.spec = str.substr(specStart, pos - 1 - specStart);
+                return;
+            }
         }
-        else if (conversion != 0)
+        Raise("unmatched '{' in format spec");
+    }
+
+    // One replacement field. Its value is looked up first, then the nested fields of its spec
+    // are expanded, so '{:{}}' numbers the value 0 and the width 1.
+    // escape: Markup's format() (markupsafe's EscapeFormatter), which escapes each field after
+    // formatting it and takes Markup fields as they are; nested fields are escaped too
+    static Str ReplaceField(const Field& field, const CallParams& params, FieldNumbering& numbering, RenderContext& context, bool escape, int depth)
+    {
+        // The first name, then .attr and [key] parts
+        auto nameEnd = field.name.find_first_of(Ascii(".["));
+        auto first = field.name.substr(0, nameEnd == View::npos ? field.name.size() : nameEnd);
+        auto rest = nameEnd == View::npos ? View() : field.name.substr(nameEnd);
+        auto value = ApplyAccessors(LookupArg(first, params, numbering), rest, context);
+        if (field.conversion == 'r' || field.conversion == 's' || field.conversion == 'a')
+        {
+            value = TargetString(ToStr(value, field.conversion != 's'));
+        }
+        else if (field.conversion != 0)
         {
             Raise("Unknown conversion specifier");
+        }
+        Str expanded;
+        View spec = field.spec;
+        if (field.nestedSpec)
+        {
+            expanded = Build(field.spec, params, numbering, context, escape, depth - 1);
+            spec = expanded;
         }
         if (!escape)
         {
@@ -1454,40 +1559,51 @@ struct StrOps
         return EscapeHtml<CharT>(FormatValue(value, spec));
     }
 
-    // str.format: {}, {0}, {name}, attribute and index lookups {0.x} {a[k]}, !r/!s and a
-    // format spec. Nested replacement fields inside a spec are not supported.
-    static InternalValue Format(View self, const CallParams& params, RenderContext& context, bool escape = false)
+    // CPython's build_string: the literal text with {{ and }} unescaped and each replacement
+    // field formatted; depth counts down to the nested fields of a spec, which may not nest
+    // again (Max string recursion exceeded)
+    static Str Build(View self, const CallParams& params, FieldNumbering& numbering, RenderContext& context, bool escape, int depth)
     {
-        Str result;
-        FieldNumbering numbering;
-        for (size_t pos = 0; pos < self.size(); ++pos)
+        if (depth <= 0)
         {
-            auto ch = self[pos];
-            bool doubled = pos + 1 < self.size() && self[pos + 1] == ch;
-            if (ch == '}' && !doubled)
+            Raise("Max string recursion exceeded");
+        }
+        Str result;
+        for (size_t pos = 0; pos < self.size();)
+        {
+            auto ch = self[pos++];
+            if (ch != '{' && ch != '}')
+            {
+                result.push_back(ch);
+                continue;
+            }
+            const bool doubled = pos < self.size() && self[pos] == ch;
+            if (doubled)
+            {
+                result.push_back(ch);
+                ++pos;
+                continue;
+            }
+            if (ch == '}')
             {
                 Raise("Single '}' encountered in format string");
             }
-            if (ch != '{' || doubled)
-            {
-                result.push_back(ch);
-                pos += (ch == '{' || ch == '}') ? 1 : 0;
-                continue;
-            }
-            auto close = self.find('}', pos + 1);
-            if (close == View::npos)
+            if (pos == self.size())
             {
                 Raise("Single '{' encountered in format string");
             }
-            auto field = self.substr(pos + 1, close - pos - 1);
-            if (field.find('{') != View::npos)
-            {
-                Raise("Nested replacement fields are not supported");
-            }
-            pos = close;
-            result += ReplaceField(field, params, numbering, context, escape);
+            auto field = ParseField(self, pos);
+            result += ReplaceField(field, params, numbering, context, escape, depth);
         }
-        return Result(std::move(result));
+        return result;
+    }
+
+    // str.format: {}, {0}, {name}, attribute and index lookups {0.x} {a[k]}, !r/!s/!a, a
+    // format spec and fields nested in it ('{:{}.{}f}')
+    static InternalValue Format(View self, const CallParams& params, RenderContext& context, bool escape = false)
+    {
+        FieldNumbering numbering;
+        return Result(Build(self, params, numbering, context, escape, 2));
     }
 };
 
@@ -1529,6 +1645,7 @@ JINJA2CPP_STR_METHOD(Isalnum)
 JINJA2CPP_STR_METHOD(Isspace)
 JINJA2CPP_STR_METHOD(Isupper)
 JINJA2CPP_STR_METHOD(Islower)
+JINJA2CPP_STR_METHOD(Istitle)
 JINJA2CPP_STR_METHOD(Zfill)
 JINJA2CPP_STR_METHOD(Center)
 JINJA2CPP_STR_METHOD(Ljust)
@@ -1570,6 +1687,7 @@ const MethodInfo StrMethods[] = {
     { "isspace", StrIsspace, false },
     { "isupper", StrIsupper, false },
     { "islower", StrIslower, false },
+    { "istitle", StrIstitle, false },
     { "zfill", StrZfill, false },
     { "center", StrCenter, false },
     { "ljust", StrLjust, false },
@@ -1684,6 +1802,7 @@ const MethodInfo MarkupMethods[] = {
     { "isspace", StrIsspace, false },
     { "isupper", StrIsupper, false },
     { "islower", StrIslower, false },
+    { "istitle", StrIstitle, false },
     { "zfill", MarkupMethod<StrZfill>, false },
     { "center", MarkupMethod<StrCenter, 1>, false },
     { "ljust", MarkupMethod<StrLjust, 1>, false },
@@ -1840,6 +1959,94 @@ InternalValue ListReverse(const InternalValue& self, const CallParams& params, R
     return InternalValue(NoneValue());
 }
 
+// list.sort(*, key=None, reverse=False), stable like Python's, comparing with `<` only. As in
+// CPython the list looks empty while the keys are computed and compared, and a list changed
+// meanwhile is an error; a key or comparison that fails leaves the list as it was.
+InternalValue ListSort(const InternalValue& self, const CallParams& params, RenderContext& context)
+{
+    if (!params.posParams.empty())
+    {
+        Raise("sort() takes no positional arguments");
+    }
+    for (const auto& kw : params.kwParams)
+    {
+        if (kw.first != "key" && kw.first != "reverse")
+        {
+            Raise("'" + kw.first + "' is an invalid keyword argument for sort()");
+        }
+    }
+    const auto* keyFn = ArgOrNone(params, 0, "key");
+    const auto* reverseArg = Arg(params, 0, "reverse");
+    bool reverse = false;
+    if (reverseArg)
+    {
+        reverse = ConvertToBool(*reverseArg);
+    }
+
+    auto& items = MutableItems(self);
+    InternalValueList values;
+    values.swap(items);
+    struct Restore
+    {
+        InternalValueList& items;
+        InternalValueList& values;
+        Restore(InternalValueList& listItems, InternalValueList& taken)
+            : items(listItems)
+            , values(taken)
+        {
+        }
+        Restore(const Restore&) = delete;
+        Restore(Restore&&) = delete;
+        Restore& operator=(const Restore&) = delete;
+        Restore& operator=(Restore&&) = delete;
+        ~Restore()
+        {
+            // Whatever a key call put into the list meanwhile is dropped, as in CPython
+            if (!values.empty())
+            {
+                items.swap(values);
+            }
+        }
+    } restore{ items, values };
+
+    InternalValueList keys;
+    if (keyFn)
+    {
+        keys.reserve(values.size());
+        for (const auto& val : values)
+        {
+            CallParams keyParams;
+            keyParams.posParams.push_back(val);
+            keys.push_back(CallExpression::CallValue(context, *keyFn, keyParams));
+        }
+    }
+    const auto& sortKeys = keyFn ? keys : values;
+    std::vector<size_t> order(values.size());
+    std::iota(order.begin(), order.end(), size_t{ 0 });
+    // reverse=True keeps equal items in their order too
+    std::stable_sort(order.begin(), order.end(), [&sortKeys, reverse](size_t idx1, size_t idx2) {
+        const auto& left = sortKeys[reverse ? idx2 : idx1];
+        const auto& right = sortKeys[reverse ? idx1 : idx2];
+        return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
+    });
+    InternalValueList sorted;
+    sorted.reserve(values.size());
+    for (auto idx : order)
+    {
+        sorted.push_back(std::move(values[idx]));
+    }
+    // CPython's allocated == -1 sentinel: the list was left with no storage, and any change
+    // that put an item in it gave it some, even when a later pop emptied it again
+    const bool modified = items.capacity() != 0;
+    values.clear();
+    items = std::move(sorted);
+    if (modified)
+    {
+        Raise("list modified during sort");
+    }
+    return InternalValue(NoneValue());
+}
+
 InternalValue ListClear(const InternalValue& self, const CallParams& params, RenderContext&)
 {
     CheckArgs(params, "clear", 0, 0);
@@ -1862,6 +2069,7 @@ const MethodInfo ListMethods[] = {
     { "pop", ListPop, true },
     { "remove", ListRemove, true },
     { "reverse", ListReverse, true },
+    { "sort", ListSort, true },
     { "clear", ListClear, true },
     { "copy", ListCopy, false },
 };

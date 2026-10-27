@@ -1,3 +1,4 @@
+#include "case_mapping.h"
 #include "engine_errors.h"
 #include "filters.h"
 #include "function_base.h"
@@ -6,7 +7,6 @@
 #include "markup.h"
 #include "render_context.h"
 #include "span.h"
-#include "unicode_case.h"
 #include "undefined.h"
 #include "unicode_tables.h"
 #include "value_visitors.h"
@@ -102,33 +102,6 @@ struct GenericStringEncoder : public StringEncoder<GenericStringEncoder<Fn>>
 
     mutable Fn m_fn;
 };
-
-// Code point of one character produced by SplitCodePoints
-inline uint32_t CodePointValue(std::string_view ch)
-{
-    auto lead = static_cast<unsigned char>(ch[0]);
-    if (lead < 0x80 || ch.size() == 1)
-    {
-        return lead;
-    }
-    uint32_t value = lead & (lead >= 0xF0 ? 0x07 : lead >= 0xE0 ? 0x0F
-                                                                : 0x1F);
-    for (size_t n = 1; n < ch.size(); ++n)
-    {
-        value = (value << 6) | (static_cast<unsigned char>(ch[n]) & 0x3F);
-    }
-    return value;
-}
-
-inline uint32_t CodePointValue(std::wstring_view ch)
-{
-    auto unit = CodeUnit(ch[0]);
-    if (ch.size() == 2 && unit >= 0xD800 && unit <= 0xDBFF)
-    {
-        return 0x10000 + ((unit - 0xD800) << 10) + (CodeUnit(ch[1]) - 0xDC00);
-    }
-    return unit;
-}
 
 // Port of Python's textwrap.wrap as Jinja2's wordwrap calls it (expand_tabs, replace_whitespace
 // off; drop_whitespace on). Lengths are counted in code points. Each paragraph of the input is
@@ -1078,143 +1051,23 @@ std::basic_string_view<CharT> PythonStrip(std::basic_string_view<CharT> str, con
     return str.substr(first, last - first);
 }
 
-template<typename CharT>
-void AppendCodePoint(std::basic_string<CharT>& out, uint32_t cp)
-{
-    if (sizeof(CharT) == 1)
-    {
-        if (cp < 0x80)
-        {
-            out.push_back(static_cast<CharT>(cp));
-        }
-        else if (cp < 0x800)
-        {
-            out.append({ static_cast<CharT>(0xC0 | (cp >> 6)), static_cast<CharT>(0x80 | (cp & 0x3F)) });
-        }
-        else if (cp < 0x10000)
-        {
-            out.append({ static_cast<CharT>(0xE0 | (cp >> 12)), static_cast<CharT>(0x80 | ((cp >> 6) & 0x3F)), static_cast<CharT>(0x80 | (cp & 0x3F)) });
-        }
-        else
-        {
-            out.append({ static_cast<CharT>(0xF0 | (cp >> 18)),
-                         static_cast<CharT>(0x80 | ((cp >> 12) & 0x3F)),
-                         static_cast<CharT>(0x80 | ((cp >> 6) & 0x3F)),
-                         static_cast<CharT>(0x80 | (cp & 0x3F)) });
-        }
-    }
-    else if (sizeof(CharT) == 2 && cp >= 0x10000)
-    {
-        out.append({ static_cast<CharT>(0xD800 + ((cp - 0x10000) >> 10)), static_cast<CharT>(0xDC00 + ((cp - 0x10000) & 0x3FF)) });
-    }
-    else
-    {
-        out.push_back(static_cast<CharT>(cp));
-    }
-}
-
-// The code points of a string with the characters they came from, so that characters a case
-// mapping leaves alone are copied as they are
-template<typename CharT>
-struct CaseChars
-{
-    explicit CaseChars(std::basic_string_view<CharT> str)
-        : views(SplitCodePoints(str))
-    {
-        cps.reserve(views.size());
-        for (auto view : views)
-        {
-            cps.push_back(CodePointValue(view));
-        }
-    }
-
-    std::vector<std::basic_string_view<CharT>> views;
-    std::vector<uint32_t> cps;
-};
-
-using CaseFn = size_t (*)(uint32_t, uint32_t (&)[3]);
-
-template<typename CharT>
-void AppendMapped(std::basic_string<CharT>& out, const CaseChars<CharT>& chars, size_t idx, CaseFn map)
-{
-    uint32_t mapped[3];
-    auto count = map(chars.cps[idx], mapped);
-    if (count == 1 && mapped[0] == chars.cps[idx])
-    {
-        out.append(chars.views[idx].begin(), chars.views[idx].end());
-        return;
-    }
-    for (size_t n = 0; n != count; ++n)
-    {
-        AppendCodePoint(out, mapped[n]);
-    }
-}
-
-// CPython's handle_capital_sigma: the sigma at idx ends a word when a cased character precedes
-// it and none follows it, skipping case-ignorable ones; the string is cps[begin, end)
-inline bool IsFinalSigma(const std::vector<uint32_t>& cps, size_t begin, size_t end, size_t idx)
-{
-    auto before = idx;
-    while (before > begin && unicode::IsCaseIgnorable(cps[before - 1]))
-    {
-        --before;
-    }
-    if (before == begin || !unicode::IsCased(cps[before - 1]))
-    {
-        return false;
-    }
-    auto after = idx + 1;
-    while (after < end && unicode::IsCaseIgnorable(cps[after]))
-    {
-        ++after;
-    }
-    return after == end || !unicode::IsCased(cps[after]);
-}
-
-// str.lower() of the characters [from, to) of the string cps[begin, to)
-template<typename CharT>
-void AppendLower(std::basic_string<CharT>& out, const CaseChars<CharT>& chars, size_t begin, size_t from, size_t to)
-{
-    for (auto idx = from; idx != to; ++idx)
-    {
-        if (chars.cps[idx] == 0x3A3)
-        {
-            AppendCodePoint(out, IsFinalSigma(chars.cps, begin, to, idx) ? 0x3C2U : 0x3C3U);
-        }
-        else
-        {
-            AppendMapped(out, chars, idx, unicode::ToLower);
-        }
-    }
-}
-
 // The non-ASCII path of MapCase, out of line so that the ASCII path inlines into the
 // string visitor as before 0048 (Render/many_tags)
 template<bool upper, bool capitalize, typename CharT>
 JINJA2CPP_OUTLINE_INLINE InternalValue MapCaseUnicode(std::basic_string_view<CharT> str)
 {
-    std::basic_string<CharT> result;
-    CaseChars<CharT> chars(str);
     if constexpr (upper)
     {
-        for (size_t idx = 0; idx != chars.cps.size(); ++idx)
-        {
-            AppendMapped(result, chars, idx, unicode::ToUpper);
-        }
+        return InternalValue(UpperUnicode(str));
     }
     else if constexpr (capitalize)
     {
-        if (!chars.cps.empty())
-        {
-            AppendMapped(result, chars, 0, unicode::ToTitle);
-            AppendLower(result, chars, 0, 1, chars.cps.size());
-        }
+        return InternalValue(CapitalizeUnicode(str));
     }
     else
     {
-        AppendLower(result, chars, 0, 0, chars.cps.size());
+        return InternalValue(LowerUnicode(str));
     }
-    return InternalValue(result);
 }
 
 // Upper, lower or capitalize (first character titlecase, the rest lower) a string
@@ -1250,7 +1103,7 @@ JINJA2CPP_OUTLINE_INLINE InternalValue TitleCaseUnicode(std::basic_string_view<C
     {
         if (isDelim(idx))
         {
-            result.append(chars.views[idx].begin(), chars.views[idx].end());
+            AppendUnchanged(result, chars, idx);
             ++idx;
             continue;
         }
@@ -1378,6 +1231,7 @@ InternalValue Underscorize(std::basic_string_view<CharT> str)
     {
         if (!result.empty())
         {
+            CheckCaseMappedSize(result, 1);
             result.push_back('_');
         }
         AppendLower(result, chars, begin, begin, end);
@@ -2343,14 +2197,14 @@ namespace
 template<typename CharT>
 std::vector<uint32_t> LowerCodePoints(std::basic_string_view<CharT> str)
 {
-    const filters::CaseChars<CharT> chars(str);
+    const CaseChars<CharT> chars(str);
     std::vector<uint32_t> result;
     result.reserve(chars.cps.size());
     for (size_t idx = 0; idx != chars.cps.size(); ++idx)
     {
         if (chars.cps[idx] == 0x3A3)
         {
-            result.push_back(filters::IsFinalSigma(chars.cps, 0, chars.cps.size(), idx) ? 0x3C2U : 0x3C3U);
+            result.push_back(IsFinalSigma(chars.cps, 0, chars.cps.size(), idx) ? 0x3C2U : 0x3C3U);
             continue;
         }
         uint32_t mapped[3];
@@ -2376,8 +2230,8 @@ int CompareLower(std::basic_string_view<CharT> left, std::basic_string_view<Char
 void LowerUtf8Unicode(std::string_view str, std::string& out)
 {
     out.clear();
-    const filters::CaseChars<char> chars(str);
-    filters::AppendLower(out, chars, 0, 0, chars.cps.size());
+    const CaseChars<char> chars(str);
+    AppendLower(out, chars, 0, 0, chars.cps.size());
 }
 
 int CompareLowerUnicode(std::string_view left, std::string_view right)

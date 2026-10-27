@@ -1,3 +1,7 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the methods area (cases/methods.py).
 # Format and kinds: test/parity/README.md.
 
+methods.str_digit_numeric_unicode       output      0317 isdigit() and isnumeric() accept decimal digits only, not Unicode Digit and Numeric characters
+methods.str_casefold_isascii            rejects     0317 casefold(), isascii(), isidentifier() and isprintable() are not implemented
+methods.str_format_attr_is_not_item     accepts     0317 a format field's .attr also finds a dict item; Python's getattr does not
+methods.str_format_ascii_conversion     output      0317 !a converts as !r and keeps non-ASCII characters instead of escaping them

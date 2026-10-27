@@ -172,7 +172,10 @@ locations), 0255 (engine runtime errors).
   template before 0270; int64 overflow in template arithmetic), 17 `TemplateRuntimeError` (the template's own
   operation failed: Python's `TypeError`, `ValueError`, ...), 18 `ResourceLimitExceeded`
   (`extraParams[1]` names the limit), 19 `TemplateExpired` (a macro of a `Template::MakeModule`
-  module called after its template was loaded again; 0284), 20 `DataReadError` (`ToValue` could not
+  module called after its template was loaded again; 0284. A Load no longer raises it since 0321:
+  `Load` replaces the template for its own object only, and a module keeps its tree, reversing
+  the second half of 0284 D1a. 0301 raises it for a stored macro of a module that ended with an
+  earlier call), 20 `DataReadError` (`ToValue` could not
   read a JSON document: its `JsonTraits` reported an error; 0311). `UnexpectedException` (1) now means "an exception the
   engine did not raise and could not attribute", with location and `GetException()`.
 
