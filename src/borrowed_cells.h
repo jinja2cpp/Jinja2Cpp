@@ -155,7 +155,7 @@ private:
 class BorrowedCell final : public ValueObject
 {
 public:
-    BorrowedCell(InternalValue storage, InternalValue source, bool isList);
+    BorrowedCell(InternalValue storage, InternalValue source, bool isList, const BorrowedCells& registry);
     BorrowedCell(const BorrowedCell&) = delete;
     BorrowedCell(BorrowedCell&&) = delete;
     BorrowedCell& operator=(const BorrowedCell&) = delete;
@@ -169,9 +169,28 @@ public:
     [[nodiscard]] const IMapAccessor& Map() const noexcept { return *m_map; }
     // The items of the list, read without a virtual call on the hot paths of the list adapter
     [[nodiscard]] InternalValueList& Items() const noexcept { return *m_items; }
-    // The items a write changes: null once the cell is frozen, which nothing writes
-    [[nodiscard]] InternalValueList* MutableItems() const noexcept { return m_frozen ? nullptr : m_items; }
-    [[nodiscard]] TemplateDict* MutableDict() const noexcept { return m_frozen ? nullptr : m_map->GetMutableItems(); }
+    // The items a write changes: null once the cell is frozen, which nothing writes. A write in a
+    // template module's call after a value of an earlier call took the items copies them first
+    // (Unshare)
+    [[nodiscard]] InternalValueList* MutableItems() const
+    {
+        if (JINJA2CPP_CELL_UNLIKELY(m_frozen || m_exportedIn != 0))
+        {
+            return Unshare() ? m_items : nullptr;
+        }
+        return m_items;
+    }
+    [[nodiscard]] TemplateDict* MutableDict() const
+    {
+        if (JINJA2CPP_CELL_UNLIKELY(m_frozen || m_exportedIn != 0))
+        {
+            return Unshare() ? m_map->GetMutableItems() : nullptr;
+        }
+        return m_map->GetMutableItems();
+    }
+    // The list or dict a value handed to the host reads (docs/tasks/0331)
+    [[nodiscard]] GenericList ExportList() const;
+    [[nodiscard]] GenericMap ExportMap() const;
     // Whether the render that made the cell ended: the values that outlived it read the cell, and
     // nothing writes it (docs/tasks/0331)
     [[nodiscard]] bool IsFrozen() const noexcept { return m_frozen; }
@@ -180,15 +199,29 @@ private:
     friend class CellLink;
     friend class BorrowedCells;
 
-    InternalValue m_storage;
+    // Before a write: false for a frozen cell; else copies the items if a value handed out in an
+    // earlier call of the module still shares them
+    JINJA2CPP_CELL_NOINLINE bool Unshare() const;
+    // Notes that a value handed to the host shares the items
+    void NoteExport() const noexcept;
+    void Bind() const noexcept;
+
+    mutable InternalValue m_storage;
+    // The storage before the last Unshare: an enumeration of it may still run
+    mutable InternalValue m_retired;
     // The value promoted first: it keeps the host's data alive, for an adapter that owns it
     // (a user callable's result), so that the identity the registry keys the cell by is not
     // reused while the registry has the cell. Dropped when the cell freezes
     mutable InternalValue m_source;
-    // Views into m_storage, which owns them for the cell's life
-    const IListAccessor* m_list = nullptr;
-    const IMapAccessor* m_map = nullptr;
-    InternalValueList* m_items = nullptr;
+    // Views into m_storage, which owns them
+    mutable const IListAccessor* m_list = nullptr;
+    mutable const IMapAccessor* m_map = nullptr;
+    mutable InternalValueList* m_items = nullptr;
+    // The registry that made the cell; not dereferenced once the cell is frozen
+    const BorrowedCells* m_registry;
+    // The call of a template module in which a value handed to the host first shared the items, 0
+    // when none does (docs/tasks/0331, decision D8)
+    mutable uint32_t m_exportedIn = 0;
     bool m_isList;
     // Set when the render ends (BorrowedCells::Finish)
     mutable bool m_frozen = false;
@@ -287,8 +320,19 @@ public:
         }
     }
 
+    // A call of a template module starts: a write in it to a container a value of an earlier call
+    // shares copies it first (BorrowedCell::Unshare). A render's registry has one call, 0
+    void BeginCall() noexcept
+    {
+        if (++m_call == 0)
+        {
+            m_call = 1;
+        }
+    }
+
 private:
     friend class CellLink;
+    friend class BorrowedCell;
 
     // The cells by the identity of the host's data (IListAccessor::GetIdentity)
     using Table = robin_hood::unordered_flat_map<const void*, IntrusivePtr<const BorrowedCell>>;
@@ -296,6 +340,8 @@ private:
     void Finish() noexcept;
 
     std::unique_ptr<Table> m_cells;
+    // The template module's call that runs, or 0 for a render's registry
+    uint32_t m_call = 0;
 };
 
 } // namespace v2

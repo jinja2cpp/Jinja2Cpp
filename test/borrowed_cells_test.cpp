@@ -257,6 +257,103 @@ TEST(BorrowedCellsKept, ModuleWritesAndKeeps)
     EXPECT_EQ("[0, 1]", keeper.Show());
 }
 
+namespace
+{
+// A module whose macro writes the host's `l` with its argument and hands `l` to keep()
+struct KeepingModule
+{
+    Keeper keeper;
+    Template tpl;
+    TemplateModule module;
+
+    explicit KeepingModule(const std::string& macro)
+    {
+        ValuesMap params{ { "l", ValuesList{ 0 } } };
+        keeper.AddTo(params);
+        EXPECT_TRUE(!!tpl.Load(macro));
+        auto made = tpl.MakeModule(params);
+        EXPECT_TRUE(!!made);
+        if (made)
+        {
+            module = std::move(*made);
+        }
+    }
+    void Call(int64_t x)
+    {
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ x };
+        module.exports["add"].As<UserCallable>().callable(callParams);
+    }
+};
+} // namespace
+
+TEST(BorrowedCellsKept, ModuleCopiesOnALaterWrite)
+{
+    // D8: a value a module call handed out keeps that call's final state; a later call's write
+    // copies the items first (Python: every kept value is the same list, [0, 1, 2, 3])
+    KeepingModule m("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep(l) %}{% set _ = l.append(x * 10) %}{% endmacro %}");
+    m.Call(1);
+    m.Call(2);
+    EXPECT_EQ("[0, 1, 10]", m.keeper.Show(0));
+    EXPECT_EQ("[0, 1, 10, 2, 20]", m.keeper.Show(1));
+    m.Call(3);
+    EXPECT_EQ("[0, 1, 10]", m.keeper.Show(0));
+    EXPECT_EQ("[0, 1, 10, 2, 20]", m.keeper.Show(1));
+    EXPECT_EQ("[0, 1, 10, 2, 20, 3, 30]", m.keeper.Show(2));
+}
+
+TEST(BorrowedCellsKept, ModuleDictCopiesOnALaterWrite)
+{
+    // The same for a dict of the host's data
+    Keeper keeper;
+    ValuesMap params{ { "d", ValuesMap{ { "a", 0 } } } };
+    keeper.AddTo(params);
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% set _ = d.update(b=x) %}{% set _ = keep(d) %}{% endmacro %}"));
+    auto module = tpl.MakeModule(params).value();
+    for (int64_t x = 1; x != 3; ++x)
+    {
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ x };
+        module.exports["add"].As<UserCallable>().callable(callParams);
+    }
+    EXPECT_EQ("{'a': 0, 'b': 1}", keeper.Show(0));
+    EXPECT_EQ("{'a': 0, 'b': 2}", keeper.Show(1));
+}
+
+TEST(BorrowedCellsKept, ModuleCalledFromThreadsWhileTheHostReads)
+{
+    // D8, TSan: two threads call the module, which writes `l` in every call, while a third reads
+    // what the first call handed out
+    KeepingModule m("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep(l) %}{% endmacro %}");
+    m.Call(1);
+    const Value first = m.keeper.kept.at(0);
+    std::vector<std::thread> threads;
+    for (int t = 0; t != 2; ++t)
+    {
+        threads.emplace_back([&m]() {
+            for (int i = 0; i != 50; ++i)
+            {
+                UserCallableParams callParams;
+                callParams.extraPosArgs = ValuesList{ int64_t{ 2 } };
+                m.module.exports.at("add").As<UserCallable>().callable(callParams);
+            }
+        });
+    }
+    std::string seen;
+    threads.emplace_back([&first, &seen]() {
+        for (int i = 0; i != 50; ++i)
+        {
+            seen = Render("{{ k }}", ValuesMap{ { "k", first } });
+        }
+    });
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+    EXPECT_EQ("[0, 1]", seen);
+}
+
 TEST(BorrowedCellsKept, GivenBackAndWritten)
 {
     // K8: a kept value given to a later render is that render's borrowed data: it writes a copy

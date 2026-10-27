@@ -44,6 +44,7 @@
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
+#include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
 #ifdef JINJA2CPP_BENCH_GPERFTOOLS
@@ -58,6 +59,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <memory>
@@ -650,8 +652,85 @@ int CountCase(const Case& c, CountKind kind, int iterations, const ProfileOption
     return ok ? 0 : 1;
 }
 
+// A template module that wrote a host list of 1000 items hands it to a host callable that keeps
+// the last one it got, once a call (docs/tasks/0331, decision D8). Module/keep only hands it
+// out: no call copies. Module/keep_written writes the list first: the write copies the items
+// the previous call's kept value shares, once a call
+class ModuleKeep
+{
+public:
+    explicit ModuleKeep(bool written)
+    {
+        jinja2::ValuesList items;
+        for (int64_t i = 0; i != 1000; ++i)
+        {
+            items.emplace_back(i);
+        }
+        jinja2::ValuesMap params{ { "l", std::move(items) }, { "w", written } };
+        params["keep"] = jinja2::UserCallable(
+            [this](const jinja2::UserCallableParams& p) {
+                m_kept = p["v"];
+                return jinja2::Value();
+            },
+            { jinja2::ArgInfo{ "v" } });
+        if (!m_tpl.Load("{% set _ = l.append(-1) %}{% macro call(x) %}{% set _ = l.append(x) if w %}{% set _ = keep(l) %}{% endmacro %}"))
+        {
+            return;
+        }
+        auto module = m_tpl.MakeModule(params);
+        if (module)
+        {
+            m_module = std::move(module.value());
+            m_call = m_module.exports["call"].As<jinja2::UserCallable>().callable;
+        }
+        m_args.extraPosArgs = jinja2::ValuesList{ 1 };
+    }
+
+    [[nodiscard]] bool Ok() const { return static_cast<bool>(m_call); }
+    void Call() { m_call(m_args); }
+
+private:
+    jinja2::Template m_tpl;
+    jinja2::TemplateModule m_module;
+    std::function<jinja2::Value(const jinja2::UserCallableParams&)> m_call;
+    jinja2::UserCallableParams m_args;
+    jinja2::Value m_kept;
+};
+
+void BenchModuleKeep(benchmark::State& state, bool written)
+{
+    ModuleKeep module(written);
+    if (!module.Ok())
+    {
+        state.SkipWithError("module failed");
+        return;
+    }
+    for (auto _ : state)
+    {
+        module.Call();
+    }
+}
+
+int CountModuleKeep(bool written, int iterations, const ProfileOptions& profile)
+{
+    ModuleKeep module(written);
+    if (!module.Ok())
+    {
+        std::cerr << "Module/keep: failed to load\n";
+        return 1;
+    }
+    auto fn = [&module] { module.Call(); };
+    fn();
+    RunCounted(fn, iterations, profile);
+    return 0;
+}
+
 int Count(const std::vector<std::unique_ptr<Case>>& cases, const std::string& name, int iterations, const ProfileOptions& profile)
 {
+    if (name == "Module/keep" || name == "Module/keep_written")
+    {
+        return CountModuleKeep(name == "Module/keep_written", iterations, profile);
+    }
     const auto slash = name.find('/');
     const std::string kind = name.substr(0, slash);
     const std::string caseName = slash == std::string::npos ? std::string() : name.substr(slash + 1);
@@ -767,6 +846,8 @@ int main(int argc, char** argv)
         benchmark::RegisterBenchmark("Load/" + c->name, c->wide ? BenchLoad<wchar_t> : BenchLoad<char>, c.get());
         benchmark::RegisterBenchmark("Render/" + c->name, c->wide ? BenchRender<wchar_t> : BenchRender<char>, c.get());
     }
+    benchmark::RegisterBenchmark("Module/keep", BenchModuleKeep, false);
+    benchmark::RegisterBenchmark("Module/keep_written", BenchModuleKeep, true);
     for (const auto& c : cases)
     {
         if (std::find(OutputTargetCases.begin(), OutputTargetCases.end(), c->name) == OutputTargetCases.end())

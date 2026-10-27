@@ -47,6 +47,7 @@ public:
     explicit CycleCollector(BorrowedCells& cells) noexcept
         : m_external(&cells)
     {
+        cells.BeginCall();
         s_current = this;
     }
     ~CycleCollector()

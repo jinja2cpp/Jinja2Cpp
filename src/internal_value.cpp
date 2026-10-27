@@ -1490,7 +1490,7 @@ public:
         // look at its link, which the next render on the thread changes
         if (const auto* cell = this->IsGlobalData() ? nullptr : m_link.Current())
         {
-            return cell->List().CreateGenericList();
+            return cell->ExportList();
         }
         return GenericList([list = m_values]() -> const IListItemAccessor* { return list.Get().GetAccessor(); });
     }
@@ -1815,7 +1815,7 @@ public:
         {
             if (const auto* cell = m_link.Current())
             {
-                return cell->List().CreateGenericList();
+                return cell->ExportList();
             }
         }
         return ExportListView::Make(m_values.Get(), ExportOwner(m_values));
@@ -2690,7 +2690,7 @@ public:
         // As GenericListAdapter's
         if (const auto* cell = this->IsGlobalData() ? nullptr : m_link.Current())
         {
-            return cell->Map().CreateGenericMap();
+            return cell->ExportMap();
         }
         return GenericMap([values = m_values]() -> const IMapItemAccessor* { return values.Get().GetAccessor(); });
     }
@@ -2856,7 +2856,7 @@ public:
         {
             if (const auto* cell = m_link.Current())
             {
-                return cell->Map().CreateGenericMap();
+                return cell->ExportMap();
             }
         }
         return ExportMapView::Make(m_values.Get(), ExportOwner(m_values));

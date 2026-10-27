@@ -45,12 +45,18 @@ uint32_t NextEpoch() noexcept
 }
 } // namespace
 
-BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, bool isList)
+BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, bool isList, const BorrowedCells& registry)
     : m_storage(std::move(storage))
     , m_source(std::move(source))
+    , m_registry(&registry)
     , m_isList(isList)
 {
-    if (isList)
+    Bind();
+}
+
+void BorrowedCell::Bind() const noexcept
+{
+    if (m_isList)
     {
         auto list = AsList(m_storage);
         m_list = list ? list->GetAccessor() : nullptr;
@@ -61,6 +67,55 @@ BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, bool isL
         auto map = AsMap(m_storage);
         m_map = map ? map->GetAccessor() : nullptr;
     }
+}
+
+GenericList BorrowedCell::ExportList() const
+{
+    NoteExport();
+    return m_list->CreateGenericList();
+}
+
+GenericMap BorrowedCell::ExportMap() const
+{
+    NoteExport();
+    return m_map->CreateGenericMap();
+}
+
+void BorrowedCell::NoteExport() const noexcept
+{
+    // Only in the cell's own render or module call, which alone writes the cell: a frozen cell is
+    // never written, and a render's cells live for one call
+    if (m_frozen || m_exportedIn != 0 || CycleCollector::CurrentCells() != m_registry || m_registry->m_call == 0)
+    {
+        return;
+    }
+    m_exportedIn = m_registry->m_call;
+}
+
+bool BorrowedCell::Unshare() const
+{
+    if (m_frozen)
+    {
+        return false;
+    }
+    // The call that handed the items out sees its own later writes, as the host does while it runs
+    if (m_exportedIn == m_registry->m_call)
+    {
+        return true;
+    }
+    m_exportedIn = 0;
+    if (m_isList ? m_list->OwnsMutableItemsAlone() : m_map->OwnsMutableItemsAlone())
+    {
+        // The host let go of what it was handed
+        return true;
+    }
+    // The value of the earlier call keeps the items as they were: the host holds a snapshot that
+    // nothing writes any more (decision D8, copy on write)
+    InternalValue copy = m_isList ? InternalValue(ListAdapter::CreateAdapter(InternalValueList(*m_items)))
+                                  : InternalValue(CreateMapAdapter(TemplateDict(*m_map->GetMutableItems())));
+    m_retired = std::exchange(m_storage, std::move(copy));
+    Bind();
+    return true;
 }
 
 // The registry detaches or freezes every link before it lets go of its cells, and a frozen cell
@@ -162,7 +217,7 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     {
         cells->m_cells = std::make_unique<BorrowedCells::Table>();
     }
-    auto cell = MakeRef<BorrowedCell>(std::move(storage), self, isList);
+    auto cell = MakeRef<BorrowedCell>(std::move(storage), self, isList, *cells);
     if (isList ? !cell->m_items : !cell->m_map)
     {
         return false;
