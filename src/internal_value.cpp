@@ -1615,7 +1615,7 @@ public:
     OwnedAdapter& operator=(OwnedAdapter&&) noexcept = default;
     ~OwnedAdapter() override { this->ReleaseLink(); }
 
-    void Traverse(const TraverseFn& fn) const override { this->GetCellLink()->TraverseFrozen(fn); }
+    void Traverse(const TraverseFn& fn) const override { this->TraverseOwned(fn); }
 };
 
 template<template<typename> class Holder>
@@ -1636,6 +1636,16 @@ public:
     // Detaches the adapter from its cell: the block of item adapters calls it before it frees
     // the slot (ItemAdapters), as OwnedAdapter's destructor does
     void ReleaseLink() const noexcept { m_link.Release(); }
+    // The collector's view of what the adapter alone holds: its frozen cell and its block of item
+    // adapters, whose slots may hold frozen cells too (OwnedAdapter, ItemAdapters)
+    void TraverseOwned(const TraverseFn& fn) const
+    {
+        m_link.TraverseFrozen(fn);
+        if (m_items)
+        {
+            fn(m_items.get());
+        }
+    }
 
     [[nodiscard]] size_t GetItemsCountImpl() const
     {
@@ -2819,6 +2829,8 @@ public:
     // Detaches the adapter from its cell: the block of item adapters calls it before it frees
     // the slot (ItemAdapters), as OwnedAdapter's destructor does
     void ReleaseLink() const noexcept { m_link.Release(); }
+    // The collector's view of what the adapter alone holds: its frozen cell (OwnedAdapter, ItemAdapters)
+    void TraverseOwned(const TraverseFn& fn) const { m_link.TraverseFrozen(fn); }
 
     [[nodiscard]] size_t GetSize() const override
     {
@@ -3005,11 +3017,11 @@ struct ItemAdapters final : ValueObject
         {
             if (const auto* map = std::get_if<Map>(&adapters[idx]))
             {
-                map->GetCellLink()->TraverseFrozen(fn);
+                map->TraverseOwned(fn);
             }
             else if (const auto* list = std::get_if<List>(&adapters[idx]))
             {
-                list->GetCellLink()->TraverseFrozen(fn);
+                list->TraverseOwned(fn);
             }
         }
     }

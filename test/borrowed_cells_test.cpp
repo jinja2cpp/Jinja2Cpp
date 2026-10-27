@@ -398,8 +398,9 @@ TEST(BorrowedCellsKept, CyclesThroughFrozenCellsAreFreed)
     // Cycles through the render's copies that nothing keeps: the collector frees them through the
     // frozen links (LSan in the sanitizer job)
     Keeper keeper;
-    EXPECT_EQ("2|1|2", RenderFreed(keeper, "{% set _ = l.append(l) %}{{ l|length }}|{% set _ = m[0].append(m) %}{{ m|length }}|{% set _ = n.append([n]) %}{{ n|length }}",
-                                   { { "l", ValuesList{ 1 } }, { "m", ValuesList{ Value(ValuesList{ 1 }) } }, { "n", ValuesList{ 2 } } }));
+    EXPECT_EQ("2", RenderFreed(keeper, "{% set _ = l.append(l) %}{{ l|length }}", { { "l", ValuesList{ 1 } } }));
+    EXPECT_EQ("1", RenderFreed(keeper, "{% set _ = m[0].append(m) %}{{ m|length }}", { { "m", ValuesList{ Value(ValuesList{ 1 }) } } }));
+    EXPECT_EQ("2", RenderFreed(keeper, "{% set _ = n.append([n]) %}{{ n|length }}", { { "n", ValuesList{ 2 } } }));
 }
 
 TEST(BorrowedCellsKept, KeptSelfCycleIsTheRendersCopy)
@@ -408,9 +409,9 @@ TEST(BorrowedCellsKept, KeptSelfCycleIsTheRendersCopy)
     // are freed. As on master the cycle leaks once the host lets it go, as no collector runs then
     // (docs/tasks/0331, decision D7): a static keeps it reachable, so that LSan does not report
     // the leak this row documents
-    static Keeper keeper;
-    EXPECT_EQ("[1, [...]]", RenderFreed(keeper, "{% set _ = l.append(l) %}{% set _ = keep(l) %}{{ l }}", { { "l", ValuesList{ 1 } } }));
-    const auto kept = keeper.kept.back().ToGenericList();
+    static auto* keeper = new Keeper;
+    EXPECT_EQ("[1, [...]]", RenderFreed(*keeper, "{% set _ = l.append(l) %}{% set _ = keep(l) %}{{ l }}", { { "l", ValuesList{ 1 } } }));
+    const auto kept = keeper->kept.back().ToGenericList();
     EXPECT_EQ(2u, kept.GetSize().value_or(0));
     EXPECT_EQ(2u, kept.GetAccessor()->GetIndexer()->GetItemByIndex(1).ToGenericList().GetSize().value_or(0));
 }
