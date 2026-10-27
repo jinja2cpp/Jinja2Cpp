@@ -112,7 +112,10 @@ the advisor's four changes, D1-D7 as recommended and D8 as copy on write.
   cell its storage), and `BorrowedCells::Release` hands the frozen cells that values still read
   to the collector ending the render or the module. A cycle nothing keeps is freed. A kept
   container that holds itself (`l.append(l); keep(l)`) is the render's copy, cycle included,
-  and leaks once the host lets it go, as on master (D7 option a). Option b, which detached the
+  and leaks once the host lets it go (D7 option a). Kept mutual cycles (`a.append(b);
+  b.append(a); keep(a)`) stay cycles the same way: host conversion does not print them and
+  they leak, where master printed `[1, [2]]` through the host's params and read freed memory
+  once those were gone. Option b, which detached the
   back-edges at Finish, was dropped after verifier round 8: the inner name then read the
   host's params, a use-after-free once they were freed, and which edge broke depended on the
   table's order.
