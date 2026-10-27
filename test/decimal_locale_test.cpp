@@ -19,7 +19,11 @@ protected:
         m_saved = current ? current : "C";
         for (const char* name : { "de_DE.UTF-8", "de_DE.utf8", "fr_FR.UTF-8", "ru_RU.UTF-8", "de-DE", "German_Germany.1252" })
         {
-            if (std::setlocale(LC_NUMERIC, name) && std::string(std::localeconv()->decimal_point) == ",")
+            if (!std::setlocale(LC_NUMERIC, name))
+            {
+                continue;
+            }
+            if (std::string(std::localeconv()->decimal_point) == ",")
             {
                 return;
             }
