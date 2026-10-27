@@ -21,18 +21,14 @@ inline namespace v2
 
 namespace detail
 {
-std::atomic<uint32_t> g_cellEpoch{ 0 };
-std::atomic<uint32_t> g_liveCells{ 0 };
-std::atomic<uint32_t> g_frozenCells{ 0 };
-} // namespace detail
+std::atomic<uint32_t> CellCounters::s_epoch{ 0 };
+std::atomic<uint32_t> CellCounters::s_live{ 0 };
 
-namespace
-{
-uint32_t NextEpoch() noexcept
+uint32_t CellCounters::NextEpoch() noexcept
 {
     // Past the attached mark and the epoch of a new adapter: the counter never holds either,
     // also not for a moment while another thread reads it
-    auto epoch = detail::g_cellEpoch.load(std::memory_order_relaxed);
+    auto epoch = s_epoch.load(std::memory_order_relaxed);
     uint32_t next = 0;
     do
     {
@@ -41,10 +37,10 @@ uint32_t NextEpoch() noexcept
         {
             ++next;
         }
-    } while (!detail::g_cellEpoch.compare_exchange_weak(epoch, next, std::memory_order_relaxed));
+    } while (!s_epoch.compare_exchange_weak(epoch, next, std::memory_order_relaxed));
     return next;
 }
-} // namespace
+} // namespace detail
 
 BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, bool isList, const BorrowedCells& registry)
     : m_storage(std::move(storage))
@@ -133,16 +129,6 @@ bool BorrowedCell::Unshare() const
     return true;
 }
 
-// The registry detaches or freezes every link before it lets go of its cells, and a frozen cell
-// goes with the last link that reads it
-BorrowedCell::~BorrowedCell()
-{
-    if (m_frozen)
-    {
-        detail::g_frozenCells.fetch_sub(1, std::memory_order_relaxed);
-    }
-}
-
 const BorrowedCell* CellLink::Find(const IListAccessor& self) const
 {
     return Find(self.GetIdentity(), true, self.IsGlobalData());
@@ -162,7 +148,7 @@ const BorrowedCell* CellLink::Find(const void* identity, bool isList, bool held)
         return m_cell;
     }
     // Read first: a promotion after this read moves the epoch again
-    m_seenEpoch = detail::g_cellEpoch.load(std::memory_order_relaxed);
+    m_seenEpoch = detail::CellEpoch();
     const auto* cells = CycleCollector::CurrentCells();
     if (!cells || !cells->m_cells)
     {
@@ -270,9 +256,9 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
         throw;
     }
     // Counted before the epoch moves (QuietEpoch)
-    detail::g_liveCells.fetch_add(1, std::memory_order_relaxed);
+    detail::CellCounters::AddLive(1);
     // The other adapters of the same data look the cell up on their next read
-    NextEpoch();
+    detail::CellCounters::NextEpoch();
     return true;
 }
 
@@ -307,7 +293,6 @@ void BorrowedCells::Finish(CycleCollector* collector) noexcept
         cell->m_links.shrink_to_fit();
     }
     const auto count = static_cast<uint32_t>(m_cells->size());
-    detail::g_frozenCells.fetch_add(count, std::memory_order_relaxed);
     // A cell a link still reads may be in a cycle the render's end left (`l.append(l)`, or the
     // items of a copy, which keep the value they were copied from): the collector walks from it
     if (collector)
@@ -329,9 +314,9 @@ void BorrowedCells::Finish(CycleCollector* collector) noexcept
     }
     // A cell no link reads goes now, and with it what only its items held
     m_cells.reset();
-    detail::g_liveCells.fetch_sub(count, std::memory_order_relaxed);
+    detail::CellCounters::RemoveLive(count);
     // An adapter that read a cell of this render, or found none while it ran, looks again
-    NextEpoch();
+    detail::CellCounters::NextEpoch();
 }
 
 } // namespace v2

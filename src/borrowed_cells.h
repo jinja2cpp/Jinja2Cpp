@@ -34,15 +34,38 @@ class CycleCollector;
 
 namespace detail
 {
-// The epoch of the borrowed cells: it moves on every promotion and at the end of a render that
-// made a cell, in any thread, so that an adapter learns that its data may have a cell with one
-// load and a compare (CellLink::Get). Defined in borrowed_cells.cpp
-extern std::atomic<uint32_t> g_cellEpoch;
-// The cells that exist now, in any thread's registry; with the epoch it tells a block of item
-// adapters that none of its slots can have a cell (QuietEpoch)
-extern std::atomic<uint32_t> g_liveCells;
-// The frozen cells that exist now: those a value kept after its render still reads (docs/tasks/0331)
-extern std::atomic<uint32_t> g_frozenCells;
+// The counters of the borrowed cells that every thread shares. Only borrowed_cells.cpp changes
+// them; readers get a value. The storage is a member defined in borrowed_cells.cpp, not a static
+// local of an inline function, so code outside the library that reached it would fail to link
+// rather than read a copy of its own, and a hidden symbol is one RIP-relative load in a shared
+// build
+class CellCounters
+{
+public:
+    // Moves on every promotion and at the end of a render that made a cell, in any thread, so
+    // that an adapter learns that its data may have a cell with one load and a compare
+    // (CellLink::Get)
+    static uint32_t Epoch() noexcept { return s_epoch.load(std::memory_order_relaxed); }
+    // The cells that exist now, in any thread's registry; with the epoch it tells a block of item
+    // adapters that none of its slots can have a cell (QuietEpoch)
+    static uint32_t Live() noexcept { return s_live.load(std::memory_order_relaxed); }
+
+private:
+    friend class jinja2::BorrowedCells;
+    friend class jinja2::CellLink;
+
+    static uint32_t NextEpoch() noexcept;
+    static void AddLive(uint32_t count) noexcept { s_live.fetch_add(count, std::memory_order_relaxed); }
+    static void RemoveLive(uint32_t count) noexcept { s_live.fetch_sub(count, std::memory_order_relaxed); }
+
+    static std::atomic<uint32_t> s_epoch;
+    static std::atomic<uint32_t> s_live;
+};
+
+inline uint32_t CellEpoch() noexcept
+{
+    return CellCounters::Epoch();
+}
 } // namespace detail
 
 // The part of an adapter of the host's data (a list or map lent by reference, docs/tasks/0115)
@@ -110,7 +133,7 @@ public:
     // Whether Get may return a cell. The hottest reads (an item of a list or map) test it and
     // call a JINJA2CPP_CELL_NOINLINE member for the rest, so that their own code stays small
     // enough to keep what they inline (the string view of an item, Render/many_tags)
-    [[nodiscard]] bool MayHaveCell() const noexcept { return detail::g_cellEpoch.load(std::memory_order_relaxed) != m_seenEpoch; }
+    [[nodiscard]] bool MayHaveCell() const noexcept { return detail::CellEpoch() != m_seenEpoch; }
     // The same for an epoch the caller read
     [[nodiscard]] bool MayHaveCell(uint32_t epoch) const noexcept { return epoch != m_seenEpoch; }
 
@@ -166,7 +189,7 @@ public:
     BorrowedCell(BorrowedCell&&) = delete;
     BorrowedCell& operator=(const BorrowedCell&) = delete;
     BorrowedCell& operator=(BorrowedCell&&) = delete;
-    ~BorrowedCell() override;
+    ~BorrowedCell() override = default;
 
     void Traverse(const TraverseFn& fn) const override;
 
@@ -250,7 +273,7 @@ struct CellStep
     size_t size = 0;
     uint32_t epoch = Recheck;
 
-    [[nodiscard]] bool IsCurrent() const noexcept { return epoch == detail::g_cellEpoch.load(std::memory_order_relaxed); }
+    [[nodiscard]] bool IsCurrent() const noexcept { return epoch == detail::CellEpoch(); }
 };
 
 // The epoch, if no cell exists now, else CellStep::Recheck, which the epoch never is: while the
@@ -258,8 +281,8 @@ struct CellStep
 // order: a cell is counted before its promotion moves the epoch (CellLink::Adopt)
 inline uint32_t QuietEpoch() noexcept
 {
-    const auto epoch = detail::g_cellEpoch.load(std::memory_order_relaxed);
-    return detail::g_liveCells.load(std::memory_order_relaxed) == 0 ? epoch : CellStep::Recheck;
+    const auto epoch = detail::CellEpoch();
+    return detail::CellCounters::Live() == 0 ? epoch : CellStep::Recheck;
 }
 
 inline CellLink& CellLink::operator=(const CellLink& other) noexcept

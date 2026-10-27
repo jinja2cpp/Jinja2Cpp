@@ -1702,7 +1702,7 @@ public:
         {
             step.cell = nullptr;
         }
-        const auto epoch = detail::g_cellEpoch.load(std::memory_order_relaxed);
+        const auto epoch = detail::CellEpoch();
         if (m_link.MayHaveCell(epoch))
         {
             step.epoch = CellStep::Recheck;
@@ -1870,7 +1870,7 @@ private:
     JINJA2CPP_CELL_NOINLINE size_t Restep(CellStep& step) const
     {
         // Read first: a promotion after this read moves the epoch again
-        const auto epoch = detail::g_cellEpoch.load(std::memory_order_relaxed);
+        const auto epoch = detail::CellEpoch();
         step.cell = IntrusivePtr<const BorrowedCell>(m_link.Get(*this));
         if (step.cell)
         {
@@ -3009,7 +3009,7 @@ struct ItemAdapters final : ValueObject
     }
     void Traverse(const TraverseFn& fn) const override
     {
-        if (quietEpoch == detail::g_cellEpoch.load(std::memory_order_relaxed))
+        if (quietEpoch == detail::CellEpoch())
         {
             return;
         }
@@ -3029,7 +3029,7 @@ struct ItemAdapters final : ValueObject
     {
         // No slot can have a cell when no cell existed as the block was made and none was made
         // since, which would have moved the epoch
-        if (quietEpoch == detail::g_cellEpoch.load(std::memory_order_relaxed))
+        if (quietEpoch == detail::CellEpoch())
         {
             return;
         }
