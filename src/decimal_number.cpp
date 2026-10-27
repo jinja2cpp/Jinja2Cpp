@@ -7,6 +7,7 @@
 #include <fmt/format.h>
 
 #include <cmath>
+#include <cstddef>
 #include <optional>
 #include <string_view>
 #include <system_error>
@@ -45,7 +46,10 @@ double FloatAsDecimalDouble(float val)
     // A float's longest decimal, "-1.17549435e-38", is 15 characters
     char buffer[32];
     auto nearest = [&buffer, val](const char* end) -> std::optional<double> {
+        // The analyzer follows ParseDecimal into fast_float and reports its flag enum, as there
+        // NOLINTBEGIN(clang-analyzer-security.ArrayBound,clang-analyzer-optin.core.EnumCastOutOfRange)
         const auto decimal = ParseDecimal(std::string_view(buffer, static_cast<size_t>(end - buffer)));
+        // NOLINTEND(clang-analyzer-security.ArrayBound,clang-analyzer-optin.core.EnumCastOutOfRange)
         return decimal && static_cast<float>(*decimal) == val ? decimal : std::nullopt;
     };
     if (auto decimal = nearest(fmt::format_to(buffer, "{}", val)))
