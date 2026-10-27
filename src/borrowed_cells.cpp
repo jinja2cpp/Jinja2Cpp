@@ -6,10 +6,14 @@
 #include "robin_hood.h"
 #include "template_dict.h"
 
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/value.h>
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <new>
 #include <utility>
 #include <vector>
 
@@ -85,7 +89,7 @@ void BorrowedCell::NoteExport() const noexcept
 {
     // Only in the cell's own render or module call, which alone writes the cell: a frozen cell is
     // never written, and a render's cells live for one call
-    if (m_frozen || m_exportedIn != 0 || CycleCollector::CurrentCells() != m_registry || m_registry->m_call == 0)
+    if (m_frozen || m_exportedIn != 0 || !m_registry || CycleCollector::CurrentCells() != m_registry || m_registry->m_call == 0)
     {
         return;
     }
@@ -326,7 +330,7 @@ private:
             {
                 item = &(*node.list)[node.next++];
             }
-            else if (node.dict && node.it != node.dict->end())
+            else if (node.dict != nullptr && node.it != node.dict->end())
             {
                 item = &node.it->second;
                 ++node.it;
@@ -420,7 +424,7 @@ void BorrowedCells::Finish() noexcept
     {
         FrozenCycleBreaker().Run(*m_cells);
     }
-    catch (...)
+    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
     {
         // Out of memory: the cycles not broken leak, as the collector's do (docs/tasks/0283)
     }

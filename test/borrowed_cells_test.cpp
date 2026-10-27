@@ -8,9 +8,11 @@
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 using namespace jinja2;
@@ -162,7 +164,7 @@ struct Keeper
         params["touch"] = UserCallable([this](const UserCallableParams&) { return kept.back(); }, {});
     }
     // What the host keeps, printed by another render with params of its own
-    std::string Show(size_t idx = 0) const { return Render("{{ k }}", ValuesMap{ { "k", kept.at(idx) } }); }
+    [[nodiscard]] std::string Show(size_t idx = 0) const { return Render("{{ k }}", ValuesMap{ { "k", kept.at(idx) } }); }
 };
 
 // Renders `source` with params made for it and freed before the host reads what it kept
@@ -340,6 +342,7 @@ TEST(BorrowedCellsKept, ModuleCalledFromThreadsWhileTheHostReads)
     m.Call(1);
     const Value first = m.keeper.kept.at(0);
     std::vector<std::thread> threads;
+    threads.reserve(3);
     for (int t = 0; t != 2; ++t)
     {
         threads.emplace_back([&m]() {
@@ -421,6 +424,7 @@ TEST(BorrowedCellsKept, ConcurrentRendersOfAKeptView)
     Template tpl;
     ASSERT_TRUE(!!tpl.Load("{% set _ = l.append(3) %}{{ t|length }},{{ l|length }}"));
     std::vector<std::thread> threads;
+    threads.reserve(4);
     std::vector<std::string> results(4);
     for (auto& result : results)
     {
@@ -481,6 +485,7 @@ TEST(BorrowedCellsKept, FrozenValueReadFromThreads)
     EXPECT_EQ("", RenderFreed(keeper, "{% set _ = l[0].append(2) %}{% set _ = keep([l]) %}", { { "l", ValuesList{ Value(ValuesList{ 1 }) } } }));
     const Value kept = keeper.kept.at(0);
     std::vector<std::thread> threads;
+    threads.reserve(4);
     std::vector<std::string> results(4);
     for (auto& result : results)
     {

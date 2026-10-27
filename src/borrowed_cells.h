@@ -5,6 +5,9 @@
 #include "intrusive_ptr.h"
 #include "robin_hood.h"
 
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/value.h>
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>

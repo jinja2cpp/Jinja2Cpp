@@ -1265,7 +1265,7 @@ public:
         {
             auto result = Clone();
             this->m_list = nullptr;
-            this->m_curItem = this->InvalidIndex;
+            this->m_curItem = BaseClass::InvalidIndex;
             this->m_maxItems = 0;
             return result;
         }
@@ -1291,7 +1291,7 @@ public:
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* view = dynamic_cast<const ExportListView*>(&other);
-        return view && view->m_items == m_items;
+        return view != nullptr && view->m_items == m_items;
     }
 
     // A GenericList of the view: the copy lives in it, as the adapters' exports do
@@ -1334,7 +1334,7 @@ public:
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* view = dynamic_cast<const ExportMapView*>(&other);
-        return view && view->m_items == m_items;
+        return view != nullptr && view->m_items == m_items;
     }
 
     static GenericMap Make(const ValuesMap& items, std::shared_ptr<const void> owner)

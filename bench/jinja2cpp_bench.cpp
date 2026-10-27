@@ -654,8 +654,8 @@ int CountCase(const Case& c, CountKind kind, int iterations, const ProfileOption
 
 // A template module that wrote a host list of 1000 items hands it to a host callable that keeps
 // the last one it got, once a call (docs/tasks/0331, decision D8). Module/keep only hands it
-// out: no call copies. Module/keep_written writes the list first: the write copies the items
-// the previous call's kept value shares, once a call
+// out: no call copies. Module/keep_written writes the list first (a pop and an append, so its
+// size stays): the write copies the items the previous call's kept value shares, once a call
 class ModuleKeep
 {
 public:
@@ -673,7 +673,7 @@ public:
                 return jinja2::Value();
             },
             { jinja2::ArgInfo{ "v" } });
-        if (!m_tpl.Load("{% set _ = l.append(-1) %}{% macro call(x) %}{% set _ = l.append(x) if w %}{% set _ = keep(l) %}{% endmacro %}"))
+        if (!m_tpl.Load("{% set _ = l.append(-1) %}{% macro call(x) %}{% if w %}{% set _ = l.pop() %}{% set _ = l.append(x) %}{% endif %}{% set _ = keep(l) %}{% endmacro %}"))
         {
             return;
         }
