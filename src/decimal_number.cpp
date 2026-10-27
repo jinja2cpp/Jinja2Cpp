@@ -36,6 +36,9 @@ std::optional<double> ParseDecimal(std::string_view text)
     return result;
 }
 
+// The analyzer follows ParseDecimal into fast_float from every path here and reports what it
+// reports there: the flag enum combined with operator| and the range-checked table index
+// NOLINTBEGIN(clang-analyzer-security.ArrayBound,clang-analyzer-optin.core.EnumCastOutOfRange)
 double FloatAsDecimalDouble(float val)
 {
     const auto widened = static_cast<double>(val);
@@ -46,10 +49,7 @@ double FloatAsDecimalDouble(float val)
     // A float's longest decimal, "-1.17549435e-38", is 15 characters
     char buffer[32];
     auto nearest = [&buffer, val](const char* end) -> std::optional<double> {
-        // The analyzer follows ParseDecimal into fast_float and reports its flag enum, as there
-        // NOLINTBEGIN(clang-analyzer-security.ArrayBound,clang-analyzer-optin.core.EnumCastOutOfRange)
         const auto decimal = ParseDecimal(std::string_view(buffer, static_cast<size_t>(end - buffer)));
-        // NOLINTEND(clang-analyzer-security.ArrayBound,clang-analyzer-optin.core.EnumCastOutOfRange)
         return decimal && static_cast<float>(*decimal) == val ? decimal : std::nullopt;
     };
     if (auto decimal = nearest(fmt::format_to(buffer, "{}", val)))
@@ -67,6 +67,7 @@ double FloatAsDecimalDouble(float val)
     }
     return widened;
 }
+// NOLINTEND(clang-analyzer-security.ArrayBound,clang-analyzer-optin.core.EnumCastOutOfRange)
 
 } // namespace v2
 } // namespace jinja2
