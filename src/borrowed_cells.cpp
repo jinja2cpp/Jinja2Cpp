@@ -59,7 +59,10 @@ void BorrowedCell::Traverse(const TraverseFn& fn) const
     if (m_frozen)
     {
         TraverseValue(m_storage, fn);
-        TraverseValue(m_retired, fn);
+        for (const auto& retired : m_retired)
+        {
+            TraverseValue(retired, fn);
+        }
     }
 }
 
@@ -123,10 +126,24 @@ bool BorrowedCell::Unshare() const
     // place, so a copy that fails to allocate is tried again by the next write
     InternalValue copy = m_isList ? InternalValue(ListAdapter::CreateAdapter(InternalValueList(*m_items)))
                                   : InternalValue(CreateMapAdapter(TemplateDict(*m_map->GetMutableItems())));
-    m_retired = std::exchange(m_storage, std::move(copy));
+    m_retired.push_back(m_storage);
+    m_storage = std::move(copy);
     Bind();
     m_exportedIn = 0;
     return true;
+}
+
+void BorrowedCells::EndCall(uint32_t outer) noexcept
+{
+    m_call = outer;
+    if (--m_depth != 0 || !m_cells)
+    {
+        return;
+    }
+    for (const auto& [identity, cell] : *m_cells)
+    {
+        cell->m_retired.clear();
+    }
 }
 
 const BorrowedCell* CellLink::Find(const IListAccessor& self) const

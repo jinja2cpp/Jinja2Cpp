@@ -238,8 +238,10 @@ private:
     void Bind() const noexcept;
 
     mutable InternalValue m_storage;
-    // The storage before the last Unshare: an enumeration of it may still run
-    mutable InternalValue m_retired;
+    // The storages Unshare replaced in the module call that runs and the calls nested in it: code
+    // of those calls may still hold their items (an enumeration, a sort that calls the key
+    // function). The outermost call's end lets go of them (BorrowedCells::EndCall)
+    mutable std::vector<InternalValue> m_retired;
     // The value promoted first: it keeps the host's data alive, for an adapter that owns it
     // (a user callable's result), so that the identity the registry keys the cell by is not
     // reused while the registry has the cell. Dropped when the cell freezes
@@ -353,14 +355,23 @@ public:
     }
 
     // A call of a template module starts: a write in it to a container a value of an earlier call
-    // shares copies it first (BorrowedCell::Unshare). A render's registry has one call, 0
-    void BeginCall() noexcept
+    // shares copies it first (BorrowedCell::Unshare). A render's registry has one call, 0. A call
+    // made from a host callable inside another call of the same module nests in it; returns the
+    // call to go back to at EndCall
+    [[nodiscard]] uint32_t BeginCall() noexcept
     {
-        if (++m_call == 0)
+        const auto outer = m_call;
+        if (++m_lastCall == 0)
         {
-            m_call = 1;
+            m_lastCall = 1;
         }
+        m_call = m_lastCall;
+        ++m_depth;
+        return outer;
     }
+    // The call BeginCall started ends: the call it nested in runs again, and the outermost call's
+    // end lets go of the storages its writes replaced
+    void EndCall(uint32_t outer) noexcept;
 
 private:
     friend class CellLink;
@@ -374,6 +385,9 @@ private:
     std::unique_ptr<Table> m_cells;
     // The template module's call that runs, or 0 for a render's registry
     uint32_t m_call = 0;
+    // The last call number given out, and how many calls run, nested in each other
+    uint32_t m_lastCall = 0;
+    uint32_t m_depth = 0;
 };
 
 } // namespace v2

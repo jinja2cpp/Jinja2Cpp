@@ -1983,15 +1983,17 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
         reverse = ConvertToBool(*reverseArg);
     }
 
-    auto& items = MutableItems(self);
     InternalValueList values;
-    values.swap(items);
+    values.swap(MutableItems(self));
+    // The items are found again after the key calls: a module call a key function makes can hand
+    // the list's items to the host and give the list new ones (docs/tasks/0331, D8), and the
+    // items the host was handed are never written again
     struct Restore
     {
-        InternalValueList& items;
+        const InternalValue& self;
         InternalValueList& values;
-        Restore(InternalValueList& listItems, InternalValueList& taken)
-            : items(listItems)
+        Restore(const InternalValue& list, InternalValueList& taken)
+            : self(list)
             , values(taken)
         {
         }
@@ -2002,12 +2004,19 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
         ~Restore()
         {
             // Whatever a key call put into the list meanwhile is dropped, as in CPython
-            if (!values.empty())
+            if (values.empty())
             {
-                items.swap(values);
+                return;
+            }
+            try
+            {
+                MutableItems(self).swap(values);
+            }
+            catch (...) // NOLINT(bugprone-empty-catch): out of memory copying the list's items; it keeps what the key calls left
+            {
             }
         }
-    } restore{ items, values };
+    } restore{ self, values };
 
     InternalValueList keys;
     if (keyFn)
@@ -2037,6 +2046,7 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     }
     // CPython's allocated == -1 sentinel: the list was left with no storage, and any change
     // that put an item in it gave it some, even when a later pop emptied it again
+    auto& items = MutableItems(self);
     const bool modified = items.capacity() != 0;
     values.clear();
     items = std::move(sorted);

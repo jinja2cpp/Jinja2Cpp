@@ -366,6 +366,75 @@ TEST(BorrowedCellsKept, ModuleLoopWhileACallbackCopiesTwice)
     EXPECT_EQ("[0, 1, 2]", keeper.Show(1));
 }
 
+namespace
+{
+// A module whose `l` is the host's list and whose host callable `again` calls the module's `add`
+// twice, the first time only: two nested calls that each copy `l` on write (D8), between which the
+// host lets go of the oldest value it kept
+struct ReenteredModule
+{
+    Keeper keeper;
+    Template tpl;
+    TemplateModule module;
+    bool once = true;
+
+    explicit ReenteredModule(const std::string& macros)
+    {
+        ValuesMap params{ { "l", ValuesList{ 0 } } };
+        keeper.AddTo(params);
+        params["again"] = UserCallable(
+            [this](const UserCallableParams&) {
+                if (std::exchange(once, false))
+                {
+                    Add(2);
+                    // The host lets go of what the call before this one handed it
+                    keeper.kept.erase(keeper.kept.begin());
+                    Add(3);
+                }
+                return Value();
+            },
+            {});
+        EXPECT_TRUE(!!tpl.Load("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep(l) %}{% endmacro %}" + macros));
+        auto made = tpl.MakeModule(params);
+        EXPECT_TRUE(!!made);
+        if (made)
+        {
+            module = std::move(*made);
+        }
+    }
+    void Add(int64_t x)
+    {
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ x };
+        module.exports["add"].As<UserCallable>().callable(callParams);
+    }
+    std::string Call(const std::string& name) { return module.exports[name].As<UserCallable>().callable(UserCallableParams{}).AsString(); }
+};
+} // namespace
+
+TEST(BorrowedCellsKept, ModuleCallAfterANestedCallCopies)
+{
+    // The outer call writes after a nested call of the same module exported `l`: the nested
+    // call's snapshot stays as it was when that call returned (Codex review)
+    ReenteredModule m("{% macro outer() %}{% set _ = again() %}{% set _ = l.append(9) %}{% endmacro %}");
+    m.Call("outer");
+    ASSERT_EQ(1u, m.keeper.kept.size());
+    EXPECT_EQ("[0, 2, 3]", m.keeper.Show(0));
+}
+
+TEST(BorrowedCellsKept, ModuleSortWhoseKeyCopiesTwice)
+{
+    // sort() holds the items of `l` while the key function runs two calls that each copy `l`
+    // on write: the storage it sorts lives until the outermost call ends (Codex review, ASan).
+    // The key function changed the list, which Python rejects too
+    ReenteredModule m("{% macro srt() %}{% set _ = l.sort(key=k) %}{% endmacro %}"
+                      "{% macro k(x) %}{% set _ = again() %}{{ x }}{% endmacro %}");
+    m.Add(1);
+    EXPECT_THROW(m.Call("srt"), BadResultAccess<>);
+    EXPECT_EQ("[2]", m.keeper.Show(0));
+    EXPECT_EQ("[2, 3]", m.keeper.Show(1));
+}
+
 TEST(BorrowedCellsKept, ModuleCellInsideAKeptList)
 {
     // A limit (docs/tasks/0332): a list the module call made holds `l`'s adapter, which reads the

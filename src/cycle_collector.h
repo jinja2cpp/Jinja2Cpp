@@ -5,6 +5,7 @@
 #include "internal_value.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <utility>
 #include <unordered_set>
@@ -47,13 +48,17 @@ public:
     // module's, whose values live across its calls (docs/tasks/0049)
     explicit CycleCollector(BorrowedCells& cells) noexcept
         : m_external(&cells)
+        , m_outerCall(cells.BeginCall())
     {
-        cells.BeginCall();
         s_current = this;
     }
     ~CycleCollector()
     {
         s_current = m_outer;
+        if (m_external)
+        {
+            m_external->EndCall(m_outerCall);
+        }
         if (m_notes)
         {
             Finish();
@@ -120,6 +125,8 @@ private:
     std::unique_ptr<Notes> m_notes;
     // The cells of a template module, which outlive the call (docs/tasks/0049); null for a render
     BorrowedCells* m_external = nullptr;
+    // The module call that ran when this one started (BorrowedCells::BeginCall)
+    uint32_t m_outerCall = 0;
 };
 
 } // namespace v2
