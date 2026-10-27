@@ -119,7 +119,7 @@ inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::Templat
 {
     auto& workspace = RenderWorkspace::ForThisThread();
     auto& cached = workspace.Globals();
-    if (workspace.TakeGlobalAttached() || !cached || cached->generation != env.globalsGeneration.load(std::memory_order_acquire))
+    if (workspace.IsGlobalAttached() || !cached || cached->generation != env.globalsGeneration.load(std::memory_order_acquire))
     {
         auto snapshot = std::make_shared<GlobalsSnapshot>();
         {
@@ -134,6 +134,7 @@ inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::Templat
             snapshot->values[name] = LendGlobal(value, snapshot->source);
         }
         cached = std::move(snapshot);
+        workspace.GlobalsConverted();
     }
     return cached;
 }

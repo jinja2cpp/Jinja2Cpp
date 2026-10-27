@@ -647,6 +647,49 @@ TEST_F(AllocationFailureTest, ModuleSortKeepsItsItemsWhenTheCopyFails)
     EXPECT_LT(n, maxAllocations);
 }
 
+// A render nested in one that wrote a global through an alias converts its own globals; when that
+// conversion fails, the next render it makes still does, rather than read the outer render's cell
+// (Codex review, docs/tasks/0331)
+TEST_F(AllocationFailureTest, NestedRenderAfterAFailedGlobalsConversion)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{ 0 });
+    Template inner(&env);
+    ASSERT_TRUE(!!inner.Load("{{ g }}"));
+    Template outer(&env);
+    ASSERT_TRUE(!!outer.Load("{% set y = g %}{% set _ = y.append(1) %}{{ inner() }}|{{ g }}"));
+    long n = 0;
+    for (; n != maxAllocations; ++n)
+    {
+        bool fired = false;
+        ValuesMap params;
+        params["inner"] = MakeCallable([&inner, &fired, n]() {
+            {
+                const Injection injection(n);
+                try
+                {
+                    static_cast<void>(inner.RenderAsString({}));
+                }
+                catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): a failed render is one of the outcomes checked
+                {
+                }
+                fired = Injection::Fired();
+            }
+            return inner.RenderAsString({}).value();
+        });
+        std::string result;
+        OnFreshThread([&] { result = outer.RenderAsString(params).value(); });
+        ASSERT_EQ("[0]|[0, 1]", result) << "allocation " << n;
+        if (!fired)
+        {
+            break;
+        }
+    }
+    EXPECT_LT(0, n) << "no allocation reached the injection";
+    EXPECT_LT(n, maxAllocations);
+}
+
 // Two names of the host's data in a module: an allocation failure while the second attaches to
 // the cell the first made leaves it looking again, not reading the host's data for good
 // (docs/tasks/0049)

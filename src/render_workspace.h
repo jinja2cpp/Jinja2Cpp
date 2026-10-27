@@ -95,7 +95,9 @@ public:
     // A global's adapter was attached to a cell of the running render (CellLink::Link): a
     // render it starts converts the globals again rather than read that cell (docs/tasks/0331)
     void GlobalAttached() noexcept { m_globalAttached = true; }
-    [[nodiscard]] bool TakeGlobalAttached() noexcept { return std::exchange(m_globalAttached, false); }
+    [[nodiscard]] bool IsGlobalAttached() const noexcept { return m_globalAttached; }
+    // Once the globals were converted again: a conversion that fails leaves the mark
+    void GlobalsConverted() noexcept { m_globalAttached = false; }
 
     // The tables of the params and the top scope of a render (docs/tasks/0160)
     struct RenderMaps
