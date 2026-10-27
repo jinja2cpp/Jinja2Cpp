@@ -21,6 +21,7 @@
 #include <atomic>
 #include <csignal>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
@@ -29,6 +30,7 @@
 #include <new>
 #include <string>
 #include <thread>
+#include <vector>
 #if defined(_MSC_VER) && defined(__cpp_lib_stacktrace)
 #include <iostream>
 #include <stacktrace>
@@ -511,6 +513,65 @@ TEST_F(ModuleCallTest, CallSucceedsOrThrowsBadAlloc)
         {
             ASSERT_EQ("X3", result) << "allocation " << n;
         }
+        if (!fired)
+        {
+            break;
+        }
+    }
+    EXPECT_LT(0, n) << "no allocation reached the injection";
+    EXPECT_LT(n, maxAllocations);
+}
+
+// A module call whose copy on write fails leaves what the host kept from an earlier call as it
+// was, and the next call copies again (docs/tasks/0331, D8)
+TEST_F(AllocationFailureTest, KeptModuleSnapshotSurvivesAFailedCopy)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = d.update(b=x) %}{% set _ = keep(l) %}"
+                           "{% set _ = keep(d) %}{% endmacro %}"));
+    const auto show = [](const Value& v) {
+        Template shown;
+        EXPECT_TRUE(!!shown.Load("{{ k }}"));
+        return shown.RenderAsString(ValuesMap{ { "k", v } }).value();
+    };
+    long n = 0;
+    for (; n != maxAllocations; ++n)
+    {
+        std::vector<Value> kept;
+        ValuesMap params{ { "l", ValuesList{ 0 } }, { "d", ValuesMap{ { "a", 0 } } } };
+        params["keep"] = UserCallable(
+            [&kept](const UserCallableParams& p) {
+                kept.push_back(p["v"]);
+                return Value();
+            },
+            { ArgInfo{ "v" } });
+        auto module = tpl.MakeModule(params);
+        ASSERT_TRUE(!!module);
+        const auto call = [&module](int64_t x) {
+            UserCallableParams callParams;
+            callParams.extraPosArgs = ValuesList{ x };
+            module->exports["add"].As<UserCallable>().callable(callParams);
+        };
+        call(1);
+        ASSERT_EQ(2u, kept.size());
+        const Value list = kept[0];
+        const Value dict = kept[1];
+        bool fired = false;
+        OnFreshThread([&] {
+            const Injection injection(n);
+            try
+            {
+                call(2);
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): a failed call is one of the outcomes checked
+            {
+            }
+            fired = Injection::Fired();
+        });
+        call(3);
+        ASSERT_EQ("[0, 1]", show(list)) << "allocation " << n;
+        ASSERT_EQ("{'a': 0, 'b': 1}", show(dict)) << "allocation " << n;
         if (!fired)
         {
             break;

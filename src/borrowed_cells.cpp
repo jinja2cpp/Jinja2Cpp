@@ -116,18 +116,20 @@ bool BorrowedCell::Unshare() const
     {
         return true;
     }
-    m_exportedIn = 0;
     if (m_isList ? m_list->OwnsMutableItemsAlone() : m_map->OwnsMutableItemsAlone())
     {
         // The host let go of what it was handed
+        m_exportedIn = 0;
         return true;
     }
     // The value of the earlier call keeps the items as they were: the host holds a snapshot that
-    // nothing writes any more (decision D8, copy on write)
+    // nothing writes any more (decision D8, copy on write). The mark stays until the copy is in
+    // place, so a copy that fails to allocate is tried again by the next write
     InternalValue copy = m_isList ? InternalValue(ListAdapter::CreateAdapter(InternalValueList(*m_items)))
                                   : InternalValue(CreateMapAdapter(TemplateDict(*m_map->GetMutableItems())));
     m_retired = std::exchange(m_storage, std::move(copy));
     Bind();
+    m_exportedIn = 0;
     return true;
 }
 
