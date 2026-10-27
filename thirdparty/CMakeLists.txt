@@ -176,3 +176,7 @@ if (NOT DEFINED JINJA2_PUBLIC_LIBS_INT)
 else ()
     set (JINJA2CPP_PUBLIC_LIBS ${JINJA2_PUBLIC_LIBS_INT})
 endif ()
+
+# fast_float is header-only and only src/ includes it: a build interface, so neither the
+# installed package nor its exported targets name it (docs/tasks/0333)
+list(APPEND JINJA2CPP_PRIVATE_LIBS $<BUILD_INTERFACE:FastFloat::fast_float>)

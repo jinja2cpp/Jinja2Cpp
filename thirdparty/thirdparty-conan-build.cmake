@@ -4,6 +4,8 @@ find_package(expected-lite REQUIRED)
 
 find_package(fmt REQUIRED)
 
+find_package(FastFloat REQUIRED)
+
 # The JSON libraries are for the tests only: the library reads {% meta %} itself (0230 D6)
 if (JINJA2CPP_BUILD_TESTS)
     find_package(nlohmann_json REQUIRED)

@@ -1,6 +1,7 @@
 #include "lexer.h"
 
 #include "big_int.h"
+#include "decimal_number.h"
 #include "internal_value.h"
 
 #include <algorithm>
@@ -75,7 +76,8 @@ InternalValue ParseNumberLiteral(std::string number)
         return IntegerFromDigits(number, 10, false);
     }
 
-    return InternalValue(std::strtod(digits, nullptr));
+    // A decimal float literal, which the tokenizer has checked
+    return InternalValue(ParseDecimal(number).value_or(0.0));
 }
 
 } // namespace v2

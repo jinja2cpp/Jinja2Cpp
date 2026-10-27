@@ -23,6 +23,18 @@ FetchContent_MakeAvailable(fmt)
 set(JINJA2CPP_FMT_VERSION 12.2.0)
 jinja2cpp_mark_system("${fmt_SOURCE_DIR}")
 
+# Decimal-to-double conversion that ignores the C locale (docs/tasks/0333). Header-only and
+# used by src/decimal_number.cpp alone, so the library takes it at build time and does not
+# install it (thirdparty/CMakeLists.txt links it as a build interface)
+set (FASTFLOAT_INSTALL OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    fast_float
+    URL https://github.com/fastfloat/fast_float/archive/refs/tags/v8.2.10.tar.gz
+    URL_HASH SHA256=76f958dd97b1cf4d8862d1f0986a47d4bdfa8845252bae15ef0f40de3b95961f
+)
+FetchContent_MakeAvailable(fast_float)
+jinja2cpp_mark_system("${fast_float_SOURCE_DIR}")
+
 # The JSON libraries are for the tests only: the library reads {% meta %} itself (0230 D6)
 if (JINJA2CPP_BUILD_TESTS)
     set (JSON_BuildTests OFF CACHE BOOL "" FORCE)

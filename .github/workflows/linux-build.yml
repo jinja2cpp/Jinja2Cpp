@@ -161,8 +161,8 @@ jobs:
           -DCONSUMER_STD=${{ matrix.package }} -DEXPECT_SHARED=${{ matrix.shared }} \
           -P test/package/check_package.cmake
 
-  # The external dependency modes take Boost (and, for external, fmt, expected-lite and
-  # nlohmann_json) from the system instead of building them (docs/tasks/0163). The library
+  # The external dependency modes take Boost (and, for external, fmt, expected-lite,
+  # fast_float and nlohmann_json) from the system instead of building them (docs/tasks/0163). The library
   # links no Boost (0230): the tests take Multiprecision through Boost::headers, which a
   # b2-built Ubuntu Boost provides; bindings.yml tests the Ubuntu Boost.JSON. external-boost
   # is a deprecated alias of internal, kept until 3.0.
@@ -193,9 +193,11 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
-          libboost-dev nlohmann-json3-dev
+          libboost-dev nlohmann-json3-dev locales
+        # A decimal-comma locale, so DecimalCommaLocaleTest runs instead of skipping (0333)
+        sudo locale-gen de_DE.UTF-8
 
-    - name: fmt and expected-lite
+    - name: fmt, expected-lite and fast_float
       if: matrix.mode == 'external'
       run: |
         git clone --depth 1 --branch 12.2.0 https://github.com/fmtlib/fmt.git "$RUNNER_TEMP/fmt"
@@ -207,6 +209,9 @@ jobs:
         cmake -S "$RUNNER_TEMP/expected-lite" -B "$RUNNER_TEMP/expected-lite/build" -G Ninja \
           -DEXPECTED_LITE_OPT_BUILD_TESTS=OFF -DEXPECTED_LITE_OPT_BUILD_EXAMPLES=OFF
         sudo cmake --install "$RUNNER_TEMP/expected-lite/build"
+        git clone --depth 1 --branch v8.2.10 https://github.com/fastfloat/fast_float.git "$RUNNER_TEMP/fast_float"
+        cmake -S "$RUNNER_TEMP/fast_float" -B "$RUNNER_TEMP/fast_float/build" -G Ninja
+        sudo cmake --install "$RUNNER_TEMP/fast_float/build"
 
     - name: Configure
       run: |

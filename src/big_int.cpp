@@ -1,5 +1,6 @@
 #include "big_int.h"
 
+#include "decimal_number.h"
 #include "engine_errors.h"
 #include "internal_value.h"
 #include "intrusive_ptr.h"
@@ -12,12 +13,10 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
-#include <cerrno>
 #include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <limits>
 #include <new>
 #include <optional>
@@ -363,12 +362,10 @@ double BigIntToDouble(const BigIntView& val)
     // 10^309 is past the largest double
     if (val.Magnitude().size() <= 309)
     {
-        const std::string text(val.decimal);
-        errno = 0;
-        const double result = std::strtod(text.c_str(), nullptr);
-        if (errno != ERANGE && std::isfinite(result))
+        const auto result = ParseDecimal(val.decimal);
+        if (result && std::isfinite(*result))
         {
-            return result;
+            return *result;
         }
     }
     throw IntegerOutOfRangeError("int too large to convert to float");

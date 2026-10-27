@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:5fdc5fdd-6c24-5fbd-8a2f-5f49d01baa7d",
+  "serialNumber": "urn:uuid:1841dd53-7de7-5ea6-b51c-c98ba8202a8c",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -186,6 +186,76 @@
         {
           "name": "jinja2cpp:conan",
           "value": "fmt/12.2.0"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "fast-float",
+      "name": "fast_float",
+      "version": "8.2.10",
+      "supplier": {
+        "name": "Daniel Lemire and fast_float contributors"
+      },
+      "scope": "required",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "76f958dd97b1cf4d8862d1f0986a47d4bdfa8845252bae15ef0f40de3b95961f"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0 OR BSL-1.0"
+        }
+      ],
+      "purl": "pkg:github/fastfloat/fast_float@v8.2.10",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/fastfloat/fast_float"
+        },
+        {
+          "type": "distribution",
+          "url": "https://github.com/fastfloat/fast_float/archive/refs/tags/v8.2.10.tar.gz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "mandatory"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "build"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "internal"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "fetched"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "always"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "Decimal-to-double conversion that ignores the C locale (src/decimal_number.cpp): float literals, the float and round filters, big integer to float, {% meta %} numbers (docs/tasks/0333)"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "strtod reads the decimal point of LC_NUMERIC, so a host under a decimal-comma locale read 1.5 as 1; std::from_chars for double is missing from older AppleClang libc++ (0083). Correctly rounded and header-only; libstdc++ 12 uses it for from_chars"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Replace with std::from_chars once every supported standard library has it for double. Header-only and linked as a build interface, so neither the package nor static consumers see it"
+        },
+        {
+          "name": "jinja2cpp:conan",
+          "value": "fast_float/8.2.10"
         }
       ]
     },
@@ -796,6 +866,7 @@
       "dependsOn": [
         "expected-lite",
         "fmt",
+        "fast-float",
         "boost",
         "nlohmann-json",
         "robin-hood-hashing",
