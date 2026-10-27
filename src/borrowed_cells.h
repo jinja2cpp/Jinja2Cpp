@@ -238,10 +238,11 @@ private:
     void Bind() const noexcept;
 
     mutable InternalValue m_storage;
-    // The storages Unshare replaced in the module call that runs and the calls nested in it: code
-    // of those calls may still hold their items (an enumeration, a sort that calls the key
-    // function). The outermost call's end lets go of them (BorrowedCells::EndCall)
-    mutable std::vector<InternalValue> m_retired;
+    // The storage before the last Unshare. No code holds a cell's items across a call into the
+    // template or the host: an enumeration finds the cell again at each step, sort() after its
+    // key calls. One slot, so that a template looping over calls that copy does not keep a copy
+    // for each
+    mutable InternalValue m_retired;
     // The value promoted first: it keeps the host's data alive, for an adapter that owns it
     // (a user callable's result), so that the identity the registry keys the cell by is not
     // reused while the registry has the cell. Dropped when the cell freezes
@@ -366,12 +367,10 @@ public:
             m_lastCall = 1;
         }
         m_call = m_lastCall;
-        ++m_depth;
         return outer;
     }
-    // The call BeginCall started ends: the call it nested in runs again, and the outermost call's
-    // end lets go of the storages its writes replaced
-    void EndCall(uint32_t outer) noexcept;
+    // The call BeginCall started ends: the call it nested in runs again
+    void EndCall(uint32_t outer) noexcept { m_call = outer; }
 
 private:
     friend class CellLink;
@@ -385,9 +384,8 @@ private:
     std::unique_ptr<Table> m_cells;
     // The template module's call that runs, or 0 for a render's registry
     uint32_t m_call = 0;
-    // The last call number given out, and how many calls run, nested in each other
+    // The last call number given out
     uint32_t m_lastCall = 0;
-    uint32_t m_depth = 0;
 };
 
 } // namespace v2

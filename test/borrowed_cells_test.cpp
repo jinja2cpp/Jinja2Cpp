@@ -424,9 +424,10 @@ TEST(BorrowedCellsKept, ModuleCallAfterANestedCallCopies)
 
 TEST(BorrowedCellsKept, ModuleSortWhoseKeyCopiesTwice)
 {
-    // sort() holds the items of `l` while the key function runs two calls that each copy `l`
-    // on write: the storage it sorts lives until the outermost call ends (Codex review, ASan).
-    // The key function changed the list, which Python rejects too
+    // The key function of sort() runs two calls that each copy `l` on write (D8) and hand it to
+    // the host: sort() finds the list's items again after its key calls, so it never writes what
+    // the host was handed (Codex review). The key function changed the list, which Python
+    // rejects too
     ReenteredModule m("{% macro srt() %}{% set _ = l.sort(key=k) %}{% endmacro %}"
                       "{% macro k(x) %}{% set _ = again() %}{{ x }}{% endmacro %}");
     m.Add(1);
