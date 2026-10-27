@@ -177,6 +177,9 @@ else ()
     set (JINJA2CPP_PUBLIC_LIBS ${JINJA2_PUBLIC_LIBS_INT})
 endif ()
 
-# fast_float is header-only and only src/ includes it: a build interface, so neither the
-# installed package nor its exported targets name it (docs/tasks/0333)
-list(APPEND JINJA2CPP_PRIVATE_LIBS $<BUILD_INTERFACE:FastFloat::fast_float>)
+# fast_float is header-only and only src/ includes it, so the library takes its include
+# directory at build time: neither the installed package nor its exported targets name it
+# (docs/tasks/0333). Not the target itself: its interface adds /permissive- for MSVC, which
+# changes how MSVC reads the library's own sources (generic_adapters.h)
+target_include_directories(${LIB_TARGET_NAME} SYSTEM PRIVATE
+    $<BUILD_INTERFACE:$<TARGET_PROPERTY:FastFloat::fast_float,INTERFACE_INCLUDE_DIRECTORIES>>)
