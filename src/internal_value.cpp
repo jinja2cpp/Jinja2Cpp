@@ -1483,11 +1483,55 @@ public:
     }
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData()); }
     [[nodiscard]] bool IsBorrowed() const override { return true; }
+    // An enumeration of the list's cell that finds the cell's storage again at each step: a
+    // module call the loop body makes can copy the cell on write (decision D8) and let go of the
+    // storage the loop started on (Codex review)
+    class CellEnumerator final : public IListAccessorEnumerator
+    {
+    public:
+        explicit CellEnumerator(const GenericListAdapter* list)
+            : m_list(list)
+        {
+        }
+
+        void Reset() override { m_next = 0; }
+        // The size is read at each step: an append in the loop body is seen, as in Python
+        bool MoveNext() override
+        {
+            m_cur = m_next;
+            if (m_cur >= m_list->GetSize().value_or(0))
+            {
+                return false;
+            }
+            ++m_next;
+            return true;
+        }
+        [[nodiscard]] InternalValue GetCurrent() const override { return m_list->GetItem(static_cast<int64_t>(m_cur)).value_or(InternalValue()); }
+        [[nodiscard]] bool IsEqual(const IComparable& other) const override
+        {
+            const auto* val = dynamic_cast<const CellEnumerator*>(&other);
+            return val && m_list == val->m_list && m_next == val->m_next;
+        }
+        [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
+        {
+            return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<CellEnumerator>{}, *this);
+        }
+        std::optional<ListAccessorEnumeratorPtr> Transfer() override
+        {
+            return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<CellEnumerator>{}, *this);
+        }
+
+    private:
+        const GenericListAdapter* m_list;
+        size_t m_cur = 0;
+        size_t m_next = 0;
+    };
+
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
     {
-        if (const auto* cell = m_link.Get(*this))
+        if (m_link.Get(*this))
         {
-            return cell->List().CreateListAccessorEnumerator();
+            return ListAccessorEnumeratorPtr(types::in_place_type_t<CellEnumerator>{}, CellEnumerator(this));
         }
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
         if (!accessor)

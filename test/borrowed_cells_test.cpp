@@ -3,6 +3,7 @@
 #include "gtest/gtest.h"
 #include "test_tools.h"
 
+#include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
@@ -10,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <thread>
 #include <utility>
@@ -323,6 +325,45 @@ TEST(BorrowedCellsKept, ModuleDictCopiesOnALaterWrite)
     }
     EXPECT_EQ("{'a': 0, 'b': 1}", keeper.Show(0));
     EXPECT_EQ("{'a': 0, 'b': 2}", keeper.Show(1));
+}
+
+TEST(BorrowedCellsKept, ModuleLoopWhileACallbackCopiesTwice)
+{
+    // A loop over the host's list in one module call, whose callback runs two calls that each
+    // copy the list on write (D8): the loop reads the module's list as it is now, not storage the
+    // second copy let go of (Codex review)
+    Keeper keeper;
+    const std::vector<int64_t> data{ 0 };
+    auto made = std::make_shared<GenericList>(MakeGenericList(data.begin(), data.end()));
+    ValuesMap params{ { "l", GenericList([made] { return made->GetAccessor(); }) } };
+    keeper.AddTo(params);
+    TemplateModule* self = nullptr;
+    bool once = true;
+    const auto add = [&self](int64_t x) {
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ x };
+        self->exports["add"].As<UserCallable>().callable(callParams);
+    };
+    params["again"] = UserCallable(
+        [&add, &once](const UserCallableParams&) {
+            if (std::exchange(once, false))
+            {
+                add(2);
+                add(3);
+            }
+            return Value();
+        },
+        {});
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep(l) %}{% endmacro %}"
+                           "{% macro walk() %}{% for i in l %}{{ i }}{% set _ = again() %};{% endfor %}{% endmacro %}"));
+    auto module = tpl.MakeModule(params);
+    ASSERT_TRUE(!!module);
+    self = &*module;
+    add(1);
+    EXPECT_EQ("0;1;2;3;", module->exports["walk"].As<UserCallable>().callable(UserCallableParams{}).AsString());
+    EXPECT_EQ("[0, 1]", keeper.Show(0));
+    EXPECT_EQ("[0, 1, 2]", keeper.Show(1));
 }
 
 TEST(BorrowedCellsKept, ModuleCellInsideAKeptList)
