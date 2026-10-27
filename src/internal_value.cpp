@@ -1464,6 +1464,17 @@ public:
         return LendGenericItem(GenericOwner(m_values), indexer->GetItemByIndex(idx));
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    [[nodiscard]] InternalValue LifetimeAnchor(const InternalValue& self) const override
+    {
+        if constexpr (std::is_same_v<Holder<int>, BySharedVal<int>>)
+        {
+            return InternalValue(ListAdapter(MakeRef<GenericListAdapter>(m_values)));
+        }
+        else
+        {
+            return self;
+        }
+    }
     [[nodiscard]] const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
     [[nodiscard]] InternalValueList* GetMutableItems() const override
     {
@@ -1804,6 +1815,17 @@ public:
         }
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    [[nodiscard]] InternalValue LifetimeAnchor(const InternalValue& self) const override
+    {
+        if constexpr (std::is_same_v<Holder<int>, BySharedVal<int>>)
+        {
+            return InternalValue(ListAdapter(MakeRef<OwnedAdapter<ValuesListAdapter>>(m_values)));
+        }
+        else
+        {
+            return self;
+        }
+    }
     [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
     [[nodiscard]] InternalValueList* GetMutableItems() const override
     {
@@ -1935,6 +1957,16 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
     };
 
     return ListAdapter(MakeRef<Adapter>(std::move(values)));
+}
+
+InternalValue IListAccessor::LifetimeAnchor(const InternalValue& self) const
+{
+    return self;
+}
+
+InternalValue IMapAccessor::LifetimeAnchor(const InternalValue& self) const
+{
+    return self;
 }
 
 ListAdapter ListAdapter::CreateAdapter(const GenericList& values)
@@ -2685,6 +2717,17 @@ public:
         return IMapAccessor::FindItem(key);
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    [[nodiscard]] InternalValue LifetimeAnchor(const InternalValue& self) const override
+    {
+        if constexpr (std::is_same_v<Holder<int>, BySharedVal<int>>)
+        {
+            return InternalValue(MapAdapter(MakeRef<GenericMapAdapter>(m_values)));
+        }
+        else
+        {
+            return self;
+        }
+    }
     [[nodiscard]] bool HasAttributes() const override { return true; }
     [[nodiscard]] const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
     [[nodiscard]] TemplateDict* GetMutableItems() const override
@@ -2851,6 +2894,17 @@ public:
     // A mapping passed in the context is a Python dict to the template
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::MethodsFirst; }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    [[nodiscard]] InternalValue LifetimeAnchor(const InternalValue& self) const override
+    {
+        if constexpr (std::is_same_v<Holder<int>, BySharedVal<int>>)
+        {
+            return InternalValue(MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter>>(m_values)));
+        }
+        else
+        {
+            return self;
+        }
+    }
     [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
     [[nodiscard]] TemplateDict* GetMutableItems() const override
     {

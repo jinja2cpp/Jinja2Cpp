@@ -2362,9 +2362,11 @@ InternalValue MakeMutable(const InternalValue& value)
         auto items = list->ToValueList();
         if (extendLifetime)
         {
+            const auto* accessor = list->GetAccessor();
+            const auto anchor = accessor ? accessor->LifetimeAnchor(value) : value;
             for (auto& item : items)
             {
-                item.SetParentData(value);
+                item.SetParentData(anchor);
             }
         }
         InternalValue copy(ListAdapter::CreateAdapter(std::move(items)));
@@ -2375,11 +2377,13 @@ InternalValue MakeMutable(const InternalValue& value)
     if (auto map = AsMap(value))
     {
         TemplateDict items;
+        const auto* mapAccessor = map->GetAccessor();
+        const auto anchor = extendLifetime && mapAccessor ? mapAccessor->LifetimeAnchor(value) : value;
         for (auto& [key, item] : map->GetEntries())
         {
             if (extendLifetime)
             {
-                item.SetParentData(value);
+                item.SetParentData(anchor);
             }
             items.Set(key, std::move(item));
         }

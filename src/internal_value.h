@@ -602,6 +602,11 @@ struct IListAccessor : ValueObject
     // The link of an adapter of the host's data to the render's copy of it (borrowed_cells.h);
     // null for the other lists
     [[nodiscard]] virtual const CellLink* GetCellLink() const { return nullptr; }
+    // What the items of a copy of the list keep alive when the list says ShouldExtendLifetime:
+    // `self`, or, for an adapter of the host's data, another adapter of the same data, as the
+    // copy may become this adapter's cell, which the items would then hold in a cycle
+    // (docs/tasks/0331)
+    [[nodiscard]] virtual InternalValue LifetimeAnchor(const InternalValue& self) const;
     // An accessor with iteration state of its own (a generator, which says so with
     // SetClonesOnCopy) is copied with the list value, so that copies iterate independently;
     // every other accessor is shared
@@ -656,6 +661,8 @@ struct IMapAccessor : ValueObject
     virtual bool AdoptCopy(const InternalValue& /*self*/, const InternalValue& /*copy*/) const { return false; }
     // See IListAccessor::GetCellLink
     [[nodiscard]] virtual const CellLink* GetCellLink() const { return nullptr; }
+    // See IListAccessor::LifetimeAnchor
+    [[nodiscard]] virtual InternalValue LifetimeAnchor(const InternalValue& self) const;
     // How x.name resolves against Python's dict methods (items, get, ...)
     [[nodiscard]] virtual MapAttrPolicy GetAttrPolicy() const { return MapAttrPolicy::KeysOnly; }
     // A namespace() object, the only one `set obj.attr = ...` can change
