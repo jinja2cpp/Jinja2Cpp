@@ -37,6 +37,8 @@ extern std::atomic<uint32_t> g_cellEpoch;
 // The cells that exist now, in any thread's registry; with the epoch it tells a block of item
 // adapters that none of its slots can have a cell (QuietEpoch)
 extern std::atomic<uint32_t> g_liveCells;
+// The frozen cells that exist now: those a value kept after its render still reads (docs/tasks/0331)
+extern std::atomic<uint32_t> g_frozenCells;
 } // namespace detail
 
 // The part of an adapter of the host's data (a list or map lent by reference, docs/tasks/0115)
@@ -45,11 +47,15 @@ extern std::atomic<uint32_t> g_liveCells;
 // one object, and a write through one is seen through all. The host's data is never written: the
 // first write copies it into a cell the render owns, every adapter of the same data finds the
 // cell by the data's identity in the render's registry (BorrowedCells), and reads go to the cell
-// from then on. The registry detaches its adapters when the render ends, so an adapter that
-// outlives the render (the thread's globals) reads the host's data again in the next one.
+// from then on. When the render ends its registry freezes the cells (docs/tasks/0331): an adapter
+// of a global, which outlives the render in the thread's snapshot, detaches and reads the host's
+// data again in the next render; any other adapter still attached is one a value outlives the
+// render in (a container the host keeps), and it keeps the frozen cell, which nothing writes any
+// more, as long as it lives.
 //
-// A copy of the adapter (one handed to the host) starts detached and finds the cell again
-// while the render runs. Adapters of the host's data are read by one thread (internal_value.cpp)
+// A copy of an adapter attached to a frozen cell keeps the cell too; a copy of any other adapter
+// starts detached. Adapters of the host's data are read by the thread of their render; a value
+// handed to the host reads only the link (Current), never changes it (internal_value.cpp)
 //
 // The destructor does not detach: the owner of the adapter calls Release first. An adapter on
 // its own does that as it goes (AutoCellLink, OwnedAdapter in internal_value.cpp); a block of
@@ -59,9 +65,21 @@ class CellLink
 {
 public:
     CellLink() = default;
-    // A copy is another adapter: detached
-    CellLink(const CellLink& /*other*/) noexcept {}
-    CellLink(CellLink&& /*other*/) noexcept {}
+    // A copy is another adapter: detached, unless the original reads a frozen cell
+    CellLink(const CellLink& other) noexcept
+    {
+        if (other.m_cell)
+        {
+            Inherit(other);
+        }
+    }
+    CellLink(CellLink&& other) noexcept
+    {
+        if (other.m_cell)
+        {
+            Inherit(other);
+        }
+    }
     // An adapter given other data: its cell is not of that data, so it detaches
     CellLink& operator=(const CellLink& other) noexcept;
     CellLink& operator=(CellLink&& other) noexcept;
@@ -98,29 +116,37 @@ public:
 
     // Attaches the adapter to a new cell holding `storage` (a list or dict the template owns,
     // the copy of the adapter's items) for the data `self` names; false outside a render, where
-    // the caller keeps the copy instead
-    bool Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage) const;
+    // the caller keeps the copy instead, and for an adapter that reads a frozen cell. `held`: the adapter is a
+    // global's (ValueObject::IsGlobalData)
+    bool Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held) const;
 
 private:
     friend class BorrowedCell;
     friend class BorrowedCells;
+    friend class FrozenCycleBreaker;
 
     // Out of line, in borrowed_cells.cpp: the reads that call them stay small
     const BorrowedCell* Find(const IListAccessor& self) const;
     const BorrowedCell* Find(const IMapAccessor& self) const;
-    const BorrowedCell* Find(const void* identity, bool isList) const;
-    void Link(const BorrowedCell& cell) const;
-    // Below BorrowedCell, with Release
-    inline void Unlink() const noexcept;
+    const BorrowedCell* Find(const void* identity, bool isList, bool held) const;
+    void Link(const BorrowedCell& cell, bool held) const;
+    // Detaches from a live cell, or lets go of a frozen one
+    JINJA2CPP_CELL_NOINLINE void Unlink() const noexcept;
+    // Takes the frozen cell `other` reads, if it reads one
+    JINJA2CPP_CELL_NOINLINE void Inherit(const CellLink& other) noexcept;
 
     // An epoch the counter skips: the value of m_seenEpoch while the adapter is attached
     static constexpr uint32_t Attached = UINT32_MAX;
+    // The bit of m_linkIndex that marks the link of a global's adapter, which the end of the render
+    // detaches instead of freezing
+    static constexpr uint32_t HeldBit = 0x80000000U;
 
-    // Not owned: the registry keeps each cell until it has detached every link to it
+    // A live cell is not owned: its registry keeps it until the render ends. A frozen one is: the
+    // link holds a reference to it
     mutable const BorrowedCell* m_cell = nullptr;
     // The epoch of the last look, or Attached
     mutable uint32_t m_seenEpoch = 0;
-    // The position of this link in the cell's list of links
+    // The position of this link in the live cell's list of links, and HeldBit
     mutable uint32_t m_linkIndex = 0;
 };
 
@@ -143,6 +169,12 @@ public:
     [[nodiscard]] const IMapAccessor& Map() const noexcept { return *m_map; }
     // The items of the list, read without a virtual call on the hot paths of the list adapter
     [[nodiscard]] InternalValueList& Items() const noexcept { return *m_items; }
+    // The items a write changes: null once the cell is frozen, which nothing writes
+    [[nodiscard]] InternalValueList* MutableItems() const noexcept { return m_frozen ? nullptr : m_items; }
+    [[nodiscard]] TemplateDict* MutableDict() const noexcept { return m_frozen ? nullptr : m_map->GetMutableItems(); }
+    // Whether the render that made the cell ended: the values that outlived it read the cell, and
+    // nothing writes it (docs/tasks/0331)
+    [[nodiscard]] bool IsFrozen() const noexcept { return m_frozen; }
 
 private:
     friend class CellLink;
@@ -151,14 +183,17 @@ private:
     InternalValue m_storage;
     // The value promoted first: it keeps the host's data alive, for an adapter that owns it
     // (a user callable's result), so that the identity the registry keys the cell by is not
-    // reused while the cell exists
-    InternalValue m_source;
+    // reused while the registry has the cell. Dropped when the cell freezes
+    mutable InternalValue m_source;
     // Views into m_storage, which owns them for the cell's life
     const IListAccessor* m_list = nullptr;
     const IMapAccessor* m_map = nullptr;
     InternalValueList* m_items = nullptr;
     bool m_isList;
-    // The adapters attached to the cell, which the registry detaches when the render ends
+    // Set when the render ends (BorrowedCells::Finish)
+    mutable bool m_frozen = false;
+    // The adapters attached to the live cell, which the registry detaches or freezes when the
+    // render ends
     mutable std::vector<const CellLink*> m_links;
 };
 
@@ -186,18 +221,6 @@ inline uint32_t QuietEpoch() noexcept
     return detail::g_liveCells.load(std::memory_order_relaxed) == 0 ? epoch : CellStep::Recheck;
 }
 
-// Inline, as Release, which the destructors of the adapters call
-inline void CellLink::Unlink() const noexcept
-{
-    auto& links = m_cell->m_links;
-    const auto* last = links.back();
-    links[m_linkIndex] = last;
-    last->m_linkIndex = m_linkIndex;
-    links.pop_back();
-    m_cell = nullptr;
-    m_seenEpoch = 0;
-}
-
 inline CellLink& CellLink::operator=(const CellLink& other) noexcept
 {
     if (this != &other && m_cell)
@@ -216,6 +239,7 @@ inline CellLink& CellLink::operator=(CellLink&& other) noexcept
     return *this;
 }
 
+// Inline, as the destructors of the adapters call it: the call is out of line
 inline void CellLink::Release() const noexcept
 {
     if (m_cell)
@@ -253,7 +277,8 @@ public:
     BorrowedCells& operator=(const BorrowedCells&) = delete;
     BorrowedCells& operator=(BorrowedCells&&) = delete;
 
-    // Detaches every adapter from its cell and frees the cells
+    // Freezes the cells: a global's adapters detach, the others keep the frozen cell they read, and
+    // the registry lets go of the cells, so that a cell no value reads any more goes
     void Release() noexcept
     {
         if (m_cells)

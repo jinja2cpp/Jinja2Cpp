@@ -1465,9 +1465,9 @@ public:
     [[nodiscard]] InternalValueList* GetMutableItems() const override
     {
         const auto* cell = m_link.Get(*this);
-        return cell ? &cell->Items() : nullptr;
+        return cell ? cell->MutableItems() : nullptr;
     }
-    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy); }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData()); }
     [[nodiscard]] bool IsBorrowed() const override { return true; }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
     {
@@ -1801,9 +1801,9 @@ public:
     [[nodiscard]] InternalValueList* GetMutableItems() const override
     {
         const auto* cell = m_link.Get(*this);
-        return cell ? &cell->Items() : nullptr;
+        return cell ? cell->MutableItems() : nullptr;
     }
-    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy); }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData()); }
     [[nodiscard]] bool IsBorrowed() const override { return true; }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericList CreateGenericList() const override
@@ -2680,9 +2680,9 @@ public:
     [[nodiscard]] TemplateDict* GetMutableItems() const override
     {
         const auto* cell = m_link.Get(*this);
-        return cell ? cell->Map().GetMutableItems() : nullptr;
+        return cell ? cell->MutableDict() : nullptr;
     }
-    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy); }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData()); }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysFirst; }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
@@ -2845,9 +2845,9 @@ public:
     [[nodiscard]] TemplateDict* GetMutableItems() const override
     {
         const auto* cell = m_link.Get(*this);
-        return cell ? cell->Map().GetMutableItems() : nullptr;
+        return cell ? cell->MutableDict() : nullptr;
     }
-    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy); }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData()); }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {

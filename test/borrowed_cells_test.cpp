@@ -123,10 +123,9 @@ TEST(BorrowedCellsSingle, KeptValueBeforeAndAfterTheWrite)
     EXPECT_EQ("None[[1, 2], 3, 4]", Render("{% set _ = l[0].append(2) %}{% set _ = l.append(3) %}{{ keep(l) }}{% set _ = l.append(4) %}{{ show() }}", params));
 }
 
-// After the render, a kept host container the render wrote reads the host's data again: the
-// host's data is never written and the render's cells are gone. Python keeps the writes
-// (`[1, 2]|[1, 2]`); what the host should keep is docs/tasks/0331
-TEST(BorrowedCellsSingle, KeptValueAfterTheRenderReadsTheHostData)
+// After the render, a kept host container the render wrote keeps the render's final state: the
+// render's copy freezes, the host's data is never written (docs/tasks/0331)
+TEST(BorrowedCellsSingle, KeptValueAfterTheRenderKeepsTheWrites)
 {
     Value nested;
     Value direct;
@@ -140,11 +139,258 @@ TEST(BorrowedCellsSingle, KeptValueAfterTheRenderReadsTheHostData)
         },
         { ArgInfo{ "nested" }, ArgInfo{ "direct" } });
     EXPECT_EQ("None", Render("{% set _ = l[0].append(2) %}{{ keep({'saved': l}, l[0]) }}", params));
-    // `l` reads the host's data (and params must outlive it); `l[0]` was read from the render's
-    // copy, which the kept value now holds alone
-    EXPECT_EQ("[1]|[1, 2]", Render("{{ n.saved[0] }}|{{ d }}", ValuesMap{ { "n", nested }, { "d", direct } }));
+    EXPECT_EQ("[1, 2]|[1, 2]", Render("{{ n.saved[0] }}|{{ d }}", ValuesMap{ { "n", nested }, { "d", direct } }));
     // The host's data is not written
     EXPECT_EQ("[[1]]", Render("{{ l }}", params));
+}
+
+namespace
+{
+// A host callable that keeps what the template hands it (docs/tasks/0331)
+struct Keeper
+{
+    std::vector<Value> kept;
+
+    void AddTo(ValuesMap& params)
+    {
+        params["keep"] = UserCallable(
+            [this](const UserCallableParams& p) {
+                kept.push_back(p["v"]);
+                return Value();
+            },
+            { ArgInfo{ "v" } });
+        params["touch"] = UserCallable([this](const UserCallableParams&) { return kept.back(); }, {});
+    }
+    // What the host keeps, printed by another render with params of its own
+    std::string Show(size_t idx = 0) const { return Render("{{ k }}", ValuesMap{ { "k", kept.at(idx) } }); }
+};
+
+// Renders `source` with params made for it and freed before the host reads what it kept
+std::string RenderFreed(Keeper& keeper, const std::string& source, ValuesMap params)
+{
+    keeper.AddTo(params);
+    auto result = Render(source, params);
+    params.clear();
+    return result;
+}
+} // namespace
+
+// The acceptance rows of docs/tasks/0331
+TEST(BorrowedCellsKept, WrittenInsideATemplateList)
+{
+    // K1: the list the template made holds h's adapter, which reads the frozen cell
+    Keeper keeper;
+    EXPECT_EQ("", RenderFreed(keeper, "{% set _ = h.append(3) %}{% set _ = keep([h]) %}{% set _ = h.append(4) %}", { { "h", ValuesList{ 1, 2 } } }));
+    EXPECT_EQ("[[1, 2, 3, 4]]", keeper.Show());
+}
+
+TEST(BorrowedCellsKept, NestedWriteThenKept)
+{
+    // K2: a subscript write copies the spine; l's copy holds l[0]'s
+    Keeper keeper;
+    EXPECT_EQ("", RenderFreed(keeper, "{% set _ = l[0].append(2) %}{% set _ = keep(l) %}", { { "l", ValuesList{ Value(ValuesList{ 1 }) } } }));
+    EXPECT_EQ("[[1, 2]]", keeper.Show());
+}
+
+TEST(BorrowedCellsKept, WrittenBeforeAndAfter)
+{
+    // K3: handed out after a write, the host has the render's copy and its final state
+    Keeper keeper;
+    EXPECT_EQ("[1, 2, 3, 4]", RenderFreed(keeper, "{% set _ = h.append(3) %}{% set _ = keep(h) %}{% set _ = h.append(4) %}{{ touch() }}", { { "h", ValuesList{ 1, 2 } } }));
+    EXPECT_EQ("[1, 2, 3, 4]", keeper.Show());
+}
+
+TEST(BorrowedCellsKept, HandedOutBeforeTheWrite)
+{
+    // K4: a view of the host's data, during the render and after it (Python: [1, 2, 4] in both;
+    // decision D1). The host keeps the params alive while it holds the view, as on master
+    Keeper keeper;
+    ValuesMap params{ { "l", ValuesList{ 1, 2 } } };
+    keeper.AddTo(params);
+    EXPECT_EQ("[1, 2]|[1, 2, 4]", Render("{% set _ = keep(l) %}{% set _ = l.append(4) %}{{ touch() }}|{{ l }}", params));
+    EXPECT_EQ("[1, 2]", keeper.Show());
+}
+
+TEST(BorrowedCellsKept, NotKeptLeavesNoCell)
+{
+    // K5: the cell goes at the render's end (LSan in the sanitizer job)
+    Keeper keeper;
+    EXPECT_EQ("[1, 2, 3]", RenderFreed(keeper, "{% set _ = h.append(3) %}{{ h }}", { { "h", ValuesList{ 1, 2 } } }));
+    EXPECT_EQ("[1, 2, 3]|[1, [...]]|{'a': 1, 'd': {...}}",
+              RenderFreed(keeper, "{% set _ = h.append(3) %}{{ h }}|{% set _ = l.append(l) %}{{ l }}|{% set _ = d.update(d=d) %}{{ d }}",
+                          { { "h", ValuesList{ 1, 2 } }, { "l", ValuesList{ 1 } }, { "d", ValuesMap{ { "a", 1 } } } }));
+}
+
+TEST(BorrowedCellsKept, NestedRenderReturnsItsKeptValue)
+{
+    // K6: a callable renders an inner template with params of its own and returns what it kept
+    Template inner;
+    ASSERT_TRUE(!!inner.Load("{% set _ = l.append(2) %}{% set _ = keep(l) %}"));
+    ValuesMap params;
+    params["f"] = UserCallable(
+        [&inner](const UserCallableParams&) {
+            Keeper keeper;
+            ValuesMap local{ { "l", ValuesList{ 1 } } };
+            keeper.AddTo(local);
+            EXPECT_TRUE(!!inner.RenderAsString(local));
+            local.clear();
+            return keeper.kept.at(0);
+        },
+        {});
+    EXPECT_EQ("[1, 2]", Render("{{ f() }}", params));
+}
+
+TEST(BorrowedCellsKept, ModuleWritesAndKeeps)
+{
+    // K7: the module's cells freeze when the module goes
+    Keeper keeper;
+    {
+        ValuesMap params{ { "l", ValuesList{ 0 } } };
+        keeper.AddTo(params);
+        Template tpl;
+        ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep(l) %}{% endmacro %}"));
+        auto module = tpl.MakeModule(params).value();
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ 1 };
+        module.exports["add"].As<UserCallable>().callable(callParams);
+    }
+    EXPECT_EQ("[0, 1]", keeper.Show());
+}
+
+TEST(BorrowedCellsKept, GivenBackAndWritten)
+{
+    // K8: a kept value given to a later render is that render's borrowed data: it writes a copy
+    Keeper keeper;
+    EXPECT_EQ("", RenderFreed(keeper, "{% set _ = h.append(3) %}{% set _ = keep(h) %}", { { "h", ValuesList{ 1, 2 } } }));
+    EXPECT_EQ("[1, 2, 3, 9]", Render("{% set _ = k.append(9) %}{{ k }}", ValuesMap{ { "k", keeper.kept.at(0) } }));
+    EXPECT_EQ("[1, 2, 3]", keeper.Show());
+}
+
+TEST(BorrowedCellsKept, GlobalInsideAKeptList)
+{
+    // K9: a global's adapter detaches at the render's end: the next render and the kept value read
+    // the global's data (decision D4; Python keeps [[1, 2, 1]])
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{ 1, 2 });
+    Keeper keeper;
+    ValuesMap params;
+    keeper.AddTo(params);
+    EXPECT_EQ("[1, 2, 1]", Render("{% set _ = g.append(1) %}{% set _ = keep([g]) %}{{ g }}", params, &env));
+    EXPECT_EQ("[1, 2]", Render("{{ g }}", {}, &env));
+    EXPECT_EQ("[[1, 2]]", keeper.Show());
+}
+
+TEST(BorrowedCellsKept, KeptSelfCycleIsBroken)
+{
+    // A written container that holds itself, kept: the end of the render breaks the cycle (D7),
+    // and the inner name is a view of the host's data, as on master, so the host keeps the params
+    // alive while it reads it (LSan)
+    Keeper keeper;
+    ValuesMap params{ { "l", ValuesList{ 1 } }, { "m", ValuesList{ 2 } } };
+    keeper.AddTo(params);
+    EXPECT_EQ("[1, [...]]", Render("{% set _ = l.append(l) %}{% set _ = keep(l) %}{% set _ = m.append([m]) %}{% set _ = keep(m) %}{{ l }}", params));
+    EXPECT_EQ("[1, [1]]", keeper.Show(0));
+    EXPECT_EQ("[2, [[2]]]", keeper.Show(1));
+}
+
+TEST(BorrowedCellsKept, HostWrapperOfItsArgumentEnds)
+{
+    // H1: a host callable that wraps its argument in a new host list, twice
+    ValuesMap params{ { "l", ValuesList{ 1 } } };
+    params["idl"] = UserCallable([](const UserCallableParams& p) { return Value(ValuesList{ p["v"] }); }, { ArgInfo{ "v" } });
+    EXPECT_EQ("2", Render("{% set _ = l.append(idl(l)) %}{% set _ = l.append(idl(l)) %}{{ l|length - 1 }}", params));
+}
+
+TEST(BorrowedCellsKept, ConcurrentRendersOfAKeptView)
+{
+    // T1: a view kept from one render is given to four concurrent renders, each writing its own
+    // `l`: the view is read-only, so no render links it into its cell (TSan)
+    Keeper keeper;
+    ValuesMap first{ { "l", ValuesList{ 1, 2 } } };
+    keeper.AddTo(first);
+    EXPECT_EQ("", Render("{% set _ = keep(l) %}", first));
+    ValuesMap params{ { "l", ValuesList{ 1, 2 } }, { "t", keeper.kept.at(0) } };
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% set _ = l.append(3) %}{{ t|length }},{{ l|length }}"));
+    std::vector<std::thread> threads;
+    std::vector<std::string> results(4);
+    for (auto& result : results)
+    {
+        threads.emplace_back([&tpl, &params, &result]() {
+            for (int i = 0; i != 50; ++i)
+            {
+                auto out = tpl.RenderAsString(params);
+                result = out ? out.value() : out.error().ToString();
+            }
+        });
+    }
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+    for (const auto& result : results)
+    {
+        EXPECT_EQ("2,3", result);
+    }
+}
+
+TEST(BorrowedCellsKept, KeptGlobalReadWhileItsThreadWrites)
+{
+    // T2: a list holding a global's adapter is read on another thread while the global's thread
+    // renders writes to that global (TSan)
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{ 1, 2 });
+    Keeper keeper;
+    ValuesMap params;
+    keeper.AddTo(params);
+    Template tpl(&env);
+    ASSERT_TRUE(!!tpl.Load("{% set _ = keep([g]) if not done %}{% set _ = g.append(1) %}{{ g|length }}"));
+    params["done"] = false;
+    const auto first = tpl.RenderAsString(params);
+    EXPECT_EQ("3", first ? first.value() : first.error().ToString());
+    params["done"] = true;
+    const Value kept = keeper.kept.at(0);
+    std::thread reader([&kept]() {
+        for (int i = 0; i != 200; ++i)
+        {
+            const auto list = kept.ToGenericList();
+            const auto item = list.GetAccessor()->GetIndexer()->GetItemByIndex(0);
+            EXPECT_EQ(2u, item.ToGenericList().GetSize().value_or(0));
+        }
+    });
+    for (int i = 0; i != 200; ++i)
+    {
+        const auto out = tpl.RenderAsString(params);
+        EXPECT_EQ("3", out ? out.value() : out.error().ToString());
+    }
+    reader.join();
+}
+
+TEST(BorrowedCellsKept, FrozenValueReadFromThreads)
+{
+    // T4: a kept frozen list read from four threads after its render (TSan)
+    Keeper keeper;
+    EXPECT_EQ("", RenderFreed(keeper, "{% set _ = l[0].append(2) %}{% set _ = keep([l]) %}", { { "l", ValuesList{ Value(ValuesList{ 1 }) } } }));
+    const Value kept = keeper.kept.at(0);
+    std::vector<std::thread> threads;
+    std::vector<std::string> results(4);
+    for (auto& result : results)
+    {
+        threads.emplace_back([&kept, &result]() {
+            for (int i = 0; i != 50; ++i)
+            {
+                result = Render("{{ k }}", ValuesMap{ { "k", kept } });
+            }
+        });
+    }
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+    for (const auto& result : results)
+    {
+        EXPECT_EQ("[[[1, 2]]]", result);
+    }
 }
 
 // An export of a cycle is a view of it
