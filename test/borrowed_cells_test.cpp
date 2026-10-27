@@ -321,6 +321,17 @@ TEST(BorrowedCellsKept, ModuleDictCopiesOnALaterWrite)
     EXPECT_EQ("{'a': 0, 'b': 2}", keeper.Show(1));
 }
 
+TEST(BorrowedCellsKept, ModuleCellInsideAKeptList)
+{
+    // A limit (docs/tasks/0332): a list the module call made holds `l`'s adapter, which reads the
+    // module's live cell, so a later call's write shows through it until the module goes. The
+    // target is the first call's state, [[0, 1]], as for `keep(l)` (ModuleCopiesOnALaterWrite)
+    KeepingModule m("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep([l]) %}{% endmacro %}");
+    m.Call(1);
+    m.Call(2);
+    EXPECT_EQ("[[0, 1, 2]]", m.keeper.Show(0));
+}
+
 TEST(BorrowedCellsKept, ModuleCalledFromThreadsWhileTheHostReads)
 {
     // D8, TSan: two threads call the module, which writes `l` in every call, while a third reads

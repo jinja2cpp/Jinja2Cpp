@@ -66,19 +66,13 @@ host's data now copies it, as Python does. `methods.context_alias` and
 `methods.operand_changed_by_call` match; rows `methods.alias_*` and test/borrowed_cells_test.cpp
 pin the rest.
 
-A container the render hands to a user callable (an argument, which the host may keep) is a
-view at every call, as on master, also for a list the template built: while the render runs the
-host sees the render's later writes through it, nested ones too, and a call costs no copy.
-Two limits remain:
-- a host container the template wrote and the host keeps reads the host's original data after
-  the render, since the render's cells are gone and the host's data was never written. On master
-  the write had made the template's variable a copy, which the kept value shared and which kept
-  the writes. Task 0331 is the fix;
-- the host keeps its params alive while it holds a kept value: a kept view reads them, so a read
-  after the params are freed is a use-after-free, as master already has for a kept value the
-  render never wrote. On master a kept value the render had written held the template's copy and
-  outlived the params; now it is a view of them too (a nested render whose callable returns its
-  kept argument after its params are gone crashes). Task 0331 is the fix.
+A container the render hands to a user callable (an argument, which the host may keep) never
+links a cell and costs no copy (task 0331): written before the call it is the render's copy,
+which freezes when the render ends, so the host keeps the final state and it outlives the
+params; handed out before any write it is a read-only view of the host's data, during the
+render too (Python shows the later writes: a deliberate divergence, as the host must never hold
+mutable state a render shares). A global's data is always handed out as the original. The full
+table is in 0331 and `docs/api-2.0.md`.
 
 Perf: an item adapter in a block (`ItemAdapters`) has a `CellLink` whose destructor does
 nothing; the block releases its slots, and skips that when no cell existed since it was made
@@ -95,5 +89,5 @@ Left for later phases:
 - the write-back of a copy into its variable or owner (`EvaluateMutableRoot`,
   `EvaluateIndices(forMutation)`) stays for the containers that are not the host's data (a
   context map of the engine, a computed list), and stores the same value back for a cell.
-- what a host callable keeps of a host container the render wrote (a view that reads the host's
-  original after the render): 0331, designed before or with P4.
+- what a host callable keeps of a host container the render wrote: done in 0331; P4's round
+  trip of an exported container builds on its exports.

@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: parity
 depends: [0049]
-touches: [src/borrowed_cells.h, src/borrowed_cells.cpp, src/internal_value.cpp#OutputValueConvertor, test/borrowed_cells_test.cpp]
+touches: [src/borrowed_cells.h, src/borrowed_cells.cpp, src/internal_value.cpp#OutputValueConvertor, src/internal_value.cpp#CreateGenericList, src/internal_value.h#ValueObject, src/cycle_collector.h, test/borrowed_cells_test.cpp, bench/jinja2cpp_bench.cpp]
 ---
 # What a host callable keeps of a container the render hands it
 
@@ -91,3 +91,42 @@ the leak shapes above, and `bench/count.py`.
 **Plan.** Needs an architect design before any code: it changes what a value outside the
 render owns, across threads. P4 of the 0049 plan (keys, callables, `id(l) is sameas l`)
 works on the same boundary, so this design comes before P4 or together with it.
+
+**Design.** Approved by Ruslan 2026-10-27: the architect plan
+`/mnt/project-files/release-2.0/0331-plan.md` (option A, freeze in place with read-only exports),
+the advisor's four changes, D1-D7 as recommended and D8 as copy on write.
+
+**Implementation (PR #673, three commits).**
+- A1, read-only exports: `CreateGenericList`/`CreateGenericMap` of the host-data adapters read
+  the link (`CellLink::Current`) and never look a cell up. Attached, and not a global's
+  adapter: the render's copy. Otherwise `ExportListView`/`ExportMapView`, a read-only view
+  with no link and no item cache; a nested read is a new view with the same owner. A global's
+  adapter (`ValueObject::IsGlobalData`: the `ByHeldRef` adapters, and the generic containers
+  `LendHeldItem` makes) always exports the host's original, decided before its link is read.
+- A2, freeze at the end: `BorrowedCells::Finish` drops each cell's source, freezes every cell,
+  detaches a global's links (`HeldBit`) and turns every other link into a reference to its
+  frozen cell. A frozen cell is never written (`MutableItems` null, `Adopt` refuses). A copy
+  of an adapter that reads a frozen cell keeps it.
+- D7: `FrozenCycleBreaker`, a depth-first walk over the frozen cells' items and the template
+  containers among them, detaches each link back to a cell on its path. The inner name then
+  reads the host's data, as on master (`[1, [1]]` for `l.append(l); keep(l)`), so it is a view
+  of the params. The collector's `Traverse` of frozen links (plan A3) is not needed: no cycle
+  through a frozen link survives Finish.
+- D8: an export of a module cell notes its call; a write in a later call copies the items when
+  an export still shares them (refcount test), so the host keeps an immutable snapshot of each
+  call's final state. Bench `Module/keep`, `Module/keep_written`.
+
+**Contract** (`docs/api-2.0.md`, values crossing the boundary, item 9). The host holds a read-only
+snapshot, never shared mutable state:
+
+| handed out | the host keeps after the render |
+|---|---|
+| after the render wrote it (`h.append(3); keep(h)`), or inside a container the template made | the render's copy, its final state; it outlives the params |
+| before any write (`keep(l); l.append(4)`) | a view of the host's original, also during the render (Python: the writes; D1) |
+| never written | a view of the host's original; the host keeps the params alive (as master) |
+| a global's data | the global's original (D4; Python: the writes) |
+| from a module call | that call's final state; a later call's write copies first (D8) |
+
+Left: a container a module call made that holds a host container keeps reading the module's
+live cell (task 0332).
+
