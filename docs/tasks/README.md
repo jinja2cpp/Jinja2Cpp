@@ -388,8 +388,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0314](0314-method-sort-format-unicode-case.md) | Methods 0020 left out: list.sort, nested format fields, Unicode case | parity | low | done |
 | [0317](0317-str-numeric-classes-and-missing-methods.md) | str methods: Unicode digit and numeric classes, casefold, isascii, isidentifier, isprintable, format leftovers | parity | low | open |
 | [0318](0318-kept-globals-keep-their-snapshot.md) | A list or map from the globals keeps the globals it was read from | robustness | high | done |
-| [0319](0319-makecallable-value-parameter.md) | MakeCallable with a Value parameter does not compile | api | medium | open |
-| [0320](0320-typed-callable-omitted-argument.md) | A typed callable with an omitted optional argument is not called | api | low | open |
+| [0319](0319-makecallable-value-parameter.md) | MakeCallable with a Value parameter does not compile | api | medium | done |
+| [0320](0320-typed-callable-omitted-argument.md) | A typed callable with an omitted optional argument is not called | api | low | done |
 | [0321](0321-load-copies-on-write.md) | Load replaces the template for its own object only | robustness | high | done |
 | [0322](0322-parity-corpus-through-reflect.md) | Run the parity corpus with the context as a JSON view | parity | low | open |
 | [0323](0323-stored-self-sees-includer-names.md) | A `self` an include stored does not see the names the includer set | parity | low | open |
@@ -401,4 +401,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0329](0329-reflect-counts-in-ci.md) | Count `--data reflect` in the PR gate and the trend | perf | medium | open |
 | [0330](0330-gate-reports-newly-outlined-frames.md) | The PR gate names hot functions that GCC stopped inlining | perf | low | open |
 | [0333](0333-locale-free-float-parsing.md) | Float parsing follows the C locale | robustness | high | open |
-| [0334](0334-makecallable-per-argument-dispatch.md) | MakeCallable visits every combination of argument types | api | high | open |
+| [0334](0334-makecallable-per-argument-dispatch.md) | MakeCallable visits every combination of argument types | api | high | done |
