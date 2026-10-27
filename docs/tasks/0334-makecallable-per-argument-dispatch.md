@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/681
 priority: high
 area: api
 touches: [include/jinja2cpp/user_callable.h, test/user_callable_test.cpp]
