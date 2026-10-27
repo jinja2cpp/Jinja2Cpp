@@ -472,7 +472,8 @@ render is running (the C++ rule for a member call). Both are undefined behaviour
    is never mutable state the host shares with a render or a thread: the host holds a
    read-only snapshot. One the render wrote before the call (or one inside a list or dict the
    template made) is the render's copy, frozen when the render ends: the host keeps its final
-   state, also after the params are freed. One handed out before any write, or never written,
+   state, also after the params are freed (a nested container it never wrote stays a view of
+   the host's data). One handed out before any write, or never written,
    is a view of the host's data (item 1 applies), also while the render runs; Python shows the
    render's later writes there, a deliberate divergence. A global's data is handed out as the
    global's original. A module call's container keeps that call's final state: a later call's

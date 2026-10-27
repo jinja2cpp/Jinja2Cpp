@@ -107,11 +107,18 @@ the advisor's four changes, D1-D7 as recommended and D8 as copy on write.
   detaches a global's links (`HeldBit`) and turns every other link into a reference to its
   frozen cell. A frozen cell is never written (`MutableItems` null, `Adopt` refuses). A copy
   of an adapter that reads a frozen cell keeps it.
-- D7: `FrozenCycleBreaker`, a depth-first walk over the frozen cells' items and the template
-  containers among them, detaches each link back to a cell on its path. The inner name then
-  reads the host's data, as on master (`[1, [1]]` for `l.append(l); keep(l)`), so it is a view
-  of the params. The collector's `Traverse` of frozen links (plan A3) is not needed: no cycle
-  through a frozen link survives Finish.
+- A3 and D7: a link to a frozen cell is a reference the cycle collector follows (`OwnedAdapter`,
+  the generic adapters and `ItemAdapters` report their frozen cells and item blocks, a frozen
+  cell its storage), and `BorrowedCells::Release` hands the frozen cells that values still read
+  to the collector ending the render or the module. A cycle nothing keeps is freed. A kept
+  container that holds itself (`l.append(l); keep(l)`) is the render's copy, cycle included,
+  and leaks once the host lets it go, as on master (D7 option a). Option b, which detached the
+  back-edges at Finish, was dropped after verifier round 8: the inner name then read the
+  host's params, a use-after-free once they were freed, and which edge broke depended on the
+  table's order.
+- The items of a copy keep the host's shared data alive through an adapter of their own
+  (`LifetimeAnchor`), not through the adapter that reads the copy as its cell, which would
+  make a cycle once the cell froze.
 - D8: an export of a module cell notes its call; a write in a later call copies the items when
   an export still shares them (refcount test), so the host keeps an immutable snapshot of each
   call's final state. Bench `Module/keep`, `Module/keep_written`.
@@ -121,7 +128,7 @@ snapshot, never shared mutable state:
 
 | handed out | the host keeps after the render |
 |---|---|
-| after the render wrote it (`h.append(3); keep(h)`), or inside a container the template made | the render's copy, its final state; it outlives the params |
+| after the render wrote it (`h.append(3); keep(h)`), or inside a container the template made | the render's copy, its final state; it outlives the params, except its items the render never wrote, which stay views of the host's data (as master) |
 | before any write (`keep(l); l.append(4)`) | a view of the host's original, also during the render (Python: the writes; D1) |
 | never written | a view of the host's original; the host keeps the params alive (as master) |
 | a global's data | the global's original (D4; Python: the writes) |
