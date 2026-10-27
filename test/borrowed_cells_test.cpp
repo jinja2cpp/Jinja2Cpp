@@ -240,6 +240,8 @@ TEST(BorrowedCellsKept, NestedRenderReturnsItsKeptValue)
         },
         {});
     EXPECT_EQ("[1, 2]", Render("{{ f() }}", params));
+    // Written by the outer render, which copies it into a cell of its own
+    EXPECT_EQ("[1, 2, 9]", Render("{% set x = f() %}{% set _ = x.append(9) %}{{ x }}", params));
 }
 
 TEST(BorrowedCellsKept, ModuleWritesAndKeeps)
@@ -391,17 +393,27 @@ TEST(BorrowedCellsKept, GlobalInsideAKeptList)
     EXPECT_EQ("[[1, 2]]", keeper.Show());
 }
 
-TEST(BorrowedCellsKept, KeptSelfCycleIsBroken)
+TEST(BorrowedCellsKept, CyclesThroughFrozenCellsAreFreed)
 {
-    // A written container that holds itself, kept: the end of the render breaks the cycle (D7),
-    // and the inner name is a view of the host's data, as on master, so the host keeps the params
-    // alive while it reads it (LSan)
+    // Cycles through the render's copies that nothing keeps: the collector frees them through the
+    // frozen links (LSan in the sanitizer job)
     Keeper keeper;
-    ValuesMap params{ { "l", ValuesList{ 1 } }, { "m", ValuesList{ 2 } } };
-    keeper.AddTo(params);
-    EXPECT_EQ("[1, [...]]", Render("{% set _ = l.append(l) %}{% set _ = keep(l) %}{% set _ = m.append([m]) %}{% set _ = keep(m) %}{{ l }}", params));
-    EXPECT_EQ("[1, [1]]", keeper.Show(0));
-    EXPECT_EQ("[2, [[2]]]", keeper.Show(1));
+    EXPECT_EQ("2|1|2", RenderFreed(keeper, "{% set _ = l.append(l) %}{{ l|length }}|{% set _ = m[0].append(m) %}{{ m|length }}|{% set _ = n.append([n]) %}{{ n|length }}",
+                                   { { "l", ValuesList{ 1 } }, { "m", ValuesList{ Value(ValuesList{ 1 }) } }, { "n", ValuesList{ 2 } } }));
+}
+
+TEST(BorrowedCellsKept, KeptSelfCycleIsTheRendersCopy)
+{
+    // A kept container that holds itself is the render's copy, cycle included, after the params
+    // are freed. As on master the cycle leaks once the host lets it go: no collector runs then
+    // (docs/tasks/0331, decision D7)
+    Keeper keeper;
+    EXPECT_EQ("[1, [...]]", RenderFreed(keeper, "{% set _ = l.append(l) %}{% set _ = keep(l) %}{{ l }}", { { "l", ValuesList{ 1 } } }));
+    const auto kept = keeper.kept.at(0).ToGenericList();
+    EXPECT_EQ(2u, kept.GetSize().value_or(0));
+    EXPECT_EQ(2u, kept.GetAccessor()->GetIndexer()->GetItemByIndex(1).ToGenericList().GetSize().value_or(0));
+    // Broken by the host, so that the test leaks nothing
+    keeper.kept.clear();
 }
 
 TEST(BorrowedCellsKept, HostWrapperOfItsArgumentEnds)

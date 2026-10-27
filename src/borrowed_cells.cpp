@@ -3,7 +3,6 @@
 #include "cycle_collector.h"
 #include "internal_value.h"
 #include "intrusive_ptr.h"
-#include "robin_hood.h"
 #include "template_dict.h"
 
 #include <jinja2cpp/generic_list.h>
@@ -13,9 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <new>
 #include <utility>
-#include <vector>
 
 namespace jinja2
 {
@@ -56,6 +53,18 @@ BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, bool isL
     , m_isList(isList)
 {
     Bind();
+    // A frozen cell is held by the links of the values that outlived the render: a cycle through
+    // its items is the collector's (CellLink::TraverseFrozen)
+    SetTraversable();
+}
+
+void BorrowedCell::Traverse(const TraverseFn& fn) const
+{
+    if (m_frozen)
+    {
+        TraverseValue(m_storage, fn);
+        TraverseValue(m_retired, fn);
+    }
 }
 
 void BorrowedCell::Bind() const noexcept
@@ -193,6 +202,14 @@ void CellLink::Unlink() const noexcept
     links.pop_back();
 }
 
+void CellLink::TraverseFrozen(const TraverseFn& fn) const
+{
+    if (m_cell && m_cell->m_frozen)
+    {
+        fn(m_cell);
+    }
+}
+
 void CellLink::Inherit(const CellLink& other) noexcept
 {
     if (!other.m_cell->m_frozen)
@@ -257,137 +274,6 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     return true;
 }
 
-// Breaks the cycles through frozen cells (docs/tasks/0331, decision D7): a written container
-// that holds itself (`l.append(l)`), directly or through the template's lists and dicts and
-// other cells, and that a value outlives the render in, would be a cycle no collector sees any
-// more once the host lets go of it. A depth-first walk over the frozen cells' items and the
-// template's containers in them detaches each link back to a cell on the walk's path, which then
-// reads the host's data, as on master, where the write had not reached that name. The walk
-// enters no host data and no host callable, so it ends (the walk of r6 did not)
-class FrozenCycleBreaker
-{
-public:
-    // Walks from each cell of `cells` a link still reads
-    template<typename Table>
-    void Run(const Table& cells)
-    {
-        for (const auto& [identity, cell] : cells)
-        {
-            if (cell->use_count() > 1)
-            {
-                Enter(Items(*cell));
-                Walk();
-            }
-        }
-    }
-
-private:
-    // The items of a list or dict on the walk's path, and the next one to look at
-    struct Node
-    {
-        const InternalValueList* list = nullptr;
-        const TemplateDict* dict = nullptr;
-        size_t next = 0;
-        TemplateDict::const_iterator it{};
-    };
-
-    static Node Items(const BorrowedCell& cell)
-    {
-        Node node;
-        if (cell.IsList())
-        {
-            node.list = &cell.Items();
-        }
-        else
-        {
-            node.dict = cell.Map().GetMutableItems();
-            if (node.dict)
-            {
-                node.it = node.dict->begin();
-            }
-        }
-        return node;
-    }
-    static const void* Key(const Node& node) { return node.list ? static_cast<const void*>(node.list) : static_cast<const void*>(node.dict); }
-
-    void Enter(Node node)
-    {
-        const auto* key = Key(node);
-        if (!key || !m_seen.emplace(key, true).second)
-        {
-            return;
-        }
-        m_path.push_back(node);
-    }
-
-    void Walk()
-    {
-        while (!m_path.empty())
-        {
-            auto& node = m_path.back();
-            const InternalValue* item = nullptr;
-            if (node.list && node.next < node.list->size())
-            {
-                item = &(*node.list)[node.next++];
-            }
-            else if (node.dict != nullptr && node.it != node.dict->end())
-            {
-                item = &node.it->second;
-                ++node.it;
-            }
-            if (!item)
-            {
-                m_seen[Key(node)] = false;
-                m_path.pop_back();
-                continue;
-            }
-            Visit(*item);
-        }
-    }
-
-    void Visit(const InternalValue& item)
-    {
-        Node node;
-        const CellLink* link = nullptr;
-        if (auto list = AsList(item))
-        {
-            const auto* accessor = list->GetAccessor();
-            link = accessor ? accessor->GetCellLink() : nullptr;
-            node.list = accessor && !link ? accessor->GetMutableItems() : nullptr;
-        }
-        else if (auto map = AsMap(item))
-        {
-            const auto* accessor = map->GetAccessor();
-            link = accessor ? accessor->GetCellLink() : nullptr;
-            node.dict = accessor && !link ? accessor->GetMutableItems() : nullptr;
-            if (node.dict)
-            {
-                node.it = node.dict->begin();
-            }
-        }
-        if (link)
-        {
-            if (!link->m_cell || !link->m_cell->IsFrozen())
-            {
-                return;
-            }
-            node = Items(*link->m_cell);
-            const auto found = m_seen.find(Key(node));
-            if (found != m_seen.end() && found->second)
-            {
-                // Back to a cell on the path: the table still holds it
-                link->Unlink();
-                return;
-            }
-        }
-        Enter(node);
-    }
-
-    // The lists and dicts the walk entered: true while on its path
-    robin_hood::unordered_flat_map<const void*, bool> m_seen;
-    std::vector<Node> m_path;
-};
-
 void BorrowedCells::Finish() noexcept
 {
     // The sources first: what they alone held may hold adapters attached to a cell, which detach
@@ -420,14 +306,6 @@ void BorrowedCells::Finish() noexcept
     }
     const auto count = static_cast<uint32_t>(m_cells->size());
     detail::g_frozenCells.fetch_add(count, std::memory_order_relaxed);
-    try
-    {
-        FrozenCycleBreaker().Run(*m_cells);
-    }
-    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
-    {
-        // Out of memory: the cycles not broken leak, as the collector's do (docs/tasks/0283)
-    }
     // A cell no link reads goes now, and with it what only its items held
     m_cells.reset();
     detail::g_liveCells.fetch_sub(count, std::memory_order_relaxed);

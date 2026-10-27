@@ -1435,7 +1435,10 @@ public:
     explicit GenericListAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
+        // As OwnedAdapter
+        this->SetTraversable();
     }
+    void Traverse(const TraverseFn& fn) const override { m_link.TraverseFrozen(fn); }
 
     [[nodiscard]] std::optional<size_t> GetSize() const override
     {
@@ -1592,12 +1595,16 @@ public:
     explicit OwnedAdapter(U&& values)
         : Adapter(std::forward<U>(values))
     {
+        // A link to a frozen cell is a reference the collector follows (docs/tasks/0331)
+        this->SetTraversable();
     }
     OwnedAdapter(const OwnedAdapter&) = default;
     OwnedAdapter(OwnedAdapter&&) noexcept = default;
     OwnedAdapter& operator=(const OwnedAdapter&) = default;
     OwnedAdapter& operator=(OwnedAdapter&&) noexcept = default;
     ~OwnedAdapter() override { this->ReleaseLink(); }
+
+    void Traverse(const TraverseFn& fn) const override { this->GetCellLink()->TraverseFrozen(fn); }
 };
 
 template<template<typename> class Holder>
@@ -2614,7 +2621,10 @@ public:
     explicit GenericMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
+        // As OwnedAdapter
+        this->SetTraversable();
     }
+    void Traverse(const TraverseFn& fn) const override { m_link.TraverseFrozen(fn); }
 
     [[nodiscard]] size_t GetSize() const override
     {
@@ -2928,6 +2938,26 @@ struct ItemAdapters final : ValueObject
         , size(count)
         , quietEpoch(QuietEpoch())
     {
+        // A slot's link to a frozen cell is a reference the collector follows (docs/tasks/0331)
+        SetTraversable();
+    }
+    void Traverse(const TraverseFn& fn) const override
+    {
+        if (quietEpoch == detail::g_cellEpoch.load(std::memory_order_relaxed))
+        {
+            return;
+        }
+        for (size_t idx = 0; idx < size; ++idx)
+        {
+            if (const auto* map = std::get_if<Map>(&adapters[idx]))
+            {
+                map->GetCellLink()->TraverseFrozen(fn);
+            }
+            else if (const auto* list = std::get_if<List>(&adapters[idx]))
+            {
+                list->GetCellLink()->TraverseFrozen(fn);
+            }
+        }
     }
     ~ItemAdapters() override
     {

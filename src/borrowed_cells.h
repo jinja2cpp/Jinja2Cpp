@@ -116,6 +116,9 @@ public:
     // The cell the adapter is attached to, read without a lookup and without a change: what an
     // export of the adapter to the host reads (docs/tasks/0331)
     [[nodiscard]] const BorrowedCell* Current() const noexcept { return m_cell; }
+    // Passes fn the frozen cell the link holds a reference to, if any: the Traverse of the
+    // adapter's owner, so that the collector frees a cycle through it (docs/tasks/0331)
+    void TraverseFrozen(const TraverseFn& fn) const;
 
     // Attaches the adapter to a new cell holding `storage` (a list or dict the template owns,
     // the copy of the adapter's items) for the data `self` names; false outside a render, where
@@ -126,7 +129,6 @@ public:
 private:
     friend class BorrowedCell;
     friend class BorrowedCells;
-    friend class FrozenCycleBreaker;
 
     // Out of line, in borrowed_cells.cpp: the reads that call them stay small
     const BorrowedCell* Find(const IListAccessor& self) const;
@@ -164,6 +166,8 @@ public:
     BorrowedCell& operator=(const BorrowedCell&) = delete;
     BorrowedCell& operator=(BorrowedCell&&) = delete;
     ~BorrowedCell() override;
+
+    void Traverse(const TraverseFn& fn) const override;
 
     [[nodiscard]] bool IsList() const noexcept { return m_isList; }
     // The list or dict the template owns, and its accessor
