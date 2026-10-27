@@ -7,6 +7,7 @@
 #include "value.h"
 
 #include <cassert>
+#include <cstddef>
 #include <optional>
 #include <stdexcept> // IWYU pragma: keep (public header: user code may rely on it)
 #include <string>
@@ -305,6 +306,12 @@ template<typename Fn, typename... ArgDescr>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): fn is held by reference, ad only read
 Value InvokeUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&&... ad)
 {
+    // One visit over every combination of argument types: 17 alternatives make 17^N instantiations, so three string
+    // parameters already took 41 s and 2.4 MB of code to compile (docs/tasks/0334)
+    static_assert(sizeof...(ArgDescr) <= 2,
+                  "MakeCallable: the parameter types of this callable cannot be read (a generic lambda, an overload set or a "
+                  "non-const operator()), so its arguments are matched jointly, which takes minutes to compile from three "
+                  "arguments; describe the parameters with ArgInfoT<T> or give the callable concrete parameter types");
     auto invoker = UCInvoker<Fn>(fn, params);
     return std::visit(ParamUnwrapper<UCInvoker<Fn>, true>(&invoker), GetParamValue(params, ad).GetData()...);
 }
@@ -415,10 +422,12 @@ struct TypedParamUnwrapper
 
     void operator()(const ValueType& val) const { param->SetPointer(&val); }
 
+    // The overloads are all const: a non-const template beat the const None overload, so an omitted argument (None)
+    // left the parameter without a value and the call was skipped (docs/tasks/0320)
     void operator()(const NoneValue&) const { param->SetValue(ValueType()); }
 
     template<typename U>
-    auto operator()(const U& v) -> std::enable_if_t<PromoteTester<U>::value && !std::is_same_v<std::decay_t<U>, ValueType>>
+    auto operator()(const U& v) const -> std::enable_if_t<PromoteTester<U>::value && !std::is_same_v<std::decay_t<U>, ValueType>>
     {
         if constexpr (TypedParam<T>::IsView)
         {
@@ -434,7 +443,7 @@ struct TypedParamUnwrapper
     }
 
     template<typename U>
-    auto operator()(const U&) -> std::enable_if_t<!PromoteTester<U>::value && !std::is_same_v<std::decay_t<U>, ValueType>>
+    auto operator()(const U&) const -> std::enable_if_t<!PromoteTester<U>::value && !std::is_same_v<std::decay_t<U>, ValueType>>
     {
     }
 };
@@ -479,28 +488,47 @@ struct MarkupParamUnwrapper
     }
 };
 
-template<typename T, typename V>
-auto TypedUnwrapParam(const V& value)
+// A Value parameter takes the argument as passed, None and Markup included (docs/tasks/0319)
+template<typename T>
+struct ValueParam
 {
-    TypedParam<T> param;
-    if constexpr (IsMarkupParam<std::decay_t<T>>::value)
+    const Value* value;
+
+    [[nodiscard]] static bool HasValue() { return true; }
+    // A by-value or `Value&&` parameter gets its own copy
+    [[nodiscard]] std::conditional_t<std::is_reference_v<T>, const Value&, Value> GetValue() const { return *value; }
+};
+
+template<typename T>
+auto TypedUnwrapParam(const Value& value)
+{
+    if constexpr (std::is_same_v<std::decay_t<T>, Value>)
     {
-        // Not through ParamUnwrapper, which hands a Markup over as its string and would drop the flag
-        std::visit(MarkupParamUnwrapper<T>(param), value);
+        return ValueParam<T>{ &value };
     }
     else
     {
-        TypedParamUnwrapper<T> visitor(param);
-        std::visit(ParamUnwrapper<TypedParamUnwrapper<T>>(&visitor), value);
+        TypedParam<T> param;
+        if constexpr (IsMarkupParam<std::decay_t<T>>::value)
+        {
+            // Not through ParamUnwrapper, which hands a Markup over as its string and would drop the flag
+            std::visit(MarkupParamUnwrapper<T>(param), value.GetData());
+        }
+        else
+        {
+            TypedParamUnwrapper<T> visitor(param);
+            std::visit(ParamUnwrapper<TypedParamUnwrapper<T>>(&visitor), value.GetData());
+        }
+        return param;
     }
-    return param;
 }
 
-template<typename Fn, typename... ArgDescr>
-// NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): fn is called through a reference, ad only read
-Value InvokeTypedUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&&... ad)
+// Each argument is converted to its parameter type `T` on its own, so a callable with N parameters costs N visits
+// of the argument variant to compile, not one visit of every combination (docs/tasks/0334)
+template<typename... T, typename Fn, typename... ArgDescr>
+Value InvokeWithParamTypes(const Fn& fn, const UserCallableParams& params, const ArgDescr&... ad)
 {
-    auto typedParams = std::make_tuple(TypedUnwrapParam<typename std::decay_t<ArgDescr>::type>(GetParamValue(params, ad).GetData())...);
+    auto typedParams = std::make_tuple(TypedUnwrapParam<T>(GetParamValue(params, ad))...);
     return std::apply(
         [&fn](auto&... args) {
             bool hasValue = (true && ... && args.HasValue());
@@ -512,6 +540,82 @@ Value InvokeTypedUserCallable(Fn&& fn, const UserCallableParams& params, ArgDesc
             return MakeCallResult(fn(args.GetValue()...));
         },
         typedParams);
+}
+
+template<typename Fn, typename... ArgDescr>
+// NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): fn is called through a reference, ad only read
+Value InvokeTypedUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&&... ad)
+{
+    return InvokeWithParamTypes<typename std::decay_t<ArgDescr>::type...>(fn, params, ad...);
+}
+
+// The type an argument is converted to for a parameter of type `P`: a `T&&` parameter takes a converted `T`
+template<typename P>
+struct DeducedParam
+{
+    static_assert(!std::is_lvalue_reference_v<P> || std::is_const_v<std::remove_reference_t<P>>,
+                  "MakeCallable: a parameter cannot be a non-const lvalue reference, take it by value or by const reference");
+    using type = std::conditional_t<std::is_rvalue_reference_v<P>, std::remove_cv_t<std::remove_reference_t<P>>, P>;
+};
+
+template<typename... P>
+struct ParamList
+{
+    static constexpr std::size_t Size = sizeof...(P);
+};
+
+// The parameter types of a callable whose signature can be read: a function, a function pointer, or a class with a
+// single const, non-template `operator()` (a non-generic lambda, `std::function`)
+template<typename Fn, typename = void>
+struct CallableSignature
+{
+    static constexpr bool IsKnown = false;
+};
+
+template<typename R, typename... Args>
+struct CallableSignature<R (*)(Args...), void>
+{
+    static constexpr bool IsKnown = true;
+    using Params = ParamList<Args...>;
+};
+
+template<typename R, typename... Args>
+struct CallableSignature<R (*)(Args...) noexcept, void> : CallableSignature<R (*)(Args...)>
+{
+};
+
+template<typename R, typename C, typename... Args>
+struct CallableSignature<R (C::*)(Args...) const, void> : CallableSignature<R (*)(Args...)>
+{
+};
+
+template<typename R, typename C, typename... Args>
+struct CallableSignature<R (C::*)(Args...) const noexcept, void> : CallableSignature<R (*)(Args...)>
+{
+};
+
+template<typename Fn>
+struct CallableSignature<Fn, std::enable_if_t<std::is_class_v<Fn>, std::void_t<decltype(&Fn::operator())>>>
+    : CallableSignature<decltype(&Fn::operator())>
+{
+};
+
+// Arguments are dispatched one by one when the descriptors name every parameter of a readable signature
+template<typename Fn, std::size_t ArgsCount, typename Signature = CallableSignature<Fn>, typename = void>
+struct HasDeducibleParams : std::false_type
+{
+};
+
+template<typename Fn, std::size_t ArgsCount, typename Signature>
+struct HasDeducibleParams<Fn, ArgsCount, Signature, std::enable_if_t<Signature::IsKnown>>
+    : std::bool_constant<Signature::Params::Size == ArgsCount>
+{
+};
+
+template<typename Fn, typename... P, typename... ArgDescr>
+Value InvokeDeducedUserCallable(const Fn& fn, ParamList<P...> /*params*/, const UserCallableParams& params, const ArgDescr&... ad)
+{
+    return InvokeWithParamTypes<typename DeducedParam<P>::type...>(fn, params, ad...);
 }
 
 template<typename... ArgDescr>
@@ -552,6 +656,14 @@ struct ArgDescrHasType<ArgInfoT<T>...> : std::true_type
  *  - Current template context. \ref ArgInfo should describe this param with name `*context` (\ref ArgInfo::Context). Param of the function should
  *    has \ref GenericMap type
  *
+ * Each argument is converted to the type of its parameter: the stored alternative as is or converted (a number to
+ * another arithmetic type, a string to the other character width, a string to an escaped \ref Markup), None to a
+ * default-constructed value, an omitted argument without a default the same as None. When an argument cannot be
+ * converted the function is not called and the call returns None. A \ref Value parameter (by value or `const&`) takes
+ * the argument as passed. The parameter types are read from the signature of a function, a function pointer or a
+ * class with one const, non-template `operator()`; for a generic lambda or an overload set describe them with
+ * \ref ArgInfoT (a generic callable with untyped descriptors is limited to two parameters).
+ *
  * \param f  Function which should be called
  * \param ad Function param descriptors
  *
@@ -560,8 +672,16 @@ struct ArgDescrHasType<ArgInfoT<T>...> : std::true_type
 template<typename Fn, typename... ArgDescr>
 auto MakeCallable(Fn&& f, ArgDescr&&... ad) -> std::enable_if_t<!detail::ArgDescrHasType<ArgDescr...>::value, UserCallable>
 {
+    using Signature = detail::CallableSignature<std::decay_t<Fn>>;
     UserCallable::Function callable = [=, fn = std::forward<Fn>(f)](const UserCallableParams& params) {
-        return detail::InvokeUserCallable(fn, params, ad...);
+        if constexpr (detail::HasDeducibleParams<std::decay_t<Fn>, sizeof...(ArgDescr)>::value)
+        {
+            return detail::InvokeDeducedUserCallable(fn, typename Signature::Params(), params, ad...);
+        }
+        else
+        {
+            return detail::InvokeUserCallable(fn, params, ad...);
+        }
     };
     return UserCallable{
         callable,
@@ -585,7 +705,7 @@ template<typename R, typename... Args, typename... ArgDescr>
 auto MakeCallable(R (*f)(Args...), ArgDescr&&... ad) -> UserCallable
 {
     UserCallable::Function callable = [=, fn = f](const UserCallableParams& params) {
-        return detail::InvokeTypedUserCallable(fn, params, ArgInfoT<Args>(ad)...);
+        return detail::InvokeDeducedUserCallable(fn, detail::ParamList<Args...>(), params, ad...);
     };
     return UserCallable{
         callable,
@@ -597,8 +717,8 @@ template<typename R, typename T, typename... Args, typename... ArgDescr>
 auto MakeCallable(R (T::*f)(Args...), T* obj, ArgDescr&&... ad) -> UserCallable
 {
     UserCallable::Function callable = [=, fn = f](const UserCallableParams& params) {
-        return detail::InvokeTypedUserCallable(
-            [fn, obj](Args&&... args) { return (obj->*fn)(std::forward<Args>(args)...); }, params, ArgInfoT<Args>(ad)...);
+        return detail::InvokeDeducedUserCallable(
+            [fn, obj](Args&&... args) { return (obj->*fn)(std::forward<Args>(args)...); }, detail::ParamList<Args...>(), params, ad...);
     };
     return UserCallable{
         callable,
@@ -610,8 +730,8 @@ template<typename R, typename T, typename... Args, typename... ArgDescr>
 auto MakeCallable(R (T::*f)(Args...) const, const T* obj, ArgDescr&&... ad) -> UserCallable
 {
     UserCallable::Function callable = [=, fn = f](const UserCallableParams& params) {
-        return detail::InvokeTypedUserCallable(
-            [fn, obj](Args&&... args) { return (obj->*fn)(std::forward<Args>(args)...); }, params, ArgInfoT<Args>(ad)...);
+        return detail::InvokeDeducedUserCallable(
+            [fn, obj](Args&&... args) { return (obj->*fn)(std::forward<Args>(args)...); }, detail::ParamList<Args...>(), params, ad...);
     };
     return UserCallable{
         callable,

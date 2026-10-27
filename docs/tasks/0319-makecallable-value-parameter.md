@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: api
 touches: [include/jinja2cpp/user_callable.h, test/user_callable_test.cpp]
@@ -24,3 +24,8 @@ A host that wants the raw argument has to write `UserCallable{ fn, argsInfo }` b
 
 **Done when.** Both forms above compile and receive the argument as passed, undefined and none
 included, for narrow and wide strings; rows in `test/user_callable_test.cpp`.
+
+**Resolution** (with 0334, same PR). `TypedUnwrapParam` hands a `Value` parameter (by value, `const&` or
+`&&`) the argument itself through `ValueParam`, without promotion, on every path: lambdas with
+`ArgInfo`, function and member pointers, and `ArgInfoT<Value>`. Rows: `PerArgumentDispatch`
+(`cref`, `byValue`, `rref`, `echo`, `valueAndText`), narrow and wide.

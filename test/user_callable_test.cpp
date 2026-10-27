@@ -13,6 +13,7 @@
 
 #include <cstdint>
 #include <exception>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -467,6 +468,9 @@ INSTANTIATE_TEST_SUITE_P(StringViewParamConvert, UserCallableParamConvertTest, :
 
 INSTANTIATE_TEST_SUITE_P(StringViewPointerParamConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"StringViewPtrFn('Hello World')", "'Hello World'"},
+                            // An omitted argument reaches a function pointer as it reaches a lambda: default-constructed (docs/tasks/0320)
+                            InputOutputPair{"StringViewPtrFn()", "''"},
+                            InputOutputPair{"WStringViewPtrFn()", "''"},
                             InputOutputPair{"StringViewPtrFn(stringValue)", "'rain'"},
                             InputOutputPair{"StringViewPtrFn(wstringValue)", "'  hello world '"},
                             InputOutputPair{"StringViewPtrFn(longString)", "'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn'"},
@@ -894,6 +898,7 @@ protected:
         params["ws"] = std::wstring(L"<i>");
         params["typedMarkup"] = MakeCallable(&MarkupIdentity, ArgInfo{ "v" });
         params["typedWMarkup"] = MakeCallable(&WMarkupIdentity, ArgInfo{ "v" });
+        params["lambdaMarkup"] = MakeCallable([](const Markup& v) { return v; }, ArgInfo{ "v" });
         return params;
     }
 
@@ -950,7 +955,9 @@ INSTANTIATE_TEST_SUITE_P(Markup, MarkupTest, ::testing::Values(
     MarkupRow{ "{{ typed(x) }}", "&lt;b&gt;", "<b>" },
     // A typed Markup parameter given text of the other width converts it: a Markup stays one, a string is escaped (docs/tasks/0296)
     MarkupRow{ "{{ typedMarkup(x) }}|{{ typedMarkup(wx) }}|{{ typedMarkup(s) }}|{{ typedMarkup(ws) }}", "<b>|<b>|&lt;i&gt;|&lt;i&gt;", "<b>|<b>|&lt;i&gt;|&lt;i&gt;" },
-    MarkupRow{ "{{ typedWMarkup(x) }}|{{ typedWMarkup(wx) }}|{{ typedWMarkup(s) }}|{{ typedWMarkup(ws) }}", "<b>|<b>|&lt;i&gt;|&lt;i&gt;", "<b>|<b>|&lt;i&gt;|&lt;i&gt;" }
+    MarkupRow{ "{{ typedWMarkup(x) }}|{{ typedWMarkup(wx) }}|{{ typedWMarkup(s) }}|{{ typedWMarkup(ws) }}", "<b>|<b>|&lt;i&gt;|&lt;i&gt;", "<b>|<b>|&lt;i&gt;|&lt;i&gt;" },
+    // ... and so does a lambda's (docs/tasks/0320)
+    MarkupRow{ "{{ lambdaMarkup(x) }}|{{ lambdaMarkup(wx) }}|{{ lambdaMarkup(s) }}|{{ lambdaMarkup(ws) }}", "<b>|<b>|&lt;i&gt;|&lt;i&gt;", "<b>|<b>|&lt;i&gt;|&lt;i&gt;" }
 ));
 // clang-format on
 
@@ -1247,5 +1254,111 @@ TEST(UserCallableTestSingle, KeptGlobalItemsOutliveTheirSnapshot)
         Template print;
         ASSERT_TRUE(!!print.Load("{{ v }}"));
         EXPECT_EQ(expected, print.RenderAsString({ { "v", kept } }).value());
+    }
+}
+
+namespace
+{
+std::string Describe(const Value& v)
+{
+    if (v.IsNone())
+    {
+        return "none";
+    }
+    if (v.IsMarkup() || v.IsWMarkup())
+    {
+        return "markup";
+    }
+    if (v.IsString() || v.IsWString())
+    {
+        return "string";
+    }
+    if (v.IsInt())
+    {
+        return "int";
+    }
+    return "other";
+}
+
+std::string JoinTwo(const std::string& a, const std::string& b)
+{
+    return a + b;
+}
+
+std::string JoinFour(const std::string& a, int64_t b, double c, const std::wstring& d)
+{
+    return a + "|" + std::to_string(b) + "|" + std::to_string(static_cast<int>(c * 10)) + "|" + ConvertString<std::string>(d);
+}
+} // namespace
+
+// Each argument of a callable with readable parameter types is converted on its own (docs/tasks/0334), a Value parameter
+// takes the argument as passed (docs/tasks/0319), and a generic callable still matches up to two arguments jointly
+TEST(UserCallableTestSingle, PerArgumentDispatch)
+{
+    jinja2::ValuesMap params;
+    params["f4"] = MakeCallable(
+        [](const std::string& a, int64_t b, double c, const std::wstring& d) { return JoinFour(a, b, c, d); }, ArgInfo{ "a" }, ArgInfo{ "b" }, ArgInfo{ "c" }, ArgInfo{ "d", false, "dd" });
+    params["f5"] = MakeCallable([](std::string a, std::string_view b, std::string&& c, const Markup& d, bool e) { return a + std::string(b) + c + d.str() + (e ? "T" : "F"); },
+                                ArgInfo{ "a" },
+                                ArgInfo{ "b" },
+                                ArgInfo{ "c" },
+                                ArgInfo{ "d" },
+                                ArgInfo{ "e" });
+    params["fptr4"] = MakeCallable(&JoinFour, ArgInfo{ "a" }, ArgInfo{ "b" }, ArgInfo{ "c" }, ArgInfo{ "d", false, "dd" });
+    params["func3"] = MakeCallable(std::function<std::string(const std::string&, const std::string&, const std::string&)>(
+                                       [](const std::string& a, const std::string& b, const std::string& c) { return a + b + c; }),
+                                   ArgInfo{ "a" },
+                                   ArgInfo{ "b" },
+                                   ArgInfo{ "c" });
+    params["nothrow"] = MakeCallable([](int64_t a) noexcept { return a * 2; }, ArgInfo{ "a" });
+    params["cref"] = MakeCallable([](const Value& v) { return Describe(v); }, ArgInfo{ "v" });
+    params["byValue"] = MakeCallable([](Value v) { return Describe(v); }, ArgInfo{ "v" });
+    // NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved): the row checks that an rvalue Value binds
+    params["rref"] = MakeCallable([](Value&& v) { return Describe(v); }, ArgInfo{ "v" });
+    params["echo"] = MakeCallable([](const Value& v) { return v; }, ArgInfo{ "v" });
+    params["valueAndText"] = MakeCallable([](const Value& v, const std::string& s) { return Describe(v) + ":" + s; }, ArgInfo{ "v" }, ArgInfo{ "s" });
+    // A generic lambda gets the arguments' promoters, which convert to the types it passes them on as
+    params["generic"] = MakeCallable([](const auto& a, const auto& b) -> decltype(JoinTwo(a, b)) { return JoinTwo(a, b); }, ArgInfo{ "a" }, ArgInfo{ "b" });
+    params["markup"] = Markup("<b>");
+    struct Row
+    {
+        const char* source;
+        const char* expected;
+    };
+    const Row rows[] = {
+        { "{{ f4('x', 2, 1.5, 'y') }}", "x|2|15|y" },
+        { "{{ f4('x', 2, 1.5) }}", "x|2|15|dd" },
+        { "{{ f4('x', 2.9, 3, 'y') }}", "x|2|30|y" },
+        // An argument that cannot be converted: the function is not called
+        { "{{ f4('x', 'two', 1.5, 'y') is none }}", "True" },
+        { "{{ f4([1], 2, 1.5, 'y') is none }}", "True" },
+        { "{{ f4('x', 2, none, 'y') }}", "x|2|0|y" },
+        { "{{ fptr4('x', 2, 1.5, 'y') }}|{{ fptr4('x', 2, 1.5) }}|{{ fptr4('x', 'two', 1.5) is none }}", "x|2|15|y|x|2|15|dd|True" },
+        { "{{ f5('a', 'b', 'c', 'd', true) }}", "abcdT" },
+        { "{{ f5('a', 'b', 'c', markup, 0) }}", "abc<b>F" },
+        { "{{ f5() }}", "F" },
+        { "{{ func3('a', 'b', 'c') }}", "abc" },
+        { "{{ nothrow(21) }}", "42" },
+        { "{{ cref(1) }} {{ cref('s') }} {{ cref(markup) }} {{ cref(none) }} {{ cref() }} {{ cref([]) }}", "int string markup none none other" },
+        { "{{ byValue(1) }} {{ byValue(markup) }} {{ byValue() }}", "int markup none" },
+        { "{{ rref(1) }} {{ rref(markup) }} {{ rref() }}", "int markup none" },
+        { "{{ echo(markup) is escaped }} {{ echo([1, 'a']) }} {{ echo(none) is none }} {{ echo() is none }}", "True [1, 'a'] True True" },
+        { "{{ valueAndText(markup, 'x') }} {{ valueAndText(1, [1]) is none }}", "markup:x True" },
+        { "{{ generic('a', 'b') }} {{ generic(markup, 'b') }} {{ generic('a', 1) is none }}", "ab <b>b True" },
+    };
+    for (const auto& row : rows)
+    {
+        const std::string source = row.source;
+        Template tpl;
+        ASSERT_TRUE(tpl.Load(source)) << source;
+        auto result = tpl.RenderAsString(params);
+        ASSERT_TRUE(result) << source << ": " << result.error().ToString();
+        EXPECT_EQ(row.expected, result.value()) << source;
+
+        TemplateW tplW;
+        ASSERT_TRUE(tplW.Load(ConvertString<std::wstring>(source))) << source;
+        auto resultW = tplW.RenderAsString(params);
+        ASSERT_TRUE(resultW) << source << ": " << ConvertString<std::string>(resultW.error().ToString());
+        EXPECT_EQ(ConvertString<std::wstring>(std::string(row.expected)), resultW.value()) << source;
     }
 }
