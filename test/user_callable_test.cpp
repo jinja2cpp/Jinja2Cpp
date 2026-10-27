@@ -1299,15 +1299,11 @@ TEST(UserCallableTestSingle, PerArgumentDispatch)
     params["f4"] = MakeCallable(
         [](const std::string& a, int64_t b, double c, const std::wstring& d) { return JoinFour(a, b, c, d); }, ArgInfo{ "a" }, ArgInfo{ "b" }, ArgInfo{ "c" }, ArgInfo{ "d", false, "dd" });
     params["f5"] = MakeCallable([](std::string a, std::string_view b, std::string&& c, const Markup& d, bool e) {
-                                    a += b;
-                                    a += std::string(std::move(c));
-                                    return a + d.str() + (e ? "T" : "F");
-                                },
-                                ArgInfo{ "a" },
-                                ArgInfo{ "b" },
-                                ArgInfo{ "c" },
-                                ArgInfo{ "d" },
-                                ArgInfo{ "e" });
+        a += b;
+        a += std::string(std::move(c));
+        return a + d.str() + (e ? "T" : "F");
+    },
+                                ArgInfo{ "a" }, ArgInfo{ "b" }, ArgInfo{ "c" }, ArgInfo{ "d" }, ArgInfo{ "e" });
     params["fptr4"] = MakeCallable(&JoinFour, ArgInfo{ "a" }, ArgInfo{ "b" }, ArgInfo{ "c" }, ArgInfo{ "d", false, "dd" });
     params["func3"] = MakeCallable(std::function<std::string(const std::string&, const std::string&, const std::string&)>(
                                        [](const std::string& a, const std::string& b, const std::string& c) { return a + b + c; }),
@@ -1319,7 +1315,8 @@ TEST(UserCallableTestSingle, PerArgumentDispatch)
     params["byValue"] = MakeCallable([](Value v) {
         const Value kept = std::move(v);
         return Describe(kept);
-    }, ArgInfo{ "v" });
+    },
+                                     ArgInfo{ "v" });
     // NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved): the row checks that an rvalue Value binds
     params["rref"] = MakeCallable([](Value&& v) { return Describe(v); }, ArgInfo{ "v" });
     params["echo"] = MakeCallable([](const Value& v) { return v; }, ArgInfo{ "v" });
