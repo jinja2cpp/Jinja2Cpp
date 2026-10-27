@@ -389,7 +389,7 @@ TEST(ContainersApiTest, ReflectEveryArithmeticType)
     EXPECT_EQ(6, asInt(Reflect(named)));
     EXPECT_EQ(6, asInt(Reflect(&named)));
 
-    EXPECT_EQ(1.5, std::get<double>(Reflect(1.5F).GetData()));
+    EXPECT_EQ(1.5F, std::get<float>(Reflect(1.5F).GetData()));
     EXPECT_EQ(1.5, std::get<double>(Reflect(1.5L).GetData()));
     EXPECT_TRUE(std::get<bool>(Reflect(true).GetData()));
     const bool constTrue = true;

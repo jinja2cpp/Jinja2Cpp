@@ -337,9 +337,12 @@ Thanks to **@martinus** for the fast hash maps implementation.
   floats in shortest round-trip form with `.0` on whole numbers (`2.0`, `0.30000000000000004`,
   `1e+16`), lists, tuples and dicts as `[1, 'a']`, `(1, 2)`, `{'a': 1}` instead of nothing,
   and `join` converts non-string items instead of dropping them. Templates that relied on
-  `true`/`false` or on 8-digit floats need updating; a C++ `float` passed in a `Value` is
-  widened to `double` and prints all its digits (`12.123f` prints `12.123000144958496`),
-  so pass `double` instead. Integer `%` and `**` now give integers (`10 % 3` is `1`, not `1.0`).
+  `true`/`false` or on 8-digit floats need updating. Integer `%` and `**` now give integers (`10 % 3` is `1`, not `1.0`).
+- `jinja2::Value` stores a C++ `float` as a `float` (its last alternative): `IsFloat()` and
+  `AsFloat()` read it, and `IsDouble()` is false for it, so code that read `Value(1.5f)` as a
+  `double` must test for both. A template sees the Python float its shortest digits name, so
+  `12.123f` prints `12.123` (not `12.123000144958496`) and compares equal to `12.123`; values
+  coming back from a template are `double`. `Reflect` keeps `float` members `float`.
 - A single newline at the end of a template is removed, as Jinja2 does by default; set
   `Settings::keepTrailingNewline` to keep it. `\r\n` and `\r` in templates become `\n`, or
   `Settings::newlineSequence` when set. `trim_blocks` now removes only a newline directly

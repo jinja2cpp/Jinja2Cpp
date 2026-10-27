@@ -4,6 +4,9 @@
 #include <fast_float/float_common.h>
 #include <fast_float/parse_number.h>
 
+#include <fmt/format.h>
+
+#include <cmath>
 #include <optional>
 #include <string_view>
 #include <system_error>
@@ -30,6 +33,35 @@ std::optional<double> ParseDecimal(std::string_view text)
         return std::nullopt;
     }
     return result;
+}
+
+double FloatAsDecimalDouble(float val)
+{
+    const auto widened = static_cast<double>(val);
+    if (!std::isfinite(val))
+    {
+        return widened;
+    }
+    // A float's longest decimal, "-1.17549435e-38", is 15 characters
+    char buffer[32];
+    auto nearest = [&buffer, val](const char* end) -> std::optional<double> {
+        const auto decimal = ParseDecimal(std::string_view(buffer, static_cast<size_t>(end - buffer)));
+        return decimal && static_cast<float>(*decimal) == val ? decimal : std::nullopt;
+    };
+    if (auto decimal = nearest(fmt::format_to(buffer, "{}", val)))
+    {
+        return *decimal;
+    }
+    // The double nearest the shortest decimal can round to the neighbouring float: 2 of all
+    // 2^32, +-7.038531e-26, checked exhaustively. One more digit, 7.0385307e-26, round-trips
+    for (int precision = 7; precision <= 8; ++precision)
+    {
+        if (auto decimal = nearest(fmt::format_to(buffer, "{:.{}e}", val, precision)))
+        {
+            return *decimal;
+        }
+    }
+    return widened;
 }
 
 } // namespace v2

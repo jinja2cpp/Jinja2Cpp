@@ -117,7 +117,7 @@ R"(
 //-----------
 R"(
 3
-12.123000144958496
+12.123
 rain)")
 {
     params = {
@@ -456,7 +456,7 @@ INSTANTIATE_TEST_SUITE_P(LogicalExpressionTest, ExpressionSubstitutionTest, ::te
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(BasicValueSubstitutionTest, ExpressionSubstitutionTest, ::testing::Values(
                             InputOutputPair{"intValue",       "3"},
-                            InputOutputPair{"doubleValue",    "12.123000144958496"},
+                            InputOutputPair{"doubleValue",    "12.123"},
                             InputOutputPair{"stringValue",    "rain"},
                             InputOutputPair{"boolTrueValue",  "True"},
                             InputOutputPair{"boolFalseValue", "False"}

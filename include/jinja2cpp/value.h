@@ -304,6 +304,7 @@ Data ToStoredInt(T val) noexcept(!CanExceedInt64<T>)
  *  - integer (int64_t) value
  *  - integer outside the int64_t range (\ref BigInt)
  *  - floating point (double) value
+ *  - single-precision floating point (float) value, as the host passed it
  *  - Simple list of other values (\ref ValuesList)
  *  - Simple map of other values (\ref ValuesMap)
  *  - Generic list of other values (\ref GenericList)
@@ -338,7 +339,8 @@ public:
         RecWrapper<UserCallable>,
         Markup,
         WMarkup,
-        BigInt>;
+        BigInt,
+        float>;
 
     template<typename T, typename... L>
     struct AnyOf : public std::false_type
@@ -441,13 +443,16 @@ public:
     template<typename C, std::enable_if_t<detail::IsCharType<C>::value>* = nullptr>
     Value(C val) = delete;
     /*!
-     * \brief Initializing constructor from any floating-point value: stores `double`
+     * \brief Initializing constructor from a floating-point value: a `float` stores `float`, any other type `double`
+     *
+     * In a template a `float` is the Python float its shortest digits name: `12.123f` prints `12.123`
+     * (docs/tasks/0039).
      *
      * @param val Floating-point value which should be used to initialize \ref Value instance
      */
     template<typename F, std::enable_if_t<std::is_floating_point_v<F>>* = nullptr>
     Value(F val) noexcept // NOLINT(google-explicit-constructor)
-        : m_data(static_cast<double>(val))
+        : m_data(StoredFloat(val))
     {
     }
     /*!
@@ -495,8 +500,10 @@ public:
     [[nodiscard]] bool IsInt() const noexcept { return Holds<int64_t>(); }
     //! Test Value for holding an integer outside the `int64_t` range (\ref BigInt); \ref IsInt is false for it
     [[nodiscard]] bool IsBigInt() const noexcept { return Holds<BigInt>(); }
-    //! Test Value for holding a floating-point number (`double`)
+    //! Test Value for holding a floating-point number (`double`); \ref IsFloat tests for a `float`
     [[nodiscard]] bool IsDouble() const noexcept { return Holds<double>(); }
+    //! Test Value for holding a single-precision `float`; \ref IsDouble is false for it
+    [[nodiscard]] bool IsFloat() const noexcept { return Holds<float>(); }
     //! Test Value for holding `std::string` or a \ref Markup, which is one (a `std::string_view` does not count)
     [[nodiscard]] bool IsString() const noexcept { return Holds<std::string>() || Holds<Markup>(); }
     //! Test Value for holding `std::wstring` or a \ref WMarkup (a `std::wstring_view` does not count)
@@ -543,6 +550,10 @@ public:
     [[nodiscard]] double AsDouble() const { return As<double>(); }
     //! Same as \ref AsDouble(), without throwing
     bool AsDouble(double& out) const noexcept { return Load(out); }
+    //! The stored `float`; throws `std::bad_variant_access` for anything else, a `double` included
+    [[nodiscard]] float AsFloat() const { return As<float>(); }
+    //! Same as \ref AsFloat(), without throwing
+    bool AsFloat(float& out) const noexcept { return Load(out); }
     //! The stored `std::string` (or the text of a \ref Markup); throws `std::bad_variant_access` for anything else
     [[nodiscard]] const std::string& AsString() const { return As<std::string>(); }
     //! The stored `std::string`, mutable; throws `std::bad_variant_access` for anything else. A \ref Markup becomes a plain string first (mutable access makes it one, as any change to a Python Markup gives a `str`)
@@ -853,6 +864,20 @@ private:
     auto GetRaw() const noexcept
     {
         return GetRawFrom<const Value, T>(*this);
+    }
+
+    // A float keeps its type; double and long double are stored as double
+    template<typename F>
+    static auto StoredFloat(F val) noexcept
+    {
+        if constexpr (std::is_same_v<F, float>)
+        {
+            return val;
+        }
+        else
+        {
+            return static_cast<double>(val);
+        }
     }
 
     template<typename T>
@@ -1248,6 +1273,9 @@ using ValueDataBeforeMarkup = std::variant<NoneValue,
                                            RecWrapper<UserCallable>>;
 } // namespace detail
 static_assert(sizeof(Value) == sizeof(detail::ValueDataBeforeMarkup), "Markup must not make Value larger");
+// float was appended, so the indices of the 1.x alternatives did not move (docs/tasks/0039)
+static_assert(std::is_same_v<std::variant_alternative_t<15, Value::ValueData>, BigInt> && std::is_same_v<std::variant_alternative_t<16, Value::ValueData>, float> && std::variant_size_v<Value::ValueData> == 17,
+              "float is the last alternative of Value");
 
 inline Value::Value() = default;
 inline Value::Value(const Value& val) = default;
