@@ -37,11 +37,9 @@ Two smaller leftovers of the same change:
   (`{% set q = [1, 2, 3] %}{% for x in q %}{{ x }}{% do q.remove(x) %}{% endfor %}` gives
   `12`, Python `13`). Appending during the loop matches.
 
-And methods 0020 left out, all raising or diverging without crashing: `list.sort(key=,
-reverse=)`, `d.get([1])` (an unhashable key, Python TypeError), nested format fields
-(`'{:{}}'.format(1, 5)`), non-ASCII case mapping in `upper`/`capitalize`/`swapcase` (shared
-with the filters), and `|attr('upper')` / `|map(attribute='upper')`, which look up items
-only.
+The methods 0020 left out are split off: `list.sort`, nested format fields and Unicode case
+mapping in the str methods went to 0314. `d.get([1])`, `|attr('upper')` and
+`|map(attribute='upper')` were fixed since.
 
 **Proposal.** Convert each borrowed container once per render into a lazily-filled
 copy-on-write state shared by every value converted from it (a per-render cache keyed by

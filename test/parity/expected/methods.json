@@ -2395,6 +2395,857 @@
    },
    "templates": {},
    "output": "bb2"
+  },
+  {
+   "id": "methods.list_sort",
+   "template": "{% set q = [3, 1, 2] %}{{ q.sort() }}{{ q }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "None[1, 2, 3]"
+  },
+  {
+   "id": "methods.list_sort_reverse",
+   "template": "{% set q = [3, 1, 2] %}{% do q.sort(reverse=true) %}{{ q }}|{% do q.sort(key=none, reverse=false) %}{{ q }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[3, 2, 1]|[1, 2, 3]"
+  },
+  {
+   "id": "methods.list_sort_key_macro",
+   "template": "{% macro neg(x) %}{{ 10 - x }}{% endmacro %}{% set q = [3, 1, 2] %}{% do q.sort(key=neg) %}{{ q }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[3, 2, 1]"
+  },
+  {
+   "id": "methods.list_sort_key_stable_reverse",
+   "template": "{% set q = [(1, 'b'), (1, 'a'), (0, 'z')] %}{% do q.sort(key='{0[0]}'.format, reverse=true) %}{{ q }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[(1, 'b'), (1, 'a'), (0, 'z')]"
+  },
+  {
+   "id": "methods.list_sort_key_method",
+   "template": "{% set q = ['bb', 'a', 'ccc', 'B'] %}{% do q.sort(key='x'.join) %}{{ q }}|{% do q.sort() %}{{ q }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "['B', 'a', 'bb', 'ccc']|['B', 'a', 'bb', 'ccc']"
+  },
+  {
+   "id": "methods.list_sort_nested_lists",
+   "template": "{% set q = [[2, 'a'], [1, 'b'], [2, '0']] %}{% do q.sort() %}{{ q }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[[1, 'b'], [2, '0'], [2, 'a']]"
+  },
+  {
+   "id": "methods.list_sort_mixed_numbers",
+   "template": "{% set q = [1, 1.5, true, 0] %}{% do q.sort() %}{{ q }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[0, 1, True, 1.5]"
+  },
+  {
+   "id": "methods.list_sort_positional",
+   "template": "{% set q = [3, 1] %}{% do q.sort(true) %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "sort() takes no positional arguments"
+   }
+  },
+  {
+   "id": "methods.list_sort_bad_keyword",
+   "template": "{% set q = [3, 1] %}{% do q.sort(cmp=1) %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'cmp' is an invalid keyword argument for sort()"
+   }
+  },
+  {
+   "id": "methods.list_sort_unorderable",
+   "template": "{% set q = [3, 'a'] %}{% do q.sort() %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'str' and 'int'"
+   }
+  },
+  {
+   "id": "methods.list_sort_equal_dicts",
+   "template": "{% set q = [{'a': 1}, {'a': 1}] %}{% do q.sort() %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'dict' and 'dict'"
+   }
+  },
+  {
+   "id": "methods.list_sort_key_not_callable",
+   "template": "{% set q = [3, 1] %}{% do q.sort(key=1) %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not callable"
+   }
+  },
+  {
+   "id": "methods.list_sort_key_sees_empty_list",
+   "template": "{% set q = [3, 1, 2] %}{% macro k(x) %}{{ q|length }}{% endmacro %}{% do q.sort(key=k) %}{{ q }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[3, 1, 2]"
+  },
+  {
+   "id": "methods.list_sort_modified_by_key",
+   "template": "{% set q = [3, 1, 2] %}{% macro k(x) %}{% do q.append(x) %}{{ x }}{% endmacro %}{% do q.sort(key=k) %}{{ q }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "list modified during sort"
+   }
+  },
+  {
+   "id": "methods.list_sort_modified_and_restored_by_key",
+   "template": "{% set q = [2, 1] %}{% macro k(x) %}{% do q.append(9) %}{% do q.pop() %}{{ x }}{% endmacro %}{% do q.sort(key=k) %}{{ q }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "list modified during sort"
+   }
+  },
+  {
+   "id": "methods.list_sort_nested_sort_in_key",
+   "template": "{% set q = [2, 1] %}{% macro k(x) %}{% do q.sort() %}{% do q.clear() %}{{ x }}{% endmacro %}{% do q.sort(key=k) %}{{ q }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[1, 2]"
+  },
+  {
+   "id": "methods.list_sort_reverse_truthy",
+   "template": "{% set q = [1, 3, 2] %}{% do q.sort(reverse='x') %}{{ q }}{% do q.sort(reverse=0) %}{{ q }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[3, 2, 1][1, 2, 3]"
+  },
+  {
+   "id": "methods.tuple_has_no_sort",
+   "template": "{{ 'T' if (1, 2).sort is defined else 'F' }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "F"
+  },
+  {
+   "id": "methods.str_format_nested",
+   "template": "{{ '{:{}}'.format(1, 5) }}|{{ '{:{w}.{p}f}'.format(3.14159, w=8, p=2) }}|{{ '{0:{1}{2}}'.format('x', '>', 4) }}|{{ '{:{}}x{:{}}'.format(1, 3, 2, 4) }}|{{ '{!r:{}}'.format('a', 5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "    1|    3.14|   x|  1x   2|'a'  "
+  },
+  {
+   "id": "methods.str_format_nested_escapes",
+   "template": "{{ '{0:{1}}}}'.format(1, 3) }}|{{ '{0[}]}'.format({'}': 5}) }}|{{ '{0[a:b]}'.format({'a:b': 6}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "  1}|5|6"
+  },
+  {
+   "id": "methods.str_format_nested_too_deep",
+   "template": "{{ '{0:{1:{2}}}'.format(1, 2, 3) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "Max string recursion exceeded"
+   }
+  },
+  {
+   "id": "methods.str_format_nested_unmatched",
+   "template": "{{ '{:{}'.format(1, 2) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "unmatched '{' in format spec"
+   }
+  },
+  {
+   "id": "methods.str_format_nested_numbering",
+   "template": "{{ '{0:{}}'.format(1, 2) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "cannot switch from manual field specification to automatic field numbering"
+   }
+  },
+  {
+   "id": "methods.str_format_nested_missing",
+   "template": "{{ '{:{}}'.format(1) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "IndexError",
+    "message": "Replacement index 1 out of range for positional args tuple"
+   }
+  },
+  {
+   "id": "methods.str_format_brace_in_name",
+   "template": "{{ '{a{}'.format(1) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "ValueError",
+    "message": "unexpected '{' in field name"
+   }
+  },
+  {
+   "id": "methods.markup_format_nested",
+   "template": "{{ ('{:{}}'|safe).format('<a>', 5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "&lt;a&gt;  "
+  },
+  {
+   "id": "methods.str_case_unicode",
+   "template": "{{ 'straße'.upper() }}|{{ 'éa'.capitalize() }}|{{ 'Éa'.swapcase() }}|{{ 'ÉCOLE'.lower() }}|{{ 'ΟΔΟΣ'.lower() }}|{{ 'ﬁx émile'.title() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "STRASSE|Éa|éA|école|οδος|Fix Émile"
+  },
+  {
+   "id": "methods.str_case_unicode_edges",
+   "template": "{{ 'ǅungla'.swapcase() }}|{{ 'ǆa ǅb'.title() }}|{{ 'ʰa'.title() }}|{{ 'ΣΑΣ'.swapcase() }}|{{ 'aΣ'.swapcase() }}|{{ 'ßa'.swapcase() }}|{{ 'ŉ'.capitalize() }}|{{ 'İ'.lower()|length }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "ǅUNGLA|ǅa ǅb|ʰa|σας|Aς|SSA|ʼN|2"
+  },
+  {
+   "id": "methods.str_case_tests_unicode",
+   "template": "{{ 'T' if 'ÉA'.isupper() else 'F' }}{{ 'T' if 'éa'.islower() else 'F' }}{{ 'T' if 'ǅ'.isupper() else 'F' }}{{ 'T' if 'ª'.islower() else 'F' }}{{ 'T' if 'ÉA'.islower() else 'F' }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "TTFTF"
+  },
+  {
+   "id": "methods.str_istitle",
+   "template": "{{ 'T' if 'Éa Bé'.istitle() else 'F' }}{{ 'T' if 'ǅa'.istitle() else 'F' }}{{ 'T' if 'AB'.istitle() else 'F' }}{{ 'T' if 'Ab 1'.istitle() else 'F' }}{{ 'T' if '1'.istitle() else 'F' }}{{ 'T' if 'aB'.istitle() else 'F' }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "TTFTFF"
+  },
+  {
+   "id": "methods.markup_case_unicode",
+   "template": "{{ ('<b>straße</b>'|safe).upper() }}|{{ ('é'|safe).swapcase() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "<B>STRASSE</B>|É"
+  },
+  {
+   "id": "methods.str_digit_numeric_unicode",
+   "template": "{{ 'T' if '²'.isdigit() else 'F' }}{{ 'T' if '½'.isnumeric() else 'F' }}{{ 'T' if 'Ⅷ'.isnumeric() else 'F' }}{{ 'T' if '²'.isdecimal() else 'F' }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "TTTF"
+  },
+  {
+   "id": "methods.str_casefold_isascii",
+   "template": "{{ 'ßA'.casefold() }}|{{ 'T' if 'ab'.isascii() else 'F' }}|{{ 'T' if 'a1'.isidentifier() else 'F' }}|{{ 'T' if 'a\\n'.isprintable() else 'F' }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "ssa|T|T|F"
+  },
+  {
+   "id": "methods.str_format_attr_is_not_item",
+   "template": "{{ '{x.y}'.format(x={'y': 1}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'dict' object has no attribute 'y'"
+   }
+  },
+  {
+   "id": "methods.str_format_ascii_conversion",
+   "template": "{{ '{!a}'.format('é') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "'\\xe9'"
   }
  ]
 }

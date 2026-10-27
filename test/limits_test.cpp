@@ -78,6 +78,15 @@ std::vector<LimitCase> Cases()
         { "SequenceAboveCap", "{{ ('x' * 1000)|length }}", [](auto& l) { l.maxSequenceSize = UINT64_MAX; }, "" },
         // Past the built-in cap as well: the render's own limit is reported
         { "RepeatAboveCap", "{{ 'x' * 100000000 }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
+        // A case mapping can lengthen a string: U+0390 (two UTF-8 bytes) uppercases to six
+        { "CaseMethodOver", "{{ ('\xce\x90' * 400).upper() }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
+        { "CaseMethodAt", "{{ ('\xce\x90' * 100).upper()|length }}", [](auto& l) { l.maxSequenceSize = 1000; }, "" },
+        { "CaseFilterOver", "{{ ('\xce\x90' * 400)|upper }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
+        { "CaseTitleOver", "{{ ('\xce\x90 ' * 300).title() }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
+        // Characters a mapping leaves unchanged still count after one that grew: 4 bytes in, 8 out
+        { "CaseUnchangedTailOver", "{{ '\xce\x90' ~ ('1' * 2) }}{{ ('\xce\x90' ~ ('1' * 2)).upper() }}", [](auto& l) { l.maxSequenceSize = 6; }, "maxSequenceSize" },
+        { "CaseSwapcaseTailOver", "{{ ('\xce\x90' * 2 ~ '1' * 5).swapcase() }}", [](auto& l) { l.maxSequenceSize = 12; }, "maxSequenceSize" },
+        { "CaseFilterTitleTailOver", "{{ ('\xce\x90' ~ '-' * 5)|title }}", [](auto& l) { l.maxSequenceSize = 10; }, "maxSequenceSize" },
         { "CenterAboveCap", "{{ 'x'|center(100000000) }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
         // f(*args) builds the argument list from the iterable (docs/tasks/0220)
         { "UnpackedArgsOver", "{% macro m() %}{{ varargs|length }}{% endmacro %}{{ m(*range(2000)) }}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
