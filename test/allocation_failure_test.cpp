@@ -8,6 +8,7 @@
 
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/json_adapter.h>
+#include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
@@ -572,6 +573,50 @@ TEST_F(AllocationFailureTest, KeptModuleSnapshotSurvivesAFailedCopy)
         call(3);
         ASSERT_EQ("[0, 1]", show(list)) << "allocation " << n;
         ASSERT_EQ("{'a': 0, 'b': 1}", show(dict)) << "allocation " << n;
+        if (!fired)
+        {
+            break;
+        }
+    }
+    EXPECT_LT(0, n) << "no allocation reached the injection";
+    EXPECT_LT(n, maxAllocations);
+}
+
+// Two names of the host's data in a module: an allocation failure while the second attaches to
+// the cell the first made leaves it looking again, not reading the host's data for good
+// (docs/tasks/0049)
+TEST_F(AllocationFailureTest, AliasAttachesAfterAFailedLink)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro m() %}{% set _ = a.append(9) %}{{ a|length }}={{ b|length }}{% endmacro %}"));
+    const std::vector<int64_t> data{ 1, 2, 3 };
+    long n = 0;
+    for (; n != maxAllocations; ++n)
+    {
+        // One accessor behind both names: a copy of a GenericList made by MakeGenericList copies
+        // its accessor, which is other data
+        auto made = std::make_shared<GenericList>(MakeGenericList(data.begin(), data.end()));
+        const GenericList list([made] { return made->GetAccessor(); });
+        auto module = tpl.MakeModule(ValuesMap{ { "a", list }, { "b", list } });
+        ASSERT_TRUE(!!module);
+        const auto call = [&module]() { return module->exports["m"].As<UserCallable>().callable(UserCallableParams{}).AsString(); };
+        bool fired = false;
+        OnFreshThread([&] {
+            const Injection injection(n);
+            try
+            {
+                call();
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): a failed call is one of the outcomes checked
+            {
+            }
+            fired = Injection::Fired();
+        });
+        const auto result = call();
+        const auto eq = result.find('=');
+        ASSERT_NE(std::string::npos, eq) << result;
+        ASSERT_EQ(result.substr(0, eq), result.substr(eq + 1)) << "allocation " << n;
         if (!fired)
         {
             break;

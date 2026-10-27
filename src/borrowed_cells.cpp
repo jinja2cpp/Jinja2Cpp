@@ -164,7 +164,9 @@ const BorrowedCell* CellLink::Find(const void* identity, bool isList, bool held)
 
 void CellLink::Link(const BorrowedCell& cell, bool held) const
 {
-    // Pushed first: when it cannot be, the adapter stays detached
+    // Pushed first: when it cannot be, the adapter stays detached and, with an epoch the counter
+    // never holds, looks for the cell again at its next read
+    m_seenEpoch = 0;
     cell.m_links.push_back(this);
     m_linkIndex = static_cast<uint32_t>(cell.m_links.size() - 1) | (held ? HeldBit : 0);
     m_cell = &cell;
