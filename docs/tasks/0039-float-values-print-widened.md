@@ -2,7 +2,7 @@
 status: open
 priority: medium
 area: parity
-depends: [0012, 0332, 0333]
+depends: [0012, 0334, 0333]
 touches: [include/jinja2cpp/value.h, include/jinja2cpp/reflected_value.h]
 shares: [src/value_visitors.h#InputValueConvertor, src/error_info.cpp, include/jinja2cpp/string_helpers.h, test/basic_tests.cpp, test/expressions_test.cpp, docs/api-2.0.md]
 ---
@@ -50,5 +50,5 @@ docs/design/0039-float-value-plan.md, decisions D1-D8 as recommended:
   `IsDouble` stays false for a float; host equality stays structural; `long double` stays
   `double`; values come back from a template as `double`, and a typed `float` parameter gets
   the exact float back.
-- Phases: 0332 (MakeCallable per-argument dispatch) and 0333 (locale-free float parsing) in
+- Phases: 0334 (MakeCallable per-argument dispatch) and 0333 (locale-free float parsing) in
   parallel, then this task.

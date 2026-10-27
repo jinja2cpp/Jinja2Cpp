@@ -4,7 +4,7 @@ Architect plan for docs/tasks/0039 (master `d79e11c`, 2026-10-24; rebased on `39
 section 9). Decision it serves: D21 in docs/release-2.0.md (Ruslan, 2026-10-24: add a `float`
 alternative to `Value`, accept the ABI change, land before the G1 freeze).
 
-**Approved by Ruslan on 2026-10-27: D1-D8 as recommended.** Phases: 0332 (MakeCallable
+**Approved by Ruslan on 2026-10-27: D1-D8 as recommended.** Phases: 0334 (MakeCallable
 per-argument dispatch), 0333 (locale-free float parsing), then 0039 itself.
 
 ## 1. The problem in one picture
@@ -174,7 +174,7 @@ exhaustive run is a one-off recorded in the PR.
 
 | Phase | Task | Content | Files | Verifier | Gate |
 |---|---|---|---|---|---|
-| P0 | 0332 (new) | MakeCallable per-argument dispatch (4.4) | include/jinja2cpp/user_callable.h, test/user_callable_test.cpp | yes | compile-time probe; perf gate n/a (header) |
+| P0 | 0334 (new) | MakeCallable per-argument dispatch (4.4) | include/jinja2cpp/user_callable.h, test/user_callable_test.cpp | yes | compile-time probe; perf gate n/a (header) |
 | P1 | 0333 (new) | Locale-free float parsing: fast_float, replace `strtod` sites, LC_NUMERIC test | thirdparty/, sbom/, src/lexer.cpp, src/filters.cpp, src/big_int.cpp, src/value_methods.cpp, src/json_reader.cpp | yes | `--perf` (lexer) |
 | P2 | 0039 | `float` in `Value` (4.1-4.3), depends on P0 and P1 | include/jinja2cpp/value.h, reflected_value.h, string_helpers.h, src/value_visitors.h (convertor), src/error_info.cpp, test/basic_tests.cpp, test/expressions_test.cpp, docs/api-2.0.md, README changelog, abi/ | yes | `--perf`; abidiff shows only the new alternative |
 
@@ -237,7 +237,7 @@ show 0 on the existing suites. One new micro row: rendering 1000 reflected `floa
 
 Filed in the PR that adds this file.
 
-- 0332 MakeCallable per-argument dispatch (P0 above).
+- 0334 MakeCallable per-argument dispatch (P0 above).
 - 0333 `strtod` follows `LC_NUMERIC`: float literals, `float` filter and friends misread
   under a decimal-comma locale (P1 above). Pin: a unit test that sets `LC_NUMERIC` to a
   decimal-comma locale when one is installed, skipped otherwise.
@@ -254,7 +254,7 @@ train 33 #649, 0213 #642, 0284 #634). The design and D1-D8 are unchanged.
 - **Value::ValueData**: unchanged, still 16 alternatives ending in `BigInt`; `float` is
   still appended as index 16.
 - **user_callable.h**: #645 changed only `test/user_callable_test.cpp`; the header is
-  byte-identical to `d79e11c`, so P0 (now 0332) stands as written. Its new test rows go
+  byte-identical to `d79e11c`, so P0 (now 0334) stands as written. Its new test rows go
   next to #645's.
 - **JSON (0311 `json_adapter.h`)**: a JSON number with a fraction stays `double`
   (`JsonKind::Double` -> `Value(double)`), as do nlohmann and Boost.JSON `AsDouble`. JSON has
@@ -269,19 +269,19 @@ train 33 #649, 0213 #642, 0284 #634). The design and D1-D8 are unchanged.
   following #655's immutable-pin rules, an entry in `sbom/components.json`, and the
   conan/external dependency modes. Fallback if Ruslan prefers no new dependency: a small
   exact decimal->double (Eisel-Lemire + big-decimal fallback) in `src/`, about 400 lines.
-- **Renumbering**: MakeCallable per-argument dispatch is now **0332**, locale-free float
-  parsing **0333** (reserved by the backlog thread on 2026-10-27; 0311 = JSON components,
-  and 0312/0313 went to #667, task 0301's module fixes).
+- **Renumbering**: MakeCallable per-argument dispatch is **0334**, locale-free float parsing
+  **0333**. Earlier reservations 0311-0313 and 0332 were taken by other PRs (0311 JSON
+  components; 0312/0313 #667; 0332 #673) before this plan was filed.
 - **Overlap**: no open project PRs remain; section 7's PR list is historical.
 
 ## 10. Since approval (master `1256084`, 2026-10-27)
 
 - `include/jinja2cpp/user_callable.h` changed in 0296 (`MakeCallResult` copies returned views,
-  `ConvertedTextStorage` for view parameters of the other width). 0332 builds on that header.
+  `ConvertedTextStorage` for view parameters of the other width). 0334 builds on that header.
 - Two open tasks edit the same dispatch: 0319 (`MakeCallable` with a `Value` parameter does
-  not compile) and 0320 (lambda and typed paths differ on an omitted argument). 0332's
+  not compile) and 0320 (lambda and typed paths differ on an omitted argument). 0334's
   per-argument dispatch gives a `Value` parameter the argument unchanged (4.4), which is
   0319's fix, and has one argument contract for both paths, which is 0320's. They should
-  land in the same PR as 0332, or right after it in the same thread; running them in
+  land in the same PR as 0334, or right after it in the same thread; running them in
   parallel threads would conflict in every hunk.
 - `Value::ValueData` is still 16 alternatives ending in `BigInt`.
