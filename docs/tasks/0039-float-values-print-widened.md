@@ -2,9 +2,9 @@
 status: open
 priority: medium
 area: parity
-depends: [0012]
-touches: [include/jinja2cpp/value.h, src/internal_value.h, src/internal_value.cpp]
-shares: [src/value_visitors.h]
+depends: [0012, 0332, 0333]
+touches: [include/jinja2cpp/value.h, include/jinja2cpp/reflected_value.h]
+shares: [src/value_visitors.h#InputValueConvertor, src/error_info.cpp, include/jinja2cpp/string_helpers.h, test/basic_tests.cpp, test/expressions_test.cpp, docs/api-2.0.md]
 ---
 # C++ `float` values print with their widened digits
 
@@ -38,3 +38,17 @@ the implementer:
 `float` member; a `float` read back through `Value` keeps its type; the tests that encode the
 widened digits (`test/expressions_test.cpp`) are updated; the abidiff report shows the
 intended layout change only.
+
+## Plan (approved by Ruslan, 2026-10-27)
+
+docs/design/0039-float-value-plan.md, decisions D1-D8 as recommended:
+- In a template a `float` is the double nearest its shortest round-trip decimal
+  (12.123f becomes 12.123), converted once in `InputValueConvertor`; `InternalValue` gets no
+  new alternative. Exhaustively checked over all 2^32 floats: only `±7.038531e-26` double-round,
+  and one more digit fixes them.
+- `float` is appended to `Value::ValueData` after `BigInt`; `IsFloat`/`AsFloat` are exact and
+  `IsDouble` stays false for a float; host equality stays structural; `long double` stays
+  `double`; values come back from a template as `double`, and a typed `float` parameter gets
+  the exact float back.
+- Phases: 0332 (MakeCallable per-argument dispatch) and 0333 (locale-free float parsing) in
+  parallel, then this task.
