@@ -48,17 +48,12 @@ public:
     // module's, whose values live across its calls (docs/tasks/0049)
     explicit CycleCollector(BorrowedCells& cells) noexcept
         : m_external(&cells)
-        , m_outerCall(cells.BeginCall())
     {
         s_current = this;
     }
     ~CycleCollector()
     {
         s_current = m_outer;
-        if (m_external)
-        {
-            m_external->EndCall(m_outerCall);
-        }
         if (m_notes)
         {
             Finish();
@@ -125,8 +120,30 @@ private:
     std::unique_ptr<Notes> m_notes;
     // The cells of a template module, which outlive the call (docs/tasks/0049); null for a render
     BorrowedCells* m_external = nullptr;
-    // The module call that ran when this one started (BorrowedCells::BeginCall)
-    uint32_t m_outerCall = 0;
+};
+
+// A call of a template module: it runs as a new call of the module's cells (BorrowedCells::BeginCall),
+// and the call it nested in, made from a host callable, runs again when it ends. Apart from
+// CycleCollector, so that a render's collector stays as small as it was (docs/tasks/0138)
+class ModuleCallCollector
+{
+public:
+    explicit ModuleCallCollector(BorrowedCells& cells) noexcept
+        : m_cells(cells)
+        , m_outerCall(cells.BeginCall())
+        , m_collector(cells)
+    {
+    }
+    ~ModuleCallCollector() { m_cells.EndCall(m_outerCall); }
+    ModuleCallCollector(const ModuleCallCollector&) = delete;
+    ModuleCallCollector(ModuleCallCollector&&) = delete;
+    ModuleCallCollector& operator=(const ModuleCallCollector&) = delete;
+    ModuleCallCollector& operator=(ModuleCallCollector&&) = delete;
+
+private:
+    BorrowedCells& m_cells;
+    uint32_t m_outerCall;
+    CycleCollector m_collector;
 };
 
 } // namespace v2
