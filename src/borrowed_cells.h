@@ -92,6 +92,10 @@ public:
     // The same for an epoch the caller read
     [[nodiscard]] bool MayHaveCell(uint32_t epoch) const noexcept { return epoch != m_seenEpoch; }
 
+    // The cell the adapter is attached to, read without a lookup and without a change: what an
+    // export of the adapter to the host reads (docs/tasks/0331)
+    [[nodiscard]] const BorrowedCell* Current() const noexcept { return m_cell; }
+
     // Attaches the adapter to a new cell holding `storage` (a list or dict the template owns,
     // the copy of the adapter's items) for the data `self` names; false outside a render, where
     // the caller keeps the copy instead

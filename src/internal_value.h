@@ -80,6 +80,7 @@ private:
 };
 
 class ValueObject;
+class CellLink;
 
 template<typename Fn>
 class FunctionRef;
@@ -139,6 +140,11 @@ public:
     // Whether Traverse may visit something: the cycle collector skips the other objects
     // (strings, numbers, host adapters) without a call
     [[nodiscard]] bool IsTraversable() const noexcept { return (m_flags & TraverseFlag) != 0; }
+    // An adapter of an environment's global, which the thread's snapshot of the globals keeps
+    // across renders: a render's write to it never outlives the render (docs/tasks/0211, 0331)
+    [[nodiscard]] bool IsGlobalData() const noexcept { return (m_flags & GlobalFlag) != 0; }
+    // Marks the object as IsGlobalData says, before anything else shares it
+    void MarkGlobalData() noexcept { m_flags |= GlobalFlag; }
 
     // The cycle collector's view of the object (docs/tasks/0251), as CPython's tp_traverse
     // and tp_clear: Traverse passes fn each object this one holds a reference to, once per
@@ -173,6 +179,7 @@ private:
     static constexpr uint8_t CloneFlag = 1;
     static constexpr uint8_t AnchorFlag = 2;
     static constexpr uint8_t TraverseFlag = 4;
+    static constexpr uint8_t GlobalFlag = 8;
     mutable std::atomic<unsigned> m_refCount{ 0 };
     uint8_t m_flags = 0;
 };
@@ -592,6 +599,9 @@ struct IListAccessor : ValueObject
     // Whether the list is the host's data, which a write in the render changes for every name of
     // it (AdoptCopy), so that list() must copy it
     [[nodiscard]] virtual bool IsBorrowed() const { return false; }
+    // The link of an adapter of the host's data to the render's copy of it (borrowed_cells.h);
+    // null for the other lists
+    [[nodiscard]] virtual const CellLink* GetCellLink() const { return nullptr; }
     // An accessor with iteration state of its own (a generator, which says so with
     // SetClonesOnCopy) is copied with the list value, so that copies iterate independently;
     // every other accessor is shared
@@ -644,6 +654,8 @@ struct IMapAccessor : ValueObject
     [[nodiscard]] virtual bool OwnsMutableItemsAlone() const { return false; }
     // See IListAccessor::AdoptCopy
     virtual bool AdoptCopy(const InternalValue& /*self*/, const InternalValue& /*copy*/) const { return false; }
+    // See IListAccessor::GetCellLink
+    [[nodiscard]] virtual const CellLink* GetCellLink() const { return nullptr; }
     // How x.name resolves against Python's dict methods (items, get, ...)
     [[nodiscard]] virtual MapAttrPolicy GetAttrPolicy() const { return MapAttrPolicy::KeysOnly; }
     // A namespace() object, the only one `set obj.attr = ...` can change

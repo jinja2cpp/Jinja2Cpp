@@ -104,9 +104,11 @@ TEST(BorrowedCellsSingle, HostCallableSeesTheWrite)
     EXPECT_EQ("2|2", Render("{% set y = l %}{% set _ = y.append(1) %}{{ size(l) }}|{{ size(y) }}", params));
 }
 
-// A container handed to the host is a view: while the render runs it shows the render's later
-// writes, nested ones too
-TEST(BorrowedCellsSingle, KeptValueSeesLaterWritesDuringTheRender)
+// A container handed to the host before the render writes it is a view of the host's data,
+// during the render too; one handed out after the write is the render's copy, and shows the
+// render's later writes. Python shows them in both (`[[1, 2], 3]`), a deliberate divergence:
+// what the host keeps is never mutable state a render shares (docs/tasks/0331)
+TEST(BorrowedCellsSingle, KeptValueBeforeAndAfterTheWrite)
 {
     Value kept;
     ValuesMap params{ { "l", ValuesList{ Value(ValuesList{ 1 }) } } };
@@ -117,7 +119,8 @@ TEST(BorrowedCellsSingle, KeptValueSeesLaterWritesDuringTheRender)
         },
         { ArgInfo{ "v" } });
     params["show"] = UserCallable([&kept](const UserCallableParams&) { return kept; }, {});
-    EXPECT_EQ("None[[1, 2], 3]", Render("{{ keep(l) }}{% set _ = l[0].append(2) %}{% set _ = l.append(3) %}{{ show() }}", params));
+    EXPECT_EQ("None[[1]]", Render("{{ keep(l) }}{% set _ = l[0].append(2) %}{% set _ = l.append(3) %}{{ show() }}", params));
+    EXPECT_EQ("None[[1, 2], 3, 4]", Render("{% set _ = l[0].append(2) %}{% set _ = l.append(3) %}{{ keep(l) }}{% set _ = l.append(4) %}{{ show() }}", params));
 }
 
 // After the render, a kept host container the render wrote reads the host's data again: the

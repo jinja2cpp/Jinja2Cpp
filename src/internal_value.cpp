@@ -1225,6 +1225,159 @@ InternalValue LendGenericItem(const std::shared_ptr<const void>& owner, Value&& 
     return Value2IntValue(std::move(item));
 }
 
+namespace
+{
+// What the host reads of the host's data the render hands it: a read-only view of the list or
+// map, which neither finds nor attaches to a cell (docs/tasks/0331). An adapter of the host's
+// data is the render's, and a write in its render attaches it to the render's cell; a view the
+// host keeps may be read on another thread, during another render, so it must not change
+// anything a render reads. It also holds no cache of item adapters (docs/tasks/0154): a nested
+// list or map read is a new view. `owner` keeps the data alive where the adapter did: null for
+// the caller's params (ByRef, which the host keeps alive), the globals map for a global's data
+// (ByHeldRef), the shared list or map itself (BySharedVal)
+Value ExportItem(const Value& item, const std::shared_ptr<const void>& owner);
+
+class ExportListView final : public IListItemAccessor
+    , public IIndexBasedAccessor
+{
+public:
+    class Enumerator : public IndexedEnumeratorImpl<Enumerator, ExportListView, Value, IListEnumerator>
+    {
+    public:
+        using BaseClass = IndexedEnumeratorImpl<Enumerator, ExportListView, Value, IListEnumerator>;
+        using BaseClass::BaseClass;
+
+        [[nodiscard]] Value GetCurrent() const override
+        {
+            if (!this->m_list || this->m_curItem >= this->CurrentSize())
+            {
+                return Value();
+            }
+            return this->m_list->GetItemByIndex(static_cast<int64_t>(this->m_curItem));
+        }
+        [[nodiscard]] ListEnumeratorPtr Clone() const override
+        {
+            auto result = MakeEnumerator<Enumerator>(this->m_list);
+            static_cast<Enumerator&>(*result).m_curItem = this->m_curItem;
+            return result;
+        }
+        ListEnumeratorPtr Move() override
+        {
+            auto result = Clone();
+            this->m_list = nullptr;
+            this->m_curItem = this->InvalidIndex;
+            this->m_maxItems = 0;
+            return result;
+        }
+    };
+
+    ExportListView(const ValuesList& items, std::shared_ptr<const void> owner)
+        : m_items(&items)
+        , m_owner(std::move(owner))
+    {
+    }
+
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return m_items->size(); }
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return this; }
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Enumerator>(this); }
+    [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
+    {
+        if (idx < 0 || static_cast<size_t>(idx) >= m_items->size())
+        {
+            return Value();
+        }
+        return ExportItem((*m_items)[static_cast<size_t>(idx)], m_owner);
+    }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* view = dynamic_cast<const ExportListView*>(&other);
+        return view && view->m_items == m_items;
+    }
+
+    // A GenericList of the view: the copy lives in it, as the adapters' exports do
+    static GenericList Make(const ValuesList& items, std::shared_ptr<const void> owner)
+    {
+        return GenericList([view = ExportListView(items, std::move(owner))]() -> const IListItemAccessor* { return &view; });
+    }
+
+private:
+    const ValuesList* m_items;
+    std::shared_ptr<const void> m_owner;
+};
+
+class ExportMapView final : public IMapItemAccessor
+{
+public:
+    ExportMapView(const ValuesMap& items, std::shared_ptr<const void> owner)
+        : m_items(&items)
+        , m_owner(std::move(owner))
+    {
+    }
+
+    [[nodiscard]] size_t GetSize() const override { return m_items->size(); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return m_items->count(name) != 0; }
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override
+    {
+        auto found = m_items->find(name);
+        return found != m_items->end() ? ExportItem(found->second, m_owner) : Value();
+    }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override
+    {
+        std::vector<std::string> result;
+        result.reserve(m_items->size());
+        for (const auto& [key, value] : *m_items)
+        {
+            result.push_back(key);
+        }
+        return result;
+    }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* view = dynamic_cast<const ExportMapView*>(&other);
+        return view && view->m_items == m_items;
+    }
+
+    static GenericMap Make(const ValuesMap& items, std::shared_ptr<const void> owner)
+    {
+        return GenericMap([view = ExportMapView(items, std::move(owner))]() -> const IMapItemAccessor* { return &view; });
+    }
+
+private:
+    const ValuesMap* m_items;
+    std::shared_ptr<const void> m_owner;
+};
+
+Value ExportItem(const Value& item, const std::shared_ptr<const void>& owner)
+{
+    if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&item.GetData()))
+    {
+        return Value(ExportListView::Make(**list, owner));
+    }
+    if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&item.GetData()))
+    {
+        return Value(ExportMapView::Make(**map, owner));
+    }
+    return item;
+}
+
+// The owner an export of data held by `holder` keeps (ExportListView)
+template<typename T>
+std::shared_ptr<const void> ExportOwner(const ByRef<T>& /*holder*/)
+{
+    return nullptr;
+}
+template<typename T>
+std::shared_ptr<const void> ExportOwner(const ByHeldRef<T>& holder)
+{
+    return holder.GetOwner();
+}
+template<typename T>
+std::shared_ptr<const void> ExportOwner(const BySharedVal<T>& holder)
+{
+    return holder.GetOwner();
+}
+} // namespace
+
 template<template<typename> class Holder>
 class GenericListAdapter : public IListAccessor
 {
@@ -1329,9 +1482,13 @@ public:
         }
         return ListAccessorEnumeratorPtr(Enumerator(m_values.Get().GetAccessor()->CreateEnumerator(), GenericOwner(m_values)));
     }
+    [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericList CreateGenericList() const override
     {
-        if (const auto* cell = m_link.Get(*this))
+        // Without a lookup (docs/tasks/0331): the render's copy once this adapter is attached to
+        // it, else the host's list. A global's adapter always gives the host's list, without a
+        // look at its link, which the next render on the thread changes
+        if (const auto* cell = this->IsGlobalData() ? nullptr : m_link.Current())
         {
             return cell->List().CreateGenericList();
         }
@@ -1452,6 +1609,10 @@ public:
     explicit ValuesListAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
+        if constexpr (std::is_same_v<Holder<int>, ByHeldRef<int>>)
+        {
+            this->MarkGlobalData();
+        }
     }
 
     // Detaches the adapter from its cell: the block of item adapters calls it before it frees
@@ -1644,14 +1805,20 @@ public:
     }
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy); }
     [[nodiscard]] bool IsBorrowed() const override { return true; }
+    [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericList CreateGenericList() const override
     {
-        if (const auto* cell = m_link.Get(*this))
+        // Without a lookup (docs/tasks/0331): the render's copy once this adapter is attached to
+        // it, else a view of the host's list. A global's adapter always gives the view, without
+        // a look at its link, which the next render on the thread changes
+        if constexpr (!std::is_same_v<Holder<int>, ByHeldRef<int>>)
         {
-            return cell->List().CreateGenericList();
+            if (const auto* cell = m_link.Current())
+            {
+                return cell->List().CreateGenericList();
+            }
         }
-        // An adapter on its own, whatever this one is: the copy lives in the GenericList
-        return GenericList([list = OwnedAdapter<ValuesListAdapter>(m_values)]() -> const IListItemAccessor* { return &list; });
+        return ExportListView::Make(m_values.Get(), ExportOwner(m_values));
     }
 
 private:
@@ -2517,13 +2684,15 @@ public:
     }
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy); }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysFirst; }
+    [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
-        if (const auto* cell = m_link.Get(*this))
+        // As GenericListAdapter's
+        if (const auto* cell = this->IsGlobalData() ? nullptr : m_link.Current())
         {
             return cell->Map().CreateGenericMap();
         }
-        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return accessor.m_values.Get().GetAccessor(); });
+        return GenericMap([values = m_values]() -> const IMapItemAccessor* { return values.Get().GetAccessor(); });
     }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -2588,6 +2757,10 @@ public:
     explicit ValuesMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
+        if constexpr (std::is_same_v<Holder<int>, ByHeldRef<int>>)
+        {
+            this->MarkGlobalData();
+        }
     }
 
     // Detaches the adapter from its cell: the block of item adapters calls it before it frees
@@ -2675,14 +2848,18 @@ public:
         return cell ? cell->Map().GetMutableItems() : nullptr;
     }
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy); }
+    [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
-        if (const auto* cell = m_link.Get(*this))
+        // As ValuesListAdapter's
+        if constexpr (!std::is_same_v<Holder<int>, ByHeldRef<int>>)
         {
-            return cell->Map().CreateGenericMap();
+            if (const auto* cell = m_link.Current())
+            {
+                return cell->Map().CreateGenericMap();
+            }
         }
-        // An adapter on its own, whatever this one is: the copy lives in the GenericMap
-        return GenericMap([accessor = OwnedAdapter<ValuesMapAdapter>(m_values)]() -> const IMapItemAccessor* { return &accessor; });
+        return ExportMapView::Make(m_values.Get(), ExportOwner(m_values));
     }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -2858,7 +3035,20 @@ InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value
         return InternalValue(MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<ByHeldRef>>>(ByHeldRef<ValuesMap>(**map, owner))));
     }
     // By value: a generic container's copy shares the host's accessor, not the global's storage,
-    // and text is copied
+    // and text is copied. A generic container's adapter is a global's as the ones above
+    // (IsGlobalData), so that a write in a render never outlives it (docs/tasks/0331)
+    if (const auto* list = std::get_if<GenericList>(&item.GetData()))
+    {
+        auto adapter = MakeRef<GenericListAdapter<BySharedVal>>(GenericList(*list));
+        adapter->MarkGlobalData();
+        return InternalValue(ListAdapter(std::move(adapter)));
+    }
+    if (const auto* map = std::get_if<GenericMap>(&item.GetData()))
+    {
+        auto adapter = MakeRef<GenericMapAdapter<BySharedVal>>(GenericMap(*map));
+        adapter->MarkGlobalData();
+        return InternalValue(MapAdapter(std::move(adapter)));
+    }
     return visit(visitors::InputValueConvertor(true, false), item.GetData());
 }
 
