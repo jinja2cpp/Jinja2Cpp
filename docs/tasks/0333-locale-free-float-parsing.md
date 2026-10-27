@@ -1,5 +1,6 @@
 ---
-status: open
+status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/683
 priority: high
 area: robustness
 touches: [src/lexer.cpp, src/json_reader.cpp, src/big_int.cpp, thirdparty/internal_deps.cmake, sbom/components.json]

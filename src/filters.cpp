@@ -2,6 +2,7 @@
 
 #include "engine_errors.h"
 #include "big_int.h"
+#include "decimal_number.h"
 
 #include "expression_evaluator.h"
 #include "function_base.h"
@@ -30,12 +31,10 @@
 #include <cwchar>
 #include <iterator>
 #include <limits>
-#include <locale>
 #include <numeric>
 #include <memory>
 #include <optional>
 #include <random>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -1546,22 +1545,6 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         return result;
     }
 
-    static double ConvertToDouble(const char* buff, bool& isConverted)
-    {
-        char* endBuff = nullptr;
-        double dblVal = strtod(buff, &endBuff);
-        isConverted = *endBuff == 0;
-        return dblVal;
-    }
-
-    static double ConvertToDouble(const wchar_t* buff, bool& isConverted)
-    {
-        wchar_t* endBuff = nullptr;
-        double dblVal = wcstod(buff, &endBuff);
-        isConverted = *endBuff == 0;
-        return dblVal;
-    }
-
     static long long ConvertToInt(const char* buff, int base, bool& isConverted)
     {
         char* endBuff = nullptr;
@@ -1584,21 +1567,6 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         InternalValue result;
         switch (m_params.mode)
         {
-        case ValueConverter::ToFloatMode:
-        {
-            bool converted = false;
-            double dblVal = ConvertToDouble(val.c_str(), converted);
-
-            if (!converted)
-            {
-                result = m_params.defValule;
-            }
-            else
-            {
-                result = dblVal;
-            }
-            break;
-        }
         case ValueConverter::ToIntMode:
         {
             int base = static_cast<int>(GetAs<int64_t>(m_params.base));
@@ -1635,22 +1603,6 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         InternalValue result;
         switch (m_params.mode)
         {
-        case ValueConverter::ToFloatMode:
-        {
-            bool converted = false;
-            std::basic_string<CharT> str(val.begin(), val.end());
-            double dblVal = ConvertToDouble(str.c_str(), converted);
-
-            if (!converted)
-            {
-                result = m_params.defValule;
-            }
-            else
-            {
-                result = static_cast<double>(dblVal);
-            }
-            break;
-        }
         case ValueConverter::ToIntMode:
         {
             int base = static_cast<int>(GetAs<int64_t>(m_params.base));
@@ -1817,7 +1769,7 @@ size_t ReadFloatDigits(const std::string& text, size_t& pos, std::string& digits
 
 // The mantissa, an optional fraction and an optional exponent from `pos` to the end of `text`,
 // appended to `digits`; false unless all of the text is a decimal float literal
-bool ReadFloatLiteral(const std::string& text, size_t pos, std::string& digits, bool& negativeExponent)
+bool ReadFloatLiteral(const std::string& text, size_t pos, std::string& digits)
 {
     auto mantissa = ReadFloatDigits(text, pos, digits);
     if (pos < text.size() && text[pos] == '.')
@@ -1834,7 +1786,6 @@ bool ReadFloatLiteral(const std::string& text, size_t pos, std::string& digits, 
         digits.push_back(text[pos++]);
         if (pos < text.size() && (text[pos] == '+' || text[pos] == '-'))
         {
-            negativeExponent = text[pos] == '-';
             digits.push_back(text[pos++]);
         }
         if (ReadFloatDigits(text, pos, digits) == 0)
@@ -1962,22 +1913,12 @@ std::optional<double> ParsePythonFloat(const std::string& str)
     }
 
     std::string digits(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(pos));
-    bool negativeExponent = false;
-    if (!ReadFloatLiteral(text, pos, digits, negativeExponent))
+    if (!ReadFloatLiteral(text, pos, digits))
     {
         return std::nullopt;
     }
-
-    std::istringstream is(digits);
-    is.imbue(std::locale::classic());
-    double result = 0;
-    is >> result;
-    // A valid literal fails only out of range: overflow is inf, underflow is zero
-    if (is.fail())
-    {
-        result = negativeExponent ? 0.0 : std::numeric_limits<double>::infinity();
-    }
-    return negative ? -std::abs(result) : std::abs(result);
+    // The sign is in `digits`; out of range, the result is inf or zero
+    return ParseDecimal(digits);
 }
 
 char LowerAscii(char ch)
@@ -2179,9 +2120,7 @@ double PythonRound(double val, int64_t ndigits)
             }
         }
     }
-    // No decimal point, so the locale's radix character does not matter
-    auto text = kept + "e" + std::to_string(intDigits - keep);
-    auto rounded = std::strtod(text.c_str(), nullptr);
+    auto rounded = ParseDecimal(kept + "e" + std::to_string(intDigits - keep)).value_or(0.0);
     if (std::isinf(rounded))
     {
         throw TemplateRuntimeError("rounded value too large to represent");
@@ -2231,9 +2170,7 @@ InternalValue PythonRoundInt(int64_t val, int64_t ndigits)
 // 10 ** precision as the float Python converts it to, correctly rounded; 0 when it underflows
 double PowerOfTen(int64_t precision)
 {
-    auto text = "1e" + std::to_string(std::max<int64_t>(-400, std::min<int64_t>(precision, 400)));
-    // No decimal point, so the locale's radix character does not matter
-    return std::strtod(text.c_str(), nullptr);
+    return ParseDecimal("1e" + std::to_string(std::max<int64_t>(-400, std::min<int64_t>(precision, 400)))).value_or(0.0);
 }
 
 // Jinja2's round(value, precision, 'ceil' or 'floor'): func(value * (10 ** precision)) / (10 ** precision)
@@ -2270,9 +2207,8 @@ double PythonRoundByMethod(double value, bool isInt, int64_t precision, bool isC
         return (whole / scale) + 0.0;
     }
     // Two integers are divided exactly and the quotient rounded once: the digits of the
-    // integer scaled down by the power of ten, read back by strtod
-    auto text = fmt::format("{:.0f}e-{}", whole, precision);
-    return std::strtod(text.c_str(), nullptr) + 0.0;
+    // integer scaled down by the power of ten, read back
+    return ParseDecimal(fmt::format("{:.0f}e-{}", whole, precision)).value_or(0.0) + 0.0;
 }
 
 // Port of Jinja2's do_filesizeformat

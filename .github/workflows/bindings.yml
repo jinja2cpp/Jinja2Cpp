@@ -175,7 +175,7 @@ jobs:
         sudo apt-get install -y --no-install-recommends \
           libboost-dev libboost-json-dev libboost-container-dev nlohmann-json3-dev
 
-    - name: fmt and expected-lite
+    - name: fmt, expected-lite and fast_float
       run: |
         git clone --depth 1 --branch 12.2.0 https://github.com/fmtlib/fmt.git "$RUNNER_TEMP/fmt"
         # PIC: the shared jinja2cpp links this static fmt
@@ -187,6 +187,9 @@ jobs:
         cmake -S "$RUNNER_TEMP/expected-lite" -B "$RUNNER_TEMP/expected-lite/build" -G Ninja \
           -DEXPECTED_LITE_OPT_BUILD_TESTS=OFF -DEXPECTED_LITE_OPT_BUILD_EXAMPLES=OFF
         sudo cmake --install "$RUNNER_TEMP/expected-lite/build"
+        git clone --depth 1 --branch v8.2.10 https://github.com/fastfloat/fast_float.git "$RUNNER_TEMP/fast_float"
+        cmake -S "$RUNNER_TEMP/fast_float" -B "$RUNNER_TEMP/fast_float/build" -G Ninja
+        sudo cmake --install "$RUNNER_TEMP/fast_float/build"
 
     - name: Configure
       run: |

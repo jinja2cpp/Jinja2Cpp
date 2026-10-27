@@ -3,6 +3,7 @@ message(STATUS "'external' dependencies mode selected for Jinja2Cpp. All depende
 # Each dependency is found through the package config it installs (docs/tasks/0163)
 find_package(expected-lite CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
+find_package(FastFloat CONFIG REQUIRED)
 
 # The JSON libraries are for the tests only: the library reads {% meta %} itself (0230 D6)
 if (JINJA2CPP_BUILD_TESTS)

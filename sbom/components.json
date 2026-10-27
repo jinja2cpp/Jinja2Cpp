@@ -59,6 +59,29 @@
       ]
     },
     {
+      "id": "fast-float",
+      "name": "fast_float",
+      "version": "8.2.10",
+      "license": "MIT OR Apache-2.0 OR BSL-1.0",
+      "supplier": "Daniel Lemire and fast_float contributors",
+      "url": "https://github.com/fastfloat/fast_float",
+      "purl": "pkg:github/fastfloat/fast_float@v8.2.10",
+      "delivery": "fetched",
+      "source": {"url": "https://github.com/fastfloat/fast_float/archive/refs/tags/v8.2.10.tar.gz", "sha256": "76f958dd97b1cf4d8862d1f0986a47d4bdfa8845252bae15ef0f40de3b95961f"},
+      "role": "mandatory",
+      "phases": ["build"],
+      "exposure": "internal",
+      "selected_by": "always",
+      "conan": "fast_float/8.2.10",
+      "used_for": "Decimal-to-double conversion that ignores the C locale (src/decimal_number.cpp): float literals, the float and round filters, big integer to float, {% meta %} numbers (docs/tasks/0333)",
+      "why": "strtod reads the decimal point of LC_NUMERIC, so a host under a decimal-comma locale read 1.5 as 1; std::from_chars for double is missing from older AppleClang libc++ (0083). Correctly rounded and header-only; libstdc++ 12 uses it for from_chars",
+      "lighten": "Replace with std::from_chars once every supported standard library has it for double. Header-only and linked as a build interface, so neither the package nor static consumers see it",
+      "evidence": [
+        {"file": "thirdparty/internal_deps.cmake", "contains": ["fastfloat/fast_float/archive/refs/tags/v8.2.10.tar.gz", "76f958dd97b1cf4d8862d1f0986a47d4bdfa8845252bae15ef0f40de3b95961f"]},
+        {"file": "conanfile.txt", "contains": ["fast_float/8.2.10"]}
+      ]
+    },
+    {
       "id": "boost",
       "name": "boost",
       "version": "1.92.0",

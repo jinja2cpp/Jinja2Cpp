@@ -189,6 +189,7 @@ set (LIB_TARGET_NAME jinja2cpp)
 set(JINJA2CPP_SOURCES
     src/confined_filesystem.cpp
     src/cycle_collector.cpp
+    src/decimal_number.cpp
     src/error_info.cpp
     src/big_int.cpp
     src/big_int_builtin.cpp
@@ -418,6 +419,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/basic_tests.cpp
         test/big_int_test.cpp
         test/containers_api_test.cpp
+        test/decimal_locale_test.cpp
         test/embedding_lifecycle_reentry_test.cpp
         test/embedding_lifecycle_test.cpp
         test/embedding_lifecycle_threads_test.cpp

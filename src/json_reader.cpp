@@ -1,15 +1,14 @@
 #include "json_reader.h"
 
+#include "decimal_number.h"
 #include "internal_value.h"
 #include "make_unexpected.h"
 
 #include <jinja2cpp/value.h>
 
 #include <charconv>
-#include <clocale>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -558,7 +557,7 @@ private:
         const std::string_view number = m_text.substr(start, pos - start);
         if (number.size() > m_maxItems)
         {
-            // ToDouble copies the digits, so a number is bounded as a string is
+            // A number is bounded as a string is
             return Fail("Number too long", start);
         }
         m_pos = pos;
@@ -576,22 +575,9 @@ private:
         return true;
     }
 
-    // strtod reads the decimal point of the C locale in force; the number is spelled with it
-    static double ToDouble(std::string_view number)
-    {
-        std::string text(number);
-        const std::string_view point = std::localeconv()->decimal_point;
-        if (point != ".")
-        {
-            const auto dot = text.find('.');
-            if (dot != std::string::npos)
-            {
-                text.replace(dot, 1, point);
-            }
-        }
-        // An exponent out of range gives HUGE_VAL (inf) or 0, as Python's float() does
-        return std::strtod(text.c_str(), nullptr);
-    }
+    // A JSON number the reader has checked; an exponent out of range gives inf or 0, as
+    // Python's float() does
+    static double ToDouble(std::string_view number) { return ParseDecimal(number).value_or(0.0); }
 
     std::string_view m_text;
     std::size_t m_pos = 0;

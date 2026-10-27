@@ -86,6 +86,33 @@
       "comment": "role: mandatory; phases: build,consumer-link; exposure: link; delivery: fetched; selected-by: always; used-for: Python str.format / format filter and %-formatting (src/python_format.cpp, serialize_filters.cpp, value_methods.cpp), number-to-string, wide-string formatting (fmt/xchar.h), error messages (error_info.cpp), the string builder's memory_buffer; why: Python's format-spec mini-language with runtime format strings, precision-as-argument and wchar_t output; std::format is C++20 and the floor is C++17; lighten: Keep. Could be built header-only (FMT_HEADER_ONLY) to remove the link-time dependency of static consumers, at a compile-time cost; replace with std::format only at a C++20 floor (wide output and runtime specs still need checking); conan: fmt/12.2.0"
     },
     {
+      "SPDXID": "SPDXRef-Package-fast-float",
+      "name": "fast_float",
+      "versionInfo": "8.2.10",
+      "supplier": "Organization: Daniel Lemire and fast_float contributors",
+      "downloadLocation": "https://github.com/fastfloat/fast_float/archive/refs/tags/v8.2.10.tar.gz",
+      "filesAnalyzed": false,
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "76f958dd97b1cf4d8862d1f0986a47d4bdfa8845252bae15ef0f40de3b95961f"
+        }
+      ],
+      "homepage": "https://github.com/fastfloat/fast_float",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "MIT OR Apache-2.0 OR BSL-1.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/fastfloat/fast_float@v8.2.10"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: mandatory; phases: build; exposure: internal; delivery: fetched; selected-by: always; used-for: Decimal-to-double conversion that ignores the C locale (src/decimal_number.cpp): float literals, the float and round filters, big integer to float, {% meta %} numbers (docs/tasks/0333); why: strtod reads the decimal point of LC_NUMERIC, so a host under a decimal-comma locale read 1.5 as 1; std::from_chars for double is missing from older AppleClang libc++ (0083). Correctly rounded and header-only; libstdc++ 12 uses it for from_chars; lighten: Replace with std::from_chars once every supported standard library has it for double. Header-only and linked as a build interface, so neither the package nor static consumers see it; conan: fast_float/8.2.10"
+    },
+    {
       "SPDXID": "SPDXRef-Package-boost",
       "name": "boost",
       "versionInfo": "1.92.0",
@@ -900,6 +927,11 @@
       "relatedSpdxElement": "SPDXRef-Package-fmt"
     },
     {
+      "spdxElementId": "SPDXRef-Package-jinja2cpp",
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Package-fast-float"
+    },
+    {
       "spdxElementId": "SPDXRef-Package-boost",
       "relationshipType": "OPTIONAL_DEPENDENCY_OF",
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
@@ -1075,5 +1107,5 @@
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-c5321928b266d36c"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-da46f39f0ac7598b"
 }

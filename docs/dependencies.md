@@ -42,6 +42,7 @@ source and committed), `system` (found on the machine), `ci` (GitHub Actions).
 |---|---|---|---|---|---|---|---|
 | expected-lite | 0.10.0 | BSL-1.0 | mandatory | public-api | fetched | `jinja2::Result<T>` in every Load/Render signature; C++17 has no `std::expected` | Keep until a C++23 floor; could be vendored into `include/` |
 | {fmt} | 12.2.0 | MIT | mandatory | link | fetched | Python `str.format`, `%`-formatting and number output with runtime specs and `wchar_t`; `std::format` is C++20 | Keep; header-only mode would drop the link dependency |
+| fast_float | 8.2.10 | MIT, Apache-2.0 or BSL-1.0 | mandatory | internal | fetched | decimal-to-double conversion that ignores the C locale: float literals, the `float` and `round` filters, `{% meta %}` numbers (`src/decimal_number.cpp`, 0333); `strtod` follows `LC_NUMERIC` and `std::from_chars` for `double` is missing from older AppleClang | Header-only and a build interface: not installed, not seen by static consumers; `std::from_chars` once every supported library has it |
 | robin-hood-hashing | 3.11.5, modified | MIT | mandatory | internal | vendored | flat hash map for values and scopes, faster than `std::unordered_map` here | Keep the idea; upstream is archived (docs/tasks/0231) |
 | lexertk | unrecorded, modified | MIT | mandatory | internal | vendored | expression tokenizer | Keep; effectively forked code |
 | value_types | 57f2e7a, modified | MIT | mandatory | public-api | vendored | `polymorphic`/`indirect` in `jinja2::v2::detail::xyz`, behind `jinja2::types` (Value, GenericList) | Keep; `std::` at C++26 |
@@ -132,7 +133,7 @@ deprecated alias of `internal`, removed in 3.0.
    immutably (SHA-256 or commit SHA).
 
 Distribution notices for the redistributed code (fmt and expected-lite in an
-internal-mode install, Boost.Multiprecision compiled into a `bigint=boost` build, value_types in the installed headers) are docs/tasks/0226.
+internal-mode install, Boost.Multiprecision compiled into a `bigint=boost` build, fast_float compiled into every build, value_types in the installed headers) are docs/tasks/0226.
 
 ## Maintaining the inventory
 
