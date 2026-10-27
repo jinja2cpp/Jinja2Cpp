@@ -1298,7 +1298,11 @@ TEST(UserCallableTestSingle, PerArgumentDispatch)
     jinja2::ValuesMap params;
     params["f4"] = MakeCallable(
         [](const std::string& a, int64_t b, double c, const std::wstring& d) { return JoinFour(a, b, c, d); }, ArgInfo{ "a" }, ArgInfo{ "b" }, ArgInfo{ "c" }, ArgInfo{ "d", false, "dd" });
-    params["f5"] = MakeCallable([](std::string a, std::string_view b, std::string&& c, const Markup& d, bool e) { return a + std::string(b) + c + d.str() + (e ? "T" : "F"); },
+    params["f5"] = MakeCallable([](std::string a, std::string_view b, std::string&& c, const Markup& d, bool e) {
+                                    a += b;
+                                    a += std::string(std::move(c));
+                                    return a + d.str() + (e ? "T" : "F");
+                                },
                                 ArgInfo{ "a" },
                                 ArgInfo{ "b" },
                                 ArgInfo{ "c" },
@@ -1312,7 +1316,10 @@ TEST(UserCallableTestSingle, PerArgumentDispatch)
                                    ArgInfo{ "c" });
     params["nothrow"] = MakeCallable([](int64_t a) noexcept { return a * 2; }, ArgInfo{ "a" });
     params["cref"] = MakeCallable([](const Value& v) { return Describe(v); }, ArgInfo{ "v" });
-    params["byValue"] = MakeCallable([](Value v) { return Describe(v); }, ArgInfo{ "v" });
+    params["byValue"] = MakeCallable([](Value v) {
+        const Value kept = std::move(v);
+        return Describe(kept);
+    }, ArgInfo{ "v" });
     // NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved): the row checks that an rvalue Value binds
     params["rref"] = MakeCallable([](Value&& v) { return Describe(v); }, ArgInfo{ "v" });
     params["echo"] = MakeCallable([](const Value& v) { return v; }, ArgInfo{ "v" });

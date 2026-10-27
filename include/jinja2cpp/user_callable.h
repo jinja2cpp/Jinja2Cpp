@@ -601,14 +601,14 @@ struct CallableSignature<Fn, std::enable_if_t<std::is_class_v<Fn>, std::void_t<d
 };
 
 // Arguments are dispatched one by one when the descriptors name every parameter of a readable signature
-template<typename Fn, std::size_t ArgsCount, typename Signature = CallableSignature<Fn>, typename = void>
+template<typename Fn, std::size_t argsCount, typename Signature = CallableSignature<Fn>, typename = void>
 struct HasDeducibleParams : std::false_type
 {
 };
 
-template<typename Fn, std::size_t ArgsCount, typename Signature>
-struct HasDeducibleParams<Fn, ArgsCount, Signature, std::enable_if_t<Signature::IsKnown>>
-    : std::bool_constant<Signature::Params::Size == ArgsCount>
+template<typename Fn, std::size_t argsCount, typename Signature>
+struct HasDeducibleParams<Fn, argsCount, Signature, std::enable_if_t<Signature::IsKnown>>
+    : std::bool_constant<Signature::Params::Size == argsCount>
 {
 };
 
