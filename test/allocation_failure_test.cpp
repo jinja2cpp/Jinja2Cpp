@@ -582,6 +582,71 @@ TEST_F(AllocationFailureTest, KeptModuleSnapshotSurvivesAFailedCopy)
     EXPECT_LT(n, maxAllocations);
 }
 
+// A module's sort() whose key function makes the host call the module again, and that call hands
+// the emptied list to the host: the sort then copies the list on write (D8), and when that copy
+// fails the list gets its items back, not the ones already moved out (Codex review)
+TEST_F(AllocationFailureTest, ModuleSortKeepsItsItemsWhenTheCopyFails)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro srt() %}{% set _ = l.sort(key=k) %}{% endmacro %}"
+                           "{% macro k(x) %}{% set _ = reexp() %}{{ x[0] }}{% endmacro %}"
+                           "{% macro exp() %}{% set _ = keep(l) %}{% endmacro %}"
+                           "{% macro show() %}{{ l }}{% endmacro %}"));
+    long n = 0;
+    for (; n != maxAllocations; ++n)
+    {
+        std::vector<Value> kept;
+        const TemplateModule* self = nullptr;
+        ValuesMap params{ { "l", ValuesList{ Value(ValuesList{ 3 }), Value(ValuesList{ 1 }), Value(ValuesList{ 2 }) } } };
+        params["keep"] = UserCallable(
+            [&kept](const UserCallableParams& p) {
+                kept.push_back(p["v"]);
+                return Value();
+            },
+            { ArgInfo{ "v" } });
+        params["reexp"] = UserCallable(
+            [&self](const UserCallableParams&) {
+                self->exports.at("exp").As<UserCallable>().callable(UserCallableParams{});
+                return Value();
+            },
+            {});
+        auto module = tpl.MakeModule(params);
+        ASSERT_TRUE(!!module);
+        self = &*module;
+        const auto call = [&module](const std::string& name) { return module->exports[name].As<UserCallable>().callable(UserCallableParams{}).AsString(); };
+        bool fired = false;
+        bool threw = false;
+        OnFreshThread([&] {
+            const Injection injection(n);
+            try
+            {
+                call("srt");
+            }
+            catch (const std::bad_alloc&)
+            {
+                threw = true;
+            }
+            fired = Injection::Fired();
+        });
+        const auto shown = call("show");
+        if (threw)
+        {
+            ASSERT_TRUE(shown == "[[3], [1], [2]]" || shown == "[[1], [2], [3]]") << shown << " at allocation " << n;
+        }
+        else
+        {
+            ASSERT_EQ("[[1], [2], [3]]", shown) << "allocation " << n;
+        }
+        if (!fired)
+        {
+            break;
+        }
+    }
+    EXPECT_LT(0, n) << "no allocation reached the injection";
+    EXPECT_LT(n, maxAllocations);
+}
+
 // Two names of the host's data in a module: an allocation failure while the second attaches to
 // the cell the first made leaves it looking again, not reading the host's data for good
 // (docs/tasks/0049)

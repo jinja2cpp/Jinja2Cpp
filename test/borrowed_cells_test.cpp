@@ -101,6 +101,20 @@ TEST(BorrowedCellsSingle, NestedRenderHasItsOwnCells)
     EXPECT_EQ("[3, 2]|[3, 1]|[3, 1]", Render("{% set y = l %}{% set _ = l.append(1) %}{{ inner() }}|{{ l }}|{{ y }}", params));
 }
 
+TEST(BorrowedCellsSingle, NestedRenderOfAGlobalWrittenThroughAnAlias)
+{
+    // The thread keeps the globals' adapters for the next render; a write through an alias does
+    // not mark the global scope written, yet a render nested in this one must not see its cell
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{ 0 });
+    Template inner(&env);
+    ASSERT_TRUE(!!inner.Load("{% set _ = g.append(2) %}{{ g }}"));
+    ValuesMap params;
+    params["inner"] = MakeCallable([&inner]() { return inner.RenderAsString({}).value(); });
+    EXPECT_EQ("[0, 2]|[0, 1]", Render("{% set y = g %}{% set _ = y.append(1) %}{{ inner() }}|{{ g }}", params, &env));
+    EXPECT_EQ("[0]", Render("{{ g }}", {}, &env));
+}
+
 TEST(BorrowedCellsSingle, HostCallableSeesTheWrite)
 {
     ValuesMap params{ { "l", ValuesList{ 3 } } };
@@ -434,6 +448,34 @@ TEST(BorrowedCellsKept, ModuleSortWhoseKeyCopiesTwice)
     EXPECT_THROW(m.Call("srt"), BadResultAccess<>);
     EXPECT_EQ("[2]", m.keeper.Show(0));
     EXPECT_EQ("[2, 3]", m.keeper.Show(1));
+}
+
+TEST(BorrowedCellsKept, ModuleSortWhoseKeyHandsOutTheList)
+{
+    // The key function makes the host call the module again, and that call hands the list to
+    // the host while sort() holds its items: the host keeps the emptied list as that call left it,
+    // and the sorted items go to a copy (D8)
+    Keeper keeper;
+    ValuesMap params{ { "l", ValuesList{ 3, 1, 2 } } };
+    keeper.AddTo(params);
+    const TemplateModule* self = nullptr;
+    params["reexp"] = UserCallable(
+        [&self](const UserCallableParams&) {
+            self->exports.at("exp").As<UserCallable>().callable(UserCallableParams{});
+            return Value();
+        },
+        {});
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro srt() %}{% set _ = l.sort(key=k) %}{{ l }}{% endmacro %}"
+                           "{% macro k(v) %}{% set _ = reexp() %}{{ v }}{% endmacro %}"
+                           "{% macro exp() %}{% set _ = keep(l) %}{% endmacro %}"));
+    auto module = tpl.MakeModule(params);
+    ASSERT_TRUE(!!module);
+    self = &*module;
+    EXPECT_EQ("[1, 2, 3]", module->exports["srt"].As<UserCallable>().callable(UserCallableParams{}).AsString());
+    ASSERT_EQ(3u, keeper.kept.size());
+    EXPECT_EQ("[]", keeper.Show(0));
+    EXPECT_EQ("[]", keeper.Show(2));
 }
 
 TEST(BorrowedCellsKept, ModuleCellInsideAKeptList)

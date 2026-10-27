@@ -2038,16 +2038,18 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
         const auto& right = sortKeys[reverse ? idx1 : idx2];
         return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
     });
+    // Found before the items move: it may copy the list (D8), and when that fails the restore
+    // guard still holds them
+    auto& items = MutableItems(self);
+    // CPython's allocated == -1 sentinel: the list was left with no storage, and any change
+    // that put an item in it gave it some, even when a later pop emptied it again
+    const bool modified = items.capacity() != 0;
     InternalValueList sorted;
     sorted.reserve(values.size());
     for (auto idx : order)
     {
         sorted.push_back(std::move(values[idx]));
     }
-    // CPython's allocated == -1 sentinel: the list was left with no storage, and any change
-    // that put an item in it gave it some, even when a later pop emptied it again
-    auto& items = MutableItems(self);
-    const bool modified = items.capacity() != 0;
     values.clear();
     items = std::move(sorted);
     if (modified)

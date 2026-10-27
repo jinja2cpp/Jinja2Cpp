@@ -3,6 +3,7 @@
 #include "cycle_collector.h"
 #include "internal_value.h"
 #include "intrusive_ptr.h"
+#include "render_workspace.h"
 #include "template_dict.h"
 
 #include <jinja2cpp/generic_list.h>
@@ -171,6 +172,11 @@ void CellLink::Link(const BorrowedCell& cell, bool held) const
     m_linkIndex = static_cast<uint32_t>(cell.m_links.size() - 1) | (held ? HeldBit : 0);
     m_cell = &cell;
     m_seenEpoch = Attached;
+    if (held)
+    {
+        // The thread keeps the globals' adapters for its next render, which may run inside this one
+        RenderWorkspace::ForThisThread().GlobalAttached();
+    }
 }
 
 void CellLink::Unlink() const noexcept
