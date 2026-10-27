@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <new>
 #include <utility>
 
 namespace jinja2
@@ -274,7 +275,7 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     return true;
 }
 
-void BorrowedCells::Finish() noexcept
+void BorrowedCells::Finish(CycleCollector* collector) noexcept
 {
     // The sources first: what they alone held may hold adapters attached to a cell, which detach
     // while every cell is live
@@ -306,6 +307,25 @@ void BorrowedCells::Finish() noexcept
     }
     const auto count = static_cast<uint32_t>(m_cells->size());
     detail::g_frozenCells.fetch_add(count, std::memory_order_relaxed);
+    // A cell a link still reads may be in a cycle the render's end left (`l.append(l)`, or the
+    // items of a copy, which keep the value they were copied from): the collector walks from it
+    if (collector)
+    {
+        try
+        {
+            for (const auto& [identity, cell] : *m_cells)
+            {
+                if (cell->use_count() > 1)
+                {
+                    collector->NoteFrozen(ValueObjectPtr(cell));
+                }
+            }
+        }
+        catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
+        {
+            // Out of memory: the cycles through the cells not noted leak (docs/tasks/0283)
+        }
+    }
     // A cell no link reads goes now, and with it what only its items held
     m_cells.reset();
     detail::g_liveCells.fetch_sub(count, std::memory_order_relaxed);

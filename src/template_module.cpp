@@ -327,9 +327,10 @@ struct TemplateModuleState
         // The module's values may hold themselves (`l.append(l)`): a collector frees those
         // cycles once nothing else holds them, as a render's does when it ends. Noting them
         // allocates; when that fails, the cycles noted so far are still freed and the rest leak.
-        // The cells go first: a cycle through one is then one among the module's values
-        cells.Release();
-        const CycleCollector cycles;
+        // The cells freeze first, noted to the collector: a cycle through one is then one among
+        // the module's values (docs/tasks/0331)
+        CycleCollector cycles;
+        cells.Release(&cycles);
         if (module)
         {
             try

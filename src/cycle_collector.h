@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <utility>
 #include <unordered_set>
 #include <vector>
 
@@ -85,6 +86,9 @@ public:
     }
     // The registry a promotion adds its cell to, made on the first one; null outside a render
     static BorrowedCells* CellsForWrite();
+    // A frozen cell that values outliving the render still read: a candidate of this collector
+    // (BorrowedCells::Release, docs/tasks/0331). Throws std::bad_alloc
+    void NoteFrozen(ValueObjectPtr cell) { Add(std::move(cell)); }
 
 private:
     void Finish() noexcept;

@@ -27,7 +27,7 @@ struct Node
 
 void CycleCollector::Finish() noexcept
 {
-    m_notes->cells.Release();
+    m_notes->cells.Release(this);
     if (!m_outer)
     {
         Collect();

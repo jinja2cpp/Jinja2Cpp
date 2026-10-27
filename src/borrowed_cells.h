@@ -22,6 +22,7 @@ inline namespace v2
 
 class BorrowedCell;
 class BorrowedCells;
+class CycleCollector;
 
 #ifdef _MSC_VER
 #define JINJA2CPP_CELL_UNLIKELY(cond) (cond)
@@ -318,12 +319,13 @@ public:
     BorrowedCells& operator=(BorrowedCells&&) = delete;
 
     // Freezes the cells: a global's adapters detach, the others keep the frozen cell they read, and
-    // the registry lets go of the cells, so that a cell no value reads any more goes
-    void Release() noexcept
+    // the registry lets go of the cells, so that a cell no value reads any more goes. `collector`
+    // gets the frozen cells that values still read, so that it frees the cycles through them
+    void Release(CycleCollector* collector = nullptr) noexcept
     {
         if (m_cells)
         {
-            Finish();
+            Finish(collector);
         }
     }
 
@@ -344,7 +346,7 @@ private:
     // The cells by the identity of the host's data (IListAccessor::GetIdentity)
     using Table = robin_hood::unordered_flat_map<const void*, IntrusivePtr<const BorrowedCell>>;
 
-    void Finish() noexcept;
+    void Finish(CycleCollector* collector) noexcept;
 
     std::unique_ptr<Table> m_cells;
     // The template module's call that runs, or 0 for a render's registry
