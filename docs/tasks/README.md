@@ -400,5 +400,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0328](0328-bench-meta-block.md) | A benchmark for `{% meta %}` and the internal JSON reader | perf | low | open |
 | [0329](0329-reflect-counts-in-ci.md) | Count `--data reflect` in the PR gate and the trend | perf | medium | open |
 | [0330](0330-gate-reports-newly-outlined-frames.md) | The PR gate names hot functions that GCC stopped inlining | perf | low | open |
-| [0333](0333-locale-free-float-parsing.md) | Float parsing follows the C locale | robustness | high | open |
+| [0333](0333-locale-free-float-parsing.md) | Float parsing follows the C locale | robustness | high | done |
 | [0334](0334-makecallable-per-argument-dispatch.md) | MakeCallable visits every combination of argument types | api | high | done |
