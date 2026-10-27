@@ -309,9 +309,10 @@ Value InvokeUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&&..
     // One visit over every combination of argument types: 17 alternatives make 17^N instantiations, so three string
     // parameters already took 41 s and 2.4 MB of code to compile (docs/tasks/0334)
     static_assert(sizeof...(ArgDescr) <= 2,
-                  "MakeCallable: the parameter types of this callable cannot be read (a generic lambda, an overload set or a "
-                  "non-const operator()), so its arguments are matched jointly, which takes minutes to compile from three "
-                  "arguments; describe the parameters with ArgInfoT<T> or give the callable concrete parameter types");
+                  "MakeCallable: the parameter types of this callable cannot be read (a generic lambda or an overload set), "
+                  "or there are more descriptors than parameters, so its arguments are matched jointly, which takes minutes "
+                  "to compile from three arguments; describe the parameters with ArgInfoT<T> or give the callable concrete "
+                  "parameter types");
     auto invoker = UCInvoker<Fn>(fn, params);
     return std::visit(ParamUnwrapper<UCInvoker<Fn>, true>(&invoker), GetParamValue(params, ad).GetData()...);
 }
@@ -523,10 +524,16 @@ auto TypedUnwrapParam(const Value& value)
     }
 }
 
+template<typename... P>
+struct ParamList
+{
+    static constexpr std::size_t Size = sizeof...(P);
+};
+
 // Each argument is converted to its parameter type `T` on its own, so a callable with N parameters costs N visits
 // of the argument variant to compile, not one visit of every combination (docs/tasks/0334)
 template<typename... T, typename Fn, typename... ArgDescr>
-Value InvokeWithParamTypes(const Fn& fn, const UserCallableParams& params, const ArgDescr&... ad)
+Value InvokeWithParamTypes(ParamList<T...> /*types*/, const Fn& fn, const UserCallableParams& params, const ArgDescr&... ad)
 {
     auto typedParams = std::make_tuple(TypedUnwrapParam<T>(GetParamValue(params, ad))...);
     return std::apply(
@@ -546,7 +553,7 @@ template<typename Fn, typename... ArgDescr>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): fn is called through a reference, ad only read
 Value InvokeTypedUserCallable(Fn&& fn, const UserCallableParams& params, ArgDescr&&... ad)
 {
-    return InvokeWithParamTypes<typename std::decay_t<ArgDescr>::type...>(fn, params, ad...);
+    return InvokeWithParamTypes(ParamList<typename std::decay_t<ArgDescr>::type...>(), fn, params, ad...);
 }
 
 // The type an argument is converted to for a parameter of type `P`: a `T&&` parameter takes a converted `T`
@@ -556,12 +563,6 @@ struct DeducedParam
     static_assert(!std::is_lvalue_reference_v<P> || std::is_const_v<std::remove_reference_t<P>>,
                   "MakeCallable: a parameter cannot be a non-const lvalue reference, take it by value or by const reference");
     using type = std::conditional_t<std::is_rvalue_reference_v<P>, std::remove_cv_t<std::remove_reference_t<P>>, P>;
-};
-
-template<typename... P>
-struct ParamList
-{
-    static constexpr std::size_t Size = sizeof...(P);
 };
 
 // The parameter types of a callable whose signature can be read: a function, a function pointer, or a class with a
@@ -600,6 +601,28 @@ struct CallableSignature<Fn, std::enable_if_t<std::is_class_v<Fn>, std::void_t<d
 {
 };
 
+// A class whose only `operator()` is non-const (a mutable lambda) cannot be called through the const copy MakeCallable keeps
+template<typename Fn, typename = void>
+struct HasNonConstCallOperator : std::false_type
+{
+};
+
+template<typename R, typename C, typename... Args>
+struct HasNonConstCallOperator<R (C::*)(Args...), void> : std::true_type
+{
+};
+
+template<typename R, typename C, typename... Args>
+struct HasNonConstCallOperator<R (C::*)(Args...) noexcept, void> : std::true_type
+{
+};
+
+template<typename Fn>
+struct HasNonConstCallOperator<Fn, std::enable_if_t<std::is_class_v<Fn>, std::void_t<decltype(&Fn::operator())>>>
+    : HasNonConstCallOperator<decltype(&Fn::operator())>
+{
+};
+
 // Arguments are dispatched one by one when the descriptors name every parameter of a readable signature
 template<typename Fn, std::size_t argsCount, typename Signature = CallableSignature<Fn>, typename = void>
 struct HasDeducibleParams : std::false_type
@@ -615,7 +638,7 @@ struct HasDeducibleParams<Fn, argsCount, Signature, std::enable_if_t<Signature::
 template<typename Fn, typename... P, typename... ArgDescr>
 Value InvokeDeducedUserCallable(const Fn& fn, ParamList<P...> /*params*/, const UserCallableParams& params, const ArgDescr&... ad)
 {
-    return InvokeWithParamTypes<typename DeducedParam<P>::type...>(fn, params, ad...);
+    return InvokeWithParamTypes(ParamList<typename DeducedParam<P>::type...>(), fn, params, ad...);
 }
 
 template<typename... ArgDescr>
@@ -673,6 +696,8 @@ template<typename Fn, typename... ArgDescr>
 auto MakeCallable(Fn&& f, ArgDescr&&... ad) -> std::enable_if_t<!detail::ArgDescrHasType<ArgDescr...>::value, UserCallable>
 {
     using Signature = detail::CallableSignature<std::decay_t<Fn>>;
+    static_assert(!detail::HasNonConstCallOperator<std::decay_t<Fn>>::value,
+                  "MakeCallable: the callable is kept as a const copy, so its operator() must be const (not a mutable lambda)");
     UserCallable::Function callable = [=, fn = std::forward<Fn>(f)](const UserCallableParams& params) {
         if constexpr (detail::HasDeducibleParams<std::decay_t<Fn>, sizeof...(ArgDescr)>::value)
         {
