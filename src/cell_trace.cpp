@@ -30,6 +30,10 @@ public:
         if (path && *path)
         {
             m_file = std::fopen(path, "w"); // NOLINT(cppcoreguidelines-owning-memory)
+            if (!m_file)
+            {
+                Fail("cannot open");
+            }
         }
     }
 
@@ -60,7 +64,7 @@ public:
             std::fprintf(m_file, R"({"ev":"lost","t":%d,"cur":0,"kind":"%s"})"
                                  "\n",
                          Thread(), kind);
-            std::fflush(m_file);
+            Flush();
             return;
         }
         std::fprintf(m_file, R"({"ev":"%s","t":%d,"cur":%lld)", kind, Thread(), static_cast<long long>(Lookup(m_regs, CycleCollector::CurrentCells())));
@@ -81,10 +85,25 @@ public:
             std::fprintf(m_file, ",\"%s\":%lld", field.name, static_cast<long long>(values[at++]));
         }
         std::fputs("}\n", m_file);
-        std::fflush(m_file);
+        Flush();
     }
 
 private:
+    // A write that failed (a full disk, a file-size limit) lost events, the "lost" event among
+    // them: the log cannot say so, so the process does, by failing as the test that ran it
+    void Flush() noexcept
+    {
+        if (std::fflush(m_file) != 0 || std::ferror(m_file))
+        {
+            Fail("cannot write");
+        }
+    }
+    [[noreturn]] static void Fail(const char* what) noexcept
+    {
+        std::fprintf(stderr, "JINJA2CPP_CELL_TRACE: %s the trace file\n", what);
+        std::abort();
+    }
+
     using Numbers = std::unordered_map<const void*, int64_t>;
 
     // 0 for null; -1 for a cell the log does not know, which no step of the spec takes

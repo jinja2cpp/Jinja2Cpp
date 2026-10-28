@@ -211,6 +211,11 @@ python3 tla/check.py --trace --tests build-trace/jinja2cpp_tests --filter '*' --
 python3 tla/check.py --trace --logs some.ndjson                              # a log written elsewhere
 ```
 
+A log is whole only when the process that wrote it exited normally: the logger aborts the
+process when it cannot open or write the file, since the file itself cannot record that events
+were lost. `--tests` fails a test that did not exit 0; with `--logs`, check the writer's exit
+status yourself.
+
 A trace fails in one of two ways. **No step takes an event** (TLC's deadlock): the code did
 something the spec has no transition for. **An invariant fails**: the step exists, but the
 code's decision or state differs from the rules, or breaks a property of the model as far as a
