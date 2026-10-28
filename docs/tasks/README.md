@@ -114,7 +114,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0036](0036-non-string-mapping-keys.md) | Mapping keys that are not strings | parity | low | done |
 | [0037](0037-sequence-protocol-follow-ups.md) | Sequence protocol follow-ups from 0016 | parity | medium | done |
 | [0038](0038-lexical-scoping-for-macros.md) | Lexical scoping for macros | parity | medium | done |
-| [0039](0039-float-values-print-widened.md) | C++ `float` values print with their widened digits | parity | medium | open |
+| [0039](0039-float-values-print-widened.md) | C++ `float` values print with their widened digits | parity | medium | done |
 | [0040](0040-parity-shared-files-serialise-merges.md) | Parity PRs collide in shared generated files | process | high | done |
 | [0041](0041-string-literal-escapes.md) | String literal escape sequences | parity | low | done |
 | [0042](0042-loop-cycle-magic-number.md) | Global function follow-ups: globals are maps | parity | low | done |
