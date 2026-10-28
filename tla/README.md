@@ -56,6 +56,12 @@ not change in a later one. That rule is D8's copy on write.
 | `ListSort` with its `Restore` guard across key calls | `SortStart`, `SortEnd` |
 | reference counts and destructors | `GC`: reachability from the roots, run right after the step that dropped a reference |
 | a module namespace holding an argument | `ns` |
+| Proposed: the per-call export context, pinned in `~ModuleCallCollector` (0335, 0332) | an export of kind `live`; `PinEx` in `EndModCall` |
+| Proposed: a link to a module's cell holds a reference (0332) | `OwningLink` |
+| Proposed: a render's live cell holds its linked adapters until `Finish` (0340) | `Succ` of a cell, `FixPinOnAttach` |
+| `l.pop()` of a nested list | op `drop` |
+| a generic container (`MakeGenericList`) as a module call's argument, a copy the host keeps (0336) | `ad[a].generic`, `hkeep`, `HostLetsGo` |
+| `NextEpoch`, `BeginCall` wrapping past 32 bits (0342, 0341) | `NextEp`, `NextCall` with `MaxEpoch`, `MaxCallId` |
 
 What the model abstracts:
 - **Values.** A list's content is the number of appends. A copy shares its item adapters, as
@@ -65,7 +71,7 @@ What the model abstracts:
   data there lives, with a new incarnation, so a stale registry key can be detected.
 - **Concurrency.** Steps are atomic. A write records its thread and whether that thread held the
   module's lock. The host on another thread may drop or read what it kept only after the call
-  returned. `NoCrossThreadWrite` is an ownership rule, stricter than freedom from data races:
+  returned; with `HostHandoff` (0340) it may drop it on another thread at any time. `NoCrossThreadWrite` is an ownership rule, stricter than freedom from data races:
   an object written by two threads is a violation even when the writes are ordered, unless both
   held the module's lock.
 - **Host data.** It is constant. No step writes it, as in the code, so the first invariant holds
@@ -84,7 +90,8 @@ What the model abstracts:
 | + | An alias never reads the host's data while its render has a cell of it | `AliasesAgree` |
 | + | No moved-from item is stored | `NoUndefItems` |
 | + | `live` equals the number of listed cells | `LiveCount` |
-| open | A module call's export keeps that call's final state (0335) | `ExportKeepsCallState` |
+| 7 | A module call's export keeps that call's final state (0335) | `ExportKeepsCallState` |
+| 8 | No cell is dropped while its data can be lent to a later call (0336) | `NoLostWrites` |
 
 ## Results
 
@@ -172,6 +179,49 @@ runs use it, and `f1-nested-export` keeps the code before the fix. The tests are
   export. 0332 is a module's live cell read through a kept template list or a nested item.
   Their runs are expected to fail and are the acceptance checks for those tasks.
 
+## Designs of the open tasks (0338 step A)
+
+The protocol is designed here first and in C++ after (task 0338, "Proposed approach" 1). Each
+design is a `Fix` constant, on by default, with mutant runs that take it out or weaken it. The task
+files carry the proposals for decision: 0335, 0332, 0336; 0340 and 0341 are answered here.
+
+**Pin a module call's exports at its end (`FixCallPin`: 0335, 0332, 0337, 0341).** One mark per
+cell cannot say which call's value shares the items, and that gave 0335 (a later call's export
+misses its own later write), F1/0337 (a nested call's export changes after it ended) and 0341 (a
+wrapped call id equals a stale mark). The resolution moves the decision from the export to the
+call's end, where it is known what the call's value must show. While a call runs, its exports read
+the module's cells (`live`): the host on the call's thread sees the call's writes, including those
+of nested calls. `EndModCall` pins them: each export records the storage of every module cell it
+reaches, found by identity in the registry, and marks those cells shared, so the next write copies.
+A pinned export never reads an adapter's link, which the module thread may still change. No write
+compares call ids any more, so 0337's sentinel is subsumed and the id may wrap
+(`call-id-wrap` passes with `MaxCallId = 2`). The pin covers `keep([l])` and nested items, the
+two shapes of 0332, which are now in the contract (`module-0332`).
+
+**A link to a module's cell owns the cell (`FixModuleLinksOwn`: 0332).** A copy of a list shares its
+item adapters, so the host's value can hold the very adapter a module cell links. If the host drops
+the last reference on its thread, `Unlink` edits the live cell's `m_links` there. With an owning
+link, as a frozen cell's links already are, the release is a reference count. The model reaches
+the case only through a later call's adapter (the first adapter is the cell's `m_source`, which the
+cell keeps alive): `module-links-unowned`.
+
+**A render's live cell holds its linked adapters until `Finish` (`FixPinOnAttach`: 0340, option a).**
+A render's frames go before `Finish`, so a kept container can be the last holder of an attached
+adapter in that window, and a host thread that drops it unlinks from the live cell
+(`no-pin-on-attach`, with `HostHandoff`). The registry holding the adapters closes the window. It
+is option (a) of 0340; option (b), an export of a detached copy, would lose the frozen cell that a
+kept value reads after the render (0331 A2) unless renders also pinned by identity.
+
+**Drop a generic container's cell only when the host keeps no copy (`FixGenericOwner`: 0336).**
+`no-generic-owner` keeps a cell per call (`RegistryBounded`); a drop without the host-copy test
+loses the writes a later call with the same container must see (`generic-drop-without-host-test`,
+`NoLostWrites`).
+
+**Still open.** 0342, the epoch wrap, is a measurement decision (stored epoch width); the model now
+reproduces it (`open-0342-epoch-wrap`, `MaxEpoch = 2`). 0339 (a relaxed `use_count` in the
+uniqueness test) is memory order, outside a sequentially consistent model; the designs above keep
+the uniqueness test, so they inherit its fix.
+
 ## What the results claim
 
 Bounded evidence, not a proof. Each pass run covers every behaviour up to its level within its
@@ -183,11 +233,12 @@ reuse, and an inductive or cutoff argument) is task 0338.
 ## Not modelled
 
 - Dicts. Lists and dicts share the cell code, and the model has lists only.
-- `QuietEpoch`/`CellStep`, epoch wrap-around and the memory order of the atomics. The epoch is
-  an unbounded counter read atomically.
+- `QuietEpoch`/`CellStep` and the memory order of the atomics. The epoch and the call id wrap
+  only in the runs that bound them (`MaxEpoch`, `MaxCallId`).
 - The cycle collector's traversal of frozen cells (`Traverse`, `NoteFrozen`). There are no
   cycles: an item is always another identity.
-- JSON identities (P5), generic containers made per call (0336), callables' results.
+- JSON identities (P5) and callables' results. Generic containers (0336) are modelled as module
+  call arguments only.
 - A module destroyed during its own call, and the freeze at module death.
 - Python parity of values. The model checks lifetimes and isolation, not output.
 

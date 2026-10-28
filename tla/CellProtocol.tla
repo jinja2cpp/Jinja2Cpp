@@ -40,12 +40,28 @@ CONSTANTS
     FixReadOnlyExport,    \* A1: an export reads the link (Current), never Find/Link
     FixFreeze,            \* A2 (4588321 then the freeze): Finish keeps the non-global links frozen
     FixSourceKeepsId,     \* m_source keeps the data, and so its identity, alive while listed
-    DropRule,             \* 459d8f7 DropUnheld: "none", "full", "nolinks", "nosource"
+    DropRule,             \* 459d8f7 DropUnheld: "none", "full", "nolinks", "nosource", and
+                          \* "nohostcopy" (0336: no test that the host lets go of a generic container)
     FixNestedExport,      \* 0337 (finding F1 of this model): an export in a call other than the
                           \* one that marked the cell marks it shared, so every later write copies
-    \* Shapes outside the agreed contract (open tasks), off by default
-    AllowModuleKeepList,  \* keep([x]) inside a module call (0332)
-    AllowModuleNested     \* a write to a nested item inside a module call (0332)
+    \* Proposed designs of the open tasks (0338 step A): the model first, then the C++
+    FixCallPin,           \* 0335, 0332 (and 0337): a module call's exports read the module's cells
+                          \* while the call runs, and its end pins them, by identity, to the
+                          \* storages the cells then have; a pin marks the cell shared
+    FixPinMarks,          \* the pin marks the cells it pins shared (without: writes in place)
+    FixPinNested,         \* the pin covers the cells of nested items too (without: the top only)
+    FixModuleLinksOwn,    \* 0332: an adapter's link to a module's cell is an owning reference,
+                          \* as a link to a frozen cell is, so its release writes no list of links
+    FixGenericOwner,      \* 0336: a generic container's adapter tells the cell its owner
+    FixPinOnAttach,       \* 0340: a render's live cell holds the adapters linked to it until Finish,
+                          \* so a host thread's drop is never the last reference to one
+    HostHandoff,          \* the host may hand what it kept to another thread while the call runs
+    MaxCallId, MaxEpoch,  \* the call id and the epoch wrap past these (0341, 0342)
+    \* Shapes: inside a module call, keep([x]) (0332) and writes to a nested item (0332). Outside
+    \* the contract before FixCallPin; a scope choice after it
+    AllowModuleKeepList,
+    AllowModuleNested,
+    GenericArgs           \* a module call may take a generic container (0336)
 
 Hosts == {"P", "C", "G"}
 Keys == Hosts \cup OwnedAddrs
@@ -74,6 +90,9 @@ VARIABLES
     gsnap,     \* per thread: the adapter of G in the thread's globals snapshot
     gatt,      \* per thread: RenderWorkspace::GlobalAttached
     ns,        \* an adapter a module stored in its namespace
+    hkeep,     \* per owned address: the host keeps a copy of the generic container there (0336)
+    lag,       \* owned addresses whose data the host let go of since the last DropUnheld: their
+               \* cells may stay until the next call's end (RegistryBounded)
     lock,      \* the module's recursive mutex: the thread holding it, or "none"
     inc,       \* per owned address: the incarnation of the data there
     fails,     \* allocation failures injected so far
@@ -83,20 +102,27 @@ VARIABLES
     flag       \* violations seen inside a step
 
 vars == <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt,
-          ns, lock, inc, fails, dirty, dirtyBy, pendDrop, wr, flag>>
+          ns, hkeep, lag, lock, inc, fails, dirty, dirtyBy, pendDrop, wr, flag>>
 
-NoAd == [idn |-> "none", inc |-> 0, held |-> FALSE, cell |-> 0, seen |-> 0, alive |-> FALSE]
+NoAd == [idn |-> "none", inc |-> 0, held |-> FALSE, generic |-> FALSE, cell |-> 0, seen |-> 0,
+         alive |-> FALSE]
 NoCell == [idn |-> "none", inc |-> 0, reg |-> ModReg, stor |-> 0, retired |-> 0, source |-> 0,
            owned |-> FALSE, frozen |-> FALSE, exp |-> 0, links |-> {}, inTable |-> FALSE,
            alive |-> FALSE]
 NoGen == [val |-> 0, child |-> 0, alive |-> FALSE, acc |-> FALSE]
-NoEx == [kind |-> "none", gen |-> 0, ad |-> 0, idn |-> "none", thr |-> "none", depth |-> 0,
-         reg |-> ModReg, done |-> FALSE, snap |-> <<>>, alive |-> FALSE]
+\* kind: "gen" a view of a storage's items, "live" a module call's export that reads the head of
+\* cell (FixCallPin), "view" a template list holding the adapter ad, "raw" the adapter itself.
+\* pin: the call ended and the export reads only the storages pg and cg (0 for the host's data)
+NoEx == [kind |-> "none", gen |-> 0, ad |-> 0, cell |-> 0, idn |-> "none", thr |-> "none",
+         depth |-> 0, reg |-> ModReg, done |-> FALSE, snap |-> <<>>, pin |-> FALSE, pg |-> 0,
+         cg |-> 0, alive |-> FALSE]
 EmptyReg == [tbl |-> [k \in Keys |-> 0], call |-> 0, last |-> 0]
-NoFlags == [uaf |-> FALSE, foreign |-> FALSE, stale |-> FALSE, undef |-> FALSE, late |-> FALSE]
+NoFlags == [uaf |-> FALSE, foreign |-> FALSE, stale |-> FALSE, undef |-> FALSE, late |-> FALSE,
+            lost |-> FALSE]
 Objs == ({"a"} \X AdIds) \cup ({"c"} \X CellIds) \cup ({"g"} \X GenIds)
 
-NewAd(i, n, h) == [idn |-> i, inc |-> n, held |-> h, cell |-> 0, seen |-> 0, alive |-> TRUE]
+NewAd(i, n, h) == [idn |-> i, inc |-> n, held |-> h, generic |-> FALSE, cell |-> 0, seen |-> 0,
+                   alive |-> TRUE]
 
 Init ==
     /\ epoch = 0 /\ live = 0
@@ -108,6 +134,7 @@ Init ==
     /\ ex = [e \in ExIds |-> NoEx] /\ nEx = 0
     /\ gsnap = [t \in Threads |-> 0] /\ gatt = [t \in Threads |-> FALSE]
     /\ ns = 0 /\ lock = "none"
+    /\ hkeep = [o \in OwnedAddrs |-> FALSE] /\ lag = {}
     /\ inc = [o \in OwnedAddrs |-> 0]
     /\ fails = 0
     /\ dirty = FALSE /\ dirtyBy = <<"none", FALSE>> /\ pendDrop = FALSE
@@ -128,6 +155,9 @@ InModule(t) == \E i \in 1..Depth(t) : fr[t][i].kind = "mod"
 \* action rather than a CONSTRAINT: TLC then does not compute the last level's successors
 InBound == TLCGet("level") < MaxLevel
 Idle == ~dirty /\ ~pendDrop /\ InBound
+\* CellCounters::NextEpoch and BeginCall skip 0: past the bound they start again at 1
+NextEp(e) == IF e >= MaxEpoch THEN 1 ELSE e + 1
+NextCall(k) == IF k >= MaxCallId THEN 1 ELSE k + 1
 Grow(v) == IF v = EMPTY THEN 1 ELSE IF v = UNDEF THEN UNDEF ELSE v + 1
 CanGrow(v) == v < MaxVal
 
@@ -146,7 +176,16 @@ ChildVis(a) == IF a = 0 THEN 0
 VisG(g) == <<st[g].val, ChildVis(st[g].child)>>
 \* A global's adapter always exports the global's own data (0331 A1)
 VisAd(a) == IF ad[a].cell # 0 /\ ~ad[a].held THEN VisG(cl[ad[a].cell].stor) ELSE <<0, 0>>
-VisEx(e) == IF ex[e].kind = "gen" THEN VisG(ex[e].gen) ELSE VisAd(ex[e].ad)
+\* A pinned export reads the storages its pin recorded, never an adapter's link: pg for the data,
+\* cg for its nested item (-1: the nested item through its adapter's link, FixPinNested off)
+StVal(g) == IF g = 0 THEN 0 ELSE st[g].val
+PinVis(e) == IF ex[e].cg = -1
+             THEN IF ex[e].pg = 0 THEN <<0, 0>> ELSE VisG(ex[e].pg)
+             ELSE <<StVal(ex[e].pg), StVal(ex[e].cg)>>
+VisEx(e) == CASE ex[e].pin -> PinVis(e)
+              [] ex[e].kind = "gen" -> VisG(ex[e].gen)
+              [] ex[e].kind = "live" -> VisG(cl[ex[e].cell].stor)
+              [] OTHER -> VisAd(ex[e].ad)
 
 \* The exports of the frame at depth d of t: the host's snapshot is what it sees when the call
 \* ends (Snap), before Finish runs; the call has returned to the host, which may then pass what
@@ -160,11 +199,17 @@ Snap(t, d, done) ==
 -----------------------------------------------------------------------------
 (* Reachability: the reference counts *)
 
+\* A link holds its cell: a frozen one, and a module's with FixModuleLinksOwn. Its release is then
+\* a reference count, not a write of the cell's list of links
+OwningLink(c) == cl[c].frozen \/ (FixModuleLinksOwn /\ cl[c].reg = ModReg)
+
 Succ(n) ==
-    CASE n[1] = "a" -> IF ad[n[2]].cell # 0 /\ cl[ad[n[2]].cell].frozen
+    CASE n[1] = "a" -> IF ad[n[2]].cell # 0 /\ OwningLink(ad[n[2]].cell)
                        THEN {<<"c", ad[n[2]].cell>>} ELSE {}
       \* A cell holds the accessors of its storages; an accessor holds its item block
       [] n[1] = "c" -> {<<"x", cl[n[2]].stor>>}
+                       \cup (IF FixPinOnAttach /\ ~cl[n[2]].frozen /\ cl[n[2]].reg # ModReg
+                             THEN {<<"a", a>> : a \in cl[n[2]].links} ELSE {})
                        \cup (IF cl[n[2]].retired # 0 THEN {<<"x", cl[n[2]].retired>>} ELSE {})
                        \cup (IF FixSourceKeepsId /\ cl[n[2]].source # 0
                              THEN {<<"a", cl[n[2]].source>>} ELSE {})
@@ -176,13 +221,18 @@ Close(S) == LET T == S \cup UNION {Succ(n) : n \in S} IN IF T = S THEN S ELSE Cl
 
 Ads0 == UNION {UNION {fr[t][i].ads \cup (IF fr[t][i].bkind = "none" THEN {} ELSE {fr[t][i].bad}) :
                       i \in 1..Depth(t)} : t \in Threads}
+LiveEx == {e \in ExIds : ex[e].alive}
 RootsExcept(x) ==
     ({<<"a", a>> : a \in Ads0 \cup {gsnap[t] : t \in Threads} \cup {ns}
-                     \cup {ex[e].ad : e \in {e \in ExIds : ex[e].alive /\ ex[e].kind # "gen"}}}
+                     \cup {ex[e].ad : e \in {e \in LiveEx : ex[e].kind \in {"view", "raw"}}}}
        \ {<<"a", 0>>})
     \* CreateGenericList captures a copy of the storage's accessor: it shares the item block,
     \* not the accessor object in m_storage
-    \cup {<<"g", ex[e].gen>> : e \in {e \in ExIds : ex[e].alive /\ ex[e].kind = "gen"}}
+    \cup {<<"g", ex[e].gen>> : e \in {e \in LiveEx : ex[e].kind = "gen" /\ ~ex[e].pin}}
+    \* A running call's export holds the cell; a pinned one the storages it recorded
+    \cup {<<"c", ex[e].cell>> : e \in {e \in LiveEx : ex[e].kind = "live" /\ ~ex[e].pin}}
+    \cup ({<<"g", g>> : g \in UNION {{ex[e].pg, ex[e].cg} : e \in {e \in LiveEx : ex[e].pin}}}
+           \ {<<"g", 0>>, <<"g", -1>>})
     \cup {<<"c", c>> : c \in {c \in CellIds : cl[c].alive /\ cl[c].inTable /\ c # x}}
 Reach == Close(RootsExcept(0))
 
@@ -190,7 +240,7 @@ GC ==
     /\ dirty /\ InBound
     /\ LET R == Reach
            deadA == {a \in AdIds : ad[a].alive /\ <<"a", a>> \notin R}
-           unlinked == {c \in CellIds : cl[c].alive /\ ~cl[c].frozen /\ cl[c].links \cap deadA # {}}
+           unlinked == {c \in CellIds : cl[c].alive /\ ~OwningLink(c) /\ cl[c].links \cap deadA # {}}
            cl2 == [c \in CellIds |-> [cl[c] EXCEPT !.alive = @ /\ <<"c", c>> \in R,
                                                    !.links = @ \ deadA]]
            ad2 == [a \in AdIds |-> [ad[a] EXCEPT !.alive = @ /\ <<"a", a>> \in R]]
@@ -204,7 +254,7 @@ GC ==
           /\ flag' = [flag EXCEPT !.uaf = @ \/ \E a \in AdIds :
                          ad2[a].alive /\ ad2[a].cell # 0 /\ ~cl2[ad2[a].cell].alive]
     /\ dirty' = FALSE
-    /\ UNCHANGED <<epoch, live, nAd, nCell, nGen, rg, fr, ex, nEx, gsnap, gatt, ns, lock, inc,
+    /\ UNCHANGED <<epoch, live, nAd, nCell, nGen, rg, fr, ex, nEx, gsnap, gatt, ns, hkeep, lag, lock, inc,
                    fails, dirtyBy, pendDrop>>
 
 -----------------------------------------------------------------------------
@@ -240,9 +290,12 @@ ApplyGetGatt(t, a, R) == IF R.link # 0 /\ ad[a].held /\ FixNestedGlobal
 (* BorrowedCell::MutableItems and Unshare, then the write. op: "append", "touch"
    (MakeMutable on the path to a nested item) or "set" (sort writes back v) *)
 
-ExportHolds(g) == \E e \in ExIds : ex[e].alive /\ ex[e].kind = "gen" /\ ex[e].gen = g
+ExportHolds(g) == \E e \in LiveEx : IF ex[e].pin THEN g \in {ex[e].pg, ex[e].cg}
+                                    ELSE ex[e].kind = "gen" /\ ex[e].gen = g
 NeedCopy(c) == cl[c].exp # 0 /\ cl[c].exp # rg[cl[c].reg].call /\ ExportHolds(cl[c].stor)
-NewVal(op, old, v) == CASE op = "append" -> Grow(old) [] op = "touch" -> old [] OTHER -> v
+NewVal(op, old, v) == CASE op = "append" -> Grow(old) [] op \in {"touch", "drop"} -> old [] OTHER -> v
+\* "drop" removes the nested item (l.pop()): the storage lets go of its adapter
+NewChild(op, old) == IF op = "drop" THEN 0 ELSE old
 
 WC(c, f, op, v, CL) ==
     LET cc == CL[c]
@@ -256,13 +309,14 @@ WC(c, f, op, v, CL) ==
               [k |-> "copy", nGen |-> g, gen |-> g,
                cl |-> [CL EXCEPT ![c].stor = g, ![c].retired = cc.stor, ![c].exp = 0],
                st |-> [st EXCEPT ![g] = [val |-> NewVal(op, st[cc.stor].val, v),
-                                         child |-> st[cc.stor].child, alive |-> TRUE,
+                                         child |-> NewChild(op, st[cc.stor].child), alive |-> TRUE,
                                          acc |-> TRUE]]]
          [] OTHER ->
               [k |-> "inplace", nGen |-> nGen, gen |-> cc.stor,
                \* The host let go of what an earlier call was handed
                cl |-> IF cc.exp # 0 /\ cc.exp # rg[cc.reg].call THEN [CL EXCEPT ![c].exp = 0] ELSE CL,
-               st |-> [st EXCEPT ![cc.stor].val = NewVal(op, @, v)]]
+               st |-> [st EXCEPT ![cc.stor].val = NewVal(op, @, v),
+                                 ![cc.stor].child = NewChild(op, @)]]
 
 WCOk(c, f, op) ==
     /\ (NeedCopy(c) /\ ~f) => nGen < MaxGen
@@ -290,51 +344,53 @@ WriteCell(t, a, f2, op, R) ==
                 THEN SetTop(t, [Top(t) EXCEPT !.ads = @ \cup {child}]) ELSE fr
        /\ flag' = [flag EXCEPT !.foreign = @ \/ Foreign(t, a, R.c),
                                !.uaf = @ \/ ~cl[R.c].alive \/ ~st[cl[R.c].stor].acc]
-       /\ dirty' = (Wr.k = "copy") /\ dirtyBy' = W(t)
-       /\ UNCHANGED <<epoch, live, nAd, nCell, rg, ex, nEx, gsnap, ns, lock, inc, pendDrop>>
+       /\ dirty' = (Wr.k = "copy" \/ (op = "drop" /\ Wr.k # "fail")) /\ dirtyBy' = W(t)
+       /\ UNCHANGED <<epoch, live, nAd, nCell, rg, ex, nEx, gsnap, ns, hkeep, lag, lock, inc, pendDrop>>
 
 \* CellLink::Adopt with a new cell: the copy of the data, the write applied
 Adopt(t, a, op) ==
     LET r == CurReg(t)
         c == nCell + 1
         g == nGen + 1
-        hasChild == ad[a].idn = "P"
+        hasChild == ad[a].idn = "P" /\ op # "drop"
         ch == nAd + 1
     IN /\ nCell < MaxCell /\ nGen < MaxGen /\ (hasChild => nAd < MaxAd)
        /\ cl' = [cl EXCEPT ![c] = [idn |-> ad[a].idn, inc |-> ad[a].inc, reg |-> r, stor |-> g,
-                                   retired |-> 0, source |-> a, owned |-> ad[a].idn \in OwnedAddrs,
+                                   retired |-> 0, source |-> a,
+                                   \* 0336: a generic container's owner is hidden in a std::function
+                                   owned |-> ad[a].idn \in OwnedAddrs /\ (~ad[a].generic \/ FixGenericOwner),
                                    frozen |-> FALSE, exp |-> 0, links |-> {a}, inTable |-> TRUE,
                                    alive |-> TRUE]]
        /\ nCell' = c
        /\ st' = [st EXCEPT ![g] = [val |-> NewVal(op, 0, 0), child |-> IF hasChild THEN ch ELSE 0,
                                    alive |-> TRUE, acc |-> TRUE]]
        /\ nGen' = g
-       /\ ad' = [ad EXCEPT ![a].cell = c, ![a].seen = ATT,
-                           ![ch] = IF hasChild THEN NewAd("C", 0, FALSE) ELSE ad[ch]]
+       /\ ad' = IF hasChild THEN [ad EXCEPT ![a].cell = c, ![a].seen = ATT, ![ch] = NewAd("C", 0, FALSE)]
+                ELSE [ad EXCEPT ![a].cell = c, ![a].seen = ATT]
        /\ nAd' = IF hasChild THEN ch ELSE nAd
        /\ rg' = [rg EXCEPT ![r].tbl[ad[a].idn] = c]
        /\ live' = live + 1
-       /\ epoch' = epoch + 1
+       /\ epoch' = NextEp(epoch)
        /\ gatt' = IF ad[a].held /\ FixNestedGlobal THEN [gatt EXCEPT ![t] = TRUE] ELSE gatt
        /\ wr' = Mark(wr, {<<"a", a>>, <<"c", c>>, <<"g", g>>}, t)
        /\ fr' = IF op = "touch" /\ hasChild
                 THEN SetTop(t, [Top(t) EXCEPT !.ads = @ \cup {ch}]) ELSE fr
-       /\ UNCHANGED <<ex, nEx, gsnap, ns, lock, inc, fails, flag, dirty, dirtyBy, pendDrop>>
+       /\ UNCHANGED <<ex, nEx, gsnap, ns, hkeep, lag, lock, inc, fails, flag, dirty, dirtyBy, pendDrop>>
 
 \* The write was refused by an allocation failure in Link: only the epoch the adapter saw changes
 LinkFailed(t, a, R) ==
     /\ ad' = ApplyGetAd(a, R)
     /\ wr' = Mark(wr, GetWrites(a, R), t)
     /\ fails' = fails + 1
-    /\ UNCHANGED <<epoch, live, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt, ns, lock,
+    /\ UNCHANGED <<epoch, live, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt, ns, hkeep, lag, lock,
                    inc, dirty, dirtyBy, pendDrop, flag>>
 
 CanUse(t, a) == Idle /\ Running(t) /\ a \in Top(t).ads /\ ad[a].alive
 
 Write(t, a, op) ==
-    /\ op = "touch" => "touch" \in Actions
+    /\ op \in {"touch", "drop"} => op \in Actions
     /\ CanUse(t, a)
-    /\ op = "touch" => (ad[a].idn = "P" /\ (Top(t).kind = "render" \/ AllowModuleNested))
+    /\ op \in {"touch", "drop"} => (ad[a].idn = "P" /\ (Top(t).kind = "render" \/ AllowModuleNested))
     /\ op = "append" /\ ad[a].idn = "C" => (Top(t).kind = "render" \/ AllowModuleNested)
     /\ \E f1, f2 \in BOOLEAN :
         /\ f1 => (WouldLink(t, a) /\ fails < MaxFail)
@@ -366,15 +422,15 @@ Read(t, a) ==
                      !.uaf = @ \/ (R.c # 0 /\ (~cl[R.c].alive \/ ~st[cl[R.c].stor].acc)),
                      \* An alias that reads the host's data while its render has a cell of it
                      !.stale = @ \/ (R.c = 0 /\ rg[CurReg(t)].tbl[Key(a)] # 0)]
-                /\ UNCHANGED <<epoch, live, nAd, nCell, st, nGen, rg, fr, ex, nEx, gsnap, ns,
+                /\ UNCHANGED <<epoch, live, nAd, nCell, st, nGen, rg, fr, ex, nEx, gsnap, ns, hkeep, lag,
                                lock, inc, fails, dirty, dirtyBy, pendDrop>>
 
 -----------------------------------------------------------------------------
 (* Exports to the host *)
 
 NewEx(t, kind, g, a) ==
-    [kind |-> kind, gen |-> g, ad |-> a, idn |-> ad[a].idn, thr |-> t, depth |-> Depth(t),
-     reg |-> CurReg(t), done |-> FALSE, snap |-> <<>>, alive |-> TRUE]
+    [NoEx EXCEPT !.kind = kind, !.gen = g, !.ad = a, !.cell = ad[a].cell, !.idn = ad[a].idn,
+                 !.thr = t, !.depth = Depth(t), !.reg = CurReg(t), !.alive = TRUE]
 
 \* keep(x): a host callable keeps the argument. With A1 the export reads only Current()
 Export(t, a) ==
@@ -387,16 +443,19 @@ Export(t, a) ==
                 mark == IF cl[c].exp = 0 THEN rg[r].call
                         ELSE IF FixNestedExport /\ cl[c].exp # rg[r].call THEN SHARED
                         ELSE cl[c].exp
-                note == own /\ mark # cl[c].exp
+                \* FixCallPin: the export reads the cell until the call ends, and notes nothing
+                livex == own /\ FixCallPin
+                note == own /\ ~livex /\ mark # cl[c].exp
             IN /\ c # 0 /\ ~ad[a].held  \* otherwise a view of the host's data, which never changes
-               /\ ex' = [ex EXCEPT ![nEx + 1] = NewEx(t, "gen", cl[c].stor, a)]
+               /\ ex' = [ex EXCEPT ![nEx + 1] = IF livex THEN NewEx(t, "live", 0, a)
+                                                ELSE NewEx(t, "gen", cl[c].stor, a)]
                \* BorrowedCell::NoteExport
                /\ cl' = IF note THEN [cl EXCEPT ![c].exp = mark] ELSE cl
                /\ wr' = IF note THEN Mark(wr, {<<"c", c>>}, t) ELSE wr
        ELSE /\ ex' = [ex EXCEPT ![nEx + 1] = NewEx(t, "raw", 0, a)]
             /\ UNCHANGED <<cl, wr>>
     /\ nEx' = nEx + 1
-    /\ UNCHANGED <<epoch, live, ad, nAd, nCell, st, nGen, rg, fr, gsnap, gatt, ns, lock, inc,
+    /\ UNCHANGED <<epoch, live, ad, nAd, nCell, st, nGen, rg, fr, gsnap, gatt, ns, hkeep, lag, lock, inc,
                    fails, dirty, dirtyBy, pendDrop, flag>>
 
 \* keep([x]): the host keeps a template list holding the adapter; it reads it with Current()
@@ -406,17 +465,18 @@ KeepList(t, a) ==
     /\ Top(t).kind = "render" \/ AllowModuleKeepList
     /\ ex' = [ex EXCEPT ![nEx + 1] = NewEx(t, "view", 0, a)]
     /\ nEx' = nEx + 1
-    /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, gsnap, gatt, ns, lock, inc,
+    /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, gsnap, gatt, ns, hkeep, lag, lock, inc,
                    fails, dirty, dirtyBy, pendDrop, wr, flag>>
 
 \* The host lets go of what it kept: on its own thread at any time, on another after the call
 Release(t, e) ==
     /\ "release" \in Actions
     /\ Idle /\ ex[e].alive
-    /\ ex[e].thr = t \/ ex[e].done
+    /\ ex[e].thr = t \/ ex[e].done \/ HostHandoff
     /\ ex' = [ex EXCEPT ![e].alive = FALSE]
+    /\ lag' = lag \cup ({ex[e].idn} \cap OwnedAddrs)
     /\ dirty' = TRUE /\ dirtyBy' = W(t)
-    /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, nEx, gsnap, gatt, ns, lock,
+    /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, nEx, gsnap, gatt, ns, hkeep, lock,
                    inc, fails, pendDrop, wr, flag>>
 
 -----------------------------------------------------------------------------
@@ -432,7 +492,7 @@ EnumStart(t, a) ==
        /\ ad' = ApplyGetAd(a, R) /\ cl' = ApplyGetCl(a, R)
        /\ wr' = Mark(wr, GetWrites(a, R), t)
        /\ fr' = SetTop(t, [Top(t) EXCEPT !.bkind = "enum", !.bad = a, !.bgen = cl[R.c].stor])
-    /\ UNCHANGED <<epoch, live, nAd, nCell, st, nGen, rg, ex, nEx, gsnap, gatt, ns, lock,
+    /\ UNCHANGED <<epoch, live, nAd, nCell, st, nGen, rg, ex, nEx, gsnap, gatt, ns, hkeep, lag, lock,
                    inc, fails, dirty, dirtyBy, pendDrop, flag>>
 
 \* The next step of the loop, after the body's callbacks returned
@@ -445,7 +505,7 @@ EnumStep(t) ==
        \* a raw pointer to it: an export of the items does not keep that accessor alive
        IN flag' = [flag EXCEPT !.uaf = @ \/ ~st[g].acc \/ (FixEnumRefetch /\ ~cl[ad[a].cell].alive)]
     /\ fr' = SetTop(t, [Top(t) EXCEPT !.bkind = "none", !.bad = 0, !.bgen = 0])
-    /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, ex, nEx, gsnap, gatt, ns, lock,
+    /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, ex, nEx, gsnap, gatt, ns, hkeep, lag, lock,
                    inc, fails, dirty, dirtyBy, pendDrop, wr>>
 
 \* sort(key=...): MutableItems, move the items out, then the key calls run (nested frames)
@@ -462,7 +522,7 @@ SortStart(t, a) ==
           /\ fr' = SetTop(t, [Top(t) EXCEPT !.bkind = "sort", !.bad = a, !.bgen = cl[c].stor,
                                             !.bvals = st[cl[c].stor].val])
           /\ wr' = Mark(wr, GetWrites(a, R) \cup WCWrites(c, Wr), t)
-    /\ UNCHANGED <<epoch, live, nAd, nCell, nGen, rg, ex, nEx, gsnap, gatt, ns, lock, inc,
+    /\ UNCHANGED <<epoch, live, nAd, nCell, nGen, rg, ex, nEx, gsnap, gatt, ns, hkeep, lag, lock, inc,
                    fails, dirty, dirtyBy, pendDrop, flag>>
 
 \* The key calls returned: write the sorted items back
@@ -495,7 +555,7 @@ SortEnd(t) ==
                /\ flag' = [flag EXCEPT !.uaf = @ \/ ~st[g].alive]
                /\ fr' = fr2
                /\ UNCHANGED <<cl, nGen, fails, dirty, dirtyBy>>
-    /\ UNCHANGED <<epoch, live, ad, nAd, nCell, rg, ex, nEx, gsnap, gatt, ns, lock, inc,
+    /\ UNCHANGED <<epoch, live, ad, nAd, nCell, rg, ex, nEx, gsnap, gatt, ns, hkeep, lag, lock, inc,
                    pendDrop>>
 
 -----------------------------------------------------------------------------
@@ -535,7 +595,7 @@ StartRender(t) ==
                                  outer |-> 0, call |-> 0, ads |-> {a, b, gs} \cup raws,
                                  phase |-> "run"] @@ NoBorrow)]
                    /\ UNCHANGED fails
-    /\ UNCHANGED <<epoch, live, cl, nCell, st, nGen, ex, nEx, ns, lock, inc, dirty, dirtyBy,
+    /\ UNCHANGED <<epoch, live, cl, nCell, st, nGen, ex, nEx, ns, hkeep, lag, lock, inc, dirty, dirtyBy,
                    pendDrop, wr, flag>>
 
 RegCells(r) == {c \in CellIds : cl[c].alive /\ cl[c].inTable /\ cl[c].reg = r}
@@ -549,7 +609,7 @@ FinishSources(t) ==
     /\ ex' = Snap(t, Depth(t), FALSE)
     /\ fr' = SetTop(t, [Top(t) EXCEPT !.phase = "fin", !.ads = {}])
     /\ dirty' = TRUE /\ dirtyBy' = W(t)
-    /\ UNCHANGED <<epoch, live, ad, nAd, nCell, st, nGen, rg, nEx, gsnap, gatt, ns, lock, inc,
+    /\ UNCHANGED <<epoch, live, ad, nAd, nCell, st, nGen, rg, nEx, gsnap, gatt, ns, hkeep, lag, lock, inc,
                    fails, pendDrop, wr, flag>>
 
 \* Then a global's links detach and the others become owning references to the frozen cell
@@ -567,11 +627,11 @@ FinishFreeze(t) ==
           /\ wr' = Mark(wr, {<<"a", a>> : a \in detach} \cup {<<"c", c>> : c \in RC}, t)
           /\ rg' = [rg EXCEPT ![r] = EmptyReg]
           /\ live' = live - Cardinality(RC)
-          /\ epoch' = IF RC # {} THEN epoch + 1 ELSE epoch
+          /\ epoch' = IF RC # {} THEN NextEp(epoch) ELSE epoch
     /\ ex' = Snap(t, Depth(t), TRUE)
     /\ fr' = Pop(t)
     /\ dirty' = TRUE /\ dirtyBy' = W(t)
-    /\ UNCHANGED <<nAd, nCell, st, nGen, nEx, gsnap, gatt, ns, lock, inc, fails,
+    /\ UNCHANGED <<nAd, nCell, st, nGen, nEx, gsnap, gatt, ns, hkeep, lag, lock, inc, fails,
                    pendDrop, flag>>
 
 -----------------------------------------------------------------------------
@@ -579,18 +639,45 @@ FinishFreeze(t) ==
    ModuleCallCollector (BeginCall, DropUnheld, EndCall). A call at depth > 1 runs
    from a host callback *)
 
-FreeAddrs == {o \in OwnedAddrs : ~\E a \in AdIds : ad[a].alive /\ ad[a].idn = o}
+FreeAddrs == {o \in OwnedAddrs : ~hkeep[o] /\ ~\E a \in AdIds : ad[a].alive /\ ad[a].idn = o}
+
+\* The pin at a module call's end (FixCallPin): each export of the call records the storage of
+\* every module cell it reaches, found by identity in the registry, never through a link
+RegStor(k) == IF rg[ModReg].tbl[k] # 0 THEN cl[rg[ModReg].tbl[k]].stor ELSE 0
+PinPg(e) == IF ex[e].kind = "live" THEN cl[ex[e].cell].stor ELSE RegStor(ex[e].idn)
+PinCg(e) == LET g == PinPg(e) IN
+            CASE ~FixPinNested -> -1
+              [] g # 0 -> IF st[g].child # 0 THEN RegStor(ad[st[g].child].idn) ELSE 0
+              [] ex[e].idn = "P" -> RegStor("C")  \* the host's P holds the host's C
+              [] OTHER -> 0
+PinVisOf(g, c) == IF c = -1 THEN (IF g = 0 THEN <<0, 0>> ELSE VisG(g)) ELSE <<StVal(g), StVal(c)>>
+ToPin(t, d) == IF ~FixCallPin THEN {}
+               ELSE {e \in LiveEx : ex[e].thr = t /\ ex[e].depth = d /\ ~ex[e].done
+                                    /\ ex[e].reg = ModReg /\ ex[e].kind \in {"live", "view"}}
+PinnedStors(t, d) == UNION {{PinPg(e), PinCg(e)} : e \in ToPin(t, d)} \ {0, -1}
+PinEx(t, d) ==
+    [e \in ExIds |-> IF e \in ToPin(t, d)
+                     THEN [ex[e] EXCEPT !.pin = TRUE, !.pg = PinPg(e), !.cg = PinCg(e), !.cell = 0,
+                                        !.done = TRUE, !.snap = PinVisOf(PinPg(e), PinCg(e))]
+                     ELSE Snap(t, d, TRUE)[e]]
 
 StartModCall(t) ==
     /\ Idle /\ t \in ModuleThreads /\ CanNest(t)
     /\ lock \in {"none", t}
     /\ nAd + 2 <= MaxAd
-    /\ \E o \in FreeAddrs :
-        LET a == nAd + 1
+    \* The argument: new data at a free address, a generic container (0336) the host may keep a
+    \* copy of, or (again) the generic container the host kept, lent once more
+    /\ \E o \in OwnedAddrs, gk \in (IF GenericArgs THEN BOOLEAN ELSE {FALSE}), hk \in BOOLEAN :
+        LET again == hkeep[o]
+            a == nAd + 1
             w == nAd + 2
-            k == rg[ModReg].last + 1
-        IN /\ ad' = [ad EXCEPT ![a] = NewAd("P", 0, FALSE), ![w] = NewAd(o, inc[o] + 1, FALSE)]
-           /\ inc' = [inc EXCEPT ![o] = @ + 1]
+            k == NextCall(rg[ModReg].last)
+            n == IF again THEN inc[o] ELSE inc[o] + 1
+        IN /\ IF again THEN gk /\ ~hk ELSE o \in FreeAddrs /\ (hk => gk)
+           /\ ad' = [ad EXCEPT ![a] = NewAd("P", 0, FALSE),
+                               ![w] = [NewAd(o, n, FALSE) EXCEPT !.generic = gk]]
+           /\ inc' = [inc EXCEPT ![o] = n]
+           /\ hkeep' = [hkeep EXCEPT ![o] = again \/ hk]
            /\ nAd' = nAd + 2
            /\ rg' = [rg EXCEPT ![ModReg].last = k, ![ModReg].call = k]
            /\ fr' = [fr EXCEPT ![t] = Append(@, [kind |-> "mod", reg |-> ModReg,
@@ -598,7 +685,7 @@ StartModCall(t) ==
                          ads |-> {a, w} \cup (IF ns # 0 THEN {ns} ELSE {}),
                          phase |-> "run"] @@ NoBorrow)]
     /\ lock' = t
-    /\ UNCHANGED <<epoch, live, cl, nCell, st, nGen, ex, nEx, gsnap, gatt, ns, fails, dirty,
+    /\ UNCHANGED <<epoch, live, cl, nCell, st, nGen, ex, nEx, gsnap, gatt, ns, lag, fails, dirty,
                    dirtyBy, pendDrop, wr, flag>>
 
 \* The call's arguments go first (Call declares the collector first), then DropUnheld
@@ -611,8 +698,13 @@ EndModCall(t) ==
                      /\ ex[e].kind = "gen"
                      /\ LET c == rg[ModReg].tbl[ex[e].idn]
                         IN c # 0 /\ VisG(cl[c].stor) # VisG(ex[e].gen)
-       IN /\ ex' = Snap(t, d, TRUE)
+           \* The pinned cells are marked shared: their next write copies (Unshare)
+           marked == IF FixPinMarks
+                     THEN {c \in RegCells(ModReg) : cl[c].stor \in PinnedStors(t, d)} ELSE {}
+       IN /\ ex' = PinEx(t, d)
           /\ flag' = [flag EXCEPT !.late = @ \/ late]
+          /\ cl' = [c \in CellIds |-> IF c \in marked THEN [cl[c] EXCEPT !.exp = SHARED] ELSE cl[c]]
+          /\ wr' = Mark(wr, {<<"c", c>> : c \in marked}, t)
     /\ rg' = [rg EXCEPT ![ModReg].call = IF FixCallRestore THEN Top(t).outer ELSE @]
     /\ fr' = Pop(t)
     /\ lock' = IF \E i \in 1..(Depth(t) - 1) : fr[t][i].kind = "mod" THEN t ELSE "none"
@@ -621,16 +713,15 @@ EndModCall(t) ==
     \* (Codex review of #688). No other thread steps before that GC: it waits for Idle
     /\ dirty' = TRUE /\ dirtyBy' = W(t)
     /\ pendDrop' = (DropRule # "none")
-    /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, nEx, gsnap, gatt, ns, inc, fails,
-                   wr>>
+    /\ UNCHANGED <<epoch, live, ad, nAd, nCell, st, nGen, nEx, gsnap, gatt, ns, hkeep, lag, inc, fails>>
 
 \* A module stores an argument in its namespace: it lives across calls
 StoreNs(t, a) ==
     /\ "ns" \in Actions
     /\ CanUse(t, a) /\ Top(t).kind = "mod" /\ ad[a].idn \in OwnedAddrs /\ ns = 0
     /\ ns' = a
-    /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt, lock,
-                   inc, fails, dirty, dirtyBy, pendDrop, wr, flag>>
+    /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt, hkeep, lag,
+                   lock, inc, fails, dirty, dirtyBy, pendDrop, wr, flag>>
 
 \* BorrowedCell::IsUnheld: only the registry holds the cell, only the cell holds its source,
 \* and only the source is attached
@@ -641,22 +732,35 @@ Unheld(c) ==
        /\ <<"c", c>> \notin R
        /\ (DropRule # "nosource") => <<"a", s>> \notin R
        /\ (DropRule # "nolinks") => cl[c].links \subseteq {s}
+       \* 0336: the host keeps no copy of the generic container, so it cannot lend it again
+       /\ (DropRule # "nohostcopy") => ~hkeep[cl[c].idn]
 
 DropUnheld ==
     /\ ~dirty /\ pendDrop /\ InBound
     /\ LET cand == {c \in RegCells(ModReg) : Unheld(c)} IN
        IF cand = {}
        THEN /\ pendDrop' = FALSE
-            /\ UNCHANGED <<cl, rg, live, dirty>>
+            /\ lag' = {}
+            /\ UNCHANGED <<cl, rg, live, dirty, flag>>
        ELSE \E c \in cand :
             \* Out of the table first, then the source goes
             /\ rg' = [rg EXCEPT ![ModReg].tbl[cl[c].idn] = 0]
             /\ cl' = [cl EXCEPT ![c].inTable = FALSE, ![c].source = 0]
             /\ live' = live - 1
             /\ dirty' = TRUE
-            /\ UNCHANGED pendDrop
-    /\ UNCHANGED <<epoch, ad, nAd, nCell, st, nGen, fr, ex, nEx, gsnap, gatt, ns, lock, inc, fails,
-                   dirtyBy, wr, flag>>
+            \* A later call that is lent the same data would miss this cell's writes
+            /\ flag' = [flag EXCEPT !.lost = @ \/ hkeep[cl[c].idn]]
+            /\ UNCHANGED <<pendDrop, lag>>
+    /\ UNCHANGED <<epoch, ad, nAd, nCell, st, nGen, fr, ex, nEx, gsnap, gatt, ns, hkeep, lag, lock, inc, fails,
+                   dirtyBy, wr>>
+
+\* The host lets go of its copy of a generic container (0336)
+HostLetsGo(o) ==
+    /\ "hostgen" \in Actions
+    /\ Idle /\ hkeep[o]
+    /\ hkeep' = [hkeep EXCEPT ![o] = FALSE]
+    /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt, ns, lag,
+                   lock, inc, fails, dirty, dirtyBy, pendDrop, wr, flag>>
 
 -----------------------------------------------------------------------------
 
@@ -671,6 +775,7 @@ Next ==
         \/ \E a \in AdIds :
             \/ Write(t, a, "append")
             \/ Write(t, a, "touch")
+            \/ Write(t, a, "drop")
             \/ Read(t, a)
             \/ Export(t, a)
             \/ KeepList(t, a)
@@ -678,6 +783,7 @@ Next ==
             \/ EnumStart(t, a)
             \/ SortStart(t, a)
         \/ "release" \in Actions /\ \E e \in ExIds : Release(t, e)
+    \/ \E o \in OwnedAddrs : HostLetsGo(o)
 
 Spec == Init /\ [][Next]_vars
 
@@ -707,10 +813,15 @@ NoUseAfterFree ==
 \* 5. A lookup never returns a cell of other data, or a live cell of another render
 NoForeignCell == ~flag.foreign
 
+\* The host still holds, or let go of since the last DropUnheld, an adapter of the data at o
+\* (keep([x]) of an argument): its cell stays until the first call's end after it lets go
+HeldOut(o) == o \in lag \/ \E e \in LiveEx : ex[e].kind \in {"view", "raw"} /\ ex[e].idn = o
+
 \* 6. Between module calls the registry keeps no cell of a finished call's own data
 RegistryBounded ==
     (Quiet /\ \A t \in Threads : ~InModule(t))
-        => Cardinality({o \in OwnedAddrs : rg[ModReg].tbl[o] # 0}) <= (IF ns # 0 THEN 1 ELSE 0)
+        => Cardinality({o \in OwnedAddrs : rg[ModReg].tbl[o] # 0 /\ ~hkeep[o] /\ ~HeldOut(o)})
+               <= (IF ns # 0 THEN 1 ELSE 0)
 
 \* Extra: aliases agree (a read never misses its render's cell), no moved-from item is
 \* stored, the live counter matches the tables
@@ -718,7 +829,10 @@ AliasesAgree == ~flag.stale
 NoUndefItems == ~flag.undef
 LiveCount == live = Cardinality({c \in CellIds : cl[c].alive /\ cl[c].inTable})
 
-\* Open (task 0335): a module call's export keeps that call's final state
+\* 0335: a module call's export keeps that call's final state (an open task before FixCallPin)
 ExportKeepsCallState == ~flag.late
+
+\* 0336: no cell is dropped while its data can be lent again (its writes would be lost)
+NoLostWrites == ~flag.lost
 
 =============================================================================

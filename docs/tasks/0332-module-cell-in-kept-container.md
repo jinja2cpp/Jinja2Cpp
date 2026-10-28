@@ -29,5 +29,28 @@ its comment).
   values; at the next call's first write to any cell, copy every cell whose links include one
   held from outside the module's context (needs a way to tell those links apart).
 
+**Design (model-first, 0338 step A; for Ruslan to decide).** The pin of 0335 (`FixCallPin`) covers
+`keep([l])` and nested items as well: the pin resolves each item of an exported template container,
+and each nested item of an exported list, by identity, so the host's value keeps the state at the
+call's end and later calls copy before they write. Two lifetime rules come with it, since the
+host's value can hold the adapter object that the module's cell links:
+
+- **A link to a module's cell owns the cell** (`FixModuleLinksOwn`), as a link to a frozen cell
+  does: `Link` takes a reference, `Unlink` releases it. A host thread that drops the last
+  reference to such an adapter then writes no `m_links` vector of a live cell. `IsUnheld` counts
+  references instead of links, the module's `Finish` needs no walk of the links (except a global's,
+  which the thread's snapshot holds), and the collector's traversal must report these links
+  (`TraverseFrozen` extends to module cells; an obligation for the collector spec, 0338 step E).
+  Mutant `module-links-unowned`: a later call's adapter kept by `keep([l])`, dropped on another
+  thread, unlinks from the live cell (`NoCrossThreadWrite`).
+- The host's reads go only through the pinned context, never through a link, so the module
+  re-linking an adapter shared with a pinned storage is not a race.
+
+The model now has item removal (`l.pop()` of a nested list, op `drop`), the path by which a pinned
+storage becomes the only holder of a nested adapter. Runs: `module-0332` (keep([x]), nested writes,
+removal) and `threads-module-kept` pass; `no-call-pin-kept-list` and `no-call-pin-nested` are this
+task's counterexamples. 0340 (the same unlink in a render's window before `Finish`) is decided
+separately: the model uses its option (a), `FixPinOnAttach`.
+
 **Done when.** The test row expects `[[0, 1]]` and a TSan row (two threads calling the module,
 one reading the kept list) is clean, with `Module/keep` unchanged in `bench/count.py`.
