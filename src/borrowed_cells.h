@@ -237,6 +237,10 @@ private:
     JINJA2CPP_CELL_NOINLINE bool Unshare() const;
     // Notes that a value handed to the host shares the items
     void NoteExport() const noexcept;
+
+    // Never a call (BorrowedCells::BeginCall): the mark once values handed out in two calls share
+    // the items, so that every write asks whether one still holds them (docs/tasks/0337)
+    static constexpr uint32_t SharedExport = UINT32_MAX;
     // Whether nothing can read the cell any more but the registry: no value holds it, its
     // source alone holds its data and no other adapter is attached to it (BorrowedCells::DropUnheld)
     [[nodiscard]] bool IsUnheld() const noexcept;
@@ -262,7 +266,8 @@ private:
     // The registry that made the cell; not dereferenced once the cell is frozen
     const BorrowedCells* m_registry;
     // The call of a template module in which a value handed to the host first shared the items, 0
-    // when none does (docs/tasks/0331, decision D8)
+    // when none does (docs/tasks/0331, decision D8), SharedExport once values of two calls share
+    // them (docs/tasks/0337)
     mutable uint32_t m_exportedIn = 0;
     bool m_isList;
     // Set when the render ends (BorrowedCells::Finish)
@@ -370,7 +375,9 @@ public:
     [[nodiscard]] uint32_t BeginCall() noexcept
     {
         const auto outer = m_call;
-        if (++m_lastCall == 0)
+        // 0 is a render's call and SharedExport no call's (BorrowedCell::NoteExport)
+        ++m_lastCall;
+        if (m_lastCall == 0 || m_lastCall == BorrowedCell::SharedExport)
         {
             m_lastCall = 1;
         }
