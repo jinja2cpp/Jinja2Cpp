@@ -182,7 +182,8 @@ reuse, and an inductive or cutoff argument) is task 0338.
 ## Not modelled
 
 - Dicts. Lists and dicts share the cell code, and the model has lists only.
-- `QuietEpoch`/`CellStep`, epoch wrap-around and the memory order of the atomics. The epoch is
+- `QuietEpoch`/`CellStep`, epoch wrap-around and the memory order of the atomics (argued in
+  `docs/design/borrowed-cells-memory-order.md`; wraps are tasks 0341 and 0342). The epoch is
   an unbounded counter read atomically.
 - The cycle collector's traversal of frozen cells (`Traverse`, `NoteFrozen`). There are no
   cycles: an item is always another identity.
