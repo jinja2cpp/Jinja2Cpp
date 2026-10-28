@@ -62,6 +62,11 @@ RUNS = {
     "module": ("pass", MODULE1, {}, SAFETY, "module calls, nested through a callback"),
     "mixed": ("pass", MIXED1, {"MaxLevel": 10}, SAFETY, "renders and module calls on one thread"),
     "threads": ("pass", TWO, {"MaxLevel": 9}, SAFETY, "two threads, renders and the locked module"),
+    # Two threads in the module only, deeper: sequential calls on two threads that write the
+    # same cell, with the GC of each call's teardown under the lock (Codex review of #688)
+    "threads-module": ("pass", dict(TWO, RenderThreads='{}',
+                                    Actions='{"export", "release", "ns", "touch", "read"}'),
+                       {"MaxLevel": 15}, SAFETY, "two threads, module calls only"),
     # Finding F1: #673 as it is at 459d8f7, without the proposed FixNestedExport
     "f1-nested-export": ("finding", MODULE1, {"FixNestedExport": False, "MaxFail": 0},
                          ["SnapshotStable"],

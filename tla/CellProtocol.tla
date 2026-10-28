@@ -77,7 +77,7 @@ VARIABLES
     lock,      \* the module's recursive mutex: the thread holding it, or "none"
     inc,       \* per owned address: the incarnation of the data there
     fails,     \* allocation failures injected so far
-    dirty, dirtyBy, \* a reference was dropped: GC runs next, on behalf of dirtyBy
+    dirty, dirtyBy, \* a reference was dropped: GC runs next, as the writer dirtyBy (W)
     pendDrop,  \* a module call ended: DropUnheld runs next
     wr,        \* per object: the set of <<thread, holds the module lock>> that wrote it
     flag       \* violations seen inside a step
@@ -110,7 +110,7 @@ Init ==
     /\ ns = 0 /\ lock = "none"
     /\ inc = [o \in OwnedAddrs |-> 0]
     /\ fails = 0
-    /\ dirty = FALSE /\ dirtyBy = "none" /\ pendDrop = FALSE
+    /\ dirty = FALSE /\ dirtyBy = <<"none", FALSE>> /\ pendDrop = FALSE
     /\ wr = [o \in Objs |-> {}]
     /\ flag = NoFlags
 
@@ -124,15 +124,19 @@ Running(t) == Depth(t) > 0 /\ Top(t).phase = "run"
 SetTop(t, f) == [fr EXCEPT ![t][Depth(t)] = f]
 Pop(t) == [fr EXCEPT ![t] = SubSeq(@, 1, Len(@) - 1)]
 InModule(t) == \E i \in 1..Depth(t) : fr[t][i].kind = "mod"
-Idle == ~dirty /\ ~pendDrop
+\* Behaviours of at most MaxLevel states, GC steps included (TLC's BFS level). A guard of every
+\* action rather than a CONSTRAINT: TLC then does not compute the last level's successors
+InBound == TLCGet("level") < MaxLevel
+Idle == ~dirty /\ ~pendDrop /\ InBound
 Grow(v) == IF v = EMPTY THEN 1 ELSE IF v = UNDEF THEN UNDEF ELSE v + 1
 CanGrow(v) == v < MaxVal
 
 \* A write by t: the module's state is written under its lock
 W(t) == <<t, InModule(t)>>
 \* (One thread: nothing to compare, so the writers are not kept and add no states)
-Mark(w, objs, t) == IF Cardinality(Threads) = 1 THEN w
-                    ELSE [o \in Objs |-> IF o \in objs THEN w[o] \cup {W(t)} ELSE w[o]]
+MarkBy(w, objs, who) == IF Cardinality(Threads) = 1 THEN w
+                        ELSE [o \in Objs |-> IF o \in objs THEN w[o] \cup {who} ELSE w[o]]
+Mark(w, objs, t) == MarkBy(w, objs, W(t))
 
 -----------------------------------------------------------------------------
 (* What the host sees through what it keeps *)
@@ -183,7 +187,7 @@ RootsExcept(x) ==
 Reach == Close(RootsExcept(0))
 
 GC ==
-    /\ dirty
+    /\ dirty /\ InBound
     /\ LET R == Reach
            deadA == {a \in AdIds : ad[a].alive /\ <<"a", a>> \notin R}
            unlinked == {c \in CellIds : cl[c].alive /\ ~cl[c].frozen /\ cl[c].links \cap deadA # {}}
@@ -195,7 +199,7 @@ GC ==
           /\ st' = [g \in GenIds |-> [st[g] EXCEPT !.alive = @ /\ <<"g", g>> \in R,
                                                   !.acc = @ /\ <<"x", g>> \in R]]
           \* Unlinking a dead adapter from a live cell writes that cell's list of links
-          /\ wr' = Mark(wr, {<<"c", c>> : c \in unlinked}, dirtyBy)
+          /\ wr' = MarkBy(wr, {<<"c", c>> : c \in unlinked}, dirtyBy)
           \* An adapter that lives on, attached to a cell that went
           /\ flag' = [flag EXCEPT !.uaf = @ \/ \E a \in AdIds :
                          ad2[a].alive /\ ad2[a].cell # 0 /\ ~cl2[ad2[a].cell].alive]
@@ -286,7 +290,7 @@ WriteCell(t, a, f2, op, R) ==
                 THEN SetTop(t, [Top(t) EXCEPT !.ads = @ \cup {child}]) ELSE fr
        /\ flag' = [flag EXCEPT !.foreign = @ \/ Foreign(t, a, R.c),
                                !.uaf = @ \/ ~cl[R.c].alive \/ ~st[cl[R.c].stor].acc]
-       /\ dirty' = (Wr.k = "copy") /\ dirtyBy' = t
+       /\ dirty' = (Wr.k = "copy") /\ dirtyBy' = W(t)
        /\ UNCHANGED <<epoch, live, nAd, nCell, rg, ex, nEx, gsnap, ns, lock, inc, pendDrop>>
 
 \* CellLink::Adopt with a new cell: the copy of the data, the write applied
@@ -411,7 +415,7 @@ Release(t, e) ==
     /\ Idle /\ ex[e].alive
     /\ ex[e].thr = t \/ ex[e].done
     /\ ex' = [ex EXCEPT ![e].alive = FALSE]
-    /\ dirty' = TRUE /\ dirtyBy' = t
+    /\ dirty' = TRUE /\ dirtyBy' = W(t)
     /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, nEx, gsnap, gatt, ns, lock,
                    inc, fails, pendDrop, wr, flag>>
 
@@ -482,7 +486,7 @@ SortEnd(t) ==
                        /\ fails' = IF f THEN fails + 1 ELSE fails
                        /\ flag' = [flag EXCEPT !.undef = @ \/ v2 = UNDEF,
                                                !.uaf = @ \/ ~cl[c].alive]
-                       /\ dirty' = (Wr.k = "copy") /\ dirtyBy' = t
+                       /\ dirty' = (Wr.k = "copy") /\ dirtyBy' = W(t)
                /\ fr' = fr2
           ELSE LET g == Top(t).bgen IN
                \* The InternalValueList& sort held across its key calls
@@ -544,7 +548,7 @@ FinishSources(t) ==
        cl' = [c \in CellIds |-> IF c \in RC THEN [cl[c] EXCEPT !.source = 0] ELSE cl[c]]
     /\ ex' = Snap(t, Depth(t), FALSE)
     /\ fr' = SetTop(t, [Top(t) EXCEPT !.phase = "fin", !.ads = {}])
-    /\ dirty' = TRUE /\ dirtyBy' = t
+    /\ dirty' = TRUE /\ dirtyBy' = W(t)
     /\ UNCHANGED <<epoch, live, ad, nAd, nCell, st, nGen, rg, nEx, gsnap, gatt, ns, lock, inc,
                    fails, pendDrop, wr, flag>>
 
@@ -566,7 +570,7 @@ FinishFreeze(t) ==
           /\ epoch' = IF RC # {} THEN epoch + 1 ELSE epoch
     /\ ex' = Snap(t, Depth(t), TRUE)
     /\ fr' = Pop(t)
-    /\ dirty' = TRUE /\ dirtyBy' = t
+    /\ dirty' = TRUE /\ dirtyBy' = W(t)
     /\ UNCHANGED <<nAd, nCell, st, nGen, nEx, gsnap, gatt, ns, lock, inc, fails,
                    pendDrop, flag>>
 
@@ -612,7 +616,10 @@ EndModCall(t) ==
     /\ rg' = [rg EXCEPT ![ModReg].call = IF FixCallRestore THEN Top(t).outer ELSE @]
     /\ fr' = Pop(t)
     /\ lock' = IF \E i \in 1..(Depth(t) - 1) : fr[t][i].kind = "mod" THEN t ELSE "none"
-    /\ dirty' = TRUE /\ dirtyBy' = t
+    \* W(t) of the call, not of its caller: TemplateModuleState::Call holds its lock while the
+    \* arguments die and the collector is torn down, so the GC step writes under the lock
+    \* (Codex review of #688). No other thread steps before that GC: it waits for Idle
+    /\ dirty' = TRUE /\ dirtyBy' = W(t)
     /\ pendDrop' = (DropRule # "none")
     /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, nEx, gsnap, gatt, ns, inc, fails,
                    wr>>
@@ -636,7 +643,7 @@ Unheld(c) ==
        /\ (DropRule # "nolinks") => cl[c].links \subseteq {s}
 
 DropUnheld ==
-    /\ ~dirty /\ pendDrop
+    /\ ~dirty /\ pendDrop /\ InBound
     /\ LET cand == {c \in RegCells(ModReg) : Unheld(c)} IN
        IF cand = {}
        THEN /\ pendDrop' = FALSE
@@ -653,13 +660,7 @@ DropUnheld ==
 
 -----------------------------------------------------------------------------
 
-\* Behaviours of at most MaxLevel states, GC steps included (TLC's BFS level). A guard rather
-\* than a CONSTRAINT: TLC then does not compute the successors of the last level at all
-InBound == TLCGet("level") < MaxLevel
-
 Next ==
-  InBound /\
-  (
     \/ GC
     \/ DropUnheld
     \/ \E t \in Threads :
@@ -677,7 +678,6 @@ Next ==
             \/ EnumStart(t, a)
             \/ SortStart(t, a)
         \/ "release" \in Actions /\ \E e \in ExIds : Release(t, e)
-  )
 
 Spec == Init /\ [][Next]_vars
 

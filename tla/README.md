@@ -13,7 +13,9 @@ fix #673 made is needed: taking any one of them out gives a counterexample.
 
 ```bash
 curl -sSLo tla/tla2tools.jar https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
-python3 tla/check.py                        # every run, about 2.7 hours on 4 cores
+python3 tla/check.py                        # every run, about 2.8 hours on 4 cores
+python3 tla/check.py --only render mixed    # or in two parts: about 1h45m ...
+python3 tla/check.py --only $(python3 tla/check.py --list | awk '$1 != "render" && $1 != "mixed" {print $1}')   # ... and 1h05m
 python3 tla/check.py --only f1-nested-export --traces
 python3 tla/check.py --list
 ```
@@ -95,8 +97,9 @@ explores every behaviour up to it and none past it.
 |---|---|---|
 | `render` | 1 thread: renders, nested through a callback, level 11 | no error (51.6M states, 82 min) |
 | `module` | 1 thread: module calls, nested through a callback, level 12 | no error (1.5M states, 3 min) |
-| `mixed` | 1 thread: renders and module calls, level 10 | no error (19.5M states, 25 min) |
-| `threads` | 2 threads: renders and the locked module, level 9 | no error (32.0M states, 45 min) |
+| `mixed` | 1 thread: renders and module calls, level 10 | no error (19.6M states, 23 min) |
+| `threads` | 2 threads: renders and the locked module, level 9 | no error (32.0M states, 46 min) |
+| `threads-module` | 2 threads: module calls only, level 15 | no error (1.4M states, 3 min) |
 | `f1-nested-export` | `module`, the code as merged (no `FixNestedExport`), no allocation failure | **counterexample: `SnapshotStable`** (F1) |
 | `no-link-epoch` | c06d969 out (Codex P2) | counterexample: `AliasesAgree` |
 | `no-enum-refetch` | f83b89f out (Codex P1) | counterexample: `NoUseAfterFree` |
@@ -144,6 +147,12 @@ write goes through the uniqueness test. The pass runs use it. The pinned test is
 
 ### Other observations
 
+- **A module call's teardown runs under the module's lock** (Codex review of #688).
+  `TemplateModuleState::Call` holds its mutex while the arguments die and
+  `ModuleCallCollector` is torn down. The model first recorded the GC step after `EndModCall` as
+  a write without the lock, which gave a spurious `NoCrossThreadWrite` for two sequential calls
+  on two threads at level 10. That GC step now writes as the call did (`dirtyBy`), and
+  `threads-module` checks the two-thread module case to level 15.
 - **A storage's accessor and its items have separate lifetimes** (Ruslan's review of #688).
   `CreateGenericList` copies the storage's `ListAdapter` accessor and shares its
   `InternalValueList`, so an export keeps the items but not the accessor object in `m_storage`.
@@ -161,6 +170,14 @@ write goes through the uniqueness test. The pass runs use it. The pinned test is
 - **The open tasks reproduce as described.** 0335 is a call's own later write missing from its
   export. 0332 is a module's live cell read through a kept template list or a nested item.
   Their runs are expected to fail and are the acceptance checks for those tasks.
+
+## What the results claim
+
+Bounded evidence, not a proof. Each pass run covers every behaviour up to its level within its
+bounds, under sequentially consistent interleavings of the steps listed above. The path from
+here to a safety argument for the implementation (every ownership and escape path, failure at
+each allocation, concurrent reads and destruction, memory order, collection and identifier
+reuse, and an inductive or cutoff argument) is task 0338.
 
 ## Not modelled
 
