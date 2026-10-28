@@ -1,5 +1,6 @@
 ---
 status: open
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/688
 priority: medium
 area: robustness
 depends: [0337]

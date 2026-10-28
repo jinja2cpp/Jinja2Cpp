@@ -406,3 +406,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0334](0334-makecallable-per-argument-dispatch.md) | MakeCallable visits every combination of argument types | api | high | done |
 | [0335](0335-late-export-in-a-later-module-call.md) | A module call that hands out a container before it writes it keeps the earlier call's state | parity | low | open |
 | [0336](0336-module-cells-of-per-call-data.md) | A template module keeps the cells of generic containers made for one call | robustness | medium | open |
+| [0337](0337-nested-module-export-written-by-outer-call.md) | A nested module call's kept value is written by the outer call | robustness | medium | done |
+| [0338](0338-borrowed-cell-protocol-safety-proof.md) | From a bounded model of the borrowed-cell protocol to a safety argument | robustness | medium | open |
