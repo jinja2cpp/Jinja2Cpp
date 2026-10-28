@@ -27,7 +27,7 @@ FIXES = {
     "FixCallRestore": True, "FixNestedGlobal": True, "FixMarkOrder": True,
     "FixSortMutableFirst": True, "FixMarkerAfterCopy": True, "FixReadOnlyExport": True,
     "FixFreeze": True, "FixSourceKeepsId": True,
-    # Proposed by this model, not in #673 yet (README, finding F1)
+    # Task 0337 (README, finding F1): BorrowedCell::NoteExport marks an export of two calls shared
     "FixNestedExport": True,
 }
 SAFETY = ["SnapshotStable", "NoCrossThreadWrite", "NoUseAfterFree", "NoForeignCell",
@@ -67,7 +67,7 @@ RUNS = {
     "threads-module": ("pass", dict(TWO, RenderThreads='{}',
                                     Actions='{"export", "release", "ns", "touch", "read"}'),
                        {"MaxLevel": 15}, SAFETY, "two threads, module calls only"),
-    # Finding F1: #673 as it is at 459d8f7, without the proposed FixNestedExport
+    # Finding F1: #673 as it is at 459d8f7, before the 0337 fix (FixNestedExport)
     "f1-nested-export": ("finding", MODULE1, {"FixNestedExport": False, "MaxFail": 0},
                          ["SnapshotStable"],
                          "F1: a nested call's kept value changes when the outer call writes"),

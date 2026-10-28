@@ -98,11 +98,22 @@ void BorrowedCell::NoteExport() const noexcept
 {
     // Only in the cell's own render or module call, which alone writes the cell: a frozen cell is
     // never written, and a render's cells live for one call
-    if (m_frozen || m_exportedIn != 0 || !m_registry || CycleCollector::CurrentCells() != m_registry || m_registry->m_call == 0)
+    if (m_frozen || !m_registry || CycleCollector::CurrentCells() != m_registry || m_registry->m_call == 0)
     {
         return;
     }
-    m_exportedIn = m_registry->m_call;
+    // A mark of another call stays only as the shared one: the call that runs may be nested in
+    // the marked call (a host callback), which then writes on after this call ended, and a write
+    // in place would change what this call handed out (docs/tasks/0337)
+    const auto call = m_registry->m_call;
+    if (m_exportedIn == 0)
+    {
+        m_exportedIn = call;
+    }
+    else if (m_exportedIn != call)
+    {
+        m_exportedIn = SharedExport;
+    }
 }
 
 bool BorrowedCell::IsUnheld() const noexcept

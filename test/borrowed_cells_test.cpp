@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <thread>
@@ -458,35 +459,90 @@ TEST(BorrowedCellsKept, ModuleCallAfterANestedCallCopies)
     EXPECT_EQ("[0, 2, 3]", m.keeper.Show(0));
 }
 
+namespace
+{
+// A module whose macro `outer` calls `again()`, a host callable that calls the module's macro
+// `show`, which hands out `name`: a call nested in the outer call through a host callback.
+// `afterNested` runs in the callback once the nested call returned (docs/tasks/0337)
+struct NestedModule
+{
+    Keeper keeper;
+    TemplateModule module;
+    std::function<void()> afterNested;
+
+    NestedModule(const std::string& name, Value data, const std::string& outer)
+    {
+        ValuesMap params{ { name, std::move(data) } };
+        keeper.AddTo(params);
+        params["again"] = UserCallable(
+            [this](const UserCallableParams&) {
+                module.exports["show"].As<UserCallable>().callable(UserCallableParams{});
+                if (afterNested)
+                {
+                    afterNested();
+                }
+                return Value();
+            },
+            {});
+        Template tpl;
+        EXPECT_TRUE(!!tpl.Load("{% macro show() %}{% set _ = keep(" + name + ") %}{% endmacro %}{% macro outer() %}" + outer + "{% endmacro %}"));
+        auto made = tpl.MakeModule(params);
+        EXPECT_TRUE(!!made);
+        if (made)
+        {
+            module = std::move(*made);
+        }
+    }
+    void Run() { module.exports["outer"].As<UserCallable>().callable(UserCallableParams{}); }
+};
+} // namespace
+
 TEST(BorrowedCellsKept, ModuleNestedKeepOfTheOuterCallsExport)
 {
     // The outer call writes and hands out `l`, a nested call of the same module hands out `l`
     // without writing it, and the outer call writes again after the nested call returned. The
-    // cell keeps the outer call's export mark, so that write goes in place and changes what the
-    // nested call handed out after it ended. Found by the TLA+ model (tla/, finding F1). This
-    // row pins the current behaviour. Task 0337 makes the nested call's value "[0, 1]"; the
-    // outer call's value then misses its own later write too, which is the 0335 limit
-    Keeper keeper;
-    ValuesMap params{ { "l", ValuesList{ 0 } } };
-    keeper.AddTo(params);
-    TemplateModule module;
-    params["again"] = UserCallable(
-        [&module](const UserCallableParams&) {
-            module.exports["show"].As<UserCallable>().callable(UserCallableParams{});
-            return Value();
-        },
-        {});
-    Template tpl;
-    ASSERT_TRUE(!!tpl.Load("{% macro show() %}{% set _ = keep(l) %}{% endmacro %}"
-                           "{% macro outer() %}{% set _ = l.append(1) %}{% set _ = keep(l) %}"
-                           "{% set _ = again() %}{% set _ = l.append(2) %}{% endmacro %}"));
-    auto made = tpl.MakeModule(params);
-    ASSERT_TRUE(!!made);
-    module = std::move(*made);
-    module.exports["outer"].As<UserCallable>().callable(UserCallableParams{});
-    ASSERT_EQ(2u, keeper.kept.size());
-    EXPECT_EQ("[0, 1, 2]", keeper.Show(0));
-    EXPECT_EQ("[0, 1, 2]", keeper.Show(1));
+    // two exports share the items, so that write copies them: what the nested call handed out
+    // stays as it was when the call ended (D8). Found by the TLA+ model (tla/, finding F1, task
+    // 0337). The outer call's value misses its own later write too, which is the 0335 limit
+    NestedModule m("l", ValuesList{ 0 }, "{% set _ = l.append(1) %}{% set _ = keep(l) %}{% set _ = again() %}{% set _ = l.append(2) %}");
+    m.Run();
+    ASSERT_EQ(2u, m.keeper.kept.size());
+    EXPECT_EQ("[0, 1]", m.keeper.Show(0));
+    EXPECT_EQ("[0, 1]", m.keeper.Show(1));
+    // The module's own list has the write
+    m.Run();
+    ASSERT_EQ(4u, m.keeper.kept.size());
+    EXPECT_EQ("[0, 1, 2, 1]", m.keeper.Show(3));
+    EXPECT_EQ("[0, 1]", m.keeper.Show(1));
+}
+
+TEST(BorrowedCellsKept, ModuleNestedKeepOfTheOuterCallsExportDict)
+{
+    // The same for a dict
+    NestedModule m("d", ValuesMap{ { "a", 0 } }, "{% set _ = d.update(b=1) %}{% set _ = keep(d) %}{% set _ = again() %}{% set _ = d.update(c=2) %}");
+    m.Run();
+    ASSERT_EQ(2u, m.keeper.kept.size());
+    EXPECT_EQ("{'a': 0, 'b': 1}", m.keeper.Show(0));
+    EXPECT_EQ("{'a': 0, 'b': 1}", m.keeper.Show(1));
+}
+
+TEST(BorrowedCellsKept, ModuleNestedKeepReadWhileTheOuterCallWrites)
+{
+    // TSan: a host thread reads what the nested call handed out while the outer call writes `l`
+    NestedModule m("l", ValuesList{ 0 }, "{% set _ = l.append(1) %}{% set _ = keep(l) %}{% set _ = again() %}{% for i in range(200) %}{% set _ = l.append(i) %}{% endfor %}");
+    std::thread reader;
+    std::string seen;
+    m.afterNested = [&m, &reader, &seen]() {
+        reader = std::thread([nested = m.keeper.kept.at(1), &seen]() {
+            for (int i = 0; i != 50; ++i)
+            {
+                seen = Render("{{ k }}", ValuesMap{ { "k", nested } });
+            }
+        });
+    };
+    m.Run();
+    reader.join();
+    EXPECT_EQ("[0, 1]", seen);
 }
 
 TEST(BorrowedCellsKept, ModuleSortWhoseKeyCopiesTwice)

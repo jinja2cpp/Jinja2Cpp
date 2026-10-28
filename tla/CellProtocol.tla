@@ -41,7 +41,7 @@ CONSTANTS
     FixFreeze,            \* A2 (4588321 then the freeze): Finish keeps the non-global links frozen
     FixSourceKeepsId,     \* m_source keeps the data, and so its identity, alive while listed
     DropRule,             \* 459d8f7 DropUnheld: "none", "full", "nolinks", "nosource"
-    FixNestedExport,      \* PROPOSED (found by this model): an export in a call other than the
+    FixNestedExport,      \* 0337 (finding F1 of this model): an export in a call other than the
                           \* one that marked the cell marks it shared, so every later write copies
     \* Shapes outside the agreed contract (open tasks), off by default
     AllowModuleKeepList,  \* keep([x]) inside a module call (0332)

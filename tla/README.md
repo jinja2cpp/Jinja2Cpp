@@ -140,10 +140,11 @@ Trace (`f1-nested-export`, no allocation failure needed):
    2's kept value changes after call 2 ended. A host thread reading it races with call 1.
 
 0335 has the same root, one mark per cell, but its text said "nothing is shared mutably". That
-holds for sequential calls only. The proposed fix, modelled as `FixNestedExport`: when
-`NoteExport` meets another call's mark, it sets a sentinel no call id equals, so every later
-write goes through the uniqueness test. The pass runs use it. The pinned test is
-`BorrowedCellsKept.ModuleNestedKeepOfTheOuterCallsExport`.
+holds for sequential calls only. The fix (task 0337), modelled as `FixNestedExport`: when
+`NoteExport` meets another call's mark, it sets `BorrowedCell::SharedExport`, which no call id
+equals (`BeginCall` skips it), so every later write goes through the uniqueness test. The pass
+runs use it, and `f1-nested-export` keeps the code before the fix. The tests are
+`BorrowedCellsKept.ModuleNestedKeepOfTheOuterCallsExport` and the dict and TSan rows after it.
 
 ### Other observations
 
