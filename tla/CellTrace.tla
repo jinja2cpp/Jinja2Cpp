@@ -204,12 +204,22 @@ AdoptNo ==
     /\ Next1(TRUE)
     /\ UNCHANGED <<cl, lk, rg, exr, live, promoted>>
 
+\* A cell is made (BorrowedCell's constructor): Adopt then puts it in a table, or drops it when
+\* another adapter made the data's cell first
+CellNew ==
+    /\ E.ev = "cellnew" /\ E.c \notin DOMAIN cl
+    /\ Next1(cl' = SetC(E.c, [idn |-> 0, list |-> 0, reg |-> 0, stor |-> 0, exp |-> 0, frozen |-> FALSE,
+                              links |-> {}, held |-> {}, inTable |-> FALSE, src |-> 0, owned |-> FALSE,
+                              alive |-> TRUE]))
+    /\ UNCHANGED <<lk, rg, exr, live, promoted, bad>>
+
 Adopt ==
     /\ E.ev = "adopt" /\ E.reg \in DOMAIN rg
     /\ LET r == E.reg IN
        IF E.new = 1
-       THEN /\ E.c \notin DOMAIN cl
-            /\ Check([TableAgrees |-> E.reg # E.cur \/ Lookup(r, E.idn, E.list) # 0
+       THEN /\ Known(E.c) /\ cl[E.c].reg = 0
+            /\ Check([NoUseAfterFree |-> ~cl[E.c].alive,
+                      TableAgrees |-> E.reg # E.cur \/ Lookup(r, E.idn, E.list) # 0
                                        \/ (E.idn \in DOMAIN rg[r].tbl /\ rg[r].tbl[E.idn] # 0),
                       LinksAgree |-> L(E.a).cell # 0,
                       NoCrossThreadWrite |-> ~WriterOk(r, E.t)])
@@ -375,7 +385,7 @@ Next ==
     \/ l <= Len(Log) /\
         \/ RegNew \/ RegFree \/ BeginCall \/ EndCall
         \/ Skip \/ Hit \/ Find \/ Link \/ LinkFail \/ Unlink \/ Inherit \/ DieAttached
-        \/ AdoptNo \/ Adopt \/ AdoptUndo \/ Promote
+        \/ CellNew \/ AdoptNo \/ Adopt \/ AdoptUndo \/ Promote
         \/ Export \/ Write \/ Unshare \/ Copied
         \/ Drop \/ Dropped \/ Freeze \/ Finish \/ Finished \/ Free
     \/ Done

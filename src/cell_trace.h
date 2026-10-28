@@ -42,7 +42,7 @@ public:
         NewCell,
         NewReg,
         NewGen,
-        // The object goes: its address is free for the next one
+        // The object goes: its number stays with the address until a new object is made there
         GoneCell,
         GoneReg,
         // A list of links
@@ -61,8 +61,8 @@ public:
     // Whether events are written: JINJA2CPP_CELL_TRACE names a file
     static bool On() noexcept;
     // Writes one event with the running thread ("t") and the registry of the render or module
-    // call running on it ("cur", CycleCollector::CurrentCells) added. An event about a cell the
-    // log never named (one Adopt made and dropped) is left out
+    // call running on it ("cur", CycleCollector::CurrentCells) added. When the log cannot
+    // allocate, it writes a "lost" event, which fails the trace's check
     static void Event(const char* kind, std::initializer_list<Field> fields) noexcept;
     // A read that skipped the lookup: the adapter saw this epoch (CellLink::MayHaveCell). False,
     // so that the caller returns it

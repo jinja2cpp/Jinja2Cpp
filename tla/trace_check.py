@@ -196,6 +196,14 @@ def _no_restore(events):
     return events[:j] + [dict(events[j], call=events[i]["call"])] + events[j + 1:]
 
 
+def _use_after_free(events):
+    # A freed cell read again (a dangling pointer): the log keeps the freed cell's number
+    i = _first(events, lambda e: e["ev"] == "free")
+    if i is None:
+        return None
+    return events[:i + 1] + [dict(ev="hit", t=events[i]["t"], cur=events[i]["cur"], a=1, c=events[i]["c"])] + events[i + 1:]
+
+
 def _unknown_event(events):
     # A code path the spec has no step for
     return events[:1] + [dict(ev="retarget", t=1, cur=0)] + events[1:]
@@ -212,6 +220,8 @@ MUTANTS = {
     "other-thread-write": ("a write by a thread that does not own the cell", _other_thread_write,
                            {"violated: NoCrossThreadWrite"}),
     "no-call-restore": ("EndCall leaves the nested call running", _no_restore, {"violated: CallsAgree"}),
+    "use-after-free": ("a read of a freed cell", _use_after_free,
+                       {"violated: NoUseAfterFree", "violated: LinksAgree"}),
     "unknown-event": ("an event the spec has no step for", _unknown_event, {"no step takes this event"}),
 }
 
@@ -279,7 +289,16 @@ def main(argv=None):
                 print(f"BAD {test:60} the test failed", flush=True)
                 failed += 1
             traces.append((test, log_path))
-    traces += [(os.path.basename(p), os.path.abspath(p)) for p in args.logs]
+        # A build without the hooks writes no log at all: that is not a passing trace
+        if traces and not any(os.path.exists(path) for _, path in traces):
+            print(f"BAD no test wrote a trace: is {args.tests} built with -DJINJA2CPP_CELL_TRACE=ON?", flush=True)
+            failed += 1
+    for path in args.logs:
+        if not os.path.isfile(path):
+            print(f"BAD {path}: no such log", flush=True)
+            failed += 1
+        else:
+            traces.append((os.path.basename(path), os.path.abspath(path)))
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         futures = {pool.submit(check_trace, args.jar, path, os.path.join(base, f"tlc-{i}"),
                                not args.no_fix_nested_export): (name, path)

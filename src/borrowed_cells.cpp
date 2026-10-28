@@ -58,6 +58,8 @@ BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, bool isL
     // A frozen cell is held by the links of the values that outlived the render: a cycle through
     // its items is the collector's (CellLink::TraverseFrozen)
     SetTraversable();
+    // Every cell, also one Adopt drops: its free is in the log too
+    JINJA2CPP_CELL_TRACE_EVENT("cellnew", Trace::Ptr("c", Trace::Space::NewCell, this));
 }
 
 void BorrowedCell::Traverse(const TraverseFn& fn) const
@@ -378,7 +380,7 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
         }
         JINJA2CPP_CELL_TRACE_EVENT("adopt", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("idn", Trace::Space::Idn, identity), Trace::Num("list", isList ? 1 : 0),
                                    Trace::Num("held", held ? 1 : 0), Trace::Num("owned", cell->m_owner.expired() ? 0 : 1), Trace::Ptr("reg", Trace::Space::Reg, cells),
-                                   Trace::Ptr("c", Trace::Space::NewCell, cell.get()), Trace::Num("new", 1), Trace::Ptr("g", Trace::Space::NewGen, cell->TraceGen()),
+                                   Trace::Ptr("c", Trace::Space::Cell, cell.get()), Trace::Num("new", 1), Trace::Ptr("g", Trace::Space::NewGen, cell->TraceGen()),
                                    Trace::Ptr("src", Trace::Space::Link, source));
     }
 #endif
@@ -474,17 +476,33 @@ void BorrowedCells::Finish(CycleCollector* collector) noexcept
 #ifdef JINJA2CPP_CELL_TRACE
         if (detail::CellTrace::On())
         {
+            // Finish does not throw: a list that cannot be allocated leaves a gap the check reports
             std::vector<const CellLink*> held;
-            for (const auto* link : cell->m_links)
+            bool listed = true;
+            try
             {
-                if ((link->m_linkIndex & CellLink::HeldBit) != 0)
+                for (const auto* link : cell->m_links)
                 {
-                    held.push_back(link);
+                    if ((link->m_linkIndex & CellLink::HeldBit) != 0)
+                    {
+                        held.push_back(link);
+                    }
                 }
             }
-            JINJA2CPP_CELL_TRACE_EVENT("freeze", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Ptr("c", Trace::Space::Cell, cell.get()),
-                                       Trace::Links("links", cell->m_links.data(), cell->m_links.size()),
-                                       Trace::Links("held", held.data(), held.size()));
+            catch (const std::bad_alloc&)
+            {
+                listed = false;
+            }
+            if (listed)
+            {
+                JINJA2CPP_CELL_TRACE_EVENT("freeze", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Ptr("c", Trace::Space::Cell, cell.get()),
+                                           Trace::Links("links", cell->m_links.data(), cell->m_links.size()),
+                                           Trace::Links("held", held.data(), held.size()));
+            }
+            else
+            {
+                JINJA2CPP_CELL_TRACE_EVENT("lost", Trace::Ptr("c", Trace::Space::Cell, cell.get()));
+            }
         }
 #endif
         cell->m_frozen = true;

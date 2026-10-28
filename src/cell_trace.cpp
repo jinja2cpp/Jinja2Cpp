@@ -40,15 +40,28 @@ public:
         const std::scoped_lock lock(m_mutex);
         int64_t values[16] = {};
         size_t at = 0;
-        for (const auto& field : fields)
+        // Every number is given out before the line is written: what allocates is done, so an
+        // allocation that fails leaves no half line
+        try
         {
-            const auto value = Resolve(field);
-            if (value < 0 && (field.space == CellTrace::Space::GoneCell || field.space == CellTrace::Space::Cell))
+            for (const auto& field : fields)
             {
-                // A cell Adopt made and dropped, never in the log
-                return;
+                values[at++] = Resolve(field);
+                for (size_t i = 0; field.space == CellTrace::Space::Links && i < field.count; ++i)
+                {
+                    Number(m_links, m_nextLink, field.list[i]);
+                }
             }
-            values[at++] = value;
+        }
+        catch (...)
+        {
+            // The trace misses an event: no step of CellTrace.tla takes this one, so the check of
+            // the trace fails rather than passing with a gap
+            std::fprintf(m_file, R"({"ev":"lost","t":%d,"cur":0,"kind":"%s"})"
+                                 "\n",
+                         Thread(), kind);
+            std::fflush(m_file);
+            return;
         }
         std::fprintf(m_file, R"({"ev":"%s","t":%d,"cur":%lld)", kind, Thread(), static_cast<long long>(Lookup(m_regs, CycleCollector::CurrentCells())));
         at = 0;
@@ -59,7 +72,7 @@ public:
                 std::fprintf(m_file, ",\"%s\":[", field.name);
                 for (size_t i = 0; i < field.count; ++i)
                 {
-                    std::fprintf(m_file, "%s%lld", i == 0 ? "" : ",", static_cast<long long>(Number(m_links, m_nextLink, field.list[i])));
+                    std::fprintf(m_file, "%s%lld", i == 0 ? "" : ",", static_cast<long long>(Lookup(m_links, field.list[i])));
                 }
                 std::fputs("]", m_file);
                 ++at;
@@ -74,7 +87,7 @@ public:
 private:
     using Numbers = std::unordered_map<const void*, int64_t>;
 
-    // 0 for null; -1 for a cell the log does not know
+    // 0 for null; -1 for a cell the log does not know, which no step of the spec takes
     int64_t Resolve(const CellTrace::Field& field)
     {
         switch (field.space)
@@ -82,7 +95,7 @@ private:
         case CellTrace::Space::Num:
             return field.num;
         case CellTrace::Space::Cell:
-            return field.ptr ? (m_cells.count(field.ptr) ? m_cells[field.ptr] : -1) : 0;
+            return field.ptr ? Known(m_cells, field.ptr) : 0;
         case CellTrace::Space::Link:
             return Number(m_links, m_nextLink, field.ptr);
         case CellTrace::Space::Reg:
@@ -97,10 +110,12 @@ private:
             return Fresh(m_regs, m_nextReg, field.ptr);
         case CellTrace::Space::NewGen:
             return Fresh(m_gens, m_nextGen, field.ptr);
+        // Kept as a tombstone: a later event about the address names the freed object, which the
+        // spec rejects, until a new object there gets a new number
         case CellTrace::Space::GoneCell:
-            return Forget(m_cells, field.ptr);
+            return Known(m_cells, field.ptr);
         case CellTrace::Space::GoneReg:
-            return Forget(m_regs, field.ptr);
+            return Known(m_regs, field.ptr);
         case CellTrace::Space::Links:
             return 0;
         }
@@ -130,16 +145,10 @@ private:
         const auto found = ptr ? numbers.find(ptr) : numbers.end();
         return found != numbers.end() ? found->second : 0;
     }
-    static int64_t Forget(Numbers& numbers, const void* ptr)
+    static int64_t Known(const Numbers& numbers, const void* ptr)
     {
         const auto found = numbers.find(ptr);
-        if (found == numbers.end())
-        {
-            return -1;
-        }
-        const auto number = found->second;
-        numbers.erase(found);
-        return number;
+        return found != numbers.end() ? found->second : -1;
     }
     static int Thread() noexcept
     {
