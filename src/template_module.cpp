@@ -194,9 +194,31 @@ InternalValue InvokeInModule(RenderContext& context, const Callable& callable, c
 }
 
 // A host Value as an argument the call owns: copied and converted by value, so that a module
-// value the macro stores it in (a namespace) never refers to the host's
+// value the macro stores it in (a namespace) never refers to the host's. A ValuesList or
+// ValuesMap, also a nested one, becomes a list or dict of the template: a write to it changes
+// the call's own copy and makes no borrowed cell, which the module would keep for as long as it
+// lives (docs/tasks/0049)
 InternalValue OwnedArgument(const Value& value)
 {
+    if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&value.GetData()))
+    {
+        InternalValueList items;
+        items.reserve((*list)->size());
+        for (const auto& item : **list)
+        {
+            items.push_back(OwnedArgument(item));
+        }
+        return InternalValue(ListAdapter::CreateAdapter(std::move(items)));
+    }
+    if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&value.GetData()))
+    {
+        TemplateDict items;
+        for (const auto& [key, item] : **map)
+        {
+            items.SetString(key, OwnedArgument(item));
+        }
+        return CreateMapAdapter(std::move(items));
+    }
     Value copy = value;
     return visit(visitors::InputValueConvertor(true, false), copy.GetData());
 }
