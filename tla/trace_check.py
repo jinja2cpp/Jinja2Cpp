@@ -48,6 +48,9 @@ def tla_value(value):
 
 def read_log(path):
     events = []
+    if not os.path.exists(path):
+        # Nothing asked whether to log: the test never reached the cell code
+        return events
     with open(path, encoding="utf-8") as log:
         for line in log:
             line = line.strip()
@@ -82,7 +85,7 @@ def check_trace(jar, log_path, workdir, fix_nested=True):
         cfg.write(f"    FixNestedExport = {'TRUE' if fix_nested else 'FALSE'}\n")
         cfg.write("INVARIANTS\n" + "".join(f"    {inv}\n" for inv in INVARIANTS))
         cfg.write("ALIAS Alias\n")
-    cmd = ["java", "-XX:+UseParallelGC", "-Xss16m", "-cp", jar, "tlc2.TLC", "-workers", "1",
+    cmd = ["java", "-XX:+UseParallelGC", "-Xmx1g", "-Xss16m", "-cp", jar, "tlc2.TLC", "-workers", "1",
            "-config", "MC.cfg", "-metadir", os.path.join(workdir, "states"), "CellTrace.tla"]
     out = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, check=False).stdout
     with open(os.path.join(workdir, "tlc.out"), "w", encoding="utf-8") as tlc_log:
@@ -123,6 +126,118 @@ def list_tests(binary, pattern, per_suite):
     return tests
 
 
+# Mutants: a real trace changed as a defect of the code would change it. Each must fail with one
+# of the named verdicts, which shows that the check sees that kind of defect. name: (what the
+# defect is, the change, the verdicts)
+def _first(events, pred):
+    return next((i for i, e in enumerate(events) if pred(e)), None)
+
+
+def _drop_live_unlink(events):
+    # An adapter goes without detaching from its live cell (a missing Release)
+    i = _first(events, lambda e: e["ev"] == "unlink" and e["frozen"] == 0)
+    return None if i is None else events[:i] + events[i + 1:]
+
+
+def _keep_mark(events):
+    # NoteExport keeps the first call's mark (0337 before #689)
+    i = _first(events, lambda e: e["ev"] == "export" and e["exp1"] != e["exp0"] and e["exp0"] != 0)
+    if i is None:
+        return None
+    return events[:i] + [dict(events[i], exp1=events[i]["exp0"])] + events[i + 1:]
+
+
+def _write_frozen(events):
+    # A write reaches a frozen cell (MutableItems without its frozen test)
+    i = _first(events, lambda e: e["ev"] == "freeze")
+    if i is None:
+        return None
+    g = next((e["g"] for e in events[:i] if e.get("c") == events[i]["c"] and "g" in e and e["ev"] in ("adopt", "copied")), 0)
+    return events[:i + 1] + [dict(ev="write", t=events[i]["t"], cur=events[i]["cur"], c=events[i]["c"], g=g)] + events[i + 1:]
+
+
+def _miss_lookup(events):
+    # Find misses the cell its registry has for the data
+    i = _first(events, lambda e: e["ev"] == "find" and e["hit"] != 0)
+    if i is None:
+        return None
+    rest = events[i + 1:]
+    if rest and rest[0]["ev"] == "link":
+        rest = rest[1:]
+    return events[:i] + [dict(events[i], hit=0)] + rest
+
+
+def _foreign_read(events):
+    # A read through an attached adapter while another registry runs
+    i = _first(events, lambda e: e["ev"] == "hit" and e["cur"] != 0)
+    if i is None:
+        return None
+    return events[:i] + [dict(events[i], cur=events[i]["cur"] + 1000)] + events[i + 1:]
+
+
+def _other_thread_write(events):
+    # Another thread writes the cell
+    i = _first(events, lambda e: e["ev"] == "write")
+    if i is None:
+        return None
+    return events[:i] + [dict(events[i], t=events[i]["t"] + 1000)] + events[i + 1:]
+
+
+def _no_restore(events):
+    # EndCall does not restore the outer call (1e15c2d taken out): the outer call's next export
+    # reads the nested call's number
+    i = _first(events, lambda e: e["ev"] == "end" and e["outer"] != 0)
+    if i is None:
+        return None
+    j = _first(events[i + 1:], lambda e: e["ev"] in ("export", "unshare") and e["call"] == events[i]["outer"])
+    if j is None:
+        return None
+    j += i + 1
+    return events[:j] + [dict(events[j], call=events[i]["call"])] + events[j + 1:]
+
+
+def _unknown_event(events):
+    # A code path the spec has no step for
+    return events[:1] + [dict(ev="retarget", t=1, cur=0)] + events[1:]
+
+
+MUTANTS = {
+    "drop-live-unlink": ("an adapter goes attached to a live cell", _drop_live_unlink,
+                         {"violated: NoUseAfterFree", "violated: LinksAgree", "violated: TableAgrees"}),
+    "keep-first-mark": ("0337: a nested call's export keeps the outer call's mark", _keep_mark,
+                        {"violated: MarkRule"}),
+    "write-frozen": ("a write to a frozen cell", _write_frozen, {"violated: FrozenUnwritten"}),
+    "miss-lookup": ("a lookup misses its registry's cell", _miss_lookup, {"violated: TableAgrees"}),
+    "foreign-read": ("a read of another registry's live cell", _foreign_read, {"violated: NoForeignCell"}),
+    "other-thread-write": ("a write by a thread that does not own the cell", _other_thread_write,
+                           {"violated: NoCrossThreadWrite"}),
+    "no-call-restore": ("EndCall leaves the nested call running", _no_restore, {"violated: CallsAgree"}),
+    "unknown-event": ("an event the spec has no step for", _unknown_event, {"no step takes this event"}),
+}
+
+
+def self_test(jar, logs, base):
+    """Each mutant on the first of the logs it applies to: it must fail as expected."""
+    failed = 0
+    for name, (note, mutate, expected) in MUTANTS.items():
+        for path in logs:
+            mutated = mutate(read_log(path))
+            if mutated is not None:
+                break
+        else:
+            print(f"BAD mutant {name:22} applies to none of the logs")
+            failed += 1
+            continue
+        mpath = os.path.join(base, f"mutant-{name}.ndjson")
+        with open(mpath, "w", encoding="utf-8") as out:
+            out.writelines(json.dumps(e) + "\n" for e in mutated)
+        verdict = check_trace(jar, mpath, os.path.join(base, f"tlc-mutant-{name}"))[0]
+        ok = verdict in expected
+        failed += not ok
+        print(f"{'ok ' if ok else 'BAD'} mutant {name:22} {verdict:32} {note} ({os.path.basename(path)})", flush=True)
+    return failed
+
+
 def trivial(events):
     """Nothing but registries made and gone and reads before any promotion: nothing to check."""
     return all(e["ev"] in ("regnew", "regfree") or (e["ev"] == "skip" and e["e"] == 0) for e in events)
@@ -146,6 +261,8 @@ def main(argv=None):
     parser.add_argument("--per-suite", action="store_true",
                         help="one trace for each test suite rather than each test (for wide filters)")
     parser.add_argument("--jobs", type=int, default=2, help="TLC runs at a time")
+    parser.add_argument("--mutants", action="store_true",
+                        help="also check that each mutant of the traces fails (MUTANTS)")
     parser.add_argument("--no-fix-nested-export", action="store_true",
                         help="check the mark rule without #689's shared mark")
     args = parser.parse_args(argv)
@@ -175,6 +292,10 @@ def main(argv=None):
             if where:
                 index, event = where
                 print(f"      event {index} of {path}: {json.dumps(event)}")
+    if args.mutants:
+        # The richest traces first: they have every kind of event a mutant changes
+        logs = sorted((p for _, p in traces), key=lambda p: -os.path.getsize(p) if os.path.exists(p) else 0)
+        failed += self_test(args.jar, logs, base)
     print(f"{len(traces)} traces, {failed} failed; logs in {base}")
     return 1 if failed else 0
 

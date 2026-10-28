@@ -76,21 +76,21 @@ public:
 } // namespace v2
 } // namespace jinja2
 
-#define JINJA2CPP_CELL_TRACE_EVENT(kind, ...)                                         \
-    do                                                                                \
-    {                                                                                 \
-        if (::jinja2::detail::CellTrace::On())                                        \
-        {                                                                             \
-            using Trace = ::jinja2::detail::CellTrace;                                \
-            ::jinja2::detail::CellTrace::Event(kind, { __VA_ARGS__ });                \
-        }                                                                             \
+#define JINJA2CPP_CELL_TRACE_EVENT(kind, ...) \
+    do \
+    { \
+        if (::jinja2::detail::CellTrace::On()) \
+        { \
+            using Trace = ::jinja2::detail::CellTrace; \
+            ::jinja2::detail::CellTrace::Event(kind, { __VA_ARGS__ }); \
+        } \
     } while (false)
 
 #else
 
 #define JINJA2CPP_CELL_TRACE_EVENT(kind, ...) \
-    do                                        \
-    {                                         \
+    do \
+    { \
     } while (false)
 
 #endif
