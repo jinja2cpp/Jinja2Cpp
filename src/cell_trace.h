@@ -50,8 +50,8 @@ public:
     };
     struct Field
     {
-        const char* name;
-        Space space;
+        const char* name = nullptr;
+        Space space = Space::Num;
         int64_t num = 0;
         const void* ptr = nullptr;
         const CellLink* const* list = nullptr;

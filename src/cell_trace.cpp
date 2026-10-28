@@ -6,8 +6,10 @@
 #include "cycle_collector.h"
 
 #include <atomic>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <initializer_list>
 #include <mutex>
 #include <unordered_map>
 
@@ -35,7 +37,7 @@ public:
 
     void Write(const char* kind, std::initializer_list<CellTrace::Field> fields) noexcept
     {
-        const std::lock_guard<std::mutex> lock(m_mutex);
+        const std::scoped_lock lock(m_mutex);
         int64_t values[16] = {};
         size_t at = 0;
         for (const auto& field : fields)
@@ -48,7 +50,7 @@ public:
             }
             values[at++] = value;
         }
-        std::fprintf(m_file, "{\"ev\":\"%s\",\"t\":%d,\"cur\":%lld", kind, Thread(), static_cast<long long>(Lookup(m_regs, CycleCollector::CurrentCells())));
+        std::fprintf(m_file, R"({"ev":"%s","t":%d,"cur":%lld)", kind, Thread(), static_cast<long long>(Lookup(m_regs, CycleCollector::CurrentCells())));
         at = 0;
         for (const auto& field : fields)
         {
@@ -141,9 +143,9 @@ private:
     }
     static int Thread() noexcept
     {
-        static std::atomic<int> s_next{ 0 };
-        static thread_local const int s_thread = ++s_next;
-        return s_thread;
+        static std::atomic<int> nextThread{ 0 };
+        static thread_local const int thread = ++nextThread;
+        return thread;
     }
 
     std::mutex m_mutex;
@@ -164,15 +166,15 @@ private:
 // after main returns, and log their Finish
 TraceLog& Log()
 {
-    static auto* const s_log = new TraceLog(); // NOLINT(cppcoreguidelines-owning-memory)
-    return *s_log;
+    static auto* const log = new TraceLog(); // NOLINT(cppcoreguidelines-owning-memory)
+    return *log;
 }
 } // namespace
 
 bool CellTrace::On() noexcept
 {
-    static const bool s_on = Log().On();
-    return s_on;
+    static const bool on = Log().On();
+    return on;
 }
 
 void CellTrace::Event(const char* kind, std::initializer_list<Field> fields) noexcept
