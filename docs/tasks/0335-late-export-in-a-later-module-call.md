@@ -15,9 +15,13 @@ the later export shares the earlier call's items: `NoteExport` keeps the earlier
 append copies the items and the later call's kept value misses the append. Dicts behave the
 same. Found by the Codex review of #673 (comment 4395529329).
 
-Nothing is shared mutably: both kept values are immutable snapshots and no call writes them. The
-later kept value is the state at its `keep()` instead of the call's final state, which is the
-contract row "from a module call: that call's final state" (docs/api-2.0.md, item 9).
+For sequential calls, nothing is shared mutably: both kept values are immutable snapshots and no
+call writes them. The later kept value is the state at its `keep()` instead of the call's final
+state, which is the contract row "from a module call: that call's final state"
+(docs/api-2.0.md, item 9). When the later call is nested in the earlier one (a host callback),
+the earlier call writes on in place and changes the nested call's kept value after the nested
+call ended: that is task 0337, found by the TLA+ model in `tla/`, and the holder proposal below
+must keep it copying.
 
 The pull is between that contract and the cost of a module call. Copying at the export when an
 earlier snapshot still shares the items fixes it, but `Module/keep` (a call that only hands the
@@ -29,6 +33,9 @@ itself (`ExportListView` holds `const ValuesList&` plus its owner, internal_valu
 cell keeps the holder of the call that runs; `Unshare` copies into new storage and re-points
 the current call's holder at it, so the earlier call's holder keeps the old items. An export
 in a call with no earlier snapshot needs no holder, so `Module/keep` keeps its allocations.
+
+The model's `open-0335-late-export` run (`tla/check.py`) gives this task's counterexample; it
+should pass once the fix is modelled.
 
 **Done when.** `BorrowedCellsKept` has rows for a list and a dict where call 2 runs `keep(l)`
 before `l.append(2)` and keeps `[0, 1, 2]` while call 1's value stays `[0, 1]`, ASan and TSan

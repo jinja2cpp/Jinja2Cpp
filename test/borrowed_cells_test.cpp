@@ -458,6 +458,37 @@ TEST(BorrowedCellsKept, ModuleCallAfterANestedCallCopies)
     EXPECT_EQ("[0, 2, 3]", m.keeper.Show(0));
 }
 
+TEST(BorrowedCellsKept, ModuleNestedKeepOfTheOuterCallsExport)
+{
+    // The outer call writes and hands out `l`, a nested call of the same module hands out `l`
+    // without writing it, and the outer call writes again after the nested call returned. The
+    // cell keeps the outer call's export mark, so that write goes in place and changes what the
+    // nested call handed out after it ended. Found by the TLA+ model (tla/, finding F1). This
+    // row pins the current behaviour. Task 0337 makes the nested call's value "[0, 1]"; the
+    // outer call's value then misses its own later write too, which is the 0335 limit
+    Keeper keeper;
+    ValuesMap params{ { "l", ValuesList{ 0 } } };
+    keeper.AddTo(params);
+    TemplateModule module;
+    params["again"] = UserCallable(
+        [&module](const UserCallableParams&) {
+            module.exports["show"].As<UserCallable>().callable(UserCallableParams{});
+            return Value();
+        },
+        {});
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro show() %}{% set _ = keep(l) %}{% endmacro %}"
+                           "{% macro outer() %}{% set _ = l.append(1) %}{% set _ = keep(l) %}"
+                           "{% set _ = again() %}{% set _ = l.append(2) %}{% endmacro %}"));
+    auto made = tpl.MakeModule(params);
+    ASSERT_TRUE(!!made);
+    module = std::move(*made);
+    module.exports["outer"].As<UserCallable>().callable(UserCallableParams{});
+    ASSERT_EQ(2u, keeper.kept.size());
+    EXPECT_EQ("[0, 1, 2]", keeper.Show(0));
+    EXPECT_EQ("[0, 1, 2]", keeper.Show(1));
+}
+
 TEST(BorrowedCellsKept, ModuleSortWhoseKeyCopiesTwice)
 {
     // The key function of sort() runs two calls that each copy `l` on write (D8) and hand it to
