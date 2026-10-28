@@ -1376,6 +1376,20 @@ std::shared_ptr<const void> ExportOwner(const BySharedVal<T>& holder)
 {
     return holder.GetOwner();
 }
+
+// The owner of data that lives only as long as its adapters (a user callable's result, a module
+// call's argument), which a module's cell of it checks (BorrowedCell::IsUnheld); none for the
+// data the host or a global keeps
+template<typename Holder>
+std::weak_ptr<const void> AdaptersOwner(const Holder& /*holder*/)
+{
+    return {};
+}
+template<typename T>
+std::weak_ptr<const void> AdaptersOwner(const BySharedVal<T>& holder)
+{
+    return holder.GetOwner();
+}
 } // namespace
 
 template<template<typename> class Holder>
@@ -1886,7 +1900,7 @@ public:
         const auto* cell = m_link.Get(*this);
         return cell ? cell->MutableItems() : nullptr;
     }
-    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData()); }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData(), AdaptersOwner(m_values)); }
     [[nodiscard]] bool IsBorrowed() const override { return true; }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericList CreateGenericList() const override
@@ -2967,7 +2981,7 @@ public:
         const auto* cell = m_link.Get(*this);
         return cell ? cell->MutableDict() : nullptr;
     }
-    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData()); }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData(), AdaptersOwner(m_values)); }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {

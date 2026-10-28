@@ -147,8 +147,10 @@ public:
     // Attaches the adapter to a new cell holding `storage` (a list or dict the template owns,
     // the copy of the adapter's items) for the data `self` names; false outside a render, where
     // the caller keeps the copy instead, and for an adapter that reads a frozen cell. `held`: the adapter is a
-    // global's (ValueObject::IsGlobalData)
-    bool Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held) const;
+    // global's (ValueObject::IsGlobalData). `owner`: what owns data that lives only as long as
+    // its adapters (a user callable's result, a module call's argument), empty for the host's
+    // data
+    bool Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, std::weak_ptr<const void> owner = {}) const;
 
 private:
     friend class BorrowedCell;
@@ -184,7 +186,7 @@ private:
 class BorrowedCell final : public ValueObject
 {
 public:
-    BorrowedCell(InternalValue storage, InternalValue source, bool isList, const BorrowedCells& registry);
+    BorrowedCell(InternalValue storage, InternalValue source, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner = {});
     BorrowedCell(const BorrowedCell&) = delete;
     BorrowedCell(BorrowedCell&&) = delete;
     BorrowedCell& operator=(const BorrowedCell&) = delete;
@@ -235,6 +237,9 @@ private:
     JINJA2CPP_CELL_NOINLINE bool Unshare() const;
     // Notes that a value handed to the host shares the items
     void NoteExport() const noexcept;
+    // Whether nothing can read the cell any more but the registry: no value holds it, its
+    // source alone holds its data and no other adapter is attached to it (BorrowedCells::DropUnheld)
+    [[nodiscard]] bool IsUnheld() const noexcept;
     void Bind() const noexcept;
 
     mutable InternalValue m_storage;
@@ -247,6 +252,9 @@ private:
     // (a user callable's result), so that the identity the registry keys the cell by is not
     // reused while the registry has the cell. Dropped when the cell freezes
     mutable InternalValue m_source;
+    // The owner of data that lives only as long as its adapters, empty for the host's data
+    // (CellLink::Adopt)
+    std::weak_ptr<const void> m_owner;
     // Views into m_storage, which owns them
     mutable const IListAccessor* m_list = nullptr;
     mutable const IMapAccessor* m_map = nullptr;
@@ -371,6 +379,11 @@ public:
     }
     // The call BeginCall started ends: the call it nested in runs again
     void EndCall(uint32_t outer) noexcept { m_call = outer; }
+    // Drops the cells nothing reads any more and nothing can find again: the cells of data that
+    // lived for one call of a template module (an argument, a user callable's result), which
+    // the module's cells would otherwise keep until the module goes. A cell of the host's data
+    // stays, as a later call may write it again
+    void DropUnheld() noexcept;
 
 private:
     friend class CellLink;
@@ -380,6 +393,8 @@ private:
     using Table = robin_hood::unordered_flat_map<const void*, IntrusivePtr<const BorrowedCell>>;
 
     void Finish(CycleCollector* collector) noexcept;
+    // One pass of DropUnheld; false when it dropped none
+    bool DropUnheldOnce() noexcept;
 
     std::unique_ptr<Table> m_cells;
     // The template module's call that runs, or 0 for a render's registry

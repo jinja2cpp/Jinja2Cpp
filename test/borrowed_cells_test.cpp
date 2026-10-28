@@ -341,6 +341,28 @@ TEST(BorrowedCellsKept, ModuleDictCopiesOnALaterWrite)
     EXPECT_EQ("{'a': 0, 'b': 2}", keeper.Show(1));
 }
 
+TEST(BorrowedCellsKept, ModuleStoredArgumentCopiesOnALaterWrite)
+{
+    // D8 for an argument the module keeps in its namespace: its cell is held, so it stays, and a
+    // later call's write copies the items the kept value shares (verifier round 12 of #673)
+    Keeper keeper;
+    ValuesMap params;
+    keeper.AddTo(params);
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% set ns = namespace(l=none) %}{% macro store(xs) %}{% set _ = xs.append(2) %}{% set ns.l = xs %}{% set _ = keep(xs) %}{% endmacro %}"
+                           "{% macro app(v) %}{% set _ = ns.l.append(v) %}{{ ns.l }}{% endmacro %}"));
+    auto module = tpl.MakeModule(params).value();
+    auto call = [&module](const std::string& name, Value arg) {
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ std::move(arg) };
+        return module.exports[name].As<UserCallable>().callable(callParams).AsString();
+    };
+    call("store", ValuesList{ 1 });
+    EXPECT_EQ("[1, 2, 3]", call("app", 3));
+    EXPECT_EQ("[1, 2, 3, 4]", call("app", 4));
+    EXPECT_EQ("[1, 2]", keeper.Show(0));
+}
+
 TEST(BorrowedCellsKept, ModuleLoopWhileACallbackCopiesTwice)
 {
     // A loop over the host's list in one module call, whose callback runs two calls that each
@@ -692,47 +714,45 @@ TEST(BorrowedCellsSingle, ModuleKeepsItsWritesAcrossCalls)
     EXPECT_EQ("[0, 1, 2]", call(2));
 }
 
-TEST(BorrowedCellsSingle, ModuleCallFreesTheArgumentsItWrote)
+TEST(BorrowedCellsSingle, ModuleCallFreesTheCellsOfItsOwnData)
 {
-    // An argument the macro writes, also a nested one, is the call's own copy: the module keeps
-    // nothing of it once the call ends. A borrowed cell of it would stay in the module's cells,
-    // one more for each call. The callable in the arguments holds the token
-    Template tpl;
-    ASSERT_TRUE(!!tpl.Load("{% macro consume(xs, d) %}{% set _ = xs.append(1) %}{% set _ = xs[0].append(2) %}{% set _ = d.update(k=1) %}"
-                           "{{ xs|length }}{{ xs[0] }}{{ d|length }}{% endmacro %}"));
-    auto module = tpl.MakeModule({}).value();
+    // An argument or a user callable's result that the macro writes lives for the call: once
+    // nothing holds it, the module drops its cell when the call ends, instead of keeping one
+    // more for each call. The callable in the data holds the token
     auto token = std::make_shared<int>(0);
     UserCallable held([token](const UserCallableParams&) { return Value(); }, {});
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro consume(xs, d) %}{% set _ = xs.append(1) %}{% set _ = d.update(k=1) %}{% set r = make() %}"
+                           "{% set _ = r.append(1) %}{{ xs|length }}{{ d|length }}{{ r|length }}{% endmacro %}"));
+    ValuesMap params{ { "make", UserCallable([&held](const UserCallableParams&) { return Value(ValuesList{ held }); }, {}) } };
+    auto module = tpl.MakeModule(params).value();
     for (int i = 0; i != 3; ++i)
     {
         UserCallableParams callParams;
-        callParams.extraPosArgs = ValuesList{ ValuesList{ ValuesList{ 0 }, held }, ValuesMap{ { "f", held } } };
-        EXPECT_EQ("3[0, 2]2", module.exports["consume"].As<UserCallable>().callable(callParams).AsString());
+        callParams.extraPosArgs = ValuesList{ ValuesList{ 0, held }, ValuesMap{ { "f", held } } };
+        EXPECT_EQ("322", module.exports["consume"].As<UserCallable>().callable(callParams).AsString());
     }
     held = UserCallable();
     EXPECT_EQ(1, token.use_count());
 }
 
-TEST(BorrowedCellsSingle, ModuleKeepsTheCellsOfCallableResults)
+TEST(BorrowedCellsSingle, ModuleCallFreesTheCellsOfItsNestedData)
 {
-    // Current behaviour, docs/tasks/0336: a list a host callable returns in a module call and
-    // the call writes gets a cell in the module's cells, which keeps the list until the module
-    // goes. Target: the token is freed after each call (use_count 1 below)
+    // The same when the data holds containers, written at both levels: the copy's items hold
+    // the nested adapters, whose cells go once the outer cell has gone
     auto token = std::make_shared<int>(0);
     UserCallable held([token](const UserCallableParams&) { return Value(); }, {});
     Template tpl;
-    ASSERT_TRUE(!!tpl.Load("{% macro grow() %}{% set r = make() %}{% set _ = r.append(1) %}{{ r|length }}{% endmacro %}"));
+    ASSERT_TRUE(!!tpl.Load("{% macro consume(xs) %}{% set _ = xs.append(1) %}{% set _ = xs[0].append(2) %}{% set _ = xs[1].update(k=1) %}"
+                           "{{ xs|length }}{{ xs[0] }}{{ xs[1]|length }}{% endmacro %}"));
+    auto module = tpl.MakeModule({}).value();
+    for (int i = 0; i != 3; ++i)
     {
-        ValuesMap params{ { "make", UserCallable([&held](const UserCallableParams&) { return Value(ValuesList{ held }); }, {}) } };
-        auto module = tpl.MakeModule(params).value();
-        for (int i = 0; i != 3; ++i)
-        {
-            EXPECT_EQ("2", module.exports["grow"].As<UserCallable>().callable(UserCallableParams()).AsString());
-        }
-        held = UserCallable();
-        // The test, and the source and the copy of each call's list
-        EXPECT_EQ(7, token.use_count());
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ ValuesList{ ValuesList{ 0, held }, ValuesMap{ { "f", held } } } };
+        EXPECT_EQ("3[0, , 2]2", module.exports["consume"].As<UserCallable>().callable(callParams).AsString());
     }
+    held = UserCallable();
     EXPECT_EQ(1, token.use_count());
 }
 

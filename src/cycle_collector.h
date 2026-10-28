@@ -134,7 +134,12 @@ public:
         , m_collector(cells)
     {
     }
-    ~ModuleCallCollector() { m_cells.EndCall(m_outerCall); }
+    ~ModuleCallCollector()
+    {
+        // Last in the call: what the call made is gone, and with it the adapters of its data
+        m_cells.DropUnheld();
+        m_cells.EndCall(m_outerCall);
+    }
     ModuleCallCollector(const ModuleCallCollector&) = delete;
     ModuleCallCollector(ModuleCallCollector&&) = delete;
     ModuleCallCollector& operator=(const ModuleCallCollector&) = delete;

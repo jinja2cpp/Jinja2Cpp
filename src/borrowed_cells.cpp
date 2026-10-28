@@ -43,9 +43,10 @@ uint32_t CellCounters::NextEpoch() noexcept
 }
 } // namespace detail
 
-BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, bool isList, const BorrowedCells& registry)
+BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner)
     : m_storage(std::move(storage))
     , m_source(std::move(source))
+    , m_owner(std::move(owner))
     , m_registry(&registry)
     , m_isList(isList)
 {
@@ -100,6 +101,40 @@ void BorrowedCell::NoteExport() const noexcept
         return;
     }
     m_exportedIn = m_registry->m_call;
+}
+
+bool BorrowedCell::IsUnheld() const noexcept
+{
+    // The registry's reference alone, for data that lives only as long as its adapters. The only
+    // other adapters of the data are the anchors of copied items (LifetimeAnchor), which are never
+    // read; so when nothing but the cell holds the source, no adapter of the data can be read or
+    // made again, and no later call finds the cell. The data of the host, or of a global, can be
+    // lent again at any time: its cell stays
+    if (m_frozen || use_count() != 1 || m_owner.expired())
+    {
+        return false;
+    }
+    const ValueObject* owner = nullptr;
+    const CellLink* link = nullptr;
+    if (m_isList)
+    {
+        if (auto list = AsList(m_source))
+        {
+            owner = list->GetOwner();
+            link = list->GetAccessor() ? list->GetAccessor()->GetCellLink() : nullptr;
+        }
+    }
+    else if (auto map = AsMap(m_source))
+    {
+        owner = map->GetOwner();
+        link = map->GetAccessor() ? map->GetAccessor()->GetCellLink() : nullptr;
+    }
+    if (!owner || owner->use_count() != 1)
+    {
+        return false;
+    }
+    // Only the source's own adapter reads the cell
+    return m_links.empty() || (m_links.size() == 1 && m_links.front() == link);
 }
 
 bool BorrowedCell::Unshare() const
@@ -217,7 +252,7 @@ void CellLink::Inherit(const CellLink& other) noexcept
     m_seenEpoch = Attached;
 }
 
-bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held) const
+bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, std::weak_ptr<const void> owner) const
 {
     // An adapter of a value kept after its render: nothing writes the frozen cell, and the caller
     // writes its copy instead (docs/tasks/0331)
@@ -234,7 +269,7 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     {
         cells->m_cells = std::make_unique<BorrowedCells::Table>();
     }
-    auto cell = MakeRef<BorrowedCell>(std::move(storage), self, isList, *cells);
+    auto cell = MakeRef<BorrowedCell>(std::move(storage), self, isList, *cells, std::move(owner));
     if (isList ? !cell->m_items : !cell->m_map)
     {
         return false;
@@ -267,6 +302,61 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     detail::CellCounters::AddLive(1);
     // The other adapters of the same data look the cell up on their next read
     detail::CellCounters::NextEpoch();
+    return true;
+}
+
+void BorrowedCells::DropUnheld() noexcept
+{
+    // A dropped cell lets go of its items, which may hold the only source of another cell (the
+    // adapter of a nested list): again until a pass drops none
+    while (m_cells && DropUnheldOnce())
+    {
+    }
+}
+
+bool BorrowedCells::DropUnheldOnce() noexcept
+{
+    size_t count = 0;
+    for (const auto& [identity, cell] : *m_cells)
+    {
+        count += cell->IsUnheld() ? 1U : 0U;
+    }
+    if (count == 0)
+    {
+        return false;
+    }
+    std::vector<IntrusivePtr<const BorrowedCell>> dropped;
+    try
+    {
+        dropped.reserve(count);
+    }
+    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
+    {
+        // Out of memory: the cells stay until the module goes, as before the call ended
+        return false;
+    }
+    // Out of the registry first, while the data the identity names is alive: the identity is
+    // not reused before its cell is gone from the table
+    for (auto entry = m_cells->begin(); entry != m_cells->end();)
+    {
+        if (entry->second->IsUnheld())
+        {
+            dropped.push_back(entry->second);
+            entry = m_cells->erase(entry);
+        }
+        else
+        {
+            ++entry;
+        }
+    }
+    for (const auto& cell : dropped)
+    {
+        // The source's adapter detaches from the cell, which is still alive
+        cell->m_source = InternalValue();
+    }
+    const auto removed = static_cast<uint32_t>(dropped.size());
+    dropped.clear();
+    detail::CellCounters::RemoveLive(removed);
     return true;
 }
 

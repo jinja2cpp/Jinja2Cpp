@@ -141,6 +141,7 @@ Left: a container a module call made that holds a host container keeps reading t
 live cell (task 0332).
 
 A module call that hands out a container before its first write to it keeps the earlier call's
-state (task 0335). The cells of host data that lives for one call (a host callable's result,
-a generic container made per call) stay until the module goes (task 0336); a `ValuesList` or
-`ValuesMap` argument of a module call is the call's own list or dict and makes no cell.
+state (task 0335). A module call ends by dropping the cells of data that lived for the call (an
+argument, a host callable's result) once nothing holds their source
+(`BorrowedCells::DropUnheld`); a generic container the host makes for each call keeps its
+cell until the module goes (task 0336).
