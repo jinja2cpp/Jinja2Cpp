@@ -10,10 +10,12 @@
 #include <jinja2cpp/value.h>
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <new>
 #include <utility>
+#include <vector>
 
 namespace jinja2
 {
