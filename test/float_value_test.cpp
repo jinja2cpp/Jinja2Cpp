@@ -196,6 +196,8 @@ TEST(FloatValueTest, ErrorInfoPrintsTheFloatAsTheTemplateDoes)
     EXPECT_NE(std::string::npos, ErrorInfo(data).ToString().find("Undefined value: 12.123")) << ErrorInfo(data).ToString();
 }
 
+// FloatAsDecimalDouble is internal, not exported from a shared library
+#ifndef JINJA2CPP_LINK_AS_SHARED
 // Every 4099th float, plus the bit patterns at the edges: the converted double gives the
 // float back, and prints at most 9 significant digits (the full 2^32 sweep is recorded in
 // the PR that added this test)
@@ -232,3 +234,4 @@ TEST(FloatValueTest, SampledFloatsRoundTrip)
         check(bits);
     }
 }
+#endif // JINJA2CPP_LINK_AS_SHARED
