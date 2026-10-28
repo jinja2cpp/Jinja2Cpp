@@ -759,7 +759,8 @@ HostLetsGo(o) ==
     /\ "hostgen" \in Actions
     /\ Idle /\ hkeep[o]
     /\ hkeep' = [hkeep EXCEPT ![o] = FALSE]
-    /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt, ns, lag,
+    /\ lag' = lag \cup {o}
+    /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt, ns,
                    lock, inc, fails, dirty, dirtyBy, pendDrop, wr, flag>>
 
 -----------------------------------------------------------------------------
@@ -814,7 +815,8 @@ NoUseAfterFree ==
 NoForeignCell == ~flag.foreign
 
 \* The host still holds, or let go of since the last DropUnheld, an adapter of the data at o
-\* (keep([x]) of an argument): its cell stays until the first call's end after it lets go
+\* (keep([x]) of an argument) or its copy of a generic container there: the cell stays until the
+\* first call's end after the host lets go
 HeldOut(o) == o \in lag \/ \E e \in LiveEx : ex[e].kind \in {"view", "raw"} /\ ex[e].idn = o
 
 \* 6. Between module calls the registry keeps no cell of a finished call's own data
