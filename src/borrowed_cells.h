@@ -376,7 +376,8 @@ public:
     {
         const auto outer = m_call;
         // 0 is a render's call and SharedExport no call's (BorrowedCell::NoteExport)
-        if (++m_lastCall == 0 || m_lastCall == BorrowedCell::SharedExport)
+        ++m_lastCall;
+        if (m_lastCall == 0 || m_lastCall == BorrowedCell::SharedExport)
         {
             m_lastCall = 1;
         }
