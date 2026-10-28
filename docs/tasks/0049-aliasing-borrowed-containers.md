@@ -48,3 +48,44 @@ Keep the read path free of allocations for templates that never mutate.
 
 **Done when.** No line of `test/parity/divergences/` names 0049, and an ASan/LSan run of
 the corpus is clean.
+
+**Plan.** Approved 2026-10-25 (D1-D8), `/mnt/project-files/release-2.0/0049-plan.md`; phases
+P1 (collector, #663, done), P2 (borrowed cells), P3 (loops, folds 0304), P4 (0212 keys and
+callables), P5 (JSON identity and unpacking).
+
+**P2, borrowed cells.** An adapter of the host's data (`ValuesListAdapter`, `ValuesMapAdapter`,
+`GenericListAdapter`, `GenericMapAdapter`) carries a `CellLink` (src/borrowed_cells.h). The first
+write copies the data into a `BorrowedCell` that the render's registry (`BorrowedCells`, one per
+render and one per template module) keys by the data's identity; the writing adapter and every
+other adapter of the same data read the cell from then on (a global epoch tells them to look).
+The host's data is never written (D2), and the registry detaches its adapters when the render
+ends, so the thread's globals read their own data again in the next render. `list()` of the
+host's data now copies it, as Python does. `methods.context_alias` and
+`methods.operand_changed_by_call` match; rows `methods.alias_*` and test/borrowed_cells_test.cpp
+pin the rest.
+
+A container the render hands to a user callable (an argument, which the host may keep) never
+links a cell and costs no copy (task 0331): written before the call it is the render's copy,
+which freezes when the render ends, so the host keeps the final state and it outlives the
+params; handed out before any write it is a read-only view of the host's data, during the
+render too (Python shows the later writes: a deliberate divergence, as the host must never hold
+mutable state a render shares). A global's data is always handed out as the original. The full
+table is in 0331 and `docs/api-2.0.md`.
+
+Perf: an item adapter in a block (`ItemAdapters`) has a `CellLink` whose destructor does
+nothing; the block releases its slots, and skips that when no cell existed since it was made
+(`QuietEpoch`). An adapter on its own is an `OwnedAdapter`, which only adds a destructor that
+releases the link, so the adapter's code is compiled once. A map item of the caller's
+data skips the convertor's visit (`LendMapItem`). Every host-data row is within +1% of master
+c39c06a (`bench/count.py`, convert and reflect).
+
+Left for later phases:
+- the loop rows (`pop` in a loop over context data, `loop.length` after an append): P3;
+- a JSON value read twice gives two accessors (`{% set y = j.a %}{% do j.a.append(2) %}{{ y }}`
+  prints `[1]`, Python `[1, 2]`): the binding has no stable identity until P5's `IJsonNode`
+  marker (plan section 9);
+- the write-back of a copy into its variable or owner (`EvaluateMutableRoot`,
+  `EvaluateIndices(forMutation)`) stays for the containers that are not the host's data (a
+  context map of the engine, a computed list), and stores the same value back for a cell.
+- what a host callable keeps of a host container the render wrote: done in 0331; P4's round
+  trip of an exported container builds on its exports.

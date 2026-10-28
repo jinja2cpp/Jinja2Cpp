@@ -113,11 +113,13 @@ inline std::shared_ptr<const GlobalsSnapshot>& ThreadGlobalsSnapshot()
 
 // The globals of `env` for a render on this thread: converted again only when they changed since
 // the last render here, or a render changed one in place. The render holds the result, which a
-// render it starts may replace
+// render it starts may replace. A render that attached a global to one of its cells keeps its
+// snapshot, and one it starts converts its own
 inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::TemplateEnvImpl& env)
 {
-    auto& cached = ThreadGlobalsSnapshot();
-    if (!cached || cached->generation != env.globalsGeneration.load(std::memory_order_acquire))
+    auto& workspace = RenderWorkspace::ForThisThread();
+    auto& cached = workspace.Globals();
+    if (workspace.IsGlobalAttached() || !cached || cached->generation != env.globalsGeneration.load(std::memory_order_acquire))
     {
         auto snapshot = std::make_shared<GlobalsSnapshot>();
         {
@@ -132,6 +134,7 @@ inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::Templat
             snapshot->values[name] = LendGlobal(value, snapshot->source);
         }
         cached = std::move(snapshot);
+        workspace.GlobalsConverted();
     }
     return cached;
 }
@@ -409,6 +412,7 @@ public:
         try
         {
             // First, so that it ends last: when nothing of the render holds values any more
+            // It also keeps the render's copies of the host's data (docs/tasks/0049)
             const CycleCollector cycles;
             // Before anything else the render does, the conversion of the params included
             const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr, m_settings->bigIntBackend);

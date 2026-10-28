@@ -1830,7 +1830,16 @@ ListRef ListOf(const InternalValue& self)
 InternalValueList& MutableItems(const InternalValue& self)
 {
     auto* items = ListOf(self).GetMutableItems();
-    // The call path makes the receiver mutable first (MakeMutable)
+    // The call path makes the receiver mutable first (MakeMutable); a bound method kept its
+    // receiver as it was read (`set f = l.append`), and a list of the host's data takes its copy
+    // only now (docs/tasks/0049)
+    if (!items)
+    {
+        if (IsMutable(MakeMutable(self)))
+        {
+            items = ListOf(self).GetMutableItems();
+        }
+    }
     if (!items)
     {
         Raise("this list cannot be changed");
@@ -1974,15 +1983,17 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
         reverse = ConvertToBool(*reverseArg);
     }
 
-    auto& items = MutableItems(self);
     InternalValueList values;
-    values.swap(items);
+    values.swap(MutableItems(self));
+    // The items are found again after the key calls: a module call a key function makes can hand
+    // the list's items to the host and give the list new ones (docs/tasks/0331, D8), and the
+    // items the host was handed are never written again
     struct Restore
     {
-        InternalValueList& items;
+        const InternalValue& self;
         InternalValueList& values;
-        Restore(InternalValueList& listItems, InternalValueList& taken)
-            : items(listItems)
+        Restore(const InternalValue& list, InternalValueList& taken)
+            : self(list)
             , values(taken)
         {
         }
@@ -1993,12 +2004,19 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
         ~Restore()
         {
             // Whatever a key call put into the list meanwhile is dropped, as in CPython
-            if (!values.empty())
+            if (values.empty())
             {
-                items.swap(values);
+                return;
+            }
+            try
+            {
+                MutableItems(self).swap(values);
+            }
+            catch (...) // NOLINT(bugprone-empty-catch): out of memory copying the list's items; it keeps what the key calls left
+            {
             }
         }
-    } restore{ items, values };
+    } restore{ self, values };
 
     InternalValueList keys;
     if (keyFn)
@@ -2020,15 +2038,18 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
         const auto& right = sortKeys[reverse ? idx1 : idx2];
         return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));
     });
+    // Found before the items move: it may copy the list (D8), and when that fails the restore
+    // guard still holds them
+    auto& items = MutableItems(self);
+    // CPython's allocated == -1 sentinel: the list was left with no storage, and any change
+    // that put an item in it gave it some, even when a later pop emptied it again
+    const bool modified = items.capacity() != 0;
     InternalValueList sorted;
     sorted.reserve(values.size());
     for (auto idx : order)
     {
         sorted.push_back(std::move(values[idx]));
     }
-    // CPython's allocated == -1 sentinel: the list was left with no storage, and any change
-    // that put an item in it gave it some, even when a later pop emptied it again
-    const bool modified = items.capacity() != 0;
     values.clear();
     items = std::move(sorted);
     if (modified)
@@ -2086,6 +2107,14 @@ MapRef MapOf(const InternalValue& self)
 TemplateDict& MutableDict(const InternalValue& self)
 {
     auto* items = MapOf(self).GetMutableItems();
+    // As MutableItems does for a list
+    if (!items)
+    {
+        if (IsMutable(MakeMutable(self)))
+        {
+            items = MapOf(self).GetMutableItems();
+        }
+    }
     if (!items)
     {
         Raise("this dict cannot be changed");
@@ -2553,25 +2582,34 @@ InternalValue MakeMutable(const InternalValue& value)
         auto items = list->ToValueList();
         if (extendLifetime)
         {
+            const auto* accessor = list->GetAccessor();
+            const auto anchor = accessor ? accessor->LifetimeAnchor(value) : value;
             for (auto& item : items)
             {
-                item.SetParentData(value);
+                item.SetParentData(anchor);
             }
         }
-        return ListAdapter::CreateAdapter(std::move(items));
+        InternalValue copy(ListAdapter::CreateAdapter(std::move(items)));
+        // The host's list becomes the copy for every name of it in the render (docs/tasks/0049)
+        const auto* accessor = list->GetAccessor();
+        return accessor && accessor->AdoptCopy(value, copy) ? value : copy;
     }
     if (auto map = AsMap(value))
     {
         TemplateDict items;
+        const auto* mapAccessor = map->GetAccessor();
+        const auto anchor = extendLifetime && mapAccessor ? mapAccessor->LifetimeAnchor(value) : value;
         for (auto& [key, item] : map->GetEntries())
         {
             if (extendLifetime)
             {
-                item.SetParentData(value);
+                item.SetParentData(anchor);
             }
             items.Set(key, std::move(item));
         }
-        return CreateMapAdapter(std::move(items));
+        InternalValue copy(CreateMapAdapter(std::move(items)));
+        const auto* accessor = map->GetAccessor();
+        return accessor && accessor->AdoptCopy(value, copy) ? value : copy;
     }
     return value;
 }

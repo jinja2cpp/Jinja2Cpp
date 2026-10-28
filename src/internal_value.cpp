@@ -1,6 +1,7 @@
 #include "internal_value.h"
 
 #include "big_int.h"
+#include "borrowed_cells.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
@@ -1224,6 +1225,173 @@ InternalValue LendGenericItem(const std::shared_ptr<const void>& owner, Value&& 
     return Value2IntValue(std::move(item));
 }
 
+namespace
+{
+// What the host reads of the host's data the render hands it: a read-only view of the list or
+// map, which neither finds nor attaches to a cell (docs/tasks/0331). An adapter of the host's
+// data is the render's, and a write in its render attaches it to the render's cell; a view the
+// host keeps may be read on another thread, during another render, so it must not change
+// anything a render reads. It also holds no cache of item adapters (docs/tasks/0154): a nested
+// list or map read is a new view. `owner` keeps the data alive where the adapter did: null for
+// the caller's params (ByRef, which the host keeps alive), the globals map for a global's data
+// (ByHeldRef), the shared list or map itself (BySharedVal)
+Value ExportItem(const Value& item, const std::shared_ptr<const void>& owner);
+
+class ExportListView final : public IListItemAccessor
+    , public IIndexBasedAccessor
+{
+public:
+    class Enumerator : public IndexedEnumeratorImpl<Enumerator, ExportListView, Value, IListEnumerator>
+    {
+    public:
+        using BaseClass = IndexedEnumeratorImpl<Enumerator, ExportListView, Value, IListEnumerator>;
+        using BaseClass::BaseClass;
+
+        [[nodiscard]] Value GetCurrent() const override
+        {
+            if (!this->m_list || this->m_curItem >= this->CurrentSize())
+            {
+                return Value();
+            }
+            return this->m_list->GetItemByIndex(static_cast<int64_t>(this->m_curItem));
+        }
+        [[nodiscard]] ListEnumeratorPtr Clone() const override
+        {
+            auto result = MakeEnumerator<Enumerator>(this->m_list);
+            static_cast<Enumerator&>(*result).m_curItem = this->m_curItem;
+            return result;
+        }
+        ListEnumeratorPtr Move() override
+        {
+            auto result = Clone();
+            this->m_list = nullptr;
+            this->m_curItem = BaseClass::InvalidIndex;
+            this->m_maxItems = 0;
+            return result;
+        }
+    };
+
+    ExportListView(const ValuesList& items, std::shared_ptr<const void> owner)
+        : m_items(&items)
+        , m_owner(std::move(owner))
+    {
+    }
+
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return m_items->size(); }
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return this; }
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Enumerator>(this); }
+    [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
+    {
+        if (idx < 0 || static_cast<size_t>(idx) >= m_items->size())
+        {
+            return Value();
+        }
+        return ExportItem((*m_items)[static_cast<size_t>(idx)], m_owner);
+    }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* view = dynamic_cast<const ExportListView*>(&other);
+        return view != nullptr && view->m_items == m_items;
+    }
+
+    // A GenericList of the view: the copy lives in it, as the adapters' exports do
+    static GenericList Make(const ValuesList& items, std::shared_ptr<const void> owner)
+    {
+        return GenericList([view = ExportListView(items, std::move(owner))]() -> const IListItemAccessor* { return &view; });
+    }
+
+private:
+    const ValuesList* m_items;
+    std::shared_ptr<const void> m_owner;
+};
+
+class ExportMapView final : public IMapItemAccessor
+{
+public:
+    ExportMapView(const ValuesMap& items, std::shared_ptr<const void> owner)
+        : m_items(&items)
+        , m_owner(std::move(owner))
+    {
+    }
+
+    [[nodiscard]] size_t GetSize() const override { return m_items->size(); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return m_items->count(name) != 0; }
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override
+    {
+        auto found = m_items->find(name);
+        return found != m_items->end() ? ExportItem(found->second, m_owner) : Value();
+    }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override
+    {
+        std::vector<std::string> result;
+        result.reserve(m_items->size());
+        for (const auto& [key, value] : *m_items)
+        {
+            result.push_back(key);
+        }
+        return result;
+    }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* view = dynamic_cast<const ExportMapView*>(&other);
+        return view != nullptr && view->m_items == m_items;
+    }
+
+    static GenericMap Make(const ValuesMap& items, std::shared_ptr<const void> owner)
+    {
+        return GenericMap([view = ExportMapView(items, std::move(owner))]() -> const IMapItemAccessor* { return &view; });
+    }
+
+private:
+    const ValuesMap* m_items;
+    std::shared_ptr<const void> m_owner;
+};
+
+Value ExportItem(const Value& item, const std::shared_ptr<const void>& owner)
+{
+    if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&item.GetData()))
+    {
+        return Value(ExportListView::Make(**list, owner));
+    }
+    if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&item.GetData()))
+    {
+        return Value(ExportMapView::Make(**map, owner));
+    }
+    return item;
+}
+
+// The owner an export of data held by `holder` keeps (ExportListView)
+template<typename T>
+std::shared_ptr<const void> ExportOwner(const ByRef<T>& /*holder*/)
+{
+    return nullptr;
+}
+template<typename T>
+std::shared_ptr<const void> ExportOwner(const ByHeldRef<T>& holder)
+{
+    return holder.GetOwner();
+}
+template<typename T>
+std::shared_ptr<const void> ExportOwner(const BySharedVal<T>& holder)
+{
+    return holder.GetOwner();
+}
+
+// The owner of data that lives only as long as its adapters (a user callable's result, a module
+// call's argument), which a module's cell of it checks (BorrowedCell::IsUnheld); none for the
+// data the host or a global keeps
+template<typename Holder>
+std::weak_ptr<const void> AdaptersOwner(const Holder& /*holder*/)
+{
+    return {};
+}
+template<typename T>
+std::weak_ptr<const void> AdaptersOwner(const BySharedVal<T>& holder)
+{
+    return holder.GetOwner();
+}
+} // namespace
+
 template<template<typename> class Holder>
 class GenericListAdapter : public IListAccessor
 {
@@ -1281,11 +1449,25 @@ public:
     explicit GenericListAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
+        // As OwnedAdapter
+        this->SetTraversable();
     }
+    void Traverse(const TraverseFn& fn) const override { m_link.TraverseFrozen(fn); }
 
-    [[nodiscard]] std::optional<size_t> GetSize() const override { return m_values.Get().GetSize(); }
+    [[nodiscard]] std::optional<size_t> GetSize() const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Items().size();
+        }
+        return m_values.Get().GetSize();
+    }
     [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
     {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return CellItem(*cell, idx);
+        }
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
         const auto* indexer = accessor->GetIndexer();
         if (!indexer)
@@ -1296,9 +1478,75 @@ public:
         return LendGenericItem(GenericOwner(m_values), indexer->GetItemByIndex(idx));
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    [[nodiscard]] InternalValue LifetimeAnchor(const InternalValue& self) const override
+    {
+        if constexpr (std::is_same_v<Holder<int>, BySharedVal<int>>)
+        {
+            return InternalValue(ListAdapter(MakeRef<GenericListAdapter>(m_values)));
+        }
+        else
+        {
+            return self;
+        }
+    }
     [[nodiscard]] const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
+    [[nodiscard]] InternalValueList* GetMutableItems() const override
+    {
+        const auto* cell = m_link.Get(*this);
+        return cell ? cell->MutableItems() : nullptr;
+    }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData()); }
+    [[nodiscard]] bool IsBorrowed() const override { return true; }
+    // An enumeration of the list's cell that finds the cell's storage again at each step: a
+    // module call the loop body makes can copy the cell on write (decision D8) and let go of the
+    // storage the loop started on (Codex review)
+    class CellEnumerator final : public IListAccessorEnumerator
+    {
+    public:
+        explicit CellEnumerator(const GenericListAdapter* list)
+            : m_list(list)
+        {
+        }
+
+        void Reset() override { m_next = 0; }
+        // The size is read at each step: an append in the loop body is seen, as in Python
+        bool MoveNext() override
+        {
+            m_cur = m_next;
+            if (m_cur >= m_list->GetSize().value_or(0))
+            {
+                return false;
+            }
+            ++m_next;
+            return true;
+        }
+        [[nodiscard]] InternalValue GetCurrent() const override { return m_list->GetItem(static_cast<int64_t>(m_cur)).value_or(InternalValue()); }
+        [[nodiscard]] bool IsEqual(const IComparable& other) const override
+        {
+            const auto* val = dynamic_cast<const CellEnumerator*>(&other);
+            return val && m_list == val->m_list && m_next == val->m_next;
+        }
+        [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
+        {
+            return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<CellEnumerator>{}, *this);
+        }
+        std::optional<ListAccessorEnumeratorPtr> Transfer() override
+        {
+            return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<CellEnumerator>{}, *this);
+        }
+
+    private:
+        const GenericListAdapter* m_list;
+        size_t m_cur = 0;
+        size_t m_next = 0;
+    };
+
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
     {
+        if (m_link.Get(*this))
+        {
+            return ListAccessorEnumeratorPtr(types::in_place_type_t<CellEnumerator>{}, CellEnumerator(this));
+        }
         const IListItemAccessor* accessor = m_values.Get().GetAccessor();
         if (!accessor)
         {
@@ -1306,14 +1554,23 @@ public:
         }
         return ListAccessorEnumeratorPtr(Enumerator(m_values.Get().GetAccessor()->CreateEnumerator(), GenericOwner(m_values)));
     }
+    [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericList CreateGenericList() const override
     {
-        // return m_values.Get();
+        // Without a lookup (docs/tasks/0331): the render's copy once this adapter is attached to
+        // it, else the host's list. A global's adapter always gives the host's list, without a
+        // look at its link, which the next render on the thread changes
+        if (const auto* cell = this->IsGlobalData() ? nullptr : m_link.Current())
+        {
+            return cell->ExportList();
+        }
         return GenericList([list = m_values]() -> const IListItemAccessor* { return list.Get().GetAccessor(); });
     }
 
 private:
     Holder<GenericList> m_values;
+    // The render's copy of the list once the render wrote to it (docs/tasks/0049)
+    AutoCellLink m_link;
 };
 
 ListAdapter LendNestedList(std::shared_ptr<ValuesList> list);
@@ -1341,6 +1598,10 @@ InternalValue LendOwnedItem(const std::shared_ptr<T>& owner, const Value& item)
 // generic container's copy shares its accessor); defined after the adapters
 InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value& item);
 
+// A map item of the caller's data, as the convertor makes it, without the convertor's visit
+// (Render/chat_llama); defined after the adapters
+JINJA2CPP_CELL_NOINLINE InternalValue LendMapItem(const ValuesMap& map);
+
 // Borrows the item when the caller owns the storage for the whole render (ByRef, ByHeldRef)
 template<template<typename> class Holder, typename T>
 InternalValue LendItem([[maybe_unused]] const Holder<T>& holder, const Value& item)
@@ -1367,6 +1628,10 @@ InternalValue LendItem([[maybe_unused]] const Holder<T>& holder, const Value& it
             {
                 return InternalValue(*i);
             }
+            if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&item.GetData()))
+            {
+                return LendMapItem(**map);
+            }
             return Value2IntValue(item);
         }
     }
@@ -1376,8 +1641,43 @@ InternalValue LendItem([[maybe_unused]] const Holder<T>& holder, const Value& it
 template<bool held>
 struct ItemAdapters;
 
+// An item of the cell of a borrowed list: it can shrink while it is iterated (pop() in a loop body)
+std::optional<InternalValue> CellItem(const BorrowedCell& cell, int64_t idx)
+{
+    const auto& items = cell.Items();
+    if (idx < 0 || static_cast<size_t>(idx) >= items.size())
+    {
+        return std::nullopt;
+    }
+    return items[static_cast<size_t>(idx)];
+}
+
+// An adapter of the host's data on its own (MakeRef, the copy in a GenericList or GenericMap): it
+// detaches from its cell when it goes. An item in a block of item adapters is the adapter itself,
+// whose destructor does nothing, as the block releases its slots (ItemAdapters); one type for
+// both keeps one copy of the adapter's code (Render/chat_llama)
+template<typename Adapter>
+class OwnedAdapter final : public Adapter
+{
+public:
+    template<typename U, typename = std::enable_if_t<!std::is_same_v<std::decay_t<U>, OwnedAdapter>>>
+    explicit OwnedAdapter(U&& values)
+        : Adapter(std::forward<U>(values))
+    {
+        // A link to a frozen cell is a reference the collector follows (docs/tasks/0331)
+        this->SetTraversable();
+    }
+    OwnedAdapter(const OwnedAdapter&) = default;
+    OwnedAdapter(OwnedAdapter&&) noexcept = default;
+    OwnedAdapter& operator=(const OwnedAdapter&) = default;
+    OwnedAdapter& operator=(OwnedAdapter&&) noexcept = default;
+    ~OwnedAdapter() override { this->ReleaseLink(); }
+
+    void Traverse(const TraverseFn& fn) const override { this->TraverseOwned(fn); }
+};
+
 template<template<typename> class Holder>
-class ValuesListAdapter final : public IndexedListAccessorImpl<ValuesListAdapter<Holder>>
+class ValuesListAdapter : public IndexedListAccessorImpl<ValuesListAdapter<Holder>>
 {
 public:
     // Constrained: an unconstrained U&& would take a copy of a non-const adapter
@@ -1385,15 +1685,165 @@ public:
     explicit ValuesListAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
+        if constexpr (std::is_same_v<Holder<int>, ByHeldRef<int>>)
+        {
+            this->MarkGlobalData();
+        }
     }
 
-    [[nodiscard]] size_t GetItemsCountImpl() const { return m_values.Get().size(); }
+    // Detaches the adapter from its cell: the block of item adapters calls it before it frees
+    // the slot (ItemAdapters), as OwnedAdapter's destructor does
+    void ReleaseLink() const noexcept { m_link.Release(); }
+    // The collector's view of what the adapter alone holds: its frozen cell and its block of item
+    // adapters, whose slots may hold frozen cells too (OwnedAdapter, ItemAdapters)
+    void TraverseOwned(const TraverseFn& fn) const
+    {
+        m_link.TraverseFrozen(fn);
+        if (m_items)
+        {
+            fn(m_items.get());
+        }
+    }
+
+    [[nodiscard]] size_t GetItemsCountImpl() const
+    {
+        if (JINJA2CPP_CELL_UNLIKELY(m_link.MayHaveCell()))
+        {
+            return CellOrHostCount();
+        }
+        return m_values.Get().size();
+    }
     [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
     {
+        if (JINJA2CPP_CELL_UNLIKELY(m_link.MayHaveCell()))
+        {
+            if (const auto* cell = m_link.Get(*this))
+            {
+                return CellItem(*cell, idx);
+            }
+        }
         return LendItem(m_values, m_values.Get()[static_cast<size_t>(idx)]);
     }
     // The item an enumeration reads
     [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const
+    {
+        if (JINJA2CPP_CELL_UNLIKELY(m_link.MayHaveCell()))
+        {
+            return CellOrHostCurrentItem(idx);
+        }
+        return HostCurrentItem(idx);
+    }
+    // The size of the list at a step of an enumeration, and the item it reads
+    [[nodiscard]] size_t StepSize(CellStep& step) const
+    {
+        if (JINJA2CPP_CELL_UNLIKELY(!step.IsCurrent()))
+        {
+            return Restep(step);
+        }
+        return step.size;
+    }
+    [[nodiscard]] InternalValue StepItem(const CellStep& step, int64_t idx) const
+    {
+        if (JINJA2CPP_CELL_UNLIKELY(step.cell))
+        {
+            return CellItem(*step.cell, idx).value_or(InternalValue());
+        }
+        return HostCurrentItem(idx);
+    }
+
+    // Sets the step an enumeration starts with: the host's size, unless the list may have a
+    // cell, which the first step then looks up (Restep). In place: a rebound enumerator keeps
+    // its step, whose cell is most often already empty
+    void FirstStep(CellStep& step) const
+    {
+        if (JINJA2CPP_CELL_UNLIKELY(step.cell))
+        {
+            step.cell = nullptr;
+        }
+        const auto epoch = detail::CellEpoch();
+        if (m_link.MayHaveCell(epoch))
+        {
+            step.epoch = CellStep::Recheck;
+            return;
+        }
+        step.epoch = epoch;
+        step.size = m_values.Get().size();
+    }
+
+    // An enumeration that checks the epoch once a step (CellStep)
+    class StepEnumerator final : public IndexedEnumeratorImpl<StepEnumerator, ValuesListAdapter, InternalValue, IListAccessorEnumerator>
+    {
+    public:
+        using BaseClass = IndexedEnumeratorImpl<StepEnumerator, ValuesListAdapter, InternalValue, IListAccessorEnumerator>;
+
+        explicit StepEnumerator(const ValuesListAdapter* list)
+            : BaseClass(list)
+        {
+            list->FirstStep(m_step);
+        }
+
+        // Called by MoveNext before each item
+        [[nodiscard]] size_t CurrentSize() const { return this->m_list->StepSize(m_step); }
+        [[nodiscard]] InternalValue GetCurrent() const override { return this->m_list->StepItem(m_step, static_cast<int64_t>(this->m_curItem)); }
+        bool Rebind(const IListAccessor* list) override
+        {
+            // Only a list of the same final type, an item in a block or one on its own: the
+            // enumerator reads it through ValuesListAdapter
+            if (list && typeid(*list) != typeid(ValuesListAdapter) && typeid(*list) != typeid(OwnedAdapter<ValuesListAdapter>))
+            {
+                return false;
+            }
+            const auto* values = static_cast<const ValuesListAdapter*>(list);
+            this->m_list = values;
+            this->m_curItem = this->InvalidIndex;
+            if (!values)
+            {
+                m_step = CellStep();
+                this->m_maxItems = 0;
+                return true;
+            }
+            values->FirstStep(m_step);
+            // The host's size when the first step has it; m_maxItems only tells two enumerators apart
+            this->m_maxItems = m_step.epoch != CellStep::Recheck ? m_step.size : values->GetItemsCountImpl();
+            return true;
+        }
+        [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
+        {
+            auto result = std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<StepEnumerator>{}, *this);
+            return result;
+        }
+        std::optional<ListAccessorEnumeratorPtr> Transfer() override
+        {
+            auto result = std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<StepEnumerator>{}, std::move(*this));
+            this->m_list = nullptr;
+            this->m_curItem = this->InvalidIndex;
+            this->m_maxItems = 0;
+            m_step = CellStep();
+            return result;
+        }
+
+    private:
+        mutable CellStep m_step;
+    };
+
+    [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> CreateListAccessorEnumerator() const override
+    {
+        return ListAccessorEnumeratorPtr(types::in_place_type_t<StepEnumerator>{}, StepEnumerator(this));
+    }
+    void ForEach(IListAccessor::ItemVisitor fn) const override
+    {
+        CellStep step;
+        // The size is read at each step: the list can get a cell, and the cell change, while fn runs
+        for (size_t idx = 0; idx < StepSize(step); ++idx)
+        {
+            if (!fn(StepItem(step, static_cast<int64_t>(idx))))
+            {
+                return;
+            }
+        }
+    }
+
+    [[nodiscard]] InternalValue HostCurrentItem(int64_t idx) const
     {
         const auto& item = m_values.Get()[static_cast<size_t>(idx)];
         if constexpr (LendsViews<Holder>)
@@ -1433,19 +1883,79 @@ public:
         }
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    [[nodiscard]] InternalValue LifetimeAnchor(const InternalValue& self) const override
+    {
+        if constexpr (std::is_same_v<Holder<int>, BySharedVal<int>>)
+        {
+            return InternalValue(ListAdapter(MakeRef<OwnedAdapter<ValuesListAdapter>>(m_values)));
+        }
+        else
+        {
+            return self;
+        }
+    }
     [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
+    [[nodiscard]] InternalValueList* GetMutableItems() const override
+    {
+        const auto* cell = m_link.Get(*this);
+        return cell ? cell->MutableItems() : nullptr;
+    }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData(), AdaptersOwner(m_values)); }
+    [[nodiscard]] bool IsBorrowed() const override { return true; }
+    [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericList CreateGenericList() const override
     {
-        // return m_values.Get();
-        return GenericList([list = *this]() -> const IListItemAccessor* { return &list; });
+        // Without a lookup (docs/tasks/0331): the render's copy once this adapter is attached to
+        // it, else a view of the host's list. A global's adapter always gives the view, without
+        // a look at its link, which the next render on the thread changes
+        if constexpr (!std::is_same_v<Holder<int>, ByHeldRef<int>>)
+        {
+            if (const auto* cell = m_link.Current())
+            {
+                return cell->ExportList();
+            }
+        }
+        return ExportListView::Make(m_values.Get(), ExportOwner(m_values));
     }
 
 private:
+    JINJA2CPP_CELL_NOINLINE size_t CellOrHostCount() const
+    {
+        const auto* cell = m_link.Get(*this);
+        return cell ? cell->Items().size() : m_values.Get().size();
+    }
+    // The size at a step whose epoch moved, or of a list with a cell
+    JINJA2CPP_CELL_NOINLINE size_t Restep(CellStep& step) const
+    {
+        // Read first: a promotion after this read moves the epoch again
+        const auto epoch = detail::CellEpoch();
+        step.cell = IntrusivePtr<const BorrowedCell>(m_link.Get(*this));
+        if (step.cell)
+        {
+            // The cell can change at any step: its size is read at each one
+            step.epoch = CellStep::Recheck;
+            return step.cell->Items().size();
+        }
+        step.epoch = epoch;
+        step.size = m_values.Get().size();
+        return step.size;
+    }
+    JINJA2CPP_CELL_NOINLINE InternalValue CellOrHostCurrentItem(int64_t idx) const
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return CellItem(*cell, idx).value_or(InternalValue());
+        }
+        return HostCurrentItem(idx);
+    }
+
     // A list or map item of the caller's list, lent from the block of adapters the list keeps
     template<typename T>
     [[nodiscard]] InternalValue LendNested(size_t idx, const T& container) const;
 
     Holder<ValuesList> m_values;
+    // The render's copy of the list once the render wrote to it (docs/tasks/0049)
+    CellLink m_link;
     // The adapters of the list and map items read lately, made in blocks of ItemAdapters::
     // BlockSize items, instead of an adapter allocated for each item each time it is read
     // (docs/tasks/0154). A list of the caller's data is converted for one render or held
@@ -1517,6 +2027,16 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
     return ListAdapter(MakeRef<Adapter>(std::move(values)));
 }
 
+InternalValue IListAccessor::LifetimeAnchor(const InternalValue& self) const
+{
+    return self;
+}
+
+InternalValue IMapAccessor::LifetimeAnchor(const InternalValue& self) const
+{
+    return self;
+}
+
 ListAdapter ListAdapter::CreateAdapter(const GenericList& values)
 {
     return ListAdapter(MakeRef<GenericListAdapter<ByRef>>(values));
@@ -1524,7 +2044,7 @@ ListAdapter ListAdapter::CreateAdapter(const GenericList& values)
 
 ListAdapter ListAdapter::CreateAdapter(const ValuesList& values)
 {
-    return ListAdapter(MakeRef<ValuesListAdapter<ByRef>>(values));
+    return ListAdapter(MakeRef<OwnedAdapter<ValuesListAdapter<ByRef>>>(values));
 }
 
 ListAdapter ListAdapter::CreateAdapter(GenericList&& values)
@@ -1534,7 +2054,7 @@ ListAdapter ListAdapter::CreateAdapter(GenericList&& values)
 
 ListAdapter ListAdapter::CreateAdapter(ValuesList&& values)
 {
-    return ListAdapter(MakeRef<ValuesListAdapter<BySharedVal>>(std::move(values)));
+    return ListAdapter(MakeRef<OwnedAdapter<ValuesListAdapter<BySharedVal>>>(std::move(values)));
 }
 
 ListAdapter ListAdapter::CreateAdapter(std::function<std::optional<InternalValue>()> fn)
@@ -2201,13 +2721,111 @@ public:
     explicit GenericMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
+        // As OwnedAdapter
+        this->SetTraversable();
     }
+    void Traverse(const TraverseFn& fn) const override { m_link.TraverseFrozen(fn); }
 
-    [[nodiscard]] size_t GetSize() const override { return m_values.Get().GetSize(); }
-    [[nodiscard]] bool HasValue(const std::string& name) const override { return m_values.Get().HasValue(name); }
+    [[nodiscard]] size_t GetSize() const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetSize();
+        }
+        return m_values.Get().GetSize();
+    }
+    [[nodiscard]] bool HasValue(const std::string& name) const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().HasValue(name);
+        }
+        return m_values.Get().HasValue(name);
+    }
     // One lookup; an absent item reads as Undefined, and so does an empty Value unless the accessor
     // says an empty Value is a real null (JSON), which is None
     [[nodiscard]] InternalValue GetItem(const std::string& name) const override
+    {
+        if (JINJA2CPP_CELL_UNLIKELY(m_link.MayHaveCell()))
+        {
+            return CellOrHostItem(name);
+        }
+        return HostItem(name);
+    }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetKeys();
+        }
+        return m_values.Get().GetKeys();
+    }
+    [[nodiscard]] std::vector<KeyValuePair> GetEntries() const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetEntries();
+        }
+        return IMapAccessor::GetEntries();
+    }
+    [[nodiscard]] InternalValueList GetKeyValues() const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetKeyValues();
+        }
+        return IMapAccessor::GetKeyValues();
+    }
+    [[nodiscard]] std::optional<InternalValue> FindItem(const InternalValue& key) const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().FindItem(key);
+        }
+        return IMapAccessor::FindItem(key);
+    }
+    [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    [[nodiscard]] InternalValue LifetimeAnchor(const InternalValue& self) const override
+    {
+        if constexpr (std::is_same_v<Holder<int>, BySharedVal<int>>)
+        {
+            return InternalValue(MapAdapter(MakeRef<GenericMapAdapter>(m_values)));
+        }
+        else
+        {
+            return self;
+        }
+    }
+    [[nodiscard]] bool HasAttributes() const override { return true; }
+    [[nodiscard]] const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
+    [[nodiscard]] TemplateDict* GetMutableItems() const override
+    {
+        const auto* cell = m_link.Get(*this);
+        return cell ? cell->MutableDict() : nullptr;
+    }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData()); }
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysFirst; }
+    [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
+    [[nodiscard]] GenericMap CreateGenericMap() const override
+    {
+        // As GenericListAdapter's
+        if (const auto* cell = this->IsGlobalData() ? nullptr : m_link.Current())
+        {
+            return cell->ExportMap();
+        }
+        return GenericMap([values = m_values]() -> const IMapItemAccessor* { return values.Get().GetAccessor(); });
+    }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        auto* val = dynamic_cast<const GenericMapAdapter*>(&other);
+        if (!val)
+        {
+            return false;
+        }
+        return m_values == val->m_values;
+    }
+private:
+    [[nodiscard]] InternalValue HostItem(const std::string& name) const
     {
         auto val = m_values.Get().Find(name);
         if (!val)
@@ -2222,26 +2840,18 @@ public:
 
         return LendGenericItem(GenericOwner(m_values), std::move(*val));
     }
-    [[nodiscard]] std::vector<std::string> GetKeys() const override { return m_values.Get().GetKeys(); }
-    [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
-    [[nodiscard]] bool HasAttributes() const override { return true; }
-    [[nodiscard]] const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
-    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysFirst; }
-    [[nodiscard]] GenericMap CreateGenericMap() const override
+    JINJA2CPP_CELL_NOINLINE InternalValue CellOrHostItem(const std::string& name) const
     {
-        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return accessor.m_values.Get().GetAccessor(); });
-    }
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        auto* val = dynamic_cast<const GenericMapAdapter*>(&other);
-        if (!val)
+        if (const auto* cell = m_link.Get(*this))
         {
-            return false;
+            return cell->Map().GetItem(name);
         }
-        return m_values == val->m_values;
+        return HostItem(name);
     }
-private:
+
     Holder<GenericMap> m_values;
+    // The render's copy of the map once the render wrote to it (docs/tasks/0049)
+    AutoCellLink m_link;
 };
 
 // A key of user data as LendItem lends its string items: a view while the data outlives the
@@ -2268,23 +2878,48 @@ public:
     explicit ValuesMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
+        if constexpr (std::is_same_v<Holder<int>, ByHeldRef<int>>)
+        {
+            this->MarkGlobalData();
+        }
     }
 
-    [[nodiscard]] size_t GetSize() const override { return m_values.Get().size(); }
-    [[nodiscard]] bool HasValue(const std::string& name) const override { return m_values.Get().count(name) != 0; }
+    // Detaches the adapter from its cell: the block of item adapters calls it before it frees
+    // the slot (ItemAdapters), as OwnedAdapter's destructor does
+    void ReleaseLink() const noexcept { m_link.Release(); }
+    // The collector's view of what the adapter alone holds: its frozen cell (OwnedAdapter, ItemAdapters)
+    void TraverseOwned(const TraverseFn& fn) const { m_link.TraverseFrozen(fn); }
+
+    [[nodiscard]] size_t GetSize() const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetSize();
+        }
+        return m_values.Get().size();
+    }
+    [[nodiscard]] bool HasValue(const std::string& name) const override
+    {
+        if (JINJA2CPP_CELL_UNLIKELY(m_link.MayHaveCell()))
+        {
+            return CellOrHostHasValue(name);
+        }
+        return m_values.Get().count(name) != 0;
+    }
     [[nodiscard]] InternalValue GetItem(const std::string& name) const override
     {
-        auto& vals = m_values.Get();
-        auto p = vals.find(name);
-        if (p == vals.end())
+        if (JINJA2CPP_CELL_UNLIKELY(m_link.MayHaveCell()))
         {
-            return InternalValue();
+            return CellOrHostItem(name);
         }
-
-        return LendItem(m_values, p->second);
+        return HostItem(name);
     }
     [[nodiscard]] std::vector<std::string> GetKeys() const override
     {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetKeys();
+        }
         std::vector<std::string> result;
 
         for (const auto& [key, value] : m_values.Get())
@@ -2296,6 +2931,10 @@ public:
     }
     [[nodiscard]] std::vector<KeyValuePair> GetEntries() const override
     {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetEntries();
+        }
         std::vector<KeyValuePair> result;
         result.reserve(m_values.Get().size());
 
@@ -2306,13 +2945,55 @@ public:
 
         return result;
     }
+    [[nodiscard]] InternalValueList GetKeyValues() const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetKeyValues();
+        }
+        return IMapAccessor::GetKeyValues();
+    }
+    [[nodiscard]] std::optional<InternalValue> FindItem(const InternalValue& key) const override
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().FindItem(key);
+        }
+        return IMapAccessor::FindItem(key);
+    }
     // A mapping passed in the context is a Python dict to the template
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::MethodsFirst; }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
+    [[nodiscard]] InternalValue LifetimeAnchor(const InternalValue& self) const override
+    {
+        if constexpr (std::is_same_v<Holder<int>, BySharedVal<int>>)
+        {
+            return InternalValue(MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter>>(m_values)));
+        }
+        else
+        {
+            return self;
+        }
+    }
     [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
+    [[nodiscard]] TemplateDict* GetMutableItems() const override
+    {
+        const auto* cell = m_link.Get(*this);
+        return cell ? cell->MutableDict() : nullptr;
+    }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData(), AdaptersOwner(m_values)); }
+    [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
-        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
+        // As ValuesListAdapter's
+        if constexpr (!std::is_same_v<Holder<int>, ByHeldRef<int>>)
+        {
+            if (const auto* cell = m_link.Current())
+            {
+                return cell->ExportMap();
+            }
+        }
+        return ExportMapView::Make(m_values.Get(), ExportOwner(m_values));
     }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -2324,31 +3005,120 @@ public:
         return m_values == val->m_values;
     }
 private:
+    [[nodiscard]] InternalValue HostItem(const std::string& name) const
+    {
+        auto& vals = m_values.Get();
+        auto p = vals.find(name);
+        if (p == vals.end())
+        {
+            return InternalValue();
+        }
+
+        return LendItem(m_values, p->second);
+    }
+    JINJA2CPP_CELL_NOINLINE InternalValue CellOrHostItem(const std::string& name) const
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().GetItem(name);
+        }
+        return HostItem(name);
+    }
+    JINJA2CPP_CELL_NOINLINE bool CellOrHostHasValue(const std::string& name) const
+    {
+        if (const auto* cell = m_link.Get(*this))
+        {
+            return cell->Map().HasValue(name);
+        }
+        return m_values.Get().count(name) != 0;
+    }
+
     Holder<ValuesMap> m_values;
+    // The render's copy of the map once the render wrote to it (docs/tasks/0049)
+    CellLink m_link;
 };
 
 // One object for the block: a lent item's value shares it (docs/tasks/0154, 0140). The items of
 // a global are a type of their own, so the larger held adapters do not widen every block (0318)
+//
+// The adapters in a block are not OwnedAdapter: their CellLink's destructor does nothing and the
+// block releases the slots that have a cell, so that freeing an item without one calls nothing
+// (Render/for_filter_if)
 template<bool held>
 struct ItemAdapters final : ValueObject
 {
-    using Adapter = std::conditional_t<held,
-                                       std::variant<std::monostate, ValuesListAdapter<ByHeldRef>, ValuesMapAdapter<ByHeldRef>>,
-                                       std::variant<std::monostate, ValuesListAdapter<ByRef>, ValuesMapAdapter<ByRef>>>;
+    using List = std::conditional_t<held, ValuesListAdapter<ByHeldRef>, ValuesListAdapter<ByRef>>;
+    using Map = std::conditional_t<held, ValuesMapAdapter<ByHeldRef>, ValuesMapAdapter<ByRef>>;
+    using Adapter = std::variant<std::monostate, List, Map>;
     // Items per block: the list keeps only the block of the items it reads now, so a long list
     // holds a bounded number of adapters; a block an item was kept from stays with that item
     static constexpr size_t BlockSize = 256;
 
     ItemAdapters(size_t firstItem, size_t count)
-        : adapters(std::make_unique<Adapter[]>(count))
+        // Default-initialised: value-initialising would zero each slot before its variant
+        // sets the index (Render/for_filter_if)
+        : adapters(new Adapter[count])
         , first(firstItem)
         , size(count)
+        , quietEpoch(QuietEpoch())
     {
+        // A slot's link to a frozen cell is a reference the collector follows (docs/tasks/0331)
+        SetTraversable();
+    }
+    void Traverse(const TraverseFn& fn) const override
+    {
+        if (quietEpoch == detail::CellEpoch())
+        {
+            return;
+        }
+        for (size_t idx = 0; idx < size; ++idx)
+        {
+            if (const auto* map = std::get_if<Map>(&adapters[idx]))
+            {
+                map->TraverseOwned(fn);
+            }
+            else if (const auto* list = std::get_if<List>(&adapters[idx]))
+            {
+                list->TraverseOwned(fn);
+            }
+        }
+    }
+    ~ItemAdapters() override
+    {
+        // No slot can have a cell when no cell existed as the block was made and none was made
+        // since, which would have moved the epoch
+        if (quietEpoch == detail::CellEpoch())
+        {
+            return;
+        }
+        for (size_t idx = 0; idx < size; ++idx)
+        {
+            Release(adapters[idx]);
+        }
+    }
+    ItemAdapters(const ItemAdapters&) = delete;
+    ItemAdapters(ItemAdapters&&) = delete;
+    ItemAdapters& operator=(const ItemAdapters&) = delete;
+    ItemAdapters& operator=(ItemAdapters&&) = delete;
+
+    // Detaches the adapter in `slot` from its cell, before the slot is freed or reused
+    static void Release(const Adapter& slot) noexcept
+    {
+        if (const auto* map = std::get_if<Map>(&slot))
+        {
+            map->ReleaseLink();
+        }
+        else if (const auto* list = std::get_if<List>(&slot))
+        {
+            list->ReleaseLink();
+        }
     }
 
     std::unique_ptr<Adapter[]> adapters;
     size_t first;
     size_t size;
+    // The epoch as the block was made, or CellStep::Recheck if a cell existed then
+    uint32_t quietEpoch;
 };
 
 template<template<typename> class Holder>
@@ -2357,13 +3127,11 @@ InternalValue ValuesListAdapter<Holder>::LendNested(size_t idx, const T& contain
 {
     // A global's items keep its owner (ByHeldRef); the caller's params are borrowed (ByRef)
     using ItemHolder = std::conditional_t<std::is_same_v<Holder<T>, ByHeldRef<T>>, ByHeldRef<T>, ByRef<T>>;
-    using AdapterType = std::conditional_t<std::is_same_v<T, ValuesList>,
-                                           std::conditional_t<std::is_same_v<ItemHolder, ByRef<T>>, ValuesListAdapter<ByRef>, ValuesListAdapter<ByHeldRef>>,
-                                           std::conditional_t<std::is_same_v<ItemHolder, ByRef<T>>, ValuesMapAdapter<ByRef>, ValuesMapAdapter<ByHeldRef>>>;
+    using Block = typename decltype(m_items)::element_type;
+    using AdapterType = std::conditional_t<std::is_same_v<T, ValuesList>, typename Block::List, typename Block::Map>;
     using ResultType = std::conditional_t<std::is_same_v<T, ValuesList>, ListAdapter, MapAdapter>;
     if (!m_items || idx < m_items->first || idx - m_items->first >= m_items->size)
     {
-        using Block = typename decltype(m_items)::element_type;
         const auto first = idx - (idx % Block::BlockSize);
         m_items = MakeRef<Block>(first, std::min(Block::BlockSize, m_values.Get().size() - first));
     }
@@ -2371,6 +3139,9 @@ InternalValue ValuesListAdapter<Holder>::LendNested(size_t idx, const T& contain
     auto* adapter = std::get_if<AdapterType>(&slot);
     if (!adapter)
     {
+        // A slot is only ever one kind of item, as the host's data does not change; released
+        // all the same, as the block's destructor would
+        Block::Release(slot);
         if constexpr (std::is_same_v<ItemHolder, ByRef<T>>)
         {
             adapter = &slot.template emplace<AdapterType>(ByRef<T>(container));
@@ -2386,12 +3157,17 @@ InternalValue ValuesListAdapter<Holder>::LendNested(size_t idx, const T& contain
 
 ListAdapter LendNestedList(std::shared_ptr<ValuesList> list)
 {
-    return ListAdapter(MakeRef<ValuesListAdapter<BySharedVal>>(BySharedVal<ValuesList>(std::move(list))));
+    return ListAdapter(MakeRef<OwnedAdapter<ValuesListAdapter<BySharedVal>>>(BySharedVal<ValuesList>(std::move(list))));
 }
 
 MapAdapter LendNestedMap(std::shared_ptr<ValuesMap> map)
 {
-    return MapAdapter(MakeRef<ValuesMapAdapter<BySharedVal>>(BySharedVal<ValuesMap>(std::move(map))));
+    return MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<BySharedVal>>>(BySharedVal<ValuesMap>(std::move(map))));
+}
+
+JINJA2CPP_CELL_NOINLINE InternalValue LendMapItem(const ValuesMap& map)
+{
+    return InternalValue(MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<ByRef>>>(map)));
 }
 
 InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value& item)
@@ -2406,14 +3182,27 @@ InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value
     }
     if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&item.GetData()))
     {
-        return InternalValue(ListAdapter(MakeRef<ValuesListAdapter<ByHeldRef>>(ByHeldRef<ValuesList>(**list, owner))));
+        return InternalValue(ListAdapter(MakeRef<OwnedAdapter<ValuesListAdapter<ByHeldRef>>>(ByHeldRef<ValuesList>(**list, owner))));
     }
     if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&item.GetData()))
     {
-        return InternalValue(MapAdapter(MakeRef<ValuesMapAdapter<ByHeldRef>>(ByHeldRef<ValuesMap>(**map, owner))));
+        return InternalValue(MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<ByHeldRef>>>(ByHeldRef<ValuesMap>(**map, owner))));
     }
     // By value: a generic container's copy shares the host's accessor, not the global's storage,
-    // and text is copied
+    // and text is copied. A generic container's adapter is a global's as the ones above
+    // (IsGlobalData), so that a write in a render never outlives it (docs/tasks/0331)
+    if (const auto* list = std::get_if<GenericList>(&item.GetData()))
+    {
+        auto adapter = MakeRef<GenericListAdapter<BySharedVal>>(GenericList(*list));
+        adapter->MarkGlobalData();
+        return InternalValue(ListAdapter(std::move(adapter)));
+    }
+    if (const auto* map = std::get_if<GenericMap>(&item.GetData()))
+    {
+        auto adapter = MakeRef<GenericMapAdapter<BySharedVal>>(GenericMap(*map));
+        adapter->MarkGlobalData();
+        return InternalValue(MapAdapter(std::move(adapter)));
+    }
     return visit(visitors::InputValueConvertor(true, false), item.GetData());
 }
 
@@ -2479,12 +3268,12 @@ MapAdapter CreateMapAdapter(GenericMap&& values)
 
 MapAdapter CreateMapAdapter(const ValuesMap& values)
 {
-    return MapAdapter(MakeRef<ValuesMapAdapter<ByRef>>(values));
+    return MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<ByRef>>>(values));
 }
 
 MapAdapter CreateMapAdapter(ValuesMap&& values)
 {
-    return MapAdapter(MakeRef<ValuesMapAdapter<BySharedVal>>(std::move(values)));
+    return MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<BySharedVal>>>(std::move(values)));
 }
 
 struct OutputValueConvertor

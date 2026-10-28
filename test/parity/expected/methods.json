@@ -1810,6 +1810,413 @@
    "output": "[3, 1, 2, 9]"
   },
   {
+   "id": "methods.alias_with",
+   "template": "{% with y = l %}{% do y.append(9) %}{% endwith %}{{ l }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[3, 1, 2, 9]"
+  },
+  {
+   "id": "methods.alias_macro_arg",
+   "template": "{% macro f(x) %}{% do x.append(1) %}{% endmacro %}{{ f(l) }}{{ l }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[3, 1, 2, 1]"
+  },
+  {
+   "id": "methods.alias_bound_method",
+   "template": "{% set f = l.append %}{% do f(9) %}{{ l }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[3, 1, 2, 9]"
+  },
+  {
+   "id": "methods.alias_bound_dict_method",
+   "template": "{% set f = d.update %}{% do f(c=3) %}{{ d|dictsort }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[('a', 1), ('b', 2), ('c', 3)]"
+  },
+  {
+   "id": "methods.alias_is_sameas",
+   "template": "{% set y = l %}{% do y.append(9) %}{{ y is sameas l }}|{{ y|length }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "True|4"
+  },
+  {
+   "id": "methods.alias_self_append",
+   "template": "{% do l.append(l) %}{{ l }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[3, 1, 2, [...]]"
+  },
+  {
+   "id": "methods.alias_copy_then_mutate",
+   "template": "{% set c = l.copy() %}{% do l.append(7) %}{{ c }}{{ l }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[3, 1, 2][3, 1, 2, 7]"
+  },
+  {
+   "id": "methods.alias_loop_var_update",
+   "template": "{% for m in messages %}{% do m.update(x=1) %}{% endfor %}{{ messages }}",
+   "context": {
+    "messages": [
+     {
+      "r": "u"
+     },
+     {
+      "r": "a"
+     }
+    ],
+    "nd": {
+     "k": [
+      1
+     ]
+    }
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[{'r': 'u', 'x': 1}, {'r': 'a', 'x': 1}]"
+  },
+  {
+   "id": "methods.alias_loop_var_kept",
+   "template": "{% for m in messages %}{% set ns = m %}{% do ns.update(z=1) %}{% endfor %}{{ messages }}",
+   "context": {
+    "messages": [
+     {
+      "r": "u"
+     },
+     {
+      "r": "a"
+     }
+    ],
+    "nd": {
+     "k": [
+      1
+     ]
+    }
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[{'r': 'u', 'z': 1}, {'r': 'a', 'z': 1}]"
+  },
+  {
+   "id": "methods.alias_item_then_owner",
+   "template": "{% set m = messages[0] %}{% do messages[0].update(y=2) %}{{ m }}",
+   "context": {
+    "messages": [
+     {
+      "r": "u"
+     },
+     {
+      "r": "a"
+     }
+    ],
+    "nd": {
+     "k": [
+      1
+     ]
+    }
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{'r': 'u', 'y': 2}"
+  },
+  {
+   "id": "methods.alias_owner_then_item",
+   "template": "{% set m = messages[0] %}{% do m.update(y=2) %}{{ messages }}",
+   "context": {
+    "messages": [
+     {
+      "r": "u"
+     },
+     {
+      "r": "a"
+     }
+    ],
+    "nd": {
+     "k": [
+      1
+     ]
+    }
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[{'r': 'u', 'y': 2}, {'r': 'a'}]"
+  },
+  {
+   "id": "methods.alias_nested_dict",
+   "template": "{% set e = nd %}{% do nd.k.append(5) %}{{ e }}|{{ nd.k is sameas e.k }}",
+   "context": {
+    "messages": [
+     {
+      "r": "u"
+     },
+     {
+      "r": "a"
+     }
+    ],
+    "nd": {
+     "k": [
+      1
+     ]
+    }
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "{'k': [1, 5]}|True"
+  },
+  {
+   "id": "methods.alias_item_read_twice",
+   "template": "{% do nd.k.append(5) %}{% set a = nd.k %}{% do a.append(6) %}{{ nd['k'] }}",
+   "context": {
+    "messages": [
+     {
+      "r": "u"
+     },
+     {
+      "r": "a"
+     }
+    ],
+    "nd": {
+     "k": [
+      1
+     ]
+    }
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[1, 5, 6]"
+  },
+  {
+   "id": "methods.alias_set_item_kept",
+   "template": "{% set a = nd.k %}{% do nd['k'].append(2) %}{{ a }}",
+   "context": {
+    "messages": [
+     {
+      "r": "u"
+     },
+     {
+      "r": "a"
+     }
+    ],
+    "nd": {
+     "k": [
+      1
+     ]
+    }
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "[1, 2]"
+  },
+  {
+   "id": "methods.alias_pop_then_read",
+   "template": "{% set y = l %}{{ y.pop() }}|{{ l }}|{{ l|length }}|{{ l|sum }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "2|[3, 1]|2|4"
+  },
+  {
+   "id": "methods.alias_dict_pop",
+   "template": "{% set e = d %}{{ e.pop('a') }}|{{ d|dictsort }}|{{ 'a' in d }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "1|[('b', 2)]|False"
+  },
+  {
    "id": "methods.dict_literal_methods",
    "template": "{% set x = {'a': 1, 'b': 2} %}{{ x.keys()|list }}{{ x.values()|list }}{{ x.items()|list }}{{ x.get('b') }}",
    "context": {

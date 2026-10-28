@@ -1,10 +1,13 @@
 #ifndef JINJA2CPP_SRC_CYCLE_COLLECTOR_H
 #define JINJA2CPP_SRC_CYCLE_COLLECTOR_H
 
+#include "borrowed_cells.h"
 #include "internal_value.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <utility>
 #include <unordered_set>
 #include <vector>
 
@@ -41,6 +44,13 @@ public:
     {
         s_current = this;
     }
+    // A collector whose writes to the host's data go to `cells`, which outlive it: a template
+    // module's, whose values live across its calls (docs/tasks/0049)
+    explicit CycleCollector(BorrowedCells& cells) noexcept
+        : m_external(&cells)
+    {
+        s_current = this;
+    }
     ~CycleCollector()
     {
         s_current = m_outer;
@@ -59,6 +69,26 @@ public:
     // fails the store and leaves no cycle unnoted (docs/tasks/0283). Does nothing outside a
     // render.
     static void NoteStore(const InternalValue& container);
+    // The registry of the borrowed cells of the render running on this thread, or null when
+    // the render has none yet (docs/tasks/0049)
+    [[nodiscard]] static BorrowedCells* CurrentCells() noexcept
+    {
+        const auto* collector = s_current;
+        if (!collector)
+        {
+            return nullptr;
+        }
+        if (collector->m_external)
+        {
+            return collector->m_external;
+        }
+        return collector->m_notes ? &collector->m_notes->cells : nullptr;
+    }
+    // The registry a promotion adds its cell to, made on the first one; null outside a render
+    static BorrowedCells* CellsForWrite();
+    // A frozen cell that values outliving the render still read: a candidate of this collector
+    // (BorrowedCells::Release, docs/tasks/0331). Throws std::bad_alloc
+    void NoteFrozen(ValueObjectPtr cell) { Add(std::move(cell)); }
 
 private:
     void Finish() noexcept;
@@ -81,10 +111,44 @@ private:
         // Candidates held by nothing else are dropped when there are this many (Add)
         static constexpr size_t MinPruneAt = 64;
         size_t pruneAt = MinPruneAt;
+        // The render's copies of the host's data, released before the walk: detaching them
+        // frees what only they held
+        BorrowedCells cells;
     };
 
     CycleCollector* m_outer = s_current;
     std::unique_ptr<Notes> m_notes;
+    // The cells of a template module, which outlive the call (docs/tasks/0049); null for a render
+    BorrowedCells* m_external = nullptr;
+};
+
+// A call of a template module: it runs as a new call of the module's cells (BorrowedCells::BeginCall),
+// and the call it nested in, made from a host callable, runs again when it ends. Apart from
+// CycleCollector, so that a render's collector stays as small as it was (docs/tasks/0138)
+class ModuleCallCollector
+{
+public:
+    explicit ModuleCallCollector(BorrowedCells& cells) noexcept
+        : m_cells(cells)
+        , m_outerCall(cells.BeginCall())
+        , m_collector(cells)
+    {
+    }
+    ~ModuleCallCollector()
+    {
+        // Last in the call: what the call made is gone, and with it the adapters of its data
+        m_cells.DropUnheld();
+        m_cells.EndCall(m_outerCall);
+    }
+    ModuleCallCollector(const ModuleCallCollector&) = delete;
+    ModuleCallCollector(ModuleCallCollector&&) = delete;
+    ModuleCallCollector& operator=(const ModuleCallCollector&) = delete;
+    ModuleCallCollector& operator=(ModuleCallCollector&&) = delete;
+
+private:
+    BorrowedCells& m_cells;
+    uint32_t m_outerCall;
+    CycleCollector m_collector;
 };
 
 } // namespace v2

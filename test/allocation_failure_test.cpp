@@ -8,6 +8,7 @@
 
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/json_adapter.h>
+#include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
@@ -21,6 +22,7 @@
 #include <atomic>
 #include <csignal>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
@@ -29,6 +31,7 @@
 #include <new>
 #include <string>
 #include <thread>
+#include <vector>
 #if defined(_MSC_VER) && defined(__cpp_lib_stacktrace)
 #include <iostream>
 #include <stacktrace>
@@ -520,6 +523,217 @@ TEST_F(ModuleCallTest, CallSucceedsOrThrowsBadAlloc)
     EXPECT_LT(n, maxAllocations);
 }
 
+// A module call whose copy on write fails leaves what the host kept from an earlier call as it
+// was, and the next call copies again (docs/tasks/0331, D8)
+TEST_F(AllocationFailureTest, KeptModuleSnapshotSurvivesAFailedCopy)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = d.update(b=x) %}{% set _ = keep(l) %}"
+                           "{% set _ = keep(d) %}{% endmacro %}"));
+    const auto show = [](const Value& v) {
+        Template shown;
+        EXPECT_TRUE(!!shown.Load("{{ k }}"));
+        return shown.RenderAsString(ValuesMap{ { "k", v } }).value();
+    };
+    long n = 0;
+    for (; n != maxAllocations; ++n)
+    {
+        std::vector<Value> kept;
+        ValuesMap params{ { "l", ValuesList{ 0 } }, { "d", ValuesMap{ { "a", 0 } } } };
+        params["keep"] = UserCallable(
+            [&kept](const UserCallableParams& p) {
+                kept.push_back(p["v"]);
+                return Value();
+            },
+            { ArgInfo{ "v" } });
+        auto module = tpl.MakeModule(params);
+        ASSERT_TRUE(!!module);
+        const auto call = [&module](int64_t x) {
+            UserCallableParams callParams;
+            callParams.extraPosArgs = ValuesList{ x };
+            module->exports["add"].As<UserCallable>().callable(callParams);
+        };
+        call(1);
+        ASSERT_EQ(2u, kept.size());
+        const Value list = kept[0];
+        const Value dict = kept[1];
+        bool fired = false;
+        OnFreshThread([&] {
+            const Injection injection(n);
+            try
+            {
+                call(2);
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): a failed call is one of the outcomes checked
+            {
+            }
+            fired = Injection::Fired();
+        });
+        call(3);
+        ASSERT_EQ("[0, 1]", show(list)) << "allocation " << n;
+        ASSERT_EQ("{'a': 0, 'b': 1}", show(dict)) << "allocation " << n;
+        if (!fired)
+        {
+            break;
+        }
+    }
+    EXPECT_LT(0, n) << "no allocation reached the injection";
+    EXPECT_LT(n, maxAllocations);
+}
+
+// A module's sort() whose key function makes the host call the module again, and that call hands
+// the emptied list to the host: the sort then copies the list on write (D8), and when that copy
+// fails the list gets its items back, not the ones already moved out (Codex review)
+TEST_F(AllocationFailureTest, ModuleSortKeepsItsItemsWhenTheCopyFails)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro srt() %}{% set _ = l.sort(key=k) %}{% endmacro %}"
+                           "{% macro k(x) %}{% set _ = reexp() %}{{ x[0] }}{% endmacro %}"
+                           "{% macro exp() %}{% set _ = keep(l) %}{% endmacro %}"
+                           "{% macro show() %}{{ l }}{% endmacro %}"));
+    long n = 0;
+    for (; n != maxAllocations; ++n)
+    {
+        std::vector<Value> kept;
+        const TemplateModule* self = nullptr;
+        ValuesMap params{ { "l", ValuesList{ Value(ValuesList{ 3 }), Value(ValuesList{ 1 }), Value(ValuesList{ 2 }) } } };
+        params["keep"] = UserCallable(
+            [&kept](const UserCallableParams& p) {
+                kept.push_back(p["v"]);
+                return Value();
+            },
+            { ArgInfo{ "v" } });
+        params["reexp"] = UserCallable(
+            [&self](const UserCallableParams&) {
+                self->exports.at("exp").As<UserCallable>().callable(UserCallableParams{});
+                return Value();
+            },
+            {});
+        auto module = tpl.MakeModule(params);
+        ASSERT_TRUE(!!module);
+        self = &*module;
+        const auto call = [&module](const std::string& name) { return module->exports[name].As<UserCallable>().callable(UserCallableParams{}).AsString(); };
+        bool fired = false;
+        bool threw = false;
+        OnFreshThread([&] {
+            const Injection injection(n);
+            try
+            {
+                call("srt");
+            }
+            catch (const std::bad_alloc&)
+            {
+                threw = true;
+            }
+            fired = Injection::Fired();
+        });
+        const auto shown = call("show");
+        if (threw)
+        {
+            ASSERT_TRUE(shown == "[[3], [1], [2]]" || shown == "[[1], [2], [3]]") << shown << " at allocation " << n;
+        }
+        else
+        {
+            ASSERT_EQ("[[1], [2], [3]]", shown) << "allocation " << n;
+        }
+        if (!fired)
+        {
+            break;
+        }
+    }
+    EXPECT_LT(0, n) << "no allocation reached the injection";
+    EXPECT_LT(n, maxAllocations);
+}
+
+// A render nested in one that wrote a global through an alias converts its own globals; when that
+// conversion fails, the next render it makes still does, rather than read the outer render's cell
+// (Codex review, docs/tasks/0331)
+TEST_F(AllocationFailureTest, NestedRenderAfterAFailedGlobalsConversion)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{ 0 });
+    Template inner(&env);
+    ASSERT_TRUE(!!inner.Load("{{ g }}"));
+    Template outer(&env);
+    ASSERT_TRUE(!!outer.Load("{% set y = g %}{% set _ = y.append(1) %}{{ inner() }}|{{ g }}"));
+    long n = 0;
+    for (; n != maxAllocations; ++n)
+    {
+        bool fired = false;
+        ValuesMap params;
+        params["inner"] = MakeCallable([&inner, &fired, n]() {
+            {
+                const Injection injection(n);
+                try
+                {
+                    static_cast<void>(inner.RenderAsString({}));
+                }
+                catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): a failed render is one of the outcomes checked
+                {
+                }
+                fired = Injection::Fired();
+            }
+            return inner.RenderAsString({}).value();
+        });
+        std::string result;
+        OnFreshThread([&] { result = outer.RenderAsString(params).value(); });
+        ASSERT_EQ("[0]|[0, 1]", result) << "allocation " << n;
+        if (!fired)
+        {
+            break;
+        }
+    }
+    EXPECT_LT(0, n) << "no allocation reached the injection";
+    EXPECT_LT(n, maxAllocations);
+}
+
+// Two names of the host's data in a module: an allocation failure while the second attaches to
+// the cell the first made leaves it looking again, not reading the host's data for good
+// (docs/tasks/0049)
+TEST_F(AllocationFailureTest, AliasAttachesAfterAFailedLink)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro m() %}{% set _ = a.append(9) %}{{ a|length }}={{ b|length }}{% endmacro %}"));
+    const std::vector<int64_t> data{ 1, 2, 3 };
+    long n = 0;
+    for (; n != maxAllocations; ++n)
+    {
+        // One accessor behind both names: a copy of a GenericList made by MakeGenericList copies
+        // its accessor, which is other data
+        auto made = std::make_shared<GenericList>(MakeGenericList(data.begin(), data.end()));
+        const GenericList list([made] { return made->GetAccessor(); });
+        auto module = tpl.MakeModule(ValuesMap{ { "a", list }, { "b", list } });
+        ASSERT_TRUE(!!module);
+        const auto call = [&module]() { return module->exports["m"].As<UserCallable>().callable(UserCallableParams{}).AsString(); };
+        bool fired = false;
+        OnFreshThread([&] {
+            const Injection injection(n);
+            try
+            {
+                call();
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): a failed call is one of the outcomes checked
+            {
+            }
+            fired = Injection::Fired();
+        });
+        const auto result = call();
+        const auto eq = result.find('=');
+        ASSERT_NE(std::string::npos, eq) << result;
+        ASSERT_EQ(result.substr(0, eq), result.substr(eq + 1)) << "allocation " << n;
+        if (!fired)
+        {
+            break;
+        }
+    }
+    EXPECT_LT(0, n) << "no allocation reached the injection";
+    EXPECT_LT(n, maxAllocations);
+}
+
 INSTANTIATE_TEST_SUITE_P(Templates,
                          AllocationFailureTest,
                          testing::Values(Case{ "Hello, {{ user.name }}!", "Hello, Ann!" },
@@ -535,5 +749,10 @@ INSTANTIATE_TEST_SUITE_P(Templates,
                                          // allocation fails (docs/tasks/0283, LeakSanitizer in the sanitizer job)
                                          Case{ "{% set ns = namespace(l=[]) %}{% set ns.self = ns %}{% set l = [1] %}{{ l.append(l) or '' }}"
                                                "{% set ns.c = cycler(ns) %}{% set ns.f = ns.l.append %}{{ l|length }}",
-                                               "2" }));
+                                               "2" },
+                                         // Writes to the host's data through its aliases, and a cycle through
+                                         // its cell (docs/tasks/0049)
+                                         Case{ "{% set y = items %}{% set r = user.roles %}{{ y.append(6) or '' }}{{ r.append('ops') or '' }}"
+                                               "{% set f = user.update %}{{ f(x=1) or '' }}{{ items.append(items) or '' }}{{ items|length }}{{ user.roles|length }}{{ user.x }}",
+                                               "731" }));
 } // namespace

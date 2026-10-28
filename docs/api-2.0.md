@@ -472,6 +472,17 @@ render is running (the C++ rule for a member call). Both are undefined behaviour
    `ReflectJson` gives it an owner.
 8. A macro or `caller` given to a host callable arrives as `None` until
    [0300](tasks/0300-module-export-callable-gaps.md).
+9. **A container the render hands to a callable** ([0331](tasks/0331-kept-container-contract.md))
+   is never mutable state the host shares with a render or a thread: the host holds a
+   read-only snapshot. One the render wrote before the call (or one inside a list or dict the
+   template made) is the render's copy, frozen when the render ends: the host keeps its final
+   state, also after the params are freed (a nested container it never wrote stays a view of
+   the host's data). One handed out before any write, or never written,
+   is a view of the host's data (item 1 applies), also while the render runs; Python shows the
+   render's later writes there, a deliberate divergence. A global's data is handed out as the
+   global's original. A module call's container keeps that call's final state: a later call's
+   write copies it first. Reading a kept value on another thread while its render runs is not
+   supported, as for any value of a running render.
 
 **Destruction order.** Supported in any order: the environment before its templates (they keep
 rendering, uncached); templates before their modules; environment, templates and handler before

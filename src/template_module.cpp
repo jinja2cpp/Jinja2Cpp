@@ -1,5 +1,6 @@
 // Template::MakeModule: a template's exports for the host, as Python Jinja2's Template.module
 // and make_module (docs/tasks/0284)
+#include "borrowed_cells.h"
 #include "cycle_collector.h"
 #include "engine_errors.h"
 #include "error_boundary.h"
@@ -325,8 +326,11 @@ struct TemplateModuleState
     {
         // The module's values may hold themselves (`l.append(l)`): a collector frees those
         // cycles once nothing else holds them, as a render's does when it ends. Noting them
-        // allocates; when that fails, the cycles noted so far are still freed and the rest leak
-        const CycleCollector cycles;
+        // allocates; when that fails, the cycles noted so far are still freed and the rest leak.
+        // The cells freeze first, noted to the collector: a cycle through one is then one among
+        // the module's values (docs/tasks/0331)
+        CycleCollector cycles;
+        cells.Release(&cycles);
         if (module)
         {
             try
@@ -447,7 +451,7 @@ struct TemplateModuleState
         try
         {
             // First, so that it ends last: when nothing of the call holds values any more
-            const CycleCollector cycles;
+            const ModuleCallCollector cycles(cells);
             // Then what the call loads, which its collector sees go
             const CallScope callScope(*callback);
             // Then the module's context as the call found it, which a failed call would leave
@@ -511,6 +515,9 @@ struct TemplateModuleState
     std::unique_ptr<Callback> callback;
     // The module's context, where the macros were defined; after the callback, which it uses
     std::unique_ptr<ImportedModule> module;
+    // The module's copies of the host's data it wrote to: its values live across its calls
+    // (docs/tasks/0049). Released before the module's values, by the destructor
+    BorrowedCells cells;
     // Calls of the exports take turns: the context is not shared by concurrent calls
     std::recursive_mutex mutex;
 };
@@ -547,7 +554,7 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
     BasicTemplateModule<CharT> result;
     try
     {
-        const CycleCollector cycles;
+        const ModuleCallCollector cycles(state->cells);
         const auto limitsScope = state->MakeLimitsScope();
         // Into result.body, which outlives the limits that keep a pointer to it
         state->Render(result.body);

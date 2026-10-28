@@ -92,6 +92,12 @@ public:
     std::vector<IntrusivePtr<detail::LoopFrame>>& LoopFrames() { return m_loopFrames; }
     // The globals converted last on this thread (template_impl.h)
     std::shared_ptr<const GlobalsSnapshot>& Globals() { return m_globals; }
+    // A global's adapter was attached to a cell of the running render (CellLink::Link): a
+    // render it starts converts the globals again rather than read that cell (docs/tasks/0331)
+    void GlobalAttached() noexcept { m_globalAttached = true; }
+    [[nodiscard]] bool IsGlobalAttached() const noexcept { return m_globalAttached; }
+    // Once the globals were converted again: a conversion that fails leaves the mark
+    void GlobalsConverted() noexcept { m_globalAttached = false; }
 
     // The tables of the params and the top scope of a render (docs/tasks/0160)
     struct RenderMaps
@@ -202,6 +208,7 @@ private:
     std::uint32_t m_lastGeneration = 0;
     std::vector<IntrusivePtr<detail::LoopFrame>> m_loopFrames;
     std::shared_ptr<const GlobalsSnapshot> m_globals;
+    bool m_globalAttached = false;
     // Where the maps live never changes, so that the maps lent to a render stay in place
     // while a render inside it is lent others
     std::vector<std::unique_ptr<RenderMaps>> m_maps;

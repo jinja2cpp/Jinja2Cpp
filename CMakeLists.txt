@@ -193,6 +193,7 @@ set(JINJA2CPP_SOURCES
     src/error_info.cpp
     src/big_int.cpp
     src/big_int_builtin.cpp
+    src/borrowed_cells.cpp
     src/expression_evaluator.cpp
     src/expression_parser.cpp
     src/filesystem_handler.cpp
@@ -418,6 +419,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/autoescape_test.cpp
         test/basic_tests.cpp
         test/big_int_test.cpp
+        test/borrowed_cells_test.cpp
         test/containers_api_test.cpp
         test/decimal_locale_test.cpp
         test/embedding_lifecycle_reentry_test.cpp
