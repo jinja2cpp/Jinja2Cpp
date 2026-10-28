@@ -749,7 +749,8 @@ TEST(BorrowedCellsSingle, ModuleCallFreesTheCellsOfItsNestedData)
     for (int i = 0; i != 3; ++i)
     {
         UserCallableParams callParams;
-        callParams.extraPosArgs = ValuesList{ ValuesList{ ValuesList{ 0, held }, ValuesMap{ { "f", held } } } };
+        // Value(...): some compilers take a braced ValuesList holding one ValuesList for a copy of it
+        callParams.extraPosArgs = ValuesList{ Value(ValuesList{ ValuesList{ 0, held }, ValuesMap{ { "f", held } } }) };
         EXPECT_EQ("3[0, , 2]2", module.exports["consume"].As<UserCallable>().callable(callParams).AsString());
     }
     held = UserCallable();
