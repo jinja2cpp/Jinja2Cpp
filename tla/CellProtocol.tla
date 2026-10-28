@@ -65,7 +65,9 @@ VARIABLES
     live,      \* CellCounters::s_live
     ad, nAd,   \* adapters (their CellLink) of host or owned data
     cl, nCell, \* BorrowedCell
-    st, nGen,  \* storage generations: a cell's m_storage, m_retired, a copy
+    st, nGen,  \* storage generations: a cell's m_storage, m_retired, a copy. alive: the
+               \* item block (InternalValueList); acc: the accessor (the ListAdapter's
+               \* Adapter object) in m_storage or m_retired, which an export does not keep
     rg,        \* BorrowedCells: the table, m_call, m_lastCall
     fr,        \* per thread: the stack of renders and module calls
     ex, nEx,   \* what the host keeps: a view of a storage ("gen"), a template list holding an adapter ("view"), the adapter itself ("raw", only without A1)
@@ -87,7 +89,7 @@ NoAd == [idn |-> "none", inc |-> 0, held |-> FALSE, cell |-> 0, seen |-> 0, aliv
 NoCell == [idn |-> "none", inc |-> 0, reg |-> ModReg, stor |-> 0, retired |-> 0, source |-> 0,
            owned |-> FALSE, frozen |-> FALSE, exp |-> 0, links |-> {}, inTable |-> FALSE,
            alive |-> FALSE]
-NoGen == [val |-> 0, child |-> 0, alive |-> FALSE]
+NoGen == [val |-> 0, child |-> 0, alive |-> FALSE, acc |-> FALSE]
 NoEx == [kind |-> "none", gen |-> 0, ad |-> 0, idn |-> "none", thr |-> "none", depth |-> 0,
          reg |-> ModReg, done |-> FALSE, snap |-> <<>>, alive |-> FALSE]
 EmptyReg == [tbl |-> [k \in Keys |-> 0], call |-> 0, last |-> 0]
@@ -123,8 +125,6 @@ SetTop(t, f) == [fr EXCEPT ![t][Depth(t)] = f]
 Pop(t) == [fr EXCEPT ![t] = SubSeq(@, 1, Len(@) - 1)]
 InModule(t) == \E i \in 1..Depth(t) : fr[t][i].kind = "mod"
 Idle == ~dirty /\ ~pendDrop
-\* The bound on a behaviour's length is the CONSTRAINT LevelBound (TLC's BFS level)
-CanStep == TRUE
 Grow(v) == IF v = EMPTY THEN 1 ELSE IF v = UNDEF THEN UNDEF ELSE v + 1
 CanGrow(v) == v < MaxVal
 
@@ -159,10 +159,12 @@ Snap(t, d, done) ==
 Succ(n) ==
     CASE n[1] = "a" -> IF ad[n[2]].cell # 0 /\ cl[ad[n[2]].cell].frozen
                        THEN {<<"c", ad[n[2]].cell>>} ELSE {}
-      [] n[1] = "c" -> {<<"g", cl[n[2]].stor>>}
-                       \cup (IF cl[n[2]].retired # 0 THEN {<<"g", cl[n[2]].retired>>} ELSE {})
+      \* A cell holds the accessors of its storages; an accessor holds its item block
+      [] n[1] = "c" -> {<<"x", cl[n[2]].stor>>}
+                       \cup (IF cl[n[2]].retired # 0 THEN {<<"x", cl[n[2]].retired>>} ELSE {})
                        \cup (IF FixSourceKeepsId /\ cl[n[2]].source # 0
                              THEN {<<"a", cl[n[2]].source>>} ELSE {})
+      [] n[1] = "x" -> {<<"g", n[2]>>}
       [] n[1] = "g" -> IF st[n[2]].child # 0 THEN {<<"a", st[n[2]].child>>} ELSE {}
 
 RECURSIVE Close(_)
@@ -174,6 +176,8 @@ RootsExcept(x) ==
     ({<<"a", a>> : a \in Ads0 \cup {gsnap[t] : t \in Threads} \cup {ns}
                      \cup {ex[e].ad : e \in {e \in ExIds : ex[e].alive /\ ex[e].kind # "gen"}}}
        \ {<<"a", 0>>})
+    \* CreateGenericList captures a copy of the storage's accessor: it shares the item block,
+    \* not the accessor object in m_storage
     \cup {<<"g", ex[e].gen>> : e \in {e \in ExIds : ex[e].alive /\ ex[e].kind = "gen"}}
     \cup {<<"c", c>> : c \in {c \in CellIds : cl[c].alive /\ cl[c].inTable /\ c # x}}
 Reach == Close(RootsExcept(0))
@@ -188,7 +192,8 @@ GC ==
            ad2 == [a \in AdIds |-> [ad[a] EXCEPT !.alive = @ /\ <<"a", a>> \in R]]
        IN /\ cl' = cl2
           /\ ad' = ad2
-          /\ st' = [g \in GenIds |-> [st[g] EXCEPT !.alive = @ /\ <<"g", g>> \in R]]
+          /\ st' = [g \in GenIds |-> [st[g] EXCEPT !.alive = @ /\ <<"g", g>> \in R,
+                                                  !.acc = @ /\ <<"x", g>> \in R]]
           \* Unlinking a dead adapter from a live cell writes that cell's list of links
           /\ wr' = Mark(wr, {<<"c", c>> : c \in unlinked}, dirtyBy)
           \* An adapter that lives on, attached to a cell that went
@@ -247,7 +252,8 @@ WC(c, f, op, v, CL) ==
               [k |-> "copy", nGen |-> g, gen |-> g,
                cl |-> [CL EXCEPT ![c].stor = g, ![c].retired = cc.stor, ![c].exp = 0],
                st |-> [st EXCEPT ![g] = [val |-> NewVal(op, st[cc.stor].val, v),
-                                         child |-> st[cc.stor].child, alive |-> TRUE]]]
+                                         child |-> st[cc.stor].child, alive |-> TRUE,
+                                         acc |-> TRUE]]]
          [] OTHER ->
               [k |-> "inplace", nGen |-> nGen, gen |-> cc.stor,
                \* The host let go of what an earlier call was handed
@@ -279,7 +285,7 @@ WriteCell(t, a, f2, op, R) ==
        /\ fr' = IF op = "touch" /\ child # 0 /\ Wr.k # "fail"
                 THEN SetTop(t, [Top(t) EXCEPT !.ads = @ \cup {child}]) ELSE fr
        /\ flag' = [flag EXCEPT !.foreign = @ \/ Foreign(t, a, R.c),
-                               !.uaf = @ \/ ~cl[R.c].alive \/ ~st[cl[R.c].stor].alive]
+                               !.uaf = @ \/ ~cl[R.c].alive \/ ~st[cl[R.c].stor].acc]
        /\ dirty' = (Wr.k = "copy") /\ dirtyBy' = t
        /\ UNCHANGED <<epoch, live, nAd, nCell, rg, ex, nEx, gsnap, ns, lock, inc, pendDrop>>
 
@@ -297,7 +303,7 @@ Adopt(t, a, op) ==
                                    alive |-> TRUE]]
        /\ nCell' = c
        /\ st' = [st EXCEPT ![g] = [val |-> NewVal(op, 0, 0), child |-> IF hasChild THEN ch ELSE 0,
-                                   alive |-> TRUE]]
+                                   alive |-> TRUE, acc |-> TRUE]]
        /\ nGen' = g
        /\ ad' = [ad EXCEPT ![a].cell = c, ![a].seen = ATT,
                            ![ch] = IF hasChild THEN NewAd("C", 0, FALSE) ELSE ad[ch]]
@@ -319,7 +325,7 @@ LinkFailed(t, a, R) ==
     /\ UNCHANGED <<epoch, live, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt, ns, lock,
                    inc, dirty, dirtyBy, pendDrop, flag>>
 
-CanUse(t, a) == Idle /\ CanStep /\ Running(t) /\ a \in Top(t).ads /\ ad[a].alive
+CanUse(t, a) == Idle /\ Running(t) /\ a \in Top(t).ads /\ ad[a].alive
 
 Write(t, a, op) ==
     /\ op = "touch" => "touch" \in Actions
@@ -353,7 +359,7 @@ Read(t, a) ==
                 /\ wr' = Mark(wr, GetWrites(a, R), t)
                 /\ flag' = [flag EXCEPT
                      !.foreign = @ \/ Foreign(t, a, R.c),
-                     !.uaf = @ \/ (R.c # 0 /\ (~cl[R.c].alive \/ ~st[cl[R.c].stor].alive)),
+                     !.uaf = @ \/ (R.c # 0 /\ (~cl[R.c].alive \/ ~st[cl[R.c].stor].acc)),
                      \* An alias that reads the host's data while its render has a cell of it
                      !.stale = @ \/ (R.c = 0 /\ rg[CurReg(t)].tbl[Key(a)] # 0)]
                 /\ UNCHANGED <<epoch, live, nAd, nCell, st, nGen, rg, fr, ex, nEx, gsnap, ns,
@@ -402,7 +408,7 @@ KeepList(t, a) ==
 \* The host lets go of what it kept: on its own thread at any time, on another after the call
 Release(t, e) ==
     /\ "release" \in Actions
-    /\ Idle /\ CanStep /\ ex[e].alive
+    /\ Idle /\ ex[e].alive
     /\ ex[e].thr = t \/ ex[e].done
     /\ ex' = [ex EXCEPT ![e].alive = FALSE]
     /\ dirty' = TRUE /\ dirtyBy' = t
@@ -431,7 +437,9 @@ EnumStep(t) ==
     /\ Idle /\ Running(t) /\ Top(t).bkind = "enum"
     /\ LET a == Top(t).bad
            g == IF FixEnumRefetch THEN cl[ad[a].cell].stor ELSE Top(t).bgen
-       IN flag' = [flag EXCEPT !.uaf = @ \/ ~st[g].alive \/ (FixEnumRefetch /\ ~cl[ad[a].cell].alive)]
+       \* Before f83b89f the loop held the enumerator of the storage's accessor (cell->List()),
+       \* a raw pointer to it: an export of the items does not keep that accessor alive
+       IN flag' = [flag EXCEPT !.uaf = @ \/ ~st[g].acc \/ (FixEnumRefetch /\ ~cl[ad[a].cell].alive)]
     /\ fr' = SetTop(t, [Top(t) EXCEPT !.bkind = "none", !.bad = 0, !.bgen = 0])
     /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, ex, nEx, gsnap, gatt, ns, lock,
                    inc, fails, dirty, dirtyBy, pendDrop, wr>>
@@ -493,7 +501,7 @@ SortEnd(t) ==
 CanNest(t) == Depth(t) < MaxDepth /\ IF Depth(t) = 0 THEN TRUE ELSE Top(t).phase = "run"
 
 StartRender(t) ==
-    /\ Idle /\ CanStep /\ t \in RenderThreads /\ CanNest(t)
+    /\ Idle /\ t \in RenderThreads /\ CanNest(t)
     /\ LET conv == gsnap[t] = 0 \/ (FixNestedGlobal /\ gatt[t]) IN
        \E f \in BOOLEAN :
         /\ f => (conv /\ fails < MaxFail)
@@ -570,7 +578,7 @@ FinishFreeze(t) ==
 FreeAddrs == {o \in OwnedAddrs : ~\E a \in AdIds : ad[a].alive /\ ad[a].idn = o}
 
 StartModCall(t) ==
-    /\ Idle /\ CanStep /\ t \in ModuleThreads /\ CanNest(t)
+    /\ Idle /\ t \in ModuleThreads /\ CanNest(t)
     /\ lock \in {"none", t}
     /\ nAd + 2 <= MaxAd
     /\ \E o \in FreeAddrs :
@@ -645,7 +653,13 @@ DropUnheld ==
 
 -----------------------------------------------------------------------------
 
+\* Behaviours of at most MaxLevel states, GC steps included (TLC's BFS level). A guard rather
+\* than a CONSTRAINT: TLC then does not compute the successors of the last level at all
+InBound == TLCGet("level") < MaxLevel
+
 Next ==
+  InBound /\
+  (
     \/ GC
     \/ DropUnheld
     \/ \E t \in Threads :
@@ -663,11 +677,9 @@ Next ==
             \/ EnumStart(t, a)
             \/ SortStart(t, a)
         \/ "release" \in Actions /\ \E e \in ExIds : Release(t, e)
+  )
 
 Spec == Init /\ [][Next]_vars
-
-\* The states TLC explores: behaviours of at most MaxLevel steps, GC steps included
-LevelBound == TLCGet("level") <= MaxLevel
 
 -----------------------------------------------------------------------------
 (* Invariants *)
@@ -690,7 +702,7 @@ NoCrossThreadWrite ==
 NoUseAfterFree ==
     /\ ~flag.uaf
     /\ Quiet => \A a \in AdIds : (ad[a].alive /\ ad[a].cell # 0) => cl[ad[a].cell].alive
-    /\ Quiet => \A c \in CellIds : cl[c].alive => st[cl[c].stor].alive
+    /\ Quiet => \A c \in CellIds : cl[c].alive => st[cl[c].stor].acc
 
 \* 5. A lookup never returns a cell of other data, or a live cell of another render
 NoForeignCell == ~flag.foreign

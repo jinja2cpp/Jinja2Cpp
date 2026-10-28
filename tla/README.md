@@ -13,13 +13,14 @@ fix #673 made is needed: taking any one of them out gives a counterexample.
 
 ```bash
 curl -sSLo tla/tla2tools.jar https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
-python3 tla/check.py --timeout 900          # every run, about 75 minutes on 4 cores
+python3 tla/check.py                        # every run, about 2.7 hours on 4 cores
 python3 tla/check.py --only f1-nested-export --traces
 python3 tla/check.py --list
 ```
 
 Java 11 or later is needed. `--set Name=Value` overrides a constant, for example
-`--set MaxLevel=14`. Each run writes `MC.cfg` and `tlc.out` into a temporary directory; the
+`--set MaxLevel=14`. `--timeout SECONDS` limits each run; a run stopped by it fails as
+inconclusive, so a pass is always a completed search of its bounded space. Each run writes `MC.cfg` and `tlc.out` into a temporary directory; the
 last line of the output names it. The TLA+ Toolbox or the VS Code TLA+ extension can open
 `CellProtocol.tla` with such an `MC.cfg`.
 
@@ -39,6 +40,7 @@ not change in a later one. That rule is D8's copy on write.
 | `CellCounters` epoch and live | `epoch`, `live` |
 | `CellLink::Get`, `Find`, `Link` | `GetR`; an allocation failure in the push of `Link` (c06d969) |
 | `BorrowedCell` (`m_storage`, `m_retired`, `m_source`, `m_owner`, `m_exportedIn`, `m_frozen`, `m_links`) | `cl[c]`: `stor`, `retired`, `source`, `owned`, `exp`, `frozen`, `links` |
+| A storage: the `ListAdapter`'s accessor object, and the `InternalValueList` it shares | `st[g]`: `acc` (held by the cell only), `alive` (held by the accessor and by exports) |
 | `MutableItems`, `Unshare`, `NoteExport` | `WC`, `NeedCopy`, `Export`; a failed copy |
 | `CellLink::Adopt` | `Adopt`: a copy of the data with one nested item adapter (`P` holds `C`) |
 | `BorrowedCells` of a render and of a module, `BeginCall`/`EndCall` | `rg[r]`: `tbl`, `call`, `last` |
@@ -46,7 +48,7 @@ not change in a later one. That rule is D8's copy on write.
 | `ModuleCallCollector`, `DropUnheld`/`IsUnheld` (459d8f7) | `EndModCall`, `DropUnheld`, `Unheld`; `DropRule` |
 | `TemplateModuleState::Call` under its recursive mutex | `StartModCall`, `lock` |
 | `GetGlobalsSnapshot`, `RenderWorkspace::GlobalAttached` | `StartRender`, `gsnap`, `gatt`; a failed conversion |
-| `ExportListView` and its owner (A1) | an export of kind `gen` holds a storage generation |
+| `ExportListView` and its owner (A1); `CreateGenericList` copies the accessor | an export of kind `gen` holds a storage's items, not its accessor |
 | `keep([l])`: a template list holding an adapter | an export of kind `view` |
 | `CellEnumerator` / `StepEnumerator` across a callback | `EnumStart`, `EnumStep` |
 | `ListSort` with its `Restore` guard across key calls | `SortStart`, `SortEnd` |
@@ -85,17 +87,20 @@ What the model abstracts:
 ## Results
 
 Bounds: owned addresses `O1` and `O2`, values up to 3, one allocation failure, and two
-exports. "Level" is TLC's BFS depth, and each GC or DropUnheld step counts as one level.
+exports. "Level" is the most states a behaviour has (TLC's BFS depth, the initial state is
+level 1), and each GC or DropUnheld step counts as one. `Next` stops at that level, so TLC
+explores every behaviour up to it and none past it.
 
 | Run | Scope | Result |
 |---|---|---|
-| `render` | 1 thread: renders, nested through a callback | no error, complete to level 12 (13.6M states, time limit) |
-| `module` | 1 thread: module calls, nested through a callback | no error, whole space (1.5M states) |
-| `mixed` | 1 thread: renders and module calls | no error, complete to level 11 (14.8M states, time limit) |
-| `threads` | 2 threads: renders and the locked module | no error, complete to level 9 (12.4M states, time limit) |
+| `render` | 1 thread: renders, nested through a callback, level 11 | no error (51.6M states, 82 min) |
+| `module` | 1 thread: module calls, nested through a callback, level 12 | no error (1.5M states, 3 min) |
+| `mixed` | 1 thread: renders and module calls, level 10 | no error (19.5M states, 25 min) |
+| `threads` | 2 threads: renders and the locked module, level 9 | no error (32.0M states, 45 min) |
 | `f1-nested-export` | `module`, the code as merged (no `FixNestedExport`), no allocation failure | **counterexample: `SnapshotStable`** (F1) |
 | `no-link-epoch` | c06d969 out (Codex P2) | counterexample: `AliasesAgree` |
 | `no-enum-refetch` | f83b89f out (Codex P1) | counterexample: `NoUseAfterFree` |
+| `no-enum-refetch-kept` | f83b89f out, no release of exports | counterexample: `NoUseAfterFree` (the loop's accessor freed while the export keeps the items) |
 | `no-sort-refetch` | 1e15c2d/89df914 out (Codex P0) | counterexample: `SnapshotStable` |
 | `no-call-restore` | 1e15c2d out (Codex P1) | counterexample: `SnapshotStable` |
 | `no-nested-global` | 9c91ffc out (Codex P2) | counterexample: `NoForeignCell` |
@@ -112,11 +117,11 @@ exports. "Level" is TLC's BFS depth, and each GC or DropUnheld step counts as on
 | `open-0332-kept-list` | `keep([l])` in a module call | counterexample: `SnapshotStable` (task 0332, expected) |
 | `open-0332-nested` | a nested item written in a module call | counterexample: `SnapshotStable` (task 0332, expected) |
 
-Every counterexample takes 1 to 75 seconds; `check.py --traces` prints its steps.
+Every counterexample takes 1 to 80 seconds; `check.py --traces` prints its steps.
 
-**What the scopes cover.** `render`, `mixed` and `threads` stopped at the 15-minute limit. They
-are complete to the level reached (BFS), which is 5 to 7 template steps. `module` explored its
-whole bounded space. The deep counterexamples (the loop and sort rows) need about 13
+**What the scopes cover.** Every pass run explored its whole bounded space. Their levels are 5 to
+7 template steps, plus the GC steps between them, and they are lower than the levels of the scopes
+the mutants use, which only need to reach a counterexample. The deep counterexamples (the loop and sort rows) need about 13
 template steps, so their runs use a scope with only module calls, one cell and the steps a
 borrower needs (`DEEP` in `check.py`).
 
@@ -139,6 +144,14 @@ write goes through the uniqueness test. The pass runs use it. The pinned test is
 
 ### Other observations
 
+- **A storage's accessor and its items have separate lifetimes** (Ruslan's review of #688).
+  `CreateGenericList` copies the storage's `ListAdapter` accessor and shares its
+  `InternalValueList`, so an export keeps the items but not the accessor object in `m_storage`.
+  The loop before f83b89f held that accessor's enumerator. The first version of the model had
+  one lifetime for both. There, an outer loop over a kept export never read freed memory
+  (`no-enum-refetch-kept` explored its whole space without an error). The model now has `acc`
+  apart from `alive`, and that run gives the counterexample: two nested copies retire the
+  loop's storage while the host still holds its items.
 - **`IsUnheld`'s links test never decides in the model** (`drop-without-link-check` passes).
   Owned data has one adapter per call here. The test guards the `LifetimeAnchor` adapters of
   copied items, which the model does not have, so the run neither confirms nor refutes it.

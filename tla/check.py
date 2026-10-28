@@ -4,7 +4,8 @@
 Usage: tla/check.py [--jar tla2tools.jar] [--only NAME ...] [--list]
 
 Every run is a TLC model: a set of constants plus the invariants it checks. A "pass" run must
-find no violation; a "mutant" run puts back the code as it was before one fix and must find a
+explore its whole bounded space and find no violation (a run stopped by --timeout is a failure,
+not a partial pass); a "mutant" run puts back the code as it was before one fix and must find a
 counterexample for the named invariant; an "open" run checks an invariant of an open task and
 is expected to fail too. See tla/README.md.
 """
@@ -55,11 +56,12 @@ ALL = '{"touch", "read", "export", "keeplist", "ns", "enum", "sort", "release"}'
 
 # name: (kind, scope, overrides, invariants, note)
 RUNS = {
-    # The protocol as #673 has it at 459d8f7
-    "render": ("pass", RENDER1, {}, SAFETY, "renders, nested through a callback"),
+    # The protocol as #673 has it at 459d8f7. A pass run explores its whole bounded space, so
+    # its level is lower than its scope's, which the mutants use
+    "render": ("pass", RENDER1, {"MaxLevel": 11}, SAFETY, "renders, nested through a callback"),
     "module": ("pass", MODULE1, {}, SAFETY, "module calls, nested through a callback"),
-    "mixed": ("pass", MIXED1, {}, SAFETY, "renders and module calls on one thread"),
-    "threads": ("pass", TWO, {}, SAFETY, "two threads, renders and the locked module"),
+    "mixed": ("pass", MIXED1, {"MaxLevel": 10}, SAFETY, "renders and module calls on one thread"),
+    "threads": ("pass", TWO, {"MaxLevel": 9}, SAFETY, "two threads, renders and the locked module"),
     # Finding F1: #673 as it is at 459d8f7, without the proposed FixNestedExport
     "f1-nested-export": ("finding", MODULE1, {"FixNestedExport": False, "MaxFail": 0},
                          ["SnapshotStable"],
@@ -69,6 +71,11 @@ RUNS = {
                       "c06d969, Codex P2: alias detached after a failed Link"),
     "no-enum-refetch": ("mutant", DEEP, {"FixEnumRefetch": False}, ["NoUseAfterFree"],
                         "f83b89f, Codex P1: loop over storage two copies freed"),
+    # The same with the export kept to the end: only the storage's accessor dies, while the
+    # export keeps its items (Ruslan's review of #688)
+    "no-enum-refetch-kept": ("mutant", dict(DEEP, Actions='{"export", "enum"}'),
+                             {"FixEnumRefetch": False}, ["NoUseAfterFree"],
+                             "f83b89f with the export kept: the loop's accessor is freed"),
     "no-sort-refetch": ("mutant", DEEP, {"FixSortRefetch": False},
                         ["NoUseAfterFree", "SnapshotStable"],
                         "1e15c2d/89df914, Codex P0: sort writes back into freed storage"),
@@ -112,7 +119,6 @@ RUNS = {
 
 
 def config(scope, overrides, invariants):
-    overrides = {k: v for k, v in overrides.items() if not k.startswith("_")}
     consts = dict(OwnedAddrs='{"O1", "O2"}', MaxVal=3, MaxFail=1, DropRule='"full"',
                   AllowModuleKeepList=False, AllowModuleNested=False)
     consts["Actions"] = ALL
@@ -124,7 +130,6 @@ def config(scope, overrides, invariants):
         if isinstance(value, bool):
             value = "TRUE" if value else "FALSE"
         lines.append(f"    {key} = {value}")
-    lines.append("CONSTRAINT LevelBound")
     lines.append("INVARIANTS")
     lines += [f"    {inv}" for inv in invariants]
     return "\n".join(lines) + "\n"
@@ -138,13 +143,8 @@ def run(jar, name, spec, workdir, extra=None, timeout=None):
     with open(os.path.join(workdir, "MC.cfg"), "w", encoding="utf-8") as cfg:
         cfg.write(config(scope, overrides, invariants))
     start = time.time()
-    mode = []
-    if "_sim" in overrides:
-        # Random behaviours: for counterexamples deeper than an exhaustive search reaches
-        traces, depth = overrides["_sim"]
-        mode = ["-simulate", f"num={traces}", "-depth", str(depth), "-seed", "1"]
     cmd = ["java", "-XX:+UseParallelGC", "-cp", jar, "tlc2.TLC", "-workers", "auto", "-deadlock",
-           "-config", "MC.cfg"] + mode + ["CellProtocol.tla"]
+           "-config", "MC.cfg", "CellProtocol.tla"]
     timed_out = False
     try:
         out = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, check=False,
@@ -165,14 +165,14 @@ def run(jar, name, spec, workdir, extra=None, timeout=None):
     if violated:
         verdict = "counterexample: " + violated.group(1)
         ok = kind != "pass" and violated.group(1) in invariants
-    elif ("Model checking completed. No error has been found." in out
-          or (mode and "Finished in" in out and "Error:" not in out)):
+    elif "Model checking completed. No error has been found." in out:
         verdict = "no error"
         ok = kind == "pass"
     elif timed_out:
+        # Not evidence: a pass run must explore its whole bounded space (Ruslan's review of #688)
         level = re.findall(r"Progress\((\d+)\)", out)
-        verdict = f"no error to level {level[-1] if level else '?'} (time limit)"
-        ok = kind == "pass"
+        verdict = f"inconclusive: time limit at level {level[-1] if level else '?'}"
+        ok = False
     else:
         verdict = "TLC failed (see " + os.path.join(workdir, "tlc.out") + ")"
         ok = False
@@ -187,10 +187,12 @@ def main():
     parser.add_argument("--set", nargs="*", default=[], help="override a constant: NAME=VALUE")
     parser.add_argument("--only", nargs="*")
     parser.add_argument("--list", action="store_true")
-    parser.add_argument("--timeout", type=int, help="seconds per run; a pass run that reaches it reports the BFS level it completed")
+    parser.add_argument("--timeout", type=int, help="seconds per run; a run that reaches it fails as inconclusive")
     parser.add_argument("--traces", action="store_true", help="print each counterexample's steps")
     args = parser.parse_args()
     args.jar = os.path.abspath(args.jar)
+    if args.timeout is not None and args.timeout <= 0:
+        parser.error("--timeout must be positive")
     if args.list:
         for name, spec in RUNS.items():
             print(f"{name:28} {spec[0]:7} {spec[4]}")
