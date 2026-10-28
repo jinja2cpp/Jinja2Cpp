@@ -429,6 +429,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/extends_test.cpp
         test/filesystem_handler_test.cpp
         test/filters_test.cpp
+        test/float_value_test.cpp
         test/forloop_test.cpp
         test/fwd_test.cpp
         test/global_functions_test.cpp

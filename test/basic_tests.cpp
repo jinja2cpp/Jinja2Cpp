@@ -986,7 +986,7 @@ TEST(BasicTests, ValueFromIntegralTypesStoresInt)
     ExpectStoredAsInt<const unsigned&>(lvalue, "const unsigned&");
 
     EXPECT_TRUE(std::holds_alternative<bool>(Value(true).GetData()));
-    EXPECT_TRUE(std::holds_alternative<double>(Value(1.5f).GetData()));
+    EXPECT_TRUE(std::holds_alternative<float>(Value(1.5f).GetData()));
     EXPECT_TRUE(std::holds_alternative<double>(Value(1.5).GetData()));
     EXPECT_TRUE(std::holds_alternative<double>(Value(1.5L).GetData()));
     EXPECT_TRUE(std::holds_alternative<int64_t>(Reflect(5LL).GetData()));

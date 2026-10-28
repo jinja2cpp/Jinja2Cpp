@@ -85,7 +85,7 @@ TEST_F(ToJson, SerializeObject)
 {
     const auto* const source = "{{obj | tojson}}";
     const auto* const expectedResult = "{\"map\":{\"str1\":1},\"listValue\":[1,2,3],\"boolFalseValue\":false,\"boolTrueValue\":true,\"wstringValue\":\"rain\","
-                                       "\"stringValue\":\"rain\",\"doubleValue\":12.123000144958496,\"intValue\":3}";
+                                       "\"stringValue\":\"rain\",\"doubleValue\":12.123,\"intValue\":3}";
 
     PerformBothJsonTests(source, expectedResult, GetObjectParam());
 }

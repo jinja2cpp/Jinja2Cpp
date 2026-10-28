@@ -690,8 +690,9 @@ struct Reflector<T, std::enable_if_t<std::is_same_v<std::remove_cv_t<T>, bool>>>
 template<typename T>
 struct Reflector<T, std::enable_if_t<std::is_floating_point_v<T>>>
 {
-    static auto Create(T val) { return Value(static_cast<double>(val)); }
-    static auto CreateFromPtr(const T* val) { return Value(static_cast<double>(*val)); }
+    // A float stays a float (docs/tasks/0039); double and long double become double
+    static auto Create(T val) { return Value(val); }
+    static auto CreateFromPtr(const T* val) { return Value(*val); }
 };
 
 // Every integral type except bool, including the character types, is reflected as int64_t; a value outside its

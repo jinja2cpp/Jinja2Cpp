@@ -1,6 +1,7 @@
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/exception.h>
 
+#include "decimal_number.h"
 #include "helpers.h"
 
 #include <jinja2cpp/big_int.h>
@@ -113,6 +114,9 @@ struct ValueRenderer
     void operator()(const jinja2::UserCallable& /*val*/) const {}
 
     void operator()(const jinja2::BigInt& val) const { this->operator()(val.ToString()); }
+
+    // Printed as the template sees it: 12.123f is 12.123 (docs/tasks/0039)
+    void operator()(float val) const { this->operator()(jinja2::FloatAsDecimalDouble(val)); }
 
     template<typename T>
     void operator()(const T& val) const

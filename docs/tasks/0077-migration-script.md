@@ -36,6 +36,10 @@ before the end of an expression is the operator; `+%}` on statements is unchange
 A positional argument after a keyword one is a syntax error too (0294): `f(a=1, 2)`, and the
 old `applymacro(macro='m', x)` order, become `f(2, a=1)` and `applymacro(x, macro='m')`.
 
+`Value(float)` stores a `float` since 0039: `IsDouble()`, `AsDouble()` and
+`GetIf<double>()` no longer see it, so host code that read a C++ `float` back as a `double`
+tests `IsFloat()` too (no compiler warning points at it; `MIGRATION.md` names it).
+
 **Done when.** The script migrates a copy of our own 1.x-style tests to warning-free code,
 in CI.
 

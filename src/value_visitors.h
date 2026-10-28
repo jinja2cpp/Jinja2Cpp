@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_VALUE_VISITORS_H
 
 #include "big_int.h"
+#include "decimal_number.h"
 #include "expression_evaluator.h"
 #include "internal_value.h"
 #include "loop_attr.h"
@@ -658,6 +659,9 @@ struct InputValueConvertor
     {
         return result_t(InternalValue(val));
     }
+
+    // In a template a float is the Python float its digits name: 12.123f is 12.123 (docs/tasks/0039)
+    result_t operator()(float val) const { return result_t(InternalValue(FloatAsDecimalDouble(val))); }
 
     // An integer outside int64 is a big integer; one that fits is an int (docs/tasks/0270)
     result_t operator()(const BigInt& val) const { return MakeBigIntValue(val.ToString()); }

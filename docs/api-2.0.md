@@ -212,6 +212,7 @@ the migration notes fix it), **fix** (a defect; behaviour changes, no rename),
 | `Value(nullptr)` | *probe:* picks `Value(const char*)` and throws `logic_error` from `std::string(nullptr)` | `Value(std::nullptr_t)` makes `None` | fix (0067) |
 | `Value(ValuesList&&) noexcept`, `Value(ValuesMap&&) noexcept` | allocate, so `bad_alloc` becomes `std::terminate` | drop `noexcept` there | fix |
 | `Value(uint64_t)` above `INT64_MAX` | cannot be held: wrapped to a negative number in 1.x, `std::overflow_error` since 0172 | `jinja2::BigInt` (`big_int.h`): an integer of any size as canonical decimal text, `TryParse(std::string_view, BigInt&) noexcept`, `Sign`, `ToInt64`/`ToUInt64`, comparisons by value; the last `Value` alternative (`sizeof(Value)` unchanged), with `IsBigInt()`, `AsBigInt()`, `bool AsBigInt(const BigInt*&)`; the integral constructor, `Reflect` and the JSON bindings store it for a value outside `int64_t`. `IsInt()` stays `int64_t` only. Until 0270 a `BigInt` that enters a template fails the render (a top-level render parameter fails it even unread), and `ToString()` prints one only at top level, not inside a list or map; arithmetic on it needs a backend (0271, plan docs/design/0178-big-integer-plan.md) | add (0269); an exhaustive `std::visit` over `GetData()` must handle the new alternative |
+| `Value(float)` | widened to `double` exactly, so `12.123f` prints `12.123000144958496` | `float` is the last `Value` alternative (after `BigInt`, `sizeof(Value)` unchanged), with `IsFloat()`, `AsFloat()`, `bool AsFloat(float&)`; `IsDouble()` stays false for it and host equality stays structural (`Value(1.5f) != Value(1.5)`). `Value(double)` and `Value(long double)` store `double`; `Reflect` keeps a `float` member a `float`. In a template a `float` is the double nearest its shortest decimal (`12.123f` is `12.123`), and a value coming back from a template is a `double`; a typed `float` callable parameter gets the exact float back (0039, plan docs/design/0039-float-value-plan.md) | add (0039); an exhaustive `std::visit` over `GetData()` must handle the new alternative |
 | `IsEqual()` next to `operator==` | redundant | keep both; not worth a break | — |
 | `ValuesMap : std::unordered_map` | hash order | ordered map (task 0043) | break, done in 0043 |
 | free `AsString`/`AsWString` overloads for `std::string`, `std::wstring` and the views | encoding conversion; the `std::string` one returns a `const` value, defeating moves | `ToString`/`ToWString` returning `std::string`/`std::wstring` | alias |
@@ -499,7 +500,7 @@ class Value
 public:
     using ValueData = variant<NoneValue, bool, std::string, std::wstring, string_view, wstring_view,
                               int64_t, double, RecWrapper<ValuesList>, RecWrapper<ValuesMap>,
-                              GenericList, GenericMap, RecWrapper<UserCallable>, Markup, WMarkup, BigInt>;
+                              GenericList, GenericMap, RecWrapper<UserCallable>, Markup, WMarkup, BigInt, float>;
 
     Value();
     Value(std::nullptr_t) noexcept;                         // None
@@ -507,6 +508,8 @@ public:
     Value(I val) noexcept(!detail::CanExceedInt64<I>)       // outside int64_t: a BigInt (0269)
         : m_data(detail::ToStoredInt<ValueData>(val)) {}
     Value(char) = delete;                                   // number or one-letter string? say which
+    template<class F, std::enable_if_t<std::is_floating_point_v<F>>* = nullptr>
+    Value(F val) noexcept;                                  // float stores float (0039), others double
     // ... string, double, list, map, callable constructors as today
 
     bool IsNone() const noexcept;
@@ -520,6 +523,7 @@ public:
     bool IsMap() const noexcept;       // ValuesMap or GenericMap
     bool IsCallable() const noexcept;
     bool IsBigInt() const noexcept;    // an integer outside int64_t
+    bool IsFloat() const noexcept;     // a float exactly; IsDouble is false for it
 
     const std::string& AsString() const;                // throws bad_variant_access
     std::string& AsString();                           // a held Markup becomes a plain string first
@@ -531,7 +535,7 @@ public:
     bool AsList(const ValuesList*& out) const noexcept;
     GenericList ToGenericList() const;                  // a view over either list representation
     GenericMap ToGenericMap() const;
-    // AsBool, AsDouble, AsWString (std::wstring_view&), AsMap, AsCallable: both forms likewise
+    // AsBool, AsDouble, AsFloat, AsWString (std::wstring_view&), AsMap, AsCallable: both forms likewise
 
     template<class T> const T& As() const; template<class T> T& As();
     template<class T> const T* GetIf() const noexcept; template<class T> T* GetIf() noexcept;
