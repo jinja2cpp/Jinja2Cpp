@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_BORROWED_CELLS_H
 #define JINJA2CPP_SRC_BORROWED_CELLS_H
 
+#include "cell_trace.h"
 #include "internal_value.h"
 #include "intrusive_ptr.h"
 #include "robin_hood.h"
@@ -110,7 +111,18 @@ public:
     // An adapter given other data: its cell is not of that data, so it detaches
     CellLink& operator=(const CellLink& other) noexcept;
     CellLink& operator=(CellLink&& other) noexcept;
+#ifndef JINJA2CPP_CELL_TRACE
     ~CellLink() = default;
+#else
+    // An adapter that goes attached left a dangling link or a reference to a frozen cell
+    ~CellLink()
+    {
+        if (m_cell)
+        {
+            JINJA2CPP_CELL_TRACE_EVENT("dieatt", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("c", Trace::Space::Cell, m_cell));
+        }
+    }
+#endif
 
     // Detaches the adapter from its cell, before the adapter goes
     inline void Release() const noexcept;
@@ -133,9 +145,15 @@ public:
     // Whether Get may return a cell. The hottest reads (an item of a list or map) test it and
     // call a JINJA2CPP_CELL_NOINLINE member for the rest, so that their own code stays small
     // enough to keep what they inline (the string view of an item, Render/many_tags)
+#ifndef JINJA2CPP_CELL_TRACE
     [[nodiscard]] bool MayHaveCell() const noexcept { return detail::CellEpoch() != m_seenEpoch; }
     // The same for an epoch the caller read
     [[nodiscard]] bool MayHaveCell(uint32_t epoch) const noexcept { return epoch != m_seenEpoch; }
+#else
+    // A read that skips the lookup is an event of the trace (tla/CellTrace.tla, AliasesAgree)
+    [[nodiscard]] bool MayHaveCell() const noexcept { return MayHaveCell(detail::CellEpoch()); }
+    [[nodiscard]] bool MayHaveCell(uint32_t epoch) const noexcept { return epoch != m_seenEpoch || detail::CellTrace::Skip(this, epoch); }
+#endif
 
     // The cell the adapter is attached to, read without a lookup and without a change: what an
     // export of the adapter to the host reads (docs/tasks/0331)
@@ -191,7 +209,11 @@ public:
     BorrowedCell(BorrowedCell&&) = delete;
     BorrowedCell& operator=(const BorrowedCell&) = delete;
     BorrowedCell& operator=(BorrowedCell&&) = delete;
+#ifndef JINJA2CPP_CELL_TRACE
     ~BorrowedCell() override = default;
+#else
+    ~BorrowedCell() override { JINJA2CPP_CELL_TRACE_EVENT("free", Trace::Ptr("c", Trace::Space::GoneCell, this), Trace::Num("frozen", m_frozen ? 1 : 0)); }
+#endif
 
     void Traverse(const TraverseFn& fn) const override;
 
@@ -209,16 +231,24 @@ public:
     {
         if (JINJA2CPP_CELL_UNLIKELY(m_frozen || m_exportedIn != 0))
         {
-            return Unshare() ? m_items : nullptr;
+            if (!Unshare())
+            {
+                return nullptr;
+            }
         }
+        JINJA2CPP_CELL_TRACE_EVENT("write", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Ptr("g", Trace::Space::Gen, TraceGen()));
         return m_items;
     }
     [[nodiscard]] TemplateDict* MutableDict() const
     {
         if (JINJA2CPP_CELL_UNLIKELY(m_frozen || m_exportedIn != 0))
         {
-            return Unshare() ? m_map->GetMutableItems() : nullptr;
+            if (!Unshare())
+            {
+                return nullptr;
+            }
         }
+        JINJA2CPP_CELL_TRACE_EVENT("write", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Ptr("g", Trace::Space::Gen, TraceGen()));
         return m_map->GetMutableItems();
     }
     // The list or dict a value handed to the host reads (docs/tasks/0331)
@@ -237,6 +267,10 @@ private:
     JINJA2CPP_CELL_NOINLINE bool Unshare() const;
     // Notes that a value handed to the host shares the items
     void NoteExport() const noexcept;
+#ifdef JINJA2CPP_CELL_TRACE
+    // The export as an event of the trace: the mark before NoteExport and after it
+    void TraceExport(uint32_t before) const noexcept;
+#endif
 
     // Never a call (BorrowedCells::BeginCall): the mark once values handed out in two calls share
     // the items, so that every write asks whether one still holds them (docs/tasks/0337)
@@ -245,6 +279,8 @@ private:
     // source alone holds its data and no other adapter is attached to it (BorrowedCells::DropUnheld)
     [[nodiscard]] bool IsUnheld() const noexcept;
     void Bind() const noexcept;
+    // The item block a write changes and an export shares: a storage generation of the trace
+    [[nodiscard]] const void* TraceGen() const noexcept { return m_isList ? static_cast<const void*>(m_items) : static_cast<const void*>(m_map ? m_map->GetMutableItems() : nullptr); }
 
     mutable InternalValue m_storage;
     // The storage before the last Unshare. No code holds a cell's items across a call into the
@@ -350,8 +386,17 @@ public:
 class BorrowedCells
 {
 public:
+#ifndef JINJA2CPP_CELL_TRACE
     BorrowedCells() noexcept = default;
     ~BorrowedCells() { Release(); }
+#else
+    BorrowedCells() noexcept { JINJA2CPP_CELL_TRACE_EVENT("regnew", Trace::Ptr("reg", Trace::Space::NewReg, this)); }
+    ~BorrowedCells()
+    {
+        Release();
+        JINJA2CPP_CELL_TRACE_EVENT("regfree", Trace::Ptr("reg", Trace::Space::GoneReg, this));
+    }
+#endif
     BorrowedCells(const BorrowedCells&) = delete;
     BorrowedCells(BorrowedCells&&) = delete;
     BorrowedCells& operator=(const BorrowedCells&) = delete;
@@ -382,10 +427,15 @@ public:
             m_lastCall = 1;
         }
         m_call = m_lastCall;
+        JINJA2CPP_CELL_TRACE_EVENT("begin", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("call", m_call), Trace::Num("outer", outer));
         return outer;
     }
     // The call BeginCall started ends: the call it nested in runs again
-    void EndCall(uint32_t outer) noexcept { m_call = outer; }
+    void EndCall(uint32_t outer) noexcept
+    {
+        JINJA2CPP_CELL_TRACE_EVENT("end", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("call", m_call), Trace::Num("outer", outer));
+        m_call = outer;
+    }
     // Drops the cells nothing reads any more and nothing can find again: the cells of data that
     // lived for one call of a template module (an argument, a user callable's result), which
     // the module's cells would otherwise keep until the module goes. A cell of the host's data

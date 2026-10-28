@@ -2,6 +2,7 @@
 """Model-checks tla/CellProtocol.tla with TLC: the fixed protocol, then each #673 fix taken out.
 
 Usage: tla/check.py [--jar tla2tools.jar] [--only NAME ...] [--list]
+       tla/check.py --trace ...   (trace validation: tla/trace_check.py)
 
 Every run is a TLC model: a set of constants plus the invariants it checks. A "pass" run must
 explore its whole bounded space and find no violation (a run stopped by --timeout is a failure,
@@ -187,6 +188,10 @@ def run(jar, name, spec, workdir, extra=None, timeout=None):
 
 
 def main():
+    if "--trace" in sys.argv[1:]:
+        # Trace validation of the C++ against CellTrace.tla (docs/tasks/0338 step B)
+        import trace_check  # pylint: disable=import-outside-toplevel
+        return trace_check.main([a for a in sys.argv[1:] if a != "--trace"])
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--jar", default=os.environ.get("TLA2TOOLS", os.path.join(HERE, "tla2tools.jar")))
     parser.add_argument("--set", nargs="*", default=[], help="override a constant: NAME=VALUE")

@@ -57,6 +57,9 @@ jobs:
   # do too, and one of them checks the installed package.
   # The `boost-free` job sits outside the matrix: the defaults with tests OFF fetch and
   # install no Boost at all (docs/tasks/0230).
+  # One Debug row builds the borrowed-cell trace hooks (`celltrace`, JINJA2CPP_CELL_TRACE) and
+  # checks the traces of the cell and module tests against tla/CellTrace.tla with TLC
+  # (docs/tasks/0338 step B). It is a check after the tests, not an axis.
   # JSON bindings are package components (docs/tasks/0311): these jobs test the nlohmann_json
   # binding and the JsonTraits contract on toy traits (JINJA2CPP_TEST_BINDINGS default);
   # bindings.yml tests every binding on PRs that touch them, and nightly.
@@ -69,7 +72,7 @@ jobs:
       matrix:
         include:
           - { std: 17, compiler: gcc-12,   config: Release, shared: 'OFF', noderef: 'OFF', bigint: boost }
-          - { std: 17, compiler: gcc-14,   config: Debug,   shared: 'OFF' }
+          - { std: 17, compiler: gcc-14,   config: Debug,   shared: 'OFF', celltrace: true }
           - { std: 17, compiler: clang-18, config: RelWithDebInfo, shared: 'ON', abi: true }
           - { std: 17, compiler: clang-20, config: Release, shared: 'OFF', package: 23, bigint: boost }
           - { std: 20, compiler: gcc-12,   config: RelWithDebInfo, shared: 'ON', abi: true }
@@ -105,6 +108,7 @@ jobs:
           -DJINJA2CPP_STRICT_WARNINGS=ON \
           -DJINJA2CPP_NODEREF_CHECKS=${{ matrix.noderef == 'OFF' && 'OFF' || '' }} \
           -DJINJA2CPP_WITH_BIGINT=${{ matrix.bigint || 'none' }} \
+          -DJINJA2CPP_CELL_TRACE=${{ matrix.celltrace && 'ON' || 'OFF' }} \
           "-DCMAKE_CXX_FLAGS=${{ startsWith(matrix.compiler, 'gcc') && '-Wno-error=maybe-uninitialized' || '' }}"
 
     - name: Build
@@ -112,6 +116,13 @@ jobs:
 
     - name: Test
       run: ctest --test-dir .build --output-on-failure
+
+    - name: Trace validation
+      if: matrix.celltrace
+      run: |
+        curl -sSfLo tla/tla2tools.jar https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
+        echo "fc6878c603f0fdc18b9fe3e5bf51860cb90ab5b1154e3c371660c036d6bdd63e  tla/tla2tools.jar" | sha256sum -c -
+        python3 tla/check.py --trace --tests .build/jinja2cpp_tests --jobs 2 --mutants
 
     # abidiff against the ABI of the previous master build (report only) or, once the RC
     # commits abi/libjinja2cpp.so.2.cxx<std>.abi, against that baseline: an incompatible

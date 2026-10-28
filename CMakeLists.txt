@@ -60,6 +60,7 @@ option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as e
 set(JINJA2CPP_NODEREF_CHECKS "" CACHE STRING "Checks of the handles that link a parse tree: OFF, ON (Seal and cross-template links), FULL (every access); empty picks FULL for Debug, sanitizer and fuzz builds, else ON")
 set_property(CACHE JINJA2CPP_NODEREF_CHECKS PROPERTY STRINGS "" ON FULL OFF)
 option(JINJA2CPP_WITH_UNICODE_NAMES "Decode \\N{name} escapes in string literals with the Unicode name table (about 450 KB of data)" ON)
+option(JINJA2CPP_CELL_TRACE "Log the borrowed-cell protocol's events to the file the JINJA2CPP_CELL_TRACE environment variable names, for tla/check.py --trace (docs/tasks/0338); a test build only" OFF)
 option(JINJA2CPP_CHECK_SLOTS "Check every name read from a slot against its lookup by name (always on without NDEBUG)" OFF)
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
 option(JINJA2CPP_PIC "Control -fPIC option for library build" OFF)
@@ -194,6 +195,7 @@ set(JINJA2CPP_SOURCES
     src/big_int.cpp
     src/big_int_builtin.cpp
     src/borrowed_cells.cpp
+    src/cell_trace.cpp
     src/expression_evaluator.cpp
     src/expression_parser.cpp
     src/filesystem_handler.cpp
@@ -338,6 +340,10 @@ target_compile_definitions(
 )
 if (JINJA2CPP_CHECK_SLOTS)
     target_compile_definitions(${LIB_TARGET_NAME} PUBLIC JINJA2CPP_CHECK_SLOTS)
+endif ()
+# Public within the build: the tests include src/ headers whose inline code has trace hooks
+if (JINJA2CPP_CELL_TRACE)
+    target_compile_definitions(${LIB_TARGET_NAME} PUBLIC "$<BUILD_INTERFACE:JINJA2CPP_CELL_TRACE>")
 endif ()
 if (NOT JINJA2CPP_WITH_UNICODE_NAMES)
     set_source_files_properties(src/unicode_names.cpp PROPERTIES COMPILE_DEFINITIONS JINJA2CPP_NO_UNICODE_NAMES)

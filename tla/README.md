@@ -191,6 +191,79 @@ reuse, and an inductive or cutoff argument) is task 0338.
 - A module destroyed during its own call, and the freeze at module death.
 - Python parity of values. The model checks lifetimes and isolation, not output.
 
+## Trace validation (task 0338, step B)
+
+The model checks the protocol; trace validation checks that the C++ follows it. A build
+configured with `-DJINJA2CPP_CELL_TRACE=ON` (a Debug or test build; off by default, and every
+hook compiles to nothing without it) writes the protocol's events to the file the environment
+variable `JINJA2CPP_CELL_TRACE` names, one JSON object a line (`src/cell_trace.h`).
+`check.py --trace` runs tests one per process, turns each log into the module `TraceLog` and
+runs TLC on `CellTrace.tla`, which reads the log one event at a time and keeps the protocol's
+state: cells, the links of the adapters, the registries with their tables and running calls,
+and what the values a module call handed out share.
+
+```bash
+cmake -S . -B build-trace -G Ninja -DCMAKE_BUILD_TYPE=Debug -DJINJA2CPP_CELL_TRACE=ON
+cmake --build build-trace --target jinja2cpp_tests
+python3 tla/check.py --trace --tests build-trace/jinja2cpp_tests            # cell and module tests, 1-2 min
+python3 tla/check.py --trace --tests build-trace/jinja2cpp_tests --mutants  # and the checker's own mutants
+python3 tla/check.py --trace --tests build-trace/jinja2cpp_tests --filter '*' --per-suite   # every test
+python3 tla/check.py --trace --logs some.ndjson                              # a log written elsewhere
+```
+
+A log is whole only when the process that wrote it exited normally: the logger aborts the
+process when it cannot open or write the file, since the file itself cannot record that events
+were lost. `--tests` fails a test that did not exit 0; with `--logs`, check the writer's exit
+status yourself.
+
+A trace fails in one of two ways. **No step takes an event** (TLC's deadlock): the code did
+something the spec has no transition for. **An invariant fails**: the step exists, but the
+code's decision or state differs from the rules, or breaks a property of the model as far as a
+trace can show it. The events and what the spec checks at each:
+
+| Event (C++) | Checked |
+|---|---|
+| `skip` (`CellLink::MayHaveCell` false) | the epoch is the one the adapter saw at its last lookup (`EpochAgrees`); the running registry has no cell of its data (`AliasesAgree`) |
+| `find`, `link`, `linkfail` (`Find`, `Link`) | the lookup finds the registry's cell of that identity and kind (`TableAgrees`); a link only to a live, unfrozen cell, by its registry's writer (`NoCrossThreadWrite`) |
+| `hit` (an attached adapter's read) | the adapter is attached to that cell (`LinksAgree`); the cell is alive and, unless frozen, of the running registry (`NoForeignCell`) |
+| `unlink`, `inherit`, `dieatt` | the link set agrees; a live cell's links change on its writer's thread only; an adapter never goes attached (`NoDanglingLink`) |
+| `adopt`, `adoptno`, `adoptundo`, `promote` | a new cell only where the table has none; the live count (`LiveCount`, one-thread traces) |
+| `export` (`ExportList`/`ExportMap`) | the mark NoteExport leaves is `CellRules!MarkAfterExport` (`MarkRule`) |
+| `unshare`, `copied` | Unshare's outcome is one `CellRules!UnshareOutcomes` allows (`MarkRule`) |
+| `write` (`MutableItems`/`MutableDict`) | never a frozen cell (`FrozenUnwritten`); in place only to an unmarked cell or one the running call marked (`MarkRule`); never to a storage a value of an ended call shares (`SnapshotStable`) |
+| `begin`, `end` (`BeginCall`, `EndCall`) | call numbers and the call restored (`CallsAgree`); nested calls on the thread holding the lock |
+| `drop`, `dropped` (`DropUnheld`) | `CellRules!MayDrop` on the spec's state: owned data, live cell, no link but its source's (`DropRule`) |
+| `freeze`, `finish`, `finished` (`Finish`) | the code's links of each cell are the spec's (`LinksAgree`); a global's links detach (`FinishDetaches`), the rest keep the frozen cell; every table cell freezes |
+| `free` (`~BorrowedCell`) | no table lists the cell and no adapter is attached to it (`NoUseAfterFree`) |
+| `regnew`, `regfree` | a registry goes with an empty table and no running call |
+
+What only the host knows is an input that the log supplies, and the spec checks only that the
+choice was one the rules allow: reference counts (whether Unshare finds the items owned alone,
+whether DropUnheld's counts hold), and which objects die when. Objects are the log's numbers: a
+cell, a storage and a registry get a new number when made; a link and an identity are named by
+their address.
+
+`CellRules.tla` holds the step rules as operators of plain values. `CellTrace.tla` uses them;
+`CellProtocol.tla` states the same rules inline (`Export`, `WC`, `FinishFreeze`, `Unheld`). Once
+the contract work of 0338 step A freezes the rules, `CellProtocol.tla` should use the
+`CellRules` operators too, so that both specs share one statement of each rule.
+
+**Results.** On master before #689, the traces of `BorrowedCellsKept.ModuleNestedKeepOfTheOuterCallsExport`
+and `ModuleSortWhoseKeyHandsOutTheList` fail `MarkRule` at the nested call's export (finding F1,
+0337), and with `--no-fix-nested-export` they fail `SnapshotStable` at the outer call's later
+write: the defect the model found, seen from the C++. With #689 every trace passes. The
+mutants (`--mutants`, `trace_check.py` MUTANTS) change a real trace as a defect would: an adapter
+that goes attached, the 0337 mark, a write to a frozen cell, a missed lookup, a foreign read, a
+write from another thread, EndCall without its restore, an event the spec lacks. Each fails as
+expected.
+
+**Not traced.** The block-level skips (`QuietEpoch`, `ItemAdapters` slots released without a
+call, `CellStep` steps after the first): they read no cell by construction and log nothing. The
+order of events across threads is the order the trace's mutex took them, which agrees with the
+code's order for state one thread or the module's lock owns; the counters' memory order is step
+C's (task 0339 onwards). The epoch and call numbers are logged as the 32-bit values they are, so
+a wrap shows as `CallsAgree` or `EpochAgrees`; the tests do not reach one.
+
 ## Changing the protocol
 
 Change the spec together with the code it mirrors (the table above). Keep the mutant runs: a
