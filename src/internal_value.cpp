@@ -1208,6 +1208,24 @@ std::shared_ptr<const void> GenericOwner([[maybe_unused]] const Holder<T>& holde
 // through raw pointers (Reflect of a field or an element), so once the item escapes the
 // container (a loop target stored in a namespace, a sorted copy) its accessor must keep the
 // owned root alive (docs/tasks/0125). Strings are copied by the convertor either way
+template<typename Container, typename Accessor>
+Container WithOwnerImpl(std::shared_ptr<const void> owner, Container&& nested)
+{
+    // One allocation holds the owner and the nested container whose accessor it lends
+    auto holder = std::make_shared<std::pair<std::shared_ptr<const void>, Container>>(std::move(owner), std::move(nested));
+    return Container(std::shared_ptr<const Accessor>(holder, holder->second.GetAccessor()));
+}
+
+GenericList WithOwner(std::shared_ptr<const void> owner, GenericList&& nested)
+{
+    return WithOwnerImpl<GenericList, IListItemAccessor>(std::move(owner), std::move(nested));
+}
+
+GenericMap WithOwner(std::shared_ptr<const void> owner, GenericMap&& nested)
+{
+    return WithOwnerImpl<GenericMap, IMapItemAccessor>(std::move(owner), std::move(nested));
+}
+
 InternalValue LendGenericItem(const std::shared_ptr<const void>& owner, Value&& item)
 {
     if (owner)
@@ -1215,11 +1233,11 @@ InternalValue LendGenericItem(const std::shared_ptr<const void>& owner, Value&& 
         // An invalid container stays invalid: a wrapper's provider would hand out a null accessor
         if (auto* list = std::get_if<GenericList>(&item.GetData()); list && list->IsValid())
         {
-            return Value2IntValue(Value(GenericList([owner, nested = std::move(*list)]() { return nested.GetAccessor(); })));
+            return Value2IntValue(Value(WithOwner(owner, std::move(*list))));
         }
         if (auto* map = std::get_if<GenericMap>(&item.GetData()); map && map->GetAccessor())
         {
-            return Value2IntValue(Value(GenericMap([owner, nested = std::move(*map)]() { return nested.GetAccessor(); })));
+            return Value2IntValue(Value(WithOwner(owner, std::move(*map))));
         }
     }
     return Value2IntValue(std::move(item));
@@ -1297,7 +1315,7 @@ public:
     // A GenericList of the view: the copy lives in it, as the adapters' exports do
     static GenericList Make(const ValuesList& items, std::shared_ptr<const void> owner)
     {
-        return GenericList([view = ExportListView(items, std::move(owner))]() -> const IListItemAccessor* { return &view; });
+        return GenericList(std::make_shared<const ExportListView>(items, std::move(owner)));
     }
 
 private:
@@ -1339,7 +1357,7 @@ public:
 
     static GenericMap Make(const ValuesMap& items, std::shared_ptr<const void> owner)
     {
-        return GenericMap([view = ExportMapView(items, std::move(owner))]() -> const IMapItemAccessor* { return &view; });
+        return GenericMap(std::make_shared<const ExportMapView>(items, std::move(owner)));
     }
 
 private:
@@ -1630,12 +1648,12 @@ std::weak_ptr<const void> AdaptersOwner(const BySharedVal<T>& holder)
 
 GenericList ExportCallList(IntrusivePtr<const CallExports> exports, const void* identity, InternalValue container)
 {
-    return GenericList([view = CallListView(std::move(exports), identity, std::move(container))]() -> const IListItemAccessor* { return &view; });
+    return GenericList(std::make_shared<const CallListView>(std::move(exports), identity, std::move(container)));
 }
 
 GenericMap ExportCallMap(IntrusivePtr<const CallExports> exports, const void* identity, InternalValue container)
 {
-    return GenericMap([view = CallMapView(std::move(exports), identity, std::move(container))]() -> const IMapItemAccessor* { return &view; });
+    return GenericMap(std::make_shared<const CallMapView>(std::move(exports), identity, std::move(container)));
 }
 
 template<template<typename> class Holder>
@@ -1814,7 +1832,7 @@ public:
     }
     [[nodiscard]] GenericList CreateHostGenericList() const override
     {
-        return GenericList([list = m_values]() -> const IListItemAccessor* { return list.Get().GetAccessor(); });
+        return m_values.Get();
     }
 
 private:
@@ -2258,7 +2276,7 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
                 // A copy that shares the items, as the GenericList below holds
                 return ExportCallList(std::move(exports), nullptr, InternalValue(ListAdapter(MakeRef<Adapter>(*this))));
             }
-            return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
+            return GenericList(std::make_shared<const std::decay_t<decltype(*this)>>(*this));
         }
         void Traverse(const TraverseFn& fn) const override
         {
@@ -2456,7 +2474,7 @@ ListAdapter ListAdapter::CreateAdapter(size_t listSize, std::function<InternalVa
         [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
         [[nodiscard]] GenericList CreateGenericList() const override
         {
-            return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
+            return GenericList(std::make_shared<const std::decay_t<decltype(*this)>>(*this));
         }
 
     private:
@@ -2503,7 +2521,7 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
         [[nodiscard]] const RangeInfo* GetRangeInfo() const override { return &m_info; }
         [[nodiscard]] GenericList CreateGenericList() const override
         {
-            return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
+            return GenericList(std::make_shared<const std::decay_t<decltype(*this)>>(*this));
         }
 
     private:
@@ -2743,7 +2761,7 @@ public:
     [[nodiscard]] bool ShouldExtendLifetime() const override { return m_values.ShouldExtendLifetime(); }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
-        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
+        return GenericMap(std::make_shared<const std::decay_t<decltype(*this)>>(*this));
     }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -2879,7 +2897,7 @@ public:
         {
             return ExportCallMap(std::move(exports), nullptr, InternalValue(MapAdapter(MakeRef<SharedDictAdapter>(*this))));
         }
-        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
+        return GenericMap(std::make_shared<const std::decay_t<decltype(*this)>>(*this));
     }
 
 protected:
@@ -2928,7 +2946,7 @@ public:
         {
             return std::move(*snapshot);
         }
-        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
+        return GenericMap(std::make_shared<const std::decay_t<decltype(*this)>>(*this));
     }
 };
 
@@ -2956,7 +2974,7 @@ public:
     [[nodiscard]] const InternalValue* GetReprArgument() const override { return m_reprArgument ? &*m_reprArgument : nullptr; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
-        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
+        return GenericMap(std::make_shared<const std::decay_t<decltype(*this)>>(*this));
     }
 
 private:
@@ -3080,7 +3098,7 @@ public:
     }
     [[nodiscard]] GenericMap CreateHostGenericMap() const override
     {
-        return GenericMap([values = m_values]() -> const IMapItemAccessor* { return values.Get().GetAccessor(); });
+        return m_values.Get();
     }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -3708,7 +3726,7 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
         extraPosArgs.push_back(IntValue2Value(p));
     }
     result.extraPosArgs = Value(std::move(extraPosArgs));
-    result.context = GenericMap([accessor = ContextMapper(&context)]() -> const IMapItemAccessor* { return &accessor; });
+    result.context = GenericMap(std::make_shared<const ContextMapper>(&context));
 
     return result;
 }

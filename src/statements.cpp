@@ -607,7 +607,7 @@ public:
     }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
-        return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
+        return GenericMap(std::make_shared<const LoopAccessor>(*this));
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return true; }
     // An object, not a mapping: dictsort and items refuse it, pprint prints its repr

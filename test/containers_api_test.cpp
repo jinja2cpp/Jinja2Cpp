@@ -369,8 +369,144 @@ TEST(ContainersApiTest, GeneratedListIsComparedByIdentity)
     });
     GenericList copy = list; // NOLINT(performance-unnecessary-copy-initialization): compares two objects
     EXPECT_TRUE(list == list);
-    (void)(list == copy);
+    EXPECT_TRUE(list == copy); // copies share one accessor, so they are one list
     EXPECT_EQ(0, calls);
+}
+
+TEST(ContainersApiTest, GenericListSharesItsAccessor)
+{
+    static_assert(sizeof(GenericList) == sizeof(std::shared_ptr<const IListItemAccessor>));
+    static_assert(sizeof(GenericMap) == sizeof(std::shared_ptr<const IMapItemAccessor>));
+    static_assert(std::is_nothrow_constructible_v<GenericList, std::shared_ptr<const IListItemAccessor>>);
+    static_assert(std::is_nothrow_constructible_v<GenericMap, std::shared_ptr<const IMapItemAccessor>>);
+    static_assert(std::is_copy_constructible_v<GenericList> && std::is_copy_constructible_v<GenericMap>);
+
+    using Vec = std::vector<int64_t>;
+    using ListAccessor = detail::RandomIteratorListAccessor<Vec::const_iterator, Vec::const_iterator>;
+    const Vec items{ 1, 2, 3 };
+
+    // The shared_ptr form
+    auto accessor = std::make_shared<const ListAccessor>(items.begin(), items.end());
+    GenericList list(accessor);
+    GenericList copy = list; // NOLINT(performance-unnecessary-copy-initialization): checks the shared accessor
+    EXPECT_EQ(accessor.get(), list.GetAccessor());
+    EXPECT_EQ(accessor.get(), copy.GetAccessor());
+    EXPECT_EQ(3u, list.GetSize().value_or(0));
+    EXPECT_EQ("1,2,3", Render("{{ l | join(',') }}", { { "l", copy } }));
+
+    // The aliasing form keeps the owner alive
+    int destroyed = 0;
+    struct Owner
+    {
+        Owner(const Vec& v, int* counter)
+            : data(v)
+            , accessor(data.begin(), data.end())
+            , destroyed(counter)
+        {
+        }
+        ~Owner() { ++*destroyed; }
+        Owner(const Owner&) = delete;
+        Owner& operator=(const Owner&) = delete;
+        Vec data;
+        ListAccessor accessor;
+        int* destroyed;
+    };
+    {
+        GenericList aliased;
+        {
+            auto owner = std::make_shared<const Owner>(items, &destroyed);
+            aliased = GenericList(std::shared_ptr<const IListItemAccessor>(owner, &owner->accessor));
+        }
+        EXPECT_EQ(0, destroyed);
+        EXPECT_EQ("1,2,3", Render("{{ l | join(',') }}", { { "l", aliased } }));
+    }
+    EXPECT_EQ(1, destroyed);
+
+    // The 1.x callable form is called once, when the list is made
+    int calls = 0;
+    const ListAccessor* raw = accessor.get();
+    GenericList fromCallable([&calls, raw]() {
+        ++calls;
+        return raw;
+    });
+    GenericList fromCallableCopy = fromCallable; // NOLINT(performance-unnecessary-copy-initialization)
+    EXPECT_EQ(1, calls);
+    EXPECT_EQ("1,2,3", Render("{{ l | join(',') }}", { { "l", fromCallableCopy } }));
+    EXPECT_EQ(1, calls);
+
+    // No accessor: the list is invalid and renders empty
+    GenericList fromNull([]() -> const IListItemAccessor* { return nullptr; });
+    EXPECT_FALSE(fromNull.IsValid());
+    EXPECT_EQ("[]", Render("[{% for x in l %}{{ x }}{% endfor %}]", { { "l", fromNull } }));
+    std::function<const IListItemAccessor*()> emptyFn;
+    GenericList fromEmpty(emptyFn);
+    EXPECT_FALSE(fromEmpty.IsValid());
+    EXPECT_FALSE(GenericList().IsValid());
+
+    // The same for maps
+    auto mapAccessor = std::make_shared<const PlainMapAccessor>();
+    GenericMap map(mapAccessor);
+    GenericMap mapCopy = map; // NOLINT(performance-unnecessary-copy-initialization)
+    EXPECT_EQ(mapAccessor.get(), mapCopy.GetAccessor());
+    EXPECT_TRUE(map == mapCopy);
+    EXPECT_EQ("1 3", Render("{{ m.a }} {{ m['c'] }}", { { "m", mapCopy } }));
+
+    int mapDestroyed = 0;
+    struct MapOwner
+    {
+        explicit MapOwner(int* counter)
+            : destroyed(counter)
+        {
+        }
+        ~MapOwner() { ++*destroyed; }
+        MapOwner(const MapOwner&) = delete;
+        MapOwner& operator=(const MapOwner&) = delete;
+        PlainMapAccessor accessor;
+        int* destroyed;
+    };
+    {
+        GenericMap aliased;
+        {
+            auto owner = std::make_shared<const MapOwner>(&mapDestroyed);
+            aliased = GenericMap(std::shared_ptr<const IMapItemAccessor>(owner, &owner->accessor));
+        }
+        EXPECT_EQ(0, mapDestroyed);
+        EXPECT_EQ("2", Render("{{ m.b }}", { { "m", aliased } }));
+    }
+    EXPECT_EQ(1, mapDestroyed);
+
+    int mapCalls = 0;
+    const PlainMapAccessor* mapRaw = mapAccessor.get();
+    GenericMap mapFromCallable([&mapCalls, mapRaw]() {
+        ++mapCalls;
+        return mapRaw;
+    });
+    GenericMap mapFromCallableCopy = mapFromCallable; // NOLINT(performance-unnecessary-copy-initialization)
+    EXPECT_EQ(1, mapCalls);
+    EXPECT_EQ("3", Render("{{ m.c }}", { { "m", mapFromCallableCopy } }));
+    EXPECT_EQ(1, mapCalls);
+
+    GenericMap mapFromNull([]() -> const IMapItemAccessor* { return nullptr; });
+    EXPECT_EQ(nullptr, mapFromNull.GetAccessor());
+    EXPECT_EQ(0u, mapFromNull.GetSize());
+    std::function<const IMapItemAccessor*()> emptyMapFn;
+    EXPECT_EQ(nullptr, GenericMap(emptyMapFn).GetAccessor());
+}
+
+TEST(ContainersApiTest, CopiesOfAGeneratedListShareItsState)
+{
+    GenericList list = MakeGenericList([n = int64_t(0)]() mutable -> std::optional<Value> {
+        if (n >= 3)
+        {
+            return std::nullopt;
+        }
+        return Value(++n);
+    });
+    GenericList copy = list; // NOLINT(performance-unnecessary-copy-initialization)
+    EXPECT_EQ(list.GetAccessor(), copy.GetAccessor());
+    EXPECT_EQ("1,2,3", Render("{{ l | join(',') }}", { { "l", list } }));
+    // The generator is used up, for every copy
+    EXPECT_EQ("", Render("{{ l | join(',') }}", { { "l", copy } }));
 }
 
 TEST(ContainersApiTest, ReflectEveryArithmeticType)

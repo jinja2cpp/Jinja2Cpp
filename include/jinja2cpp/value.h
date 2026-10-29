@@ -144,14 +144,40 @@ public:
     /*!
      * \brief Initializing constructor
      *
-     * The only one way to get valid non-empty GeneridMap is to construct it with the specified \ref IMapItemAccessor
-     * implementation provider. This provider is a functional object which returns pointer to the interface instance.
+     * Holds `accessor` and shares it with every copy of the map. The pointer can point into a larger object that owns
+     * the accessor (the aliasing constructor of `std::shared_ptr`).
      *
-     * @param accessor Functional object which returns pointer to the \ref IMapItemAccessor interface
+     * @param accessor Shared pointer to the \ref IMapItemAccessor implementation
      */
-    explicit GenericMap(std::function<const IMapItemAccessor*()> accessor)
+    explicit GenericMap(std::shared_ptr<const IMapItemAccessor> accessor) noexcept
         : m_accessor(std::move(accessor))
     {
+    }
+
+    /*!
+     * \brief Initializing constructor from a callable (1.x form)
+     *
+     * `fn` is stored in one shared allocation and called once, here; the accessor it returns must stay valid as long as `fn` lives. An empty
+     * `std::function` or a callable that returns nullptr gives an empty map.
+     *
+     * @param fn Callable which returns a pointer to the \ref IMapItemAccessor interface
+     */
+    template<typename Fn, std::enable_if_t<!std::is_same_v<std::decay_t<Fn>, GenericMap> && std::is_invocable_r_v<const IMapItemAccessor*, std::decay_t<Fn>&>, int> = 0>
+    explicit GenericMap(Fn&& fn)
+    {
+        auto holder = std::make_shared<std::decay_t<Fn>>(std::forward<Fn>(fn));
+        if constexpr (std::is_constructible_v<bool, const std::decay_t<Fn>&>)
+        {
+            if (!static_cast<bool>(*holder))
+            {
+                return;
+            }
+        }
+        const IMapItemAccessor* raw = (*holder)();
+        if (raw)
+        {
+            m_accessor = std::shared_ptr<const IMapItemAccessor>(std::move(holder), raw);
+        }
     }
 
     /*!
@@ -163,7 +189,7 @@ public:
      */
     [[nodiscard]] bool HasValue(std::string_view name) const
     {
-        return m_accessor ? m_accessor()->Contains(name) : false;
+        return m_accessor ? m_accessor->Contains(name) : false;
     }
 
     /*!
@@ -189,7 +215,7 @@ public:
      */
     [[nodiscard]] size_t GetSize() const
     {
-        return m_accessor ? m_accessor()->GetSize() : 0;
+        return m_accessor ? m_accessor->GetSize() : 0;
     }
     /*!
      * \brief  Get collection of keys from the dictionary
@@ -198,16 +224,16 @@ public:
      */
     [[nodiscard]] auto GetKeys() const
     {
-        return m_accessor ? m_accessor()->GetKeys() : std::vector<std::string>();
+        return m_accessor ? m_accessor->GetKeys() : std::vector<std::string>();
     }
     /*!
      * \brief Get the underlying access interface to the dictionary
      *
      * @return Pointer to the underlying interface or nullptr if no
      */
-    [[nodiscard]] const IMapItemAccessor* GetAccessor() const
+    [[nodiscard]] const IMapItemAccessor* GetAccessor() const noexcept
     {
-        return m_accessor ? m_accessor() : nullptr;
+        return m_accessor.get();
     }
 
     //! Same as \ref GetValueByName
@@ -231,7 +257,7 @@ public:
     [[nodiscard]] const_iterator cend() const;
 
 private:
-    std::function<const IMapItemAccessor*()> m_accessor;
+    std::shared_ptr<const IMapItemAccessor> m_accessor;
 };
 
 JINJA2CPP_EXPORT bool operator==(const GenericMap& lhs, const GenericMap& rhs);
@@ -1151,7 +1177,7 @@ inline Value::Value(UserCallable&& callable)
 
 inline std::optional<Value> GenericMap::Find(std::string_view name) const
 {
-    return m_accessor ? m_accessor()->Find(name) : std::nullopt;
+    return m_accessor ? m_accessor->Find(name) : std::nullopt;
 }
 inline Value GenericMap::GetValueByName(std::string_view name) const
 {
