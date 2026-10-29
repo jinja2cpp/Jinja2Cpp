@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_USER_CALLABLE_H
 #define JINJA2CPP_USER_CALLABLE_H
 
+#include "config.h"
 #include "fwd.h" // IWYU pragma: export
 #include "markup.h"
 #include "string_helpers.h"
@@ -96,7 +97,7 @@ struct ArgPromoter<std::basic_string<CharT>, void>
     {
         return ConvertString<other_string>(*m_ptr);
     }
-    operator other_string_view() const // NOLINT(google-explicit-constructor)
+    operator other_string_view() const JINJA2CPP_LIFETIMEBOUND // NOLINT(google-explicit-constructor)
     {
         m_convertedStr = ConvertString<other_string>(*m_ptr);
         return m_convertedStr.value();
@@ -130,7 +131,7 @@ struct ArgPromoter<std::basic_string_view<CharT>, void>
     {
         return ConvertString<other_string>(*m_ptr);
     }
-    operator other_string_view() const // NOLINT(google-explicit-constructor)
+    operator other_string_view() const JINJA2CPP_LIFETIMEBOUND // NOLINT(google-explicit-constructor)
     {
         m_convertedStr = ConvertString<other_string>(*m_ptr);
         return m_convertedStr.value();
@@ -165,7 +166,7 @@ struct ArgPromoter<BasicMarkup<CharT>, void>
     {
         return ConvertString<other_string>(m_ptr->str());
     }
-    operator other_string_view() const // NOLINT(google-explicit-constructor)
+    operator other_string_view() const JINJA2CPP_LIFETIMEBOUND // NOLINT(google-explicit-constructor)
     {
         m_convertedStr = ConvertString<other_string>(m_ptr->str());
         return m_convertedStr.value();
@@ -177,7 +178,7 @@ struct ArgPromoter<BasicMarkup<CharT>, void>
 
 template<typename Arg>
 // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): keeps the argument's address, never moves it
-auto Promote(Arg&& arg)
+auto Promote(Arg&& arg JINJA2CPP_LIFETIMEBOUND)
 {
     return ArgPromoter<std::decay_t<Arg>>(&arg);
 }
@@ -366,7 +367,9 @@ struct TypedParam
 
     void SetPointer(const decayed_t* ptr) { data = ptr; }
 
-    void SetValue(decayed_t&& val) { data = std::move(val); }
+    // By value: a view argument is captured by the param, which Clang checks against a temporary that owns
+    // the text (-Wdangling-capture, docs/tasks/0296, 0343)
+    void SetValue(decayed_t val JINJA2CPP_LIFETIME_CAPTURE_BY(this)) { data = std::move(val); }
 
     template<typename String>
     void SetConverted(String&& str)
@@ -437,10 +440,16 @@ struct TypedParamUnwrapper
             {
                 // Promote(v) would view a string its temporary promoter owns
                 param->SetConverted(ConvertString<std::basic_string<CharT>>(v));
-                return;
+            }
+            else
+            {
+                param->SetValue(Promote(v));
             }
         }
-        param->SetValue(Promote(v));
+        else
+        {
+            param->SetValue(Promote(v));
+        }
     }
 
     template<typename U>

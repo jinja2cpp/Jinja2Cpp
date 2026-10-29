@@ -265,8 +265,8 @@ using ErrorInfoW = BasicErrorInfo<wchar_t>;
 template<typename CharT>
 using ErrorInfoTpl JINJA2CPP_DEPRECATED("jinja2cpp-2: BasicErrorInfo") = BasicErrorInfo<CharT>;
 
-JINJA2CPP_EXPORT std::ostream& operator<<(std::ostream& os, const ErrorInfo& res);
-JINJA2CPP_EXPORT std::wostream& operator<<(std::wostream& os, const ErrorInfoW& res);
+JINJA2CPP_EXPORT std::ostream& operator<<(std::ostream& os JINJA2CPP_LIFETIMEBOUND, const ErrorInfo& res);
+JINJA2CPP_EXPORT std::wostream& operator<<(std::wostream& os JINJA2CPP_LIFETIMEBOUND, const ErrorInfoW& res);
 } // namespace v2
 } // namespace jinja2
 
