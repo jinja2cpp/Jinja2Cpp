@@ -490,8 +490,9 @@ render is running (the C++ rule for a member call). Both are undefined behaviour
    read an accessor, possibly on several threads at once (Threads, item 6). A single-pass list
    (`MakeGenericList` of a generator or of input iterators) is used up by whichever copy reads
    it first, and is not safe in concurrent renders. Give each render its own, in its params or
-   from a global callable that makes a new one per call. Before 2.0, a copy restarted from a
-   copy of the generator's state.
+   from a global callable that makes a new one per call. Two params that are copies of one list
+   are one list in the template too: `a.append(7)` shows in `b`, as for one Python object. Before
+   2.0, a copy restarted from a copy of the generator's state.
 
 **Destruction order.** Supported in any order: the environment before its templates (they keep
 rendering, uncached); templates before their modules; environment, templates and handler before
