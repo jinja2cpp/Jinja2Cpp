@@ -164,6 +164,18 @@ struct JINJA2CPP_EXPORT IListItemAccessor : virtual IComparable
 namespace detail
 {
 class GenericListIterator;
+
+//! Callables the 1.x containers' constructors can get empty: a `std::function` and a function pointer. Others are not tested, so a
+//! captureless lambda is not converted to a function pointer to test it
+template<typename Fn>
+struct IsNullableCallable : std::is_pointer<Fn>
+{
+};
+
+template<typename R, typename... Args>
+struct IsNullableCallable<std::function<R(Args...)>> : std::true_type
+{
+};
 } // namespace detail
 
 /*!
@@ -226,7 +238,7 @@ public:
     explicit GenericList(Fn&& fn)
     {
         auto holder = std::make_shared<std::decay_t<Fn>>(std::forward<Fn>(fn));
-        if constexpr (std::is_constructible_v<bool, const std::decay_t<Fn>&>)
+        if constexpr (detail::IsNullableCallable<std::decay_t<Fn>>::value)
         {
             if (!static_cast<bool>(*holder))
             {
