@@ -3,7 +3,7 @@ status: open
 priority: medium
 area: api
 depends: [0335]
-touches: [include/jinja2cpp/generic_list.h, include/jinja2cpp/generic_map.h, include/jinja2cpp/make_generic_list.h, include/jinja2cpp/reflected_value.h, include/jinja2cpp/json_adapter.h, src/internal_value.cpp, src/borrowed_cells.h, src/borrowed_cells.cpp, docs/api-2.0.md]
+touches: [include/jinja2cpp/generic_list.h, include/jinja2cpp/value.h, include/jinja2cpp/make_generic_list.h, include/jinja2cpp/reflected_value.h, include/jinja2cpp/json_adapter.h, src/internal_value.cpp, src/borrowed_cells.h, src/borrowed_cells.cpp, docs/api-2.0.md]
 ---
 # GenericList and GenericMap hold their accessor by a shared pointer
 
