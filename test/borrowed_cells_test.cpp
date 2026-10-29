@@ -12,7 +12,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -745,8 +744,12 @@ TEST(BorrowedCellsKept, KeptListDroppedOnAnotherThreadWhileTheRenderRuns)
             mine.clear();
         }
     });
-    // Fewer under trace validation (tla/check.py --trace), which checks the log's shape, not the race
-    const int renders = std::getenv("JINJA2CPP_CELL_TRACE") ? 20 : 2000;
+    // Fewer in the trace build (tla/check.py --trace), which checks the log's shape, not the race
+#ifdef JINJA2CPP_CELL_TRACE
+    const int renders = 20;
+#else
+    const int renders = 2000;
+#endif
     for (int i = 0; i != renders; ++i)
     {
         ValuesMap params{ { "l", ValuesList{ Value(ValuesList{ 0 }) } } };
