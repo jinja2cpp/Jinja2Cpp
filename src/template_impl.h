@@ -369,10 +369,7 @@ public:
         m_origin.source = m_template.get();
         m_origin.name = &m_templateName;
         m_origin.isWide = std::is_same_v<CharT, wchar_t>;
-        {
-            const detail::WriterLock<detail::Mutex> lock(m_metadataMutex);
-            m_metadata.reset();
-        }
+        ResetMetadataCache();
         return std::optional<BasicErrorInfo<CharT>>();
     }
 
@@ -685,6 +682,10 @@ public:
 private:
     template<typename>
     friend struct TemplateModuleState;
+
+    // Load parses in place only a template nothing else holds (LoadsInPlace in template.cpp; see 0339), or a new
+    // one, so no GetMetadata can run on it at the same time: no lock, which would cost every Load
+    void ResetMetadataCache() JINJA2CPP_NO_THREAD_SAFETY_ANALYSIS { m_metadata.reset(); }
 
     // GetMetadata with m_metadataMutex held
     nonstd::expected<GenericMap, BasicErrorInfo<CharT>> ParseMetadata() const JINJA2CPP_REQUIRES(m_metadataMutex)

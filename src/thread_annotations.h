@@ -13,7 +13,7 @@
 #include <mutex>
 #include <shared_mutex>
 
-#if defined(__clang__)
+#ifdef __clang__
 #define JINJA2CPP_THREAD_ANNOTATION(x) __attribute__((x))
 #else
 #define JINJA2CPP_THREAD_ANNOTATION(x)
@@ -28,8 +28,6 @@
 #define JINJA2CPP_RELEASE(...) JINJA2CPP_THREAD_ANNOTATION(release_capability(__VA_ARGS__))
 #define JINJA2CPP_RELEASE_SHARED(...) JINJA2CPP_THREAD_ANNOTATION(release_shared_capability(__VA_ARGS__))
 #define JINJA2CPP_RELEASE_GENERIC(...) JINJA2CPP_THREAD_ANNOTATION(release_generic_capability(__VA_ARGS__))
-#define JINJA2CPP_TRY_ACQUIRE(...) JINJA2CPP_THREAD_ANNOTATION(try_acquire_capability(__VA_ARGS__))
-#define JINJA2CPP_TRY_ACQUIRE_SHARED(...) JINJA2CPP_THREAD_ANNOTATION(try_acquire_shared_capability(__VA_ARGS__))
 // For a function the analysis cannot follow; say why next to it
 #define JINJA2CPP_NO_THREAD_SAFETY_ANALYSIS JINJA2CPP_THREAD_ANNOTATION(no_thread_safety_analysis)
 
@@ -43,9 +41,8 @@ namespace detail
 class JINJA2CPP_CAPABILITY("mutex") Mutex
 {
 public:
-    void lock() JINJA2CPP_ACQUIRE() { m_mutex.lock(); }
-    void unlock() JINJA2CPP_RELEASE() { m_mutex.unlock(); }
-    bool try_lock() JINJA2CPP_TRY_ACQUIRE(true) { return m_mutex.try_lock(); }
+    void Lock() JINJA2CPP_ACQUIRE() { m_mutex.lock(); }
+    void Unlock() JINJA2CPP_RELEASE() { m_mutex.unlock(); }
 
 private:
     std::mutex m_mutex;
@@ -54,12 +51,10 @@ private:
 class JINJA2CPP_CAPABILITY("mutex") SharedMutex
 {
 public:
-    void lock() JINJA2CPP_ACQUIRE() { m_mutex.lock(); }
-    void unlock() JINJA2CPP_RELEASE() { m_mutex.unlock(); }
-    bool try_lock() JINJA2CPP_TRY_ACQUIRE(true) { return m_mutex.try_lock(); }
-    void lock_shared() JINJA2CPP_ACQUIRE_SHARED() { m_mutex.lock_shared(); }
-    void unlock_shared() JINJA2CPP_RELEASE_SHARED() { m_mutex.unlock_shared(); }
-    bool try_lock_shared() JINJA2CPP_TRY_ACQUIRE_SHARED(true) { return m_mutex.try_lock_shared(); }
+    void Lock() JINJA2CPP_ACQUIRE() { m_mutex.lock(); }
+    void Unlock() JINJA2CPP_RELEASE() { m_mutex.unlock(); }
+    void LockShared() JINJA2CPP_ACQUIRE_SHARED() { m_mutex.lock_shared(); }
+    void UnlockShared() JINJA2CPP_RELEASE_SHARED() { m_mutex.unlock_shared(); }
 
 private:
     std::shared_timed_mutex m_mutex;
@@ -73,13 +68,13 @@ public:
     explicit WriterLock(M& mutex) JINJA2CPP_ACQUIRE(mutex)
         : m_mutex(mutex)
     {
-        m_mutex.lock();
+        m_mutex.Lock();
     }
     WriterLock(const WriterLock&) = delete;
     WriterLock(WriterLock&&) = delete;
     WriterLock& operator=(const WriterLock&) = delete;
     WriterLock& operator=(WriterLock&&) = delete;
-    ~WriterLock() JINJA2CPP_RELEASE() { m_mutex.unlock(); }
+    ~WriterLock() JINJA2CPP_RELEASE() { m_mutex.Unlock(); }
 
 private:
     M& m_mutex;
@@ -92,13 +87,13 @@ public:
     explicit ReaderLock(SharedMutex& mutex) JINJA2CPP_ACQUIRE_SHARED(mutex)
         : m_mutex(mutex)
     {
-        m_mutex.lock_shared();
+        m_mutex.LockShared();
     }
     ReaderLock(const ReaderLock&) = delete;
     ReaderLock(ReaderLock&&) = delete;
     ReaderLock& operator=(const ReaderLock&) = delete;
     ReaderLock& operator=(ReaderLock&&) = delete;
-    ~ReaderLock() JINJA2CPP_RELEASE_GENERIC() { m_mutex.unlock_shared(); }
+    ~ReaderLock() JINJA2CPP_RELEASE_GENERIC() { m_mutex.UnlockShared(); }
 
 private:
     SharedMutex& m_mutex;
@@ -110,17 +105,17 @@ class JINJA2CPP_SCOPED_CAPABILITY ReaderLockPair
 {
 public:
     ReaderLockPair(SharedMutex& first, SharedMutex& second) JINJA2CPP_ACQUIRE_SHARED(first, second)
-        : m_low(std::less<SharedMutex*>()(&first, &second) ? first : second)
-        , m_high(std::less<SharedMutex*>()(&first, &second) ? second : first)
+        : m_low(std::less<>()(&first, &second) ? first : second)
+        , m_high(std::less<>()(&first, &second) ? second : first)
     {
-        m_low.lock_shared();
+        m_low.LockShared();
         try
         {
-            m_high.lock_shared();
+            m_high.LockShared();
         }
         catch (...)
         {
-            m_low.unlock_shared();
+            m_low.UnlockShared();
             throw;
         }
     }
@@ -130,8 +125,8 @@ public:
     ReaderLockPair& operator=(ReaderLockPair&&) = delete;
     ~ReaderLockPair() JINJA2CPP_RELEASE_GENERIC()
     {
-        m_high.unlock_shared();
-        m_low.unlock_shared();
+        m_high.UnlockShared();
+        m_low.UnlockShared();
     }
 
 private:
