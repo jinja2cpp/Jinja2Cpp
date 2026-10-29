@@ -17,6 +17,16 @@ and then write the storage in place:
   cycle collector and empty a container the same way.
 - `ChangeGlobals` (`template_env.cpp:485`) writes the shared globals map in place when no render
   holds it.
+- `TraverseBoxed` (`internal_value.cpp:3562`, `:3572`): the collector decides from
+  `m_callable.use_count() == 1` and `m_attributes.use_count() == 1` whether it owns the callable's
+  captures and attributes alone, and then reads (and, through `Clear`, empties) them.
+- `LoadsInPlace` (`template.cpp:86`): `impl.use_count() == 1`, after which the template parses into
+  the existing implementation in place; a render thread that just dropped its copy of the
+  implementation has not been ordered before that write.
+
+Task 0343 (`scripts/use_count_check.py`, PR #694) lists these calls and fails a PR that adds one;
+this task is done when its whole-tree run lists none, or each remaining call carries a
+`// use_count: <reason>` comment.
 
 `use_count()` is a relaxed load in libstdc++ (`bits/shared_ptr_base.h:230`: "No memory barrier is used
 here so there is no synchronization with other threads") and in libc++. The host thread's drop of its
@@ -53,4 +63,5 @@ test is the right production fix but TSan does not model fences, so it cannot co
 - `*BorrowedCells*:*Module*` pass under ASan+UBSan and TSan.
 - `Module/keep` and `Module/keep_written` do not move in `bench/count.py` (the count is read once
   per write after an export, not on the hot path).
-- The design document's table (section 12) loses its two "gap 1" rows.
+- The design document's table (section 12) loses its "gap 1" rows.
+- `scripts/use_count_check.py` (0343) run on the whole tree lists no call.

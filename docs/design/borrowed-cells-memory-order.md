@@ -177,7 +177,8 @@ read), which keeps an object alive and cannot free a live one: new references ar
 existing ones, so a count that was above `internalRefs` stays above it unless the outside holder
 drops its reference, and then it is garbage anyway.
 
-**R2. `std::shared_ptr` counts are used as a uniqueness test and are not acquire.** Three sites ask
+**R2. `std::shared_ptr` counts are used as a uniqueness test and are not acquire.** The sites that
+touch the cell protocol ask
 "is this the only reference" and then write the storage in place:
 
 | Site | Test | In place after it |
@@ -199,7 +200,8 @@ the load to the write orders them in practice. The fix is one acquire fence afte
 decrement gives the synchronizes-with edge), or switching the holder to a count the library
 owns (R1). Task 0339.
 
-Everything else the argument needs from these counts holds: a kept value's reader holds a
+Task 0343's lint also finds `TraverseBoxed` (`internal_value.cpp:3562,3572`) and `LoadsInPlace`
+(`template.cpp:86`) with the same pattern; 0339 covers them. Everything else the argument needs from these counts holds: a kept value's reader holds a
 reference for as long as it reads, so the count cannot be 1 while a reader is active, and nobody
 can make a new reference to storage whose only holder is the module (H3: a host cannot copy a
 value it no longer holds).
