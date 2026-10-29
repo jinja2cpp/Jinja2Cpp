@@ -20,6 +20,7 @@
 #include "unicode_tables.h"
 #include "value_visitors.h"
 
+#include <jinja2cpp/config.h>
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
@@ -613,7 +614,7 @@ public:
     using ParseResult = nonstd::expected<NodeRef<TemplateRenderer>, std::vector<ErrorInfo>>;
 
     // The tree goes to `nodes`
-    TemplateParser(const string_t* tpl, const detail::LoadSettings& setts, TemplateEnv* env, const std::string& tplName, NodeArena& nodes)
+    TemplateParser(const string_t* tpl, const detail::LoadSettings& setts, TemplateEnv* env, const std::string& tplName JINJA2CPP_LIFETIMEBOUND, NodeArena& nodes)
         : m_template(tpl)
         , m_templateName(tplName)
         , m_settings(setts.settings)

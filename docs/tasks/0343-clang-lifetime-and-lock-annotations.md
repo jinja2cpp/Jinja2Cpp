@@ -60,7 +60,9 @@ check more of them.
   early return. The promoters' `operator string_view()` views the argument, not the promoter, so it
   carries no annotation.
 - `lifetimebound` on `FunctionRef`'s and `ReferenceWrapper`'s constructors, `UnwrapRecursive`,
-  `OrderedMap::FindLinear` and `ErrorInfo`'s `operator<<`. Lifetime Safety also suggested
+  `OrderedMap::FindLinear`, `ErrorInfo`'s `operator<<` and `TemplateParser`'s name (which it keeps by
+  reference: `test/name_resolver_test.cpp` passed a temporary, found by Clang 23 in 0345 and fixed
+  there; the same test fix is in this PR so that the annotation does not fail the Clang builds). Lifetime Safety also suggested
   `RenderContext::SetTemplateFrame`, which returns the previous frame, not its argument: not taken.
   The iterator helpers in `helpers.h` it suggested are left out (the result is an iterator into the
   caller's range, which the annotation would not add anything to).

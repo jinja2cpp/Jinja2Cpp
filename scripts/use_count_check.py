@@ -10,8 +10,9 @@ that: thread safety analysis knows nothing about atomics, and TSan sees it only 
 happens. This runs scripts/use_count.query with clang-query over every translation unit of the
 compile database and prints one `file:line:col` per call in src/ and include/ (tests count
 references on one thread to check ownership). A call that is right (an assertion on the owning
-thread, say) carries `use_count: <reason>` in a comment on its line. --changed keeps only calls on lines the diff against that ref adds; --github prints
-GitHub annotations; --fail exits 1 when anything is reported.
+thread, say) carries `use_count: <reason>` in a comment on its line. --changed keeps only calls
+on lines the diff against that ref adds; --github prints GitHub annotations; --fail exits 1 when
+anything is reported.
 """
 
 import argparse
