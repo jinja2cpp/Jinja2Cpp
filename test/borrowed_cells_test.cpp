@@ -631,14 +631,21 @@ TEST(BorrowedCellsKept, ModuleWithManyCellsAndAKeptTemplateList)
     // host's list is 0049 P3's (loops)
     Keeper keeper;
     ValuesList lists;
-    for (int i = 0; i != 3000; ++i)
+    // Fewer in the trace build (tla/check.py --trace), whose checker holds the whole log
+#ifdef JINJA2CPP_CELL_TRACE
+    const int count = 20;
+#else
+    const int count = 3000;
+#endif
+    for (int i = 0; i != count; ++i)
     {
         lists.emplace_back(ValuesList{ 0 });
     }
     ValuesMap params{ { "ls", std::move(lists) } };
     keeper.AddTo(params);
     Template tpl;
-    ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% for i in range(3000) %}{% set _ = ls[i].append(x) %}{% endfor %}{% set _ = keep([ls[0], ls[2999]]) %}{% set _ = keep([]) %}{% endmacro %}"));
+    params["n"] = count;
+    ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% for i in range(n) %}{% set _ = ls[i].append(x) %}{% endfor %}{% set _ = keep([ls[0], ls[n - 1]]) %}{% set _ = keep([]) %}{% endmacro %}"));
     auto module = tpl.MakeModule(params).value();
     for (int64_t x = 1; x != 3; ++x)
     {
