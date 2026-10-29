@@ -14,6 +14,7 @@
 #include "unicode_printable.h"
 
 #include <jinja2cpp/big_int.h>
+#include <jinja2cpp/config.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
@@ -123,7 +124,7 @@ struct RecursiveUnwrapper
     {}
 
     template<typename T>
-    static const T& UnwrapRecursive(const T& arg, const ValueObject* /*owner*/)
+    static const T& UnwrapRecursive(const T& arg JINJA2CPP_LIFETIMEBOUND, const ValueObject* /*owner*/)
     {
         // An alternative std::visit holds for the call
         return arg; // NOLINT(bugprone-return-const-ref-from-parameter)

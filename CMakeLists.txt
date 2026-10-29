@@ -316,7 +316,8 @@ if (JINJA2CPP_STRICT_WARNINGS)
         # boost_variant used to hand this flag to the library as an INTERFACE option (0229)
         set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} ${_strict_warnings} -Wno-error=array-bounds
             -Wno-error=maybe-uninitialized)
-        set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} ${_strict_warnings} -Wno-unused-command-line-argument)
+        # -Wthread-safety checks the lock annotations of src/thread_annotations.h (docs/tasks/0343)
+        set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} ${_strict_warnings} -Wthread-safety -Wno-unused-command-line-argument)
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         # Dependencies come in as system headers (thirdparty/CMakeLists.txt), which /W4 leaves alone
         # C4702 is reported by the code generator, after /external:W0 no longer applies, so

@@ -5,6 +5,7 @@
 #include "load_settings.h"
 #include "make_unexpected.h"
 #include "template_env_impl.h"
+#include "thread_annotations.h"
 
 #include <jinja2cpp/big_int_backend.h>
 #include <jinja2cpp/error_info.h>
@@ -13,15 +14,14 @@
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <optional>
-#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -192,7 +192,8 @@ struct TemplateFunctions<char>
     using ResultType = Result<Template>;
     static Template CreateTemplate(TemplateEnv* env) { return Template(env); }
     static auto LoadFile(const std::string& fileName, const IFilesystemHandler* fs) { return fs->OpenStream(fileName); }
-    static auto& GetCache(TemplateEnvImpl& impl) { return impl.templateCache; }
+    // The caller holds `guard` around every use of the cache; the analysis does not follow the reference
+    static auto& GetCache(TemplateEnvImpl& impl) JINJA2CPP_NO_THREAD_SAFETY_ANALYSIS { return impl.templateCache; }
 };
 
 template<>
@@ -201,7 +202,8 @@ struct TemplateFunctions<wchar_t>
     using ResultType = ResultW<TemplateW>;
     static TemplateW CreateTemplate(TemplateEnv* env) { return TemplateW(env); }
     static auto LoadFile(const std::string& fileName, const IFilesystemHandler* fs) { return fs->OpenWStream(fileName); }
-    static auto& GetCache(TemplateEnvImpl& impl) { return impl.templateWCache; }
+    // The caller holds `guard` around every use of the cache; the analysis does not follow the reference
+    static auto& GetCache(TemplateEnvImpl& impl) JINJA2CPP_NO_THREAD_SAFETY_ANALYSIS { return impl.templateWCache; }
 };
 
 } // namespace
@@ -222,9 +224,7 @@ bool TemplateEnvImpl::IsEqual(const TemplateEnvImpl& other) const
     {
         return true;
     }
-    std::shared_lock<std::shared_timed_mutex> l1(guard, std::defer_lock);
-    std::shared_lock<std::shared_timed_mutex> l2(other.guard, std::defer_lock);
-    std::lock(l1, l2);
+    const ReaderLockPair lock(guard, other.guard);
     return filesystemHandlers == other.filesystemHandlers && settings == other.settings && GetBigIntBackend() == other.GetBigIntBackend() && *globalValues == *other.globalValues && IsSameCallables(filters, other.filters) && IsSameCallables(tests, other.tests) && IsSameCallables(translations, other.translations) && templateCache == other.templateCache && templateWCache == other.templateWCache;
 }
 
@@ -234,7 +234,7 @@ LoadSettingsPtr TemplateEnvImpl::GetLoadSettings() const
     // the reference TemplateEnv::GetSettings returns
     // A finalize callable edited in place keeps its identity, so it would compare equal: templates of an environment
     // with one get settings of their own
-    std::scoped_lock l(m_loadSettingsGuard);
+    const WriterLock<Mutex> l(m_loadSettingsGuard);
     if (settings.finalize.callable)
     {
         return std::make_shared<const LoadSettings>(settings, BigIntBackendLocked());
@@ -248,7 +248,7 @@ LoadSettingsPtr TemplateEnvImpl::GetLoadSettings() const
 
 bool TemplateEnvImpl::SetBigIntBackend(const BigIntBackend* backend) noexcept
 {
-    std::scoped_lock l(m_loadSettingsGuard);
+    const WriterLock<Mutex> l(m_loadSettingsGuard);
     if (backend == BigIntBackendLocked())
     {
         return true;
@@ -266,7 +266,7 @@ bool TemplateEnvImpl::SetBigIntBackend(const BigIntBackend* backend) noexcept
 
 const BigIntBackend* TemplateEnvImpl::GetBigIntBackend() const noexcept
 {
-    std::scoped_lock l(m_loadSettingsGuard);
+    const WriterLock<Mutex> l(m_loadSettingsGuard);
     return BigIntBackendLocked();
 }
 
@@ -289,7 +289,7 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
         auto& cache = Functions::GetCache(*this);
 
         {
-            std::shared_lock<std::shared_timed_mutex> l(guard);
+            const detail::ReaderLock l(guard);
             auto p = cache.find(fileName);
             if (p != cache.end())
             {
@@ -333,7 +333,7 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
                     // released after the lock: it may hold the last handle to this environment, and
                     // ~TemplateEnv takes the same lock
                     std::optional<decltype(tpl)> replaced;
-                    std::unique_lock<std::shared_timed_mutex> l(guard);
+                    const detail::WriterLock<detail::SharedMutex> l(guard);
                     if (owner)
                     {
                         auto& cacheEntry = cache[fileName];
@@ -389,7 +389,7 @@ TemplateEnv::~TemplateEnv()
     detail::TemplateEnvImpl::TemplateCache<Template> templateCache;
     detail::TemplateEnvImpl::TemplateCache<TemplateW> templateWCache;
     {
-        std::unique_lock<std::shared_timed_mutex> l(m_impl->guard);
+        const detail::WriterLock<detail::SharedMutex> l(m_impl->guard);
         m_impl->owner = nullptr;
         templateCache.swap(m_impl->templateCache);
         templateWCache.swap(m_impl->templateWCache);
@@ -480,7 +480,7 @@ namespace
 template<typename Fn>
 void ChangeGlobals(detail::TemplateEnvImpl& impl, const Fn& fn)
 {
-    std::unique_lock<std::shared_timed_mutex> l(impl.guard);
+    const detail::WriterLock<detail::SharedMutex> l(impl.guard);
     // A render may still hold the map: it gets a new one
     if (impl.globalValues.use_count() > 1)
     {
@@ -503,66 +503,64 @@ void TemplateEnv::RemoveGlobal(const std::string& name)
 
 void TemplateEnv::AddFilter(std::string name, UserCallable filter)
 {
-    std::unique_lock<std::shared_timed_mutex> l(m_impl->guard);
+    const detail::WriterLock<detail::SharedMutex> l(m_impl->guard);
     m_impl->filters[std::move(name)] = std::move(filter);
 }
 
 void TemplateEnv::RemoveFilter(const std::string& name)
 {
-    std::unique_lock<std::shared_timed_mutex> l(m_impl->guard);
+    const detail::WriterLock<detail::SharedMutex> l(m_impl->guard);
     m_impl->filters.erase(name);
 }
 
 void TemplateEnv::AddTest(std::string name, UserCallable test)
 {
-    std::unique_lock<std::shared_timed_mutex> l(m_impl->guard);
+    const detail::WriterLock<detail::SharedMutex> l(m_impl->guard);
     m_impl->tests[std::move(name)] = std::move(test);
 }
 
 void TemplateEnv::RemoveTest(const std::string& name)
 {
-    std::unique_lock<std::shared_timed_mutex> l(m_impl->guard);
+    const detail::WriterLock<detail::SharedMutex> l(m_impl->guard);
     m_impl->tests.erase(name);
 }
 
 std::optional<UserCallable> TemplateEnv::FindFilter(const std::string& name) const
 {
-    std::shared_lock<std::shared_timed_mutex> l(m_impl->guard);
+    const detail::ReaderLock l(m_impl->guard);
     return detail::FindCallable(m_impl->filters, name);
 }
 
 std::optional<UserCallable> TemplateEnv::FindTest(const std::string& name) const
 {
-    std::shared_lock<std::shared_timed_mutex> l(m_impl->guard);
+    const detail::ReaderLock l(m_impl->guard);
     return detail::FindCallable(m_impl->tests, name);
 }
 
 void TemplateEnv::InstallGettextCallables(UserCallable gettext, UserCallable ngettext, UserCallable pgettext, UserCallable npgettext)
 {
-    std::unique_lock<std::shared_timed_mutex> l(m_impl->guard);
-    auto& translations = m_impl->translations;
-    translations.clear();
-    auto install = [&translations](const char* name, UserCallable& fn) {
-        if (fn.callable)
+    const detail::WriterLock<detail::SharedMutex> l(m_impl->guard);
+    m_impl->translations.clear();
+    // A loop rather than a lambda: the analysis checks a lambda as a function of its own, which holds no lock
+    const std::array<std::pair<const char*, UserCallable*>, 4> callables{ { { "gettext", &gettext }, { "ngettext", &ngettext }, { "pgettext", &pgettext }, { "npgettext", &npgettext } } };
+    for (const auto& [name, fn] : callables)
+    {
+        if (fn->callable)
         {
-            translations[name] = std::move(fn);
+            m_impl->translations[name] = std::move(*fn);
         }
-    };
-    install("gettext", gettext);
-    install("ngettext", ngettext);
-    install("pgettext", pgettext);
-    install("npgettext", npgettext);
+    }
 }
 
 std::optional<UserCallable> TemplateEnv::FindGettextCallable(const std::string& name) const
 {
-    std::shared_lock<std::shared_timed_mutex> l(m_impl->guard);
+    const detail::ReaderLock l(m_impl->guard);
     return detail::FindCallable(m_impl->translations, name);
 }
 
 void TemplateEnv::ApplyGlobals(const std::function<void(const ValuesMap&)>& fn) const
 {
-    std::shared_lock<std::shared_timed_mutex> l(m_impl->guard);
+    const detail::ReaderLock l(m_impl->guard);
     fn(*m_impl->globalValues);
 }
 

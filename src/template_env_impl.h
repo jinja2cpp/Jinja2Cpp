@@ -8,14 +8,13 @@
 #include <jinja2cpp/value.h>
 
 #include "load_settings.h"
+#include "thread_annotations.h"
 
 #include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <memory>
-#include <mutex>
 #include <optional>
-#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -78,18 +77,18 @@ public:
 
     std::vector<FsHandler> filesystemHandlers;
     Settings settings;
-    // Guarded by `guard`. A render keeps the map it converted alive, so a change while the map is held
-    // replaces it instead of changing it (docs/tasks/0139)
-    std::shared_ptr<ValuesMap> globalValues = std::make_shared<ValuesMap>();
+    // A render keeps the map it converted alive, so a change while the map is held replaces it instead of
+    // changing it (docs/tasks/0139)
+    std::shared_ptr<ValuesMap> globalValues JINJA2CPP_GUARDED_BY(guard) = std::make_shared<ValuesMap>();
     // Changes with every change of the globals: a render converts them only when it differs
     // from the one of the copy it converted last
     std::atomic<uint64_t> globalsGeneration{ NewGlobalsGeneration() };
-    CallablesMap filters;
-    CallablesMap tests;
-    CallablesMap translations;
-    mutable std::shared_timed_mutex guard;
-    TemplateCache<Template> templateCache;
-    TemplateCache<TemplateW> templateWCache;
+    CallablesMap filters JINJA2CPP_GUARDED_BY(guard);
+    CallablesMap tests JINJA2CPP_GUARDED_BY(guard);
+    CallablesMap translations JINJA2CPP_GUARDED_BY(guard);
+    mutable SharedMutex guard;
+    TemplateCache<Template> templateCache JINJA2CPP_GUARDED_BY(guard);
+    TemplateCache<TemplateW> templateWCache JINJA2CPP_GUARDED_BY(guard);
     // The TemplateEnv that owns this state; null once it is destroyed, and nothing is cached then. Changed under `guard`
     std::atomic<const TemplateEnv*> owner{ nullptr };
 
@@ -99,11 +98,11 @@ public:
     const BigIntBackend* GetBigIntBackend() const noexcept;
 
 private:
-    const BigIntBackend* BigIntBackendLocked() const noexcept { return m_loadSettings ? m_loadSettings->bigIntBackend : GetBuiltinBigIntBackend(); }
+    const BigIntBackend* BigIntBackendLocked() const noexcept JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_loadSettings ? m_loadSettings->bigIntBackend : GetBuiltinBigIntBackend(); }
 
-    mutable std::mutex m_loadSettingsGuard;
+    mutable Mutex m_loadSettingsGuard;
     // Made on the first Load, or by SetBigIntBackend when the backend differs from the built-in one
-    mutable LoadSettingsPtr m_loadSettings;
+    mutable LoadSettingsPtr m_loadSettings JINJA2CPP_GUARDED_BY(m_loadSettingsGuard);
 };
 
 struct TemplateEnvAccess
