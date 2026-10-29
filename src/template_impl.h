@@ -17,6 +17,7 @@
 #include "template_env_impl.h"
 #include "template_parser.h"
 #include "template_slots.h"
+#include "thread_annotations.h"
 #include "undefined.h"
 #include "value_visitors.h"
 
@@ -45,8 +46,6 @@
 #include <nonstd/expected.hpp>
 
 #include <list>
-#include <mutex>
-#include <shared_mutex>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -123,7 +122,7 @@ inline std::shared_ptr<const GlobalsSnapshot> GetGlobalsSnapshot(detail::Templat
     {
         auto snapshot = std::make_shared<GlobalsSnapshot>();
         {
-            std::shared_lock<std::shared_timed_mutex> lock(env.guard);
+            const detail::ReaderLock lock(env.guard);
             snapshot->generation = env.globalsGeneration.load(std::memory_order_relaxed);
             snapshot->source = env.globalValues;
         }
@@ -370,7 +369,10 @@ public:
         m_origin.source = m_template.get();
         m_origin.name = &m_templateName;
         m_origin.isWide = std::is_same_v<CharT, wchar_t>;
-        m_metadata.reset();
+        {
+            const detail::WriterLock<detail::Mutex> lock(m_metadataMutex);
+            m_metadata.reset();
+        }
         return std::optional<BasicErrorInfo<CharT>>();
     }
 
@@ -589,7 +591,7 @@ public:
     {
         // The JSON document is parsed once and kept in the template: the returned maps may refer to
         // it, so it must outlive every map handed out
-        std::scoped_lock lock(m_metadataMutex);
+        const detail::WriterLock<detail::Mutex> lock(m_metadataMutex);
         try
         {
             return ParseMetadata();
@@ -672,10 +674,8 @@ public:
         {
             return false;
         }
-        if (m_metadata != other.m_metadata)
-        {
-            return false;
-        }
+        // Not the parsed metadata: GetMetadata fills that cache under its lock, maybe on another thread, and two
+        // templates with the same metadata text are equal whether or not it ran yet (docs/tasks/0343)
         if (m_metadataInfo != other.m_metadataInfo)
         {
             return false;
@@ -687,7 +687,7 @@ private:
     friend struct TemplateModuleState;
 
     // GetMetadata with m_metadataMutex held
-    nonstd::expected<GenericMap, BasicErrorInfo<CharT>> ParseMetadata() const
+    nonstd::expected<GenericMap, BasicErrorInfo<CharT>> ParseMetadata() const JINJA2CPP_REQUIRES(m_metadataMutex)
     {
         if (m_metadata)
         {
@@ -1051,8 +1051,8 @@ private:
         std::array<char, CacheLineSize> padAfter{};
     };
     mutable OutputSizeHint m_outputSizeHint;
-    mutable std::optional<GenericMap> m_metadata;
-    mutable std::mutex m_metadataMutex;
+    mutable std::optional<GenericMap> m_metadata JINJA2CPP_GUARDED_BY(m_metadataMutex);
+    mutable detail::Mutex m_metadataMutex;
     MetadataInfo<CharT> m_metadataInfo;
     // The source and name the tree's render errors are located in; read on an error only
     detail::TemplateOrigin m_origin;

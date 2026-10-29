@@ -1,10 +1,11 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: robustness
 depends: []
-touches: [include/jinja2cpp/config.h, include/jinja2cpp/user_callable.h, src/thread_annotations.h, src/template_env_impl.h, src/template_env.cpp, .clang-tidy, .github/workflows/clang-tidy.yml]
-shares: [src/template_impl.h, src/template_module.cpp, include/jinja2cpp/utils/ordered_map.h, src/helpers.h, src/render_context.h, src/value_visitors.h, include/jinja2cpp/error_info.h]
+touches: [include/jinja2cpp/config.h, include/jinja2cpp/user_callable.h, src/thread_annotations.h, src/template_env_impl.h, src/template_env.cpp, CMakeLists.txt, scripts/use_count*, scripts/preflight.sh, .github/workflows/clang-tidy.yml]
+shares: [src/template_impl.h, src/template_module.cpp, src/internal_value.h, include/jinja2cpp/utils/ordered_map.h, src/render_context.h, src/value_visitors.h, include/jinja2cpp/error_info.h]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/694
 ---
 # Check lifetimes and lock discipline at compile time with Clang annotations
 
@@ -49,3 +50,45 @@ getter fails the clang-tidy job; GCC, MSVC and AppleClang builds are unchanged.
 **Next.** The annotations can lie. An ASan or TSan report on an annotated path means the
 annotation is wrong and must be fixed, not the test silenced. Trunk Lifetime Safety (0345) will
 check more of them.
+
+**Resolution (PR #694).**
+- `config.h`: `JINJA2CPP_LIFETIMEBOUND` (Clang only for now; MSVC's `[[msvc::lifetimebound]]` is left
+  out until a Windows job checks it) and `JINJA2CPP_LIFETIME_CAPTURE_BY(x)` (Clang 20+).
+- `user_callable.h`: `lifetimebound` on the three `operator other_string_view()` and on `Promote`'s
+  argument; `TypedParam::SetValue` takes its value by value with `lifetime_capture_by(this)` (a
+  `decayed_t&&` parameter made Clang warn for every owning type); `else` branches after the 0296
+  early return. The promoters' `operator string_view()` views the argument, not the promoter, so it
+  carries no annotation.
+- `lifetimebound` on `FunctionRef`'s and `ReferenceWrapper`'s constructors, `UnwrapRecursive`,
+  `OrderedMap::FindLinear` and `ErrorInfo`'s `operator<<`. Lifetime Safety also suggested
+  `RenderContext::SetTemplateFrame`, which returns the previous frame, not its argument: not taken.
+  The iterator helpers in `helpers.h` it suggested are left out (the result is an iterator into the
+  caller's range, which the annotation would not add anything to).
+- `src/thread_annotations.h`: annotated `Mutex`, `SharedMutex`, `WriterLock`, `ReaderLock` and
+  `ReaderLockPair` (address order, for `TemplateEnvImpl::IsEqual`). `GUARDED_BY(guard)` on
+  `globalValues`, `filters`, `tests`, `translations` and both template caches;
+  `m_loadSettings` / `BigIntBackendLocked` under `m_loadSettingsGuard`; `TemplateImpl::m_metadata` /
+  `ParseMetadata` under `m_metadataMutex`. `InstallGettextCallables` loops instead of calling a lambda
+  (the analysis checks a lambda as a function holding no lock); `GetCache` returns the cache by
+  reference with `JINJA2CPP_NO_THREAD_SAFETY_ANALYSIS` (every use is under `guard`, which the
+  analysis cannot follow through the reference). `-Wthread-safety` is in every Clang build's strict
+  warnings (`CMakeLists.txt`), so a violation fails the build like any other warning.
+- Found by the annotations: `TemplateImpl::operator==` (used when render callbacks compare their
+  hosts) read the lazily filled `m_metadata` without its lock, so a `GetMetadata` on another thread
+  raced it, and the comparison depended on whether `GetMetadata` had run. It now compares only
+  `m_metadataInfo`, the text the cache is parsed from. `Load` clears the cache under the lock.
+- Left unannotated: the module call `std::recursive_mutex` (`template_module.cpp`). Its state is
+  set up before the module is published and torn down in the destructor, neither of which the
+  analysis can express, and Clang 18 and 20 have no `reentrant_capability`.
+- Not done: `[[gsl::Pointer]]` and `bugprone-dangling-handle.HandleClasses`. The view-like types
+  (`FunctionRef`, `ReferenceWrapper`) got `lifetimebound` constructors, which give the same
+  warning, and `StringView` / `BigIntView` are aggregates filled from values that own the text.
+  The Lifetime Safety report moved to 0345, which runs the trunk analyses anyway.
+- `scripts/use_count_check.py` (+ `use_count.query`): lists `shared_ptr` / `weak_ptr`
+  `use_count()` calls in `src/` and `include/`; fails a pull request that adds one (clang-tidy
+  job, preflight). On master it lists six: the three of 0339, plus `TraverseBoxed`
+  (`internal_value.cpp`, two) and `LoadsInPlace` (`template.cpp`), sent to 0339's owner.
+- Checked: Clang 18 and 20 `-fsyntax-only` over all 103 translation units with `-Wthread-safety
+  -Wthread-safety-beta -Wdangling -Wdangling-capture -Wdangling-gsl`: no warning. Reverting the 0296
+  branch (`if constexpr (false)`) gives `-Wdangling-capture` at the `SetValue(Promote(v))` line;
+  removing the lock from `FindFilter` gives `-Wthread-safety-reference`.

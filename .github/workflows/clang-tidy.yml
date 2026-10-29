@@ -19,6 +19,7 @@ on:
       - '.clang-tidy'
       - 'test/.clang-tidy'
       - 'scripts/null_compare.*'
+      - 'scripts/use_count*'
       - '.github/workflows/clang-tidy.yml'
   schedule:
     - cron: '17 3 * * 1'
@@ -110,6 +111,14 @@ jobs:
       # The tree is clean since task 0058, so a new match fails the pull request.
       run: python scripts/null_compare.py -p build --changed "$BASE_SHA" --github --fail --clang-query clang-query-18
 
+    - name: shared_ptr use_count() calls (changed lines)
+      if: github.event_name == 'pull_request'
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      # A relaxed load that no Clang analysis or the TLA+ model sees (docs/tasks/0339, 0343): a new
+      # call fails the pull request; the ones on master are 0339's to replace.
+      run: python scripts/use_count_check.py -p build --changed "$BASE_SHA" --github --fail --clang-query clang-query-18
+
     - name: clang-tidy on the whole tree
       if: github.event_name != 'pull_request'
       run: |
@@ -142,6 +151,11 @@ jobs:
     - name: Comparisons with nullptr in conditions (whole tree)
       if: github.event_name != 'pull_request'
       run: python scripts/null_compare.py -p build --github --fail --clang-query clang-query-18
+
+    # Listed, not failed, until 0339 replaces the calls on master
+    - name: shared_ptr use_count() calls (whole tree)
+      if: github.event_name != 'pull_request'
+      run: python scripts/use_count_check.py -p build --github --clang-query clang-query-18
 
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       if: always()

@@ -123,7 +123,7 @@ struct RecursiveUnwrapper
     {}
 
     template<typename T>
-    static const T& UnwrapRecursive(const T& arg, const ValueObject* /*owner*/)
+    static const T& UnwrapRecursive(const T& arg JINJA2CPP_LIFETIMEBOUND, const ValueObject* /*owner*/)
     {
         // An alternative std::visit holds for the call
         return arg; // NOLINT(bugprone-return-const-ref-from-parameter)
