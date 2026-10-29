@@ -5,6 +5,7 @@
 #include "internal_value.h"
 #include "intrusive_ptr.h"
 #include "robin_hood.h"
+#include "small_vector.h"
 
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/value.h>
@@ -384,12 +385,12 @@ private:
     // The registry while the call runs, null once pinned
     const BorrowedCells* m_registry;
     // The cells the values read, by their data's identity
-    std::vector<std::pair<const void*, bool>> m_cells;
+    SmallVector<std::pair<const void*, bool>, 1> m_cells;
     // Whether a value reads a list or dict the template owns, whose items may be any of the
     // module's data: the pin then takes every cell of the module, which only copies more
     bool m_containers = false;
     // Recorded by Pin, sorted by identity
-    std::vector<Pinned> m_pins;
+    SmallVector<Pinned, 1> m_pins;
 };
 
 // The views a value handed to the host reads in a template module's call (internal_value.cpp): of

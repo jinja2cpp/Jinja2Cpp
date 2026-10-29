@@ -14,6 +14,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <new>
@@ -576,7 +577,7 @@ const InternalValue* CallExports::Storage(const void* identity, bool isList) con
         }
         return &found->second->Storage();
     }
-    const auto found = std::lower_bound(m_pins.begin(), m_pins.end(), identity, [](const Pinned& pin, const void* key) { return std::less<>()(pin.identity, key); });
+    const auto* const found = std::lower_bound(m_pins.begin(), m_pins.end(), identity, [](const Pinned& pin, const void* key) { return std::less<>()(pin.identity, key); });
     return found != m_pins.end() && found->identity == identity && found->isList == isList ? &found->storage : nullptr;
 }
 
@@ -606,6 +607,7 @@ bool CallExports::PinCell(const BorrowedCell& cell)
     }
     // Shares the storage's object, so that the next write copies the items (BorrowedCell::OwnsItemsAlone)
     m_pins.push_back(Pinned{ cell.m_identity, cell.IsList(), cell.Storage() });
+    cell.m_shared = true;
     JINJA2CPP_CELL_TRACE_EVENT("pin", Trace::Ptr("reg", Trace::Space::Reg, m_registry), Trace::Ptr("c", Trace::Space::Cell, &cell), Trace::Ptr("g", Trace::Space::Gen, cell.TraceGen()),
                                Trace::Num("call", m_registry->m_call));
     return true;
@@ -767,16 +769,15 @@ void CallExports::Pin() noexcept
             PinNested(table);
         }
     }
-    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
+    catch (const std::exception&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
     {
-        // Out of memory: the cells handed out are pinned, and nested data whose cell could not be
+        // Out of memory (bad_alloc, or length_error from SmallVector): the cells handed out are pinned, and nested data whose cell could not be
         // recorded reads the host's data
     }
-    for (const auto& pin : m_pins)
+    if (m_pins.size() > 1)
     {
-        table.find(pin.identity)->second->m_shared = true;
+        std::sort(m_pins.begin(), m_pins.end(), [](const Pinned& lhs, const Pinned& rhs) { return std::less<>()(lhs.identity, rhs.identity); });
     }
-    std::sort(m_pins.begin(), m_pins.end(), [](const Pinned& lhs, const Pinned& rhs) { return std::less<>()(lhs.identity, rhs.identity); });
     m_registry = nullptr;
     m_cells.clear();
 }

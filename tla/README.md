@@ -110,7 +110,8 @@ explores every behaviour up to it and none past it.
 | `threads-module` | 2 threads: module calls only, level 15 | no error (1.3M states, 4 min) |
 | `threads-module-kept` | 2 threads: module calls, `keep([x])`, hand-off, level 16 | no error (4.2M states, 9 min) |
 | `module-0332` | 1 thread: module calls with `keep([x])`, nested writes and `drop`, level 11 | no error (3.1M states, 7 min) |
-| `render-handoff` | 2 threads: renders, kept lists dropped on the other thread mid-render, level 10 | no error (5.9M states, 15 min) |
+| `render-handoff` | 2 threads: renders, kept lists dropped on the other thread mid-render, level 10, owning links (`FixLinksOwn`, the C++) | no error (5.9M states, 52 min) |
+| `render-handoff-pin-on-attach` | `render-handoff` with 0340 option (a) instead (`FixPinOnAttach`, no `FixLinksOwn`) | no error (5.9M states, 34 min) |
 | `call-id-wrap` | `module` with call ids wrapping after 2 | no error (1.4M states, 3 min) |
 | `module-generic` | 1 thread: module calls taking generic containers the host may keep | no error (5.2M states, 11 min) |
 | `f1-nested-export` | `module`, the code before 0337 (no `FixNestedExport`, no `FixCallPin`), no allocation failure | **counterexample: `SnapshotStable`** (F1) |
@@ -328,13 +329,16 @@ the contract work of 0338 step A freezes the rules, `CellProtocol.tla` should us
 `CellRules` operators too, so that both specs share one statement of each rule.
 
 **Results.** On master before #689, the traces of `BorrowedCellsKept.ModuleNestedKeepOfTheOuterCallsExport`
-and `ModuleSortWhoseKeyHandsOutTheList` fail `MarkRule` at the nested call's export (finding F1,
-0337), and with `--no-fix-nested-export` they fail `SnapshotStable` at the outer call's later
-write: the defect the model found, seen from the C++. With #689 every trace passes. The
-mutants (`--mutants`, `trace_check.py` MUTANTS) change a real trace as a defect would: an adapter
-that goes attached, the 0337 mark, a write to a frozen cell, a missed lookup, a foreign read, a
-write from another thread, EndCall without its restore, an event the spec lacks. Each fails as
-expected.
+and `ModuleSortWhoseKeyHandsOutTheList` failed `MarkRule` at the nested call's export (finding F1,
+0337), and without that fix they failed `SnapshotStable` at the outer call's later write: the
+defect the model found, seen from the C++. Since 0335/0332 an export in a module call marks
+nothing; the call's end pins the cells (`pin`) and the next write copies, which the trace checks
+with `MarkRule` and `SnapshotStable`. Every trace passes (81 with `--mutants`). The mutants
+(`--mutants`, `trace_check.py` MUTANTS) change a real trace as a defect would: an adapter that
+goes attached, a pin that leaves its cell unmarked, a write to a frozen cell, a missed lookup, a
+foreign read, a write from another thread, EndCall without its restore, an event the spec lacks.
+Each fails as expected. A test's log must stay small for TLC: the 0340 drop row runs 20 renders
+instead of 2000 under `JINJA2CPP_CELL_TRACE` (400k events ran out of TLC's heap).
 
 **Not traced.** The block-level skips (`QuietEpoch`, `ItemAdapters` slots released without a
 call, `CellStep` steps after the first): they read no cell by construction and log nothing. The
