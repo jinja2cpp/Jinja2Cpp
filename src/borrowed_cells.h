@@ -357,7 +357,10 @@ public:
     {
     }
     CallExports(const CallExports&) = delete;
+    CallExports(CallExports&&) = delete;
     CallExports& operator=(const CallExports&) = delete;
+    CallExports& operator=(CallExports&&) = delete;
+    ~CallExports() = default;
 
     // A shared pointer to these exports, for a view made later; null only while they are being
     // destroyed

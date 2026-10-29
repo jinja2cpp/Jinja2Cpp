@@ -398,8 +398,8 @@ TEST(ContainersApiTest, GenericListSharesItsAccessor)
     int destroyed = 0;
     struct Owner
     {
-        Owner(const Vec& v, int* counter)
-            : data(v)
+        Owner(Vec v, int* counter)
+            : data(std::move(v))
             , accessor(data.begin(), data.end())
             , destroyed(counter)
         {
@@ -495,7 +495,7 @@ TEST(ContainersApiTest, GenericListSharesItsAccessor)
 
 TEST(ContainersApiTest, CopiesOfAGeneratedListShareItsState)
 {
-    GenericList list = MakeGenericList([n = int64_t(0)]() mutable -> std::optional<Value> {
+    GenericList list = MakeGenericList([n = int64_t{ 0 }]() mutable -> std::optional<Value> {
         if (n >= 3)
         {
             return std::nullopt;

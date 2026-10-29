@@ -1209,7 +1209,7 @@ std::shared_ptr<const void> GenericOwner([[maybe_unused]] const Holder<T>& holde
 // container (a loop target stored in a namespace, a sorted copy) its accessor must keep the
 // owned root alive (docs/tasks/0125). Strings are copied by the convertor either way
 template<typename Container, typename Accessor>
-Container WithOwnerImpl(std::shared_ptr<const void> owner, Container&& nested)
+Container WithOwnerImpl(std::shared_ptr<const void> owner, Container nested)
 {
     // One allocation holds the owner and the nested container whose accessor it lends
     auto holder = std::make_shared<std::pair<std::shared_ptr<const void>, Container>>(std::move(owner), std::move(nested));
