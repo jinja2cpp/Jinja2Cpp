@@ -130,6 +130,36 @@ if(NOT ${JINJA2CPP_WITH_SANITIZERS} STREQUAL "none")
     add_sanitizer_target(${JINJA2CPP_SANITIZE_TARGET})
 endif()
 
+# A checking standard library for a test build (docs/tasks/0344). Both modes change the ABI
+# of std containers, so the setting is global: dependencies and tests are built the same way.
+#   libstdc++: _GLIBCXX_DEBUG, safe iterators; a use of an invalidated iterator aborts.
+#              (_GLIBCXX_SANITIZE_VECTOR is not used: with GCC 13 ASan reports gtest's own
+#              vector growth as a heap-buffer-overflow, because only some TUs are instrumented)
+#   libc++:    hardening mode "debug" (bounds and precondition assertions). Needs Clang and
+#              libc++; the old iterator-invalidation debug mode no longer exists there.
+set(JINJA2CPP_DEBUG_CONTAINERS OFF CACHE STRING "Check std containers at run time in a test build: OFF, libstdc++ or libc++")
+set_property(CACHE JINJA2CPP_DEBUG_CONTAINERS PROPERTY STRINGS OFF libstdc++ libc++)
+if (JINJA2CPP_DEBUG_CONTAINERS STREQUAL "libstdc++")
+    if (NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        message(FATAL_ERROR "JINJA2CPP_DEBUG_CONTAINERS=libstdc++ needs GCC or Clang")
+    endif ()
+    add_compile_definitions(_GLIBCXX_DEBUG)
+    set(JINJA2CPP_DEBUG_CONTAINERS_ACTIVE TRUE)
+elseif (JINJA2CPP_DEBUG_CONTAINERS STREQUAL "libc++")
+    if (NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "JINJA2CPP_DEBUG_CONTAINERS=libc++ needs Clang")
+    endif ()
+    add_compile_options(-stdlib=libc++)
+    add_link_options(-stdlib=libc++)
+    add_compile_definitions(_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG)
+    set(JINJA2CPP_DEBUG_CONTAINERS_ACTIVE TRUE)
+elseif (NOT JINJA2CPP_DEBUG_CONTAINERS STREQUAL "OFF")
+    message(FATAL_ERROR "JINJA2CPP_DEBUG_CONTAINERS is OFF, libstdc++ or libc++, not '${JINJA2CPP_DEBUG_CONTAINERS}'")
+endif ()
+if (JINJA2CPP_DEBUG_CONTAINERS_ACTIVE)
+    message(STATUS "Jinja2C++ checking standard library: ${JINJA2CPP_DEBUG_CONTAINERS}")
+endif ()
+
 if (UNIX)
     if (JINJA2CPP_PIC OR CONAN_CMAKE_POSITION_INDEPENDENT_CODE)
         add_compile_options(-fPIC)
@@ -428,6 +458,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/big_int_test.cpp
         test/borrowed_cells_test.cpp
         test/containers_api_test.cpp
+        test/debug_containers_test.cpp
         test/decimal_locale_test.cpp
         test/embedding_lifecycle_reentry_test.cpp
         test/embedding_lifecycle_test.cpp
