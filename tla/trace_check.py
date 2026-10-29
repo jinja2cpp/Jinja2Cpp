@@ -70,7 +70,7 @@ def write_trace_module(events, path):
         out.write("\n>>\n====\n")
 
 
-def check_trace(jar, log_path, workdir, fix_nested=True):
+def check_trace(jar, log_path, workdir):
     """TLC on one trace: (verdict, ok, the event TLC stopped at or None, seconds)."""
     start = time.time()
     events = read_log(log_path)
@@ -81,8 +81,7 @@ def check_trace(jar, log_path, workdir, fix_nested=True):
         shutil.copy(os.path.join(HERE, spec), workdir)
     write_trace_module(events, os.path.join(workdir, "TraceLog.tla"))
     with open(os.path.join(workdir, "MC.cfg"), "w", encoding="utf-8") as cfg:
-        cfg.write("SPECIFICATION Spec\nCONSTANTS\n")
-        cfg.write(f"    FixNestedExport = {'TRUE' if fix_nested else 'FALSE'}\n")
+        cfg.write("SPECIFICATION Spec\n")
         cfg.write("INVARIANTS\n" + "".join(f"    {inv}\n" for inv in INVARIANTS))
         cfg.write("ALIAS Alias\n")
     cmd = ["java", "-XX:+UseParallelGC", "-Xmx1g", "-Xss16m", "-cp", jar, "tlc2.TLC", "-workers", "1",
@@ -134,17 +133,18 @@ def _first(events, pred):
 
 
 def _drop_live_unlink(events):
-    # An adapter goes without detaching from its live cell (a missing Release)
-    i = _first(events, lambda e: e["ev"] == "unlink" and e["frozen"] == 0)
+    # An adapter goes without letting go of its cell (a missing Release)
+    i = _first(events, lambda e: e["ev"] == "unlink")
     return None if i is None else events[:i] + events[i + 1:]
 
 
-def _keep_mark(events):
-    # NoteExport keeps the first call's mark (0337 before #689)
-    i = _first(events, lambda e: e["ev"] == "export" and e["exp1"] != e["exp0"] and e["exp0"] != 0)
-    if i is None:
-        return None
-    return events[:i] + [dict(events[i], exp1=events[i]["exp0"])] + events[i + 1:]
+def _pin_without_mark(events):
+    # The pin at a module call's end does not mark the cell (CellProtocol's pin-without-marks): the
+    # next write would go in place into the storage the host's value reads
+    for i, e in enumerate(events):
+        if e["ev"] == "pin" and any(f["ev"] == "unshare" and f["c"] == e["c"] for f in events[i + 1:]):
+            return events[:i] + events[i + 1:]
+    return None
 
 
 def _write_frozen(events):
@@ -212,8 +212,8 @@ def _unknown_event(events):
 MUTANTS = {
     "drop-live-unlink": ("an adapter goes attached to a live cell", _drop_live_unlink,
                          {"violated: NoUseAfterFree", "violated: LinksAgree", "violated: TableAgrees"}),
-    "keep-first-mark": ("0337: a nested call's export keeps the outer call's mark", _keep_mark,
-                        {"violated: MarkRule"}),
+    "pin-without-mark": ("0335: the pin leaves the cell unmarked", _pin_without_mark,
+                         {"violated: MarkRule"}),
     "write-frozen": ("a write to a frozen cell", _write_frozen, {"violated: FrozenUnwritten"}),
     "miss-lookup": ("a lookup misses its registry's cell", _miss_lookup, {"violated: TableAgrees"}),
     "foreign-read": ("a read of another registry's live cell", _foreign_read, {"violated: NoForeignCell"}),
@@ -273,8 +273,6 @@ def main(argv=None):
     parser.add_argument("--jobs", type=int, default=2, help="TLC runs at a time")
     parser.add_argument("--mutants", action="store_true",
                         help="also check that each mutant of the traces fails (MUTANTS)")
-    parser.add_argument("--no-fix-nested-export", action="store_true",
-                        help="check the mark rule without #689's shared mark")
     args = parser.parse_args(argv)
     args.jar = os.path.abspath(args.jar)
     if not os.path.exists(args.jar):
@@ -300,8 +298,7 @@ def main(argv=None):
         else:
             traces.append((os.path.basename(path), os.path.abspath(path)))
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
-        futures = {pool.submit(check_trace, args.jar, path, os.path.join(base, f"tlc-{i}"),
-                               not args.no_fix_nested_export): (name, path)
+        futures = {pool.submit(check_trace, args.jar, path, os.path.join(base, f"tlc-{i}")): (name, path)
                    for i, (name, path) in enumerate(traces)}
         for future in concurrent.futures.as_completed(futures):
             name, path = futures[future]

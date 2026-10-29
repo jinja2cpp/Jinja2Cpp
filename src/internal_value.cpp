@@ -1360,6 +1360,227 @@ Value ExportItem(const Value& item, const std::shared_ptr<const void>& owner)
     return item;
 }
 
+// An item of what a template module's call handed to the host (CallExports): the module's data
+// reads through the call's exports, by the identity of the data, and never through an adapter's
+// link, which a later call of the module changes; a list or dict the template owns is a view of
+// the same kind, for the module's data in its items
+Value CallExportItem(const IntrusivePtr<const CallExports>& exports, const InternalValue& item);
+
+class CallListView final : public IListItemAccessor
+    , public IIndexBasedAccessor
+{
+public:
+    class Enumerator : public IndexedEnumeratorImpl<Enumerator, CallListView, Value, IListEnumerator>
+    {
+    public:
+        using BaseClass = IndexedEnumeratorImpl<Enumerator, CallListView, Value, IListEnumerator>;
+        using BaseClass::BaseClass;
+
+        [[nodiscard]] Value GetCurrent() const override
+        {
+            if (!this->m_list || this->m_curItem >= this->CurrentSize())
+            {
+                return Value();
+            }
+            return this->m_list->GetItemByIndex(static_cast<int64_t>(this->m_curItem));
+        }
+        [[nodiscard]] ListEnumeratorPtr Clone() const override
+        {
+            auto result = MakeEnumerator<Enumerator>(this->m_list);
+            static_cast<Enumerator&>(*result).m_curItem = this->m_curItem;
+            return result;
+        }
+        ListEnumeratorPtr Move() override
+        {
+            auto result = Clone();
+            this->m_list = nullptr;
+            this->m_curItem = BaseClass::InvalidIndex;
+            this->m_maxItems = 0;
+            return result;
+        }
+    };
+
+    // The cell of `identity`, or, for a null identity, the template's list `container`
+    CallListView(IntrusivePtr<const CallExports> exports, const void* identity, InternalValue container)
+        : m_exports(std::move(exports))
+        , m_identity(identity)
+        , m_container(std::move(container))
+    {
+    }
+
+    [[nodiscard]] std::optional<size_t> GetSize() const override
+    {
+        const auto* items = Items();
+        return items ? items->size() : 0;
+    }
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return this; }
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Enumerator>(this); }
+    [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
+    {
+        const auto* items = Items();
+        if (!items || idx < 0 || static_cast<size_t>(idx) >= items->size())
+        {
+            return Value();
+        }
+        return CallExportItem(m_exports, (*items)[static_cast<size_t>(idx)]);
+    }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* view = dynamic_cast<const CallListView*>(&other);
+        return view != nullptr && view->Items() == Items();
+    }
+
+private:
+    [[nodiscard]] const InternalValueList* Items() const
+    {
+        const auto* storage = m_identity ? m_exports->Storage(m_identity, true) : &m_container;
+        auto list = storage ? AsList(*storage) : std::nullopt;
+        return list ? list->GetMutableItems() : nullptr;
+    }
+
+    IntrusivePtr<const CallExports> m_exports;
+    const void* m_identity;
+    InternalValue m_container;
+};
+
+class CallMapView final : public IMapItemAccessor
+{
+public:
+    CallMapView(IntrusivePtr<const CallExports> exports, const void* identity, InternalValue container)
+        : m_exports(std::move(exports))
+        , m_identity(identity)
+        , m_container(std::move(container))
+    {
+    }
+
+    [[nodiscard]] size_t GetSize() const override
+    {
+        const auto* dict = Dict();
+        if (!dict)
+        {
+            return 0;
+        }
+        return dict->HasKeyValues() ? Snapshot(*dict).size() : dict->size();
+    }
+    [[nodiscard]] bool HasValue(const std::string& name) const override
+    {
+        const auto* dict = Dict();
+        if (!dict)
+        {
+            return false;
+        }
+        return dict->HasKeyValues() ? Snapshot(*dict).count(name) != 0 : dict->FindString(name) != dict->end();
+    }
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override
+    {
+        const auto* dict = Dict();
+        if (!dict)
+        {
+            return Value();
+        }
+        if (dict->HasKeyValues())
+        {
+            auto snapshot = Snapshot(*dict);
+            auto found = snapshot.find(name);
+            return found != snapshot.end() ? std::move(found->second) : Value();
+        }
+        auto found = dict->FindString(name);
+        return found != dict->end() ? CallExportItem(m_exports, found->second) : Value();
+    }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override
+    {
+        std::vector<std::string> result;
+        const auto* dict = Dict();
+        if (!dict)
+        {
+            return result;
+        }
+        if (dict->HasKeyValues())
+        {
+            for (auto& entry : Snapshot(*dict))
+            {
+                result.push_back(entry.first);
+            }
+            return result;
+        }
+        result.reserve(dict->size());
+        for (const auto& entry : *dict)
+        {
+            result.push_back(DictKeyText(dict->KeyOf(entry.first)));
+        }
+        return result;
+    }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* view = dynamic_cast<const CallMapView*>(&other);
+        return view != nullptr && view->Dict() == Dict();
+    }
+
+private:
+    [[nodiscard]] const TemplateDict* Dict() const
+    {
+        const auto* storage = m_identity ? m_exports->Storage(m_identity, false) : &m_container;
+        auto map = storage ? AsMap(*storage) : std::nullopt;
+        return map ? map->GetMutableItems() : nullptr;
+    }
+    // A dict with a key that is not a string, spelled as SharedDictAdapter::CreateSnapshot does
+    [[nodiscard]] ValuesMap Snapshot(const TemplateDict& dict) const
+    {
+        ValuesMap snapshot;
+        for (const auto& entry : dict)
+        {
+            snapshot[DictKeyText(dict.KeyOf(entry.first))] = CallExportItem(m_exports, entry.second);
+        }
+        return snapshot;
+    }
+
+    IntrusivePtr<const CallExports> m_exports;
+    const void* m_identity;
+    InternalValue m_container;
+};
+
+Value CallExportItem(const IntrusivePtr<const CallExports>& exports, const InternalValue& item)
+{
+    if (auto list = AsList(item))
+    {
+        if (const auto* accessor = list->GetAccessor())
+        {
+            if (accessor->GetCellLink())
+            {
+                // The module's data, or the host's when the module has no cell of it
+                if (!accessor->IsGlobalData() && exports->Storage(accessor->GetIdentity(), true))
+                {
+                    return Value(ExportCallList(exports, accessor->GetIdentity(), InternalValue()));
+                }
+                return Value(accessor->CreateHostGenericList());
+            }
+            if (accessor->GetMutableItems())
+            {
+                return Value(ExportCallList(exports, nullptr, item));
+            }
+        }
+    }
+    else if (auto map = AsMap(item))
+    {
+        if (const auto* accessor = map->GetAccessor())
+        {
+            if (accessor->GetCellLink())
+            {
+                if (!accessor->IsGlobalData() && exports->Storage(accessor->GetIdentity(), false))
+                {
+                    return Value(ExportCallMap(exports, accessor->GetIdentity(), InternalValue()));
+                }
+                return Value(accessor->CreateHostGenericMap());
+            }
+            if (accessor->GetMutableItems())
+            {
+                return Value(ExportCallMap(exports, nullptr, item));
+            }
+        }
+    }
+    return IntValue2Value(item);
+}
+
 // The owner an export of data held by `holder` keeps (ExportListView)
 template<typename T>
 std::shared_ptr<const void> ExportOwner(const ByRef<T>& /*holder*/)
@@ -1391,6 +1612,16 @@ std::weak_ptr<const void> AdaptersOwner(const BySharedVal<T>& holder)
     return holder.GetOwner();
 }
 } // namespace
+
+GenericList ExportCallList(IntrusivePtr<const CallExports> exports, const void* identity, InternalValue container)
+{
+    return GenericList([view = CallListView(std::move(exports), identity, std::move(container))]() -> const IListItemAccessor* { return &view; });
+}
+
+GenericMap ExportCallMap(IntrusivePtr<const CallExports> exports, const void* identity, InternalValue container)
+{
+    return GenericMap([view = CallMapView(std::move(exports), identity, std::move(container))]() -> const IMapItemAccessor* { return &view; });
+}
 
 template<template<typename> class Holder>
 class GenericListAdapter : public IListAccessor
@@ -1564,6 +1795,10 @@ public:
         {
             return cell->ExportList();
         }
+        return CreateHostGenericList();
+    }
+    [[nodiscard]] GenericList CreateHostGenericList() const override
+    {
         return GenericList([list = m_values]() -> const IListItemAccessor* { return list.Get().GetAccessor(); });
     }
 
@@ -1915,8 +2150,9 @@ public:
                 return cell->ExportList();
             }
         }
-        return ExportListView::Make(m_values.Get(), ExportOwner(m_values));
+        return CreateHostGenericList();
     }
+    [[nodiscard]] GenericList CreateHostGenericList() const override { return ExportListView::Make(m_values.Get(), ExportOwner(m_values)); }
 
 private:
     JINJA2CPP_CELL_NOINLINE size_t CellOrHostCount() const
@@ -2000,6 +2236,13 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
         [[nodiscard]] bool OwnsMutableItemsAlone() const override { return m_values.use_count() == 1; }
         [[nodiscard]] GenericList CreateGenericList() const override
         {
+            // In a template module's call, its items that are the module's data read what the
+            // call left them (CallExports, docs/tasks/0332)
+            if (auto exports = ExportOfContainer())
+            {
+                // A copy that shares the items, as the GenericList below holds
+                return ExportCallList(std::move(exports), nullptr, InternalValue(ListAdapter(MakeRef<Adapter>(*this))));
+            }
             return GenericList([adapter = *this]() -> const IListItemAccessor* { return &adapter; });
         }
         void Traverse(const TraverseFn& fn) const override
@@ -2616,6 +2859,11 @@ public:
         {
             return std::move(*snapshot);
         }
+        // As the template's list (ListAdapter::CreateAdapter)
+        if (auto exports = ExportOfContainer())
+        {
+            return ExportCallMap(std::move(exports), nullptr, InternalValue(MapAdapter(MakeRef<SharedDictAdapter>(*this))));
+        }
         return GenericMap([accessor = *this]() -> const IMapItemAccessor* { return &accessor; });
     }
 
@@ -2813,6 +3061,10 @@ public:
         {
             return cell->ExportMap();
         }
+        return CreateHostGenericMap();
+    }
+    [[nodiscard]] GenericMap CreateHostGenericMap() const override
+    {
         return GenericMap([values = m_values]() -> const IMapItemAccessor* { return values.Get().GetAccessor(); });
     }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
@@ -2993,8 +3245,9 @@ public:
                 return cell->ExportMap();
             }
         }
-        return ExportMapView::Make(m_values.Get(), ExportOwner(m_values));
+        return CreateHostGenericMap();
     }
+    [[nodiscard]] GenericMap CreateHostGenericMap() const override { return ExportMapView::Make(m_values.Get(), ExportOwner(m_values)); }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         auto* val = dynamic_cast<const ValuesMapAdapter*>(&other);

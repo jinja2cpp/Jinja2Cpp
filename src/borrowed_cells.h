@@ -23,6 +23,7 @@ inline namespace v2
 
 class BorrowedCell;
 class BorrowedCells;
+class CallExports;
 class CycleCollector;
 
 #ifdef _MSC_VER
@@ -84,6 +85,12 @@ inline uint32_t CellEpoch() noexcept
 // A copy of an adapter attached to a frozen cell keeps the cell too; a copy of any other adapter
 // starts detached. Adapters of the host's data are read by the thread of their render; a value
 // handed to the host reads only the link (Current), never changes it (internal_value.cpp)
+//
+// A link owns its cell, a reference count, unless it is a global's: a value the host keeps can
+// hold the adapter, and the host may let go of it on another thread, before the render or
+// module call that made the cell ended (docs/tasks/0332, 0340). Letting go is then a release of
+// the count, never a write to the live cell. Only a global's link, which the thread's snapshot
+// holds until the end of the render detaches it, is listed in the cell
 //
 // The destructor does not detach: the owner of the adapter calls Release first. An adapter on
 // its own does that as it goes (AutoCellLink, OwnedAdapter in internal_value.cpp); a block of
@@ -159,7 +166,8 @@ public:
     // export of the adapter to the host reads (docs/tasks/0331)
     [[nodiscard]] const BorrowedCell* Current() const noexcept { return m_cell; }
     // Passes fn the frozen cell the link holds a reference to, if any: the Traverse of the
-    // adapter's owner, so that the collector frees a cycle through it (docs/tasks/0331)
+    // adapter's owner, so that the collector frees a cycle through it (docs/tasks/0331). A live
+    // cell's registry holds it, so the collector never takes it
     void TraverseFrozen(const TraverseFn& fn) const;
 
     // Attaches the adapter to a new cell holding `storage` (a list or dict the template owns,
@@ -179,7 +187,7 @@ private:
     const BorrowedCell* Find(const IMapAccessor& self) const;
     const BorrowedCell* Find(const void* identity, bool isList, bool held) const;
     void Link(const BorrowedCell& cell, bool held) const;
-    // Detaches from a live cell, or lets go of a frozen one
+    // Lets go of the cell, or, for a global's link, detaches from the live cell
     JINJA2CPP_CELL_NOINLINE void Unlink() const noexcept;
     // Takes the frozen cell `other` reads, if it reads one
     JINJA2CPP_CELL_NOINLINE void Inherit(const CellLink& other) noexcept;
@@ -189,13 +197,17 @@ private:
     // The bit of m_linkIndex that marks the link of a global's adapter, which the end of the render
     // detaches instead of freezing
     static constexpr uint32_t HeldBit = 0x80000000U;
+    // The bit of m_linkIndex that marks a link holding a reference to its cell: every link but a
+    // global's to a live cell. Read by the link's own thread, never from the cell, which another
+    // thread may freeze meanwhile (docs/tasks/0340)
+    static constexpr uint32_t OwnsBit = 0x40000000U;
 
-    // A live cell is not owned: its registry keeps it until the render ends. A frozen one is: the
-    // link holds a reference to it
+    // Owned (OwnsBit), unless the link is a global's to a live cell, which its registry keeps
+    // until it detaches the link at the render's end
     mutable const BorrowedCell* m_cell = nullptr;
     // The epoch of the last look, or Attached
     mutable uint32_t m_seenEpoch = 0;
-    // The position of this link in the live cell's list of links, and HeldBit
+    // OwnsBit, or the position of this global's link in the live cell's list of links and HeldBit
     mutable uint32_t m_linkIndex = 0;
 };
 
@@ -204,7 +216,7 @@ private:
 class BorrowedCell final : public ValueObject
 {
 public:
-    BorrowedCell(InternalValue storage, InternalValue source, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner = {});
+    BorrowedCell(InternalValue storage, InternalValue source, const void* identity, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner = {});
     BorrowedCell(const BorrowedCell&) = delete;
     BorrowedCell(BorrowedCell&&) = delete;
     BorrowedCell& operator=(const BorrowedCell&) = delete;
@@ -225,11 +237,11 @@ public:
     // The items of the list, read without a virtual call on the hot paths of the list adapter
     [[nodiscard]] InternalValueList& Items() const noexcept { return *m_items; }
     // The items a write changes: null once the cell is frozen, which nothing writes. A write in a
-    // template module's call after a value of an earlier call took the items copies them first
+    // template module's call after a value of an ended call took the items copies them first
     // (Unshare)
     [[nodiscard]] InternalValueList* MutableItems() const
     {
-        if (JINJA2CPP_CELL_UNLIKELY(m_frozen || m_exportedIn != 0))
+        if (JINJA2CPP_CELL_UNLIKELY(m_frozen || m_shared))
         {
             if (!Unshare())
             {
@@ -241,7 +253,7 @@ public:
     }
     [[nodiscard]] TemplateDict* MutableDict() const
     {
-        if (JINJA2CPP_CELL_UNLIKELY(m_frozen || m_exportedIn != 0))
+        if (JINJA2CPP_CELL_UNLIKELY(m_frozen || m_shared))
         {
             if (!Unshare())
             {
@@ -251,7 +263,9 @@ public:
         JINJA2CPP_CELL_TRACE_EVENT("write", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Ptr("g", Trace::Space::Gen, TraceGen()));
         return m_map->GetMutableItems();
     }
-    // The list or dict a value handed to the host reads (docs/tasks/0331)
+    // The list or dict a value handed to the host reads (docs/tasks/0331): in a call of a template
+    // module, a view that reads the cell until the call ends and what the cell held then after
+    // (CallExports)
     [[nodiscard]] GenericList ExportList() const;
     [[nodiscard]] GenericMap ExportMap() const;
     // Whether the render that made the cell ended: the values that outlived it read the cell, and
@@ -261,23 +275,23 @@ public:
 private:
     friend class CellLink;
     friend class BorrowedCells;
+    friend class CallExports;
 
     // Before a write: false for a frozen cell; else copies the items if a value handed out in an
-    // earlier call of the module still shares them
+    // ended call of the module still shares them
     JINJA2CPP_CELL_NOINLINE bool Unshare() const;
-    // Notes that a value handed to the host shares the items
-    void NoteExport() const noexcept;
+    // The registry of the module call running on this thread, if it is the cell's: the export
+    // then reads through the call's CallExports
+    [[nodiscard]] BorrowedCells* ExportingCall() const noexcept;
 #ifdef JINJA2CPP_CELL_TRACE
-    // The export as an event of the trace: the mark before NoteExport and after it
-    void TraceExport(uint32_t before) const noexcept;
+    void TraceExport(bool live) const noexcept;
 #endif
 
-    // Never a call (BorrowedCells::BeginCall): the mark once values handed out in two calls share
-    // the items, so that every write asks whether one still holds them (docs/tasks/0337)
-    static constexpr uint32_t SharedExport = UINT32_MAX;
     // Whether nothing can read the cell any more but the registry: no value holds it, its
     // source alone holds its data and no other adapter is attached to it (BorrowedCells::DropUnheld)
     [[nodiscard]] bool IsUnheld() const noexcept;
+    // Whether the cell's storage alone holds the items: no value of an ended call shares them
+    [[nodiscard]] bool OwnsItemsAlone() const noexcept;
     void Bind() const noexcept;
     // The item block a write changes and an export shares: a storage generation of the trace
     [[nodiscard]] const void* TraceGen() const noexcept { return m_isList ? static_cast<const void*>(m_items) : static_cast<const void*>(m_map ? m_map->GetMutableItems() : nullptr); }
@@ -299,19 +313,84 @@ private:
     mutable const IListAccessor* m_list = nullptr;
     mutable const IMapAccessor* m_map = nullptr;
     mutable InternalValueList* m_items = nullptr;
+    // The object m_storage holds: a module call's pin of the storage shares it (CallExports)
+    mutable const ValueObject* m_object = nullptr;
+    // The identity of the data, the cell's key in its registry
+    const void* m_identity;
     // The registry that made the cell; not dereferenced once the cell is frozen
     const BorrowedCells* m_registry;
-    // The call of a template module in which a value handed to the host first shared the items, 0
-    // when none does (docs/tasks/0331, decision D8), SharedExport once values of two calls share
-    // them (docs/tasks/0337)
-    mutable uint32_t m_exportedIn = 0;
+    // Set when a template module's call ended with values handed to the host that share the
+    // items, so that the next write copies them unless the host let go of those values
+    // (docs/tasks/0331 decision D8, 0335: CallExports::Pin)
+    mutable bool m_shared = false;
     bool m_isList;
     // Set when the render ends (BorrowedCells::Finish)
     mutable bool m_frozen = false;
-    // The adapters attached to the live cell, which the registry detaches or freezes when the
-    // render ends
+    // The links of the globals' adapters attached to the live cell, which the registry detaches
+    // when the render ends; the other links own the cell and are not listed
     mutable std::vector<const CellLink*> m_links;
 };
+
+// What one call of a template module handed to the host (docs/tasks/0335, 0332): the values read
+// through it. While the call runs, a read goes to the module's cells, on the call's thread, so a
+// value sees every later write of the call, nested calls included. When the call ends, Pin
+// records the storage of every module cell those values reach, found by the identity of the data
+// in the registry, never through an adapter's link (which the module's later calls change), and
+// marks those cells shared, so that a later write copies the items unless the host let go of
+// the values by then (BorrowedCell::Unshare). From then on a read goes only to the recorded
+// storages, which nothing writes, on any thread, and data with no recorded storage reads the
+// host's data. An analogy: the host gets a window onto the module's desk while the call runs and
+// a photograph of the desk once it ends; the next writer takes a fresh sheet
+class CallExports final : public ValueObject
+{
+public:
+    explicit CallExports(const BorrowedCells& registry) noexcept
+        : m_registry(&registry)
+    {
+    }
+
+    // The storage a value reads for data of `identity`: the module's cell while the call runs,
+    // the storage recorded at its end after; null for data with no cell, which reads the host's
+    // data
+    [[nodiscard]] const InternalValue* Storage(const void* identity, bool isList) const noexcept;
+
+private:
+    friend class BorrowedCell;
+    friend class BorrowedCells;
+    friend IntrusivePtr<const CallExports> ExportOfContainer();
+
+    struct Pinned
+    {
+        const void* identity;
+        bool isList;
+        InternalValue storage;
+    };
+
+    // A value handed out reads the cell of `identity`
+    void AddCell(const void* identity, bool isList);
+    // The call ends: records the storages and marks their cells shared
+    void Pin() noexcept;
+    // Records the storage of a cell the values reach; false if it was recorded already
+    bool PinCell(const BorrowedCell& cell);
+
+    // The registry while the call runs, null once pinned
+    const BorrowedCells* m_registry;
+    // The cells the values read, by their data's identity
+    std::vector<std::pair<const void*, bool>> m_cells;
+    // Whether a value reads a list or dict the template owns, whose items may be any of the
+    // module's data: the pin then takes every cell of the module, which only copies more
+    bool m_containers = false;
+    // Recorded by Pin, sorted by identity
+    std::vector<Pinned> m_pins;
+};
+
+// The views a value handed to the host reads in a template module's call (internal_value.cpp): of
+// the cell of `identity` (a null container), or of the template's container `container`
+GenericList ExportCallList(IntrusivePtr<const CallExports> exports, const void* identity, InternalValue container);
+GenericMap ExportCallMap(IntrusivePtr<const CallExports> exports, const void* identity, InternalValue container);
+// The CallExports of the template module's call running on this thread, noted as having handed
+// out a list or dict the template owns; null outside a module call
+IntrusivePtr<const CallExports> ExportOfContainer();
 
 // What an enumeration of the host's list knows between two moves of the epoch: whether the list
 // has a cell, and its size when it has none. A step then costs one load and a compare, and the
@@ -413,29 +492,43 @@ public:
         }
     }
 
-    // A call of a template module starts: a write in it to a container a value of an earlier call
-    // shares copies it first (BorrowedCell::Unshare). A render's registry has one call, 0. A call
-    // made from a host callable inside another call of the same module nests in it; returns the
-    // call to go back to at EndCall
-    [[nodiscard]] uint32_t BeginCall() noexcept
+    // The cells by the identity of the host's data (IListAccessor::GetIdentity)
+    using Table = robin_hood::unordered_flat_map<const void*, IntrusivePtr<const BorrowedCell>>;
+
+    // The state of the call a nested call goes back to
+    struct CallFrame
     {
-        const auto outer = m_call;
-        // 0 is a render's call and SharedExport no call's (BorrowedCell::NoteExport)
-        ++m_lastCall;
-        if (m_lastCall == 0 || m_lastCall == BorrowedCell::SharedExport)
+        uint32_t call = 0;
+        IntrusivePtr<CallExports> exports;
+    };
+    // A call of a template module starts: what it hands to the host is its own (CallExports). A
+    // render's registry has one call, 0. A call made from a host callable inside another call of
+    // the same module nests in it; returns the call to go back to at EndCall
+    [[nodiscard]] CallFrame BeginCall() noexcept
+    {
+        CallFrame outer{ m_call, std::move(m_exports) };
+        // 0 is a render's call: the id only names the call in the trace, and may wrap
+        if (++m_lastCall == 0)
         {
             m_lastCall = 1;
         }
         m_call = m_lastCall;
-        JINJA2CPP_CELL_TRACE_EVENT("begin", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("call", m_call), Trace::Num("outer", outer));
+        JINJA2CPP_CELL_TRACE_EVENT("begin", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("call", m_call), Trace::Num("outer", outer.call));
         return outer;
     }
+    // The call ends: the values it handed out keep what they read now (CallExports::Pin)
+    void PinExports() noexcept;
     // The call BeginCall started ends: the call it nested in runs again
-    void EndCall(uint32_t outer) noexcept
+    void EndCall(CallFrame&& outer) noexcept
     {
-        JINJA2CPP_CELL_TRACE_EVENT("end", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("call", m_call), Trace::Num("outer", outer));
-        m_call = outer;
+        JINJA2CPP_CELL_TRACE_EVENT("end", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("call", m_call), Trace::Num("outer", outer.call));
+        m_call = outer.call;
+        m_exports = std::move(outer.exports);
     }
+    // Whether a template module's call runs on the registry
+    [[nodiscard]] bool InCall() const noexcept { return m_call != 0; }
+    // The running call's CallExports, made on the first value it hands out
+    [[nodiscard]] const IntrusivePtr<CallExports>& Exports();
     // Drops the cells nothing reads any more and nothing can find again: the cells of data that
     // lived for one call of a template module (an argument, a user callable's result), which
     // the module's cells would otherwise keep until the module goes. A cell of the host's data
@@ -445,9 +538,7 @@ public:
 private:
     friend class CellLink;
     friend class BorrowedCell;
-
-    // The cells by the identity of the host's data (IListAccessor::GetIdentity)
-    using Table = robin_hood::unordered_flat_map<const void*, IntrusivePtr<const BorrowedCell>>;
+    friend class CallExports;
 
     void Finish(CycleCollector* collector) noexcept;
     // One pass of DropUnheld; false when it dropped none
@@ -458,6 +549,8 @@ private:
     uint32_t m_call = 0;
     // The last call number given out
     uint32_t m_lastCall = 0;
+    // What the running call handed out, made on its first export
+    IntrusivePtr<CallExports> m_exports;
 };
 
 } // namespace v2

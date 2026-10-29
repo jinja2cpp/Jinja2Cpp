@@ -136,9 +136,11 @@ public:
     }
     ~ModuleCallCollector()
     {
-        // Last in the call: what the call made is gone, and with it the adapters of its data
+        // Last in the call: what the call made is gone, and with it the adapters of its data. The
+        // values the call handed out keep what they read now, before a cell of theirs is dropped
+        m_cells.PinExports();
         m_cells.DropUnheld();
-        m_cells.EndCall(m_outerCall);
+        m_cells.EndCall(std::move(m_outerCall));
     }
     ModuleCallCollector(const ModuleCallCollector&) = delete;
     ModuleCallCollector(ModuleCallCollector&&) = delete;
@@ -147,7 +149,7 @@ public:
 
 private:
     BorrowedCells& m_cells;
-    uint32_t m_outerCall;
+    BorrowedCells::CallFrame m_outerCall;
     CycleCollector m_collector;
 };
 

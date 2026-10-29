@@ -10,9 +10,11 @@
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/value.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <new>
 #include <optional>
@@ -47,10 +49,11 @@ uint32_t CellCounters::NextEpoch() noexcept
 }
 } // namespace detail
 
-BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner)
+BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, const void* identity, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner)
     : m_storage(std::move(storage))
     , m_source(std::move(source))
     , m_owner(std::move(owner))
+    , m_identity(identity)
     , m_registry(&registry)
     , m_isList(isList)
 {
@@ -78,78 +81,80 @@ void BorrowedCell::Bind() const noexcept
         auto list = AsList(m_storage);
         m_list = list ? list->GetAccessor() : nullptr;
         m_items = list ? list->GetMutableItems() : nullptr;
+        m_object = list ? list->GetOwner() : nullptr;
     }
     else
     {
         auto map = AsMap(m_storage);
         m_map = map ? map->GetAccessor() : nullptr;
+        m_object = map ? map->GetOwner() : nullptr;
     }
+}
+
+BorrowedCells* BorrowedCell::ExportingCall() const noexcept
+{
+    // Only in the cell's own module call, which alone writes the cell: a frozen cell is never
+    // written, and a render's cells live for one render
+    if (m_frozen || !m_registry)
+    {
+        return nullptr;
+    }
+    auto* cells = CycleCollector::CurrentCells();
+    return cells == m_registry && cells->InCall() ? cells : nullptr;
 }
 
 GenericList BorrowedCell::ExportList() const
 {
+    if (auto* call = ExportingCall())
+    {
+        const auto& exports = call->Exports();
+        exports->AddCell(m_identity, true);
 #ifdef JINJA2CPP_CELL_TRACE
-    const auto before = m_exportedIn;
-    NoteExport();
-    TraceExport(before);
-#else
-    NoteExport();
+        TraceExport(true);
+#endif
+        return ExportCallList(exports, m_identity, InternalValue());
+    }
+#ifdef JINJA2CPP_CELL_TRACE
+    TraceExport(false);
 #endif
     return m_list->CreateGenericList();
 }
 
 GenericMap BorrowedCell::ExportMap() const
 {
+    if (auto* call = ExportingCall())
+    {
+        const auto& exports = call->Exports();
+        exports->AddCell(m_identity, false);
 #ifdef JINJA2CPP_CELL_TRACE
-    const auto before = m_exportedIn;
-    NoteExport();
-    TraceExport(before);
-#else
-    NoteExport();
+        TraceExport(true);
+#endif
+        return ExportCallMap(exports, m_identity, InternalValue());
+    }
+#ifdef JINJA2CPP_CELL_TRACE
+    TraceExport(false);
 #endif
     return m_map->CreateGenericMap();
 }
 
 #ifdef JINJA2CPP_CELL_TRACE
-void BorrowedCell::TraceExport(uint32_t before) const noexcept
+void BorrowedCell::TraceExport(bool live) const noexcept
 {
-    // The call is read only where NoteExport may read it: a frozen cell's registry may be gone
+    // The call is read only where the export may read it: a frozen cell's registry may be gone
     const auto call = !m_frozen && m_registry && CycleCollector::CurrentCells() == m_registry ? m_registry->m_call : 0;
     JINJA2CPP_CELL_TRACE_EVENT("export", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Ptr("g", Trace::Space::Gen, TraceGen()), Trace::Num("call", call),
-                               Trace::Num("exp0", before), Trace::Num("exp1", m_exportedIn));
+                               Trace::Num("live", live ? 1 : 0));
 }
 #endif
 
-void BorrowedCell::NoteExport() const noexcept
-{
-    // Only in the cell's own render or module call, which alone writes the cell: a frozen cell is
-    // never written, and a render's cells live for one call
-    if (m_frozen || !m_registry || CycleCollector::CurrentCells() != m_registry || m_registry->m_call == 0)
-    {
-        return;
-    }
-    // A mark of another call stays only as the shared one: the call that runs may be nested in
-    // the marked call (a host callback), which then writes on after this call ended, and a write
-    // in place would change what this call handed out (docs/tasks/0337)
-    const auto call = m_registry->m_call;
-    if (m_exportedIn == 0)
-    {
-        m_exportedIn = call;
-    }
-    else if (m_exportedIn != call)
-    {
-        m_exportedIn = SharedExport;
-    }
-}
-
 bool BorrowedCell::IsUnheld() const noexcept
 {
-    // The registry's reference alone, for data that lives only as long as its adapters. The only
-    // other adapters of the data are the anchors of copied items (LifetimeAnchor), which are never
-    // read; so when nothing but the cell holds the source, no adapter of the data can be read or
-    // made again, and no later call finds the cell. The data of the host, or of a global, can be
-    // lent again at any time: its cell stays
-    if (m_frozen || use_count() != 1 || m_owner.expired())
+    // The registry's reference alone, for data that lives only as long as its adapters, and the
+    // reference of the source's own link. The only other adapters of the data are the anchors of
+    // copied items (LifetimeAnchor), which are never read; so when nothing but the cell holds the
+    // source, no adapter of the data can be read or made again, and no later call finds the cell.
+    // The data of the host, or of a global, can be lent again at any time: its cell stays
+    if (m_frozen || !m_links.empty() || m_owner.expired())
     {
         return false;
     }
@@ -172,43 +177,43 @@ bool BorrowedCell::IsUnheld() const noexcept
     {
         return false;
     }
-    // Only the source's own adapter reads the cell
-    return m_links.empty() || (m_links.size() == 1 && m_links.front() == link);
+    // Every other link owns the cell: only the source's own adapter reads it
+    return use_count() == (link && link->m_cell == this ? 2U : 1U);
+}
+
+bool BorrowedCell::OwnsItemsAlone() const noexcept
+{
+    // A pin shares the storage's object (CallExports::Pin), a value of a render or a copy of the
+    // accessor the items
+    return m_object && m_object->use_count() == 1 && (m_isList ? m_list->OwnsMutableItemsAlone() : m_map->OwnsMutableItemsAlone());
 }
 
 bool BorrowedCell::Unshare() const
 {
     if (m_frozen)
     {
-        JINJA2CPP_CELL_TRACE_EVENT("unshare", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Num("kind", 1), Trace::Num("exp", m_exportedIn), Trace::Num("call", 0),
+        JINJA2CPP_CELL_TRACE_EVENT("unshare", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Num("kind", 1), Trace::Num("exp", m_shared ? -1 : 0), Trace::Num("call", 0),
                                    Trace::Ptr("g", Trace::Space::Gen, TraceGen()));
         return false;
     }
-    // The call that handed the items out sees its own later writes, as the host does while it runs
-    if (m_exportedIn == m_registry->m_call)
+    if (OwnsItemsAlone())
     {
-        JINJA2CPP_CELL_TRACE_EVENT("unshare", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Num("kind", 2), Trace::Num("exp", m_exportedIn),
+        JINJA2CPP_CELL_TRACE_EVENT("unshare", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Num("kind", 3), Trace::Num("exp", m_shared ? -1 : 0),
                                    Trace::Num("call", m_registry->m_call), Trace::Ptr("g", Trace::Space::Gen, TraceGen()));
+        // The host let go of what ended calls handed it
+        m_shared = false;
         return true;
     }
-    if (m_isList ? m_list->OwnsMutableItemsAlone() : m_map->OwnsMutableItemsAlone())
-    {
-        JINJA2CPP_CELL_TRACE_EVENT("unshare", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Num("kind", 3), Trace::Num("exp", m_exportedIn),
-                                   Trace::Num("call", m_registry->m_call), Trace::Ptr("g", Trace::Space::Gen, TraceGen()));
-        // The host let go of what it was handed
-        m_exportedIn = 0;
-        return true;
-    }
-    // The value of the earlier call keeps the items as they were: the host holds a snapshot that
+    // A value of an ended call keeps the items as they were: the host holds a snapshot that
     // nothing writes any more (decision D8, copy on write). The mark stays until the copy is in
     // place, so a copy that fails to allocate is tried again by the next write
     InternalValue copy = m_isList ? InternalValue(ListAdapter::CreateAdapter(InternalValueList(*m_items)))
                                   : InternalValue(CreateMapAdapter(TemplateDict(*m_map->GetMutableItems())));
-    JINJA2CPP_CELL_TRACE_EVENT("unshare", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Num("kind", 4), Trace::Num("exp", m_exportedIn),
+    JINJA2CPP_CELL_TRACE_EVENT("unshare", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Num("kind", 4), Trace::Num("exp", m_shared ? -1 : 0),
                                Trace::Num("call", m_registry->m_call), Trace::Ptr("g", Trace::Space::Gen, TraceGen()));
     m_retired = std::exchange(m_storage, std::move(copy));
     Bind();
-    m_exportedIn = 0;
+    m_shared = false;
     JINJA2CPP_CELL_TRACE_EVENT("copied", Trace::Ptr("c", Trace::Space::Cell, this), Trace::Ptr("g", Trace::Space::NewGen, TraceGen()));
     return true;
 }
@@ -254,6 +259,16 @@ const BorrowedCell* CellLink::Find(const void* identity, bool isList, bool held)
 
 void CellLink::Link(const BorrowedCell& cell, bool held) const
 {
+    if (!held)
+    {
+        // A reference: the host may let go of the adapter on any thread (docs/tasks/0340)
+        intrusive_ptr_add_ref(&cell);
+        m_linkIndex = OwnsBit;
+        m_cell = &cell;
+        m_seenEpoch = Attached;
+        JINJA2CPP_CELL_TRACE_EVENT("link", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("c", Trace::Space::Cell, &cell), Trace::Num("held", 0));
+        return;
+    }
     // Pushed first: when it cannot be, the adapter stays detached and, with an epoch the counter
     // never holds, looks for the cell again at its next read
     m_seenEpoch = 0;
@@ -270,29 +285,29 @@ void CellLink::Link(const BorrowedCell& cell, bool held) const
 #else
     cell.m_links.push_back(this);
 #endif
-    m_linkIndex = static_cast<uint32_t>(cell.m_links.size() - 1) | (held ? HeldBit : 0);
+    m_linkIndex = static_cast<uint32_t>(cell.m_links.size() - 1) | HeldBit;
     m_cell = &cell;
     m_seenEpoch = Attached;
-    JINJA2CPP_CELL_TRACE_EVENT("link", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("c", Trace::Space::Cell, &cell), Trace::Num("held", held ? 1 : 0));
-    if (held)
-    {
-        // The thread keeps the globals' adapters for its next render, which may run inside this one
-        RenderWorkspace::ForThisThread().GlobalAttached();
-    }
+    JINJA2CPP_CELL_TRACE_EVENT("link", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("c", Trace::Space::Cell, &cell), Trace::Num("held", 1));
+    // The thread keeps the globals' adapters for its next render, which may run inside this one
+    RenderWorkspace::ForThisThread().GlobalAttached();
 }
 
 void CellLink::Unlink() const noexcept
 {
     const auto* cell = m_cell;
-    JINJA2CPP_CELL_TRACE_EVENT("unlink", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("c", Trace::Space::Cell, cell), Trace::Num("frozen", cell->m_frozen ? 1 : 0));
+    const bool owns = (m_linkIndex & OwnsBit) != 0;
+    JINJA2CPP_CELL_TRACE_EVENT("unlink", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("c", Trace::Space::Cell, cell), Trace::Num("owns", owns ? 1 : 0));
     m_cell = nullptr;
     m_seenEpoch = 0;
-    if (cell->m_frozen)
+    if (owns)
     {
-        // Any thread: the reference is atomic, and a frozen cell's links are not listed
+        // Any thread: the reference is atomic, and the cell's list does not have the link
+        m_linkIndex = 0;
         intrusive_ptr_release(cell);
         return;
     }
+    // A global's link, on the thread of the render that made the cell
     auto& links = cell->m_links;
     const auto index = m_linkIndex & ~HeldBit;
     const auto* last = links.back();
@@ -303,7 +318,7 @@ void CellLink::Unlink() const noexcept
 
 void CellLink::TraverseFrozen(const TraverseFn& fn) const
 {
-    if (m_cell && m_cell->m_frozen)
+    if (m_cell && (m_linkIndex & OwnsBit) != 0 && m_cell->m_frozen)
     {
         fn(m_cell);
     }
@@ -311,12 +326,13 @@ void CellLink::TraverseFrozen(const TraverseFn& fn) const
 
 void CellLink::Inherit(const CellLink& other) noexcept
 {
-    if (!other.m_cell->m_frozen)
+    if ((other.m_linkIndex & OwnsBit) == 0 || !other.m_cell->m_frozen)
     {
         return;
     }
     intrusive_ptr_add_ref(other.m_cell);
     m_cell = other.m_cell;
+    m_linkIndex = OwnsBit;
     m_seenEpoch = Attached;
     JINJA2CPP_CELL_TRACE_EVENT("inherit", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("from", Trace::Space::Link, &other), Trace::Ptr("c", Trace::Space::Cell, m_cell));
 }
@@ -340,7 +356,7 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     {
         cells->m_cells = std::make_unique<BorrowedCells::Table>();
     }
-    auto cell = MakeRef<BorrowedCell>(std::move(storage), self, isList, *cells, std::move(owner));
+    auto cell = MakeRef<BorrowedCell>(std::move(storage), self, identity, isList, *cells, std::move(owner));
     if (isList ? !cell->m_items : !cell->m_map)
     {
         JINJA2CPP_CELL_TRACE_EVENT("adoptno", Trace::Ptr("a", Trace::Space::Link, this), Trace::Num("why", 3), Trace::Num("c", 0));
@@ -468,55 +484,18 @@ void BorrowedCells::Finish(CycleCollector* collector) noexcept
     {
         cell->m_source = InternalValue();
     }
-    // Then a global's adapter detaches, as the thread's snapshot outlives the render (0211), and
-    // every other link still there is held from outside the render: by a value the host keeps,
-    // another cell's items, or a cycle. It keeps the frozen cell
+    // Then a global's adapter detaches, as the thread's snapshot outlives the render (0211). Every
+    // other link owns its cell and keeps it frozen: a value the host keeps holds it, another
+    // cell's items, or a cycle
     for (const auto& [identity, cell] : *m_cells)
     {
-#ifdef JINJA2CPP_CELL_TRACE
-        if (detail::CellTrace::On())
-        {
-            // Finish does not throw: a list that cannot be allocated leaves a gap the check reports
-            std::vector<const CellLink*> held;
-            bool listed = true;
-            try
-            {
-                for (const auto* link : cell->m_links)
-                {
-                    if ((link->m_linkIndex & CellLink::HeldBit) != 0)
-                    {
-                        held.push_back(link);
-                    }
-                }
-            }
-            catch (const std::bad_alloc&)
-            {
-                listed = false;
-            }
-            if (listed)
-            {
-                JINJA2CPP_CELL_TRACE_EVENT("freeze", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Ptr("c", Trace::Space::Cell, cell.get()),
-                                           Trace::Links("links", cell->m_links.data(), cell->m_links.size()),
-                                           Trace::Links("held", held.data(), held.size()));
-            }
-            else
-            {
-                JINJA2CPP_CELL_TRACE_EVENT("lost", Trace::Ptr("c", Trace::Space::Cell, cell.get()));
-            }
-        }
-#endif
+        JINJA2CPP_CELL_TRACE_EVENT("freeze", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Ptr("c", Trace::Space::Cell, cell.get()),
+                                   Trace::Links("held", cell->m_links.data(), cell->m_links.size()));
         cell->m_frozen = true;
         for (const auto* link : cell->m_links)
         {
-            if ((link->m_linkIndex & CellLink::HeldBit) != 0)
-            {
-                link->m_cell = nullptr;
-                link->m_seenEpoch = 0;
-            }
-            else
-            {
-                intrusive_ptr_add_ref(cell.get());
-            }
+            link->m_cell = nullptr;
+            link->m_seenEpoch = 0;
             link->m_linkIndex = 0;
         }
         cell->m_links.clear();
@@ -549,6 +528,243 @@ void BorrowedCells::Finish(CycleCollector* collector) noexcept
     // An adapter that read a cell of this render, or found none while it ran, looks again
     [[maybe_unused]] const auto epoch = detail::CellCounters::NextEpoch();
     JINJA2CPP_CELL_TRACE_EVENT("finished", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("e", epoch), Trace::Num("live", detail::CellCounters::Live()));
+}
+
+const IntrusivePtr<CallExports>& BorrowedCells::Exports()
+{
+    if (!m_exports)
+    {
+        m_exports = MakeRef<CallExports>(*this);
+    }
+    return m_exports;
+}
+
+void BorrowedCells::PinExports() noexcept
+{
+    if (m_exports)
+    {
+        m_exports->Pin();
+        m_exports.reset();
+    }
+}
+
+IntrusivePtr<const CallExports> ExportOfContainer()
+{
+    auto* cells = CycleCollector::CurrentCells();
+    if (!cells || !cells->InCall())
+    {
+        return {};
+    }
+    const auto& exports = cells->Exports();
+    exports->m_containers = true;
+    return exports;
+}
+
+const InternalValue* CallExports::Storage(const void* identity, bool isList) const noexcept
+{
+    if (m_registry)
+    {
+        // The call runs: its thread reads the module's cell as it is now
+        if (!m_registry->m_cells)
+        {
+            return nullptr;
+        }
+        const auto found = m_registry->m_cells->find(identity);
+        if (found == m_registry->m_cells->end() || found->second->IsList() != isList || found->second->IsFrozen())
+        {
+            return nullptr;
+        }
+        return &found->second->Storage();
+    }
+    const auto found = std::lower_bound(m_pins.begin(), m_pins.end(), identity, [](const Pinned& pin, const void* key) { return std::less<>()(pin.identity, key); });
+    return found != m_pins.end() && found->identity == identity && found->isList == isList ? &found->storage : nullptr;
+}
+
+void CallExports::AddCell(const void* identity, bool isList)
+{
+    // A call that hands out the same data again (a loop, or the next call of Module/keep) notes it once
+    for (const auto& [noted, list] : m_cells)
+    {
+        if (noted == identity && list == isList)
+        {
+            return;
+        }
+    }
+    m_cells.emplace_back(identity, isList);
+    // The pin of the cells handed out needs no allocation of its own (Pin)
+    m_pins.reserve(m_cells.size());
+}
+
+bool CallExports::PinCell(const BorrowedCell& cell)
+{
+    for (const auto& pin : m_pins)
+    {
+        if (pin.identity == cell.m_identity && pin.isList == cell.IsList())
+        {
+            return false;
+        }
+    }
+    // Shares the storage's object, so that the next write copies the items (BorrowedCell::OwnsItemsAlone)
+    m_pins.push_back(Pinned{ cell.m_identity, cell.IsList(), cell.Storage() });
+    JINJA2CPP_CELL_TRACE_EVENT("pin", Trace::Ptr("reg", Trace::Space::Reg, m_registry), Trace::Ptr("c", Trace::Space::Cell, &cell), Trace::Ptr("g", Trace::Space::Gen, cell.TraceGen()),
+                               Trace::Num("call", m_registry->m_call));
+    return true;
+}
+
+namespace
+{
+// The cell of the module's data `item` names, if `item` is an adapter of data with a cell in
+// `registry`: by the identity of the data, never by the adapter's link
+const BorrowedCell* CellOfItem(const BorrowedCells::Table& table, const InternalValue& item)
+{
+    const void* identity = nullptr;
+    bool isList = true;
+    if (auto list = AsList(item))
+    {
+        const auto* accessor = list->GetAccessor();
+        if (!accessor || !accessor->GetCellLink() || accessor->IsGlobalData())
+        {
+            return nullptr;
+        }
+        identity = accessor->GetIdentity();
+    }
+    else if (auto map = AsMap(item))
+    {
+        const auto* accessor = map->GetAccessor();
+        if (!accessor || !accessor->GetCellLink() || accessor->IsGlobalData())
+        {
+            return nullptr;
+        }
+        identity = accessor->GetIdentity();
+        isList = false;
+    }
+    else
+    {
+        return nullptr;
+    }
+    const auto found = table.find(identity);
+    return found != table.end() && found->second->IsList() == isList && !found->second->IsFrozen() ? found->second.get() : nullptr;
+}
+
+// The identity of a list or dict the template owns, null for any other value
+const void* ContainerIdentity(const InternalValue& item)
+{
+    if (auto list = AsList(item))
+    {
+        const auto* accessor = list->GetAccessor();
+        return accessor && !accessor->GetCellLink() && accessor->GetMutableItems() ? accessor->GetIdentity() : nullptr;
+    }
+    if (auto map = AsMap(item))
+    {
+        const auto* accessor = map->GetAccessor();
+        return accessor && !accessor->GetCellLink() && accessor->GetMutableItems() ? accessor->GetIdentity() : nullptr;
+    }
+    return nullptr;
+}
+
+template<typename Fn>
+void ForEachItem(const InternalValue& container, Fn&& fn)
+{
+    if (auto list = AsList(container))
+    {
+        if (const auto* items = list->GetMutableItems())
+        {
+            for (const auto& item : *items)
+            {
+                fn(item);
+            }
+        }
+    }
+    else if (auto map = AsMap(container))
+    {
+        if (const auto* dict = map->GetMutableItems())
+        {
+            for (const auto& entry : *dict)
+            {
+                fn(entry.second);
+            }
+        }
+    }
+}
+} // namespace
+
+void CallExports::Pin() noexcept
+{
+    const auto* registry = m_registry;
+    try
+    {
+        if (registry && registry->m_cells)
+        {
+            const auto& table = *registry->m_cells;
+            // The cells handed out: AddCell reserved their room, so that these need no allocation
+            for (const auto& [identity, isList] : m_cells)
+            {
+                const auto found = table.find(identity);
+                if (found != table.end() && found->second->IsList() == isList && !found->second->IsFrozen())
+                {
+                    PinCell(*found->second);
+                }
+            }
+            // Then the items of what the values read, for the cells of nested data: none to find
+            // when the values read every cell of the module already (Module/keep, or a list the
+            // template owns)
+            if (m_pins.size() < table.size())
+            {
+                if (m_containers)
+                {
+                    m_pins.reserve(table.size());
+                    for (const auto& [identity, cell] : table)
+                    {
+                        if (!cell->IsFrozen())
+                        {
+                            PinCell(*cell);
+                        }
+                    }
+                }
+                std::vector<InternalValue> work;
+                work.reserve(m_pins.size());
+                for (const auto& pin : m_pins)
+                {
+                    work.push_back(pin.storage);
+                }
+                std::vector<const void*> seen;
+                while (!work.empty() && m_pins.size() < table.size())
+                {
+                    const auto container = std::move(work.back());
+                    work.pop_back();
+                    ForEachItem(container, [&](const InternalValue& item) {
+                        if (const auto* cell = CellOfItem(table, item))
+                        {
+                            if (PinCell(*cell))
+                            {
+                                work.push_back(cell->Storage());
+                            }
+                        }
+                        else if (const auto* identity = ContainerIdentity(item))
+                        {
+                            if (std::find(seen.begin(), seen.end(), identity) == seen.end())
+                            {
+                                seen.push_back(identity);
+                                work.push_back(item);
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    }
+    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
+    {
+        // Out of memory: the cells handed out are pinned, and nested data whose cell could not be
+        // recorded reads the host's data
+    }
+    for (const auto& pin : m_pins)
+    {
+        registry->m_cells->find(pin.identity)->second->m_shared = true;
+    }
+    std::sort(m_pins.begin(), m_pins.end(), [](const Pinned& lhs, const Pinned& rhs) { return std::less<>()(lhs.identity, rhs.identity); });
+    m_registry = nullptr;
+    m_cells.clear();
 }
 
 } // namespace v2
