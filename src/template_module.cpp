@@ -451,7 +451,7 @@ struct TemplateModuleState
         try
         {
             // First, so that it ends last: when nothing of the call holds values any more
-            const ModuleCallCollector cycles(cells);
+            ModuleCallCollector cycles(cells);
             // Then what the call loads, which its collector sees go
             const CallScope callScope(*callback);
             // Then the module's context as the call found it, which a failed call would leave
@@ -492,6 +492,7 @@ struct TemplateModuleState
             {
                 detail::PollDeadline();
             }
+            cycles.Complete();
             return result;
         }
         catch (const std::bad_alloc&)
@@ -554,7 +555,7 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
     BasicTemplateModule<CharT> result;
     try
     {
-        const ModuleCallCollector cycles(state->cells);
+        ModuleCallCollector cycles(state->cells);
         const auto limitsScope = state->MakeLimitsScope();
         // Into result.body, which outlives the limits that keep a pointer to it
         state->Render(result.body);
@@ -569,6 +570,7 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
             // Copied within the render's limits, which bound a lazy list read out
             result.exports[name] = ExportCopier().Copy(*value);
         }
+        cycles.Complete();
     }
     catch (const std::bad_alloc&)
     {

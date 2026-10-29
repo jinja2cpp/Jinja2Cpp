@@ -333,6 +333,9 @@ private:
     mutable std::vector<const CellLink*> m_links;
 };
 
+// A registry's cells by identity (BorrowedCells::Table)
+using CellTable = robin_hood::unordered_flat_map<const void*, IntrusivePtr<const BorrowedCell>>;
+
 // What one call of a template module handed to the host (docs/tasks/0335, 0332): the values read
 // through it. While the call runs, a read goes to the module's cells, on the call's thread, so a
 // value sees every later write of the call, nested calls included. When the call ends, Pin
@@ -343,9 +346,6 @@ private:
 // storages, which nothing writes, on any thread, and data with no recorded storage reads the
 // host's data. An analogy: the host gets a window onto the module's desk while the call runs and
 // a photograph of the desk once it ends; the next writer takes a fresh sheet
-// A registry's cells by identity (BorrowedCells::Table)
-using CellTable = robin_hood::unordered_flat_map<const void*, IntrusivePtr<const BorrowedCell>>;
-
 class CallExports final : public ValueObject
 {
 public:
@@ -373,18 +373,20 @@ private:
 
     // A value handed out reads the cell of `identity`
     void AddCell(const void* identity, bool isList);
-    // The call ends: records the storages and marks their cells shared
-    void Pin() noexcept;
-    // Records the storage of a cell the values reach; false if it was recorded already
-    bool PinCell(const BorrowedCell& cell);
-    // The cells handed out, and every cell when a value reads a list or dict the template owns
-    void PinHandedOut(const CellTable& table);
+    // The call ends: records the storages of the cells the values reach and marks those cells
+    // shared. Throws std::bad_alloc (or SmallVector's length_error) with the cells recorded so far
+    void Record(const CellTable& table);
+    // Then, whatever Record did: from now on a read goes to the recorded storages only
+    void Seal() noexcept;
+    // Records the storage of a cell the values reach and marks the cell shared
+    void PinCell(const BorrowedCell& cell);
     // The cells of nested data the recorded storages reach
     void PinNested(const CellTable& table);
 
     // The registry while the call runs, null once pinned
     const BorrowedCells* m_registry;
-    // The cells the values read, by their data's identity
+    // The cells the values read, by their data's identity, as handed out: a run of the same data
+    // is noted once, other repeats when the call ends
     SmallVector<std::pair<const void*, bool>, 1> m_cells;
     // Whether a value reads a list or dict the template owns, whose items may be any of the
     // module's data: the pin then takes every cell of the module, which only copies more
@@ -525,8 +527,12 @@ public:
         JINJA2CPP_CELL_TRACE_EVENT("begin", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("call", m_call), Trace::Num("outer", outer.call));
         return outer;
     }
-    // The call ends: the values it handed out keep what they read now (CallExports::Pin)
-    void PinExports() noexcept;
+    // The call ends: the values it handed out keep what they read now (CallExports::Record).
+    // Throws std::bad_alloc when it cannot record them, so that the call fails rather than hand
+    // out values that read the host's data; the values keep what was recorded
+    void PinExports();
+    // The same for a call that failed already, whose values are best effort
+    void PinExportsOrSkip() noexcept;
     // The call BeginCall started ends: the call it nested in runs again
     void EndCall(CallFrame outer) noexcept
     {

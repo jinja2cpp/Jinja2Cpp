@@ -540,12 +540,36 @@ const IntrusivePtr<CallExports>& BorrowedCells::Exports()
     return m_exports;
 }
 
-void BorrowedCells::PinExports() noexcept
+void BorrowedCells::PinExports()
 {
-    if (m_exports)
+    if (!m_exports)
     {
-        m_exports->Pin();
-        m_exports.reset();
+        return;
+    }
+    auto exports = std::move(m_exports);
+    try
+    {
+        if (m_cells)
+        {
+            exports->Record(*m_cells);
+        }
+    }
+    catch (...)
+    {
+        exports->Seal();
+        throw;
+    }
+    exports->Seal();
+}
+
+void BorrowedCells::PinExportsOrSkip() noexcept
+{
+    try
+    {
+        PinExports();
+    }
+    catch (const std::exception&) // NOLINT(bugprone-empty-catch): the call failed already; its values keep what was recorded
+    {
     }
 }
 
@@ -583,34 +607,21 @@ const InternalValue* CallExports::Storage(const void* identity, bool isList) con
 
 void CallExports::AddCell(const void* identity, bool isList)
 {
-    // A call that hands out the same data again (a loop, or the next call of Module/keep) notes it once
-    for (const auto& [noted, list] : m_cells)
+    // A call that hands out the same data again in a row (a loop) notes it once; Record drops
+    // the other repeats
+    if (m_cells.empty() || m_cells.back() != std::pair(identity, isList))
     {
-        if (noted == identity && list == isList)
-        {
-            return;
-        }
+        m_cells.emplace_back(identity, isList);
     }
-    m_cells.emplace_back(identity, isList);
-    // The pin of the cells handed out needs no allocation of its own (Pin)
-    m_pins.reserve(m_cells.size());
 }
 
-bool CallExports::PinCell(const BorrowedCell& cell)
+void CallExports::PinCell(const BorrowedCell& cell)
 {
-    for (const auto& pin : m_pins)
-    {
-        if (pin.identity == cell.m_identity && pin.isList == cell.IsList())
-        {
-            return false;
-        }
-    }
     // Shares the storage's object, so that the next write copies the items (BorrowedCell::OwnsItemsAlone)
     m_pins.push_back(Pinned{ cell.m_identity, cell.IsList(), cell.Storage() });
     cell.m_shared = true;
     JINJA2CPP_CELL_TRACE_EVENT("pin", Trace::Ptr("reg", Trace::Space::Reg, m_registry), Trace::Ptr("c", Trace::Space::Cell, &cell), Trace::Ptr("g", Trace::Space::Gen, cell.TraceGen()),
                                Trace::Num("call", m_registry->m_call));
-    return true;
 }
 
 namespace
@@ -690,20 +701,11 @@ void ForEachItem(const InternalValue& container, const Fn& fn)
 }
 } // namespace
 
-void CallExports::PinHandedOut(const BorrowedCells::Table& table)
+void CallExports::Record(const CellTable& table)
 {
-    // AddCell reserved their room, so that these need no allocation
-    for (const auto& [identity, isList] : m_cells)
+    if (m_containers)
     {
-        const auto found = table.find(identity);
-        if (found != table.end() && found->second->IsList() == isList && !found->second->IsFrozen())
-        {
-            PinCell(*found->second);
-        }
-    }
-    if (m_containers && m_pins.size() < table.size())
-    {
-        // A list or dict the template owns may hold any of the module's data
+        // A list or dict the template owns may hold any of the module's data: every live cell
         m_pins.reserve(table.size());
         for (const auto& [identity, cell] : table)
         {
@@ -712,31 +714,56 @@ void CallExports::PinHandedOut(const BorrowedCells::Table& table)
                 PinCell(*cell);
             }
         }
+        return;
+    }
+    if (m_cells.size() > 1)
+    {
+        std::sort(m_cells.begin(), m_cells.end(), [](const auto& lhs, const auto& rhs) { return std::less<>()(lhs.first, rhs.first) || (lhs.first == rhs.first && lhs.second < rhs.second); });
+        m_cells.erase(std::unique(m_cells.begin(), m_cells.end()), m_cells.end());
+    }
+    m_pins.reserve(m_cells.size());
+    for (const auto& [identity, isList] : m_cells)
+    {
+        const auto found = table.find(identity);
+        if (found != table.end() && found->second->IsList() == isList && !found->second->IsFrozen())
+        {
+            PinCell(*found->second);
+        }
+    }
+    // Then the items of what the values read, for the cells of nested data: none to find when
+    // the values read every cell of the module already (Module/keep)
+    if (m_pins.size() < table.size())
+    {
+        PinNested(table);
     }
 }
 
-void CallExports::PinNested(const BorrowedCells::Table& table)
+void CallExports::PinNested(const CellTable& table)
 {
+    // The table's keys are the identities, so a cell is pinned at most once by its identity
+    robin_hood::unordered_flat_set<const void*> pinned;
+    pinned.reserve(m_pins.size());
     std::vector<InternalValue> work;
     work.reserve(m_pins.size());
     for (const auto& pin : m_pins)
     {
+        pinned.insert(pin.identity);
         work.push_back(pin.storage);
     }
-    std::vector<const void*> seen;
-    const auto visit = [this, &table, &work, &seen](const InternalValue& item) {
+    robin_hood::unordered_flat_set<const void*> seen;
+    const auto visit = [this, &table, &work, &pinned, &seen](const InternalValue& item) {
         if (const auto* cell = CellOfItem(table, item))
         {
-            if (PinCell(*cell))
+            if (pinned.insert(cell->m_identity).second)
             {
+                PinCell(*cell);
                 work.push_back(cell->Storage());
             }
             return;
         }
         const auto* identity = ContainerIdentity(item);
-        if (identity && std::find(seen.begin(), seen.end(), identity) == seen.end())
+        if (identity && seen.insert(identity).second)
         {
-            seen.push_back(identity);
             work.push_back(item);
         }
     };
@@ -748,32 +775,8 @@ void CallExports::PinNested(const BorrowedCells::Table& table)
     }
 }
 
-void CallExports::Pin() noexcept
+void CallExports::Seal() noexcept
 {
-    const auto* registry = m_registry;
-    if (!registry || !registry->m_cells)
-    {
-        m_registry = nullptr;
-        m_cells.clear();
-        return;
-    }
-    const auto& table = *registry->m_cells;
-    try
-    {
-        PinHandedOut(table);
-        // Then the items of what the values read, for the cells of nested data: none to find
-        // when the values read every cell of the module already (Module/keep, or a list the
-        // template owns)
-        if (m_pins.size() < table.size())
-        {
-            PinNested(table);
-        }
-    }
-    catch (const std::exception&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
-    {
-        // Out of memory (bad_alloc, or length_error from SmallVector): the cells handed out are pinned, and nested data whose cell could not be
-        // recorded reads the host's data
-    }
     if (m_pins.size() > 1)
     {
         std::sort(m_pins.begin(), m_pins.end(), [](const Pinned& lhs, const Pinned& rhs) { return std::less<>()(lhs.identity, rhs.identity); });

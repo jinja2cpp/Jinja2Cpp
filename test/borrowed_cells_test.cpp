@@ -623,6 +623,34 @@ TEST(BorrowedCellsKept, ModuleCellInsideAKeptDict)
     EXPECT_EQ("{'d': {'a': 0, 'b': 2}}", keeper.Show(1));
 }
 
+TEST(BorrowedCellsKept, ModuleWithManyCellsAndAKeptTemplateList)
+{
+    // A call that writes many of the host's lists and hands out a list it made: the end of the
+    // call records every cell of the module, each once, in time linear in their number (Codex
+    // review), and a later call's writes copy. By index: a write through a loop variable over the
+    // host's list is 0049 P3's (loops)
+    Keeper keeper;
+    ValuesList lists;
+    for (int i = 0; i != 3000; ++i)
+    {
+        lists.emplace_back(ValuesList{ 0 });
+    }
+    ValuesMap params{ { "ls", std::move(lists) } };
+    keeper.AddTo(params);
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% for i in range(3000) %}{% set _ = ls[i].append(x) %}{% endfor %}{% set _ = keep([ls[0], ls[2999]]) %}{% set _ = keep([]) %}{% endmacro %}"));
+    auto module = tpl.MakeModule(params).value();
+    for (int64_t x = 1; x != 3; ++x)
+    {
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ x };
+        module.exports["add"].As<UserCallable>().callable(callParams);
+    }
+    EXPECT_EQ("[[0, 1], [0, 1]]", keeper.Show(0));
+    EXPECT_EQ("[]", keeper.Show(1));
+    EXPECT_EQ("[[0, 1, 2], [0, 1, 2]]", keeper.Show(2));
+}
+
 TEST(BorrowedCellsKept, ModuleNestedCellInsideAKeptList)
 {
     // An item of the host's list that the call wrote (a cell of its own) inside the list it hands

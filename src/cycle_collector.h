@@ -138,10 +138,15 @@ public:
     {
         // Last in the call: what the call made is gone, and with it the adapters of its data. The
         // values the call handed out keep what they read now, before a cell of theirs is dropped
-        m_cells.PinExports();
+        // (Complete did that already, unless the call failed)
+        m_cells.PinExportsOrSkip();
         m_cells.DropUnheld();
         m_cells.EndCall(std::move(m_outerCall));
     }
+    // The call succeeded: its values keep what they read now, or the call fails with
+    // std::bad_alloc rather than hand out values that read the host's data
+    void Complete() { m_cells.PinExports(); }
+
     ModuleCallCollector(const ModuleCallCollector&) = delete;
     ModuleCallCollector(ModuleCallCollector&&) = delete;
     ModuleCallCollector& operator=(const ModuleCallCollector&) = delete;
