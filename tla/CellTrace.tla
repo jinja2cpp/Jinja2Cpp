@@ -25,23 +25,21 @@
 (***************************************************************************)
 EXTENDS Integers, Sequences, FiniteSets, TLC, CellRules, TraceLog
 
-CONSTANT FixNestedExport   \* the export mark rule with #689's shared mark (CellProtocol's)
-
 ATT == -1   \* CellLink::Attached in the log's seen epochs (UINT32_MAX)
 
 VARIABLES
     l,       \* the next event of the log
     cl,      \* cell -> its state
-    lk,      \* link -> the cell it is attached to, the epoch it saw, what it looked up
+    lk,      \* link -> the cell it is attached to, whether it owns it, the epoch it saw, what it looked up
     rg,      \* registry -> its table, its running calls, its thread
-    exr,     \* <<cell, storage, call>>: a value a module call handed to the host shares the storage
+    exr,     \* <<cell, storage>>: a value an ended module call handed to the host shares the storage
     live,    \* the cells in a table (CellCounters::s_live)
     promoted,\* the promotions so far
     bad      \* <<property, event>>: the violations seen
 
 vars == <<l, cl, lk, rg, exr, live, promoted, bad>>
 
-NoLink == [cell |-> 0, seen |-> 0, idn |-> 0, list |-> 0]
+NoLink == [cell |-> 0, own |-> FALSE, seen |-> 0, idn |-> 0, list |-> 0]
 EmptyTbl == [i \in {} |-> 0]
 
 Init ==
@@ -144,7 +142,7 @@ Find ==
     /\ E.ev = "find"
     /\ Check([LinksAgree |-> L(E.a).cell # 0,
               TableAgrees |-> E.hit # Lookup(E.cur, E.idn, E.list)])
-    /\ Next1(lk' = SetL(E.a, [cell |-> 0, seen |-> E.e, idn |-> E.idn, list |-> E.list]))
+    /\ Next1(lk' = SetL(E.a, [cell |-> 0, own |-> FALSE, seen |-> E.e, idn |-> E.idn, list |-> E.list]))
     /\ UNCHANGED <<cl, rg, exr, live, promoted>>
 
 Link ==
@@ -154,7 +152,7 @@ Link ==
                  NoUseAfterFree |-> ~cl[c].alive,
                  FrozenUnwritten |-> cl[c].frozen,
                  NoCrossThreadWrite |-> ~WriterOk(cl[c].reg, E.t)])
-       /\ Next1(/\ lk' = SetL(E.a, [L(E.a) EXCEPT !.cell = c, !.seen = ATT])
+       /\ Next1(/\ lk' = SetL(E.a, [L(E.a) EXCEPT !.cell = c, !.own = LinkOwns(E.held = 1), !.seen = ATT])
                 /\ cl' = [cl EXCEPT ![c].links = @ \cup {E.a},
                                     ![c].held = IF E.held = 1 THEN @ \cup {E.a} ELSE @])
     /\ UNCHANGED <<rg, exr, live, promoted>>
@@ -165,22 +163,24 @@ LinkFail ==
     /\ Next1(lk' = SetL(E.a, [L(E.a) EXCEPT !.seen = 0]))
     /\ UNCHANGED <<cl, rg, exr, live, promoted, bad>>
 
+\* An owning link lets go of its reference, on any thread: the count is atomic and the cell does
+\* not list the link (0340). A global's link edits the live cell's list: on the cell's writer only
 Unlink ==
     /\ E.ev = "unlink" /\ Known(E.c)
     /\ LET c == E.c IN
-       /\ Check([LinksAgree |-> L(E.a).cell # c \/ (E.frozen = 1) # cl[c].frozen
-                                \/ (~cl[c].frozen /\ E.a \notin cl[c].links),
+       /\ Check([LinksAgree |-> L(E.a).cell # c \/ (E.owns = 1) # L(E.a).own
+                                \/ (~cl[c].frozen /\ E.a \notin cl[c].links)
+                                \/ (E.owns = 0 /\ (cl[c].frozen \/ E.a \notin cl[c].held)),
                  NoUseAfterFree |-> ~cl[c].alive,
-                 \* A frozen cell's reference is atomic: any thread lets go of it
-                 NoCrossThreadWrite |-> ~cl[c].frozen /\ ~WriterOk(cl[c].reg, E.t)])
-       /\ Next1(/\ lk' = SetL(E.a, [L(E.a) EXCEPT !.cell = 0, !.seen = 0])
+                 NoCrossThreadWrite |-> E.owns = 0 /\ ~WriterOk(cl[c].reg, E.t)])
+       /\ Next1(/\ lk' = SetL(E.a, [L(E.a) EXCEPT !.cell = 0, !.own = FALSE, !.seen = 0])
                 /\ cl' = [cl EXCEPT ![c].links = @ \ {E.a}, ![c].held = @ \ {E.a}])
     /\ UNCHANGED <<rg, exr, live, promoted>>
 
 \* A copy of an adapter that reads a frozen cell reads it too
 Inherit ==
     /\ E.ev = "inherit" /\ Known(E.c)
-    /\ Check([LinksAgree |-> L(E.from).cell # E.c \/ L(E.a).cell # 0,
+    /\ Check([LinksAgree |-> L(E.from).cell # E.c \/ ~L(E.from).own \/ L(E.a).cell # 0,
               FrozenUnwritten |-> ~cl[E.c].frozen,
               NoUseAfterFree |-> ~cl[E.c].alive])
     /\ Next1(lk' = SetL(E.a, [L(E.from) EXCEPT !.seen = ATT]))
@@ -253,44 +253,56 @@ Promote ==
     /\ UNCHANGED <<cl, lk, rg, exr, live, promoted>>
 
 -----------------------------------------------------------------------------
-(* Exports and writes: BorrowedCell::ExportList/Map (NoteExport), MutableItems/Dict, Unshare *)
+(* Exports and writes: BorrowedCell::ExportList/Map, CallExports::Pin, MutableItems/Dict, Unshare *)
 
-\* exr: what the values a call handed to the host share. The host let go of every value that
-\* shares a storage when Unshare finds the items owned alone
+\* An export reads the cell, or, in the cell's own module call, through the call's CallExports
+\* until the call ends: it marks nothing (FixCallPin)
 Export ==
     /\ E.ev = "export" /\ Known(E.c)
     /\ LET c == E.c
            C == cl[c]
            own == ~C.frozen /\ C.reg = E.cur
            call == IF own THEN RunningCall(C.reg) ELSE 0
-           mark == MarkAfterExport(C.frozen, own, C.exp, call, FixNestedExport)
+       IN Check([NoUseAfterFree |-> ~C.alive,
+                 StorageAgrees |-> E.g # C.stor,
+                 CallsAgree |-> E.call # call,
+                 MarkRule |-> (E.live = 1) # ExportLive(C.frozen, own, call)])
+    /\ Next1(TRUE)
+    /\ UNCHANGED <<cl, lk, rg, exr, live, promoted>>
+
+\* exr: what the values an ended call handed to the host share. The pin at the call's end records
+\* the cell's storage and marks the cell (CallExports::Pin); which cells it reaches is the
+\* model's to check (CellProtocol's FixPinNested), not a trace's
+Pin ==
+    /\ E.ev = "pin" /\ Known(E.c) /\ E.reg \in DOMAIN rg
+    /\ LET c == E.c
+           C == cl[c]
        IN /\ Check([NoUseAfterFree |-> ~C.alive,
+                    TableAgrees |-> c \notin TblCells(E.reg),
+                    FrozenUnwritten |-> C.frozen,
                     StorageAgrees |-> E.g # C.stor,
-                    CallsAgree |-> E.call # call,
-                    MarkRule |-> E.exp0 # C.exp \/ E.exp1 # mark,
-                    NoCrossThreadWrite |-> mark # C.exp /\ ~WriterOk(C.reg, E.t)])
-          /\ Next1(/\ cl' = [cl EXCEPT ![c].exp = mark]
-                   /\ exr' = IF NoteApplies(C.frozen, own, call) THEN exr \cup {<<c, C.stor, call>>} ELSE exr)
+                    CallsAgree |-> E.call # RunningCall(E.reg),
+                    NoCrossThreadWrite |-> ~WriterOk(E.reg, E.t)])
+          /\ Next1(/\ cl' = [cl EXCEPT ![c].exp = MarkAfterPin]
+                   /\ exr' = exr \cup {<<c, C.stor>>})
     /\ UNCHANGED <<lk, rg, live, promoted>>
 
 \* A value an ended call handed to the host never changes (CellProtocol's SnapshotStable): no
-\* write in place to a storage it shares, unless the call that handed it out still runs
+\* write in place to a storage it shares
 Write ==
     /\ E.ev = "write" /\ Known(E.c)
     /\ LET c == E.c
            C == cl[c]
-           ended == {x \in exr : x[1] = c /\ x[2] = C.stor /\ x[3] \notin RunningCalls(C.reg)}
        IN Check([NoUseAfterFree |-> ~C.alive,
                  FrozenUnwritten |-> C.frozen,
                  StorageAgrees |-> E.g # C.stor,
-                 MarkRule |-> ~WritesInPlace(C.frozen, C.exp, RunningCall(C.reg)),
-                 SnapshotStable |-> ended # {},
+                 MarkRule |-> ~WritesInPlace(C.frozen, C.exp),
+                 SnapshotStable |-> <<c, C.stor>> \in exr,
                  NoCrossThreadWrite |-> ~WriterOk(C.reg, E.t)])
     /\ Next1(TRUE)
     /\ UNCHANGED <<cl, lk, rg, exr, live, promoted>>
 
-UnshareKind == CASE E.kind = 1 -> "frozen" [] E.kind = 2 -> "own" [] E.kind = 3 -> "released"
-                 [] OTHER -> "copy"
+UnshareKind == CASE E.kind = 1 -> "frozen" [] E.kind = 3 -> "released" [] OTHER -> "copy"
 
 Unshare ==
     /\ E.ev = "unshare" /\ Known(E.c)
@@ -302,10 +314,10 @@ Unshare ==
                     StorageAgrees |-> E.g # C.stor,
                     CallsAgree |-> E.call # call,
                     MarkRule |-> E.exp # C.exp \/ ~NeedsUnshare(C.frozen, C.exp)
-                                 \/ k \notin UnshareOutcomes(C.frozen, C.exp, call),
+                                 \/ k \notin UnshareOutcomes(C.frozen, C.exp),
                     NoCrossThreadWrite |-> ~C.frozen /\ ~WriterOk(C.reg, E.t)])
           /\ Next1(/\ cl' = [cl EXCEPT ![c].exp = MarkAfterUnshare(k, @)]
-                   /\ exr' = IF k = "released" THEN {x \in exr : x[1] # c \/ x[2] # C.stor} ELSE exr)
+                   /\ exr' = IF k = "released" THEN exr \ {<<c, C.stor>>} ELSE exr)
     /\ UNCHANGED <<lk, rg, live, promoted>>
 
 \* The copy is in place: the cell's storage is a new generation
@@ -322,7 +334,8 @@ Drop ==
     /\ LET c == E.c
            C == cl[c]
        IN /\ Check([TableAgrees |-> c \notin TblCells(E.reg),
-                    LinksAgree |-> AsSet(E.links) # C.links,
+                    \* The code lists a global's links; the others own the cell
+                    LinksAgree |-> AsSet(E.links) # C.held,
                     DropRule |-> ~MayDrop(C.owned, C.frozen, C.links, C.src),
                     NoCrossThreadWrite |-> ~WriterOk(E.reg, E.t)])
           /\ Next1(/\ cl' = [cl EXCEPT ![c].inTable = FALSE]
@@ -342,7 +355,8 @@ Freeze ==
            C == cl[c]
            detach == {a \in C.links : FinishDetaches(a \in C.held)}
        IN /\ Check([TableAgrees |-> c \notin TblCells(E.reg),
-                    LinksAgree |-> AsSet(E.links) # C.links \/ AsSet(E.held) # C.held,
+                    \* The code lists a global's links; the others own the cell and keep it frozen
+                    LinksAgree |-> AsSet(E.held) # C.held \/ \E a \in C.links \ C.held : ~L(a).own,
                     \* A module's cells freeze when the module goes, outside its calls
                     NoCrossThreadWrite |-> IF rg[E.reg].module THEN Calls(E.reg) # <<>>
                                            ELSE rg[E.reg].thr # E.t])
@@ -386,7 +400,7 @@ Next ==
         \/ RegNew \/ RegFree \/ BeginCall \/ EndCall
         \/ Skip \/ Hit \/ Find \/ Link \/ LinkFail \/ Unlink \/ Inherit \/ DieAttached
         \/ CellNew \/ AdoptNo \/ Adopt \/ AdoptUndo \/ Promote
-        \/ Export \/ Write \/ Unshare \/ Copied
+        \/ Export \/ Pin \/ Write \/ Unshare \/ Copied
         \/ Drop \/ Dropped \/ Freeze \/ Finish \/ Finished \/ Free
     \/ Done
 

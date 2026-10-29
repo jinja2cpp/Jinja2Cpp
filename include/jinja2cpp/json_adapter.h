@@ -558,9 +558,9 @@ Value MakeValue(const Ref<J>& ref)
             return Value();
         }
     case JsonKind::Array:
-        return Value(GenericList([accessor = ArrayAccessor<J>(ref)]() { return &accessor; }));
+        return Value(GenericList(std::make_shared<const ArrayAccessor<J>>(ref)));
     case JsonKind::Object:
-        return Value(GenericMap([accessor = ObjectAccessor<J>(ref)]() { return &accessor; }));
+        return Value(GenericMap(std::make_shared<const ObjectAccessor<J>>(ref)));
     }
     return Value();
 }

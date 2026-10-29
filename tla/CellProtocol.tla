@@ -53,8 +53,10 @@ CONSTANTS
     FixModuleLinksOwn,    \* 0332: an adapter's link to a module's cell is an owning reference,
                           \* as a link to a frozen cell is, so its release writes no list of links
     FixGenericOwner,      \* 0336: a generic container's adapter tells the cell its owner
-    FixPinOnAttach,       \* 0340: a render's live cell holds the adapters linked to it until Finish,
-                          \* so a host thread's drop is never the last reference to one
+    FixPinOnAttach,       \* 0340 option (a): a render's live cell holds the adapters linked to it
+                          \* until Finish, so a host thread's drop is never the last reference to one
+    FixLinksOwn,          \* 0340 as the C++ does it: every link but a global's owns its cell, a
+                          \* render's too, so a host thread's drop is a release, never a write
     HostHandoff,          \* the host may hand what it kept to another thread while the call runs
     MaxCallId, MaxEpoch,  \* the call id and the epoch wrap past these (0341, 0342)
     \* Shapes: inside a module call, keep([x]) (0332) and writes to a nested item (0332). Outside
@@ -199,12 +201,15 @@ Snap(t, d, done) ==
 -----------------------------------------------------------------------------
 (* Reachability: the reference counts *)
 
-\* A link holds its cell: a frozen one, and a module's with FixModuleLinksOwn. Its release is then
-\* a reference count, not a write of the cell's list of links
-OwningLink(c) == cl[c].frozen \/ (FixModuleLinksOwn /\ cl[c].reg = ModReg)
+\* A link holds its cell: a frozen one, a module's with FixModuleLinksOwn, and with FixLinksOwn any
+\* cell unless the adapter is a global's. Its release is then a reference count, not a write of
+\* the cell's list of links
+OwningLink(a) == LET c == ad[a].cell
+                 IN cl[c].frozen \/ (FixModuleLinksOwn /\ cl[c].reg = ModReg)
+                    \/ (FixLinksOwn /\ ~ad[a].held)
 
 Succ(n) ==
-    CASE n[1] = "a" -> IF ad[n[2]].cell # 0 /\ OwningLink(ad[n[2]].cell)
+    CASE n[1] = "a" -> IF ad[n[2]].cell # 0 /\ OwningLink(n[2])
                        THEN {<<"c", ad[n[2]].cell>>} ELSE {}
       \* A cell holds the accessors of its storages; an accessor holds its item block
       [] n[1] = "c" -> {<<"x", cl[n[2]].stor>>}
@@ -240,7 +245,7 @@ GC ==
     /\ dirty /\ InBound
     /\ LET R == Reach
            deadA == {a \in AdIds : ad[a].alive /\ <<"a", a>> \notin R}
-           unlinked == {c \in CellIds : cl[c].alive /\ ~OwningLink(c) /\ cl[c].links \cap deadA # {}}
+           unlinked == {c \in CellIds : cl[c].alive /\ \E a \in cl[c].links \cap deadA : ~OwningLink(a)}
            cl2 == [c \in CellIds |-> [cl[c] EXCEPT !.alive = @ /\ <<"c", c>> \in R,
                                                    !.links = @ \ deadA]]
            ad2 == [a \in AdIds |-> [ad[a] EXCEPT !.alive = @ /\ <<"a", a>> \in R]]

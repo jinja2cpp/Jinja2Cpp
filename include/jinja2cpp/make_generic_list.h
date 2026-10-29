@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <functional>
 #include <iterator>
+#include <memory>
 #include <optional>
 #include <type_traits>
 #include <utility>
@@ -451,24 +452,24 @@ private:
 template<typename It1, typename It2>
 GenericList MakeGenericList(const It1& it1, const It2& it2, std::input_iterator_tag)
 {
-    return GenericList([accessor = InputIteratorListAccessor<It1, It2>(std::move(it1), std::move(it2))]() { return &accessor; });
+    return GenericList(std::make_shared<const InputIteratorListAccessor<It1, It2>>(std::move(it1), std::move(it2)));
 }
 
 template<typename It1, typename It2>
 GenericList MakeGenericList(It1 it1, It2 it2, std::random_access_iterator_tag)
 {
-    return GenericList([accessor = RandomIteratorListAccessor<It1, It2>(std::move(it1), std::move(it2))]() { return &accessor; });
+    return GenericList(std::make_shared<const RandomIteratorListAccessor<It1, It2>>(std::move(it1), std::move(it2)));
 }
 
 template<typename It1, typename It2, typename Category>
 GenericList MakeGenericList(It1 it1, It2 it2, Category)
 {
-    return GenericList([accessor = ForwardIteratorListAccessor<It1, It2>(std::move(it1), std::move(it2))]() { return &accessor; });
+    return GenericList(std::make_shared<const ForwardIteratorListAccessor<It1, It2>>(std::move(it1), std::move(it2)));
 }
 
 inline GenericList MakeGeneratedList(ListGenerator&& fn)
 {
-    return GenericList([accessor = GeneratedListAccessor(std::move(fn))]() { return &accessor; });
+    return GenericList(std::make_shared<const GeneratedListAccessor>(std::move(fn)));
 }
 } // namespace detail
 

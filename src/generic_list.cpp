@@ -8,7 +8,7 @@ inline namespace v2
 
 GenericList::iterator GenericList::begin() const
 {
-    return m_accessor && m_accessor() ? detail::GenericListIterator(m_accessor()->CreateEnumerator()) : detail::GenericListIterator();
+    return m_accessor ? detail::GenericListIterator(m_accessor->CreateEnumerator()) : detail::GenericListIterator();
 }
 
 GenericList::iterator GenericList::end() const // NOLINT(readability-convert-member-functions-to-static): container API
