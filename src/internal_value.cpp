@@ -1539,46 +1539,61 @@ private:
     InternalValue m_container;
 };
 
+// The module's data, or the host's when the module has no cell of it; null for plain data
+template<typename Accessor>
+std::optional<Value> CallExportList(const IntrusivePtr<const CallExports>& exports, const Accessor* accessor, const InternalValue& item)
+{
+    if (accessor->GetCellLink())
+    {
+        if (!accessor->IsGlobalData() && exports->Storage(accessor->GetIdentity(), true))
+        {
+            return Value(ExportCallList(exports, accessor->GetIdentity(), InternalValue()));
+        }
+        return Value(accessor->CreateHostGenericList());
+    }
+    if (accessor->GetMutableItems())
+    {
+        return Value(ExportCallList(exports, nullptr, item));
+    }
+    return std::nullopt;
+}
+
+template<typename Accessor>
+std::optional<Value> CallExportMap(const IntrusivePtr<const CallExports>& exports, const Accessor* accessor, const InternalValue& item)
+{
+    if (accessor->GetCellLink())
+    {
+        if (!accessor->IsGlobalData() && exports->Storage(accessor->GetIdentity(), false))
+        {
+            return Value(ExportCallMap(exports, accessor->GetIdentity(), InternalValue()));
+        }
+        return Value(accessor->CreateHostGenericMap());
+    }
+    if (accessor->GetMutableItems())
+    {
+        return Value(ExportCallMap(exports, nullptr, item));
+    }
+    return std::nullopt;
+}
+
 Value CallExportItem(const IntrusivePtr<const CallExports>& exports, const InternalValue& item)
 {
+    std::optional<Value> exported;
     if (auto list = AsList(item))
     {
         if (const auto* accessor = list->GetAccessor())
         {
-            if (accessor->GetCellLink())
-            {
-                // The module's data, or the host's when the module has no cell of it
-                if (!accessor->IsGlobalData() && exports->Storage(accessor->GetIdentity(), true))
-                {
-                    return Value(ExportCallList(exports, accessor->GetIdentity(), InternalValue()));
-                }
-                return Value(accessor->CreateHostGenericList());
-            }
-            if (accessor->GetMutableItems())
-            {
-                return Value(ExportCallList(exports, nullptr, item));
-            }
+            exported = CallExportList(exports, accessor, item);
         }
     }
     else if (auto map = AsMap(item))
     {
         if (const auto* accessor = map->GetAccessor())
         {
-            if (accessor->GetCellLink())
-            {
-                if (!accessor->IsGlobalData() && exports->Storage(accessor->GetIdentity(), false))
-                {
-                    return Value(ExportCallMap(exports, accessor->GetIdentity(), InternalValue()));
-                }
-                return Value(accessor->CreateHostGenericMap());
-            }
-            if (accessor->GetMutableItems())
-            {
-                return Value(ExportCallMap(exports, nullptr, item));
-            }
+            exported = CallExportMap(exports, accessor, item);
         }
     }
-    return IntValue2Value(item);
+    return exported ? std::move(*exported) : IntValue2Value(item);
 }
 
 // The owner an export of data held by `holder` keeps (ExportListView)

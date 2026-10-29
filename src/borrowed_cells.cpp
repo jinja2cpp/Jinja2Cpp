@@ -185,7 +185,7 @@ bool BorrowedCell::OwnsItemsAlone() const noexcept
 {
     // A pin shares the storage's object (CallExports::Pin), a value of a render or a copy of the
     // accessor the items
-    return m_object && m_object->use_count() == 1 && (m_isList ? m_list->OwnsMutableItemsAlone() : m_map->OwnsMutableItemsAlone());
+    return m_object != nullptr && m_object->use_count() == 1 && (m_isList ? m_list->OwnsMutableItemsAlone() : m_map->OwnsMutableItemsAlone());
 }
 
 bool BorrowedCell::Unshare() const
@@ -663,7 +663,7 @@ const void* ContainerIdentity(const InternalValue& item)
 }
 
 template<typename Fn>
-void ForEachItem(const InternalValue& container, Fn&& fn)
+void ForEachItem(const InternalValue& container, const Fn& fn)
 {
     if (auto list = AsList(container))
     {
@@ -688,69 +688,83 @@ void ForEachItem(const InternalValue& container, Fn&& fn)
 }
 } // namespace
 
+void CallExports::PinHandedOut(const BorrowedCells::Table& table)
+{
+    // AddCell reserved their room, so that these need no allocation
+    for (const auto& [identity, isList] : m_cells)
+    {
+        const auto found = table.find(identity);
+        if (found != table.end() && found->second->IsList() == isList && !found->second->IsFrozen())
+        {
+            PinCell(*found->second);
+        }
+    }
+    if (m_containers && m_pins.size() < table.size())
+    {
+        // A list or dict the template owns may hold any of the module's data
+        m_pins.reserve(table.size());
+        for (const auto& [identity, cell] : table)
+        {
+            if (!cell->IsFrozen())
+            {
+                PinCell(*cell);
+            }
+        }
+    }
+}
+
+void CallExports::PinNested(const BorrowedCells::Table& table)
+{
+    std::vector<InternalValue> work;
+    work.reserve(m_pins.size());
+    for (const auto& pin : m_pins)
+    {
+        work.push_back(pin.storage);
+    }
+    std::vector<const void*> seen;
+    const auto visit = [this, &table, &work, &seen](const InternalValue& item) {
+        if (const auto* cell = CellOfItem(table, item))
+        {
+            if (PinCell(*cell))
+            {
+                work.push_back(cell->Storage());
+            }
+            return;
+        }
+        const auto* identity = ContainerIdentity(item);
+        if (identity && std::find(seen.begin(), seen.end(), identity) == seen.end())
+        {
+            seen.push_back(identity);
+            work.push_back(item);
+        }
+    };
+    while (!work.empty() && m_pins.size() < table.size())
+    {
+        const auto container = std::move(work.back());
+        work.pop_back();
+        ForEachItem(container, visit);
+    }
+}
+
 void CallExports::Pin() noexcept
 {
     const auto* registry = m_registry;
+    if (!registry || !registry->m_cells)
+    {
+        m_registry = nullptr;
+        m_cells.clear();
+        return;
+    }
+    const auto& table = *registry->m_cells;
     try
     {
-        if (registry && registry->m_cells)
+        PinHandedOut(table);
+        // Then the items of what the values read, for the cells of nested data: none to find
+        // when the values read every cell of the module already (Module/keep, or a list the
+        // template owns)
+        if (m_pins.size() < table.size())
         {
-            const auto& table = *registry->m_cells;
-            // The cells handed out: AddCell reserved their room, so that these need no allocation
-            for (const auto& [identity, isList] : m_cells)
-            {
-                const auto found = table.find(identity);
-                if (found != table.end() && found->second->IsList() == isList && !found->second->IsFrozen())
-                {
-                    PinCell(*found->second);
-                }
-            }
-            // Then the items of what the values read, for the cells of nested data: none to find
-            // when the values read every cell of the module already (Module/keep, or a list the
-            // template owns)
-            if (m_pins.size() < table.size())
-            {
-                if (m_containers)
-                {
-                    m_pins.reserve(table.size());
-                    for (const auto& [identity, cell] : table)
-                    {
-                        if (!cell->IsFrozen())
-                        {
-                            PinCell(*cell);
-                        }
-                    }
-                }
-                std::vector<InternalValue> work;
-                work.reserve(m_pins.size());
-                for (const auto& pin : m_pins)
-                {
-                    work.push_back(pin.storage);
-                }
-                std::vector<const void*> seen;
-                while (!work.empty() && m_pins.size() < table.size())
-                {
-                    const auto container = std::move(work.back());
-                    work.pop_back();
-                    ForEachItem(container, [&](const InternalValue& item) {
-                        if (const auto* cell = CellOfItem(table, item))
-                        {
-                            if (PinCell(*cell))
-                            {
-                                work.push_back(cell->Storage());
-                            }
-                        }
-                        else if (const auto* identity = ContainerIdentity(item))
-                        {
-                            if (std::find(seen.begin(), seen.end(), identity) == seen.end())
-                            {
-                                seen.push_back(identity);
-                                work.push_back(item);
-                            }
-                        }
-                    });
-                }
-            }
+            PinNested(table);
         }
     }
     catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
@@ -760,7 +774,7 @@ void CallExports::Pin() noexcept
     }
     for (const auto& pin : m_pins)
     {
-        registry->m_cells->find(pin.identity)->second->m_shared = true;
+        table.find(pin.identity)->second->m_shared = true;
     }
     std::sort(m_pins.begin(), m_pins.end(), [](const Pinned& lhs, const Pinned& rhs) { return std::less<>()(lhs.identity, rhs.identity); });
     m_registry = nullptr;

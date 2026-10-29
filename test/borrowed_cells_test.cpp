@@ -739,7 +739,7 @@ TEST(BorrowedCellsKept, KeptListDroppedOnAnotherThreadWhileTheRenderRuns)
         {
             std::vector<Value> mine;
             {
-                const std::lock_guard<std::mutex> lock(guard);
+                const std::scoped_lock lock(guard);
                 mine.swap(queue);
             }
             mine.clear();
@@ -752,7 +752,7 @@ TEST(BorrowedCellsKept, KeptListDroppedOnAnotherThreadWhileTheRenderRuns)
         ValuesMap params{ { "l", ValuesList{ Value(ValuesList{ 0 }) } } };
         params["keep"] = UserCallable(
             [&](const UserCallableParams& p) {
-                const std::lock_guard<std::mutex> lock(guard);
+                const std::scoped_lock lock(guard);
                 queue.push_back(p["v"]);
                 return Value();
             },

@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <memory>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace jinja2
@@ -341,6 +342,9 @@ private:
 // storages, which nothing writes, on any thread, and data with no recorded storage reads the
 // host's data. An analogy: the host gets a window onto the module's desk while the call runs and
 // a photograph of the desk once it ends; the next writer takes a fresh sheet
+// A registry's cells by identity (BorrowedCells::Table)
+using CellTable = robin_hood::unordered_flat_map<const void*, IntrusivePtr<const BorrowedCell>>;
+
 class CallExports final : public ValueObject
 {
 public:
@@ -372,6 +376,10 @@ private:
     void Pin() noexcept;
     // Records the storage of a cell the values reach; false if it was recorded already
     bool PinCell(const BorrowedCell& cell);
+    // The cells handed out, and every cell when a value reads a list or dict the template owns
+    void PinHandedOut(const CellTable& table);
+    // The cells of nested data the recorded storages reach
+    void PinNested(const CellTable& table);
 
     // The registry while the call runs, null once pinned
     const BorrowedCells* m_registry;
@@ -493,7 +501,7 @@ public:
     }
 
     // The cells by the identity of the host's data (IListAccessor::GetIdentity)
-    using Table = robin_hood::unordered_flat_map<const void*, IntrusivePtr<const BorrowedCell>>;
+    using Table = CellTable;
 
     // The state of the call a nested call goes back to
     struct CallFrame
@@ -519,7 +527,7 @@ public:
     // The call ends: the values it handed out keep what they read now (CallExports::Pin)
     void PinExports() noexcept;
     // The call BeginCall started ends: the call it nested in runs again
-    void EndCall(CallFrame&& outer) noexcept
+    void EndCall(CallFrame outer) noexcept
     {
         JINJA2CPP_CELL_TRACE_EVENT("end", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("call", m_call), Trace::Num("outer", outer.call));
         m_call = outer.call;
