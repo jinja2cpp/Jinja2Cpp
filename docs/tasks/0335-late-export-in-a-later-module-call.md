@@ -37,7 +37,9 @@ in a call with no earlier snapshot needs no holder, so `Module/keep` keeps its a
 The model's `no-call-pin` run (`tla/check.py`, formerly `open-0335-late-export`) gives this task's
 counterexample; with the design below modelled, every pass run checks `ExportKeepsCallState`.
 
-**Design (model-first, 0338 step A; for Ruslan to decide).** Modelled in `tla/CellProtocol.tla`
+**Decision (Ruslan, 2026-10-29).** Call-end pinning as designed below (`FixCallPin`); it also closes 0341. Next: the C++ step.
+
+**Design (model-first, 0338 step A; decided 2026-10-29).** Modelled in `tla/CellProtocol.tla`
 as `FixCallPin`; see `tla/README.md`, "Designs of the open tasks".
 
 A module call's exports are *live* while the call runs and *pinned* when it ends. An analogy: the

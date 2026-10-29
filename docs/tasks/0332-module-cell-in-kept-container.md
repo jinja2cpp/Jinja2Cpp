@@ -29,7 +29,9 @@ its comment).
   values; at the next call's first write to any cell, copy every cell whose links include one
   held from outside the module's context (needs a way to tell those links apart).
 
-**Design (model-first, 0338 step A; for Ruslan to decide).** The pin of 0335 (`FixCallPin`) covers
+**Decision (Ruslan, 2026-10-29).** Call-end pinning (0335's design) plus owning links to module cells (`FixModuleLinksOwn`); 0340 takes its option (a), `FixPinOnAttach`. Next: the C++ step.
+
+**Design (model-first, 0338 step A; decided 2026-10-29).** The pin of 0335 (`FixCallPin`) covers
 `keep([l])` and nested items as well: the pin resolves each item of an exported template container,
 and each nested item of an exported list, by identity, so the host's value keeps the state at the
 call's end and later calls copy before they write. Two lifetime rules come with it, since the

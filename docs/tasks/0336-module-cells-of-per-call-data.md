@@ -27,7 +27,9 @@ container is the accessor's only owner (an internal accessor interface the libra
 `MakeGenericList` implements, so no public ABI change), pass it to `CellLink::Adopt` as the
 `ValuesListAdapter` does with `AdaptersOwner`, and let `IsUnheld` drop such a cell.
 
-**Design (model-first, 0338 step A; for Ruslan to decide).** The proposal above, with one
+**Decision (Ruslan, 2026-10-29).** The generic-owner rule with the host-copy test (`FixGenericOwner`). Next: the C++ step.
+
+**Design (model-first, 0338 step A; decided 2026-10-29).** The proposal above, with one
 condition the model shows is needed: the cell may be dropped only when the generic adapter's copy is
 the accessor's **only** owner. If the host keeps its own copy of the `GenericList`, it can lend the
 same container to a later call, which must see this call's writes (0049 P2), so the cell stays.
