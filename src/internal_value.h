@@ -55,7 +55,7 @@ class ReferenceWrapper
 public:
     using type = T;
 
-    ReferenceWrapper(T& ref) noexcept // NOLINT(google-explicit-constructor)
+    ReferenceWrapper(T& ref JINJA2CPP_LIFETIMEBOUND) noexcept // NOLINT(google-explicit-constructor)
         : m_ptr(std::addressof(ref))
     {
     }
@@ -552,7 +552,7 @@ class FunctionRef<R(Args...)>
 public:
     template<typename F, typename = std::enable_if_t<!std::is_same_v<std::decay_t<F>, FunctionRef>>>
     // NOLINTNEXTLINE(google-explicit-constructor,bugprone-forwarding-reference-overload,cppcoreguidelines-missing-std-forward): binds like a function parameter, keeps only the address
-    FunctionRef(F&& fn) noexcept
+    FunctionRef(F&& fn JINJA2CPP_LIFETIMEBOUND) noexcept
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast): restored by the cast in m_call
         : m_obj(const_cast<void*>(static_cast<const void*>(std::addressof(fn))))
         , m_call([](void* obj, Args... args) -> R { return (*static_cast<std::remove_reference_t<F>*>(obj))(std::forward<Args>(args)...); })

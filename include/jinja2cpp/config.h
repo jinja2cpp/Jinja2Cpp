@@ -31,6 +31,26 @@
 #define JINJA2CPP_DEPRECATED(msg) [[deprecated(msg)]]
 #endif
 
+// Lifetime contracts that Clang checks at each call site (docs/design/clang-static-analysis-evaluation.md,
+// docs/tasks/0343). JINJA2CPP_LIFETIMEBOUND on a parameter, or after a member function's qualifiers for
+// `*this`, says that the result refers to that object: binding the result to a temporary that dies first is
+// a -Wdangling warning. JINJA2CPP_LIFETIME_CAPTURE_BY(x) on a parameter says that x keeps a reference to the
+// argument (-Wdangling-capture, Clang 20). Other compilers see nothing: GCC warns about unknown attributes.
+#if defined(__clang__) && defined(__has_cpp_attribute)
+#if __has_cpp_attribute(clang::lifetimebound)
+#define JINJA2CPP_LIFETIMEBOUND [[clang::lifetimebound]]
+#endif
+#if __has_cpp_attribute(clang::lifetime_capture_by)
+#define JINJA2CPP_LIFETIME_CAPTURE_BY(x) [[clang::lifetime_capture_by(x)]]
+#endif
+#endif
+#ifndef JINJA2CPP_LIFETIMEBOUND
+#define JINJA2CPP_LIFETIMEBOUND
+#endif
+#ifndef JINJA2CPP_LIFETIME_CAPTURE_BY
+#define JINJA2CPP_LIFETIME_CAPTURE_BY(x)
+#endif
+
 // The shared library exports only what JINJA2CPP_EXPORT marks: on Windows by
 // dllexport/dllimport, elsewhere by default visibility, the library being compiled
 // with -fvisibility=hidden (CMakeLists.txt). The same markings serve both, so the

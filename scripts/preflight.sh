@@ -90,6 +90,11 @@ else
   else
     record FAIL "null comparisons: scripts/null_compare.py --fix"
   fi
+  if python3 scripts/use_count_check.py -p "$build" --changed "$base" --fail --clang-query "$query"; then
+    record PASS "use_count() calls"
+  else
+    record FAIL "use_count() calls: docs/tasks/0339 (or mark a correct one with a 'use_count: <reason>' comment)"
+  fi
 fi
 
 # 3. CodeQL cpp/suspicious-add-sizeof: pointer + sizeof(...) on added lines. A heuristic;

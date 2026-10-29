@@ -15,6 +15,7 @@
 #include "template_dict.h"
 #include "template_env_impl.h"
 #include "template_impl.h"
+#include "thread_annotations.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
@@ -30,7 +31,6 @@
 #include <mutex>
 #include <new>
 #include <optional>
-#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -366,7 +366,7 @@ struct TemplateModuleState
         {
             auto& envImpl = *detail::TemplateEnvAccess::GetImpl(*env);
             {
-                std::shared_lock<std::shared_timed_mutex> lock(envImpl.guard);
+                const detail::ReaderLock lock(envImpl.guard);
                 globals.source = envImpl.globalValues;
             }
             for (const auto& [name, value] : *globals.source)

@@ -1,0 +1,8 @@
+# clang-query matcher for shared_ptr/weak_ptr use_count() calls (docs/tasks/0339, 0343).
+# use_count() is a relaxed load in libstdc++ and libc++: deciding "nobody else holds this" from it and
+# then writing the object in place races with the release of the other holder (0339). Count ownership
+# with a library-owned counter (ValueObject::use_count, an acquire load) instead.
+# Usage: clang-query -p build -f scripts/use_count.query src/template_env.cpp
+set output diag
+set bind-root true
+match cxxMemberCallExpr(callee(cxxMethodDecl(hasName("use_count"), ofClass(matchesName("^::std::(__1::)?(__)?(shared|weak)_ptr$|^::std::__shared_ptr$|^::std::__weak_ptr$")))), unless(isExpansionInSystemHeader()))
