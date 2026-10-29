@@ -96,7 +96,9 @@ RUNS = {
     "no-sort-refetch": ("mutant", DEEP, {"FixSortRefetch": False},
                         ["NoUseAfterFree", "SnapshotStable"],
                         "1e15c2d/89df914, Codex P0: sort writes back into freed storage"),
-    "no-call-restore": ("mutant", MODULE1, {"FixCallRestore": False}, ["SnapshotStable"],
+    # FixCallPin compares no call ids, so the restore matters only without it: the code of #673
+    "no-call-restore": ("mutant", MODULE1, {"FixCallRestore": False, "FixCallPin": False},
+                        ["SnapshotStable"],
                         "1e15c2d, Codex P1: outer call writes a nested call's snapshot"),
     "no-nested-global": ("mutant", RENDER1, {"FixNestedGlobal": False}, ["NoForeignCell"],
                          "9c91ffc, Codex P2: nested render reads the outer render's cell"),
@@ -119,7 +121,9 @@ RUNS = {
     # IsUnheld's links test can never decide: this run shows it, rather than a counterexample
     "drop-without-link-check": ("pass", MODULE1, {"DropRule": '"nolinks"'}, SAFETY,
                                 "IsUnheld without its links test: never decides here"),
-    "drop-without-source-check": ("mutant", MODULE1, {"DropRule": '"nosource"'},
+    # With FixModuleLinksOwn the namespace's link keeps the dropped cell alive: no use-after-free,
+    # so the run keeps #673's unowned links
+    "drop-without-source-check": ("mutant", MODULE1, {"DropRule": '"nosource"', "FixModuleLinksOwn": False},
                                   ["NoUseAfterFree", "NoForeignCell", "AliasesAgree"],
                                   "IsUnheld without its source-owner test"),
     "no-source-keeps-id": ("mutant", MODULE1, {"FixSourceKeepsId": False, "DropRule": '"none"'},

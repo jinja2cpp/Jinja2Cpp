@@ -13,9 +13,10 @@ fix #673 made is needed: taking any one of them out gives a counterexample.
 
 ```bash
 curl -sSLo tla/tla2tools.jar https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
-python3 tla/check.py                        # every run, about 2.8 hours on 4 cores
-python3 tla/check.py --only render mixed    # or in two parts: about 1h45m ...
-python3 tla/check.py --only $(python3 tla/check.py --list | awk '$1 != "render" && $1 != "mixed" {print $1}')   # ... and 1h05m
+python3 tla/check.py                        # every run, about 4.8 hours on 4 cores
+python3 tla/check.py --only render          # or in three parts: about 2h10m (21 GB of disk) ...
+python3 tla/check.py --only mixed threads   # ... about 1h40m ...
+python3 tla/check.py --only $(python3 tla/check.py --list | awk '$1 !~ /^(render|mixed|threads)$/ {print $1}')   # ... and 1h10m
 python3 tla/check.py --only f1-nested-export --traces
 python3 tla/check.py --list
 ```
@@ -102,17 +103,22 @@ explores every behaviour up to it and none past it.
 
 | Run | Scope | Result |
 |---|---|---|
-| `render` | 1 thread: renders, nested through a callback, level 11 | no error (51.6M states, 82 min) |
-| `module` | 1 thread: module calls, nested through a callback, level 12 | no error (1.5M states, 3 min) |
-| `mixed` | 1 thread: renders and module calls, level 10 | no error (19.6M states, 23 min) |
-| `threads` | 2 threads: renders and the locked module, level 9 | no error (32.0M states, 46 min) |
-| `threads-module` | 2 threads: module calls only, level 15 | no error (1.4M states, 3 min) |
-| `f1-nested-export` | `module`, the code as merged (no `FixNestedExport`), no allocation failure | **counterexample: `SnapshotStable`** (F1) |
+| `render` | 1 thread: renders, nested through a callback, level 11 | no error (80.6M states, 130 min; about 21 GB of TLC state on disk) |
+| `module` | 1 thread: module calls, nested through a callback, level 12 | no error (1.4M states, 3 min) |
+| `mixed` | 1 thread: renders and module calls, level 10 | no error (28.6M states, 35 min) |
+| `threads` | 2 threads: renders and the locked module, level 9 | no error (42.6M states, 61 min) |
+| `threads-module` | 2 threads: module calls only, level 15 | no error (1.3M states, 4 min) |
+| `threads-module-kept` | 2 threads: module calls, `keep([x])`, hand-off, level 16 | no error (4.2M states, 9 min) |
+| `module-0332` | 1 thread: module calls with `keep([x])`, nested writes and `drop`, level 11 | no error (3.1M states, 7 min) |
+| `render-handoff` | 2 threads: renders, kept lists dropped on the other thread mid-render, level 10 | no error (5.9M states, 15 min) |
+| `call-id-wrap` | `module` with call ids wrapping after 2 | no error (1.4M states, 3 min) |
+| `module-generic` | 1 thread: module calls taking generic containers the host may keep | no error (5.2M states, 11 min) |
+| `f1-nested-export` | `module`, the code before 0337 (no `FixNestedExport`, no `FixCallPin`), no allocation failure | **counterexample: `SnapshotStable`** (F1) |
 | `no-link-epoch` | c06d969 out (Codex P2) | counterexample: `AliasesAgree` |
 | `no-enum-refetch` | f83b89f out (Codex P1) | counterexample: `NoUseAfterFree` |
 | `no-enum-refetch-kept` | f83b89f out, no release of exports | counterexample: `NoUseAfterFree` (the loop's accessor freed while the export keeps the items) |
 | `no-sort-refetch` | 1e15c2d/89df914 out (Codex P0) | counterexample: `SnapshotStable` |
-| `no-call-restore` | 1e15c2d out (Codex P1) | counterexample: `SnapshotStable` |
+| `no-call-restore` | 1e15c2d out (Codex P1), without `FixCallPin` | counterexample: `SnapshotStable` (with `FixCallPin` no error: no write compares call ids) |
 | `no-nested-global` | 9c91ffc out (Codex P2) | counterexample: `NoForeignCell` |
 | `no-mark-order` | 5e37c24 out (verifier r11) | counterexample: `NoForeignCell` |
 | `no-sort-mutable-first` | 9c91ffc out (Codex P2) | counterexample: `NoUndefItems` |
@@ -120,12 +126,20 @@ explores every behaviour up to it and none past it.
 | `no-read-only-export` | 0331 A1 out (b2.cpp shapes) | counterexample: `NoCrossThreadWrite` (a kept global adapter linked by another thread's render) |
 | `no-freeze` | 0331 A2 out (4588321, Ruslan's P2) | counterexample: `SnapshotStable` |
 | `no-drop-unheld` | 459d8f7 out (Codex P2) | counterexample: `RegistryBounded` |
-| `drop-without-source-check` | `IsUnheld` without the source-owner test | counterexample: `NoUseAfterFree` |
+| `drop-without-source-check` | `IsUnheld` without the source-owner test, without `FixModuleLinksOwn` | counterexample: `NoUseAfterFree` (with owning links no error: the namespace's link keeps the cell) |
 | `drop-without-link-check` | `IsUnheld` without the links test | no error (see below) |
 | `no-source-keeps-id` | no `m_source`, no DropUnheld | counterexample: `NoForeignCell` (identity reuse) |
-| `open-0335-late-export` | `ExportKeepsCallState` | counterexample (task 0335, expected) |
-| `open-0332-kept-list` | `keep([l])` in a module call | counterexample: `SnapshotStable` (task 0332, expected) |
-| `open-0332-nested` | a nested item written in a module call | counterexample: `SnapshotStable` (task 0332, expected) |
+| `no-call-pin` | the code after 0337 (no `FixCallPin`) | counterexample: `ExportKeepsCallState` (0335) |
+| `no-call-pin-kept-list` | no `FixCallPin`, `keep([l])` in a module call | counterexample: `SnapshotStable` (0332) |
+| `no-call-pin-nested` | no `FixCallPin`, a nested item written in a module call | counterexample: `SnapshotStable` (0332) |
+| `pin-without-marks` | the pin marks no cell shared | counterexample: `SnapshotStable` |
+| `pin-top-only` | the pin leaves the nested item's cell live | counterexample: `SnapshotStable` |
+| `module-links-unowned` | no `FixModuleLinksOwn`: a later call's adapter kept, dropped on the other thread | counterexample: `NoCrossThreadWrite` (0332) |
+| `no-pin-on-attach` | no `FixPinOnAttach`, hand-off | counterexample: `NoCrossThreadWrite` (0340) |
+| `call-id-wrap-no-pin` | call ids wrap after 2, no `FixCallPin` | counterexample: `SnapshotStable` (0341) |
+| `no-generic-owner` | no `FixGenericOwner` | counterexample: `RegistryBounded` (0336) |
+| `generic-drop-without-host-test` | `IsUnheld` without the host-copy test | counterexample: `NoLostWrites` (0336) |
+| `open-0342-epoch-wrap` | `render` with the epoch wrapping after 2 | counterexample: `AliasesAgree` (task 0342, expected) |
 
 Every counterexample takes 1 to 80 seconds; `check.py --traces` prints its steps.
 
@@ -175,9 +189,14 @@ runs use it, and `f1-nested-export` keeps the code before the fix. The tests are
 - **The source-owner test of `IsUnheld` is needed.** Without it, a module call's argument
   stored in the namespace loses its cell while the namespace's adapter is still attached
   (`drop-without-source-check`, a use-after-free).
-- **The open tasks reproduce as described.** 0335 is a call's own later write missing from its
-  export. 0332 is a module's live cell read through a kept template list or a nested item.
-  Their runs are expected to fail and are the acceptance checks for those tasks.
+- **The open tasks reproduced as described.** 0335 is a call's own later write missing from its
+  export. 0332 is a module's live cell read through a kept template list or a nested item. Their
+  runs are now the mutants of the designs below (`no-call-pin*`).
+- **Two #673 fixes become redundant under the designs.** `FixCallRestore` guards a comparison of
+  call ids that `FixCallPin` removes, and the source-owner test of `IsUnheld` guards a
+  use-after-free that owning module links remove. Their mutants run without the design that
+  covers them, so they still show the model sees the defect in #673's code. The C++ may keep both
+  (cheap, and the source test still keeps aliases of a namespace value on one cell).
 
 ## Designs of the open tasks (0338 step A)
 

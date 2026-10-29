@@ -34,8 +34,8 @@ cell keeps the holder of the call that runs; `Unshare` copies into new storage a
 the current call's holder at it, so the earlier call's holder keeps the old items. An export
 in a call with no earlier snapshot needs no holder, so `Module/keep` keeps its allocations.
 
-The model's `open-0335-late-export` run (`tla/check.py`) gives this task's counterexample; it
-should pass once the fix is modelled.
+The model's `no-call-pin` run (`tla/check.py`, formerly `open-0335-late-export`) gives this task's
+counterexample; with the design below modelled, every pass run checks `ExportKeepsCallState`.
 
 **Design (model-first, 0338 step A; for Ruslan to decide).** Modelled in `tla/CellProtocol.tla`
 as `FixCallPin`; see `tla/README.md`, "Designs of the open tasks".
