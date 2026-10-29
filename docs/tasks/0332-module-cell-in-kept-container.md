@@ -57,7 +57,7 @@ separately: the model uses its option (a), `FixPinOnAttach`.
 **Done when.** The test row expects `[[0, 1]]` and a TSan row (two threads calling the module,
 one reading the kept list) is clean, with `Module/keep` unchanged in `bench/count.py`.
 
-**Implementation.** With 0335's `CallExports`: a list or dict the template owns, handed out in a module
+**Implementation** (PR #695). With 0335's `CallExports`: a list or dict the template owns, handed out in a module
 call, is a view whose items that are the module's data read through the call's exports by identity
 (`CallExportItem`), and its pin takes every cell of the module (simpler than a walk of template
 containers, and only copies more). Every link but a global's owns its cell (`CellLink::OwnsBit`), for
