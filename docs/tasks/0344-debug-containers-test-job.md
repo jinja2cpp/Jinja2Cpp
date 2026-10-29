@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/697
 priority: medium
 area: ci
