@@ -8,6 +8,7 @@
 #include "internal_value.h"
 #include "markup.h"
 #include "render_context.h"
+#include "stable_sort_values.h"
 #include "template_dict.h"
 #include "unicode_case.h"
 #include "unicode_tables.h"
@@ -2033,7 +2034,7 @@ InternalValue ListSort(const InternalValue& self, const CallParams& params, Rend
     std::vector<size_t> order(values.size());
     std::iota(order.begin(), order.end(), size_t{ 0 });
     // reverse=True keeps equal items in their order too
-    std::stable_sort(order.begin(), order.end(), [&sortKeys, reverse](size_t idx1, size_t idx2) {
+    StableSortValues(order.begin(), order.end(), [&sortKeys, reverse](size_t idx1, size_t idx2) {
         const auto& left = sortKeys[reverse ? idx2 : idx1];
         const auto& right = sortKeys[reverse ? idx1 : idx2];
         return ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, BinaryExpression::LogicalLt, BinaryExpression::CaseSensitive));

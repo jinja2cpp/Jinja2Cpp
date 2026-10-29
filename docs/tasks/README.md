@@ -409,6 +409,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0337](0337-nested-module-export-written-by-outer-call.md) | A nested module call's kept value is written by the outer call | robustness | medium | done |
 | [0338](0338-borrowed-cell-protocol-safety-proof.md) | From a bounded model of the borrowed-cell protocol to a safety argument | robustness | medium | open |
 | [0343](0343-clang-lifetime-and-lock-annotations.md) | Check lifetimes and lock discipline at compile time with Clang annotations | robustness | medium | done |
-| [0344](0344-debug-containers-test-job.md) | A test job with a checking standard library (iterator and reference invalidation) | ci | medium | open |
+| [0344](0344-debug-containers-test-job.md) | A test job with a checking standard library (iterator and reference invalidation) | ci | medium | done |
 | [0345](0345-latest-llvm-analysis-job.md) | A report-only job with the latest LLVM for trunk lifetime and cross-TU analyses | ci | low | done |
 | [0349](0349-ctu-analyzer-on-newest-llvm.md) | Run the cross-TU static analyzer on the newest LLVM and on libstdc++ | ci | low | open |
