@@ -108,12 +108,11 @@ GenericList BorrowedCell::ExportList() const
 {
     if (auto* call = ExportingCall())
     {
-        const auto& exports = call->Exports();
-        exports->AddCell(m_identity, true);
+        auto list = ExportCallList(*call, m_identity, InternalValue());
 #ifdef JINJA2CPP_CELL_TRACE
         TraceExport(true);
 #endif
-        return ExportCallList(exports, m_identity, InternalValue());
+        return list;
     }
 #ifdef JINJA2CPP_CELL_TRACE
     TraceExport(false);
@@ -125,12 +124,11 @@ GenericMap BorrowedCell::ExportMap() const
 {
     if (auto* call = ExportingCall())
     {
-        const auto& exports = call->Exports();
-        exports->AddCell(m_identity, false);
+        auto map = ExportCallMap(*call, m_identity, InternalValue());
 #ifdef JINJA2CPP_CELL_TRACE
         TraceExport(true);
 #endif
-        return ExportCallMap(exports, m_identity, InternalValue());
+        return map;
     }
 #ifdef JINJA2CPP_CELL_TRACE
     TraceExport(false);
@@ -531,13 +529,22 @@ void BorrowedCells::Finish(CycleCollector* collector) noexcept
     JINJA2CPP_CELL_TRACE_EVENT("finished", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("e", epoch), Trace::Num("live", detail::CellCounters::Live()));
 }
 
-const IntrusivePtr<CallExports>& BorrowedCells::Exports()
+void BorrowedCells::AdoptExports(std::shared_ptr<CallExports> exports) noexcept
 {
-    if (!m_exports)
+    exports->m_self = exports;
+    m_exports = std::move(exports);
+}
+
+void BorrowedCells::NoteExport(const void* identity, bool isList)
+{
+    if (identity)
     {
-        m_exports = MakeRef<CallExports>(*this);
+        m_exports->AddCell(identity, isList);
     }
-    return m_exports;
+    else
+    {
+        m_exports->m_containers = true;
+    }
 }
 
 void BorrowedCells::PinExports()
@@ -573,16 +580,10 @@ void BorrowedCells::PinExportsOrSkip() noexcept
     }
 }
 
-IntrusivePtr<const CallExports> ExportOfContainer()
+BorrowedCells* RunningModuleCall()
 {
     auto* cells = CycleCollector::CurrentCells();
-    if (!cells || !cells->InCall())
-    {
-        return {};
-    }
-    const auto& exports = cells->Exports();
-    exports->m_containers = true;
-    return exports;
+    return cells && cells->InCall() ? cells : nullptr;
 }
 
 const InternalValue* CallExports::Storage(const void* identity, bool isList) const noexcept

@@ -715,6 +715,49 @@ TEST(BorrowedCellsKept, ModuleKeepBeforeTheWriteDict)
     EXPECT_EQ("{'a': 0, 'b': 2}", keeper.Show(1));
 }
 
+TEST(BorrowedCellsKept, ModuleCallHandsOutAListAndADict)
+{
+    // 0348: the first value a call hands out holds the call's exports in its own allocation; the
+    // second shares them. Both read the call's final state after the module and template are gone
+    // (LSan/ASan: the exports go with the last view)
+    Keeper keeper;
+    {
+        ValuesMap params{ { "l", ValuesList{ 0 } }, { "d", ValuesMap{ { "a", 0 } } } };
+        keeper.AddTo(params);
+        Template tpl;
+        ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = d.update(b=x) %}{% set _ = keep(l) %}{% set _ = keep(d) %}"
+                               "{% set _ = l.append(x * 10) %}{% set _ = d.update(c=x * 10) %}{% endmacro %}"));
+        auto module = tpl.MakeModule(params).value();
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ 1 };
+        module.exports["add"].As<UserCallable>().callable(callParams);
+    }
+    ASSERT_EQ(2u, keeper.kept.size());
+    EXPECT_EQ("[0, 1, 10]", keeper.Show(0));
+    EXPECT_EQ("{'a': 0, 'b': 1, 'c': 10}", keeper.Show(1));
+    // The dict view outlives the list view that holds the exports' allocation
+    Value dict = keeper.kept.at(1);
+    keeper.kept.clear();
+    EXPECT_EQ("{'a': 0, 'b': 1, 'c': 10}", Render("{{ k }}", ValuesMap{ { "k", dict } }));
+}
+
+TEST(BorrowedCellsKept, ModuleKeptValueOutlivesItsModule)
+{
+    // 0348: a kept list is the only owner of the call's exports, and so are its copies
+    Value copy;
+    {
+        KeepingModule m("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep(l) %}{% endmacro %}");
+        m.Call(1);
+        copy = m.keeper.kept.at(0);
+        m.keeper.kept.clear();
+        m.Call(2);
+    }
+    EXPECT_EQ("[0, 1]", Render("{{ k }}", ValuesMap{ { "k", copy } }));
+    Value again = copy;
+    copy = Value();
+    EXPECT_EQ("[0, 1]", Render("{{ k }}", ValuesMap{ { "k", again } }));
+}
+
 TEST(BorrowedCellsKept, ModuleKeptValueSeesTheCallsLaterWrites)
 {
     // While the call runs, the host reads the module's list as it is now, as Python does

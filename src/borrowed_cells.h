@@ -346,13 +346,22 @@ using CellTable = robin_hood::unordered_flat_map<const void*, IntrusivePtr<const
 // storages, which nothing writes, on any thread, and data with no recorded storage reads the
 // host's data. An analogy: the host gets a window onto the module's desk while the call runs and
 // a photograph of the desk once it ends; the next writer takes a fresh sheet
-class CallExports final : public ValueObject
+// Owned by a std::shared_ptr: the running call (BorrowedCells::Exports) and the views that read it
+// share it. The first view lives in the same allocation (ExportCallList), so a view holds a
+// reference to its exports, and a shared pointer to keep them only when it is not that first one
+class CallExports final
 {
 public:
     explicit CallExports(const BorrowedCells& registry) noexcept
         : m_registry(&registry)
     {
     }
+    CallExports(const CallExports&) = delete;
+    CallExports& operator=(const CallExports&) = delete;
+
+    // A shared pointer to these exports, for a view made later; null only while they are being
+    // destroyed
+    [[nodiscard]] std::shared_ptr<const CallExports> Share() const noexcept { return m_self.lock(); }
 
     // The storage a value reads for data of `identity`: the module's cell while the call runs,
     // the storage recorded at its end after; null for data with no cell, which reads the host's
@@ -362,7 +371,6 @@ public:
 private:
     friend class BorrowedCell;
     friend class BorrowedCells;
-    friend IntrusivePtr<const CallExports> ExportOfContainer();
 
     struct Pinned
     {
@@ -393,15 +401,23 @@ private:
     bool m_containers = false;
     // Recorded by Pin, sorted by identity
     SmallVector<Pinned, 1> m_pins;
+    // Set by BorrowedCells::AdoptExports. Weak: the views keep the exports alive, and the first
+    // one is in their allocation
+    std::weak_ptr<const CallExports> m_self;
 };
 
 // The views a value handed to the host reads in a template module's call (internal_value.cpp): of
 // the cell of `identity` (a null container), or of the template's container `container`
-GenericList ExportCallList(IntrusivePtr<const CallExports> exports, const void* identity, InternalValue container);
-GenericMap ExportCallMap(IntrusivePtr<const CallExports> exports, const void* identity, InternalValue container);
-// The CallExports of the template module's call running on this thread, noted as having handed
-// out a list or dict the template owns; null outside a module call
-IntrusivePtr<const CallExports> ExportOfContainer();
+//
+// The first export of a call makes its CallExports in one allocation with the view returned; a
+// null `identity` notes that the call handed out a list or dict the template owns
+GenericList ExportCallList(BorrowedCells& call, const void* identity, InternalValue container);
+GenericMap ExportCallMap(BorrowedCells& call, const void* identity, InternalValue container);
+// A later view, or one of nested data, of the same call's exports
+GenericList ExportCallList(std::shared_ptr<const CallExports> exports, const void* identity, InternalValue container);
+GenericMap ExportCallMap(std::shared_ptr<const CallExports> exports, const void* identity, InternalValue container);
+// The registry of the template module's call running on this thread; null outside a module call
+BorrowedCells* RunningModuleCall();
 
 // What an enumeration of the host's list knows between two moves of the epoch: whether the list
 // has a cell, and its size when it has none. A step then costs one load and a compare, and the
@@ -510,7 +526,7 @@ public:
     struct CallFrame
     {
         uint32_t call = 0;
-        IntrusivePtr<CallExports> exports;
+        std::shared_ptr<CallExports> exports;
     };
     // A call of a template module starts: what it hands to the host is its own (CallExports). A
     // render's registry has one call, 0. A call made from a host callable inside another call of
@@ -542,8 +558,14 @@ public:
     }
     // Whether a template module's call runs on the registry
     [[nodiscard]] bool InCall() const noexcept { return m_call != 0; }
-    // The running call's CallExports, made on the first value it hands out
-    [[nodiscard]] const IntrusivePtr<CallExports>& Exports();
+    // The running call's CallExports, made on the first value it hands out (ExportCallList); null
+    // before
+    [[nodiscard]] const std::shared_ptr<CallExports>& Exports() const noexcept { return m_exports; }
+    // The first value the call hands out made `exports`, which ExportCallList shares with it
+    void AdoptExports(std::shared_ptr<CallExports> exports) noexcept;
+    // A value handed out reads the cell of `identity`, or, for a null identity, a list or dict the
+    // template owns
+    void NoteExport(const void* identity, bool isList);
     // Drops the cells nothing reads any more and nothing can find again: the cells of data that
     // lived for one call of a template module (an argument, a user callable's result), which
     // the module's cells would otherwise keep until the module goes. A cell of the host's data
@@ -565,7 +587,7 @@ private:
     // The last call number given out
     uint32_t m_lastCall = 0;
     // What the running call handed out, made on its first export
-    IntrusivePtr<CallExports> m_exports;
+    std::shared_ptr<CallExports> m_exports;
 };
 
 } // namespace v2

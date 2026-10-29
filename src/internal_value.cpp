@@ -1382,7 +1382,7 @@ Value ExportItem(const Value& item, const std::shared_ptr<const void>& owner)
 // reads through the call's exports, by the identity of the data, and never through an adapter's
 // link, which a later call of the module changes; a list or dict the template owns is a view of
 // the same kind, for the module's data in its items
-Value CallExportItem(const IntrusivePtr<const CallExports>& exports, const InternalValue& item);
+Value CallExportItem(const CallExports& exports, const InternalValue& item);
 
 class CallListView final : public IListItemAccessor
     , public IIndexBasedAccessor
@@ -1419,8 +1419,10 @@ public:
     };
 
     // The cell of `identity`, or, for a null identity, the template's list `container`
-    CallListView(IntrusivePtr<const CallExports> exports, const void* identity, InternalValue container)
-        : m_exports(std::move(exports))
+    // `keep` holds the exports when they are not in the allocation of this view
+    CallListView(const CallExports& exports, std::shared_ptr<const CallExports> keep, const void* identity, InternalValue container)
+        : m_exports(exports)
+        , m_keep(std::move(keep))
         , m_identity(identity)
         , m_container(std::move(container))
     {
@@ -1451,12 +1453,13 @@ public:
 private:
     [[nodiscard]] const InternalValueList* Items() const
     {
-        const auto* storage = m_identity ? m_exports->Storage(m_identity, true) : &m_container;
+        const auto* storage = m_identity ? m_exports.Storage(m_identity, true) : &m_container;
         auto list = storage ? AsList(*storage) : std::nullopt;
         return list ? list->GetMutableItems() : nullptr;
     }
 
-    IntrusivePtr<const CallExports> m_exports;
+    const CallExports& m_exports;
+    std::shared_ptr<const CallExports> m_keep;
     const void* m_identity;
     InternalValue m_container;
 };
@@ -1464,8 +1467,9 @@ private:
 class CallMapView final : public IMapItemAccessor
 {
 public:
-    CallMapView(IntrusivePtr<const CallExports> exports, const void* identity, InternalValue container)
-        : m_exports(std::move(exports))
+    CallMapView(const CallExports& exports, std::shared_ptr<const CallExports> keep, const void* identity, InternalValue container)
+        : m_exports(exports)
+        , m_keep(std::move(keep))
         , m_identity(identity)
         , m_container(std::move(container))
     {
@@ -1537,7 +1541,7 @@ public:
 private:
     [[nodiscard]] const TemplateDict* Dict() const
     {
-        const auto* storage = m_identity ? m_exports->Storage(m_identity, false) : &m_container;
+        const auto* storage = m_identity ? m_exports.Storage(m_identity, false) : &m_container;
         auto map = storage ? AsMap(*storage) : std::nullopt;
         return map ? map->GetMutableItems() : nullptr;
     }
@@ -1552,49 +1556,50 @@ private:
         return snapshot;
     }
 
-    IntrusivePtr<const CallExports> m_exports;
+    const CallExports& m_exports;
+    std::shared_ptr<const CallExports> m_keep;
     const void* m_identity;
     InternalValue m_container;
 };
 
 // The module's data, or the host's when the module has no cell of it; null for plain data
 template<typename Accessor>
-std::optional<Value> CallExportList(const IntrusivePtr<const CallExports>& exports, const Accessor* accessor, const InternalValue& item)
+std::optional<Value> CallExportList(const CallExports& exports, const Accessor* accessor, const InternalValue& item)
 {
     if (accessor->GetCellLink())
     {
-        if (!accessor->IsGlobalData() && exports->Storage(accessor->GetIdentity(), true))
+        if (!accessor->IsGlobalData() && exports.Storage(accessor->GetIdentity(), true))
         {
-            return Value(ExportCallList(exports, accessor->GetIdentity(), InternalValue()));
+            return Value(ExportCallList(exports.Share(), accessor->GetIdentity(), InternalValue()));
         }
         return Value(accessor->CreateHostGenericList());
     }
     if (accessor->GetMutableItems())
     {
-        return Value(ExportCallList(exports, nullptr, item));
+        return Value(ExportCallList(exports.Share(), nullptr, item));
     }
     return std::nullopt;
 }
 
 template<typename Accessor>
-std::optional<Value> CallExportMap(const IntrusivePtr<const CallExports>& exports, const Accessor* accessor, const InternalValue& item)
+std::optional<Value> CallExportMap(const CallExports& exports, const Accessor* accessor, const InternalValue& item)
 {
     if (accessor->GetCellLink())
     {
-        if (!accessor->IsGlobalData() && exports->Storage(accessor->GetIdentity(), false))
+        if (!accessor->IsGlobalData() && exports.Storage(accessor->GetIdentity(), false))
         {
-            return Value(ExportCallMap(exports, accessor->GetIdentity(), InternalValue()));
+            return Value(ExportCallMap(exports.Share(), accessor->GetIdentity(), InternalValue()));
         }
         return Value(accessor->CreateHostGenericMap());
     }
     if (accessor->GetMutableItems())
     {
-        return Value(ExportCallMap(exports, nullptr, item));
+        return Value(ExportCallMap(exports.Share(), nullptr, item));
     }
     return std::nullopt;
 }
 
-Value CallExportItem(const IntrusivePtr<const CallExports>& exports, const InternalValue& item)
+Value CallExportItem(const CallExports& exports, const InternalValue& item)
 {
     std::optional<Value> exported;
     if (auto list = AsList(item))
@@ -1646,14 +1651,65 @@ std::weak_ptr<const void> AdaptersOwner(const BySharedVal<T>& holder)
 }
 } // namespace
 
-GenericList ExportCallList(IntrusivePtr<const CallExports> exports, const void* identity, InternalValue container)
+namespace
 {
-    return GenericList(std::make_shared<const CallListView>(std::move(exports), identity, std::move(container)));
+template<typename View, typename Container>
+Container ExportCallView(std::shared_ptr<const CallExports> exports, const void* identity, InternalValue&& container)
+{
+    const CallExports& ref = *exports;
+    return Container(std::make_shared<const View>(ref, std::move(exports), identity, std::move(container)));
 }
 
-GenericMap ExportCallMap(IntrusivePtr<const CallExports> exports, const void* identity, InternalValue container)
+// The exports of a call and the first view of them, in one allocation: the view reads the
+// exports it sits beside and holds no pointer of its own to keep them
+template<typename View>
+struct CallExportsWith
 {
-    return GenericMap(std::make_shared<const CallMapView>(std::move(exports), identity, std::move(container)));
+    CallExportsWith(const BorrowedCells& registry, const void* identity, InternalValue container)
+        : exports(registry)
+        , view(exports, nullptr, identity, std::move(container))
+    {
+    }
+
+    CallExports exports;
+    View view;
+};
+
+template<typename View, typename Container, typename Accessor>
+Container ExportCallFirst(BorrowedCells& call, const void* identity, InternalValue&& container, bool isList)
+{
+    if (const auto& exports = call.Exports())
+    {
+        call.NoteExport(identity, isList);
+        std::shared_ptr<const CallExports> keep = exports;
+        return ExportCallView<View, Container>(std::move(keep), identity, std::move(container));
+    }
+    auto block = std::make_shared<CallExportsWith<View>>(call, identity, std::move(container));
+    const Accessor* view = &block->view;
+    call.AdoptExports(std::shared_ptr<CallExports>(block, &block->exports));
+    call.NoteExport(identity, isList);
+    return Container(std::shared_ptr<const Accessor>(std::move(block), view));
+}
+} // namespace
+
+GenericList ExportCallList(BorrowedCells& call, const void* identity, InternalValue container)
+{
+    return ExportCallFirst<CallListView, GenericList, IListItemAccessor>(call, identity, std::move(container), true);
+}
+
+GenericMap ExportCallMap(BorrowedCells& call, const void* identity, InternalValue container)
+{
+    return ExportCallFirst<CallMapView, GenericMap, IMapItemAccessor>(call, identity, std::move(container), false);
+}
+
+GenericList ExportCallList(std::shared_ptr<const CallExports> exports, const void* identity, InternalValue container)
+{
+    return ExportCallView<CallListView, GenericList>(std::move(exports), identity, std::move(container));
+}
+
+GenericMap ExportCallMap(std::shared_ptr<const CallExports> exports, const void* identity, InternalValue container)
+{
+    return ExportCallView<CallMapView, GenericMap>(std::move(exports), identity, std::move(container));
 }
 
 template<template<typename> class Holder>
@@ -2271,10 +2327,10 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
         {
             // In a template module's call, its items that are the module's data read what the
             // call left them (CallExports, docs/tasks/0332)
-            if (auto exports = ExportOfContainer())
+            if (auto* call = RunningModuleCall())
             {
                 // A copy that shares the items, as the GenericList below holds
-                return ExportCallList(std::move(exports), nullptr, InternalValue(ListAdapter(MakeRef<Adapter>(*this))));
+                return ExportCallList(*call, nullptr, InternalValue(ListAdapter(MakeRef<Adapter>(*this))));
             }
             return GenericList(std::make_shared<const std::decay_t<decltype(*this)>>(*this));
         }
@@ -2893,9 +2949,9 @@ public:
             return std::move(*snapshot);
         }
         // As the template's list (ListAdapter::CreateAdapter)
-        if (auto exports = ExportOfContainer())
+        if (auto* call = RunningModuleCall())
         {
-            return ExportCallMap(std::move(exports), nullptr, InternalValue(MapAdapter(MakeRef<SharedDictAdapter>(*this))));
+            return ExportCallMap(*call, nullptr, InternalValue(MapAdapter(MakeRef<SharedDictAdapter>(*this))));
         }
         return GenericMap(std::make_shared<const std::decay_t<decltype(*this)>>(*this));
     }
