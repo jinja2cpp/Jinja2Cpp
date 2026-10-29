@@ -9,6 +9,7 @@
 #include "python_format.h"
 #include "recursion_guard.h"
 #include "render_context.h"
+#include "stable_sort_values.h"
 #include "string_builder.h"
 #include "template_dict.h"
 #include "undefined.h"
@@ -81,7 +82,7 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     {
         if (!std::all_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return IsStringValue(entry.key); }))
         {
-            std::stable_sort(entries.begin(), entries.end(), [](const KeyValuePair& left, const KeyValuePair& right) { return SafeKeyLess(left.key, right.key); });
+            StableSortValues(entries.begin(), entries.end(), [](const KeyValuePair& left, const KeyValuePair& right) { return SafeKeyLess(left.key, right.key); });
             return;
         }
         std::vector<std::pair<std::string, size_t>> order;
@@ -1048,7 +1049,7 @@ private:
             }
             order.emplace_back(std::move(text), idx);
         }
-        std::stable_sort(order.begin(), order.end(), [&entries](const auto& left, const auto& right) { return KeyLess(entries[left.second].key, entries[right.second].key); });
+        StableSortValues(order.begin(), order.end(), [&entries](const auto& left, const auto& right) { return KeyLess(entries[left.second].key, entries[right.second].key); });
     }
 
     RenderContext& m_context;

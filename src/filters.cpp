@@ -11,6 +11,7 @@
 #include "markup.h"
 #include "out_stream.h" // IWYU pragma: keep (GetStreamOnString returns an OutStream by value)
 #include "render_context.h"
+#include "stable_sort_values.h"
 #include "string_builder.h"
 #include "template_dict.h"
 #include "testers.h"
@@ -348,7 +349,7 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     // Python's sorted() is stable
     if (paths.empty())
     {
-        std::stable_sort(values.begin(), values.end(), [&isLess](auto& val1, auto& val2) {
+        StableSortValues(values.begin(), values.end(), [&isLess](auto& val1, auto& val2) {
             bool isEqual = false;
             return isLess(val1, val2, isEqual);
         });
@@ -369,7 +370,7 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     }
     std::vector<size_t> order(values.size());
     std::iota(order.begin(), order.end(), size_t{ 0 });
-    std::stable_sort(order.begin(), order.end(), [&](size_t idx1, size_t idx2) {
+    StableSortValues(order.begin(), order.end(), [&](size_t idx1, size_t idx2) {
         for (size_t n = 0; n != width; ++n)
         {
             bool isEqual = false;
@@ -561,11 +562,11 @@ InternalValue DictSort::Filter(const InternalValue& baseVal, RenderContext& cont
     // Python's sorted() is stable, also with reverse=True: ties keep the mapping's order
     if (ConvertToBool(isReverseVal))
     {
-        std::stable_sort(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) { return comparator(r, l); });
+        StableSortValues(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) { return comparator(r, l); });
     }
     else
     {
-        std::stable_sort(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) { return comparator(l, r); });
+        StableSortValues(tempVector.begin(), tempVector.end(), [comparator](auto& l, auto& r) { return comparator(l, r); });
     }
 
     InternalValueList resultList;
@@ -621,7 +622,7 @@ InternalValue GroupBy::Filter(const InternalValue& baseVal, RenderContext& conte
 
     // Like Jinja2: sort by the key (stable), then group runs of equal keys. Without
     // case_sensitive strings compare lowercased and a group keeps its first item's key
-    std::stable_sort(items.begin(), items.end(), [compType](const Item& left, const Item& right) {
+    StableSortValues(items.begin(), items.end(), [compType](const Item& left, const Item& right) {
         return CompareForOrder(left.key, right.key, BinaryExpression::LogicalLt, compType);
     });
 
@@ -1011,7 +1012,7 @@ void DropDuplicates(std::vector<UniqueItem>& items, BinaryExpression::CompareTyp
     std::vector<UniqueItem> uniqueItems;
     try
     {
-        std::stable_sort(order.begin(), order.end(), [&items, compType](size_t i1, size_t i2) {
+        StableSortValues(order.begin(), order.end(), [&items, compType](size_t i1, size_t i2) {
             return ConvertToBool(Apply2<visitors::BinaryMathOperation>(items[i1].val, items[i2].val, BinaryExpression::LogicalLt, compType));
         });
         order.erase(std::unique(order.begin(), order.end(), [&](size_t i1, size_t i2) { return isEqual(items[i1], items[i2]); }), order.end());
