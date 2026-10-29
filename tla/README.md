@@ -39,12 +39,12 @@ not change in a later one. That rule is D8's copy on write.
 
 | Code | Model |
 |---|---|
-| `CellLink` of an adapter (`m_cell`, `m_seenEpoch`, held bit) | `ad[a]`: `cell`, `seen`, `held` |
+| `CellLink` of an adapter (`m_cell`, `m_seenEpoch`, held bit, owns bit) | `ad[a]`: `cell`, `seen`, `held`; `OwningLink(a)` |
 | `CellCounters` epoch and live | `epoch`, `live` |
 | `CellLink::Get`, `Find`, `Link` | `GetR`; an allocation failure in the push of `Link` (c06d969) |
-| `BorrowedCell` (`m_storage`, `m_retired`, `m_source`, `m_owner`, `m_exportedIn`, `m_frozen`, `m_links`) | `cl[c]`: `stor`, `retired`, `source`, `owned`, `exp`, `frozen`, `links` |
+| `BorrowedCell` (`m_storage`, `m_retired`, `m_source`, `m_owner`, `m_shared`, `m_frozen`, `m_links`) | `cl[c]`: `stor`, `retired`, `source`, `owned`, `exp`, `frozen`, `links` |
 | A storage: the `ListAdapter`'s accessor object, and the `InternalValueList` it shares | `st[g]`: `acc` (held by the cell only), `alive` (held by the accessor and by exports) |
-| `MutableItems`, `Unshare`, `NoteExport` | `WC`, `NeedCopy`, `Export`; a failed copy |
+| `MutableItems`, `Unshare`, `ExportList`/`ExportMap` | `WC`, `NeedCopy`, `Export`; a failed copy |
 | `CellLink::Adopt` | `Adopt`: a copy of the data with one nested item adapter (`P` holds `C`) |
 | `BorrowedCells` of a render and of a module, `BeginCall`/`EndCall` | `rg[r]`: `tbl`, `call`, `last` |
 | `BorrowedCells::Finish` | `FinishSources`, then `FinishFreeze` (sources first, then freeze) |
@@ -57,9 +57,9 @@ not change in a later one. That rule is D8's copy on write.
 | `ListSort` with its `Restore` guard across key calls | `SortStart`, `SortEnd` |
 | reference counts and destructors | `GC`: reachability from the roots, run right after the step that dropped a reference |
 | a module namespace holding an argument | `ns` |
-| Proposed: the per-call export context, pinned in `~ModuleCallCollector` (0335, 0332) | an export of kind `live`; `PinEx` in `EndModCall` |
-| Proposed: a link to a module's cell holds a reference (0332) | `OwningLink` |
-| Proposed: a render's live cell holds its linked adapters until `Finish` (0340) | `Succ` of a cell, `FixPinOnAttach` |
+| `CallExports`, pinned in `~ModuleCallCollector` (0335, 0332); its views `CallListView`, `CallMapView` | an export of kind `live`; `PinEx` in `EndModCall` |
+| A link holds a reference to its cell unless it is a global's (`CellLink::OwnsBit`; 0332, 0340) | `OwningLink`, `FixModuleLinksOwn`, `FixLinksOwn` |
+| 0340 option (a), not in the C++: a render's live cell holds its linked adapters until `Finish` | `Succ` of a cell, `FixPinOnAttach` |
 | `l.pop()` of a nested list | op `drop` |
 | a generic container (`MakeGenericList`) as a module call's argument, a copy the host keeps (0336) | `ad[a].generic`, `hkeep`, `HostLetsGo` |
 | `NextEpoch`, `BeginCall` wrapping past 32 bits (0342, 0341) | `NextEp`, `NextCall` with `MaxEpoch`, `MaxCallId` |
@@ -134,8 +134,8 @@ explores every behaviour up to it and none past it.
 | `no-call-pin-nested` | no `FixCallPin`, a nested item written in a module call | counterexample: `SnapshotStable` (0332) |
 | `pin-without-marks` | the pin marks no cell shared | counterexample: `SnapshotStable` |
 | `pin-top-only` | the pin leaves the nested item's cell live | counterexample: `SnapshotStable` |
-| `module-links-unowned` | no `FixModuleLinksOwn`: a later call's adapter kept, dropped on the other thread | counterexample: `NoCrossThreadWrite` (0332) |
-| `no-pin-on-attach` | no `FixPinOnAttach`, hand-off | counterexample: `NoCrossThreadWrite` (0340) |
+| `module-links-unowned` | no `FixModuleLinksOwn` (nor `FixLinksOwn`): a later call's adapter kept, dropped on the other thread | counterexample: `NoCrossThreadWrite` (0332) |
+| `render-links-unowned` | no `FixLinksOwn` (nor `FixPinOnAttach`), hand-off | counterexample: `NoCrossThreadWrite` (0340) |
 | `call-id-wrap-no-pin` | call ids wrap after 2, no `FixCallPin` | counterexample: `SnapshotStable` (0341) |
 | `no-generic-owner` | no `FixGenericOwner` | counterexample: `RegistryBounded` (0336) |
 | `generic-drop-without-host-test` | `IsUnheld` without the host-copy test | counterexample: `NoLostWrites` (0336) |
@@ -224,12 +224,20 @@ link, as a frozen cell's links already are, the release is a reference count. Th
 the case only through a later call's adapter (the first adapter is the cell's `m_source`, which the
 cell keeps alive): `module-links-unowned`.
 
-**A render's live cell holds its linked adapters until `Finish` (`FixPinOnAttach`: 0340, option a).**
-A render's frames go before `Finish`, so a kept container can be the last holder of an attached
-adapter in that window, and a host thread that drops it unlinks from the live cell
-(`no-pin-on-attach`, with `HostHandoff`). The registry holding the adapters closes the window. It
-is option (a) of 0340; option (b), an export of a detached copy, would lose the frozen cell that a
-kept value reads after the render (0331 A2) unless renders also pinned by identity.
+**Every link but a global's owns its cell (`FixLinksOwn`: 0340).** A render's frames go before
+`Finish`, so a kept container can be the last holder of an attached adapter in that window, and a
+host thread that drops it unlinks from the live cell (`render-links-unowned`, with `HostHandoff`).
+The decision was option (a) of 0340, the registry holding the adapters (`FixPinOnAttach`). The C++
+makes the render's links owning instead, the rule `FixModuleLinksOwn` already sets for a module's
+cells: a link to a cell in an `ItemAdapters` block has no object of its own the registry could
+hold (the block owns it), while the link always knows its cell. A global's link stays listed and
+non-owning, since `Finish` must find it to detach it; the thread's snapshot holds a global's
+adapter, so a host's drop is never its last reference, except for a global's nested item whose
+block of item adapters the global's adapter let go of (task 0346; the model has no blocks). Both
+closings are runs:
+`render-handoff` (the C++) and `render-handoff-pin-on-attach` (option a). Option (b), an export of
+a detached copy, would lose the frozen cell that a kept value reads after the render (0331 A2)
+unless renders also pinned by identity.
 
 **Drop a generic container's cell only when the host keeps no copy (`FixGenericOwner`: 0336).**
 `no-generic-owner` keeps a cell per call (`RegistryBounded`); a drop without the host-copy test
@@ -296,14 +304,15 @@ trace can show it. The events and what the spec checks at each:
 | `skip` (`CellLink::MayHaveCell` false) | the epoch is the one the adapter saw at its last lookup (`EpochAgrees`); the running registry has no cell of its data (`AliasesAgree`) |
 | `find`, `link`, `linkfail` (`Find`, `Link`) | the lookup finds the registry's cell of that identity and kind (`TableAgrees`); a link only to a live, unfrozen cell, by its registry's writer (`NoCrossThreadWrite`) |
 | `hit` (an attached adapter's read) | the adapter is attached to that cell (`LinksAgree`); the cell is alive and, unless frozen, of the running registry (`NoForeignCell`) |
-| `unlink`, `inherit`, `dieatt` | the link set agrees; a live cell's links change on its writer's thread only; an adapter never goes attached (`NoDanglingLink`) |
+| `unlink`, `inherit`, `dieatt` | the link set agrees, and whether the link owns its cell (`CellRules!LinkOwns`); an owning link lets go on any thread, a global's link changes a live cell's list on its writer's thread only; an adapter never goes attached (`NoDanglingLink`) |
 | `adopt`, `adoptno`, `adoptundo`, `promote` | a new cell only where the table has none; the live count (`LiveCount`, one-thread traces) |
-| `export` (`ExportList`/`ExportMap`) | the mark NoteExport leaves is `CellRules!MarkAfterExport` (`MarkRule`) |
+| `export` (`ExportList`/`ExportMap`) | a value reads through the call's `CallExports` exactly in the cell's own module call (`CellRules!ExportLive`, `MarkRule`); it marks nothing |
+| `pin` (`CallExports::Pin`) | a live table cell of the registry whose call ends; the cell is marked and its storage is what the host's values share from now on (`exr`) |
 | `unshare`, `copied` | Unshare's outcome is one `CellRules!UnshareOutcomes` allows (`MarkRule`) |
-| `write` (`MutableItems`/`MutableDict`) | never a frozen cell (`FrozenUnwritten`); in place only to an unmarked cell or one the running call marked (`MarkRule`); never to a storage a value of an ended call shares (`SnapshotStable`) |
+| `write` (`MutableItems`/`MutableDict`) | never a frozen cell (`FrozenUnwritten`); in place only to an unmarked cell (`MarkRule`); never to a storage a value of an ended call shares (`SnapshotStable`) |
 | `begin`, `end` (`BeginCall`, `EndCall`) | call numbers and the call restored (`CallsAgree`); nested calls on the thread holding the lock |
-| `drop`, `dropped` (`DropUnheld`) | `CellRules!MayDrop` on the spec's state: owned data, live cell, no link but its source's (`DropRule`) |
-| `freeze`, `finish`, `finished` (`Finish`) | the code's links of each cell are the spec's (`LinksAgree`); a global's links detach (`FinishDetaches`), the rest keep the frozen cell; every table cell freezes |
+| `drop`, `dropped` (`DropUnheld`) | `CellRules!MayDrop` on the spec's state: owned data, live cell, no link but its source's (`DropRule`); the code's list is the global's links |
+| `freeze`, `finish`, `finished` (`Finish`) | the code's list of each cell is the spec's global links, every other link owns (`LinksAgree`); a global's links detach (`FinishDetaches`), the rest keep the frozen cell; every table cell freezes |
 | `free` (`~BorrowedCell`) | no table lists the cell and no adapter is attached to it (`NoUseAfterFree`) |
 | `regnew`, `regfree` | a registry goes with an empty table and no running call |
 

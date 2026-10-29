@@ -32,7 +32,10 @@ FIXES = {
     "FixNestedExport": True,
     # Proposed designs of the open tasks 0335, 0332 and 0336 (README, "Designs")
     "FixCallPin": True, "FixPinMarks": True, "FixPinNested": True, "FixModuleLinksOwn": True,
-    "FixGenericOwner": True, "FixPinOnAttach": True,
+    "FixGenericOwner": True,
+    # 0340: the C++ makes every link but a global's own its cell (FixLinksOwn) instead of the
+    # registry holding the adapters (FixPinOnAttach, option (a)); both close the window
+    "FixPinOnAttach": False, "FixLinksOwn": True,
 }
 SAFETY = ["SnapshotStable", "NoCrossThreadWrite", "NoUseAfterFree", "NoForeignCell",
           "RegistryBounded", "AliasesAgree", "NoUndefItems", "LiveCount", "ExportKeepsCallState",
@@ -146,18 +149,22 @@ RUNS = {
     # The cell's source adapter is never the last reference: a later call's adapter is kept
     "module-links-unowned": ("mutant", dict(TWO, RenderThreads='{}',
                                             Actions='{"keeplist", "release", "read"}'),
-                             {"FixModuleLinksOwn": False, "AllowModuleKeepList": True,
-                              "MaxLevel": 16},
+                             {"FixModuleLinksOwn": False, "FixLinksOwn": False,
+                              "AllowModuleKeepList": True, "MaxLevel": 16},
                              ["NoCrossThreadWrite"],
                              "0332: the host's release unlinks from a module's live cell"),
     # 0340: the host hands a kept container to another thread, which drops it while the render runs
     "render-handoff": ("pass", dict(TWO, ModuleThreads='{}', Actions='{"keeplist", "release", "read"}'),
                        {"HostHandoff": True, "MaxLevel": 10, "MaxCell": 2, "MaxGen": 3}, SAFETY,
                        "0340: a kept container dropped on another thread during the render"),
-    "no-pin-on-attach": ("mutant", dict(TWO, ModuleThreads='{}', Actions='{"keeplist", "release", "read"}'),
-                         {"HostHandoff": True, "FixPinOnAttach": False, "MaxLevel": 12},
-                         ["NoCrossThreadWrite"],
-                         "0340: the dropper unlinks the adapter from the render's live cell"),
+    "render-handoff-pin-on-attach": ("pass", dict(TWO, ModuleThreads='{}', Actions='{"keeplist", "release", "read"}'),
+                                     {"HostHandoff": True, "FixLinksOwn": False, "FixPinOnAttach": True,
+                                      "MaxLevel": 10, "MaxCell": 2, "MaxGen": 3}, SAFETY,
+                                     "0340 option (a), the registry holds the adapters: also closes it"),
+    "render-links-unowned": ("mutant", dict(TWO, ModuleThreads='{}', Actions='{"keeplist", "release", "read"}'),
+                             {"HostHandoff": True, "FixLinksOwn": False, "MaxLevel": 12},
+                             ["NoCrossThreadWrite"],
+                             "0340: the dropper unlinks the adapter from the render's live cell"),
     # 0341: with FixCallPin no write compares call ids, so a wrapped id is harmless
     "call-id-wrap": ("pass", MODULE1, {"MaxCallId": 2}, SAFETY, "0341: call ids wrap after 2"),
     "call-id-wrap-no-pin": ("mutant", dict(MODULE1, Actions='{"export", "release"}'),

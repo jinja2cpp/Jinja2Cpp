@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0331]
@@ -77,3 +77,10 @@ also safe (it only copies more), and simpler.
 **Done when.** `BorrowedCellsKept` has rows for a list and a dict where call 2 runs `keep(l)`
 before `l.append(2)` and keeps `[0, 1, 2]` while call 1's value stays `[0, 1]`, ASan and TSan
 are clean, and `Module/keep` and `Module/keep_written` do not move in `bench/count.py`.
+
+**Implementation.** `CallExports` in `src/borrowed_cells.h`: `ExportList`/`ExportMap` in the cell's own
+module call return a view (`CallListView`, `CallMapView` in `src/internal_value.cpp`) that reads through
+the call's exports, and `~ModuleCallCollector` pins them (`BorrowedCells::PinExports`) before
+`DropUnheld`. The pin shares the storage's object, so `BorrowedCell::OwnsItemsAlone` sees it. The
+nested walk is skipped when the pin already holds every cell of the module. `m_exportedIn` became
+the flag `m_shared`; call ids only name calls in the trace and may wrap (0341).
