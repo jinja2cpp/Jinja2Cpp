@@ -1,0 +1,45 @@
+# Findings of scripts/clang_analysis.py that were triaged and are not defects (docs/tasks/0345).
+# One per line: <check glob> <path glob>[:<line>]  # reason (required)
+# A finding that is a defect becomes a task instead; a finding fixed in the code loses its line.
+
+# Vendored code: not changed here, upstream owns it.
+* src/robin_hood.h  # vendored (martinus/robin-hood-hashing)
+* include/jinja2cpp/polymorphic_value/*  # vendored (jbcoe/polymorphic_value)
+
+# -Wlifetime-safety-invalidation in Clang 23.1.3 treats a reference to a container as a loan on
+# the container's storage, so any mutation through the reference "invalidates" the reference
+# itself. Reduced: `void f(std::string& s) { s.push_back('a'); s.push_back('b'); }` warns, and
+# so does a local `std::string& r = s;`. Every line below was read (2026-10-29, first report):
+# the "later used" expression is the container itself, a reference or pointer to the container
+# (a lambda capture, std::back_inserter, a range-for element whose own string is edited, the
+# reference emplace_back returns), never an iterator, pointer or view into its old storage.
+-Wlifetime-safety-invalidation src/big_int.cpp "parameter 'limbs' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/expression_evaluator.cpp "parameter 'posParams' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/expression_parser.cpp "parameter 'name' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/filters.cpp "parameter 'digits' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/filters.cpp "parameter 'result' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/json_reader.cpp "parameter 'list' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/json_reader.cpp "parameter 'out' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/python_format.cpp "parameter 'out' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/serialize_filters.cpp "parameter 'out' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/serialize_filters.cpp "local variable 'str' is later invalidated"  # std::back_inserter keeps a pointer to the string
+-Wlifetime-safety-invalidation src/serialize_filters.cpp "parameter 'order' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/string_converter_filter.cpp "parameter 'middle' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/string_converter_filter.cpp "parameter 'head' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/string_converter_filter.cpp "parameter 'tail' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/string_converter_filter.cpp "local variable 'result' is later invalidated"  # lambda captures the string by reference
+-Wlifetime-safety-invalidation src/string_converter_filter.cpp "parameter 'out' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/template_dict.cpp "parameter 'out' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/template_env.cpp "parameter 'extensions' is later invalidated"  # range-for edits each element's own string
+-Wlifetime-safety-invalidation src/template_parser.cpp "local variable 'names' is later invalidated"  # uses the reference emplace_back returns, before the next emplace
+-Wlifetime-safety-invalidation src/template_parser.h "parameter 'tpl' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/template_parser.h "parameter 'trans' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/value_methods.cpp "parameter 'updates' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/value_visitors.h "parameter 'out' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation src/value_visitors.h "parameter 'os' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation test/binding/toy_json.h "parameter 'out' is later invalidated"  # container reference parameter
+-Wlifetime-safety-invalidation test/forloop_test.cpp "local variable 'log' is later invalidated"  # lambda captures the vector by reference
+-Wlifetime-safety-invalidation test/support_types_test.cpp "parameter 'pool' is later invalidated"  # container reference parameter
+
+# The cross-TU analyzer (Clang 22.1.8, libc++).
+analyzer:alpha.cplusplus.MismatchedIterator src/template_env.cpp:228  # vector operator== hands both vectors' iterators to std::equal
