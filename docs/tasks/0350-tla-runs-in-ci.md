@@ -39,6 +39,13 @@ Constant-factor changes therefore buy less than one level each:
   disk: on pull requests that change the model or check.py, nightly on master when `tla/`
   changed in the last day, and on demand (`workflow_dispatch`, with an optional list of runs).
 
+**First run (#702, 4-vCPU ubuntu-24.04 runners).** All four jobs in parallel; `render` 80,574,890
+states in 4 h 03 min (130 min on the session's 4 dedicated cores), `mixed` 64 min, `threads`
+44 min, the rest 1 h 45 min. Every run is 1.3 to 1.9 times slower per state than on the session
+container, with identical state counts. The job prints `lscpu` to tell whether the runner's
+vCPUs are hyperthreads; render keeps about 40% headroom under the 340-minute limit, so the next
+level or scope growth of `render` needs a split or a reduction first.
+
 **Found by the first run.** The mutant `drop-without-source-check` passed (no counterexample,
 1.4M states) on master: it turned off `FixModuleLinksOwn` but not `FixLinksOwn`, which #695 added
 and which also makes the namespace's link own the cell. Nobody ran the suite after #695, so the
