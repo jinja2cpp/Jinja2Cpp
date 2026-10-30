@@ -347,14 +347,14 @@ What the collector needs, from the evaluator, the cell protocol and the host:
 - **C3. `Traverse` shows a reference only when the object holds it alone**
   (`OwnsMutableItemsAlone`); one it shares is not shown, so what it reaches counts as held from
   outside. The `opaque` runs check that this only leaks (`opaque-leaks`), never clears.
-- **H5. During the walk another thread only copies or drops the references it already has.**
+- **H6. During the walk another thread only copies or drops the references it already has.**
   Other threads hold two kinds of value. What this render handed out (`keep`) they may copy
   and drop at any time but not read until the render, its collector included, has completed (H3,
   H3b); copying a `Value` shares its accessor (`GenericList`). Values of earlier renders they
   may read, but this render sees those only as the host's data, through host adapters that
   `Traverse` does not enter (`IsTraversable`), so nothing of them is in the walk. Neither way can
-  another thread make a reference to an object of the walk that it did not hold. This is not in
-  the memory-order document's host contract yet, and it is load-bearing: the `host-reads-share`
+  another thread make a reference to an object of the walk that it did not hold. It is H6 of the
+  memory-order document's host contract (#690), and it is load-bearing: the `host-reads-share`
   mutants take it out (a copy of a kept value that takes the cell's link, or a read of an item
   that keeps it) and the walk empties a list the host still reaches. The host moves its
   reference from a node whose count the walk has not read yet to one it has already read (take
@@ -368,13 +368,13 @@ What the collector needs, from the evaluator, the cell protocol and the host:
 
 What it gives: G1 and G2 always, G3 when C3 shows every reference and the host stands still.
 
-Why reading the counts one by one is sound: under C2 and H5, the outside references to a node can
+Why reading the counts one by one is sound: under C2 and H6, the outside references to a node can
 only grow by a copy from a holder of that same node. A node read as held only from inside stays
 so for the rest of the walk; one read as held from outside is kept, with all it reaches, even if
 its holder lets go later (it then leaks until it is freed, as before). So a node in the garbage
-was held only by other garbage when it was read and is still so when it is emptied. The memory-
-order document (R1) argues the same from "new references are only made from existing ones",
-which is not enough: it takes "to the same object" (H5), as the mutants show.
+was held only by other garbage when it was read and is still so when it is emptied. The first
+version of the memory-order document (R1) argued the same from "new references are only made
+from existing ones", which is not enough: it takes "to the same object" (H6), as the mutants show.
 
 This model's `GC` action frees exactly what no root reaches: the collector's G3. Where the
 collector falls short of that (C3, a reference it cannot see), objects live longer than in this
@@ -402,10 +402,10 @@ runs add up to three host steps during the walk.
 | `prune-shared` | mutant | counterexample: Complete | 25350 | the prune drops a candidate another reference holds: its cycle leaks |
 | `host-during-walk` | pass | no error | 574686 | the host copies and drops a kept value during the walk |
 | `prior-during-walk` | pass | no error | 150804 | an earlier render's kept value, held by the host, in a cycle of this one |
-| `host-reads-share` | mutant | counterexample: NoClearLive | 28525 | H5 out: a copy of a kept value takes the cell's link |
-| `host-reads-share-prior` | mutant | counterexample: NoClearLive | 324995 | H5 out: a read of an earlier render's item keeps it |
+| `host-reads-share` | mutant | counterexample: NoClearLive | 28525 | H6 out: a copy of a kept value takes the cell's link |
+| `host-reads-share-prior` | mutant | counterexample: NoClearLive | 324995 | H6 out: a read of an earlier render's item keeps it |
 
-Bounded evidence, as for the cell model: small heaps, and the contract items C2 and H5 are
+Bounded evidence, as for the cell model: small heaps, and the contract items C2 and H6 are
 argued from the code above, not checked against it. Removing the bounds is step F of 0338.
 
 ### Not modelled

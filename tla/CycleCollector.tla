@@ -37,7 +37,7 @@
 (*    the host contract of docs/design/borrowed-cells-memory-order.md: it  *)
 (*    copies and drops the references it holds at any time (H3b) and       *)
 (*    writes nothing the render made. Its reads make no new reference to   *)
-(*    an object of the heap (contract H5, README): HostReadsShare takes    *)
+(*    an object of the heap (contract H6, README): HostReadsShare takes    *)
 (*    that out, and the walk then empties a list the host still reaches.   *)
 (*  - Out of memory is not modelled (step D of 0338): the walk's retry     *)
 (*    and the note-before-store order of 0283 are in the C++ only.         *)
@@ -52,7 +52,7 @@ CONSTANTS
     MaxHost,       \* steps of the host thread
     Prior,         \* TRUE: an earlier render made and published values first
     HostInCollect, \* TRUE: other threads step while the walk runs
-    HostReadsShare, \* TRUE takes contract H5 out: a host read keeps a reference into the heap
+    HostReadsShare, \* TRUE takes contract H6 out: a host read keeps a reference into the heap
     \* The design of the collector, one flag per part; FALSE takes the part out
     FixNoteStore,     \* a store into a container notes it (NoteStore)
     FixCountCands,    \* the walk counts the collector's reference to a candidate (visit)
@@ -254,7 +254,7 @@ HostDrop(o) ==
     /\ HostHeld(o)
     /\ Release(edge, SetHold("host", o, hold["host"][o] - 1), cand, ghold)
 
-\* H5 taken out (HostReadsShare): what a read through o would reach, if a read handed out
+\* H6 taken out (HostReadsShare): what a read through o would reach, if a read handed out
 \* references into the heap: a kept value's link to its cell, and the items of what a
 \* completed render published
 RECURSIVE HostReach(_)
@@ -262,7 +262,7 @@ HostReach(S) ==
     LET N == S \cup UNION {{p \in Objs : edge[o][p] > 0} : o \in {o \in S : kind[o] = "adapter" \/ pub[o]}}
     IN IF N = S THEN S ELSE HostReach(N)
 
-\* A host read that keeps a reference to p, reached through o: the step contract H5 rules out.
+\* A host read that keeps a reference to p, reached through o: the step contract H6 rules out.
 \* In the C++ a read of a kept value is a new view that keeps the kept value's owner
 \* (ExportItem), and a copy shares the accessor (GenericList), so the host never gets a
 \* reference to an object the walk can reach that it did not hold before

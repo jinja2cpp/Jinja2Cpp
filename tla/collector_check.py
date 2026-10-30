@@ -66,12 +66,12 @@ RUNS = {
                          "the host copies and drops a kept value during the walk"),
     "prior-during-walk": ("pass", PRIOR, {"HostInCollect": True}, SAFETY,
                           "an earlier render's kept value, held by the host, in a cycle of this one"),
-    # Contract H5 taken out: a host read that kept a reference into the heap would let the host
+    # Contract H6 taken out: a host read that kept a reference into the heap would let the host
     # move its reference past the walk's reads, and the walk would empty a list it still reaches
     "host-reads-share": ("mutant", KEPT3, {"HostInCollect": True, "HostReadsShare": True},
-                         ["NoClearLive"], "H5 out: a copy of a kept value takes the cell's link"),
+                         ["NoClearLive"], "H6 out: a copy of a kept value takes the cell's link"),
     "host-reads-share-prior": ("mutant", PRIOR, {"HostInCollect": True, "HostReadsShare": True},
-                               ["NoClearLive"], "H5 out: a read of an earlier render's item keeps it"),
+                               ["NoClearLive"], "H6 out: a read of an earlier render's item keeps it"),
 }
 
 

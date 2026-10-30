@@ -130,6 +130,6 @@ held garbage. `tla/collector_check.py` checks it (the `collector` job of `tla-mo
 empties a list something live reaches (G1), never touches a destroyed object (G2), and frees
 every cycle when `Traverse` sees every reference (G3); taking out any part of the collector gives
 a counterexample. The interface contract to `CellProtocol.tla` is in tla/README.md, "The cycle
-collector". It names one host-contract item the memory-order document lacks, H5: during the
-walk other threads only copy or drop references they already hold; the `host-reads-share`
-mutants show the walk is unsafe without it.
+collector". It relies on H6 of the memory-order document (#690, added from this step):
+during the walk other threads only copy or drop references they already hold; the
+`host-reads-share` mutants show the walk is unsafe without it.
