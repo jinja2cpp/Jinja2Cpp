@@ -152,7 +152,9 @@ CurReg(t) == Top(t).reg
 Running(t) == Depth(t) > 0 /\ Top(t).phase = "run"
 SetTop(t, f) == [fr EXCEPT ![t][Depth(t)] = f]
 Pop(t) == [fr EXCEPT ![t] = SubSeq(@, 1, Len(@) - 1)]
-InModule(t) == \E i \in 1..Depth(t) : fr[t][i].kind = "mod"
+\* The frames of t: 1..Depth(t), written so that Apalache sees a constant range
+Frames(t) == {i \in 1..MaxDepth : i <= Depth(t)}
+InModule(t) == \E i \in Frames(t) : fr[t][i].kind = "mod"
 \* Behaviours of at most MaxLevel states, GC steps included (TLC's BFS level). A guard of every
 \* action rather than a CONSTRAINT: TLC then does not compute the last level's successors
 InBound == TLCGet("level") < MaxLevel
@@ -164,8 +166,10 @@ Grow(v) == IF v = EMPTY THEN 1 ELSE IF v = UNDEF THEN UNDEF ELSE v + 1
 CanGrow(v) == v < MaxVal
 
 \* A write by t: the module's state is written under its lock
+\* @type: (Str) => <<Str, Bool>>;
 W(t) == <<t, InModule(t)>>
 \* (One thread: nothing to compare, so the writers are not kept and add no states)
+\* @type: (<<Str, Int>> -> Set(<<Str, Bool>>), Set(<<Str, Int>>), <<Str, Bool>>) => <<Str, Int>> -> Set(<<Str, Bool>>);
 MarkBy(w, objs, who) == IF Cardinality(Threads) = 1 THEN w
                         ELSE [o \in Objs |-> IF o \in objs THEN w[o] \cup {who} ELSE w[o]]
 Mark(w, objs, t) == MarkBy(w, objs, W(t))
@@ -175,15 +179,19 @@ Mark(w, objs, t) == MarkBy(w, objs, W(t))
 
 ChildVis(a) == IF a = 0 THEN 0
                ELSE IF ad[a].cell # 0 THEN st[cl[ad[a].cell].stor].val ELSE 0
+\* @type: (Int) => Seq(Int);
 VisG(g) == <<st[g].val, ChildVis(st[g].child)>>
 \* A global's adapter always exports the global's own data (0331 A1)
+\* @type: (Int) => Seq(Int);
 VisAd(a) == IF ad[a].cell # 0 /\ ~ad[a].held THEN VisG(cl[ad[a].cell].stor) ELSE <<0, 0>>
 \* A pinned export reads the storages its pin recorded, never an adapter's link: pg for the data,
 \* cg for its nested item (-1: the nested item through its adapter's link, FixPinNested off)
 StVal(g) == IF g = 0 THEN 0 ELSE st[g].val
+\* @type: (Int) => Seq(Int);
 PinVis(e) == IF ex[e].cg = -1
              THEN IF ex[e].pg = 0 THEN <<0, 0>> ELSE VisG(ex[e].pg)
              ELSE <<StVal(ex[e].pg), StVal(ex[e].cg)>>
+\* @type: (Int) => Seq(Int);
 VisEx(e) == CASE ex[e].pin -> PinVis(e)
               [] ex[e].kind = "gen" -> VisG(ex[e].gen)
               [] ex[e].kind = "live" -> VisG(cl[ex[e].cell].stor)
@@ -208,6 +216,7 @@ OwningLink(a) == LET c == ad[a].cell
                  IN cl[c].frozen \/ (FixModuleLinksOwn /\ cl[c].reg = ModReg)
                     \/ (FixLinksOwn /\ ~ad[a].held)
 
+\* @type: (<<Str, Int>>) => Set(<<Str, Int>>);
 Succ(n) ==
     CASE n[1] = "a" -> IF ad[n[2]].cell # 0 /\ OwningLink(n[2])
                        THEN {<<"c", ad[n[2]].cell>>} ELSE {}
@@ -225,7 +234,7 @@ RECURSIVE Close(_)
 Close(S) == LET T == S \cup UNION {Succ(n) : n \in S} IN IF T = S THEN S ELSE Close(T)
 
 Ads0 == UNION {UNION {fr[t][i].ads \cup (IF fr[t][i].bkind = "none" THEN {} ELSE {fr[t][i].bad}) :
-                      i \in 1..Depth(t)} : t \in Threads}
+                      i \in Frames(t)} : t \in Threads}
 LiveEx == {e \in ExIds : ex[e].alive}
 RootsExcept(x) ==
     ({<<"a", a>> : a \in Ads0 \cup {gsnap[t] : t \in Threads} \cup {ns}
@@ -268,6 +277,7 @@ GC ==
 Key(a) == ad[a].idn
 WouldLink(t, a) == ad[a].seen # epoch /\ ad[a].cell = 0 /\ rg[CurReg(t)].tbl[Key(a)] # 0
 
+\* @type: (Str, Int, Bool) => $get;
 GetR(t, a, f) ==
     LET A == ad[a]
         e == rg[CurReg(t)].tbl[Key(a)]
@@ -284,10 +294,14 @@ Foreign(t, a, c) ==
     c # 0 /\ (cl[c].idn # ad[a].idn \/ cl[c].inc # ad[a].inc
               \/ (~cl[c].frozen /\ cl[c].reg # CurReg(t)))
 
+\* @type: (Int, $get) => Int -> $ad;
 ApplyGetAd(a, R) == [ad EXCEPT ![a] = R.A2]
+\* @type: (Int, $get) => Int -> $cell;
 ApplyGetCl(a, R) == IF R.link # 0 THEN [cl EXCEPT ![R.link].links = @ \cup {a}] ELSE cl
+\* @type: (Int, $get) => Set(<<Str, Int>>);
 GetWrites(a, R) == (IF R.A2 # ad[a] THEN {<<"a", a>>} ELSE {})
                    \cup (IF R.link # 0 THEN {<<"c", R.link>>} ELSE {})
+\* @type: (Str, Int, $get) => Str -> Bool;
 ApplyGetGatt(t, a, R) == IF R.link # 0 /\ ad[a].held /\ FixNestedGlobal
                          THEN [gatt EXCEPT ![t] = TRUE] ELSE gatt
 
@@ -302,6 +316,7 @@ NewVal(op, old, v) == CASE op = "append" -> Grow(old) [] op \in {"touch", "drop"
 \* "drop" removes the nested item (l.pop()): the storage lets go of its adapter
 NewChild(op, old) == IF op = "drop" THEN 0 ELSE old
 
+\* @type: (Int, Bool, Str, Int, Int -> $cell) => $write;
 WC(c, f, op, v, CL) ==
     LET cc == CL[c]
         g == nGen + 1
@@ -328,6 +343,7 @@ WCOk(c, f, op) ==
     /\ op = "append" => CanGrow(st[cl[c].stor].val)
     /\ f => (NeedCopy(c) /\ ~cl[c].frozen /\ fails < MaxFail)
 
+\* @type: (Int, $write) => Set(<<Str, Int>>);
 WCWrites(c, Wr) == (IF Wr.k = "private" THEN {} ELSE {<<"c", c>>})
                    \cup (IF Wr.gen # 0 THEN {<<"g", Wr.gen>>} ELSE {})
 
@@ -335,6 +351,7 @@ WCWrites(c, Wr) == (IF Wr.k = "private" THEN {} ELSE {<<"c", c>>})
 (* A write through adapter a (methods::MakeMutable then the change) *)
 
 \* The cell exists: link if needed, then write it
+\* @type: (Str, Int, Bool, Str, $get) => Bool;
 WriteCell(t, a, f2, op, R) ==
     LET CL1 == ApplyGetCl(a, R)
         Wr == WC(R.c, f2, op, 0, CL1)
@@ -383,6 +400,7 @@ Adopt(t, a, op) ==
        /\ UNCHANGED <<ex, nEx, gsnap, ns, hkeep, lag, lock, inc, fails, flag, dirty, dirtyBy, pendDrop>>
 
 \* The write was refused by an allocation failure in Link: only the epoch the adapter saw changes
+\* @type: (Str, Int, $get) => Bool;
 LinkFailed(t, a, R) ==
     /\ ad' = ApplyGetAd(a, R)
     /\ wr' = Mark(wr, GetWrites(a, R), t)
@@ -487,7 +505,7 @@ Release(t, e) ==
 -----------------------------------------------------------------------------
 (* Borrowers across a callback: an enumeration and list.sort *)
 
-NoBorrow == [bkind |-> "none", bad |-> 0, bgen |-> 0, bvals |-> 0]
+\* A frame borrows nothing at first: bkind "none", bad, bgen and bvals 0
 
 EnumStart(t, a) ==
     /\ "enum" \in Actions
@@ -598,7 +616,8 @@ StartRender(t) ==
                    /\ rg' = [rg EXCEPT ![<<t, d>>] = EmptyReg]
                    /\ fr' = [fr EXCEPT ![t] = Append(@, [kind |-> "render", reg |-> <<t, d>>,
                                  outer |-> 0, call |-> 0, ads |-> {a, b, gs} \cup raws,
-                                 phase |-> "run"] @@ NoBorrow)]
+                                 phase |-> "run", bkind |-> "none", bad |-> 0, bgen |-> 0,
+                                 bvals |-> 0])]
                    /\ UNCHANGED fails
     /\ UNCHANGED <<epoch, live, cl, nCell, st, nGen, ex, nEx, ns, hkeep, lag, lock, inc, dirty, dirtyBy,
                    pendDrop, wr, flag>>
@@ -655,6 +674,7 @@ PinCg(e) == LET g == PinPg(e) IN
               [] g # 0 -> IF st[g].child # 0 THEN RegStor(ad[st[g].child].idn) ELSE 0
               [] ex[e].idn = "P" -> RegStor("C")  \* the host's P holds the host's C
               [] OTHER -> 0
+\* @type: (Int, Int) => Seq(Int);
 PinVisOf(g, c) == IF c = -1 THEN (IF g = 0 THEN <<0, 0>> ELSE VisG(g)) ELSE <<StVal(g), StVal(c)>>
 ToPin(t, d) == IF ~FixCallPin THEN {}
                ELSE {e \in LiveEx : ex[e].thr = t /\ ex[e].depth = d /\ ~ex[e].done
@@ -688,7 +708,8 @@ StartModCall(t) ==
            /\ fr' = [fr EXCEPT ![t] = Append(@, [kind |-> "mod", reg |-> ModReg,
                          outer |-> rg[ModReg].call, call |-> k,
                          ads |-> {a, w} \cup (IF ns # 0 THEN {ns} ELSE {}),
-                         phase |-> "run"] @@ NoBorrow)]
+                         phase |-> "run", bkind |-> "none", bad |-> 0, bgen |-> 0,
+                         bvals |-> 0])]
     /\ lock' = t
     /\ UNCHANGED <<epoch, live, cl, nCell, st, nGen, ex, nEx, gsnap, gatt, ns, lag, fails, dirty,
                    dirtyBy, pendDrop, wr, flag>>
@@ -712,7 +733,7 @@ EndModCall(t) ==
           /\ wr' = Mark(wr, {<<"c", c>> : c \in marked}, t)
     /\ rg' = [rg EXCEPT ![ModReg].call = IF FixCallRestore THEN Top(t).outer ELSE @]
     /\ fr' = Pop(t)
-    /\ lock' = IF \E i \in 1..(Depth(t) - 1) : fr[t][i].kind = "mod" THEN t ELSE "none"
+    /\ lock' = IF \E i \in Frames(t) : i < Depth(t) /\ fr[t][i].kind = "mod" THEN t ELSE "none"
     \* W(t) of the call, not of its caller: TemplateModuleState::Call holds its lock while the
     \* arguments die and the collector is torn down, so the GC step writes under the lock
     \* (Codex review of #688). No other thread steps before that GC: it waits for Idle
@@ -756,7 +777,7 @@ DropUnheld ==
             \* A later call that is lent the same data would miss this cell's writes
             /\ flag' = [flag EXCEPT !.lost = @ \/ hkeep[cl[c].idn]]
             /\ UNCHANGED <<pendDrop, lag>>
-    /\ UNCHANGED <<epoch, ad, nAd, nCell, st, nGen, fr, ex, nEx, gsnap, gatt, ns, hkeep, lag, lock, inc, fails,
+    /\ UNCHANGED <<epoch, ad, nAd, nCell, st, nGen, fr, ex, nEx, gsnap, gatt, ns, hkeep, lock, inc, fails,
                    dirtyBy, wr>>
 
 \* The host lets go of its copy of a generic container (0336)
@@ -841,5 +862,78 @@ ExportKeepsCallState == ~flag.late
 
 \* 0336: no cell is dropped while its data can be lent again (its writes would be lost)
 NoLostWrites == ~flag.lost
+
+
+-----------------------------------------------------------------------------
+(* Well-formedness: every id a field holds names an object made so far, and the links,
+   tables and frames agree. TLC checks it as an invariant (check.py); it is the first layer of
+   the inductive invariant (CellInductive.tla), where an arbitrary state would otherwise read
+   outside a function's domain, which Apalache leaves unspecified *)
+
+AdsMade == {a \in AdIds : a <= nAd}
+CellsMade == {c \in CellIds : c <= nCell}
+GensMade == {g \in GenIds : g <= nGen}
+AdRef(a) == a = 0 \/ a \in AdsMade
+CellRef(c) == c = 0 \/ c \in CellsMade
+GenRef(g) == g = 0 \/ g \in GensMade
+
+WFAd ==
+    \A a \in AdIds :
+        IF a > nAd THEN ad[a] = NoAd
+        ELSE /\ ad[a].idn \in Keys
+             /\ CellRef(ad[a].cell)
+             /\ ad[a].held = (ad[a].idn = "G")
+             /\ ad[a].generic => ad[a].idn \in OwnedAddrs
+             /\ (ad[a].seen = ATT) = (ad[a].cell # 0)
+
+WFCell ==
+    \A c \in CellIds :
+        IF c > nCell THEN cl[c] = NoCell
+        ELSE /\ cl[c].idn \in Keys
+             /\ cl[c].stor \in GensMade /\ GenRef(cl[c].retired) /\ AdRef(cl[c].source)
+             /\ cl[c].links \subseteq AdsMade
+             /\ cl[c].inTable => (cl[c].alive /\ ~cl[c].frozen
+                                  /\ rg[cl[c].reg].tbl[cl[c].idn] = c)
+             /\ cl[c].frozen => cl[c].links = {}
+
+WFGen ==
+    \A g \in GenIds :
+        IF g > nGen THEN st[g] = NoGen ELSE AdRef(st[g].child)
+
+WFTable ==
+    \A r \in RegIds : \A k \in Keys :
+        LET c == rg[r].tbl[k] IN
+        c # 0 => (c \in CellsMade /\ cl[c].inTable /\ cl[c].reg = r /\ cl[c].idn = k)
+
+WFFrame ==
+    \A t \in Threads : \A i \in Frames(t) :
+        LET F == fr[t][i] IN
+        /\ F.kind = "render" => (t \in RenderThreads /\ F.reg = <<t, i>>)
+        /\ F.kind = "mod" => (t \in ModuleThreads /\ F.reg = ModReg)
+        /\ F.ads \subseteq AdsMade
+        /\ F.phase = "fin" => (F.ads = {} /\ F.kind = "render")
+        /\ i < Depth(t) => F.phase = "run"
+        /\ (F.bkind = "none") = (F.bad = 0)
+        /\ F.bkind # "none" => (F.bad \in AdsMade /\ ad[F.bad].cell \in CellsMade
+                                /\ F.bgen \in GensMade)
+
+WFEx ==
+    \A e \in ExIds :
+        IF e > nEx THEN ex[e] = NoEx
+        ELSE /\ ex[e].kind \in {"gen", "live", "view", "raw"}
+             /\ ex[e].thr \in Threads /\ ex[e].depth \in 1..MaxDepth
+             /\ ex[e].idn \in Keys
+             /\ IF ex[e].pin
+                THEN /\ GenRef(ex[e].pg) /\ (ex[e].cg = -1 \/ GenRef(ex[e].cg))
+                     /\ ex[e].kind \in {"live", "view"}
+                ELSE /\ ex[e].kind = "gen" => ex[e].gen \in GensMade
+                     /\ ex[e].kind = "live" => ex[e].cell \in CellsMade
+             /\ ex[e].kind \in {"view", "raw"} => ex[e].ad \in AdsMade
+             /\ ex[e].done => Len(ex[e].snap) = 2
+
+WFRest ==
+    /\ AdRef(ns) /\ \A t \in Threads : AdRef(gsnap[t])
+
+WellFormed == WFAd /\ WFCell /\ WFGen /\ WFTable /\ WFFrame /\ WFEx /\ WFRest
 
 =============================================================================

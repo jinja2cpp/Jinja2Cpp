@@ -133,3 +133,14 @@ a counterexample. The interface contract to `CellProtocol.tla` is in tla/README.
 collector". It relies on H6 of the memory-order document (#690, added from this step):
 during the walk other threads only copy or drop references they already hold; the
 `host-reads-share` mutants show the walk is unsafe without it.
+
+**Step F, past the bounds (2026-10-30).** Apalache runs the model (`tla/apalache.py`), but one
+inductive step of the full `Next` ran out of memory on the smallest scope, so the mechanized
+proof is task 0363. In its place: each scope is finite, so a run without the level bound that
+completes covers every behaviour (0351 item 1); `WellFormed` is a TLC invariant of every pass
+run; and tla/README.md, "Past the bounds", gives the cutoff argument for threads, identities and
+nesting, with its gaps. Apalache's assignment check also found a dead end in `DropUnheld` (an
+empty `lag` was required), which cut TLC's behaviours short; fixed.
+Decision (Ruslan, 2026-10-30): the model is a design tool and stays bounded evidence plus that
+argument; the implementation is checked by a periodic deep validation of a frozen version
+(0364), not per PR.
