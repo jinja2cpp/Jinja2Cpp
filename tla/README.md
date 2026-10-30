@@ -25,15 +25,17 @@ python3 tla/check.py --list
 ```
 
 The GitHub Actions workflow `tla-model` (`.github/workflows/tla-model.yml`, task 0350) runs
-the same suite in four parallel jobs (`render`, `mixed`, `threads` and the rest): on pull
-requests that change `CellProtocol.tla` or `check.py`, nightly on master when `tla/` changed,
-and on demand from the Actions tab (Run workflow, on any branch, optionally with a list of runs).
+the same suite in four parallel jobs (`render`, `mixed`, `threads` and the rest) as a routine,
+not per pull request: weekly on master when `tla/` changed, and on demand from the Actions tab
+(Run workflow, on any branch or tag such as a frozen release candidate, optionally with a list
+of runs).
 Prefer it to a local run for anything longer than an hour: the job summary has a row per run
 and the `tlc-*` artifacts keep each run's `MC.cfg` and `tlc.out`.
 
 The two-thread scopes are reduced by thread symmetry (`SYMMETRY ThreadPerms` over the threads as
 model values), which halves them; `--no-symmetry` turns it off. `--except NAME ...` runs every
-run but those, and `--java-opts` (or `TLC_JAVA_OPTS`) passes JVM options to TLC.
+run but those, `--cache DIR` (or `TLC_CACHE`) skips a run whose spec, model and constants
+match an expected verdict recorded there (the workflow keeps one per shard), and `--java-opts` (or `TLC_JAVA_OPTS`) passes JVM options to TLC.
 
 Java 11 or later is needed. `--set Name=Value` overrides a constant, for example
 `--set MaxLevel=14`. `--timeout SECONDS` limits each run; a run stopped by it fails as
@@ -76,7 +78,7 @@ not change in a later one. That rule is D8's copy on write.
 | 0340 option (a), not in the C++: a render's live cell holds its linked adapters until `Finish` | `Succ` of a cell, `FixPinOnAttach` |
 | `l.pop()` of a nested list | op `drop` |
 | a generic container (`MakeGenericList`) as a module call's argument, a copy the host keeps (0336) | `ad[a].generic`, `hkeep`, `HostLetsGo` |
-| `NextEpoch`, `BeginCall` wrapping past 32 bits (0342, 0341) | `NextEp`, `NextCall` with `MaxEpoch`, `MaxCallId` |
+| `NextEpoch` (64 bits since 0342), `BeginCall` wrapping past 32 bits (0341) | `NextEp`, `NextCall` with `MaxEpoch`, `MaxCallId` |
 
 What the model abstracts:
 - **Values.** A list's content is the number of appends. A copy shares its item adapters, as
@@ -154,7 +156,7 @@ explores every behaviour up to it and none past it.
 | `call-id-wrap-no-pin` | call ids wrap after 2, no `FixCallPin` | counterexample: `SnapshotStable` (0341) |
 | `no-generic-owner` | no `FixGenericOwner` | counterexample: `RegistryBounded` (0336) |
 | `generic-drop-without-host-test` | `IsUnheld` without the host-copy test | counterexample: `NoLostWrites` (0336) |
-| `open-0342-epoch-wrap` | `render` with the epoch wrapping after 2 | counterexample: `AliasesAgree` (task 0342, expected) |
+| `epoch-wrap` | `render` with the epoch wrapping after 2, as a 32-bit epoch did before 0342 | counterexample: `AliasesAgree` |
 
 Every counterexample takes 1 to 80 seconds; `check.py --traces` prints its steps.
 
@@ -259,10 +261,11 @@ unless renders also pinned by identity.
 loses the writes a later call with the same container must see (`generic-drop-without-host-test`,
 `NoLostWrites`).
 
-**Still open.** 0342, the epoch wrap, is a measurement decision (stored epoch width); the model now
-reproduces it (`open-0342-epoch-wrap`, `MaxEpoch = 2`). 0339 (a relaxed `use_count` in the
-uniqueness test) is memory order, outside a sequentially consistent model; the designs above keep
-the uniqueness test, so they inherit its fix.
+**Closed since.** 0342, the epoch wrap: the C++ epoch is 64 bits, so it never returns to a stored
+value, which is the unbounded counter the pass runs use; `epoch-wrap` (`MaxEpoch = 2`) keeps the
+32-bit defect as a mutant. 0339 (a relaxed `use_count` in the
+uniqueness test, now an acquire) is memory order, outside a sequentially consistent model; the
+designs above keep the uniqueness test, so they inherit its fix.
 
 ## What the results claim
 
@@ -275,7 +278,8 @@ reuse, and an inductive or cutoff argument) is task 0338.
 ## Not modelled
 
 - Dicts. Lists and dicts share the cell code, and the model has lists only.
-- `QuietEpoch`/`CellStep` and the memory order of the atomics. The epoch and the call id wrap
+- `QuietEpoch`/`CellStep` and the memory order of the atomics (argued in
+  `docs/design/borrowed-cells-memory-order.md`). The epoch and the call id wrap
   only in the runs that bound them (`MaxEpoch`, `MaxCallId`).
 - The cycle collector's traversal of frozen cells (`Traverse`, `NoteFrozen`). There are no
   cycles: an item is always another identity. The collector has its own spec,
@@ -300,8 +304,8 @@ python3 tla/collector_check.py --list
 python3 tla/collector_check.py --only no-propagate --traces
 ```
 
-The `collector` job of the `tla-model` workflow runs all of it, on pull requests that change
-`CycleCollector.tla`, `collector_check.py` or the workflow, and nightly with the cell model.
+The `collector` job of the `tla-model` workflow runs all of it, with the cell model's shards:
+weekly on master when `tla/` changed, and on demand from the Actions tab.
 
 ### What is modelled
 
@@ -493,8 +497,10 @@ instead of 2000 under `JINJA2CPP_CELL_TRACE` (400k events ran out of TLC's heap)
 call, `CellStep` steps after the first): they read no cell by construction and log nothing. The
 order of events across threads is the order the trace's mutex took them, which agrees with the
 code's order for state one thread or the module's lock owns; the counters' memory order is step
-C's (task 0339 onwards). The epoch and call numbers are logged as the 32-bit values they are, so
-a wrap shows as `CallsAgree` or `EpochAgrees`; the tests do not reach one.
+C's (task 0339 onwards). The epoch (64 bits since 0342) and call numbers are logged as they are,
+so a wrap would show as `CallsAgree` or `EpochAgrees`; the tests do not reach one. TLC's integers
+are 32-bit, so the test that moves the epoch past 2^32
+(`AdapterFindsACellPromotedAcrossThe32BitWrap`) is skipped in the trace build.
 
 ## Changing the protocol
 

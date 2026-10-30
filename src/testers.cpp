@@ -5,6 +5,7 @@
 #include "expression_evaluator.h"
 #include "filters.h"
 #include "function_base.h"
+#include "host_object.h"
 #include "internal_value.h"
 #include "render_context.h"
 #include "template_dict.h"
@@ -482,6 +483,12 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
     }
     else if (seqKind == TestKind::Integer || seqKind == TestKind::Double || seqKind == TestKind::Boolean || seqKind == TestKind::Object)
     {
+        // An object of the host language answers through its __contains__ first
+        const auto* host = seqKind == TestKind::Object ? GetHostObject(seq) : nullptr;
+        if (const auto found = host ? host->Contains(baseVal) : std::nullopt)
+        {
+            return *found;
+        }
         if (const auto found = seqKind == TestKind::Object ? IsValueInIteration(baseVal, seq) : std::nullopt)
         {
             return *found;
@@ -514,11 +521,17 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         {
             // An object stored as a map that defines a call (joiner(), a recursive loop)
             auto map = AsMap(baseVal);
-            result = map && map->GetAttrPolicy() == MapAttrPolicy::KeysOnly && map->HasValue("operator()");
+            const auto* host = map ? map->GetHostObject() : nullptr;
+            result = host ? host->IsCallable() : map && map->GetAttrPolicy() == MapAttrPolicy::KeysOnly && map->HasValue("operator()");
         }
         break;
     case IsEscapedMode:
-        // Python checks for __html__, which only Markup has
+        // Python checks for __html__, which Markup has, and an object of the host language may
+        if (const auto* host = GetHostObject(baseVal))
+        {
+            result = host->IsMarkupLike();
+            break;
+        }
         result = baseVal.IsMarkup();
         break;
     case IsFalseMode:

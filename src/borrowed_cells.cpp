@@ -29,24 +29,19 @@ inline namespace v2
 
 namespace detail
 {
-std::atomic<uint32_t> CellCounters::s_epoch{ 0 };
+std::atomic<uint64_t> CellCounters::s_epoch{ 0 };
 std::atomic<uint32_t> CellCounters::s_live{ 0 };
 
-uint32_t CellCounters::NextEpoch() noexcept
+uint64_t CellCounters::NextEpoch() noexcept
 {
-    // Past the attached mark and the epoch of a new adapter: the counter never holds either,
-    // also not for a moment while another thread reads it
-    auto epoch = s_epoch.load(std::memory_order_relaxed);
-    uint32_t next = 0;
-    do
-    {
-        next = epoch + 1;
-        while (next == UINT32_MAX || next == 0)
-        {
-            ++next;
-        }
-    } while (!s_epoch.compare_exchange_weak(epoch, next, std::memory_order_relaxed));
-    return next;
+    // Never 0, the epoch of a new adapter, and never as far as the attached mark: 2^63 moves are
+    // out of reach, so the counter never returns to a value an adapter stored (docs/tasks/0342)
+    return s_epoch.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
+void CellCounters::AdvanceEpochForTesting(uint64_t count) noexcept
+{
+    s_epoch.fetch_add(count, std::memory_order_relaxed);
 }
 } // namespace detail
 
@@ -237,18 +232,18 @@ const BorrowedCell* CellLink::Find(const void* identity, bool isList, bool held)
         return m_cell;
     }
     // Read first: a promotion after this read moves the epoch again
-    m_seenEpoch = detail::CellEpoch();
+    m_state = detail::CellEpoch();
     const auto* cells = CycleCollector::CurrentCells();
     if (!cells || !cells->m_cells)
     {
         JINJA2CPP_CELL_TRACE_EVENT("find", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("idn", Trace::Space::Idn, identity), Trace::Num("list", isList ? 1 : 0),
-                                   Trace::Num("e", m_seenEpoch), Trace::Num("hit", 0));
+                                   Trace::Num("e", static_cast<int64_t>(m_state)), Trace::Num("hit", 0));
         return nullptr;
     }
     const auto found = cells->m_cells->find(identity);
     const BorrowedCell* hit = found != cells->m_cells->end() && found->second->IsList() == isList ? found->second.get() : nullptr;
     JINJA2CPP_CELL_TRACE_EVENT("find", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("idn", Trace::Space::Idn, identity), Trace::Num("list", isList ? 1 : 0),
-                               Trace::Num("e", m_seenEpoch), Trace::Ptr("hit", Trace::Space::Cell, hit));
+                               Trace::Num("e", static_cast<int64_t>(m_state)), Trace::Ptr("hit", Trace::Space::Cell, hit));
     if (hit)
     {
         Link(*hit, held);
@@ -262,15 +257,14 @@ void CellLink::Link(const BorrowedCell& cell, bool held) const
     {
         // A reference: the host may let go of the adapter on any thread (docs/tasks/0340)
         intrusive_ptr_add_ref(&cell);
-        m_linkIndex = OwnsBit;
         m_cell = &cell;
-        m_seenEpoch = Attached;
+        m_state = AttachedBit | OwnsBit;
         JINJA2CPP_CELL_TRACE_EVENT("link", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("c", Trace::Space::Cell, &cell), Trace::Num("held", 0));
         return;
     }
     // Pushed first: when it cannot be, the adapter stays detached and, with an epoch the counter
     // never holds, looks for the cell again at its next read
-    m_seenEpoch = 0;
+    m_state = 0;
 #ifdef JINJA2CPP_CELL_TRACE
     try
     {
@@ -284,9 +278,8 @@ void CellLink::Link(const BorrowedCell& cell, bool held) const
 #else
     cell.m_links.push_back(this);
 #endif
-    m_linkIndex = static_cast<uint32_t>(cell.m_links.size() - 1) | HeldBit;
     m_cell = &cell;
-    m_seenEpoch = Attached;
+    m_state = AttachedBit | HeldBit | (cell.m_links.size() - 1);
     JINJA2CPP_CELL_TRACE_EVENT("link", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("c", Trace::Space::Cell, &cell), Trace::Num("held", 1));
     // The thread keeps the globals' adapters for its next render, which may run inside this one
     RenderWorkspace::ForThisThread().GlobalAttached();
@@ -295,29 +288,33 @@ void CellLink::Link(const BorrowedCell& cell, bool held) const
 void CellLink::Unlink() const noexcept
 {
     const auto* cell = m_cell;
-    const bool owns = (m_linkIndex & OwnsBit) != 0;
+    const bool owns = Owns();
+    const auto index = m_state & IndexBits;
     JINJA2CPP_CELL_TRACE_EVENT("unlink", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("c", Trace::Space::Cell, cell), Trace::Num("owns", owns ? 1 : 0));
     m_cell = nullptr;
-    m_seenEpoch = 0;
+    m_state = 0;
     if (owns)
     {
         // Any thread: the reference is atomic, and the cell's list does not have the link
-        m_linkIndex = 0;
         intrusive_ptr_release(cell);
         return;
     }
     // A global's link, on the thread of the render that made the cell
     auto& links = cell->m_links;
-    const auto index = m_linkIndex & ~HeldBit;
+    // The last link takes this one's place. When this link is the last, its state stays 0: a
+    // detached link holds 0 or an epoch it saw, never a list index
     const auto* last = links.back();
-    links[index] = last;
-    last->m_linkIndex = (last->m_linkIndex & HeldBit) | index;
+    if (last != this)
+    {
+        links[index] = last;
+        last->m_state = (last->m_state & ~IndexBits) | index;
+    }
     links.pop_back();
 }
 
 void CellLink::TraverseFrozen(const TraverseFn& fn) const
 {
-    if (m_cell && (m_linkIndex & OwnsBit) != 0 && m_cell->m_frozen)
+    if (m_cell && Owns() && m_cell->m_frozen)
     {
         fn(m_cell);
     }
@@ -325,14 +322,13 @@ void CellLink::TraverseFrozen(const TraverseFn& fn) const
 
 void CellLink::Inherit(const CellLink& other) noexcept
 {
-    if ((other.m_linkIndex & OwnsBit) == 0 || !other.m_cell->m_frozen)
+    if (!other.Owns() || !other.m_cell->m_frozen)
     {
         return;
     }
     intrusive_ptr_add_ref(other.m_cell);
     m_cell = other.m_cell;
-    m_linkIndex = OwnsBit;
-    m_seenEpoch = Attached;
+    m_state = AttachedBit | OwnsBit;
     JINJA2CPP_CELL_TRACE_EVENT("inherit", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("from", Trace::Space::Link, &other), Trace::Ptr("c", Trace::Space::Cell, m_cell));
 }
 
@@ -413,7 +409,7 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     detail::CellCounters::AddLive(1);
     // The other adapters of the same data look the cell up on their next read
     [[maybe_unused]] const auto epoch = detail::CellCounters::NextEpoch();
-    JINJA2CPP_CELL_TRACE_EVENT("promote", Trace::Ptr("c", Trace::Space::Cell, cell.get()), Trace::Num("e", epoch), Trace::Num("live", detail::CellCounters::Live()));
+    JINJA2CPP_CELL_TRACE_EVENT("promote", Trace::Ptr("c", Trace::Space::Cell, cell.get()), Trace::Num("e", static_cast<int64_t>(epoch)), Trace::Num("live", detail::CellCounters::Live()));
     return true;
 }
 
@@ -494,8 +490,7 @@ void BorrowedCells::Finish(CycleCollector* collector) noexcept
         for (const auto* link : cell->m_links)
         {
             link->m_cell = nullptr;
-            link->m_seenEpoch = 0;
-            link->m_linkIndex = 0;
+            link->m_state = 0;
         }
         cell->m_links.clear();
         cell->m_links.shrink_to_fit();
@@ -526,7 +521,7 @@ void BorrowedCells::Finish(CycleCollector* collector) noexcept
     detail::CellCounters::RemoveLive(count);
     // An adapter that read a cell of this render, or found none while it ran, looks again
     [[maybe_unused]] const auto epoch = detail::CellCounters::NextEpoch();
-    JINJA2CPP_CELL_TRACE_EVENT("finished", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("e", epoch), Trace::Num("live", detail::CellCounters::Live()));
+    JINJA2CPP_CELL_TRACE_EVENT("finished", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("e", static_cast<int64_t>(epoch)), Trace::Num("live", detail::CellCounters::Live()));
 }
 
 void BorrowedCells::AdoptExports(std::shared_ptr<CallExports> exports) noexcept

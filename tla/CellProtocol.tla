@@ -58,7 +58,7 @@ CONSTANTS
     FixLinksOwn,          \* 0340 as the C++ does it: every link but a global's owns its cell, a
                           \* render's too, so a host thread's drop is a release, never a write
     HostHandoff,          \* the host may hand what it kept to another thread while the call runs
-    MaxCallId, MaxEpoch,  \* the call id and the epoch wrap past these (0341, 0342)
+    MaxCallId, MaxEpoch,  \* the call id and the epoch wrap past these (0341, 0342: mutant runs only)
     \* Shapes: inside a module call, keep([x]) (0332) and writes to a nested item (0332). Outside
     \* the contract before FixCallPin; a scope choice after it
     AllowModuleKeepList,
