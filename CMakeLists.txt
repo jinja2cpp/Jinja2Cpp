@@ -457,6 +457,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/autoescape_test.cpp
         test/basic_tests.cpp
         test/big_int_test.cpp
+        test/borrowed_cells_globals_test.cpp
         test/borrowed_cells_test.cpp
         test/containers_api_test.cpp
         test/debug_containers_test.cpp

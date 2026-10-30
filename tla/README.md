@@ -73,6 +73,7 @@ not change in a later one. That rule is D8's copy on write.
 | `CallExports`, pinned in `~ModuleCallCollector` (0335, 0332); its views `CallListView`, `CallMapView` | an export of kind `live`; `PinEx` in `EndModCall` |
 | A link holds a reference to its cell unless it is a global's (`CellLink::OwnsBit`; 0332, 0340) | `OwningLink`, `FixModuleLinksOwn`, `FixLinksOwn` |
 | 0340 option (a), not in the C++: a render's live cell holds its linked adapters until `Finish` | `Succ` of a cell, `FixPinOnAttach` |
+| `CellLink::SnapshotBit`: the snapshot reaches a global's adapter; `LendNested`'s block, `LeaveSnapshot` when it lets go of it; `g[i]` and a map's item lent afresh (0346) | `ad[a].snap`, `ad[a].blk`, `LendGItem`, `Evict`, `Forget`, `FixSnapshotLinks` |
 | `l.pop()` of a nested list | op `drop` |
 | a generic container (`MakeGenericList`) as a module call's argument, a copy the host keeps (0336) | `ad[a].generic`, `hkeep`, `HostLetsGo` |
 | `NextEpoch` (64 bits since 0342), `BeginCall` wrapping past 32 bits (0341) | `NextEp`, `NextCall` with `MaxEpoch`, `MaxCallId` |
@@ -246,12 +247,28 @@ makes the render's links owning instead, the rule `FixModuleLinksOwn` already se
 cells: a link to a cell in an `ItemAdapters` block has no object of its own the registry could
 hold (the block owns it), while the link always knows its cell. A global's link stays listed and
 non-owning, since `Finish` must find it to detach it; the thread's snapshot holds a global's
-adapter, so a host's drop is never its last reference, except for a global's nested item whose
-block of item adapters the global's adapter let go of (task 0346; the model has no blocks). Both
-closings are runs:
+adapter, so a host's drop is never its last reference. That holds only for the adapters the
+snapshot reaches, which 0346 makes the rule (below). Both closings are runs:
 `render-handoff` (the C++) and `render-handoff-pin-on-attach` (option a). Option (b), an export of
 a detached copy, would lose the frozen cell that a kept value reads after the render (0331 A2)
 unless renders also pinned by identity.
+
+**A global's link is listed only while the snapshot reaches its adapter (`FixSnapshotLinks`:
+0346).** The snapshot of the globals holds each global's own adapter and, through it, the block of
+item adapters that adapter read last (`ValuesListAdapter::m_items`, a loop over the global). Any
+other adapter of a global's data is a value like the host's: `g[i]` and a map's item are new
+adapters at each read, and an item of a block the global's adapter let go of (it read past the
+block) lives only as long as the values that hold it. Before the fix every global's link was listed,
+so a host that held the last reference to such an adapter and dropped it on another thread edited
+the live cell's `m_links` while the render pushed to it (TSan: data races and a use after free of
+the list's buffer), or read the link that `Finish` was writing. With the fix such a link owns its
+cell, and when the global's adapter lets go of a block, its items' listed links leave the list
+and become owning references, on the render's thread, which still holds the block. Since the
+snapshot is converted again after a render that attached a global (`GlobalAttached`), no later
+render reads an owning global's link; the frozen cell it keeps is what a kept value reads, as for
+any other link. The model has one level of items (`LendGItem`, `Evict`, `Forget`):
+`global-items-listed` is the code before the fix, `global-items-handoff` and
+`render-global-items` the fix.
 
 **Drop a generic container's cell only when the host keeps no copy (`FixGenericOwner`: 0336).**
 `no-generic-owner` keeps a cell per call (`RegistryBounded`); a drop without the host-copy test
@@ -320,7 +337,8 @@ trace can show it. The events and what the spec checks at each:
 | `skip` (`CellLink::MayHaveCell` false) | the epoch is the one the adapter saw at its last lookup (`EpochAgrees`); the running registry has no cell of its data (`AliasesAgree`) |
 | `find`, `link`, `linkfail` (`Find`, `Link`) | the lookup finds the registry's cell of that identity and kind (`TableAgrees`); a link only to a live, unfrozen cell, by its registry's writer (`NoCrossThreadWrite`) |
 | `hit` (an attached adapter's read) | the adapter is attached to that cell (`LinksAgree`); the cell is alive and, unless frozen, of the running registry (`NoForeignCell`) |
-| `unlink`, `inherit`, `dieatt` | the link set agrees, and whether the link owns its cell (`CellRules!LinkOwns`); an owning link lets go on any thread, a global's link changes a live cell's list on its writer's thread only; an adapter never goes attached (`NoDanglingLink`) |
+| `unlink`, `inherit`, `dieatt` | the link set agrees, and whether the link owns its cell (`CellRules!LinkOwns`); an owning link lets go on any thread, a listed (global's) link changes a live cell's list on its writer's thread only; an adapter never goes attached (`NoDanglingLink`) |
+| `leave` (`CellLink::LeaveSnapshot`, 0346) | a listed link of a live cell leaves the list and owns the cell, on the cell's writer's thread |
 | `adopt`, `adoptno`, `adoptundo`, `promote` | a new cell only where the table has none; the live count (`LiveCount`, one-thread traces) |
 | `export` (`ExportList`/`ExportMap`) | a value reads through the call's `CallExports` exactly in the cell's own module call (`CellRules!ExportLive`, `MarkRule`); it marks nothing |
 | `pin` (`CallExports::Pin`) | a live table cell of the registry whose call ends; the cell is marked and its storage is what the host's values share from now on (`exr`) |

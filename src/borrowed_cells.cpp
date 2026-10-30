@@ -214,15 +214,15 @@ bool BorrowedCell::Unshare() const
 
 const BorrowedCell* CellLink::Find(const IListAccessor& self) const
 {
-    return Find(self.GetIdentity(), true, self.IsGlobalData());
+    return Find(self.GetIdentity(), true, self.IsGlobalData(), self.IsInSnapshot());
 }
 
 const BorrowedCell* CellLink::Find(const IMapAccessor& self) const
 {
-    return Find(self.GetIdentity(), false, self.IsGlobalData());
+    return Find(self.GetIdentity(), false, self.IsGlobalData(), self.IsInSnapshot());
 }
 
-const BorrowedCell* CellLink::Find(const void* identity, bool isList, bool held) const
+const BorrowedCell* CellLink::Find(const void* identity, bool isList, bool held, bool listed) const
 {
     // A cell stays until its render detaches it, also while a render nested in it runs; a frozen
     // one for as long as the link lives
@@ -246,20 +246,25 @@ const BorrowedCell* CellLink::Find(const void* identity, bool isList, bool held)
                                Trace::Num("e", static_cast<int64_t>(m_state)), Trace::Ptr("hit", Trace::Space::Cell, hit));
     if (hit)
     {
-        Link(*hit, held);
+        Link(*hit, held, listed);
     }
     return m_cell;
 }
 
-void CellLink::Link(const BorrowedCell& cell, bool held) const
+void CellLink::Link(const BorrowedCell& cell, bool held, bool listed) const
 {
-    if (!held)
+    if (!held || !listed)
     {
-        // A reference: the host may let go of the adapter on any thread (docs/tasks/0340)
+        // A reference: the host may let go of the adapter on any thread (docs/tasks/0340), a
+        // global's item too, which the thread's snapshot does not keep (0346)
         intrusive_ptr_add_ref(&cell);
         m_cell = &cell;
         m_state = AttachedBit | OwnsBit;
         JINJA2CPP_CELL_TRACE_EVENT("link", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("c", Trace::Space::Cell, &cell), Trace::Num("held", 0));
+        if (held)
+        {
+            RenderWorkspace::ForThisThread().GlobalAttached();
+        }
         return;
     }
     // Pushed first: when it cannot be, the adapter stays detached and, with an epoch the counter
@@ -299,10 +304,15 @@ void CellLink::Unlink() const noexcept
         intrusive_ptr_release(cell);
         return;
     }
-    // A global's link, on the thread of the render that made the cell
-    auto& links = cell->m_links;
-    // The last link takes this one's place. When this link is the last, its state stays 0: a
-    // detached link holds 0 or an epoch it saw, never a list index
+    // A listed link, on the thread of the render that made the cell
+    Unlist(*cell, index);
+}
+
+void CellLink::Unlist(const BorrowedCell& cell, uint64_t index) const noexcept
+{
+    auto& links = cell.m_links;
+    // The last link takes this one's place. When this link is the last, its state is left as the
+    // caller sets it: a detached link holds 0 or an epoch it saw, never a list index
     const auto* last = links.back();
     if (last != this)
     {
@@ -310,6 +320,18 @@ void CellLink::Unlink() const noexcept
         last->m_state = (last->m_state & ~IndexBits) | index;
     }
     links.pop_back();
+}
+
+void CellLink::LeaveSnapshot() const noexcept
+{
+    if (!m_cell || Owns())
+    {
+        return;
+    }
+    JINJA2CPP_CELL_TRACE_EVENT("leave", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("c", Trace::Space::Cell, m_cell));
+    Unlist(*m_cell, m_state & IndexBits);
+    intrusive_ptr_add_ref(m_cell);
+    m_state = AttachedBit | OwnsBit;
 }
 
 void CellLink::TraverseFrozen(const TraverseFn& fn) const
@@ -332,7 +354,7 @@ void CellLink::Inherit(const CellLink& other) noexcept
     JINJA2CPP_CELL_TRACE_EVENT("inherit", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("from", Trace::Space::Link, &other), Trace::Ptr("c", Trace::Space::Cell, m_cell));
 }
 
-bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, std::weak_ptr<const void> owner) const
+bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, bool listed, std::weak_ptr<const void> owner) const
 {
     // An adapter of a value kept after its render: nothing writes the frozen cell, and the caller
     // writes its copy instead (docs/tasks/0331)
@@ -373,7 +395,7 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
         JINJA2CPP_CELL_TRACE_EVENT("adopt", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("idn", Trace::Space::Idn, identity), Trace::Num("list", isList ? 1 : 0),
                                    Trace::Num("held", held ? 1 : 0), Trace::Num("owned", 0), Trace::Ptr("reg", Trace::Space::Reg, cells),
                                    Trace::Ptr("c", Trace::Space::Cell, entry->second.get()), Trace::Num("new", 0), Trace::Num("g", 0), Trace::Num("src", 0));
-        Link(*entry->second, held);
+        Link(*entry->second, held, listed);
         return true;
     }
 #ifdef JINJA2CPP_CELL_TRACE
@@ -397,7 +419,7 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
 #endif
     try
     {
-        Link(*cell, held);
+        Link(*cell, held, listed);
     }
     catch (...)
     {
