@@ -24,3 +24,8 @@ upstream test subset and its failures are filed as parity tasks.
 Jinja2, so the bindings are a product (0248), and running Jinja2's test suite is its proof
 step. This task stays open only for the decision of which upstream tests to adapt; 0248
 owns the binding.
+
+**Decision (0248 plan, approved 2026-10-30).** Adapt all of pallets/jinja's `tests/`, not a
+hand-picked subset. The subset is the allow-list
+`python/tests/upstream/expected-failures.txt`, with the classes `internals`, `async`,
+`extension`, `deliberate` and `divergence`. Running it is 0355, which closes this task.
