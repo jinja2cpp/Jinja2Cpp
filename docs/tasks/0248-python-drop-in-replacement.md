@@ -31,3 +31,32 @@ test tool; this task is the product.
 **Done when.** The supported subset is documented, a chat-template workload from
 `transformers` renders identically through the module, the upstream test subset runs in
 CI with its pass rate reported, and wheels build in CI.
+
+**Plan approved (Ruslan 2026-10-30).** The plan is in
+`/mnt/project-files/release-2.0/0248-plan.md`. Its decisions:
+- **Binding:** nanobind with scikit-build-core, CPython 3.12 as the floor, abi3 wheels.
+- **D3:** the module links the library statically and uses a private engine seam.
+- **D4:** Python containers cross as lazy adapters that keep their identity.
+- **D5:** the GIL is held during a render; a measured snapshot path renders with the GIL
+  released.
+- **D6:** `Markup` is the same type as `markupsafe.Markup`.
+- **D7:** fallback to real Jinja2 is `auto` by default, `never` in CI, and is decided only
+  at environment construction, at template load, or on a render retry before any callable
+  has run.
+- **D8:** the sandbox is an attribute and call policy inside the adapters.
+- **D9:** transformers switch over through an explicit `patch()`, with no import hijack.
+- **Performance gate:** the module must beat Python Jinja2 on Load and Render for every
+  bench case.
+- **Deliberate divergences:** behaviour we do not want to keep is reported apart in the
+  upstream pass rate.
+
+It is split into these tasks:
+- 0352: P1a, the private host-object seam
+- 0353: P1b, the core and the perf gate
+- 0354: P2, the subset, sandbox and fallback
+- 0355: P3, the upstream suite, the corpus, chat templates and the bench row
+- 0356: P4, wheels
+- 0357: before the G1 freeze, move the module to public API only, so the project's contract
+  is the public interface alone (Ruslan 2026-10-30)
+
+This task is done when 0352-0356 are.
