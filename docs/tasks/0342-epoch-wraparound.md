@@ -57,7 +57,7 @@ benchmark between -0.05% (`Render/chat_llama`) and +0.00%, including `Render/for
 targets (the link stays 16 bytes; on a 32-bit target it grows from 12 to 16).
 
 Evidence: `BorrowedCellsSingle.AdapterFindsACellPromotedAcrossThe32BitWrap` moves the counter by
-2^32 - 1 through the exported `detail::AdvanceCellEpochForTesting`; on the 32-bit code it fails with
+2^32 - 1 through the exported `detail::CellCounters::AdvanceEpochForTesting`; on the 32-bit code it fails with
 `[1]|[1]|[1, 9]` (the adapter skipped the lookup), with the fix it passes (skipped in the trace build,
 whose epochs must fit TLC's 32-bit integers). The model's `open-0342-epoch-wrap` run is now the mutant
 `epoch-wrap` (`MaxEpoch = 2`, counterexample `AliasesAgree`), and the design document's E4 and gap 3

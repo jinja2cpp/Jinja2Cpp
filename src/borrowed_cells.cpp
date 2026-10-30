@@ -39,9 +39,9 @@ uint64_t CellCounters::NextEpoch() noexcept
     return s_epoch.fetch_add(1, std::memory_order_relaxed) + 1;
 }
 
-void AdvanceCellEpochForTesting(uint64_t count) noexcept
+void CellCounters::AdvanceEpochForTesting(uint64_t count) noexcept
 {
-    CellCounters::s_epoch.fetch_add(count, std::memory_order_relaxed);
+    s_epoch.fetch_add(count, std::memory_order_relaxed);
 }
 } // namespace detail
 

@@ -175,7 +175,7 @@ one, and would need 2^63 moves to reach the attached mark: 292 years at 10^9 mov
 never returns to a value an adapter stored, which is the unbounded counter the TLA+ model assumes.
 The `epoch-wrap` mutant of the model (`MaxEpoch = 2`) keeps the old defect visible, and
 `BorrowedCellsSingle.AdapterFindsACellPromotedAcrossThe32BitWrap` moves the counter past 2^32 at
-once (`AdvanceCellEpochForTesting`) and fails with a 32-bit stored epoch.
+once (`CellCounters::AdvanceEpochForTesting`) and fails with a 32-bit stored epoch.
 
 **E5. The call id no longer guards anything.** Until #695, `m_exportedIn` kept the id of the call
 that first shared a cell's items with the host and `Unshare` wrote in place when it equalled the

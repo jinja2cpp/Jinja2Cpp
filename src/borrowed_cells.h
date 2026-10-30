@@ -39,11 +39,6 @@ class CycleCollector;
 
 namespace detail
 {
-// Moves the epoch by `count` at once, as that many promotions would: a test of the old 32-bit
-// wrap-around needs 2^32 moves (docs/tasks/0342). Exported for the tests of a shared library, and
-// declared before CellCounters befriends it so that MSVC sees the dllimport first
-JINJA2CPP_EXPORT void AdvanceCellEpochForTesting(uint64_t count) noexcept;
-
 // The counters of the borrowed cells that every thread shares. Only borrowed_cells.cpp changes
 // them; readers get a value. The storage is a member defined in borrowed_cells.cpp, not a static
 // local of an inline function, so code outside the library that reached it would fail to link
@@ -60,11 +55,14 @@ public:
     // The cells that exist now, in any thread's registry; with the epoch it tells a block of item
     // adapters that none of its slots can have a cell (QuietEpoch)
     static uint32_t Live() noexcept { return s_live.load(std::memory_order_relaxed); }
+    // Moves the epoch by `count` at once, as that many promotions would: a test of the old 32-bit
+    // wrap-around needs 2^32 moves (docs/tasks/0342). Exported for the tests of a shared library;
+    // a member rather than a friend, as MSVC rejects a friend redeclaration without the dllimport
+    JINJA2CPP_EXPORT static void AdvanceEpochForTesting(uint64_t count) noexcept;
 
 private:
     friend class jinja2::BorrowedCells;
     friend class jinja2::CellLink;
-    friend void AdvanceCellEpochForTesting(uint64_t count) noexcept;
 
     static uint64_t NextEpoch() noexcept;
     static void AddLive(uint32_t count) noexcept { s_live.fetch_add(count, std::memory_order_relaxed); }

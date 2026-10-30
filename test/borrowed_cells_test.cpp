@@ -135,7 +135,7 @@ TEST(BorrowedCellsSingle, AdapterFindsACellPromotedAcrossThe32BitWrap)
     ValuesMap params{ { "a", list }, { "b", list } };
     params["advance"] = MakeCallable(
         [](int64_t count) {
-            detail::AdvanceCellEpochForTesting(static_cast<uint64_t>(count));
+            detail::CellCounters::AdvanceEpochForTesting(static_cast<uint64_t>(count));
             return std::string();
         },
         ArgInfo{ "count" });
