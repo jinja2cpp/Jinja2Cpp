@@ -158,7 +158,7 @@ namespace host
 inline bool IsMarkupLike(const InternalValue& value)
 {
     const auto* object = GetHostObject(value);
-    return object && object->IsMarkupLike();
+    return object != nullptr && object->IsMarkupLike();
 }
 // x(...) of a host object as a callable value of the engine, which keeps the object alive;
 // throws Python's TypeError for an object that is not callable
