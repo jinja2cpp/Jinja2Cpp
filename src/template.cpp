@@ -4,6 +4,7 @@
 #include "make_unexpected.h"
 #include "markup.h"
 #include "render_workspace.h"
+#include "shared_owner.h"
 #include "template_impl.h"
 
 #include <jinja2cpp/config.h>
@@ -79,11 +80,12 @@ private:
 };
 
 // The first Load of a template no other object holds yet (as LoadTemplate's) parses in place:
-// no copy, the cache, render or module can see it change
+// no copy, the cache, render or module can see it change. A copy let go of on another thread
+// has its reads ordered before the parse (docs/tasks/0339)
 template<typename CharT>
 bool LoadsInPlace(const std::shared_ptr<ITemplateImpl>& impl)
 {
-    return !GetImpl<CharT>(impl)->GetRenderer() && impl.use_count() == 1;
+    return !GetImpl<CharT>(impl)->GetRenderer() && IsSoleOwner(impl);
 }
 
 // The Load that replaces the template, out of the first Load's path; returns the result itself,

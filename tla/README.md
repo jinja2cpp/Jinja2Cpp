@@ -247,8 +247,8 @@ loses the writes a later call with the same container must see (`generic-drop-wi
 
 **Still open.** 0342, the epoch wrap, is a measurement decision (stored epoch width); the model now
 reproduces it (`open-0342-epoch-wrap`, `MaxEpoch = 2`). 0339 (a relaxed `use_count` in the
-uniqueness test) is memory order, outside a sequentially consistent model; the designs above keep
-the uniqueness test, so they inherit its fix.
+uniqueness test, now an acquire) is memory order, outside a sequentially consistent model; the
+designs above keep the uniqueness test, so they inherit its fix.
 
 ## What the results claim
 
@@ -261,7 +261,8 @@ reuse, and an inductive or cutoff argument) is task 0338.
 ## Not modelled
 
 - Dicts. Lists and dicts share the cell code, and the model has lists only.
-- `QuietEpoch`/`CellStep` and the memory order of the atomics. The epoch and the call id wrap
+- `QuietEpoch`/`CellStep` and the memory order of the atomics (argued in
+  `docs/design/borrowed-cells-memory-order.md`). The epoch and the call id wrap
   only in the runs that bound them (`MaxEpoch`, `MaxCallId`).
 - The cycle collector's traversal of frozen cells (`Traverse`, `NoteFrozen`). There are no
   cycles: an item is always another identity.
