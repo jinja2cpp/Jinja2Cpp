@@ -12,6 +12,8 @@ is expected to fail too. See tla/README.md.
 """
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -226,7 +228,16 @@ ThreadPerms == Permutations(Threads)
 """
 
 
-def run(jar, name, spec, workdir, extra=None, timeout=None, symmetry=True, java_opts=()):
+def cache_key(jar, workdir):
+    """What a run's verdict depends on: the spec, the model, its configuration and TLC itself"""
+    digest = hashlib.sha256()
+    for path in (jar, *(os.path.join(workdir, f) for f in ("CellProtocol.tla", "MC.tla", "MC.cfg"))):
+        with open(path, "rb") as data:
+            digest.update(hashlib.sha256(data.read()).digest())
+    return digest.hexdigest()
+
+
+def run(jar, name, spec, workdir, extra=None, timeout=None, symmetry=True, java_opts=(), cache=None):
     kind, scope, overrides, invariants, note = spec
     overrides = dict(overrides, **(extra or {}))
     os.makedirs(workdir, exist_ok=True)
@@ -235,6 +246,13 @@ def run(jar, name, spec, workdir, extra=None, timeout=None, symmetry=True, java_
         mc.write(MC_TLA)
     with open(os.path.join(workdir, "MC.cfg"), "w", encoding="utf-8") as cfg:
         cfg.write(config(scope, overrides, invariants, symmetry))
+    # A verdict that held for the same inputs holds again: TLC's search is deterministic in its
+    # result, so a run whose inputs did not change is not run again (only expected verdicts are kept)
+    cached = os.path.join(cache, cache_key(jar, workdir) + ".json") if cache else None
+    if cached and os.path.exists(cached):
+        with open(cached, encoding="utf-8") as data:
+            res = json.load(data)
+        return dict(res, name=name, note=note, verdict=res["verdict"] + " (cached)", secs=0)
     start = time.time()
     cmd = ["java", "-XX:+UseParallelGC", *java_opts, "-cp", jar, "tlc2.TLC", "-workers", "auto",
            "-deadlock", "-config", "MC.cfg", "MC.tla"]
@@ -269,9 +287,14 @@ def run(jar, name, spec, workdir, extra=None, timeout=None, symmetry=True, java_
     else:
         verdict = "TLC failed (see " + os.path.join(workdir, "tlc.out") + ")"
         ok = False
-    return dict(name=name, kind=kind, note=note, verdict=verdict, ok=ok,
-                states=states[0] if states else "?", secs=int(time.time() - start),
-                trace=[s for s in steps if not s.endswith("<GC>")])
+    res = dict(name=name, kind=kind, note=note, verdict=verdict, ok=ok,
+               states=states[0] if states else "?", secs=int(time.time() - start),
+               trace=[s for s in steps if not s.endswith("<GC>")])
+    if cached and ok:
+        os.makedirs(cache, exist_ok=True)
+        with open(cached, "w", encoding="utf-8") as data:
+            json.dump(res, data)
+    return res
 
 
 def main():
@@ -286,6 +309,9 @@ def main():
     parser.add_argument("--except", nargs="*", dest="skip", default=[], help="every run but these")
     parser.add_argument("--no-symmetry", action="store_true",
                         help="do not reduce two-thread runs by thread symmetry")
+    parser.add_argument("--cache", default=os.environ.get("TLC_CACHE"),
+                        help="directory of verdicts by input hash: a run whose spec, model and "
+                             "constants match an expected verdict there is not run again")
     parser.add_argument("--java-opts", default=os.environ.get("TLC_JAVA_OPTS", ""),
                         help="extra JVM options for TLC, for example -Xmx10g")
     parser.add_argument("--list", action="store_true")
@@ -293,6 +319,8 @@ def main():
     parser.add_argument("--traces", action="store_true", help="print each counterexample's steps")
     args = parser.parse_args()
     args.jar = os.path.abspath(args.jar)
+    if args.cache:
+        args.cache = os.path.abspath(os.path.expanduser(args.cache))
     if args.timeout is not None and args.timeout <= 0:
         parser.error("--timeout must be positive")
     if args.list:
@@ -310,7 +338,7 @@ def main():
     for name in names:
         extra = dict(item.split("=", 1) for item in args.set)
         res = run(args.jar, name, RUNS[name], os.path.join(base, name), extra, args.timeout,
-                  not args.no_symmetry, args.java_opts.split())
+                  not args.no_symmetry, args.java_opts.split(), args.cache)
         failed += not res["ok"]
         mark = "ok " if res["ok"] else "BAD"
         print(f"{mark} {name:28} {res['kind']:7} {res['verdict']:36} {res['states']:>12} states "

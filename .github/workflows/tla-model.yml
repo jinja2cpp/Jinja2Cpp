@@ -106,8 +106,20 @@ jobs:
         curl -sSfL --retry 3 -o tla/tla2tools.jar "$TLA_URL"
         echo "$TLA_SHA256  tla/tla2tools.jar" | sha256sum -c -
 
+    # Verdicts by input hash (check.py --cache): a push that leaves a run's spec and constants as
+    # they were does not run it again, so a fix to one mutant re-runs that mutant, not render
+    - name: Restore earlier verdicts
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ~/.cache/tlc-verdicts
+        key: tlc-verdicts-${{ matrix.shard.name }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: |
+          tlc-verdicts-${{ matrix.shard.name }}-
+          tlc-verdicts-
+
     - name: Check the model
       env:
+        TLC_CACHE: ~/.cache/tlc-verdicts
         # TLC's fingerprint set and queue grow in the heap first; the rest of RAM is page cache
         TLC_JAVA_OPTS: -Xmx10g
         SHARD_ARGS: ${{ matrix.shard.args }}
@@ -116,6 +128,13 @@ jobs:
         printf '| | Run | Kind | Verdict | States | Time |\n|---|---|---|---|---|---|\n' >> "$GITHUB_STEP_SUMMARY"
         # shellcheck disable=SC2086 # SHARD_ARGS is a list of words
         python3 tla/check.py $SHARD_ARGS --traces 2>&1 | tee "$TMPDIR/check.log"
+
+    - name: Save the verdicts
+      if: always()
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ~/.cache/tlc-verdicts
+        key: tlc-verdicts-${{ matrix.shard.name }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     - name: Keep the TLC logs
       if: always()
