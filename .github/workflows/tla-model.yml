@@ -1,8 +1,8 @@
 name: tla-model
 
 # The bounded TLC runs of tla/CellProtocol.tla (tla/check.py): every pass run must explore its
-# whole space and every mutant must find its counterexample. The longest runs take one to two
-# hours each on four cores, past what an agent's session can hold (docs/tasks/0350), so they
+# whole space and every mutant must find its counterexample. The longest runs take one to four
+# hours each on the runners, past what an agent's session can hold (docs/tasks/0350), so they
 # run here, one job per shard, in parallel. The trace validation of the C++ against
 # tla/CellTrace.tla runs in the linux-build `celltrace` row instead.
 #
@@ -63,7 +63,7 @@ jobs:
         if [ -n "${RUNS:-}" ]; then
           shards=$(python3 -c 'import json, sys; print(json.dumps([{"name": "chosen", "args": "--only " + sys.argv[1]}]))' "$RUNS")
         else
-          # render takes about 2 h, mixed and threads under 1 h each, the rest about 1 h
+          # On the 4-vCPU runner: render about 4 h, mixed 64 min, threads 44 min, the rest 1 h 45 min
           shards='[{"name": "render", "args": "--only render"},
                    {"name": "mixed", "args": "--only mixed"},
                    {"name": "threads", "args": "--only threads"},
@@ -98,7 +98,7 @@ jobs:
         mkdir -p "$work"
         echo "TMPDIR=$work" >> "$GITHUB_ENV"
         df -h / /mnt "$RUNNER_TEMP" || true
-        nproc; free -g; java -version
+        lscpu | grep -E "^(Model name|CPU\(s\)|Thread|Core)"; free -g; java -version
 
     - name: Fetch TLC
       run: |
