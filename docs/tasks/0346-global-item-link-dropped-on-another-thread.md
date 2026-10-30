@@ -3,6 +3,7 @@ status: in-progress
 priority: high
 area: robustness
 depends: [0340]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/711
 touches: [src/borrowed_cells.h, src/borrowed_cells.cpp, src/internal_value.cpp#ItemAdapters, src/internal_value.cpp#LendHeldItem, test/borrowed_cells_globals_test.cpp, tla/CellProtocol.tla, tla/CellTrace.tla, tla/CellRules.tla]
 ---
 # A global's item adapter in a block the global let go of, dropped on another thread
