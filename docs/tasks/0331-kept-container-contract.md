@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/673
 priority: medium
 area: parity
@@ -138,11 +138,14 @@ snapshot, never shared mutable state:
 | a global's data | the global's original (D4; Python: the writes) |
 | from a module call | that call's final state; a later call's write copies first (D8) |
 
-Left: a container a module call made that holds a host container keeps reading the module's
-live cell (task 0332).
+A container a module call made that holds a host container no longer reads the module's live
+cell: 0332 fixed it (#695).
 
 A module call that hands out a container before its first write to it keeps the earlier call's
 state (task 0335). A module call ends by dropping the cells of data that lived for the call (an
 argument, a host callable's result) once nothing holds their source
 (`BorrowedCells::DropUnheld`); a generic container the host makes for each call keeps its
 cell until the module goes (task 0336).
+
+**Closed (2026-10-30).** #673 landed the contract and its implementation (a64c314). What it left
+is in 0332 and 0335 (both done, #695), and in 0336 and 0347 (open).
