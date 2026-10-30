@@ -22,9 +22,10 @@ python3 tla/check.py --list
 ```
 
 The GitHub Actions workflow `tla-model` (`.github/workflows/tla-model.yml`, task 0350) runs
-the same suite in four parallel jobs (`render`, `mixed`, `threads` and the rest): on pull
-requests that change `CellProtocol.tla` or `check.py`, nightly on master when `tla/` changed,
-and on demand from the Actions tab (Run workflow, on any branch, optionally with a list of runs).
+the same suite in four parallel jobs (`render`, `mixed`, `threads` and the rest) as a routine,
+not per pull request: weekly on master when `tla/` changed, and on demand from the Actions tab
+(Run workflow, on any branch or tag such as a frozen release candidate, optionally with a list
+of runs).
 Prefer it to a local run for anything longer than an hour: the job summary has a row per run
 and the `tlc-*` artifacts keep each run's `MC.cfg` and `tlc.out`.
 
