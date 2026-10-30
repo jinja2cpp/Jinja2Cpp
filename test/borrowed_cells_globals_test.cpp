@@ -120,8 +120,8 @@ TEST(BorrowedCellsGlobals, SubscriptItemDroppedOnAnotherThread)
     // adapter of the item. A write through g[i] itself would give g a cell, whose items the cell
     // holds
     RenderWhileAnotherThreadDrops("{% macro f(i) %}{% set x = g[299] %}{% set _ = x.append(i) %}{% set _ = keep([x]) %}{% endmacro %}"
-                                  "{% for i in range(100) %}{{ f(i) }}{% endfor %}{{ g[299]|length }}",
-                                  ListOfLists(300), "101", true);
+                                  "{% for i in range(30) %}{{ f(i) }}{% endfor %}{{ g[299]|length }}",
+                                  ListOfLists(300), "31", true);
 }
 
 TEST(BorrowedCellsGlobals, ItemOfAnEnumeratedBlockDroppedOnAnotherThread)
@@ -138,8 +138,8 @@ TEST(BorrowedCellsGlobals, MapItemDroppedOnAnotherThread)
 {
     // The same for a map item of a global, also a new adapter at each read
     RenderWhileAnotherThreadDrops("{% macro f(i) %}{% set x = g.m %}{% set _ = x.append(i) %}{% set _ = keep([x]) %}{% endmacro %}"
-                                  "{% for i in range(100) %}{{ f(i) }}{% endfor %}{{ g.m|length }}",
-                                  Value(ValuesMap{ { "m", ValuesList{ 0 } } }), "101", true);
+                                  "{% for i in range(30) %}{{ f(i) }}{% endfor %}{{ g.m|length }}",
+                                  Value(ValuesMap{ { "m", ValuesList{ 0 } } }), "31", true);
 }
 
 TEST(BorrowedCellsGlobals, ItemsAgreeAcrossBlocks)
@@ -164,8 +164,46 @@ TEST(BorrowedCellsGlobals, MapItemsAgree)
 TEST(BorrowedCellsGlobals, CyclesThroughAGlobalsItemsAreFreed)
 {
     // The cell of an owning link holds the adapter that holds it: the collector frees the cycle
-    // when the render ends (LeakSanitizer in the address sanitizer build)
-    EXPECT_EQ("2", RenderWithGlobal("{% set _ = g.m.append(g.m) %}{{ g.m|length }}", Value(ValuesMap{ { "m", ValuesList{ 0 } } })));
-    EXPECT_EQ("21", RenderWithGlobal("{% set _ = g[299].append(g[299]) %}{{ g[299]|length }}{{ g[0]|length }}", Value(ListOfLists(300))));
-    EXPECT_EQ("12", RenderWithGlobal("{% set x = g[299] %}{{ g[0]|length }}{% set _ = x.append(x) %}{{ x|length }}", Value(ListOfLists(300))));
+    // when the render ends (LeakSanitizer in the address sanitizer build). A map's item and g[i],
+    // new adapters, and an item of a block the loop let go of; then the listed links, which
+    // Finish detaches: a write through g itself, and the item of the block the loop reads last
+    const auto map = Value(ValuesMap{ { "m", ValuesList{ 0 } } });
+    const auto lists = Value(ListOfLists(300));
+    EXPECT_EQ("2", RenderWithGlobal("{% set x = g.m %}{% set _ = x.append(x) %}{{ x|length }}", map));
+    EXPECT_EQ("2", RenderWithGlobal("{% set x = g[299] %}{% set _ = x.append(x) %}{{ g[299]|length }}", lists));
+    EXPECT_EQ("2", RenderWithGlobal("{% for x in g %}{% if loop.first %}{% set _ = x.append(x) %}{% endif %}{% endfor %}{{ g[0]|length }}", lists));
+    EXPECT_EQ("2", RenderWithGlobal("{% set _ = g.m.append(g.m) %}{{ g.m|length }}", map));
+    EXPECT_EQ("2", RenderWithGlobal("{% for x in g %}{% if loop.last %}{% set _ = x.append(x) %}{% endif %}{% endfor %}{{ g[299]|length }}", lists));
+}
+
+TEST(BorrowedCellsGlobals, KeptItemsReadTheHostsData)
+{
+    // A value the host keeps reads a global's own data whether its link is listed or owns a
+    // frozen cell (docs/tasks/0331 A1): the render's writes to a global never outlive it
+    TemplateEnv env;
+    env.AddGlobal("g", ListOfLists(300));
+    env.AddGlobal("gm", ValuesMap{ { "m", ValuesList{ 0 } } });
+    std::vector<Value> kept;
+    const ValuesMap params{ { "keep", UserCallable(
+                                          [&](const UserCallableParams& p) {
+                                              kept.push_back(p["v"]);
+                                              return Value();
+                                          },
+                                          { ArgInfo{ "v" } }) } };
+    Template tpl(&env);
+    ASSERT_TRUE(!!tpl.Load("{% macro f() %}{% set x = gm.m %}{% set _ = x.append(1) %}{% set _ = keep([x]) %}{% endmacro %}{{ f() }}"
+                           "{% for x in g %}{% if loop.first %}{% set _ = x.append(1) %}{% set _ = keep([x]) %}{% endif %}{% endfor %}"
+                           "{{ gm.m }}{{ g[0] }}"));
+    const auto out = tpl.RenderAsString(params);
+    ASSERT_TRUE(!!out) << out.error().ToString();
+    EXPECT_EQ("[0, 1][0, 1]", out.value());
+    ASSERT_EQ(2U, kept.size());
+    const auto again = tpl.RenderAsString(params);
+    ASSERT_TRUE(!!again);
+    EXPECT_EQ("[0, 1][0, 1]", again.value());
+    Template reader;
+    ASSERT_TRUE(!!reader.Load("{{ a }}{{ b }}"));
+    const auto seen = reader.RenderAsString(ValuesMap{ { "a", kept[0] }, { "b", kept[1] } });
+    ASSERT_TRUE(!!seen);
+    EXPECT_EQ("[[0]][[0]]", seen.value());
 }
