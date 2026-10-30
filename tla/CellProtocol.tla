@@ -63,7 +63,7 @@ CONSTANTS
     FixAtomicPin,         \* PinExports: a failed pin records and marks nothing (without: the cells
                           \* recorded before the failure stay pinned and marked)
     HostHandoff,          \* the host may hand what it kept to another thread while the call runs
-    MaxCallId, MaxEpoch,  \* the call id and the epoch wrap past these (0341, 0342)
+    MaxCallId, MaxEpoch,  \* the call id and the epoch wrap past these (0341, 0342: mutant runs only)
     \* Shapes: inside a module call, keep([x]) (0332) and writes to a nested item (0332). Outside
     \* the contract before FixCallPin; a scope choice after it
     AllowModuleKeepList,

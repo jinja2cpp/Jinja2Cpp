@@ -1,0 +1,189 @@
+name: tla-model
+
+# The bounded TLC runs of tla/CellProtocol.tla (tla/check.py) and of the cycle collector's spec,
+# tla/CycleCollector.tla (tla/collector_check.py, the `collector` job, a few minutes): every pass
+# run must explore its whole space and every mutant must find its counterexample. The longest
+# runs take one to four hours each on the runners, past what an agent's session can hold
+# (docs/tasks/0350), so they run here, one job per shard, in parallel. The trace validation of
+# the C++ against tla/CellTrace.tla runs in the linux-build `celltrace` row instead.
+#
+# It runs as a routine, not per pull request (Ruslan, 2026-10-30): weekly on master when tla/
+# changed in the last week, and on demand (workflow_dispatch) on any branch or tag, for example a
+# frozen release candidate, with all shards or a chosen list of runs (`runs`, names from
+# `tla/check.py --list`). Findings are fixed in batches.
+
+on:
+  schedule:
+    - cron: '17 1 * * 1'
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: 'Runs to check, space separated (empty: every shard)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # A stable release: the v1.8.0 pre-release asset was rebuilt upstream on 2026-10-30, which broke
+  # the pinned hash. Change TLA_URL and TLA_SHA256 together, here and in linux-build.yml
+  TLA_URL: https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
+  TLA_SHA256: 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      with:
+        fetch-depth: 0
+    - name: Pick the shards
+      id: plan
+      env:
+        RUNS: ${{ github.event.inputs.runs }}
+        EVENT: ${{ github.event_name }}
+      run: |
+        set -euo pipefail
+        if [ "$EVENT" = schedule ] && [ -z "$(git log --since='8 days ago' --format=%H -- tla/)" ]; then
+          echo "tla/ unchanged in the last week: nothing to check"
+          echo 'shards=[]' >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if [ -n "${RUNS:-}" ]; then
+          shards=$(python3 -c 'import json, sys; print(json.dumps([{"name": "chosen", "args": "--only " + sys.argv[1]}]))' "$RUNS")
+        else
+          # On the 4-vCPU runner: render about 4 h, mixed 64 min, threads 44 min, the rest 1 h 45 min
+          shards='[{"name": "render", "args": "--only render"},
+                   {"name": "mixed", "args": "--only mixed"},
+                   {"name": "threads", "args": "--only threads"},
+                   {"name": "rest", "args": "--except render mixed threads"}]'
+        fi
+        echo "shards=$(echo "$shards" | tr -d '\n')" >> "$GITHUB_OUTPUT"
+
+  tlc:
+    needs: plan
+    if: needs.plan.outputs.shards != '[]'
+    name: tlc (${{ matrix.shard.name }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    # The render run keeps about 21 GB of TLC state on disk: drop preinstalled toolchains this
+    # job does not use and put the state on the larger of /mnt and the runner's temp directory
+    - name: Make room for TLC state
+      run: |
+        set -euo pipefail
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+        work="$RUNNER_TEMP/tlc"
+        if [ -d /mnt ] && [ "$(df --output=avail /mnt | tail -1)" -gt "$(df --output=avail "$RUNNER_TEMP" | tail -1)" ]; then
+          sudo mkdir -p /mnt/tlc && sudo chown "$(id -u):$(id -g)" /mnt/tlc
+          work=/mnt/tlc
+        fi
+        mkdir -p "$work"
+        echo "TMPDIR=$work" >> "$GITHUB_ENV"
+        df -h / /mnt "$RUNNER_TEMP" || true
+        lscpu | grep -E "^(Model name|CPU\(s\)|Thread|Core)"; free -g; java -version
+
+    # The jar is kept in the Actions cache under its hash, so a later rebuild of the upstream
+    # asset cannot change what runs; the hash is checked either way
+    - name: Cache TLC
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ~/.cache/tla2tools
+        key: tla2tools-${{ env.TLA_SHA256 }}
+
+    - name: Fetch TLC
+      run: |
+        set -euo pipefail
+        jar="$HOME/.cache/tla2tools/$TLA_SHA256.jar"
+        if [ ! -f "$jar" ]; then
+          mkdir -p "$(dirname "$jar")"
+          curl -sSfL --retry 3 -o "$jar" "$TLA_URL"
+        fi
+        echo "$TLA_SHA256  $jar" | sha256sum -c -
+        cp "$jar" tla/tla2tools.jar
+
+    # Verdicts by input hash (check.py --cache): a push that leaves a run's spec and constants as
+    # they were does not run it again, so a fix to one mutant re-runs that mutant, not render
+    - name: Restore earlier verdicts
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ~/.cache/tlc-verdicts
+        key: tlc-verdicts-${{ matrix.shard.name }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: |
+          tlc-verdicts-${{ matrix.shard.name }}-
+          tlc-verdicts-
+
+    - name: Check the model
+      env:
+        TLC_CACHE: ~/.cache/tlc-verdicts
+        # TLC's fingerprint set and queue grow in the heap first; the rest of RAM is page cache
+        TLC_JAVA_OPTS: -Xmx10g
+        SHARD_ARGS: ${{ matrix.shard.args }}
+      run: |
+        set -euo pipefail
+        printf '| | Run | Kind | Verdict | States | Time |\n|---|---|---|---|---|---|\n' >> "$GITHUB_STEP_SUMMARY"
+        # shellcheck disable=SC2086 # SHARD_ARGS is a list of words
+        python3 tla/check.py $SHARD_ARGS --traces 2>&1 | tee "$TMPDIR/check.log"
+
+    - name: Save the verdicts
+      if: always()
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ~/.cache/tlc-verdicts
+        key: tlc-verdicts-${{ matrix.shard.name }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+    - name: Keep the TLC logs
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: tlc-${{ matrix.shard.name }}
+        path: |
+          ${{ env.TMPDIR }}/check.log
+          ${{ env.TMPDIR }}/tlc-cells-*/*/tlc.out
+          ${{ env.TMPDIR }}/tlc-cells-*/*/MC.cfg
+        if-no-files-found: ignore
+
+  # The collector's spec is small: every run in a few minutes, so one job checks all of it
+  collector:
+    needs: plan
+    if: needs.plan.outputs.shards != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    - name: Fetch TLC
+      run: |
+        set -euo pipefail
+        curl -sSfL --retry 3 -o tla/tla2tools.jar "$TLA_URL"
+        echo "$TLA_SHA256  tla/tla2tools.jar" | sha256sum -c -
+
+    - name: Check the collector's spec
+      run: |
+        set -euo pipefail
+        printf '| | Run | Kind | Verdict | States | Time |\n|---|---|---|---|---|---|\n' >> "$GITHUB_STEP_SUMMARY"
+        python3 tla/collector_check.py --traces 2>&1 | tee "$RUNNER_TEMP/collector.log"
+
+    - name: Keep the TLC logs
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: tlc-collector
+        path: |
+          ${{ runner.temp }}/collector.log
+          /tmp/tlc-collector-*/*/tlc.out
+          /tmp/tlc-collector-*/*/MC.cfg
+        if-no-files-found: ignore

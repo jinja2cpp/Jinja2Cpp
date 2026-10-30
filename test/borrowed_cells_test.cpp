@@ -3,7 +3,10 @@
 #include "gtest/gtest.h"
 #include "test_tools.h"
 
+#include "../src/borrowed_cells.h"
+
 #include <jinja2cpp/make_generic_list.h>
+#include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
@@ -15,6 +18,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <utility>
@@ -116,6 +120,28 @@ TEST(BorrowedCellsSingle, NestedRenderOfAGlobalWrittenThroughAnAlias)
     params["inner"] = MakeCallable([&inner]() { return inner.RenderAsString({}).value(); });
     EXPECT_EQ("[0, 2]|[0, 1]", Render("{% set y = g %}{% set _ = y.append(1) %}{{ inner() }}|{{ g }}", params, &env));
     EXPECT_EQ("[0]", Render("{{ g }}", {}, &env));
+}
+
+TEST(BorrowedCellsSingle, AdapterFindsACellPromotedAcrossThe32BitWrap)
+{
+    // 0342: `a` and `b` are two adapters of one host list (the same accessor). `a` stores the
+    // epoch as it reads (after the first move: a new adapter's epoch is 0); the epoch then moves
+    // 2^32 - 1 at once, and the write through `b` promotes a cell, which moves it once more. A
+    // 32-bit stored epoch would equal the counter again, and `a` would skip the lookup and read
+    // the host's list without the write
+#ifdef JINJA2CPP_CELL_TRACE
+    GTEST_SKIP() << "the trace's epochs must fit TLC's 32-bit integers";
+#endif
+    const std::vector<int64_t> data{ 1 };
+    const auto list = MakeGenericList(data.begin(), data.end());
+    ValuesMap params{ { "a", list }, { "b", list } };
+    params["advance"] = MakeCallable(
+        [](int64_t count) {
+            detail::CellCounters::AdvanceEpochForTesting(static_cast<uint64_t>(count));
+            return std::string();
+        },
+        ArgInfo{ "count" });
+    EXPECT_EQ("[1]|[1, 9]|[1, 9]", Render("{{ advance(1) }}{{ a }}|{{ advance(4294967295) }}{% set _ = b.append(9) %}{{ a }}|{{ b }}", params));
 }
 
 TEST(BorrowedCellsSingle, HostCallableSeesTheWrite)
@@ -1092,6 +1118,136 @@ TEST(BorrowedCellsSingle, ModuleCallFreesTheCellsOfItsNestedData)
     EXPECT_EQ(1, token.use_count());
 }
 
+namespace
+{
+// A generated list of 0, 1, 2 the host makes for one call: its generator holds `token`
+GenericList FreshGenericList(const std::shared_ptr<int>& token)
+{
+    return MakeGenericList([token, n = int64_t{ 0 }]() mutable { return n < 3 ? std::optional<Value>(n++) : std::optional<Value>(); });
+}
+
+// A reflected struct the host makes for one call: its copy in the accessor holds `token`
+Value FreshGenericMap(const std::shared_ptr<TestInnerStruct>& token)
+{
+    TestStruct data;
+    data.innerStruct = token;
+    return Reflect(std::move(data));
+}
+} // namespace
+
+TEST(BorrowedCellsSingle, ModuleCallFreesTheCellsOfFreshGenericData)
+{
+    // 0336: a generic list or map the host makes for one call, which the macro writes. Nothing
+    // but the call's adapter owns its accessor, so nothing can lend it again: the module drops
+    // its cell when the call ends, as for a ValuesList (ModuleCallFreesTheCellsOfItsOwnData)
+    auto token = std::make_shared<int>(0);
+    auto mapToken = std::make_shared<TestInnerStruct>();
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro consume() %}{% set r = make() %}{% set _ = r.append(1) %}{% set d = makeMap() %}"
+                           "{% set _ = d.update(k=1) %}{{ r|length }}{{ d.k }}{% endmacro %}"));
+    ValuesMap params{ { "make", UserCallable([&token](const UserCallableParams&) { return Value(FreshGenericList(token)); }, {}) },
+                      { "makeMap", UserCallable([&mapToken](const UserCallableParams&) { return FreshGenericMap(mapToken); }, {}) } };
+    auto module = tpl.MakeModule(params).value();
+    for (int i = 0; i != 3; ++i)
+    {
+        EXPECT_EQ("41", module.exports["consume"].As<UserCallable>().callable(UserCallableParams()).AsString());
+        EXPECT_EQ(1, token.use_count());
+        EXPECT_EQ(1, mapToken.use_count());
+    }
+}
+
+TEST(BorrowedCellsSingle, ModuleCallFreesTheCellOfAGenericArgumentOnceTheHostLetsGo)
+{
+    // 0336: the host's call parameters hold a copy of the list while the call runs, so its cell
+    // stays at that call's end; the next call's end drops it, once the host let go
+    auto token = std::make_shared<int>(0);
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro consume(xs) %}{% set _ = xs.append(1) %}{{ xs|length }}{% endmacro %}"));
+    auto module = tpl.MakeModule({}).value();
+    for (int i = 0; i != 3; ++i)
+    {
+        {
+            UserCallableParams callParams;
+            callParams.extraPosArgs = ValuesList{ FreshGenericList(token) };
+            EXPECT_EQ("4", module.exports["consume"].As<UserCallable>().callable(callParams).AsString());
+        }
+        // This call's list, and none of the earlier calls'
+        EXPECT_EQ(2, token.use_count());
+    }
+    module = TemplateModule();
+    EXPECT_EQ(1, token.use_count());
+}
+
+TEST(BorrowedCellsSingle, ModuleKeepsTheCellOfAGenericListTheHostLendsAgain)
+{
+    // 0336: the host keeps its list and lends it to each call, so each call sees the earlier
+    // calls' writes (0049 P2), also when the host wraps the accessor anew in the 1.x callable
+    // form, an aliasing pointer the accessor's own owners do not count
+    std::vector<int64_t> data{ 0, 1, 2 };
+    const GenericList kept = MakeGenericList(data.begin(), data.end());
+    const Value map = FreshGenericMap(std::make_shared<TestInnerStruct>());
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro consume(xs, d) %}{% set _ = xs.append(1) %}{% set _ = d.update(k=d.get('k', 0) + 1) %}"
+                           "{{ xs|length }}{{ d.k }}{% endmacro %}"));
+    auto module = tpl.MakeModule({}).value();
+    for (int i = 0; i != 3; ++i)
+    {
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ kept, map };
+        EXPECT_EQ(std::to_string(4 + i) + std::to_string(1 + i), module.exports["consume"].As<UserCallable>().callable(callParams).AsString());
+    }
+    auto made = std::make_shared<GenericList>(MakeGenericList(data.begin(), data.end()));
+    for (int i = 0; i != 3; ++i)
+    {
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ GenericList([made] { return made->GetAccessor(); }), map };
+        EXPECT_EQ(std::to_string(4 + i) + std::to_string(4 + i), module.exports["consume"].As<UserCallable>().callable(callParams).AsString());
+    }
+}
+
+TEST(BorrowedCellsSingle, ThreadsCallAModuleWritingFreshGenericData)
+{
+    // 0336, TSan: two threads call the module, each with fresh generic data the call writes and
+    // the call's end drops
+    auto token = std::make_shared<int>(0);
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro consume(xs) %}{% set r = make() %}{% set _ = r.append(1) %}{% set _ = xs.append(2) %}"
+                           "{{ r|length }}{{ xs|length }}{% endmacro %}"));
+    ValuesMap params{ { "make", UserCallable([token](const UserCallableParams&) { return Value(FreshGenericList(token)); }, {}) } };
+    auto module = tpl.MakeModule(params).value();
+    auto consume = module.exports["consume"].As<UserCallable>().callable;
+    std::vector<std::thread> threads;
+    std::vector<std::string> results(2);
+    threads.reserve(results.size());
+    for (auto& result : results)
+    {
+        threads.emplace_back([&consume, &token, &result]() {
+            for (int i = 0; i != 50; ++i)
+            {
+                UserCallableParams callParams;
+                callParams.extraPosArgs = ValuesList{ FreshGenericList(token) };
+                result = consume(callParams).AsString();
+                if (result != "44")
+                {
+                    return;
+                }
+            }
+        });
+    }
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+    for (const auto& result : results)
+    {
+        EXPECT_EQ("44", result);
+    }
+    consume = nullptr;
+    params.clear();
+    module = TemplateModule();
+    EXPECT_EQ(1, token.use_count());
+}
+
 TEST(BorrowedCellsSingle, ThreadsRenderSharedHostData)
 {
     // One host map, rendered by several threads that each write to it: each render has its own
@@ -1124,4 +1280,130 @@ TEST(BorrowedCellsSingle, ThreadsRenderSharedHostData)
     {
         EXPECT_EQ("[3, 1, 2, 1, 2]2", result);
     }
+}
+
+namespace
+{
+// Runs `drop` on another thread and waits, with no happens-before edge back, until it is done:
+// what orders the other thread's last access before ours can only be the count the drop
+// releases (docs/tasks/0339). A relaxed flag is no edge for TSan
+template<typename Fn>
+std::thread DropUnordered(std::atomic<bool>& dropped, Fn drop)
+{
+    std::thread thread([&dropped, drop = std::move(drop)]() mutable {
+        drop();
+        dropped.store(true, std::memory_order_relaxed);
+    });
+    while (!dropped.load(std::memory_order_relaxed))
+    {
+        std::this_thread::yield();
+    }
+    return thread;
+}
+} // namespace
+
+TEST(SharedOwnerTest, CollectorClearsAListTheHostDroppedOnAnotherThread)
+{
+    // 0339, TSan: the host reads a template's list on another thread and drops it; the
+    // collector then finds the list's cycle garbage and clears its storage in place, which
+    // needs the drop ordered before it
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% set l = [1] %}{% set _ = l.append(l) %}{{ hand(l) }}{{ wait() }}"));
+    for (int i = 0; i != 20; ++i)
+    {
+        std::mutex guard;
+        Value handed;
+        std::atomic<bool> dropped{ false };
+        std::thread reader;
+        size_t seen = 0;
+        ValuesMap params;
+        params["hand"] = UserCallable(
+            [&](const UserCallableParams& p) {
+                const std::scoped_lock lock(guard);
+                handed = p["l"];
+                return Value();
+            },
+            { ArgInfo{ "l" } });
+        params["wait"] = UserCallable(
+            [&](const UserCallableParams&) {
+                reader = DropUnordered(dropped, [&]() {
+                    Value mine;
+                    {
+                        const std::scoped_lock lock(guard);
+                        mine = std::move(handed);
+                        handed = Value();
+                    }
+                    const auto* list = mine.GetIf<GenericList>();
+                    ASSERT_TRUE(list);
+                    // Its size only: an item read would hold and let go of `l`'s object, whose
+                    // count the collector reads with an acquire, which would order this thread
+                    seen = list->GetSize().value_or(0);
+                });
+                return Value();
+            },
+            {});
+        const auto out = tpl.RenderAsString(params);
+        reader.join();
+        ASSERT_TRUE(!!out);
+        EXPECT_EQ(2U, seen);
+    }
+}
+
+TEST(SharedOwnerTest, FirstLoadAfterACopyIsDroppedOnAnotherThread)
+{
+    // 0339, TSan: a copy of a template that was never loaded is rendered on another thread and
+    // dropped; the first Load then parses into the implementation in place (LoadsInPlace). The
+    // other thread checks nothing with gtest, whose lock would order it, and holds the only copy:
+    // DropUnordered would copy the template (it has no move constructor), and this thread's drop
+    // of that copy would order the other's
+    EXPECT_FALSE(!!Template().RenderAsString({}));
+    Template tpl;
+    std::atomic<bool> dropped{ false };
+    bool failed = false;
+    std::thread other([&dropped, copy = tpl, &failed]() mutable {
+        failed = !copy.RenderAsString({});
+        copy = Template();
+        dropped.store(true, std::memory_order_relaxed);
+    });
+    while (!dropped.load(std::memory_order_relaxed))
+    {
+        std::this_thread::yield();
+    }
+    const bool loaded = !!tpl.Load("{{ 1 }}");
+    other.join();
+    ASSERT_TRUE(loaded);
+    EXPECT_TRUE(failed);
+    EXPECT_EQ("1", tpl.RenderAsString({}).value());
+}
+
+TEST(SharedOwnerTest, AddGlobalAfterARenderOnAnotherThreadLetGoOfTheMap)
+{
+    // 0339, TSan: a render on another thread reads the globals map, and its thread's snapshot lets
+    // go of it when a render of another environment replaces it; AddGlobal then replaces the
+    // global in place (ChangeGlobals). This thread renders first with an environment of its own,
+    // so that its snapshot does not hold `env`'s map
+    {
+        TemplateEnv warmEnv;
+        warmEnv.AddGlobal("g", ValuesList{ 1, 2 });
+        Template warm(&warmEnv);
+        ASSERT_TRUE(!!warm.Load("{{ g }}"));
+        EXPECT_EQ("[1, 2]", warm.RenderAsString({}).value());
+    }
+    TemplateEnv env;
+    TemplateEnv otherEnv;
+    env.AddGlobal("g", ValuesList{ 1, 2 });
+    Template tpl(&env);
+    Template otherTpl(&otherEnv);
+    ASSERT_TRUE(!!tpl.Load("{{ g }}"));
+    ASSERT_TRUE(!!otherTpl.Load("x"));
+    std::atomic<bool> dropped{ false };
+    std::string seen;
+    auto other = DropUnordered(dropped, [&tpl, &otherTpl, &seen]() {
+        seen = tpl.RenderAsString({}).value_or("error");
+        seen += otherTpl.RenderAsString({}).value_or("error");
+    });
+    env.AddGlobal("g", 3);
+    other.join();
+    EXPECT_EQ("[1, 2]x", seen);
+    EXPECT_EQ("3", tpl.RenderAsString({}).value());
 }

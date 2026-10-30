@@ -7,6 +7,7 @@
 #include "robin_hood.h"
 #include "small_vector.h"
 
+#include <jinja2cpp/config.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/value.h>
 
@@ -48,28 +49,34 @@ class CellCounters
 public:
     // Moves on every promotion and at the end of a render that made a cell, in any thread, so
     // that an adapter learns that its data may have a cell with one load and a compare
-    // (CellLink::Get)
-    static uint32_t Epoch() noexcept { return s_epoch.load(std::memory_order_relaxed); }
+    // (CellLink::Get). 64 bits, so that it never comes back to a value an adapter stored: at
+    // 10^9 moves a second it would take 292 years to reach the attached mark (docs/tasks/0342)
+    static uint64_t Epoch() noexcept { return s_epoch.load(std::memory_order_relaxed); }
     // The cells that exist now, in any thread's registry; with the epoch it tells a block of item
     // adapters that none of its slots can have a cell (QuietEpoch)
     static uint32_t Live() noexcept { return s_live.load(std::memory_order_relaxed); }
+    // Moves the epoch by `count` at once, as that many promotions would: a test of the old 32-bit
+    // wrap-around needs 2^32 moves (docs/tasks/0342). Exported for the tests of a shared library;
+    // a member rather than a friend, as MSVC rejects a friend redeclaration without the dllimport
+    JINJA2CPP_EXPORT static void AdvanceEpochForTesting(uint64_t count) noexcept;
 
 private:
     friend class jinja2::BorrowedCells;
     friend class jinja2::CellLink;
 
-    static uint32_t NextEpoch() noexcept;
+    static uint64_t NextEpoch() noexcept;
     static void AddLive(uint32_t count) noexcept { s_live.fetch_add(count, std::memory_order_relaxed); }
     static void RemoveLive(uint32_t count) noexcept { s_live.fetch_sub(count, std::memory_order_relaxed); }
 
-    static std::atomic<uint32_t> s_epoch;
+    static std::atomic<uint64_t> s_epoch;
     static std::atomic<uint32_t> s_live;
 };
 
-inline uint32_t CellEpoch() noexcept
+inline uint64_t CellEpoch() noexcept
 {
     return CellCounters::Epoch();
 }
+
 } // namespace detail
 
 // The part of an adapter of the host's data (a list or map lent by reference, docs/tasks/0115)
@@ -155,13 +162,13 @@ public:
     // call a JINJA2CPP_CELL_NOINLINE member for the rest, so that their own code stays small
     // enough to keep what they inline (the string view of an item, Render/many_tags)
 #ifndef JINJA2CPP_CELL_TRACE
-    [[nodiscard]] bool MayHaveCell() const noexcept { return detail::CellEpoch() != m_seenEpoch; }
+    [[nodiscard]] bool MayHaveCell() const noexcept { return detail::CellEpoch() != m_state; }
     // The same for an epoch the caller read
-    [[nodiscard]] bool MayHaveCell(uint32_t epoch) const noexcept { return epoch != m_seenEpoch; }
+    [[nodiscard]] bool MayHaveCell(uint64_t epoch) const noexcept { return epoch != m_state; }
 #else
     // A read that skips the lookup is an event of the trace (tla/CellTrace.tla, AliasesAgree)
     [[nodiscard]] bool MayHaveCell() const noexcept { return MayHaveCell(detail::CellEpoch()); }
-    [[nodiscard]] bool MayHaveCell(uint32_t epoch) const noexcept { return epoch != m_seenEpoch || detail::CellTrace::Skip(this, epoch); }
+    [[nodiscard]] bool MayHaveCell(uint64_t epoch) const noexcept { return epoch != m_state || detail::CellTrace::Skip(this, epoch); }
 #endif
 
     // The cell the adapter is attached to, read without a lookup and without a change: what an
@@ -197,23 +204,28 @@ private:
     // Takes the frozen cell `other` reads, if it reads one
     JINJA2CPP_CELL_NOINLINE void Inherit(const CellLink& other) noexcept;
 
-    // An epoch the counter skips: the value of m_seenEpoch while the adapter is attached
-    static constexpr uint32_t Attached = UINT32_MAX;
-    // The bit of m_linkIndex that marks the link of a global's adapter, which the end of the render
-    // detaches instead of freezing
-    static constexpr uint32_t HeldBit = 0x80000000U;
-    // The bit of m_linkIndex that marks a link holding a reference to its cell: every link but a
-    // global's to a live cell. Read by the link's own thread, never from the cell, which another
-    // thread may freeze meanwhile (docs/tasks/0340)
-    static constexpr uint32_t OwnsBit = 0x40000000U;
+    // The bit of m_state that marks an attached adapter: the epoch never reaches it, so an
+    // attached adapter's reads always take the call (docs/tasks/0342)
+    static constexpr uint64_t AttachedBit = uint64_t{ 1 } << 63U;
+    // The bit of an attached m_state that marks the link of a global's adapter, which the end of
+    // the render detaches instead of freezing
+    static constexpr uint64_t HeldBit = 0x80000000U;
+    // The bit of an attached m_state that marks a link holding a reference to its cell: every link
+    // but a global's to a live cell. Read by the link's own thread, never from the cell, which
+    // another thread may freeze meanwhile (docs/tasks/0340)
+    static constexpr uint64_t OwnsBit = 0x40000000U;
+    // The bits of an attached global's m_state that hold its position in the cell's list of links
+    static constexpr uint64_t IndexBits = 0x3fffffffU;
+
+    [[nodiscard]] bool Owns() const noexcept { return (m_state & OwnsBit) != 0; }
 
     // Owned (OwnsBit), unless the link is a global's to a live cell, which its registry keeps
     // until it detaches the link at the render's end
     mutable const BorrowedCell* m_cell = nullptr;
-    // The epoch of the last look, or Attached
-    mutable uint32_t m_seenEpoch = 0;
-    // OwnsBit, or the position of this global's link in the live cell's list of links and HeldBit
-    mutable uint32_t m_linkIndex = 0;
+    // Detached: the epoch of the last look, or 0 (no look yet; the epoch never is 0). Attached:
+    // AttachedBit with OwnsBit, or with HeldBit and the position of this global's link in the live
+    // cell's list of links. One word for both keeps the link at two words with a 64-bit epoch
+    mutable uint64_t m_state = 0;
 };
 
 // The render's copy of one container of the host's data: the list or dict the template owns
@@ -312,7 +324,8 @@ private:
     // reused while the registry has the cell. Dropped when the cell freezes
     mutable InternalValue m_source;
     // The owner of data that lives only as long as its adapters, empty for the host's data
-    // (CellLink::Adopt)
+    // (CellLink::Adopt). A generic container's copy may share its accessor with the host's: the
+    // cell then asks the source whether the host can lend it again (docs/tasks/0336)
     std::weak_ptr<const void> m_owner;
     // Views into m_storage, which owns them
     mutable const IListAccessor* m_list = nullptr;
@@ -436,11 +449,11 @@ BorrowedCells* RunningModuleCall();
 struct CellStep
 {
     // Never an epoch: a step of a new enumeration, or of a list with a cell, whose size is live
-    static constexpr uint32_t Recheck = UINT32_MAX;
+    static constexpr uint64_t Recheck = UINT64_MAX;
 
     IntrusivePtr<const BorrowedCell> cell;
     size_t size = 0;
-    uint32_t epoch = Recheck;
+    uint64_t epoch = Recheck;
 
     [[nodiscard]] bool IsCurrent() const noexcept { return epoch == detail::CellEpoch(); }
 };
@@ -448,7 +461,7 @@ struct CellStep
 // The epoch, if no cell exists now, else CellStep::Recheck, which the epoch never is: while the
 // epoch keeps this value, no adapter made since can have been attached to a cell. Read in this
 // order: a cell is counted before its promotion moves the epoch (CellLink::Adopt)
-inline uint32_t QuietEpoch() noexcept
+inline uint64_t QuietEpoch() noexcept
 {
     const auto epoch = detail::CellEpoch();
     return detail::CellCounters::Live() == 0 ? epoch : CellStep::Recheck;

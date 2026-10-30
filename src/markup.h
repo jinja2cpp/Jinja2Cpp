@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_MARKUP_H
 #define JINJA2CPP_SRC_MARKUP_H
 
+#include "host_object.h"
 #include "internal_value.h"
 #include "out_stream.h"
 #include "render_context.h"
@@ -186,6 +187,11 @@ inline InternalValue MarkupEscape(const InternalValue& val, IRendererCallback* c
     else if (auto view = AsStringView<char>(val))
     {
         return escape(*view);
+    }
+    // An object of the host language with __html__ is the Markup it gives, as markupsafe.escape has it
+    if (const auto* host = GetHostObject(val); host && host->IsMarkupLike())
+    {
+        return host::Html(*host, callback->IsWideTarget());
     }
     // Any other value is escaped from its str()
     auto text = callback->GetAsTargetString(val);

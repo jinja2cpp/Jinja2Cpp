@@ -4,7 +4,7 @@ pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/688
 priority: medium
 area: robustness
 depends: [0337]
-touches: [tla/CellProtocol.tla, tla/check.py, tla/README.md]
+touches: [tla/CellProtocol.tla, tla/check.py, tla/README.md, tla/CycleCollector.tla, tla/collector_check.py]
 ---
 # From a bounded model of the borrowed-cell protocol to a safety argument
 
@@ -122,6 +122,17 @@ and it does not describe the model as a proof.
 events, `tla/check.py --trace` checks each test's trace against `tla/CellTrace.tla`, which
 applies the rules in `tla/CellRules.tla`; one Debug CI row runs it with its mutants. It sees F1
 (0337) from the C++ traces before #689. See tla/README.md, "Trace validation".
+
+**Step E, the cycle collector's spec (2026-10-30).** `tla/CycleCollector.tla` specifies
+`src/cycle_collector.{h,cpp}` on its own: the notes, the prune, the walk with its counts read one
+node at a time while other threads copy and drop references, the closure, and `Clear` under the
+held garbage. `tla/collector_check.py` checks it (the `collector` job of `tla-model`): never
+empties a list something live reaches (G1), never touches a destroyed object (G2), and frees
+every cycle when `Traverse` sees every reference (G3); taking out any part of the collector gives
+a counterexample. The interface contract to `CellProtocol.tla` is in tla/README.md, "The cycle
+collector". It relies on H6 of the memory-order document (#690, added from this step):
+during the walk other threads only copy or drop references they already hold; the
+`host-reads-share` mutants show the walk is unsafe without it.
 
 **Step D, failure atomicity (2026-10-30).** Each protocol step that allocates now allocates
 first and commits with operations that cannot fail: `CellLink::Find`/`Link` (`ReserveLink`),

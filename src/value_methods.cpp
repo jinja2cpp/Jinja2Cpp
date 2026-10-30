@@ -2414,7 +2414,9 @@ const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view n
     case ValueKind::Map:
         if (auto map = AsMap(self))
         {
-            return map->GetAttrPolicy() == MapAttrPolicy::KeysOnly ? nullptr : FindIn(DictMethods, name);
+            // An object (KeysOnly) has no dict methods, and one of the host language only its own
+            const auto policy = map->GetAttrPolicy();
+            return policy == MapAttrPolicy::KeysOnly || policy == MapAttrPolicy::Host ? nullptr : FindIn(DictMethods, name);
         }
         return nullptr;
     case ValueKind::Int:

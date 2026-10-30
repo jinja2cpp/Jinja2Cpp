@@ -405,9 +405,13 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0333](0333-locale-free-float-parsing.md) | Float parsing follows the C locale | robustness | high | done |
 | [0334](0334-makecallable-per-argument-dispatch.md) | MakeCallable visits every combination of argument types | api | high | done |
 | [0335](0335-late-export-in-a-later-module-call.md) | A module call that hands out a container before it writes it keeps the earlier call's state | parity | low | done |
-| [0336](0336-module-cells-of-per-call-data.md) | A template module keeps the cells of generic containers made for one call | robustness | medium | open |
+| [0336](0336-module-cells-of-per-call-data.md) | A template module keeps the cells of generic containers made for one call | robustness | medium | done |
 | [0337](0337-nested-module-export-written-by-outer-call.md) | A nested module call's kept value is written by the outer call | robustness | medium | done |
 | [0338](0338-borrowed-cell-protocol-safety-proof.md) | From a bounded model of the borrowed-cell protocol to a safety argument | robustness | medium | open |
+| [0339](0339-shared-ptr-uniqueness-needs-acquire.md) | A uniqueness test on a `shared_ptr` count has no acquire | robustness | low | done |
+| [0340](0340-foreign-unlink-of-a-live-cell.md) | A host thread dropping a kept container unlinks an adapter from a live cell | robustness | medium | done |
+| [0341](0341-call-id-wraparound.md) | A module call id wraps and a stale export mark equals it | robustness | low | done |
+| [0342](0342-epoch-wraparound.md) | The 32-bit cell epoch wraps and an old adapter compares equal | robustness | low | done |
 | [0343](0343-clang-lifetime-and-lock-annotations.md) | Check lifetimes and lock discipline at compile time with Clang annotations | robustness | medium | done |
 | [0344](0344-debug-containers-test-job.md) | A test job with a checking standard library (iterator and reference invalidation) | ci | medium | done |
 | [0345](0345-latest-llvm-analysis-job.md) | A report-only job with the latest LLVM for trunk lifetime and cross-TU analyses | ci | low | done |
@@ -415,3 +419,16 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0347](0347-module-cells-in-lazy-and-namespace-exports.md) | Module cells reached through a lazy list or a namespace are not pinned | robustness | medium | open |
 | [0348](0348-generic-list-shared-accessor.md) | GenericList and GenericMap hold their accessor by a shared pointer | api | medium | done |
 | [0349](0349-ctu-analyzer-on-newest-llvm.md) | Run the cross-TU static analyzer on the newest LLVM and on libstdc++ | ci | low | open |
+| [0350](0350-tla-runs-in-ci.md) | Run the long TLC checks of the cell model in GitHub Actions, and halve the two-thread runs | ci | medium | in-progress |
+| [0351](0351-cell-model-past-the-depth-bound.md) | Check the cell model past its depth bound | robustness | medium | open |
+| [0352](0352-python-host-object-seam.md) | Python module P1a: a private host-object seam in the engine | api | medium | done |
+| [0353](0353-python-module-core.md) | Python module P1b: build, Environment/Template/render, value crossing | api | medium | open |
+| [0354](0354-python-module-subset.md) | Python module P2: the supported subset, sandbox and fallback | api | medium | open |
+| [0355](0355-python-module-proof.md) | Python module P3: upstream test suite, parity corpus, chat templates, bench row | parity | medium | open |
+| [0356](0356-python-module-wheels.md) | Python module P4: wheels for Linux, macOS and Windows; free-threaded audit | build | medium | open |
+| [0357](0357-python-module-public-api.md) | Python module: move from the private seam to the public API before the G1 freeze | api | medium | open |
+| [0358](0358-prompt-autoescape.md) | Prompt autoescape: `fence`, `neutralize` and an escaping mode for LLM prompts | api | medium | open |
+| [0359](0359-token-budget-filters.md) | Token budget filters: `count_tokens`, `truncate_tokens` and `pack` | api | medium | open |
+| [0360](0360-hf-chat-template-compat.md) | Render Hugging Face chat templates as transformers does | parity | high | open |
+| [0362](0362-host-object-python-errors.md) | Host objects: Python's errors where generic filters guess | parity | low | open |
+| [0365](0365-fresh-generic-items-of-a-call-argument.md) | A fresh generic container nested in a call's argument keeps its module cell | robustness | low | open |

@@ -12,6 +12,8 @@ is expected to fail too. See tla/README.md.
 """
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -21,7 +23,7 @@ import tempfile
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TLA_URL = "https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar"
+TLA_URL = "https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar"
 
 FIXES = {
     "FixLinkEpoch": True, "FixEnumRefetch": True, "FixSortRefetch": True,
@@ -126,9 +128,11 @@ RUNS = {
     # IsUnheld's links test can never decide: this run shows it, rather than a counterexample
     "drop-without-link-check": ("pass", MODULE1, {"DropRule": '"nolinks"'}, SAFETY,
                                 "IsUnheld without its links test: never decides here"),
-    # With FixModuleLinksOwn the namespace's link keeps the dropped cell alive: no use-after-free,
-    # so the run keeps #673's unowned links
-    "drop-without-source-check": ("mutant", MODULE1, {"DropRule": '"nosource"', "FixModuleLinksOwn": False},
+    # With FixModuleLinksOwn or FixLinksOwn the namespace's link keeps the dropped cell alive: no
+    # use-after-free, so the run keeps #673's unowned links (FixLinksOwn came with #695 and made
+    # this run pass silently until the tla-model job ran it, task 0350)
+    "drop-without-source-check": ("mutant", MODULE1, {"DropRule": '"nosource"', "FixModuleLinksOwn": False,
+                                                      "FixLinksOwn": False},
                                   ["NoUseAfterFree", "NoForeignCell", "AliasesAgree"],
                                   "IsUnheld without its source-owner test"),
     "no-source-keeps-id": ("mutant", MODULE1, {"FixSourceKeepsId": False, "DropRule": '"none"'},
@@ -178,10 +182,11 @@ RUNS = {
                         "step D: a failed Link changes the adapter"),
     "partial-pin": ("mutant", MODULE1, {"FixAtomicPin": False}, ["NoTornStep"],
                     "step D: a failed pin keeps some exports pinned and their cells marked"),
-    # 0342: an open task; the run shows the defect the model now sees
-    "open-0342-epoch-wrap": ("open", RENDER1, {"MaxEpoch": 2},
-                             ["AliasesAgree", "NoForeignCell", "NoUseAfterFree"],
-                             "0342: an adapter's seen epoch equals the counter again after a wrap"),
+    # 0342: the C++ epoch is 64 bits, which the unbounded counter of the other runs stands for;
+    # a counter that wraps (32 bits before 0342) brings an adapter's seen epoch back
+    "epoch-wrap": ("mutant", RENDER1, {"MaxEpoch": 2},
+                   ["AliasesAgree", "NoForeignCell", "NoUseAfterFree"],
+                   "0342: an adapter's seen epoch equals the counter again after a wrap"),
     "module-generic": ("pass", dict(MODULE1, Actions='{"export", "release", "ns", "read", "hostgen"}'),
                        {"GenericArgs": True}, SAFETY, "0336: module calls taking generic containers"),
     "no-generic-owner": ("mutant", dict(MODULE1, Actions='{"export", "release", "hostgen"}'),
@@ -194,7 +199,7 @@ RUNS = {
 }
 
 
-def config(scope, overrides, invariants):
+def config(scope, overrides, invariants, symmetry=True):
     consts = dict(OwnedAddrs='{"O1", "O2"}', MaxVal=3, MaxFail=1, DropRule='"full"',
                   AllowModuleKeepList=False, AllowModuleNested=False, GenericArgs=False,
                   HostHandoff=False, MaxCallId=1000, MaxEpoch=1000)
@@ -202,6 +207,9 @@ def config(scope, overrides, invariants):
     consts.update(FIXES)
     consts.update(scope)
     consts.update(overrides)
+    # Threads are model values, so TLC can permute them (SYMMETRY): the spec names no thread
+    for key in ("Threads", "ModuleThreads", "RenderThreads"):
+        consts[key] = re.sub(r'"(t\d+)"', r"\1", consts[key])
     lines = ["SPECIFICATION Spec", "CONSTANTS"]
     for key, value in consts.items():
         if isinstance(value, bool):
@@ -209,19 +217,55 @@ def config(scope, overrides, invariants):
         lines.append(f"    {key} = {value}")
     lines.append("INVARIANTS")
     lines += [f"    {inv}" for inv in invariants]
+    if symmetry and symmetric(consts):
+        lines.append("SYMMETRY ThreadPerms")
     return "\n".join(lines) + "\n"
 
 
-def run(jar, name, spec, workdir, extra=None, timeout=None):
+def symmetric(consts):
+    """Whether swapping the threads maps the model onto itself: two threads or more, and the
+    render and module threads each either all of them or none"""
+    threads = set(re.findall(r"t\d+", consts["Threads"]))
+    return len(threads) > 1 and all(set(re.findall(r"t\d+", consts[key])) in (set(), threads)
+                                    for key in ("ModuleThreads", "RenderThreads"))
+
+
+MC_TLA = """---- MODULE MC ----
+EXTENDS CellProtocol
+ThreadPerms == Permutations(Threads)
+====
+"""
+
+
+def cache_key(jar, workdir, kind):
+    """What a run's verdict depends on: the spec, the model, its configuration and TLC itself, and
+    what counts as success: the expected kind (the invariants are in MC.cfg)"""
+    digest = hashlib.sha256(kind.encode())
+    for path in (jar, *(os.path.join(workdir, f) for f in ("CellProtocol.tla", "MC.tla", "MC.cfg"))):
+        with open(path, "rb") as data:
+            digest.update(hashlib.sha256(data.read()).digest())
+    return digest.hexdigest()
+
+
+def run(jar, name, spec, workdir, extra=None, timeout=None, symmetry=True, java_opts=(), cache=None):
     kind, scope, overrides, invariants, note = spec
     overrides = dict(overrides, **(extra or {}))
     os.makedirs(workdir, exist_ok=True)
     shutil.copy(os.path.join(HERE, "CellProtocol.tla"), workdir)
+    with open(os.path.join(workdir, "MC.tla"), "w", encoding="utf-8") as mc:
+        mc.write(MC_TLA)
     with open(os.path.join(workdir, "MC.cfg"), "w", encoding="utf-8") as cfg:
-        cfg.write(config(scope, overrides, invariants))
+        cfg.write(config(scope, overrides, invariants, symmetry))
+    # A verdict that held for the same inputs holds again: TLC's search is deterministic in its
+    # result, so a run whose inputs did not change is not run again (only expected verdicts are kept)
+    cached = os.path.join(cache, cache_key(jar, workdir, kind) + ".json") if cache else None
+    if cached and os.path.exists(cached):
+        with open(cached, encoding="utf-8") as data:
+            res = json.load(data)
+        return dict(res, name=name, note=note, verdict=res["verdict"] + " (cached)", secs=0)
     start = time.time()
-    cmd = ["java", "-XX:+UseParallelGC", "-cp", jar, "tlc2.TLC", "-workers", "auto", "-deadlock",
-           "-config", "MC.cfg", "CellProtocol.tla"]
+    cmd = ["java", "-XX:+UseParallelGC", *java_opts, "-cp", jar, "tlc2.TLC", "-workers", "auto",
+           "-deadlock", "-config", "MC.cfg", "MC.tla"]
     timed_out = False
     try:
         out = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, check=False,
@@ -253,9 +297,14 @@ def run(jar, name, spec, workdir, extra=None, timeout=None):
     else:
         verdict = "TLC failed (see " + os.path.join(workdir, "tlc.out") + ")"
         ok = False
-    return dict(name=name, kind=kind, note=note, verdict=verdict, ok=ok,
-                states=states[0] if states else "?", secs=int(time.time() - start),
-                trace=[s for s in steps if not s.endswith("<GC>")])
+    res = dict(name=name, kind=kind, note=note, verdict=verdict, ok=ok,
+               states=states[0] if states else "?", secs=int(time.time() - start),
+               trace=[s for s in steps if not s.endswith("<GC>")])
+    if cached and ok:
+        os.makedirs(cache, exist_ok=True)
+        with open(cached, "w", encoding="utf-8") as data:
+            json.dump(res, data)
+    return res
 
 
 def main():
@@ -267,11 +316,21 @@ def main():
     parser.add_argument("--jar", default=os.environ.get("TLA2TOOLS", os.path.join(HERE, "tla2tools.jar")))
     parser.add_argument("--set", nargs="*", default=[], help="override a constant: NAME=VALUE")
     parser.add_argument("--only", nargs="*")
+    parser.add_argument("--except", nargs="*", dest="skip", default=[], help="every run but these")
+    parser.add_argument("--no-symmetry", action="store_true",
+                        help="do not reduce two-thread runs by thread symmetry")
+    parser.add_argument("--cache", default=os.environ.get("TLC_CACHE"),
+                        help="directory of verdicts by input hash: a run whose spec, model and "
+                             "constants match an expected verdict there is not run again")
+    parser.add_argument("--java-opts", default=os.environ.get("TLC_JAVA_OPTS", ""),
+                        help="extra JVM options for TLC, for example -Xmx10g")
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--timeout", type=int, help="seconds per run; a run that reaches it fails as inconclusive")
     parser.add_argument("--traces", action="store_true", help="print each counterexample's steps")
     args = parser.parse_args()
     args.jar = os.path.abspath(args.jar)
+    if args.cache:
+        args.cache = os.path.abspath(os.path.expanduser(args.cache))
     if args.timeout is not None and args.timeout <= 0:
         parser.error("--timeout must be positive")
     if args.list:
@@ -280,16 +339,25 @@ def main():
         return 0
     if not os.path.exists(args.jar):
         sys.exit(f"tla2tools.jar not found at {args.jar}: download {TLA_URL} or pass --jar")
-    names = args.only or list(RUNS)
+    names = [name for name in args.only or list(RUNS) if name not in args.skip]
+    unknown = [name for name in names + args.skip if name not in RUNS]
+    if unknown:
+        parser.error("unknown runs: " + " ".join(unknown))
     base = tempfile.mkdtemp(prefix="tlc-cells-")
     failed = 0
     for name in names:
         extra = dict(item.split("=", 1) for item in args.set)
-        res = run(args.jar, name, RUNS[name], os.path.join(base, name), extra, args.timeout)
+        res = run(args.jar, name, RUNS[name], os.path.join(base, name), extra, args.timeout,
+                  not args.no_symmetry, args.java_opts.split(), args.cache)
         failed += not res["ok"]
         mark = "ok " if res["ok"] else "BAD"
         print(f"{mark} {name:28} {res['kind']:7} {res['verdict']:36} {res['states']:>12} states "
               f"{res['secs']:>5}s  {res['note']}", flush=True)
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            with open(summary, "a", encoding="utf-8") as out:
+                out.write(f"| {'ok' if res['ok'] else '**BAD**'} | `{name}` | {res['kind']} | "
+                          f"{res['verdict']} | {res['states']} | {res['secs']} s |\n")
         if args.traces and res["trace"]:
             for step in res["trace"]:
                 print("      " + step)
