@@ -4,6 +4,7 @@
 #include "big_int.h"
 #include "decimal_number.h"
 #include "expression_evaluator.h"
+#include "host_object.h"
 #include "internal_value.h"
 #include "loop_attr.h"
 #include "make_unexpected.h"
@@ -812,6 +813,20 @@ void ValueRendererBase<CharT>::operator()(const ListRef& list) const
 template<typename CharT>
 void ValueRendererBase<CharT>::operator()(const MapRef& map) const
 {
+    // An object of the host language prints as the host prints it: str(), repr() in a container
+    if (const auto* host = map.GetHostObject())
+    {
+        const auto text = m_asRepr ? host->Repr() : host->Str();
+        if constexpr (std::is_same_v<CharT, char>)
+        {
+            m_os->append(text);
+        }
+        else
+        {
+            m_os->append(ConvertString<std::basic_string<CharT>>(text));
+        }
+        return;
+    }
     // A for loop's `loop` prints as Jinja2's LoopContext: <LoopContext index/length>
     InternalValue loopIndex;
     InternalValue loopLength;
@@ -1118,6 +1133,34 @@ struct UnaryOperation : BaseVisitor<InternalValue>
     UnaryExpression::Operation m_oper;
 };
 
+// A visited operand as a value again, for a host object's __eq__ (IHostObject::Equals). Strings
+// are copied, as the host may keep its argument; an operand no host compares with (a renderer)
+// is undefined
+template<typename T>
+InternalValue HostOperand(const T& val)
+{
+    if constexpr (std::is_same_v<T, ListRef> || std::is_same_v<T, MapRef>)
+    {
+        return InternalValue(val.ToAdapter());
+    }
+    else if constexpr (std::is_same_v<T, BigIntView>)
+    {
+        return MakeBigIntValue(val.decimal);
+    }
+    else if constexpr (IsStringType_v<T>)
+    {
+        return InternalValue::FromText(std::basic_string_view<typename T::value_type>(val));
+    }
+    else if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, int64_t> || std::is_same_v<T, double> || std::is_same_v<T, NoneValue> || std::is_same_v<T, UndefinedValue> || std::is_same_v<T, KeyValuePair> || std::is_same_v<T, Callable>)
+    {
+        return InternalValue(val);
+    }
+    else
+    {
+        return InternalValue();
+    }
+}
+
 // Binary arithmetic and comparison with Python semantics: bool is an int, int op int stays
 // an int (overflow raises), `/` is true division, `//` and `%` floor, operands of unrelated
 // types compare unequal and raise TypeError for everything else.
@@ -1197,6 +1240,13 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             return PercentFormat(left, right);
         }
+        if constexpr (std::is_same_v<L, MapRef> || std::is_same_v<R, MapRef>)
+        {
+            if (auto equal = HostEqual(left, right))
+            {
+                return *equal;
+            }
+        }
         if (m_oper == BinaryExpression::LogicalEq)
         {
             return false;
@@ -1206,6 +1256,33 @@ struct BinaryMathOperation : BaseVisitor<>
             return true;
         }
         ThrowUnsupported(left, right);
+    }
+
+    // == and != with a host object on either side, which decides (host::Equal); nullopt for
+    // any other operator or operands
+    template<typename L, typename R>
+    [[nodiscard]] std::optional<bool> HostEqual(const L& left, const R& right) const
+    {
+        if (m_oper != BinaryExpression::LogicalEq && m_oper != BinaryExpression::LogicalNe)
+        {
+            return std::nullopt;
+        }
+        const IHostObject* leftHost = nullptr;
+        const IHostObject* rightHost = nullptr;
+        if constexpr (std::is_same_v<L, MapRef>)
+        {
+            leftHost = left.GetHostObject();
+        }
+        if constexpr (std::is_same_v<R, MapRef>)
+        {
+            rightHost = right.GetHostObject();
+        }
+        if (!leftHost && !rightHost)
+        {
+            return std::nullopt;
+        }
+        const bool equal = host::Equal(leftHost, HostOperand(left), rightHost, HostOperand(right));
+        return m_oper == BinaryExpression::LogicalEq ? equal : !equal;
     }
 
     // printf-style `str % args` is task 0020's; until it lands the result is empty
@@ -1907,6 +1984,10 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             return Mismatch(left, right);
         }
+        if (auto equal = HostEqual(left, right))
+        {
+            return *equal;
+        }
 
         // An object (namespace(), cycler(), joiner()) equals only itself, as Python objects
         // without __eq__ do; a dict equals itself without its items being compared, and nested
@@ -2018,7 +2099,13 @@ struct BooleanEvaluator : BaseVisitor<bool>
     // An object (namespace(), cycler(), joiner()) is truthy, as Python objects without __bool__ are
     bool operator()(const MapRef& val) const
     {
-        return val.GetObjectClass() != nullptr || val.GetSize() != 0ULL;
+        if (val.GetObjectClass() != nullptr)
+        {
+            // An object of the host language answers itself, as Python calls __bool__
+            const auto* host = val.GetHostObject();
+            return !host || host->Truth();
+        }
+        return val.GetSize() != 0ULL;
     }
 
     bool operator()(const ListRef& val) const

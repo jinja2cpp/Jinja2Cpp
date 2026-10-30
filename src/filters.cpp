@@ -6,6 +6,7 @@
 
 #include "expression_evaluator.h"
 #include "function_base.h"
+#include "host_object.h"
 #include "internal_value.h"
 #include "loop_attr.h"
 #include "markup.h"
@@ -413,6 +414,12 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
         throw TemplateRuntimeError("attribute name must be string, not '" + (info ? std::string(UndefinedClassName(*info)) : Apply<visitors::PythonTypeNameGetter>(attrNameVal)) + "'");
     }
     CheckUndefinedUse(baseVal, UndefinedUse::Attribute);
+    // An object of the host language: its getattr, without the items
+    if (const auto* host = GetHostObject(baseVal))
+    {
+        auto attr = host->GetAttr(AsString(attrNameVal));
+        return attr ? std::move(*attr) : GetArgumentValue("default", context);
+    }
     // Python's attr reads attributes only: the items of a dict are not attributes, the fields
     // of a reflected object and of an object such as namespace() are
     auto map = AsMap(baseVal);
@@ -1098,6 +1105,11 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     if (const auto loop = m_mode == LengthMode ? AsMap(baseVal) : std::nullopt; loop && loop->GetLoopAttr(LoopAttr::Length, loopLength))
     {
         return loopLength;
+    }
+    // len() of an object of the host language is its own
+    if (const auto* host = m_mode == LengthMode ? GetHostObject(baseVal) : nullptr)
+    {
+        return host::Len(*host);
     }
     // Like Python, a string is a sequence of characters and a mapping one of its keys
     bool isConverted = false;

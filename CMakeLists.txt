@@ -234,6 +234,7 @@ set(JINJA2CPP_SOURCES
     src/json_reader.cpp
     src/generic_list.cpp
     src/global_functions.cpp
+    src/host_object.cpp
     src/internal_value.cpp
     src/lexer.cpp
     src/markup.cpp
@@ -474,6 +475,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/fwd_test.cpp
         test/global_functions_test.cpp
         test/helpers_tests.cpp
+        test/host_object_test.cpp
         test/i18n_test.cpp
         test/limits_test.cpp
         test/if_test.cpp

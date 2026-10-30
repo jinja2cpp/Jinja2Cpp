@@ -628,8 +628,13 @@ enum class MapAttrPolicy
     // Python's getattr finds them before the items
     MethodsFirst,
     // A host object (reflected structs, JSON bindings): its keys, then dict methods
-    KeysFirst
+    KeysFirst,
+    // An object of a host language (IMapAccessor::GetHostObject, host_object.h): the object's
+    // own attributes, then its items, as Python's getattr; the engine adds no methods
+    Host
 };
+
+class IHostObject;
 
 struct IMapAccessor : ValueObject
 {
@@ -687,6 +692,8 @@ struct IMapAccessor : ValueObject
     virtual bool GetIteration(ListAdapter& /*items*/) const { return false; }
     // Whether GetIteration gives items, asked without making them
     [[nodiscard]] virtual bool Iterates() const { return false; }
+    // The object of a host language this map stands for (host_object.h); null for the others
+    [[nodiscard]] virtual const IHostObject* GetHostObject() const { return nullptr; }
 };
 
 // A non-owning view of a list: code outside internal_value.* reads list values through it,
@@ -889,6 +896,7 @@ public:
     // See IMapAccessor::GetIteration
     bool GetIteration(ListAdapter& items) const { return m_accessor != nullptr && m_accessor->GetIteration(items); }
     [[nodiscard]] bool Iterates() const { return m_accessor != nullptr && m_accessor->Iterates(); }
+    [[nodiscard]] const IHostObject* GetHostObject() const { return m_accessor ? m_accessor->GetHostObject() : nullptr; }
 
     // An owning copy, which shares the map as copying the value does
     [[nodiscard]] MapAdapter ToAdapter() const;

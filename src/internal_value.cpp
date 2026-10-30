@@ -437,18 +437,25 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     {
         if constexpr (std::is_same_v<CharT, char>)
         {
-            return GetField(values, fieldName);
+            return GetStringItem(values, fieldName);
         }
         else
         {
-            return GetField(values, ConvertString<std::string>(fieldName));
+            return GetStringItem(values, ConvertString<std::string>(fieldName));
         }
     }
 
     template<typename CharT>
     InternalValue operator()(const MapRef& values, const std::basic_string_view<CharT>& fieldName) const
     {
-        return GetField(values, ConvertString<std::string>(fieldName));
+        return GetStringItem(values, ConvertString<std::string>(fieldName));
+    }
+
+    // x['name']: an object of the host language looks among its items first, as Jinja2's
+    // getitem does (HostObjectAccessor::FindItem); for every other map it is x.name
+    [[nodiscard]] static InternalValue GetStringItem(const MapRef& values, const std::string& field)
+    {
+        return values.GetAttrPolicy() == MapAttrPolicy::Host ? FindKey(values, InternalValue(field)) : GetField(values, field);
     }
 
     // Undefined for a missing name; a user's accessor (IMapItemAccessor) is asked through
@@ -505,6 +512,16 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     }
     // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     InternalValue operator()(const BigIntView& /*values*/, const BigIntView& /*index*/) const { return InternalValue(); }
+
+    // An object of the host language is a key by its identity (ObjectKey, template_dict.cpp)
+    InternalValue operator()(const MapRef& values, const MapRef& key) const
+    {
+        if (!key.GetHostObject())
+        {
+            return InternalValue();
+        }
+        return FindKey(values, InternalValue(key.ToAdapter()));
+    }
 
     InternalValue operator()(const MapRef& values, const ListRef& key) const
     {
