@@ -138,7 +138,7 @@ explores every behaviour up to it and none past it.
 | `no-read-only-export` | 0331 A1 out (b2.cpp shapes) | counterexample: `NoCrossThreadWrite` (a kept global adapter linked by another thread's render) |
 | `no-freeze` | 0331 A2 out (4588321, Ruslan's P2) | counterexample: `SnapshotStable` |
 | `no-drop-unheld` | 459d8f7 out (Codex P2) | counterexample: `RegistryBounded` |
-| `drop-without-source-check` | `IsUnheld` without the source-owner test, without `FixModuleLinksOwn` | counterexample: `NoUseAfterFree` (with owning links no error: the namespace's link keeps the cell) |
+| `drop-without-source-check` | `IsUnheld` without the source-owner test, without `FixModuleLinksOwn` and `FixLinksOwn` | counterexample: `NoUseAfterFree` (with owning links no error: the namespace's link keeps the cell) |
 | `drop-without-link-check` | `IsUnheld` without the links test | no error (see below) |
 | `no-source-keeps-id` | no `m_source`, no DropUnheld | counterexample: `NoForeignCell` (identity reuse) |
 | `no-call-pin` | the code after 0337 (no `FixCallPin`) | counterexample: `ExportKeepsCallState` (0335) |
