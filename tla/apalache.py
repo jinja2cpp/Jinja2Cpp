@@ -96,7 +96,7 @@ MODES = {
     # name: (init, invariant, length)
     "bounded": ("Init", "Safety", None),
     "init": ("Init", "IndInv", 0),          # Init => IndInv
-    "inductive": ("IndInit", "IndInv", 1),  # IndInv /\ Next => IndInv'
+    "inductive": ("IndInit", "Goal", 1),    # IndInv /\ Next => Goal' (Goal: IndInv or --inv)
     "safety": ("IndInit", "Safety", 0),     # IndInv => the invariants of check.py
     "sat": ("IndInit", "NoState", 0),       # IndInv has a state: must report a violation
 }
@@ -125,12 +125,15 @@ def main():
     work = tempfile.mkdtemp(prefix="apalache-cells-")
     prepare(work)
     with open(os.path.join(work, "MCApalache.tla"), "w", encoding="utf-8") as mc:
+        # An action invariant: Apalache checks it on the step only, not on IndInit's state
+        goal = f"Goal == ({args.inv or 'IndInv'})'\n"
         mc.write("---- MODULE MCApalache ----\nEXTENDS CellInductive\n\n"
-                 + constants(scope, overrides) + "====\n")
+                 + constants(scope, overrides) + goal + "====\n")
     cmd = [tool, args.mode if args.mode == "typecheck" else "check"]
     if args.mode != "typecheck":
         init, inv, length = MODES[args.mode]
-        cmd += ["--cinit=CInit", f"--init={init}", f"--next={args.next}", f"--inv={args.inv or inv}",
+        inv = inv if args.mode == "inductive" else args.inv or inv
+        cmd += ["--cinit=CInit", f"--init={init}", f"--next={args.next}", f"--inv={inv}",
                 f"--length={args.length if length is None else length}", "--no-deadlock"]
     cmd += [f"--out-dir={os.path.join(work, 'out')}", "MCApalache.tla"]
     env = dict(os.environ, JVM_ARGS=args.java_opts)

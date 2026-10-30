@@ -863,4 +863,77 @@ ExportKeepsCallState == ~flag.late
 \* 0336: no cell is dropped while its data can be lent again (its writes would be lost)
 NoLostWrites == ~flag.lost
 
+
+-----------------------------------------------------------------------------
+(* Well-formedness: every id a field holds names an object made so far, and the links,
+   tables and frames agree. TLC checks it as an invariant (check.py); it is the first layer of
+   the inductive invariant (CellInductive.tla), where an arbitrary state would otherwise read
+   outside a function's domain, which Apalache leaves unspecified *)
+
+AdsMade == {a \in AdIds : a <= nAd}
+CellsMade == {c \in CellIds : c <= nCell}
+GensMade == {g \in GenIds : g <= nGen}
+AdRef(a) == a = 0 \/ a \in AdsMade
+CellRef(c) == c = 0 \/ c \in CellsMade
+GenRef(g) == g = 0 \/ g \in GensMade
+
+WFAd ==
+    \A a \in AdIds :
+        IF a > nAd THEN ad[a] = NoAd
+        ELSE /\ ad[a].idn \in Keys
+             /\ CellRef(ad[a].cell)
+             /\ ad[a].held = (ad[a].idn = "G")
+             /\ ad[a].generic => ad[a].idn \in OwnedAddrs
+             /\ (ad[a].seen = ATT) = (ad[a].cell # 0)
+
+WFCell ==
+    \A c \in CellIds :
+        IF c > nCell THEN cl[c] = NoCell
+        ELSE /\ cl[c].idn \in Keys
+             /\ cl[c].stor \in GensMade /\ GenRef(cl[c].retired) /\ AdRef(cl[c].source)
+             /\ cl[c].links \subseteq AdsMade
+             /\ cl[c].inTable => (cl[c].alive /\ ~cl[c].frozen
+                                  /\ rg[cl[c].reg].tbl[cl[c].idn] = c)
+             /\ cl[c].frozen => cl[c].links = {}
+
+WFGen ==
+    \A g \in GenIds :
+        IF g > nGen THEN st[g] = NoGen ELSE AdRef(st[g].child)
+
+WFTable ==
+    \A r \in RegIds : \A k \in Keys :
+        LET c == rg[r].tbl[k] IN
+        c # 0 => (c \in CellsMade /\ cl[c].inTable /\ cl[c].reg = r /\ cl[c].idn = k)
+
+WFFrame ==
+    \A t \in Threads : \A i \in Frames(t) :
+        LET F == fr[t][i] IN
+        /\ F.kind = "render" => (t \in RenderThreads /\ F.reg = <<t, i>>)
+        /\ F.kind = "mod" => (t \in ModuleThreads /\ F.reg = ModReg)
+        /\ F.ads \subseteq AdsMade
+        /\ F.phase = "fin" => (F.ads = {} /\ F.kind = "render")
+        /\ i < Depth(t) => F.phase = "run"
+        /\ (F.bkind = "none") = (F.bad = 0)
+        /\ F.bkind # "none" => (F.bad \in AdsMade /\ ad[F.bad].cell \in CellsMade
+                                /\ F.bgen \in GensMade)
+
+WFEx ==
+    \A e \in ExIds :
+        IF e > nEx THEN ex[e] = NoEx
+        ELSE /\ ex[e].kind \in {"gen", "live", "view", "raw"}
+             /\ ex[e].thr \in Threads /\ ex[e].depth \in 1..MaxDepth
+             /\ ex[e].idn \in Keys
+             /\ IF ex[e].pin
+                THEN /\ GenRef(ex[e].pg) /\ (ex[e].cg = -1 \/ GenRef(ex[e].cg))
+                     /\ ex[e].kind \in {"live", "view"}
+                ELSE /\ ex[e].kind = "gen" => ex[e].gen \in GensMade
+                     /\ ex[e].kind = "live" => ex[e].cell \in CellsMade
+             /\ ex[e].kind \in {"view", "raw"} => ex[e].ad \in AdsMade
+             /\ ex[e].done => Len(ex[e].snap) = 2
+
+WFRest ==
+    /\ AdRef(ns) /\ \A t \in Threads : AdRef(gsnap[t])
+
+WellFormed == WFAd /\ WFCell /\ WFGen /\ WFTable /\ WFFrame /\ WFEx /\ WFRest
+
 =============================================================================

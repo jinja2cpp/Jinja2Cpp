@@ -109,6 +109,7 @@ What the model abstracts:
 | + | `live` equals the number of listed cells | `LiveCount` |
 | 7 | A module call's export keeps that call's final state (0335) | `ExportKeepsCallState` |
 | 8 | No cell is dropped while its data can be lent to a later call (0336) | `NoLostWrites` |
+| + | Every id names an object made so far; tables, links and frames agree (0338 F) | `WellFormed` |
 
 ## Results
 
@@ -267,13 +268,139 @@ value, which is the unbounded counter the pass runs use; `epoch-wrap` (`MaxEpoch
 uniqueness test, now an acquire) is memory order, outside a sequentially consistent model; the
 designs above keep the uniqueness test, so they inherit its fix.
 
+## Past the bounds: depth, sizes and Apalache (task 0338, step F)
+
+Step F was to replace "bounded" with inductive invariants checked by Apalache plus a cutoff
+argument for the sizes. Apalache now runs the model, but the inductive check is out of reach as
+the spec is written, so the mechanized proof is task 0363. This section records what was built,
+what it costs, and the argument that stands in for the proof.
+
+**Running Apalache.**
+
+```bash
+curl -sSL https://github.com/apalache-mc/apalache/releases/download/v0.51.1/apalache-0.51.1.tgz | tar xz -C tla
+ln -s apalache-0.51.1 tla/apalache
+python3 tla/apalache.py typecheck
+python3 tla/apalache.py bounded --length 3 --scope module --set MaxAd=6 MaxCell=2 MaxGen=3 MaxEx=1
+python3 tla/apalache.py inductive --inv NoLostWrites ...   # IndInv /\ Next => NoLostWrites'
+python3 tla/apalache.py sat ...                            # IndInv has a state at all
+```
+
+`apalache.py` takes the constants from a `check.py` run (`--scope`, `--set`), so both tools
+check the same models. It copies the spec and replaces three things Apalache cannot read, each
+checked to occur once: `InBound` (TLC's level; Apalache bounds the length itself), the
+`RECURSIVE` `Close` (a fold of a reached flag per object, one round per object, since the
+fixed point of a set of tuples ran out of memory) and the `EXTENDS`. The types are in
+`CellApalache.tla` and in `\* @type:` comments in `CellProtocol.tla`, which TLC ignores.
+`CellInductive.tla` has `TypeOK`, `IndInv` (so far `WellFormed /\ Safety`) and `IndInit`, any
+state of the right shape.
+
+**What it costs.** On the smallest module scope (6 adapters, 2 cells, 3 storages, 1 export):
+
+| Check | Time or result |
+|---|---|
+| type check | 20 s |
+| bounded, 3 steps of renders, uses and GC | 6 min |
+| a `WellFormed` part, or a flag invariant, against `IndInit` | 20 s to 3 min |
+| `SnapshotStable` or `NoCrossThreadWrite` against `IndInit` (implied by it) | over 15 min, stopped |
+| one inductive step of the full `Next` | out of memory at 14 GB |
+
+An inductive invariant is found by strengthening `IndInv` from the counterexamples of that
+last row, typically dozens of rounds, and the result would still hold for these sizes only.
+The costs come from the symbolic encoding of indirect function reads (`cl[ad[a].cell].stor`)
+and of `GC`, which every step may take. What would make it tractable is in task 0363.
+
+**The model found one defect on the way.** `DropUnheld`'s branch with no candidate set
+`lag' = {}` while its trailing `UNCHANGED` kept `lag`, so the step was enabled only when `lag`
+was already empty. With `-deadlock`, TLC silently ended every behaviour in which the host had
+let go of data before a module call ended (`module-generic` at level 9: 275,413 states before,
+275,591 after). Apalache's assignment check reports such a step, TLC does not. Fixed; the
+`module`, `module-generic` and `module-0332` passes and the `lag` mutants were rerun.
+
+**Well-formedness.** `WellFormed` is a TLC invariant of every pass run: every id a field holds
+names an object made so far, a listed cell is alive, not frozen and the table's entry for its
+identity, a table entry is such a cell, a frozen cell has no links, an adapter is attached
+(`seen = ATT`) exactly when it has a cell, only the global's adapter is held, frames have their
+own registries and borrow only attached adapters. It is the first layer of `IndInv`, and it
+guards the model against drift: a new action that leaves a dangling id fails it.
+
+### Depth: every scope is finite
+
+The level bound is not what keeps the search finite. Ids are never reused and each kind is
+bounded (`MaxAd`, `MaxCell`, `MaxGen`, `MaxEx`); the epoch moves only in `Adopt` (which makes
+a cell) and in `FinishFreeze` of a render with listed cells, so it stays at or below
+`2 * MaxCell`; the call id and each `inc[o]` move only in `StartModCall` (two adapters), so at
+or below `MaxAd / 2`; `fails <= MaxFail`, values `<= MaxVal`. Every other field ranges over a
+finite set. So each scope has finitely many reachable states, and a run without the level
+guard that completes checks every behaviour of that scope, at any length. That is what an
+inductive invariant gives for fixed constants; task 0351 (item 1) runs it. It is slow, not
+blocked: `module` at 6/2/3/1 with `MaxLevel=500` had not finished after 25 minutes.
+
+### Sizes: the cutoff argument
+
+The question is whether a defect that needs more threads, identities or nesting than a scope
+has can exist. The argument below is on paper, step by step, against the actions above; each
+part says what it rests on and where it stops.
+
+**What links threads.** A thread's own state is its frame stack `fr[t]`, `gsnap[t]`,
+`gatt[t]`, the registries `<<t, d>>` of its renders, and the adapters, cells and storages its
+render frames make. Another thread reaches that state only (a) through the module, whose every
+step runs under the module lock, (b) by releasing an export it was handed (`Release`, after
+`done` or with `HostHandoff`), which only drops a reference, and (c) through `GC`, which only
+frees what no root reaches and unlinks dead adapters. Host data is constant and each render
+makes its own host adapters (without A1, raws are the exception, a mutant only).
+
+**Threads: two suffice, given one move.** Every invariant names at most two threads: the two
+writers of `NoCrossThreadWrite`; the rest name an object, not a thread. Take a violating
+behaviour with threads A and B named by the violation and a third thread C. C's render steps
+touch only C's objects and so commute with every step of A and B except `GC`, whose result for
+A's and B's objects does not depend on C's roots (C's roots reach C's objects and the module's;
+a module object reached only through C would be freed earlier without C, which is a release
+that A or B can make too). So C's render steps can be dropped. C's module calls are
+lock-serialized with A's and B's; give each such call to B. That is a behaviour of the
+two-thread model **if** B is outside the module at that time, which holds, and if B's own
+render steps during C's call can move before or after it, which holds since they touch only
+B's render objects; the call then runs at B's depth 0 or nested in B's render, which needs
+`MaxDepth` one higher. Status: argued for the safety invariants, with the depth caveat; the
+three-thread runs below found nothing new.
+
+**Identities: two plus the busy ones.** The protocol compares identities only for equality
+(registry keys, `cl[c].idn = ad[a].idn`, `FreeAddrs`), and every invariant names at most two:
+`NoForeignCell` one address in two incarnations or two addresses, the rest one. That is the
+data-independence condition (Wolper, 1986), with one exception: `StartModCall` needs a free
+address, so an address that is busy (an argument of a running call, the namespace's adapter,
+a host's kept copy or view) blocks a call that a larger set would allow. At most
+`MaxDepth` (nested calls) + 1 (`ns`) + `MaxEx` (kept views and copies) addresses are busy at
+once, so with one more than that every call finds a free one, and since addresses are
+symmetric, renaming covers every behaviour: 6 for the module scopes, not the 2 they use.
+Status: argued; the runs with 2 addresses are partial for behaviours that need two busy
+addresses and a third for the next call, and the three-address runs below are the check that
+exists.
+
+**Nesting.** Each frame saves what it changes in the frame itself (`outer`, the registry
+`<<t, d>>`, the borrower) and restores it at its end, and the invariants relate a frame to its
+direct parent (call restore, the nested global, the export marks of F1). Stack discipline
+carries that to any depth by induction on the depth, if no step reads a grandparent's state;
+none does, except `InModule` (any module frame below, for the lock), which a depth-2 scope
+covers. Status: argued; one depth-3 run below.
+
+**Allocations.** `MaxAd`, `MaxCell`, `MaxGen` and `MaxEx` bound how many objects a behaviour
+makes, so they are a length bound in another form. No cutoff is claimed for them.
+
+**Runs past the usual sizes** (this PR, level-bounded):
+
+| Run | Change | States | Result |
+|---|---|---|---|
+CUTOFF_ROWS
+
 ## What the results claim
 
 Bounded evidence, not a proof. Each pass run covers every behaviour up to its level within its
-bounds, under sequentially consistent interleavings of the steps listed above. The path from
-here to a safety argument for the implementation (every ownership and escape path, failure at
-each allocation, concurrent reads and destruction, memory order, collection and identifier
-reuse, and an inductive or cutoff argument) is task 0338.
+bounds, under sequentially consistent interleavings of the steps listed above. Each scope is
+finite, so a run without the level bound that completes covers every behaviour of its scope
+(task 0351); the cutoff argument above, on paper, carries the results to more threads and
+identities, with the limits it states. The mechanized inductive proof is task 0363. The path
+from here to a safety argument for the implementation is task 0338.
 
 ## Not modelled
 
