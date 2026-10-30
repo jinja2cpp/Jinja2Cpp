@@ -44,7 +44,7 @@ library can see through an internal interface (no public ABI change); `IsUnheld`
 frees the list's data after each call under ASan/LSan, a TSan row with two threads calling
 the module is clean, and `Module/keep`, `Module/keep_written` do not move in `bench/count.py`.
 
-**Implementation.** The generic adapters pass their copy's owner to `CellLink::Adopt` (not for a
+**Implementation (PR #714).** The generic adapters pass their copy's owner to `CellLink::Adopt` (not for a
 global's data), and `IsUnheld` asks the source adapter `MayBeLentAgain()`. A generic container is
 the accessor's only owner when the accessor derives from `detail::OwnedAccessor` (an
 `enable_shared_from_this` base the library's own accessors take: `MakeGenericList`, `Reflect` of a
