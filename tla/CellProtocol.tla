@@ -109,7 +109,7 @@ VARIABLES
 vars == <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt,
           ns, hkeep, lag, lock, inc, fails, dirty, dirtyBy, pendDrop, wr, flag>>
 
-\* snap: the thread's globals snapshot reaches the adapter (CellLink::SnapshotBit, 0346); blk: the
+\* snap: the thread's globals snapshot reaches the adapter (ValueObject::IsInSnapshot, 0346); blk: the
 \* item adapters in the block a global's adapter keeps (ValuesListAdapter::m_items)
 NoAd == [idn |-> "none", inc |-> 0, held |-> FALSE, generic |-> FALSE, cell |-> 0, seen |-> 0,
          snap |-> FALSE, blk |-> {}, alive |-> FALSE]

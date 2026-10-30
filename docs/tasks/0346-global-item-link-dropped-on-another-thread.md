@@ -53,9 +53,11 @@ values on another thread, which 0340 made part of the contract.
 `NoCrossThreadWrite` counterexample, `global-items-handoff` and `render-global-items` pass
 (tla/README.md, "A global's link is listed only while the snapshot reaches its adapter"). Then the
 C++: a link is listed only if its adapter is a global's that the thread's snapshot reaches
-(`CellLink::SnapshotBit`, set by `LendGlobal` on a global's own adapter and by `LendNested` on the
-items of such an adapter's block); every other link owns its cell. When the global's adapter lets
-go of a block, `ItemAdapters::LeaveSnapshot` walks it (and the blocks its items hold), and each
+(`ValueObject::IsInSnapshot`, a byte in the padding after the object's flags, set by `LendGlobal`
+on a global's own adapter and by `LendNested` on the items of such an adapter's block; not in
+`CellLink::m_state`, whose detached value is the epoch since 0342); every other link owns its
+cell. When the global's adapter lets go of a block, `ItemAdapters::LeaveSnapshot` walks it (and,
+iteratively, the blocks its items hold), and each
 listed link leaves its cell's list and takes a reference, on the render's thread, which still holds
 the block. Neither option of the description was taken: (a) would keep every adapter of `g[i]` read
 in a loop alive until `Finish`, and (b) does not cover the adapters no block holds. The trace

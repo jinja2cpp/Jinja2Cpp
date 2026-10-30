@@ -73,7 +73,7 @@ not change in a later one. That rule is D8's copy on write.
 | `CallExports`, pinned in `~ModuleCallCollector` (0335, 0332); its views `CallListView`, `CallMapView` | an export of kind `live`; `PinEx` in `EndModCall` |
 | A link holds a reference to its cell unless it is a global's (`CellLink::OwnsBit`; 0332, 0340) | `OwningLink`, `FixModuleLinksOwn`, `FixLinksOwn` |
 | 0340 option (a), not in the C++: a render's live cell holds its linked adapters until `Finish` | `Succ` of a cell, `FixPinOnAttach` |
-| `CellLink::SnapshotBit`: the snapshot reaches a global's adapter; `LendNested`'s block, `LeaveSnapshot` when it lets go of it; `g[i]` and a map's item lent afresh (0346) | `ad[a].snap`, `ad[a].blk`, `LendGItem`, `Evict`, `Forget`, `FixSnapshotLinks` |
+| `ValueObject::IsInSnapshot`: the snapshot reaches a global's adapter; `LendNested`'s block, `LeaveSnapshot` when it lets go of it; `g[i]` and a map's item lent afresh (0346) | `ad[a].snap`, `ad[a].blk`, `LendGItem`, `Evict`, `Forget`, `FixSnapshotLinks` |
 | `l.pop()` of a nested list | op `drop` |
 | a generic container (`MakeGenericList`) as a module call's argument, a copy the host keeps (0336) | `ad[a].generic`, `hkeep`, `HostLetsGo` |
 | `NextEpoch` (64 bits since 0342), `BeginCall` wrapping past 32 bits (0341) | `NextEp`, `NextCall` with `MaxEpoch`, `MaxCallId` |
