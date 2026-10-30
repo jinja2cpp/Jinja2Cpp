@@ -10,7 +10,7 @@
 #include <jinja2cpp/value.h>
 
 #include <atomic>
-#include <cstdint>
+#include <cstddef>
 #include <mutex>
 #include <string>
 #include <thread>

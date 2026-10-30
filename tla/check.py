@@ -63,8 +63,8 @@ SHARED_KEPT = dict(Threads='{"t1", "t2"}', ModuleThreads='{}', RenderThreads='{"
 DEEP = dict(Threads='{"t1"}', ModuleThreads='{"t1"}', RenderThreads='{}', MaxDepth=2,
             MaxLevel=34, MaxAd=10, MaxCell=1, MaxGen=4, MaxEx=2,
             Actions='{"export", "release", "enum", "sort"}')
-# Two threads' renders lending a global's items, which the host keeps and hands off (0346)
-GLOBAL_ITEMS = dict(Threads='{"t1", "t2"}', ModuleThreads='{}', RenderThreads='{"t1", "t2"}',
+# Renders on t1 lending a global's items, which the host keeps and drops on t2 (0346)
+GLOBAL_ITEMS = dict(Threads='{"t1", "t2"}', ModuleThreads='{}', RenderThreads='{"t1"}',
                     MaxDepth=1, MaxLevel=12, MaxAd=9, MaxCell=2, MaxGen=3, MaxEx=1,
                     HostHandoff=True, Actions='{"keeplist", "release", "read", "gitem"}')
 ALL = '{"touch", "read", "export", "keeplist", "ns", "enum", "sort", "release"}'
@@ -177,7 +177,7 @@ RUNS = {
                              "0340: the dropper unlinks the adapter from the render's live cell"),
     # 0346: a global's item the snapshot no longer reaches (its block let go of it, a map item),
     # kept in a list and dropped on another thread while the render runs
-    "global-items-handoff": ("pass", GLOBAL_ITEMS, {"MaxLevel": 11}, SAFETY,
+    "global-items-handoff": ("pass", GLOBAL_ITEMS, {}, SAFETY,
                              "0346: a global's item kept, let go of and dropped on another thread"),
     "global-items-listed": ("mutant", GLOBAL_ITEMS, {"FixSnapshotLinks": False},
                             ["NoCrossThreadWrite"],
