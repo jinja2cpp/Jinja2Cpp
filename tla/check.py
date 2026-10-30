@@ -228,9 +228,10 @@ ThreadPerms == Permutations(Threads)
 """
 
 
-def cache_key(jar, workdir):
-    """What a run's verdict depends on: the spec, the model, its configuration and TLC itself"""
-    digest = hashlib.sha256()
+def cache_key(jar, workdir, kind):
+    """What a run's verdict depends on: the spec, the model, its configuration and TLC itself, and
+    what counts as success: the expected kind (the invariants are in MC.cfg)"""
+    digest = hashlib.sha256(kind.encode())
     for path in (jar, *(os.path.join(workdir, f) for f in ("CellProtocol.tla", "MC.tla", "MC.cfg"))):
         with open(path, "rb") as data:
             digest.update(hashlib.sha256(data.read()).digest())
@@ -248,7 +249,7 @@ def run(jar, name, spec, workdir, extra=None, timeout=None, symmetry=True, java_
         cfg.write(config(scope, overrides, invariants, symmetry))
     # A verdict that held for the same inputs holds again: TLC's search is deterministic in its
     # result, so a run whose inputs did not change is not run again (only expected verdicts are kept)
-    cached = os.path.join(cache, cache_key(jar, workdir) + ".json") if cache else None
+    cached = os.path.join(cache, cache_key(jar, workdir, kind) + ".json") if cache else None
     if cached and os.path.exists(cached):
         with open(cached, encoding="utf-8") as data:
             res = json.load(data)
