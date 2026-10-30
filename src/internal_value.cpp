@@ -513,10 +513,11 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     InternalValue operator()(const BigIntView& /*values*/, const BigIntView& /*index*/) const { return InternalValue(); }
 
-    // An object of the host language is a key by its identity (ObjectKey, template_dict.cpp)
+    // An object of the host language is a key by its identity (ObjectKey, template_dict.cpp).
+    // A host object's own __getitem__ takes any key, hashable or not
     InternalValue operator()(const MapRef& values, const MapRef& key) const
     {
-        if (!key.GetHostObject())
+        if (!values.IsHost() && !key.GetHostObject())
         {
             return InternalValue();
         }
@@ -525,7 +526,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue operator()(const MapRef& values, const ListRef& key) const
     {
-        if (!key.IsTuple() && !key.GetRangeInfo())
+        if (!values.IsHost() && !key.IsTuple() && !key.GetRangeInfo())
         {
             return InternalValue();
         }

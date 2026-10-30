@@ -3,6 +3,7 @@
 #include "../src/internal_value.h"
 #include "../src/template_dict.h"
 #include "../src/template_impl.h"
+#include "../src/value_visitors.h"
 
 #include "gtest/gtest.h"
 
@@ -45,6 +46,8 @@ struct ToySpec
     std::optional<int64_t> equalsInt;
     bool hashable = true;
     std::optional<std::string> html;
+    // __getitem__ answers every other key with the name of its type
+    bool typeKeys = false;
 };
 
 class ToyObject final : public IHostObject
@@ -68,6 +71,10 @@ public:
         if (const auto* index = GetIf<int64_t>(&key))
         {
             return Find(m_spec->intItems, *index);
+        }
+        if (m_spec->typeKeys)
+        {
+            return InternalValue(std::string(Apply<visitors::PythonTypeNameGetter>(key)) + "-key");
         }
         return std::nullopt;
     }
@@ -205,6 +212,13 @@ TEST(HostObjectTest, AttributeBeforeItemAndItemBeforeAttribute)
     // No dict methods are added to a host object: a missing one is undefined
     EXPECT_EQ("True", Render("{{ x.items is undefined }}", params));
     EXPECT_EQ(L"attr-name item-key", RenderW(L"{{ x.name }} {{ x['key'] }}", params));
+
+    // __getitem__ takes any key, hashable or not; a native dict takes none of these
+    ToySpec typed;
+    typed.typeKeys = true;
+    const InternalValueMap typedParams{ { "k", MakeToy(typed) } };
+    EXPECT_EQ("list-key dict-key tuple-key|True", Render("{{ k[[1]] }} {{ k[{}] }} {{ k[(1,)] }}|{{ {}[[1]] is undefined }}", typedParams));
+    EXPECT_EQ(L"list-key dict-key", RenderW(L"{{ k[[1]] }} {{ k[{}] }}", typedParams));
 }
 
 TEST(HostObjectTest, CallsWithPositionalAndKeywordArguments)
@@ -284,6 +298,11 @@ TEST(HostObjectTest, MarkupLikeObjectUnderAutoescape)
     // safe, striptags and forceescape read __html__() too; string is str()
     EXPECT_EQ("<b>Тоу</b>|Тоу|&lt;b&gt;Тоу&lt;/b&gt;|<plain>", Render("{{ m|safe }}|{{ m|striptags }}|{{ m|forceescape }}|{{ m|string }}", params));
     EXPECT_EQ(L"<b>Тоу</b>|Тоу", RenderW(L"{{ m|safe }}|{{ m|striptags }}", params));
+    // join escapes the rest when an item has __html__; a delimiter with it, and the operands of
+    // `~`, are converted with str() first, so they do not
+    EXPECT_EQ("<b>Тоу</b>&lt;i&gt;|&lt;i&gt;&lt;plain&gt;&lt;plain&gt;|&lt;plain&gt;&lt;i&gt;|&lt;i&gt;&lt;plain&gt;&lt;plain&gt;|<plain><i>",
+              Render("{% autoescape true %}{{ [m, '<i>']|join }}|{{ ['<i>', p]|join(m) }}|{{ m ~ '<i>' }}|{{ '<i>' ~ p ~ m }}{% endautoescape %}|{{ m ~ '<i>' }}", params));
+    EXPECT_EQ(L"<b>Тоу</b>&lt;i&gt;", RenderW(L"{% autoescape true %}{{ [m, '<i>']|join }}{% endautoescape %}", params));
 }
 
 TEST(HostObjectTest, DictKeysByIdentity)

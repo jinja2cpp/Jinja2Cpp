@@ -154,6 +154,12 @@ inline const IHostObject* GetHostObject(const InternalValue& value)
 // The Python operations of a host object the engine reaches outside the accessor
 namespace host
 {
+// hasattr(x, '__html__') of a host object, for the places that ask before converting it with str()
+inline bool IsMarkupLike(const InternalValue& value)
+{
+    const auto* object = GetHostObject(value);
+    return object && object->IsMarkupLike();
+}
 // x(...) of a host object as a callable value of the engine, which keeps the object alive;
 // throws Python's TypeError for an object that is not callable
 Callable MakeCall(const InternalValue& object, const IHostObject& host);
