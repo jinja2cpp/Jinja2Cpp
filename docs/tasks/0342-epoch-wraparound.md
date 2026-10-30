@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/713
 priority: low
 area: robustness
 depends: [0331]
-touches: [src/borrowed_cells.h, src/borrowed_cells.cpp, src/internal_value.cpp, test/borrowed_cells_test.cpp]
+touches: [src/borrowed_cells.h, src/borrowed_cells.cpp, src/internal_value.cpp, src/cell_trace.h, src/cell_trace.cpp, test/borrowed_cells_test.cpp, tla/check.py, tla/README.md, tla/CellProtocol.tla, docs/design/borrowed-cells-memory-order.md]
 ---
 # The 32-bit cell epoch wraps and an old adapter compares equal
 
@@ -40,3 +41,24 @@ renders are the thread's globals snapshot and values the host keeps. The chance 
 **Done when.** The choice and its measured cost are recorded here. A test starts the counter near
 the limit (a test accessor) and checks that an adapter read before the wrap finds a cell promoted
 across it. The design document (E4) and the TLA+ README drop the wrap-around from their lists.
+
+**Resolution.** A fourth option, cheaper than the three above: widen the epoch to 64 bits and keep
+`CellLink` at two words. The stored epoch and the link's position fields were never used at the
+same time: an attached link always takes `Find` (its epoch was the `Attached` mark) and a detached
+one has no position in a cell's list (its index was 0). So `CellLink::m_state` is one 64-bit word
+holding either the seen epoch or `AttachedBit` (bit 63) with `OwnsBit`, `HeldBit` and the index.
+The counter (`fetch_add` now, no CAS loop), `ItemAdapters::quietEpoch` and `CellStep::epoch` are 64
+bits. The counter would need 2^63 moves to reach the attached mark (292 years at 10^9 a second), so
+it never returns to a stored value: the unbounded counter the TLA+ model assumes.
+
+Measured cost (`scripts/preflight.sh --perf` against the 0339 commit, `bench/count.py`): every
+benchmark between -0.05% (`Render/chat_llama`) and +0.00%, including `Render/for_loop_vars`,
+`Module/keep` and `Module/keep_written`; allocations unchanged. Adapter sizes are unchanged on 64-bit
+targets (the link stays 16 bytes; on a 32-bit target it grows from 12 to 16).
+
+Evidence: `BorrowedCellsSingle.AdapterFindsACellPromotedAcrossThe32BitWrap` moves the counter by
+2^32 - 1 through the exported `detail::CellCounters::AdvanceEpochForTesting`; on the 32-bit code it fails with
+`[1]|[1]|[1, 9]` (the adapter skipped the lookup), with the fix it passes (skipped in the trace build,
+whose epochs must fit TLC's 32-bit integers). The model's `open-0342-epoch-wrap` run is now the mutant
+`epoch-wrap` (`MaxEpoch = 2`, counterexample `AliasesAgree`), and the design document's E4 and gap 3
+are closed.

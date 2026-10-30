@@ -6,7 +6,7 @@ Written 2026-10-28 on master `81ce81a`, revised 2026-10-30 on master `42873f9` (
 argument, not in TLA+"). It covers `src/borrowed_cells.{h,cpp}`, `src/cycle_collector.{h,cpp}` and
 `src/template_module.cpp`, and the state they share with the rest of the library. Line numbers are
 those of `42873f9`. It changes no code. What it finds is filed as tasks 0339 to 0342 and 0346.
-Task 0339 closed gap 1 since (section 4, R3).
+Task 0339 closed gap 1 since (section 4, R3), and task 0342 gap 3 (section 3, E4).
 
 The claim is narrow. **Given the host contract in section 1, every access the protocol makes to
 state that more than one thread can reach is either ordered by a lock, ordered by a
@@ -19,7 +19,8 @@ not meet that claim, with TSan reproducing both; #695 closed them. Today:
   test with `IsSoleOwner`, an `acq_rel` decrement of the same count);
 - a global's item link can be dropped on a host thread while the render runs (task 0346, found by
   reading, not reproduced);
-- the 32-bit epoch wraps (task 0342).
+- the 32-bit epoch wrapped (task 0342, now closed: the epoch is 64 bits and the link stays at two
+  words).
 
 Closed by #695: the foreign unlink of a live cell (task 0340: every link but a global's owns its
 cell, so letting go is a count release) and the call-id wrap (task 0341: no code compares a stored
@@ -119,7 +120,7 @@ src/borrowed_cells.h:52   Epoch()        s_epoch.load(relaxed)
 src/borrowed_cells.h:55   Live()         s_live.load(relaxed)
 src/borrowed_cells.h:62   AddLive(n)     s_live.fetch_add(relaxed)
 src/borrowed_cells.h:63   RemoveLive(n)  s_live.fetch_sub(relaxed)
-src/borrowed_cells.cpp:39 NextEpoch()    s_epoch.load(relaxed) + compare_exchange_weak(relaxed)
+src/borrowed_cells.cpp:39 NextEpoch()    s_epoch.fetch_add(relaxed)  (64 bits since 0342; a CAS loop before)
 ```
 
 The counters carry no data. Nothing is published through them: a reader that sees a value does not
@@ -129,7 +130,7 @@ what makes relaxed enough, and the argument has to show that no wrong hint can l
 answer.
 
 **What an adapter does with the epoch.** `CellLink::Get` returns null without a lookup when
-`m_seenEpoch == Epoch()`. `Find` stores the epoch it read *before* it looks the cell up
+`m_seenEpoch == Epoch()` (`m_state` since 0342). `Find` stores the epoch it read *before* it looks the cell up
 (`borrowed_cells.cpp:240`), so a promotion after that read moves the epoch past the stored value
 and the next read looks again. `ItemAdapters` and `CellStep` store an epoch for a whole block or
 enumeration with the same rule.
@@ -139,8 +140,8 @@ is the thread's own, so only that thread's promotions (`Adopt`) and render ends 
 to them. Take an adapter that stored epoch `v` at time t1, and a promotion by the same thread at
 t2 > t1 that moved the counter to `v'`. Both are in `s_epoch`'s modification order, and `v'` is
 after `v` in it, because `v'` was made by a read-modify-write that observed `v` or a later value
-(`NextEpoch` is a CAS loop; each iteration observes the latest value in the modification order
-for its own CAS to succeed). Coherence (read-read, write-read) says a load that follows the
+(`NextEpoch` is a `fetch_add`, which reads the latest value in the modification order; it was a CAS
+loop before 0342, with the same property). Coherence (read-read, write-read) says a load that follows the
 promotion in program order returns `v'` or a later value. Later values are larger, apart from the
 wrap-around (E4), so the load is not `v`, and the adapter looks again. A block destroyed on
 another thread (the host drops a kept value) compares with a load that happens after the handoff,
@@ -166,7 +167,7 @@ a later one, and later ones are also sums of such contributions. So it is at lea
 read a value larger than the thread's own count (other threads' cells), which only forces
 `Recheck`.
 
-**E4. Wrap-around.** The counter is 32 bits and the adapter stores 32 bits
+**E4. Wrap-around (closed by 0342).** Until 0342 the counter was 32 bits and the adapter stored 32 bits
 (`CellLink::m_seenEpoch`; the link is 16 bytes in every adapter). `NextEpoch` skips 0
 (a new adapter's mark) and `UINT32_MAX` (the attached mark), so the period is 2^32 - 2 moves.
 After exactly that many moves, an adapter that stored `v` and has not read since compares equal
@@ -174,9 +175,17 @@ again, and a cell promoted in the meantime is not found. The same holds for `Ite
 which then skips `Release` (a leaked frozen cell) and `Traverse` (a cycle the collector does not
 see). It needs about 4.3 billion moves with no look by that adapter, and a promotion of its data in
 that window. Each render that writes host data moves the epoch twice. The adapters that live that
-long are the thread's globals snapshot and values the host keeps. This is the lowest-severity gap
-(task 0342) but it is not covered by the argument, and the TLA+ model's unbounded counter hides
-it.
+long are the thread's globals snapshot and values the host keeps.
+
+Since 0342 the counter, `ItemAdapters::quietEpoch` and `CellStep::epoch` are 64 bits, and the link
+keeps two words: an attached link never compares its epoch (its reads take `Find`), and a detached
+one has no position in a cell's list, so `CellLink::m_state` holds either the seen epoch or the
+attached mark (bit 63) with the ownership bits and the position. The counter starts at 0, moves by
+one, and would need 2^63 moves to reach the attached mark: 292 years at 10^9 moves a second, so it
+never returns to a value an adapter stored, which is the unbounded counter the TLA+ model assumes.
+The `epoch-wrap` mutant of the model (`MaxEpoch = 2`) keeps the old defect visible, and
+`BorrowedCellsSingle.AdapterFindsACellPromotedAcrossThe32BitWrap` moves the counter past 2^32 at
+once (`CellCounters::AdvanceEpochForTesting`) and fails with a 32-bit stored epoch.
 
 **E5. The call id no longer guards anything.** Until #695, `m_exportedIn` kept the id of the call
 that first shared a cell's items with the host and `Unshare` wrote in place when it equalled the
@@ -439,7 +448,7 @@ which the existing rows exercise without a report.
 |---|---|---|---|---|
 | 1 | The `shared_ptr::use_count()` uniqueness tests at `IsUnique`, the list/dict `Traverse` and `Clear`, `TraverseBoxed`, `LoadsInPlace` and `ChangeGlobals` are relaxed: the other holder's last access is not ordered before the in-place access | [0339](../tasks/0339-shared-ptr-uniqueness-needs-acquire.md), **closed** (R3) | probe A on `81ce81a`, reading; TSan rows in 0339 | low: a formal data race on every platform; the module path is closed by #695, the rest needs a host thread dropping at the same time as the collector, a load or a globals change |
 | 2 | The global's own link (the only link in `cell->m_links`) is still unlinked outside the owning thread when the host drops it | [0346](../tasks/0346-global-item-link-dropped-on-another-thread.md) | reading after #695 | low; see the task |
-| 3 | The 32-bit epoch wraps after 2^32 - 2 moves: an adapter or `ItemAdapters` block that stored `v` and was not read since can miss a cell, skip a `Release` or skip a `Traverse` | [0342](../tasks/0342-epoch-wraparound.md) | reading | low: needs 2^31 renders that write host data between two reads of one long-lived adapter |
+| 3 | The 32-bit epoch wraps after 2^32 - 2 moves: an adapter or `ItemAdapters` block that stored `v` and was not read since can miss a cell, skip a `Release` or skip a `Traverse` | [0342](../tasks/0342-epoch-wraparound.md), **closed** (E4) | reading; TLA+ `epoch-wrap` | low: needs 2^31 renders that write host data between two reads of one long-lived adapter |
 
 Closed by #695 (`done` in their task files): [0340](../tasks/0340-foreign-unlink-of-a-live-cell.md),
 the foreign unlink of a live cell, found by probe B (owning links); and
@@ -472,7 +481,7 @@ reader does not have to search for it.
 
 | Where | What | Order | Role | Verdict |
 |---|---|---|---|---|
-| `borrowed_cells.h:52,55,62,63,65,66`, `.cpp:39,48` | `CellCounters::s_epoch`: load, CAS loop | relaxed | change hint for adapters, blocks, enumerations | E1, E2 hold; wrap = gap 3 |
+| `borrowed_cells.h:52,55,62,63,65,66`, `.cpp:39,48` | `CellCounters::s_epoch`: load, `fetch_add` (64 bits) | relaxed | change hint for adapters, blocks, enumerations | E1, E2 hold; no wrap since 0342 (E4) |
 | `borrowed_cells.h:51,58,59,62`, `.cpp:28` | `CellCounters::s_live`: load, `fetch_add`, `fetch_sub` | relaxed | quiet-block hint | E3 holds; a 32-bit sum, no wrap in practice |
 | `internal_value.h:162,183` | `ValueObject::m_refCount` add | relaxed | new reference from an existing one | R1 holds |
 | `internal_value.h:166` | `m_refCount` release | `acq_rel`, destroys on 1 | end of a reader's access, destruction | R1 holds |

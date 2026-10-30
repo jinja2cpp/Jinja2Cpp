@@ -174,10 +174,11 @@ RUNS = {
     "call-id-wrap-no-pin": ("mutant", dict(MODULE1, Actions='{"export", "release"}'),
                             {"MaxCallId": 2, "FixCallPin": False, "MaxLevel": 14},
                             ["SnapshotStable"], "0341: a wrapped id equals a stale export mark"),
-    # 0342: an open task; the run shows the defect the model now sees
-    "open-0342-epoch-wrap": ("open", RENDER1, {"MaxEpoch": 2},
-                             ["AliasesAgree", "NoForeignCell", "NoUseAfterFree"],
-                             "0342: an adapter's seen epoch equals the counter again after a wrap"),
+    # 0342: the C++ epoch is 64 bits, which the unbounded counter of the other runs stands for;
+    # a counter that wraps (32 bits before 0342) brings an adapter's seen epoch back
+    "epoch-wrap": ("mutant", RENDER1, {"MaxEpoch": 2},
+                   ["AliasesAgree", "NoForeignCell", "NoUseAfterFree"],
+                   "0342: an adapter's seen epoch equals the counter again after a wrap"),
     "module-generic": ("pass", dict(MODULE1, Actions='{"export", "release", "ns", "read", "hostgen"}'),
                        {"GenericArgs": True}, SAFETY, "0336: module calls taking generic containers"),
     "no-generic-owner": ("mutant", dict(MODULE1, Actions='{"export", "release", "hostgen"}'),
