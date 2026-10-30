@@ -3,6 +3,8 @@
 #include "gtest/gtest.h"
 #include "test_tools.h"
 
+#include "../src/borrowed_cells.h"
+
 #include <jinja2cpp/make_generic_list.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
@@ -116,6 +118,28 @@ TEST(BorrowedCellsSingle, NestedRenderOfAGlobalWrittenThroughAnAlias)
     params["inner"] = MakeCallable([&inner]() { return inner.RenderAsString({}).value(); });
     EXPECT_EQ("[0, 2]|[0, 1]", Render("{% set y = g %}{% set _ = y.append(1) %}{{ inner() }}|{{ g }}", params, &env));
     EXPECT_EQ("[0]", Render("{{ g }}", {}, &env));
+}
+
+TEST(BorrowedCellsSingle, AdapterFindsACellPromotedAcrossThe32BitWrap)
+{
+    // 0342: `a` and `b` are two adapters of one host list (the same accessor). `a` stores the
+    // epoch as it reads (after the first move: a new adapter's epoch is 0); the epoch then moves
+    // 2^32 - 1 at once, and the write through `b` promotes a cell, which moves it once more. A
+    // 32-bit stored epoch would equal the counter again, and `a` would skip the lookup and read
+    // the host's list without the write
+#ifdef JINJA2CPP_CELL_TRACE
+    GTEST_SKIP() << "the trace's epochs must fit TLC's 32-bit integers";
+#endif
+    const std::vector<int64_t> data{ 1 };
+    const auto list = MakeGenericList(data.begin(), data.end());
+    ValuesMap params{ { "a", list }, { "b", list } };
+    params["advance"] = MakeCallable(
+        [](int64_t count) {
+            detail::AdvanceCellEpochForTesting(static_cast<uint64_t>(count));
+            return std::string();
+        },
+        ArgInfo{ "count" });
+    EXPECT_EQ("[1]|[1, 9]|[1, 9]", Render("{{ advance(1) }}{{ a }}|{{ advance(4294967295) }}{% set _ = b.append(9) %}{{ a }}|{{ b }}", params));
 }
 
 TEST(BorrowedCellsSingle, HostCallableSeesTheWrite)

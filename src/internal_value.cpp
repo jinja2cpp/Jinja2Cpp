@@ -3493,7 +3493,7 @@ struct ItemAdapters final : ValueObject
     size_t first;
     size_t size;
     // The epoch as the block was made, or CellStep::Recheck if a cell existed then
-    uint32_t quietEpoch;
+    uint64_t quietEpoch;
 };
 
 template<template<typename> class Holder>

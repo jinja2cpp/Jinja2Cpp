@@ -66,7 +66,7 @@ public:
     static void Event(const char* kind, std::initializer_list<Field> fields) noexcept;
     // A read that skipped the lookup: the adapter saw this epoch (CellLink::MayHaveCell). False,
     // so that the caller returns it
-    static bool Skip(const CellLink* link, uint32_t epoch) noexcept;
+    static bool Skip(const CellLink* link, uint64_t epoch) noexcept;
 
     static Field Num(const char* name, int64_t value) noexcept { return { name, Space::Num, value }; }
     static Field Ptr(const char* name, Space space, const void* ptr) noexcept { return { name, space, 0, ptr }; }

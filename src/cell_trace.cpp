@@ -210,11 +210,11 @@ void CellTrace::Event(const char* kind, std::initializer_list<Field> fields) noe
     Log().Write(kind, fields);
 }
 
-bool CellTrace::Skip(const CellLink* link, uint32_t epoch) noexcept
+bool CellTrace::Skip(const CellLink* link, uint64_t epoch) noexcept
 {
     if (On())
     {
-        Event("skip", { Ptr("a", Space::Link, link), Num("e", epoch) });
+        Event("skip", { Ptr("a", Space::Link, link), Num("e", static_cast<int64_t>(epoch)) });
     }
     return false;
 }
