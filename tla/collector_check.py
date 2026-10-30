@@ -20,7 +20,7 @@ import tempfile
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-TLA_URL = "https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar"
+TLA_URL = "https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar"
 
 FIXES = {"FixNoteStore": True, "FixCountCands": True, "FixPropagate": True,
          "FixHoldGarbage": True, "FixPruneUnique": True}
