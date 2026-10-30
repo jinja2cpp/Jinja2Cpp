@@ -2,14 +2,20 @@
 
 #include "engine_errors.h"
 #include "expression_evaluator.h"
-#include "value_visitors.h"
+#include "internal_value.h"
+#include "intrusive_ptr.h"
 
 #include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/value.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace jinja2
 {
@@ -34,7 +40,7 @@ public:
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* view = dynamic_cast<const HostObjectView*>(&other);
-        return view && view->m_accessor->GetIdentity() == m_accessor->GetIdentity();
+        return view != nullptr && view->m_accessor->GetIdentity() == m_accessor->GetIdentity();
     }
 
 private:
@@ -208,7 +214,7 @@ bool Equal(const IHostObject* left, const InternalValue& leftValue, const IHostO
         }
     }
     // Python's default __eq__: the same object
-    return left && right && left->Identity() == right->Identity();
+    return left != nullptr && right != nullptr && left->Identity() == right->Identity();
 }
 } // namespace host
 

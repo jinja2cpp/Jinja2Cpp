@@ -319,7 +319,7 @@ TEST(HostObjectTest, PublicViewReadsAttributes)
     const auto toy = MakeToy(Rich());
     const auto map = AsMap(toy);
     ASSERT_TRUE(map.has_value());
-    const auto generic = map->CreateGenericMap();
+    const auto generic = map ? map->CreateGenericMap() : GenericMap();
     EXPECT_TRUE(generic.HasValue("name"));
     EXPECT_EQ("attr-name", generic.GetValueByName("name").As<std::string>());
     EXPECT_EQ("item-key", generic.GetValueByName("key").As<std::string>());

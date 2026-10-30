@@ -3,7 +3,10 @@
 
 #include "internal_value.h"
 
+#include <jinja2cpp/value.h>
+
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>

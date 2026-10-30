@@ -2111,13 +2111,12 @@ struct BooleanEvaluator : BaseVisitor<bool>
     // An object (namespace(), cycler(), joiner()) is truthy, as Python objects without __bool__ are
     bool operator()(const MapRef& val) const
     {
-        if (val.GetObjectClass() != nullptr)
+        // An object of the host language answers itself, as Python calls __bool__
+        if (const auto* host = val.GetHostObject())
         {
-            // An object of the host language answers itself, as Python calls __bool__
-            const auto* host = val.GetHostObject();
-            return !host || host->Truth();
+            return host->Truth();
         }
-        return val.GetSize() != 0ULL;
+        return val.GetObjectClass() != nullptr || val.GetSize() != 0ULL;
     }
 
     bool operator()(const ListRef& val) const
