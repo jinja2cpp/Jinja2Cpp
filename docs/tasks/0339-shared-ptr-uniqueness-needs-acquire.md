@@ -1,46 +1,46 @@
 ---
 status: open
-priority: medium
+priority: low
 area: robustness
 depends: [0331]
 touches: [src/internal_value.cpp, src/template_env.cpp, src/template_env_impl.h, test/borrowed_cells_test.cpp]
 ---
 # A uniqueness test on a `shared_ptr` count has no acquire
 
-**Problem.** Three places decide "nobody else holds this storage" from `std::shared_ptr::use_count()`
-and then write the storage in place:
+**Problem.** Some places decide "nobody else holds this storage" from `std::shared_ptr::use_count()`
+and then read or write the storage in place:
 
-- `BorrowedCell::Unshare` asks `OwnsMutableItemsAlone()` (`internal_value.cpp:2000` for lists,
-  `BySharedMutable::IsUnique` at `:1183` for dicts). If it is alone, a module call writes the cell's
-  items without copying (decision D8 of 0331).
-- The same two adapters' `Traverse` and `Clear` (`:2007`, `:2017`, `:2593`, `:2607`) run in the
-  cycle collector and empty a container the same way.
+- `BySharedMutable::IsUnique` (`internal_value.cpp:1183`) and the list adapter's
+  `OwnsMutableItemsAlone` (`:2325`), with the `Traverse`/`Clear` of the same adapters (`:2339`,
+  `:2349`, `:2922`, `:2925`, `:2939`) that run in the cycle collector.
+- `TraverseBoxed` (`:3904`, `:3914`): `m_callable.use_count() == 1` and
+  `m_attributes.use_count() == 1` decide whether the collector owns the callable's captures and
+  attributes alone.
+- `LoadsInPlace` (`template.cpp:86`): `impl.use_count() == 1`, after which the template parses into
+  the existing implementation; a render thread that just dropped its copy has not been ordered before
+  that write.
 - `ChangeGlobals` (`template_env.cpp:485`) writes the shared globals map in place when no render
   holds it.
-- `TraverseBoxed` (`internal_value.cpp:3562`, `:3572`): the collector decides from
-  `m_callable.use_count() == 1` and `m_attributes.use_count() == 1` whether it owns the callable's
-  captures and attributes alone, and then reads (and, through `Clear`, empties) them.
-- `LoadsInPlace` (`template.cpp:86`): `impl.use_count() == 1`, after which the template parses into
-  the existing implementation in place; a render thread that just dropped its copy of the
-  implementation has not been ordered before that write.
+
+The module-call path is no longer one of them. Since #695 the kept value holds the cell's
+`ValueObject`, and `BorrowedCell::OwnsItemsAlone` (`borrowed_cells.cpp:187`) tests
+`ValueObject::use_count()` (an acquire load, R1 in the design document) before it asks the adapter,
+so the host's last read happens before the module's next in-place write. Probe A in the document
+(section 9), with the handoff after the call returns as the host contract requires, is clean under
+TSan.
+
+`use_count()` is a relaxed load in libstdc++ (`bits/shared_ptr_base.h:230`: "No memory barrier is used
+here so there is no synchronization with other threads") and in libc++. The drop of the last other
+copy is a release, but a relaxed load that reads it does not synchronize with it. The other holder's
+reads are therefore not ordered before the write. That is a data race in the C++ memory model on
+every platform, whatever the hardware does; on a weak-memory CPU it can also be a wrong value. The
+remaining sites need a thread that holds the storage and drops it concurrently with the collector, a
+load or a globals change, which the host contract allows (dropping a reference is supported at any
+time), but no test reaches them today.
 
 Task 0343 (`scripts/use_count_check.py`, PR #694) lists these calls and fails a PR that adds one;
 this task is done when its whole-tree run lists none, or each remaining call carries a
 `// use_count: <reason>` comment.
-
-`use_count()` is a relaxed load in libstdc++ (`bits/shared_ptr_base.h:230`: "No memory barrier is used
-here so there is no synchronization with other threads") and in libc++. The host thread's drop of its
-last copy is a release, but a relaxed load that reads it does not synchronize with it. The host's
-reads of the kept value are therefore not ordered before the module's next write: a data race in the
-C++ memory model, on every platform. On x86 it never shows as a wrong value; on a weak-memory CPU it
-can.
-
-TSan reproduces it (`docs/design/borrowed-cells-memory-order.md`, section 9, probe A, kept in the
-project files as `0338-memory-order/probe_use_count.cpp`): a module macro appends to `l` and calls
-`keep(l)`, a second thread reads each kept value and drops it, and the main thread calls the macro
-2000 times. Master gives 1 to 6 reports per run; with the count read by an acquire load (an
-experiment on libstdc++'s control block) every report disappears. An `atomic_thread_fence` after the
-test is the right production fix but TSan does not model fences, so it cannot confirm it.
 
 **Proposal.** Make the test an acquire that TSan can see.
 
@@ -58,10 +58,9 @@ test is the right production fix but TSan does not model fences, so it cannot co
   flag. The cost is one map copy per change after a render, which is rare.
 
 **Done when.**
-- A TSan row built from probe A (a macro that appends and keeps, a thread that reads and drops each
-  kept value, 2000 calls) is clean, and fails on master.
+- A TSan row exists for each remaining site that a host thread can reach (a kept value dropped while
+  the collector runs; a template reloaded while a render drops its copy), and fails before the fix.
 - `*BorrowedCells*:*Module*` pass under ASan+UBSan and TSan.
-- `Module/keep` and `Module/keep_written` do not move in `bench/count.py` (the count is read once
-  per write after an export, not on the hot path).
+- `Module/keep` and `Module/keep_written` do not move in `bench/count.py`.
 - The design document's table (section 12) loses its "gap 1" rows.
 - `scripts/use_count_check.py` (0343) run on the whole tree lists no call.

@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 priority: low
 area: robustness
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/695
 depends: [0337]
 touches: [src/borrowed_cells.h, src/borrowed_cells.cpp, test/borrowed_cells_test.cpp]
 ---
@@ -32,3 +33,9 @@ and shows that a kept value from before the wrap is not written by a call after 
 and `Module/keep_written` do not move in `bench/count.py`. The design document
 (`docs/design/borrowed-cells-memory-order.md`, E5) and the TLA+ README drop the wrap-around from
 their lists.
+
+**Resolution (2026-10-29, PR #695).** Call-end pinning (0335) replaced the per-cell export mark: a
+cell is shared by a flag (`m_shared`) that a call's pin sets, and the next write copies unless the
+host let go. No code compares a stored call id with the running one any more; the id only names a
+call in the trace and may wrap (`BorrowedCells::BeginCall`). The TLA+ model bounds it
+(`MaxCallId`).

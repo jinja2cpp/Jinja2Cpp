@@ -1,20 +1,31 @@
 # Memory order of the borrowed-cell protocol
 
-Written 2026-10-28 on master `81ce81a`, step C of the route in
+Written 2026-10-28 on master `81ce81a`, revised 2026-10-30 on master `42873f9` (after #694 and
+#695), step C of the route in
 [0338](../tasks/0338-borrowed-cell-protocol-safety-proof.md) (item 5, "memory order by design and
 argument, not in TLA+"). It covers `src/borrowed_cells.{h,cpp}`, `src/cycle_collector.{h,cpp}` and
-`src/template_module.cpp`, and the state they share with the rest of the library. It changes no
-code. What it finds is filed as tasks 0339 to 0342, listed in section 7.
+`src/template_module.cpp`, and the state they share with the rest of the library. Line numbers are
+those of `42873f9`. It changes no code. What it finds is filed as tasks 0339 to 0342 and 0346.
 
 The claim is narrow. **Given the host contract in section 1, every access the protocol makes to
 state that more than one thread can reach is either ordered by a lock, ordered by a
 happens-before edge the library creates (an acquire/release pair on a reference count), or reads
-state nothing writes any more.** Two places do not meet that claim today, and TSan reproduces
-both (section 9): the uniqueness tests on `std::shared_ptr` counts have no acquire (task 0339), and a
-host thread that drops a kept container can unlink an adapter from a live cell (task 0340). Two
-more are bounded only by the width of a counter (tasks 0341 and 0342). The TLA+ model in `tla/` says
-nothing about any of this: it interleaves atomic steps, so it assumes sequential consistency
-(`tla/README.md`, "Not modelled").
+state nothing writes any more.** The first version of this document found two places that did
+not meet that claim, with TSan reproducing both; #695 closed them. Today:
+
+- the uniqueness tests on `std::shared_ptr` counts have no acquire (task 0339). The module-call path
+  that the first probe reproduced now also tests a `ValueObject` count, which has one, and the probe
+  is clean; the collector, `ChangeGlobals`, `TraverseBoxed` and `LoadsInPlace` still rest on the
+  relaxed count;
+- a global's item link can be dropped on a host thread while the render runs (task 0346, found by
+  reading, not reproduced);
+- the 32-bit epoch wraps (task 0342).
+
+Closed by #695: the foreign unlink of a live cell (task 0340: every link but a global's owns its
+cell, so letting go is a count release) and the call-id wrap (task 0341: no code compares a stored
+call id with the running one any more). The TLA+ model in `tla/` says nothing about memory order:
+it interleaves atomic steps, so it assumes sequential consistency (`tla/README.md`, "Not
+modelled").
 
 An analogy for the shape of the argument. The library is a print shop with one proof room per
 render. Each room's table (the render's registry of cells) is only ever touched by the person in
@@ -36,15 +47,21 @@ library does not promise to prevent.
   globals are changed through `TemplateEnv`, which copies on change (section 7).
 - **H2. A render and its adapters live on one thread.** The adapters of the host's data, the
   render's registry of cells and its collector are used by the thread that runs the render. A
-  value handed to a callback is valid during the call and is used on the callback's thread. A
-  value the host keeps after the call is a snapshot (H3).
-- **H3. A kept value is a snapshot.** A value that a render or a module call returns, or hands to
-  the host with a callback argument, is immutable once the call that handed it out has returned
-  (decisions D4 and D8 of 0331). The host may pass it to other threads with its own
-  synchronization (a mutex, a queue, a thread start), and may drop it on any thread. Two cases
-  do not meet this today: a container the call made that holds a template variable's adapter
-  (`keep([l])`, task 0332) is not a snapshot while the module's cell lives, and dropping such a
-  container on another thread races with the end of the render (task 0340).
+  value handed to a callback is valid during the call and is used on the callback's thread.
+- **H3. A kept value is read only after the call that handed it out has completed.** A value that
+  a render or a module call returns, or hands to the host with a callback argument, is a read-only
+  snapshot (decisions D4 and D8 of 0331), but only once the enclosing render has completed
+  (`Finish` and the collector's teardown included) or the exported module invocation has
+  returned. Reading earlier on another thread is not supported (`docs/api-2.0.md`, item 9): until
+  then a value handed out directly is the render's own storage, which later writes change (`h.append(3);
+  keep(h); h.append(4)`, `BorrowedCellsKept.WrittenBeforeAndAfter`), and a queue or thread start
+  inside `keep` does not order those writes before the reader. The host may read it on another
+  thread after the completion, through a handoff ordered after it (a mutex, a queue, a thread
+  start).
+- **H3b. Dropping or copying a reference to a kept value is supported at any time, on any
+  thread.** That is a reference count operation, not a read of the contents. Since #695 it never
+  writes the live cell, because every link but a global's owns its cell (section 8); a global's
+  item link is the exception (task 0346).
 - **H4. Concurrent renders share only H1 data and kept values.** Two threads rendering with the
   same `Template` or `TemplateEnv` share the parse tree, the environment's callables and
   settings, and the globals map, all read-only during a render (loads and `AddGlobal` take the
@@ -72,7 +89,7 @@ What is not shared, and why that matters for the argument:
   are reached from one thread: the one that made the render (or, for a module, the one that holds
   its mutex). The registry is found through `CycleCollector::s_current`, a `thread_local`, so a
   thread cannot name another thread's registry. This is the invariant behind most of the
-  argument; section 8 states what keeps it true, and the one window where it does not (gap 2).
+  argument; section 8 states what keeps it true, and the one remainder where it does not (gap 2, the global's own link).
 - **The collector.** `CycleCollector` is a stack object, `s_current` is thread-local, and its walk
   runs at the end of the render that owns it.
 - **Other `thread_local` state**: `t_pendingDestroy` (the deferred-destroy list, trivially
@@ -87,11 +104,11 @@ What is not shared, and why that matters for the argument:
 ## 3. The counters (S1)
 
 ```
-src/borrowed_cells.h:48   Epoch()        s_epoch.load(relaxed)
-src/borrowed_cells.h:51   Live()         s_live.load(relaxed)
-src/borrowed_cells.h:58   AddLive(n)     s_live.fetch_add(relaxed)
-src/borrowed_cells.h:59   RemoveLive(n)  s_live.fetch_sub(relaxed)
-src/borrowed_cells.cpp:34 NextEpoch()    s_epoch.load(relaxed) + compare_exchange_weak(relaxed)
+src/borrowed_cells.h:52   Epoch()        s_epoch.load(relaxed)
+src/borrowed_cells.h:55   Live()         s_live.load(relaxed)
+src/borrowed_cells.h:62   AddLive(n)     s_live.fetch_add(relaxed)
+src/borrowed_cells.h:63   RemoveLive(n)  s_live.fetch_sub(relaxed)
+src/borrowed_cells.cpp:39 NextEpoch()    s_epoch.load(relaxed) + compare_exchange_weak(relaxed)
 ```
 
 The counters carry no data. Nothing is published through them: a reader that sees a value does not
@@ -102,7 +119,7 @@ answer.
 
 **What an adapter does with the epoch.** `CellLink::Get` returns null without a lookup when
 `m_seenEpoch == Epoch()`. `Find` stores the epoch it read *before* it looks the cell up
-(`borrowed_cells.cpp:189`), so a promotion after that read moves the epoch past the stored value
+(`borrowed_cells.cpp:240`), so a promotion after that read moves the epoch past the stored value
 and the next read looks again. `ItemAdapters` and `CellStep` store an epoch for a whole block or
 enumeration with the same rule.
 
@@ -116,7 +133,7 @@ for its own CAS to succeed). Coherence (read-read, write-read) says a load that 
 promotion in program order returns `v'` or a later value. Later values are larger, apart from the
 wrap-around (E4), so the load is not `v`, and the adapter looks again. A block destroyed on
 another thread (the host drops a kept value) compares with a load that happens after the handoff,
-so it sees every promotion made before the handoff; one made after is gap 2's window.
+so it sees every promotion made before the handoff; one made after is the remainder of gap 2.
 
 **E2. Other threads' moves cost a lookup and nothing else.** A promotion on another thread moves
 the epoch too, so a quiet adapter takes the `Find` path once and finds nothing in its own
@@ -124,10 +141,10 @@ registry. That is a performance cost, not a correctness one: the lookup is a rea
 own table. A stale (old) epoch value read because of another thread's promotion can only be a
 value the adapter already compares unequal or equal to for E1's reason.
 
-**E3. `Live` is read after the epoch, for the same thread's cells.** `QuietEpoch` (`borrowed_cells.h:293`)
+**E3. `Live` is read after the epoch, for the same thread's cells.** `QuietEpoch` (`borrowed_cells.h:443`)
 returns the epoch only if `Live() == 0`, so that a block of item adapters made while no cell
 exists can skip all its slots until the epoch moves. `Adopt` counts the cell (`AddLive`) before it
-moves the epoch (`borrowed_cells.cpp:304-306`), and `Finish` removes the count before it moves the
+moves the epoch (`borrowed_cells.cpp:413-415`), and `Finish` removes the count before it moves the
 epoch. We need: if the thread has a cell now, `Live() != 0`. The counter is a sum of adds and
 subtracts that each thread makes in order (an `AddLive(n)` and its matching `RemoveLive(n)` are
 ordered by coherence of the same thread's RMWs on one variable). In every prefix of the
@@ -150,12 +167,12 @@ long are the thread's globals snapshot and values the host keeps. This is the lo
 (task 0342) but it is not covered by the argument, and the TLA+ model's unbounded counter hides
 it.
 
-**E5. The call id has the same defect with a worse consequence.** `BeginCall` hands out `++m_lastCall`
-and skips only 0 (`borrowed_cells.h:373`). `m_exportedIn` keeps the id of the call that first
-shared a cell's items with the host; `Unshare` treats `m_exportedIn == m_call` as "the call that
-handed them out is writing". After 2^32 calls of one module with no write to that cell, a stale mark
-equals the new call's id, the write goes in place, and a kept value that still shares the items
-changes, which is a data race with the host thread that reads it (task 0341).
+**E5. The call id no longer guards anything.** Until #695, `m_exportedIn` kept the id of the call
+that first shared a cell's items with the host and `Unshare` wrote in place when it equalled the
+running call's; after 2^32 calls a stale mark could equal a new call (the first version of this
+document filed that as task 0341). Call-end pinning replaced the mark with a flag, `m_shared`:
+`BeginCall` still hands out `++m_lastCall`, but the id only names the call in the trace
+(`borrowed_cells.h:541`) and a wrap changes nothing. The TLA+ model bounds it (`MaxCallId`).
 
 ## 4. Reference counts and the uniqueness tests (S2)
 
@@ -177,34 +194,37 @@ read), which keeps an object alive and cannot free a live one: new references ar
 existing ones, so a count that was above `internalRefs` stays above it unless the outside holder
 drops its reference, and then it is garbage anyway.
 
-**R2. `std::shared_ptr` counts are used as a uniqueness test and are not acquire.** The sites that
-touch the cell protocol ask
-"is this the only reference" and then write the storage in place:
+**R2. `std::shared_ptr` counts are used as a uniqueness test and are not acquire.** Sites that ask
+"is this the only reference" and then write or read the storage as if nobody else could:
 
-| Site | Test | In place after it |
-|---|---|---|
-| `BorrowedCell::Unshare` via `OwnsMutableItemsAlone` (`internal_value.cpp:2000`, list: `std::shared_ptr<InternalValueList>::use_count()`; `internal_value.cpp:1183,2590`, dict: `BySharedMutable::IsUnique`) | `== 1` | the module call writes the cell's items (D8) |
-| `Traverse` and `Clear` of the same two adapters (`internal_value.cpp:2007,2017,2593,2607`), run by the collector | `== 1` | `Clear` empties the container; `Traverse` reads its items only when it is the sole owner |
-| `ChangeGlobals` (`template_env.cpp:485`) | `> 1` | `AddGlobal`/`RemoveGlobal` write the shared map in place when no render holds it |
+| Site | Test | After it | Status on `42873f9` |
+|---|---|---|---|
+| `BorrowedCell::OwnsItemsAlone` (`borrowed_cells.cpp:187`), second conjunct: `OwnsMutableItemsAlone` (`internal_value.cpp:2325` list, `IsUnique` at `:1183`, used at `:2922`, dict) | `== 1` | a module call writes the cell's items in place (D8) | covered for a pin: the first conjunct is `m_object->use_count() == 1`, a `ValueObject` count with an acquire, and a call's pin holds that object |
+| `Traverse` and `Clear` of the same two adapters (`internal_value.cpp:2339,2349,2925,2939`), run by the collector | `== 1` | `Clear` empties the container; `Traverse` reads its items only when it is the sole owner | open |
+| `ChangeGlobals` (`template_env.cpp:485`) | `> 1` | `AddGlobal`/`RemoveGlobal` write the shared map in place when no render holds it | open |
+| `TraverseBoxed` (`internal_value.cpp:3904,3914`) | `== 1` on a callable's captures and attributes | the collector reads them | open |
+| `LoadsInPlace` (`template.cpp:86`) | `== 1` | the template parses into its implementation in place | open |
 
 `std::shared_ptr::use_count()` is a relaxed load in libstdc++ (`bits/shared_ptr_base.h:230` says
 "No memory barrier is used here so there is no synchronization with other threads") and in
-libc++. The release side is correct: the host thread's drop of its last copy is an `acq_rel`
-(or release plus an acquire fence on the last owner). But a relaxed load that reads the value this
-decrement wrote does not synchronize with it, so in the C++ memory model the host thread's reads of
-the items are not ordered before the module's in-place write. That is a data race by definition
-(TSan reports it when it sees one: section 9), though it needs weak ordering to show up as a wrong
-value, since on x86 loads are not reordered with later stores and on ARM a control dependency from
-the load to the write orders them in practice. The fix is one acquire fence after the test reads 1
-(`std::atomic_thread_fence(std::memory_order_acquire)`, which together with the release
-decrement gives the synchronizes-with edge), or switching the holder to a count the library
-owns (R1). Task 0339.
+libc++. The release side is fine: the other thread's drop of its last copy is an `acq_rel` (or a
+release plus an acquire fence on the last owner). But a relaxed load that reads the value this
+decrement wrote does not synchronize with it, so in the C++ memory model that thread's reads of the
+storage are not ordered before the in-place write. That is a data race, which is undefined behaviour
+on every platform; this document makes no claim about what a particular CPU or compiler turns it
+into, because no weak-memory hardware was tested and the x86 memory order does not constrain the
+compiler's transformations of unsynchronized accesses either. TSan reports it when it sees the
+schedule (section 9). The fix is an acquire the checker can see: a library-owned count (R1), or one
+acquire fence after the test reads 1 (`std::atomic_thread_fence(std::memory_order_acquire)`, which
+TSan does not model). Task 0339.
 
-Task 0343's lint also finds `TraverseBoxed` (`internal_value.cpp:3562,3572`) and `LoadsInPlace`
-(`template.cpp:86`) with the same pattern; 0339 covers them. Everything else the argument needs from these counts holds: a kept value's reader holds a
+The calls that carry their own acquire are not in the table: `BorrowedCell::IsUnheld` and
+`CycleCollector::DropUnshared` test `ValueObject` counts. Task 0343's lint
+(`scripts/use_count_check.py`) lists every `use_count()` call in `src/`, which is how the last
+three rows were found. Everything else the argument needs from these counts holds: a reader holds a
 reference for as long as it reads, so the count cannot be 1 while a reader is active, and nobody
-can make a new reference to storage whose only holder is the module (H3: a host cannot copy a
-value it no longer holds).
+can make a new reference to storage whose only holder is the module (a host cannot copy a value it
+no longer holds).
 
 ## 5. Template module state (S3)
 
@@ -231,42 +251,49 @@ value it no longer holds).
   copies the call's result into a `Value` that does not refer to the module's context. What stays
   shared with the host is the exported storage of a cell (H3), which is the subject of section 6; section 10 lists where that does not hold.
 - **M4. A kept value made under the lock is dropped on a thread that does not hold it.** The
-  host drops a kept value on any thread. For a value that holds only storage (`keep(l)` after the
-  call: `ExportList` returns an adapter over the cell's *storage*, which owns its items) the
-  destruction touches the value and its children through R1 counts and nothing of the registry.
-  A value that holds an *adapter object* (`keep([l])`) reaches `CellLink::Unlink` from its
-  destructor. That is safe when the cell is frozen (the unlink only releases a reference, P3). It
-  is not safe when the cell is live, and section 8 (I1) says when that can happen.
+  host may drop a kept value on any thread (H3b). A value that holds storage (`keep(l)`: in a
+  module call a `CallExports` view, after the call the storage a pin recorded) destroys the value
+  and its children through R1 counts and nothing of the registry. A value that holds an *adapter
+  object* (`keep([l])`) reaches `CellLink::Unlink` from its destructor; since #695 that is a
+  release of the link's reference to its cell (`borrowed_cells.cpp:295-316`), whichever thread runs
+  it. The exception is a global's link, which is listed in the live cell and must be dropped on the
+  render's thread (task 0346).
+- **M5. The call ends under the lock.** `Call` holds the mutex across `ModuleCallCollector`, whose
+  destructor pins the values the call handed out (`PinExportsOrSkip`) and drops the unheld cells
+  before `EndCall`, and across `Complete()`, which pins and may throw so that the call fails
+  rather than hand out values that read the host's data. So the pin is ordered before the next
+  call by the mutex, and before the host's first read by the call's return (H3).
 
 ## 6. Publication of frozen cells and kept values (S4)
 
 `BorrowedCells::Finish` runs at the end of the render (or on teardown of a module): it sets
-`m_frozen` on every cell, detaches the global's links, keeps the others as owning references, and
-clears `m_links`. A cell is read after that by whichever threads hold a value that refers to it.
+`m_frozen` on every cell, detaches the global's links (the only ones listed in the cell), and
+clears `m_links`; every other link already owns its cell by a reference count. A cell is read after
+that by whichever threads hold a value that refers to it.
 
-- **P1. What escapes a call is storage, not the registry's cell.** A value escapes through a
-  call's return, an `ExportCopier` result, `keep(...)` in a callback or a module export.
-  `ExportList`/`ExportMap` (`borrowed_cells.cpp:85-95`) return a `GenericList`/`GenericMap` over the
-  cell's *storage* accessor, which is plain template-owned storage; `NoteExport` records that it is
-  shared (`m_exportedIn`) and the next write copies it when a reader still holds it (`Unshare`). A
-  frozen cell escapes only as a reference held by a `CellLink` copy (`Inherit`), made after the
-  freeze. The exception is a container that holds an adapter object itself (`keep([l])`, 0332): it
-  escapes with the adapter's link, attached to a live cell.
+- **P1. What escapes a call is storage, or a view that is pinned when the call ends.**
+  `ExportList`/`ExportMap` (`borrowed_cells.cpp:107-140`) return, inside a module call of the
+  cell's own registry, a `CallExports` view that reads the cell on the call's thread until the call
+  ends; `PinExports` then records the storage the values reach and sets the cells' `m_shared` flag,
+  so that a later write copies unless the host let go (R2, `Unshare`). Outside a call they return a
+  `GenericList`/`GenericMap` over the cell's storage accessor. A cell escapes as such only as a
+  reference held by a `CellLink` that owns it, which a container holding an adapter object carries
+  (`keep([l])`).
 - **P2. After the freeze nothing writes the cell, its storage or its links.** `m_frozen` is a plain
-  `bool`, written once by `Finish` on the render's thread. A value that escaped *after* the freeze (a
-  render's return value, a module export from a finished call) is ordered after it by the host's
-  handoff (H3). A value that escaped *before* it and holds only storage never reads `m_frozen`, so
-  the missing order is harmless. A value that escaped before it holding an attached adapter reads
-  `m_frozen` when it is destroyed or copied (`Unlink`, `Inherit`), concurrently with the freeze;
-  that is gap 2 (section 8, task 0340).
-- **P3. A frozen cell's reference count is the only thing foreign threads write.** `Inherit`
-  (`borrowed_cells.cpp:246`) adds a reference (relaxed, R1), `Unlink` releases one (`acq_rel`,
-  R1); neither touches the cell's other fields, because `Unlink` returns after the release when
-  `m_frozen` is set. A frozen cell can be destroyed by any thread, after the last reader's release
+  `bool`, written once by `Finish` on the render's thread. Every supported foreign access is ordered
+  after it by H3: reading a kept value starts after the render completed, and the handoff is ordered
+  after that. The one supported access that may run earlier, dropping or copying a reference (H3b),
+  never reads `m_frozen` for an owning link: `Unlink` takes the link's own `OwnsBit`
+  (`borrowed_cells.cpp:298`, "read by the link's own thread, never from the cell, which another
+  thread may freeze meanwhile"). The plain reads of `m_frozen` that remain (`Inherit` at `:328`,
+  `ExportingCall` at `:99`, `Unshare`) belong to reading a value, which H3 puts after the freeze.
+- **P3. A frozen cell's reference count is the only thing foreign threads write.** `Inherit` adds a
+  reference (relaxed, R1) and `Unlink` releases one (`acq_rel`, R1); neither writes the cell's
+  other fields. A frozen cell can be destroyed by any thread, after the last holder's release
   (R1's edge), and its destructor reads only fields nothing writes.
 - **P4. The collector walks a frozen cell only when the render's thread has noted it.** `Finish`
   hands the collector the frozen cells that a link still holds (`use_count() > 1`, acquire,
-  `borrowed_cells.cpp:404`) and the collector reads them (`BorrowedCell::Traverse` reads
+  `borrowed_cells.cpp:512`) and the collector reads them (`BorrowedCell::Traverse` reads
   `m_frozen`, `m_storage`, `m_retired`) on the same thread. A foreign thread may be reading the
   cell at the same time; both are reads. The walk writes only on objects it found unreachable
   from outside (`use_count() <= internalRefs`, an acquire read). A foreign reader holds a
@@ -299,25 +326,20 @@ template caches and `globalsGeneration`.
 
 ## 8. Invariants that keep the live cell single-threaded
 
-The arguments of sections 3 to 6 need two structural invariants. I2 holds. I1 holds for modules
-and for the render's own frames, and does not hold in one window, which is gap 2.
+The arguments of sections 3 to 6 need two structural invariants.
 
-- **I1. The last reference to an adapter object attached to a live cell is dropped on the cell's
-  thread.** A link belongs to an adapter *object*, a `ValueObject` that every `InternalValue`
-  pointing at it shares by reference count, not to the values. `CellLink`'s copy constructor
-  detaches (`Inherit` does nothing for a live cell), but copying an `InternalValue` does not copy
-  the adapter, so a container the host keeps can hold the very adapter that is attached
-  (`keep([l])`, 0332). What makes the last reference the cell thread's:
-  - for a **module**, the module's context holds `l` until the destructor, which freezes the cells
-    first (`template_module.cpp:327-334`, `cells.Release` before `module.reset()`), so a host
-    reference is never the last while the cell is live;
-  - for a **render**, the frames hold it until they are destroyed, which is *before* the
-    collector's `Finish` freezes the registry (`CycleCollector` is made first so that it ends
-    after everything the render keeps values in). Between those two points a kept container is
-    the only holder, and a host thread that drops it runs `~OwnedAdapter` → `Unlink` on a live
-    cell. `Unlink` reads the plain `bool m_frozen` while `Finish` writes it, and, when it reads
-    `false`, edits `m_links` while `Finish` walks it. TSan reports the first as a data race (probe
-    B, section 9); the second would corrupt the vector. This is gap 2 (task 0340).
+- **I1. A live cell's mutable state is touched only by the thread of its registry.** That state is
+  `m_links`, `m_frozen` before the freeze, `m_shared`, the storage and the registry's table. A link
+  belongs to an adapter *object*, which every `InternalValue` pointing at it shares by reference
+  count, so a value the host keeps can hold the adapter that is attached to a live cell
+  (`keep([l])`). The first version of this document found that dropping such a value on a host
+  thread ran `Unlink` on the live cell (task 0340, TSan-reproduced on `81ce81a`). Since #695 the
+  invariant holds by construction for every link but a global's: the link owns its cell
+  (`OwnsBit`), so a drop is a release of a count, and the cell's `m_links` holds only globals'
+  links. What is left is the global's link, which the thread's snapshot holds and `Finish`
+  detaches: an item adapter of a global lives in a block the global's adapter lets go of when it
+  reads another block, and a host value may then be the block's only holder, so a host thread's
+  drop edits `m_links` of the live cell (task 0346, found by reading, not reproduced).
 - **I2. The registry is thread-local.** `CellsForWrite` and `CurrentCells` read `s_current`
   (`cycle_collector.h:103`), so `Find` and `Adopt` cannot reach another thread's table. A
   module's registry is `m_external`, reached only from the call that holds the mutex (M1). This
@@ -326,79 +348,79 @@ and for the render's own frames, and does not hold in one window, which is gap 2
 
 ## 9. Evidence
 
-Everything here ran on master `81ce81a` with clang 18.1.3, x86-64 Linux, `RelWithDebInfo`,
-`-DJINJA2CPP_WITH_SANITIZERS=thread`, `JINJA2CPP_NODEREF_CHECKS=FULL` (the sanitizer default), in
-`build-tsan/`. TSan finds the races of the schedules it sees and models the C++ memory model, but x86
-never reorders a load past a later store and TSan ignores `atomic_thread_fence` (clang warns with
-`-Wtsan`). So a clean run is evidence, not proof, and the fence experiment below cannot be judged
-by TSan.
+Current results ran on master `42873f9` (after #694, #695 and #699) with clang 18.1.3, x86-64 Linux,
+`RelWithDebInfo`, `-DJINJA2CPP_WITH_SANITIZERS=thread`, `JINJA2CPP_NODEREF_CHECKS=FULL` (the sanitizer
+default), in `build-tsan/`. TSan finds the races of the schedules it sees and models the C++ memory
+model, but x86 never reorders a load past a later store, no weak-memory machine (ARM, POWER) was
+run, and TSan ignores `atomic_thread_fence` (clang warns with `-Wtsan`). So a clean run is evidence,
+not proof.
 
 **Existing rows.** `build-tsan/jinja2cpp_tests --gtest_filter='BorrowedCells*:EmbeddingLifecycle*:*Module*:*Thread*:*Concurrent*'`:
-121 tests in 16 suites, all pass, **no TSan report**. They cover: a kept view rendered from several
-threads, a kept global read while its thread writes (T2), a frozen value read from four threads
-(T4), module calls from two threads while a third reads the first call's value (D8), concurrent
-renders sharing host data, and the embedding-lifecycle rows C1 to C6 (concurrent loads, renders,
-module macros, environment teardown). What they leave out is exactly what the probes below test: the
+133 tests, all pass, **no TSan report**. They cover: a kept view rendered from several threads, a
+kept global read while its thread writes (T2), a frozen value read from four threads (T4), module
+calls from two threads while a third reads the first call's value (D8), concurrent renders sharing
+host data, and the embedding-lifecycle rows C1 to C6. They leave out what the probes below test: the
 host thread *drops* the last reference to a kept value, which is when the reference counts have to
 carry the ordering.
 
-Two probes follow, kept in the project files
-(`/mnt/project-files/0338-memory-order/`: `probe_use_count.cpp`, `probe_unlink.cpp`; ~80 lines each,
-built against `build-tsan/libjinja2cpp.a`). They are not in the repository; the tasks that fix the
-gaps add their own rows.
+Two probes, kept in `/mnt/project-files/0338-memory-order/` (`probe_use_count.cpp` is the first
+version, `probe_use_count2.cpp` the corrected one; `probe_unlink.cpp`; about 80 lines each, built
+against `build-tsan/libjinja2cpp.a`). They are not in the repository; the tasks that fix a gap add
+their own rows.
 
-**Probe A, the uniqueness test (gap 1).** A module macro appends to `l` and calls `keep(l)`. A
-second thread takes each kept value (through a mutex, so the handoff is ordered), reads its items,
-and drops it outside the lock. The main thread calls the macro 2000 times. The module's next write
-sees one reference and writes in place:
+**Probe A, the uniqueness test.** A module macro appends to `l` and calls `keep(l)`. A second thread
+takes each kept value (through a mutex), reads its items and drops it. The main thread calls the macro
+2000 times.
 
-| Variant | Runs | TSan reports per run |
-|---|---|---|
-| master, `l = [0]` | 3 | 1, 6, 5 (write in `ListAppend`'s `push_back` against the reader's `GetItem`) |
-| `OwnsMutableItemsAlone` and `IsUnique` read the count with `__ATOMIC_ACQUIRE` (experiment, reverted; reads libstdc++'s `_M_use_count` directly) | 3 | 0, 0, 0 |
-| the same with `std::atomic_thread_fence(acquire)` after `use_count() == 1` | 3 | 5, 5, 5 (TSan does not model the fence; this row says nothing) |
-| master, `l = [[0]]`, macro writes `l[0]` | 3 | 10 each; **still 7 to 10 with the acquire load**: the reader reads the inner list's live cell through the kept outer list, which is 0332, not gap 1 |
+| Master | Variant | Runs | TSan reports per run |
+|---|---|---|---|
+| `81ce81a` | `l = [0]`, reader starts while the call runs | 3 | 1, 6, 5 (write in `ListAppend` against the reader's `GetItem`) |
+| `81ce81a` | the same with `OwnsMutableItemsAlone` and `IsUnique` reading the count with `__ATOMIC_ACQUIRE` (experiment, reverted) | 3 | 0, 0, 0 |
+| `81ce81a` | the same with `std::atomic_thread_fence(acquire)` after `use_count() == 1` | 3 | 5, 5, 5 (TSan does not model the fence; says nothing) |
+| `42873f9` | the first probe unchanged | 3 | 25 to 50: the reader read the kept value while the call that produced it was still running, which the host contract (H3) does not allow |
+| `42873f9` | `probe_use_count2.cpp`: the value reaches the reader only after the call returned, `l = [0]` and `l = [[0]]` | 3 each | **0, 0, 0** |
 
-The acquire-load row isolates the cause: with a load TSan understands, every report of the flat
-variant disappears. The reports are the formal race of section 4 (R2), seen on x86 because TSan
-checks happens-before, not the hardware's behaviour.
+The first probe was out of contract: the early `81ce81a` results mixed a real race (the relaxed
+`shared_ptr` count) with that misuse, and only the acquire-load row separated them. After #695 the
+kept value holds the cell's `ValueObject`, and `OwnsItemsAlone` tests its acquire count first
+(R1), so the module path no longer depends on the `shared_ptr` count. The `shared_ptr` count remains
+the only test at the sites listed in gap 1.
 
-**Probe B, the foreign unlink (gap 2).** The template does `l.append(1)`, then `keep([l, [l]])`, then
-30 more appends. The callback queues the kept container; a second thread drops it as soon as it
-can. 20000 renders: **one TSan report in each of 3 runs**: a read of `BorrowedCell::m_frozen` in
-`CellLink::Unlink` (from `~OwnedAdapter`, on the dropper thread) against the write in
-`BorrowedCells::Finish`. The read that returned `false` would go on to edit `m_links` while `Finish`
-walks it, which the report does not show but the code does (`borrowed_cells.cpp:230-235`).
+**Probe B, the foreign unlink.** The template does `l.append(1)`, then `keep([l, [l]])`, then 30 more
+appends. A second thread drops each kept container as soon as it can. On `81ce81a`, 20000 renders
+gave one TSan report in each of 3 runs: a read of `BorrowedCell::m_frozen` in `CellLink::Unlink` on
+the dropper thread against the write in `BorrowedCells::Finish`. On `42873f9`, same probe, **0
+reports in 3 of 3 runs**: the owning links of #695 make the kept container hold the cell, so the
+drop no longer reaches `Unlink` on a live cell (I1).
 
-What the evidence does not cover: the weak-memory hardware behaviour of any of this (no ARM or
-POWER run); `ChangeGlobals` (gap 1, third site: reasoning only, because a render thread keeps its
-cached snapshot, so the in-place branch needs a thread that has just exited or called
-`ReleaseThreadCaches`); the counter wraps (gaps 3 and 4: reasoning only, they need 2^32 moves);
-and the cycle collector's walk, which the existing rows exercise without a report.
+What the evidence does not cover: weak-memory hardware; the remaining `use_count` sites of gap 1
+(`ChangeGlobals`, `LoadsInPlace`, `TraverseBoxed`, the collector's `Traverse`/`Clear`: reasoning
+only); the counter wrap (gap 3: reasoning only, it needs 2^32 moves); and the cycle collector's walk,
+which the existing rows exercise without a report.
 
 ## 10. Gaps and tasks
 
 | # | Gap | Task | How found | Severity |
 |---|---|---|---|---|
-| 1 | The uniqueness tests (`OwnsMutableItemsAlone`, `BySharedMutable::IsUnique`, `ChangeGlobals`) read a relaxed `shared_ptr::use_count()`; the host's last read of a kept value does not happen before the module's next in-place write | [0339](../tasks/0339-shared-ptr-uniqueness-needs-acquire.md) | probe A, TSan | medium: a formal data race on every platform, a wrong value only on weak-memory hardware |
-| 2 | A host thread that drops a kept container holding an attached adapter calls `CellLink::Unlink` on a live cell, racing `Finish` (and editing `m_links` if it reads `m_frozen == false`) | [0340](../tasks/0340-foreign-unlink-of-a-live-cell.md) | probe B, TSan | medium to high: a possible vector corruption, needs the host to drop in the window after the frames die |
-| 3 | `m_lastCall` wraps after 2^32 calls and a stale `m_exportedIn` equals a new call's id: a write goes in place into items a kept value shares | [0341](../tasks/0341-call-id-wraparound.md) | reading | low: needs 2^32 calls of one module with no write to that cell in between; the fix is a few lines (depends on 0337's sentinel) |
-| 4 | The 32-bit epoch wraps after 2^32 - 2 moves: an adapter or `ItemAdapters` block that stored `v` and was not read since can miss a cell, skip a `Release` or skip a `Traverse` | [0342](../tasks/0342-epoch-wraparound.md) | reading | low: needs 2^31 renders that write host data between two reads of one long-lived adapter |
+| 1 | The `shared_ptr::use_count()` uniqueness tests at `IsUnique`, the list/dict `Traverse` and `Clear`, `TraverseBoxed`, `LoadsInPlace` and `ChangeGlobals` are relaxed: the other holder's last access is not ordered before the in-place access | [0339](../tasks/0339-shared-ptr-uniqueness-needs-acquire.md) | probe A on `81ce81a`, reading | low: a formal data race on every platform; the module path is closed by #695, the rest needs a host thread dropping at the same time as the collector, a load or a globals change |
+| 2 | The global's own link (the only link in `cell->m_links`) is still unlinked outside the owning thread when the host drops it | [0346](../tasks/0346-global-item-link-dropped-on-another-thread.md) | reading after #695 | low; see the task |
+| 3 | The 32-bit epoch wraps after 2^32 - 2 moves: an adapter or `ItemAdapters` block that stored `v` and was not read since can miss a cell, skip a `Release` or skip a `Traverse` | [0342](../tasks/0342-epoch-wraparound.md) | reading | low: needs 2^31 renders that write host data between two reads of one long-lived adapter |
 
-Not new: the nested rows of probe A are task 0332 (a kept container holds the module's live cell), which this
-document confirms is a data race under TSan and not only a stale value. Its fix (freeze at the end
-of every call) also closes gap 2 for modules; the render's window remains.
+Closed by #695 (`done` in their task files): [0340](../tasks/0340-foreign-unlink-of-a-live-cell.md),
+the foreign unlink of a live cell, found by probe B (owning links); and
+[0341](../tasks/0341-call-id-wraparound.md), the call-id wrap (the call id is now only a trace name
+and the `m_shared` flag decides in-place writes). Tasks 0332 and 0335 are closed as well, so the
+nested rows of the first probe are no longer a separate gap.
 
-Hand-off to the other steps of 0338: step A should model the foreign drop (an `Unlink` by a thread
-that does not own the registry) and the call-id wrap as transitions, and step B's trace
-validation should log the epoch and call ids as full-width integers so that a wrap is visible.
+Hand-off to the other steps of 0338: step A's model covers the owning-link transitions;
+step B's trace validation should log the epoch as a full-width integer so that a wrap is visible.
 
 ## 11. Keeping it true
 
 - A new atomic, lock or `thread_local` in `src/borrowed_cells*`, `src/cycle_collector*`,
   `src/template_module.cpp` or `src/internal_value.*` updates section 12 in the same PR. Review
   rejects a new `memory_order` weaker than `acq_rel` on a count that guards destruction, and a new
-  uniqueness test on a `std::shared_ptr` count (use R1's `ValueObject` count or add the fence).
+  uniqueness test on a `std::shared_ptr` count (use R1's `ValueObject` count; `scripts/use_count_check.py` (0343) enforces it, and a correct call carries a `// use_count: <reason>` comment).
 - A change to who may hold a live `CellLink` (I1) or to how the registry is found (I2) changes
   section 8 first.
 - The TLA+ model keeps its "Not modelled" bullet on memory order and points here.
@@ -415,15 +437,18 @@ reader does not have to search for it.
 
 | Where | What | Order | Role | Verdict |
 |---|---|---|---|---|
-| `borrowed_cells.h:48,61`, `.cpp:27,34,43` | `CellCounters::s_epoch`: load, CAS loop | relaxed | change hint for adapters, blocks, enumerations | E1, E2 hold; wrap = gap 4 |
+| `borrowed_cells.h:52,55,62,63,65,66`, `.cpp:39,48` | `CellCounters::s_epoch`: load, CAS loop | relaxed | change hint for adapters, blocks, enumerations | E1, E2 hold; wrap = gap 3 |
 | `borrowed_cells.h:51,58,59,62`, `.cpp:28` | `CellCounters::s_live`: load, `fetch_add`, `fetch_sub` | relaxed | quiet-block hint | E3 holds; a 32-bit sum, no wrap in practice |
 | `internal_value.h:162,183` | `ValueObject::m_refCount` add | relaxed | new reference from an existing one | R1 holds |
 | `internal_value.h:166` | `m_refCount` release | `acq_rel`, destroys on 1 | end of a reader's access, destruction | R1 holds |
 | `internal_value.h:132` | `use_count()` | acquire | collector reachability, `DropUnshared`, `IsUnheld` | R1 holds |
-| `internal_value.cpp:2000,2007,2017` `1183,2590,2593,2607` | `shared_ptr::use_count() == 1` as "alone" | **relaxed** | in-place write, collector `Traverse`/`Clear` | **gap 1** |
+| `internal_value.cpp:1183,2325,2339,2349,2922,2925,2939,3904,3914`, `template.cpp:86` | `shared_ptr::use_count() == 1` as "alone" | **relaxed** | in-place write, collector `Traverse`/`Clear`, `LoadsInPlace` | **gap 1** |
 | `template_env.cpp:485` | `globalValues.use_count() > 1` | **relaxed** | in-place change of the shared globals map | **gap 1** |
-| `borrowed_cells.cpp:101,149,224,233` | plain `m_frozen`, `m_exportedIn`, `m_links` | none; single thread by I1 | live-cell state | I1 broken in one window: **gap 2**; `m_exportedIn` wrap: **gap 3** |
-| `template_module.cpp:450,522` | `recursive_mutex` | lock | module calls, S3 | M1 holds |
+| `borrowed_cells.cpp:99,187,240,295-316,478-528` | plain `m_frozen`, `m_links`, `m_shared` | none; single thread by I1 (owning links, #695) | live-cell state | I1 holds except the global's own link: **gap 2** |
+| `borrowed_cells.cpp:187` | `ValueObject::use_count()` first in `OwnsItemsAlone` | acquire | module in-place write | R1 holds |
+| `cell_trace.cpp:44,174,179` | `m_mutex`, `nextThread` | mutex; relaxed id | trace log (test builds) | no protocol data |
+| `template_module.cpp:450,523` | `recursive_mutex` | lock | module calls, S3 | M1 holds |
+| `thread_annotations.h:51-75`, `detail::SharedMutex`, `ReaderLock`, `WriterLock` | annotated wrappers of the shared mutexes in the environment | shared/unique | clang `-Wthread-safety` checks the guarded members (0343) | G1, G2 |
 | `template_env.cpp:483`, `template_env_impl.h:86` | `globalsGeneration` store | release, under the unique lock | new globals | G1 |
 | `template_impl.h:122` | `globalsGeneration` load | acquire, no lock | is the cached snapshot current | G2 (acquire not needed for the data) |
 | `template_impl.h:127` | `globalsGeneration` load | relaxed, under the shared lock | the snapshot's generation | G2 |

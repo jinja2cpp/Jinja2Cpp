@@ -1,7 +1,8 @@
 ---
-status: open
+status: done
 priority: medium
 area: robustness
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/695
 depends: [0331]
 touches: [src/borrowed_cells.h, src/borrowed_cells.cpp, src/internal_value.cpp, test/borrowed_cells_test.cpp, tla/CellProtocol.tla]
 ---
@@ -55,3 +56,12 @@ decision is needed from Ruslan's side only because (b) changes what the host see
 - The TLA+ model has a transition for a host thread dropping a value that holds an attached
   adapter, and `tla/check.py` fails without the fix (a mutant).
 - `Module/keep` and the for-loop rows do not move in `bench/count.py`.
+
+**Resolution (2026-10-29, PR #695).** Every link but a global's now owns its cell by reference
+count (`CellLink::OwnsBit`), so letting go of one is a release of the count and never touches the live
+cell (`CellLink::Unlink` reads the link's own bit, not `cell->m_frozen`). That is option (a) in
+a form that needs no back pointer: the registry keeps the live cell and the link keeps its own
+reference, instead of the registry pinning the adapter. A global's link stays listed in the cell
+and must still be dropped on the render's thread: that remainder is task 0346. The reads of the
+plain `m_frozen` that foreign threads still do (copying an adapter, exporting it) are recorded in
+`docs/design/borrowed-cells-memory-order.md`, section 8.
