@@ -331,7 +331,8 @@ private:
     // reused while the registry has the cell. Dropped when the cell freezes
     mutable InternalValue m_source;
     // The owner of data that lives only as long as its adapters, empty for the host's data
-    // (CellLink::Adopt)
+    // (CellLink::Adopt). A generic container's copy may share its accessor with the host's: the
+    // cell then asks the source whether the host can lend it again (docs/tasks/0336)
     std::weak_ptr<const void> m_owner;
     // Views into m_storage, which owns them
     mutable const IListAccessor* m_list = nullptr;

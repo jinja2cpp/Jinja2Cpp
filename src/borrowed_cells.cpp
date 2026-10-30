@@ -154,20 +154,25 @@ bool BorrowedCell::IsUnheld() const noexcept
     }
     const ValueObject* owner = nullptr;
     const CellLink* link = nullptr;
+    // The host's copy of a generic container can lend it to a later call, which must see this
+    // call's writes (0049 P2): its cell stays while the host holds one (docs/tasks/0336)
+    bool lentAgain = false;
     if (m_isList)
     {
-        if (auto list = AsList(m_source))
+        if (auto list = AsList(m_source); list && list->GetAccessor())
         {
             owner = list->GetOwner();
-            link = list->GetAccessor() ? list->GetAccessor()->GetCellLink() : nullptr;
+            link = list->GetAccessor()->GetCellLink();
+            lentAgain = list->GetAccessor()->MayBeLentAgain();
         }
     }
-    else if (auto map = AsMap(m_source))
+    else if (auto map = AsMap(m_source); map && map->GetAccessor())
     {
         owner = map->GetOwner();
-        link = map->GetAccessor() ? map->GetAccessor()->GetCellLink() : nullptr;
+        link = map->GetAccessor()->GetCellLink();
+        lentAgain = map->GetAccessor()->MayBeLentAgain();
     }
-    if (!owner || owner->use_count() != 1)
+    if (!owner || owner->use_count() != 1 || lentAgain)
     {
         return false;
     }
@@ -467,9 +472,11 @@ bool BorrowedCells::DropUnheldOnce() noexcept
     }
     // Out of the registry first, while the data the identity names is alive: the identity is
     // not reused before its cell is gone from the table
+    // The host may let go of a generic container's last copy on another thread meanwhile
+    // (docs/tasks/0336): a cell that became unheld since the count waits for the next pass
     for (auto entry = m_cells->begin(); entry != m_cells->end();)
     {
-        if (entry->second->IsUnheld())
+        if (dropped.size() != count && entry->second->IsUnheld())
         {
             JINJA2CPP_CELL_TRACE_EVENT("drop", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Ptr("c", Trace::Space::Cell, entry->second.get()),
                                        Trace::Links("links", entry->second->m_links.data(), entry->second->m_links.size()));

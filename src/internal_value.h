@@ -95,6 +95,14 @@ namespace detail
 // outermost deletion empties in a loop, as CPython's "trashcan" does.
 // Exported: intrusive_ptr_release calls it from code outside a shared library.
 JINJA2CPP_EXPORT void DestroyValueObject(const ValueObject* obj) noexcept;
+
+// The shared_ptr a generic container holds its accessor by, which the library reads to tell
+// whether the container is the accessor's only owner (docs/tasks/0336)
+struct GenericAccessorAccess
+{
+    static const std::shared_ptr<const IListItemAccessor>& Get(const GenericList& list) noexcept { return list.m_accessor; }
+    static const std::shared_ptr<const IMapItemAccessor>& Get(const GenericMap& map) noexcept { return map.m_accessor; }
+};
 } // namespace detail
 
 // The base of every object a value owns: a long string, a list or map accessor, a pair, a
@@ -614,6 +622,10 @@ struct IListAccessor : ValueObject
     // The link of an adapter of the host's data to the render's copy of it (borrowed_cells.h);
     // null for the other lists
     [[nodiscard]] virtual const CellLink* GetCellLink() const { return nullptr; }
+    // Whether something besides the adapter's own copy of the data can lend it to a later call of
+    // a template module, which must then see what this call wrote: the host's copy of a generic
+    // container (docs/tasks/0336). Asked of the data an adapter owns (BorrowedCell::IsUnheld)
+    [[nodiscard]] virtual bool MayBeLentAgain() const noexcept { return false; }
     // The host's data an adapter of it lends, as the host sees it, without a look at the link
     // (a value a template module's call handed out, CallExports); CreateGenericList for the
     // other lists
@@ -682,6 +694,8 @@ struct IMapAccessor : ValueObject
     virtual bool AdoptCopy(const InternalValue& /*self*/, const InternalValue& /*copy*/) const { return false; }
     // See IListAccessor::GetCellLink
     [[nodiscard]] virtual const CellLink* GetCellLink() const { return nullptr; }
+    // See IListAccessor::MayBeLentAgain
+    [[nodiscard]] virtual bool MayBeLentAgain() const noexcept { return false; }
     // See IListAccessor::CreateHostGenericList
     [[nodiscard]] virtual GenericMap CreateHostGenericMap() const { return CreateGenericMap(); }
     // See IListAccessor::LifetimeAnchor

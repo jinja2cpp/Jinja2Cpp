@@ -234,6 +234,7 @@ private:
 template<typename T>
 class ReflectedMapImpl : public ReflectedMapImplBase<ReflectedMapImpl<T>>
     , public ReflectedDataHolder<T>
+    , public detail::OwnedAccessor
 {
 public:
     using ReflectedDataHolder<T>::ReflectedDataHolder;
@@ -385,6 +386,7 @@ struct ContainerReflector
     template<typename T>
     struct ValueItemAccessor : IListItemAccessor
         , IIndexBasedAccessor
+        , detail::OwnedAccessor
     {
         using ThisType = ValueItemAccessor<T>;
 
@@ -434,6 +436,7 @@ struct ContainerReflector
     template<typename T>
     struct PtrItemAccessor : IListItemAccessor
         , IIndexBasedAccessor
+        , detail::OwnedAccessor
     {
         using ThisType = PtrItemAccessor<T>;
 
