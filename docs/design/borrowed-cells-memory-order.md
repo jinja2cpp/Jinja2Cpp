@@ -223,13 +223,14 @@ TSan does not model). Task 0339.
 is now a `ValueObject`, so "alone" is R1's acquire load and costs no more than before. The other
 three sites hold a `std::shared_ptr` the public API or the environment owns (a template's
 implementation, the globals map, a callable's captures and attributes), so they test with
-`IsSoleOwner` (`src/shared_owner.h`): after `use_count() == 1` it copies the pointer and drops the
-copy. The drop is an `acq_rel` decrement of the same count. Every change of a count is a
-read-modify-write, so the release decrement of the last other owner heads a release sequence
-that the copy's increment continues, and the drop reads from it: it synchronizes with that
-release, and the other owner's accesses happen before what the caller does next. TSan models
-it, unlike a fence. The cost is two atomic operations on paths that are not per node (a Load, a
-globals change, the collector's walk of a callable).
+`IsSoleOwner` (`src/shared_owner.h`): after `use_count() == 1` it issues an acquire fence. The
+last other owner's drop is a release decrement, and an acquire fence after a relaxed load that
+read its value (or a later value of its release sequence, which only read-modify-writes extend)
+synchronizes with it ([atomics.fences]/2), so the other owner's accesses happen before what the
+caller does next. That costs nothing on x86. TSan does not model fences, so a TSan build copies the
+pointer and drops the copy instead: an `acq_rel` decrement of the same count, which reads the last
+value in the modification order and gives the same edge in a form TSan sees. (The first version
+did the copy in every build; it cost 41 instructions per `Load`, +1.1% on `Load/plain_text`.)
 
 The calls that carry their own acquire are not in the table: `BorrowedCell::IsUnheld` and
 `CycleCollector::DropUnshared` test `ValueObject` counts. Task 0343's lint
@@ -464,7 +465,7 @@ reader does not have to search for it.
 | `internal_value.h:166` | `m_refCount` release | `acq_rel`, destroys on 1 | end of a reader's access, destruction | R1 holds |
 | `internal_value.h:132` | `use_count()` | acquire | collector reachability, `DropUnshared`, `IsUnheld` | R1 holds |
 | `internal_value.cpp` `BySharedMutable::IsUnique` | storage `ValueObject::use_count() == 1` | acquire | in-place write, collector `Traverse`/`Clear` of template lists and dicts | R1 holds (0339) |
-| `shared_owner.h` `IsSoleOwner`, at `TraverseBoxed`, `LoadsInPlace`, `ChangeGlobals` | `shared_ptr::use_count() == 1`, then a copy dropped | relaxed hint, then `acq_rel` decrement | collector walk of a callable, in-place Load, in-place globals change | R3 holds (0339) |
+| `shared_owner.h` `IsSoleOwner`, at `TraverseBoxed`, `LoadsInPlace`, `ChangeGlobals` | `shared_ptr::use_count() == 1`, then an acquire fence (TSan builds: a copy dropped) | relaxed load + acquire fence | collector walk of a callable, in-place Load, in-place globals change | R3 holds (0339) |
 | `borrowed_cells.cpp:99,187,240,295-316,478-528` | plain `m_frozen`, `m_links`, `m_shared` | none; single thread by I1 (owning links, #695) | live-cell state | I1 holds except the global's own link: **gap 2** |
 | `borrowed_cells.cpp:187` | `ValueObject::use_count()` first in `OwnsItemsAlone` | acquire | module in-place write | R1 holds |
 | `cell_trace.cpp:44,174,179` | `m_mutex`, `nextThread` | mutex; relaxed id | trace log (test builds) | no protocol data |

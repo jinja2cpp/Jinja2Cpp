@@ -74,12 +74,13 @@ this task is done when its whole-tree run lists none, or each remaining call car
   and the pointer is one word instead of two.
 - The other sites hold a `std::shared_ptr` that the public API or the environment owns (the
   template's implementation, the globals map, a callable's captures and attributes), so they
-  call `IsSoleOwner` (`src/shared_owner.h`): after `use_count() == 1` it copies the pointer and
-  drops the copy, an `acq_rel` decrement that reads from the release sequence of the last other
-  owner's drop. Unlike the fence of the fallback, TSan models it. `ChangeGlobals` uses it too
-  instead of the proposed flag: the thread's globals snapshot keeps the map across renders, so a
-  flag would copy on nearly every change, and the drop costs two atomic operations once per
-  change.
+  call `IsSoleOwner` (`src/shared_owner.h`): after `use_count() == 1` it issues the acquire fence
+  of the fallback, and in a TSan build, which does not model fences, it copies the pointer and
+  drops the copy instead (an `acq_rel` decrement that reads from the release sequence of the last
+  other owner's drop). The copy in every build cost 41 instructions per `Load` (+1.1% on
+  `Load/plain_text`, over the perf track's bar), so it is kept for TSan only. `ChangeGlobals` uses
+  it too instead of the proposed flag: the thread's globals snapshot keeps the map across
+  renders, so a flag would copy on nearly every change.
 
 Evidence: `SharedOwnerTest.CollectorClearsAListTheHostDroppedOnAnotherThread`,
 `FirstLoadAfterACopyIsDroppedOnAnotherThread` and `AddGlobalAfterARenderOnAnotherThreadLetGoOfTheMap`

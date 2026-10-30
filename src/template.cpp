@@ -85,7 +85,7 @@ private:
 template<typename CharT>
 bool LoadsInPlace(const std::shared_ptr<ITemplateImpl>& impl)
 {
-    return IsSoleOwner(impl) && !GetImpl<CharT>(impl)->GetRenderer();
+    return !GetImpl<CharT>(impl)->GetRenderer() && IsSoleOwner(impl);
 }
 
 // The Load that replaces the template, out of the first Load's path; returns the result itself,
