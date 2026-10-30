@@ -6,6 +6,7 @@ Written 2026-10-28 on master `81ce81a`, revised 2026-10-30 on master `42873f9` (
 argument, not in TLA+"). It covers `src/borrowed_cells.{h,cpp}`, `src/cycle_collector.{h,cpp}` and
 `src/template_module.cpp`, and the state they share with the rest of the library. Line numbers are
 those of `42873f9`. It changes no code. What it finds is filed as tasks 0339 to 0342 and 0346.
+Task 0339 closed gap 1 since (section 4, R3).
 
 The claim is narrow. **Given the host contract in section 1, every access the protocol makes to
 state that more than one thread can reach is either ordered by a lock, ordered by a
@@ -13,10 +14,9 @@ happens-before edge the library creates (an acquire/release pair on a reference 
 state nothing writes any more.** The first version of this document found two places that did
 not meet that claim, with TSan reproducing both; #695 closed them. Today:
 
-- the uniqueness tests on `std::shared_ptr` counts have no acquire (task 0339). The module-call path
-  that the first probe reproduced now also tests a `ValueObject` count, which has one, and the probe
-  is clean; the collector, `ChangeGlobals`, `TraverseBoxed` and `LoadsInPlace` still rest on the
-  relaxed count;
+- the uniqueness tests on `std::shared_ptr` counts had no acquire (task 0339, now closed: the
+  template's list and dict storage is a `ValueObject` with an acquire count, and the other sites
+  test with `IsSoleOwner`, an `acq_rel` decrement of the same count);
 - a global's item link can be dropped on a host thread while the render runs (task 0346, found by
   reading, not reproduced);
 - the 32-bit epoch wraps (task 0342).
@@ -33,8 +33,9 @@ that room. Three things cross the walls: a notice board with two numbers on it (
 anyone may glance at them), finished proofs carried out the door (frozen cells and kept values),
 and the shop's reference binders (the module's state and the environment, behind a sign-out
 sheet, which is the mutex). Nobody ever edits a proof once it is carried out; when the shop wants
-to reuse a proof's paper, someone has to check that the last reader has put it down. That check is
-the one that is not rigorous yet (gap 1).
+to reuse a proof's paper, someone has to check that the last reader has put it down. That check
+was the one that was not rigorous (gap 1, closed by task 0339): glancing at the reading desk is not
+enough, the checker has to sign the same sign-out sheet the reader signed when leaving.
 
 ## 1. Host contract the argument rests on
 
@@ -197,13 +198,13 @@ drops its reference, and then it is garbage anyway.
 **R2. `std::shared_ptr` counts are used as a uniqueness test and are not acquire.** Sites that ask
 "is this the only reference" and then write or read the storage as if nobody else could:
 
-| Site | Test | After it | Status on `42873f9` |
-|---|---|---|---|
-| `BorrowedCell::OwnsItemsAlone` (`borrowed_cells.cpp:187`), second conjunct: `OwnsMutableItemsAlone` (`internal_value.cpp:2325` list, `IsUnique` at `:1183`, used at `:2922`, dict) | `== 1` | a module call writes the cell's items in place (D8) | covered for a pin: the first conjunct is `m_object->use_count() == 1`, a `ValueObject` count with an acquire, and a call's pin holds that object |
-| `Traverse` and `Clear` of the same two adapters (`internal_value.cpp:2339,2349,2925,2939`), run by the collector | `== 1` | `Clear` empties the container; `Traverse` reads its items only when it is the sole owner | open |
-| `ChangeGlobals` (`template_env.cpp:485`) | `> 1` | `AddGlobal`/`RemoveGlobal` write the shared map in place when no render holds it | open |
-| `TraverseBoxed` (`internal_value.cpp:3904,3914`) | `== 1` on a callable's captures and attributes | the collector reads them | open |
-| `LoadsInPlace` (`template.cpp:86`) | `== 1` | the template parses into its implementation in place | open |
+| Site | Test | After it | Status on `42873f9` | After 0339 |
+|---|---|---|---|---|
+| `BorrowedCell::OwnsItemsAlone` (`borrowed_cells.cpp:187`), second conjunct: `OwnsMutableItemsAlone` (`internal_value.cpp:2325` list, `IsUnique` at `:1183`, used at `:2922`, dict) | `== 1` | a module call writes the cell's items in place (D8) | covered for a pin: the first conjunct is `m_object->use_count() == 1`, a `ValueObject` count with an acquire, and a call's pin holds that object | `BySharedMutable` storage is a `ValueObject`: both conjuncts are acquire loads (R1) |
+| `Traverse` and `Clear` of the same two adapters (`internal_value.cpp:2339,2349,2925,2939`), run by the collector | `== 1` | `Clear` empties the container; `Traverse` reads its items only when it is the sole owner | open; TSan row `SharedOwnerTest.CollectorClearsAListTheHostDroppedOnAnotherThread` reports it | R1, same storage; the row is clean |
+| `ChangeGlobals` (`template_env.cpp:485`) | `> 1` | `AddGlobal`/`RemoveGlobal` write the shared map in place when no render holds it | open; `SharedOwnerTest.AddGlobalAfterARenderOnAnotherThreadLetGoOfTheMap` reports it | `IsSoleOwner` (below); clean |
+| `TraverseBoxed` (`internal_value.cpp:3904,3914`) | `== 1` on a callable's captures and attributes | the collector reads them | open | `IsSoleOwner`; reasoning only, no row (the collector only reads there) |
+| `LoadsInPlace` (`template.cpp:86`) | `== 1` | the template parses into its implementation in place | open; `SharedOwnerTest.FirstLoadAfterACopyIsDroppedOnAnotherThread` reports it | `IsSoleOwner`; clean |
 
 `std::shared_ptr::use_count()` is a relaxed load in libstdc++ (`bits/shared_ptr_base.h:230` says
 "No memory barrier is used here so there is no synchronization with other threads") and in
@@ -217,6 +218,18 @@ compiler's transformations of unsynchronized accesses either. TSan reports it wh
 schedule (section 9). The fix is an acquire the checker can see: a library-owned count (R1), or one
 acquire fence after the test reads 1 (`std::atomic_thread_fence(std::memory_order_acquire)`, which
 TSan does not model). Task 0339.
+
+**R3. The fix (0339).** The list and dict storage of a template's containers (`BySharedMutable`)
+is now a `ValueObject`, so "alone" is R1's acquire load and costs no more than before. The other
+three sites hold a `std::shared_ptr` the public API or the environment owns (a template's
+implementation, the globals map, a callable's captures and attributes), so they test with
+`IsSoleOwner` (`src/shared_owner.h`): after `use_count() == 1` it copies the pointer and drops the
+copy. The drop is an `acq_rel` decrement of the same count. Every change of a count is a
+read-modify-write, so the release decrement of the last other owner heads a release sequence
+that the copy's increment continues, and the drop reads from it: it synchronizes with that
+release, and the other owner's accesses happen before what the caller does next. TSan models
+it, unlike a fence. The cost is two atomic operations on paths that are not per node (a Load, a
+globals change, the collector's walk of a callable).
 
 The calls that carry their own acquire are not in the table: `BorrowedCell::IsUnheld` and
 `CycleCollector::DropUnshared` test `ValueObject` counts. Task 0343's lint
@@ -308,7 +321,7 @@ that by whichever threads hold a value that refers to it.
 template caches and `globalsGeneration`.
 
 - **G1. Writers hold the unique lock** (`ChangeGlobals`, `template_env.cpp:483`): the map is
-  replaced by a copy when a render still holds it (R2, gap 1), changed, and `globalsGeneration`
+  replaced by a copy when a render still holds it (R2; `IsSoleOwner` since 0339, R3), changed, and `globalsGeneration`
   is stored with `release`, still under the lock (`template_env.cpp:490`).
 - **G2. A render takes its thread's snapshot of the globals** (`GetGlobalsSnapshot`,
   `template_impl.h:117`): it loads `globalsGeneration` with `acquire` and, if it differs from the
@@ -384,7 +397,7 @@ The first probe was out of contract: the early `81ce81a` results mixed a real ra
 `shared_ptr` count) with that misuse, and only the acquire-load row separated them. After #695 the
 kept value holds the cell's `ValueObject`, and `OwnsItemsAlone` tests its acquire count first
 (R1), so the module path no longer depends on the `shared_ptr` count. The `shared_ptr` count remains
-the only test at the sites listed in gap 1.
+the only test at the sites listed in gap 1 until 0339 (rows below).
 
 **Probe B, the foreign unlink.** The template does `l.append(1)`, then `keep([l, [l]])`, then 30 more
 appends. A second thread drops each kept container as soon as it can. On `81ce81a`, 20000 renders
@@ -393,16 +406,24 @@ the dropper thread against the write in `BorrowedCells::Finish`. On `42873f9`, s
 reports in 3 of 3 runs**: the owning links of #695 make the kept container hold the cell, so the
 drop no longer reaches `Unlink` on a live cell (I1).
 
-What the evidence does not cover: weak-memory hardware; the remaining `use_count` sites of gap 1
-(`ChangeGlobals`, `LoadsInPlace`, `TraverseBoxed`, the collector's `Traverse`/`Clear`: reasoning
-only); the counter wrap (gap 3: reasoning only, it needs 2^32 moves); and the cycle collector's walk,
+**Task 0339 rows.** Three tests in `test/borrowed_cells_test.cpp` (`SharedOwnerTest.*`) let
+another thread read the shared storage and drop it with no happens-before edge back (a relaxed
+flag), and then take the in-place path: the collector's `Clear`, the first `Load` and `AddGlobal`.
+On the parent of 0339 each reports a TSan data race in 3 of 3 runs; with the fix, 0 of 3. Getting
+them to fail took care, because any other count the dropping thread touches carries the edge:
+reading an item of the list holds and lets go of the item's `ValueObject`, whose count the
+collector reads with an acquire, and a copy of the template dropped on the testing thread is
+itself an `acq_rel` decrement that orders the other thread's drop (the mechanism of R3).
+
+What the evidence does not cover: weak-memory hardware; `TraverseBoxed` (reasoning only); the
+counter wrap (gap 3: reasoning only, it needs 2^32 moves); and the cycle collector's walk,
 which the existing rows exercise without a report.
 
 ## 10. Gaps and tasks
 
 | # | Gap | Task | How found | Severity |
 |---|---|---|---|---|
-| 1 | The `shared_ptr::use_count()` uniqueness tests at `IsUnique`, the list/dict `Traverse` and `Clear`, `TraverseBoxed`, `LoadsInPlace` and `ChangeGlobals` are relaxed: the other holder's last access is not ordered before the in-place access | [0339](../tasks/0339-shared-ptr-uniqueness-needs-acquire.md) | probe A on `81ce81a`, reading | low: a formal data race on every platform; the module path is closed by #695, the rest needs a host thread dropping at the same time as the collector, a load or a globals change |
+| 1 | The `shared_ptr::use_count()` uniqueness tests at `IsUnique`, the list/dict `Traverse` and `Clear`, `TraverseBoxed`, `LoadsInPlace` and `ChangeGlobals` are relaxed: the other holder's last access is not ordered before the in-place access | [0339](../tasks/0339-shared-ptr-uniqueness-needs-acquire.md), **closed** (R3) | probe A on `81ce81a`, reading; TSan rows in 0339 | low: a formal data race on every platform; the module path is closed by #695, the rest needs a host thread dropping at the same time as the collector, a load or a globals change |
 | 2 | The global's own link (the only link in `cell->m_links`) is still unlinked outside the owning thread when the host drops it | [0346](../tasks/0346-global-item-link-dropped-on-another-thread.md) | reading after #695 | low; see the task |
 | 3 | The 32-bit epoch wraps after 2^32 - 2 moves: an adapter or `ItemAdapters` block that stored `v` and was not read since can miss a cell, skip a `Release` or skip a `Traverse` | [0342](../tasks/0342-epoch-wraparound.md) | reading | low: needs 2^31 renders that write host data between two reads of one long-lived adapter |
 
@@ -442,8 +463,8 @@ reader does not have to search for it.
 | `internal_value.h:162,183` | `ValueObject::m_refCount` add | relaxed | new reference from an existing one | R1 holds |
 | `internal_value.h:166` | `m_refCount` release | `acq_rel`, destroys on 1 | end of a reader's access, destruction | R1 holds |
 | `internal_value.h:132` | `use_count()` | acquire | collector reachability, `DropUnshared`, `IsUnheld` | R1 holds |
-| `internal_value.cpp:1183,2325,2339,2349,2922,2925,2939,3904,3914`, `template.cpp:86` | `shared_ptr::use_count() == 1` as "alone" | **relaxed** | in-place write, collector `Traverse`/`Clear`, `LoadsInPlace` | **gap 1** |
-| `template_env.cpp:485` | `globalValues.use_count() > 1` | **relaxed** | in-place change of the shared globals map | **gap 1** |
+| `internal_value.cpp` `BySharedMutable::IsUnique` | storage `ValueObject::use_count() == 1` | acquire | in-place write, collector `Traverse`/`Clear` of template lists and dicts | R1 holds (0339) |
+| `shared_owner.h` `IsSoleOwner`, at `TraverseBoxed`, `LoadsInPlace`, `ChangeGlobals` | `shared_ptr::use_count() == 1`, then a copy dropped | relaxed hint, then `acq_rel` decrement | collector walk of a callable, in-place Load, in-place globals change | R3 holds (0339) |
 | `borrowed_cells.cpp:99,187,240,295-316,478-528` | plain `m_frozen`, `m_links`, `m_shared` | none; single thread by I1 (owning links, #695) | live-cell state | I1 holds except the global's own link: **gap 2** |
 | `borrowed_cells.cpp:187` | `ValueObject::use_count()` first in `OwnsItemsAlone` | acquire | module in-place write | R1 holds |
 | `cell_trace.cpp:44,174,179` | `m_mutex`, `nextThread` | mutex; relaxed id | trace log (test builds) | no protocol data |

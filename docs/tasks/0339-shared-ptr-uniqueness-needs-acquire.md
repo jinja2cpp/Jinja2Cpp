@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/TBD
 priority: low
 area: robustness
 depends: [0331]
-touches: [src/internal_value.cpp, src/template_env.cpp, src/template_env_impl.h, test/borrowed_cells_test.cpp]
+touches: [src/internal_value.cpp, src/shared_owner.h, src/template.cpp, src/template_env.cpp, test/borrowed_cells_test.cpp, docs/design/borrowed-cells-memory-order.md]
 ---
 # A uniqueness test on a `shared_ptr` count has no acquire
 
@@ -64,3 +65,25 @@ this task is done when its whole-tree run lists none, or each remaining call car
 - `Module/keep` and `Module/keep_written` do not move in `bench/count.py`.
 - The design document's table (section 12) loses its "gap 1" rows.
 - `scripts/use_count_check.py` (0343) run on the whole tree lists no call.
+
+**Resolution.** Two mechanisms, chosen by who owns the pointer:
+
+- The list and dict storage the template owns (`BySharedMutable`, now also under the list
+  adapter) is a `ValueObject` holding the container, as recommended: `IsUnique` and therefore
+  `OwnsMutableItemsAlone`, `Traverse` and `Clear` read an acquire count. Same allocation count,
+  and the pointer is one word instead of two.
+- The other sites hold a `std::shared_ptr` that the public API or the environment owns (the
+  template's implementation, the globals map, a callable's captures and attributes), so they
+  call `IsSoleOwner` (`src/shared_owner.h`): after `use_count() == 1` it copies the pointer and
+  drops the copy, an `acq_rel` decrement that reads from the release sequence of the last other
+  owner's drop. Unlike the fence of the fallback, TSan models it. `ChangeGlobals` uses it too
+  instead of the proposed flag: the thread's globals snapshot keeps the map across renders, so a
+  flag would copy on nearly every change, and the drop costs two atomic operations once per
+  change.
+
+Evidence: `SharedOwnerTest.CollectorClearsAListTheHostDroppedOnAnotherThread`,
+`FirstLoadAfterACopyIsDroppedOnAnotherThread` and `AddGlobalAfterARenderOnAnotherThreadLetGoOfTheMap`
+report a TSan race in 3 of 3 runs without the fix and none with it; `TraverseBoxed` has no row
+(the collector only reads there, so a race needs a later `Clear` of what it reached, which its
+own counts already order). `scripts/use_count_check.py` lists 6 calls on the parent and none
+after. The design document's R3 has the argument.

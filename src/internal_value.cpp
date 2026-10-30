@@ -8,6 +8,7 @@
 #include "intrusive_ptr.h"
 #include "recursion_guard.h"
 #include "render_failure.h"
+#include "shared_owner.h"
 #include "span.h"
 #include "template_dict.h"
 #include "undefined.h"
@@ -1167,26 +1168,38 @@ private:
 };
 
 // The storage of a container the template owns: shared by every copy of the value (as
-// Python containers are) and self-contained, so its items need no parent to stay alive
+// Python containers are) and self-contained, so its items need no parent to stay alive. The
+// library counts its references (a ValueObject), so that IsUnique is an acquire load: the last
+// other holder's reads happen before the in-place write or the collector's Clear that follows
+// it, also when that holder let go on another thread (docs/tasks/0339)
 template<typename T>
 class BySharedMutable
 {
 public:
     explicit BySharedMutable(T&& val)
-        : m_val(std::make_shared<T>(std::move(val)))
+        : m_val(MakeRef<Storage>(std::move(val)))
     {
     }
 
-    [[nodiscard]] T& Get() const { return *m_val; }
+    [[nodiscard]] T& Get() const { return m_val->items; }
     [[nodiscard]] bool ShouldExtendLifetime() const { return false; }
     // Whether this holder alone keeps the storage
-    [[nodiscard]] bool IsUnique() const { return m_val.use_count() == 1; }
+    [[nodiscard]] bool IsUnique() const { return m_val->use_count() == 1; }
 
-    bool operator==(const BySharedMutable<T>& other) const { return *m_val == *other.m_val; }
+    bool operator==(const BySharedMutable<T>& other) const { return Get() == other.Get(); }
     bool operator!=(const BySharedMutable<T>& other) const { return !(*this == other); }
 
 private:
-    std::shared_ptr<T> m_val;
+    struct Storage final : ValueObject
+    {
+        explicit Storage(T&& val)
+            : items(std::move(val))
+        {
+        }
+        mutable T items;
+    };
+
+    IntrusivePtr<const Storage> m_val;
 };
 
 // The owner of a generic container's storage when a value (a user callable's result) holds
@@ -2296,33 +2309,35 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
     {
     public:
         explicit Adapter(InternalValueList&& values)
-            : m_values(std::make_shared<InternalValueList>(std::move(values)))
+            : m_values(std::move(values))
         {
             SetTraversable();
         }
 
-        [[nodiscard]] size_t GetItemsCountImpl() const { return m_values->size(); }
+        [[nodiscard]] size_t GetItemsCountImpl() const { return m_values.Get().size(); }
         [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
         {
             // A list can shrink while it is iterated (pop() in a loop body)
-            if (idx < 0 || static_cast<size_t>(idx) >= m_values->size())
+            const auto& values = m_values.Get();
+            if (idx < 0 || static_cast<size_t>(idx) >= values.size())
             {
                 return std::optional<InternalValue>();
             }
-            return (*m_values)[static_cast<size_t>(idx)];
+            return values[static_cast<size_t>(idx)];
         }
         [[nodiscard]] InternalValue GetCurrentItem(int64_t idx) const
         {
-            if (idx < 0 || static_cast<size_t>(idx) >= m_values->size())
+            const auto& values = m_values.Get();
+            if (idx < 0 || static_cast<size_t>(idx) >= values.size())
             {
                 return InternalValue();
             }
-            return (*m_values)[static_cast<size_t>(idx)];
+            return values[static_cast<size_t>(idx)];
         }
         [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
-        [[nodiscard]] const void* GetIdentity() const override { return m_values.get(); }
-        [[nodiscard]] InternalValueList* GetMutableItems() const override { return m_values.get(); }
-        [[nodiscard]] bool OwnsMutableItemsAlone() const override { return m_values.use_count() == 1; }
+        [[nodiscard]] const void* GetIdentity() const override { return &m_values.Get(); }
+        [[nodiscard]] InternalValueList* GetMutableItems() const override { return &m_values.Get(); }
+        [[nodiscard]] bool OwnsMutableItemsAlone() const override { return m_values.IsUnique(); }
         [[nodiscard]] GenericList CreateGenericList() const override
         {
             // In a template module's call, its items that are the module's data read what the
@@ -2338,7 +2353,7 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
         {
             if (OwnsMutableItemsAlone())
             {
-                for (const auto& item : *m_values)
+                for (const auto& item : m_values.Get())
                 {
                     TraverseValue(item, fn);
                 }
@@ -2348,12 +2363,12 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
         {
             if (OwnsMutableItemsAlone())
             {
-                m_values->clear();
+                m_values.Get().clear();
             }
         }
 
     private:
-        std::shared_ptr<InternalValueList> m_values;
+        BySharedMutable<InternalValueList> m_values;
     };
 
     return ListAdapter(MakeRef<Adapter>(std::move(values)));
@@ -3900,8 +3915,9 @@ void TraverseBoxed(const KeyValuePair& pair, const TraverseFn& fn)
 
 void TraverseBoxed(const Callable& callable, const TraverseFn& fn)
 {
-    // Another copy of the callable would hold them too, unseen
-    if (callable.m_callable.use_count() == 1)
+    // Another copy of the callable would hold them too, unseen; one the host let go of on another
+    // thread has its reads ordered before ours (docs/tasks/0339)
+    if (IsSoleOwner(callable.m_callable))
     {
         if (const auto* fnCall = std::get_if<Callable::ExpressionCallable>(callable.m_callable.get()))
         {
@@ -3911,7 +3927,7 @@ void TraverseBoxed(const Callable& callable, const TraverseFn& fn)
             }
         }
     }
-    if (callable.m_attributes && callable.m_attributes.use_count() == 1)
+    if (callable.m_attributes && IsSoleOwner(callable.m_attributes))
     {
         for (const auto& entry : *callable.m_attributes)
         {

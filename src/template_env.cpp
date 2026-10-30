@@ -4,6 +4,7 @@
 #include "error_boundary.h"
 #include "load_settings.h"
 #include "make_unexpected.h"
+#include "shared_owner.h"
 #include "template_env_impl.h"
 #include "thread_annotations.h"
 
@@ -481,8 +482,9 @@ template<typename Fn>
 void ChangeGlobals(detail::TemplateEnvImpl& impl, const Fn& fn)
 {
     const detail::WriterLock<detail::SharedMutex> l(impl.guard);
-    // A render may still hold the map: it gets a new one
-    if (impl.globalValues.use_count() > 1)
+    // A render may still hold the map: it gets a new one. One whose thread let go of it has its
+    // reads ordered before the change (docs/tasks/0339)
+    if (!IsSoleOwner(impl.globalValues))
     {
         impl.globalValues = std::make_shared<ValuesMap>(*impl.globalValues);
     }

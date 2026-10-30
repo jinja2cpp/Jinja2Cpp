@@ -247,8 +247,8 @@ loses the writes a later call with the same container must see (`generic-drop-wi
 
 **Still open.** 0342, the epoch wrap, is a measurement decision (stored epoch width); the model now
 reproduces it (`open-0342-epoch-wrap`, `MaxEpoch = 2`). 0339 (a relaxed `use_count` in the
-uniqueness test) is memory order, outside a sequentially consistent model; the designs above keep
-the uniqueness test, so they inherit its fix.
+uniqueness test, now an acquire) is memory order, outside a sequentially consistent model; the
+designs above keep the uniqueness test, so they inherit its fix.
 
 ## What the results claim
 
