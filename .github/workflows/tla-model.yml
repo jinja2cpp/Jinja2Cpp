@@ -4,8 +4,8 @@ name: tla-model
 # tla/CycleCollector.tla (tla/collector_check.py, the `collector` job, a few minutes): every pass
 # run must explore its whole space and every mutant must find its counterexample. The longest
 # runs take one to four hours each on the runners, past what an agent's session can hold
-# (docs/tasks/0350), so they run here, one job per shard, in parallel. The trace validation of the C++ against
-# tla/CellTrace.tla runs in the linux-build `celltrace` row instead.
+# (docs/tasks/0350), so they run here, one job per shard, in parallel. The trace validation of
+# the C++ against tla/CellTrace.tla runs in the linux-build `celltrace` row instead.
 #
 # It runs as a routine, not per pull request (Ruslan, 2026-10-30): weekly on master when tla/
 # changed in the last week, and on demand (workflow_dispatch) on any branch or tag, for example a
