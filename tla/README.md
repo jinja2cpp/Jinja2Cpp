@@ -16,10 +16,21 @@ curl -sSLo tla/tla2tools.jar https://github.com/tlaplus/tlaplus/releases/downloa
 python3 tla/check.py                        # every run, about 4.8 hours on 4 cores
 python3 tla/check.py --only render          # or in three parts: about 2h10m (21 GB of disk) ...
 python3 tla/check.py --only mixed threads   # ... about 1h40m ...
-python3 tla/check.py --only $(python3 tla/check.py --list | awk '$1 !~ /^(render|mixed|threads)$/ {print $1}')   # ... and 1h10m
+python3 tla/check.py --except render mixed threads   # ... and 1h10m
 python3 tla/check.py --only f1-nested-export --traces
 python3 tla/check.py --list
 ```
+
+The GitHub Actions workflow `tla-model` (`.github/workflows/tla-model.yml`, task 0350) runs
+the same suite in four parallel jobs (`render`, `mixed`, `threads` and the rest): on pull
+requests that change `CellProtocol.tla` or `check.py`, nightly on master when `tla/` changed,
+and on demand from the Actions tab (Run workflow, on any branch, optionally with a list of runs).
+Prefer it to a local run for anything longer than an hour: the job summary has a row per run
+and the `tlc-*` artifacts keep each run's `MC.cfg` and `tlc.out`.
+
+The two-thread scopes are reduced by thread symmetry (`SYMMETRY ThreadPerms` over the threads as
+model values), which halves them; `--no-symmetry` turns it off. `--except NAME ...` runs every
+run but those, and `--java-opts` (or `TLC_JAVA_OPTS`) passes JVM options to TLC.
 
 Java 11 or later is needed. `--set Name=Value` overrides a constant, for example
 `--set MaxLevel=14`. `--timeout SECONDS` limits each run; a run stopped by it fails as

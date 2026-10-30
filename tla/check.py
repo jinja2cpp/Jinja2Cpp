@@ -186,7 +186,7 @@ RUNS = {
 }
 
 
-def config(scope, overrides, invariants):
+def config(scope, overrides, invariants, symmetry=True):
     consts = dict(OwnedAddrs='{"O1", "O2"}', MaxVal=3, MaxFail=1, DropRule='"full"',
                   AllowModuleKeepList=False, AllowModuleNested=False, GenericArgs=False,
                   HostHandoff=False, MaxCallId=1000, MaxEpoch=1000)
@@ -194,6 +194,9 @@ def config(scope, overrides, invariants):
     consts.update(FIXES)
     consts.update(scope)
     consts.update(overrides)
+    # Threads are model values, so TLC can permute them (SYMMETRY): the spec names no thread
+    for key in ("Threads", "ModuleThreads", "RenderThreads"):
+        consts[key] = re.sub(r'"(t\d+)"', r"\1", consts[key])
     lines = ["SPECIFICATION Spec", "CONSTANTS"]
     for key, value in consts.items():
         if isinstance(value, bool):
@@ -201,19 +204,38 @@ def config(scope, overrides, invariants):
         lines.append(f"    {key} = {value}")
     lines.append("INVARIANTS")
     lines += [f"    {inv}" for inv in invariants]
+    if symmetry and symmetric(consts):
+        lines.append("SYMMETRY ThreadPerms")
     return "\n".join(lines) + "\n"
 
 
-def run(jar, name, spec, workdir, extra=None, timeout=None):
+def symmetric(consts):
+    """Whether swapping the threads maps the model onto itself: two threads or more, and the
+    render and module threads each either all of them or none"""
+    threads = set(re.findall(r"t\d+", consts["Threads"]))
+    return len(threads) > 1 and all(set(re.findall(r"t\d+", consts[key])) in (set(), threads)
+                                    for key in ("ModuleThreads", "RenderThreads"))
+
+
+MC_TLA = """---- MODULE MC ----
+EXTENDS CellProtocol
+ThreadPerms == Permutations(Threads)
+====
+"""
+
+
+def run(jar, name, spec, workdir, extra=None, timeout=None, symmetry=True, java_opts=()):
     kind, scope, overrides, invariants, note = spec
     overrides = dict(overrides, **(extra or {}))
     os.makedirs(workdir, exist_ok=True)
     shutil.copy(os.path.join(HERE, "CellProtocol.tla"), workdir)
+    with open(os.path.join(workdir, "MC.tla"), "w", encoding="utf-8") as mc:
+        mc.write(MC_TLA)
     with open(os.path.join(workdir, "MC.cfg"), "w", encoding="utf-8") as cfg:
-        cfg.write(config(scope, overrides, invariants))
+        cfg.write(config(scope, overrides, invariants, symmetry))
     start = time.time()
-    cmd = ["java", "-XX:+UseParallelGC", "-cp", jar, "tlc2.TLC", "-workers", "auto", "-deadlock",
-           "-config", "MC.cfg", "CellProtocol.tla"]
+    cmd = ["java", "-XX:+UseParallelGC", *java_opts, "-cp", jar, "tlc2.TLC", "-workers", "auto",
+           "-deadlock", "-config", "MC.cfg", "MC.tla"]
     timed_out = False
     try:
         out = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, check=False,
@@ -259,6 +281,11 @@ def main():
     parser.add_argument("--jar", default=os.environ.get("TLA2TOOLS", os.path.join(HERE, "tla2tools.jar")))
     parser.add_argument("--set", nargs="*", default=[], help="override a constant: NAME=VALUE")
     parser.add_argument("--only", nargs="*")
+    parser.add_argument("--except", nargs="*", dest="skip", default=[], help="every run but these")
+    parser.add_argument("--no-symmetry", action="store_true",
+                        help="do not reduce two-thread runs by thread symmetry")
+    parser.add_argument("--java-opts", default=os.environ.get("TLC_JAVA_OPTS", ""),
+                        help="extra JVM options for TLC, for example -Xmx10g")
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--timeout", type=int, help="seconds per run; a run that reaches it fails as inconclusive")
     parser.add_argument("--traces", action="store_true", help="print each counterexample's steps")
@@ -272,16 +299,25 @@ def main():
         return 0
     if not os.path.exists(args.jar):
         sys.exit(f"tla2tools.jar not found at {args.jar}: download {TLA_URL} or pass --jar")
-    names = args.only or list(RUNS)
+    names = [name for name in args.only or list(RUNS) if name not in args.skip]
+    unknown = [name for name in names + args.skip if name not in RUNS]
+    if unknown:
+        parser.error("unknown runs: " + " ".join(unknown))
     base = tempfile.mkdtemp(prefix="tlc-cells-")
     failed = 0
     for name in names:
         extra = dict(item.split("=", 1) for item in args.set)
-        res = run(args.jar, name, RUNS[name], os.path.join(base, name), extra, args.timeout)
+        res = run(args.jar, name, RUNS[name], os.path.join(base, name), extra, args.timeout,
+                  not args.no_symmetry, args.java_opts.split())
         failed += not res["ok"]
         mark = "ok " if res["ok"] else "BAD"
         print(f"{mark} {name:28} {res['kind']:7} {res['verdict']:36} {res['states']:>12} states "
               f"{res['secs']:>5}s  {res['note']}", flush=True)
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            with open(summary, "a", encoding="utf-8") as out:
+                out.write(f"| {'ok' if res['ok'] else '**BAD**'} | `{name}` | {res['kind']} | "
+                          f"{res['verdict']} | {res['states']} | {res['secs']} s |\n")
         if args.traces and res["trace"]:
             for step in res["trace"]:
                 print("      " + step)
