@@ -6,13 +6,16 @@
 it is, the protocol with each #673 fix taken out (each must give a counterexample), and the open
 tasks.
 
+The cycle collector has a spec of its own, `CycleCollector.tla`, checked by `collector_check.py`
+(section "The cycle collector").
+
 The model found one defect the reviews missed, **F1** (task 0337). It also shows that every
 fix #673 made is needed: taking any one of them out gives a counterexample.
 
 ## Running it
 
 ```bash
-curl -sSLo tla/tla2tools.jar https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
+curl -sSLo tla/tla2tools.jar https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
 python3 tla/check.py                        # every run, about 4.8 hours on 4 cores
 python3 tla/check.py --only render          # or in three parts: about 2h10m (21 GB of disk) ...
 python3 tla/check.py --only mixed threads   # ... about 1h40m ...
@@ -299,11 +302,146 @@ reuse, and an inductive or cutoff argument) is task 0338.
   `docs/design/borrowed-cells-memory-order.md`). The epoch and the call id wrap
   only in the runs that bound them (`MaxEpoch`, `MaxCallId`).
 - The cycle collector's traversal of frozen cells (`Traverse`, `NoteFrozen`). There are no
-  cycles: an item is always another identity.
+  cycles: an item is always another identity. The collector has its own spec,
+  `CycleCollector.tla` (next section), and the GC action here stands for it: it frees exactly
+  what no root reaches, which is the collector's guarantee G3 when its contract holds.
 - JSON identities (P5) and callables' results. Generic containers (0336) are modelled as module
   call arguments only.
 - A module destroyed during its own call, and the freeze at module death.
 - Python parity of values. The model checks lifetimes and isolation, not output.
+
+## The cycle collector (task 0338, step E)
+
+`CycleCollector.tla` specifies the per-render collector of `src/cycle_collector.{h,cpp}` (tasks
+0110, 0251, 0283, 0331) as a spec of its own, with the contract below between it and this model:
+two small models are checked far more deeply than one large one. The heap is a multigraph of
+reference-counted objects; the render, the host and the collector hold references into it, and
+releasing the last one destroys an object and what it alone held, in the same step.
+
+```bash
+python3 tla/collector_check.py              # every run, about 6 minutes on 4 cores
+python3 tla/collector_check.py --list
+python3 tla/collector_check.py --only no-propagate --traces
+```
+
+The `collector` job of the `tla-model` workflow runs all of it, with the cell model's shards:
+weekly on master when `tla/` changed, and on demand from the Actions tab.
+
+### What is modelled
+
+| C++ | Spec | Atomicity in the spec |
+|---|---|---|
+| `NoteStore` before a store into a list, dict or namespace (`methods::NoteContainerStore`, `AssignTo`) | `Store` | note and store in one step (a note that fails to allocate is step D's) |
+| `CycleCollector::Add` past its threshold: `DropUnshared` | `PruneOne` during the render | one step per candidate |
+| `BorrowedCells::Finish`: `NoteFrozen` of a cell a link still reads | `MakeKept` notes the cell when it is made | the walk cannot tell the two apart |
+| `keep(x)`: a callback hands the host a value | `Keep` | |
+| the render's scopes die before `~CycleCollector` | `EndScopes` | one step |
+| `CollectOnce`: `while (DropUnshared())` | `Prune` | one step per candidate |
+| `visit` and the `Traverse` loop | `Walk` | one step: nothing writes what the walk reads (C2) |
+| `use_count() > internalRefs` | `MarkOne` | one step per node, in any order; other threads step between two |
+| `markReachable` | `Propagate` | one step: it reads references, not counts |
+| `garbage.emplace_back`, then `candidates.clear()` | `HoldGarbage` | one step |
+| `object->Clear()` | `ClearOne` | one step per node; only a list changes |
+| the `garbage` vector goes | `ReleaseGarbage` | one step |
+| another thread copies or drops a reference it holds (H3b) | `HostCopy`, `HostDrop` | one step each, at any time, the walk included |
+| `intrusive_ptr_release` and the destructors it runs | `Release` (`Settle`) | with the step that dropped the reference |
+
+Kinds of object, by what `Traverse` shows and what `Clear` does: `list` (a container the template
+made and owns alone: shows every item, `Clear` empties it), `cell` (shows its references, `Clear`
+leaves it: a frozen cell, and with it a loop object, a bound method's box, a cycler), `adapter`
+(a value of the host's data whose owning link reads a frozen cell: shows the link), `opaque`
+(shows nothing: a `std::function` capture, storage another accessor shares, 0348).
+
+Invariants: **G1** `NoClearLive`, the collector never empties a list that the host still
+reaches; **G2** `NoUseAfterFree`, it never reads the count of, or clears, a destroyed object;
+`CountsSound`, the reference counts themselves; **G3** `Complete`, once it is done every live
+object is one the host reaches, in the runs where `Traverse` sees every reference and the host
+stands still during the walk.
+
+### The contract
+
+What the collector needs, from the evaluator, the cell protocol and the host:
+
+- **C1. A store into a container notes it first** (`NoteStore`, 0283). Only a store closes a
+  cycle, so every cycle has a noted container. `store-without-note` shows the leak without it.
+- **C2. Nothing writes what the walk reads while it runs.** The collector runs on the render's
+  thread after its scopes are gone; a frozen cell does not change (this model's `SnapshotStable`
+  with `FixFreeze`); other threads write nothing a render made (H2 to H4 of
+  `docs/design/borrowed-cells-memory-order.md`, PR #690).
+- **C3. `Traverse` shows a reference only when the object holds it alone**
+  (`OwnsMutableItemsAlone`); one it shares is not shown, so what it reaches counts as held from
+  outside. The `opaque` runs check that this only leaks (`opaque-leaks`), never clears.
+- **H6. During the walk another thread only copies or drops the references it already has.**
+  Other threads hold two kinds of value. What this render handed out (`keep`) they may copy
+  and drop at any time but not read until the render, its collector included, has completed (H3,
+  H3b); copying a `Value` shares its accessor (`GenericList`). Values of earlier renders they
+  may read, but this render sees those only as the host's data, through host adapters that
+  `Traverse` does not enter (`IsTraversable`), so nothing of them is in the walk. Neither way can
+  another thread make a reference to an object of the walk that it did not hold. It is H6 of the
+  memory-order document's host contract (#690), and it is load-bearing: the `host-reads-share`
+  mutants take it out (a copy of a kept value that takes the cell's link, or a read of an item
+  that keeps it) and the walk empties a list the host still reaches. The host moves its
+  reference from a node whose count the walk has not read yet to one it has already read (take
+  the inner reference, then drop the outer), so each count the walk reads looks internal.
+
+  A host reference is modelled as a reference to the object. In the C++ it is mostly a share of
+  the object's storage (a `GenericList` copy of an adapter shares its items), which C3 makes the
+  walk treat as opaque and which `Clear` checks again when it runs: more conservative, not
+  modelled. Likewise the `Prior` runs let the render read an earlier render's objects
+  themselves, which the C++ does not; the spec allows more sharing than the code has.
+
+What it gives: G1 and G2 always, G3 when C3 shows every reference and the host stands still.
+
+Why reading the counts one by one is sound: under C2 and H6, the outside references to a node can
+only grow by a copy from a holder of that same node. A node read as held only from inside stays
+so for the rest of the walk; one read as held from outside is kept, with all it reaches, even if
+its holder lets go later (it then leaks until it is freed, as before). So a node in the garbage
+was held only by other garbage when it was read and is still so when it is emptied. The first
+version of the memory-order document (R1) argued the same from "new references are only made
+from existing ones", which is not enough: it takes "to the same object" (H6), as the mutants show.
+
+This model's `GC` action frees exactly what no root reaches: the collector's G3. Where the
+collector falls short of that (C3, a reference it cannot see), objects live longer than in this
+model. None of this model's invariants forbids that: they are about objects used after they die
+and writes by the wrong party, and `RegistryBounded` counts registry entries, which `DropUnheld`
+frees, not the collector. That step of the argument is by reading, not checked.
+
+### Results
+
+All thirteen runs end as expected, in about six minutes on four cores (`collector_check.py`
+at the commit that added them). Scopes: `lists` four objects, eight render steps, up to two
+references from one holder to one object; `kept` four objects, seven steps; the `host`
+runs add up to three host steps during the walk.
+
+| Run | Kind | Verdict | Distinct states | Shows |
+|---|---|---|---|---|
+| `lists` | pass | no error | 485673 | lists and namespaces of one render, the host still |
+| `kept` | pass | no error | 340264 | kept values of the host's data (frozen cells), host steps before the walk |
+| `opaque` | pass | no error | 1231598 | captures Traverse does not show: may leak, never clears a live list |
+| `opaque-leaks` | open | counterexample: Complete | 813091 | a cycle through a capture is missed (by design, 0110) |
+| `store-without-note` | mutant | counterexample: Complete | 2136 | a store that does not note its container: the cycle leaks |
+| `candidates-not-counted` | mutant | counterexample: Complete | 196025 | the walk misses the collector's own reference: nothing is collected |
+| `no-propagate` | mutant | counterexample: NoClearLive | 610890 | only the outside-held nodes kept: their items are emptied |
+| `no-garbage-hold` | mutant | counterexample: NoUseAfterFree | 353907 | emptying one garbage list frees the next before its Clear |
+| `prune-shared` | mutant | counterexample: Complete | 25350 | the prune drops a candidate another reference holds: its cycle leaks |
+| `host-during-walk` | pass | no error | 574686 | the host copies and drops a kept value during the walk |
+| `prior-during-walk` | pass | no error | 150804 | an earlier render's kept value, held by the host, in a cycle of this one |
+| `host-reads-share` | mutant | counterexample: NoClearLive | 28525 | H6 out: a copy of a kept value takes the cell's link |
+| `host-reads-share-prior` | mutant | counterexample: NoClearLive | 324995 | H6 out: a read of an earlier render's item keeps it |
+
+Bounded evidence, as for the cell model: small heaps, and the contract items C2 and H6 are
+argued from the code above, not checked against it. Removing the bounds is step F of 0338.
+
+### Not modelled
+
+- Running out of memory: the walk's retry, the note before the store, `NoteFrozen`'s best effort
+  (0283). Step D of 0338 makes the steps failure-atomic first.
+- A render nested in another one on the same thread hands its candidates to the outer collector;
+  the outer walk then starts from a superset, which the spec's candidates already allow.
+- A module call's collector (`ModuleCallCollector`, external cells) and the teardown collector:
+  the same walk, under the module's mutex.
+- Dicts and keys: a dict is a list whose items are its values and non-string keys.
+- The memory order of `use_count()` (task 0339): the spec is sequentially consistent.
 
 ## Trace validation (task 0338, step B)
 
@@ -390,3 +528,7 @@ are 32-bit, so the test that moves the epoch past 2^32
 Change the spec together with the code it mirrors (the table above). Keep the mutant runs: a
 mutant that stops failing means the model no longer sees that defect. A new fix gets a
 `FixXxx` constant, defaulting to the fixed behaviour, and a mutant row in `check.py`.
+
+The same holds for the collector: a change to `src/cycle_collector.{h,cpp}`, to what a
+`Traverse` or `Clear` shows or does, or to what the host may do with a value it holds changes
+`CycleCollector.tla` and the contract above, with a mutant row in `collector_check.py`.

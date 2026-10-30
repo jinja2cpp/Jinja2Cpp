@@ -119,11 +119,28 @@ jobs:
     - name: Test
       run: ctest --test-dir .build --output-on-failure
 
+    # The same stable TLC release and hash as tla-model.yml, kept in the Actions cache under its
+    # hash so a later rebuild of the upstream asset cannot change what runs
+    - name: Cache TLC
+      if: matrix.celltrace
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ~/.cache/tla2tools
+        key: tla2tools-936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88
+
     - name: Trace validation
       if: matrix.celltrace
+      env:
+        TLA_URL: https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
+        TLA_SHA256: 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88
       run: |
-        curl -sSfLo tla/tla2tools.jar https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
-        echo "fc6878c603f0fdc18b9fe3e5bf51860cb90ab5b1154e3c371660c036d6bdd63e  tla/tla2tools.jar" | sha256sum -c -
+        jar="$HOME/.cache/tla2tools/$TLA_SHA256.jar"
+        if [ ! -f "$jar" ]; then
+          mkdir -p "$(dirname "$jar")"
+          curl -sSfL --retry 3 -o "$jar" "$TLA_URL"
+        fi
+        echo "$TLA_SHA256  $jar" | sha256sum -c -
+        cp "$jar" tla/tla2tools.jar
         python3 tla/check.py --trace --tests .build/jinja2cpp_tests --jobs 2 --mutants
 
     # abidiff against the ABI of the previous master build (report only) or, once the RC

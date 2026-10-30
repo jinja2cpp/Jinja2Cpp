@@ -443,6 +443,7 @@ EpochAgrees == Holds("EpochAgrees")
 FrozenAgrees == Holds("FrozenAgrees")
 
 \* The whole log was read: checked by check.py on TLC's result (no deadlock before the end)
+\* For TLC 1.8 by hand (ALIAS Alias in MC.cfg); the pinned 1.7.4 has no ALIAS
 Alias == [l |-> l, ev |-> IF l > 1 /\ l - 1 <= Len(Log) THEN Log[l - 1] ELSE "-", bad |-> bad]
 
 =============================================================================
