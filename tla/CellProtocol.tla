@@ -57,6 +57,11 @@ CONSTANTS
                           \* until Finish, so a host thread's drop is never the last reference to one
     FixLinksOwn,          \* 0340 as the C++ does it: every link but a global's owns its cell, a
                           \* render's too, so a host thread's drop is a release, never a write
+    \* Failure atomicity (0338 step D): a step allocates first and commits with operations that
+    \* cannot fail, so an allocation failure is one disjunct per step that changes nothing
+    FixAtomicLink,        \* CellLink::Find/Link: a failed Link leaves the adapter as it was
+    FixAtomicPin,         \* PinExports: a failed pin records and marks nothing (without: the cells
+                          \* recorded before the failure stay pinned and marked)
     HostHandoff,          \* the host may hand what it kept to another thread while the call runs
     MaxCallId, MaxEpoch,  \* the call id and the epoch wrap past these (0341, 0342)
     \* Shapes: inside a module call, keep([x]) (0332) and writes to a nested item (0332). Outside
@@ -120,7 +125,7 @@ NoEx == [kind |-> "none", gen |-> 0, ad |-> 0, cell |-> 0, idn |-> "none", thr |
          cg |-> 0, alive |-> FALSE]
 EmptyReg == [tbl |-> [k \in Keys |-> 0], call |-> 0, last |-> 0]
 NoFlags == [uaf |-> FALSE, foreign |-> FALSE, stale |-> FALSE, undef |-> FALSE, late |-> FALSE,
-            lost |-> FALSE]
+            lost |-> FALSE, torn |-> FALSE]
 Objs == ({"a"} \X AdIds) \cup ({"c"} \X CellIds) \cup ({"g"} \X GenIds)
 
 NewAd(i, n, h) == [idn |-> i, inc |-> n, held |-> h, generic |-> FALSE, cell |-> 0, seen |-> 0,
@@ -275,7 +280,8 @@ GetR(t, a, f) ==
          [] A.cell # 0 -> [c |-> A.cell, A2 |-> A, link |-> 0, failed |-> FALSE]
          [] e = 0 -> [c |-> 0, A2 |-> [A EXCEPT !.seen = epoch], link |-> 0, failed |-> FALSE]
          [] f -> [c |-> 0, link |-> 0, failed |-> TRUE,
-                  A2 |-> [A EXCEPT !.seen = IF FixLinkEpoch THEN 0 ELSE epoch]]
+                  A2 |-> IF FixAtomicLink THEN A
+                         ELSE [A EXCEPT !.seen = IF FixLinkEpoch THEN 0 ELSE epoch]]
          [] OTHER -> [c |-> e, A2 |-> [A EXCEPT !.cell = e, !.seen = ATT], link |-> e,
                       failed |-> FALSE]
 
@@ -348,7 +354,9 @@ WriteCell(t, a, f2, op, R) ==
        /\ fr' = IF op = "touch" /\ child # 0 /\ Wr.k # "fail"
                 THEN SetTop(t, [Top(t) EXCEPT !.ads = @ \cup {child}]) ELSE fr
        /\ flag' = [flag EXCEPT !.foreign = @ \/ Foreign(t, a, R.c),
-                               !.uaf = @ \/ ~cl[R.c].alive \/ ~st[cl[R.c].stor].acc]
+                               !.uaf = @ \/ ~cl[R.c].alive \/ ~st[cl[R.c].stor].acc,
+                               \* Unshare could not copy: the cell must be as Get left it
+                               !.torn = @ \/ (Wr.k = "fail" /\ Wr.cl # CL1)]
        /\ dirty' = (Wr.k = "copy" \/ (op = "drop" /\ Wr.k # "fail")) /\ dirtyBy' = W(t)
        /\ UNCHANGED <<epoch, live, nAd, nCell, rg, ex, nEx, gsnap, ns, hkeep, lag, lock, inc, pendDrop>>
 
@@ -382,13 +390,24 @@ Adopt(t, a, op) ==
                 THEN SetTop(t, [Top(t) EXCEPT !.ads = @ \cup {ch}]) ELSE fr
        /\ UNCHANGED <<ex, nEx, gsnap, ns, hkeep, lag, lock, inc, fails, flag, dirty, dirtyBy, pendDrop>>
 
-\* The write was refused by an allocation failure in Link: only the epoch the adapter saw changes
+\* The read or write was refused by an allocation failure in Link. With FixAtomicLink nothing
+\* changes: the adapter keeps the epoch it saw, which the promotion of the cell moved past, so it
+\* looks again. Without it the epoch it read is kept (0, or the counter without FixLinkEpoch)
 LinkFailed(t, a, R) ==
     /\ ad' = ApplyGetAd(a, R)
     /\ wr' = Mark(wr, GetWrites(a, R), t)
     /\ fails' = fails + 1
+    /\ flag' = [flag EXCEPT !.torn = @ \/ R.A2 # ad[a]]
     /\ UNCHANGED <<epoch, live, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt, ns, hkeep, lag, lock,
-                   inc, dirty, dirtyBy, pendDrop, flag>>
+                   inc, dirty, dirtyBy, pendDrop>>
+
+\* CellLink::Adopt ran out of memory: the table, the cell and the room for a global's link come
+\* before the commit, so nothing changes (0338 step D; #673 rolled back a failed Link instead)
+AdoptFailed ==
+    /\ fails < MaxFail
+    /\ fails' = fails + 1
+    /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt, ns, hkeep, lag,
+                   lock, inc, dirty, dirtyBy, pendDrop, wr, flag>>
 
 CanUse(t, a) == Idle /\ Running(t) /\ a \in Top(t).ads /\ ad[a].alive
 
@@ -408,7 +427,7 @@ Write(t, a, op) ==
                   WriteCell(t, a, f2, op, [c |-> rg[CurReg(t)].tbl[Key(a)], link |-> rg[CurReg(t)].tbl[Key(a)],
                                             failed |-> FALSE,
                                             A2 |-> [ad[a] EXCEPT !.cell = rg[CurReg(t)].tbl[Key(a)], !.seen = ATT]])
-             [] OTHER -> ~f2 /\ Adopt(t, a, op)
+             [] OTHER -> IF f2 THEN AdoptFailed ELSE Adopt(t, a, op)
 
 \* A read: what Get returns, or the host's data
 Read(t, a) ==
@@ -659,12 +678,17 @@ PinVisOf(g, c) == IF c = -1 THEN (IF g = 0 THEN <<0, 0>> ELSE VisG(g)) ELSE <<St
 ToPin(t, d) == IF ~FixCallPin THEN {}
                ELSE {e \in LiveEx : ex[e].thr = t /\ ex[e].depth = d /\ ~ex[e].done
                                     /\ ex[e].reg = ModReg /\ ex[e].kind \in {"live", "view"}}
-PinnedStors(t, d) == UNION {{PinPg(e), PinCg(e)} : e \in ToPin(t, d)} \ {0, -1}
-PinEx(t, d) ==
-    [e \in ExIds |-> IF e \in ToPin(t, d)
-                     THEN [ex[e] EXCEPT !.pin = TRUE, !.pg = PinPg(e), !.cg = PinCg(e), !.cell = 0,
-                                        !.done = TRUE, !.snap = PinVisOf(PinPg(e), PinCg(e))]
-                     ELSE Snap(t, d, TRUE)[e]]
+\* P: the exports the pin records; the others of ToPin(t, d) read nothing that changes (a
+\* failed pin: the host's data, or no items for a module cell's view)
+PinExOf(t, d, P) ==
+    [e \in ExIds |-> CASE e \in P ->
+                           [ex[e] EXCEPT !.pin = TRUE, !.pg = PinPg(e), !.cg = PinCg(e), !.cell = 0,
+                                         !.done = TRUE, !.snap = PinVisOf(PinPg(e), PinCg(e))]
+                       [] e \in ToPin(t, d) ->
+                           [ex[e] EXCEPT !.pin = TRUE, !.pg = 0, !.cg = 0, !.cell = 0, !.done = TRUE,
+                                         !.snap = <<0, 0>>]
+                       [] OTHER -> Snap(t, d, TRUE)[e]]
+PinEx(t, d) == PinExOf(t, d, ToPin(t, d))
 
 StartModCall(t) ==
     /\ Idle /\ t \in ModuleThreads /\ CanNest(t)
@@ -695,21 +719,31 @@ StartModCall(t) ==
 
 \* The call's arguments go first (Call declares the collector first), then DropUnheld
 \* and EndCall run in ~ModuleCallCollector
+\* The pin may run out of memory (0338 step D): the call then fails, after the same teardown. With
+\* FixAtomicPin it records nothing (P = {}); without, what it recorded before the failure stays
+\* recorded and marked (P a part of ToPin), which tears the call's values: some read its end, the
+\* others data nothing writes
 EndModCall(t) ==
     /\ Idle /\ Running(t) /\ Top(t).kind = "mod" /\ Top(t).bkind = "none"
     /\ LET d == Depth(t)
-           late == \E e \in ExIds :
-                     /\ ex[e].alive /\ ex[e].thr = t /\ ex[e].depth = d /\ ~ex[e].done
-                     /\ ex[e].kind = "gen"
-                     /\ LET c == rg[ModReg].tbl[ex[e].idn]
-                        IN c # 0 /\ VisG(cl[c].stor) # VisG(ex[e].gen)
-           \* The pinned cells are marked shared: their next write copies (Unshare)
-           marked == IF FixPinMarks
-                     THEN {c \in RegCells(ModReg) : cl[c].stor \in PinnedStors(t, d)} ELSE {}
-       IN /\ ex' = PinEx(t, d)
-          /\ flag' = [flag EXCEPT !.late = @ \/ late]
-          /\ cl' = [c \in CellIds |-> IF c \in marked THEN [cl[c] EXCEPT !.exp = SHARED] ELSE cl[c]]
-          /\ wr' = Mark(wr, {<<"c", c>> : c \in marked}, t)
+           TP == ToPin(t, d)
+       IN \E pf \in BOOLEAN, P \in SUBSET TP :
+           /\ pf => (TP # {} /\ fails < MaxFail)
+           /\ IF pf THEN (IF FixAtomicPin THEN P = {} ELSE P # TP) ELSE P = TP
+           /\ LET late == \E e \in ExIds :
+                             /\ ex[e].alive /\ ex[e].thr = t /\ ex[e].depth = d /\ ~ex[e].done
+                             /\ ex[e].kind = "gen"
+                             /\ LET c == rg[ModReg].tbl[ex[e].idn]
+                                IN c # 0 /\ VisG(cl[c].stor) # VisG(ex[e].gen)
+                   stors == UNION {{PinPg(e), PinCg(e)} : e \in P} \ {0, -1}
+                   \* The pinned cells are marked shared: their next write copies (Unshare)
+                   marked == IF FixPinMarks
+                             THEN {c \in RegCells(ModReg) : cl[c].stor \in stors} ELSE {}
+               IN /\ ex' = PinExOf(t, d, P)
+                  /\ fails' = IF pf THEN fails + 1 ELSE fails
+                  /\ flag' = [flag EXCEPT !.late = @ \/ late, !.torn = @ \/ (pf /\ P # {})]
+                  /\ cl' = [c \in CellIds |-> IF c \in marked THEN [cl[c] EXCEPT !.exp = SHARED] ELSE cl[c]]
+                  /\ wr' = Mark(wr, {<<"c", c>> : c \in marked}, t)
     /\ rg' = [rg EXCEPT ![ModReg].call = IF FixCallRestore THEN Top(t).outer ELSE @]
     /\ fr' = Pop(t)
     /\ lock' = IF \E i \in 1..(Depth(t) - 1) : fr[t][i].kind = "mod" THEN t ELSE "none"
@@ -718,7 +752,7 @@ EndModCall(t) ==
     \* (Codex review of #688). No other thread steps before that GC: it waits for Idle
     /\ dirty' = TRUE /\ dirtyBy' = W(t)
     /\ pendDrop' = (DropRule # "none")
-    /\ UNCHANGED <<epoch, live, ad, nAd, nCell, st, nGen, nEx, gsnap, gatt, ns, hkeep, lag, inc, fails>>
+    /\ UNCHANGED <<epoch, live, ad, nAd, nCell, st, nGen, nEx, gsnap, gatt, ns, hkeep, lag, inc>>
 
 \* A module stores an argument in its namespace: it lives across calls
 StoreNs(t, a) ==
@@ -746,17 +780,24 @@ DropUnheld ==
        IF cand = {}
        THEN /\ pendDrop' = FALSE
             /\ lag' = {}
-            /\ UNCHANGED <<cl, rg, live, dirty, flag>>
-       ELSE \E c \in cand :
-            \* Out of the table first, then the source goes
-            /\ rg' = [rg EXCEPT ![ModReg].tbl[cl[c].idn] = 0]
-            /\ cl' = [cl EXCEPT ![c].inTable = FALSE, ![c].source = 0]
-            /\ live' = live - 1
-            /\ dirty' = TRUE
-            \* A later call that is lent the same data would miss this cell's writes
-            /\ flag' = [flag EXCEPT !.lost = @ \/ hkeep[cl[c].idn]]
-            /\ UNCHANGED <<pendDrop, lag>>
-    /\ UNCHANGED <<epoch, ad, nAd, nCell, st, nGen, fr, ex, nEx, gsnap, gatt, ns, hkeep, lag, lock, inc, fails,
+            /\ UNCHANGED <<cl, rg, live, dirty, flag, fails>>
+       ELSE \/ \E c \in cand :
+               \* Out of the table first, then the source goes
+               /\ rg' = [rg EXCEPT ![ModReg].tbl[cl[c].idn] = 0]
+               /\ cl' = [cl EXCEPT ![c].inTable = FALSE, ![c].source = 0]
+               /\ live' = live - 1
+               /\ dirty' = TRUE
+               \* A later call that is lent the same data would miss this cell's writes
+               /\ flag' = [flag EXCEPT !.lost = @ \/ hkeep[cl[c].idn]]
+               /\ UNCHANGED <<pendDrop, lag, fails>>
+            \* The list of the cells to drop could not be allocated (0338 step D): none goes, and
+            \* the cells stay until the end of the next call, as data the host let go of late
+            \/ /\ fails < MaxFail
+               /\ fails' = fails + 1
+               /\ pendDrop' = FALSE
+               /\ lag' = lag \cup {cl[c].idn : c \in cand}
+               /\ UNCHANGED <<cl, rg, live, dirty, flag>>
+    /\ UNCHANGED <<epoch, ad, nAd, nCell, st, nGen, fr, ex, nEx, gsnap, gatt, ns, hkeep, lock, inc,
                    dirtyBy, wr>>
 
 \* The host lets go of its copy of a generic container (0336)
@@ -841,5 +882,9 @@ ExportKeepsCallState == ~flag.late
 
 \* 0336: no cell is dropped while its data can be lent again (its writes would be lost)
 NoLostWrites == ~flag.lost
+
+\* 0338 step D: a step that runs out of memory changes nothing the step after it reads, but
+\* the cleanup its caller runs (the teardown of a failed call, the restore guard of sort)
+NoTornStep == ~flag.torn
 
 =============================================================================

@@ -36,10 +36,12 @@ FIXES = {
     # 0340: the C++ makes every link but a global's own its cell (FixLinksOwn) instead of the
     # registry holding the adapters (FixPinOnAttach, option (a)); both close the window
     "FixPinOnAttach": False, "FixLinksOwn": True,
+    # 0338 step D: a step allocates first and then commits with operations that cannot fail
+    "FixAtomicLink": True, "FixAtomicPin": True,
 }
 SAFETY = ["SnapshotStable", "NoCrossThreadWrite", "NoUseAfterFree", "NoForeignCell",
           "RegistryBounded", "AliasesAgree", "NoUndefItems", "LiveCount", "ExportKeepsCallState",
-          "NoLostWrites"]
+          "NoLostWrites", "NoTornStep"]
 
 # Scopes. The deep counterexamples need about 14 steps, which an all-actions model of two
 # threads cannot reach exhaustively; each scope enables the parts a group of fixes needs.
@@ -87,7 +89,7 @@ RUNS = {
                          ["SnapshotStable"],
                          "F1: a nested call's kept value changes when the outer call writes"),
     # Each fix taken out
-    "no-link-epoch": ("mutant", RENDER1, {"FixLinkEpoch": False}, ["AliasesAgree"],
+    "no-link-epoch": ("mutant", RENDER1, {"FixLinkEpoch": False, "FixAtomicLink": False}, ["AliasesAgree"],
                       "c06d969, Codex P2: alias detached after a failed Link"),
     "no-enum-refetch": ("mutant", DEEP, {"FixEnumRefetch": False}, ["NoUseAfterFree"],
                         "f83b89f, Codex P1: loop over storage two copies freed"),
@@ -170,6 +172,12 @@ RUNS = {
     "call-id-wrap-no-pin": ("mutant", dict(MODULE1, Actions='{"export", "release"}'),
                             {"MaxCallId": 2, "FixCallPin": False, "MaxLevel": 14},
                             ["SnapshotStable"], "0341: a wrapped id equals a stale export mark"),
+    # 0338 step D: failure atomicity. #673's Link kept the epoch 0 after a failed push (safe, as
+    # no-link-epoch shows, but a change all the same); its pin kept what it recorded
+    "non-atomic-link": ("mutant", RENDER1, {"FixAtomicLink": False}, ["NoTornStep"],
+                        "step D: a failed Link changes the adapter"),
+    "partial-pin": ("mutant", MODULE1, {"FixAtomicPin": False}, ["NoTornStep"],
+                    "step D: a failed pin keeps some exports pinned and their cells marked"),
     # 0342: an open task; the run shows the defect the model now sees
     "open-0342-epoch-wrap": ("open", RENDER1, {"MaxEpoch": 2},
                              ["AliasesAgree", "NoForeignCell", "NoUseAfterFree"],

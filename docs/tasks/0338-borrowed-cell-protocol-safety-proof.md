@@ -122,3 +122,13 @@ and it does not describe the model as a proof.
 events, `tla/check.py --trace` checks each test's trace against `tla/CellTrace.tla`, which
 applies the rules in `tla/CellRules.tla`; one Debug CI row runs it with its mutants. It sees F1
 (0337) from the C++ traces before #689. See tla/README.md, "Trace validation".
+
+**Step D, failure atomicity (2026-10-30).** Each protocol step that allocates now allocates
+first and commits with operations that cannot fail: `CellLink::Find`/`Link` (`ReserveLink`),
+`Adopt` (the table's insert last), an export's note, and the module call's pin
+(`CallExports::Record`, then `Commit`). `Unshare`, `DropUnheldOnce` and the globals'
+conversion had that shape already. The model has one "fails before the commit" disjunct per
+step and the invariant `NoTornStep`; the mutants `non-atomic-link` and `partial-pin` put back
+the code before the step. `jinja2cpp_alloc_tests` fails every allocation in turn
+(`FailedCallsPinIsAllOrNothing` saw the torn `[[0], 2]` on the old pin). See tla/README.md,
+"Failure atomicity". Follow-up: 0361 (a failed call's top view reads no items).

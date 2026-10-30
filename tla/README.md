@@ -41,14 +41,14 @@ not change in a later one. That rule is D8's copy on write.
 |---|---|
 | `CellLink` of an adapter (`m_cell`, `m_seenEpoch`, held bit, owns bit) | `ad[a]`: `cell`, `seen`, `held`; `OwningLink(a)` |
 | `CellCounters` epoch and live | `epoch`, `live` |
-| `CellLink::Get`, `Find`, `Link` | `GetR`; an allocation failure in the push of `Link` (c06d969) |
+| `CellLink::Get`, `Find`, `ReserveLink`, `Link` | `GetR`; an allocation failure in `ReserveLink`, before anything changes (`FixAtomicLink`; c06d969 before it) |
 | `BorrowedCell` (`m_storage`, `m_retired`, `m_source`, `m_owner`, `m_shared`, `m_frozen`, `m_links`) | `cl[c]`: `stor`, `retired`, `source`, `owned`, `exp`, `frozen`, `links` |
 | A storage: the `ListAdapter`'s accessor object, and the `InternalValueList` it shares | `st[g]`: `acc` (held by the cell only), `alive` (held by the accessor and by exports) |
 | `MutableItems`, `Unshare`, `ExportList`/`ExportMap` | `WC`, `NeedCopy`, `Export`; a failed copy |
-| `CellLink::Adopt` | `Adopt`: a copy of the data with one nested item adapter (`P` holds `C`) |
+| `CellLink::Adopt` | `Adopt`: a copy of the data with one nested item adapter (`P` holds `C`); `AdoptFailed` |
 | `BorrowedCells` of a render and of a module, `BeginCall`/`EndCall` | `rg[r]`: `tbl`, `call`, `last` |
 | `BorrowedCells::Finish` | `FinishSources`, then `FinishFreeze` (sources first, then freeze) |
-| `ModuleCallCollector`, `DropUnheld`/`IsUnheld` (459d8f7) | `EndModCall`, `DropUnheld`, `Unheld`; `DropRule` |
+| `ModuleCallCollector`, `DropUnheld`/`IsUnheld` (459d8f7) | `EndModCall`, `DropUnheld`, `Unheld`; `DropRule`; a failed reserve of the list to drop |
 | `TemplateModuleState::Call` under its recursive mutex | `StartModCall`, `lock` |
 | `GetGlobalsSnapshot`, `RenderWorkspace::GlobalAttached` | `StartRender`, `gsnap`, `gatt`; a failed conversion |
 | `ExportListView` and its owner (A1); `CreateGenericList` copies the accessor | an export of kind `gen` holds a storage's items, not its accessor |
@@ -57,7 +57,7 @@ not change in a later one. That rule is D8's copy on write.
 | `ListSort` with its `Restore` guard across key calls | `SortStart`, `SortEnd` |
 | reference counts and destructors | `GC`: reachability from the roots, run right after the step that dropped a reference |
 | a module namespace holding an argument | `ns` |
-| `CallExports`, pinned in `~ModuleCallCollector` (0335, 0332); its views `CallListView`, `CallMapView` | an export of kind `live`; `PinEx` in `EndModCall` |
+| `CallExports`, pinned in `~ModuleCallCollector` (0335, 0332): `Record`, then `Commit`; its views `CallListView`, `CallMapView` | an export of kind `live`; `PinExOf` in `EndModCall`; a failed `Record` (`FixAtomicPin`) |
 | A link holds a reference to its cell unless it is a global's (`CellLink::OwnsBit`; 0332, 0340) | `OwningLink`, `FixModuleLinksOwn`, `FixLinksOwn` |
 | 0340 option (a), not in the C++: a render's live cell holds its linked adapters until `Finish` | `Succ` of a cell, `FixPinOnAttach` |
 | `l.pop()` of a nested list | op `drop` |
@@ -93,6 +93,7 @@ What the model abstracts:
 | + | `live` equals the number of listed cells | `LiveCount` |
 | 7 | A module call's export keeps that call's final state (0335) | `ExportKeepsCallState` |
 | 8 | No cell is dropped while its data can be lent to a later call (0336) | `NoLostWrites` |
+| 9 | A step that runs out of memory changes nothing the next step reads, but what its caller's cleanup does (0338 step D) | `NoTornStep` |
 
 ## Results
 
@@ -250,6 +251,35 @@ reproduces it (`open-0342-epoch-wrap`, `MaxEpoch = 2`). 0339 (a relaxed `use_cou
 uniqueness test) is memory order, outside a sequentially consistent model; the designs above keep
 the uniqueness test, so they inherit its fix.
 
+## Failure atomicity (0338 step D)
+
+Each protocol step that allocates is written as allocate first, then commit with operations that
+cannot fail. An allocation failure is then one disjunct per step, "fails before the commit", that
+changes nothing but the failure count; the model needs no failure point per allocation, and the
+C++ sweep (`test/allocation_failure_test.cpp`, `jinja2cpp_alloc_tests`, ASan in CI) fails every
+allocation in turn to check the code has that shape. `NoTornStep` states it: the step's own
+change is all or nothing.
+
+| Step | Allocates (before the commit) | Commits (cannot fail) | Model |
+|---|---|---|---|
+| `CellLink::Find` + `Link` | room for a global's link (`ReserveLink`), the thread's workspace | the epoch seen, or the link | `LinkFailed`; `non-atomic-link` (#673 kept the epoch 0) |
+| `CellLink::Adopt` | the table, the cell, room for a global's link, the table's insert last | install the table, unlink, link, live count, epoch | `AdoptFailed` |
+| `BorrowedCell::Unshare` | the copy of the items | swap the storage, clear the mark | `WC` kind `fail`; `no-marker-after-copy` |
+| an export in a module call (`ExportCallFirst`) | the view, the note of the cell | adopt the call's exports | stutter (not a disjunct) |
+| `BorrowedCells::PinExports` | `CallExports::Record`: the pins, the sets of the nested walk | `Commit`: mark the recorded cells; `Seal` always | `EndModCall` with `pf`; `partial-pin` (#695 kept what it recorded) |
+| `BorrowedCells::DropUnheldOnce` | the list of cells to drop | out of the table, sources go | `DropUnheld`, the candidates join `lag` |
+| `GetGlobalsSnapshot` | the conversion | clear the attached mark | `StartRender`; `no-mark-order` |
+| `Finish`, `BeginCall`, `EndCall`, `Unlink` | nothing | everything (`noexcept`) | no failure |
+
+`ListSort`'s restore guard is cleanup, not a step: its failed copy writes the items back in
+place, which `SortEnd` models (`no-sort-mutable-first`).
+
+A call whose pin fails throws `std::bad_alloc`. The values it handed to the host already then read
+only data nothing writes: the host's data through an adapter, and no items for the view of a
+module cell at the top (task 0361). Before step D they kept what the pin recorded before the
+failure and read the host's data for the rest, a mix of the call's end and its start
+(`FailedCallsPinIsAllOrNothing` shows `[[0], 2]` on that code).
+
 ## What the results claim
 
 Bounded evidence, not a proof. Each pass run covers every behaviour up to its level within its
@@ -306,7 +336,7 @@ trace can show it. The events and what the spec checks at each:
 | `find`, `link`, `linkfail` (`Find`, `Link`) | the lookup finds the registry's cell of that identity and kind (`TableAgrees`); a link only to a live, unfrozen cell, by its registry's writer (`NoCrossThreadWrite`) |
 | `hit` (an attached adapter's read) | the adapter is attached to that cell (`LinksAgree`); the cell is alive and, unless frozen, of the running registry (`NoForeignCell`) |
 | `unlink`, `inherit`, `dieatt` | the link set agrees, and whether the link owns its cell (`CellRules!LinkOwns`); an owning link lets go on any thread, a global's link changes a live cell's list on its writer's thread only; an adapter never goes attached (`NoDanglingLink`) |
-| `adopt`, `adoptno`, `adoptundo`, `promote` | a new cell only where the table has none; the live count (`LiveCount`, one-thread traces) |
+| `adopt`, `adoptno`, `promote` | a new cell only where the table has none; the live count (`LiveCount`, one-thread traces) |
 | `export` (`ExportList`/`ExportMap`) | a value reads through the call's `CallExports` exactly in the cell's own module call (`CellRules!ExportLive`, `MarkRule`); it marks nothing |
 | `pin` (`CallExports::Pin`) | a live table cell of the registry whose call ends; the cell is marked and its storage is what the host's values share from now on (`exr`) |
 | `unshare`, `copied` | Unshare's outcome is one `CellRules!UnshareOutcomes` allows (`MarkRule`) |

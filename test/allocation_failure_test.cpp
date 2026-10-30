@@ -800,6 +800,126 @@ TEST_F(AllocationFailureTest, AliasAttachesAfterAFailedLink)
     EXPECT_LT(n, maxAllocations);
 }
 
+// The end of a module call records what the values it handed out read, then marks the recorded
+// cells shared: an allocation failure in between records nothing. A kept value then shows the
+// call's final state or, when the call failed, data nothing writes (no items for a module cell
+// it reads at the top, task 0361), never the outer list's new items over the host's nested list;
+// and later calls do not change it (docs/tasks/0338, step D)
+TEST_F(AllocationFailureTest, FailedCallsPinIsAllOrNothing)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% set _ = a[0].append(x) %}{% set _ = a.append(x + 1) %}{% set _ = keep(a) %}{% endmacro %}"));
+    const auto show = [](const Value& v) {
+        Template shown;
+        EXPECT_TRUE(!!shown.Load("{{ k }}"));
+        return shown.RenderAsString(ValuesMap{ { "k", v } }).value();
+    };
+    long n = 0;
+    for (; n != maxAllocations; ++n)
+    {
+        std::vector<Value> kept;
+        ValuesMap params{ { "a", ValuesList{ Value(ValuesList{ 0 }) } } };
+        params["keep"] = UserCallable(
+            [&kept](const UserCallableParams& p) {
+                kept.push_back(p["v"]);
+                return Value();
+            },
+            { ArgInfo{ "v" } });
+        auto module = tpl.MakeModule(params);
+        ASSERT_TRUE(!!module);
+        const auto call = [&module](int64_t x) {
+            UserCallableParams callParams;
+            callParams.extraPosArgs = ValuesList{ x };
+            module->exports["add"].As<UserCallable>().callable(callParams);
+        };
+        bool fired = false;
+        bool threw = false;
+        OnFreshThread([&] {
+            const Injection injection(n);
+            try
+            {
+                call(1);
+            }
+            catch (const std::bad_alloc&)
+            {
+                threw = true;
+            }
+            fired = Injection::Fired();
+        });
+        if (!kept.empty())
+        {
+            const auto first = show(kept[0]);
+            if (threw)
+            {
+                ASSERT_TRUE(first == "[[0, 1], 2]" || first == "[]") << first << " at allocation " << n;
+            }
+            else
+            {
+                ASSERT_EQ("[[0, 1], 2]", first) << "allocation " << n;
+            }
+            call(3);
+            call(5);
+            ASSERT_EQ(first, show(kept[0])) << "allocation " << n;
+        }
+        if (!fired)
+        {
+            break;
+        }
+    }
+    EXPECT_LT(0, n) << "no allocation reached the injection";
+    EXPECT_LT(n, maxAllocations);
+}
+
+// A global written through an alias and through its own name: an allocation failure while the
+// cell is made or an adapter attaches to it leaves the render's view of the global whole, and
+// never writes the host's data (docs/tasks/0338, step D)
+TEST_F(AllocationFailureTest, GlobalAliasesAfterAFailedAdopt)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{ 0 });
+    Template tpl(&env);
+    ASSERT_TRUE(!!tpl.Load("{% set y = g %}{% set _ = y.append(1) %}{% set _ = g.append(2) %}{{ y }}|{{ g }}"));
+    Template plain(&env);
+    ASSERT_TRUE(!!plain.Load("{{ g }}"));
+    long n = 0;
+    for (; n != maxAllocations; ++n)
+    {
+        bool fired = false;
+        bool threw = false;
+        Result<std::string> result;
+        OnFreshThread([&] {
+            {
+                const Injection injection(n);
+                try
+                {
+                    result = tpl.RenderAsString({});
+                }
+                catch (const std::bad_alloc&)
+                {
+                    threw = true;
+                }
+                fired = Injection::Fired();
+            }
+            // The same thread, whose snapshot of the globals the failed render may have left attached
+            if (!threw)
+            {
+                ASSERT_TRUE(result.has_value()) << result.error().ToString();
+                ASSERT_EQ("[0, 1, 2]|[0, 1, 2]", result.value()) << "allocation " << n;
+            }
+            ASSERT_EQ("[0, 1, 2]|[0, 1, 2]", tpl.RenderAsString({}).value()) << "after allocation " << n;
+            ASSERT_EQ("[0]", plain.RenderAsString({}).value()) << "after allocation " << n;
+        });
+        if (!fired)
+        {
+            break;
+        }
+    }
+    EXPECT_LT(0, n) << "no allocation reached the injection";
+    EXPECT_LT(n, maxAllocations);
+}
+
 INSTANTIATE_TEST_SUITE_P(Templates,
                          AllocationFailureTest,
                          testing::Values(Case{ "Hello, {{ user.name }}!", "Hello, Ann!" },
