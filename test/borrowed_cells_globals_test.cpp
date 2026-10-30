@@ -207,3 +207,25 @@ TEST(BorrowedCellsGlobals, KeptItemsReadTheHostsData)
     ASSERT_TRUE(!!seen);
     EXPECT_EQ("[[0]][[0]]", seen.value());
 }
+
+TEST(BorrowedCellsGlobals, DeepChainOfBlocksLeavesTheSnapshot)
+{
+    // Each descent into the singleton list held in `ns.c` lends its item from a new block, which
+    // the item keeps: the chain under the first block of the global's loop is as deep as the
+    // data, and the loop lets go of that block at item 256. Its items' links, down to the one the
+    // render wrote last, leave the snapshot without a recursion as deep as the chain
+    // Deep enough for a chain of blocks; the host's own copies of `deep` recurse as deep
+    const int depth = 300;
+    Value deep = ValuesList{ 0 };
+    for (int i = 0; i != depth; ++i)
+    {
+        deep = ValuesList{ std::move(deep) };
+    }
+    auto lists = ListOfLists(300);
+    lists[0] = std::move(deep);
+    const auto global = Value(std::move(lists));
+    const auto descend = "{% for i in range(" + std::to_string(depth) + ") %}{% for y in ns.c %}{% set ns.c = y %}{% endfor %}{% endfor %}";
+    const auto source = "{% set ns = namespace(c=none) %}{% for x in g %}{% if loop.first %}{% set ns.c = x %}" + descend + "{% set _ = ns.c.append(1) %}{% endif %}{% endfor %}{{ ns.c }}{{ g[1] }}";
+    EXPECT_EQ("[0, 1][0]", RenderWithGlobal(source, global));
+    EXPECT_EQ("[0, 1][0]", RenderWithGlobal(source, global));
+}

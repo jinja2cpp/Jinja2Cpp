@@ -1804,7 +1804,6 @@ public:
         this->SetTraversable();
     }
     void Traverse(const TraverseFn& fn) const override { m_link.TraverseFrozen(fn); }
-    // A global's own adapter, which the thread's snapshot keeps (docs/tasks/0346)
 
     [[nodiscard]] std::optional<size_t> GetSize() const override
     {
@@ -2050,11 +2049,16 @@ public:
     // Detaches the adapter from its cell: the block of item adapters calls it before it frees
     // the slot (ItemAdapters), as OwnedAdapter's destructor does
     void ReleaseLink() const noexcept { m_link.Release(); }
-    // The thread's snapshot of the globals reaches the adapter: a global's own adapter, or an
-    // item in the block of item adapters such an adapter reads now (docs/tasks/0346)
-    // The snapshot no longer reaches the adapter, nor its items (CellLink::LeaveSnapshot). As
-    // deep as the destructor of the blocks goes, which frees the same chain
-    void LeaveSnapshot() const noexcept;
+    // The snapshot no longer reaches the adapter (CellLink::LeaveSnapshot). Its items leave with
+    // it: ItemAdapters::LeaveSnapshot walks the chain of blocks, as deep as the data, without
+    // recursing
+    void LeaveSnapshot() const noexcept
+    {
+        this->SetInSnapshot(false);
+        m_link.LeaveSnapshot();
+    }
+    // The block of item adapters the adapter keeps while the snapshot reaches it
+    [[nodiscard]] const auto* SnapshotItems() const noexcept { return this->IsInSnapshot() ? m_items.get() : nullptr; }
     // The collector's view of what the adapter alone holds: its frozen cell and its block of item
     // adapters, whose slots may hold frozen cells too (OwnedAdapter, ItemAdapters)
     void TraverseOwned(const TraverseFn& fn) const
@@ -3101,7 +3105,6 @@ public:
         this->SetTraversable();
     }
     void Traverse(const TraverseFn& fn) const override { m_link.TraverseFrozen(fn); }
-    // A global's own adapter, which the thread's snapshot keeps (docs/tasks/0346)
 
     [[nodiscard]] size_t GetSize() const override
     {
@@ -3502,8 +3505,38 @@ struct ItemAdapters final : ValueObject
         }
     }
     // The global's adapter lets go of the block: the thread's snapshot no longer reaches its
-    // items, which a value of the template or of the host may still hold (docs/tasks/0346)
-    void LeaveSnapshot() const noexcept
+    // items, which a value of the template or of the host may still hold (docs/tasks/0346), nor
+    // the blocks of their own items. The chain is as deep as the data, so it is collected without
+    // recursion first, which may throw only before any link changed
+    void LeaveSnapshot() const
+    {
+        std::vector<const ItemAdapters*> nested;
+        CollectNested(*this, nested);
+        for (size_t next = 0; next != nested.size(); ++next)
+        {
+            CollectNested(*nested[next], nested);
+        }
+        LeaveSlots();
+        for (const auto* block : nested)
+        {
+            block->LeaveSlots();
+        }
+    }
+
+    static void CollectNested(const ItemAdapters& block, std::vector<const ItemAdapters*>& nested)
+    {
+        for (size_t idx = 0; idx < block.size; ++idx)
+        {
+            if (const auto* list = std::get_if<List>(&block.adapters[idx]))
+            {
+                if (const auto* items = list->SnapshotItems())
+                {
+                    nested.push_back(items);
+                }
+            }
+        }
+    }
+    void LeaveSlots() const noexcept
     {
         for (size_t idx = 0; idx < size; ++idx)
         {
@@ -3524,17 +3557,6 @@ struct ItemAdapters final : ValueObject
     // The epoch as the block was made, or CellStep::Recheck if a cell existed then
     uint64_t quietEpoch;
 };
-
-template<template<typename> class Holder>
-void ValuesListAdapter<Holder>::LeaveSnapshot() const noexcept
-{
-    this->SetInSnapshot(false);
-    m_link.LeaveSnapshot();
-    if (m_items)
-    {
-        m_items->LeaveSnapshot();
-    }
-}
 
 template<template<typename> class Holder>
 template<typename T>
