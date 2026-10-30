@@ -83,7 +83,8 @@ def check_trace(jar, log_path, workdir):
     with open(os.path.join(workdir, "MC.cfg"), "w", encoding="utf-8") as cfg:
         cfg.write("SPECIFICATION Spec\n")
         cfg.write("INVARIANTS\n" + "".join(f"    {inv}\n" for inv in INVARIANTS))
-        cfg.write("ALIAS Alias\n")
+        # No ALIAS: TLC 1.7.4, the pinned stable release, does not know it. The error trace then
+        # prints every variable, `l` among them, which is all the parser below reads
     cmd = ["java", "-XX:+UseParallelGC", "-Xmx1g", "-Xss16m", "-cp", jar, "tlc2.TLC", "-workers", "1",
            "-config", "MC.cfg", "-metadir", os.path.join(workdir, "states"), "CellTrace.tla"]
     out = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, check=False).stdout

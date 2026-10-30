@@ -400,6 +400,7 @@ inline std::optional<Value> BigIntValue(std::string_view text)
 
 template<typename J>
 class ObjectAccessor final : public IMapItemAccessor
+    , public detail::OwnedAccessor
 {
 public:
     explicit ObjectAccessor(Ref<J> ref)
@@ -491,6 +492,7 @@ private:
 template<typename J>
 class ArrayAccessor final : public IListItemAccessor
     , public IIndexBasedAccessor
+    , public detail::OwnedAccessor
 {
 public:
     explicit ArrayAccessor(Ref<J> ref)
