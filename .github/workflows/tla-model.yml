@@ -1,10 +1,11 @@
 name: tla-model
 
-# The bounded TLC runs of tla/CellProtocol.tla (tla/check.py): every pass run must explore its
-# whole space and every mutant must find its counterexample. The longest runs take one to four
-# hours each on the runners, past what an agent's session can hold (docs/tasks/0350), so they
-# run here, one job per shard, in parallel. The trace validation of the C++ against
-# tla/CellTrace.tla runs in the linux-build `celltrace` row instead.
+# The bounded TLC runs of tla/CellProtocol.tla (tla/check.py) and of the cycle collector's spec,
+# tla/CycleCollector.tla (tla/collector_check.py, the `collector` job, a few minutes): every pass
+# run must explore its whole space and every mutant must find its counterexample. The longest
+# runs take one to four hours each on the runners, past what an agent's session can hold
+# (docs/tasks/0350), so they run here, one job per shard, in parallel. The trace validation of
+# the C++ against tla/CellTrace.tla runs in the linux-build `celltrace` row instead.
 #
 # It runs as a routine, not per pull request (Ruslan, 2026-10-30): weekly on master when tla/
 # changed in the last week, and on demand (workflow_dispatch) on any branch or tag, for example a
@@ -153,4 +154,36 @@ jobs:
           ${{ env.TMPDIR }}/check.log
           ${{ env.TMPDIR }}/tlc-cells-*/*/tlc.out
           ${{ env.TMPDIR }}/tlc-cells-*/*/MC.cfg
+        if-no-files-found: ignore
+
+  # The collector's spec is small: every run in a few minutes, so one job checks all of it
+  collector:
+    needs: plan
+    if: needs.plan.outputs.shards != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    - name: Fetch TLC
+      run: |
+        set -euo pipefail
+        curl -sSfL --retry 3 -o tla/tla2tools.jar "$TLA_URL"
+        echo "$TLA_SHA256  tla/tla2tools.jar" | sha256sum -c -
+
+    - name: Check the collector's spec
+      run: |
+        set -euo pipefail
+        printf '| | Run | Kind | Verdict | States | Time |\n|---|---|---|---|---|---|\n' >> "$GITHUB_STEP_SUMMARY"
+        python3 tla/collector_check.py --traces 2>&1 | tee "$RUNNER_TEMP/collector.log"
+
+    - name: Keep the TLC logs
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: tlc-collector
+        path: |
+          ${{ runner.temp }}/collector.log
+          /tmp/tlc-collector-*/*/tlc.out
+          /tmp/tlc-collector-*/*/MC.cfg
         if-no-files-found: ignore
