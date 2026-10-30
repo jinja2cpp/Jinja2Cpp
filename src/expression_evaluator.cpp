@@ -2,6 +2,7 @@
 
 #include "engine_errors.h"
 #include "filters.h"
+#include "host_object.h"
 #include "internal_value.h"
 #include "lookup_result.h"
 #include "loop_attr.h"
@@ -1474,6 +1475,11 @@ const Callable* ResolveCallee(InternalValue& fnVal)
     if (const auto* callable = GetIf<Callable>(&fnVal))
     {
         return callable;
+    }
+    if (const auto* host = GetHostObject(fnVal))
+    {
+        fnVal = host::MakeCall(fnVal, *host);
+        return GetIf<Callable>(&fnVal);
     }
     auto callOperator = Subscript(fnVal, "operator()"s, nullptr);
     if (!GetIf<Callable>(&callOperator))

@@ -39,9 +39,10 @@ const char* UnhashableType(const InternalValue& value);
 
 // The token of a key, which is equal for the keys Python treats as one. Nullopt when the key
 // cannot be hashed, with the type to report in `unhashableType`: Python's TypeError
-// `unhashable type: 'list'`. Objects (namespace(), cycler(), host values), undefined values and
-// callables have no token of their own yet (docs/tasks/0212): they read as the empty string, and
-// `hasObject` tells a lookup that the token stands for no key of its own
+// `unhashable type: 'list'`. An object of a host language (host_object.h) is keyed by its
+// identity (docs/tasks/0352). The engine's objects (namespace(), cycler(), reflected and JSON
+// values), undefined values and callables have no token of their own yet (docs/tasks/0212): they
+// read as the empty string, and `hasObject` tells a lookup that the token stands for no key of its own
 std::optional<std::string> MakeDictKey(const InternalValue& key, const char** unhashableType = nullptr, bool* hasObject = nullptr);
 
 // Throws Python's TypeError for a key MakeDictKey rejects

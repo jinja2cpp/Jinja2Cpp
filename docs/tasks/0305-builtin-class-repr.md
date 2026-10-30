@@ -3,7 +3,7 @@ status: open
 priority: low
 area: parity
 touches: [src/value_visitors.h#ValueRenderer, src/global_functions.cpp, src/serialize_filters.cpp#XmlAttrFilter]
-shares: [test/parity/divergences/calls.txt]
+shares: [test/parity/divergences/calls.txt, test/parity/divergences/statements.txt]
 ---
 # The builtin classes print as `<class 'range'>`
 
@@ -12,6 +12,9 @@ shares: [test/parity/divergences/calls.txt]
 `<class 'range'>`, `{{ cycler }}` `<class 'jinja2.utils.Cycler'>`, and `xmlattr` prints the
 escaped repr. Jinja2C++ prints nothing for any callable but a macro (`ValueRendererBase`
 leaves them out because a Python function's repr names its address), and `xmlattr` drops them.
+The same gap covers a bound method: `{{ loop.cycle|string }}` prints nothing where Jinja2 prints
+`<bound method LoopContext.cycle of <LoopContext 1/2>>` (`statements.loop_cycle_string`, moved
+here from 0214, which is done).
 Pinned by `calls.global_class_str` and `calls.global_class_xmlattr`. `lipsum` is a function
 in Python, whose repr has an address, so it stays as it is.
 

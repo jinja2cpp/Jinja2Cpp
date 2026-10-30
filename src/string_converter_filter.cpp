@@ -2,6 +2,7 @@
 #include "engine_errors.h"
 #include "filters.h"
 #include "function_base.h"
+#include "host_object.h"
 #include "html_entities.h"
 #include "internal_value.h"
 #include "markup.h"
@@ -2115,6 +2116,14 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
     {
         // wordwrap calls the value's splitlines(), which only a string has
         throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(baseVal) + "' object has no attribute 'splitlines'");
+    }
+    // safe, striptags and forceescape take __html__() of an object that has it, as Jinja2's do
+    if (m_mode == SafeMode || m_mode == StriptagsMode || m_mode == ForceEscapeMode)
+    {
+        if (const auto* host = GetHostObject(baseVal); host && host->IsMarkupLike())
+        {
+            return Filter(host::Html(*host, context.GetRendererCallback()->IsWideTarget()), context);
+        }
     }
     switch (m_mode)
     {
