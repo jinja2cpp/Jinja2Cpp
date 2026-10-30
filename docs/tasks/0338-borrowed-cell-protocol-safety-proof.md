@@ -143,3 +143,14 @@ step and the invariant `NoTornStep`; the mutants `non-atomic-link` and `partial-
 the code before the step. `jinja2cpp_alloc_tests` fails every allocation in turn
 (`FailedCallsPinIsAllOrNothing` saw the torn `[[0], 2]` on the old pin). See tla/README.md,
 "Failure atomicity". Follow-up: 0361 (a failed call's top view reads no items).
+
+**Step F, past the bounds (2026-10-30).** Apalache runs the model (`tla/apalache.py`), but one
+inductive step of the full `Next` ran out of memory on the smallest scope, so the mechanized
+proof is task 0363. In its place: each scope is finite, so a run without the level bound that
+completes covers every behaviour (0351 item 1); `WellFormed` is a TLC invariant of every pass
+run; and tla/README.md, "Past the bounds", gives the cutoff argument for threads, identities and
+nesting, with its gaps. Apalache's assignment check also found a dead end in `DropUnheld` (an
+empty `lag` was required), which cut TLC's behaviours short; fixed.
+Decision (Ruslan, 2026-10-30): the model is a design tool and stays bounded evidence plus that
+argument; the implementation is checked by a periodic deep validation of a frozen version
+(0364), not per PR.

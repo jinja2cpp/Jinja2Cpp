@@ -43,7 +43,7 @@ FIXES = {
 }
 SAFETY = ["SnapshotStable", "NoCrossThreadWrite", "NoUseAfterFree", "NoForeignCell",
           "RegistryBounded", "AliasesAgree", "NoUndefItems", "LiveCount", "ExportKeepsCallState",
-          "NoLostWrites", "NoTornStep"]
+          "NoLostWrites", "NoTornStep", "WellFormed"]
 
 # Scopes. The deep counterexamples need about 14 steps, which an all-actions model of two
 # threads cannot reach exhaustively; each scope enables the parts a group of fixes needs.
