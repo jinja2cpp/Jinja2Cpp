@@ -301,9 +301,14 @@ void CellLink::Unlink() const noexcept
     }
     // A global's link, on the thread of the render that made the cell
     auto& links = cell->m_links;
+    // The last link takes this one's place. When this link is the last, its state stays 0: a
+    // detached link holds 0 or an epoch it saw, never a list index
     const auto* last = links.back();
-    links[index] = last;
-    last->m_state = (last->m_state & ~IndexBits) | index;
+    if (last != this)
+    {
+        links[index] = last;
+        last->m_state = (last->m_state & ~IndexBits) | index;
+    }
     links.pop_back();
 }
 

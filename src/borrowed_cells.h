@@ -39,6 +39,11 @@ class CycleCollector;
 
 namespace detail
 {
+// Moves the epoch by `count` at once, as that many promotions would: a test of the old 32-bit
+// wrap-around needs 2^32 moves (docs/tasks/0342). Exported for the tests of a shared library, and
+// declared before CellCounters befriends it so that MSVC sees the dllimport first
+JINJA2CPP_EXPORT void AdvanceCellEpochForTesting(uint64_t count) noexcept;
+
 // The counters of the borrowed cells that every thread shares. Only borrowed_cells.cpp changes
 // them; readers get a value. The storage is a member defined in borrowed_cells.cpp, not a static
 // local of an inline function, so code outside the library that reached it would fail to link
@@ -74,9 +79,6 @@ inline uint64_t CellEpoch() noexcept
     return CellCounters::Epoch();
 }
 
-// Moves the epoch by `count` at once, as that many promotions would: a test of the old 32-bit
-// wrap-around needs 2^32 moves (docs/tasks/0342). Exported for the tests of a shared library
-JINJA2CPP_EXPORT void AdvanceCellEpochForTesting(uint64_t count) noexcept;
 } // namespace detail
 
 // The part of an adapter of the host's data (a list or map lent by reference, docs/tasks/0115)
