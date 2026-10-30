@@ -22,6 +22,10 @@
 
 using namespace jinja2;
 
+// Internal functions are not exported from a shared library; the Python module links the
+// library statically
+#ifndef JINJA2CPP_LINK_AS_SHARED
+
 // The private seam the Python module builds on (docs/tasks/0352): a toy object of a "host
 // language" written in C++, with each operation of IHostObject switchable, read by templates
 namespace
@@ -315,3 +319,5 @@ TEST(HostObjectTest, PublicViewReadsAttributes)
     EXPECT_EQ("attr-name", generic.GetValueByName("name").As<std::string>());
     EXPECT_EQ("item-key", generic.GetValueByName("key").As<std::string>());
 }
+
+#endif // JINJA2CPP_LINK_AS_SHARED
