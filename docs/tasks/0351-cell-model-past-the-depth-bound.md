@@ -18,10 +18,13 @@ cheaper steps can come first, and they are not exclusive.
 reaches a fixed point: TLC then reports a complete search with no level bound, a check of every
 behaviour for those constants, not only the short ones. Observed: `module` with `MaxLevel=100`
 grew 1.3M, 2.3M, 4.2M states at levels 12-14 (slowing, about 1.7 times a level) before a
-7-minute probe stopped it. What blocks a fixed point: the epoch and the call id climb to 1000
-without an allocation, so they need a wrap (`MaxEpoch`, `MaxCallId`) that is harmless in the
-scope (0341 is, under FixCallPin; 0342 is not, so the render scopes need 0342 fixed first, or an
-abstraction of the epoch to "equal to the adapter's seen value or not"). Add a run kind
+7-minute probe stopped it. Nothing but size blocks a fixed point: the
+epoch advances only when a cell is adopted or a frozen render lists cells (at most `2*MaxCell`),
+the call id only at a module call's start (at most `MaxAd/2`), and failures and values are
+bounded, so every scope is finite without the level guard (0338 step F's count, against
+master after #695; recheck once #709's failure steps land). It is still large: `module` with
+`MaxAd=6`, `MaxCell=2`, `MaxGen=3`, `MaxEx=1` had not finished after 25 minutes, so the runs
+need the 340-minute job and the smallest scopes first. Add a run kind
 `exhaustive` whose verdict requires TLC's "No error" without the level guard firing, and run
 `module`, `module-0332`, `module-generic` and `threads-module` that way in the nightly job.
 
