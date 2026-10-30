@@ -391,7 +391,14 @@ makes, so they are a length bound in another form. No cutoff is claimed for them
 
 | Run | Change | States | Result |
 |---|---|---|---|
-CUTOFF_ROWS
+| `module`, level 10 | `OwnedAddrs` O1-O3 | 619,996 | no error |
+| `module-0332`, level 10 | `OwnedAddrs` O1-O3 | 3,461,806 | no error |
+| `threads`, level 7 | three threads, all render and module threads | 2,187,128 | no error |
+| `threads-module`, level 7 | three threads, renders on too | 667,991 | no error |
+| `module`, level 11 | `MaxDepth=3` | 575,049 | no error |
+
+Every pass invariant, `WellFormed` included, holds in each. They are level-bounded like the
+rest, so they test the argument's assumptions rather than prove them.
 
 ## What the results claim
 
