@@ -1,6 +1,6 @@
 ---
 status: in-progress
-pr:
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/702
 priority: medium
 area: ci
 depends: [0338]
@@ -38,6 +38,19 @@ Constant-factor changes therefore buy less than one level each:
   `threads`, the rest), each with a 340-minute limit and the TLC state on the runner's larger
   disk: on pull requests that change the model or check.py, nightly on master when `tla/`
   changed in the last day, and on demand (`workflow_dispatch`, with an optional list of runs).
+
+**First run (#702, 4-vCPU ubuntu-24.04 runners).** All four jobs in parallel; `render` 80,574,890
+states in 4 h 03 min (130 min on the session's 4 dedicated cores), `mixed` 64 min, `threads`
+44 min, the rest 1 h 45 min. Every run is 1.3 to 1.9 times slower per state than on the session
+container, with identical state counts. The job prints `lscpu` to tell whether the runner's
+vCPUs are hyperthreads; render keeps about 40% headroom under the 340-minute limit, so the next
+level or scope growth of `render` needs a split or a reduction first.
+
+**Found by the first run.** The mutant `drop-without-source-check` passed (no counterexample,
+1.4M states) on master: it turned off `FixModuleLinksOwn` but not `FixLinksOwn`, which #695 added
+and which also makes the namespace's link own the cell. Nobody ran the suite after #695, so the
+mutant had silently stopped testing the source-owner check. It now turns off both and finds the
+use-after-free again in 6 s.
 
 **Done when** the workflow runs green on its PR, which also confirms `mixed` and `threads` on
 the owning-link code of #695, and the README's running section points at it.

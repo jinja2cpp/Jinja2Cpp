@@ -30,18 +30,14 @@ deeper than the BFS reaches. Not a proof, but it finds deep counterexamples (the
 bugs needed about 14 steps) in every scope, including the full-action ones. Add `--simulate
 SECONDS` to check.py and a nightly shard that gives each pass run a fixed budget.
 
-**3. Inductive invariants (0338 step F).** Write `IndInv` (the invariants plus the structural
-facts they need: links point at live cells, an attached adapter's cell is in its registry, an
-export's storages are alive) and check `IndInv /\ Next => IndInv'` for every state, reachable or
-not. Apalache does this symbolically for fixed constants and needs: type annotations on the 25
-variables, `Close` (the recursive reachability of GC) as `ApaFoldSet` or a bounded iteration,
-and the level guard (`TLCGet("level")`) removed from `Next`. TLC can sample the same check on
-random states of `IndInv` when Apalache cannot finish.
+**3. Inductive invariants: owned by 0338 step F**, in its own thread and task: Apalache
+typing of `CellProtocol.tla`, `Close` as a fold, a wrapper module without the level guard,
+`IndInv /\ Next => IndInv'`, and the cutoff argument. This task does not touch it.
 
 Alloy 6 is the alternative for the heap half only: GC reachability, ownership links and the
 registry are relations with transitive closure, which Alloy states directly and checks for all
 heaps up to N atoms. It would be a second model to keep in step with the C++, outside the trace
 validation of 0338 step B, so it is worth it only if Apalache cannot handle `Close`.
 
-**Done when** the README states, per run, whether it is depth-bounded, exhaustive for its
-constants, or covered by an inductive check, and the nightly job runs the new kinds.
+**Done when** the README states, per run, whether it is depth-bounded or exhaustive for its
+constants, and the nightly job runs the exhaustive and simulation kinds.

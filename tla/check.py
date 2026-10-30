@@ -124,9 +124,11 @@ RUNS = {
     # IsUnheld's links test can never decide: this run shows it, rather than a counterexample
     "drop-without-link-check": ("pass", MODULE1, {"DropRule": '"nolinks"'}, SAFETY,
                                 "IsUnheld without its links test: never decides here"),
-    # With FixModuleLinksOwn the namespace's link keeps the dropped cell alive: no use-after-free,
-    # so the run keeps #673's unowned links
-    "drop-without-source-check": ("mutant", MODULE1, {"DropRule": '"nosource"', "FixModuleLinksOwn": False},
+    # With FixModuleLinksOwn or FixLinksOwn the namespace's link keeps the dropped cell alive: no
+    # use-after-free, so the run keeps #673's unowned links (FixLinksOwn came with #695 and made
+    # this run pass silently until the tla-model job ran it, task 0350)
+    "drop-without-source-check": ("mutant", MODULE1, {"DropRule": '"nosource"', "FixModuleLinksOwn": False,
+                                                      "FixLinksOwn": False},
                                   ["NoUseAfterFree", "NoForeignCell", "AliasesAgree"],
                                   "IsUnheld without its source-owner test"),
     "no-source-keeps-id": ("mutant", MODULE1, {"FixSourceKeepsId": False, "DropRule": '"none"'},
