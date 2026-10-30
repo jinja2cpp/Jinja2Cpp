@@ -9,9 +9,11 @@ namespace jinja2
 inline namespace v2
 {
 
-#if defined(__SANITIZE_THREAD__)
+// GCC and Clang each say it their own way
+#ifdef __SANITIZE_THREAD__
 #define JINJA2CPP_SHARED_OWNER_TSAN 1
-#elif defined(__has_feature)
+#endif
+#ifdef __has_feature
 #if __has_feature(thread_sanitizer)
 #define JINJA2CPP_SHARED_OWNER_TSAN 1
 #endif
