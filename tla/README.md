@@ -139,6 +139,8 @@ explores every behaviour up to it and none past it.
 | `module-links-unowned` | no `FixModuleLinksOwn` (nor `FixLinksOwn`): a later call's adapter kept, dropped on the other thread | counterexample: `NoCrossThreadWrite` (0332) |
 | `render-links-unowned` | no `FixLinksOwn` (nor `FixPinOnAttach`), hand-off | counterexample: `NoCrossThreadWrite` (0340) |
 | `call-id-wrap-no-pin` | call ids wrap after 2, no `FixCallPin` | counterexample: `SnapshotStable` (0341) |
+| `non-atomic-link` | `render` with #673's `Link`: a failed push leaves the epoch 0 (0338 step D) | counterexample: `NoTornStep` |
+| `partial-pin` | `module` with #695's pin: a failure keeps what was recorded (0338 step D) | counterexample: `NoTornStep` |
 | `no-generic-owner` | no `FixGenericOwner` | counterexample: `RegistryBounded` (0336) |
 | `generic-drop-without-host-test` | `IsUnheld` without the host-copy test | counterexample: `NoLostWrites` (0336) |
 | `open-0342-epoch-wrap` | `render` with the epoch wrapping after 2 | counterexample: `AliasesAgree` (task 0342, expected) |
