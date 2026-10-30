@@ -257,6 +257,8 @@ public:
     [[nodiscard]] const_iterator cend() const;
 
 private:
+    friend struct detail::GenericAccessorAccess;
+
     std::shared_ptr<const IMapItemAccessor> m_accessor;
 };
 

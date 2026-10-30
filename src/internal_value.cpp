@@ -1680,6 +1680,30 @@ std::weak_ptr<const void> AdaptersOwner(const BySharedVal<T>& holder)
 {
     return holder.GetOwner();
 }
+
+// Whether the container's accessor has an owner besides `container` and its copies' owner: the
+// library makes its own accessors with std::make_shared (detail::OwnedAccessor), so the owners
+// of the accessor's shared_ptr are all that can lend it again. Any other accessor may be reached
+// some other way (an aliasing pointer over a holder, the 1.x callable form), so it may be lent
+// again (docs/tasks/0336)
+template<typename Container>
+bool AccessorHasOtherOwners(const Container& container) noexcept
+{
+    const auto& accessor = detail::GenericAccessorAccess::Get(container);
+    const auto* owned = dynamic_cast<const detail::OwnedAccessor*>(accessor.get());
+    if (!owned)
+    {
+        return true;
+    }
+    // The container shares the control block that owns the accessor, not an aliasing pointer
+    // over another object
+    const auto self = owned->weak_from_this();
+    if (self.owner_before(accessor) || accessor.owner_before(self))
+    {
+        return true;
+    }
+    return !IsSoleOwner(accessor);
+}
 } // namespace
 
 namespace
@@ -1846,7 +1870,12 @@ public:
         const auto* cell = m_link.Get(*this);
         return cell ? cell->MutableItems() : nullptr;
     }
-    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData()); }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override
+    {
+        // A global's data is the host's, whatever holds it
+        return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values));
+    }
+    [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
     [[nodiscard]] bool IsBorrowed() const override { return true; }
     // An enumeration of the list's cell that finds the cell's storage again at each step: a
     // module call the loop body makes can copy the cell on write (decision D8) and let go of the
@@ -3173,7 +3202,12 @@ public:
         const auto* cell = m_link.Get(*this);
         return cell ? cell->MutableDict() : nullptr;
     }
-    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData()); }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override
+    {
+        // As GenericListAdapter's
+        return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values));
+    }
+    [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysFirst; }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
