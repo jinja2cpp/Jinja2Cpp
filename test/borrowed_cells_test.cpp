@@ -1116,6 +1116,136 @@ TEST(BorrowedCellsSingle, ModuleCallFreesTheCellsOfItsNestedData)
     EXPECT_EQ(1, token.use_count());
 }
 
+namespace
+{
+// A generated list of 0, 1, 2 the host makes for one call: its generator holds `token`
+GenericList FreshGenericList(const std::shared_ptr<int>& token)
+{
+    return MakeGenericList([token, n = int64_t{ 0 }]() mutable { return n < 3 ? std::optional<Value>(n++) : std::optional<Value>(); });
+}
+
+// A reflected struct the host makes for one call: its copy in the accessor holds `token`
+Value FreshGenericMap(const std::shared_ptr<TestInnerStruct>& token)
+{
+    TestStruct data;
+    data.innerStruct = token;
+    return Reflect(std::move(data));
+}
+} // namespace
+
+TEST(BorrowedCellsSingle, ModuleCallFreesTheCellsOfFreshGenericData)
+{
+    // 0336: a generic list or map the host makes for one call, which the macro writes. Nothing
+    // but the call's adapter owns its accessor, so nothing can lend it again: the module drops
+    // its cell when the call ends, as for a ValuesList (ModuleCallFreesTheCellsOfItsOwnData)
+    auto token = std::make_shared<int>(0);
+    auto mapToken = std::make_shared<TestInnerStruct>();
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro consume() %}{% set r = make() %}{% set _ = r.append(1) %}{% set d = makeMap() %}"
+                           "{% set _ = d.update(k=1) %}{{ r|length }}{{ d.k }}{% endmacro %}"));
+    ValuesMap params{ { "make", UserCallable([&token](const UserCallableParams&) { return Value(FreshGenericList(token)); }, {}) },
+                      { "makeMap", UserCallable([&mapToken](const UserCallableParams&) { return FreshGenericMap(mapToken); }, {}) } };
+    auto module = tpl.MakeModule(params).value();
+    for (int i = 0; i != 3; ++i)
+    {
+        EXPECT_EQ("41", module.exports["consume"].As<UserCallable>().callable(UserCallableParams()).AsString());
+        EXPECT_EQ(1, token.use_count());
+        EXPECT_EQ(1, mapToken.use_count());
+    }
+}
+
+TEST(BorrowedCellsSingle, ModuleCallFreesTheCellOfAGenericArgumentOnceTheHostLetsGo)
+{
+    // 0336: the host's call parameters hold a copy of the list while the call runs, so its cell
+    // stays at that call's end; the next call's end drops it, once the host let go
+    auto token = std::make_shared<int>(0);
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro consume(xs) %}{% set _ = xs.append(1) %}{{ xs|length }}{% endmacro %}"));
+    auto module = tpl.MakeModule({}).value();
+    for (int i = 0; i != 3; ++i)
+    {
+        {
+            UserCallableParams callParams;
+            callParams.extraPosArgs = ValuesList{ FreshGenericList(token) };
+            EXPECT_EQ("4", module.exports["consume"].As<UserCallable>().callable(callParams).AsString());
+        }
+        // This call's list, and none of the earlier calls'
+        EXPECT_EQ(2, token.use_count());
+    }
+    module = TemplateModule();
+    EXPECT_EQ(1, token.use_count());
+}
+
+TEST(BorrowedCellsSingle, ModuleKeepsTheCellOfAGenericListTheHostLendsAgain)
+{
+    // 0336: the host keeps its list and lends it to each call, so each call sees the earlier
+    // calls' writes (0049 P2), also when the host wraps the accessor anew in the 1.x callable
+    // form, an aliasing pointer the accessor's own owners do not count
+    std::vector<int64_t> data{ 0, 1, 2 };
+    const GenericList kept = MakeGenericList(data.begin(), data.end());
+    const Value map = FreshGenericMap(std::make_shared<TestInnerStruct>());
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro consume(xs, d) %}{% set _ = xs.append(1) %}{% set _ = d.update(k=d.get('k', 0) + 1) %}"
+                           "{{ xs|length }}{{ d.k }}{% endmacro %}"));
+    auto module = tpl.MakeModule({}).value();
+    for (int i = 0; i != 3; ++i)
+    {
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ kept, map };
+        EXPECT_EQ(std::to_string(4 + i) + std::to_string(1 + i), module.exports["consume"].As<UserCallable>().callable(callParams).AsString());
+    }
+    auto made = std::make_shared<GenericList>(MakeGenericList(data.begin(), data.end()));
+    for (int i = 0; i != 3; ++i)
+    {
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ GenericList([made] { return made->GetAccessor(); }), map };
+        EXPECT_EQ(std::to_string(4 + i) + std::to_string(4 + i), module.exports["consume"].As<UserCallable>().callable(callParams).AsString());
+    }
+}
+
+TEST(BorrowedCellsSingle, ThreadsCallAModuleWritingFreshGenericData)
+{
+    // 0336, TSan: two threads call the module, each with fresh generic data the call writes and
+    // the call's end drops
+    auto token = std::make_shared<int>(0);
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro consume(xs) %}{% set r = make() %}{% set _ = r.append(1) %}{% set _ = xs.append(2) %}"
+                           "{{ r|length }}{{ xs|length }}{% endmacro %}"));
+    ValuesMap params{ { "make", UserCallable([token](const UserCallableParams&) { return Value(FreshGenericList(token)); }, {}) } };
+    auto module = tpl.MakeModule(params).value();
+    auto consume = module.exports["consume"].As<UserCallable>().callable;
+    std::vector<std::thread> threads;
+    std::vector<std::string> results(2);
+    threads.reserve(results.size());
+    for (auto& result : results)
+    {
+        threads.emplace_back([&consume, &token, &result]() {
+            for (int i = 0; i != 50; ++i)
+            {
+                UserCallableParams callParams;
+                callParams.extraPosArgs = ValuesList{ FreshGenericList(token) };
+                result = consume(callParams).AsString();
+                if (result != "44")
+                {
+                    return;
+                }
+            }
+        });
+    }
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+    for (const auto& result : results)
+    {
+        EXPECT_EQ("44", result);
+    }
+    consume = nullptr;
+    params.clear();
+    module = TemplateModule();
+    EXPECT_EQ(1, token.use_count());
+}
+
 TEST(BorrowedCellsSingle, ThreadsRenderSharedHostData)
 {
     // One host map, rendered by several threads that each write to it: each render has its own

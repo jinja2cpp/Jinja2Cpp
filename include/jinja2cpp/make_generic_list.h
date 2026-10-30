@@ -32,6 +32,7 @@ namespace detail
 {
 template<typename It1, typename It2>
 struct InputIteratorListAccessor : IListItemAccessor
+    , OwnedAccessor
 {
     mutable It1 m_begin;
     mutable It2 m_end;
@@ -136,6 +137,7 @@ struct InputIteratorListAccessor : IListItemAccessor
 
 template<typename It1, typename It2>
 struct ForwardIteratorListAccessor : IListItemAccessor
+    , OwnedAccessor
 {
     It1 m_begin;
     It2 m_end;
@@ -248,6 +250,7 @@ struct ForwardIteratorListAccessor : IListItemAccessor
 template<typename It1, typename It2>
 struct RandomIteratorListAccessor : IListItemAccessor
     , IIndexBasedAccessor
+    , OwnedAccessor
 {
     It1 m_begin;
     It2 m_end;
@@ -367,6 +370,7 @@ struct RandomIteratorListAccessor : IListItemAccessor
 };
 
 class GeneratedListAccessor : public IListItemAccessor
+    , public OwnedAccessor
 {
 public:
     class Enumerator : public IListEnumerator

@@ -154,20 +154,25 @@ bool BorrowedCell::IsUnheld() const noexcept
     }
     const ValueObject* owner = nullptr;
     const CellLink* link = nullptr;
+    // The host's copy of a generic container can lend it to a later call, which must see this
+    // call's writes (0049 P2): its cell stays while the host holds one (docs/tasks/0336)
+    bool lentAgain = false;
     if (m_isList)
     {
-        if (auto list = AsList(m_source))
+        if (auto list = AsList(m_source); list && list->GetAccessor())
         {
             owner = list->GetOwner();
-            link = list->GetAccessor() ? list->GetAccessor()->GetCellLink() : nullptr;
+            link = list->GetAccessor()->GetCellLink();
+            lentAgain = list->GetAccessor()->MayBeLentAgain();
         }
     }
-    else if (auto map = AsMap(m_source))
+    else if (auto map = AsMap(m_source); map && map->GetAccessor())
     {
         owner = map->GetOwner();
-        link = map->GetAccessor() ? map->GetAccessor()->GetCellLink() : nullptr;
+        link = map->GetAccessor()->GetCellLink();
+        lentAgain = map->GetAccessor()->MayBeLentAgain();
     }
-    if (!owner || owner->use_count() != 1)
+    if (!owner || owner->use_count() != 1 || lentAgain)
     {
         return false;
     }

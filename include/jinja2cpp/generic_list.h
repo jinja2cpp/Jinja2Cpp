@@ -21,6 +21,23 @@ namespace jinja2
 {
 inline namespace v2
 {
+namespace detail
+{
+/*!
+ * \brief Base of the library's own list and map accessors, which only the `std::shared_ptr` the library makes them with owns
+ *
+ * Internal. It lets the library find the accessor's owners from the accessor (`weak_from_this`): when a \ref GenericList or
+ * \ref GenericMap a template module's call wrote is the accessor's only owner, nothing can lend the accessor to a later
+ * call, and the module lets go of the call's copy of its items when the call ends (docs/tasks/0336). An accessor made any
+ * other way keeps that copy until the module goes.
+ */
+struct JINJA2CPP_EXPORT OwnedAccessor : std::enable_shared_from_this<OwnedAccessor>
+{
+};
+//! Internal: the library's view of the accessor a \ref GenericList or \ref GenericMap holds
+struct GenericAccessorAccess;
+} // namespace detail
+
 /*!
  * \brief Interface for accessing items in list by the indexes
  *
@@ -316,6 +333,8 @@ public:
     [[nodiscard]] bool IsEqual(const GenericList& rhs) const;
 
 private:
+    friend struct detail::GenericAccessorAccess;
+
     std::shared_ptr<const IListItemAccessor> m_accessor;
 };
 
