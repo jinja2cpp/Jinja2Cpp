@@ -12,7 +12,7 @@ fix #673 made is needed: taking any one of them out gives a counterexample.
 ## Running it
 
 ```bash
-curl -sSLo tla/tla2tools.jar https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
+curl -sSLo tla/tla2tools.jar https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
 python3 tla/check.py                        # every run, about 4.8 hours on 4 cores
 python3 tla/check.py --only render          # or in three parts: about 2h10m (21 GB of disk) ...
 python3 tla/check.py --only mixed threads   # ... about 1h40m ...

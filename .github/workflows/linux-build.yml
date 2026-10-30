@@ -122,8 +122,8 @@ jobs:
     - name: Trace validation
       if: matrix.celltrace
       run: |
-        curl -sSfLo tla/tla2tools.jar https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
-        echo "fc6878c603f0fdc18b9fe3e5bf51860cb90ab5b1154e3c371660c036d6bdd63e  tla/tla2tools.jar" | sha256sum -c -
+        curl -sSfLo tla/tla2tools.jar https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
+        echo "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88  tla/tla2tools.jar" | sha256sum -c -
         python3 tla/check.py --trace --tests .build/jinja2cpp_tests --jobs 2 --mutants
 
     # abidiff against the ABI of the previous master build (report only) or, once the RC
