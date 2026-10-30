@@ -264,7 +264,10 @@ def run(jar, name, spec, workdir, extra=None, timeout=None, symmetry=True, java_
             res = json.load(data)
         return dict(res, name=name, note=note, verdict=res["verdict"] + " (cached)", secs=0)
     start = time.time()
-    cmd = ["java", "-XX:+UseParallelGC", *java_opts, "-cp", jar, "tlc2.TLC", "-workers", "auto",
+    # A private java.io.tmpdir: TLC unpacks its standard modules there, and parallel runs sharing
+    # /tmp can parse each other's half-written copies
+    cmd = ["java", "-XX:+UseParallelGC", *java_opts, f"-Djava.io.tmpdir={workdir}", "-cp", jar,
+           "tlc2.TLC", "-workers", "auto",
            "-deadlock", "-config", "MC.cfg", "MC.tla"]
     timed_out = False
     try:
