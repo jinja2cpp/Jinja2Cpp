@@ -30,7 +30,8 @@ and the `tlc-*` artifacts keep each run's `MC.cfg` and `tlc.out`.
 
 The two-thread scopes are reduced by thread symmetry (`SYMMETRY ThreadPerms` over the threads as
 model values), which halves them; `--no-symmetry` turns it off. `--except NAME ...` runs every
-run but those, and `--java-opts` (or `TLC_JAVA_OPTS`) passes JVM options to TLC.
+run but those, `--cache DIR` (or `TLC_CACHE`) skips a run whose spec, model and constants
+match an expected verdict recorded there (the workflow keeps one per shard), and `--java-opts` (or `TLC_JAVA_OPTS`) passes JVM options to TLC.
 
 Java 11 or later is needed. `--set Name=Value` overrides a constant, for example
 `--set MaxLevel=14`. `--timeout SECONDS` limits each run; a run stopped by it fails as
