@@ -22,7 +22,8 @@ class RenderContext;
 // 0357 moves the module to the public API before the G1 freeze.
 //
 // A host object is a map value whose accessor is a HostObjectAccessor (IMapAccessor::
-// GetHostObject); ValueStorage has no alternative of its own for it. The engine asks the object
+// GetHostObject), marked in the value (MapAdapter::MarkAsHost, MakeHostValue) so that native
+// maps pay no virtual call for the check; ValueStorage has no alternative of its own for it. The engine asks the object
 // where Python asks the object:
 // - printing: Str(), and Repr() inside a container; Html() under autoescape when IsMarkupLike()
 // - x.name: GetAttr, then GetItem with the name, as Jinja2's Environment.getattr
@@ -94,22 +95,25 @@ public:
 class HostObjectAccessor : public IMapAccessor
 {
 public:
+    // Every override is out of line: a body in sight lets GCC guess this class at each call
+    // of an IMapAccessor virtual (speculative devirtualization), which costs the native maps
+    // a compare per call
     [[nodiscard]] const IHostObject* GetHostObject() const override = 0;
 
     [[nodiscard]] size_t GetSize() const override;
     [[nodiscard]] bool HasValue(const std::string& name) const override;
     [[nodiscard]] InternalValue GetItem(const std::string& name) const override;
-    [[nodiscard]] std::vector<std::string> GetKeys() const override { return {}; }
-    [[nodiscard]] std::vector<KeyValuePair> GetEntries() const override { return {}; }
-    [[nodiscard]] InternalValueList GetKeyValues() const override { return {}; }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override;
+    [[nodiscard]] std::vector<KeyValuePair> GetEntries() const override;
+    [[nodiscard]] InternalValueList GetKeyValues() const override;
     [[nodiscard]] std::optional<InternalValue> FindItem(const InternalValue& key) const override;
     [[nodiscard]] GenericMap CreateGenericMap() const override;
-    [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
-    [[nodiscard]] bool HasAttributes() const override { return true; }
-    [[nodiscard]] const void* GetIdentity() const override { return GetHostObject()->Identity(); }
-    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const final { return MapAttrPolicy::Host; }
-    [[nodiscard]] const char* GetObjectClass() const final { return GetHostObject()->TypeName(); }
-    [[nodiscard]] bool Iterates() const override { return GetHostObject()->IsIterable(); }
+    [[nodiscard]] bool ShouldExtendLifetime() const override;
+    [[nodiscard]] bool HasAttributes() const override;
+    [[nodiscard]] const void* GetIdentity() const override;
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const final;
+    [[nodiscard]] const char* GetObjectClass() const final;
+    [[nodiscard]] bool Iterates() const override;
     bool GetIteration(ListAdapter& items) const override;
 };
 
@@ -134,11 +138,15 @@ private:
 template<typename T, typename... Args>
 InternalValue MakeHostValue(Args&&... args)
 {
-    return InternalValue(MapAdapter(MakeRef<HostObjectHolder<T>>(std::forward<Args>(args)...)));
+    return InternalValue(MapAdapter(MakeRef<HostObjectHolder<T>>(std::forward<Args>(args)...)).MarkAsHost());
 }
 
 // The host object a value carries; null for every other value
-const IHostObject* GetHostObject(const InternalValue& value);
+inline const IHostObject* GetHostObject(const InternalValue& value)
+{
+    const auto map = AsMap(value);
+    return map ? map->GetHostObject() : nullptr;
+}
 
 // The Python operations of a host object the engine reaches outside the accessor
 namespace host

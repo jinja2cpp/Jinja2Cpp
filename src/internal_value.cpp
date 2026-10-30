@@ -455,7 +455,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     // getitem does (HostObjectAccessor::FindItem); for every other map it is x.name
     [[nodiscard]] static InternalValue GetStringItem(const MapRef& values, const std::string& field)
     {
-        return values.GetAttrPolicy() == MapAttrPolicy::Host ? FindKey(values, InternalValue(field)) : GetField(values, field);
+        return values.IsHost() ? FindKey(values, InternalValue(field)) : GetField(values, field);
     }
 
     // Undefined for a missing name; a user's accessor (IMapItemAccessor) is asked through

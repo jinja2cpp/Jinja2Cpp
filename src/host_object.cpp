@@ -68,6 +68,52 @@ std::optional<size_t> IHostObject::Hash() const
     return std::hash<const void*>()(Identity());
 }
 
+
+std::vector<std::string> HostObjectAccessor::GetKeys() const
+{
+    return {};
+}
+
+std::vector<KeyValuePair> HostObjectAccessor::GetEntries() const
+{
+    return {};
+}
+
+InternalValueList HostObjectAccessor::GetKeyValues() const
+{
+    return {};
+}
+
+bool HostObjectAccessor::ShouldExtendLifetime() const
+{
+    return false;
+}
+
+bool HostObjectAccessor::HasAttributes() const
+{
+    return true;
+}
+
+const void* HostObjectAccessor::GetIdentity() const
+{
+    return GetHostObject()->Identity();
+}
+
+MapAttrPolicy HostObjectAccessor::GetAttrPolicy() const
+{
+    return MapAttrPolicy::Host;
+}
+
+const char* HostObjectAccessor::GetObjectClass() const
+{
+    return GetHostObject()->TypeName();
+}
+
+bool HostObjectAccessor::Iterates() const
+{
+    return GetHostObject()->IsIterable();
+}
+
 size_t HostObjectAccessor::GetSize() const
 {
     return GetHostObject()->Len().value_or(0);
@@ -113,12 +159,6 @@ bool HostObjectAccessor::GetIteration(ListAdapter& items) const
     }
     items = std::move(*iteration);
     return true;
-}
-
-const IHostObject* GetHostObject(const InternalValue& value)
-{
-    const auto map = AsMap(value);
-    return map ? map->GetHostObject() : nullptr;
 }
 
 namespace host

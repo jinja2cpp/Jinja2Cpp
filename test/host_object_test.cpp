@@ -81,7 +81,7 @@ public:
         std::string result = "called(" + std::to_string(params.posParams.size());
         for (const auto& [name, value] : params.kwParams)
         {
-            result += "," + name + "=" + AsString(value);
+            result += "," + name + "=" + (IsStringValue(value) ? AsString(value) : std::string("<callable>"));
         }
         return InternalValue(result + ")");
     }
@@ -215,6 +215,8 @@ TEST(HostObjectTest, CallsWithPositionalAndKeywordArguments)
     const InternalValueMap params{ { "f", MakeToy(spec) }, { "o", MakeToy() } };
     EXPECT_EQ("called(2,k=v) called(0) True False", Render("{{ f(1, 2, k='v') }} {{ f.method() }} {{ f is callable }} {{ o is callable }}", params));
     EXPECT_EQ(L"called(1)", RenderW(L"{{ f(1) }}", params));
+    // A call block passes caller=, as to any callable
+    EXPECT_EQ("called(1,caller=<callable>)", Render("{% call f(1) %}body{% endcall %}", params));
     EXPECT_NE(std::string::npos, Render("{{ o() }}", params).find("'Toy' object is not callable"));
 }
 
@@ -279,6 +281,9 @@ TEST(HostObjectTest, MarkupLikeObjectUnderAutoescape)
     // str() without autoescape, __html__() with it, as markupsafe.escape has it
     EXPECT_EQ("<plain> <b>Тоу</b> &lt;plain&gt;|True False", Render("{{ m }} {% autoescape true %}{{ m }} {{ p }}{% endautoescape %}|{{ m is escaped }} {{ p is escaped }}", params));
     EXPECT_EQ(L"<b>Тоу</b> &lt;plain&gt;", RenderW(L"{% autoescape true %}{{ m }} {{ p }}{% endautoescape %}", params));
+    // safe, striptags and forceescape read __html__() too; string is str()
+    EXPECT_EQ("<b>Тоу</b>|Тоу|&lt;b&gt;Тоу&lt;/b&gt;|<plain>", Render("{{ m|safe }}|{{ m|striptags }}|{{ m|forceescape }}|{{ m|string }}", params));
+    EXPECT_EQ(L"<b>Тоу</b>|Тоу", RenderW(L"{{ m|safe }}|{{ m|striptags }}", params));
 }
 
 TEST(HostObjectTest, DictKeysByIdentity)

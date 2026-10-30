@@ -156,7 +156,7 @@ struct RecursiveUnwrapper
     // An integer outside int64 is visited as its decimal form (docs/tasks/0270)
     static BigIntView UnwrapRecursive(const BigIntHandle& arg, const ValueObject* /*owner*/) noexcept { return BigIntView{ arg.object->Decimal() }; }
     static ListRef UnwrapRecursive(const ListHandle& arg, const ValueObject* owner) noexcept { return ListRef(arg.accessor, owner, arg.isTuple); }
-    static MapRef UnwrapRecursive(const MapHandle& arg, const ValueObject* owner) noexcept { return MapRef(arg.accessor, owner); }
+    static MapRef UnwrapRecursive(const MapHandle& arg, const ValueObject* owner) noexcept { return MapRef(arg.accessor, owner, arg.isHost); }
     template<typename T>
     static const T& UnwrapRecursive(const BoxHandle<T>& arg, const ValueObject* /*owner*/) noexcept
     {
@@ -1242,9 +1242,9 @@ struct BinaryMathOperation : BaseVisitor<>
         }
         if constexpr (std::is_same_v<L, MapRef> || std::is_same_v<R, MapRef>)
         {
-            if (auto equal = HostEqual(left, right))
+            if (HasHostOperand(left, right))
             {
-                return *equal;
+                return HostCompare(left, right);
             }
         }
         if (m_oper == BinaryExpression::LogicalEq)
@@ -1258,15 +1258,31 @@ struct BinaryMathOperation : BaseVisitor<>
         ThrowUnsupported(left, right);
     }
 
-    // == and != with a host object on either side, which decides (host::Equal); nullopt for
-    // any other operator or operands
+    // Whether an operand of == or != is a host object, which then decides (HostCompare)
     template<typename L, typename R>
-    [[nodiscard]] std::optional<bool> HostEqual(const L& left, const R& right) const
+    [[nodiscard]] bool HasHostOperand(const L& left, const R& right) const
     {
         if (m_oper != BinaryExpression::LogicalEq && m_oper != BinaryExpression::LogicalNe)
         {
-            return std::nullopt;
+            return false;
         }
+        bool result = false;
+        if constexpr (std::is_same_v<L, MapRef>)
+        {
+            result = left.IsHost();
+        }
+        if constexpr (std::is_same_v<R, MapRef>)
+        {
+            result = result || right.IsHost();
+        }
+        return result;
+    }
+
+    // == or != with a host object on either side (host::Equal). Out of line and cold: inlined,
+    // it grew every Mismatch past GCC's budget for the loops that compare (docs/tasks/0352)
+    template<typename L, typename R>
+    [[nodiscard]] JINJA2CPP_COLD_INLINE ResultType HostCompare(const L& left, const R& right) const
+    {
         const IHostObject* leftHost = nullptr;
         const IHostObject* rightHost = nullptr;
         if constexpr (std::is_same_v<L, MapRef>)
@@ -1276,10 +1292,6 @@ struct BinaryMathOperation : BaseVisitor<>
         if constexpr (std::is_same_v<R, MapRef>)
         {
             rightHost = right.GetHostObject();
-        }
-        if (!leftHost && !rightHost)
-        {
-            return std::nullopt;
         }
         const bool equal = host::Equal(leftHost, HostOperand(left), rightHost, HostOperand(right));
         return m_oper == BinaryExpression::LogicalEq ? equal : !equal;
@@ -1984,9 +1996,9 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             return Mismatch(left, right);
         }
-        if (auto equal = HostEqual(left, right))
+        if (HasHostOperand(left, right))
         {
-            return *equal;
+            return HostCompare(left, right);
         }
 
         // An object (namespace(), cycler(), joiner()) equals only itself, as Python objects

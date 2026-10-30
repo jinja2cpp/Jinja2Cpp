@@ -403,6 +403,9 @@ struct ListHandle
 struct MapHandle
 {
     const IMapAccessor* accessor;
+    // The accessor is a host object's (host_object.h): in the value, so that a native map
+    // tells it is none without a virtual call
+    bool isHost;
 };
 
 // A pair, a callable or a renderer, in a ValueBox
@@ -868,9 +871,10 @@ private:
 class MapRef
 {
 public:
-    MapRef(const IMapAccessor* accessor, const ValueObject* owner) noexcept
+    MapRef(const IMapAccessor* accessor, const ValueObject* owner, bool isHost = false) noexcept
         : m_accessor(accessor)
         , m_owner(owner)
+        , m_isHost(isHost)
     {
     }
 
@@ -896,7 +900,10 @@ public:
     // See IMapAccessor::GetIteration
     bool GetIteration(ListAdapter& items) const { return m_accessor != nullptr && m_accessor->GetIteration(items); }
     [[nodiscard]] bool Iterates() const { return m_accessor != nullptr && m_accessor->Iterates(); }
-    [[nodiscard]] const IHostObject* GetHostObject() const { return m_accessor ? m_accessor->GetHostObject() : nullptr; }
+    // The object of a host language this map stands for (host_object.h); null for the others,
+    // which IsHost tells without asking the accessor
+    [[nodiscard]] bool IsHost() const noexcept { return m_isHost; }
+    [[nodiscard]] const IHostObject* GetHostObject() const { return m_isHost ? m_accessor->GetHostObject() : nullptr; }
 
     // An owning copy, which shares the map as copying the value does
     [[nodiscard]] MapAdapter ToAdapter() const;
@@ -907,6 +914,7 @@ public:
 private:
     const IMapAccessor* m_accessor;
     const ValueObject* m_owner;
+    bool m_isHost;
 };
 
 // A map and what keeps it alive, as ListAdapter is for a list
@@ -927,7 +935,7 @@ public:
     {
     }
 
-    [[nodiscard]] MapRef Ref() const noexcept { return MapRef(m_accessor, m_owner.get()); }
+    [[nodiscard]] MapRef Ref() const noexcept { return MapRef(m_accessor, m_owner.get(), m_isHost); }
 
     [[nodiscard]] size_t GetSize() const { return Ref().GetSize(); }
     [[nodiscard]] bool HasValue(const std::string& name) const { return Ref().HasValue(name); }
@@ -947,12 +955,19 @@ public:
     [[nodiscard]] GenericMap CreateGenericMap() const { return Ref().CreateGenericMap(); }
     // See IMapAccessor::GetLoopAttr
     bool GetLoopAttr(LoopAttr attr, InternalValue& value) const { return Ref().GetLoopAttr(attr, value); }
+    // Marks the accessor as a host object's (MakeHostValue)
+    MapAdapter& MarkAsHost() noexcept
+    {
+        m_isHost = true;
+        return *this;
+    }
 
 private:
     friend class InternalValue;
 
     const IMapAccessor* m_accessor = nullptr;
     ValueObjectPtr m_owner;
+    bool m_isHost = false;
 };
 
 
@@ -1174,13 +1189,13 @@ public:
 
     // NOLINTNEXTLINE(google-explicit-constructor,cppcoreguidelines-rvalue-reference-param-not-moved): takes its parts
     InternalValue(MapAdapter&& val) noexcept
-        : m_imm(detail::MapHandle{ std::exchange(val.m_accessor, nullptr) })
+        : m_imm(detail::MapHandle{ std::exchange(val.m_accessor, nullptr), val.m_isHost })
         , m_obj(std::move(val.m_owner))
     {
     }
 
     InternalValue(const MapAdapter& val) noexcept // NOLINT(google-explicit-constructor)
-        : m_imm(detail::MapHandle{ val.m_accessor })
+        : m_imm(detail::MapHandle{ val.m_accessor, val.m_isHost })
         , m_obj(val.m_owner)
     {
     }
@@ -1650,7 +1665,12 @@ inline ListAdapter ListRef::ToAdapter() const
 
 inline MapAdapter MapRef::ToAdapter() const
 {
-    return MapAdapter(m_accessor, ValueObjectPtr(m_owner));
+    auto adapter = MapAdapter(m_accessor, ValueObjectPtr(m_owner));
+    if (m_isHost)
+    {
+        adapter.MarkAsHost();
+    }
+    return adapter;
 }
 
 struct KeyValuePair
@@ -1715,7 +1735,7 @@ inline std::optional<MapRef> AsMap(const InternalValue& val)
 {
     if (const auto* map = std::get_if<detail::MapHandle>(&detail::InternalValueAccess::Data(val)))
     {
-        return MapRef(map->accessor, detail::InternalValueAccess::Object(val));
+        return MapRef(map->accessor, detail::InternalValueAccess::Object(val), map->isHost);
     }
     return std::nullopt;
 }
