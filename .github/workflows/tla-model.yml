@@ -29,6 +29,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # A stable release: the v1.8.0 pre-release asset was rebuilt upstream on 2026-10-30, which broke
+  # the pinned hash. Change TLA_URL and TLA_SHA256 together, here and in linux-build.yml
   TLA_URL: https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
   TLA_SHA256: 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88
 
