@@ -450,9 +450,11 @@ bool BorrowedCells::DropUnheldOnce() noexcept
     }
     // Out of the registry first, while the data the identity names is alive: the identity is
     // not reused before its cell is gone from the table
+    // The host may let go of a generic container's last copy on another thread meanwhile
+    // (docs/tasks/0336): a cell that became unheld since the count waits for the next pass
     for (auto entry = m_cells->begin(); entry != m_cells->end();)
     {
-        if (entry->second->IsUnheld())
+        if (dropped.size() != count && entry->second->IsUnheld())
         {
             JINJA2CPP_CELL_TRACE_EVENT("drop", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Ptr("c", Trace::Space::Cell, entry->second.get()),
                                        Trace::Links("links", entry->second->m_links.data(), entry->second->m_links.size()));

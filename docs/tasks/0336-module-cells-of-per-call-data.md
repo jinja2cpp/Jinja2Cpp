@@ -51,9 +51,11 @@ the accessor's only owner when the accessor derives from `detail::OwnedAccessor`
 container or struct, the JSON bindings), the container's `shared_ptr` shares the control block that
 owns it (not an aliasing pointer, as the 1.x callable form or a nested item's `WithOwner` makes),
 and `IsSoleOwner` (0339's acquire) holds for that pointer. The library reads the pointer through
-`detail::GenericAccessorAccess`, a friend of `GenericList` and `GenericMap`: no exported symbol or
-class layout of the library changes; the header-only accessor templates gain the base (16 bytes).
-Any other accessor keeps its cell until the module goes, as before. The TLA+ model already had the
+`detail::GenericAccessorAccess`, a friend of `GenericList` and `GenericMap`: no exported function or
+class layout of the library changes (the library adds the typeinfo of `detail::OwnedAccessor`); the
+header-only accessor templates gain the base (16 bytes). Any other accessor keeps its cell until the
+module goes, as before. Limit, filed as 0365: a fresh generic container nested in a `ValuesList`
+argument is lent by reference (no owner), so its cell still stays per call. The TLA+ model already had the
 rule (`FixGenericOwner` with the host-copy test in `Unheld`); the trace's `adopt` now reports
 `owned` for a generic container's cell, which `MayDrop` reads.
 
