@@ -1,6 +1,7 @@
 #include "template_dict.h"
 
 #include "engine_errors.h"
+#include "host_object.h"
 #include "internal_value.h"
 #include "recursion_guard.h"
 #include "value_visitors.h"
@@ -37,6 +38,7 @@ constexpr char KindTuple = 't';
 constexpr char KindRange = 'r';
 constexpr char KindString = 's';
 constexpr char KindBigInt = 'b';
+constexpr char KindObject = 'o';
 
 // The type of a value Python's hash() rejects, also inside a tuple
 struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
@@ -73,6 +75,11 @@ struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
     }
     const char* operator()(const MapRef& map) const
     {
+        // An object of the host language says itself, as Python asks its __hash__
+        if (const auto* host = map.GetHostObject())
+        {
+            return host->Hash() ? nullptr : host->TypeName();
+        }
         return map.GetObjectClass() || map.GetAttrPolicy() == MapAttrPolicy::KeysFirst ? nullptr : "dict";
     }
     const char* operator()(const KeyValuePair& pair) const { return Apply<UnhashableTypeGetter>(pair.value, m_items); }
@@ -105,6 +112,18 @@ void AppendBigInt(std::string& out, std::string_view decimal)
     out.push_back(KindBigInt);
     AppendBytes(out, static_cast<uint64_t>(decimal.size()));
     out.append(decimal);
+}
+
+// ObjectKey: the key of an object by its identity, as Python's default __hash__ and __eq__
+// have it. The dict's table of first spellings (TemplateDict::KeyOf) holds the key, which keeps
+// the object, and so its address, alive while the entry is there. Only objects of the host
+// language have it so far (docs/tasks/0352, the address of IHostObject::Identity, so that two
+// views of one host object are one key); 0049 P4 extends it to the engine's own objects
+void AppendObjectKey(std::string& out, const void* identity)
+{
+    out.push_back(DictKeyMark);
+    out.push_back(KindObject);
+    AppendBytes(out, reinterpret_cast<uintptr_t>(identity)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the address is the key
 }
 
 // The number of items of range(start, stop, step), for a step that is not zero
@@ -236,6 +255,15 @@ struct KeyTokenBuilder
     }
     const char* operator()(const MapRef& map) const
     {
+        if (const auto* host = map.GetHostObject())
+        {
+            if (!host->Hash())
+            {
+                return host->TypeName();
+            }
+            AppendObjectKey(m_out, host->Identity());
+            return nullptr;
+        }
         if (map.GetObjectClass() || map.GetAttrPolicy() == MapAttrPolicy::KeysFirst)
         {
             AddObject();

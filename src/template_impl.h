@@ -386,6 +386,14 @@ public:
     // (template_module.cpp)
     static nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params);
 
+    // Renders `tpl` with params that are values of the engine already, such as host objects
+    // (host_object.h): the private entry of the Python module, which links the library
+    // statically (docs/tasks/0352)
+    static std::optional<BasicErrorInfo<CharT>> RenderInternal(const BasicTemplate<CharT>& tpl, std::basic_string<CharT>& os, const InternalValueMap& params)
+    {
+        return static_cast<const TemplateImpl*>(tpl.m_impl.get())->Render(os, params);
+    }
+
     // Renders with the params of a ValuesMap or a GenericMap, appending to a string or writing to a
     // host's sink. Rendering reads the template only, so several threads may render one template at once.
     template<typename Target, typename ParamsMap>
@@ -429,7 +437,14 @@ public:
 
             // A GenericMap returns values by copy; the context refers to them, so they live here
             std::list<Value> genericValues;
-            if constexpr (std::is_same_v<ParamsMap, GenericMap>)
+            if constexpr (std::is_same_v<ParamsMap, InternalValueMap>)
+            {
+                for (const auto& [name, value] : params)
+                {
+                    intParams[name] = value;
+                }
+            }
+            else if constexpr (std::is_same_v<ParamsMap, GenericMap>)
             {
                 for (auto& name : params.GetKeys())
                 {

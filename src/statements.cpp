@@ -3,6 +3,7 @@
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
+#include "host_object.h"
 #include "internal_value.h"
 #include "intrusive_ptr.h"
 #include "lookup_result.h"
@@ -2829,7 +2830,12 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
 void MacroCallStatement::Render(OutStream& os, RenderContext& values)
 {
     const auto& call = values.Nodes()[m_call];
-    const auto fnVal = values.Nodes()[call.GetValueRef()].Evaluate(values);
+    auto fnVal = values.Nodes()[call.GetValueRef()].Evaluate(values);
+    // An object of the host language that is callable takes caller= as any call
+    if (const auto* host = GetHostObject(fnVal))
+    {
+        fnVal = host::MakeCall(fnVal, *host);
+    }
     const auto* callable = GetIf<Callable>(&fnVal);
     if (!callable)
     {
