@@ -14,8 +14,10 @@ harness (`tla/apalache.py`, `CellApalache.tla`, `CellInductive.tla`, README "Pas
 and measured it. On the smallest module scope (6 adapters, 2 cells, 3 storages, 1 export) one
 inductive step of the full `Next` ran out of memory at 14 GB, and `SnapshotStable` or
 `NoCrossThreadWrite` alone took over 15 minutes against `IndInit`, which implies them. Finding
-`IndInv` takes dozens of such rounds. Step F therefore shipped the harness, the
-well-formedness invariant and a cutoff argument on paper, and left the proof to this task.
+`IndInv` takes dozens of such rounds. Ruslan decided (2026-10-30) to ship the harness,
+the well-formedness invariant and a cutoff argument on paper, and to defer the proof here: the
+model is a design tool, and the implementation is checked by the periodic validation of a
+frozen version (0364).
 
 **What the proof would add.** For fixed constants, little: every scope is finite (README,
 "Depth: every scope is finite"), so a completed run without the level bound (0351 item 1)

@@ -141,3 +141,6 @@ completes covers every behaviour (0351 item 1); `WellFormed` is a TLC invariant 
 run; and tla/README.md, "Past the bounds", gives the cutoff argument for threads, identities and
 nesting, with its gaps. Apalache's assignment check also found a dead end in `DropUnheld` (an
 empty `lag` was required), which cut TLC's behaviours short; fixed.
+Decision (Ruslan, 2026-10-30): the model is a design tool and stays bounded evidence plus that
+argument; the implementation is checked by a periodic deep validation of a frozen version
+(0364), not per PR.
