@@ -29,8 +29,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  TLA_URL: https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
-  TLA_SHA256: fc6878c603f0fdc18b9fe3e5bf51860cb90ab5b1154e3c371660c036d6bdd63e
+  # A stable release: the v1.8.0 pre-release asset was rebuilt upstream on 2026-10-30, which broke
+  # the pinned hash. Change TLA_URL and TLA_SHA256 together, here and in linux-build.yml
+  TLA_URL: https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
+  TLA_SHA256: 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88
 
 jobs:
   plan:
@@ -93,11 +95,24 @@ jobs:
         df -h / /mnt "$RUNNER_TEMP" || true
         lscpu | grep -E "^(Model name|CPU\(s\)|Thread|Core)"; free -g; java -version
 
+    # The jar is kept in the Actions cache under its hash, so a later rebuild of the upstream
+    # asset cannot change what runs; the hash is checked either way
+    - name: Cache TLC
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ~/.cache/tla2tools
+        key: tla2tools-${{ env.TLA_SHA256 }}
+
     - name: Fetch TLC
       run: |
         set -euo pipefail
-        curl -sSfL --retry 3 -o tla/tla2tools.jar "$TLA_URL"
-        echo "$TLA_SHA256  tla/tla2tools.jar" | sha256sum -c -
+        jar="$HOME/.cache/tla2tools/$TLA_SHA256.jar"
+        if [ ! -f "$jar" ]; then
+          mkdir -p "$(dirname "$jar")"
+          curl -sSfL --retry 3 -o "$jar" "$TLA_URL"
+        fi
+        echo "$TLA_SHA256  $jar" | sha256sum -c -
+        cp "$jar" tla/tla2tools.jar
 
     # Verdicts by input hash (check.py --cache): a push that leaves a run's spec and constants as
     # they were does not run it again, so a fix to one mutant re-runs that mutant, not render
