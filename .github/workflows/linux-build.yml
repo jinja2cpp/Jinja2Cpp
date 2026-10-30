@@ -55,8 +55,13 @@ jobs:
   # pairwise axis: five rows build `bigint: boost`, so that boost meets every standard,
   # compiler, build type, linkage and noderef value, the rest keep `none` and still
   # do too, and one of them checks the installed package.
+  # The `debug-containers` job sits outside the matrix too: a checking standard library
+  # (docs/tasks/0344), one row per library.
   # The `boost-free` job sits outside the matrix: the defaults with tests OFF fetch and
   # install no Boost at all (docs/tasks/0230).
+  # One Debug row builds the borrowed-cell trace hooks (`celltrace`, JINJA2CPP_CELL_TRACE) and
+  # checks the traces of the cell and module tests against tla/CellTrace.tla with TLC
+  # (docs/tasks/0338 step B). It is a check after the tests, not an axis.
   # JSON bindings are package components (docs/tasks/0311): these jobs test the nlohmann_json
   # binding and the JsonTraits contract on toy traits (JINJA2CPP_TEST_BINDINGS default);
   # bindings.yml tests every binding on PRs that touch them, and nightly.
@@ -69,7 +74,7 @@ jobs:
       matrix:
         include:
           - { std: 17, compiler: gcc-12,   config: Release, shared: 'OFF', noderef: 'OFF', bigint: boost }
-          - { std: 17, compiler: gcc-14,   config: Debug,   shared: 'OFF' }
+          - { std: 17, compiler: gcc-14,   config: Debug,   shared: 'OFF', celltrace: true }
           - { std: 17, compiler: clang-18, config: RelWithDebInfo, shared: 'ON', abi: true }
           - { std: 17, compiler: clang-20, config: Release, shared: 'OFF', package: 23, bigint: boost }
           - { std: 20, compiler: gcc-12,   config: RelWithDebInfo, shared: 'ON', abi: true }
@@ -105,6 +110,7 @@ jobs:
           -DJINJA2CPP_STRICT_WARNINGS=ON \
           -DJINJA2CPP_NODEREF_CHECKS=${{ matrix.noderef == 'OFF' && 'OFF' || '' }} \
           -DJINJA2CPP_WITH_BIGINT=${{ matrix.bigint || 'none' }} \
+          -DJINJA2CPP_CELL_TRACE=${{ matrix.celltrace && 'ON' || 'OFF' }} \
           "-DCMAKE_CXX_FLAGS=${{ startsWith(matrix.compiler, 'gcc') && '-Wno-error=maybe-uninitialized' || '' }}"
 
     - name: Build
@@ -112,6 +118,13 @@ jobs:
 
     - name: Test
       run: ctest --test-dir .build --output-on-failure
+
+    - name: Trace validation
+      if: matrix.celltrace
+      run: |
+        curl -sSfLo tla/tla2tools.jar https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar
+        echo "fc6878c603f0fdc18b9fe3e5bf51860cb90ab5b1154e3c371660c036d6bdd63e  tla/tla2tools.jar" | sha256sum -c -
+        python3 tla/check.py --trace --tests .build/jinja2cpp_tests --jobs 2 --mutants
 
     # abidiff against the ABI of the previous master build (report only) or, once the RC
     # commits abi/libjinja2cpp.so.2.cxx<std>.abi, against that baseline: an incompatible
@@ -331,6 +344,73 @@ jobs:
     # A hang under a sanitizer prints the stuck test's output instead of running to the 6 h job limit
     - name: Test
       run: ctest --test-dir .build --output-on-failure --timeout 1200
+
+  # A checking standard library finds what ASan cannot: a stale iterator or reference into a
+  # container whose buffer is still allocated reads valid memory with the wrong value
+  # (docs/tasks/0344). It changes the ABI, so each row builds everything (dependencies, tests)
+  # in that mode (JINJA2CPP_DEBUG_CONTAINERS); an abort is a finding. libstdc++ has the
+  # iterator-invalidation checks (_GLIBCXX_DEBUG); libc++ has hardening "debug" (bounds and
+  # preconditions). The libstdc++ row adds ASan+UBSan. Container-overflow annotations are off:
+  # only the library is instrumented, and with GCC 13 _GLIBCXX_SANITIZE_VECTOR makes ASan report
+  # gtest's own vector growth (libc++ reports the same kind of false positive). The libc++ row has
+  # no ASan: Ubuntu's libc++abi is not ASan-aware (alloc-dealloc-mismatch on exceptions).
+  # The rows are outside the C++ standard x compiler matrix: one standard each.
+  debug-containers:
+    name: ${{ matrix.stdlib }} debug containers C++${{ matrix.std }} (${{ matrix.compiler }})
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { std: 20, compiler: gcc-14,   stdlib: libstdc++, sanitizer: address+undefined }
+          - { std: 17, compiler: clang-18, stdlib: libc++,    sanitizer: none }
+
+    env:
+      ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      GTEST_BRIEF: 1
+
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    - name: Install toolchain
+      uses: ./.github/actions/install-toolchain
+      with:
+        compiler: ${{ matrix.compiler }}
+
+    - name: Install libc++
+      if: matrix.stdlib == 'libc++'
+      run: sudo apt-get install -y --no-install-recommends libc++-${COMPILER##*-}-dev libc++abi-${COMPILER##*-}-dev
+      env:
+        COMPILER: ${{ matrix.compiler }}
+
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: debug-containers-${{ matrix.compiler }}-${{ matrix.stdlib }}-${{ matrix.std }}
+
+    # Sanitizer instrumentation makes GCC emit false-positive -Wstringop-overflow in libstdc++
+    # atomics (as in the sanitizers job); warnings are enforced by the build matrix instead.
+    - name: Configure
+      run: |
+        cmake -S . -B .build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DJINJA2CPP_DEPS_MODE=internal \
+          -DJINJA2CPP_CXX_STANDARD=${{ matrix.std }} \
+          -DJINJA2CPP_DEBUG_CONTAINERS=${{ matrix.stdlib }} \
+          -DJINJA2CPP_WITH_SANITIZERS=${{ matrix.sanitizer }} \
+          -DJINJA2CPP_STRICT_WARNINGS=OFF
+
+    - name: Build
+      run: cmake --build .build --parallel
+
+    # DebugContainersTest seeds a misuse that only the checking library catches and expects an abort
+    - name: Test
+      run: ctest --test-dir .build --output-on-failure --timeout 1200
+
+    # A skip (the checks are off) must not pass: the test has to run and pass
+    - name: Seeded misuse aborts
+      run: .build/jinja2cpp_tests --gtest_filter='DebugContainersTest.*' | tee /dev/stderr | grep -q '\[  PASSED  \] 1 test'
 
   coverage:
     name: Coverage (gcc-14)

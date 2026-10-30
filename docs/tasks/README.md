@@ -401,8 +401,17 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0329](0329-reflect-counts-in-ci.md) | Count `--data reflect` in the PR gate and the trend | perf | medium | open |
 | [0330](0330-gate-reports-newly-outlined-frames.md) | The PR gate names hot functions that GCC stopped inlining | perf | low | open |
 | [0331](0331-kept-container-contract.md) | What a host callable keeps of a container the render hands it | parity | medium | in-progress |
-| [0332](0332-module-cell-in-kept-container.md) | A module's live cell read through a container the host keeps | robustness | low | open |
+| [0332](0332-module-cell-in-kept-container.md) | A module's live cell read through a container the host keeps | robustness | low | done |
 | [0333](0333-locale-free-float-parsing.md) | Float parsing follows the C locale | robustness | high | done |
 | [0334](0334-makecallable-per-argument-dispatch.md) | MakeCallable visits every combination of argument types | api | high | done |
-| [0335](0335-late-export-in-a-later-module-call.md) | A module call that hands out a container before it writes it keeps the earlier call's state | parity | low | open |
+| [0335](0335-late-export-in-a-later-module-call.md) | A module call that hands out a container before it writes it keeps the earlier call's state | parity | low | done |
 | [0336](0336-module-cells-of-per-call-data.md) | A template module keeps the cells of generic containers made for one call | robustness | medium | open |
+| [0337](0337-nested-module-export-written-by-outer-call.md) | A nested module call's kept value is written by the outer call | robustness | medium | done |
+| [0338](0338-borrowed-cell-protocol-safety-proof.md) | From a bounded model of the borrowed-cell protocol to a safety argument | robustness | medium | open |
+| [0343](0343-clang-lifetime-and-lock-annotations.md) | Check lifetimes and lock discipline at compile time with Clang annotations | robustness | medium | done |
+| [0344](0344-debug-containers-test-job.md) | A test job with a checking standard library (iterator and reference invalidation) | ci | medium | done |
+| [0345](0345-latest-llvm-analysis-job.md) | A report-only job with the latest LLVM for trunk lifetime and cross-TU analyses | ci | low | done |
+| [0346](0346-global-item-link-dropped-on-another-thread.md) | A global's item adapter in a block the global let go of, dropped on another thread | robustness | low | open |
+| [0347](0347-module-cells-in-lazy-and-namespace-exports.md) | Module cells reached through a lazy list or a namespace are not pinned | robustness | medium | open |
+| [0348](0348-generic-list-shared-accessor.md) | GenericList and GenericMap hold their accessor by a shared pointer | api | medium | done |
+| [0349](0349-ctu-analyzer-on-newest-llvm.md) | Run the cross-TU static analyzer on the newest LLVM and on libstdc++ | ci | low | open |

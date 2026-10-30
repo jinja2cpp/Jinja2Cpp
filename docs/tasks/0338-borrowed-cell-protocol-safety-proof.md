@@ -1,5 +1,6 @@
 ---
 status: open
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/688
 priority: medium
 area: robustness
 depends: [0337]
@@ -116,3 +117,8 @@ and it does not describe the model as a proof.
 - The memory-order argument exists, as a model or as a document.
 - The bounded results come with either inductive invariants or a cutoff argument, or the README
   states that the result is bounded evidence only.
+
+**Step B, trace validation (2026-10-28).** `-DJINJA2CPP_CELL_TRACE=ON` logs the protocol's
+events, `tla/check.py --trace` checks each test's trace against `tla/CellTrace.tla`, which
+applies the rules in `tla/CellRules.tla`; one Debug CI row runs it with its mutants. It sees F1
+(0337) from the C++ traces before #689. See tla/README.md, "Trace validation".

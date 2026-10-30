@@ -25,7 +25,9 @@ std::string ResolveNames(const std::string& source)
     NodeArena nodes;
     TemplateEnv env;
     detail::LoadSettings settings{ env.GetSettings() };
-    TemplateParser<char> parser(&source, settings, &env, "test", nodes);
+    // The parser keeps a reference to its name (Clang Lifetime Safety, docs/tasks/0345)
+    const std::string templateName = "test";
+    TemplateParser<char> parser(&source, settings, &env, templateName, nodes);
     auto result = parser.Parse();
     if (!result)
     {

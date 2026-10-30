@@ -12,6 +12,7 @@
 #include <iterator> // IWYU pragma: keep (public header: user code may rely on it)
 #include <memory>   // IWYU pragma: keep (public header: user code may rely on it)
 #include <optional>
+#include <type_traits>
 #include <utility>
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
@@ -163,13 +164,25 @@ struct JINJA2CPP_EXPORT IListItemAccessor : virtual IComparable
 namespace detail
 {
 class GenericListIterator;
+
+//! Callables the 1.x containers' constructors can get empty: a `std::function` and a function pointer. Others are not tested, so a
+//! captureless lambda is not converted to a function pointer to test it
+template<typename Fn>
+struct IsNullableCallable : std::is_pointer<Fn>
+{
+};
+
+template<typename R, typename... Args>
+struct IsNullableCallable<std::function<R(Args...)>> : std::true_type
+{
+};
 } // namespace detail
 
 /*!
  * \brief Facade class for generic lists
  *
  * This class holds the implementation of particular generic list interface and provides friendly access to it's method. Also this class is used to hold
- * the particular list. Pointer to the generic list interface implementation is held inside std::function object which provides access to the pointer to the interface.
+ * the particular list. The interface implementation is held by a `std::shared_ptr<const IListItemAccessor>`, so copies of a GenericList share one accessor (and its state).
  *
  * You can use \ref MakeGenericList method (`jinja2cpp/make_generic_list.h`) to create instances of the GenericList:
  * ```
@@ -196,22 +209,47 @@ public:
     /*!
      * \brief Initializing constructor
      *
-     * This constructor is only one way to create the valid GenericList object. `accessor` is a functional object which provides access to the \ref IListItemAccessor
-     * interface. The most common way of GenericList creation is to initialize it with lambda which simultaniously holds and and provide access to the
-     * generic list implementation:
+     * Holds `accessor` and shares it with every copy of the list. The pointer can point into a larger object that owns the accessor
+     * (the aliasing constructor of `std::shared_ptr`):
      *
      * ```
      * auto MakeGeneratedList(ListGenerator&& fn)
      * {
-     *     return GenericList([accessor = GeneratedListAccessor(std::move(fn))]() {return &accessor;});
+     *     return GenericList(std::make_shared<GeneratedListAccessor>(std::move(fn)));
      * }
      * ```
      *
-     * @param accessor Functional object which provides access to the particular generic list implementation
+     * @param accessor Shared pointer to the particular generic list implementation
      */
-    explicit GenericList(std::function<const IListItemAccessor*()> accessor)
+    explicit GenericList(std::shared_ptr<const IListItemAccessor> accessor) noexcept
         : m_accessor(std::move(accessor))
     {
+    }
+
+    /*!
+     * \brief Initializing constructor from a callable (1.x form)
+     *
+     * `fn` is stored in one shared allocation and called once, here; the accessor it returns must stay valid as long as `fn` lives. An empty
+     * `std::function` or a callable that returns nullptr gives an invalid list.
+     *
+     * @param fn Callable which returns a pointer to the particular generic list implementation
+     */
+    template<typename Fn, std::enable_if_t<!std::is_same_v<std::decay_t<Fn>, GenericList> && std::is_invocable_r_v<const IListItemAccessor*, std::decay_t<Fn>&>, int> = 0>
+    explicit GenericList(Fn&& fn)
+    {
+        auto holder = std::make_shared<std::decay_t<Fn>>(std::forward<Fn>(fn));
+        if constexpr (detail::IsNullableCallable<std::decay_t<Fn>>::value)
+        {
+            if (!static_cast<bool>(*holder))
+            {
+                return;
+            }
+        }
+        const IListItemAccessor* raw = (*holder)();
+        if (raw)
+        {
+            m_accessor = std::shared_ptr<const IListItemAccessor>(std::move(holder), raw);
+        }
     }
 
     /*!
@@ -221,7 +259,7 @@ public:
      */
     [[nodiscard]] std::optional<size_t> GetSize() const
     {
-        return m_accessor ? m_accessor()->GetSize() : std::optional<size_t>();
+        return m_accessor ? m_accessor->GetSize() : std::optional<size_t>();
     }
 
     /*!
@@ -229,9 +267,9 @@ public:
      *
      * @return Pointer to the list accessor interface or nullptr in case of non-initialized GenericList object
      */
-    [[nodiscard]] const IListItemAccessor* GetAccessor() const
+    [[nodiscard]] const IListItemAccessor* GetAccessor() const noexcept
     {
-        return m_accessor ? m_accessor() : nullptr;
+        return m_accessor.get();
     }
 
     /*!
@@ -239,9 +277,9 @@ public:
      *
      * @return true if GenericList object is valid (initialize) or false otherwize
      */
-    [[nodiscard]] bool IsValid() const
+    [[nodiscard]] bool IsValid() const noexcept
     {
-        return !(!m_accessor);
+        return m_accessor != nullptr;
     }
 
     /*!
@@ -278,7 +316,7 @@ public:
     [[nodiscard]] bool IsEqual(const GenericList& rhs) const;
 
 private:
-    std::function<const IListItemAccessor*()> m_accessor;
+    std::shared_ptr<const IListItemAccessor> m_accessor;
 };
 
 JINJA2CPP_EXPORT bool operator==(const GenericList& lhs, const GenericList& rhs);

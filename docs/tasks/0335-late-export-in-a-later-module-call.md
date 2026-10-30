@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/695
 priority: low
 area: parity
 depends: [0331]
@@ -34,9 +35,53 @@ cell keeps the holder of the call that runs; `Unshare` copies into new storage a
 the current call's holder at it, so the earlier call's holder keeps the old items. An export
 in a call with no earlier snapshot needs no holder, so `Module/keep` keeps its allocations.
 
-The model's `open-0335-late-export` run (`tla/check.py`) gives this task's counterexample; it
-should pass once the fix is modelled.
+The model's `no-call-pin` run (`tla/check.py`, formerly `open-0335-late-export`) gives this task's
+counterexample; with the design below modelled, every pass run checks `ExportKeepsCallState`.
+
+**Decision (Ruslan, 2026-10-29).** Call-end pinning as designed below (`FixCallPin`); it also closes 0341. Next: the C++ step.
+
+**Design (model-first, 0338 step A; decided 2026-10-29).** Modelled in `tla/CellProtocol.tla`
+as `FixCallPin`; see `tla/README.md`, "Designs of the open tasks".
+
+A module call's exports are *live* while the call runs and *pinned* when it ends. An analogy: the
+call hands the host a window onto the module's desk rather than a photocopy; when the call ends,
+the window is replaced by a photograph of what the desk then showed, and the next writer to the
+desk first takes a fresh sheet (copy on write) instead of drawing over the photographed one.
+
+1. An export in a module call (`ExportList`, `ExportMap`, and the export of a template container,
+   `keep([l])`) holds a small per-call export context instead of the cell's items. While the call
+   runs, a read through it reads the cell's current storage, on the call's thread, so the export
+   sees every later write of the same call, nested calls included. `NoteExport` no longer marks
+   anything at export time.
+2. `~ModuleCallCollector`, under the module's lock, pins the call's context: for every module cell
+   the call's exports reach, found **by identity** in the registry (`GetIdentity()` of the item's
+   accessor), it records the cell's storage (sharing the items, a reference count) and sets the
+   cell's mark to `SharedExport`. From then on a read through the context uses only the recorded
+   storages, never an adapter's link (which the module thread may still change), and an item whose
+   identity has no recorded storage reads the host's data.
+3. `Unshare` is unchanged: a marked cell copies when the items are not unique, and the pinned
+   storage stays as it was. `m_exportedIn` becomes a flag (shared or not): no write compares call
+   ids any more, so 0337's sentinel and the call-id wrap of 0341 go away.
+
+What the model checks: `ExportKeepsCallState` (this task) and `SnapshotStable` with nested calls
+(0337) both hold in every pass run; `no-call-pin` (the code after 0337) gives this task's
+counterexample, `pin-without-marks` and `pin-top-only` show that the mark and the nested pin are
+both needed, `call-id-wrap` passes with ids that wrap after 2 while `call-id-wrap-no-pin` fails.
+
+Cost and open choices for the C++ step: one context per call that exports a module cell (a small
+allocation; `Module/keep` needs a `bench/count.py` verdict, and the context can live in the
+`GenericList`'s own allocation when a call exports one value). Finding the nested cells at the pin
+needs a walk of the exported cells' items; it is skipped when the registry holds no cell besides
+the exported ones, which is the `Module/keep` case. Pinning every cell of the registry instead is
+also safe (it only copies more), and simpler.
 
 **Done when.** `BorrowedCellsKept` has rows for a list and a dict where call 2 runs `keep(l)`
 before `l.append(2)` and keeps `[0, 1, 2]` while call 1's value stays `[0, 1]`, ASan and TSan
 are clean, and `Module/keep` and `Module/keep_written` do not move in `bench/count.py`.
+
+**Implementation** (PR #695). `CallExports` in `src/borrowed_cells.h`: `ExportList`/`ExportMap` in the cell's own
+module call return a view (`CallListView`, `CallMapView` in `src/internal_value.cpp`) that reads through
+the call's exports, and `~ModuleCallCollector` pins them (`BorrowedCells::PinExports`) before
+`DropUnheld`. The pin shares the storage's object, so `BorrowedCell::OwnsItemsAlone` sees it. The
+nested walk is skipped when the pin already holds every cell of the module. `m_exportedIn` became
+the flag `m_shared`; call ids only name calls in the trace and may wrap (0341).

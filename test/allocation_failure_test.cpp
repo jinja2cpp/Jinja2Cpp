@@ -452,6 +452,11 @@ protected:
 TEST_F(ModuleCallTest, CallsStayFlat)
 {
     JINJA2CPP_SKIP_UNREACHED_INJECTION();
+#ifdef _LIBCPP_VERSION
+    // libc++abi allocates an exception's message with operator new and frees it with free(), so
+    // the counter sees one live allocation per failing call (JINJA2CPP_DEBUG_CONTAINERS=libc++, 0344)
+    GTEST_SKIP() << "the allocation counter cannot follow libc++abi's exception messages";
+#endif
     for (const char* body : { "{% import 'lib' as l with context %}{{ l.x() }}{% include 'lib' %}",
                               "{% import 'lib' as l %}{{ l.x() }}",
                               "{% from 'lib' import x with context %}{{ x() }}",
@@ -573,6 +578,67 @@ TEST_F(AllocationFailureTest, KeptModuleSnapshotSurvivesAFailedCopy)
         call(3);
         ASSERT_EQ("[0, 1]", show(list)) << "allocation " << n;
         ASSERT_EQ("{'a': 0, 'b': 1}", show(dict)) << "allocation " << n;
+        if (!fired)
+        {
+            break;
+        }
+    }
+    EXPECT_LT(0, n) << "no allocation reached the injection";
+    EXPECT_LT(n, maxAllocations);
+}
+
+// A call that succeeds hands out values that keep its final state, also when recording that state
+// at the call's end runs out of memory: the call then fails instead (0335, Codex review). Here the
+// kept list is a template list, so the end of the call records every cell of the module
+TEST_F(AllocationFailureTest, SucceededCallKeepsItsStateOrFails)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% set _ = a.append(x) %}{% set _ = b.append(x) %}{% set _ = keep([a, b]) %}{% endmacro %}"));
+    const auto show = [](const Value& v) {
+        Template shown;
+        EXPECT_TRUE(!!shown.Load("{{ k }}"));
+        return shown.RenderAsString(ValuesMap{ { "k", v } }).value();
+    };
+    long n = 0;
+    for (; n != maxAllocations; ++n)
+    {
+        std::vector<Value> kept;
+        ValuesMap params{ { "a", ValuesList{ 0 } }, { "b", ValuesList{ 0 } } };
+        params["keep"] = UserCallable(
+            [&kept](const UserCallableParams& p) {
+                kept.push_back(p["v"]);
+                return Value();
+            },
+            { ArgInfo{ "v" } });
+        auto module = tpl.MakeModule(params);
+        ASSERT_TRUE(!!module);
+        const auto call = [&module](int64_t x) {
+            UserCallableParams callParams;
+            callParams.extraPosArgs = ValuesList{ x };
+            module->exports["add"].As<UserCallable>().callable(callParams);
+        };
+        bool fired = false;
+        bool succeeded = false;
+        OnFreshThread([&] {
+            const Injection injection(n);
+            try
+            {
+                call(1);
+                succeeded = true;
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): a failed call is one of the outcomes checked
+            {
+            }
+            fired = Injection::Fired();
+        });
+        if (succeeded)
+        {
+            call(2);
+            ASSERT_EQ(2u, kept.size()) << "allocation " << n;
+            ASSERT_EQ("[[0, 1], [0, 1]]", show(kept[0])) << "allocation " << n;
+            ASSERT_EQ("[[0, 1, 2], [0, 1, 2]]", show(kept[1])) << "allocation " << n;
+        }
         if (!fired)
         {
             break;

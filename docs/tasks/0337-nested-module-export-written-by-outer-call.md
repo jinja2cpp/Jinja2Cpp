@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
 priority: medium
 area: robustness
 depends: [0331]
 touches: [src/borrowed_cells.h, src/borrowed_cells.cpp, test/borrowed_cells_test.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/689
 ---
 # A nested module call's kept value is written by the outer call
 

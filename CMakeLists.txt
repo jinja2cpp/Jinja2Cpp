@@ -60,6 +60,7 @@ option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as e
 set(JINJA2CPP_NODEREF_CHECKS "" CACHE STRING "Checks of the handles that link a parse tree: OFF, ON (Seal and cross-template links), FULL (every access); empty picks FULL for Debug, sanitizer and fuzz builds, else ON")
 set_property(CACHE JINJA2CPP_NODEREF_CHECKS PROPERTY STRINGS "" ON FULL OFF)
 option(JINJA2CPP_WITH_UNICODE_NAMES "Decode \\N{name} escapes in string literals with the Unicode name table (about 450 KB of data)" ON)
+option(JINJA2CPP_CELL_TRACE "Log the borrowed-cell protocol's events to the file the JINJA2CPP_CELL_TRACE environment variable names, for tla/check.py --trace (docs/tasks/0338); a test build only" OFF)
 option(JINJA2CPP_CHECK_SLOTS "Check every name read from a slot against its lookup by name (always on without NDEBUG)" OFF)
 option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
 option(JINJA2CPP_PIC "Control -fPIC option for library build" OFF)
@@ -129,6 +130,36 @@ if(NOT ${JINJA2CPP_WITH_SANITIZERS} STREQUAL "none")
     add_sanitizer_target(${JINJA2CPP_SANITIZE_TARGET})
 endif()
 
+# A checking standard library for a test build (docs/tasks/0344). Both modes change the ABI
+# of std containers, so the setting is global: dependencies and tests are built the same way.
+#   libstdc++: _GLIBCXX_DEBUG, safe iterators; a use of an invalidated iterator aborts.
+#              (_GLIBCXX_SANITIZE_VECTOR is not used: with GCC 13 ASan reports gtest's own
+#              vector growth as a heap-buffer-overflow, because only some TUs are instrumented)
+#   libc++:    hardening mode "debug" (bounds and precondition assertions). Needs Clang and
+#              libc++; the old iterator-invalidation debug mode no longer exists there.
+set(JINJA2CPP_DEBUG_CONTAINERS OFF CACHE STRING "Check std containers at run time in a test build: OFF, libstdc++ or libc++")
+set_property(CACHE JINJA2CPP_DEBUG_CONTAINERS PROPERTY STRINGS OFF libstdc++ libc++)
+if (JINJA2CPP_DEBUG_CONTAINERS STREQUAL "libstdc++")
+    if (NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        message(FATAL_ERROR "JINJA2CPP_DEBUG_CONTAINERS=libstdc++ needs GCC or Clang")
+    endif ()
+    add_compile_definitions(_GLIBCXX_DEBUG)
+    set(JINJA2CPP_DEBUG_CONTAINERS_ACTIVE TRUE)
+elseif (JINJA2CPP_DEBUG_CONTAINERS STREQUAL "libc++")
+    if (NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "JINJA2CPP_DEBUG_CONTAINERS=libc++ needs Clang")
+    endif ()
+    add_compile_options(-stdlib=libc++)
+    add_link_options(-stdlib=libc++)
+    add_compile_definitions(_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG)
+    set(JINJA2CPP_DEBUG_CONTAINERS_ACTIVE TRUE)
+elseif (NOT JINJA2CPP_DEBUG_CONTAINERS STREQUAL "OFF")
+    message(FATAL_ERROR "JINJA2CPP_DEBUG_CONTAINERS is OFF, libstdc++ or libc++, not '${JINJA2CPP_DEBUG_CONTAINERS}'")
+endif ()
+if (JINJA2CPP_DEBUG_CONTAINERS_ACTIVE)
+    message(STATUS "Jinja2C++ checking standard library: ${JINJA2CPP_DEBUG_CONTAINERS}")
+endif ()
+
 if (UNIX)
     if (JINJA2CPP_PIC OR CONAN_CMAKE_POSITION_INDEPENDENT_CODE)
         add_compile_options(-fPIC)
@@ -194,6 +225,7 @@ set(JINJA2CPP_SOURCES
     src/big_int.cpp
     src/big_int_builtin.cpp
     src/borrowed_cells.cpp
+    src/cell_trace.cpp
     src/expression_evaluator.cpp
     src/expression_parser.cpp
     src/filesystem_handler.cpp
@@ -284,7 +316,8 @@ if (JINJA2CPP_STRICT_WARNINGS)
         # boost_variant used to hand this flag to the library as an INTERFACE option (0229)
         set(GCC_CXX_FLAGS ${GCC_CXX_FLAGS} ${_strict_warnings} -Wno-error=array-bounds
             -Wno-error=maybe-uninitialized)
-        set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} ${_strict_warnings} -Wno-unused-command-line-argument)
+        # -Wthread-safety checks the lock annotations of src/thread_annotations.h (docs/tasks/0343)
+        set(CLANG_CXX_FLAGS ${CLANG_CXX_FLAGS} ${_strict_warnings} -Wthread-safety -Wno-unused-command-line-argument)
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         # Dependencies come in as system headers (thirdparty/CMakeLists.txt), which /W4 leaves alone
         # C4702 is reported by the code generator, after /external:W0 no longer applies, so
@@ -338,6 +371,10 @@ target_compile_definitions(
 )
 if (JINJA2CPP_CHECK_SLOTS)
     target_compile_definitions(${LIB_TARGET_NAME} PUBLIC JINJA2CPP_CHECK_SLOTS)
+endif ()
+# Public within the build: the tests include src/ headers whose inline code has trace hooks
+if (JINJA2CPP_CELL_TRACE)
+    target_compile_definitions(${LIB_TARGET_NAME} PUBLIC "$<BUILD_INTERFACE:JINJA2CPP_CELL_TRACE>")
 endif ()
 if (NOT JINJA2CPP_WITH_UNICODE_NAMES)
     set_source_files_properties(src/unicode_names.cpp PROPERTIES COMPILE_DEFINITIONS JINJA2CPP_NO_UNICODE_NAMES)
@@ -421,6 +458,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/big_int_test.cpp
         test/borrowed_cells_test.cpp
         test/containers_api_test.cpp
+        test/debug_containers_test.cpp
         test/decimal_locale_test.cpp
         test/embedding_lifecycle_reentry_test.cpp
         test/embedding_lifecycle_test.cpp

@@ -1,0 +1,112 @@
+name: clang-analysis
+
+# Report-only analyses with the newest LLVM (docs/tasks/0345): Lifetime Safety (strict,
+# invalidation, suggestions, inference), -Wthread-safety and the cross-TU static analyzer,
+# over src/ and test/. Nightly on master and on demand; pull requests run it only when they
+# change the job itself. It never fails on a finding: the report is the job summary and the
+# `clang-analysis` artifact. Triage each finding into a task (a defect) or a line with its
+# reason in scripts/clang_analysis_suppressions.txt (a false positive).
+#
+# LLVM comes prebuilt from cache.nixos.org at a pinned nixpkgs revision. To move to a newer
+# LLVM, pick a revision whose llvmPackages_<N> is in the binary cache (`-j0` below refuses to
+# build LLVM from source) and update NIXPKGS_URL and NIXPKGS_SHA256
+# (`nix-prefetch-url --unpack <url>`).
+
+on:
+  schedule:
+    - cron: '41 2 * * *'
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - '.github/workflows/clang-analysis.yml'
+      - 'scripts/clang_analysis*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The installer checks the hash of the Nix tarball it downloads; this hash pins the installer.
+  NIX_VERSION: 2.34.6
+  NIX_INSTALLER_SHA256: bf6d12da4aeaae38ab509dc736df648597bcdee051046ea76d3d53d5b18fa54a
+  # nixpkgs-unstable of 2026-10-28: LLVM 23.1.3 and 22.1.8.
+  NIXPKGS_URL: https://releases.nixos.org/nixpkgs/nixpkgs-26.11pre1104102.e62746b0b472/nixexprs.tar.xz
+  NIXPKGS_SHA256: 18s7mrq692sx79j7ydaxq921f40609ddybvabwp27zi2djp412hr
+
+jobs:
+  clang-analysis:
+    name: clang-analysis (LLVM from nixpkgs, report only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    # Clang 18 only configures the build, so the compile database has Clang flags.
+    - name: Install toolchain
+      uses: ./.github/actions/install-toolchain
+      with:
+        compiler: clang-18
+
+    - name: Install Nix
+      run: |
+        set -euo pipefail
+        curl -sSfL --retry 3 -o /tmp/nix-install "https://releases.nixos.org/nix/nix-${NIX_VERSION}/install"
+        echo "${NIX_INSTALLER_SHA256}  /tmp/nix-install" | sha256sum -c -
+        sh /tmp/nix-install --no-daemon --yes --no-channel-add --no-modify-profile
+        echo "$HOME/.nix-profile/bin" >> "$GITHUB_PATH"
+
+    # Unwrapped clang: it finds the runner's libstdc++ like any Ubuntu clang, and the
+    # cross-TU analyzer parses imported units in-process, where a wrapper script's extra
+    # include paths would be missing.
+    # The cross-TU analyzer uses LLVM 22 with libc++: LLVM 23.1.3's AST importer rejects every
+    # explicit instantiation ("cannot import unsupported AST node ExplicitInstantiation"), and
+    # LLVM 22's rejects the file-scope asm in libstdc++'s <iostream> (docs/tasks/0349).
+    - name: Fetch LLVM
+      run: |
+        set -euo pipefail
+        expr="let pkgs = import (builtins.fetchTarball { url = \"$NIXPKGS_URL\"; sha256 = \"$NIXPKGS_SHA256\"; }) {}; in {
+          clang = pkgs.llvmPackages_23.clang-unwrapped;
+          ctuClang = pkgs.llvmPackages_22.clang-unwrapped;
+          ctuLibcxx = pkgs.llvmPackages_22.libcxx.dev;
+        }"
+        fetch() { nix-build -j0 --no-out-link -E "$expr" -A "$1"; }
+        clang=$(fetch clang)
+        ctu_clang=$(fetch ctuClang)
+        ctu_libcxx=$(fetch ctuLibcxx)
+        {
+          echo "ANALYSIS_CLANG=$clang/bin/clang++"
+          echo "CTU_CLANG=$ctu_clang/bin/clang++"
+          echo "CTU_LIBCXX=$ctu_libcxx/include/c++/v1"
+        } >> "$GITHUB_ENV"
+        "$clang/bin/clang++" --version
+        "$ctu_clang/bin/clang++" --version
+
+    # The analysis runs at the minimum supported standard, C++17, as clang-tidy does.
+    # Configure only: no generated sources, so nothing needs building.
+    - name: Configure
+      run: |
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+          -DJINJA2CPP_DEPS_MODE=internal \
+          -DJINJA2CPP_CXX_STANDARD=17
+
+    - name: Analyse
+      run: |
+        python3 scripts/clang_analysis.py -p build --clang "$ANALYSIS_CLANG" --out clang-analysis \
+          --ctu --ctu-clang "$CTU_CLANG" \
+          --ctu-arg=-nostdinc++ --ctu-arg=-isystem --ctu-arg="$CTU_LIBCXX" \
+          -j "$(nproc)" > /dev/null
+
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      if: always()
+      with:
+        name: clang-analysis
+        path: clang-analysis
+        if-no-files-found: ignore

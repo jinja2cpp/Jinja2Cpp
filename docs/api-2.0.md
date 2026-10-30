@@ -318,6 +318,7 @@ Only int64 overflow calls the backend, so int64 arithmetic costs the same with o
 | `Reflect(5LL)` | *probe:* does not compile on LP64 (`int64_t` is `long`; no `Reflector<long long>`) | reflect every integral type | fix (0067) |
 | `Reflect(const T&)` borrows (stores a pointer), `Reflect(T&&)` owns | surprising, but changing it silently copies or stops compiling for non-copyable types | keep; document; add `ReflectRef`/`ReflectCopy` if asked | — |
 | `JINJA2_INT_REFLECTOR` macro | wrong prefix, leaks from the header | `#undef` after use | fix |
+| `GenericList`, `GenericMap` hold `std::function<const I…ItemAccessor*()>` | each copy copies the callable and the accessor in it (an allocation per copy); 32 bytes | hold `std::shared_ptr<const IListItemAccessor>` (`IMapItemAccessor`): a copy shares the accessor. New `explicit GenericList(std::shared_ptr<const IListItemAccessor>)`, which can point into a larger object (aliasing constructor). The 1.x callable form stays as a constructor template: it stores the callable in one shared allocation and calls it once, when the list is made (0348, decided by Ruslan 2026-10-29) | break (ABI, 16 bytes). 1.x code compiles; the callable must return the same accessor every time; copies share the accessor's state and compare equal |
 
 ### 3.7 Filesystem handlers (`filesystem_handler.h`)
 
@@ -483,6 +484,15 @@ render is running (the C++ rule for a member call). Both are undefined behaviour
    global's original. A module call's container keeps that call's final state: a later call's
    write copies it first. Reading a kept value on another thread while its render runs is not
    supported, as for any value of a running render.
+10. **Copies of a generic container are one container** ([0348](tasks/0348-generic-list-shared-accessor.md)).
+   A `GenericList` or `GenericMap` shares its accessor with every copy, including the copies the
+   engine makes (a thread's snapshot of a global, a value handed to a callable). Renders only
+   read an accessor, possibly on several threads at once (Threads, item 6). A single-pass list
+   (`MakeGenericList` of a generator or of input iterators) is used up by whichever copy reads
+   it first, and is not safe in concurrent renders. Give each render its own, in its params or
+   from a global callable that makes a new one per call. Two params that are copies of one list
+   are one list in the template too: `a.append(7)` shows in `b`, as for one Python object. Before
+   2.0, a copy restarted from a copy of the generator's state.
 
 **Destruction order.** Supported in any order: the environment before its templates (they keep
 rendering, uncached); templates before their modules; environment, templates and handler before

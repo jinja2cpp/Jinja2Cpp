@@ -55,7 +55,7 @@ class ReferenceWrapper
 public:
     using type = T;
 
-    ReferenceWrapper(T& ref) noexcept // NOLINT(google-explicit-constructor)
+    ReferenceWrapper(T& ref JINJA2CPP_LIFETIMEBOUND) noexcept // NOLINT(google-explicit-constructor)
         : m_ptr(std::addressof(ref))
     {
     }
@@ -552,7 +552,7 @@ class FunctionRef<R(Args...)>
 public:
     template<typename F, typename = std::enable_if_t<!std::is_same_v<std::decay_t<F>, FunctionRef>>>
     // NOLINTNEXTLINE(google-explicit-constructor,bugprone-forwarding-reference-overload,cppcoreguidelines-missing-std-forward): binds like a function parameter, keeps only the address
-    FunctionRef(F&& fn) noexcept
+    FunctionRef(F&& fn JINJA2CPP_LIFETIMEBOUND) noexcept
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast): restored by the cast in m_call
         : m_obj(const_cast<void*>(static_cast<const void*>(std::addressof(fn))))
         , m_call([](void* obj, Args... args) -> R { return (*static_cast<std::remove_reference_t<F>*>(obj))(std::forward<Args>(args)...); })
@@ -602,6 +602,10 @@ struct IListAccessor : ValueObject
     // The link of an adapter of the host's data to the render's copy of it (borrowed_cells.h);
     // null for the other lists
     [[nodiscard]] virtual const CellLink* GetCellLink() const { return nullptr; }
+    // The host's data an adapter of it lends, as the host sees it, without a look at the link
+    // (a value a template module's call handed out, CallExports); CreateGenericList for the
+    // other lists
+    [[nodiscard]] virtual GenericList CreateHostGenericList() const { return CreateGenericList(); }
     // What the items of a copy of the list keep alive when the list says ShouldExtendLifetime:
     // `self`, or, for an adapter of the host's data, another adapter of the same data, as the
     // copy may become this adapter's cell, which the items would then hold in a cycle
@@ -661,6 +665,8 @@ struct IMapAccessor : ValueObject
     virtual bool AdoptCopy(const InternalValue& /*self*/, const InternalValue& /*copy*/) const { return false; }
     // See IListAccessor::GetCellLink
     [[nodiscard]] virtual const CellLink* GetCellLink() const { return nullptr; }
+    // See IListAccessor::CreateHostGenericList
+    [[nodiscard]] virtual GenericMap CreateHostGenericMap() const { return CreateGenericMap(); }
     // See IListAccessor::LifetimeAnchor
     [[nodiscard]] virtual InternalValue LifetimeAnchor(const InternalValue& self) const;
     // How x.name resolves against Python's dict methods (items, get, ...)

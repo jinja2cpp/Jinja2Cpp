@@ -9,9 +9,12 @@
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <utility>
@@ -458,35 +461,93 @@ TEST(BorrowedCellsKept, ModuleCallAfterANestedCallCopies)
     EXPECT_EQ("[0, 2, 3]", m.keeper.Show(0));
 }
 
+namespace
+{
+// A module whose macro `outer` calls `again()`, a host callable that calls the module's macro
+// `show`, which hands out `name`: a call nested in the outer call through a host callback.
+// `afterNested` runs in the callback once the nested call returned (docs/tasks/0337)
+struct NestedModule
+{
+    Keeper keeper;
+    TemplateModule module;
+    std::function<void()> afterNested;
+
+    NestedModule(const std::string& name, Value data, const std::string& outer)
+    {
+        ValuesMap params{ { name, std::move(data) } };
+        keeper.AddTo(params);
+        params["again"] = UserCallable(
+            [this](const UserCallableParams&) {
+                module.exports["show"].As<UserCallable>().callable(UserCallableParams{});
+                if (afterNested)
+                {
+                    afterNested();
+                }
+                return Value();
+            },
+            {});
+        Template tpl;
+        EXPECT_TRUE(!!tpl.Load("{% macro show() %}{% set _ = keep(" + name + ") %}{% endmacro %}{% macro outer() %}" + outer + "{% endmacro %}"));
+        auto made = tpl.MakeModule(params);
+        EXPECT_TRUE(!!made);
+        if (made)
+        {
+            module = std::move(*made);
+        }
+    }
+    void Run() { module.exports["outer"].As<UserCallable>().callable(UserCallableParams{}); }
+};
+} // namespace
+
 TEST(BorrowedCellsKept, ModuleNestedKeepOfTheOuterCallsExport)
 {
     // The outer call writes and hands out `l`, a nested call of the same module hands out `l`
     // without writing it, and the outer call writes again after the nested call returned. The
-    // cell keeps the outer call's export mark, so that write goes in place and changes what the
-    // nested call handed out after it ended. Found by the TLA+ model (tla/, finding F1). This
-    // row pins the current behaviour. Task 0337 makes the nested call's value "[0, 1]"; the
-    // outer call's value then misses its own later write too, which is the 0335 limit
-    Keeper keeper;
-    ValuesMap params{ { "l", ValuesList{ 0 } } };
-    keeper.AddTo(params);
-    TemplateModule module;
-    params["again"] = UserCallable(
-        [&module](const UserCallableParams&) {
-            module.exports["show"].As<UserCallable>().callable(UserCallableParams{});
-            return Value();
-        },
-        {});
-    Template tpl;
-    ASSERT_TRUE(!!tpl.Load("{% macro show() %}{% set _ = keep(l) %}{% endmacro %}"
-                           "{% macro outer() %}{% set _ = l.append(1) %}{% set _ = keep(l) %}"
-                           "{% set _ = again() %}{% set _ = l.append(2) %}{% endmacro %}"));
-    auto made = tpl.MakeModule(params);
-    ASSERT_TRUE(!!made);
-    module = std::move(*made);
-    module.exports["outer"].As<UserCallable>().callable(UserCallableParams{});
-    ASSERT_EQ(2u, keeper.kept.size());
-    EXPECT_EQ("[0, 1, 2]", keeper.Show(0));
-    EXPECT_EQ("[0, 1, 2]", keeper.Show(1));
+    // nested call's value is pinned when that call ends, so the write copies the items: what the
+    // nested call handed out stays as it was then (D8). Found by the TLA+ model (tla/, finding
+    // F1, task 0337). The outer call's value is pinned when the outer call ends: it has the
+    // write (0335)
+    NestedModule m("l", ValuesList{ 0 }, "{% set _ = l.append(1) %}{% set _ = keep(l) %}{% set _ = again() %}{% set _ = l.append(2) %}");
+    m.Run();
+    ASSERT_EQ(2u, m.keeper.kept.size());
+    EXPECT_EQ("[0, 1, 2]", m.keeper.Show(0));
+    EXPECT_EQ("[0, 1]", m.keeper.Show(1));
+    // The module's own list has the write
+    m.Run();
+    ASSERT_EQ(4u, m.keeper.kept.size());
+    EXPECT_EQ("[0, 1, 2, 1, 2]", m.keeper.Show(2));
+    EXPECT_EQ("[0, 1, 2, 1]", m.keeper.Show(3));
+    EXPECT_EQ("[0, 1, 2]", m.keeper.Show(0));
+    EXPECT_EQ("[0, 1]", m.keeper.Show(1));
+}
+
+TEST(BorrowedCellsKept, ModuleNestedKeepOfTheOuterCallsExportDict)
+{
+    // The same for a dict
+    NestedModule m("d", ValuesMap{ { "a", 0 } }, "{% set _ = d.update(b=1) %}{% set _ = keep(d) %}{% set _ = again() %}{% set _ = d.update(c=2) %}");
+    m.Run();
+    ASSERT_EQ(2u, m.keeper.kept.size());
+    EXPECT_EQ("{'a': 0, 'b': 1, 'c': 2}", m.keeper.Show(0));
+    EXPECT_EQ("{'a': 0, 'b': 1}", m.keeper.Show(1));
+}
+
+TEST(BorrowedCellsKept, ModuleNestedKeepReadWhileTheOuterCallWrites)
+{
+    // TSan: a host thread reads what the nested call handed out while the outer call writes `l`
+    NestedModule m("l", ValuesList{ 0 }, "{% set _ = l.append(1) %}{% set _ = keep(l) %}{% set _ = again() %}{% for i in range(200) %}{% set _ = l.append(i) %}{% endfor %}");
+    std::thread reader;
+    std::string seen;
+    m.afterNested = [&m, &reader, &seen]() {
+        reader = std::thread([nested = m.keeper.kept.at(1), &seen]() {
+            for (int i = 0; i != 50; ++i)
+            {
+                seen = Render("{{ k }}", ValuesMap{ { "k", nested } });
+            }
+        });
+    };
+    m.Run();
+    reader.join();
+    EXPECT_EQ("[0, 1]", seen);
 }
 
 TEST(BorrowedCellsKept, ModuleSortWhoseKeyCopiesTwice)
@@ -533,13 +594,256 @@ TEST(BorrowedCellsKept, ModuleSortWhoseKeyHandsOutTheList)
 
 TEST(BorrowedCellsKept, ModuleCellInsideAKeptList)
 {
-    // A limit (docs/tasks/0332): a list the module call made holds `l`'s adapter, which reads the
-    // module's live cell, so a later call's write shows through it until the module goes. The
-    // target is the first call's state, [[0, 1]], as for `keep(l)` (ModuleCopiesOnALaterWrite)
+    // A list the module call made holds `l`'s adapter: the host's value reads `l` by its identity
+    // through the call's pin, never through the adapter's link, so it keeps the call's state, as
+    // `keep(l)` does (docs/tasks/0332, ModuleCopiesOnALaterWrite)
     KeepingModule m("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep([l]) %}{% endmacro %}");
     m.Call(1);
     m.Call(2);
-    EXPECT_EQ("[[0, 1, 2]]", m.keeper.Show(0));
+    EXPECT_EQ("[[0, 1]]", m.keeper.Show(0));
+    EXPECT_EQ("[[0, 1, 2]]", m.keeper.Show(1));
+}
+
+TEST(BorrowedCellsKept, ModuleCellInsideAKeptDict)
+{
+    // The same for a dict the call made, and for the module's dict
+    Keeper keeper;
+    ValuesMap params{ { "d", ValuesMap{ { "a", 0 } } } };
+    keeper.AddTo(params);
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% set _ = d.update(b=x) %}{% set _ = keep({'d': d}) %}{% endmacro %}"));
+    auto module = tpl.MakeModule(params).value();
+    for (int64_t x = 1; x != 3; ++x)
+    {
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ x };
+        module.exports["add"].As<UserCallable>().callable(callParams);
+    }
+    EXPECT_EQ("{'d': {'a': 0, 'b': 1}}", keeper.Show(0));
+    EXPECT_EQ("{'d': {'a': 0, 'b': 2}}", keeper.Show(1));
+}
+
+TEST(BorrowedCellsKept, ModuleWithManyCellsAndAKeptTemplateList)
+{
+    // A call that writes many of the host's lists and hands out a list it made: the end of the
+    // call records every cell of the module, each once, in time linear in their number (Codex
+    // review), and a later call's writes copy. By index: a write through a loop variable over the
+    // host's list is 0049 P3's (loops)
+    Keeper keeper;
+    ValuesList lists;
+    // Fewer in the trace build (tla/check.py --trace), whose checker holds the whole log
+#ifdef JINJA2CPP_CELL_TRACE
+    const int count = 20;
+#else
+    const int count = 3000;
+#endif
+    for (int i = 0; i != count; ++i)
+    {
+        lists.emplace_back(ValuesList{ 0 });
+    }
+    ValuesMap params{ { "ls", std::move(lists) } };
+    keeper.AddTo(params);
+    Template tpl;
+    params["n"] = count;
+    ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% for i in range(n) %}{% set _ = ls[i].append(x) %}{% endfor %}{% set _ = keep([ls[0], ls[n - 1]]) %}{% set _ = keep([]) %}{% endmacro %}"));
+    auto module = tpl.MakeModule(params).value();
+    for (int64_t x = 1; x != 3; ++x)
+    {
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ x };
+        module.exports["add"].As<UserCallable>().callable(callParams);
+    }
+    EXPECT_EQ("[[0, 1], [0, 1]]", keeper.Show(0));
+    EXPECT_EQ("[]", keeper.Show(1));
+    EXPECT_EQ("[[0, 1, 2], [0, 1, 2]]", keeper.Show(2));
+}
+
+TEST(BorrowedCellsKept, ModuleNestedCellInsideAKeptList)
+{
+    // An item of the host's list that the call wrote (a cell of its own) inside the list it hands
+    // out: the pin finds the nested cell through the items, by identity (0332)
+    Keeper keeper;
+    ValuesMap params{ { "l", ValuesList{ Value(ValuesList{ 0 }) } } };
+    keeper.AddTo(params);
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% set _ = l[0].append(x) %}{% set _ = keep(l) %}{% set _ = keep([l[0]]) %}{% endmacro %}"));
+    auto module = tpl.MakeModule(params).value();
+    for (int64_t x = 1; x != 3; ++x)
+    {
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ x };
+        module.exports["add"].As<UserCallable>().callable(callParams);
+    }
+    EXPECT_EQ("[[0, 1]]", keeper.Show(0));
+    EXPECT_EQ("[[0, 1]]", keeper.Show(1));
+    EXPECT_EQ("[[0, 1, 2]]", keeper.Show(2));
+    EXPECT_EQ("[[0, 1, 2]]", keeper.Show(3));
+}
+
+TEST(BorrowedCellsKept, ModuleKeepBeforeTheWrite)
+{
+    // 0335: call 1 writes `l` and hands it out; call 2 hands it out before it writes it. Call 2's
+    // value has that call's final state, call 1's stays as call 1 ended. (Before the module's
+    // first write `l` is the host's data, which a value handed out keeps: decision D1)
+    KeepingModule m("{% macro add(x) %}{% if x == 1 %}{% set _ = l.append(x) %}{% endif %}{% set _ = keep(l) %}{% if x != 1 %}{% set _ = l.append(x) %}{% endif %}{% endmacro %}");
+    m.Call(1);
+    m.Call(2);
+    EXPECT_EQ("[0, 1]", m.keeper.Show(0));
+    EXPECT_EQ("[0, 1, 2]", m.keeper.Show(1));
+    m.Call(3);
+    EXPECT_EQ("[0, 1]", m.keeper.Show(0));
+    EXPECT_EQ("[0, 1, 2]", m.keeper.Show(1));
+    EXPECT_EQ("[0, 1, 2, 3]", m.keeper.Show(2));
+}
+
+TEST(BorrowedCellsKept, ModuleKeepBeforeTheWriteDict)
+{
+    // The same for a dict
+    Keeper keeper;
+    ValuesMap params{ { "d", ValuesMap{ { "a", 0 } } } };
+    keeper.AddTo(params);
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% if x == 1 %}{% set _ = d.update(b=x) %}{% endif %}{% set _ = keep(d) %}{% if x != 1 %}{% set _ = d.update(b=x) %}{% endif %}{% endmacro %}"));
+    auto module = tpl.MakeModule(params).value();
+    for (int64_t x = 1; x != 3; ++x)
+    {
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ x };
+        module.exports["add"].As<UserCallable>().callable(callParams);
+    }
+    EXPECT_EQ("{'a': 0, 'b': 1}", keeper.Show(0));
+    EXPECT_EQ("{'a': 0, 'b': 2}", keeper.Show(1));
+}
+
+TEST(BorrowedCellsKept, ModuleCallHandsOutAListAndADict)
+{
+    // 0348: the first value a call hands out holds the call's exports in its own allocation; the
+    // second shares them. Both read the call's final state after the module and template are gone
+    // (LSan/ASan: the exports go with the last view)
+    Keeper keeper;
+    {
+        ValuesMap params{ { "l", ValuesList{ 0 } }, { "d", ValuesMap{ { "a", 0 } } } };
+        keeper.AddTo(params);
+        Template tpl;
+        ASSERT_TRUE(!!tpl.Load("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = d.update(b=x) %}{% set _ = keep(l) %}{% set _ = keep(d) %}"
+                               "{% set _ = l.append(x * 10) %}{% set _ = d.update(c=x * 10) %}{% endmacro %}"));
+        auto module = tpl.MakeModule(params).value();
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ 1 };
+        module.exports["add"].As<UserCallable>().callable(callParams);
+    }
+    ASSERT_EQ(2u, keeper.kept.size());
+    EXPECT_EQ("[0, 1, 10]", keeper.Show(0));
+    EXPECT_EQ("{'a': 0, 'b': 1, 'c': 10}", keeper.Show(1));
+    // The dict view outlives the list view that holds the exports' allocation
+    Value dict = keeper.kept.at(1);
+    keeper.kept.clear();
+    EXPECT_EQ("{'a': 0, 'b': 1, 'c': 10}", Render("{{ k }}", ValuesMap{ { "k", dict } }));
+}
+
+TEST(BorrowedCellsKept, ModuleKeptValueOutlivesItsModule)
+{
+    // 0348: a kept list is the only owner of the call's exports, and so are its copies
+    Value copy;
+    {
+        KeepingModule m("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep(l) %}{% endmacro %}");
+        m.Call(1);
+        copy = m.keeper.kept.at(0);
+        m.keeper.kept.clear();
+        m.Call(2);
+    }
+    EXPECT_EQ("[0, 1]", Render("{{ k }}", ValuesMap{ { "k", copy } }));
+    Value again = copy;
+    copy = Value();
+    EXPECT_EQ("[0, 1]", Render("{{ k }}", ValuesMap{ { "k", again } }));
+}
+
+TEST(BorrowedCellsKept, ModuleKeptValueSeesTheCallsLaterWrites)
+{
+    // While the call runs, the host reads the module's list as it is now, as Python does
+    KeepingModule m("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep(l) %}{% set _ = l.append(x * 10) %}{{ touch() }}{% endmacro %}");
+    UserCallableParams callParams;
+    callParams.extraPosArgs = ValuesList{ 1 };
+    EXPECT_EQ("[0, 1, 10]", m.module.exports["add"].As<UserCallable>().callable(callParams).AsString());
+}
+
+TEST(BorrowedCellsKept, ModuleCellInsideAKeptListReadFromThreads)
+{
+    // 0332, TSan: two threads call the module, which writes `l` in every call, while a third reads
+    // the list the first call handed out
+    KeepingModule m("{% macro add(x) %}{% set _ = l.append(x) %}{% set _ = keep([l]) %}{% endmacro %}");
+    m.Call(1);
+    const Value first = m.keeper.kept.at(0);
+    std::vector<std::thread> threads;
+    threads.reserve(3);
+    for (int t = 0; t != 2; ++t)
+    {
+        threads.emplace_back([&m]() {
+            for (int i = 0; i != 50; ++i)
+            {
+                UserCallableParams callParams;
+                callParams.extraPosArgs = ValuesList{ int64_t{ 2 } };
+                m.module.exports.at("add").As<UserCallable>().callable(callParams);
+            }
+        });
+    }
+    std::string seen;
+    threads.emplace_back([&first, &seen]() {
+        for (int i = 0; i != 50; ++i)
+        {
+            seen = Render("{{ k }}", ValuesMap{ { "k", first } });
+        }
+    });
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+    EXPECT_EQ("[[0, 1]]", seen);
+}
+
+TEST(BorrowedCellsKept, KeptListDroppedOnAnotherThreadWhileTheRenderRuns)
+{
+    // 0340, TSan: the render keeps a list that holds `l`'s adapter, attached to the render's live
+    // cell, and the host drops it on another thread while the render still runs. The link owns
+    // the cell, so the drop is a release of a count, never a write to the cell
+    std::mutex guard;
+    std::vector<Value> queue;
+    std::atomic<bool> stop{ false };
+    Template tpl;
+    ASSERT_TRUE(!!tpl.Load("{% set _ = l.append(1) %}{% set _ = keep([l, [l]]) %}{% for i in range(30) %}{% set _ = l.append(i) %}{% endfor %}{{ l|length }}"));
+    std::thread dropper([&]() {
+        while (!stop.load(std::memory_order_acquire))
+        {
+            std::vector<Value> mine;
+            {
+                const std::scoped_lock lock(guard);
+                mine.swap(queue);
+            }
+            mine.clear();
+        }
+    });
+    // Fewer in the trace build (tla/check.py --trace), which checks the log's shape, not the race
+#ifdef JINJA2CPP_CELL_TRACE
+    const int renders = 20;
+#else
+    const int renders = 2000;
+#endif
+    for (int i = 0; i != renders; ++i)
+    {
+        ValuesMap params{ { "l", ValuesList{ Value(ValuesList{ 0 }) } } };
+        params["keep"] = UserCallable(
+            [&](const UserCallableParams& p) {
+                const std::scoped_lock lock(guard);
+                queue.push_back(p["v"]);
+                return Value();
+            },
+            { ArgInfo{ "v" } });
+        const auto out = tpl.RenderAsString(params);
+        ASSERT_TRUE(!!out);
+        EXPECT_EQ("32", out.value());
+    }
+    stop.store(true, std::memory_order_release);
+    dropper.join();
 }
 
 TEST(BorrowedCellsKept, ModuleCalledFromThreadsWhileTheHostReads)

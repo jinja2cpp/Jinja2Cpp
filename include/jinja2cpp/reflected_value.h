@@ -482,20 +482,33 @@ struct ContainerReflector
     // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): forwarded in the init-capture, which the check misses
     static Value CreateFromValue(T&& cont)
     {
-        return GenericList([accessor = ValueItemAccessor<T>(std::forward<T>(cont))]() { return &accessor; });
+        return GenericList(std::make_shared<const ValueItemAccessor<T>>(std::forward<T>(cont)));
     }
 
     template<typename T>
     static Value CreateFromPtr(const T* cont)
     {
-        return GenericList([accessor = PtrItemAccessor<T>(cont)]() { return &accessor; });
+        return GenericList(std::make_shared<const PtrItemAccessor<T>>(cont));
     }
 
     template<typename T>
     static Value CreateFromPtr(std::shared_ptr<T> cont)
     {
+        // One allocation holds the owner and the accessor that reads it
+        struct Holder
+        {
+            Holder(std::shared_ptr<T> p, const T* raw)
+                : ptr(std::move(p))
+                , accessor(raw)
+            {
+            }
+            std::shared_ptr<T> ptr;
+            PtrItemAccessor<T> accessor;
+        };
         const T* raw = cont.get();
-        return GenericList([ptr = std::move(cont), accessor = PtrItemAccessor<T>(raw)]() { return &accessor; });
+        auto holder = std::make_shared<const Holder>(std::move(cont), raw);
+        const IListItemAccessor* accessor = &holder->accessor;
+        return GenericList(std::shared_ptr<const IListItemAccessor>(std::move(holder), accessor));
     }
 };
 
@@ -535,17 +548,29 @@ struct Reflector<T, IsReflectedType<T>>
 {
     static auto Create(const T& val)
     {
-        return GenericMap([accessor = ReflectedMapImpl<T>(val)]() { return &accessor; });
+        return GenericMap(std::make_shared<const ReflectedMapImpl<T>>(val));
     }
 
     static auto CreateFromPtr(const T* val)
     {
-        return GenericMap([accessor = ReflectedMapImpl<T>(static_cast<const T*>(val))]() { return &accessor; });
+        return GenericMap(std::make_shared<const ReflectedMapImpl<T>>(static_cast<const T*>(val)));
     }
 
     static auto CreateFromPtr(const std::shared_ptr<T>& val)
     {
-        return GenericMap([ptr = val, accessor = ReflectedMapImpl<T>(val.get())]() { return &accessor; });
+        struct Holder
+        {
+            explicit Holder(const std::shared_ptr<T>& p)
+                : ptr(p)
+                , accessor(p.get())
+            {
+            }
+            std::shared_ptr<T> ptr;
+            ReflectedMapImpl<T> accessor;
+        };
+        auto holder = std::make_shared<const Holder>(val);
+        const IMapItemAccessor* accessor = &holder->accessor;
+        return GenericMap(std::shared_ptr<const IMapItemAccessor>(std::move(holder), accessor));
     }
 };
 

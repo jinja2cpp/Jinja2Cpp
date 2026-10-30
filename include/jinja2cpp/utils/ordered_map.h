@@ -1,6 +1,8 @@
 #ifndef JINJA2CPP_UTILS_ORDERED_MAP_H
 #define JINJA2CPP_UTILS_ORDERED_MAP_H
 
+#include <jinja2cpp/config.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <functional>
@@ -354,7 +356,7 @@ private:
     [[nodiscard]] bool IsIndexed() const noexcept { return !m_index.empty(); }
 
     template<typename Items>
-    static auto FindLinear(Items& items, const K& key) -> decltype(items.begin())
+    static auto FindLinear(Items& items JINJA2CPP_LIFETIMEBOUND, const K& key) -> decltype(items.begin())
     {
         KeyEqual equal;
         auto p = items.begin();

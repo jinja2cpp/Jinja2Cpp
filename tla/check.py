@@ -2,6 +2,7 @@
 """Model-checks tla/CellProtocol.tla with TLC: the fixed protocol, then each #673 fix taken out.
 
 Usage: tla/check.py [--jar tla2tools.jar] [--only NAME ...] [--list]
+       tla/check.py --trace ...   (trace validation: tla/trace_check.py)
 
 Every run is a TLC model: a set of constants plus the invariants it checks. A "pass" run must
 explore its whole bounded space and find no violation (a run stopped by --timeout is a failure,
@@ -27,11 +28,18 @@ FIXES = {
     "FixCallRestore": True, "FixNestedGlobal": True, "FixMarkOrder": True,
     "FixSortMutableFirst": True, "FixMarkerAfterCopy": True, "FixReadOnlyExport": True,
     "FixFreeze": True, "FixSourceKeepsId": True,
-    # Proposed by this model, not in #673 yet (README, finding F1)
+    # Task 0337 (README, finding F1): BorrowedCell::NoteExport marks an export of two calls shared
     "FixNestedExport": True,
+    # Proposed designs of the open tasks 0335, 0332 and 0336 (README, "Designs")
+    "FixCallPin": True, "FixPinMarks": True, "FixPinNested": True, "FixModuleLinksOwn": True,
+    "FixGenericOwner": True,
+    # 0340: the C++ makes every link but a global's own its cell (FixLinksOwn) instead of the
+    # registry holding the adapters (FixPinOnAttach, option (a)); both close the window
+    "FixPinOnAttach": False, "FixLinksOwn": True,
 }
 SAFETY = ["SnapshotStable", "NoCrossThreadWrite", "NoUseAfterFree", "NoForeignCell",
-          "RegistryBounded", "AliasesAgree", "NoUndefItems", "LiveCount"]
+          "RegistryBounded", "AliasesAgree", "NoUndefItems", "LiveCount", "ExportKeepsCallState",
+          "NoLostWrites"]
 
 # Scopes. The deep counterexamples need about 14 steps, which an all-actions model of two
 # threads cannot reach exhaustively; each scope enables the parts a group of fixes needs.
@@ -67,8 +75,15 @@ RUNS = {
     "threads-module": ("pass", dict(TWO, RenderThreads='{}',
                                     Actions='{"export", "release", "ns", "touch", "read"}'),
                        {"MaxLevel": 15}, SAFETY, "two threads, module calls only"),
-    # Finding F1: #673 as it is at 459d8f7, without the proposed FixNestedExport
-    "f1-nested-export": ("finding", MODULE1, {"FixNestedExport": False, "MaxFail": 0},
+    # The same with keep([x]) and the host's hand-off, the shapes of 0332 and 0340
+    "threads-module-kept": ("pass", dict(TWO, RenderThreads='{}',
+                                         Actions='{"keeplist", "release", "read"}'),
+                            {"AllowModuleKeepList": True, "HostHandoff": True, "MaxLevel": 16},
+                            SAFETY, "two threads, module calls, keep([x]) handed off"),
+    # Finding F1: #673 as it is at 459d8f7, before the 0337 fix (FixNestedExport) and
+    # without the designs of the open tasks, which replace it
+    "f1-nested-export": ("finding", MODULE1, {"FixNestedExport": False, "FixCallPin": False,
+                                              "MaxFail": 0},
                          ["SnapshotStable"],
                          "F1: a nested call's kept value changes when the outer call writes"),
     # Each fix taken out
@@ -84,7 +99,9 @@ RUNS = {
     "no-sort-refetch": ("mutant", DEEP, {"FixSortRefetch": False},
                         ["NoUseAfterFree", "SnapshotStable"],
                         "1e15c2d/89df914, Codex P0: sort writes back into freed storage"),
-    "no-call-restore": ("mutant", MODULE1, {"FixCallRestore": False}, ["SnapshotStable"],
+    # FixCallPin compares no call ids, so the restore matters only without it: the code of #673
+    "no-call-restore": ("mutant", MODULE1, {"FixCallRestore": False, "FixCallPin": False},
+                        ["SnapshotStable"],
                         "1e15c2d, Codex P1: outer call writes a nested call's snapshot"),
     "no-nested-global": ("mutant", RENDER1, {"FixNestedGlobal": False}, ["NoForeignCell"],
                          "9c91ffc, Codex P2: nested render reads the outer render's cell"),
@@ -107,25 +124,72 @@ RUNS = {
     # IsUnheld's links test can never decide: this run shows it, rather than a counterexample
     "drop-without-link-check": ("pass", MODULE1, {"DropRule": '"nolinks"'}, SAFETY,
                                 "IsUnheld without its links test: never decides here"),
-    "drop-without-source-check": ("mutant", MODULE1, {"DropRule": '"nosource"'},
+    # With FixModuleLinksOwn the namespace's link keeps the dropped cell alive: no use-after-free,
+    # so the run keeps #673's unowned links
+    "drop-without-source-check": ("mutant", MODULE1, {"DropRule": '"nosource"', "FixModuleLinksOwn": False},
                                   ["NoUseAfterFree", "NoForeignCell", "AliasesAgree"],
                                   "IsUnheld without its source-owner test"),
     "no-source-keeps-id": ("mutant", MODULE1, {"FixSourceKeepsId": False, "DropRule": '"none"'},
                            ["NoForeignCell"],
                            "m_source: identity reused while the registry lists the cell"),
-    # Open tasks
-    "open-0335-late-export": ("open", MODULE1, {}, ["ExportKeepsCallState"],
-                              "0335: an export before the call's first write"),
-    "open-0332-kept-list": ("open", MODULE1, {"AllowModuleKeepList": True}, ["SnapshotStable"],
-                            "0332: a module's live cell read through a kept list"),
-    "open-0332-nested": ("open", MODULE1, {"AllowModuleNested": True}, ["SnapshotStable"],
-                         "0332: a nested item of a module's export, written later"),
+    # The designs of the open tasks (README, "Designs"). FixCallPin off is the code after 0337
+    "no-call-pin": ("mutant", MODULE1, {"FixCallPin": False}, ["ExportKeepsCallState"],
+                    "0335: an export before the call's write misses it"),
+    "no-call-pin-kept-list": ("mutant", MODULE1, {"FixCallPin": False, "AllowModuleKeepList": True},
+                              ["SnapshotStable"], "0332: a module's live cell read through a kept list"),
+    "no-call-pin-nested": ("mutant", MODULE1, {"FixCallPin": False, "AllowModuleNested": True},
+                           ["SnapshotStable"], "0332: a nested item of a module's export, written later"),
+    "module-0332": ("pass", dict(MODULE1, Actions='{"touch", "drop", "read", "export", "keeplist", "release"}'),
+                    {"AllowModuleKeepList": True, "AllowModuleNested": True, "MaxLevel": 11}, SAFETY,
+                    "module calls with keep([x]), nested writes and item removal"),
+    "pin-without-marks": ("mutant", MODULE1, {"FixPinMarks": False}, ["SnapshotStable"],
+                          "the pin does not mark the cells shared"),
+    "pin-top-only": ("mutant", MODULE1, {"FixPinNested": False, "AllowModuleNested": True},
+                     ["SnapshotStable"], "the pin leaves the nested item's cell live"),
+    # The cell's source adapter is never the last reference: a later call's adapter is kept
+    "module-links-unowned": ("mutant", dict(TWO, RenderThreads='{}',
+                                            Actions='{"keeplist", "release", "read"}'),
+                             {"FixModuleLinksOwn": False, "FixLinksOwn": False,
+                              "AllowModuleKeepList": True, "MaxLevel": 16},
+                             ["NoCrossThreadWrite"],
+                             "0332: the host's release unlinks from a module's live cell"),
+    # 0340: the host hands a kept container to another thread, which drops it while the render runs
+    "render-handoff": ("pass", dict(TWO, ModuleThreads='{}', Actions='{"keeplist", "release", "read"}'),
+                       {"HostHandoff": True, "MaxLevel": 10, "MaxCell": 2, "MaxGen": 3}, SAFETY,
+                       "0340: a kept container dropped on another thread during the render"),
+    "render-handoff-pin-on-attach": ("pass", dict(TWO, ModuleThreads='{}', Actions='{"keeplist", "release", "read"}'),
+                                     {"HostHandoff": True, "FixLinksOwn": False, "FixPinOnAttach": True,
+                                      "MaxLevel": 10, "MaxCell": 2, "MaxGen": 3}, SAFETY,
+                                     "0340 option (a), the registry holds the adapters: also closes it"),
+    "render-links-unowned": ("mutant", dict(TWO, ModuleThreads='{}', Actions='{"keeplist", "release", "read"}'),
+                             {"HostHandoff": True, "FixLinksOwn": False, "MaxLevel": 12},
+                             ["NoCrossThreadWrite"],
+                             "0340: the dropper unlinks the adapter from the render's live cell"),
+    # 0341: with FixCallPin no write compares call ids, so a wrapped id is harmless
+    "call-id-wrap": ("pass", MODULE1, {"MaxCallId": 2}, SAFETY, "0341: call ids wrap after 2"),
+    "call-id-wrap-no-pin": ("mutant", dict(MODULE1, Actions='{"export", "release"}'),
+                            {"MaxCallId": 2, "FixCallPin": False, "MaxLevel": 14},
+                            ["SnapshotStable"], "0341: a wrapped id equals a stale export mark"),
+    # 0342: an open task; the run shows the defect the model now sees
+    "open-0342-epoch-wrap": ("open", RENDER1, {"MaxEpoch": 2},
+                             ["AliasesAgree", "NoForeignCell", "NoUseAfterFree"],
+                             "0342: an adapter's seen epoch equals the counter again after a wrap"),
+    "module-generic": ("pass", dict(MODULE1, Actions='{"export", "release", "ns", "read", "hostgen"}'),
+                       {"GenericArgs": True}, SAFETY, "0336: module calls taking generic containers"),
+    "no-generic-owner": ("mutant", dict(MODULE1, Actions='{"export", "release", "hostgen"}'),
+                         {"GenericArgs": True, "FixGenericOwner": False}, ["RegistryBounded"],
+                         "0336: a generic container's cell stays per call"),
+    "generic-drop-without-host-test": ("mutant", dict(MODULE1, Actions='{"export", "release", "hostgen"}'),
+                                       {"GenericArgs": True, "DropRule": '"nohostcopy"'},
+                                       ["NoLostWrites"],
+                                       "0336: a cell dropped while the host can lend its data again"),
 }
 
 
 def config(scope, overrides, invariants):
     consts = dict(OwnedAddrs='{"O1", "O2"}', MaxVal=3, MaxFail=1, DropRule='"full"',
-                  AllowModuleKeepList=False, AllowModuleNested=False)
+                  AllowModuleKeepList=False, AllowModuleNested=False, GenericArgs=False,
+                  HostHandoff=False, MaxCallId=1000, MaxEpoch=1000)
     consts["Actions"] = ALL
     consts.update(FIXES)
     consts.update(scope)
@@ -187,6 +251,10 @@ def run(jar, name, spec, workdir, extra=None, timeout=None):
 
 
 def main():
+    if "--trace" in sys.argv[1:]:
+        # Trace validation of the C++ against CellTrace.tla (docs/tasks/0338 step B)
+        import trace_check  # pylint: disable=import-outside-toplevel
+        return trace_check.main([a for a in sys.argv[1:] if a != "--trace"])
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--jar", default=os.environ.get("TLA2TOOLS", os.path.join(HERE, "tla2tools.jar")))
     parser.add_argument("--set", nargs="*", default=[], help="override a constant: NAME=VALUE")

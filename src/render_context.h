@@ -519,7 +519,7 @@ public:
     RenderContext& operator=(const RenderContext&) = delete;
     RenderContext& operator=(RenderContext&&) = delete;
     // Nothing holds the context's anchor beyond a call nested in its lifetime (HomeCall)
-    ~RenderContext() { assert(!m_anchor || m_anchor.use_count() == 1); }
+    ~RenderContext() { assert(!m_anchor || m_anchor.use_count() == 1); } // use_count: an assertion on the render's own thread
 
     // A context that sees the first `depth` scopes of `other`, plus a fresh one of its own on
     // top. It refers to those scopes instead of copying them (docs/tasks/0108), so it must
