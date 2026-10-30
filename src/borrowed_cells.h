@@ -190,7 +190,7 @@ private:
     const BorrowedCell* Find(const void* identity, bool isList, bool held) const;
     // The allocation a link needs (room in the cell's list for a global's link), made before
     // anything changes; then Link, which allocates nothing (docs/tasks/0338, step D)
-    void ReserveLink(const BorrowedCell& cell, bool held) const;
+    static void ReserveLink(const BorrowedCell& cell, bool held);
     void Link(const BorrowedCell& cell, bool held) const noexcept;
     // Lets go of the cell, or, for a global's link, detaches from the live cell
     JINJA2CPP_CELL_NOINLINE void Unlink() const noexcept;

@@ -256,37 +256,37 @@ const BorrowedCell* CellLink::Find(const void* identity, bool isList, bool held)
         m_seenEpoch = epoch;
         return nullptr;
     }
+#ifdef JINJA2CPP_CELL_TRACE
+    try
+    {
+        ReserveLink(*hit, held);
+    }
+    catch (...)
+    {
+        // The adapter keeps the epoch it had, which the counter has moved past: it looks again
+        JINJA2CPP_CELL_TRACE_EVENT("linkfail", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("c", Trace::Space::Cell, hit), Trace::Num("e", m_seenEpoch));
+        throw;
+    }
+#else
     ReserveLink(*hit, held);
+#endif
     Link(*hit, held);
     return m_cell;
 }
 
-void CellLink::ReserveLink(const BorrowedCell& cell, bool held) const
+void CellLink::ReserveLink(const BorrowedCell& cell, bool held)
 {
     if (!held)
     {
         return;
     }
-#ifdef JINJA2CPP_CELL_TRACE
-    try
+    // The workspace Link marks, made now if this thread has none yet
+    static_cast<void>(RenderWorkspace::ForThisThread());
+    auto& links = cell.m_links;
+    if (links.size() == links.capacity())
     {
-#endif
-        // The workspace Link marks, made now if this thread has none yet
-        static_cast<void>(RenderWorkspace::ForThisThread());
-        auto& links = cell.m_links;
-        if (links.size() == links.capacity())
-        {
-            links.reserve(links.empty() ? 4 : 2 * links.size());
-        }
-#ifdef JINJA2CPP_CELL_TRACE
+        links.reserve(links.empty() ? 4 : 2 * links.size());
     }
-    catch (...)
-    {
-        // The adapter keeps the epoch it had, which the counter has moved past: it looks again
-        JINJA2CPP_CELL_TRACE_EVENT("linkfail", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("c", Trace::Space::Cell, &cell), Trace::Num("e", m_seenEpoch));
-        throw;
-    }
-#endif
 }
 
 void CellLink::Link(const BorrowedCell& cell, bool held) const noexcept
