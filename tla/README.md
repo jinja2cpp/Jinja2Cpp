@@ -127,6 +127,8 @@ explores every behaviour up to it and none past it.
 | `render-handoff` | 2 threads: renders, kept lists dropped on the other thread mid-render, level 10, owning links (`FixLinksOwn`, the C++) | no error (5.9M states, 52 min) |
 | `render-handoff-pin-on-attach` | `render-handoff` with 0340 option (a) instead (`FixPinOnAttach`, no `FixLinksOwn`) | no error (5.9M states, 34 min) |
 | `call-id-wrap` | `module` with call ids wrapping after 2 | no error (1.4M states, 3 min) |
+| `global-items-handoff` | 2 threads: a global's items lent afresh or from a block, written, kept, let go of and dropped on the other thread, level 10 (`FixSnapshotLinks`, the C++) | no error (3.6M states, 7 min) |
+| `render-global-items` | 1 thread: a global's items in renders nested through a callback, level 10 | no error (17.1M states, 23 min) |
 | `module-generic` | 1 thread: module calls taking generic containers the host may keep | no error (5.2M states, 11 min) |
 | `f1-nested-export` | `module`, the code before 0337 (no `FixNestedExport`, no `FixCallPin`), no allocation failure | **counterexample: `SnapshotStable`** (F1) |
 | `no-link-epoch` | c06d969 out (Codex P2) | counterexample: `AliasesAgree` |
@@ -152,6 +154,7 @@ explores every behaviour up to it and none past it.
 | `module-links-unowned` | no `FixModuleLinksOwn` (nor `FixLinksOwn`): a later call's adapter kept, dropped on the other thread | counterexample: `NoCrossThreadWrite` (0332) |
 | `render-links-unowned` | no `FixLinksOwn` (nor `FixPinOnAttach`), hand-off | counterexample: `NoCrossThreadWrite` (0340) |
 | `call-id-wrap-no-pin` | call ids wrap after 2, no `FixCallPin` | counterexample: `SnapshotStable` (0341) |
+| `global-items-listed` | no `FixSnapshotLinks`: every link of a global's adapter listed | counterexample: `NoCrossThreadWrite` (0346; 8 states) |
 | `no-generic-owner` | no `FixGenericOwner` | counterexample: `RegistryBounded` (0336) |
 | `generic-drop-without-host-test` | `IsUnheld` without the host-copy test | counterexample: `NoLostWrites` (0336) |
 | `epoch-wrap` | `render` with the epoch wrapping after 2, as a 32-bit epoch did before 0342 | counterexample: `AliasesAgree` |

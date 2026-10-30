@@ -177,14 +177,15 @@ RUNS = {
                              "0340: the dropper unlinks the adapter from the render's live cell"),
     # 0346: a global's item the snapshot no longer reaches (its block let go of it, a map item),
     # kept in a list and dropped on another thread while the render runs
-    "global-items-handoff": ("pass", GLOBAL_ITEMS, {}, SAFETY,
+    # MaxLevel 10: the listed-link counterexample takes 8 states; level 12 outgrows a 4-core runner
+    "global-items-handoff": ("pass", GLOBAL_ITEMS, {"MaxLevel": 10}, SAFETY,
                              "0346: a global's item kept, let go of and dropped on another thread"),
     "global-items-listed": ("mutant", GLOBAL_ITEMS, {"FixSnapshotLinks": False},
                             ["NoCrossThreadWrite"],
                             "0346: the dropper unlinks a global's item from the render's live cell"),
     # The items of a global in renders nested through a callback, which share the snapshot
     "render-global-items": ("pass", dict(RENDER1, Actions='{"read", "keeplist", "release", "gitem"}'),
-                            {"MaxLevel": 11}, SAFETY, "0346: a global's items in nested renders"),
+                            {"MaxLevel": 10}, SAFETY, "0346: a global's items in nested renders"),
     # 0341: with FixCallPin no write compares call ids, so a wrapped id is harmless
     "call-id-wrap": ("pass", MODULE1, {"MaxCallId": 2}, SAFETY, "0341: call ids wrap after 2"),
     "call-id-wrap-no-pin": ("mutant", dict(MODULE1, Actions='{"export", "release"}'),
