@@ -68,6 +68,16 @@ library does not promise to prevent.
   environment's lock).
 - **H5. Template module calls take turns.** One module's calls are serialized by its mutex; a
   call nested through a host callback runs on the thread that holds it.
+- **H6. During the collector's walk, other threads only copy or drop references they already
+  hold.** The walk reads the counts of its nodes one by one, so a thread that makes a reference to
+  a *different* object of the walk than the one it holds, and then drops the first, can make every
+  count look internal. Three facts keep that out: a `Value` copy shares its accessor and takes no
+  new reference to another object; the values this render handed out (`keep`) are unreadable
+  until the render, its collector included, has completed (H3), so another thread can copy and drop
+  them but not follow their contents; and values of earlier renders enter this render only as the
+  host's data, through host adapters that `IsTraversable` excludes (`cycle_collector.cpp:175,210`),
+  so they are not in the walk. Found by the cycle-collector spec (task 0338 step E, PR #707): with
+  H6 removed, TLC finds a walk that empties a list the host still reaches.
 
 ## 2. What is shared across threads
 
@@ -182,17 +192,20 @@ the next writer of the same storage, so the proof of H3 is a proof about them.
 **R1. `ValueObject` (the library's own count).** `intrusive_ptr_add_ref` is a relaxed add,
 `intrusive_ptr_release` is an `acq_rel` subtract that destroys on 1, and `use_count()` is an
 acquire load (`internal_value.h:132,162,166`). This is the standard pattern. A new reference is
-only made from a reference the thread already holds, so the relaxed increment cannot race with the
-destroying decrement. The `acq_rel` decrement makes everything the releasing thread did to the
+only made from a reference the thread already holds to *the same object*, so the relaxed
+increment cannot race with the destroying decrement. The `acq_rel` decrement makes everything the releasing thread did to the
 object happen before the destruction on whichever thread drops the last reference. The acquire
 `use_count()` gives the same edge to the tests built on it: `BorrowedCell::IsUnheld` (`use_count()
 != 1`, `owner->use_count() != 1`), `CycleCollector::DropUnshared` and the collector's reachability
 test (`use_count() > internalRefs`). A reader's last access happens before its release, the
 release is the last decrement the acquire load reads, so the writer or the collector sees it
 happen before. The collector can read a count that is too high (a reference was dropped after the
-read), which keeps an object alive and cannot free a live one: new references are only made from
-existing ones, so a count that was above `internalRefs` stays above it unless the outside holder
-drops its reference, and then it is garbage anyway.
+read), which keeps an object alive and cannot free a live one: new references to an object are only
+made from existing references to that same object (H6), so a count that was above `internalRefs`
+stays above it unless the outside holder drops its reference, and then it is garbage anyway. "Only
+from existing ones" alone is not enough for the walk: a thread that copies a reference to object B
+from its reference to A and drops A between the walk's reads of A and B would make both look
+internal. H6 is what excludes that; the counts' memory order does not.
 
 **R2. `std::shared_ptr` counts are used as a uniqueness test and are not acquire.** Sites that ask
 "is this the only reference" and then write or read the storage as if nobody else could:
