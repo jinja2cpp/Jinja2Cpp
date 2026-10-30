@@ -26,12 +26,12 @@ master after #695; recheck once #709's failure steps land). It is still large: `
 `MaxAd=6`, `MaxCell=2`, `MaxGen=3`, `MaxEx=1` had not finished after 25 minutes, so the runs
 need the 340-minute job and the smallest scopes first. Add a run kind
 `exhaustive` whose verdict requires TLC's "No error" without the level guard firing, and run
-`module`, `module-0332`, `module-generic` and `threads-module` that way in the nightly job.
+`module`, `module-0332`, `module-generic` and `threads-module` that way in the weekly job.
 
 **2. Simulation past the bound.** `tlc2.TLC -simulate -depth 40` samples random behaviours far
 deeper than the BFS reaches. Not a proof, but it finds deep counterexamples (the loop and sort
 bugs needed about 14 steps) in every scope, including the full-action ones. Add `--simulate
-SECONDS` to check.py and a nightly shard that gives each pass run a fixed budget.
+SECONDS` to check.py and a weekly shard that gives each pass run a fixed budget.
 
 **3. Inductive invariants: owned by 0338 step F**, in its own thread and task: Apalache
 typing of `CellProtocol.tla`, `Close` as a fold, a wrapper module without the level guard,
@@ -43,4 +43,4 @@ heaps up to N atoms. It would be a second model to keep in step with the C++, ou
 validation of 0338 step B, so it is worth it only if Apalache cannot handle `Close`.
 
 **Done when** the README states, per run, whether it is depth-bounded or exhaustive for its
-constants, and the nightly job runs the exhaustive and simulation kinds.
+constants, and the weekly job runs the exhaustive and simulation kinds.

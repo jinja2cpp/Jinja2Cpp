@@ -36,8 +36,10 @@ Constant-factor changes therefore buy less than one level each:
   `TLC_JAVA_OPTS`, and writes a row per run to the GitHub job summary.
 - `.github/workflows/tla-model.yml` runs the suite in four parallel jobs (`render`, `mixed`,
   `threads`, the rest), each with a 340-minute limit and the TLC state on the runner's larger
-  disk: on pull requests that change the model or check.py, nightly on master when `tla/`
-  changed in the last day, and on demand (`workflow_dispatch`, with an optional list of runs).
+  disk: weekly on master when `tla/` changed in the last week, and on demand
+  (`workflow_dispatch`, any branch or tag, with an optional list of runs). Not per pull request:
+  Ruslan (2026-10-30) wants formal validation as a routine on a frozen version, with findings
+  fixed in batches.
 
 **First run (#702, 4-vCPU ubuntu-24.04 runners).** All four jobs in parallel; `render` 80,574,890
 states in 4 h 03 min (130 min on the session's 4 dedicated cores), `mixed` 64 min, `threads`
