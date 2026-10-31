@@ -212,6 +212,10 @@ private:
     JINJA2CPP_CELL_NOINLINE void Unlink() const noexcept;
     // Takes a listed link out of its live cell's list
     void Unlist(const BorrowedCell& cell, uint64_t index) const noexcept;
+#ifdef JINJA2CPP_CELL_TRACE
+    // The link IsUnheld compares the cell's links with, for the trace of an adopt
+    static const CellLink* TraceSourceLink(const BorrowedCell& cell, bool isList);
+#endif
     // Takes the frozen cell `other` reads, if it reads one
     JINJA2CPP_CELL_NOINLINE void Inherit(const CellLink& other) noexcept;
 

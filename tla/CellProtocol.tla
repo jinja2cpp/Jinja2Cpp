@@ -985,7 +985,9 @@ WFAd ==
         IF a > nAd THEN ad[a] = NoAd
         ELSE /\ ad[a].idn \in Keys
              /\ CellRef(ad[a].cell)
-             /\ ad[a].held = (ad[a].idn = "G")
+             /\ ad[a].held = (ad[a].idn \in {"G", "GI"})
+             /\ ad[a].snap => ad[a].held
+             /\ ad[a].blk \subseteq AdsMade
              /\ ad[a].generic => ad[a].idn \in OwnedAddrs
              /\ (ad[a].seen = ATT) = (ad[a].cell # 0)
 

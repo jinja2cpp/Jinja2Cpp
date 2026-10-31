@@ -382,6 +382,21 @@ void CellLink::Inherit(const CellLink& other) noexcept
     JINJA2CPP_CELL_TRACE_EVENT("inherit", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("from", Trace::Space::Link, &other), Trace::Ptr("c", Trace::Space::Cell, m_cell));
 }
 
+#ifdef JINJA2CPP_CELL_TRACE
+const CellLink* CellLink::TraceSourceLink(const BorrowedCell& cell, bool isList)
+{
+    if (auto list = isList ? AsList(cell.m_source) : std::nullopt)
+    {
+        return list->GetAccessor() ? list->GetAccessor()->GetCellLink() : nullptr;
+    }
+    if (auto map = isList ? std::nullopt : AsMap(cell.m_source))
+    {
+        return map->GetAccessor() ? map->GetAccessor()->GetCellLink() : nullptr;
+    }
+    return nullptr;
+}
+#endif
+
 bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, bool listed, std::weak_ptr<const void> owner) const
 {
     // An adapter of a value kept after its render: nothing writes the frozen cell, and the caller
@@ -445,16 +460,7 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
 #ifdef JINJA2CPP_CELL_TRACE
     if (detail::CellTrace::On())
     {
-        // The link IsUnheld compares the cell's links with
-        const CellLink* source = nullptr;
-        if (auto list = isList ? AsList(cell->m_source) : std::nullopt)
-        {
-            source = list->GetAccessor() ? list->GetAccessor()->GetCellLink() : nullptr;
-        }
-        else if (auto map = isList ? std::nullopt : AsMap(cell->m_source))
-        {
-            source = map->GetAccessor() ? map->GetAccessor()->GetCellLink() : nullptr;
-        }
+        const CellLink* source = TraceSourceLink(*cell, isList);
         JINJA2CPP_CELL_TRACE_EVENT("adopt", Trace::Ptr("a", Trace::Space::Link, this), Trace::Ptr("idn", Trace::Space::Idn, identity), Trace::Num("list", isList ? 1 : 0),
                                    Trace::Num("held", held ? 1 : 0), Trace::Num("owned", cell->m_owner.expired() ? 0 : 1), Trace::Ptr("reg", Trace::Space::Reg, cells),
                                    Trace::Ptr("c", Trace::Space::Cell, cell.get()), Trace::Num("new", 1), Trace::Ptr("g", Trace::Space::NewGen, cell->TraceGen()),
