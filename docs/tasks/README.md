@@ -407,7 +407,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0335](0335-late-export-in-a-later-module-call.md) | A module call that hands out a container before it writes it keeps the earlier call's state | parity | low | done |
 | [0336](0336-module-cells-of-per-call-data.md) | A template module keeps the cells of generic containers made for one call | robustness | medium | done |
 | [0337](0337-nested-module-export-written-by-outer-call.md) | A nested module call's kept value is written by the outer call | robustness | medium | done |
-| [0338](0338-borrowed-cell-protocol-safety-proof.md) | From a bounded model of the borrowed-cell protocol to a safety argument | robustness | medium | open |
+| [0338](0338-borrowed-cell-protocol-safety-proof.md) | From a bounded model of the borrowed-cell protocol to a safety argument | robustness | medium | done |
 | [0339](0339-shared-ptr-uniqueness-needs-acquire.md) | A uniqueness test on a `shared_ptr` count has no acquire | robustness | low | done |
 | [0340](0340-foreign-unlink-of-a-live-cell.md) | A host thread dropping a kept container unlinks an adapter from a live cell | robustness | medium | done |
 | [0341](0341-call-id-wraparound.md) | A module call id wraps and a stale export mark equals it | robustness | low | done |
@@ -415,7 +415,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0343](0343-clang-lifetime-and-lock-annotations.md) | Check lifetimes and lock discipline at compile time with Clang annotations | robustness | medium | done |
 | [0344](0344-debug-containers-test-job.md) | A test job with a checking standard library (iterator and reference invalidation) | ci | medium | done |
 | [0345](0345-latest-llvm-analysis-job.md) | A report-only job with the latest LLVM for trunk lifetime and cross-TU analyses | ci | low | done |
-| [0346](0346-global-item-link-dropped-on-another-thread.md) | A global's item adapter in a block the global let go of, dropped on another thread | robustness | low | open |
+| [0346](0346-global-item-link-dropped-on-another-thread.md) | A global's item adapter in a block the global let go of, dropped on another thread | robustness | high | done |
 | [0347](0347-module-cells-in-lazy-and-namespace-exports.md) | Module cells reached through a lazy list or a namespace are not pinned | robustness | medium | open |
 | [0348](0348-generic-list-shared-accessor.md) | GenericList and GenericMap hold their accessor by a shared pointer | api | medium | done |
 | [0349](0349-ctu-analyzer-on-newest-llvm.md) | Run the cross-TU static analyzer on the newest LLVM and on libstdc++ | ci | low | open |
@@ -430,5 +430,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0358](0358-prompt-autoescape.md) | Prompt autoescape: `fence`, `neutralize` and an escaping mode for LLM prompts | api | medium | open |
 | [0359](0359-token-budget-filters.md) | Token budget filters: `count_tokens`, `truncate_tokens` and `pack` | api | medium | open |
 | [0360](0360-hf-chat-template-compat.md) | Render Hugging Face chat templates as transformers does | parity | high | open |
+| [0361](0361-failed-call-top-view-reads-empty.md) | A failed module call's view of a module cell reads no items | lifetime | low | open |
 | [0362](0362-host-object-python-errors.md) | Host objects: Python's errors where generic filters guess | parity | low | open |
+| [0363](0363-cell-protocol-inductive-proof.md) | Prove the cell protocol's invariants inductively | robustness | low | open |
+| [0364](0364-frozen-version-deep-validation.md) | Validate a frozen version deeply, from time to time | robustness | medium | open |
 | [0365](0365-fresh-generic-items-of-a-call-argument.md) | A fresh generic container nested in a call's argument keeps its module cell | robustness | low | open |
