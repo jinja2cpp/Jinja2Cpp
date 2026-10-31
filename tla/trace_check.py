@@ -85,11 +85,15 @@ def check_trace(jar, log_path, workdir):
         cfg.write("INVARIANTS\n" + "".join(f"    {inv}\n" for inv in INVARIANTS))
         # No ALIAS: TLC 1.7.4, the pinned stable release, does not know it. The error trace then
         # prints every variable, `l` among them, which is all the parser below reads
-    cmd = ["java", "-XX:+UseParallelGC", "-Xmx1g", "-Xss16m", "-cp", jar, "tlc2.TLC", "-workers", "1",
+    # TLC unpacks its standard modules (TLC.tla, Sequences.tla, ...) into java.io.tmpdir; parallel
+    # runs sharing /tmp read each other's half-written copies ("Could not parse module TLC")
+    cmd = ["java", "-XX:+UseParallelGC", "-Xmx1g", "-Xss16m", f"-Djava.io.tmpdir={workdir}", "-cp", jar,
+           "tlc2.TLC", "-workers", "1",
            "-config", "MC.cfg", "-metadir", os.path.join(workdir, "states"), "CellTrace.tla"]
-    out = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, check=False).stdout
+    run = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, check=False)
+    out = run.stdout
     with open(os.path.join(workdir, "tlc.out"), "w", encoding="utf-8") as tlc_log:
-        tlc_log.write(out)
+        tlc_log.write(out + run.stderr)
     shutil.rmtree(os.path.join(workdir, "states"), ignore_errors=True)
     secs = int(time.time() - start)
     # The last state TLC printed: the event read last (ev) and the next one (l)

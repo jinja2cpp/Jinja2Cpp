@@ -157,10 +157,12 @@ Link ==
                                     ![c].held = IF E.held = 1 THEN @ \cup {E.a} ELSE @])
     /\ UNCHANGED <<rg, exr, live, promoted>>
 
-\* Link could not grow the cell's list: the adapter stays detached and looks again
+\* Link could not make room in the cell's list: nothing changed, the adapter keeps the epoch it
+\* had before the lookup (e), which the promotion of the cell moved past, so it looks again
+\* (0338 step D)
 LinkFail ==
     /\ E.ev = "linkfail"
-    /\ Next1(lk' = SetL(E.a, [L(E.a) EXCEPT !.seen = 0]))
+    /\ Next1(lk' = SetL(E.a, [L(E.a) EXCEPT !.seen = E.e]))
     /\ UNCHANGED <<cl, rg, exr, live, promoted, bad>>
 
 \* An owning link lets go of its reference, on any thread: the count is atomic and the cell does
@@ -236,15 +238,6 @@ Adopt ==
                       LinksAgree |-> L(E.a).cell # 0])
             /\ Next1(TRUE)
             /\ UNCHANGED <<cl, lk, rg, exr, live, promoted>>
-
-\* The new cell's Link failed: it leaves the table again
-AdoptUndo ==
-    /\ E.ev = "adoptundo" /\ Known(E.c)
-    /\ LET c == E.c IN
-       /\ Next1(/\ cl' = [cl EXCEPT ![c].inTable = FALSE]
-                /\ rg' = [rg EXCEPT ![E.reg].tbl = [i \in DOMAIN @ |-> IF @[i] = c THEN 0 ELSE @[i]]]
-                /\ live' = live - 1)
-       /\ UNCHANGED <<lk, exr, promoted, bad>>
 
 Promote ==
     /\ E.ev = "promote"
@@ -399,7 +392,7 @@ Next ==
     \/ l <= Len(Log) /\
         \/ RegNew \/ RegFree \/ BeginCall \/ EndCall
         \/ Skip \/ Hit \/ Find \/ Link \/ LinkFail \/ Unlink \/ Inherit \/ DieAttached
-        \/ CellNew \/ AdoptNo \/ Adopt \/ AdoptUndo \/ Promote
+        \/ CellNew \/ AdoptNo \/ Adopt \/ Promote
         \/ Export \/ Pin \/ Write \/ Unshare \/ Copied
         \/ Drop \/ Dropped \/ Freeze \/ Finish \/ Finished \/ Free
     \/ Done
