@@ -57,6 +57,9 @@ CONSTANTS
                           \* until Finish, so a host thread's drop is never the last reference to one
     FixLinksOwn,          \* 0340 as the C++ does it: every link but a global's owns its cell, a
                           \* render's too, so a host thread's drop is a release, never a write
+    FixSnapshotLinks,     \* 0346: a global's link is listed only while the thread's snapshot
+                          \* reaches its adapter; an item its block let go of, or a map item lent
+                          \* afresh, owns its cell as every other link does
     \* Failure atomicity (0338 step D): a step allocates first and commits with operations that
     \* cannot fail, so an allocation failure is one disjunct per step that changes nothing
     FixAtomicLink,        \* CellLink::Find/Link: a failed Link leaves the adapter as it was
@@ -70,7 +73,7 @@ CONSTANTS
     AllowModuleNested,
     GenericArgs           \* a module call may take a generic container (0336)
 
-Hosts == {"P", "C", "G"}
+Hosts == {"P", "C", "G", "GI"}
 Keys == Hosts \cup OwnedAddrs
 EMPTY == -1   \* the receiver of a sort while its key calls run
 UNDEF == -2   \* a moved-from item
@@ -111,8 +114,10 @@ VARIABLES
 vars == <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt,
           ns, hkeep, lag, lock, inc, fails, dirty, dirtyBy, pendDrop, wr, flag>>
 
+\* snap: the thread's globals snapshot reaches the adapter (ValueObject::IsInSnapshot, 0346); blk: the
+\* item adapters in the block a global's adapter keeps (ValuesListAdapter::m_items)
 NoAd == [idn |-> "none", inc |-> 0, held |-> FALSE, generic |-> FALSE, cell |-> 0, seen |-> 0,
-         alive |-> FALSE]
+         snap |-> FALSE, blk |-> {}, alive |-> FALSE]
 NoCell == [idn |-> "none", inc |-> 0, reg |-> ModReg, stor |-> 0, retired |-> 0, source |-> 0,
            owned |-> FALSE, frozen |-> FALSE, exp |-> 0, links |-> {}, inTable |-> FALSE,
            alive |-> FALSE]
@@ -129,7 +134,7 @@ NoFlags == [uaf |-> FALSE, foreign |-> FALSE, stale |-> FALSE, undef |-> FALSE, 
 Objs == ({"a"} \X AdIds) \cup ({"c"} \X CellIds) \cup ({"g"} \X GenIds)
 
 NewAd(i, n, h) == [idn |-> i, inc |-> n, held |-> h, generic |-> FALSE, cell |-> 0, seen |-> 0,
-                   alive |-> TRUE]
+                   snap |-> FALSE, blk |-> {}, alive |-> TRUE]
 
 Init ==
     /\ epoch = 0 /\ live = 0
@@ -215,16 +220,20 @@ Snap(t, d, done) ==
 (* Reachability: the reference counts *)
 
 \* A link holds its cell: a frozen one, a module's with FixModuleLinksOwn, and with FixLinksOwn any
-\* cell unless the adapter is a global's. Its release is then a reference count, not a write of
+\* cell unless the adapter is a global's; with FixSnapshotLinks a global's too unless the
+\* thread's snapshot reaches its adapter. Its release is then a reference count, not a write of
 \* the cell's list of links
 OwningLink(a) == LET c == ad[a].cell
                  IN cl[c].frozen \/ (FixModuleLinksOwn /\ cl[c].reg = ModReg)
                     \/ (FixLinksOwn /\ ~ad[a].held)
+                    \/ (FixSnapshotLinks /\ ~ad[a].snap)
 
 \* @type: (<<Str, Int>>) => Set(<<Str, Int>>);
 Succ(n) ==
-    CASE n[1] = "a" -> IF ad[n[2]].cell # 0 /\ OwningLink(n[2])
-                       THEN {<<"c", ad[n[2]].cell>>} ELSE {}
+    CASE n[1] = "a" -> (IF ad[n[2]].cell # 0 /\ OwningLink(n[2])
+                        THEN {<<"c", ad[n[2]].cell>>} ELSE {})
+                       \* A global's adapter holds the block of item adapters it read last
+                       \cup {<<"a", b>> : b \in ad[n[2]].blk}
       \* A cell holds the accessors of its storages; an accessor holds its item block
       [] n[1] = "c" -> {<<"x", cl[n[2]].stor>>}
                        \cup (IF FixPinOnAttach /\ ~cl[n[2]].frozen /\ cl[n[2]].reg # ModReg
@@ -627,7 +636,7 @@ StartRender(t) ==
                 IN /\ nAd + n <= MaxAd
                    /\ ad' = [i \in AdIds |-> CASE i = a -> NewAd("P", 0, FALSE)
                                                [] i = b -> NewAd("P", 0, FALSE)
-                                               [] i = gs /\ conv -> NewAd("G", 0, TRUE)
+                                               [] i = gs /\ conv -> [NewAd("G", 0, TRUE) EXCEPT !.snap = TRUE]
                                                [] OTHER -> ad[i]]
                    /\ nAd' = nAd + n
                    /\ gsnap' = [gsnap EXCEPT ![t] = gs]
@@ -655,12 +664,13 @@ FinishSources(t) ==
     /\ UNCHANGED <<epoch, live, ad, nAd, nCell, st, nGen, rg, nEx, gsnap, gatt, ns, hkeep, lag, lock, inc,
                    fails, pendDrop, wr, flag>>
 
-\* Then a global's links detach and the others become owning references to the frozen cell
+\* Then a global's listed links detach and the others become owning references to the frozen cell
 FinishFreeze(t) ==
     /\ Idle /\ Depth(t) > 0 /\ Top(t).phase = "fin"
     /\ LET r == CurReg(t)
            RC == RegCells(r)
-           detach == {a \in AdIds : \E c \in RC : a \in cl[c].links /\ (ad[a].held \/ ~FixFreeze)}
+           listed(a) == ad[a].held /\ (ad[a].snap \/ ~FixSnapshotLinks)
+           detach == {a \in AdIds : \E c \in RC : a \in cl[c].links /\ (listed(a) \/ ~FixFreeze)}
        IN /\ ad' = [a \in AdIds |-> IF a \in detach THEN [ad[a] EXCEPT !.cell = 0, !.seen = 0]
                                    ELSE ad[a]]
           /\ cl' = [c \in CellIds |-> IF c \in RC
@@ -676,6 +686,52 @@ FinishFreeze(t) ==
     /\ dirty' = TRUE /\ dirtyBy' = W(t)
     /\ UNCHANGED <<nAd, nCell, st, nGen, nEx, gsnap, gatt, ns, hkeep, lag, lock, inc, fails,
                    pendDrop, flag>>
+
+-----------------------------------------------------------------------------
+(* The items of a global (0346): ValuesListAdapter<ByHeldRef>::LendNested lends a list's item
+   from the block of item adapters the global's adapter keeps, and lets go of the block when it
+   reads an item of another one; a map's item (LendHeldItem) is a new adapter at each read.
+   One level: an item's own items are not modelled *)
+
+\* fromBlock: a list item, from the block of g; otherwise a map item, which no block keeps
+LendGItem(t, g, fromBlock) ==
+    /\ "gitem" \in Actions
+    /\ CanUse(t, g) /\ ad[g].idn = "G" /\ nAd < MaxAd
+    /\ LET a == nAd + 1 IN
+       /\ ad' = [ad EXCEPT ![a] = [NewAd("GI", 0, TRUE) EXCEPT !.snap = fromBlock /\ ad[g].snap],
+                           ![g].blk = IF fromBlock THEN @ \cup {a} ELSE @]
+       /\ nAd' = a
+       /\ fr' = SetTop(t, [Top(t) EXCEPT !.ads = @ \cup {a}])
+       /\ wr' = IF fromBlock THEN Mark(wr, {<<"a", g>>}, t) ELSE wr
+    /\ UNCHANGED <<epoch, live, cl, nCell, st, nGen, rg, ex, nEx, gsnap, gatt, ns, hkeep, lag, lock, inc,
+                   fails, dirty, dirtyBy, pendDrop, flag>>
+
+\* The global's adapter reads an item of another block and lets go of this one. With
+\* FixSnapshotLinks its items leave the snapshot: a listed link moves out of its cell's list and
+\* becomes an owning reference, on the thread of the render, which still holds the block
+Evict(t, g) ==
+    /\ "gitem" \in Actions
+    /\ CanUse(t, g) /\ ad[g].blk # {}
+    /\ LET B == ad[g].blk
+           conv == IF FixSnapshotLinks THEN B ELSE {}
+           listed == {b \in conv : ad[b].cell # 0 /\ ~OwningLink(b)}
+       IN /\ ad' = [b \in AdIds |-> IF b = g THEN [ad[g] EXCEPT !.blk = {}]
+                                   ELSE IF b \in conv THEN [ad[b] EXCEPT !.snap = FALSE]
+                                   ELSE ad[b]]
+          /\ wr' = Mark(wr, {<<"a", g>>} \cup {<<"a", b>> : b \in conv}
+                              \cup {<<"c", ad[b].cell>> : b \in listed}, t)
+    /\ dirty' = TRUE /\ dirtyBy' = W(t)
+    /\ UNCHANGED <<epoch, live, nAd, cl, nCell, st, nGen, rg, fr, ex, nEx, gsnap, gatt, ns, hkeep, lag,
+                   lock, inc, fails, pendDrop, flag>>
+
+\* The template lets go of an item (the scope that named it ends)
+Forget(t, a) ==
+    /\ "gitem" \in Actions
+    /\ Idle /\ Running(t) /\ a \in Top(t).ads /\ ad[a].idn = "GI"
+    /\ fr' = SetTop(t, [Top(t) EXCEPT !.ads = @ \ {a}])
+    /\ dirty' = TRUE /\ dirtyBy' = W(t)
+    /\ UNCHANGED <<epoch, live, ad, nAd, cl, nCell, st, nGen, rg, ex, nEx, gsnap, gatt, ns, hkeep, lag,
+                   lock, inc, fails, pendDrop, wr, flag>>
 
 -----------------------------------------------------------------------------
 (* Module calls: TemplateModuleState::Call under the module's recursive mutex,
@@ -850,6 +906,8 @@ Next ==
             \/ StoreNs(t, a)
             \/ EnumStart(t, a)
             \/ SortStart(t, a)
+            \/ LendGItem(t, a, TRUE) \/ LendGItem(t, a, FALSE)
+            \/ Evict(t, a) \/ Forget(t, a)
         \/ "release" \in Actions /\ \E e \in ExIds : Release(t, e)
     \/ \E o \in OwnedAddrs : HostLetsGo(o)
 
@@ -927,7 +985,9 @@ WFAd ==
         IF a > nAd THEN ad[a] = NoAd
         ELSE /\ ad[a].idn \in Keys
              /\ CellRef(ad[a].cell)
-             /\ ad[a].held = (ad[a].idn = "G")
+             /\ ad[a].held = (ad[a].idn \in {"G", "GI"})
+             /\ ad[a].snap => ad[a].held
+             /\ ad[a].blk \subseteq AdsMade
              /\ ad[a].generic => ad[a].idn \in OwnedAddrs
              /\ (ad[a].seen = ATT) = (ad[a].cell # 0)
 

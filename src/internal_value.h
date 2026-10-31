@@ -153,6 +153,12 @@ public:
     [[nodiscard]] bool IsGlobalData() const noexcept { return (m_flags & GlobalFlag) != 0; }
     // Marks the object as IsGlobalData says, before anything else shares it
     void MarkGlobalData() noexcept { m_flags |= GlobalFlag; }
+    // The thread's snapshot of the globals reaches the object: a global's own adapter, or an item
+    // in the block of item adapters such an adapter reads now, whose link to a cell is listed in
+    // the cell (CellLink, docs/tasks/0346). Set before the object is shared; cleared on the
+    // render's thread when the block is let go of. Not copied: a copy is another adapter
+    [[nodiscard]] bool IsInSnapshot() const noexcept { return m_inSnapshot; }
+    void MarkInSnapshot() noexcept { m_inSnapshot = true; }
 
     // The cycle collector's view of the object (docs/tasks/0251), as CPython's tp_traverse
     // and tp_clear: Traverse passes fn each object this one holds a reference to, once per
@@ -182,6 +188,7 @@ protected:
     void SetAnchor() noexcept { m_flags |= AnchorFlag; }
     // Set by the constructor of a class whose Traverse visits something
     void SetTraversable() noexcept { m_flags |= TraverseFlag; }
+    void SetInSnapshot(bool inSnapshot) const noexcept { m_inSnapshot = inSnapshot; }
 
 private:
     static constexpr uint8_t CloneFlag = 1;
@@ -190,6 +197,8 @@ private:
     static constexpr uint8_t GlobalFlag = 8;
     mutable std::atomic<unsigned> m_refCount{ 0 };
     uint8_t m_flags = 0;
+    // In the padding after m_flags, so that the object keeps its size
+    mutable bool m_inSnapshot = false;
 };
 
 using ValueObjectPtr = IntrusivePtr<const ValueObject>;

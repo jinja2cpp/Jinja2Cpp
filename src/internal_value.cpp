@@ -1876,7 +1876,7 @@ public:
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override
     {
         // A global's data is the host's, whatever holds it
-        return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values));
+        return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
     [[nodiscard]] bool IsBorrowed() const override { return true; }
@@ -1983,7 +1983,7 @@ InternalValue LendOwnedItem(const std::shared_ptr<T>& owner, const Value& item)
 
 // An item of a global: a list or map keeps the global's owner, anything else is copied (a
 // generic container's copy shares its accessor); defined after the adapters
-InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value& item);
+InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value& item, bool inSnapshot = false);
 
 // A map item of the caller's data, as the convertor makes it, without the convertor's visit
 // (Render/chat_llama); defined after the adapters
@@ -2081,6 +2081,16 @@ public:
     // Detaches the adapter from its cell: the block of item adapters calls it before it frees
     // the slot (ItemAdapters), as OwnedAdapter's destructor does
     void ReleaseLink() const noexcept { m_link.Release(); }
+    // The snapshot no longer reaches the adapter (CellLink::LeaveSnapshot). Its items leave with
+    // it: ItemAdapters::LeaveSnapshot walks the chain of blocks, as deep as the data, without
+    // recursing
+    void LeaveSnapshot() const noexcept
+    {
+        this->SetInSnapshot(false);
+        m_link.LeaveSnapshot();
+    }
+    // The block of item adapters the adapter keeps while the snapshot reaches it
+    [[nodiscard]] const auto* SnapshotItems() const noexcept { return this->IsInSnapshot() ? m_items.get() : nullptr; }
     // The collector's view of what the adapter alone holds: its frozen cell and its block of item
     // adapters, whose slots may hold frozen cells too (OwnedAdapter, ItemAdapters)
     void TraverseOwned(const TraverseFn& fn) const
@@ -2287,7 +2297,7 @@ public:
         const auto* cell = m_link.Get(*this);
         return cell ? cell->MutableItems() : nullptr;
     }
-    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData(), AdaptersOwner(m_values)); }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData(), this->IsInSnapshot(), AdaptersOwner(m_values)); }
     [[nodiscard]] bool IsBorrowed() const override { return true; }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericList CreateGenericList() const override
@@ -3208,7 +3218,7 @@ public:
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override
     {
         // As GenericListAdapter's
-        return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values));
+        return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
     [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysFirst; }
@@ -3298,6 +3308,12 @@ public:
     // Detaches the adapter from its cell: the block of item adapters calls it before it frees
     // the slot (ItemAdapters), as OwnedAdapter's destructor does
     void ReleaseLink() const noexcept { m_link.Release(); }
+    // As ValuesListAdapter's: a map lends its items afresh, so it has no block to walk
+    void LeaveSnapshot() const noexcept
+    {
+        this->SetInSnapshot(false);
+        m_link.LeaveSnapshot();
+    }
     // The collector's view of what the adapter alone holds: its frozen cell (OwnedAdapter, ItemAdapters)
     void TraverseOwned(const TraverseFn& fn) const { m_link.TraverseFrozen(fn); }
 
@@ -3392,7 +3408,7 @@ public:
         const auto* cell = m_link.Get(*this);
         return cell ? cell->MutableDict() : nullptr;
     }
-    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData(), AdaptersOwner(m_values)); }
+    bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData(), this->IsInSnapshot(), AdaptersOwner(m_values)); }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
@@ -3525,6 +3541,52 @@ struct ItemAdapters final : ValueObject
             list->ReleaseLink();
         }
     }
+    // The global's adapter lets go of the block: the thread's snapshot no longer reaches its
+    // items, which a value of the template or of the host may still hold (docs/tasks/0346), nor
+    // the blocks of their own items. The chain is as deep as the data, so it is collected without
+    // recursion first, which may throw only before any link changed
+    void LeaveSnapshot() const
+    {
+        std::vector<const ItemAdapters*> nested;
+        CollectNested(*this, nested);
+        for (size_t next = 0; next != nested.size(); ++next)
+        {
+            CollectNested(*nested[next], nested);
+        }
+        LeaveSlots();
+        for (const auto* block : nested)
+        {
+            block->LeaveSlots();
+        }
+    }
+
+    static void CollectNested(const ItemAdapters& block, std::vector<const ItemAdapters*>& nested)
+    {
+        for (size_t idx = 0; idx < block.size; ++idx)
+        {
+            if (const auto* list = std::get_if<List>(&block.adapters[idx]))
+            {
+                if (const auto* items = list->SnapshotItems())
+                {
+                    nested.push_back(items);
+                }
+            }
+        }
+    }
+    void LeaveSlots() const noexcept
+    {
+        for (size_t idx = 0; idx < size; ++idx)
+        {
+            if (const auto* map = std::get_if<Map>(&adapters[idx]))
+            {
+                map->LeaveSnapshot();
+            }
+            else if (const auto* list = std::get_if<List>(&adapters[idx]))
+            {
+                list->LeaveSnapshot();
+            }
+        }
+    }
 
     std::unique_ptr<Adapter[]> adapters;
     size_t first;
@@ -3545,7 +3607,17 @@ InternalValue ValuesListAdapter<Holder>::LendNested(size_t idx, const T& contain
     if (!m_items || idx < m_items->first || idx - m_items->first >= m_items->size)
     {
         const auto first = idx - (idx % Block::BlockSize);
-        m_items = MakeRef<Block>(first, std::min(Block::BlockSize, m_values.Get().size() - first));
+        auto block = MakeRef<Block>(first, std::min(Block::BlockSize, m_values.Get().size() - first));
+        if constexpr (std::is_same_v<ItemHolder, ByHeldRef<T>>)
+        {
+            // The items of the block let go of may outlive it in a value: their links must not
+            // stay listed once the snapshot no longer holds them (docs/tasks/0346)
+            if (m_items && this->IsInSnapshot())
+            {
+                m_items->LeaveSnapshot();
+            }
+        }
+        m_items = std::move(block);
     }
     auto& slot = m_items->adapters[idx - m_items->first];
     auto* adapter = std::get_if<AdapterType>(&slot);
@@ -3561,6 +3633,11 @@ InternalValue ValuesListAdapter<Holder>::LendNested(size_t idx, const T& contain
         else
         {
             adapter = &slot.template emplace<AdapterType>(ByHeldRef<T>(container, m_values.GetOwner()));
+            // An item of a block the snapshot reaches
+            if (this->IsInSnapshot())
+            {
+                adapter->MarkInSnapshot();
+            }
         }
     }
     // Owned by the block: the item outlives the list adapter if the template keeps it
@@ -3582,7 +3659,9 @@ JINJA2CPP_CELL_NOINLINE InternalValue LendMapItem(const ValuesMap& map)
     return InternalValue(MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<ByRef>>>(map)));
 }
 
-InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value& item)
+// inSnapshot: the global's own adapter, which the thread's snapshot keeps; an item is lent afresh
+// at each read and owns the cell it links to (docs/tasks/0346)
+InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value& item, bool inSnapshot)
 {
     if (const auto* text = std::get_if<std::string>(&item.GetData()))
     {
@@ -3594,11 +3673,21 @@ InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value
     }
     if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&item.GetData()))
     {
-        return InternalValue(ListAdapter(MakeRef<OwnedAdapter<ValuesListAdapter<ByHeldRef>>>(ByHeldRef<ValuesList>(**list, owner))));
+        auto adapter = MakeRef<OwnedAdapter<ValuesListAdapter<ByHeldRef>>>(ByHeldRef<ValuesList>(**list, owner));
+        if (inSnapshot)
+        {
+            adapter->MarkInSnapshot();
+        }
+        return InternalValue(ListAdapter(std::move(adapter)));
     }
     if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&item.GetData()))
     {
-        return InternalValue(MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<ByHeldRef>>>(ByHeldRef<ValuesMap>(**map, owner))));
+        auto adapter = MakeRef<OwnedAdapter<ValuesMapAdapter<ByHeldRef>>>(ByHeldRef<ValuesMap>(**map, owner));
+        if (inSnapshot)
+        {
+            adapter->MarkInSnapshot();
+        }
+        return InternalValue(MapAdapter(std::move(adapter)));
     }
     // By value: a generic container's copy shares the host's accessor, not the global's storage,
     // and text is copied. A generic container's adapter is a global's as the ones above
@@ -3607,12 +3696,20 @@ InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value
     {
         auto adapter = MakeRef<GenericListAdapter<BySharedVal>>(GenericList(*list));
         adapter->MarkGlobalData();
+        if (inSnapshot)
+        {
+            adapter->MarkInSnapshot();
+        }
         return InternalValue(ListAdapter(std::move(adapter)));
     }
     if (const auto* map = std::get_if<GenericMap>(&item.GetData()))
     {
         auto adapter = MakeRef<GenericMapAdapter<BySharedVal>>(GenericMap(*map));
         adapter->MarkGlobalData();
+        if (inSnapshot)
+        {
+            adapter->MarkInSnapshot();
+        }
         return InternalValue(MapAdapter(std::move(adapter)));
     }
     return visit(visitors::InputValueConvertor(true, false), item.GetData());
@@ -3620,7 +3717,7 @@ InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value
 
 InternalValue LendGlobal(const Value& value, const std::shared_ptr<const void>& owner)
 {
-    return LendHeldItem(owner, value);
+    return LendHeldItem(owner, value, true);
 }
 
 MapAdapter CreateMapAdapter(InternalValueMap&& values)

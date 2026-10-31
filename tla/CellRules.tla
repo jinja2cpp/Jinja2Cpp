@@ -19,9 +19,10 @@ SHARED == -1
 FindResult(tbl, idn, isList, isListOf(_)) ==
     IF idn \in DOMAIN tbl /\ tbl[idn] # 0 /\ isListOf(tbl[idn]) = isList THEN tbl[idn] ELSE 0
 
-\* CellLink::Link: a link owns its cell (a reference count) unless it is a global's, which the
-\* cell lists and the end of the render detaches (CellProtocol's FixModuleLinksOwn, extended to
-\* a render's cells for 0340)
+\* CellLink::Link: a link owns its cell (a reference count) unless it is listed: a global's that
+\* the thread's snapshot reaches, which the end of the render detaches (CellProtocol's
+\* FixModuleLinksOwn, extended to a render's cells for 0340 and to a global's items the snapshot
+\* does not reach for 0346). The log's "held" is whether the link is listed
 LinkOwns(isHeld) == ~isHeld
 
 \* BorrowedCell::ExportList: in the cell's own module call (own, call # 0) the value reads through

@@ -1,9 +1,10 @@
 ---
-status: open
-priority: low
+status: in-progress
+priority: high
 area: robustness
 depends: [0340]
-touches: [src/borrowed_cells.h, src/borrowed_cells.cpp, src/internal_value.cpp#ItemAdapters, test/borrowed_cells_test.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/711
+touches: [src/borrowed_cells.h, src/borrowed_cells.cpp, src/internal_value.cpp#ItemAdapters, src/internal_value.cpp#LendHeldItem, test/borrowed_cells_globals_test.cpp, tla/CellProtocol.tla, tla/CellTrace.tla, tla/CellRules.tla]
 ---
 # A global's item adapter in a block the global let go of, dropped on another thread
 
@@ -32,3 +33,32 @@ adapter until `Finish` (a small list in the adapter, cleared at the detach).
 **Done when.** A TSan row (a global of 300 lists, `g[299].append(1)`, `keep([g[299]])`, `g[0]` read,
 the kept value dropped on another thread during the render, 2000 renders) is clean, and
 `Render/for_filter_if` and `Render/chat_llama` do not move in `bench/count.py`.
+
+**Found on the way.** The shape is wider than the block of the description, and TSan reproduces it
+on master (`test/borrowed_cells_globals_test.cpp`: data races and a heap-use-after-free of the
+cell's `m_links` buffer, which the render's `push_back` reallocates while the host's `Unlink`
+writes it). `g[i]` of a global (`GetItem`) and a map's item (`g.m`) are not lent from a block at
+all: `LendHeldItem` makes a new adapter at each read, which no snapshot keeps, and its link was
+listed as well. A template that writes through `x = g.m` in a macro and hands `[x]` to the host
+leaves the host the last reference once the macro's frame goes. The block shape is a loop over the
+global (`for x in g`, `HostCurrentItem`), which reads past the block of the kept item; there TSan
+also reports `Finish` writing the link of an adapter the host holds and frees. A module call never
+lists a global's link: a template module converts its globals by value (`TemplateModuleState`).
+Priority raised to high: memory corruption reachable from template text when the host drops kept
+values on another thread, which 0340 made part of the contract.
+
+**Resolution.** The model first: `tla/CellProtocol.tla` gets `FixSnapshotLinks`, an adapter's
+`snap` (the snapshot reaches it) and `blk` (the item adapters its block holds), and the actions
+`LendGItem`, `Evict` and `Forget`; `global-items-listed` (the code before) gives a
+`NoCrossThreadWrite` counterexample, `global-items-handoff` and `render-global-items` pass
+(tla/README.md, "A global's link is listed only while the snapshot reaches its adapter"). Then the
+C++: a link is listed only if its adapter is a global's that the thread's snapshot reaches
+(`ValueObject::IsInSnapshot`, a byte in the padding after the object's flags, set by `LendGlobal`
+on a global's own adapter and by `LendNested` on the items of such an adapter's block; not in
+`CellLink::m_state`, whose detached value is the epoch since 0342); every other link owns its
+cell. When the global's adapter lets go of a block, `ItemAdapters::LeaveSnapshot` walks it (and,
+iteratively, the blocks its items hold), and each
+listed link leaves its cell's list and takes a reference, on the render's thread, which still holds
+the block. Neither option of the description was taken: (a) would keep every adapter of `g[i]` read
+in a loop alive until `Finish`, and (b) does not cover the adapters no block holds. The trace
+validation has the new event `leave`.

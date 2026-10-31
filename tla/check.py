@@ -38,6 +38,8 @@ FIXES = {
     # 0340: the C++ makes every link but a global's own its cell (FixLinksOwn) instead of the
     # registry holding the adapters (FixPinOnAttach, option (a)); both close the window
     "FixPinOnAttach": False, "FixLinksOwn": True,
+    # 0346: a global's link is listed only while the thread's snapshot reaches its adapter
+    "FixSnapshotLinks": True,
     # 0338 step D: a step allocates first and then commits with operations that cannot fail
     "FixAtomicLink": True, "FixAtomicPin": True,
 }
@@ -63,6 +65,10 @@ SHARED_KEPT = dict(Threads='{"t1", "t2"}', ModuleThreads='{}', RenderThreads='{"
 DEEP = dict(Threads='{"t1"}', ModuleThreads='{"t1"}', RenderThreads='{}', MaxDepth=2,
             MaxLevel=34, MaxAd=10, MaxCell=1, MaxGen=4, MaxEx=2,
             Actions='{"export", "release", "enum", "sort"}')
+# Renders on t1 lending a global's items, which the host keeps and drops on t2 (0346)
+GLOBAL_ITEMS = dict(Threads='{"t1", "t2"}', ModuleThreads='{}', RenderThreads='{"t1"}',
+                    MaxDepth=1, MaxLevel=12, MaxAd=9, MaxCell=2, MaxGen=3, MaxEx=1,
+                    HostHandoff=True, Actions='{"keeplist", "release", "read", "gitem"}')
 ALL = '{"touch", "read", "export", "keeplist", "ns", "enum", "sort", "release"}'
 
 
@@ -171,6 +177,17 @@ RUNS = {
                              {"HostHandoff": True, "FixLinksOwn": False, "MaxLevel": 12},
                              ["NoCrossThreadWrite"],
                              "0340: the dropper unlinks the adapter from the render's live cell"),
+    # 0346: a global's item the snapshot no longer reaches (its block let go of it, a map item),
+    # kept in a list and dropped on another thread while the render runs
+    # MaxLevel 10: the listed-link counterexample takes 8 states; level 12 outgrows a 4-core runner
+    "global-items-handoff": ("pass", GLOBAL_ITEMS, {"MaxLevel": 10}, SAFETY,
+                             "0346: a global's item kept, let go of and dropped on another thread"),
+    "global-items-listed": ("mutant", GLOBAL_ITEMS, {"FixSnapshotLinks": False},
+                            ["NoCrossThreadWrite"],
+                            "0346: the dropper unlinks a global's item from the render's live cell"),
+    # The items of a global in renders nested through a callback, which share the snapshot
+    "render-global-items": ("pass", dict(RENDER1, Actions='{"read", "keeplist", "release", "gitem"}'),
+                            {"MaxLevel": 10}, SAFETY, "0346: a global's items in nested renders"),
     # 0341: with FixCallPin no write compares call ids, so a wrapped id is harmless
     "call-id-wrap": ("pass", MODULE1, {"MaxCallId": 2}, SAFETY, "0341: call ids wrap after 2"),
     "call-id-wrap-no-pin": ("mutant", dict(MODULE1, Actions='{"export", "release"}'),

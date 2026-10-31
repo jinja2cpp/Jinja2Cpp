@@ -115,7 +115,7 @@ EndCall ==
     /\ UNCHANGED <<cl, lk, exr, live, promoted>>
 
 -----------------------------------------------------------------------------
-(* Lookups: CellLink::Get, Find, Link, Unlink, Inherit *)
+(* Lookups: CellLink::Get, Find, Link, Unlink, LeaveSnapshot, Inherit *)
 
 \* A read that skipped the lookup: the adapter saw the epoch it has now. It reads the host's
 \* data, so the registry running must have no cell of it (CellProtocol's AliasesAgree)
@@ -177,6 +177,19 @@ Unlink ==
                  NoCrossThreadWrite |-> E.owns = 0 /\ ~WriterOk(cl[c].reg, E.t)])
        /\ Next1(/\ lk' = SetL(E.a, [L(E.a) EXCEPT !.cell = 0, !.own = FALSE, !.seen = 0])
                 /\ cl' = [cl EXCEPT ![c].links = @ \ {E.a}, ![c].held = @ \ {E.a}])
+    /\ UNCHANGED <<rg, exr, live, promoted>>
+
+\* The snapshot of the globals let go of the block an item's adapter is in: its listed link moves
+\* out of the live cell's list and becomes a reference to the cell (0346), on the cell's writer
+Leave ==
+    /\ E.ev = "leave" /\ Known(E.c)
+    /\ LET c == E.c IN
+       /\ Check([LinksAgree |-> L(E.a).cell # c \/ L(E.a).own \/ E.a \notin cl[c].held,
+                 NoUseAfterFree |-> ~cl[c].alive,
+                 FrozenUnwritten |-> cl[c].frozen,
+                 NoCrossThreadWrite |-> ~WriterOk(cl[c].reg, E.t)])
+       /\ Next1(/\ lk' = SetL(E.a, [L(E.a) EXCEPT !.own = TRUE])
+                /\ cl' = [cl EXCEPT ![c].held = @ \ {E.a}])
     /\ UNCHANGED <<rg, exr, live, promoted>>
 
 \* A copy of an adapter that reads a frozen cell reads it too
@@ -391,7 +404,7 @@ Done == l > Len(Log) /\ UNCHANGED vars
 Next ==
     \/ l <= Len(Log) /\
         \/ RegNew \/ RegFree \/ BeginCall \/ EndCall
-        \/ Skip \/ Hit \/ Find \/ Link \/ LinkFail \/ Unlink \/ Inherit \/ DieAttached
+        \/ Skip \/ Hit \/ Find \/ Link \/ LinkFail \/ Unlink \/ Leave \/ Inherit \/ DieAttached
         \/ CellNew \/ AdoptNo \/ Adopt \/ Promote
         \/ Export \/ Pin \/ Write \/ Unshare \/ Copied
         \/ Drop \/ Dropped \/ Freeze \/ Finish \/ Finished \/ Free

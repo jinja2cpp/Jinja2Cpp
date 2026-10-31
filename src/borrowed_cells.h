@@ -98,8 +98,12 @@ inline uint64_t CellEpoch() noexcept
 // A link owns its cell, a reference count, unless it is a global's: a value the host keeps can
 // hold the adapter, and the host may let go of it on another thread, before the render or
 // module call that made the cell ended (docs/tasks/0332, 0340). Letting go is then a release of
-// the count, never a write to the live cell. Only a global's link, which the thread's snapshot
-// holds until the end of the render detaches it, is listed in the cell
+// the count, never a write to the live cell. Only the link of an adapter the thread's snapshot of
+// the globals reaches (ValueObject::IsInSnapshot), which the snapshot holds until the end of the
+// render detaches it, is listed in the cell: a global's own adapter and the items in the block of
+// item adapters such an adapter reads now (docs/tasks/0346). An item of a global the snapshot
+// does not reach (a map's item or g[i], lent afresh at each read, or an item in a block the
+// global's adapter let go of) owns its cell as any other link does
 //
 // The destructor does not detach: the owner of the adapter calls Release first. An adapter on
 // its own does that as it goes (AutoCellLink, OwnedAdapter in internal_value.cpp); a block of
@@ -142,6 +146,10 @@ public:
 
     // Detaches the adapter from its cell, before the adapter goes
     inline void Release() const noexcept;
+    // The snapshot no longer reaches the adapter (the block it is an item of was let go of), on
+    // the thread of the render, which still holds it: a listed link becomes a reference to its
+    // cell, so that the host may let go of the adapter on any thread
+    void LeaveSnapshot() const noexcept;
 
     // The cell of `self`'s data in the running render, or null while the render has not
     // written to it: one relaxed load and a compare while no promotion happened since the last
@@ -182,10 +190,10 @@ public:
     // Attaches the adapter to a new cell holding `storage` (a list or dict the template owns,
     // the copy of the adapter's items) for the data `self` names; false outside a render, where
     // the caller keeps the copy instead, and for an adapter that reads a frozen cell. `held`: the adapter is a
-    // global's (ValueObject::IsGlobalData). `owner`: what owns data that lives only as long as
-    // its adapters (a user callable's result, a module call's argument), empty for the host's
-    // data
-    bool Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, std::weak_ptr<const void> owner = {}) const;
+    // global's (ValueObject::IsGlobalData); `listed`: the thread's snapshot reaches it
+    // (ValueObject::IsInSnapshot). `owner`: what owns data that lives only as long as its
+    // adapters (a user callable's result, a module call's argument), empty for the host's data
+    bool Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, bool listed, std::weak_ptr<const void> owner = {}) const;
 
 private:
     friend class BorrowedCell;
@@ -194,24 +202,31 @@ private:
     // Out of line, in borrowed_cells.cpp: the reads that call them stay small
     const BorrowedCell* Find(const IListAccessor& self) const;
     const BorrowedCell* Find(const IMapAccessor& self) const;
-    const BorrowedCell* Find(const void* identity, bool isList, bool held) const;
-    // The allocation a link needs (room in the cell's list for a global's link), made before
-    // anything changes; then Link, which allocates nothing (docs/tasks/0338, step D)
-    static void ReserveLink(const BorrowedCell& cell, bool held);
-    void Link(const BorrowedCell& cell, bool held) const noexcept;
-    // Lets go of the cell, or, for a global's link, detaches from the live cell
+    const BorrowedCell* Find(const void* identity, bool isList, bool held, bool listed) const;
+    // The allocation a link needs (a global's workspace, room in the cell's list for a listed
+    // link), made before anything changes; then Link, which allocates nothing (docs/tasks/0338,
+    // step D). `listed`: the thread's snapshot reaches a global's adapter (0346)
+    static void ReserveLink(const BorrowedCell& cell, bool held, bool listed);
+    void Link(const BorrowedCell& cell, bool held, bool listed) const noexcept;
+    // Lets go of the cell, or, for a listed link, detaches from the live cell
     JINJA2CPP_CELL_NOINLINE void Unlink() const noexcept;
+    // Takes a listed link out of its live cell's list
+    void Unlist(const BorrowedCell& cell, uint64_t index) const noexcept;
+#ifdef JINJA2CPP_CELL_TRACE
+    // The link IsUnheld compares the cell's links with, for the trace of an adopt
+    static const CellLink* TraceSourceLink(const BorrowedCell& cell, bool isList);
+#endif
     // Takes the frozen cell `other` reads, if it reads one
     JINJA2CPP_CELL_NOINLINE void Inherit(const CellLink& other) noexcept;
 
     // The bit of m_state that marks an attached adapter: the epoch never reaches it, so an
     // attached adapter's reads always take the call (docs/tasks/0342)
     static constexpr uint64_t AttachedBit = uint64_t{ 1 } << 63U;
-    // The bit of an attached m_state that marks the link of a global's adapter, which the end of
-    // the render detaches instead of freezing
+    // The bit of an attached m_state that marks a listed link, which the end of the render
+    // detaches instead of freezing
     static constexpr uint64_t HeldBit = 0x80000000U;
     // The bit of an attached m_state that marks a link holding a reference to its cell: every link
-    // but a global's to a live cell. Read by the link's own thread, never from the cell, which
+    // but a listed one. Read by the link's own thread, never from the cell, which
     // another thread may freeze meanwhile (docs/tasks/0340)
     static constexpr uint64_t OwnsBit = 0x40000000U;
     // The bits of an attached global's m_state that hold its position in the cell's list of links
@@ -219,11 +234,11 @@ private:
 
     [[nodiscard]] bool Owns() const noexcept { return (m_state & OwnsBit) != 0; }
 
-    // Owned (OwnsBit), unless the link is a global's to a live cell, which its registry keeps
-    // until it detaches the link at the render's end
+    // Owned (OwnsBit), unless the link is listed in a live cell, whose registry keeps it until it
+    // detaches the link at the render's end
     mutable const BorrowedCell* m_cell = nullptr;
     // Detached: the epoch of the last look, or 0 (no look yet; the epoch never is 0). Attached:
-    // AttachedBit with OwnsBit, or with HeldBit and the position of this global's link in the live
+    // AttachedBit with OwnsBit, or with HeldBit and the position of this listed link in the live
     // cell's list of links. One word for both keeps the link at two words with a 64-bit epoch
     mutable uint64_t m_state = 0;
 };
@@ -344,8 +359,9 @@ private:
     bool m_isList;
     // Set when the render ends (BorrowedCells::Finish)
     mutable bool m_frozen = false;
-    // The links of the globals' adapters attached to the live cell, which the registry detaches
-    // when the render ends; the other links own the cell and are not listed
+    // The links of the adapters the thread's snapshot of the globals reaches attached to the live
+    // cell, which the registry detaches when the render ends; the other links own the cell and
+    // are not listed
     mutable std::vector<const CellLink*> m_links;
 };
 
