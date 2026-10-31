@@ -40,10 +40,12 @@ FIXES = {
     "FixPinOnAttach": False, "FixLinksOwn": True,
     # 0346: a global's link is listed only while the thread's snapshot reaches its adapter
     "FixSnapshotLinks": True,
+    # 0338 step D: a step allocates first and then commits with operations that cannot fail
+    "FixAtomicLink": True, "FixAtomicPin": True,
 }
 SAFETY = ["SnapshotStable", "NoCrossThreadWrite", "NoUseAfterFree", "NoForeignCell",
           "RegistryBounded", "AliasesAgree", "NoUndefItems", "LiveCount", "ExportKeepsCallState",
-          "NoLostWrites"]
+          "NoLostWrites", "NoTornStep", "WellFormed"]
 
 # Scopes. The deep counterexamples need about 14 steps, which an all-actions model of two
 # threads cannot reach exhaustively; each scope enables the parts a group of fixes needs.
@@ -95,7 +97,7 @@ RUNS = {
                          ["SnapshotStable"],
                          "F1: a nested call's kept value changes when the outer call writes"),
     # Each fix taken out
-    "no-link-epoch": ("mutant", RENDER1, {"FixLinkEpoch": False}, ["AliasesAgree"],
+    "no-link-epoch": ("mutant", RENDER1, {"FixLinkEpoch": False, "FixAtomicLink": False}, ["AliasesAgree"],
                       "c06d969, Codex P2: alias detached after a failed Link"),
     "no-enum-refetch": ("mutant", DEEP, {"FixEnumRefetch": False}, ["NoUseAfterFree"],
                         "f83b89f, Codex P1: loop over storage two copies freed"),
@@ -191,6 +193,12 @@ RUNS = {
     "call-id-wrap-no-pin": ("mutant", dict(MODULE1, Actions='{"export", "release"}'),
                             {"MaxCallId": 2, "FixCallPin": False, "MaxLevel": 14},
                             ["SnapshotStable"], "0341: a wrapped id equals a stale export mark"),
+    # 0338 step D: failure atomicity. #673's Link kept the epoch 0 after a failed push (safe, as
+    # no-link-epoch shows, but a change all the same); its pin kept what it recorded
+    "non-atomic-link": ("mutant", RENDER1, {"FixAtomicLink": False}, ["NoTornStep"],
+                        "step D: a failed Link changes the adapter"),
+    "partial-pin": ("mutant", MODULE1, {"FixAtomicPin": False}, ["NoTornStep"],
+                    "step D: a failed pin keeps some exports pinned and their cells marked"),
     # 0342: the C++ epoch is 64 bits, which the unbounded counter of the other runs stands for;
     # a counter that wraps (32 bits before 0342) brings an adapter's seen epoch back
     "epoch-wrap": ("mutant", RENDER1, {"MaxEpoch": 2},
@@ -273,7 +281,10 @@ def run(jar, name, spec, workdir, extra=None, timeout=None, symmetry=True, java_
             res = json.load(data)
         return dict(res, name=name, note=note, verdict=res["verdict"] + " (cached)", secs=0)
     start = time.time()
-    cmd = ["java", "-XX:+UseParallelGC", *java_opts, "-cp", jar, "tlc2.TLC", "-workers", "auto",
+    # A private java.io.tmpdir: TLC unpacks its standard modules there, and parallel runs sharing
+    # /tmp can parse each other's half-written copies
+    cmd = ["java", "-XX:+UseParallelGC", *java_opts, f"-Djava.io.tmpdir={workdir}", "-cp", jar,
+           "tlc2.TLC", "-workers", "auto",
            "-deadlock", "-config", "MC.cfg", "MC.tla"]
     timed_out = False
     try:

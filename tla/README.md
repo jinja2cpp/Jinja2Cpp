@@ -57,14 +57,14 @@ not change in a later one. That rule is D8's copy on write.
 |---|---|
 | `CellLink` of an adapter (`m_cell`, `m_seenEpoch`, held bit, owns bit) | `ad[a]`: `cell`, `seen`, `held`; `OwningLink(a)` |
 | `CellCounters` epoch and live | `epoch`, `live` |
-| `CellLink::Get`, `Find`, `Link` | `GetR`; an allocation failure in the push of `Link` (c06d969) |
+| `CellLink::Get`, `Find`, `ReserveLink`, `Link` | `GetR`; an allocation failure in `ReserveLink`, before anything changes (`FixAtomicLink`; c06d969 before it) |
 | `BorrowedCell` (`m_storage`, `m_retired`, `m_source`, `m_owner`, `m_shared`, `m_frozen`, `m_links`) | `cl[c]`: `stor`, `retired`, `source`, `owned`, `exp`, `frozen`, `links` |
 | A storage: the `ListAdapter`'s accessor object, and the `InternalValueList` it shares | `st[g]`: `acc` (held by the cell only), `alive` (held by the accessor and by exports) |
 | `MutableItems`, `Unshare`, `ExportList`/`ExportMap` | `WC`, `NeedCopy`, `Export`; a failed copy |
-| `CellLink::Adopt` | `Adopt`: a copy of the data with one nested item adapter (`P` holds `C`) |
+| `CellLink::Adopt` | `Adopt`: a copy of the data with one nested item adapter (`P` holds `C`); `AdoptFailed` |
 | `BorrowedCells` of a render and of a module, `BeginCall`/`EndCall` | `rg[r]`: `tbl`, `call`, `last` |
 | `BorrowedCells::Finish` | `FinishSources`, then `FinishFreeze` (sources first, then freeze) |
-| `ModuleCallCollector`, `DropUnheld`/`IsUnheld` (459d8f7) | `EndModCall`, `DropUnheld`, `Unheld`; `DropRule` |
+| `ModuleCallCollector`, `DropUnheld`/`IsUnheld` (459d8f7) | `EndModCall`, `DropUnheld`, `Unheld`; `DropRule`; a failed reserve of the list to drop |
 | `TemplateModuleState::Call` under its recursive mutex | `StartModCall`, `lock` |
 | `GetGlobalsSnapshot`, `RenderWorkspace::GlobalAttached` | `StartRender`, `gsnap`, `gatt`; a failed conversion |
 | `ExportListView` and its owner (A1); `CreateGenericList` copies the accessor | an export of kind `gen` holds a storage's items, not its accessor |
@@ -73,7 +73,7 @@ not change in a later one. That rule is D8's copy on write.
 | `ListSort` with its `Restore` guard across key calls | `SortStart`, `SortEnd` |
 | reference counts and destructors | `GC`: reachability from the roots, run right after the step that dropped a reference |
 | a module namespace holding an argument | `ns` |
-| `CallExports`, pinned in `~ModuleCallCollector` (0335, 0332); its views `CallListView`, `CallMapView` | an export of kind `live`; `PinEx` in `EndModCall` |
+| `CallExports`, pinned in `~ModuleCallCollector` (0335, 0332): `Record`, then `Commit`; its views `CallListView`, `CallMapView` | an export of kind `live`; `PinExOf` in `EndModCall`; a failed `Record` (`FixAtomicPin`) |
 | A link holds a reference to its cell unless it is a global's (`CellLink::OwnsBit`; 0332, 0340) | `OwningLink`, `FixModuleLinksOwn`, `FixLinksOwn` |
 | 0340 option (a), not in the C++: a render's live cell holds its linked adapters until `Finish` | `Succ` of a cell, `FixPinOnAttach` |
 | `ValueObject::IsInSnapshot`: the snapshot reaches a global's adapter; `LendNested`'s block, `LeaveSnapshot` when it lets go of it; `g[i]` and a map's item lent afresh (0346) | `ad[a].snap`, `ad[a].blk`, `LendGItem`, `Evict`, `Forget`, `FixSnapshotLinks` |
@@ -110,6 +110,8 @@ What the model abstracts:
 | + | `live` equals the number of listed cells | `LiveCount` |
 | 7 | A module call's export keeps that call's final state (0335) | `ExportKeepsCallState` |
 | 8 | No cell is dropped while its data can be lent to a later call (0336) | `NoLostWrites` |
+| 9 | A step that runs out of memory changes nothing the next step reads, but what its caller's cleanup does (0338 step D) | `NoTornStep` |
+| + | Every id names an object made so far; tables, links and frames agree (0338 F) | `WellFormed` |
 
 ## Results
 
@@ -158,6 +160,8 @@ explores every behaviour up to it and none past it.
 | `render-links-unowned` | no `FixLinksOwn` (nor `FixPinOnAttach`), hand-off | counterexample: `NoCrossThreadWrite` (0340) |
 | `call-id-wrap-no-pin` | call ids wrap after 2, no `FixCallPin` | counterexample: `SnapshotStable` (0341) |
 | `global-items-listed` | no `FixSnapshotLinks`: every link of a global's adapter listed | counterexample: `NoCrossThreadWrite` (0346; 8 states) |
+| `non-atomic-link` | `render` with #673's `Link`: a failed push leaves the epoch 0 (0338 step D) | counterexample: `NoTornStep` |
+| `partial-pin` | `module` with #695's pin: a failure keeps what was recorded (0338 step D) | counterexample: `NoTornStep` |
 | `no-generic-owner` | no `FixGenericOwner` | counterexample: `RegistryBounded` (0336) |
 | `generic-drop-without-host-test` | `IsUnheld` without the host-copy test | counterexample: `NoLostWrites` (0336) |
 | `epoch-wrap` | `render` with the epoch wrapping after 2, as a 32-bit epoch did before 0342 | counterexample: `AliasesAgree` |
@@ -287,13 +291,175 @@ value, which is the unbounded counter the pass runs use; `epoch-wrap` (`MaxEpoch
 uniqueness test, now an acquire) is memory order, outside a sequentially consistent model; the
 designs above keep the uniqueness test, so they inherit its fix.
 
+## Failure atomicity (0338 step D)
+
+Each protocol step that allocates is written as allocate first, then commit with operations that
+cannot fail. An allocation failure is then one disjunct per step, "fails before the commit", that
+changes nothing but the failure count; the model needs no failure point per allocation, and the
+C++ sweep (`test/allocation_failure_test.cpp`, `jinja2cpp_alloc_tests`, ASan in CI) fails every
+allocation in turn to check the code has that shape. `NoTornStep` states it: the step's own
+change is all or nothing.
+
+| Step | Allocates (before the commit) | Commits (cannot fail) | Model |
+|---|---|---|---|
+| `CellLink::Find` + `Link` | room for a global's link (`ReserveLink`), the thread's workspace | the epoch seen, or the link | `LinkFailed`; `non-atomic-link` (#673 kept the epoch 0) |
+| `CellLink::Adopt` | the table, the cell, room for a global's link, the table's insert last | install the table, unlink, link, live count, epoch | `AdoptFailed` |
+| `BorrowedCell::Unshare` | the copy of the items | swap the storage, clear the mark | `WC` kind `fail`; `no-marker-after-copy` |
+| an export in a module call (`ExportCallFirst`) | the view, the note of the cell | adopt the call's exports | stutter (not a disjunct) |
+| `BorrowedCells::PinExports` | `CallExports::Record`: the pins, the sets of the nested walk | `Commit`: mark the recorded cells; `Seal` always | `EndModCall` with `pf`; `partial-pin` (#695 kept what it recorded) |
+| `BorrowedCells::DropUnheldOnce` | the list of cells to drop | out of the table, sources go | `DropUnheld`, the candidates join `lag` |
+| `GetGlobalsSnapshot` | the conversion | clear the attached mark | `StartRender`; `no-mark-order` |
+| `Finish`, `BeginCall`, `EndCall`, `Unlink` | nothing | everything (`noexcept`) | no failure |
+
+`ListSort`'s restore guard is cleanup, not a step: its failed copy writes the items back in
+place, which `SortEnd` models (`no-sort-mutable-first`).
+
+A call whose pin fails throws `std::bad_alloc`. The values it handed to the host already then read
+only data nothing writes: the host's data through an adapter, and no items for the view of a
+module cell at the top (task 0361). Before step D they kept what the pin recorded before the
+failure and read the host's data for the rest, a mix of the call's end and its start
+(`FailedCallsPinIsAllOrNothing` shows `[[0], 2]` on that code).
+
+## Past the bounds: depth, sizes and Apalache (task 0338, step F)
+
+Step F was to replace "bounded" with inductive invariants checked by Apalache plus a cutoff
+argument for the sizes. Apalache now runs the model, but the inductive check is out of reach as
+the spec is written, so the mechanized proof is task 0363. This section records what was built,
+what it costs, and the argument that stands in for the proof.
+
+**Running Apalache.**
+
+```bash
+curl -sSL https://github.com/apalache-mc/apalache/releases/download/v0.51.1/apalache-0.51.1.tgz | tar xz -C tla
+ln -s apalache-0.51.1 tla/apalache
+python3 tla/apalache.py typecheck
+python3 tla/apalache.py bounded --length 3 --scope module --set MaxAd=6 MaxCell=2 MaxGen=3 MaxEx=1
+python3 tla/apalache.py inductive --inv NoLostWrites ...   # IndInv /\ Next => NoLostWrites'
+python3 tla/apalache.py sat ...                            # IndInv has a state at all
+```
+
+`apalache.py` takes the constants from a `check.py` run (`--scope`, `--set`), so both tools
+check the same models. It copies the spec and replaces three things Apalache cannot read, each
+checked to occur once: `InBound` (TLC's level; Apalache bounds the length itself), the
+`RECURSIVE` `Close` (a fold of a reached flag per object, one round per object, since the
+fixed point of a set of tuples ran out of memory) and the `EXTENDS`. The types are in
+`CellApalache.tla` and in `\* @type:` comments in `CellProtocol.tla`, which TLC ignores.
+`CellInductive.tla` has `TypeOK`, `IndInv` (so far `WellFormed /\ Safety`) and `IndInit`, any
+state of the right shape.
+
+**What it costs.** On the smallest module scope (6 adapters, 2 cells, 3 storages, 1 export):
+
+| Check | Time or result |
+|---|---|
+| type check | 20 s |
+| bounded, 3 steps of renders, uses and GC | 6 min |
+| a `WellFormed` part, or a flag invariant, against `IndInit` | 20 s to 3 min |
+| `SnapshotStable` or `NoCrossThreadWrite` against `IndInit` (implied by it) | over 15 min, stopped |
+| one inductive step of the full `Next` | out of memory at 14 GB |
+
+An inductive invariant is found by strengthening `IndInv` from the counterexamples of that
+last row, typically dozens of rounds, and the result would still hold for these sizes only.
+The costs come from the symbolic encoding of indirect function reads (`cl[ad[a].cell].stor`)
+and of `GC`, which every step may take. What would make it tractable is in task 0363.
+
+**The model found one defect on the way.** `DropUnheld`'s branch with no candidate set
+`lag' = {}` while its trailing `UNCHANGED` kept `lag`, so the step was enabled only when `lag`
+was already empty. With `-deadlock`, TLC silently ended every behaviour in which the host had
+let go of data before a module call ended (`module-generic` at level 9: 275,413 states before,
+275,591 after). Apalache's assignment check reports such a step, TLC does not. Fixed; the
+`module`, `module-generic` and `module-0332` passes and the `lag` mutants were rerun.
+
+**Well-formedness.** `WellFormed` is a TLC invariant of every pass run: every id a field holds
+names an object made so far, a listed cell is alive, not frozen and the table's entry for its
+identity, a table entry is such a cell, a frozen cell has no links, an adapter is attached
+(`seen = ATT`) exactly when it has a cell, only the global's adapter is held, frames have their
+own registries and borrow only attached adapters. It is the first layer of `IndInv`, and it
+guards the model against drift: a new action that leaves a dangling id fails it.
+
+### Depth: every scope is finite
+
+The level bound is not what keeps the search finite. Ids are never reused and each kind is
+bounded (`MaxAd`, `MaxCell`, `MaxGen`, `MaxEx`); the epoch moves only in `Adopt` (which makes
+a cell) and in `FinishFreeze` of a render with listed cells, so it stays at or below
+`2 * MaxCell`; the call id and each `inc[o]` move only in `StartModCall` (two adapters), so at
+or below `MaxAd / 2`; `fails <= MaxFail`, values `<= MaxVal`. Every other field ranges over a
+finite set. So each scope has finitely many reachable states, and a run without the level
+guard that completes checks every behaviour of that scope, at any length. That is what an
+inductive invariant gives for fixed constants; task 0351 (item 1) runs it. It is slow, not
+blocked: `module` at 6/2/3/1 with `MaxLevel=500` had not finished after 25 minutes.
+
+### Sizes: the cutoff argument
+
+The question is whether a defect that needs more threads, identities or nesting than a scope
+has can exist. The argument below is on paper, step by step, against the actions above; each
+part says what it rests on and where it stops.
+
+**What links threads.** A thread's own state is its frame stack `fr[t]`, `gsnap[t]`,
+`gatt[t]`, the registries `<<t, d>>` of its renders, and the adapters, cells and storages its
+render frames make. Another thread reaches that state only (a) through the module, whose every
+step runs under the module lock, (b) by releasing an export it was handed (`Release`, after
+`done` or with `HostHandoff`), which only drops a reference, and (c) through `GC`, which only
+frees what no root reaches and unlinks dead adapters. Host data is constant and each render
+makes its own host adapters (without A1, raws are the exception, a mutant only).
+
+**Threads: two suffice, given one move.** Every invariant names at most two threads: the two
+writers of `NoCrossThreadWrite`; the rest name an object, not a thread. Take a violating
+behaviour with threads A and B named by the violation and a third thread C. C's render steps
+touch only C's objects and so commute with every step of A and B except `GC`, whose result for
+A's and B's objects does not depend on C's roots (C's roots reach C's objects and the module's;
+a module object reached only through C would be freed earlier without C, which is a release
+that A or B can make too). So C's render steps can be dropped. C's module calls are
+lock-serialized with A's and B's; give each such call to B. That is a behaviour of the
+two-thread model **if** B is outside the module at that time, which holds, and if B's own
+render steps during C's call can move before or after it, which holds since they touch only
+B's render objects; the call then runs at B's depth 0 or nested in B's render, which needs
+`MaxDepth` one higher. Status: argued for the safety invariants, with the depth caveat; the
+three-thread runs below found nothing new.
+
+**Identities: two plus the busy ones.** The protocol compares identities only for equality
+(registry keys, `cl[c].idn = ad[a].idn`, `FreeAddrs`), and every invariant names at most two:
+`NoForeignCell` one address in two incarnations or two addresses, the rest one. That is the
+data-independence condition (Wolper, 1986), with one exception: `StartModCall` needs a free
+address, so an address that is busy (an argument of a running call, the namespace's adapter,
+a host's kept copy or view) blocks a call that a larger set would allow. At most
+`MaxDepth` (nested calls) + 1 (`ns`) + `MaxEx` (kept views and copies) addresses are busy at
+once, so with one more than that every call finds a free one, and since addresses are
+symmetric, renaming covers every behaviour: 6 for the module scopes, not the 2 they use.
+Status: argued; the runs with 2 addresses are partial for behaviours that need two busy
+addresses and a third for the next call, and the three-address runs below are the check that
+exists.
+
+**Nesting.** Each frame saves what it changes in the frame itself (`outer`, the registry
+`<<t, d>>`, the borrower) and restores it at its end, and the invariants relate a frame to its
+direct parent (call restore, the nested global, the export marks of F1). Stack discipline
+carries that to any depth by induction on the depth, if no step reads a grandparent's state;
+none does, except `InModule` (any module frame below, for the lock), which a depth-2 scope
+covers. Status: argued; one depth-3 run below.
+
+**Allocations.** `MaxAd`, `MaxCell`, `MaxGen` and `MaxEx` bound how many objects a behaviour
+makes, so they are a length bound in another form. No cutoff is claimed for them.
+
+**Runs past the usual sizes** (this PR, level-bounded):
+
+| Run | Change | States | Result |
+|---|---|---|---|
+| `module`, level 10 | `OwnedAddrs` O1-O3 | 619,996 | no error |
+| `module-0332`, level 10 | `OwnedAddrs` O1-O3 | 3,461,806 | no error |
+| `threads`, level 7 | three threads, all render and module threads | 2,187,128 | no error |
+| `threads-module`, level 7 | three threads, renders on too | 667,991 | no error |
+| `module`, level 11 | `MaxDepth=3` | 575,049 | no error |
+
+Every pass invariant, `WellFormed` included, holds in each. They are level-bounded like the
+rest, so they test the argument's assumptions rather than prove them.
+
 ## What the results claim
 
 Bounded evidence, not a proof. Each pass run covers every behaviour up to its level within its
-bounds, under sequentially consistent interleavings of the steps listed above. The path from
-here to a safety argument for the implementation (every ownership and escape path, failure at
-each allocation, concurrent reads and destruction, memory order, collection and identifier
-reuse, and an inductive or cutoff argument) is task 0338.
+bounds, under sequentially consistent interleavings of the steps listed above. Each scope is
+finite, so a run without the level bound that completes covers every behaviour of its scope
+(task 0351); the cutoff argument above, on paper, carries the results to more threads and
+identities, with the limits it states. The mechanized inductive proof is task 0363. The path
+from here to a safety argument for the implementation is task 0338.
 
 ## Not modelled
 
@@ -480,7 +646,7 @@ trace can show it. The events and what the spec checks at each:
 | `hit` (an attached adapter's read) | the adapter is attached to that cell (`LinksAgree`); the cell is alive and, unless frozen, of the running registry (`NoForeignCell`) |
 | `unlink`, `inherit`, `dieatt` | the link set agrees, and whether the link owns its cell (`CellRules!LinkOwns`); an owning link lets go on any thread, a listed (global's) link changes a live cell's list on its writer's thread only; an adapter never goes attached (`NoDanglingLink`) |
 | `leave` (`CellLink::LeaveSnapshot`, 0346) | a listed link of a live cell leaves the list and owns the cell, on the cell's writer's thread |
-| `adopt`, `adoptno`, `adoptundo`, `promote` | a new cell only where the table has none; the live count (`LiveCount`, one-thread traces) |
+| `adopt`, `adoptno`, `promote` | a new cell only where the table has none; the live count (`LiveCount`, one-thread traces) |
 | `export` (`ExportList`/`ExportMap`) | a value reads through the call's `CallExports` exactly in the cell's own module call (`CellRules!ExportLive`, `MarkRule`); it marks nothing |
 | `pin` (`CallExports::Pin`) | a live table cell of the registry whose call ends; the cell is marked and its storage is what the host's values share from now on (`exr`) |
 | `unshare`, `copied` | Unshare's outcome is one `CellRules!UnshareOutcomes` allows (`MarkRule`) |

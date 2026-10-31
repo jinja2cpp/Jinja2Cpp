@@ -203,7 +203,11 @@ private:
     const BorrowedCell* Find(const IListAccessor& self) const;
     const BorrowedCell* Find(const IMapAccessor& self) const;
     const BorrowedCell* Find(const void* identity, bool isList, bool held, bool listed) const;
-    void Link(const BorrowedCell& cell, bool held, bool listed) const;
+    // The allocation a link needs (a global's workspace, room in the cell's list for a listed
+    // link), made before anything changes; then Link, which allocates nothing (docs/tasks/0338,
+    // step D). `listed`: the thread's snapshot reaches a global's adapter (0346)
+    static void ReserveLink(const BorrowedCell& cell, bool held, bool listed);
+    void Link(const BorrowedCell& cell, bool held, bool listed) const noexcept;
     // Lets go of the cell, or, for a listed link, detaches from the live cell
     JINJA2CPP_CELL_NOINLINE void Unlink() const noexcept;
     // Takes a listed link out of its live cell's list
@@ -404,16 +408,21 @@ private:
         const void* identity;
         bool isList;
         InternalValue storage;
+        // The cell, until Commit marks it; not read after
+        const BorrowedCell* cell;
     };
 
     // A value handed out reads the cell of `identity`
     void AddCell(const void* identity, bool isList);
-    // The call ends: records the storages of the cells the values reach and marks those cells
-    // shared. Throws std::bad_alloc (or SmallVector's length_error) with the cells recorded so far
+    // The call ends: records the storages of the cells the values reach, and changes nothing
+    // else. Throws std::bad_alloc (or SmallVector's length_error); the caller then drops what was
+    // recorded (BorrowedCells::PinExports)
     void Record(const CellTable& table);
+    // Once Record succeeded: marks the recorded cells shared, allocating nothing
+    void Commit() noexcept;
     // Then, whatever Record did: from now on a read goes to the recorded storages only
     void Seal() noexcept;
-    // Records the storage of a cell the values reach and marks the cell shared
+    // Records the storage of a cell the values reach
     void PinCell(const BorrowedCell& cell);
     // The cells of nested data the recorded storages reach
     void PinNested(const CellTable& table);
@@ -572,9 +581,10 @@ public:
     }
     // The call ends: the values it handed out keep what they read now (CallExports::Record).
     // Throws std::bad_alloc when it cannot record them, so that the call fails rather than hand
-    // out values that read the host's data; the values keep what was recorded
+    // out values that read the host's data as if it succeeded. Failure-atomic: the values of a
+    // call whose pin failed read the host's data, every one of them (docs/tasks/0338, step D)
     void PinExports();
-    // The same for a call that failed already, whose values are best effort
+    // The same for a call that failed already
     void PinExportsOrSkip() noexcept;
     // The call BeginCall started ends: the call it nested in runs again
     void EndCall(CallFrame outer) noexcept
@@ -591,8 +601,9 @@ public:
     // The first value the call hands out made `exports`, which ExportCallList shares with it
     void AdoptExports(std::shared_ptr<CallExports> exports) noexcept;
     // A value handed out reads the cell of `identity`, or, for a null identity, a list or dict the
-    // template owns
-    void NoteExport(const void* identity, bool isList);
+    // template owns. The caller makes the value first and commits it after: a note that cannot
+    // allocate then leaves no trace (docs/tasks/0338, step D)
+    static void NoteExport(CallExports& exports, const void* identity, bool isList);
     // Drops the cells nothing reads any more and nothing can find again: the cells of data that
     // lived for one call of a template module (an argument, a user callable's result), which
     // the module's cells would otherwise keep until the module goes. A cell of the host's data

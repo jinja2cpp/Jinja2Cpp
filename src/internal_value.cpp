@@ -1733,16 +1733,19 @@ struct CallExportsWith
 template<typename View, typename Container, typename Accessor>
 Container ExportCallFirst(BorrowedCells& call, const void* identity, InternalValue&& container, bool isList)
 {
+    // The value first, then the note, then the commit: a step that cannot allocate changes
+    // nothing (docs/tasks/0338, step D)
     if (const auto& exports = call.Exports())
     {
-        call.NoteExport(identity, isList);
         std::shared_ptr<const CallExports> keep = exports;
-        return ExportCallView<View, Container>(std::move(keep), identity, std::move(container));
+        auto value = ExportCallView<View, Container>(std::move(keep), identity, std::move(container));
+        BorrowedCells::NoteExport(*exports, identity, isList);
+        return value;
     }
     auto block = std::make_shared<CallExportsWith<View>>(call, identity, std::move(container));
     const Accessor* view = &block->view;
+    BorrowedCells::NoteExport(block->exports, identity, isList);
     call.AdoptExports(std::shared_ptr<CallExports>(block, &block->exports));
-    call.NoteExport(identity, isList);
     return Container(std::shared_ptr<const Accessor>(std::move(block), view));
 }
 } // namespace
