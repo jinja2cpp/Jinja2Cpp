@@ -723,10 +723,28 @@ void RenderValue(const InternalValue& val, std::basic_string<CharT>& os, bool as
 }
 
 // A macro prints as Python's Macro: <Macro 'name'>, or <Macro anonymous> for a call block's
-// caller. Other callables print nothing: Python's repr of a function names its address
+// caller; a class among the globals as the class (<class 'range'>) and a bound method with
+// its object (<bound method LoopContext.cycle of <LoopContext 1/2>>, docs/tasks/0305). Other
+// callables print nothing: Python's repr of a function names its address
 template<typename CharT>
 void ValueRendererBase<CharT>::operator()(const Callable& val) const
 {
+    if (const char* repr = val.GetRepr())
+    {
+        AppendAscii(repr);
+        return;
+    }
+    if (const auto& receiver = val.GetBoundReceiver())
+    {
+        AppendAscii("<bound method ");
+        AppendAscii(receiver->GetClassName());
+        AppendAscii(".");
+        AppendAscii(val.GetBoundMethod());
+        AppendAscii(" of ");
+        AppendAscii(receiver->Repr());
+        AppendAscii(">");
+        return;
+    }
     const auto& attributes = val.GetAttributes();
     if (val.GetKind() != Callable::Macro || !attributes)
     {

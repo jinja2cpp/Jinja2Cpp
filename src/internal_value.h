@@ -1817,6 +1817,24 @@ inline bool IsStringView(const InternalValue& val)
 }
 
 
+// The object a bound method is bound to, as the method's repr prints it. It holds no
+// template value, so the cycle collector need not see it
+class IBoundReceiver
+{
+public:
+    IBoundReceiver() = default;
+    IBoundReceiver(const IBoundReceiver&) = delete;
+    IBoundReceiver(IBoundReceiver&&) = delete;
+    IBoundReceiver& operator=(const IBoundReceiver&) = delete;
+    IBoundReceiver& operator=(IBoundReceiver&&) = delete;
+    virtual ~IBoundReceiver() = default;
+
+    // The Python class of the object (LoopContext)
+    [[nodiscard]] virtual const char* GetClassName() const = 0;
+    // The repr of the object (<LoopContext 1/2>)
+    [[nodiscard]] virtual std::string Repr() const = 0;
+};
+
 class Callable
 {
 public:
@@ -1896,6 +1914,23 @@ public:
         m_boundSelf = self;
         m_boundMethod = method;
     }
+    // As above, with the object the method is bound to, which its repr prints:
+    // <bound method LoopContext.cycle of <LoopContext 1/2>> (docs/tasks/0305)
+    void SetBoundMethod(const void* self, const char* method, std::shared_ptr<const IBoundReceiver> receiver)
+    {
+        SetBoundMethod(self, method);
+        m_boundReceiver = std::move(receiver);
+    }
+    // The object of a bound method's repr; null for other callables
+    [[nodiscard]] const std::shared_ptr<const IBoundReceiver>& GetBoundReceiver() const { return m_boundReceiver; }
+    // The name of a bound method; null for other callables
+    [[nodiscard]] const char* GetBoundMethod() const { return m_boundMethod; }
+
+    // The str() and repr() of a callable whose Python counterpart prints without an address,
+    // such as the classes among the globals (<class 'range'>); a static text, not an
+    // attribute, so range.name stays undefined (docs/tasks/0305)
+    void SetRepr(const char* repr) { m_repr = repr; }
+    [[nodiscard]] const char* GetRepr() const { return m_repr; }
 
     // Python compares functions and macros by identity: the copies of one callable share its
     // function, and a user callable converted from the same jinja2::UserCallable is the same
@@ -1910,6 +1945,8 @@ private:
     std::shared_ptr<const InternalValueMap> m_attributes;
     const void* m_boundSelf = nullptr;
     const char* m_boundMethod = nullptr;
+    std::shared_ptr<const IBoundReceiver> m_boundReceiver;
+    const char* m_repr = nullptr;
 };
 
 // The function of a method bound to its receiver (methods::MakeBoundMethod): a type of its

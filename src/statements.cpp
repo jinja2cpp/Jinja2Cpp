@@ -235,6 +235,26 @@ struct LoopTargetSlots
     std::vector<InternalValue*> items;
 };
 
+struct LoopState;
+
+// What the callables loop.cycle and loop.changed made share with their loop: the position
+// loop.cycle cycles by and the loop their repr prints, <bound method LoopContext.cycle of
+// <LoopContext 1/2>> (docs/tasks/0305). The callables do not keep the loop: one kept past a
+// loop collects the rest of a filtered loop, which a callable that cycles needs not. The
+// loop is read while it is in its frame, and its last position and length after
+struct LoopCycleCell final : IBoundReceiver
+{
+    // index0 of the loop, kept up to date
+    size_t index0 = 0;
+    // The loop while its frame holds it; null once the frame is reused or freed
+    LoopState* live = nullptr;
+    // The length of the loop once it is let go of, if known by then
+    std::optional<size_t> length;
+
+    [[nodiscard]] const char* GetClassName() const override { return "LoopContext"; }
+    [[nodiscard]] std::string Repr() const override;
+};
+
 // The state behind a loop object. The template can keep the object past the loop
 // (`set ns.x = loop`), so it is shared with the loop object: the object's value owns it
 struct LoopState : ValueObject
@@ -267,10 +287,9 @@ struct LoopState : ValueObject
     // The arguments of the last loop.changed() call, made on first use: a list [called,
     // *args] its callables hold as their receiver, where the cycle collector sees them
     InternalValue lastChanged;
-    // index0 for the callables loop.cycle made, kept up to date once one is made. They
-    // share this, not the state: a loop object kept past the loop collects the rest of a
-    // filtered loop, which a callable that cycles needs not
-    std::shared_ptr<size_t> cyclePosition;
+    // Shared with the callables loop.cycle and loop.changed made, kept up to date once one
+    // is made (LoopCycleCell)
+    std::shared_ptr<LoopCycleCell> cycleCell;
     // Whether the item after the current one is fetched, isLast telling if there is one
     bool isPeeked = false;
     // Whether the enumerator runs over indexedList, the rest the state collected
@@ -291,23 +310,41 @@ struct LoopState : ValueObject
 
     InternalValue& Item(size_t idx) { return items[idx % items.size()]; }
 
-    // The cell loop.cycle callables read the position from, made on first use
-    std::shared_ptr<size_t> CyclePosition()
+    // The cell the loop.cycle and loop.changed callables share, made on first use
+    const std::shared_ptr<LoopCycleCell>& CycleCell()
     {
-        if (!cyclePosition)
+        if (!cycleCell)
         {
-            cyclePosition = std::make_shared<size_t>(index0);
+            cycleCell = std::make_shared<LoopCycleCell>();
+            cycleCell->index0 = index0;
+            cycleCell->live = this;
         }
-        return cyclePosition;
+        return cycleCell;
     }
 
     void SetIndex(size_t idx)
     {
         index0 = idx;
-        if (cyclePosition)
+        if (cycleCell)
         {
-            *cyclePosition = idx;
+            cycleCell->index0 = idx;
         }
+    }
+
+    // Leaves the callables that share the cell the loop's last position and its length, if
+    // known: a loop that ran out knows it without collecting the rest
+    JINJA2CPP_NOINLINE_INLINE void DetachCycleCell()
+    {
+        cycleCell->live = nullptr;
+        if (listSize)
+        {
+            cycleCell->length = listSize;
+        }
+        else if (isPeeked && isLast)
+        {
+            cycleCell->length = index0 + 1;
+        }
+        cycleCell = nullptr;
     }
 
     // Fetches the item after the current one, if not done yet
@@ -362,6 +399,11 @@ struct LoopState : ValueObject
     // iteration in RenderLoop small enough to inline what it calls
     JINJA2CPP_NOINLINE_INLINE void Recycle()
     {
+        // Before the length is forgotten
+        if (cycleCell)
+        {
+            DetachCycleCell();
+        }
         indexedList = ListAdapter();
         if (enumerator && !(*enumerator)->Rebind(nullptr))
         {
@@ -386,7 +428,6 @@ struct LoopState : ValueObject
         {
             DropLastChanged();
         }
-        cyclePosition = nullptr;
         isPeeked = false;
         ownsRest = false;
         lazyFilter = nullptr;
@@ -456,6 +497,23 @@ struct LoopState : ValueObject
         return length;
     }
 };
+
+// As Jinja2's LoopContext.__repr__, which counts the items a running loop has left. A loop
+// let go of before its length was known (a `break` out of a filtered one) has no items left
+// to count (docs/tasks/0366)
+std::string LoopCycleCell::Repr() const
+{
+    if (live)
+    {
+        const auto loopLength = live->GetLength();
+        return "<LoopContext " + std::to_string(live->index0 + 1) + "/" + std::to_string(loopLength) + ">";
+    }
+    if (length)
+    {
+        return "<LoopContext " + std::to_string(index0 + 1) + "/" + std::to_string(*length) + ">";
+    }
+    return "<LoopContext " + std::to_string(index0 + 1) + "/?>";
+}
 
 // Assigns the current item to the loop target. A plain name is stored straight into its
 // slot, made by the first item so that the `else` body of an empty loop does not see the
@@ -530,7 +588,7 @@ JINJA2CPP_NOINLINE_INLINE Callable MakeLoopChanged(LoopState& state)
     // Each read of loop.changed is a new callable; reads on one loop compare equal
     if (const auto list = AsList(lastChanged))
     {
-        result.SetBoundMethod(list->GetIdentity(), "changed");
+        result.SetBoundMethod(list->GetIdentity(), "changed", state.CycleCell());
     }
     return result;
 }
@@ -540,8 +598,8 @@ JINJA2CPP_NOINLINE_INLINE Callable MakeLoopChanged(LoopState& state)
 // lookups that inline LoopAccessor::GetProperty small (Render/for_loop_vars)
 JINJA2CPP_NOINLINE_INLINE Callable MakeLoopCycle(LoopState& state)
 {
-    auto position = state.CyclePosition();
-    Callable result(Callable::GlobalFunc, [position = std::shared_ptr<const size_t>(position)](const CallParams& params, RenderContext&) -> InternalValue {
+    std::shared_ptr<const LoopCycleCell> cell = state.CycleCell();
+    Callable result(Callable::GlobalFunc, [cell](const CallParams& params, RenderContext&) -> InternalValue {
         if (!params.kwParams.empty())
         {
             throw TemplateRuntimeError("LoopContext.cycle() got an unexpected keyword argument '" + params.kwParams.begin()->first + "'");
@@ -551,9 +609,9 @@ JINJA2CPP_NOINLINE_INLINE Callable MakeLoopCycle(LoopState& state)
         {
             throw TemplateRuntimeError("no items for cycling given");
         }
-        return args[*position % args.size()];
+        return args[cell->index0 % args.size()];
     });
-    result.SetBoundMethod(position.get(), "cycle");
+    result.SetBoundMethod(cell.get(), "cycle", cell);
     return result;
 }
 
@@ -772,6 +830,18 @@ namespace detail
 struct LoopFrame : LoopState
 {
     LoopFrame() noexcept { SetTraversable(); }
+    LoopFrame(const LoopFrame&) = delete;
+    LoopFrame(LoopFrame&&) = delete;
+    LoopFrame& operator=(const LoopFrame&) = delete;
+    LoopFrame& operator=(LoopFrame&&) = delete;
+    // The callables loop.cycle made may outlive the frame
+    ~LoopFrame() override
+    {
+        if (cycleCell)
+        {
+            DetachCycleCell();
+        }
+    }
 
     // A loop object the template keeps past its loop (`set ns.x = loop`) holds the list and
     // the items, which may hold it back (docs/tasks/0251)
