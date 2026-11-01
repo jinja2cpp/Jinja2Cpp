@@ -123,3 +123,50 @@ When two branches add cases to the same area, take either side of the conflict i
 Keep cases small and aimed at one feature. Print booleans as `'T' if ... else 'F'` and
 iterate lists instead of printing them when the case is about something else, so that the
 repr gaps (task 0012) do not mask the behaviour under test.
+
+## Other oracles
+
+The checked-in `expected/` comes from the pinned pair (`.python-version`, `requirements.txt`;
+docs/parity.md, "Oracle pin"). To see how Jinja2C++ compares with another Python Jinja2, such
+as an older 3.x, Jinja2's main branch or another Python, configure the build with
+`JINJA2CPP_TEST_ORACLE` (docs/tasks/0186):
+
+| Value | What the oracle is |
+|---|---|
+| `bundled` (default) | `expected/`; nothing else runs and no Python is needed |
+| `python` | the jinja2 and markupsafe installed for `JINJA2CPP_TEST_ORACLE_PYTHON` (default: the Python 3 CMake finds) |
+| `venv` | a venv in `<build>/parity-oracle/venv`, made from `JINJA2CPP_TEST_ORACLE_PYTHON` and filled by pip from `JINJA2CPP_TEST_ORACLE_REQUIREMENTS` (`;`-separated, e.g. `jinja2==3.1.2;markupsafe==2.1.5` or `jinja2 @ git+https://github.com/pallets/jinja@main`) |
+
+```bash
+cmake -S . -B build -DJINJA2CPP_TEST_ORACLE=venv -DJINJA2CPP_TEST_ORACLE_REQUIREMENTS='jinja2==3.1.2'
+ctest --test-dir build -R parity_oracle --output-on-failure
+cat build/parity-oracle/report.md
+```
+
+`jinja2cpp_parity_oracle_generate` (a CTest fixture, so configure needs no Python packages
+and no network) runs `generate.py --out <build>/parity-oracle --any-version`, which writes the
+other oracle's expectations there with `oracle.json` naming its Python, Jinja2 and MarkupSafe.
+`venv` needs network at test time; the venv is rebuilt when the requirements change, and
+deleting it picks up a new commit of a branch requirement. Supported oracles: Python >= 3.10,
+Jinja2 >= 3.0. Configure warns when the oracle's Python is not the pinned one, because the
+Unicode tables and Python's own behaviour (`textwrap`, `\N{}` names) follow the pinned one.
+
+`jinja2cpp_parity_oracle` runs the narrow suite with `JINJA2CPP_TEST_ORACLE_DIR` naming that
+directory (set it by hand to compare against any `generate.py --out` directory; the test binary
+needs no rebuild). Each case is judged by whether the two oracles agree (same output, or both
+an error):
+
+- **they agree**: judged as without an oracle, allow-list included; a regression fails;
+- **they differ** (a Jinja2 or Python version delta): reported, not failed. The verdict is
+  `tracks-bundled` (Jinja2C++ matches the pinned oracle), `tracks-oracle` (matches the other
+  one), `neither`, or `not-run` (a listed crash, an unsupported option, or a build without the
+  Unicode name table). With `JINJA2CPP_TEST_ORACLE_STRICT=1` every verdict but
+  `tracks-oracle` fails.
+
+The run writes `report.md` next to the expectations: the two oracles' versions, the counts,
+and one row per differing case with the bundled result, the other oracle's and Jinja2C++'s.
+Against Jinja2 3.1.2 with MarkupSafe 2.1.5 on Python 3.12 that is 9 rows, all
+`tracks-bundled`; against 3.0.3 on Python 3.13, 22. `ParityRegistry.OracleCorpusMatches`
+fails when the directory does not hold the same cases as the corpus (a stale generation).
+The wide suite is held to the narrow result rather than to an oracle, so the oracle test does
+not run it.
