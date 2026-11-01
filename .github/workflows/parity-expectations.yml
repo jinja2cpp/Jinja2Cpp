@@ -12,6 +12,7 @@ on:
       - main
     paths:
       - 'test/parity/**'
+      - '.python-version'
       - 'src/unicode_printable.h'
       - 'src/unicode_tables.h'
       - 'src/unicode_case.h'
@@ -30,6 +31,7 @@ on:
       - main
     paths:
       - 'test/parity/**'
+      - '.python-version'
       - 'src/unicode_printable.h'
       - 'src/unicode_tables.h'
       - 'src/unicode_case.h'
