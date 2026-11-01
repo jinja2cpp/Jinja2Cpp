@@ -13,6 +13,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -150,9 +151,12 @@ public:
         {
             return context.Nodes()[m_exprs[idx]].Evaluate(context);
         }
-        if (m_values && (*m_values)[idx])
+        if (m_values)
         {
-            return *(*m_values)[idx];
+            if (const auto& value = (*m_values)[idx])
+            {
+                return value.value();
+            }
         }
         const auto& info = (*m_table)[idx];
         if (IsEmpty(info.defaultVal))
@@ -242,8 +246,9 @@ protected:
 
 private:
     // The checks Python makes as it binds the call, once the parameters are bound
-    template<typename Extras>
-    void CheckBound(const ArgumentsTable& argsInfo, const std::vector<bool>& bound, const ArgumentInfo* multipleValues, std::size_t extraPos, const Extras& extraKw, ExtraArgs extraArgs);
+    // isBound(idx): whether the call binds the parameter argsInfo[idx]
+    template<typename IsBound, typename Extras>
+    void CheckBound(const ArgumentsTable& argsInfo, const IsBound& isBound, const ArgumentInfo* multipleValues, std::size_t extraPos, const Extras& extraKw, ExtraArgs extraArgs);
 
 protected:
     BoundArguments m_args;
@@ -251,13 +256,13 @@ protected:
     std::unique_ptr<std::string> m_argsError;
 };
 
-template<typename Extras>
-void FunctionBase::CheckBound(const ArgumentsTable& argsInfo, const std::vector<bool>& bound, const ArgumentInfo* multipleValues, std::size_t extraPos, const Extras& extraKw, ExtraArgs extraArgs)
+template<typename IsBound, typename Extras>
+void FunctionBase::CheckBound(const ArgumentsTable& argsInfo, const IsBound& isBound, const ArgumentInfo* multipleValues, std::size_t extraPos, const Extras& extraKw, ExtraArgs extraArgs)
 {
     m_argsError.reset();
     for (std::size_t idx = 0; idx < argsInfo.size(); ++idx)
     {
-        if (argsInfo[idx].mandatory && !bound[idx])
+        if (argsInfo[idx].mandatory && !isBound(idx))
         {
             SetArgumentsError("missing required argument: '" + argsInfo[idx].name + "'");
             break;
@@ -288,17 +293,12 @@ void FunctionBase::CheckBound(const ArgumentsTable& argsInfo, const std::vector<
 inline bool FunctionBase::ParseParams(const ArgumentsTable& argsInfo, FunctionArgs params, ExtraArgs extraArgs, ForwardedArgs* extras)
 {
     bool result = true;
-    std::vector<bool> bound(argsInfo.size());
     params.Visit([&](const auto& args) {
         using Args = std::decay_t<decltype(args)>;
         if constexpr (std::is_same_v<Args, CallParamsInfo>)
         {
             auto parsed = helpers::ParseCallParamsInfo(argsInfo, args, result);
-            for (std::size_t idx = 0; idx < argsInfo.size(); ++idx)
-            {
-                bound[idx] = static_cast<bool>(parsed.args[idx]);
-            }
-            CheckBound(argsInfo, bound, parsed.multipleValues, parsed.extraPosArgs.size(), parsed.extraKwArgs, extraArgs);
+            CheckBound(argsInfo, [&parsed](std::size_t idx) { return static_cast<bool>(parsed.args[idx]); }, parsed.multipleValues, parsed.extraPosArgs.size(), parsed.extraKwArgs, extraArgs);
             if (extras)
             {
                 CallParamsInfo forwarded;
@@ -324,11 +324,10 @@ inline bool FunctionBase::ParseParams(const ArgumentsTable& argsInfo, FunctionAr
                 if (arg != parsed.args.end())
                 {
                     values[idx] = std::move(arg->second);
-                    bound[idx] = true;
                 }
             }
             const auto* multipleValues = parsed.multipleValues ? &argsInfo[static_cast<std::size_t>(parsed.multipleValues - declared.data())] : nullptr;
-            CheckBound(argsInfo, bound, multipleValues, parsed.extraPosArgs.size(), parsed.extraKwArgs, extraArgs);
+            CheckBound(argsInfo, [&values](std::size_t idx) { return values[idx].has_value(); }, multipleValues, parsed.extraPosArgs.size(), parsed.extraKwArgs, extraArgs);
             if (extras)
             {
                 CallParams forwarded;

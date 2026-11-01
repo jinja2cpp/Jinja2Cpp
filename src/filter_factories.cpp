@@ -4,6 +4,8 @@
 #include "filters.h"
 
 #include "expression_evaluator.h"
+#include "engine_errors.h"
+#include "function_base.h"
 #include "internal_value.h"
 #include "node_arena.h"
 #include "render_context.h"

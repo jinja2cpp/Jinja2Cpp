@@ -11,6 +11,7 @@
 #include "loop_attr.h"
 #include "markup.h"
 #include "out_stream.h" // IWYU pragma: keep (GetStreamOnString returns an OutStream by value)
+#include "recursion_guard.h"
 #include "render_context.h"
 #include "stable_sort_values.h"
 #include "string_builder.h"
@@ -747,6 +748,8 @@ Map::Map(const FilterParams& params)
 
 InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
 {
+    // map('map', 'map', ...) nests a filter per argument, which unpacking makes cheap to write
+    CheckStack();
     if (m_byAttribute)
     {
         bool isConverted = false;

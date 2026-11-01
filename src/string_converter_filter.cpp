@@ -1748,6 +1748,8 @@ InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, Rende
 {
     // Jinja2 asserts length >= len(end) first, so end must have a length
     const auto endVal = GetArgumentValue("end", context);
+    // len(end) of an undefined end is 0, which StrictUndefined refuses
+    CheckUndefinedUse(endVal, UndefinedUse::Operator);
     if (!IsStringValue(endVal) && !endVal.IsUndefined())
     {
         throw TemplateRuntimeError("object of type '"s + Apply<visitors::PythonTypeNameGetter>(endVal) + "' has no len()");
@@ -1756,13 +1758,13 @@ InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, Rende
     {
         return TruncateNonString(baseVal, context);
     }
-    return ConvertText(baseVal, [this, &baseVal, &context](auto srcStr) {
+    return ConvertText(baseVal, [this, &baseVal, &endVal, &context](auto srcStr) {
         using CharT = typename decltype(srcStr)::value_type;
         using String = std::basic_string<CharT>;
         auto leewayVal = this->GetArgumentValue("leeway", context);
         auto length = NumericArgument(this->GetArgumentValue("length", context), "truncate", "length", NumberKind::Any);
         auto killWords = ConvertToBool(this->GetArgumentValue("killwords", context));
-        auto end = GetAsSameString(srcStr, this->GetArgumentValue("end", context)).value_or(String());
+        auto end = GetAsSameString(srcStr, endVal).value_or(String());
         auto leeway = TruncateLeeway(leewayVal, this->IsArgumentSet(leewayVal, "leeway"));
         auto endLength = CodePointCount(end);
         // Jinja2 asserts both
@@ -1793,7 +1795,7 @@ InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, Rende
             }
         }
         // s[:n] + end, which an undefined end fails
-        CheckUndefinedUse(this->GetArgumentValue("end", context), UndefinedUse::Arithmetic);
+        CheckUndefinedUse(endVal, UndefinedUse::Arithmetic);
         // Markup + end escapes end
         if (baseVal.IsMarkup())
         {

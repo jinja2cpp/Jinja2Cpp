@@ -473,7 +473,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseCompar
 namespace
 {
 // The arguments of a call that unpacks nothing, bound at Load
-CallParamsInfo ToCallParamsInfo(CallArgsInfo&& args)
+CallParamsInfo ToCallParamsInfo(CallArgsInfo args)
 {
     CallParamsInfo result;
     result.kwParams = std::move(args.kwParams);
