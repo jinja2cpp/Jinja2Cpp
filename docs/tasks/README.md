@@ -377,11 +377,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0303](0303-retire-rapidjson-backend.md) | Retire the built-in RapidJSON backend | build | medium | done |
 | [0304](0304-loop-over-loop-peeks-early.md) | A for loop over `loop` advances the outer loop early | parity | low | open |
 | [0305](0305-builtin-class-repr.md) | The builtin classes print as `<class 'range'>` | parity | low | done |
-| [0306](0306-filter-test-argument-unpacking.md) | `*args` and `**kwargs` in filter and test calls | parity | low | open |
+| [0306](0306-filter-test-argument-unpacking.md) | `*args` and `**kwargs` in filter and test calls | parity | low | done |
 | [0307](0307-fold-by-choice-nested.md) | Fold a choice that sits inside another foldable expression | parity | low | done |
-| [0308](0308-divisibleby-non-number.md) | `divisibleby` on a value that is not a number | parity | low | open |
+| [0308](0308-divisibleby-non-number.md) | `divisibleby` on a value that is not a number | parity | low | done |
 | [0309](0309-repr-of-template-modules.md) | `pprint` of builtin globals and imported templates | parity | low | done |
-| [0310](0310-undefined-filter-argument-is-omitted.md) | A filter argument given as an undefined value reads as omitted | parity | low | open |
+| [0310](0310-undefined-filter-argument-is-omitted.md) | A filter argument given as an undefined value reads as omitted | parity | low | done |
 | [0311](0311-json-bindings-as-components.md) | JSON bindings as components on a public adapter contract | build | high | done |
 | [0312](0312-module-kept-while-stored-macro-reaches-it.md) | A macro a module call stores keeps its module, as in Jinja2 | parity | low | open |
 | [0313](0313-module-keeps-every-use-reloads.md) | A module keeps every tree `TemplateLookup::EveryUse` reloads | robustness | low | open |
