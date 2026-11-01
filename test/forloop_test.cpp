@@ -492,9 +492,11 @@ TEST(ForLoopLentItemsTest, KeptByUserCallable)
 
 // The bound methods and the classes among the globals print as in Python, in both character
 // types; a cycle callable kept past its loop prints where the loop ended (docs/tasks/0305)
+// clang-format off
 MULTISTR_TEST(ForLoopTest, BoundMethodAndClassRepr,
               R"({% set ns = namespace(c=none) %}{% for x in 'ab' %}{{ loop.cycle }};{% set ns.c = loop.cycle %}{% endfor %}{{ ns.c }};{{ ns.c('x', 'y') }}|{{ [range, namespace] }})",
               R"(<bound method LoopContext.cycle of <LoopContext 1/2>>;<bound method LoopContext.cycle of <LoopContext 2/2>>;<bound method LoopContext.cycle of <LoopContext 2/2>>;y|[<class 'range'>, <class 'jinja2.utils.Namespace'>])")
+// clang-format on
 {
 }
 
