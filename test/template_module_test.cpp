@@ -86,8 +86,9 @@ const ModuleCase moduleCases[] = {
       "m,x", " body 1" },
     // Names an import binds are not exported
     { R"({% import "a" as a %}{% from "a" import am, ac %}{% set k = 1 %})", "k", "" },
-    // ... unless set again after it (to another object: task 0299)
+    // ... unless set again after it, to the same object too (task 0299)
     { R"({% from "a" import am %}{% set am = 2 %})", "am", "" },
+    { R"({% from "a" import am %}{% import "a" as a %}{% set am = am %}{% macro a() %}{% endmacro %})", "a,am", "" },
     { R"({% set am = 1 %}{% from "a" import am %})", "", "" },
     // A set in a top-level `if`, tuple sets, a set block
     { "{% if true %}{% set i = 1 %}{% else %}{% set e = 2 %}{% endif %}{% set a, b = 1, 2 %}{% set blk %}x<y{% endset %}", "a,b,blk,i", "" },
@@ -273,6 +274,56 @@ TEST_F(TemplateModuleTest, ExportInAnotherRender)
     auto result = tpl.RenderAsString({ { "bad", module.exports["bad"] } });
     ASSERT_FALSE(!!result);
     EXPECT_EQ(jinja2::ErrorCode::TemplateRuntimeError, result.error().GetCode());
+}
+
+// A macro or `caller` of another render given to an export runs in that render while the call
+// lasts; called later, it fails with TemplateExpired (docs/tasks/0300)
+TEST_F(TemplateModuleTest, TemplateCallableArguments)
+{
+    auto module = Make(
+        "{% set ns = namespace(c=none) %}"
+        "{% macro wrap() %}<{{ caller() }}>{% endmacro %}"
+        "{% macro apply(fn) %}{{ fn(1, k=2) }}{% endmacro %}"
+        "{% macro count(fn) %}{{ fn(3) | list | length }}{% endmacro %}"
+        "{% macro keep() %}{% set ns.c = caller %}{{ caller() }}{% endmacro %}"
+        "{% macro later() %}{{ ns.c() }}{% endmacro %}");
+    const jinja2::ValuesMap params{ { "mod", module.exports }, { "l", jinja2::ValuesList{ 1 } } };
+    EXPECT_EQ("<X2>", Render("{% set y = 2 %}{% call mod.wrap() %}X{{ y }}{% endcall %}", params));
+    EXPECT_EQ("[1|2]", Render("{% macro f(a, k=0) %}[{{ a }}|{{ k }}]{% endmacro %}{{ mod.apply(f) }}", params));
+    // A builtin callable goes the same way
+    EXPECT_EQ("3", Render("{{ mod.count(range) }}", params));
+    // The caller's writes are its render's (its collector is current): the host's list is
+    // copied once, and the render sees the copy
+    EXPECT_EQ("<>[1, 3]", Render("{% call mod.wrap() %}{% set _ = l.append(3) %}{% endcall %}{{ l }}", params));
+    EXPECT_EQ("K", Render("{% call mod.keep() %}K{% endcall %}", params));
+    try
+    {
+        Call(module.exports["later"]);
+        FAIL() << "expected TemplateExpired";
+    }
+    catch (const jinja2::BadResultAccess<>& failure)
+    {
+        EXPECT_EQ(jinja2::ErrorCode::TemplateExpired, failure.error().GetCode());
+        ASSERT_EQ(1u, failure.error().GetExtraParams().size());
+        EXPECT_EQ(jinja2::Value(std::string("lent")), failure.error().GetExtraParams()[0]);
+        EXPECT_NE(std::string::npos, failure.error().ToString().find("A template callable was called after the host's call it was passed to ended"));
+    }
+}
+
+// A macro nested in an exported value, or returned by a call, is a call in the module too
+// (docs/tasks/0300); a host's callable goes back as it came
+TEST_F(TemplateModuleTest, NestedCallables)
+{
+    jinja2::UserCallable host([](const jinja2::UserCallableParams&) { return jinja2::Value(std::string("H")); }, {});
+    auto module = Make("{% macro m(a) %}M{{ a }}{% endmacro %}{% set d = {'m': m, 'l': [m], 'h': h} %}{% macro pass(x) %}{{ x(1) }}{% endmacro %}", { { "h", host } });
+    const auto& dict = module.exports["d"].AsMap();
+    EXPECT_EQ("M1", Call(dict.at("m"), { 1 }).AsString());
+    EXPECT_EQ("M2", Call(dict.at("l").AsList()[0], { 2 }).AsString());
+    ASSERT_TRUE(dict.at("h").IsCallable());
+    EXPECT_EQ("H", Call(dict.at("h")).AsString());
+    // A host's callable a template passes to another host's callable is the same callable
+    jinja2::UserCallable check([&host](const jinja2::UserCallableParams& params) { return jinja2::Value(params.args.at("f").As<jinja2::UserCallable>().IsEqual(host)); }, { jinja2::ArgInfo("f") });
+    EXPECT_EQ("True", Render("{{ check(h) }}", { { "check", check }, { "h", host } }));
 }
 
 // A container that holds itself is cut where it repeats; the module frees it (LSan)

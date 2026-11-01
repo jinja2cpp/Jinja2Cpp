@@ -339,6 +339,11 @@ void RenderErrorInfo(std::basic_string<CharT>& result, const BasicErrorInfo<Char
         {
             fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("Macro '{}' called a macro of a module that ended with an earlier call").GetValue<CharT>(), errInfo.GetExtraParams()[0]);
         }
+        else if (const auto* reason = errInfo.GetExtraParams()[0].template GetIf<std::string>(); reason && *reason == "lent")
+        {
+            // A template callable a host's call got as an argument, called after that call (docs/tasks/0300)
+            fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("A template callable was called after the host's call it was passed to ended").GetValue<CharT>());
+        }
         else
         {
             fmt::format_to(std::back_inserter(out), UNIVERSAL_STR("The template of macro '{}' was loaded again since its module was made").GetValue<CharT>(), errInfo.GetExtraParams()[0]);

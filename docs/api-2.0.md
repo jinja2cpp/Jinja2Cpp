@@ -175,7 +175,7 @@ locations), 0255 (engine runtime errors).
   module called after its template was loaded again; 0284. A Load no longer raises it since 0321:
   `Load` replaces the template for its own object only, and a module keeps its tree, reversing
   the second half of 0284 D1a. 0301 raises it for a stored macro of a module that ended with an
-  earlier call), 20 `DataReadError` (`ToValue` could not
+  earlier call; 0300 for a template callable lent to a host's call and called after it), 20 `DataReadError` (`ToValue` could not
   read a JSON document: its `JsonTraits` reported an error; 0311). `UnexpectedException` (1) now means "an exception the
   engine did not raise and could not attribute", with location and `GetException()`.
 
@@ -463,16 +463,24 @@ render is running (the C++ rule for a member call). Both are undefined behaviour
 5. `MetadataInfo::metadata` stays valid while the template is alive and not reloaded;
    `GetMetadata()` returns a self-contained map.
 6. Module exports are owned by the host. Macros keep their module, template and environment
-   alive. A list item read from an export is a view into that list (the generic-list rule of
-   `value.h`).
+   alive, also a macro inside an exported list or dict, or in a value a call returns
+   ([0300](tasks/0300-module-export-callable-gaps.md)). A list item read from an export is a
+   view into that list (the generic-list rule of `value.h`). A value export is a snapshot taken
+   when the module was made: a namespace a later macro call changes is not seen through
+   `exports` (Python's `module.ns` is the live object), while the calls share the module's
+   state. A live view would put the module's mutex on every read and hand the host mutable
+   state the module's calls change, which the immutability principle rules out (0300 item 3).
 7. **(D6)** One rule for structs and JSON documents (0311 decision 5): `Reflect` of a non-const
    lvalue copies into an owned view that every copy of the `Value` shares;
    `Reflect(std::as_const(x))`, `Reflect(const T&)` and `Reflect(&x)` borrow;
    `Reflect(std::move(x))` and `Reflect(shared_ptr)` own, and so does a `const shared_ptr<T>&`
    whose reflector takes a `shared_ptr`. A handle type (`JsonTraits::IsHandle`) always borrows;
    `ReflectJson` gives it an owner.
-8. A macro or `caller` given to a host callable arrives as `None` until
-   [0300](tasks/0300-module-export-callable-gaps.md).
+8. A macro, `caller` or built-in callable given to a host callable is lent for the duration
+   of the call ([0300](tasks/0300-module-export-callable-gaps.md)): called during it, on its
+   thread (by the host, or by a module's macro the host calls), it runs in the render that
+   passed it. Called later it fails with `TemplateExpired` (`extraParams[0]` is `"lent"`), as
+   that render may be gone. A host's own callable comes back as itself.
 9. **A container the render hands to a callable** ([0331](tasks/0331-kept-container-contract.md))
    is never mutable state the host shares with a render or a thread: the host holds a
    read-only snapshot. One the render wrote before the call (or one inside a list or dict the

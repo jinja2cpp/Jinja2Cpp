@@ -27,6 +27,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -53,8 +54,21 @@ namespace
 class ExportCopier
 {
 public:
+    // What a template callable becomes (a call in the module, TemplateModuleState::Wrap)
+    using WrapCallable = std::function<Value(const InternalValue&)>;
+
+    explicit ExportCopier(WrapCallable wrap)
+        : m_wrap(std::move(wrap))
+    {
+    }
+
     Value Copy(const InternalValue& value)
     {
+        // A macro anywhere in a value, not only at the module's top level (docs/tasks/0300)
+        if (const auto* callable = GetIf<Callable>(&value); callable && callable->GetKind() != Callable::UserCallable)
+        {
+            return m_wrap(value);
+        }
         // Nesting comes from the template (a list built in a loop): stop where a render would
         CheckStack();
         // A string may view the template's source, which a Load replaces, or the module's
@@ -131,6 +145,7 @@ private:
         return Value(std::move(items));
     }
 
+    WrapCallable m_wrap;
     // The containers being copied
     std::unordered_set<const void*> m_path;
 };
@@ -179,10 +194,17 @@ InternalValue OwnedArgument(const Value& value)
 }
 } // namespace
 
+template<typename CharT>
+struct TemplateModuleState;
+// The host's callable for `callable`, a template callable of the module `state`, named `name`
+// in its errors: a call of it in the module (ModuleCall). Defined after ModuleCall
+template<typename CharT>
+Value MakeModuleCall(const std::shared_ptr<TemplateModuleState<CharT>>& state, const InternalValue& callable, const std::string& name);
+
 // The state the exports of one module share: the template and the module's context their calls
 // run in, kept alive by every export (docs/tasks/0284, decision D1)
 template<typename CharT>
-struct TemplateModuleState
+struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<CharT>>
 {
     using Impl = TemplateImpl<CharT>;
 
@@ -442,7 +464,7 @@ struct TemplateModuleState
             {
                 callParams.kwParams[argName] = OwnedArgument(arg);
             }
-            auto result = ExportCopier().Copy(InvokeInModule(module->Context(), fn, callParams, output, impl->m_settings->hasRenderLimits));
+            auto result = ExportCopier(Wrap(name)).Copy(InvokeInModule(module->Context(), fn, callParams, output, impl->m_settings->hasRenderLimits));
             if (impl->m_settings->hasRenderLimits)
             {
                 detail::PollDeadline();
@@ -462,6 +484,13 @@ struct TemplateModuleState
         {
             throw BadResultAccess<CharT>(Named(detail::CurrentExceptionToError<CharT>(impl->m_templateName), name));
         }
+    }
+
+    // A template callable of the module found in a value handed to the host, whose errors name
+    // `name`, as a call in the module: a macro in an exported dict, or one a call returns
+    [[nodiscard]] ExportCopier::WrapCallable Wrap(const std::string& name)
+    {
+        return [state = this->shared_from_this(), name](const InternalValue& callable) { return MakeModuleCall(state, callable, name); };
     }
 
     std::shared_ptr<const Impl> impl;
@@ -494,6 +523,12 @@ struct ModuleCall
 } // namespace
 
 template<typename CharT>
+Value MakeModuleCall(const std::shared_ptr<TemplateModuleState<CharT>>& state, const InternalValue& callable, const std::string& name)
+{
+    return Value(UserCallable(ModuleCall<CharT>{ state, callable, name }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) }));
+}
+
+template<typename CharT>
 nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl<CharT>::MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params)
 {
     if (!self->m_renderer)
@@ -514,16 +549,15 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
         const auto limitsScope = state->MakeLimitsScope();
         // Into result.body, which outlives the limits that keep a pointer to it
         state->Render(result.body);
-        const std::vector<ArgInfo> argsInfo{ ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) };
         for (const auto& [name, value] : state->ExportedNames())
         {
-            if (const auto* callable = GetIf<Callable>(value))
+            if (GetIf<Callable>(value))
             {
-                result.exports[name] = UserCallable(ModuleCall<CharT>{ state, *value, name }, argsInfo);
+                result.exports[name] = MakeModuleCall(state, *value, name);
                 continue;
             }
             // Copied within the render's limits, which bound a lazy list read out
-            result.exports[name] = ExportCopier().Copy(*value);
+            result.exports[name] = ExportCopier(state->Wrap(name)).Copy(*value);
         }
         cycles.Complete();
     }

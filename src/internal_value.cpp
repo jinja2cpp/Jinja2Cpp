@@ -2,9 +2,11 @@
 
 #include "big_int.h"
 #include "borrowed_cells.h"
+#include "cycle_collector.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
+#include "out_stream.h"
 #include "intrusive_ptr.h"
 #include "recursion_guard.h"
 #include "render_failure.h"
@@ -38,6 +40,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -3785,6 +3788,10 @@ MapAdapter CreateMapAdapter(ValuesMap&& values)
     return MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<BySharedVal>>>(std::move(values)));
 }
 
+// The host's own callable a Callable was made from (InputValueConvertor::ConvertUserCallable),
+// which goes back as it came; an empty Value for a template callable. Defined below
+Value HostCallableOf(const Callable& callable);
+
 struct OutputValueConvertor
 {
     using result_t = Value;
@@ -3795,7 +3802,7 @@ struct OutputValueConvertor
     result_t operator()(const ListRef& adapter) const { return result_t(adapter.CreateGenericList()); }
     result_t operator()(const ValueRef& ref) const { return ref.get(); }
     result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", IntValue2Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }
-    result_t operator()(const Callable&) const { return result_t(); }
+    result_t operator()(const Callable& callable) const { return HostCallableOf(callable); }
     result_t operator()(const UserCallable&) const { return result_t(); }
     result_t operator()(const std::shared_ptr<IRendererBase>&) const { return result_t(); }
     // A big integer leaves a render as a BigInt, never as the value's own object (docs/tasks/0270)
@@ -3903,7 +3910,121 @@ private:
     RenderContext* m_context;
 };
 
-UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderContext& context, const std::vector<ArgumentInfo>& argsInfo)
+namespace
+{
+// The template callables a host's call got as arguments, lent for the duration of that call
+// (docs/tasks/0300): a macro or `caller` passed to a module's macro (Template::MakeModule) from
+// another render, which runs in that render when the module calls it back. Made with the first
+// such argument; the call ends it (LeaseEnd), and the host's later calls fail with
+// TemplateExpired, as the render that owns the callable may be gone. The pointers are valid
+// while the lease is: the call is running further down the thread's stack
+struct CallableLease
+{
+    RenderContext* context;
+    // The render's, which the callable's code notes its writes to
+    CycleCollector* collector;
+    std::thread::id thread;
+    bool isActive = true;
+};
+
+class LeaseEnd
+{
+public:
+    explicit LeaseEnd(const std::shared_ptr<CallableLease>& lease)
+        : m_lease(lease)
+    {
+    }
+    LeaseEnd(const LeaseEnd&) = delete;
+    LeaseEnd(LeaseEnd&&) = delete;
+    LeaseEnd& operator=(const LeaseEnd&) = delete;
+    LeaseEnd& operator=(LeaseEnd&&) = delete;
+    ~LeaseEnd()
+    {
+        if (m_lease)
+        {
+            m_lease->isActive = false;
+        }
+    }
+
+private:
+    const std::shared_ptr<CallableLease>& m_lease;
+};
+
+// The host's form of a lent template callable: called during the lease, on its thread, it runs
+// the callable in the render that lent it, with its collector current; its result goes back as
+// IntValue2Value gives it
+struct LentCallable
+{
+    std::shared_ptr<CallableLease> lease;
+    InternalValue callable;
+
+    Value operator()(const UserCallableParams& params) const
+    {
+        if (!lease->isActive || lease->thread != std::this_thread::get_id())
+        {
+            ThrowExpired();
+        }
+        // Converted by value: the callable may keep an argument past the call (a namespace)
+        const auto own = [](const Value& value) { return std::visit(visitors::InputValueConvertor(true, false), value.GetData()); };
+        CallParams callParams;
+        for (const auto& [name, value] : params.args)
+        {
+            callParams.kwParams[name] = own(value);
+        }
+        if (const auto* posArgs = params.extraPosArgs.GetIf<ValuesList>())
+        {
+            for (const auto& arg : *posArgs)
+            {
+                callParams.posParams.push_back(own(arg));
+            }
+        }
+        if (const auto* kwArgs = params.extraKwArgs.GetIf<ValuesMap>())
+        {
+            for (const auto& [name, arg] : *kwArgs)
+            {
+                callParams.kwParams[name] = own(arg);
+            }
+        }
+        auto& context = *lease->context;
+        const CycleCollector::Reentry collector(lease->collector);
+        const auto& fn = *GetIf<Callable>(&callable);
+        if (fn.GetType() == Callable::Type::Expression)
+        {
+            return IntValue2Value(fn.GetExpressionCallable()(callParams, context));
+        }
+        InternalValue result = RenderToString(context.GetRendererCallback(), [&](OutStream& stream) { fn.GetStatementCallable()(callParams, stream, context); });
+        result.SetMarkup(context.IsAutoescape());
+        return IntValue2Value(result);
+    }
+
+    [[noreturn]] static void ThrowExpired()
+    {
+        ErrorInfo::Data errorData;
+        errorData.code = ErrorCode::TemplateExpired;
+        errorData.srcLoc.line = 1;
+        errorData.srcLoc.col = 1;
+        errorData.extraParams.emplace_back(std::string("lent"));
+        throw ErrorInfo(std::move(errorData));
+    }
+};
+
+// The host's form of an argument of a host's call made from `context`: a template callable is
+// lent (CallableLease), the rest as IntValue2Value gives it
+Value ArgumentToHost(const InternalValue& value, RenderContext& context, std::shared_ptr<CallableLease>& lease)
+{
+    const auto* callable = GetIf<Callable>(&value);
+    if (!callable || callable->GetKind() == Callable::UserCallable)
+    {
+        return IntValue2Value(value);
+    }
+    if (!lease)
+    {
+        lease = std::make_shared<CallableLease>(CallableLease{ &context, CycleCollector::Current(), std::this_thread::get_id() });
+    }
+    return Value(UserCallable(LentCallable{ lease, value }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) }));
+}
+
+UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderContext& context, const std::vector<ArgumentInfo>& argsInfo, std::shared_ptr<CallableLease>& lease)
 {
     UserCallableParams result;
 
@@ -3933,26 +4054,27 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
         }
 
         const auto& v = p->second;
-        result.args[argInfo.name] = IntValue2Value(v);
+        result.args[argInfo.name] = ArgumentToHost(v, context, lease);
     }
 
     ValuesMap extraKwArgs;
     for (auto& [name, value] : args.extraKwArgs)
     {
-        extraKwArgs[name] = IntValue2Value(value);
+        extraKwArgs[name] = ArgumentToHost(value, context, lease);
     }
     result.extraKwArgs = Value(std::move(extraKwArgs));
 
     ValuesList extraPosArgs;
     for (auto& p : args.extraPosArgs)
     {
-        extraPosArgs.push_back(IntValue2Value(p));
+        extraPosArgs.push_back(ArgumentToHost(p, context, lease));
     }
     result.extraPosArgs = Value(std::move(extraPosArgs));
     result.context = GenericMap(std::make_shared<const ContextMapper>(&context));
 
     return result;
 }
+} // namespace
 
 namespace visitors
 {
@@ -3968,7 +4090,9 @@ struct UserCallableBody
 
     InternalValue operator()(const CallParams& params, RenderContext& context) const
     {
-        auto ucParams = PrepareUserCallableParams(params, context, argsInfo);
+        std::shared_ptr<CallableLease> lease;
+        const LeaseEnd leaseEnd(lease);
+        auto ucParams = PrepareUserCallableParams(params, context, argsInfo, lease);
         auto result = Value2IntValue(CallHost(ucParams));
         AfterHostCall();
         return result;
@@ -4058,6 +4182,18 @@ InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const Use
 }
 
 } // namespace visitors
+
+Value HostCallableOf(const Callable& callable)
+{
+    if (callable.GetKind() == Callable::UserCallable && callable.GetType() == Callable::Type::Expression)
+    {
+        if (const auto* body = callable.GetExpressionCallable().target<visitors::UserCallableBody>())
+        {
+            return Value(body->val);
+        }
+    }
+    return Value();
+}
 
 void TraverseBoxed(const KeyValuePair& pair, const TraverseFn& fn)
 {

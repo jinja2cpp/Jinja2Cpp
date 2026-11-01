@@ -91,6 +91,28 @@ public:
     // names a closure keeps of its ended frames (ClosureCapture), which the closure reaches
     // weakly. False outside a render. Throws std::bad_alloc
     static bool KeepUntilEnd(std::shared_ptr<const void> object);
+    // The collector of the render running on this thread, or null
+    [[nodiscard]] static CycleCollector* Current() noexcept { return s_current; }
+    // Makes `collector`, a render's that is still running further down this thread's stack, the
+    // current one for the scope: code of that render called back from inside another one (a
+    // template callable lent to a host's call that called a module's macro, docs/tasks/0300)
+    // notes its writes where that render's do
+    class Reentry
+    {
+    public:
+        explicit Reentry(CycleCollector* collector) noexcept
+            : m_saved(std::exchange(s_current, collector))
+        {
+        }
+        Reentry(const Reentry&) = delete;
+        Reentry(Reentry&&) = delete;
+        Reentry& operator=(const Reentry&) = delete;
+        Reentry& operator=(Reentry&&) = delete;
+        ~Reentry() { s_current = m_saved; }
+
+    private:
+        CycleCollector* m_saved;
+    };
     // A frozen cell that values outliving the render still read: a candidate of this collector
     // (BorrowedCells::Release, docs/tasks/0331). Throws std::bad_alloc
     void NoteFrozen(ValueObjectPtr cell) { Add(std::move(cell)); }
