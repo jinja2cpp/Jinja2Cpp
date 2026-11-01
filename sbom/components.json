@@ -473,11 +473,11 @@
       "role": "tooling",
       "phases": ["dev"],
       "exposure": "none",
-      "selected_by": "CI (actions/setup-python 3.12) and developers; not needed to build or install",
-      "used_for": "Oracle runs, table generators (ORACLE_PYTHON 3.12), task and preflight scripts, bench drivers, this SBOM generator",
+      "selected_by": "CI (actions/setup-python, version from .python-version) and developers; not needed to build or install",
+      "used_for": "Oracle runs, table generators (ORACLE_PYTHON from .python-version), task and preflight scripts, bench drivers, this SBOM generator",
       "why": "Project tooling language",
       "lighten": "Not part of any build",
-      "evidence": [{"file": ".github/workflows/parity-expectations.yml", "contains": ["3.12"]}]
+      "evidence": [{"file": ".python-version", "contains": ["3.12"]}]
     },
     {
       "id": "clang-tidy",

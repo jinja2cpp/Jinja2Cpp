@@ -271,6 +271,17 @@ add_library(jinja2cpp::jinja2cpp ALIAS ${LIB_TARGET_NAME})
 
 # jinja2cpp/version.h carries project(VERSION) into JINJA2CPP_VERSION (docs/tasks/0069)
 set(JINJA2CPP_GENERATED_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated/include)
+# The oracle pair (docs/parity.md, "Oracle pin") is read from the files CI installs from, so
+# JINJA2CPP_ORACLE_PYTHON / JINJA2CPP_ORACLE_JINJA2 in version.h cannot drift (docs/tasks/0186)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/.python-version ${CMAKE_CURRENT_SOURCE_DIR}/test/parity/requirements.txt)
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/.python-version JINJA2CPP_ORACLE_PYTHON_LINE REGEX "^[0-9]+\\.[0-9]+")
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/test/parity/requirements.txt JINJA2CPP_ORACLE_JINJA2_LINE REGEX "^[Jj]inja2==[0-9]")
+if(NOT JINJA2CPP_ORACLE_PYTHON_LINE OR NOT JINJA2CPP_ORACLE_JINJA2_LINE)
+    message(FATAL_ERROR "Cannot read the oracle pin from .python-version and test/parity/requirements.txt")
+endif()
+string(REGEX REPLACE "^([0-9]+\\.[0-9]+).*" "\\1" JINJA2CPP_ORACLE_PYTHON "${JINJA2CPP_ORACLE_PYTHON_LINE}")
+string(REGEX REPLACE "^[Jj]inja2==([^ #;]+).*" "\\1" JINJA2CPP_ORACLE_JINJA2 "${JINJA2CPP_ORACLE_JINJA2_LINE}")
 configure_file(cmake/version.h.in ${JINJA2CPP_GENERATED_INCLUDE_DIR}/jinja2cpp/version.h @ONLY)
 
 target_sources(${LIB_TARGET_NAME}
