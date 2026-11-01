@@ -1706,7 +1706,8 @@ InternalValue StringConverter::ApplyReplace(const InternalValue& baseVal, Render
         }
     }
     // str.replace's count: None (Jinja2's default, -1) or a negative count replaces every one
-    const auto countVal = GetArgumentValue("count", context);
+    bool countGiven = false;
+    const auto countVal = GetArgumentValue("count", context, countGiven);
     uint64_t count = std::numeric_limits<uint64_t>::max();
     if (const auto* intVal = GetIf<int64_t>(&countVal))
     {
@@ -1720,7 +1721,7 @@ InternalValue StringConverter::ApplyReplace(const InternalValue& baseVal, Render
     {
         throw TemplateRuntimeError("Python int too large to convert to C ssize_t");
     }
-    else if (IsArgumentSet(countVal, "count"))
+    else if (IsArgumentSet(countVal, countGiven))
     {
         throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(countVal) + "' object cannot be interpreted as an integer");
     }
@@ -1761,11 +1762,12 @@ InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, Rende
     return ConvertText(baseVal, [this, &baseVal, &endVal, &context](auto srcStr) {
         using CharT = typename decltype(srcStr)::value_type;
         using String = std::basic_string<CharT>;
-        auto leewayVal = this->GetArgumentValue("leeway", context);
+        bool leewayGiven = false;
+        auto leewayVal = this->GetArgumentValue("leeway", context, leewayGiven);
         auto length = NumericArgument(this->GetArgumentValue("length", context), "truncate", "length", NumberKind::Any);
         auto killWords = ConvertToBool(this->GetArgumentValue("killwords", context));
         auto end = GetAsSameString(srcStr, endVal).value_or(String());
-        auto leeway = TruncateLeeway(leewayVal, this->IsArgumentSet(leewayVal, "leeway"));
+        auto leeway = TruncateLeeway(leewayVal, this->IsArgumentSet(leewayVal, leewayGiven));
         auto endLength = CodePointCount(end);
         // Jinja2 asserts both
         if (length < endLength || leeway < 0)
@@ -1810,9 +1812,10 @@ InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, Rende
 // fails where the string code meets it (s[:n].rsplit(), s[:n] + end)
 InternalValue StringConverter::TruncateNonString(const InternalValue& baseVal, RenderContext& context)
 {
-    auto leewayVal = GetArgumentValue("leeway", context);
+    bool leewayGiven = false;
+    auto leewayVal = GetArgumentValue("leeway", context, leewayGiven);
     auto length = NumericArgument(GetArgumentValue("length", context), "truncate", "length", NumberKind::Any);
-    auto leeway = TruncateLeeway(leewayVal, IsArgumentSet(leewayVal, "leeway"));
+    auto leeway = TruncateLeeway(leewayVal, IsArgumentSet(leewayVal, leewayGiven));
     int64_t endLength = 0;
     ApplyStringConverter(GetArgumentValue("end", context), [&endLength](auto endStr) -> TargetString {
         endLength = CodePointCount(std::basic_string(endStr));
@@ -1898,7 +1901,8 @@ TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderCo
     return ApplyStringConverter(baseVal, [this, &context, &baseVal](auto srcStr) -> TargetString {
         using CharT = typename decltype(srcStr)::value_type;
         using String = std::basic_string<CharT>;
-        auto limitVal = this->GetArgumentValue("trim_url_limit", context);
+        bool limitGiven = false;
+        auto limitVal = this->GetArgumentValue("trim_url_limit", context, limitGiven);
         std::optional<int64_t> limit;
         if (!IsEmpty(limitVal))
         {
@@ -1965,7 +1969,7 @@ TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderCo
         }
 
         // Python slices each URL with the limit, which fails for an undefined one (docs/tasks/0310)
-        return Urlizer<CharT>(limit, rel, target, std::move(extraSchemes), this->IsArgumentGiven("trim_url_limit") ? limitVal : InternalValue())(srcStr, baseVal.IsMarkup());
+        return Urlizer<CharT>(limit, rel, target, std::move(extraSchemes), limitGiven ? limitVal : InternalValue())(srcStr, baseVal.IsMarkup());
     });
 }
 
@@ -2072,10 +2076,11 @@ InternalValue StringConverter::Convert(const InternalValue& baseVal, RenderConte
     {
     case TrimMode:
         return ConvertText(baseVal, [this, &context](auto srcStr) {
-            const auto charsVal = this->GetArgumentValue("chars", context);
+            bool charsGiven = false;
+            const auto charsVal = this->GetArgumentValue("chars", context, charsGiven);
             auto chars = GetAsSameString(srcStr, charsVal);
             // An undefined argument is Python's Undefined object, no str (docs/tasks/0310)
-            if (!chars && this->IsArgumentSet(charsVal, "chars"))
+            if (!chars && this->IsArgumentSet(charsVal, charsGiven))
             {
                 throw TemplateRuntimeError("strip arg must be None or str");
             }

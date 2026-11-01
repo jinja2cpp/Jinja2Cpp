@@ -250,7 +250,8 @@ Join::Join(const FilterParams& params)
 
 InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    InternalValue attrName = GetArgumentValue("attribute", context);
+    bool attrGiven = false;
+    InternalValue attrName = GetArgumentValue("attribute", context, attrGiven);
 
     bool isConverted = false;
     ListAdapter values = ConvertToList(baseVal, isConverted, false);
@@ -266,7 +267,7 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
     }
     // Jinja2's make_attrgetter: a dotted path, digit parts as indexes
     // An undefined attribute passed is a key that finds nothing (docs/tasks/0310)
-    if (IsArgumentSet(attrName, "attribute"))
+    if (IsArgumentSet(attrName, attrGiven))
     {
         auto path = AttributePath(attrName);
         InternalValueList items;
@@ -326,7 +327,8 @@ Sort::Sort(const FilterParams& params)
 
 InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    InternalValue attrName = GetArgumentValue("attribute", context);
+    bool attrGiven = false;
+    InternalValue attrName = GetArgumentValue("attribute", context, attrGiven);
     InternalValue isReverseVal = GetArgumentValue("reverse", context, InternalValue(false));
     InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
 
@@ -345,7 +347,7 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     BinaryExpression::Operation oper = ConvertToBool(isReverseVal) ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt;
     BinaryExpression::CompareType compType = ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
-    std::vector<InternalValueList> paths = SortKeyPaths(attrName, IsArgumentSet(attrName, "attribute"));
+    std::vector<InternalValueList> paths = SortKeyPaths(attrName, IsArgumentSet(attrName, attrGiven));
 
     auto isLess = [oper, compType](const InternalValue& key1, const InternalValue& key2, bool& isEqual) {
         // Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python
@@ -709,42 +711,6 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
     return result;
 }
 
-Map::Map(const FilterParams& params)
-{
-    // map(attribute='x', default=d) reads the attribute of each item; it binds no filter
-    const bool byAttribute = params.Visit([this](const auto& args) {
-        const auto attributeIt = args.kwParams.find("attribute");
-        if (!args.posParams.empty() || attributeIt == args.kwParams.end())
-        {
-            return false;
-        }
-        std::decay_t<decltype(args)> mapping;
-        mapping.kwParams["name"] = attributeIt->second;
-        for (const auto& [name, value] : args.kwParams)
-        {
-            if (name == "default")
-            {
-                mapping.kwParams["default"] = value;
-            }
-            else if (name != "attribute")
-            {
-                // Jinja2's prepare_map raises FilterArgumentError
-                SetArgumentsError("got an unexpected keyword argument '" + name + "'");
-                break;
-            }
-        }
-        m_mappingParams = ForwardedArgs(std::move(mapping));
-        return true;
-    });
-    if (byAttribute)
-    {
-        m_byAttribute = true;
-        return;
-    }
-
-    static const auto args = MakeArgumentsTable({ { "filter", true } });
-    ParseParams(args, params, ExtraArgs::Accept, &m_mappingParams);
-}
 
 InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
 {
@@ -1163,12 +1129,13 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         return {};
     }
 
-    InternalValue attrName = GetArgumentValue("attribute", context);
+    bool attrGiven = false;
+    InternalValue attrName = GetArgumentValue("attribute", context, attrGiven);
     InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
 
     BinaryExpression::CompareType compType = ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
-    const auto attrPath = IsArgumentSet(attrName, "attribute") ? AttributePath(attrName) : InternalValueList();
+    const auto attrPath = IsArgumentSet(attrName, attrGiven) ? AttributePath(attrName) : InternalValueList();
     // Python's min and max take each item's key once and keep the first extreme item
     auto extreme = [&](bool isMax) {
         std::optional<InternalValue> best;
@@ -1203,13 +1170,14 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         return KeepMarkup(baseVal, Reverse(list, baseVal));
     case SumItemsMode:
     {
-        auto start = GetArgumentValue("start", context);
+        bool startGiven = false;
+        auto start = GetArgumentValue("start", context, startGiven);
         // Python's sum refuses a string start ("sum() can't sum strings")
         if (IsStringValue(start))
         {
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
         }
-        return Sum(list, attrPath, IsArgumentGiven("start") ? std::optional(std::move(start)) : std::nullopt, context);
+        return Sum(list, attrPath, startGiven ? std::optional(std::move(start)) : std::nullopt, context);
     }
     case UniqueItemsMode:
         return Unique(list, baseVal, attrPath, compType, context);
@@ -1258,7 +1226,8 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
     // Port of Jinja2's do_slice: `slices` columns, the first length % slices of them one
     // item longer; with fill_with every shorter column gets one fill item
     int64_t slices = ConvertToInt(GetArgumentValue("slices", context));
-    InternalValue fillWith = GetArgumentValue("fill_with", context);
+    bool fillGiven = false;
+    InternalValue fillWith = GetArgumentValue("fill_with", context, fillGiven);
     // Python raises ZeroDivisionError
     if (slices == 0)
     {
@@ -1286,7 +1255,7 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
             {
                 column.push_back(protectedValue(items[static_cast<size_t>(idx)]));
             }
-            if (IsArgumentSet(fillWith, "fill_with") && slice >= withExtra)
+            if (IsArgumentSet(fillWith, fillGiven) && slice >= withExtra)
             {
                 column.push_back(fillWith);
             }
@@ -1316,7 +1285,8 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
 
     // Port of Jinja2's do_batch: rows of `linecount` items, the last one padded only with fill_with
     auto linecount = ConvertToInt(GetArgumentValue("linecount", context));
-    InternalValue fillWith = GetArgumentValue("fill_with", context);
+    bool fillGiven = false;
+    InternalValue fillWith = GetArgumentValue("fill_with", context, fillGiven);
 
     InternalValueList resultList;
     InternalValueList row;
@@ -1331,7 +1301,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
     }
     if (!row.empty())
     {
-        if (IsArgumentSet(fillWith, "fill_with"))
+        if (IsArgumentSet(fillWith, fillGiven))
         {
             while (static_cast<int64_t>(row.size()) < linecount)
             {
@@ -1348,37 +1318,6 @@ StringFormat::StringFormat(const FilterParams& params)
     ParseParams(NoArguments(), params, ExtraArgs::Accept, &m_params);
 }
 
-Tester::Tester(const FilterParams& params, Tester::Mode mode)
-    : m_mode(mode)
-{
-    // Python's select_or_reject takes the attribute and the test name by position and passes
-    // the other arguments, keywords included, to the test; without a test it calls bool() and
-    // drops them
-    const bool isAttrMode = mode == SelectAttrMode || mode == RejectAttrMode;
-    const size_t leadCount = std::min(params.PosCount(), isAttrMode ? size_t{ 2 } : size_t{ 1 });
-    m_hasAttribute = isAttrMode && leadCount > 0;
-
-    params.Visit([&](const auto& args) {
-        const auto split = args.posParams.begin() + static_cast<std::ptrdiff_t>(leadCount);
-        std::decay_t<decltype(args)> leadParams;
-        leadParams.posParams.assign(args.posParams.begin(), split);
-        if (isAttrMode)
-        {
-            static const auto table = MakeArgumentsTable({ { "attribute", false }, { "tester", false } });
-            ParseParams(table, leadParams);
-        }
-        else
-        {
-            static const auto table = MakeArgumentsTable({ { "tester", false } });
-            ParseParams(table, leadParams);
-        }
-
-        std::decay_t<decltype(args)> testingParams;
-        testingParams.posParams.assign(split, args.posParams.end());
-        testingParams.kwParams = args.kwParams;
-        m_testingParams = ForwardedArgs(std::move(testingParams));
-    });
-}
 
 InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& context)
 {

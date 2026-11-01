@@ -15,7 +15,6 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace jinja2
@@ -68,54 +67,48 @@ private:
 };
 
 // The arguments a filter passes on to the filter, test or callable it calls (map, select,
-// applymacro, format, a filter of the environment): expressions or values, as it was made with
+// applymacro, format, a filter of the environment): the expressions of a call bound at Load, or
+// the values of a call that unpacks. The values are behind a pointer, so a call bound at Load
+// pays one null check for them
 class ForwardedArgs
 {
 public:
     ForwardedArgs() = default;
     explicit ForwardedArgs(CallParamsInfo exprs)
-        : m_args(std::move(exprs))
+        : m_exprs(std::move(exprs))
     {
     }
     explicit ForwardedArgs(CallParams values)
-        : m_args(std::move(values))
+        : m_values(std::make_unique<CallParams>(std::move(values)))
     {
     }
 
     // NOLINTNEXTLINE(google-explicit-constructor)
-    operator FunctionArgs() const
-    {
-        return std::visit([](const auto& args) { return FunctionArgs(args); }, m_args);
-    }
-    [[nodiscard]] bool HasPositional() const
-    {
-        return std::visit([](const auto& args) { return !args.posParams.empty(); }, m_args);
-    }
-    [[nodiscard]] bool HasKeywords() const
-    {
-        return std::visit([](const auto& args) { return !args.kwParams.empty(); }, m_args);
-    }
+    operator FunctionArgs() const { return m_values ? FunctionArgs(*m_values) : FunctionArgs(m_exprs); }
+    [[nodiscard]] bool HasPositional() const { return m_values ? !m_values->posParams.empty() : !m_exprs.posParams.empty(); }
+    [[nodiscard]] bool HasKeywords() const { return m_values ? !m_values->kwParams.empty() : !m_exprs.kwParams.empty(); }
     // Makes them expressions, to fill
-    CallParamsInfo& EmplaceExprs() { return m_args.emplace<CallParamsInfo>(); }
+    CallParamsInfo& EmplaceExprs()
+    {
+        m_values.reset();
+        m_exprs = CallParamsInfo();
+        return m_exprs;
+    }
     [[nodiscard]] CallParams Evaluate(RenderContext& context) const
     {
-        if (const auto* exprs = std::get_if<CallParamsInfo>(&m_args))
+        if (m_values)
         {
-            return helpers::EvaluateCallParams(*exprs, context);
+            return *m_values;
         }
-        return std::get<CallParams>(m_args);
+        return helpers::EvaluateCallParams(m_exprs, context);
     }
 
-    void VisitRefs(detail::RefChecker& refs) const
-    {
-        if (const auto* exprs = std::get_if<CallParamsInfo>(&m_args))
-        {
-            VisitCallParams(refs, *exprs);
-        }
-    }
+    void VisitRefs(detail::RefChecker& refs) const { VisitCallParams(refs, m_exprs); }
 
 private:
-    std::variant<CallParamsInfo, CallParams> m_args;
+    CallParamsInfo m_exprs;
+    // Only a call that unpacks has them
+    std::unique_ptr<CallParams> m_values;
 };
 
 // What a filter or tester call binds: one node per declared parameter, in the order of its
@@ -141,37 +134,44 @@ public:
     {
     }
 
-    // The value of a declared parameter: its argument, else its default, else defVal
-    InternalValue Evaluate(std::string_view name, RenderContext& context, InternalValue defVal) const
+    // The value of a declared parameter: its argument, else its default, else defVal. given,
+    // when not null, tells whether the call passes the parameter, an undefined value included
+    InternalValue Evaluate(std::string_view name, RenderContext& context, InternalValue defVal, bool* given = nullptr) const
     {
-        const auto idx = IndexOf(name);
-        if (idx == NotDeclared)
+        if (!m_table)
         {
             return defVal;
         }
-        if (m_exprs && m_exprs[idx])
+        for (std::size_t idx = 0; idx < m_table->size(); ++idx)
         {
-            return context.Nodes()[m_exprs[idx]].Evaluate(context);
-        }
-        if (m_values)
-        {
-            if (const auto& value = (*m_values)[idx])
+            const auto& info = (*m_table)[idx];
+            if (info.name != name)
             {
-                return value.value();
+                continue;
             }
+            if (m_exprs && m_exprs[idx])
+            {
+                if (given)
+                {
+                    *given = true;
+                }
+                return context.Nodes()[m_exprs[idx]].Evaluate(context);
+            }
+            if (m_values && (*m_values)[idx])
+            {
+                if (given)
+                {
+                    *given = true;
+                }
+                return *(*m_values)[idx];
+            }
+            if (IsEmpty(info.defaultVal))
+            {
+                return defVal;
+            }
+            return info.defaultVal;
         }
-        const auto& info = (*m_table)[idx];
-        if (IsEmpty(info.defaultVal))
-        {
-            return defVal;
-        }
-        return info.defaultVal;
-    }
-    // Whether the call passes the declared parameter, an undefined value included
-    [[nodiscard]] bool IsGiven(std::string_view name) const
-    {
-        const auto idx = IndexOf(name);
-        return idx != NotDeclared && ((m_exprs && m_exprs[idx]) || (m_values && (*m_values)[idx]));
+        return defVal;
     }
 
     void VisitRefs(detail::RefChecker& refs) const
@@ -183,23 +183,6 @@ public:
     }
 
 private:
-    static constexpr std::size_t NotDeclared = static_cast<std::size_t>(-1);
-    [[nodiscard]] std::size_t IndexOf(std::string_view name) const
-    {
-        if (!m_table)
-        {
-            return NotDeclared;
-        }
-        for (std::size_t idx = 0; idx < m_table->size(); ++idx)
-        {
-            if ((*m_table)[idx].name == name)
-            {
-                return idx;
-            }
-        }
-        return NotDeclared;
-    }
-
     const ArgumentsTable* m_table = nullptr;
     std::unique_ptr<NodeRef<Expression>[]> m_exprs;
     // Only a call that unpacks has them
@@ -234,15 +217,14 @@ protected:
     {
         return m_args.Evaluate(argName, context, std::move(defVal));
     }
-    // Whether the call passes the parameter: Python passes an undefined argument as the
-    // Undefined object, which a parameter left out is not (docs/tasks/0310)
-    [[nodiscard]] bool IsArgumentGiven(std::string_view argName) const { return m_args.IsGiven(argName); }
+    // The value of an optional parameter, and in given whether the call passes it: Python passes
+    // an undefined argument as the Undefined object, which a parameter left out is not
+    // (docs/tasks/0310). Read in the same lookup as the value
+    // Out of line, so as not to grow the render paths that call it
+    InternalValue GetArgumentValue(std::string_view argName, RenderContext& context, bool& given) const;
     // Whether an optional argument read as `value` is set, as Python's `is not None` tells: None
     // and a parameter left out are not, an undefined value passed is
-    [[nodiscard]] bool IsArgumentSet(const InternalValue& value, std::string_view argName) const
-    {
-        return !value.IsNone() && (!value.IsUndefined() || IsArgumentGiven(argName));
-    }
+    [[nodiscard]] static bool IsArgumentSet(const InternalValue& value, bool given) { return !value.IsNone() && (!value.IsUndefined() || given); }
 
     void SetArgumentsError(std::string message) { m_argsError = std::make_unique<std::string>(std::move(message)); }
 
@@ -257,90 +239,6 @@ protected:
     // Only a call that does not fit allocates its message
     std::unique_ptr<std::string> m_argsError;
 };
-
-template<typename IsBound, typename Extras>
-void FunctionBase::CheckBound(const ArgumentsTable& argsInfo, const IsBound& isBound, const ArgumentInfo* multipleValues, std::size_t extraPos, const Extras& extraKw, ExtraArgs extraArgs)
-{
-    m_argsError.reset();
-    for (std::size_t idx = 0; idx < argsInfo.size(); ++idx)
-    {
-        if (argsInfo[idx].mandatory && !isBound(idx))
-        {
-            SetArgumentsError("missing required argument: '" + argsInfo[idx].name + "'");
-            break;
-        }
-    }
-    // Python reports it before a missing argument
-    if (multipleValues)
-    {
-        SetArgumentsError("got multiple values for argument '" + multipleValues->name + "'");
-    }
-
-    auto isDeclared = [&argsInfo](const char* name) {
-        return std::any_of(argsInfo.begin(), argsInfo.end(), [name](auto& arg) { return arg.name == name; });
-    };
-    if (!m_argsError && extraArgs == ExtraArgs::Reject)
-    {
-        if (extraPos != 0 && !isDeclared("*args"))
-        {
-            SetArgumentsError("got " + std::to_string(extraPos) + " more positional argument(s) than it takes");
-        }
-        else if (!extraKw.empty() && !isDeclared("**kwargs"))
-        {
-            SetArgumentsError("got an unexpected keyword argument '" + extraKw.begin()->first + "'");
-        }
-    }
-}
-
-inline bool FunctionBase::ParseParams(const ArgumentsTable& argsInfo, FunctionArgs params, ExtraArgs extraArgs, ForwardedArgs* extras)
-{
-    bool result = true;
-    params.Visit([&](const auto& args) {
-        using Args = std::decay_t<decltype(args)>;
-        if constexpr (std::is_same_v<Args, CallParamsInfo>)
-        {
-            auto parsed = helpers::ParseCallParamsInfo(argsInfo, args, result);
-            CheckBound(argsInfo, [&parsed](std::size_t idx) { return static_cast<bool>(parsed.args[idx]); }, parsed.multipleValues, parsed.extraPosArgs.size(), parsed.extraKwArgs, extraArgs);
-            if (extras)
-            {
-                auto& forwarded = extras->EmplaceExprs();
-                forwarded.kwParams = std::move(parsed.extraKwArgs);
-                forwarded.posParams = std::move(parsed.extraPosArgs);
-            }
-            m_args = BoundArguments(argsInfo, std::move(parsed.args));
-        }
-        else
-        {
-            // Bound without the defaults, so that what the call passes can be told from them
-            std::vector<ArgumentInfo> declared(argsInfo.begin(), argsInfo.end());
-            for (auto& info : declared)
-            {
-                info.defaultVal = InternalValue();
-            }
-            auto parsed = helpers::ParseCallParams(declared, args, result);
-            std::vector<std::optional<InternalValue>> values(argsInfo.size());
-            for (std::size_t idx = 0; idx < argsInfo.size(); ++idx)
-            {
-                auto arg = parsed.args.find(argsInfo[idx].name);
-                if (arg != parsed.args.end())
-                {
-                    values[idx] = std::move(arg->second);
-                }
-            }
-            const auto* multipleValues = parsed.multipleValues ? &argsInfo[static_cast<std::size_t>(parsed.multipleValues - declared.data())] : nullptr;
-            CheckBound(argsInfo, [&values](std::size_t idx) { return values[idx].has_value(); }, multipleValues, parsed.extraPosArgs.size(), parsed.extraKwArgs, extraArgs);
-            if (extras)
-            {
-                CallParams forwarded;
-                forwarded.kwParams = std::move(parsed.extraKwArgs);
-                forwarded.posParams = std::move(parsed.extraPosArgs);
-                *extras = ForwardedArgs(std::move(forwarded));
-            }
-            m_args = BoundArguments(argsInfo, std::move(values));
-        }
-    });
-    return result;
-}
 
 } // namespace v2
 } // namespace jinja2
