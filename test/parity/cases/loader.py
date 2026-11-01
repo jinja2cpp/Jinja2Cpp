@@ -325,6 +325,7 @@ CASES = [
     ("self_block_before_extends", "{% set x = self.b1() %}{% extends 'a.txt' %}{% block b1 %}C{% endblock %}",
      {"templates": {"a.txt": "{{ x }}|{% block b1 %}A{% endblock %}"}}),
     ('include_macro_kept_sees_includer', "{% set ns = namespace(f=none) %}{% for x in 'XY' %}{% include 'inc' %}{% endfor %}|{{ ns.f() }}", {"templates": {'inc': '{% macro m() %}M{{ x }}{% endmacro %}{% set ns.f = m %}'}}),
+    ('include_macro_kept_recursive', "{% set ns = namespace(f=none) %}{% include 'r' %}{{ ns.f(2) }}", {"templates": {'r': '{% macro i(n) %}{{ n }}{% if n %}{{ i(n - 1) }}{% endif %}{% endmacro %}{% set ns.f = i %}'}}),
     ('include_macro_kept_snapshot', "{% set ns = namespace(f=none) %}{% set x = 'X' %}{% include 'a' %}{% set x = 'X2' %}|{{ ns.f() }}", {"templates": {'a': '{% macro m() %}{{ x }}{% endmacro %}{% set ns.f = m %}'}}),
     ('include_macro_kept_nested_includes', "{% set ns = namespace(f=none) %}{% set x = 'X' %}{% include 'a' %}|{{ ns.f() }}", {"templates": {'a': "{% set y = 'Y' %}{% include 'b' %}", 'b': "{% set z = 'Z' %}{% macro m() %}{{ x }}{{ y }}{{ z }}{% endmacro %}{% set ns.f = m %}"}}),
     ('include_nested_macro_kept', "{% set ns = namespace(f=none) %}{% set x = 'X' %}{% include 'a' %}|{{ ns.f() }}", {"templates": {'a': "{% set y = 'Y' %}{% macro o(p) %}{% macro i() %}{{ x }}{{ y }}{{ p }}{% endmacro %}{% set ns.f = i %}{% endmacro %}{{ o('P') }}"}}),

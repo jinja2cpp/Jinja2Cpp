@@ -49,7 +49,7 @@ void CycleCollector::Finish() noexcept
     }
 }
 
-bool CycleCollector::KeepUntilEnd(std::shared_ptr<const void> object)
+bool CycleCollector::KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner)
 {
     auto* collector = s_current;
     if (!collector)
@@ -60,7 +60,14 @@ bool CycleCollector::KeepUntilEnd(std::shared_ptr<const void> object)
     {
         collector->m_notes = std::make_unique<Notes>();
     }
-    collector->m_notes->kept.push_back(std::move(object));
+    auto& notes = *collector->m_notes;
+    auto& kept = notes.kept;
+    if (kept.size() >= notes.keptPruneAt)
+    {
+        kept.erase(std::remove_if(kept.begin(), kept.end(), [](const auto& entry) { return entry.first.expired(); }), kept.end());
+        notes.keptPruneAt = std::max(Notes::MinPruneAt, kept.size() * 2);
+    }
+    kept.emplace_back(std::move(owner), std::move(object));
     return true;
 }
 

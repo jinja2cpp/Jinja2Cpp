@@ -18603,6 +18603,86 @@
    "output": "3210"
   },
   {
+   "id": "statements.macro_closure_recursive",
+   "template": "{% set ns = namespace(f=none) %}{% macro o() %}{% macro i(n) %}{{ n }}{% if n %}{{ i(n - 1) }}{% endif %}{% endmacro %}{% set ns.f = i %}{% endmacro %}{{ o() }}{{ ns.f(3) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "3210"
+  },
+  {
+   "id": "statements.macro_closure_calls_sibling",
+   "template": "{% set ns = namespace(f=none) %}{% macro o() %}{% macro j() %}J{% endmacro %}{% macro i() %}{{ j() }}{% endmacro %}{% set ns.f = i %}{% endmacro %}{{ o() }}{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "J"
+  },
+  {
    "id": "statements.macro_closure_param_shadows_root",
    "template": "{% set n = 'root' %}{% set ns = namespace(f=none) %}{% macro outer(n) %}{% macro inner() %}{{ n }}{% endmacro %}{% set ns.f = inner %}{% endmacro %}{{ outer('p') }}{{ ns.f() }}{{ n }}",
    "context": {

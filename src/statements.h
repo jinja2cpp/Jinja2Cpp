@@ -803,6 +803,10 @@ public:
     // inside another body needs no lookup cache epoch of its own (HomeCall::Run)
     void SetReadsSlotsOnly(std::uint32_t slotReads) { m_readsSlotsOnly = !m_bodyReachesContext && slotReads == m_bodyNameRefs; }
     [[nodiscard]] bool ReadsSlotsOnly() const { return m_readsSlotsOnly; }
+    // For `value`, a macro that keeps a copy of the frames it was defined in
+    // (ClosureSite::CaptureOnEnd): the same macro reading that copy through a weak reference
+    // (ClosureSite::Weakened), for the copy itself to hold. Else nothing. Throws std::bad_alloc
+    [[nodiscard]] static std::optional<InternalValue> WeakenCapture(const InternalValue& value);
 
 protected:
     // What MakeCallable's callable holds; defined in statements.cpp

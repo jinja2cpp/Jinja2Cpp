@@ -90,7 +90,9 @@ public:
     // walk, so that what only it held is freed rather than counted as held from outside: the
     // names a closure keeps of its ended frames (ClosureCapture), which the closure reaches
     // weakly. False outside a render. Throws std::bad_alloc
-    static bool KeepUntilEnd(std::shared_ptr<const void> object);
+    // Released earlier once `owner` has expired: the copy is of no use without it, and a loop
+    // that makes one per iteration stays in constant memory (pruned as Add prunes candidates)
+    static bool KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner);
     // The collector of the render running on this thread, or null
     [[nodiscard]] static CycleCollector* Current() noexcept { return s_current; }
     // Makes `collector`, a render's that is still running further down this thread's stack, the
@@ -138,8 +140,9 @@ private:
         // Candidates held by nothing else are dropped when there are this many (Add)
         static constexpr size_t MinPruneAt = 64;
         size_t pruneAt = MinPruneAt;
-        // What KeepUntilEnd holds
-        std::vector<std::shared_ptr<const void>> kept;
+        // What KeepUntilEnd holds, with the owner each is of use to
+        std::vector<std::pair<std::weak_ptr<const void>, std::shared_ptr<const void>>> kept;
+        size_t keptPruneAt = MinPruneAt;
         // The render's copies of the host's data, released before the walk: detaching them
         // frees what only they held
         BorrowedCells cells;

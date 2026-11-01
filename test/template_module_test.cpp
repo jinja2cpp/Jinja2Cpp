@@ -310,6 +310,28 @@ TEST_F(TemplateModuleTest, TemplateCallableArguments)
     }
 }
 
+// A host that catches what a lent callable throws and goes on finds the render's scopes as they
+// were (verifier round 1 of 0300): the failed body's scope and names are gone
+TEST_F(TemplateModuleTest, LentCallableFailureCaught)
+{
+    jinja2::UserCallable catcher(
+        [](const jinja2::UserCallableParams& params) {
+            try
+            {
+                Call(params.args.at("f"));
+            }
+            catch (...) // NOLINT(bugprone-empty-catch): the test checks what is left after it
+            {
+            }
+            return jinja2::Value(std::string("caught"));
+        },
+        { jinja2::ArgInfo("f") });
+    const jinja2::ValuesMap params{ { "catcher", catcher } };
+    EXPECT_EQ("caught7False", Render("{% set y = 7 %}{% macro bad() %}{% set z = 3 %}{{ 1 // 0 }}{% endmacro %}{{ catcher(bad) }}{{ y }}{{ z is defined }}", params));
+    EXPECT_EQ("caught5", Render("{% macro bad() %}{{ 1 // 0 }}{% endmacro %}{% macro outer() %}{% set q = 5 %}{{ catcher(bad) }}{{ q }}{% endmacro %}{{ outer() }}", params));
+    EXPECT_EQ("[caught]", Render("{% macro w() %}[{{ catcher(caller) }}]{% endmacro %}{% call w() %}{% set z = 1 %}{{ 1 // 0 }}{% endcall %}", params));
+}
+
 // A macro nested in an exported value, or returned by a call, is a call in the module too
 // (docs/tasks/0300); a host's callable goes back as it came
 TEST_F(TemplateModuleTest, NestedCallables)

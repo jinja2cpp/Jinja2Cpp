@@ -1156,7 +1156,10 @@ private:
     void CaptureClosuresImpl(size_t count);
     // Adds to `names` what a lookup here sees in the scopes from the innermost down to scope
     // `lowest`, frame views included, as CollectVisibleNames does but keeping `loop` and the
-    // names bound at entry this context does not pass over. Defined in statements.cpp
+    // names bound at entry this context does not pass over. A closure that keeps such a copy
+    // itself goes in weakened (MacroStatement::WeakenCapture): holding it as it is, the copy
+    // would keep the closure alive, and the closure the copy, until the render ends. Defined
+    // in statements.cpp
     void CollectNamesDownTo(InternalValueMap& names, size_t lowest) const;
     // Adds a closure defined here that keeps what it sees (ClosureSite::CaptureOnEnd). Defined
     // in statements.cpp
@@ -1831,6 +1834,18 @@ public:
     // what they held (ClosureCapture): the closure is defined in a frame inside its template's
     // top level, or in a context that ends before the render (RenderContext::SetEndsBeforeRender)
     [[nodiscard]] bool OutlivesItsFrames(const RenderContext& context) const { return (m_state & TopLevel) == 0 || context.m_endsBeforeRender; }
+    // Whether CaptureOnEnd made the closure keep what it sees
+    [[nodiscard]] bool KeepsCapture() const { return m_capture != nullptr; }
+    // A copy of the site that reads what this one keeps without keeping it alive: for the
+    // copy of the frames itself to hold (RenderContext::CollectNamesDownTo), which lives as
+    // long as a closure outside it holds the capture (CycleCollector::KeepUntilEnd)
+    [[nodiscard]] ClosureSite Weakened() const
+    {
+        ClosureSite copy(*this);
+        copy.m_weakCapture = m_capture;
+        copy.m_capture.reset();
+        return copy;
+    }
     // Makes the closure keep what it sees of its frames when they end (ClosureCapture). For a
     // site OutlivesItsFrames, made in `context` just now. Throws std::bad_alloc
     void CaptureOnEnd(RenderContext& context);
@@ -1851,7 +1866,15 @@ private:
         caller.GetRendererCallback()->ThrowRuntimeError(ErrorCode::TemplateExpired, {});
     }
     // The copy of the frames the closure was defined in, once they ended (ClosureCapture)
-    [[nodiscard]] std::shared_ptr<const InternalValueMap> Captured() const { return m_capture ? m_capture->names.lock() : nullptr; }
+    [[nodiscard]] std::shared_ptr<const InternalValueMap> Captured() const
+    {
+        if (m_capture)
+        {
+            return m_capture->names.lock();
+        }
+        const auto capture = m_weakCapture.lock();
+        return capture ? capture->names.lock() : nullptr;
+    }
     [[nodiscard]] static ClosureHome Ended(RenderContext& caller)
     {
         ClosureHome home;
@@ -1901,6 +1924,8 @@ private:
     bool m_endsWithCall = false;
     // Set by CaptureOnEnd, shared by the copies of the site
     std::shared_ptr<ClosureCapture> m_capture;
+    // The capture of a Weakened copy
+    std::weak_ptr<ClosureCapture> m_weakCapture;
 };
 
 // What a HomeCall that switches the home saves; at namespace scope, as Clang does not take

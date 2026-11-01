@@ -1895,7 +1895,7 @@ void RenderContext::CaptureClosuresImpl(size_t count)
         auto names = std::make_shared<InternalValueMap>();
         CollectNamesDownTo(*names, capture->lowest);
         // Outside a render nothing would release the copy: the closure reads its frames as ended
-        if (CycleCollector::KeepUntilEnd(names))
+        if (CycleCollector::KeepUntilEnd(names, capture))
         {
             capture->names = names;
         }
@@ -1924,6 +1924,11 @@ void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowes
                 {
                     continue;
                 }
+                if (auto weakened = MacroStatement::WeakenCapture(value))
+                {
+                    collected.emplace(name, std::move(*weakened));
+                    continue;
+                }
                 collected.emplace(name, value);
             }
             return false;
@@ -1933,7 +1938,9 @@ void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowes
             {
                 if (view.slots[idx].IsBound())
                 {
-                    collected.emplace(std::string(view.nodes.Text(view.names[idx].name)), static_cast<const InternalValue&>(view.slots[idx]));
+                    const auto& value = static_cast<const InternalValue&>(view.slots[idx]);
+                    auto weakened = MacroStatement::WeakenCapture(value);
+                    collected.emplace(std::string(view.nodes.Text(view.names[idx].name)), weakened ? std::move(*weakened) : value);
                 }
             }
             return false;
@@ -2678,13 +2685,32 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
     // (BindMacroDefaults)
     ClosureSite site(values);
     // Defined in a frame that may end before it is called: it keeps what it sees there (0326)
-    if (site.OutlivesItsFrames(values))
+    if ((m_bodyNameRefs != 0 || m_bodyReachesContext) && site.OutlivesItsFrames(values))
     {
         site.CaptureOnEnd(values);
     }
     Callable result(Callable::Macro, CallableBody{ this, values.Nodes(), values.IsStaticAutoescape(), values.IsVolatileAutoescape(), std::move(site), m_readsSlotsOnly });
     result.SetAttributes(m_attributes);
     return result;
+}
+
+std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& value)
+{
+    const auto* callable = GetIf<Callable>(&value);
+    if (!callable || callable->GetKind() != Callable::Macro || callable->GetType() != Callable::Type::Statement)
+    {
+        return std::nullopt;
+    }
+    const auto* body = callable->GetStatementCallable().target<CallableBody>();
+    if (!body || !body->site.KeepsCapture())
+    {
+        return std::nullopt;
+    }
+    CallableBody weakened = *body;
+    weakened.site = body->site.Weakened();
+    Callable result(Callable::Macro, std::move(weakened));
+    result.SetAttributes(callable->GetAttributes());
+    return InternalValue(std::move(result));
 }
 
 void MacroStatement::Render(OutStream&, RenderContext& values)

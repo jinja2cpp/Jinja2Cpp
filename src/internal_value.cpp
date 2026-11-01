@@ -3960,7 +3960,8 @@ struct LentCallable
 
     Value operator()(const UserCallableParams& params) const
     {
-        if (!lease->isActive || lease->thread != std::this_thread::get_id())
+        // The thread first: it never changes, while another thread must not read isActive
+        if (lease->thread != std::this_thread::get_id() || !lease->isActive)
         {
             ThrowExpired();
         }
@@ -3987,6 +3988,9 @@ struct LentCallable
         }
         auto& context = *lease->context;
         const CycleCollector::Reentry collector(lease->collector);
+        // A host may catch what the callable throws and go on: the scopes and views a failed
+        // body left on the render's context go, as a HomeCall that switched would drop them
+        const HomeCall::Restore restore(context);
         const auto& fn = *GetIf<Callable>(&callable);
         if (fn.GetType() == Callable::Type::Expression)
         {

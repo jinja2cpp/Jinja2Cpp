@@ -5121,6 +5121,19 @@
    "output": "|MY"
   },
   {
+   "id": "loader.include_macro_kept_recursive",
+   "template": "{% set ns = namespace(f=none) %}{% include 'r' %}{{ ns.f(2) }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "r": "{% macro i(n) %}{{ n }}{% if n %}{{ i(n - 1) }}{% endif %}{% endmacro %}{% set ns.f = i %}"
+   },
+   "output": "210"
+  },
+  {
    "id": "loader.include_macro_kept_snapshot",
    "template": "{% set ns = namespace(f=none) %}{% set x = 'X' %}{% include 'a' %}{% set x = 'X2' %}|{{ ns.f() }}",
    "context": {
