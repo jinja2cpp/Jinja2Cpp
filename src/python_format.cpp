@@ -540,7 +540,7 @@ public:
         {
             m_undefined = &values;
         }
-        m_isMapping = m_map.has_value() || (list && !list->IsTuple()) || m_undefined;
+        m_isMapping = m_map.has_value() || (list && !list->IsTuple()) || m_undefined != nullptr;
     }
 
     Formatter(const InternalValue* args, size_t count, bool markup)
