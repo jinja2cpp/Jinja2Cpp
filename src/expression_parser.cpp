@@ -472,15 +472,6 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseCompar
 
 namespace
 {
-// The arguments of a call that unpacks nothing, bound at Load
-CallParamsInfo ToCallParamsInfo(CallArgsInfo args)
-{
-    CallParamsInfo result;
-    result.kwParams = std::move(args.kwParams);
-    result.posParams = std::move(args.posParams);
-    return result;
-}
-
 // Whether the token after an operand starts a postfix operator, a filter or a test. Most
 // operands have none: their result is returned as it is
 bool StartsOperandSuffix(const Token& tok)
@@ -778,7 +769,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
         }
         else
         {
-            result = IsExpression::Make(m_nodes, valueRef, name, ToCallParamsInfo(std::move(params)), FindRegisteredTester(name), &unknown, !m_volatile);
+            result = IsExpression::Make(m_nodes, valueRef, name, params, FindRegisteredTester(name), &unknown, !m_volatile);
         }
         if (unknown)
         {
@@ -1291,16 +1282,13 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
             }
 
             std::string name = lexer.GetAsString(tok);
-            ParseResult<CallArgsInfo> params;
-
-            if (lexer.NextToken() == '(')
-            {
-                params = ParseCallArgs(lexer);
-            }
-            else
+            const bool hasArgs = lexer.NextToken() == '(';
+            if (!hasArgs)
             {
                 lexer.ReturnToken();
             }
+            // Made in place: assigning an expected swaps the arguments
+            auto params = hasArgs ? ParseCallArgs(lexer) : ParseResult<CallArgsInfo>();
 
             if (!params)
             {
@@ -1317,7 +1305,7 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
             }
             else
             {
-                filter = ExpressionFilter::Make(m_nodes, name, ToCallParamsInfo(std::move(*params)), FindRegisteredFilter(name), &unknown, !m_volatile);
+                filter = ExpressionFilter::Make(m_nodes, name, *params, FindRegisteredFilter(name), &unknown, !m_volatile);
             }
             if (unknown)
             {

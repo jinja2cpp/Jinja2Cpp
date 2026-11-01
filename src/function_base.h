@@ -95,6 +95,8 @@ public:
     {
         return std::visit([](const auto& args) { return !args.kwParams.empty(); }, m_args);
     }
+    // Makes them expressions, to fill
+    CallParamsInfo& EmplaceExprs() { return m_args.emplace<CallParamsInfo>(); }
     [[nodiscard]] CallParams Evaluate(RenderContext& context) const
     {
         if (const auto* exprs = std::get_if<CallParamsInfo>(&m_args))
@@ -301,10 +303,9 @@ inline bool FunctionBase::ParseParams(const ArgumentsTable& argsInfo, FunctionAr
             CheckBound(argsInfo, [&parsed](std::size_t idx) { return static_cast<bool>(parsed.args[idx]); }, parsed.multipleValues, parsed.extraPosArgs.size(), parsed.extraKwArgs, extraArgs);
             if (extras)
             {
-                CallParamsInfo forwarded;
+                auto& forwarded = extras->EmplaceExprs();
                 forwarded.kwParams = std::move(parsed.extraKwArgs);
                 forwarded.posParams = std::move(parsed.extraPosArgs);
-                *extras = ForwardedArgs(std::move(forwarded));
             }
             m_args = BoundArguments(argsInfo, std::move(parsed.args));
         }
