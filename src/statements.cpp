@@ -1727,54 +1727,55 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
         // `self` may outlive the stack and the trees its names are in
         std::string blockName(block.first);
         self[blockName] = MakeWrapped(WithKeepAlive(Callable(Callable::Macro, [name = blockName, owner = stack.self, site, templateName](const CallParams& params, OutStream& stream, RenderContext& context) {
-            CheckBlockCallParams(params);
-            auto* curFrame = context.GetTemplateFrame();
-            TemplateFrame* frame = nullptr;
-            for (auto* f = curFrame; f && owner->live; f = f->outer)
-            {
-                if (f->blocks == owner->live)
-                {
-                    frame = f;
-                    break;
-                }
-            }
-            const auto home = site.Resolve(context);
-            // A frame of a context that is alive is in place: its guard restores the one before
-            if (!frame && owner->live)
-            {
-                if (auto* homeFrame = home.context->GetTemplateFrame(); homeFrame && homeFrame->blocks == owner->live)
-                {
-                    frame = homeFrame;
-                }
-            }
-            RenderContext blockContext(*home.context, home.link);
-            // Its template has ended: the block sees what that saw (ClosureCapture, 0323)
-            CopyCaptured(blockContext, home);
-            // The template has ended (an include that stored `self`): its blocks, in a frame
-            // of their own
-            TemplateFrame endedFrame;
-            if (!frame && !owner->live)
-            {
-                endedFrame.blocks = &owner->ended;
-                endedFrame.baseDepth = home.link;
-                endedFrame.name = templateName;
-                endedFrame.outer = curFrame;
-                // Its scopes have ended too: a `self` in the block renders the ended blocks,
-                // seeing what this one sees
-                endedFrame.self = MakeTemplateSelf(owner->ended, site, templateName);
-                frame = &endedFrame;
-            }
-            if (!frame)
-            {
-                if (!curFrame || !curFrame->blocks)
-                {
-                    return;
-                }
-                frame = curFrame;
-            }
-            blockContext.SetTemplateFrame(frame);
-            RenderBlockAt(*frame->blocks, name, 0, stream, blockContext);
-        }), keepAlive));
+                                                        CheckBlockCallParams(params);
+                                                        auto* curFrame = context.GetTemplateFrame();
+                                                        TemplateFrame* frame = nullptr;
+                                                        for (auto* f = curFrame; f && owner->live; f = f->outer)
+                                                        {
+                                                            if (f->blocks == owner->live)
+                                                            {
+                                                                frame = f;
+                                                                break;
+                                                            }
+                                                        }
+                                                        const auto home = site.Resolve(context);
+                                                        // A frame of a context that is alive is in place: its guard restores the one before
+                                                        if (!frame && owner->live)
+                                                        {
+                                                            if (auto* homeFrame = home.context->GetTemplateFrame(); homeFrame && homeFrame->blocks == owner->live)
+                                                            {
+                                                                frame = homeFrame;
+                                                            }
+                                                        }
+                                                        RenderContext blockContext(*home.context, home.link);
+                                                        // Its template has ended: the block sees what that saw (ClosureCapture, 0323)
+                                                        CopyCaptured(blockContext, home);
+                                                        // The template has ended (an include that stored `self`): its blocks, in a frame
+                                                        // of their own
+                                                        TemplateFrame endedFrame;
+                                                        if (!frame && !owner->live)
+                                                        {
+                                                            endedFrame.blocks = &owner->ended;
+                                                            endedFrame.baseDepth = home.link;
+                                                            endedFrame.name = templateName;
+                                                            endedFrame.outer = curFrame;
+                                                            // Its scopes have ended too: a `self` in the block renders the ended blocks,
+                                                            // seeing what this one sees
+                                                            endedFrame.self = MakeTemplateSelf(owner->ended, site, templateName);
+                                                            frame = &endedFrame;
+                                                        }
+                                                        if (!frame)
+                                                        {
+                                                            if (!curFrame || !curFrame->blocks)
+                                                            {
+                                                                return;
+                                                            }
+                                                            frame = curFrame;
+                                                        }
+                                                        blockContext.SetTemplateFrame(frame);
+                                                        RenderBlockAt(*frame->blocks, name, 0, stream, blockContext);
+                                                    }),
+                                                    keepAlive));
     }
     return CreateObjectAdapter(std::move(self), "TemplateReference", templateName.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(templateName)));
 }
