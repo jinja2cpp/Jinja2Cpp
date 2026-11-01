@@ -38,7 +38,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     # Release builds every standard, on two runner images (macos-14 retired 2026-11-02,
-    # actions/runner-images#13518; macos-15 and macos-26 remain); one Debug build on the newest
+    # actions/runner-images#13518; macos-15 and macos-26 remain); one Debug build on macos-15
     # image and AppleClang. Debug adds the full node reference checks, which the Linux
     # Debug rows cover, and macOS has 5 runners to share (docs/tasks/0162). One Release build
     # has the Boost big-integer backend built in (JINJA2CPP_WITH_BIGINT, docs/tasks/0272).
