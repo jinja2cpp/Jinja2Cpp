@@ -6,6 +6,7 @@ name: CI-bindings
 # component. The default jobs test only the nlohmann_json binding and the toy traits, so this
 # runs on pull requests that touch the bindings or the contract they implement, nightly on
 # master, and on demand. The merge steward checks the nightly status before stacking a train.
+# The ASan job also runs the parity corpus with Reflect views of the contexts (docs/tasks/0322).
 
 on:
   pull_request:
@@ -19,6 +20,8 @@ on:
       - 'include/jinja2cpp/big_int_backend.h'
       - 'test/binding/**'
       - 'test/package/**'
+      - 'test/parity/parity_test.cpp'
+      - 'test/parity/divergences/reflect.txt'
       - 'cmake/public/**'
       - 'thirdparty/**'
       - 'CMakeLists.txt'
@@ -89,6 +92,15 @@ jobs:
 
     - name: Test
       run: .build/jinja2cpp_tests "--gtest_filter=${BINDING_TESTS}"
+
+    # The parity corpus with every context as views of the document instead of copies
+    # (docs/tasks/0322): a wide check of the view adapters and, under ASan, of the owner
+    # chain of every item a template reaches. Not in the per-PR matrix.
+    - name: Parity corpus through Reflect
+      if: matrix.sanitizer == 'address+undefined'
+      env:
+        JINJA2CPP_PARITY_CONTEXT: reflect
+      run: .build/jinja2cpp_tests "--gtest_filter=ParityReflect/*:ParityRegistry.*"
 
   msvc:
     name: bindings MSVC C++17 Release /MT static
