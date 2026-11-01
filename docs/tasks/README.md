@@ -376,11 +376,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0302](0302-simdjson-binding.md) | An optional simdjson binding | api | low | open |
 | [0303](0303-retire-rapidjson-backend.md) | Retire the built-in RapidJSON backend | build | medium | done |
 | [0304](0304-loop-over-loop-peeks-early.md) | A for loop over `loop` advances the outer loop early | parity | low | open |
-| [0305](0305-builtin-class-repr.md) | The builtin classes print as `<class 'range'>` | parity | low | open |
+| [0305](0305-builtin-class-repr.md) | The builtin classes print as `<class 'range'>` | parity | low | done |
 | [0306](0306-filter-test-argument-unpacking.md) | `*args` and `**kwargs` in filter and test calls | parity | low | open |
 | [0307](0307-fold-by-choice-nested.md) | Fold a choice that sits inside another foldable expression | parity | low | done |
 | [0308](0308-divisibleby-non-number.md) | `divisibleby` on a value that is not a number | parity | low | open |
-| [0309](0309-repr-of-template-modules.md) | `pprint` of builtin globals and imported templates | parity | low | open |
+| [0309](0309-repr-of-template-modules.md) | `pprint` of builtin globals and imported templates | parity | low | done |
 | [0310](0310-undefined-filter-argument-is-omitted.md) | A filter argument given as an undefined value reads as omitted | parity | low | open |
 | [0311](0311-json-bindings-as-components.md) | JSON bindings as components on a public adapter contract | build | high | done |
 | [0312](0312-module-kept-while-stored-macro-reaches-it.md) | A macro a module call stores keeps its module, as in Jinja2 | parity | low | open |
@@ -435,6 +435,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0363](0363-cell-protocol-inductive-proof.md) | Prove the cell protocol's invariants inductively | robustness | low | open |
 | [0364](0364-frozen-version-deep-validation.md) | Validate a frozen version deeply, from time to time | robustness | medium | open |
 | [0365](0365-fresh-generic-items-of-a-call-argument.md) | A fresh generic container nested in a call's argument keeps its module cell | robustness | low | open |
+| [0366](0366-bound-loop-method-repr-after-break.md) | A kept `loop.cycle` prints `?` for the length of a lazily filtered loop it broke out of | parity | low | open |
+| [0367](0367-module-object-is-escaped.md) | `m is escaped` of an imported module | parity | low | open |
 | [0368](0368-callable-python-type-names.md) | Python type names of callables in error messages | parity | low | open |
 | [0369](0369-finalize-template-data-in-volatile-code.md) | Template text in volatile autoescape code goes through finalize | parity | low | open |
 | [0370](0370-json-view-is-a-dict.md) | A JSON object seen through Reflect behaves as a reflected struct, not as a dict | parity | medium | open |

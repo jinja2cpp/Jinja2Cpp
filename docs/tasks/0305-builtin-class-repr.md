@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/721
 priority: low
 area: parity
 touches: [src/value_visitors.h#ValueRenderer, src/global_functions.cpp, src/serialize_filters.cpp#XmlAttrFilter]
