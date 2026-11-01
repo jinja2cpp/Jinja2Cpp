@@ -1,0 +1,35 @@
+{
+ "template": "microsoft-Phi-3.5-mini-instruct.jinja",
+ "renders": {
+  "single": {
+   "output": "<|user|>\nHello!<|end|>\n<|assistant|>\n"
+  },
+  "system": {
+   "output": "<|system|>\nYou are a helpful assistant.<|end|>\n<|user|>\nWhat is 2+2?<|end|>\n<|assistant|>\n2+2 = 4.<|end|>\n<|user|>\nAnd \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|end|>\n<|assistant|>\n"
+  },
+  "nogen": {
+   "output": "<|user|>\nHi<|end|>\n<|assistant|>\nHello! How can I help?<|end|>\n<|eos|>"
+  },
+  "tools": {
+   "output": "<|system|>\nYou can call tools.<|end|>\n<|user|>\nWeather in Paris?<|end|>\n<|assistant|>\n<|end|>\n<|assistant|>\nIt is 18°C and cloudy in Paris.<|end|>\n<|user|>\nThanks<|end|>\n<|assistant|>\n"
+  },
+  "tool_args_str": {
+   "error": "TypeError"
+  },
+  "reasoning": {
+   "output": "<|user|>\nIs 17 prime?<|end|>\n<|assistant|>\nYes, 17 is prime.<|end|>\n<|user|>\nAnd 21?<|end|>\n<|assistant|>\n"
+  },
+  "no_thinking": {
+   "output": "<|user|>\nQuick: capital of France?<|end|>\n<|assistant|>\n"
+  },
+  "parts": {
+   "error": "TypeError"
+  },
+  "documents": {
+   "output": "<|user|>\nWho wrote it?<|end|>\n<|assistant|>\n"
+  },
+  "no_alternation": {
+   "output": "<|user|>\nFirst<|end|>\n<|user|>\nSecond<|end|>\n<|assistant|>\n"
+  }
+ }
+}

@@ -1,0 +1,36 @@
+{
+ "template": "GLM-4.6.jinja",
+ "renders": {
+  "single": {
+   "output": "[gMASK]<sop><|user|>\nHello!<|assistant|>"
+  },
+  "system": {
+   "output": "[gMASK]<sop><|system|>\nYou are a helpful assistant.<|user|>\nWhat is 2+2?<|assistant|>\n<think></think>\n2+2 = 4.<|user|>\nAnd \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|assistant|>"
+  },
+  "nogen": {
+   "output": "[gMASK]<sop><|user|>\nHi<|assistant|>\n<think></think>\nHello! How can I help?"
+  },
+  "tools": {
+   "output": "[gMASK]<sop><|system|>\n# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}\n</tools>\n\nFor each function call, output the function name and arguments within the following XML format:\n<tool_call>{function-name}\n<arg_key>{arg-key-1}</arg_key>\n<arg_value>{arg-value-1}</arg_value>\n<arg_key>{arg-key-2}</arg_key>\n<arg_value>{arg-value-2}</arg_value>\n...\n</tool_call><|system|>\nYou can call tools.<|user|>\nWeather in Paris?<|assistant|>\n<think></think>\n<tool_call>get_weather\n<arg_key>city</arg_key>\n<arg_value>Paris</arg_value>\n<arg_key>unit</arg_key>\n<arg_value>celsius</arg_value>\n</tool_call><|observation|>\n<tool_response>\n{\"temp\": 18, \"sky\": \"cloudy\"}\n</tool_response><|assistant|>\n<think></think>\nIt is 18°C and cloudy in Paris.<|user|>\nThanks<|assistant|>"
+  },
+  "tool_args_str": {
+   "error": "TemplateError",
+   "message": "Invalid tool call arguments passed: {\"city\": \"Tōkyō\"}"
+  },
+  "reasoning": {
+   "output": "[gMASK]<sop><|user|>\nIs 17 prime?<|assistant|>\n<think></think>\nYes, 17 is prime.<|user|>\nAnd 21?<|assistant|>"
+  },
+  "no_thinking": {
+   "output": "[gMASK]<sop><|user|>\nQuick: capital of France?/nothink<|assistant|>\n<think></think>"
+  },
+  "parts": {
+   "output": "[gMASK]<sop><|system|>\nBe brief.<|user|>\nDescribea cat.<|assistant|>"
+  },
+  "documents": {
+   "output": "[gMASK]<sop><|user|>\nWho wrote it?<|assistant|>"
+  },
+  "no_alternation": {
+   "output": "[gMASK]<sop><|user|>\nFirst<|user|>\nSecond<|assistant|>"
+  }
+ }
+}

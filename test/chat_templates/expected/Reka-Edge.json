@@ -1,0 +1,35 @@
+{
+ "template": "Reka-Edge.jinja",
+ "renders": {
+  "single": {
+   "output": "human: Hello!<sep>assistant:"
+  },
+  "system": {
+   "output": "system: You are a helpful assistant.\n\n<sep>human: What is 2+2?<sep>assistant: 2+2 = 4.\n\n<sep>human: And \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<sep>assistant:"
+  },
+  "nogen": {
+   "output": "human: Hi<sep>assistant: Hello! How can I help?\n\n<sep>"
+  },
+  "tools": {
+   "output": "system: You can call tools.\n\n# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}\n</tools>\n\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call>\n\n<sep>human: Weather in Paris?<sep>assistant: <tool_call>\n{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\", \"unit\": \"celsius\"}}\n</tool_call>\n\n<sep>human: <tool_response>\n{\"temp\": 18, \"sky\": \"cloudy\"}\n</tool_response><sep>assistant: It is 18°C and cloudy in Paris.\n\n<sep>human: Thanks<sep>assistant:"
+  },
+  "tool_args_str": {
+   "output": "system: # Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}\n</tools>\n\nFor each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call>\n\n<sep>human: Weather in Tokyo?<sep>assistant: <tool_call>\n{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Tōkyō\"}}\n</tool_call>\n\n<sep>human: <tool_response>\nsunny\n</tool_response><sep>assistant:"
+  },
+  "reasoning": {
+   "output": "human: Is 17 prime?<sep>assistant: Yes, 17 is prime.\n\n<sep>human: And 21?<sep>assistant:"
+  },
+  "no_thinking": {
+   "output": "human: Quick: capital of France?<sep>assistant:"
+  },
+  "parts": {
+   "output": "system: Be brief.\n\n<sep>human: Describe a cat.<sep>assistant:"
+  },
+  "documents": {
+   "output": "human: Who wrote it?<sep>assistant:"
+  },
+  "no_alternation": {
+   "output": "human: First<sep>human: Second<sep>assistant:"
+  }
+ }
+}

@@ -1,0 +1,35 @@
+{
+ "template": "google-gemma-4-31B-it.jinja",
+ "renders": {
+  "single": {
+   "output": "<|bos|><|turn>user\nHello!<turn|>\n<|turn>model\n<|channel>thought\n<channel|>"
+  },
+  "system": {
+   "output": "<|bos|><|turn>system\nYou are a helpful assistant.<turn|>\n<|turn>user\nWhat is 2+2?<turn|>\n<|turn>model\n2+2 = 4.<turn|>\n<|turn>user\nAnd \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<turn|>\n<|turn>model\n<|channel>thought\n<channel|>"
+  },
+  "nogen": {
+   "output": "<|bos|><|turn>user\nHi<turn|>\n<|turn>model\nHello! How can I help?<turn|>\n"
+  },
+  "tools": {
+   "output": "<|bos|><|turn>system\nYou can call tools.<|tool>declaration:get_weather{description:<|\"|>Get the current weather in a city.<|\"|>,parameters:{properties:{city:{description:<|\"|>City name, e.g. Paris<|\"|>,type:<|\"|>STRING<|\"|>},unit:{enum:[<|\"|>celsius<|\"|>,<|\"|>fahrenheit<|\"|>],type:<|\"|>STRING<|\"|>}},required:[<|\"|>city<|\"|>],type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nWeather in Paris?<turn|>\n<|turn>model\n<|tool_call>call:get_weather{city:<|\"|>Paris<|\"|>,unit:<|\"|>celsius<|\"|>}<tool_call|><|tool_response>response:get_weather{value:<|\"|>{\"temp\": 18, \"sky\": \"cloudy\"}<|\"|>}<tool_response|>It is 18°C and cloudy in Paris.<turn|>\n<|turn>user\nThanks<turn|>\n<|turn>model\n<|channel>thought\n<channel|>"
+  },
+  "tool_args_str": {
+   "output": "<|bos|><|turn>system\n<|tool>declaration:get_weather{description:<|\"|>Get the current weather in a city.<|\"|>,parameters:{properties:{city:{description:<|\"|>City name, e.g. Paris<|\"|>,type:<|\"|>STRING<|\"|>},unit:{enum:[<|\"|>celsius<|\"|>,<|\"|>fahrenheit<|\"|>],type:<|\"|>STRING<|\"|>}},required:[<|\"|>city<|\"|>],type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nWeather in Tokyo?<turn|>\n<|turn>model\n<|tool_call>call:get_weather{{\"city\": \"Tōkyō\"}}<tool_call|><|tool_response>response:get_weather{value:<|\"|>sunny<|\"|>}<tool_response|>"
+  },
+  "reasoning": {
+   "output": "<|bos|><|turn>user\nIs 17 prime?<turn|>\n<|turn>model\nYes, 17 is prime.<turn|>\n<|turn>user\nAnd 21?<turn|>\n<|turn>model\n<|channel>thought\n<channel|>"
+  },
+  "no_thinking": {
+   "output": "<|bos|><|turn>user\nQuick: capital of France?<turn|>\n<|turn>model\n<|channel>thought\n<channel|>"
+  },
+  "parts": {
+   "output": "<|bos|><|turn>system\n[{'type': 'text', 'text': 'Be brief.'}]<turn|>\n<|turn>user\nDescribea cat.<turn|>\n<|turn>model\n<|channel>thought\n<channel|>"
+  },
+  "documents": {
+   "output": "<|bos|><|turn>user\nWho wrote it?<turn|>\n<|turn>model\n<|channel>thought\n<channel|>"
+  },
+  "no_alternation": {
+   "output": "<|bos|><|turn>user\nFirst<turn|>\n<|turn>user\nSecond<turn|>\n<|turn>model\n<|channel>thought\n<channel|>"
+  }
+ }
+}

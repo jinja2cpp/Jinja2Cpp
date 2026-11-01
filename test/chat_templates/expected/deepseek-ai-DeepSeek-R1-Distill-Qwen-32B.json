@@ -1,0 +1,35 @@
+{
+ "template": "deepseek-ai-DeepSeek-R1-Distill-Qwen-32B.jinja",
+ "renders": {
+  "single": {
+   "output": "<|bos|><｜User｜>Hello!<｜Assistant｜><think>\n</think>"
+  },
+  "system": {
+   "output": "<|bos|>You are a helpful assistant.<｜User｜>What is 2+2?<｜Assistant｜>2+2 = 4.<｜end▁of▁sentence｜><｜User｜>And \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<｜Assistant｜><think>\n</think>"
+  },
+  "nogen": {
+   "output": "<|bos|><｜User｜>Hi<｜Assistant｜>Hello! How can I help?<｜end▁of▁sentence｜>"
+  },
+  "tools": {
+   "output": "<|bos|>You can call tools.<｜User｜>Weather in Paris?<｜Assistant｜><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>get_weather\n```json\n{\"city\": \"Paris\", \"unit\": \"celsius\"}\n```<｜tool▁call▁end｜><｜tool▁calls▁end｜><｜end▁of▁sentence｜><｜Assistant｜><｜end▁of▁sentence｜><｜tool▁outputs▁begin｜><｜tool▁output▁begin｜>{\"temp\": 18, \"sky\": \"cloudy\"}<｜tool▁output▁end｜><｜tool▁outputs▁end｜>It is 18°C and cloudy in Paris.<｜end▁of▁sentence｜><｜User｜>Thanks<｜Assistant｜><think>\n</think>"
+  },
+  "tool_args_str": {
+   "output": "<|bos|><｜User｜>Weather in Tokyo?<｜Assistant｜><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>get_weather\n```json\n\"{\\\"city\\\": \\\"Tōkyō\\\"}\"\n```<｜tool▁call▁end｜><｜tool▁calls▁end｜><｜end▁of▁sentence｜><｜tool▁outputs▁begin｜><｜tool▁output▁begin｜>sunny<｜tool▁output▁end｜><｜tool▁outputs▁end｜>"
+  },
+  "reasoning": {
+   "output": "<|bos|><｜User｜>Is 17 prime?<｜Assistant｜>Yes, 17 is prime.<｜end▁of▁sentence｜><｜User｜>And 21?<｜Assistant｜><think>\n</think>"
+  },
+  "no_thinking": {
+   "output": "<|bos|><｜User｜>Quick: capital of France?<｜Assistant｜><think>\n</think>"
+  },
+  "parts": {
+   "error": "TypeError"
+  },
+  "documents": {
+   "output": "<|bos|><｜User｜>Who wrote it?<｜Assistant｜><think>\n</think>"
+  },
+  "no_alternation": {
+   "output": "<|bos|><｜User｜>First<｜User｜>Second<｜Assistant｜><think>\n</think>"
+  }
+ }
+}

@@ -1,0 +1,35 @@
+{
+ "template": "Bielik-11B-v3.0-Instruct.jinja",
+ "renders": {
+  "single": {
+   "output": "<|bos|><|im_start|>user\nHello!<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "system": {
+   "output": "<|bos|><|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nWhat is 2+2?<|im_end|>\n<|im_start|>assistant\n2+2 = 4.<|im_end|>\n<|im_start|>user\nAnd \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "nogen": {
+   "output": "<|bos|><|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\nHello! How can I help?<|im_end|>\n"
+  },
+  "tools": {
+   "output": "<|bos|><|im_start|>system\nYou can call tools.\n\nMasz dostęp do następujących narzędzi. Definicje narzędzi znajdują się poniżej wewnątrz znaczników <|function_list|>:\n<|function_list|>\n[{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}]\n<|function_list|>\n\nAby wywołać narzędzie, użyj formatu <tool_call>{\"name\": \"nazwa_narzędzia\", \"arguments\": {\"argument\": \"wartość\"}}</tool_call>. Wyniki działania narzędzi zostaną przekazane z markerem <|function_output|>.\n<|im_end|>\n<|im_start|>user\nWeather in Paris?<|im_end|>\n<|im_start|>assistant\n\n<tool_call>\n{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\", \"unit\": \"celsius\"}}\n</tool_call><|im_end|>\n<|im_start|>user\n<|function_output|>{\"temp\": 18, \"sky\": \"cloudy\"}<|im_start|>assistant\nIt is 18°C and cloudy in Paris.<|im_end|>\n<|im_start|>user\nThanks<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "tool_args_str": {
+   "error": "TypeError"
+  },
+  "reasoning": {
+   "output": "<|bos|><|im_start|>user\nIs 17 prime?<|im_end|>\n<|im_start|>assistant\n<think>\n17 has no divisors other than 1 and itself.\n</think>\nYes, 17 is prime.<|im_end|>\n<|im_start|>user\nAnd 21?<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "no_thinking": {
+   "output": "<|bos|><|im_start|>user\nQuick: capital of France?<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "parts": {
+   "error": "TypeError"
+  },
+  "documents": {
+   "output": "<|bos|><|im_start|>user\nWho wrote it?<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "no_alternation": {
+   "output": "<|bos|><|im_start|>user\nFirst<|im_end|>\n<|im_start|>user\nSecond<|im_end|>\n<|im_start|>assistant\n"
+  }
+ }
+}

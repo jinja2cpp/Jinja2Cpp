@@ -1,0 +1,36 @@
+{
+ "template": "Apertus-8B-Instruct.jinja",
+ "renders": {
+  "single": {
+   "output": "<|bos|><|system_start|>You are Apertus, a helpful assistant created by the SwissAI initiative.\nKnowledge cutoff: 2024-04\nCurrent date: 2025-03-14<|system_end|><|developer_start|>Deliberation: disabled\nTool Capabilities: disabled<|developer_end|><|user_start|>Hello!<|user_end|><|assistant_start|>"
+  },
+  "system": {
+   "output": "<|bos|><|system_start|>You are a helpful assistant.<|system_end|><|developer_start|>Deliberation: disabled\nTool Capabilities: disabled<|developer_end|><|user_start|>What is 2+2?<|user_end|><|assistant_start|>2+2 = 4.<|assistant_end|><|user_start|>And \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|user_end|><|assistant_start|>"
+  },
+  "nogen": {
+   "output": "<|bos|><|system_start|>You are Apertus, a helpful assistant created by the SwissAI initiative.\nKnowledge cutoff: 2024-04\nCurrent date: 2025-03-14<|system_end|><|developer_start|>Deliberation: disabled\nTool Capabilities: disabled<|developer_end|><|user_start|>Hi<|user_end|><|assistant_start|>Hello! How can I help?"
+  },
+  "tools": {
+   "output": "<|bos|><|system_start|>You can call tools.<|system_end|><|developer_start|>Deliberation: disabled\nTool Capabilities:\n// Get the current weather in a city.\ntype get_weather = (_: {\n// City name, e.g. Paris\ncity: string,\nunit?: \"celsius\" | \"fahrenheit\"\n}) => any;<|developer_end|><|user_start|>Weather in Paris?<|user_end|><|assistant_start|><|tools_prefix|>[{\"get_weather\": {\"city\": \"Paris\", \"unit\": \"celsius\"}}]<|tools_suffix|>[{\"temp\": 18, \"sky\": \"cloudy\"}]It is 18°C and cloudy in Paris.<|assistant_end|><|user_start|>Thanks<|user_end|><|assistant_start|>"
+  },
+  "tool_args_str": {
+   "output": "<|bos|><|system_start|>You are Apertus, a helpful assistant created by the SwissAI initiative.\nKnowledge cutoff: 2024-04\nCurrent date: 2025-03-14<|system_end|><|developer_start|>Deliberation: disabled\nTool Capabilities:\n// Get the current weather in a city.\ntype get_weather = (_: {\n// City name, e.g. Paris\ncity: string,\nunit?: \"celsius\" | \"fahrenheit\"\n}) => any;<|developer_end|><|user_start|>Weather in Tokyo?<|user_end|><|assistant_start|><|tools_prefix|>[{\"get_weather\": \"{\\\"city\\\": \\\"Tōkyō\\\"}\"}]<|tools_suffix|>[sunny]<|assistant_start|>"
+  },
+  "reasoning": {
+   "output": "<|bos|><|system_start|>You are Apertus, a helpful assistant created by the SwissAI initiative.\nKnowledge cutoff: 2024-04\nCurrent date: 2025-03-14<|system_end|><|developer_start|>Deliberation: disabled\nTool Capabilities: disabled<|developer_end|><|user_start|>Is 17 prime?<|user_end|><|assistant_start|>Yes, 17 is prime.<|assistant_end|><|user_start|>And 21?<|user_end|><|assistant_start|>"
+  },
+  "no_thinking": {
+   "output": "<|bos|><|system_start|>You are Apertus, a helpful assistant created by the SwissAI initiative.\nKnowledge cutoff: 2024-04\nCurrent date: 2025-03-14<|system_end|><|developer_start|>Deliberation: disabled\nTool Capabilities: disabled<|developer_end|><|user_start|>Quick: capital of France?<|user_end|><|assistant_start|>"
+  },
+  "parts": {
+   "error": "TemplateError",
+   "message": "Invalid system message"
+  },
+  "documents": {
+   "output": "<|bos|><|system_start|>You are Apertus, a helpful assistant created by the SwissAI initiative.\nKnowledge cutoff: 2024-04\nCurrent date: 2025-03-14<|system_end|><|developer_start|>Deliberation: disabled\nTool Capabilities: disabled<|developer_end|><|user_start|>Who wrote it?<|user_end|><|assistant_start|>"
+  },
+  "no_alternation": {
+   "output": "<|bos|><|system_start|>You are Apertus, a helpful assistant created by the SwissAI initiative.\nKnowledge cutoff: 2024-04\nCurrent date: 2025-03-14<|system_end|><|developer_start|>Deliberation: disabled\nTool Capabilities: disabled<|developer_end|><|user_start|>First<|user_end|><|user_start|>Second<|user_end|><|assistant_start|>"
+  }
+ }
+}

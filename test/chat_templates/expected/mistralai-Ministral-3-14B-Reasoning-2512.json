@@ -1,0 +1,36 @@
+{
+ "template": "mistralai-Ministral-3-14B-Reasoning-2512.jinja",
+ "renders": {
+  "single": {
+   "output": "<|bos|>[SYSTEM_PROMPT]# HOW YOU SHOULD THINK AND ANSWER\n\nFirst draft your thinking process (inner monologue) until you arrive at a response. Format your response using Markdown, and use LaTeX for any mathematical equations. Write both your thoughts and the response in the same language as the input.\n\nYour thinking process must follow the template below:[THINK]Your thoughts or/and draft, like working through an exercise on scratch paper. Be as casual and as long as you want until you are confident to generate the response to the user.[/THINK]Here, provide a self-contained response.[/SYSTEM_PROMPT][INST]Hello![/INST]"
+  },
+  "system": {
+   "output": "<|bos|>[SYSTEM_PROMPT]You are a helpful assistant.[/SYSTEM_PROMPT][INST]What is 2+2?[/INST]2+2 = 4.<|eos|>[INST]And \"3+3\" <in> café ünïcode 日本 & emoji 🙂?[/INST]"
+  },
+  "nogen": {
+   "output": "<|bos|>[SYSTEM_PROMPT]# HOW YOU SHOULD THINK AND ANSWER\n\nFirst draft your thinking process (inner monologue) until you arrive at a response. Format your response using Markdown, and use LaTeX for any mathematical equations. Write both your thoughts and the response in the same language as the input.\n\nYour thinking process must follow the template below:[THINK]Your thoughts or/and draft, like working through an exercise on scratch paper. Be as casual and as long as you want until you are confident to generate the response to the user.[/THINK]Here, provide a self-contained response.[/SYSTEM_PROMPT][INST]Hi[/INST]Hello! How can I help?<|eos|>"
+  },
+  "tools": {
+   "output": "<|bos|>[SYSTEM_PROMPT]You can call tools.[/SYSTEM_PROMPT][AVAILABLE_TOOLS][{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}][/AVAILABLE_TOOLS][INST]Weather in Paris?[/INST][TOOL_CALLS]get_weather[ARGS]{\"city\": \"Paris\", \"unit\": \"celsius\"}<|eos|>[TOOL_RESULTS]{\"temp\": 18, \"sky\": \"cloudy\"}[/TOOL_RESULTS]It is 18°C and cloudy in Paris.<|eos|>[INST]Thanks[/INST]"
+  },
+  "tool_args_str": {
+   "error": "TypeError"
+  },
+  "reasoning": {
+   "output": "<|bos|>[SYSTEM_PROMPT]# HOW YOU SHOULD THINK AND ANSWER\n\nFirst draft your thinking process (inner monologue) until you arrive at a response. Format your response using Markdown, and use LaTeX for any mathematical equations. Write both your thoughts and the response in the same language as the input.\n\nYour thinking process must follow the template below:[THINK]Your thoughts or/and draft, like working through an exercise on scratch paper. Be as casual and as long as you want until you are confident to generate the response to the user.[/THINK]Here, provide a self-contained response.[/SYSTEM_PROMPT][INST]Is 17 prime?[/INST]Yes, 17 is prime.<|eos|>[INST]And 21?[/INST]"
+  },
+  "no_thinking": {
+   "output": "<|bos|>[SYSTEM_PROMPT]# HOW YOU SHOULD THINK AND ANSWER\n\nFirst draft your thinking process (inner monologue) until you arrive at a response. Format your response using Markdown, and use LaTeX for any mathematical equations. Write both your thoughts and the response in the same language as the input.\n\nYour thinking process must follow the template below:[THINK]Your thoughts or/and draft, like working through an exercise on scratch paper. Be as casual and as long as you want until you are confident to generate the response to the user.[/THINK]Here, provide a self-contained response.[/SYSTEM_PROMPT][INST]Quick: capital of France?[/INST]"
+  },
+  "parts": {
+   "output": "<|bos|>[SYSTEM_PROMPT]Be brief.[/SYSTEM_PROMPT][INST]Describea cat.[/INST]"
+  },
+  "documents": {
+   "output": "<|bos|>[SYSTEM_PROMPT]# HOW YOU SHOULD THINK AND ANSWER\n\nFirst draft your thinking process (inner monologue) until you arrive at a response. Format your response using Markdown, and use LaTeX for any mathematical equations. Write both your thoughts and the response in the same language as the input.\n\nYour thinking process must follow the template below:[THINK]Your thoughts or/and draft, like working through an exercise on scratch paper. Be as casual and as long as you want until you are confident to generate the response to the user.[/THINK]Here, provide a self-contained response.[/SYSTEM_PROMPT][INST]Who wrote it?[/INST]"
+  },
+  "no_alternation": {
+   "error": "TemplateError",
+   "message": "After the optional system message, conversation roles must alternate user and assistant roles except for tool calls and results."
+  }
+ }
+}

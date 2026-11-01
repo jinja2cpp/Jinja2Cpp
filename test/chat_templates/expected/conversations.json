@@ -1,0 +1,333 @@
+{
+ "single": {
+  "messages": [
+   {
+    "role": "user",
+    "content": "Hello!"
+   }
+  ],
+  "add_generation_prompt": true,
+  "tools": null,
+  "documents": null,
+  "bos_token": "<|bos|>",
+  "eos_token": "<|eos|>"
+ },
+ "system": {
+  "messages": [
+   {
+    "role": "system",
+    "content": "You are a helpful assistant."
+   },
+   {
+    "role": "user",
+    "content": "What is 2+2?"
+   },
+   {
+    "role": "assistant",
+    "content": "2+2 = 4."
+   },
+   {
+    "role": "user",
+    "content": "And \"3+3\" <in> café ünïcode 日本 & emoji 🙂?"
+   }
+  ],
+  "add_generation_prompt": true,
+  "tools": null,
+  "documents": null,
+  "bos_token": "<|bos|>",
+  "eos_token": "<|eos|>"
+ },
+ "nogen": {
+  "messages": [
+   {
+    "role": "user",
+    "content": "Hi"
+   },
+   {
+    "role": "assistant",
+    "content": "Hello! How can I help?"
+   }
+  ],
+  "add_generation_prompt": false,
+  "tools": null,
+  "documents": null,
+  "bos_token": "<|bos|>",
+  "eos_token": "<|eos|>"
+ },
+ "tools": {
+  "messages": [
+   {
+    "role": "system",
+    "content": "You can call tools."
+   },
+   {
+    "role": "user",
+    "content": "Weather in Paris?"
+   },
+   {
+    "role": "assistant",
+    "content": "",
+    "tool_calls": [
+     {
+      "type": "function",
+      "id": "call_0001",
+      "function": {
+       "name": "get_weather",
+       "arguments": {
+        "city": "Paris",
+        "unit": "celsius"
+       }
+      }
+     }
+    ]
+   },
+   {
+    "role": "tool",
+    "name": "get_weather",
+    "tool_call_id": "call_0001",
+    "content": "{\"temp\": 18, \"sky\": \"cloudy\"}"
+   },
+   {
+    "role": "assistant",
+    "content": "It is 18°C and cloudy in Paris."
+   },
+   {
+    "role": "user",
+    "content": "Thanks"
+   }
+  ],
+  "tools": [
+   {
+    "type": "function",
+    "function": {
+     "name": "get_weather",
+     "description": "Get the current weather in a city.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string",
+        "description": "City name, e.g. Paris"
+       },
+       "unit": {
+        "type": "string",
+        "enum": [
+         "celsius",
+         "fahrenheit"
+        ]
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    }
+   }
+  ],
+  "add_generation_prompt": true,
+  "documents": null,
+  "bos_token": "<|bos|>",
+  "eos_token": "<|eos|>"
+ },
+ "tool_args_str": {
+  "messages": [
+   {
+    "role": "user",
+    "content": "Weather in Tokyo?"
+   },
+   {
+    "role": "assistant",
+    "content": null,
+    "tool_calls": [
+     {
+      "type": "function",
+      "id": "call_0002",
+      "function": {
+       "name": "get_weather",
+       "arguments": "{\"city\": \"Tōkyō\"}"
+      }
+     }
+    ]
+   },
+   {
+    "role": "tool",
+    "tool_call_id": "call_0002",
+    "content": "sunny"
+   }
+  ],
+  "tools": [
+   {
+    "type": "function",
+    "function": {
+     "name": "get_weather",
+     "description": "Get the current weather in a city.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string",
+        "description": "City name, e.g. Paris"
+       },
+       "unit": {
+        "type": "string",
+        "enum": [
+         "celsius",
+         "fahrenheit"
+        ]
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    }
+   }
+  ],
+  "add_generation_prompt": true,
+  "documents": null,
+  "bos_token": "<|bos|>",
+  "eos_token": "<|eos|>"
+ },
+ "reasoning": {
+  "messages": [
+   {
+    "role": "user",
+    "content": "Is 17 prime?"
+   },
+   {
+    "thinking": "17 has no divisors other than 1 and itself.",
+    "role": "assistant",
+    "content": "Yes, 17 is prime.",
+    "reasoning_content": "17 has no divisors other than 1 and itself."
+   },
+   {
+    "role": "user",
+    "content": "And 21?"
+   }
+  ],
+  "add_generation_prompt": true,
+  "tools": null,
+  "documents": null,
+  "bos_token": "<|bos|>",
+  "eos_token": "<|eos|>"
+ },
+ "no_thinking": {
+  "messages": [
+   {
+    "role": "user",
+    "content": "Quick: capital of France?"
+   }
+  ],
+  "add_generation_prompt": true,
+  "enable_thinking": false,
+  "tools": null,
+  "documents": null,
+  "bos_token": "<|bos|>",
+  "eos_token": "<|eos|>"
+ },
+ "parts": {
+  "messages": [
+   {
+    "role": "system",
+    "content": [
+     {
+      "type": "text",
+      "text": "Be brief."
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "type": "text",
+      "text": "Describe"
+     },
+     {
+      "type": "text",
+      "text": "a cat."
+     }
+    ]
+   }
+  ],
+  "add_generation_prompt": true,
+  "tools": null,
+  "documents": null,
+  "bos_token": "<|bos|>",
+  "eos_token": "<|eos|>"
+ },
+ "documents": {
+  "messages": [
+   {
+    "role": "user",
+    "content": "Who wrote it?"
+   }
+  ],
+  "documents": [
+   {
+    "title": "Hamlet",
+    "text": "A tragedy written by William Shakespeare."
+   },
+   {
+    "title": "Notes",
+    "text": "Written around 1600."
+   }
+  ],
+  "add_generation_prompt": true,
+  "tools": null,
+  "bos_token": "<|bos|>",
+  "eos_token": "<|eos|>"
+ },
+ "no_alternation": {
+  "messages": [
+   {
+    "role": "user",
+    "content": "First"
+   },
+   {
+    "role": "user",
+    "content": "Second"
+   }
+  ],
+  "add_generation_prompt": true,
+  "tools": null,
+  "documents": null,
+  "bos_token": "<|bos|>",
+  "eos_token": "<|eos|>"
+ },
+ "fireworks-ai-llama-3-firefunction-v2:functions": {
+  "messages": [
+   {
+    "role": "user",
+    "content": "Weather in Paris?"
+   }
+  ],
+  "functions": "[{\"name\": \"get_weather\", \"parameters\": {\"city\": \"string\"}}]",
+  "datetime": "2025-03-14",
+  "add_generation_prompt": true,
+  "tools": null,
+  "documents": null,
+  "bos_token": "<|bos|>",
+  "eos_token": "<|eos|>"
+ },
+ "google-translategemma-4b-it:translate": {
+  "messages": [
+   {
+    "role": "user",
+    "content": [
+     {
+      "type": "text",
+      "source_lang_code": "en",
+      "target_lang_code": "de",
+      "text": "Good morning"
+     }
+    ]
+   }
+  ],
+  "add_generation_prompt": true,
+  "tools": null,
+  "documents": null,
+  "bos_token": "<|bos|>",
+  "eos_token": "<|eos|>"
+ }
+}
