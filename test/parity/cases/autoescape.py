@@ -145,6 +145,11 @@ CASES = [
     # tests are not folded there, and `~` joins as str (docs/tasks/0216)
     ("volatile_folded_choice", "{% autoescape on %}{{ '<' if 1 > 0 else x }}{{ (1 > 0) and '<' }}{{ '<' if x else x }}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
     ("volatile_folded_choice_nested", "{% autoescape on %}{{ ('<' if 1 > 0 else x) ~ '' }}{{ ('<' if 1 > 0 else x)|lower }}{{ -(1 if 1 > 0 else x) }}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
+    # Every composite Jinja2 folds operand by operand folds by such a choice too (docs/tasks/0307)
+    ("volatile_folded_choice_composites", "{% autoescape on %}{{ ('<<' if 1 > 0 else x)[0] }}|{{ ('<<' if 1 > 0 else x)[:1] }}|{{ ('<' if 1 > 0 else x, 1) }}|{{ {'a': ('<' if 1 > 0 else x)} }}|{{ ['<' if 1 > 0 else x] }}|{{ ('<' if 1 > 0 else x) == '<' }}|{{ not ('<' if 1 > 0 else x) }}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
+    ("volatile_folded_choice_concat", "{% autoescape on %}{{ ('<' if 1 > 0 else x) ~ ('>' if 1 < 0 else '&') }}|{{ '<' ~ ((1 > 0) and '>') ~ 'a' }}|{{ ('<' if 1 > 0 else x) ~ ('<' if x else '>') }}|{{ ('<' if x else x) ~ '' }}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
+    # A `~` chain Jinja2 folds joins as str() and so drops Markup, also when it folds by a choice
+    ("folded_choice_concat_drops_markup", "{{ ('<' if 1 > 0 else x) ~ ('<'|safe) }}|{{ ('<'|safe) ~ ('<' if 1 > 0 else x) }}|{{ ('<' if x else '>') ~ ('<'|safe) }}|{{ [('<' if 1 > 0 else x) ~ ('<'|safe), x]|join }}|{{ ((1 > 0) and '<') ~ ('<'|safe) ~ 'a' }}", {"env": {"autoescape": True}, "ctx": {"x": "<"}}),
     ("volatile_folded_output", "{% autoescape on %}{{ '<' }}{{ x }}{{ '<' ~ 'a' }}{{ '<'|upper }}{{ ['<'][0] }}{{ '<' if 1 is odd }}{{ ('<', 1)[0] ~ x }}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
     ("volatile_folded_output_under_true", "{% autoescape true %}{% autoescape on %}{{ x }}{{ '<' ~ 'a' }}{{ '<'|e }}{{ ['<'][0] }}{{ '<' if true }}{% endautoescape %}{% endautoescape %}", {"ctx": {"on": False, "x": "<"}}),
     ("volatile_nested_constant", "{% autoescape on %}{% autoescape false %}{{ x }}{{ '<' }}{% endautoescape %}{% autoescape true %}{{ x }}{{ '<' }}{% endautoescape %}{% endautoescape %}", {"ctx": {"on": True, "x": "<"}}),
@@ -161,6 +166,7 @@ CASES = [
     ("env_on_finalize", "{{ '<' }}{{ x }}{% autoescape on %}{{ '<' }}{{ x }}{% endautoescape %}", {"env": {"autoescape": True, "finalize": "brackets"}, "ctx": {"on": True, "x": "<"}}),
     # Jinja2 escapes after finalize for a value of run time, before it for a value it folds
     ("env_on_finalize_order", "{{ '<'|safe }}{{ x|safe }}{{ none }}{{ y }}{{ '<' ~ x }}{{ ['<'][0] }}", {"env": {"autoescape": True, "finalize": "brackets"}, "ctx": {"x": "<", "y": None}}),
+    ("env_on_finalize_folded_choice_composites", "{{ ('<' if 1 > 0 else x)|upper }}|{{ ('<' if 1 > 0 else x)[0] }}|{{ ('<' if 1 > 0 else x) ~ 'a' }}|{{ ('<' if x else x)[0] }}", {"env": {"autoescape": True, "finalize": "brackets"}, "ctx": {"x": "<"}}),
     ("env_on_finalize_folded_none", "{{ none }}|{{ y }}|{{ x|safe }}", {"env": {"autoescape": True, "finalize": "none_to_empty"}, "ctx": {"x": "<", "y": None}}),
     ("env_on_finalize_folded_choice", "{{ '<'|safe if 1 > 0 else x }}{{ ('<'|safe) or x }}", {"env": {"autoescape": True, "finalize": "brackets"}, "ctx": {"x": "<"}}),
     # Jinja2 folds by the side a foldable test or `and`/`or` operand picks (docs/tasks/0291)

@@ -2070,6 +2070,40 @@
    "output": "<&lt;-1"
   },
   {
+   "id": "autoescape.volatile_folded_choice_composites",
+   "template": "{% autoescape on %}{{ ('<<' if 1 > 0 else x)[0] }}|{{ ('<<' if 1 > 0 else x)[:1] }}|{{ ('<' if 1 > 0 else x, 1) }}|{{ {'a': ('<' if 1 > 0 else x)} }}|{{ ['<' if 1 > 0 else x] }}|{{ ('<' if 1 > 0 else x) == '<' }}|{{ not ('<' if 1 > 0 else x) }}{% endautoescape %}",
+   "context": {
+    "on": true,
+    "x": "<"
+   },
+   "env": {},
+   "templates": {},
+   "output": "<|<|('<', 1)|{'a': '<'}|['<']|True|False"
+  },
+  {
+   "id": "autoescape.volatile_folded_choice_concat",
+   "template": "{% autoescape on %}{{ ('<' if 1 > 0 else x) ~ ('>' if 1 < 0 else '&') }}|{{ '<' ~ ((1 > 0) and '>') ~ 'a' }}|{{ ('<' if 1 > 0 else x) ~ ('<' if x else '>') }}|{{ ('<' if x else x) ~ '' }}{% endautoescape %}",
+   "context": {
+    "on": true,
+    "x": "<"
+   },
+   "env": {},
+   "templates": {},
+   "output": "<&|<>a|&lt;&lt;|&lt;"
+  },
+  {
+   "id": "autoescape.folded_choice_concat_drops_markup",
+   "template": "{{ ('<' if 1 > 0 else x) ~ ('<'|safe) }}|{{ ('<'|safe) ~ ('<' if 1 > 0 else x) }}|{{ ('<' if x else '>') ~ ('<'|safe) }}|{{ [('<' if 1 > 0 else x) ~ ('<'|safe), x]|join }}|{{ ((1 > 0) and '<') ~ ('<'|safe) ~ 'a' }}",
+   "context": {
+    "x": "<"
+   },
+   "env": {
+    "autoescape": true
+   },
+   "templates": {},
+   "output": "&lt;&lt;|&lt;&lt;|&lt;<|&lt;&lt;&lt;|&lt;&lt;a"
+  },
+  {
    "id": "autoescape.volatile_folded_output",
    "template": "{% autoescape on %}{{ '<' }}{{ x }}{{ '<' ~ 'a' }}{{ '<'|upper }}{{ ['<'][0] }}{{ '<' if 1 is odd }}{{ ('<', 1)[0] ~ x }}{% endautoescape %}",
    "context": {
@@ -2219,6 +2253,19 @@
    },
    "templates": {},
    "output": "[<][&lt;][None][None][&lt;&lt;][&lt;]"
+  },
+  {
+   "id": "autoescape.env_on_finalize_folded_choice_composites",
+   "template": "{{ ('<' if 1 > 0 else x)|upper }}|{{ ('<' if 1 > 0 else x)[0] }}|{{ ('<' if 1 > 0 else x) ~ 'a' }}|{{ ('<' if x else x)[0] }}",
+   "context": {
+    "x": "<"
+   },
+   "env": {
+    "autoescape": true,
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[&lt;]|[&lt;]|[&lt;a]|[&lt;]"
   },
   {
    "id": "autoescape.env_on_finalize_folded_none",

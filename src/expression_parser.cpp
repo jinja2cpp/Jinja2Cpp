@@ -320,15 +320,19 @@ namespace
 // the function past what the compiler inlines into it, which every expression paid for at Load
 JINJA2CPP_NOINLINE_INLINE NodeRef<Expression> MakeConcat(NodeArena& nodes, SmallVectorBase<NodeRef<Expression>>& operands)
 {
-    // Jinja2 folds a chain of foldable operands into one str
-    const bool foldable = std::all_of(operands.begin(), operands.end(), [&nodes](const NodeRef<Expression>& operand) { return nodes[operand].IsFoldable(nodes); });
     // The pure operands after the last one that is not are read in place
     const auto lastImpure = std::find_if(operands.rbegin(), operands.rend(), [&nodes](const NodeRef<Expression>& operand) { return !nodes[operand].IsPure(nodes); });
     const auto lendFrom = static_cast<uint32_t>(operands.rend() - lastImpure);
     const auto node = nodes.Make<ConcatExpression>(nodes.MakeSpan(operands), lendFrom);
-    if (foldable)
+    // Jinja2 folds a chain of foldable operands into one str, also where an operand folds by
+    // the side a foldable test picks (docs/tasks/0307)
+    if (const auto fold = nodes[node].PrepareFold(nodes); fold == FoldAlways)
     {
         nodes[node].SetFolded();
+    }
+    else if (fold == FoldByChoice)
+    {
+        nodes[node].SetFoldedByChoice();
     }
     operands.clear();
     return node;
