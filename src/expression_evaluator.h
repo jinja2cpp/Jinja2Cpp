@@ -118,12 +118,10 @@ struct CallParamsInfo
     std::vector<NodeRef<Expression>> posParams;
 };
 
-// The arguments of a call as parsed: f(*args, **kwargs) is unpacked when the call is evaluated,
-// null when not written. Only calls take them, so filters and tests keep CallParamsInfo
-struct CallArgsInfo
+// The arguments of a call, a filter or a test as parsed: f(*args, **kwargs) is unpacked when
+// the call is evaluated, null when not written. A call without them is its CallParamsInfo
+struct CallArgsInfo : CallParamsInfo
 {
-    OrderedMap<std::string, NodeRef<Expression>> kwParams;
-    std::vector<NodeRef<Expression>> posParams;
     NodeRef<Expression> dynArgs;
     NodeRef<Expression> dynKwargs;
 };

@@ -4,6 +4,8 @@
 #include "filters.h"
 
 #include "expression_evaluator.h"
+#include "engine_errors.h"
+#include "function_base.h"
 #include "internal_value.h"
 #include "node_arena.h"
 #include "render_context.h"
@@ -13,10 +15,12 @@
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -131,7 +135,7 @@ const FilterEntry* FindBuiltinFilter(std::string_view filterName)
 }
 } // namespace
 
-FilterPtr CreateFilter(std::string_view filterName, const CallParamsInfo& params)
+FilterPtr CreateFilter(std::string_view filterName, FunctionArgs params)
 {
     if (const auto* entry = FindBuiltinFilter(filterName))
     {
@@ -140,7 +144,7 @@ FilterPtr CreateFilter(std::string_view filterName, const CallParamsInfo& params
     return std::make_shared<filters::UserDefinedFilter>(std::string(filterName), params);
 }
 
-NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& nodes, std::string_view filterName, const CallParamsInfo& params, bool* unknown)
+NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& nodes, std::string_view filterName, FunctionArgs params, bool* unknown)
 {
     if (const auto* entry = FindBuiltinFilter(filterName))
     {
@@ -153,7 +157,7 @@ NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& nodes, std:
     return nodes.MakeObject<IExpressionFilter, filters::UserDefinedFilter>(std::string(filterName), params);
 }
 
-FilterPtr CreateFilter(const std::string& filterName, const CallParamsInfo& params, RenderContext& context)
+FilterPtr CreateFilter(const std::string& filterName, FunctionArgs params, RenderContext& context)
 {
     auto* env = context.GetEnv();
     auto registered = env ? env->FindFilter(filterName) : std::optional<UserCallable>();
@@ -164,6 +168,104 @@ FilterPtr CreateFilter(const std::string& filterName, const CallParamsInfo& para
     auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered);
     return std::make_shared<filters::UserDefinedFilter>(filterName, params, std::move(callable));
 }
+
+NodeRef<ExpressionFilter::IExpressionFilter> CreateUnpackingFilter(NodeArena& nodes, const std::string& filterName, const CallArgsInfo& params, InternalValue registered, bool* unknown)
+{
+    if (unknown && !GetIf<Callable>(&registered) && !FindBuiltinFilter(filterName))
+    {
+        *unknown = true;
+    }
+    // The arguments first: an arena makes one object at a time
+    const auto args = ArenaCallParams::Make(nodes, params);
+    return nodes.MakeObject<IExpressionFilter, filters::UnpackingFilter>(filterName, args, std::move(registered));
+}
+
+namespace filters
+{
+// The constructors of the filters that forward their extra arguments are templates over the
+// expressions and the values of a call (FunctionArgs::Visit). Here, out of filters.cpp: there they
+// changed GCC's inlining of the filters' render paths enough to cost up to 1% (docs/tasks/0306)
+Map::Map(const FilterParams& params)
+{
+    // map(attribute='x', default=d) reads the attribute of each item; it binds no filter
+    const bool byAttribute = params.Visit([this](const auto& args) {
+        const auto attributeIt = args.kwParams.find("attribute");
+        if (!args.posParams.empty() || attributeIt == args.kwParams.end())
+        {
+            return false;
+        }
+        std::decay_t<decltype(args)> mapping;
+        mapping.kwParams["name"] = attributeIt->second;
+        for (const auto& [name, value] : args.kwParams)
+        {
+            if (name == "default")
+            {
+                mapping.kwParams["default"] = value;
+            }
+            else if (name != "attribute")
+            {
+                // Jinja2's prepare_map raises FilterArgumentError
+                SetArgumentsError("got an unexpected keyword argument '" + name + "'");
+                break;
+            }
+        }
+        m_mappingParams = ForwardedArgs(std::move(mapping));
+        return true;
+    });
+    if (byAttribute)
+    {
+        m_byAttribute = true;
+        return;
+    }
+
+    static const auto args = MakeArgumentsTable({ { "filter", true } });
+    ParseParams(args, params, ExtraArgs::Accept, &m_mappingParams);
+}
+
+Tester::Tester(const FilterParams& params, Tester::Mode mode)
+    : m_mode(mode)
+{
+    // Python's select_or_reject takes the attribute and the test name by position and passes
+    // the other arguments, keywords included, to the test; without a test it calls bool() and
+    // drops them
+    const bool isAttrMode = mode == SelectAttrMode || mode == RejectAttrMode;
+    const std::size_t leadCount = std::min(params.PosCount(), isAttrMode ? std::size_t{ 2 } : std::size_t{ 1 });
+    m_hasAttribute = isAttrMode && leadCount > 0;
+
+    params.Visit([&](const auto& args) {
+        const auto split = args.posParams.begin() + static_cast<std::ptrdiff_t>(leadCount);
+        std::decay_t<decltype(args)> leadParams;
+        leadParams.posParams.assign(args.posParams.begin(), split);
+        if (isAttrMode)
+        {
+            static const auto table = MakeArgumentsTable({ { "attribute", false }, { "tester", false } });
+            ParseParams(table, leadParams);
+        }
+        else
+        {
+            static const auto table = MakeArgumentsTable({ { "tester", false } });
+            ParseParams(table, leadParams);
+        }
+
+        std::decay_t<decltype(args)> testingParams;
+        testingParams.posParams.assign(split, args.posParams.end());
+        testingParams.kwParams = args.kwParams;
+        m_testingParams = ForwardedArgs(std::move(testingParams));
+    });
+}
+
+InternalValue UnpackingFilter::Filter(const InternalValue& baseVal, RenderContext& context)
+{
+    const auto args = helpers::EvaluateCallParams(m_params, context);
+    // Filters added to the environment take precedence over the builtins (ExpressionFilter::Make)
+    const FilterPtr filter = GetIf<Callable>(&m_registered) ? std::make_shared<UserDefinedFilter>(m_filterName, args, m_registered) : CreateFilter(m_filterName, args);
+    if (auto error = filter->GetArgumentsError(); !error.empty())
+    {
+        throw TemplateRuntimeError(m_filterName + "() " + error);
+    }
+    return filter->Filter(baseVal, context);
+}
+} // namespace filters
 
 } // namespace v2
 } // namespace jinja2

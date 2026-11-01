@@ -11,6 +11,7 @@
 #include "loop_attr.h"
 #include "markup.h"
 #include "out_stream.h" // IWYU pragma: keep (GetStreamOnString returns an OutStream by value)
+#include "recursion_guard.h"
 #include "render_context.h"
 #include "stable_sort_values.h"
 #include "string_builder.h"
@@ -211,10 +212,11 @@ bool IsNotIterable(const InternalValue& val)
 }
 
 // Jinja2's make_multi_attrgetter: "a,b.c" sorts by the list [item.a, item.b.c]
-std::vector<InternalValueList> SortKeyPaths(const InternalValue& attrName)
+// isSet: FunctionBase::IsArgumentSet of attrName; an undefined attribute is a key that finds nothing
+std::vector<InternalValueList> SortKeyPaths(const InternalValue& attrName, bool isSet)
 {
     std::vector<InternalValueList> paths;
-    if (IsEmpty(attrName))
+    if (!isSet)
     {
         return paths;
     }
@@ -248,7 +250,8 @@ Join::Join(const FilterParams& params)
 
 InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    InternalValue attrName = GetArgumentValue("attribute", context);
+    bool attrGiven = false;
+    InternalValue attrName = GetArgumentValue("attribute", context, attrGiven);
 
     bool isConverted = false;
     ListAdapter values = ConvertToList(baseVal, isConverted, false);
@@ -263,7 +266,8 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
         return InternalValue();
     }
     // Jinja2's make_attrgetter: a dotted path, digit parts as indexes
-    if (!IsEmpty(attrName))
+    // An undefined attribute passed is a key that finds nothing (docs/tasks/0310)
+    if (IsArgumentSet(attrName, attrGiven))
     {
         auto path = AttributePath(attrName);
         InternalValueList items;
@@ -323,7 +327,8 @@ Sort::Sort(const FilterParams& params)
 
 InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
 {
-    InternalValue attrName = GetArgumentValue("attribute", context);
+    bool attrGiven = false;
+    InternalValue attrName = GetArgumentValue("attribute", context, attrGiven);
     InternalValue isReverseVal = GetArgumentValue("reverse", context, InternalValue(false));
     InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
 
@@ -342,7 +347,7 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
     BinaryExpression::Operation oper = ConvertToBool(isReverseVal) ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt;
     BinaryExpression::CompareType compType = ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
-    std::vector<InternalValueList> paths = SortKeyPaths(attrName);
+    std::vector<InternalValueList> paths = SortKeyPaths(attrName, IsArgumentSet(attrName, attrGiven));
 
     auto isLess = [oper, compType](const InternalValue& key1, const InternalValue& key2, bool& isEqual) {
         // Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python
@@ -401,9 +406,9 @@ Attribute::Attribute(const FilterParams& params)
     ParseParams(args, params);
     // default is a Jinja2C++ extension that Python's do_attr(obj, name) lacks: it can only be
     // passed by name
-    if (params.posParams.size() > 1)
+    if (params.PosCount() > 1)
     {
-        SetArgumentsError("got " + std::to_string(params.posParams.size() - 1) + " more positional argument(s) than it takes");
+        SetArgumentsError("got " + std::to_string(params.PosCount() - 1) + " more positional argument(s) than it takes");
     }
 }
 
@@ -681,7 +686,7 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
         return InternalValue();
     }
 
-    CallParams tmpCallParams = helpers::EvaluateCallParams(m_mappingParams, context);
+    CallParams tmpCallParams = m_mappingParams.Evaluate(context);
     CallParams callParams;
     callParams.kwParams = std::move(tmpCallParams.kwParams);
     callParams.posParams.reserve(tmpCallParams.posParams.size() + 1);
@@ -706,36 +711,11 @@ InternalValue ApplyMacro::Filter(const InternalValue& baseVal, RenderContext& co
     return result;
 }
 
-Map::Map(const FilterParams& params)
-{
-    // map(attribute='x', default=d) reads the attribute of each item; it binds no filter
-    const auto attributeIt = params.kwParams.find("attribute");
-    if (params.posParams.empty() && attributeIt != params.kwParams.cend())
-    {
-        m_byAttribute = true;
-        m_mappingParams.kwParams["name"] = attributeIt->second;
-        for (const auto& [name, value] : params.kwParams)
-        {
-            if (name == "default")
-            {
-                m_mappingParams.kwParams["default"] = value;
-            }
-            else if (name != "attribute")
-            {
-                // Jinja2's prepare_map raises FilterArgumentError
-                SetArgumentsError("got an unexpected keyword argument '" + name + "'");
-                break;
-            }
-        }
-        return;
-    }
-
-    static const auto args = MakeArgumentsTable({ { "filter", true } });
-    ParseParams(args, params, ExtraArgs::Accept, &m_mappingParams);
-}
 
 InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
 {
+    // map('map', 'map', ...) nests a filter per argument, which unpacking makes cheap to write
+    CheckStack();
     if (m_byAttribute)
     {
         bool isConverted = false;
@@ -754,7 +734,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
             return InternalValue();
         }
 
-        auto params = helpers::EvaluateCallParams(m_mappingParams, context);
+        auto params = m_mappingParams.Evaluate(context);
         auto path = AttributePath(params.kwParams["name"]);
         auto defaultVal = params.kwParams["default"];
         InternalValueList resultList;
@@ -989,13 +969,15 @@ InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
     return ListAdapter::CreateAdapter(std::move(resultList));
 }
 
-InternalValue Sum(const ListAdapter& list, const InternalValue& attrName, const InternalValue& start, RenderContext& context)
+// start: what the call passes, or nothing for Python's 0
+InternalValue Sum(const ListAdapter& list, const InternalValueList& path, std::optional<InternalValue> start, RenderContext& context)
 {
     // Python's sum starts from 0, so a string item raises like `0 + 'h'`
-    InternalValue resultVal = IsEmpty(start) ? InternalValue(static_cast<int64_t>(0)) : start;
-    auto path = IsEmpty(attrName) ? InternalValueList() : AttributePath(attrName);
+    InternalValue resultVal = start ? std::move(*start) : InternalValue(static_cast<int64_t>(0));
     list.ForEach([&](InternalValue&& val) {
         auto item = path.empty() ? std::move(val) : GetAttributeByPath(val, path, InternalValue(), context);
+        // An undefined start fails the first addition (docs/tasks/0310)
+        CheckUndefinedUse(resultVal, UndefinedUse::Arithmetic);
         resultVal = Apply2<visitors::BinaryMathOperation>(resultVal, item, BinaryExpression::Plus);
         return true;
     });
@@ -1050,7 +1032,7 @@ void DropDuplicates(std::vector<UniqueItem>& items, BinaryExpression::CompareTyp
 
 InternalValue Unique(const ListAdapter& list,
                      const InternalValue& baseVal,
-                     const InternalValue& attrName,
+                     const InternalValueList& path,
                      BinaryExpression::CompareType compType,
                      RenderContext& context)
 {
@@ -1058,9 +1040,8 @@ InternalValue Unique(const ListAdapter& list,
     InternalValueList values;
     std::vector<UniqueItem> items;
     int64_t idx = 0;
-    const auto path = IsEmpty(attrName) ? InternalValueList() : AttributePath(attrName);
     list.ForEach([&](InternalValue&& v) {
-        items.push_back(UniqueItem{ IsEmpty(attrName) ? v : GetAttributeByPath(v, path, InternalValue(), context), idx++ });
+        items.push_back(UniqueItem{ path.empty() ? v : GetAttributeByPath(v, path, InternalValue(), context), idx++ });
         values.push_back(std::move(v));
         return true;
     });
@@ -1148,12 +1129,13 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         return {};
     }
 
-    InternalValue attrName = GetArgumentValue("attribute", context);
+    bool attrGiven = false;
+    InternalValue attrName = GetArgumentValue("attribute", context, attrGiven);
     InternalValue isCsVal = GetArgumentValue("case_sensitive", context, InternalValue(false));
 
     BinaryExpression::CompareType compType = ConvertToBool(isCsVal) ? BinaryExpression::CaseSensitive : BinaryExpression::CaseInsensitive;
 
-    const auto attrPath = IsEmpty(attrName) ? InternalValueList() : AttributePath(attrName);
+    const auto attrPath = IsArgumentSet(attrName, attrGiven) ? AttributePath(attrName) : InternalValueList();
     // Python's min and max take each item's key once and keep the first extreme item
     auto extreme = [&](bool isMax) {
         std::optional<InternalValue> best;
@@ -1188,16 +1170,17 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         return KeepMarkup(baseVal, Reverse(list, baseVal));
     case SumItemsMode:
     {
-        auto start = GetArgumentValue("start", context);
+        bool startGiven = false;
+        auto start = GetArgumentValue("start", context, startGiven);
         // Python's sum refuses a string start ("sum() can't sum strings")
         if (IsStringValue(start))
         {
             context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
         }
-        return Sum(list, attrName, start, context);
+        return Sum(list, attrPath, startGiven ? std::optional(std::move(start)) : std::nullopt, context);
     }
     case UniqueItemsMode:
-        return Unique(list, baseVal, attrName, compType, context);
+        return Unique(list, baseVal, attrPath, compType, context);
     }
 
     return {};
@@ -1243,7 +1226,8 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
     // Port of Jinja2's do_slice: `slices` columns, the first length % slices of them one
     // item longer; with fill_with every shorter column gets one fill item
     int64_t slices = ConvertToInt(GetArgumentValue("slices", context));
-    InternalValue fillWith = GetArgumentValue("fill_with", context);
+    bool fillGiven = false;
+    InternalValue fillWith = GetArgumentValue("fill_with", context, fillGiven);
     // Python raises ZeroDivisionError
     if (slices == 0)
     {
@@ -1271,7 +1255,7 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
             {
                 column.push_back(protectedValue(items[static_cast<size_t>(idx)]));
             }
-            if (!IsEmpty(fillWith) && slice >= withExtra)
+            if (IsArgumentSet(fillWith, fillGiven) && slice >= withExtra)
             {
                 column.push_back(fillWith);
             }
@@ -1301,7 +1285,8 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
 
     // Port of Jinja2's do_batch: rows of `linecount` items, the last one padded only with fill_with
     auto linecount = ConvertToInt(GetArgumentValue("linecount", context));
-    InternalValue fillWith = GetArgumentValue("fill_with", context);
+    bool fillGiven = false;
+    InternalValue fillWith = GetArgumentValue("fill_with", context, fillGiven);
 
     InternalValueList resultList;
     InternalValueList row;
@@ -1316,7 +1301,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
     }
     if (!row.empty())
     {
-        if (!IsEmpty(fillWith))
+        if (IsArgumentSet(fillWith, fillGiven))
         {
             while (static_cast<int64_t>(row.size()) < linecount)
             {
@@ -1333,32 +1318,6 @@ StringFormat::StringFormat(const FilterParams& params)
     ParseParams(NoArguments(), params, ExtraArgs::Accept, &m_params);
 }
 
-Tester::Tester(const FilterParams& params, Tester::Mode mode)
-    : m_mode(mode)
-{
-    // Python's select_or_reject takes the attribute and the test name by position and passes
-    // the other arguments, keywords included, to the test; without a test it calls bool() and
-    // drops them
-    const bool isAttrMode = mode == SelectAttrMode || mode == RejectAttrMode;
-    const size_t leadCount = std::min(params.posParams.size(), isAttrMode ? size_t{ 2 } : size_t{ 1 });
-    m_hasAttribute = isAttrMode && leadCount > 0;
-
-    FilterParams leadParams;
-    leadParams.posParams.assign(params.posParams.begin(), params.posParams.begin() + static_cast<std::ptrdiff_t>(leadCount));
-    if (isAttrMode)
-    {
-        static const auto args = MakeArgumentsTable({ { "attribute", false }, { "tester", false } });
-        ParseParams(args, leadParams);
-    }
-    else
-    {
-        static const auto args = MakeArgumentsTable({ { "tester", false } });
-        ParseParams(args, leadParams);
-    }
-
-    m_testingParams.posParams.assign(params.posParams.begin() + static_cast<std::ptrdiff_t>(leadCount), params.posParams.end());
-    m_testingParams.kwParams = params.kwParams;
-}
 
 InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& context)
 {
@@ -2630,7 +2589,7 @@ InternalValue UserDefinedFilter::Filter(const InternalValue& baseVal, RenderCont
         return InternalValue();
     }
 
-    CallParams tmpCallParams = helpers::EvaluateCallParams(m_callParams, context);
+    CallParams tmpCallParams = m_callParams.Evaluate(context);
     CallParams callParams;
     callParams.kwParams = std::move(tmpCallParams.kwParams);
     callParams.posParams.reserve(tmpCallParams.posParams.size() + 1);

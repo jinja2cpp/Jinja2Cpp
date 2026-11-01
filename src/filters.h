@@ -12,21 +12,25 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace jinja2
 {
 inline namespace v2
 {
 using FilterPtr = std::shared_ptr<ExpressionFilter::IExpressionFilter>;
-using FilterParams = CallParamsInfo;
+using FilterParams = FunctionArgs;
 
-extern FilterPtr CreateFilter(std::string_view filterName, const CallParamsInfo& params);
+extern FilterPtr CreateFilter(std::string_view filterName, FunctionArgs params);
 // The same in the arena of the template that names the filter
 // A name that is no built-in filter makes a UserDefinedFilter and sets `*unknown`
-extern NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& nodes, std::string_view filterName, const CallParamsInfo& params, bool* unknown = nullptr);
+extern NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& nodes, std::string_view filterName, FunctionArgs params, bool* unknown = nullptr);
 // For filters named at render time (`map('name')`): a filter added to the environment of the
 // template comes first, as in Jinja2's env.filters
-extern FilterPtr CreateFilter(const std::string& filterName, const CallParamsInfo& params, RenderContext& context);
+extern FilterPtr CreateFilter(const std::string& filterName, FunctionArgs params, RenderContext& context);
+// For a call that unpacks `*args` or `**kwargs` (docs/tasks/0306): the filter is made from the
+// values each time the call runs. registered and unknown as for ExpressionFilter::Make
+extern NodeRef<ExpressionFilter::IExpressionFilter> CreateUnpackingFilter(NodeArena& nodes, const std::string& filterName, const CallArgsInfo& params, InternalValue registered, bool* unknown);
 
 namespace filters
 {
@@ -56,10 +60,10 @@ public:
     void VisitRefs(detail::RefChecker& refs) const override
     {
         FilterBase::VisitRefs(refs);
-        VisitCallParams(refs, m_mappingParams);
+        m_mappingParams.VisitRefs(refs);
     }
 private:
-    FilterParams m_mappingParams;
+    ForwardedArgs m_mappingParams;
 };
 
 class Attribute : public FilterBase
@@ -111,10 +115,10 @@ public:
     void VisitRefs(detail::RefChecker& refs) const override
     {
         FilterBase::VisitRefs(refs);
-        VisitCallParams(refs, m_mappingParams);
+        m_mappingParams.VisitRefs(refs);
     }
 private:
-    FilterParams m_mappingParams;
+    ForwardedArgs m_mappingParams;
     // map(attribute=...) looks items up like getattr with a fallback to [], not like attr
     bool m_byAttribute = false;
 };
@@ -257,13 +261,13 @@ public:
     void VisitRefs(detail::RefChecker& refs) const override
     {
         FilterBase::VisitRefs(refs);
-        VisitCallParams(refs, m_params);
+        m_params.VisitRefs(refs);
     }
     // A literal printf-style format is parsed here, once
     void SetConstantBase(const InternalValue& base) override;
 
 private:
-    FilterParams m_params;
+    ForwardedArgs m_params;
     // The literal format, parsed; null unless it is a narrow string
     std::shared_ptr<const CompiledPercentFormat> m_constFormat;
 };
@@ -285,11 +289,11 @@ public:
     void VisitRefs(detail::RefChecker& refs) const override
     {
         FilterBase::VisitRefs(refs);
-        VisitCallParams(refs, m_testingParams);
+        m_testingParams.VisitRefs(refs);
     }
 private:
     Mode m_mode;
-    FilterParams m_testingParams;
+    ForwardedArgs m_testingParams;
     bool m_hasAttribute = false;
 };
 
@@ -340,13 +344,35 @@ public:
     void VisitRefs(detail::RefChecker& refs) const override
     {
         FilterBase::VisitRefs(refs);
-        VisitCallParams(refs, m_callParams);
+        m_callParams.VisitRefs(refs);
     }
 
 private:
     std::string m_filterName;
-    FilterParams m_callParams;
+    ForwardedArgs m_callParams;
     InternalValue m_callable;
+};
+
+// A filter call that unpacks `*args` or `**kwargs`: Python binds it when it runs, so the filter
+// is made then, from the values, and checks them as a call written out would be checked
+class UnpackingFilter : public ExpressionFilter::IExpressionFilter
+{
+public:
+    UnpackingFilter(std::string filterName, ArenaCallParams params, InternalValue registered)
+        : m_filterName(std::move(filterName))
+        , m_params(params)
+        , m_registered(std::move(registered))
+    {
+    }
+
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+    void VisitRefs(detail::RefChecker& refs) const override { m_params.VisitRefs(refs); }
+
+private:
+    std::string m_filterName;
+    ArenaCallParams m_params;
+    // The filter the environment adds under this name, if any
+    InternalValue m_registered;
 };
 
 } // namespace filters
