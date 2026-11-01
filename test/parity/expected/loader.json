@@ -5106,6 +5106,170 @@
     "a.txt": "{{ x }}|{% block b1 %}A{% endblock %}"
    },
    "output": "C|C"
+  },
+  {
+   "id": "loader.include_macro_kept_sees_includer",
+   "template": "{% set ns = namespace(f=none) %}{% for x in 'XY' %}{% include 'inc' %}{% endfor %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "inc": "{% macro m() %}M{{ x }}{% endmacro %}{% set ns.f = m %}"
+   },
+   "output": "|MY"
+  },
+  {
+   "id": "loader.include_macro_kept_snapshot",
+   "template": "{% set ns = namespace(f=none) %}{% set x = 'X' %}{% include 'a' %}{% set x = 'X2' %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro m() %}{{ x }}{% endmacro %}{% set ns.f = m %}"
+   },
+   "output": "|X"
+  },
+  {
+   "id": "loader.include_macro_kept_nested_includes",
+   "template": "{% set ns = namespace(f=none) %}{% set x = 'X' %}{% include 'a' %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% set y = 'Y' %}{% include 'b' %}",
+    "b": "{% set z = 'Z' %}{% macro m() %}{{ x }}{{ y }}{{ z }}{% endmacro %}{% set ns.f = m %}"
+   },
+   "output": "|XYZ"
+  },
+  {
+   "id": "loader.include_nested_macro_kept",
+   "template": "{% set ns = namespace(f=none) %}{% set x = 'X' %}{% include 'a' %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% set y = 'Y' %}{% macro o(p) %}{% macro i() %}{{ x }}{{ y }}{{ p }}{% endmacro %}{% set ns.f = i %}{% endmacro %}{{ o('P') }}"
+   },
+   "output": "|XYP"
+  },
+  {
+   "id": "loader.self_of_ended_include_last_one",
+   "template": "{% set ns = namespace(s=none) %}{% for x in 'XY' %}{% include 'inc' %}{% endfor %}|{{ ns.s.blk() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "inc": "{% block blk %}B{{ x }}{% endblock %}{% set ns.s = self %}"
+   },
+   "output": "BXBY|BY"
+  },
+  {
+   "id": "loader.self_of_ended_include_calls_self",
+   "template": "{% set ns = namespace(s=none) %}{% set x = 'X' %}{% include 'inc' %}|{{ ns.s.a() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "inc": "{% block a %}A{{ x }}{{ self.b() }}{% endblock %}{% block b %}B{{ x }}{% endblock %}{% set ns.s = self %}"
+   },
+   "output": "AXBXBX|AXBX"
+  },
+  {
+   "id": "loader.module_exports_skip_imports",
+   "template": "{% import 'm2' as x %}[{{ x.am is defined }}|{{ x.aa is defined }}|{{ x.own() }}]",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro am() %}AM{% endmacro %}",
+    "m2": "{% from 'a' import am %}{% import 'a' as aa %}{% macro own() %}O{% endmacro %}"
+   },
+   "output": "[False|False|O]"
+  },
+  {
+   "id": "loader.from_module_import_of_import",
+   "template": "{% set am = 1 %}{% from 'm2' import am %}[{{ am is defined }}]",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro am() %}AM{% endmacro %}",
+    "m2": "{% from 'a' import am %}{% import 'a' as aa %}{% macro own() %}O{% endmacro %}"
+   },
+   "output": "[False]"
+  },
+  {
+   "id": "loader.module_reexports_reset_import",
+   "template": "{% import 'm3' as x %}[{{ x.am is defined }}|{{ x.aa is defined }}|{{ x.b }}]",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro am() %}AM{% endmacro %}",
+    "m3": "{% from 'a' import am %}{% import 'a' as aa %}{% set am = am %}{% set aa, b = aa, 2 %}"
+   },
+   "output": "[True|True|2]"
+  },
+  {
+   "id": "loader.module_import_after_set_hides",
+   "template": "{% import 'm3' as x %}[{{ x.am is defined }}|{{ x.f() }}]",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro am() %}AM{% endmacro %}",
+    "m3": "{% set am = 5 %}{% from 'a' import am %}{% macro f() %}{% from 'a' import am %}{{ am() }}{% endmacro %}"
+   },
+   "output": "[False|AM]"
+  },
+  {
+   "id": "loader.module_macro_after_import_exported",
+   "template": "{% import 'm3' as x with context %}[{{ x.am() }}]",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro am() %}AM{% endmacro %}",
+    "m3": "{% from 'a' import am %}{% macro am() %}MINE{% endmacro %}"
+   },
+   "output": "[MINE]"
+  },
+  {
+   "id": "loader.module_parent_import_not_exported",
+   "template": "{% import 'c' as x %}[{{ x.am is defined }}{{ x.own() }}]",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro am() %}AM{% endmacro %}",
+    "p": "{% from 'a' import am %}",
+    "c": "{% extends 'p' %}{% macro own() %}O{% endmacro %}"
+   },
+   "output": "[FalseO]"
   }
  ]
 }

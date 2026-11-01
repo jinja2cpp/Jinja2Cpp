@@ -1,5 +1,6 @@
 #include "statements.h"
 
+#include "cycle_collector.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
@@ -1710,6 +1711,15 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
                 }
             }
             RenderContext blockContext(*home.context, home.link);
+            // Its template has ended: the block sees what that saw (ClosureCapture, 0323)
+            if (home.captured)
+            {
+                auto scope = blockContext.GetCurrentScope();
+                for (const auto& [captured, value] : *home.captured)
+                {
+                    scope[captured] = value;
+                }
+            }
             // The template has ended (an include that stored `self`): its blocks, in a frame
             // of their own
             TemplateFrame endedFrame;
@@ -1719,8 +1729,9 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
                 endedFrame.baseDepth = home.link;
                 endedFrame.name = templateName;
                 endedFrame.outer = curFrame;
-                // Its scopes have ended too: a `self` in the block renders the ended blocks
-                endedFrame.self = MakeTemplateSelf(owner->ended, ClosureSite(), templateName);
+                // Its scopes have ended too: a `self` in the block renders the ended blocks,
+                // seeing what this one sees
+                endedFrame.self = MakeTemplateSelf(owner->ended, site, templateName);
                 frame = &endedFrame;
             }
             if (!frame)
@@ -1771,7 +1782,13 @@ LookupResult RenderContext::FindSelf(const std::string& name)
         {
             home = home->m_parent;
         }
-        return MakeTemplateSelf(*frame->blocks, ClosureSite(*home, depth), frame->name);
+        ClosureSite site(*home, depth);
+        // An included template's `self` stored past the include sees what the include saw (0323)
+        if (site.OutlivesItsFrames(*home))
+        {
+            site.CaptureOnEnd(*home);
+        }
+        return MakeTemplateSelf(*frame->blocks, site, frame->name);
     };
     // In a block that sees more than the template's top level (a scoped one in a loop, or one
     // such a block's `self` renders), `self` passes on what it sees: Jinja2's TemplateReference
@@ -1822,6 +1839,101 @@ ClosureSite::ClosureSite(RenderContext& context, size_t depth)
         {
             m_state = TopLevel;
         }
+    }
+}
+
+void ClosureSite::CaptureOnEnd(RenderContext& context)
+{
+    auto capture = std::make_shared<ClosureCapture>();
+    capture->depth = m_depth;
+    capture->serial = m_serial;
+    capture->lowest = context.m_endsBeforeRender ? 0 : m_rootDepth;
+    context.AddClosureCapture(capture);
+    m_capture = std::move(capture);
+}
+
+void RenderContext::AddClosureCapture(const std::shared_ptr<ClosureCapture>& capture)
+{
+    if (!m_captures)
+    {
+        m_captures = std::make_unique<ClosureCaptures>();
+    }
+    auto& sites = m_captures->sites;
+    if (sites.size() >= m_captures->pruneAt)
+    {
+        // A macro defined in a loop leaves one per iteration, whose frame is gone
+        sites.erase(std::remove_if(sites.begin(), sites.end(),
+                                   [this](const std::weak_ptr<ClosureCapture>& site) {
+                                       const auto p = site.lock();
+                                       return !p || !HasScopeBelow(p->depth, p->serial);
+                                   }),
+                    sites.end());
+        m_captures->pruneAt = std::max(ClosureCaptures{}.pruneAt, sites.size() * 2);
+    }
+    sites.push_back(capture);
+}
+
+void RenderContext::CaptureClosuresImpl(size_t count)
+{
+    auto& sites = m_captures->sites;
+    size_t kept = 0;
+    for (auto& site : sites)
+    {
+        const auto capture = site.lock();
+        if (!capture || !HasScopeBelow(capture->depth, capture->serial))
+        {
+            continue;
+        }
+        // Defined below the frame that ends: it stays
+        if (capture->depth < count)
+        {
+            sites[kept++] = std::move(site);
+            continue;
+        }
+        // Its frame is the innermost scope: what a lookup there sees, as in CollectVisibleNames
+        // but from that frame down to the lowest scope the closure does not read live
+        assert(capture->depth == GetScopesCount());
+        const size_t lowest = capture->lowest;
+        const size_t entryPassDepth = m_entryPassDepth;
+        auto names = std::make_shared<InternalValueMap>();
+        VisitScopes(
+            *this,
+            [&names, lowest, entryPassDepth](const InternalValueMap* scope, size_t depth) {
+                if (depth < lowest)
+                {
+                    return true;
+                }
+                for (const auto& [name, value] : *scope)
+                {
+                    // The names an include's context passes over (PassOverEntryBindings)
+                    if (depth < entryPassDepth && IsEntryBinding(value, HashedName::Hash(name)))
+                    {
+                        continue;
+                    }
+                    names->emplace(name, value);
+                }
+                return false;
+            },
+            [&names](const FrameView& view, size_t /*depth*/) {
+                for (size_t idx = 0; idx != view.names.size(); ++idx)
+                {
+                    if (view.slots[idx].IsBound())
+                    {
+                        names->emplace(std::string(view.nodes.Text(view.names[idx].name)), static_cast<const InternalValue&>(view.slots[idx]));
+                    }
+                }
+                return false;
+            });
+        // Outside a render nothing would release the copy: the closure reads its frames as ended
+        if (CycleCollector::KeepUntilEnd(names))
+        {
+            capture->names = names;
+        }
+    }
+    sites.resize(kept);
+    if (sites.empty())
+    {
+        m_captures.reset();
     }
 }
 
@@ -2156,6 +2268,8 @@ template<typename CharT>
 void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, OutStream& os, RenderContext& values)
 {
     RenderContext innerContext = values.Clone(withContext);
+    // Its macros and `self` kept past the include see what it saw (0323)
+    innerContext.SetEndsBeforeRender();
     if (withContext)
     {
         // Jinja2 renders it in a new Context, with an EvalContext of its own
@@ -2171,12 +2285,14 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
             HideIncludingLoop(values, innerContext, hidden);
             innerContext.SetNodes(tpl.Nodes());
             innerContext.Nodes()[tpl.GetRenderer()].RenderNamed(os, innerContext, tpl.SelfName());
+            innerContext.CaptureClosures(0);
             return;
         }
     }
 
     innerContext.SetNodes(tpl.Nodes());
     innerContext.Nodes()[tpl.GetRenderer()].RenderNamed(os, innerContext, tpl.SelfName());
+    innerContext.CaptureClosures(0);
 }
 
 void IncludeStatement::Render(OutStream& os, RenderContext& values)
@@ -2283,12 +2399,14 @@ ImportedModule::ImportedModule(const RenderContext& importer, bool withContext)
     : m_importerNames(ImporterNames(importer, withContext))
     , m_context(importer.CloneWith(m_importerNames))
 {
+    m_context.SetModuleImports(&m_imports);
 }
 
 ImportedModule::ImportedModule(InternalValueMap names, const InternalValueMap& globals, IRendererCallback* callback, const InternalValueMap* builtins)
     : m_importerNames(std::move(names))
     , m_context(m_importerNames, globals, callback, builtins)
 {
+    m_context.SetModuleImports(&m_imports);
     // As CloneWith: the template rendered sets its own (Render)
     m_context.ResetAutoescape(callback->GetSettings().autoescape);
 }
@@ -2340,7 +2458,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     {
         if (const auto* shared = callback.FindModule(tpl))
         {
-            ImportNames(values, nodes, shared->Names());
+            ImportNames(values, nodes, *shared);
             return;
         }
     }
@@ -2359,7 +2477,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
             module.Render(*tplPtr);
             return true;
         });
-        ImportNames(values, nodes, module.Names());
+        ImportNames(values, nodes, module);
         return;
     }
     class SharedModuleScope
@@ -2390,7 +2508,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     // Shared once complete: a module that imports itself recurses, as in Jinja2
     callback.ShareModule(tpl, module);
     scope.Shared();
-    ImportNames(values, nodes, module.Names());
+    ImportNames(values, nodes, module);
 }
 
 namespace
@@ -2408,21 +2526,40 @@ bool IsImported(const InternalValue& value)
 }
 } // namespace
 
-// Copies: the module keeps every name, which its own macros read in its context
-void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes, const InternalValueMap& moduleNames) const
+namespace
 {
+// An import at a module's top level hides the name from the module's exports, until a `set`
+// binds it again (ReexportStatement)
+void NoteModuleImport(const RenderContext& values, std::string_view name)
+{
+    auto* imports = values.TopLevelModuleImports();
+    if (imports && std::find(imports->begin(), imports->end(), name) == imports->end())
+    {
+        imports->emplace_back(name);
+    }
+}
+} // namespace
+
+// Copies: the module keeps every name, which its own macros read in its context
+void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes, const ImportedModule& module) const
+{
+    const auto& moduleNames = module.Names();
     if (m_namespace.empty())
     {
         auto scope = values.GetCurrentScope();
         for (const auto& name : nodes[m_namesToImport])
         {
             const auto p = moduleNames.find(HashedName{ nodes.Text(name.name), name.nameHash });
-            if (p == moduleNames.end() || !IsImported(p->second))
+            // A name the module does not export (one it imported is not its own) is bound
+            // undefined, as Jinja2 binds it, hiding the same name outside
+            auto& bound = scope.ForName({ nodes.Text(name.alias), name.aliasHash });
+            if (p == moduleNames.end() || !IsImported(p->second) || !module.Exports(p->first))
             {
+                bound = MakeUndefined(values, std::string(nodes.Text(name.alias)));
                 continue;
             }
-            scope.ForName({ nodes.Text(name.alias), name.aliasHash }) = p->second;
-            values.GetRendererCallback()->ImportBound(values, nodes.Text(name.alias), p->second);
+            bound = p->second;
+            NoteModuleImport(values, nodes.Text(name.alias));
         }
         return;
     }
@@ -2431,15 +2568,29 @@ void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes,
     for (const auto& [name, value] : moduleNames)
     {
         // Jinja2 exports no name that starts with an underline
-        if (name.empty() || name[0] == '_' || !IsImported(value))
+        if (name.empty() || name[0] == '_' || !IsImported(value) || !module.Exports(name))
         {
             continue;
         }
         importedNs[name] = value;
     }
-    auto& bound = values.GetCurrentScope().ForName({ nodes.Text(m_namespace), m_namespaceHash });
-    bound = CreateMapAdapter(std::move(importedNs));
-    values.GetRendererCallback()->ImportBound(values, nodes.Text(m_namespace), bound);
+    values.GetCurrentScope().ForName({ nodes.Text(m_namespace), m_namespaceHash }) = CreateMapAdapter(std::move(importedNs));
+    NoteModuleImport(values, nodes.Text(m_namespace));
+}
+
+void ReexportStatement::Render(OutStream& /*os*/, RenderContext& values)
+{
+    auto* imports = values.TopLevelModuleImports();
+    if (!imports)
+    {
+        return;
+    }
+    const auto& nodes = values.Nodes();
+    for (const auto& name : nodes[m_names])
+    {
+        const auto text = nodes.Text(name);
+        imports->erase(std::remove(imports->begin(), imports->end(), text), imports->end());
+    }
 }
 
 MacroStatement::MacroStatement(NodeArena& nodes, std::string_view name, const MacroParamsInfo& params)
@@ -2518,7 +2669,13 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
     // is called decides whether its results are Markup, its own and those of `caller()` and
     // `join` in it (RenderContext::IsAutoescape). The defaults are evaluated by each call
     // (BindMacroDefaults)
-    Callable result(Callable::Macro, CallableBody{ this, values.Nodes(), values.IsStaticAutoescape(), values.IsVolatileAutoescape(), ClosureSite(values), m_readsSlotsOnly });
+    ClosureSite site(values);
+    // Defined in a frame that may end before it is called: it keeps what it sees there (0326)
+    if (site.OutlivesItsFrames(values))
+    {
+        site.CaptureOnEnd(values);
+    }
+    Callable result(Callable::Macro, CallableBody{ this, values.Nodes(), values.IsStaticAutoescape(), values.IsVolatileAutoescape(), std::move(site), m_readsSlotsOnly });
     result.SetAttributes(m_attributes);
     return result;
 }
@@ -2803,6 +2960,8 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
             scope.ForName(name) = std::forward<decltype(value)>(value);
         });
         context.Nodes()[m_mainBody].Render(stream, context);
+        // A macro defined in the body and kept past the call sees what the call had (0326)
+        context.CaptureClosures(context.GetScopesCount());
         if (isLinked)
         {
             context.PopFrameView();
@@ -2821,6 +2980,7 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
         context.BindSlot(slots[slot], names[slot].hash, std::forward<decltype(value)>(value));
     });
     context.Nodes()[m_mainBody].Render(stream, context);
+    context.CaptureClosures(context.GetScopesCount());
 
     guard.Unbind();
     context.PopFrameView();

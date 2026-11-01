@@ -746,6 +746,7 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         // Stored once the value is read, which may read the name itself
         m_names.AddStores(m_names.Current(), m_nodes[vars], m_nodes);
         m_bodies.Add(m_nodes.Make<SetLineStatement>(vars, *expr), m_tagOffset);
+        AddReexport(m_nodes[vars], m_tagOffset);
     }
     else if (lexer.EatIfEqual('|'))
     {
@@ -806,6 +807,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&, Stateme
     const auto kind = StatementInfo::OwnsFrame(outer.type) || IsLoopElse(statementsInfo) ? NameResolver::StoreKind::Store : NameResolver::StoreKind::Branch;
     m_names.AddStores(outer.frame, m_nodes[statement.GetTarget()], m_nodes, kind);
     m_bodies.Add(info.renderer, info.tagOffset);
+    AddReexport(m_nodes[statement.GetTarget()], info.tagOffset);
 
     return {};
 }
@@ -1117,8 +1119,51 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
     renderer.SetBodyMarks(info.marks, m_nodes.Marks());
 
     m_bodies.Add(info.renderer, info.tagOffset);
+    AddReexport(renderer.GetNameText(), info.tagOffset);
 
     return ParseResult();
+}
+
+void StatementsParser::AddReexport(Span<const TargetNode> target, std::size_t tagOffset)
+{
+    if (m_root.importedNames.empty())
+    {
+        return;
+    }
+    std::vector<ArenaText> names;
+    for (const auto& node : target)
+    {
+        if (node.IsPlainName())
+        {
+            names.push_back(node.name);
+        }
+    }
+    AddReexport(names, tagOffset);
+}
+
+void StatementsParser::AddReexport(ArenaText name, std::size_t tagOffset)
+{
+    if (!m_root.importedNames.empty())
+    {
+        AddReexport(std::vector<ArenaText>{ name }, tagOffset);
+    }
+}
+
+void StatementsParser::AddReexport(const std::vector<ArenaText>& names, std::size_t tagOffset)
+{
+    std::vector<ArenaText> reexported;
+    for (const auto& name : names)
+    {
+        const auto text = m_nodes.Text(name);
+        if (std::find(m_root.importedNames.begin(), m_root.importedNames.end(), text) != m_root.importedNames.end())
+        {
+            reexported.push_back(name);
+        }
+    }
+    if (!reexported.empty())
+    {
+        m_bodies.Add(m_nodes.Make<ReexportStatement>(m_nodes.MakeSpan(reexported)), tagOffset);
+    }
 }
 
 namespace
@@ -1383,6 +1428,7 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
     m_names.AddStore(m_names.Current(), m_nodes.Text(namespaceText));
     m_nodes[renderer].SetNamespace(namespaceText, HashedName::Hash(namespaceName));
     m_bodies.Add(renderer, m_tagOffset);
+    m_root.importedNames.emplace_back(namespaceName);
 
     return ParseResult();
 }
@@ -1523,6 +1569,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
         const auto& name = names.emplace_back(ImportName{ m_nodes.MakeText(nameInfo.first), HashedName::Hash(nameInfo.first), m_nodes.MakeText(nameInfo.second), HashedName::Hash(nameInfo.second) });
         // Jinja2 stores the alias only; the imported name still hides a slot of its own
         m_names.AddStore(m_names.Current(), m_nodes.Text(name.alias));
+        m_root.importedNames.emplace_back(nameInfo.second);
         if (nameInfo.first != nameInfo.second)
         {
             m_names.AddStore(m_names.Current(), m_nodes.Text(name.name), NameResolver::StoreKind::Hidden);

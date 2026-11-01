@@ -11,6 +11,7 @@
 #include "slot_frame.h"
 #include "span.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -596,6 +597,10 @@ public:
     void Render(const Tpl& tpl, OutStream& os);
     // The names the module's top level set
     [[nodiscard]] const InternalValueMap& Names() const { return m_context.GetCurrentScope(); }
+    // Whether the module exports `name`, one of Names(): not when its top level imported it and
+    // did not set it again, as Jinja2 does not (docs/tasks/0299). Names that start with an
+    // underscore are the caller's to leave out
+    [[nodiscard]] bool Exports(std::string_view name) const { return std::find(m_imports.begin(), m_imports.end(), name) == m_imports.end(); }
     // The context the module's macros run in
     [[nodiscard]] RenderContext& Context() { return m_context; }
 
@@ -605,7 +610,33 @@ private:
     BlocksStack m_blocks;
     // The module's template, for its macros' `self`
     TemplateFrame m_frame;
+    // What its top level imported (RenderContext::SetModuleImports); before the context, which
+    // refers to it
+    ModuleImports m_imports;
     RenderContext m_context;
+};
+
+// After a `set` or a `macro` that binds a name an import bound before it in the template: at a
+// module's top level the name is exported again (Jinja2's exported_vars, docs/tasks/0299). The
+// parser adds one only after such a statement, so no other template pays for it
+class ReexportStatement final : public Statement
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::ReexportStmt;
+    void VisitRefs(detail::RefChecker& refs) const
+    {
+        refs(m_names, [](detail::RefChecker& checker, const ArenaText& name) { checker(name); });
+    }
+
+    explicit ReexportStatement(ArenaSpan<ArenaText> names)
+        : m_names(names)
+    {
+    }
+
+    void Render(OutStream& os, RenderContext& values) override;
+
+private:
+    ArenaSpan<ArenaText> m_names;
 };
 
 class IncludeStatement final : public Statement
@@ -672,7 +703,7 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
-    void ImportNames(RenderContext& values, const ArenaView& nodes, const InternalValueMap& moduleNames) const;
+    void ImportNames(RenderContext& values, const ArenaView& nodes, const ImportedModule& module) const;
 
     bool m_withContext{};
     NodeRef<Expression> m_nameExpr;
@@ -686,6 +717,8 @@ class MacroStatement : public Statement
 {
 public:
     [[nodiscard]] ArenaSpan<MacroParam> GetParams() const { return m_params; }
+    // The macro's name; empty for the caller of a call block
+    [[nodiscard]] ArenaText GetNameText() const { return m_name; }
     static constexpr NodeKind Kind = NodeKind::MacroStmt;
     void VisitRefs(detail::RefChecker& refs) const
     {

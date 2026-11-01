@@ -495,4 +495,11 @@ CASES = [
     # `self` sees what the includer set (0323)
     ("macro_closure_outlives_outer_call", "{% set ns = namespace(f=none) %}{% macro outer(n) %}{% macro inner(k) %}{{ n }}{{ k }}{% endmacro %}{% set ns.f = inner %}{% endmacro %}{{ outer('captured') }}|{{ ns.f('k') }}"),
     ("stored_self_sees_includer_names", "{% set ns = namespace(s=none) %}{% set x = 'X' %}{% include 'inc' %}|{{ ns.s.blk() }}", {"templates": {"inc": "{% block blk %}B{{ x }}{% endblock %}{% set ns.s = self %}"}}),
+    ('macro_closure_sees_last_values', "{% set ns = namespace(f=none) %}{% macro outer(n) %}{% set v = 1 %}{% macro inner() %}{{ n }}{{ v }}{{ w }}{% endmacro %}{% set ns.f = inner %}{{ inner() }}{% set v = 2 %}{% set w = 3 %}{% endmacro %}{{ outer('p') }}|{{ ns.f() }}"),
+    ('macro_closure_two_levels', "{% set ns = namespace(f=none) %}{% macro a(x) %}{% macro b(y) %}{% macro c() %}{{ x }}{{ y }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{{ b('Y') }}{% endmacro %}{{ a('X') }}{{ ns.f() }}"),
+    ('macro_closure_per_recursive_call', '{% set ns = namespace(l=[]) %}{% macro r(n) %}{% macro inner() %}{{ n }}{% endmacro %}{% set _ = ns.l.append(inner) %}{% if n > 0 %}{{ r(n - 1) }}{% endif %}{% endmacro %}{{ r(3) }}{% for f in ns.l %}{{ f() }}{% endfor %}'),
+    ('macro_closure_param_shadows_root', "{% set n = 'root' %}{% set ns = namespace(f=none) %}{% macro outer(n) %}{% macro inner() %}{{ n }}{% endmacro %}{% set ns.f = inner %}{% endmacro %}{{ outer('p') }}{{ ns.f() }}{{ n }}"),
+    ('macro_closure_reads_root_live', '{% set t = 1 %}{% set ns = namespace(f=none) %}{% macro outer() %}{% macro inner() %}{{ t }}{% endmacro %}{% set ns.f = inner %}{% endmacro %}{{ outer() }}{% set t = 2 %}{{ ns.f() }}'),
+    ('macro_closure_with_caller', "{% set ns = namespace(f=none) %}{% macro outer(n) %}{% macro inner() %}{{ n }}{{ caller() }}{% endmacro %}{% set ns.f = inner %}{% endmacro %}{{ outer('c') }}{% call ns.f() %}C{% endcall %}"),
+    ('macro_closure_in_call_body', "{% set ns = namespace(f=none) %}{% macro w() %}{{ caller() }}{% endmacro %}{% macro outer(n) %}{% call w() %}{% macro inner() %}{{ n }}{% endmacro %}{% set ns.f = inner %}{% endcall %}{% endmacro %}{{ outer('N') }}|{{ ns.f() }}"),
 ]

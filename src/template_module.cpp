@@ -135,29 +135,6 @@ private:
     std::unordered_set<const void*> m_path;
 };
 
-// Whether `value` is still the object `imported` an import bound: Python's `is`, as `is sameas`
-// tests it
-bool IsSameImport(const InternalValue& imported, const InternalValue& value)
-{
-    if (const auto* callable = GetIf<Callable>(&imported))
-    {
-        const auto* other = GetIf<Callable>(&value);
-        return other != nullptr && callable->IsSame(*other);
-    }
-    if (auto map = AsMap(imported))
-    {
-        auto other = AsMap(value);
-        return other && other->GetIdentity() == map->GetIdentity();
-    }
-    if (auto list = AsList(imported))
-    {
-        auto other = AsList(value);
-        return other && other->GetIdentity() == list->GetIdentity();
-    }
-    // A scalar has no identity: an equal one counts as the same
-    return GetIf<Callable>(&value) == nullptr && !AsMap(value) && !AsList(value) && IntValue2Value(imported) == IntValue2Value(value);
-}
-
 // Whether `value`, set under the name with hash `hash`, is only the undefined a frame binds at
 // its entry to a name it sets later (RenderContext::IsEntryBinding): a name never set
 bool IsEntryBinding(const InternalValue& value, std::size_t hash)
@@ -209,21 +186,11 @@ struct TemplateModuleState
 {
     using Impl = TemplateImpl<CharT>;
 
-    // The render callback of the module, which also notes the names its top level imports:
-    // those are not exported, as in Jinja2
+    // The render callback of the module, which keeps what the host's calls load apart
     class Callback final : public Impl::RendererCallback
     {
     public:
         using Impl::RendererCallback::RendererCallback;
-
-        void ImportBound(const RenderContext& values, std::string_view name, const InternalValue& value) override
-        {
-            // At the module's top level only: its own first scope, not a macro's or a loop's
-            if (&values == moduleContext && values.GetScopesCount() == 1)
-            {
-                imported.emplace_back(std::string(name), value);
-            }
-        }
 
         // The modules a call imports with context end with it (CallScope), but those a module
         // shared without context imports, which live as long as it does
@@ -261,9 +228,6 @@ struct TemplateModuleState
             return std::any_of(kept.begin(), kept.end(), [candidate](const KeptModule& entry) { return entry.module == candidate; });
         }
 
-        const RenderContext* moduleContext = nullptr;
-        // The names the top level imported, with the values imported
-        std::vector<std::pair<std::string, InternalValue>> imported;
         // The host's calls running, nested when a host callable calls the module again
         std::size_t calls = 0;
         // The top levels of modules imported without context rendering, and the modules they
@@ -378,7 +342,6 @@ struct TemplateModuleState
         callback = std::make_unique<Callback>(impl.get());
         callback->SetGlobals(&globals);
         module = std::make_unique<ImportedModule>(std::move(convertedParams), globals.values, callback.get(), &GetBuiltinGlobals(impl->m_settings->settings.extensions.i18n));
-        callback->moduleContext = &module->Context();
 
         OutStream stream(body);
         if (impl->m_settings->hasRenderLimits)
@@ -399,18 +362,10 @@ struct TemplateModuleState
     [[nodiscard]] std::vector<std::pair<std::string, const InternalValue*>> ExportedNames() const
     {
         std::vector<std::pair<std::string, const InternalValue*>> names;
-        const auto& imported = callback->imported;
         for (const auto& [name, value] : module->Names())
         {
-            if (name.empty() || name[0] == '_' || IsEntryBinding(value, HashedName::Hash(name)))
-            {
-                continue;
-            }
-            // Set again after the import, it is exported (Jinja2's exported_vars)
-            const auto isImported = std::any_of(imported.begin(), imported.end(), [&exportName = name, &exportValue = value](const auto& entry) {
-                return entry.first == exportName && IsSameImport(entry.second, exportValue);
-            });
-            if (isImported)
+            // Imported, and not set again since: not exported (Jinja2's exported_vars)
+            if (name.empty() || name[0] == '_' || IsEntryBinding(value, HashedName::Hash(name)) || !module->Exports(name))
             {
                 continue;
             }

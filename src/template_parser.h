@@ -383,6 +383,9 @@ struct TemplateRootInfo
     // A `{% autoescape %}` with a value that is not constant was parsed: only then can a tag
     // be in volatile code (TemplateParser::IsInVolatileCode)
     bool hasVolatileAutoescape = false;
+    // The names an `import` or `from` bound so far: a `set` or `macro` of one exports it again
+    // from a module (ReexportStatement, docs/tasks/0299)
+    std::vector<std::string> importedNames;
 
     // False if a block of this name is defined already. Most templates define few blocks,
     // whose names are compared one by one; past those, the names go to a set, so that a
@@ -504,6 +507,11 @@ private:
     ParseResult ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    // After a statement that binds `names` (a target's plain names, or one name): a
+    // ReexportStatement of those an import bound before (docs/tasks/0299)
+    void AddReexport(Span<const TargetNode> target, std::size_t tagOffset);
+    void AddReexport(ArenaText name, std::size_t tagOffset);
+    void AddReexport(const std::vector<ArenaText>& names, std::size_t tagOffset);
     ParseResult ParseWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
