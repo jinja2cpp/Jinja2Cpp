@@ -1890,40 +1890,10 @@ void RenderContext::CaptureClosuresImpl(size_t count)
             sites[kept++] = std::move(site);
             continue;
         }
-        // Its frame is the innermost scope: what a lookup there sees, as in CollectVisibleNames
-        // but from that frame down to the lowest scope the closure does not read live
+        // Its frame is the innermost scope
         assert(capture->depth == GetScopesCount());
-        const size_t lowest = capture->lowest;
-        const size_t entryPassDepth = m_entryPassDepth;
         auto names = std::make_shared<InternalValueMap>();
-        VisitScopes(
-            *this,
-            [&names, lowest, entryPassDepth](const InternalValueMap* scope, size_t depth) {
-                if (depth < lowest)
-                {
-                    return true;
-                }
-                for (const auto& [name, value] : *scope)
-                {
-                    // The names an include's context passes over (PassOverEntryBindings)
-                    if (depth < entryPassDepth && IsEntryBinding(value, HashedName::Hash(name)))
-                    {
-                        continue;
-                    }
-                    names->emplace(name, value);
-                }
-                return false;
-            },
-            [&names](const FrameView& view, size_t /*depth*/) {
-                for (size_t idx = 0; idx != view.names.size(); ++idx)
-                {
-                    if (view.slots[idx].IsBound())
-                    {
-                        names->emplace(std::string(view.nodes.Text(view.names[idx].name)), static_cast<const InternalValue&>(view.slots[idx]));
-                    }
-                }
-                return false;
-            });
+        CollectNamesDownTo(*names, capture->lowest);
         // Outside a render nothing would release the copy: the closure reads its frames as ended
         if (CycleCollector::KeepUntilEnd(names))
         {
@@ -1935,6 +1905,39 @@ void RenderContext::CaptureClosuresImpl(size_t count)
     {
         m_captures.reset();
     }
+}
+
+void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowest) const
+{
+    const size_t entryPassDepth = m_entryPassDepth;
+    VisitScopes(
+        *this,
+        [&collected, lowest, entryPassDepth](const InternalValueMap* scope, size_t depth) {
+            if (depth < lowest)
+            {
+                return true;
+            }
+            for (const auto& [name, value] : *scope)
+            {
+                // The names an include's context passes over (PassOverEntryBindings)
+                if (depth < entryPassDepth && IsEntryBinding(value, HashedName::Hash(name)))
+                {
+                    continue;
+                }
+                collected.emplace(name, value);
+            }
+            return false;
+        },
+        [&collected](const FrameView& view, size_t /*depth*/) {
+            for (size_t idx = 0; idx != view.names.size(); ++idx)
+            {
+                if (view.slots[idx].IsBound())
+                {
+                    collected.emplace(std::string(view.nodes.Text(view.names[idx].name)), static_cast<const InternalValue&>(view.slots[idx]));
+                }
+            }
+            return false;
+        });
 }
 
 void BlockStatement::Render(OutStream& os, RenderContext& values)
@@ -2533,7 +2536,11 @@ namespace
 void NoteModuleImport(const RenderContext& values, std::string_view name)
 {
     auto* imports = values.TopLevelModuleImports();
-    if (imports && std::find(imports->begin(), imports->end(), name) == imports->end())
+    if (!imports)
+    {
+        return;
+    }
+    if (std::find(imports->begin(), imports->end(), name) == imports->end())
     {
         imports->emplace_back(name);
     }

@@ -1154,6 +1154,10 @@ private:
     }
     // CaptureClosures for a context that defined such closures. Defined in statements.cpp
     void CaptureClosuresImpl(size_t count);
+    // Adds to `names` what a lookup here sees in the scopes from the innermost down to scope
+    // `lowest`, frame views included, as CollectVisibleNames does but keeping `loop` and the
+    // names bound at entry this context does not pass over. Defined in statements.cpp
+    void CollectNamesDownTo(InternalValueMap& names, size_t lowest) const;
     // Adds a closure defined here that keeps what it sees (ClosureSite::CaptureOnEnd). Defined
     // in statements.cpp
     void AddClosureCapture(const std::shared_ptr<ClosureCapture>& capture);
