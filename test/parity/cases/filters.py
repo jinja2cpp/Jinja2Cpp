@@ -404,6 +404,7 @@ CASES = [
     ("truncate_undefined_leeway", "{{ 'abc'|truncate(leeway=nope) }}"),
     ("truncate_undefined_end", "{{ 'abc'|truncate(9, end=nope) }}|{{ 'abc def ghi jkl'|truncate(9, end=nope) }}"),
     ("urlize_undefined_trim_url_limit", "{{ 'see nothing'|urlize(nope) }}|{{ 'see http://a.org/xyz'|urlize(nope) }}"),
+    ("truncate_undefined_end_strict", "{{ 'abc'|truncate(9, end=nope) }}", {"env": {"undefined": "strict"}}),
     ("wordwrap_undefined_wrapstring", "{{ 'abc def'|wordwrap(3, wrapstring=nope) }}"),
     ("join_undefined_attribute", "{{ [1, 2]|join(attribute=nope) }}|"),
     ("max_undefined_attribute", "{{ [1, 2]|max(attribute=nope) }}"),
