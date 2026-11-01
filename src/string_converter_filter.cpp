@@ -537,8 +537,10 @@ public:
     using String = std::basic_string<CharT>;
     using View = std::basic_string_view<CharT>;
 
-    Urlizer(std::optional<int64_t> trimUrlLimit, const String& rel, const String& target, std::vector<String> extraSchemes)
+    // undefinedLimit: a trim_url_limit the call passes as undefined, which fails slicing a URL
+    Urlizer(std::optional<int64_t> trimUrlLimit, const String& rel, const String& target, std::vector<String> extraSchemes, InternalValue undefinedLimit = InternalValue())
         : m_trimUrlLimit(trimUrlLimit)
+        , m_undefinedLimit(std::move(undefinedLimit))
         , m_extraSchemes(std::move(extraSchemes))
     {
         if (!rel.empty())
@@ -839,6 +841,7 @@ private:
 
     [[nodiscard]] String TrimUrl(const String& url) const
     {
+        CheckUndefinedUse(m_undefinedLimit, UndefinedUse::Arithmetic);
         if (!m_trimUrlLimit)
         {
             return url;
@@ -968,6 +971,7 @@ private:
     }
 
     std::optional<int64_t> m_trimUrlLimit;
+    InternalValue m_undefinedLimit;
     std::vector<String> m_extraSchemes;
     String m_relAttr;
     String m_targetAttr;
@@ -1568,6 +1572,18 @@ int64_t CodePointCount(const std::basic_string<CharT>& str)
     return std::count_if(str.begin(), str.end(), [](CharT ch) { return (static_cast<unsigned char>(ch) & 0xC0) != 0x80; });
 }
 
+// truncate's leeway; isSet: FunctionBase::IsArgumentSet. Unset is the policy's 5; Python adds
+// an undefined one to the length, which fails (docs/tasks/0310)
+int64_t TruncateLeeway(const InternalValue& leewayVal, bool isSet)
+{
+    if (!isSet)
+    {
+        return 5;
+    }
+    CheckUndefinedUse(leewayVal, UndefinedUse::Arithmetic);
+    return NumericArgument(leewayVal, "truncate", "leeway", NumberKind::Any);
+}
+
 } // namespace
 
 StringConverter::StringConverter(const FilterParams& params, StringConverter::Mode mode)
@@ -1704,7 +1720,7 @@ InternalValue StringConverter::ApplyReplace(const InternalValue& baseVal, Render
     {
         throw TemplateRuntimeError("Python int too large to convert to C ssize_t");
     }
-    else if (!IsEmpty(countVal))
+    else if (IsArgumentSet(countVal, "count"))
     {
         throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(countVal) + "' object cannot be interpreted as an integer");
     }
@@ -1747,7 +1763,7 @@ InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, Rende
         auto length = NumericArgument(this->GetArgumentValue("length", context), "truncate", "length", NumberKind::Any);
         auto killWords = ConvertToBool(this->GetArgumentValue("killwords", context));
         auto end = GetAsSameString(srcStr, this->GetArgumentValue("end", context)).value_or(String());
-        auto leeway = IsEmpty(leewayVal) ? 5 : NumericArgument(leewayVal, "truncate", "leeway", NumberKind::Any);
+        auto leeway = TruncateLeeway(leewayVal, this->IsArgumentSet(leewayVal, "leeway"));
         auto endLength = CodePointCount(end);
         // Jinja2 asserts both
         if (length < endLength || leeway < 0)
@@ -1776,6 +1792,8 @@ InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, Rende
                 truncated = truncated.substr(0, space);
             }
         }
+        // s[:n] + end, which an undefined end fails
+        CheckUndefinedUse(this->GetArgumentValue("end", context), UndefinedUse::Arithmetic);
         // Markup + end escapes end
         if (baseVal.IsMarkup())
         {
@@ -1792,7 +1810,7 @@ InternalValue StringConverter::TruncateNonString(const InternalValue& baseVal, R
 {
     auto leewayVal = GetArgumentValue("leeway", context);
     auto length = NumericArgument(GetArgumentValue("length", context), "truncate", "length", NumberKind::Any);
-    auto leeway = IsEmpty(leewayVal) ? 5 : NumericArgument(leewayVal, "truncate", "leeway", NumberKind::Any);
+    auto leeway = TruncateLeeway(leewayVal, IsArgumentSet(leewayVal, "leeway"));
     int64_t endLength = 0;
     ApplyStringConverter(GetArgumentValue("end", context), [&endLength](auto endStr) -> TargetString {
         endLength = CodePointCount(std::basic_string(endStr));
@@ -1944,7 +1962,8 @@ TargetString StringConverter::ApplyUrlize(const InternalValue& baseVal, RenderCo
             throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(schemesVal) + "' object is not iterable");
         }
 
-        return Urlizer<CharT>(limit, rel, target, std::move(extraSchemes))(srcStr, baseVal.IsMarkup());
+        // Python slices each URL with the limit, which fails for an undefined one (docs/tasks/0310)
+        return Urlizer<CharT>(limit, rel, target, std::move(extraSchemes), this->IsArgumentGiven("trim_url_limit") ? limitVal : InternalValue())(srcStr, baseVal.IsMarkup());
     });
 }
 
@@ -1981,8 +2000,10 @@ TargetString StringConverter::ApplyWordWrap(const InternalValue& baseVal, Render
         // Jinja2 wraps with the environment's newline_sequence unless wrapstring is given
         auto* callback = context.GetRendererCallback();
         const std::string newline = callback ? callback->GetSettings().newlineSequence : "\n"s;
-        auto wrapString =
-            GetAsSameString(srcStr, this->GetArgumentValue("wrapstring", context)).value_or(std::basic_string<CharT>(newline.begin(), newline.end()));
+        const auto wrapStringVal = this->GetArgumentValue("wrapstring", context);
+        // wrapstring.join(...), which an undefined wrapstring has not
+        CheckUndefinedUse(wrapStringVal, UndefinedUse::Method);
+        auto wrapString = GetAsSameString(srcStr, wrapStringVal).value_or(std::basic_string<CharT>(newline.begin(), newline.end()));
         // Python raises "invalid width", except for an empty text it returns early
         if ((floatWidth ? *floatWidth <= 0 : width <= 0) && !srcStr.empty())
         {
@@ -2051,7 +2072,8 @@ InternalValue StringConverter::Convert(const InternalValue& baseVal, RenderConte
         return ConvertText(baseVal, [this, &context](auto srcStr) {
             const auto charsVal = this->GetArgumentValue("chars", context);
             auto chars = GetAsSameString(srcStr, charsVal);
-            if (!chars && !IsEmpty(charsVal))
+            // An undefined argument is Python's Undefined object, no str (docs/tasks/0310)
+            if (!chars && this->IsArgumentSet(charsVal, "chars"))
             {
                 throw TemplateRuntimeError("strip arg must be None or str");
             }

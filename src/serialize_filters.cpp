@@ -1490,15 +1490,15 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
         format = *formatView;
     }
     // str() of an undefined is empty, and Python's '' % args has an argument left over
-    if (GetUndefinedInfo(baseVal) && !m_params.posParams.empty())
+    if (GetUndefinedInfo(baseVal) && m_params.HasPositional())
     {
         throw TemplateRuntimeError("not all arguments converted during string formatting");
     }
-    if (!m_params.posParams.empty() && !m_params.kwParams.empty())
+    if (m_params.HasPositional() && m_params.HasKeywords())
     {
         throw TemplateRuntimeError("format(): can't handle positional and keyword arguments at the same time");
     }
-    auto params = helpers::EvaluateCallParams(m_params, context);
+    auto params = m_params.Evaluate(context);
     bool markup = baseVal.IsMarkup();
     std::string formatted;
     if (!params.kwParams.empty())

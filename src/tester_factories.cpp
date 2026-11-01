@@ -117,7 +117,7 @@ bool IsBuiltinTester(std::string_view testerName)
     return FindBuiltinTester(testerName) != nullptr;
 }
 
-TesterPtr CreateTester(std::string testerName, const CallParamsInfo& params)
+TesterPtr CreateTester(std::string testerName, FunctionArgs params)
 {
     if (const auto* entry = FindBuiltinTester(testerName))
     {
@@ -126,7 +126,7 @@ TesterPtr CreateTester(std::string testerName, const CallParamsInfo& params)
     return std::make_shared<testers::UserDefinedTester>(std::move(testerName), params);
 }
 
-NodeRef<IsExpression::ITester> CreateTester(NodeArena& nodes, const std::string& testerName, const CallParamsInfo& params, bool* unknown)
+NodeRef<IsExpression::ITester> CreateTester(NodeArena& nodes, const std::string& testerName, FunctionArgs params, bool* unknown)
 {
     if (const auto* entry = FindBuiltinTester(testerName))
     {
@@ -139,7 +139,7 @@ NodeRef<IsExpression::ITester> CreateTester(NodeArena& nodes, const std::string&
     return nodes.MakeObject<ITester, testers::UserDefinedTester>(testerName, params);
 }
 
-TesterPtr CreateTester(std::string testerName, const CallParamsInfo& params, RenderContext& context)
+TesterPtr CreateTester(std::string testerName, FunctionArgs params, RenderContext& context)
 {
     auto* env = context.GetEnv();
     auto registered = env ? env->FindTest(testerName) : std::optional<UserCallable>();
@@ -150,6 +150,28 @@ TesterPtr CreateTester(std::string testerName, const CallParamsInfo& params, Ren
     auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered);
     return std::make_shared<testers::UserDefinedTester>(std::move(testerName), params, std::move(callable));
 }
+
+NodeRef<IsExpression::ITester> CreateUnpackingTester(NodeArena& nodes, const std::string& testerName, const CallArgsInfo& params, InternalValue registered, bool* unknown)
+{
+    if (unknown && !GetIf<Callable>(&registered) && !FindBuiltinTester(testerName))
+    {
+        *unknown = true;
+    }
+    // The arguments first: an arena makes one object at a time
+    const auto args = ArenaCallParams::Make(nodes, params);
+    return nodes.MakeObject<IsExpression::ITester, testers::UnpackingTester>(testerName, args, std::move(registered));
+}
+
+namespace testers
+{
+bool UnpackingTester::Test(const InternalValue& baseVal, RenderContext& context)
+{
+    const auto args = helpers::EvaluateCallParams(m_params, context);
+    // Tests added to the environment take precedence over the builtins (IsExpression::Make)
+    const TesterPtr tester = GetIf<Callable>(&m_registered) ? std::make_shared<UserDefinedTester>(m_testerName, args, m_registered) : CreateTester(m_testerName, args);
+    return tester->Test(baseVal, context);
+}
+} // namespace testers
 
 } // namespace v2
 } // namespace jinja2

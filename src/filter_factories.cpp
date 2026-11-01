@@ -131,7 +131,7 @@ const FilterEntry* FindBuiltinFilter(std::string_view filterName)
 }
 } // namespace
 
-FilterPtr CreateFilter(std::string_view filterName, const CallParamsInfo& params)
+FilterPtr CreateFilter(std::string_view filterName, FunctionArgs params)
 {
     if (const auto* entry = FindBuiltinFilter(filterName))
     {
@@ -140,7 +140,7 @@ FilterPtr CreateFilter(std::string_view filterName, const CallParamsInfo& params
     return std::make_shared<filters::UserDefinedFilter>(std::string(filterName), params);
 }
 
-NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& nodes, std::string_view filterName, const CallParamsInfo& params, bool* unknown)
+NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& nodes, std::string_view filterName, FunctionArgs params, bool* unknown)
 {
     if (const auto* entry = FindBuiltinFilter(filterName))
     {
@@ -153,7 +153,7 @@ NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& nodes, std:
     return nodes.MakeObject<IExpressionFilter, filters::UserDefinedFilter>(std::string(filterName), params);
 }
 
-FilterPtr CreateFilter(const std::string& filterName, const CallParamsInfo& params, RenderContext& context)
+FilterPtr CreateFilter(const std::string& filterName, FunctionArgs params, RenderContext& context)
 {
     auto* env = context.GetEnv();
     auto registered = env ? env->FindFilter(filterName) : std::optional<UserCallable>();
@@ -164,6 +164,32 @@ FilterPtr CreateFilter(const std::string& filterName, const CallParamsInfo& para
     auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered);
     return std::make_shared<filters::UserDefinedFilter>(filterName, params, std::move(callable));
 }
+
+NodeRef<ExpressionFilter::IExpressionFilter> CreateUnpackingFilter(NodeArena& nodes, const std::string& filterName, const CallArgsInfo& params, InternalValue registered, bool* unknown)
+{
+    if (unknown && !GetIf<Callable>(&registered) && !FindBuiltinFilter(filterName))
+    {
+        *unknown = true;
+    }
+    // The arguments first: an arena makes one object at a time
+    const auto args = ArenaCallParams::Make(nodes, params);
+    return nodes.MakeObject<IExpressionFilter, filters::UnpackingFilter>(filterName, args, std::move(registered));
+}
+
+namespace filters
+{
+InternalValue UnpackingFilter::Filter(const InternalValue& baseVal, RenderContext& context)
+{
+    const auto args = helpers::EvaluateCallParams(m_params, context);
+    // Filters added to the environment take precedence over the builtins (ExpressionFilter::Make)
+    const FilterPtr filter = GetIf<Callable>(&m_registered) ? std::make_shared<UserDefinedFilter>(m_filterName, args, m_registered) : CreateFilter(m_filterName, args);
+    if (auto error = filter->GetArgumentsError(); !error.empty())
+    {
+        throw TemplateRuntimeError(m_filterName + "() " + error);
+    }
+    return filter->Filter(baseVal, context);
+}
+} // namespace filters
 
 } // namespace v2
 } // namespace jinja2
