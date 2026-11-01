@@ -117,8 +117,8 @@ jobs:
       run: .build\jinja2cpp_tests.exe "--gtest_filter=%BINDING_TESTS%"
 
   macos:
-    name: bindings macos-14 AppleClang C++17 Release
-    runs-on: macos-14
+    name: bindings macos-15 AppleClang C++17 Release
+    runs-on: macos-15
 
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -133,7 +133,7 @@ jobs:
 
     - uses: ./.github/actions/setup-ccache
       with:
-        key: bindings-macos-14
+        key: bindings-macos-15
         max-size: 500M
 
     - name: Configure
