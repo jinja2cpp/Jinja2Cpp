@@ -2689,8 +2689,13 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
     {
         site.CaptureOnEnd(values);
     }
+    const void* identity = site.CaptureIdentity();
     Callable result(Callable::Macro, CallableBody{ this, values.Nodes(), values.IsStaticAutoescape(), values.IsVolatileAutoescape(), std::move(site), m_readsSlotsOnly });
     result.SetAttributes(m_attributes);
+    if (identity)
+    {
+        result.SetBoundMethod(identity, KeptMacroIdentity);
+    }
     return result;
 }
 
@@ -2706,10 +2711,13 @@ std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& 
     {
         return std::nullopt;
     }
+    const void* identity = body->site.CaptureIdentity();
     CallableBody weakened = *body;
     weakened.site = body->site.Weakened();
     Callable result(Callable::Macro, std::move(weakened));
     result.SetAttributes(callable->GetAttributes());
+    // `is sameas` finds the macro it is a copy of (Callable::IsSame)
+    result.SetBoundMethod(identity, KeptMacroIdentity);
     return InternalValue(std::move(result));
 }
 

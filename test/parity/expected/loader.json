@@ -5134,6 +5134,32 @@
    "output": "210"
   },
   {
+   "id": "loader.include_block_macro_kept",
+   "template": "{% set ns = namespace(f=none) %}{% include 'b' %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "b": "{% set q = 'Q' %}{% block b %}{% set a = 'A' %}{% macro m() %}{{ a }}{{ q }}{% endmacro %}{% set ns.f = m %}{% endblock %}"
+   },
+   "output": "|AQ"
+  },
+  {
+   "id": "loader.include_with_macro_kept",
+   "template": "{% set ns = namespace(f=none) %}{% include 'w' %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "w": "{% set q = 'Q' %}{% with a = 'A' %}{% macro m() %}{{ a }}{{ q }}{% endmacro %}{% set ns.f = m %}{% endwith %}"
+   },
+   "output": "|missingQ"
+  },
+  {
    "id": "loader.include_macro_kept_snapshot",
    "template": "{% set ns = namespace(f=none) %}{% set x = 'X' %}{% include 'a' %}{% set x = 'X2' %}|{{ ns.f() }}",
    "context": {

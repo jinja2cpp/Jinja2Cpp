@@ -504,6 +504,7 @@ CASES = [
     ('macro_closure_per_recursive_call', '{% set ns = namespace(l=[]) %}{% macro r(n) %}{% macro inner() %}{{ n }}{% endmacro %}{% set _ = ns.l.append(inner) %}{% if n > 0 %}{{ r(n - 1) }}{% endif %}{% endmacro %}{{ r(3) }}{% for f in ns.l %}{{ f() }}{% endfor %}'),
     ('macro_closure_recursive', "{% set ns = namespace(f=none) %}{% macro o() %}{% macro i(n) %}{{ n }}{% if n %}{{ i(n - 1) }}{% endif %}{% endmacro %}{% set ns.f = i %}{% endmacro %}{{ o() }}{{ ns.f(3) }}"),
     ('macro_closure_calls_sibling', "{% set ns = namespace(f=none) %}{% macro o() %}{% macro j() %}J{% endmacro %}{% macro i() %}{{ j() }}{% endmacro %}{% set ns.f = i %}{% endmacro %}{{ o() }}{{ ns.f() }}"),
+    ('macro_closure_sameas_itself', "{% set ns = namespace(f=none) %}{% macro o() %}{% macro i() %}{{ ns.f is sameas i }}{% endmacro %}{% set ns.f = i %}{% endmacro %}{{ o() }}{{ ns.f() }}"),
     ('macro_closure_param_shadows_root', "{% set n = 'root' %}{% set ns = namespace(f=none) %}{% macro outer(n) %}{% macro inner() %}{{ n }}{% endmacro %}{% set ns.f = inner %}{% endmacro %}{{ outer('p') }}{{ ns.f() }}{{ n }}"),
     ('macro_closure_reads_root_live', '{% set t = 1 %}{% set ns = namespace(f=none) %}{% macro outer() %}{% macro inner() %}{{ t }}{% endmacro %}{% set ns.f = inner %}{% endmacro %}{{ outer() }}{% set t = 2 %}{{ ns.f() }}'),
     ('macro_closure_with_caller', "{% set ns = namespace(f=none) %}{% macro outer(n) %}{% macro inner() %}{{ n }}{{ caller() }}{% endmacro %}{% set ns.f = inner %}{% endmacro %}{{ outer('c') }}{% call ns.f() %}C{% endcall %}"),

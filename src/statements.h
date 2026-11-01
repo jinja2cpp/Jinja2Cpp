@@ -807,6 +807,9 @@ public:
     // (ClosureSite::CaptureOnEnd): the same macro reading that copy through a weak reference
     // (ClosureSite::Weakened), for the copy itself to hold. Else nothing. Throws std::bad_alloc
     [[nodiscard]] static std::optional<InternalValue> WeakenCapture(const InternalValue& value);
+    // The method name a macro that keeps a copy of its frames compares by, with its
+    // ClosureSite::CaptureIdentity as the receiver (Callable::SetBoundMethod)
+    static constexpr const char* KeptMacroIdentity = "macro";
 
 protected:
     // What MakeCallable's callable holds; defined in statements.cpp

@@ -2,3 +2,5 @@
 # Format and kinds: test/parity/README.md.
 
 loader.self_of_ended_scoped_block_loses_loop output 0165 deliberate: a `self` kept past its scoped block loses the loop variable, as a macro kept past its loop does
+loader.include_block_macro_kept output 0373 a macro defined in a block of an included template and kept past the include reads the block's and the include's names as undefined: the block's frame ended before the include captured them
+loader.include_with_macro_kept output 0373 a macro defined in a `with` of an included template and kept past the include reads the include's top-level names as undefined (Jinja2 prints `missing` for the `with` name, then the top-level name)

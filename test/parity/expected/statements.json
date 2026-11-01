@@ -18683,6 +18683,46 @@
    "output": "J"
   },
   {
+   "id": "statements.macro_closure_sameas_itself",
+   "template": "{% set ns = namespace(f=none) %}{% macro o() %}{% macro i() %}{{ ns.f is sameas i }}{% endmacro %}{% set ns.f = i %}{% endmacro %}{{ o() }}{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "True"
+  },
+  {
    "id": "statements.macro_closure_param_shadows_root",
    "template": "{% set n = 'root' %}{% set ns = namespace(f=none) %}{% macro outer(n) %}{% macro inner() %}{{ n }}{% endmacro %}{% set ns.f = inner %}{% endmacro %}{{ outer('p') }}{{ ns.f() }}{{ n }}",
    "context": {

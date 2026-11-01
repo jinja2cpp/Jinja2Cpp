@@ -1836,6 +1836,9 @@ public:
     [[nodiscard]] bool OutlivesItsFrames(const RenderContext& context) const { return (m_state & TopLevel) == 0 || context.m_endsBeforeRender; }
     // Whether CaptureOnEnd made the closure keep what it sees
     [[nodiscard]] bool KeepsCapture() const { return m_capture != nullptr; }
+    // What the macro and its Weakened copies compare by (Callable::IsSame), for a site that
+    // KeepsCapture: the capture is made for one macro definition
+    [[nodiscard]] const void* CaptureIdentity() const { return m_capture.get(); }
     // A copy of the site that reads what this one keeps without keeping it alive: for the
     // copy of the frames itself to hold (RenderContext::CollectNamesDownTo), which lives as
     // long as a closure outside it holds the capture (CycleCollector::KeepUntilEnd)
