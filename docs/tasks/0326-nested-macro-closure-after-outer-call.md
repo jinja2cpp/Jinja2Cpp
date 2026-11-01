@@ -31,17 +31,21 @@ a macro call ends (`InvokeMacroRenderer`), the context copies, for each closure 
 call's scope, the names that closure sees from there down to its template's top level
 (`RenderContext::CaptureClosures`), slots included. A later call that finds the frame ended
 (`ClosureSite::Resolve`, case 3) pushes the copy as a scope below the body, linked to the top
-level, which it still reads live. The render owns each copy while a closure outside it still holds its
-capture (`CycleCollector::KeepUntilEnd`, which prunes the others and releases the rest before
-the cycle walk); the site holds the copy weakly, so a namespace that stores the closure and is
-among the names copied forms no cycle. A closure among its own copied names goes in weakened
-(`MacroStatement::WeakenCapture`): it still calls itself and its siblings, without keeping the
-copy alive, and is `sameas` the macro it copies (both compare by the capture). A macro whose body reads no names keeps no copy. 200k nested-macro calls or 100k
-includes in a loop peak at 13 MB (180 MB before the pruning). A macro defined in a loop and kept past
-the loop still reads the loop's names as undefined (Jinja2 prints its `missing` sentinel there;
-the deliberate lines stay). Also fixed: `statements.nested_macro_escapes_its_call` (0165's
-deliberate line). Corpus rows `statements.macro_closure_*`.
+level, which it still reads live. The closures of one frame share one capture and so one copy, in which each finds the
+others. The render owns the copy while a closure outside it still holds the capture
+(`CycleCollector::KeepUntilEnd`, which prunes the others and releases the rest before the cycle
+walk); the site holds the copy weakly, so a namespace that stores the closure and is among the
+names copied forms no cycle. The frame's own closures go into the copy weakened
+(`MacroStatement::WeakenCapture`), and a call that reads the copy makes them strong again
+(`StrengthenCapture`), so recursion, sibling calls and a closure stored by another kept
+closure all work, and a copy never holds itself alive; weakened, strengthened and original
+compare `sameas` by capture and macro node. A macro whose body reads no names keeps no copy.
+200k nested-macro calls or 100k includes in a loop stay at about 14 MB (180 MB before).
+A module macro's result is copied without building a `std::function` per call
+(`ExportCopier`'s wrap is a function pointer). Corpus rows `statements.macro_closure_*`.
 
-Limits, filed as 0373: copies made in a host's module call die with that call, and a closure
-defined in a `with` or block of an included template keeps nothing of it
-(`loader.include_block_macro_kept`, `loader.include_with_macro_kept`).
+Limits, filed as 0373: copies made in a host's module call die with that call; a closure
+defined in a `with` or block of an included template, or in a loop of a macro call, keeps
+nothing of its frames (`loader.include_block_macro_kept`, `loader.include_with_macro_kept`,
+`statements.macro_closure_in_loop_of_call`); a closure stored in a container made in its own
+frame forms a cycle the render frees only when it ends, as every reference cycle (0110).

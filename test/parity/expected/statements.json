@@ -18723,6 +18723,166 @@
    "output": "True"
   },
   {
+   "id": "statements.macro_closure_sibling_reads_frame",
+   "template": "{% set ns = namespace(f=none) %}{% macro outer() %}{% set y = 'Y' %}{% macro b() %}{{ y }}{% endmacro %}{% macro a2() %}{{ b() }}{% endmacro %}{% set ns.f = a2 %}{% endmacro %}{{ outer() }}{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "Y"
+  },
+  {
+   "id": "statements.macro_closure_mutual_recursion",
+   "template": "{% set ns = namespace(f=none) %}{% macro outer() %}{% set d = 4 %}{% macro ev(n) %}e{{ n }}{% if n < d %}{{ od(n + 1) }}{% endif %}{% endmacro %}{% macro od(n) %}o{{ n }}{% if n < d %}{{ ev(n + 1) }}{% endif %}{% endmacro %}{% set ns.f = ev %}{% endmacro %}{{ outer() }}{{ ns.f(0) }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "e0o1e2o3e4"
+  },
+  {
+   "id": "statements.macro_closure_stored_by_kept_closure",
+   "template": "{% set ns = namespace(f=none, g=none) %}{% macro outer(v) %}{% set y = v %}{% macro inner() %}[{{ y }}]{% endmacro %}{% macro grab() %}{% set ns.f = inner %}{% endmacro %}{% set ns.g = grab %}{% endmacro %}{{ outer(1) }}{{ ns.g() }}{% set ns.g = none %}{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[1]"
+  },
+  {
+   "id": "statements.macro_closure_in_loop_of_call",
+   "template": "{% set ns = namespace(f=none) %}{% macro outer(v) %}{% for j in [1, 2] %}{% macro m() %}{{ j }}{{ v }}{% endmacro %}{% set ns.f = m %}{% endfor %}{% endmacro %}{{ outer(7) }}{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "missing7"
+  },
+  {
    "id": "statements.macro_closure_param_shadows_root",
    "template": "{% set n = 'root' %}{% set ns = namespace(f=none) %}{% macro outer(n) %}{% macro inner() %}{{ n }}{% endmacro %}{% set ns.f = inner %}{% endmacro %}{{ outer('p') }}{{ ns.f() }}{{ n }}",
    "context": {

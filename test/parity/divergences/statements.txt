@@ -8,3 +8,4 @@ statements.block_reference_new_each_read output    0214 deliberate: self.b is on
 statements.loop_cycle_string              output      0305 loop.cycle|string prints nothing; Jinja2 prints the bound method <bound method LoopContext.cycle of <LoopContext 1/2>>
 statements.loop_iter_inner_body_reads_index output    0304 a for loop over `loop` fetches its next item before the body runs, advancing the outer loop early; Jinja2's LoopContext fetches lazily
 statements.for_remove_current_item     output      0304 a for loop fetches its next item before the body runs: removing the current item visits a different set of items; Jinja2 fetches lazily
+statements.macro_closure_in_loop_of_call output 0373 a macro defined in a loop of a macro call and kept past the call loses the call's names too, not only the loop's (Jinja2 prints `missing` for the loop variable, then the call's names)

@@ -9,6 +9,7 @@
 #include "out_stream.h"
 #include "intrusive_ptr.h"
 #include "recursion_guard.h"
+#include "render_context.h"
 #include "render_failure.h"
 #include "shared_owner.h"
 #include "span.h"

@@ -1717,7 +1717,7 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
                 auto scope = blockContext.GetCurrentScope();
                 for (const auto& [captured, value] : *home.captured)
                 {
-                    scope[captured] = value;
+                    scope[captured] = MacroStatement::StrengthenCapture(value);
                 }
             }
             // The template has ended (an include that stored `self`): its blocks, in a frame
@@ -1844,10 +1844,22 @@ ClosureSite::ClosureSite(RenderContext& context, size_t depth)
 
 void ClosureSite::CaptureOnEnd(RenderContext& context)
 {
+    const uint32_t lowest = context.m_endsBeforeRender ? 0 : m_rootDepth;
+    // The closures of one frame share its copy: each sees the others there, and the copy lives
+    // while any of them is held outside it
+    if (context.m_captures && !context.m_captures->sites.empty())
+    {
+        auto last = context.m_captures->sites.back().lock();
+        if (last && last->depth == m_depth && last->serial == m_serial && last->lowest == lowest)
+        {
+            m_capture = std::move(last);
+            return;
+        }
+    }
     auto capture = std::make_shared<ClosureCapture>();
     capture->depth = m_depth;
     capture->serial = m_serial;
-    capture->lowest = context.m_endsBeforeRender ? 0 : m_rootDepth;
+    capture->lowest = lowest;
     context.AddClosureCapture(capture);
     m_capture = std::move(capture);
 }
@@ -1893,7 +1905,7 @@ void RenderContext::CaptureClosuresImpl(size_t count)
         // Its frame is the innermost scope
         assert(capture->depth == GetScopesCount());
         auto names = std::make_shared<InternalValueMap>();
-        CollectNamesDownTo(*names, capture->lowest);
+        CollectNamesDownTo(*names, capture->lowest, *capture);
         // Outside a render nothing would release the copy: the closure reads its frames as ended
         if (CycleCollector::KeepUntilEnd(names, capture))
         {
@@ -1907,12 +1919,12 @@ void RenderContext::CaptureClosuresImpl(size_t count)
     }
 }
 
-void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowest) const
+void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowest, const ClosureCapture& capture) const
 {
     const size_t entryPassDepth = m_entryPassDepth;
     VisitScopes(
         *this,
-        [&collected, lowest, entryPassDepth](const InternalValueMap* scope, size_t depth) {
+        [&collected, lowest, entryPassDepth, &capture](const InternalValueMap* scope, size_t depth) {
             if (depth < lowest)
             {
                 return true;
@@ -1924,7 +1936,7 @@ void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowes
                 {
                     continue;
                 }
-                if (auto weakened = MacroStatement::WeakenCapture(value))
+                if (auto weakened = MacroStatement::WeakenCapture(value, capture))
                 {
                     collected.emplace(name, std::move(*weakened));
                     continue;
@@ -1933,18 +1945,37 @@ void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowes
             }
             return false;
         },
-        [&collected](const FrameView& view, size_t /*depth*/) {
+        [&collected, &capture](const FrameView& view, size_t /*depth*/) {
             for (size_t idx = 0; idx != view.names.size(); ++idx)
             {
-                if (view.slots[idx].IsBound())
+                if (!view.slots[idx].IsBound())
                 {
-                    const auto& value = static_cast<const InternalValue&>(view.slots[idx]);
-                    auto weakened = MacroStatement::WeakenCapture(value);
-                    collected.emplace(std::string(view.nodes.Text(view.names[idx].name)), weakened ? std::move(*weakened) : value);
+                    continue;
                 }
+                const auto& value = static_cast<const InternalValue&>(view.slots[idx]);
+                std::string name(view.nodes.Text(view.names[idx].name));
+                if (auto weakened = MacroStatement::WeakenCapture(value, capture))
+                {
+                    collected.emplace(std::move(name), std::move(*weakened));
+                    continue;
+                }
+                collected.emplace(std::move(name), value);
             }
             return false;
         });
+}
+
+void RenderContext::EnterCapturedScope(const InternalValueMap& captured, size_t link)
+{
+    auto scope = EnterScope();
+    for (const auto& [name, value] : captured)
+    {
+        scope[name] = MacroStatement::StrengthenCapture(value);
+    }
+    if (link < GetScopesCount() - 1)
+    {
+        PushFrameView({}, link);
+    }
 }
 
 void BlockStatement::Render(OutStream& os, RenderContext& values)
@@ -2692,32 +2723,58 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
     const void* identity = site.CaptureIdentity();
     Callable result(Callable::Macro, CallableBody{ this, values.Nodes(), values.IsStaticAutoescape(), values.IsVolatileAutoescape(), std::move(site), m_readsSlotsOnly });
     result.SetAttributes(m_attributes);
+    // Its WeakenCapture and StrengthenCapture copies are `sameas` it (Callable::IsSame): the
+    // capture is of one frame, where this node defines one macro
     if (identity)
     {
-        result.SetBoundMethod(identity, KeptMacroIdentity);
+        result.SetBoundMethod(identity, this);
     }
     return result;
 }
 
-std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& value)
+namespace
+{
+// The body of `value` when it is a macro (MacroStatement::MakeCallable), else null
+template<typename Body>
+const Body* MacroBodyOf(const InternalValue& value)
 {
     const auto* callable = GetIf<Callable>(&value);
     if (!callable || callable->GetKind() != Callable::Macro || callable->GetType() != Callable::Type::Statement)
     {
-        return std::nullopt;
+        return nullptr;
     }
-    const auto* body = callable->GetStatementCallable().target<CallableBody>();
-    if (!body || !body->site.KeepsCapture())
+    return callable->GetStatementCallable().target<Body>();
+}
+} // namespace
+
+std::optional<InternalValue> MacroStatement::WeakenCapture(const InternalValue& value, const ClosureCapture& capture)
+{
+    const auto* body = MacroBodyOf<CallableBody>(value);
+    if (!body || !body->site.Keeps(capture))
     {
         return std::nullopt;
     }
-    const void* identity = body->site.CaptureIdentity();
     CallableBody weakened = *body;
     weakened.site = body->site.Weakened();
     Callable result(Callable::Macro, std::move(weakened));
-    result.SetAttributes(callable->GetAttributes());
-    // `is sameas` finds the macro it is a copy of (Callable::IsSame)
-    result.SetBoundMethod(identity, KeptMacroIdentity);
+    result.SetAttributes(GetIf<Callable>(&value)->GetAttributes());
+    result.SetBoundMethod(&capture, body->macro);
+    return InternalValue(std::move(result));
+}
+
+InternalValue MacroStatement::StrengthenCapture(const InternalValue& value)
+{
+    const auto* body = MacroBodyOf<CallableBody>(value);
+    if (!body || !body->site.IsWeakened())
+    {
+        return value;
+    }
+    CallableBody strong = *body;
+    strong.site = body->site.Strengthened();
+    const void* identity = strong.site.CaptureIdentity();
+    Callable result(Callable::Macro, std::move(strong));
+    result.SetAttributes(GetIf<Callable>(&value)->GetAttributes());
+    result.SetBoundMethod(identity, body->macro);
     return InternalValue(std::move(result));
 }
 

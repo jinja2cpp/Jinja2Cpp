@@ -27,7 +27,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -54,11 +53,15 @@ namespace
 class ExportCopier
 {
 public:
-    // What a template callable becomes (a call in the module, TemplateModuleState::Wrap)
-    using WrapCallable = std::function<Value(const InternalValue&)>;
+    // What a template callable becomes: a call in the module `state`, whose errors name `name`
+    // (TemplateModuleState::Wrap). A plain function: a module call makes a copier for its
+    // result, which mostly holds no callable
+    using WrapCallable = Value (*)(void* state, const InternalValue& callable, const std::string& name);
 
-    explicit ExportCopier(WrapCallable wrap)
-        : m_wrap(std::move(wrap))
+    ExportCopier(WrapCallable wrap, void* state, const std::string& name)
+        : m_wrap(wrap)
+        , m_state(state)
+        , m_name(name)
     {
     }
 
@@ -67,7 +70,7 @@ public:
         // A macro anywhere in a value, not only at the module's top level (docs/tasks/0300)
         if (const auto* callable = GetIf<Callable>(&value); callable && callable->GetKind() != Callable::UserCallable)
         {
-            return m_wrap(value);
+            return m_wrap(m_state, value, m_name);
         }
         // Nesting comes from the template (a list built in a loop): stop where a render would
         CheckStack();
@@ -146,6 +149,8 @@ private:
     }
 
     WrapCallable m_wrap;
+    void* m_state;
+    const std::string& m_name;
     // The containers being copied
     std::unordered_set<const void*> m_path;
 };
@@ -464,7 +469,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             {
                 callParams.kwParams[argName] = OwnedArgument(arg);
             }
-            auto result = ExportCopier(Wrap(name)).Copy(InvokeInModule(module->Context(), fn, callParams, output, impl->m_settings->hasRenderLimits));
+            auto result = ExportCopier(&Wrap, this, name).Copy(InvokeInModule(module->Context(), fn, callParams, output, impl->m_settings->hasRenderLimits));
             if (impl->m_settings->hasRenderLimits)
             {
                 detail::PollDeadline();
@@ -488,9 +493,9 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
 
     // A template callable of the module found in a value handed to the host, whose errors name
     // `name`, as a call in the module: a macro in an exported dict, or one a call returns
-    [[nodiscard]] ExportCopier::WrapCallable Wrap(const std::string& name)
+    static Value Wrap(void* state, const InternalValue& callable, const std::string& name)
     {
-        return [state = this->shared_from_this(), name](const InternalValue& callable) { return MakeModuleCall(state, callable, name); };
+        return MakeModuleCall(static_cast<TemplateModuleState*>(state)->shared_from_this(), callable, name);
     }
 
     std::shared_ptr<const Impl> impl;
@@ -557,7 +562,7 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
                 continue;
             }
             // Copied within the render's limits, which bound a lazy list read out
-            result.exports[name] = ExportCopier(state->Wrap(name)).Copy(*value);
+            result.exports[name] = ExportCopier(&TemplateModuleState<CharT>::Wrap, state.get(), name).Copy(*value);
         }
         cycles.Complete();
     }

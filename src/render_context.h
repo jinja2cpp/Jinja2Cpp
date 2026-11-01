@@ -1154,29 +1154,19 @@ private:
     }
     // CaptureClosures for a context that defined such closures. Defined in statements.cpp
     void CaptureClosuresImpl(size_t count);
-    // Adds to `names` what a lookup here sees in the scopes from the innermost down to scope
-    // `lowest`, frame views included, as CollectVisibleNames does but keeping `loop` and the
-    // names bound at entry this context does not pass over. A closure that keeps such a copy
-    // itself goes in weakened (MacroStatement::WeakenCapture): holding it as it is, the copy
-    // would keep the closure alive, and the closure the copy, until the render ends. Defined
-    // in statements.cpp
-    void CollectNamesDownTo(InternalValueMap& names, size_t lowest) const;
+    // Adds to `collected` what a lookup here sees in the scopes from the innermost down to
+    // scope `lowest`, frame views included, as CollectVisibleNames does but keeping `loop` and
+    // the names bound at entry this context does not pass over: the copy for `capture`. The
+    // closures that share `capture` go in weakened (MacroStatement::WeakenCapture): holding
+    // them as they are, the copy would keep them alive, and they the copy, until the render
+    // ends. Defined in statements.cpp
+    void CollectNamesDownTo(InternalValueMap& collected, size_t lowest, const ClosureCapture& capture) const;
     // Adds a closure defined here that keeps what it sees (ClosureSite::CaptureOnEnd). Defined
     // in statements.cpp
     void AddClosureCapture(const std::shared_ptr<ClosureCapture>& capture);
-    // A scope holding `captured`, linked below `link` (HomeCall::EnterCaptured)
-    void EnterCapturedScope(const InternalValueMap& captured, size_t link)
-    {
-        auto scope = EnterScope();
-        for (const auto& [name, value] : captured)
-        {
-            scope[name] = value;
-        }
-        if (link < GetScopesCount() - 1)
-        {
-            PushFrameView({}, link);
-        }
-    }
+    // A scope holding `captured`, linked below `link` (HomeCall::EnterCaptured). Defined in
+    // statements.cpp. Throws std::bad_alloc
+    void EnterCapturedScope(const InternalValueMap& captured, size_t link);
     // The serial of scope `depth - 1` (ScopeStack::Stamp), when it is one of this context's
     // own; 0 otherwise
     uint32_t SerialBelow(size_t depth)
@@ -1839,6 +1829,8 @@ public:
     // What the macro and its Weakened copies compare by (Callable::IsSame), for a site that
     // KeepsCapture: the capture is made for one macro definition
     [[nodiscard]] const void* CaptureIdentity() const { return m_capture.get(); }
+    // Whether the site keeps `capture` (CaptureOnEnd)
+    [[nodiscard]] bool Keeps(const ClosureCapture& capture) const { return m_capture.get() == &capture; }
     // A copy of the site that reads what this one keeps without keeping it alive: for the
     // copy of the frames itself to hold (RenderContext::CollectNamesDownTo), which lives as
     // long as a closure outside it holds the capture (CycleCollector::KeepUntilEnd)
@@ -1847,6 +1839,18 @@ public:
         ClosureSite copy(*this);
         copy.m_weakCapture = m_capture;
         copy.m_capture.reset();
+        return copy;
+    }
+    // Whether the site is a Weakened copy
+    [[nodiscard]] bool IsWeakened() const { return !m_capture && !m_weakCapture.expired(); }
+    // The site a Weakened copy was made of, for a call that reads it out of the copy of the
+    // frames: what the call stores elsewhere keeps the capture, as the closure it copies does.
+    // Its capture is alive: the call reads the copy
+    [[nodiscard]] ClosureSite Strengthened() const
+    {
+        ClosureSite copy(*this);
+        copy.m_capture = m_weakCapture.lock();
+        copy.m_weakCapture.reset();
         return copy;
     }
     // Makes the closure keep what it sees of its frames when they end (ClosureCapture). For a

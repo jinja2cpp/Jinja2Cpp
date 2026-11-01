@@ -1890,8 +1890,9 @@ public:
 
     // A bound method made anew on each read (loop.cycle): equal to another read of the same
     // method of the same object, as Python's bound methods compare. `self` must stay valid
-    // while the callable lives (it captures the object); `method` is a static name
-    void SetBoundMethod(const void* self, const char* method)
+    // while the callable lives (it captures the object); `method` names the method (a static
+    // name, or the node of a macro: MacroStatement::MakeCallable). Neither is read
+    void SetBoundMethod(const void* self, const void* method)
     {
         m_boundSelf = self;
         m_boundMethod = method;
@@ -1909,7 +1910,7 @@ private:
     std::shared_ptr<const CallableHolder> m_callable;
     std::shared_ptr<const InternalValueMap> m_attributes;
     const void* m_boundSelf = nullptr;
-    const char* m_boundMethod = nullptr;
+    const void* m_boundMethod = nullptr;
 };
 
 // The function of a method bound to its receiver (methods::MakeBoundMethod): a type of its

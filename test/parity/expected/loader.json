@@ -5160,6 +5160,19 @@
    "output": "|missingQ"
   },
   {
+   "id": "loader.include_macro_kept_sibling_in_loop",
+   "template": "{% set ns = namespace(l=[]) %}{% for i in range(3) %}{% include 'i' %}{% endfor %}{% for f in ns.l %}{{ f() }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = i %}{% macro b() %}{{ y }}{% endmacro %}{% macro a2() %}<{{ b() }}>{% endmacro %}{% set _ = ns.l.append(a2) %}"
+   },
+   "output": "<0><1><2>"
+  },
+  {
    "id": "loader.include_macro_kept_snapshot",
    "template": "{% set ns = namespace(f=none) %}{% set x = 'X' %}{% include 'a' %}{% set x = 'X2' %}|{{ ns.f() }}",
    "context": {

@@ -3,12 +3,13 @@ status: open
 priority: low
 area: parity
 depends: [0326, 0323]
-touches: [src/statements.cpp, src/render_context.h, src/template_module.cpp, test/parity/divergences/loader.txt]
+touches: [src/statements.cpp, src/render_context.h, src/template_module.cpp, src/cycle_collector.cpp, test/parity/divergences/loader.txt, test/parity/divergences/statements.txt]
 ---
-# Closures kept past a module call or a scoped frame of an include lose their names
+# Closures kept past a module call or a scoped frame lose their names
 
 **Problem.** Found by the verifier of parity batch 2 group C (0326, 0323). A closure that keeps
-the names of the frame it was defined in (`ClosureCapture`) loses them in two cases.
+the names of the frame it was defined in (`ClosureCapture`) loses them in three cases, and one
+case holds memory until the render ends.
 
 1. *A host's module call.* The copies made during a call the host makes into a template module
    (`TemplateModuleState::Call`) are owned by that call's cycle collector, which releases them
@@ -28,13 +29,29 @@ the names of the frame it was defined in (`ClosureCapture`) loses them in two ca
    case reads `a` and `q` as undefined (`|`, Python `|AQ`), the `with` case reads `q` as
    undefined too (`|missing`, Python `|missingQ`). Corpus rows
    `loader.include_block_macro_kept` and `loader.include_with_macro_kept`.
+3. *A loop frame inside a macro call.* A macro defined in a `for` body of a macro call and kept
+   past the call reads the call's names as undefined too, not only the loop's (Jinja2 prints its
+   `missing` sentinel for the loop variable): `{% macro outer(v) %}{% for j in [1, 2] %}{% macro
+   m() %}{{ j }}{{ v }}{% endmacro %}{% set ns.f = m %}{% endfor %}{% endmacro %}` gives `` for
+   `ns.f()` after `outer(7)`, Python `missing7`. Corpus row
+   `statements.macro_closure_in_loop_of_call`. The loop's capture is skipped because the loop's
+   scope has ended when the call captures.
+4. *Memory.* A closure stored in a list, dict or namespace made in its own frame
+   (`{% set lst = [] %}{% macro m() %}{{ lst|length }}{% endmacro %}{% set _ = lst.append(m) %}`)
+   closes a cycle through the copy of the frame (copy, container, closure, capture), which the
+   render frees only when it ends, as it does every reference cycle (0110): a loop of 100k such
+   calls peaks at about 145 MB in a Debug build, Python at 22 MB. A plain cycle
+   (`{% set l = [] %}{% set _ = l.append(l) %}` in a macro) grows the same way, by less per call.
 
 **Proposal.** (1) Own the copies of a module call by the module's state (or the render that
 holds it) rather than by the call's collector, so they live as long as the closure can be
-reached. (2) Capture a closure's frame at the end of the scoped frame it was defined in (the
-`with`, block or scoped block), as `InvokeMacroRenderer` does for a macro call, down to the
-include's top level, and let the include's own capture add its top-level names.
+reached. (2, 3) Capture a closure's frame at the end of the scoped frame it was defined in (the
+`with`, block, scoped block or loop iteration), as `InvokeMacroRenderer` does for a macro call,
+and let the enclosing frame's capture add its names when it ends. (4) Collect the cycles of a
+render while it runs, as Python's generational collector does, or let the collector see a
+closure's capture and copy (ValueObject::Traverse) so a walk run when the copies pass a count
+frees the dead ones.
 
-**Done when.** Both corpus rows match and their divergence lines are deleted, a module-state
+**Done when.** The three corpus rows match and their divergence lines are deleted, a module-state
 test pins case 1, and the memory bound of 0326 (copies freed once no closure outside them
-holds the capture) still holds.
+holds the capture) still holds, and the case 4 loop stays in constant memory.
