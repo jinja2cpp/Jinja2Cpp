@@ -630,7 +630,7 @@
         }
       ],
       "primaryPackagePurpose": "APPLICATION",
-      "comment": "role: tooling; phases: dev; exposure: none; delivery: system; selected-by: CI (actions/setup-python 3.12) and developers; not needed to build or install; used-for: Oracle runs, table generators (ORACLE_PYTHON 3.12), task and preflight scripts, bench drivers, this SBOM generator; why: Project tooling language; lighten: Not part of any build"
+      "comment": "role: tooling; phases: dev; exposure: none; delivery: system; selected-by: CI (actions/setup-python, version from .python-version) and developers; not needed to build or install; used-for: Oracle runs, table generators (ORACLE_PYTHON from .python-version), task and preflight scripts, bench drivers, this SBOM generator; why: Project tooling language; lighten: Not part of any build"
     },
     {
       "SPDXID": "SPDXRef-Package-clang-tidy",
@@ -1133,5 +1133,5 @@
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-2f6c55b0c0f322f9"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-54ed67e27ff0c684"
 }

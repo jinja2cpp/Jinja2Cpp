@@ -4,8 +4,8 @@
 The oracle is transformers' own chat-template environment
 (``chat_template_utils._compile_jinja_template``: ImmutableSandboxedEnvironment with
 trim_blocks, lstrip_blocks, loop controls and ``{% generation %}``, its ``tojson`` filter and
-the ``raise_exception`` and ``strftime_now`` globals), pinned in requirements.txt and run under
-Python 3.12 as test/parity is. ``strftime_now`` reads a fixed clock, FIXED_NOW; the C++ suite
+the ``raise_exception`` and ``strftime_now`` globals), pinned in requirements.txt (transformers) and
+test/parity/requirements.txt (Jinja2), under the Python of .python-version as test/parity. ``strftime_now`` reads a fixed clock, FIXED_NOW; the C++ suite
 uses the same one.
 
 Outputs, read by chat_template_test.cpp:
@@ -38,8 +38,19 @@ import transformers  # noqa: E402
 from transformers.utils import chat_template_utils  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
-TRANSFORMERS_VERSION = "5.22.1"
-JINJA2_VERSION = "3.1.6"
+
+
+def pinned_version(requirements, package):
+    """The version requirements.txt pins for package; the one place each pin lives."""
+    for line in requirements.read_text(encoding="utf-8").splitlines():
+        name, _, version = line.split("#")[0].strip().partition("==")
+        if name.lower() == package:
+            return version
+    sys.exit(f"{requirements} does not pin {package}==<version>")
+
+
+TRANSFORMERS_VERSION = pinned_version(HERE / "requirements.txt", "transformers")
+JINJA2_VERSION = pinned_version(HERE.parent / "parity" / "requirements.txt", "jinja2")
 FIXED_NOW = datetime.datetime(2025, 3, 14, 9, 26, 53)
 # transformers passes the tokenizer's special tokens; placeholders keep the suite tokenizer-free
 SPECIAL_TOKENS = {"bos_token": "<|bos|>", "eos_token": "<|eos|>"}
@@ -131,7 +142,7 @@ def main():
     args = parser.parse_args()
     if transformers.__version__ != TRANSFORMERS_VERSION or jinja2.__version__ != JINJA2_VERSION:
         sys.exit(f"need transformers {TRANSFORMERS_VERSION} and jinja2 {JINJA2_VERSION} "
-                 f"(pip install -r {HERE / 'requirements.txt'}), found {transformers.__version__} and {jinja2.__version__}")
+                 f"(pip install -r test/parity/requirements.txt -r test/chat_templates/requirements.txt), found {transformers.__version__} and {jinja2.__version__}")
     problems = check_sources()
     files = generate()
     out = HERE / "expected"

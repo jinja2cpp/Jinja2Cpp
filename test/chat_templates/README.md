@@ -15,7 +15,7 @@ where Jinja2C++ has to match Python exactly.
 | `divergences.txt` | Allow-list of renders that differ, with kind, owning task and reason |
 | `chat_template_test.cpp` | The gtest suite (`ctest -R chat_templates`) |
 | `update_templates.py` | Refreshes `templates/` from a llama.cpp checkout |
-| `requirements.txt` | Pinned transformers, jinja2 and MarkupSafe |
+| `requirements.txt` | Pinned transformers; Jinja2 and MarkupSafe come from `test/parity/requirements.txt` |
 
 ## The oracle
 
@@ -29,10 +29,10 @@ calls that function, so the expectations follow transformers' code rather than a
 placeholders, so no tokenizer is needed. The context stored in `expected/conversations.json`
 is the one the template sees, after transformers adds the reasoning-field aliases.
 
-Run under Python 3.12, as the parity corpus:
+Run under the Python of `.python-version` (3.12), as the parity corpus:
 
 ```bash
-uv venv -p python3.12 /tmp/py312 && uv pip install -p /tmp/py312/bin/python -r test/chat_templates/requirements.txt
+uv venv -p python3.12 /tmp/py312 && uv pip install -p /tmp/py312/bin/python -r test/parity/requirements.txt -r test/chat_templates/requirements.txt
 /tmp/py312/bin/python test/chat_templates/generate.py
 ```
 

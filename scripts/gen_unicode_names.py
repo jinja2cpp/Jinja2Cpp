@@ -29,7 +29,10 @@ import pathlib
 import sys
 import unicodedata
 
-ORACLE_PYTHON = (3, 12)
+# The oracle's Python is pinned once, in .python-version at the repository root.
+ORACLE_PYTHON = tuple(
+    int(part) for part in
+    (pathlib.Path(__file__).resolve().parent.parent / ".python-version").read_text().split()[0].split(".")[:2])
 ALIASES = pathlib.Path(__file__).resolve().parent / "unicode_name_aliases.txt"
 
 # Computed by CPython, matched case sensitively

@@ -14,6 +14,7 @@ on:
     paths:
       - 'test/parity/**'
       - 'test/chat_templates/**'
+      - '.python-version'
       - 'src/unicode_printable.h'
       - 'src/unicode_tables.h'
       - 'src/unicode_case.h'
@@ -33,6 +34,7 @@ on:
     paths:
       - 'test/parity/**'
       - 'test/chat_templates/**'
+      - '.python-version'
       - 'src/unicode_printable.h'
       - 'src/unicode_tables.h'
       - 'src/unicode_case.h'
@@ -63,7 +65,7 @@ jobs:
 
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
       with:
-        python-version: '3.12'
+        python-version-file: .python-version
 
     - name: Install pinned jinja2
       run: python -m pip install -r test/parity/requirements.txt
@@ -73,7 +75,7 @@ jobs:
 
     # The Hugging Face chat templates (test/chat_templates), rendered by pinned transformers
     - name: Install pinned transformers
-      run: python -m pip install -r test/chat_templates/requirements.txt
+      run: python -m pip install -r test/parity/requirements.txt -r test/chat_templates/requirements.txt
 
     - name: Check chat template expectations
       run: python test/chat_templates/generate.py --check

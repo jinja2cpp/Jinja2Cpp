@@ -398,6 +398,39 @@ error is compared, not the message or the line.
 | Wide strings | `TemplateW`; the corpus runs every case through it too (`ParityWide`), with narrow/wide conversion by a built-in UTF-8 codec, independent of the C locale | ✅ | 0035 |
 | Error position (file, line, column) | `ErrorInfo` | ✅ messages differ from Jinja2 | |
 
+## Oracle pin
+
+Python Jinja2 at one pinned pair is the oracle; Jinja2C++ 2.0 follows exactly that pair
+(decision D7 in [release-2.0.md](release-2.0.md), task 0186). The pair is stated once per
+file and every consumer reads it from there:
+
+| What | Pinned in | Read by |
+|---|---|---|
+| Python minor version (3.12, Unicode 15.0) | `.python-version` | the five workflows through `python-version-file`; `scripts/gen_unicode_printable.py` and `gen_unicode_names.py` (`ORACLE_PYTHON`); `JINJA2CPP_ORACLE_PYTHON` in `jinja2cpp/version.h`; `sbom/components.json` evidence |
+| Jinja2 (3.1.6) and MarkupSafe (3.0.3) | `test/parity/requirements.txt` | `test/parity/generate.py`; `JINJA2CPP_ORACLE_JINJA2` in `jinja2cpp/version.h`; the workflows' `pip install -r` |
+
+`jinja2cpp/version.h` exposes `JINJA2CPP_ORACLE_PYTHON` (`"3.12"`) and `JINJA2CPP_ORACLE_JINJA2`
+(`"3.1.6"`) as string macros, so a consumer can see which Python and Jinja2 the build
+matches. They carry no ABI.
+
+Policy: one pair per release, moved deliberately and never by a dependency bot. The
+generated Unicode headers in `src/` and the checked-in `expected/` files are tied to the
+pair and checked in CI (`gen_*.py --check`, `generate.py --check`), so a half-done bump
+fails. A pair may be newer than the one a user has installed; a user who wants to know how
+Jinja2C++ compares with another Jinja2 uses the oracle selection of task 0186 (phase 1),
+not a different build of the library.
+
+Bump checklist (one PR):
+
+1. Edit `.python-version` and/or `test/parity/requirements.txt`.
+2. Regenerate the tables with that Python: `python3 scripts/gen_unicode_printable.py > src/unicode_printable.h`
+   and the other `scripts/gen_*.py` (each refuses a Python that is not the pinned one).
+3. Regenerate the expectations: `python3 test/parity/generate.py`, review the diff case by case.
+4. Rebuild and run `ctest -R parity`; a case that now differs is either fixed or listed in
+   `test/parity/divergences/<area>.txt` with its task.
+5. `python3 scripts/sbom.py` (versions in `sbom/components.json`), then `python3 scripts/sbom.py --check`.
+6. Update the pair named in `docs/release-2.0.md` (D7) and this section.
+
 ## Keeping this map current
 
 When a PR fixes a divergence, the parity suite fails until the case's line is removed

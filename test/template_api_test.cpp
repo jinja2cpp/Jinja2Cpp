@@ -10,6 +10,7 @@
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -549,6 +550,17 @@ TEST(TemplateApiTest, VersionMacrosMatchProjectVersion)
     static_assert(JINJA2CPP_VERSION_MAJOR == 2);
     const auto expected = std::to_string(JINJA2CPP_VERSION_MAJOR) + "." + std::to_string(JINJA2CPP_VERSION_MINOR) + "." + std::to_string(JINJA2CPP_VERSION_PATCH);
     EXPECT_EQ(expected, JINJA2CPP_VERSION_STRING);
+}
+
+// The oracle pair comes from .python-version and test/parity/requirements.txt (docs/tasks/0186)
+TEST(TemplateApiTest, OracleVersionMacrosNameThePinnedPair)
+{
+    const std::string python = JINJA2CPP_ORACLE_PYTHON;
+    const std::string jinja2 = JINJA2CPP_ORACLE_JINJA2;
+    EXPECT_EQ(python.find_first_not_of("0123456789."), std::string::npos);
+    EXPECT_EQ(1U, std::count(python.begin(), python.end(), '.'));
+    EXPECT_EQ(jinja2.find_first_not_of("0123456789."), std::string::npos);
+    EXPECT_GE(std::count(jinja2.begin(), jinja2.end(), '.'), 1);
 }
 
 // What renders keep on a thread is freed by ReleaseThreadCaches (docs/tasks/0275)
