@@ -20,3 +20,13 @@ and repr() is `<TemplateModule 'name'>` (see 0284 for the module object).
 
 **Done when.** `filters.pprint_global_and_module` matches and its line is gone from
 `test/parity/divergences/filters.txt`.
+
+**Done.** `pprint` prints a global's class through 0305's `Callable::SetRepr`. `import ... as m`
+binds a `ModuleMapAdapter` (internal_value.cpp, `CreateModuleAdapter`, made by
+`ImportedModule::MakeObject`): an object of class `TemplateModule` whose repr argument is the
+template's name and whose `IMapAccessor::GetStrValue` is the output of the module's top level,
+which `ImportedModule::Render` now keeps. `{{ m }}` prints that output, unescaped under
+autoescape as Jinja2's `__html__` gives it (markup.h); `pprint`, `[m]` and `string` give
+`<TemplateModule 'lib'>`, and being an object, `m|length`, `for k in m`, `m|list`, `m.items()`,
+`m|dictsort` and `m|tojson` fail as in Jinja2 (loader `module_object_*` cases). `m is escaped`
+stays False: 0367.

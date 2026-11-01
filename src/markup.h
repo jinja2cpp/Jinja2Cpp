@@ -193,6 +193,11 @@ inline InternalValue MarkupEscape(const InternalValue& val, IRendererCallback* c
     {
         return host::Html(*host, callback->IsWideTarget());
     }
+    // So is a template module, whose __html__ is its output as Markup (docs/tasks/0309)
+    if (const auto map = AsMap(val); map && map->GetStrValue())
+    {
+        return InternalValue(*map->GetStrValue()).SetMarkup();
+    }
     // Any other value is escaped from its str()
     auto text = callback->GetAsTargetString(val);
     return std::visit([&escape](const auto& str) { return escape(std::basic_string_view<typename std::decay_t<decltype(str)>::value_type>(str)); }, text);

@@ -23,3 +23,12 @@ not an attribute, so `range.name` stays undefined), print it in `ValueRendererBa
 it in `xmlattr`.
 
 **Done when.** No line of `test/parity/divergences/` names 0305.
+
+**Done.** `Callable::SetRepr` gives range, dict, cycler, joiner and namespace their class text
+(global_functions.cpp `MakeClass`); `ValueRendererBase` prints it, and so do `xmlattr`,
+`pprint`, `~`, `%` and `format`, which print through it. `loop.cycle` and `loop.changed` print
+as bound methods through `Callable::SetBoundMethod(self, method, receiver)`: the receiver is the
+`LoopCycleCell` the callables share with their loop (statements.cpp), which reads the live loop
+while its frame holds it and keeps the last position and length after, so a kept callable does
+not keep the loop (that would collect a filtered loop's rest at its end). The length after a
+`break` out of a lazily filtered loop is unknown then: 0366.
