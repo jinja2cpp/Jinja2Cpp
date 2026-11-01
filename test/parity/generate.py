@@ -229,6 +229,8 @@ def main():
                  f"pip install jinja2=={JINJA2_VERSION}")
 
     out_dir = args.out.resolve() if args.out else HERE / "expected"
+    if args.out and out_dir == (HERE / "expected").resolve():
+        sys.exit("--out names expected/; run generate.py without --out to regenerate it")
     out_dir.mkdir(parents=True, exist_ok=True)
     stale, total = [], 0
     wanted = set()
@@ -259,7 +261,8 @@ def main():
             stale.append("index.json")
         else:
             index_path.write_text(index, encoding="utf-8")
-    for orphan in sorted(p.name for p in out_dir.glob("*.json") if p.name not in wanted):
+    # Only expected/ is swept: a --out directory may hold other files, and index.json lists the areas
+    for orphan in [] if args.out else sorted(p.name for p in out_dir.glob("*.json") if p.name not in wanted):
         if args.check:
             stale.append(orphan)
         else:

@@ -707,35 +707,42 @@ const OracleRun& Oracle()
         {
             return r;
         }
-        const auto versions = ReadFile(r.dir + "/oracle.json");
-        if (versions.empty())
+        try
         {
-            r.problems.push_back("missing " + r.dir + "/oracle.json; run test/parity/generate.py --out " + r.dir + " --any-version");
-        }
-        else
-        {
-            r.versions = Json::parse(versions);
-        }
-        const auto index = ReadFile(r.dir + "/index.json");
-        if (index.empty())
-        {
-            r.problems.push_back("missing " + r.dir + "/index.json");
-            return r;
-        }
-        const auto areas = Json::parse(index)["areas"].get<std::vector<std::string>>();
-        for (const auto& area : areas)
-        {
-            const auto text = ReadFile(r.dir + "/" + area + ".json");
-            if (text.empty())
+            const auto versions = ReadFile(r.dir + "/oracle.json");
+            if (versions.empty())
             {
-                r.problems.push_back("missing " + r.dir + "/" + area + ".json");
-                continue;
+                r.problems.push_back("missing " + r.dir + "/oracle.json; run test/parity/generate.py --out " + r.dir + " --any-version");
             }
-            auto doc = Json::parse(text); // named: a range-for over parse(text)["cases"] would outlive the document
-            for (auto& c : doc["cases"])
+            else
             {
-                r.cases.emplace(c["id"].get<std::string>(), std::move(c));
+                r.versions = Json::parse(versions);
             }
+            const auto index = ReadFile(r.dir + "/index.json");
+            if (index.empty())
+            {
+                r.problems.push_back("missing " + r.dir + "/index.json");
+                return r;
+            }
+            const auto areas = Json::parse(index)["areas"].get<std::vector<std::string>>();
+            for (const auto& area : areas)
+            {
+                const auto text = ReadFile(r.dir + "/" + area + ".json");
+                if (text.empty())
+                {
+                    r.problems.push_back("missing " + r.dir + "/" + area + ".json");
+                    continue;
+                }
+                auto doc = Json::parse(text); // named: a range-for over parse(text)["cases"] would outlive the document
+                for (auto& c : doc["cases"])
+                {
+                    r.cases.emplace(c["id"].get<std::string>(), std::move(c));
+                }
+            }
+        }
+        catch (const std::exception& ex) // a malformed file: a clear failure in OracleCorpusMatches
+        {
+            r.problems.push_back("cannot read " + r.dir + ": " + ex.what());
         }
         return r;
     }();
@@ -831,7 +838,7 @@ std::string BundledPin(const std::string& package)
 std::string OracleVersion(const char* key)
 {
     const auto& v = Oracle().versions;
-    return v.contains(key) ? v[key].get<std::string>() : "?";
+    return v.is_object() && v.contains(key) && v[key].is_string() ? v[key].get<std::string>() : "?";
 }
 
 void WriteOracleReport()
@@ -915,8 +922,8 @@ bool JudgedByAllowList(const std::string& id, const Json& c, const Result* cpp)
     if (oracle.strict && verdict != OracleVerdict::TracksOracle)
     {
         ADD_FAILURE() << "JINJA2CPP_TEST_ORACLE_STRICT: " << id << " is " << OracleVerdictName(verdict) << "\n  template: " << c["template"].dump()
-                      << "\n  oracle:  " << Json(PythonText(found->second)).dump() << "\n  bundled: " << Json(PythonText(c)).dump()
-                      << "\n  c++:     " << Json(CppText(cpp)).dump();
+                      << "\n  oracle:  " << ReportCell(PythonText(found->second)) << "\n  bundled: " << ReportCell(PythonText(c))
+                      << "\n  c++:     " << ReportCell(CppText(cpp));
     }
     return false;
 }

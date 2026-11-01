@@ -135,7 +135,7 @@ as an older 3.x, Jinja2's main branch or another Python, configure the build wit
 |---|---|
 | `bundled` (default) | `expected/`; nothing else runs and no Python is needed |
 | `python` | the jinja2 and markupsafe installed for `JINJA2CPP_TEST_ORACLE_PYTHON` (default: the Python 3 CMake finds) |
-| `venv` | a venv in `<build>/parity-oracle/venv`, made from `JINJA2CPP_TEST_ORACLE_PYTHON` and filled by pip from `JINJA2CPP_TEST_ORACLE_REQUIREMENTS` (`;`-separated, e.g. `jinja2==3.1.2;markupsafe==2.1.5` or `jinja2 @ git+https://github.com/pallets/jinja@main`) |
+| `venv` | a venv in `<build>/parity-oracle/venv`, made from `JINJA2CPP_TEST_ORACLE_PYTHON` and filled by pip from `JINJA2CPP_TEST_ORACLE_REQUIREMENTS` (`;`-separated, e.g. `jinja2==3.1.2;markupsafe==2.1.5` or `jinja2 @ git+https://github.com/pallets/jinja@main`; a `;` always separates requirements, so environment markers do not fit) |
 
 ```bash
 cmake -S . -B build -DJINJA2CPP_TEST_ORACLE=venv -DJINJA2CPP_TEST_ORACLE_REQUIREMENTS='jinja2==3.1.2'
