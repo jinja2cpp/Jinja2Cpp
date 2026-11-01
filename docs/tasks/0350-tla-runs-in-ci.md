@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/702
 priority: medium
 area: ci
@@ -59,3 +59,8 @@ the owning-link code of #695, and the README's running section points at it.
 
 Deeper evidence than the bounded levels (unbounded-depth runs of small scopes, simulation past
 the bound, the inductive invariants of 0338 step F) is task 0351.
+
+**Closed (2026-11-01).** #702 merged it (2026-10-30). Its run 1 on 71f07b54 passed `render`, `mixed` and
+`threads` on the owning-link code of #695. The one unexpected verdict, the stale
+`drop-without-source-check` mutant, was fixed in the same PR. `tla/README.md` points at the workflow,
+which now runs weekly and on demand (aafd0c9). Deeper checks are 0351.
