@@ -53,6 +53,21 @@ match Python either. Such a case is listed as `wide.<id>`, with its kind relativ
 Python, and follows the same rules as narrow lines (including `crash`). Cases with an
 unsupported option or a narrow `crash` line are not run wide.
 
+### The reflect run
+
+`ParityReflect/*` (docs/tasks/0322) renders every case with its context as items of one
+`jinja2::Reflect` view of a shared copy of the document, instead of `jinja2::ToValue`
+copies, so the corpus also checks the generic map and list adapters a view answers through.
+It runs only with `JINJA2CPP_PARITY_CONTEXT=reflect` (nightly in `bindings.yml`, under
+ASan, where it checks the owner chain of every item a template reaches):
+
+```bash
+JINJA2CPP_PARITY_CONTEXT=reflect build/jinja2cpp_tests --gtest_filter='ParityReflect/*'
+```
+
+Like the wide run it is held to the copy's result, and a case that differs is listed as
+`reflect.<id>` in `divergences/reflect.txt`, one file for the whole pass.
+
 ## The allow-list
 
 One file per area, `divergences/<area>.txt` (wide lines `wide.<id>` go in the file of
