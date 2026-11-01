@@ -1,6 +1,7 @@
 ---
 status: done
 priority: low
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/726
 area: parity
 touches: [src/value_methods.cpp#StrOps, scripts/gen_unicode_case.py, src/unicode_case.h, src/unicode_tables.h]
 shares: [test/parity/cases/methods.py, test/parity/divergences/methods.txt]
