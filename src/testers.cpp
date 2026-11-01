@@ -481,7 +481,8 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
             return seqStr.find(substring) != std::string::npos;
         });
     }
-    else if (seqKind == TestKind::Integer || seqKind == TestKind::Double || seqKind == TestKind::Boolean || seqKind == TestKind::Object)
+    // None and the callables are not containers either: `x in none` is a TypeError (docs/tasks/0297)
+    else if (seqKind == TestKind::Integer || seqKind == TestKind::Double || seqKind == TestKind::Boolean || seqKind == TestKind::Object || seqKind == TestKind::Empty || seqKind == TestKind::Callable)
     {
         // An object of the host language answers through its __contains__ first
         const auto* host = seqKind == TestKind::Object ? GetHostObject(seq) : nullptr;

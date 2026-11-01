@@ -1073,6 +1073,13 @@ TEST(ErrorContractTest, EngineErrorsHaveTheirCodes)
         // A field number past Py_ssize_t: Python's ValueError, not the engine's std::out_of_range
         { "{{ '{99999999999999999999}'.format(1) }}", ErrorCode::TemplateRuntimeError },
         { "{{ '{0[99999999999999999999]}'.format([1]) }}", ErrorCode::TemplateRuntimeError },
+        // Python's Undefined raises on arithmetic, ordering, int() and its items (docs/tasks/0297)
+        { "{{ 5 + nope }}", ErrorCode::UndefinedError },
+        { "{{ 0 < nope < 5 }}", ErrorCode::UndefinedError },
+        { "{{ 'x%dy' % nope }}", ErrorCode::UndefinedError },
+        { "{{ 'x%(a)sy' % nope }}", ErrorCode::UndefinedError },
+        { "{{ 'x%xy' % nope }}", ErrorCode::TemplateRuntimeError },
+        { "{{ 1 in none }}", ErrorCode::TemplateRuntimeError },
     };
     for (const auto& [source, code] : rows)
     {
