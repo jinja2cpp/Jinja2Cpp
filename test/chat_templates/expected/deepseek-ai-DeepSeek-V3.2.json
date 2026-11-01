@@ -1,0 +1,36 @@
+{
+ "template": "deepseek-ai-DeepSeek-V3.2.jinja",
+ "renders": {
+  "single": {
+   "output": "<|bos|><｜User｜>Hello!<｜Assistant｜><think></think>"
+  },
+  "system": {
+   "output": "<|bos|>You are a helpful assistant.<｜User｜>What is 2+2?<｜Assistant｜></think>2+2 = 4.<｜end▁of▁sentence｜><｜User｜>And \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<｜Assistant｜><think></think>"
+  },
+  "nogen": {
+   "output": "<|bos|><｜User｜>Hi<｜Assistant｜></think>Hello! How can I help?<｜end▁of▁sentence｜>"
+  },
+  "tools": {
+   "output": "<|bos|>You can call tools.\n\n## Tools\n\nYou have access to a set of tools you can use to answer the user's question.\nYou can invoke functions by writing a \"<｜DSML｜function_calls>\" block like the following as part of your reply to the user:\n<｜DSML｜function_calls>\n<｜DSML｜invoke name=\"$FUNCTION_NAME\">\n<｜DSML｜parameter name=\"$PARAMETER_NAME\" string=\"true|false\">$PARAMETER_VALUE</｜DSML｜parameter>\n...\n</｜DSML｜invoke>\n<｜DSML｜invoke name=\"$FUNCTION_NAME2\">\n...\n</｜DSML｜invoke>\n</｜DSML｜function_calls>\n\nString and scalar parameters should be specified as is without any escaping or quotes, while lists and objects should use JSON format. The \"string\" attribute should be set to \"true\" for string type parameters and \"false\" for other types (numbers, booleans, arrays, objects).\n\nIf the thinking_mode is enabled, then after function results you should strongly consider outputting a thinking block. Here is an example:\n\n<｜DSML｜function_calls>\n...\n</｜DSML｜function_calls>\n\n<function_results>\n...\n</function_results>\n\n<think>...thinking about results</think>\n\nHere are the functions available in JSONSchema format:\n<functions>\n{\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}\n</functions>\n<｜User｜>Weather in Paris?<｜Assistant｜></think>\n\n<｜DSML｜function_calls>\n<｜DSML｜invoke name=\"get_weather\">\n<｜DSML｜parameter name=\"city\" string=\"true\">Paris</｜DSML｜parameter>\n<｜DSML｜parameter name=\"unit\" string=\"true\">celsius</｜DSML｜parameter>\n</｜DSML｜invoke>\n</｜DSML｜function_calls><｜end▁of▁sentence｜>\n\n<function_results>\n<result>{\"temp\": 18, \"sky\": \"cloudy\"}</result>\n</function_results>\n\n</think>It is 18°C and cloudy in Paris.<｜end▁of▁sentence｜><｜User｜>Thanks<｜Assistant｜><think></think>"
+  },
+  "tool_args_str": {
+   "error": "TemplateRuntimeError",
+   "message": "No filter named 'from_json' found."
+  },
+  "reasoning": {
+   "output": "<|bos|><｜User｜>Is 17 prime?<｜Assistant｜></think>Yes, 17 is prime.<｜end▁of▁sentence｜><｜User｜>And 21?<｜Assistant｜><think></think>"
+  },
+  "no_thinking": {
+   "output": "<|bos|><｜User｜>Quick: capital of France?<｜Assistant｜><think></think>"
+  },
+  "parts": {
+   "error": "TypeError"
+  },
+  "documents": {
+   "output": "<|bos|><｜User｜>Who wrote it?<｜Assistant｜><think></think>"
+  },
+  "no_alternation": {
+   "output": "<|bos|><｜User｜>First<｜User｜>Second<｜Assistant｜><think></think>"
+  }
+ }
+}

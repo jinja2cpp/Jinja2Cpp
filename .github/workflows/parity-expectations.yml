@@ -3,7 +3,8 @@ name: parity-expectations
 # The parity corpus (test/parity) stores Python Jinja2 output next to each case. This job
 # regenerates it with the pinned jinja2 and fails if the checked-in files are stale, so a
 # case edited without regenerating cannot pass review. The C++ side of the comparison runs
-# in every build job as `ctest -R parity`.
+# in every build job as `ctest -R parity`. The chat template suite (test/chat_templates) is
+# checked the same way against transformers.
 
 on:
   push:
@@ -12,6 +13,7 @@ on:
       - main
     paths:
       - 'test/parity/**'
+      - 'test/chat_templates/**'
       - '.python-version'
       - 'src/unicode_printable.h'
       - 'src/unicode_tables.h'
@@ -31,6 +33,7 @@ on:
       - main
     paths:
       - 'test/parity/**'
+      - 'test/chat_templates/**'
       - '.python-version'
       - 'src/unicode_printable.h'
       - 'src/unicode_tables.h'
@@ -69,6 +72,13 @@ jobs:
 
     - name: Check expectations
       run: python test/parity/generate.py --check
+
+    # The Hugging Face chat templates (test/chat_templates), rendered by pinned transformers
+    - name: Install pinned transformers
+      run: python -m pip install -r test/parity/requirements.txt -r test/chat_templates/requirements.txt
+
+    - name: Check chat template expectations
+      run: python test/chat_templates/generate.py --check
 
     - name: Self-test update_divergences.py
       run: python test/parity/update_divergences.py --self-test

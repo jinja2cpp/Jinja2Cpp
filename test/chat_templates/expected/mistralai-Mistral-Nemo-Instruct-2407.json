@@ -1,0 +1,36 @@
+{
+ "template": "mistralai-Mistral-Nemo-Instruct-2407.jinja",
+ "renders": {
+  "single": {
+   "output": "<|bos|>[INST]Hello![/INST]"
+  },
+  "system": {
+   "output": "<|bos|>[INST]What is 2+2?[/INST]2+2 = 4.<|eos|>[INST]You are a helpful assistant.\n\nAnd \"3+3\" <in> café ünïcode 日本 & emoji 🙂?[/INST]"
+  },
+  "nogen": {
+   "output": "<|bos|>[INST]Hi[/INST]Hello! How can I help?<|eos|>"
+  },
+  "tools": {
+   "output": "<|bos|>[INST]Weather in Paris?[/INST][TOOL_CALLS][{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\", \"unit\": \"celsius\"}, \"id\": \"call_0001\"}]<|eos|>[TOOL_RESULTS]{\"content\": {\"temp\": 18, \"sky\": \"cloudy\"}, \"call_id\": \"call_0001\"}[/TOOL_RESULTS]It is 18°C and cloudy in Paris.<|eos|>[AVAILABLE_TOOLS][{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}][/AVAILABLE_TOOLS][INST]You can call tools.\n\nThanks[/INST]"
+  },
+  "tool_args_str": {
+   "output": "<|bos|>[AVAILABLE_TOOLS][{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}][/AVAILABLE_TOOLS][INST]Weather in Tokyo?[/INST][TOOL_CALLS][{\"name\": \"get_weather\", \"arguments\": \"{\\\"city\\\": \\\"Tōkyō\\\"}\", \"id\": \"call_0002\"}]<|eos|>[TOOL_RESULTS]{\"content\": sunny, \"call_id\": \"call_0002\"}[/TOOL_RESULTS]"
+  },
+  "reasoning": {
+   "output": "<|bos|>[INST]Is 17 prime?[/INST]Yes, 17 is prime.<|eos|>[INST]And 21?[/INST]"
+  },
+  "no_thinking": {
+   "output": "<|bos|>[INST]Quick: capital of France?[/INST]"
+  },
+  "parts": {
+   "error": "TypeError"
+  },
+  "documents": {
+   "output": "<|bos|>[INST]Who wrote it?[/INST]"
+  },
+  "no_alternation": {
+   "error": "TemplateError",
+   "message": "After the optional system message, conversation roles must alternate user/assistant/user/assistant/..."
+  }
+ }
+}

@@ -1,0 +1,35 @@
+{
+ "template": "meta-llama-Llama-3.2-3B-Instruct.jinja",
+ "renders": {
+  "single": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 14 Mar 2025\n\n<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nHello!<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "system": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 14 Mar 2025\n\nYou are a helpful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nWhat is 2+2?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n2+2 = 4.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nAnd \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "nogen": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 14 Mar 2025\n\n<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nHi<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\nHello! How can I help?<|eot_id|>"
+  },
+  "tools": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nEnvironment: ipython\nCutting Knowledge Date: December 2023\nToday Date: 14 Mar 2025\n\nYou can call tools.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nGiven the following functions, please respond with a JSON for a function call with its proper arguments that best answers the given prompt.\n\nRespond in the format {\"name\": function name, \"parameters\": dictionary of argument name and its value}.Do not use variables.\n\n{\n    \"type\": \"function\",\n    \"function\": {\n        \"name\": \"get_weather\",\n        \"description\": \"Get the current weather in a city.\",\n        \"parameters\": {\n            \"type\": \"object\",\n            \"properties\": {\n                \"city\": {\n                    \"type\": \"string\",\n                    \"description\": \"City name, e.g. Paris\"\n                },\n                \"unit\": {\n                    \"type\": \"string\",\n                    \"enum\": [\n                        \"celsius\",\n                        \"fahrenheit\"\n                    ]\n                }\n            },\n            \"required\": [\n                \"city\"\n            ]\n        }\n    }\n}\n\nWeather in Paris?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n{\"name\": \"get_weather\", \"parameters\": {\"city\": \"Paris\", \"unit\": \"celsius\"}}<|eot_id|><|start_header_id|>ipython<|end_header_id|>\n\n\"{\\\"temp\\\": 18, \\\"sky\\\": \\\"cloudy\\\"}\"<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\nIt is 18°C and cloudy in Paris.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nThanks<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "tool_args_str": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nEnvironment: ipython\nCutting Knowledge Date: December 2023\nToday Date: 14 Mar 2025\n\n<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nGiven the following functions, please respond with a JSON for a function call with its proper arguments that best answers the given prompt.\n\nRespond in the format {\"name\": function name, \"parameters\": dictionary of argument name and its value}.Do not use variables.\n\n{\n    \"type\": \"function\",\n    \"function\": {\n        \"name\": \"get_weather\",\n        \"description\": \"Get the current weather in a city.\",\n        \"parameters\": {\n            \"type\": \"object\",\n            \"properties\": {\n                \"city\": {\n                    \"type\": \"string\",\n                    \"description\": \"City name, e.g. Paris\"\n                },\n                \"unit\": {\n                    \"type\": \"string\",\n                    \"enum\": [\n                        \"celsius\",\n                        \"fahrenheit\"\n                    ]\n                }\n            },\n            \"required\": [\n                \"city\"\n            ]\n        }\n    }\n}\n\nWeather in Tokyo?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n{\"name\": \"get_weather\", \"parameters\": \"{\\\"city\\\": \\\"Tōkyō\\\"}\"}<|eot_id|><|start_header_id|>ipython<|end_header_id|>\n\n\"sunny\"<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "reasoning": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 14 Mar 2025\n\n<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nIs 17 prime?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\nYes, 17 is prime.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nAnd 21?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "no_thinking": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 14 Mar 2025\n\n<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nQuick: capital of France?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "parts": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 14 Mar 2025\n\n[{'type': 'text', 'text': 'Be brief.'}]<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n[{'type': 'text', 'text': 'Describe'}, {'type': 'text', 'text': 'a cat.'}]<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "documents": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 14 Mar 2025\n\n<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nWho wrote it?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "no_alternation": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\nToday Date: 14 Mar 2025\n\n<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nFirst<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nSecond<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  }
+ }
+}

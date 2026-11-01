@@ -1,0 +1,4 @@
+# The oracle for test/chat_templates: transformers' own chat-template environment
+# (chat_template_utils._compile_jinja_template). Jinja2 and MarkupSafe come from
+# test/parity/requirements.txt, the one pin of the oracle's Jinja2 (docs/parity.md)
+transformers==5.22.1

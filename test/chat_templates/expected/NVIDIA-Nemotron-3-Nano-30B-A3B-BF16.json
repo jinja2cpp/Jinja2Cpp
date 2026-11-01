@@ -1,0 +1,35 @@
+{
+ "template": "NVIDIA-Nemotron-3-Nano-30B-A3B-BF16.jinja",
+ "renders": {
+  "single": {
+   "output": "<|im_start|>system\n<|im_end|>\n<|im_start|>user\nHello!<|im_end|>\n<|im_start|>assistant\n<think>\n"
+  },
+  "system": {
+   "output": "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nWhat is 2+2?<|im_end|>\n<|im_start|>assistant\n<think></think>2+2 = 4.<|im_end|>\n<|im_start|>user\nAnd \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|im_end|>\n<|im_start|>assistant\n<think>\n"
+  },
+  "nogen": {
+   "output": "<|im_start|>system\n<|im_end|>\n<|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\n<think></think>Hello! How can I help?<|im_end|>\n"
+  },
+  "tools": {
+   "output": "<|im_start|>system\nYou can call tools.\n\n# Tools\n\nYou have access to the following functions:\n\n<tools>\n<function>\n<name>get_weather</name>\n<description>Get the current weather in a city.</description>\n<parameters>\n<parameter>\n<name>city</name>\n<type>string</type>\n<description>City name, e.g. Paris</description>\n</parameter>\n<parameter>\n<name>unit</name>\n<type>string</type>\n<enum>[\"celsius\", \"fahrenheit\"]</enum>\n</parameter>\n<required>[\"city\"]</required>\n</parameters>\n</function>\n</tools>\n\nIf you choose to call a function ONLY reply in the following format with NO suffix:\n\n<tool_call>\n<function=example_function_name>\n<parameter=example_parameter_1>\nvalue_1\n</parameter>\n<parameter=example_parameter_2>\nThis is the value for the second parameter\nthat can span\nmultiple lines\n</parameter>\n</function>\n</tool_call>\n\n<IMPORTANT>\nReminder:\n- Function calls MUST follow the specified format: an inner <function=...></function> block must be nested within <tool_call></tool_call> XML tags\n- Required parameters MUST be specified\n- You may provide optional reasoning for your function call in natural language BEFORE the function call, but NOT after\n- If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls\n</IMPORTANT><|im_end|>\n<|im_start|>user\nWeather in Paris?<|im_end|>\n<|im_start|>assistant\n<think></think>\n<tool_call>\n<function=get_weather>\n<parameter=city>\nParis\n</parameter>\n<parameter=unit>\ncelsius\n</parameter>\n</function>\n</tool_call>\n<|im_end|>\n<|im_start|>user\n<tool_response>\n{\"temp\": 18, \"sky\": \"cloudy\"}\n</tool_response>\n<|im_end|>\n<|im_start|>assistant\n<think></think>It is 18°C and cloudy in Paris.<|im_end|>\n<|im_start|>user\nThanks<|im_end|>\n<|im_start|>assistant\n<think>\n"
+  },
+  "tool_args_str": {
+   "error": "TypeError"
+  },
+  "reasoning": {
+   "output": "<|im_start|>system\n<|im_end|>\n<|im_start|>user\nIs 17 prime?<|im_end|>\n<|im_start|>assistant\n<think></think>\nYes, 17 is prime.<|im_end|>\n<|im_start|>user\nAnd 21?<|im_end|>\n<|im_start|>assistant\n<think>\n"
+  },
+  "no_thinking": {
+   "output": "<|im_start|>system\n<|im_end|>\n<|im_start|>user\nQuick: capital of France?<|im_end|>\n<|im_start|>assistant\n<think></think>"
+  },
+  "parts": {
+   "error": "TypeError"
+  },
+  "documents": {
+   "output": "<|im_start|>system\n<|im_end|>\n<|im_start|>user\nWho wrote it?<|im_end|>\n<|im_start|>assistant\n<think>\n"
+  },
+  "no_alternation": {
+   "output": "<|im_start|>system\n<|im_end|>\n<|im_start|>user\nFirst<|im_end|>\n<|im_start|>user\nSecond<|im_end|>\n<|im_start|>assistant\n<think>\n"
+  }
+ }
+}
