@@ -591,6 +591,27 @@
       "comment": "role: test; phases: dev; exposure: none; delivery: system; selected-by: pip install -r test/parity/requirements.txt; used-for: Jinja2's escaping dependency, pinned with it; why: Transitive dependency of the oracle; lighten: Not part of any build"
     },
     {
+      "SPDXID": "SPDXRef-Package-python-transformers",
+      "name": "transformers",
+      "versionInfo": "5.22.1",
+      "supplier": "Organization: Hugging Face",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "homepage": "https://github.com/huggingface/transformers",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "Apache-2.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/transformers@5.22.1"
+        }
+      ],
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "role: test; phases: dev; exposure: none; delivery: system; selected-by: pip install -r test/chat_templates/requirements.txt (parity-expectations CI job); used-for: The chat-template oracle: regenerates test/chat_templates expectations with its own apply_chat_template environment (generate.py, docs/tasks/0360); why: Inference servers render chat templates as transformers does; the expectations it produces are committed, so ordinary builds do not need it; lighten: Not part of any build"
+    },
+    {
       "SPDXID": "SPDXRef-Package-python",
       "name": "CPython",
       "versionInfo": "3.12",
@@ -1032,6 +1053,11 @@
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
     },
     {
+      "spdxElementId": "SPDXRef-Package-python-transformers",
+      "relationshipType": "TEST_DEPENDENCY_OF",
+      "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
+    },
+    {
       "spdxElementId": "SPDXRef-Package-python",
       "relationshipType": "DEV_TOOL_OF",
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
@@ -1107,5 +1133,5 @@
       "relatedSpdxElement": "SPDXRef-Package-jinja2cpp"
     }
   ],
-  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-da46f39f0ac7598b"
+  "documentNamespace": "https://github.com/jinja2cpp/Jinja2Cpp/sbom/jinja2cpp-2.0.0-full-2f6c55b0c0f322f9"
 }
