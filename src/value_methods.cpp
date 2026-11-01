@@ -10,7 +10,10 @@
 #include "render_context.h"
 #include "stable_sort_values.h"
 #include "template_dict.h"
+#include "undefined.h"
+#include "host_object.h"
 #include "unicode_case.h"
+#include "unicode_printable.h"
 #include "unicode_tables.h"
 #include "value_visitors.h"
 
@@ -265,6 +268,22 @@ struct StrOps
         if (!IsAscii(self))
         {
             return Result(LowerUnicode(self));
+        }
+        return Result(MapChars(self, [](uint32_t cp) { return IsAsciiUpper(cp) ? cp + 32 : cp; }));
+    }
+    // str.casefold(): lower() without the final sigma rule, and full folding ('ß' is 'ss')
+    static InternalValue Casefold(View self, const CallParams& params, RenderContext&)
+    {
+        CheckArgs(params, "casefold", 0, 0);
+        if (!IsAscii(self))
+        {
+            Str result;
+            CaseChars<CharT> chars(self);
+            for (size_t idx = 0; idx != chars.cps.size(); ++idx)
+            {
+                AppendMapped(result, chars, idx, unicode::ToFold);
+            }
+            return Result(std::move(result));
         }
         return Result(MapChars(self, [](uint32_t cp) { return IsAsciiUpper(cp) ? cp + 32 : cp; }));
     }
@@ -734,9 +753,31 @@ struct StrOps
         }
         return InternalValue(std::all_of(chars.begin(), chars.end(), [&pred](View ch) { return pred(CodePointValue(ch)); }));
     }
-    static InternalValue Isdigit(View self, const CallParams& params, RenderContext&) { return AllChars(self, params, "isdigit", unicode::IsDecimal); }
+    static InternalValue Isdigit(View self, const CallParams& params, RenderContext&) { return AllChars(self, params, "isdigit", unicode::IsDigit); }
     static InternalValue Isdecimal(View self, const CallParams& params, RenderContext&) { return AllChars(self, params, "isdecimal", unicode::IsDecimal); }
-    static InternalValue Isnumeric(View self, const CallParams& params, RenderContext&) { return AllChars(self, params, "isnumeric", unicode::IsDecimal); }
+    static InternalValue Isnumeric(View self, const CallParams& params, RenderContext&) { return AllChars(self, params, "isnumeric", unicode::IsNumeric); }
+    // isascii() and isprintable() hold for the empty string, unlike the other tests
+    static InternalValue Isascii(View self, const CallParams& params, RenderContext&)
+    {
+        CheckArgs(params, "isascii", 0, 0);
+        return InternalValue(IsAscii(self));
+    }
+    static InternalValue Isprintable(View self, const CallParams& params, RenderContext&)
+    {
+        CheckArgs(params, "isprintable", 0, 0);
+        auto chars = SplitCodePoints(self);
+        return InternalValue(std::all_of(chars.begin(), chars.end(), [](View ch) { return detail::IsPythonPrintable(CodePointValue(ch)); }));
+    }
+    static InternalValue Isidentifier(View self, const CallParams& params, RenderContext&)
+    {
+        CheckArgs(params, "isidentifier", 0, 0);
+        auto chars = SplitCodePoints(self);
+        if (chars.empty() || !unicode::IsXidStart(CodePointValue(chars.front())))
+        {
+            return InternalValue(false);
+        }
+        return InternalValue(std::all_of(std::next(chars.begin()), chars.end(), [](View ch) { return unicode::IsXidContinue(CodePointValue(ch)); }));
+    }
     static InternalValue Isalpha(View self, const CallParams& params, RenderContext&) { return AllChars(self, params, "isalpha", IsAlphaCp); }
     static InternalValue Isalnum(View self, const CallParams& params, RenderContext&)
     {
@@ -904,6 +945,43 @@ struct StrOps
     }
 
     static Str Ascii(const std::string& str) { return Str(str.begin(), str.end()); }
+
+    // Python's ascii(): the repr with every non-ASCII character escaped as \\xhh, \\uhhhh or
+    // \\Uhhhhhhhh
+    static Str AsciiRepr(const InternalValue& val)
+    {
+        auto repr = ToStr(val, true);
+        if (IsAscii(repr))
+        {
+            return repr;
+        }
+        Str result;
+        for (auto ch : SplitCodePoints(View(repr)))
+        {
+            const auto cp = CodePointValue(ch);
+            if (cp < 0x80)
+            {
+                result.append(ch.begin(), ch.end());
+                continue;
+            }
+            std::string escaped;
+            if (cp <= 0xFF)
+            {
+                escaped = fmt::format("\\x{:02x}", cp);
+            }
+            else if (cp <= 0xFFFF)
+            {
+                escaped = fmt::format("\\u{:04x}", cp);
+            }
+            else
+            {
+                escaped = fmt::format("\\U{:08x}", cp);
+            }
+            CheckSequenceSize(static_cast<uint64_t>(result.size()) + escaped.size(), "a string");
+            result.append(escaped.begin(), escaped.end());
+        }
+        return result;
+    }
 
     // A parsed spec in the subset of Python's format mini-language that templates use:
     // [[fill]align][sign][#][0][width][,|_][.precision][type]
@@ -1387,6 +1465,38 @@ struct StrOps
         return params.posParams[idx];
     }
 
+    // Python's getattr, as a field's .attr part looks it up: the methods of a value and the
+    // attributes of an object, but not the items of a dict (the attr filter's rule)
+    static InternalValue FormatAttr(const InternalValue& value, const std::string& attr, RenderContext& context)
+    {
+        if (value.IsUndefined())
+        {
+            CheckUndefinedUse(value, UndefinedUse::Attribute);
+            return value;
+        }
+        std::optional<InternalValue> result;
+        auto map = AsMap(value);
+        const bool isObject = map && (map->HasAttributes() || map->GetObjectClass() != nullptr);
+        if (const auto* host = GetHostObject(value))
+        {
+            result = host->GetAttr(attr);
+        }
+        else if (const auto* method = FindMethod(value, attr); method && (!isObject || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(attr)))
+        {
+            result = MakeBoundMethod(value, *method);
+        }
+        else if (isObject || value.Kind() == ValueKind::Callable)
+        {
+            // The fields of a reflected object, of namespace() or loop, the attributes of a macro
+            result = Subscript(value, attr, &context);
+        }
+        if (!result || result->IsUndefined())
+        {
+            Raise("'" + TypeName(value) + "' object has no attribute '" + attr + "'");
+        }
+        return std::move(*result);
+    }
+
     // Applies the .attr and [key] parts that follow a field's first name
     static InternalValue ApplyAccessors(InternalValue value, View rest, RenderContext& context)
     {
@@ -1400,7 +1510,7 @@ struct StrOps
                 {
                     Raise("Empty attribute in format string");
                 }
-                value = GetAttr(value, attr, &context);
+                value = FormatAttr(value, attr, context);
                 rest = end == View::npos ? View() : rest.substr(end);
                 continue;
             }
@@ -1530,9 +1640,13 @@ struct StrOps
         auto first = field.name.substr(0, nameEnd == View::npos ? field.name.size() : nameEnd);
         auto rest = nameEnd == View::npos ? View() : field.name.substr(nameEnd);
         auto value = ApplyAccessors(LookupArg(first, params, numbering), rest, context);
-        if (field.conversion == 'r' || field.conversion == 's' || field.conversion == 'a')
+        if (field.conversion == 'a')
         {
-            value = TargetString(ToStr(value, field.conversion != 's'));
+            value = TargetString(AsciiRepr(value));
+        }
+        else if (field.conversion == 'r' || field.conversion == 's')
+        {
+            value = TargetString(ToStr(value, field.conversion == 'r'));
         }
         else if (field.conversion != 0)
         {
@@ -1619,6 +1733,7 @@ struct StrOps
 
 JINJA2CPP_STR_METHOD(Upper)
 JINJA2CPP_STR_METHOD(Lower)
+JINJA2CPP_STR_METHOD(Casefold)
 JINJA2CPP_STR_METHOD(Swapcase)
 JINJA2CPP_STR_METHOD(Title)
 JINJA2CPP_STR_METHOD(Capitalize)
@@ -1641,6 +1756,9 @@ JINJA2CPP_STR_METHOD(Format)
 JINJA2CPP_STR_METHOD(Isdigit)
 JINJA2CPP_STR_METHOD(Isdecimal)
 JINJA2CPP_STR_METHOD(Isnumeric)
+JINJA2CPP_STR_METHOD(Isascii)
+JINJA2CPP_STR_METHOD(Isidentifier)
+JINJA2CPP_STR_METHOD(Isprintable)
 JINJA2CPP_STR_METHOD(Isalpha)
 JINJA2CPP_STR_METHOD(Isalnum)
 JINJA2CPP_STR_METHOD(Isspace)
@@ -1661,6 +1779,7 @@ JINJA2CPP_STR_METHOD(Removesuffix)
 const MethodInfo StrMethods[] = {
     { "upper", StrUpper, false },
     { "lower", StrLower, false },
+    { "casefold", StrCasefold, false },
     { "swapcase", StrSwapcase, false },
     { "title", StrTitle, false },
     { "capitalize", StrCapitalize, false },
@@ -1683,6 +1802,9 @@ const MethodInfo StrMethods[] = {
     { "isdigit", StrIsdigit, false },
     { "isdecimal", StrIsdecimal, false },
     { "isnumeric", StrIsnumeric, false },
+    { "isascii", StrIsascii, false },
+    { "isidentifier", StrIsidentifier, false },
+    { "isprintable", StrIsprintable, false },
     { "isalpha", StrIsalpha, false },
     { "isalnum", StrIsalnum, false },
     { "isspace", StrIsspace, false },
@@ -1776,6 +1898,7 @@ InternalValue MarkupFormat(const InternalValue& self, const CallParams& params, 
 const MethodInfo MarkupMethods[] = {
     { "upper", MarkupMethod<StrUpper>, false },
     { "lower", MarkupMethod<StrLower>, false },
+    { "casefold", MarkupMethod<StrCasefold>, false },
     { "swapcase", MarkupMethod<StrSwapcase>, false },
     { "title", MarkupMethod<StrTitle>, false },
     { "capitalize", MarkupMethod<StrCapitalize>, false },
@@ -1798,6 +1921,9 @@ const MethodInfo MarkupMethods[] = {
     { "isdigit", StrIsdigit, false },
     { "isdecimal", StrIsdecimal, false },
     { "isnumeric", StrIsnumeric, false },
+    { "isascii", StrIsascii, false },
+    { "isidentifier", StrIsidentifier, false },
+    { "isprintable", StrIsprintable, false },
     { "isalpha", StrIsalpha, false },
     { "isalnum", StrIsalnum, false },
     { "isspace", StrIsspace, false },

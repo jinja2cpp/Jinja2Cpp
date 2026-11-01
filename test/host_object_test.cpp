@@ -221,6 +221,15 @@ TEST(HostObjectTest, AttributeBeforeItemAndItemBeforeAttribute)
     EXPECT_EQ(L"list-key dict-key", RenderW(L"{{ k[[1]] }} {{ k[{}] }}", typedParams));
 }
 
+// str.format's .attr part is Python's getattr: the attribute only, never the item (0317)
+TEST(HostObjectTest, FormatFieldAttributeIsGetattr)
+{
+    const InternalValueMap params{ { "x", MakeToy(Rich()) } };
+    EXPECT_EQ("attr-name|attr-both|item-key", Render("{{ '{0.name}|{0.both}|{0[key]}'.format(x) }}", params));
+    EXPECT_NE(std::string::npos, Render("{{ '{0.key}'.format(x) }}", params).find("has no attribute 'key'"));
+    EXPECT_EQ(L"attr-name", RenderW(L"{{ '{0.name}'.format(x) }}", params));
+}
+
 TEST(HostObjectTest, CallsWithPositionalAndKeywordArguments)
 {
     ToySpec spec;

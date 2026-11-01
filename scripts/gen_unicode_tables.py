@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generate src/unicode_tables.h: the Unicode character classes Python's regular
-expressions use (\\w, \\d, \\s), as code point ranges above ASCII.
+expressions use (\\w, \\d, \\s) and those of the str.is*() tests (isdigit, isnumeric,
+isidentifier), as code point ranges above ASCII.
 
 The tables follow the Unicode version of the Python that runs this script
 (unicodedata.unidata_version, written into the header). Regenerate with
@@ -42,6 +43,10 @@ def main():
         table("WordRanges", "Python \\w above ASCII: str.isalnum()", ranges(lambda c: c.isalnum())),
         table("DecimalRanges", "Python \\d above ASCII: str.isdecimal()", ranges(lambda c: c.isdecimal())),
         table("SpaceRanges", "Python \\s and str.strip() above ASCII: str.isspace()", ranges(lambda c: c.isspace())),
+        table("DigitRanges", "Digit above ASCII: str.isdigit()", ranges(lambda c: c.isdigit())),
+        table("NumericRanges", "Numeric above ASCII: str.isnumeric()", ranges(lambda c: c.isnumeric())),
+        table("XidStartRanges", "XID_Start above ASCII: the first character of str.isidentifier()", ranges(lambda c: c.isidentifier())),
+        table("XidContinueRanges", "XID_Continue above ASCII: the other characters of str.isidentifier()", ranges(lambda c: ("a" + c).isidentifier())),
         """template<size_t N>
 bool InRanges(const CodePointRange (&ranges)[N], uint32_t cp)
 {
@@ -71,6 +76,32 @@ inline bool IsSpace(uint32_t cp)
         return (cp >= 0x09 && cp <= 0x0D) || (cp >= 0x1C && cp <= 0x20);
     }
     return InRanges(SpaceRanges, cp);
+}
+
+// str.isdigit() and str.isnumeric() for one code point
+inline bool IsDigit(uint32_t cp)
+{
+    return cp < 0x80 ? cp >= '0' && cp <= '9' : InRanges(DigitRanges, cp);
+}
+
+inline bool IsNumeric(uint32_t cp)
+{
+    return cp < 0x80 ? cp >= '0' && cp <= '9' : InRanges(NumericRanges, cp);
+}
+
+// str.isidentifier(): the first character is XID_Start or '_', the others XID_Continue
+inline bool IsXidStart(uint32_t cp)
+{
+    if (cp < 0x80)
+    {
+        return (cp >= 'a' && cp <= 'z') || (cp >= 'A' && cp <= 'Z') || cp == '_';
+    }
+    return InRanges(XidStartRanges, cp);
+}
+
+inline bool IsXidContinue(uint32_t cp)
+{
+    return cp < 0x80 ? IsWordChar(cp) : InRanges(XidContinueRanges, cp);
 }
 """,
         "} // namespace unicode\n} // namespace v2\n} // namespace jinja2\n\n#endif // JINJA2CPP_SRC_UNICODE_TABLES_H\n",
