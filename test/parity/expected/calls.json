@@ -558,6 +558,22 @@
    "env": {},
    "templates": {},
    "output": " a=\"&lt;class &#39;range&#39;&gt;\""
+  },
+  {
+   "id": "calls.global_class_repr_sites",
+   "template": "{{ [range, dict] }}|{{ range ~ '' }}|{{ '%s' % cycler }}|{{ '{}'.format(joiner) }}|{{ namespace|string|length }}|{{ {'k': namespace} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[<class 'range'>, <class 'dict'>]|<class 'range'>|<class 'jinja2.utils.Cycler'>|<class 'jinja2.utils.Joiner'>|32|{'k': <class 'jinja2.utils.Namespace'>}"
+  },
+  {
+   "id": "calls.global_class_attr_undefined",
+   "template": "{{ range.name is defined }}|{{ range is callable }}|{{ range == range }}|{{ range != dict }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "False|True|True|True"
   }
  ]
 }

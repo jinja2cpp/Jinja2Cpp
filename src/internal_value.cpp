@@ -3113,6 +3113,24 @@ private:
     std::optional<InternalValue> m_reprArgument;
 };
 
+// Jinja2's TemplateModule: <TemplateModule 'name'> as repr, its template's output as str()
+class ModuleMapAdapter final : public ObjectMapAdapter
+{
+public:
+    ModuleMapAdapter(InternalValueMap&& values, InternalValue name, InternalValue output)
+        : ObjectMapAdapter(std::move(values), "TemplateModule", std::move(name))
+        , m_output(std::move(output))
+    {
+    }
+
+    [[nodiscard]] const InternalValue* GetStrValue() const override { return &m_output; }
+    [[nodiscard]] GenericMap CreateGenericMap() const override { return GenericMap(std::make_shared<const ModuleMapAdapter>(*this)); }
+
+private:
+    // A string, which holds no other value
+    InternalValue m_output;
+};
+
 InternalValue Value2IntValue(const Value& val)
 {
     return std::visit(visitors::InputValueConvertor(false, true), val.GetData());
@@ -3753,6 +3771,11 @@ MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className)
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className, InternalValue reprArgument)
 {
     return MapAdapter(MakeRef<ObjectMapAdapter>(std::move(values), className, std::move(reprArgument)));
+}
+
+MapAdapter CreateModuleAdapter(InternalValueMap&& values, InternalValue name, InternalValue output)
+{
+    return MapAdapter(MakeRef<ModuleMapAdapter>(std::move(values), std::move(name), std::move(output)));
 }
 
 MapAdapter CreateMapAdapter(const InternalValueMap* values)

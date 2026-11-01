@@ -69,4 +69,7 @@ CASES = [
     # The builtin classes print as Python's <class 'range'> (docs/tasks/0305)
     ("global_class_str", "{{ range }}|{{ dict }}|{{ cycler }}|{{ joiner }}|{{ namespace }}"),
     ("global_class_xmlattr", "{{ dict(a=range)|xmlattr }}"),
+    # Wherever a str or repr is taken (0305); lipsum is a function, which prints nothing here
+    ("global_class_repr_sites", "{{ [range, dict] }}|{{ range ~ '' }}|{{ '%s' % cycler }}|{{ '{}'.format(joiner) }}|{{ namespace|string|length }}|{{ {'k': namespace} }}"),
+    ("global_class_attr_undefined", "{{ range.name is defined }}|{{ range is callable }}|{{ range == range }}|{{ range != dict }}"),
 ]
