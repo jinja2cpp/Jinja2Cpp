@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 touches: [src/function_base.h, src/string_converter_filter.cpp]

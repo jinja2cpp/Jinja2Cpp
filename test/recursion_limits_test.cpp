@@ -172,6 +172,24 @@ TEST_F(RecursionLimitsTest, DeepTupleKeyRendersOrIsRenderError)
     }
 }
 
+TEST_F(RecursionLimitsTest, DeepMapOfMapsRendersOrIsRenderError)
+{
+    // Each 'map' argument nests one more map filter, applied as the outer one runs: unpacked
+    // arguments (docs/tasks/0306) let a short template, or context data, nest it deep
+    const std::string source = "{{ 'a'|map(*(['map'] * 5000 + ['upper']))|list|length }}";
+    Template tpl(&m_env);
+    ASSERT_TRUE(tpl.Load(source).has_value());
+    auto result = tpl.RenderAsString({});
+    if (result.has_value())
+    {
+        EXPECT_EQ("1", result.value());
+    }
+    else
+    {
+        EXPECT_EQ(ErrorCode::RecursionLimitExceeded, result.error().GetCode());
+    }
+}
+
 TEST_F(RecursionLimitsTest, InfiniteRecursionIsRenderError)
 {
     AddFile("include_self", "{% include 'include_self' %}");

@@ -231,6 +231,7 @@ set(JINJA2CPP_SOURCES
     src/filesystem_handler.cpp
     src/filter_factories.cpp
     src/filters.cpp
+    src/function_base.cpp
     src/json_reader.cpp
     src/generic_list.cpp
     src/global_functions.cpp
