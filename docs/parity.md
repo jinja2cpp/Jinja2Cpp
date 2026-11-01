@@ -28,18 +28,18 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
 | i18n | 54 | 54 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | literals | 84 | 84 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | loader | 187 | 184 | 3 | 0 | 0 | 0 | 0 | 0 | 0165 |
-| methods | 108 | 105 | 2 | 1 | 0 | 0 | 0 | 0 | 0049 |
+| methods | 159 | 155 | 2 | 1 | 1 | 0 | 0 | 0 | 0317 |
 | operators | 126 | 123 | 0 | 3 | 0 | 0 | 0 | 0 | 0178 |
 | options | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | output | 38 | 38 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | sequences | 47 | 47 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| statements | 445 | 438 | 6 | 0 | 1 | 0 | 0 | 0 | 0156, 0165, 0214, 0304 |
+| statements | 447 | 438 | 8 | 0 | 1 | 0 | 0 | 0 | 0156, 0165, 0214, 0304, 0305, 0323, 0326 |
 | string_filters | 540 | 540 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | subscripts | 43 | 43 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | tests | 60 | 58 | 0 | 1 | 1 | 0 | 0 | 0 | 0101, 0308 |
 | undefined | 112 | 112 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | whitespace | 54 | 54 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| **total** | **2797** | **2766** | **18** | **10** | **3** | **0** | **0** | **0** | |
+| **total** | **2850** | **2816** | **20** | **10** | **4** | **0** | **0** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment

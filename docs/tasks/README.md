@@ -419,7 +419,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0347](0347-module-cells-in-lazy-and-namespace-exports.md) | Module cells reached through a lazy list or a namespace are not pinned | robustness | medium | open |
 | [0348](0348-generic-list-shared-accessor.md) | GenericList and GenericMap hold their accessor by a shared pointer | api | medium | done |
 | [0349](0349-ctu-analyzer-on-newest-llvm.md) | Run the cross-TU static analyzer on the newest LLVM and on libstdc++ | ci | low | open |
-| [0350](0350-tla-runs-in-ci.md) | Run the long TLC checks of the cell model in GitHub Actions, and halve the two-thread runs | ci | medium | in-progress |
+| [0350](0350-tla-runs-in-ci.md) | Run the long TLC checks of the cell model in GitHub Actions, and halve the two-thread runs | ci | medium | done |
 | [0351](0351-cell-model-past-the-depth-bound.md) | Check the cell model past its depth bound | robustness | medium | open |
 | [0352](0352-python-host-object-seam.md) | Python module P1a: a private host-object seam in the engine | api | medium | done |
 | [0353](0353-python-module-core.md) | Python module P1b: build, Environment/Template/render, value crossing | api | medium | open |
