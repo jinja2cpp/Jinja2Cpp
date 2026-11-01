@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 touches: [src/value_methods.cpp#StrOps, scripts/gen_unicode_case.py, src/unicode_case.h, src/unicode_tables.h]
@@ -26,3 +26,11 @@ run/multi layout as the case tables. `isprintable` can reuse `src/unicode_printa
 
 **Done when.** The four corpus cases match and their lines are gone from
 `test/parity/divergences/methods.txt`.
+
+**Result.** `isdigit`/`isnumeric` use Digit and Numeric tables, `isidentifier` XID_Start and
+XID_Continue tables (all from `scripts/gen_unicode_tables.py`), `casefold` a Fold mapping
+(`scripts/gen_unicode_case.py`), `isprintable` repr's table; Markup has each. In `str.format`
+a field's `.attr` is Python's getattr (the `attr` filter's rule: methods and object attributes,
+never dict items) and `[key]` is `__getitem__` (`namespace()`, `loop` and macros are not
+subscriptable, a missing key is a KeyError); `!a` escapes the repr as `ascii()` does. The
+verifier's int/float data attribute finding is 0374.

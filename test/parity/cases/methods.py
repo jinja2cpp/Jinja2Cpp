@@ -187,4 +187,6 @@ CASES = [
     ('str_format_item_errors', "{{ '{0[5]}'.format([1]) }}"),
     ('str_format_item_of_int', "{{ '{0[0]}'.format(5) }}"),
     ('markup_format_ascii_conversion', "{{ ('<p>{0!a}</p>'|safe).format('<é>') }}"),
+    # 0374: int and float data attributes
+    ('number_data_attributes', "{{ (3).real }}|{{ (3).denominator }}|{{ 2.5.imag }}|{{ '{0.numerator}'.format(4) }}|{{ 7|attr('real') }}"),
 ]

@@ -4063,6 +4063,27 @@
    "env": {},
    "templates": {},
    "output": "<p>&#39;&lt;\\xe9&gt;&#39;</p>"
+  },
+  {
+   "id": "methods.number_data_attributes",
+   "template": "{{ (3).real }}|{{ (3).denominator }}|{{ 2.5.imag }}|{{ '{0.numerator}'.format(4) }}|{{ 7|attr('real') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "3|1|0.0|4|7"
   }
  ]
 }
