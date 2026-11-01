@@ -34,4 +34,4 @@ fails only for StrictUndefined and `%r` never; a string on the left no longer re
 StrictUndefined before its directives run. Ordering and arithmetic with an undefined operand
 (`5 + nope`, `nope < 5`) are UndefinedError rather than TypeError, as Undefined's `__add__` and
 `__lt__` raise. Cases in `operators.py`, error codes in `ErrorContractTest`. Callable type names in
-these messages are 0366.
+these messages are 0368.
