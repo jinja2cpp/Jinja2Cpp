@@ -596,6 +596,10 @@ public:
     void Render(const Tpl& tpl, OutStream& os);
     // The names the module's top level set
     [[nodiscard]] const InternalValueMap& Names() const { return m_context.GetCurrentScope(); }
+    // The `import ... as m` object: the exported names as attributes, which prints as
+    // Jinja2's TemplateModule, its output as str() and <TemplateModule 'name'> as repr()
+    // (docs/tasks/0309)
+    [[nodiscard]] InternalValue MakeObject(InternalValueMap&& exports) const;
     // The context the module's macros run in
     [[nodiscard]] RenderContext& Context() { return m_context; }
 
@@ -606,6 +610,8 @@ private:
     // The module's template, for its macros' `self`
     TemplateFrame m_frame;
     RenderContext m_context;
+    // The output of the module's top level, which str() of its object prints (Render(tpl))
+    InternalValue m_output;
 };
 
 class IncludeStatement final : public Statement
@@ -672,7 +678,7 @@ public:
 
     void Render(OutStream& os, RenderContext& values) override;
 private:
-    void ImportNames(RenderContext& values, const ArenaView& nodes, const InternalValueMap& moduleNames) const;
+    void ImportNames(RenderContext& values, const ArenaView& nodes, const ImportedModule& module) const;
 
     bool m_withContext{};
     NodeRef<Expression> m_nameExpr;

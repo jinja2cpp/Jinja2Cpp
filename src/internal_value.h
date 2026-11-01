@@ -710,6 +710,9 @@ struct IMapAccessor : ValueObject
     // The value an object prints with as <Class value> (`self`, <TemplateReference 'name'>);
     // null for one that prints as <module.Class object at 0x...>
     [[nodiscard]] virtual const InternalValue* GetReprArgument() const { return nullptr; }
+    // The text str() of an object prints when it is not its repr (a template module's output,
+    // which is also its __html__); null for the others
+    [[nodiscard]] virtual const InternalValue* GetStrValue() const { return nullptr; }
     // A for loop's `loop` object puts the attribute `attr` in `value` and returns true when
     // it can be read without the generic lookup (`loop.index`, 0117 P1); others return false
     virtual bool GetLoopAttr(LoopAttr /*attr*/, InternalValue& /*value*/) const { return false; }
@@ -914,6 +917,7 @@ public:
     [[nodiscard]] bool IsNamespace() const { return m_accessor != nullptr && m_accessor->IsNamespace(); }
     [[nodiscard]] const char* GetObjectClass() const { return m_accessor ? m_accessor->GetObjectClass() : nullptr; }
     [[nodiscard]] const InternalValue* GetReprArgument() const { return m_accessor ? m_accessor->GetReprArgument() : nullptr; }
+    [[nodiscard]] const InternalValue* GetStrValue() const { return m_accessor ? m_accessor->GetStrValue() : nullptr; }
     // NOLINTNEXTLINE(modernize-use-nodiscard): see IMapAccessor::SetValue
     bool SetValue(std::string name, const InternalValue& val) const { return m_accessor != nullptr && m_accessor->SetValue(std::move(name), val); }
     [[nodiscard]] bool ShouldExtendLifetime() const { return m_accessor != nullptr && m_accessor->ShouldExtendLifetime(); }
@@ -1587,6 +1591,9 @@ MapAdapter CreateNamespaceAdapter(TemplateDict&& values);
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className);
 // An object of `className` that prints as <className repr(reprArgument)>
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className, InternalValue reprArgument);
+// Jinja2's TemplateModule of an imported template named `name`: `values` are its exports,
+// `output` the text str() prints (docs/tasks/0309)
+MapAdapter CreateModuleAdapter(InternalValueMap&& values, InternalValue name, InternalValue output);
 MapAdapter CreateMapAdapter(const InternalValueMap* values);
 // Shares the map: the adapter keeps it alive (a loop object kept past its loop)
 MapAdapter CreateMapAdapter(std::shared_ptr<InternalValueMap> values);

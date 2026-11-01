@@ -853,6 +853,12 @@ void ValueRendererBase<CharT>::operator()(const MapRef& map) const
         AppendAscii(fmt::format("<LoopContext {}/{}>", *GetIf<int64_t>(&loopIndex), *GetIf<int64_t>(&loopLength)).c_str());
         return;
     }
+    // A template module's str() is its output (docs/tasks/0309)
+    if (const auto* str = m_asRepr ? nullptr : map.GetStrValue())
+    {
+        RenderValue(*str, *m_os, false);
+        return;
+    }
     // An object prints as Python's repr of it: <Namespace {...}> wraps its attributes, the
     // rest have the default <module.Class object at 0x...>
     const char* objectClass = map.GetObjectClass();

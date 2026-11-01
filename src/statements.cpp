@@ -2366,7 +2366,12 @@ ImportedModule::ImportedModule(InternalValueMap names, const InternalValueMap& g
 template<typename Tpl>
 void ImportedModule::Render(const Tpl& tpl)
 {
-    RenderToString(m_context.GetRendererCallback(), [this, &tpl](OutStream& stream) { Render(tpl, stream); });
+    m_output = InternalValue(RenderToString(m_context.GetRendererCallback(), [this, &tpl](OutStream& stream) { Render(tpl, stream); }));
+}
+
+InternalValue ImportedModule::MakeObject(InternalValueMap&& exports) const
+{
+    return CreateModuleAdapter(std::move(exports), m_frame.name.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(m_frame.name)), m_output);
 }
 
 template<typename Tpl>
@@ -2410,7 +2415,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     {
         if (const auto* shared = callback.FindModule(tpl))
         {
-            ImportNames(values, nodes, shared->Names());
+            ImportNames(values, nodes, *shared);
             return;
         }
     }
@@ -2429,7 +2434,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
             module.Render(*tplPtr);
             return true;
         });
-        ImportNames(values, nodes, module.Names());
+        ImportNames(values, nodes, module);
         return;
     }
     class SharedModuleScope
@@ -2460,7 +2465,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     // Shared once complete: a module that imports itself recurses, as in Jinja2
     callback.ShareModule(tpl, module);
     scope.Shared();
-    ImportNames(values, nodes, module.Names());
+    ImportNames(values, nodes, module);
 }
 
 namespace
@@ -2479,8 +2484,9 @@ bool IsImported(const InternalValue& value)
 } // namespace
 
 // Copies: the module keeps every name, which its own macros read in its context
-void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes, const InternalValueMap& moduleNames) const
+void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes, const ImportedModule& module) const
 {
+    const auto& moduleNames = module.Names();
     if (m_namespace.empty())
     {
         auto scope = values.GetCurrentScope();
@@ -2508,7 +2514,7 @@ void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes,
         importedNs[name] = value;
     }
     auto& bound = values.GetCurrentScope().ForName({ nodes.Text(m_namespace), m_namespaceHash });
-    bound = CreateMapAdapter(std::move(importedNs));
+    bound = module.MakeObject(std::move(importedNs));
     values.GetRendererCallback()->ImportBound(values, nodes.Text(m_namespace), bound);
 }
 

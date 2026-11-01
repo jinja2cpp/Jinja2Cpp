@@ -58,6 +58,21 @@ TEST_F(ImportTest, TestContextImports)
     EXPECT_EQ("[42|23]", result);
 }
 
+// `import ... as m` binds Jinja2's TemplateModule: str() is the module's output, also under
+// autoescape (its __html__), repr() names the template; in both character types (docs/tasks/0309)
+TEST_F(ImportTest, ModuleObjectPrintsAsTemplateModule)
+{
+    AddFile("out", "A<b>{% set x = 1 %}B");
+    const std::string tpl = R"({% import "out" as m %}[{{ m }}]{{ m|pprint }}{{ m.x }}|{% import "out" as w with context %}{{ [w] }})";
+    const std::string expected = "[A<b>B]<TemplateModule 'out'>1|[<TemplateModule 'out'>]";
+    EXPECT_EQ(expected, Render(tpl));
+    jinja2::TemplateW wide(&m_env);
+    ASSERT_TRUE(!!wide.Load(jinja2::ConvertString<std::wstring>(tpl)));
+    EXPECT_EQ(jinja2::ConvertString<std::wstring>(expected), wide.RenderAsString({}).value());
+    m_env.GetSettings().autoescape = true;
+    EXPECT_EQ("[A<b>B]&lt;TemplateModule &#39;out&#39;&gt;", Render(R"({% import "out" as m %}[{{ m }}]{{ m|pprint }})"));
+}
+
 TEST_F(ImportTest, TestImportSyntax)
 {
     Load(R"({% from "foo" import bar %})");
