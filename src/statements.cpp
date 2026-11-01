@@ -2371,7 +2371,11 @@ void ImportedModule::Render(const Tpl& tpl)
 
 InternalValue ImportedModule::MakeObject(InternalValueMap&& exports) const
 {
-    return CreateModuleAdapter(std::move(exports), m_frame.name.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(m_frame.name)), m_output);
+    if (m_object.IsUndefined())
+    {
+        m_object = CreateModuleAdapter(std::move(exports), m_frame.name.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(m_frame.name)), m_output);
+    }
+    return m_object;
 }
 
 template<typename Tpl>

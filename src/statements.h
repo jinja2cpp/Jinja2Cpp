@@ -598,7 +598,7 @@ public:
     [[nodiscard]] const InternalValueMap& Names() const { return m_context.GetCurrentScope(); }
     // The `import ... as m` object: the exported names as attributes, which prints as
     // Jinja2's TemplateModule, its output as str() and <TemplateModule 'name'> as repr()
-    // (docs/tasks/0309)
+    // (docs/tasks/0309). Made once: a module two imports share is one object, equal to itself
     [[nodiscard]] InternalValue MakeObject(InternalValueMap&& exports) const;
     // The context the module's macros run in
     [[nodiscard]] RenderContext& Context() { return m_context; }
@@ -612,6 +612,8 @@ private:
     RenderContext m_context;
     // The output of the module's top level, which str() of its object prints (Render(tpl))
     InternalValue m_output;
+    // The object MakeObject made; the exports of a module do not change once it is rendered
+    mutable InternalValue m_object;
 };
 
 class IncludeStatement final : public Statement

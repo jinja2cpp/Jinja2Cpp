@@ -328,6 +328,7 @@ CASES = [
     # An imported module is Jinja2's TemplateModule: its output as str() and __html__,
     # <TemplateModule 'name'> as repr, its exports as attributes (0309)
     ("module_object_str_repr", "{% import 'out.j2' as m %}[{{ m }}]|{{ m|pprint }}|{{ [m] }}|{{ m|string }}|{{ m.x }}{{ m['x'] }}{{ m.f() }}|{{ m is mapping }}|{{ m.nope is defined }}|{{ m == m }}", MODOBJ),
+    ("module_object_shared_is_one", "{% import 'out.j2' as m %}{% import 'out.j2' as n %}{{ m == n }}|{{ m is sameas n }}|{{ m != n }}", MODOBJ),
     ("module_object_with_context", "{% import 'out.j2' as m with context %}[{{ m }}]|{{ m|pprint }}", MODOBJ),
     ("module_object_autoescape", "{% import 'out.j2' as m %}[{{ m }}]|{{ m|e }}|{{ m ~ '' }}|{{ m|string }}", {**MODOBJ, "env": {"autoescape": True}}),
     ("module_object_is_escaped", "{% import 'out.j2' as m %}{{ m is escaped }}", MODOBJ),
