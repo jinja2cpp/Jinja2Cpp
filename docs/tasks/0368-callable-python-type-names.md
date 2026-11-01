@@ -28,3 +28,8 @@ work on builtin class reprs first, which already distinguishes some of these.
 
 **Done when** a unit test asserts the messages above for `1 in m`, `1 in range`, `1 in
 'a'.upper` and `1 + m`, narrow and wide.
+
+**Next.** The verifier of 0297/0307 found the same gap in output: a bound method or function prints
+empty (`{{ lipsum }}`, `{{ 'a'.upper }}`, `{{ 'a'|attr('upper') }}`) where Python prints its repr
+(`<function generate_lorem_ipsum at 0x...>`, `<built-in method upper of str object at 0x...>`).
+The addresses make exact parity impossible; decide with 0305's reprs what to print.

@@ -2268,6 +2268,18 @@
    "output": "[&lt;]|[&lt;]|[&lt;a]|[&lt;]"
   },
   {
+   "id": "autoescape.volatile_finalize_template_data",
+   "template": "{% autoescape on %}a{{ 1 }}{% endautoescape %}|{% autoescape true %}a{{ 1 }}{% endautoescape %}",
+   "context": {
+    "on": true
+   },
+   "env": {
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[a][1]|a[1]"
+  },
+  {
    "id": "autoescape.env_on_finalize_folded_none",
    "template": "{{ none }}|{{ y }}|{{ x|safe }}",
    "context": {
