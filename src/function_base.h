@@ -13,7 +13,6 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -157,13 +156,16 @@ public:
                 }
                 return context.Nodes()[m_exprs[idx]].Evaluate(context);
             }
-            if (m_values && (*m_values)[idx])
+            if (m_values)
             {
-                if (given)
+                if (const auto& value = (*m_values)[idx])
                 {
-                    *given = true;
+                    if (given)
+                    {
+                        *given = true;
+                    }
+                    return value.value();
                 }
-                return *(*m_values)[idx];
             }
             if (IsEmpty(info.defaultVal))
             {

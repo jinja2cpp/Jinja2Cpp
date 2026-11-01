@@ -1767,7 +1767,7 @@ InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, Rende
         auto length = NumericArgument(this->GetArgumentValue("length", context), "truncate", "length", NumberKind::Any);
         auto killWords = ConvertToBool(this->GetArgumentValue("killwords", context));
         auto end = GetAsSameString(srcStr, endVal).value_or(String());
-        auto leeway = TruncateLeeway(leewayVal, this->IsArgumentSet(leewayVal, leewayGiven));
+        auto leeway = TruncateLeeway(leewayVal, FunctionBase::IsArgumentSet(leewayVal, leewayGiven));
         auto endLength = CodePointCount(end);
         // Jinja2 asserts both
         if (length < endLength || leeway < 0)
@@ -2080,7 +2080,7 @@ InternalValue StringConverter::Convert(const InternalValue& baseVal, RenderConte
             const auto charsVal = this->GetArgumentValue("chars", context, charsGiven);
             auto chars = GetAsSameString(srcStr, charsVal);
             // An undefined argument is Python's Undefined object, no str (docs/tasks/0310)
-            if (!chars && this->IsArgumentSet(charsVal, charsGiven))
+            if (!chars && FunctionBase::IsArgumentSet(charsVal, charsGiven))
             {
                 throw TemplateRuntimeError("strip arg must be None or str");
             }

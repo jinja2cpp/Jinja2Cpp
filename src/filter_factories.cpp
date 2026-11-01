@@ -15,6 +15,7 @@
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
@@ -228,7 +229,7 @@ Tester::Tester(const FilterParams& params, Tester::Mode mode)
     // the other arguments, keywords included, to the test; without a test it calls bool() and
     // drops them
     const bool isAttrMode = mode == SelectAttrMode || mode == RejectAttrMode;
-    const size_t leadCount = std::min(params.PosCount(), isAttrMode ? size_t{ 2 } : size_t{ 1 });
+    const std::size_t leadCount = std::min(params.PosCount(), isAttrMode ? std::size_t{ 2 } : std::size_t{ 1 });
     m_hasAttribute = isAttrMode && leadCount > 0;
 
     params.Visit([&](const auto& args) {
