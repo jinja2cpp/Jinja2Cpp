@@ -1,6 +1,6 @@
 # Benchmark trend
 
-Instruction and allocation counts per iteration on master, one record per commit (164 so far, latest [466d84c](https://github.com/jinja2cpp/Jinja2Cpp/commit/466d84c38f78ace6717bddaa3d5aea10fa2336f9) on 2026-11-01). Written by the `trend` job of `.github/workflows/benchmark.yml` with `bench/trend.py`; the data is `history.jsonl`.
+Instruction and allocation counts per iteration on master, one record per commit (165 so far, latest [b4249a6](https://github.com/jinja2cpp/Jinja2Cpp/commit/b4249a6d9017fe5ce47d56df5d5ff2f8b751ec24) on 2026-11-01). Written by the `trend` job of `.github/workflows/benchmark.yml` with `bench/trend.py`; the data is `history.jsonl`.
 
 Memory is the bytes a loaded template keeps for `Load/*` and the peak heap use of one render for `Render/*`; vs first compares with the first record that has it.
 
