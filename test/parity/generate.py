@@ -29,7 +29,18 @@ import jinja2
 sys.dont_write_bytecode = True  # keep cases/ free of __pycache__
 
 HERE = pathlib.Path(__file__).resolve().parent
-JINJA2_VERSION = "3.1.6"
+
+
+def pinned_jinja2_version():
+    """The one pin of the oracle's Jinja2: requirements.txt (docs/parity.md, "Oracle pin")."""
+    for line in (HERE / "requirements.txt").read_text(encoding="utf-8").splitlines():
+        name, sep, version = line.split("#")[0].strip().partition("==")
+        if sep and name.strip().lower() == "jinja2":
+            return version.strip()
+    sys.exit("requirements.txt does not pin jinja2==<version>")
+
+
+JINJA2_VERSION = pinned_jinja2_version()
 
 # Options the C++ harness knows how to map (or knows it cannot map yet).
 ENV_OPTIONS = {

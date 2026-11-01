@@ -10,6 +10,10 @@
 // The Jinja2C++ library version in the form major * 10000 + minor * 100 + patch.
 #define JINJA2CPP_VERSION ((JINJA2CPP_VERSION_MAJOR * 10000) + (JINJA2CPP_VERSION_MINOR * 100) + JINJA2CPP_VERSION_PATCH)
 #define JINJA2CPP_VERSION_STRING "@PROJECT_VERSION@"
+// The Python and Jinja2 versions this build is checked against (the parity oracle, docs/parity.md).
+// Behaviour follows exactly this pair; compare strings with a static_assert or at run time.
+#define JINJA2CPP_ORACLE_PYTHON "@JINJA2CPP_ORACLE_PYTHON@"
+#define JINJA2CPP_ORACLE_JINJA2 "@JINJA2CPP_ORACLE_JINJA2@"
 // NOLINTEND(modernize-macro-to-enum)
 
 #endif // JINJA2CPP_VERSION_H

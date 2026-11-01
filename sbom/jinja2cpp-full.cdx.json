@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:7c5c9460-6033-5624-a50e-12af7b6d0e89",
+  "serialNumber": "urn:uuid:23c10eda-0dc2-526e-92a7-a545899516ea",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -1668,11 +1668,11 @@
         },
         {
           "name": "jinja2cpp:selected-by",
-          "value": "CI (actions/setup-python 3.12) and developers; not needed to build or install"
+          "value": "CI (actions/setup-python, version from .python-version) and developers; not needed to build or install"
         },
         {
           "name": "jinja2cpp:used-for",
-          "value": "Oracle runs, table generators (ORACLE_PYTHON 3.12), task and preflight scripts, bench drivers, this SBOM generator"
+          "value": "Oracle runs, table generators (ORACLE_PYTHON from .python-version), task and preflight scripts, bench drivers, this SBOM generator"
         },
         {
           "name": "jinja2cpp:why",
