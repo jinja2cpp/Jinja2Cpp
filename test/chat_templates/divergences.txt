@@ -70,7 +70,6 @@ LFM3.single rejects 0360 `{% generation %}` (transformers AssistantTracker) is n
 LFM3.system rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
 LFM3.tool_args_str message 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
 LFM3.tools rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
-llm-jp-llm-jp-4.1-8b-thinking.tool_args_str accepts 0297 `"x" in none` is a TypeError in Python
 llm-jp-llm-jp-4.1-8b-thinking.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
 meetkai-functionary-medium-v3.1.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
 meetkai-functionary-medium-v3.1.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
@@ -101,7 +100,6 @@ NousResearch-Hermes-3-Llama-3.1-8B-tool_use.tool_args_str output 0360 transforme
 NousResearch-Hermes-3-Llama-3.1-8B-tool_use.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
 NVIDIA-Nemotron-Nano-v2.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
 NVIDIA-Nemotron-Nano-v2.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
-openai-gpt-oss-120b.tool_args_str accepts 0297 `"x" in none` is a TypeError in Python
 openai-gpt-oss-120b.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
 openbmb-MiniCPM5-1B.tools rejects 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
 poolside-Laguna-S-2.1.documents rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
