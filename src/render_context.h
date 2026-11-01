@@ -225,6 +225,7 @@ private:
 class RenderContext;
 class ClosureSite;
 struct ClosureCapture;
+struct ClosureHome;
 // The names a module's top level imported and has not set again since: Jinja2 exports none of
 // them (docs/tasks/0299)
 using ModuleImports = std::vector<std::string>;
@@ -1156,17 +1157,21 @@ private:
     void CaptureClosuresImpl(size_t count);
     // Adds to `collected` what a lookup here sees in the scopes from the innermost down to
     // scope `lowest`, frame views included, as CollectVisibleNames does but keeping `loop` and
-    // the names bound at entry this context does not pass over: the copy for `capture`. The
-    // closures that share `capture` go in weakened (MacroStatement::WeakenCapture): holding
+    // the names bound at entry this context does not pass over: the copy for `captures`. The
+    // closures that keep one of them go in weakened (MacroStatement::WeakenCapture): holding
     // them as they are, the copy would keep them alive, and they the copy, until the render
     // ends. Defined in statements.cpp
-    void CollectNamesDownTo(InternalValueMap& collected, size_t lowest, const ClosureCapture& capture) const;
+    void CollectNamesDownTo(InternalValueMap& collected, size_t lowest, Span<const std::shared_ptr<ClosureCapture>> captures) const;
     // Adds a closure defined here that keeps what it sees (ClosureSite::CaptureOnEnd). Defined
     // in statements.cpp
     void AddClosureCapture(const std::shared_ptr<ClosureCapture>& capture);
-    // A scope holding `captured`, linked below `link` (HomeCall::EnterCaptured). Defined in
-    // statements.cpp. Throws std::bad_alloc
-    void EnterCapturedScope(const InternalValueMap& captured, size_t link);
+    // A scope holding what `home` kept (ClosureHome::captured over capturedBase), linked below
+    // `link` (HomeCall::EnterCaptured). Defined in statements.cpp. Throws std::bad_alloc
+    void EnterCapturedScope(const ClosureHome& home, size_t link);
+    // Whether something outside the innermost scope, the frame of `capture` that ends, holds
+    // one of the closures that keep `capture`: else no call can read the copy. Defined in
+    // statements.cpp
+    [[nodiscard]] bool CaptureEscapes(const std::shared_ptr<ClosureCapture>& capture) const;
     // The serial of scope `depth - 1` (ScopeStack::Stamp), when it is one of this context's
     // own; 0 otherwise
     uint32_t SerialBelow(size_t depth)
@@ -1708,6 +1713,10 @@ struct ClosureCapture
 {
     // The copy, once the frame has ended; empty before, and once the render has ended
     std::weak_ptr<const InternalValueMap> names;
+    // For a frame inside a context that ends before the render (an include), what the
+    // context's top level and its parents held when it ended: below `names`, which has only
+    // the frame's own scopes. Empty before, and when the context is a template's own
+    std::weak_ptr<const InternalValueMap> base;
     // The site's scopes and the serial of the innermost (ClosureSite)
     uint32_t depth = 0;
     uint32_t serial = 0;
@@ -1740,8 +1749,10 @@ struct ClosureHome
     size_t link = ScopeView::NoLink;
     Epoch epoch = Epoch::Home;
     // What the closure kept of the frames it was defined in, which have ended
-    // (ClosureCapture): the body sees these names first, below `link`. Null for most calls
+    // (ClosureCapture): the body sees these names first, below `link`, then those of
+    // `capturedBase`. Null for most calls
     std::shared_ptr<const InternalValueMap> captured;
+    std::shared_ptr<const InternalValueMap> capturedBase;
 };
 
 // Where a closure (a macro, a call block's caller, a recursive loop's loop(), super()) was
@@ -1794,7 +1805,11 @@ public:
                     ThrowEndedWithCall(caller);
                 }
                 auto ended = Ended(caller);
-                ended.captured = Captured();
+                if (const auto capture = m_capture.lock())
+                {
+                    ended.captured = capture->names.lock();
+                    ended.capturedBase = capture->base.lock();
+                }
                 return ended;
             }
         }
@@ -1817,45 +1832,24 @@ public:
         }
         home.link = context.HasScopeBelow(m_rootDepth, m_rootSerial) ? m_rootDepth : context.m_parentDepth;
         home.epoch = ClosureHome::Epoch::Fresh;
-        home.captured = Captured();
+        if (const auto capture = m_capture.lock())
+        {
+            home.captured = capture->names.lock();
+        }
         return home;
     }
     // Whether a call made after the frames the closure is defined in have ended should see
     // what they held (ClosureCapture): the closure is defined in a frame inside its template's
     // top level, or in a context that ends before the render (RenderContext::SetEndsBeforeRender)
     [[nodiscard]] bool OutlivesItsFrames(const RenderContext& context) const { return (m_state & TopLevel) == 0 || context.m_endsBeforeRender; }
-    // Whether CaptureOnEnd made the closure keep what it sees
-    [[nodiscard]] bool KeepsCapture() const { return m_capture != nullptr; }
-    // What the macro and its Weakened copies compare by (Callable::IsSame), for a site that
-    // KeepsCapture: the capture is made for one macro definition
-    [[nodiscard]] const void* CaptureIdentity() const { return m_capture.get(); }
-    // Whether the site keeps `capture` (CaptureOnEnd)
-    [[nodiscard]] bool Keeps(const ClosureCapture& capture) const { return m_capture.get() == &capture; }
-    // A copy of the site that reads what this one keeps without keeping it alive: for the
-    // copy of the frames itself to hold (RenderContext::CollectNamesDownTo), which lives as
-    // long as a closure outside it holds the capture (CycleCollector::KeepUntilEnd)
-    [[nodiscard]] ClosureSite Weakened() const
-    {
-        ClosureSite copy(*this);
-        copy.m_weakCapture = m_capture;
-        copy.m_capture.reset();
-        return copy;
-    }
-    // Whether the site is a Weakened copy
-    [[nodiscard]] bool IsWeakened() const { return !m_capture && !m_weakCapture.expired(); }
-    // The site a Weakened copy was made of, for a call that reads it out of the copy of the
-    // frames: what the call stores elsewhere keeps the capture, as the closure it copies does.
-    // Its capture is alive: the call reads the copy
-    [[nodiscard]] ClosureSite Strengthened() const
-    {
-        ClosureSite copy(*this);
-        copy.m_capture = m_weakCapture.lock();
-        copy.m_weakCapture.reset();
-        return copy;
-    }
+    // The capture CaptureOnEnd gave the closure, while a copy of the closure keeps it
+    [[nodiscard]] std::shared_ptr<ClosureCapture> Capture() const { return m_capture.lock(); }
     // Makes the closure keep what it sees of its frames when they end (ClosureCapture). For a
-    // site OutlivesItsFrames, made in `context` just now. Throws std::bad_alloc
-    void CaptureOnEnd(RenderContext& context);
+    // site OutlivesItsFrames, made in `context` just now. The site holds the capture weakly:
+    // the callable made of it keeps the result (Callable::SetKeepAlive), so that the copy of
+    // the frames can hold the closure without holding itself (MacroStatement::WeakenCapture).
+    // Throws std::bad_alloc
+    [[nodiscard]] std::shared_ptr<ClosureCapture> CaptureOnEnd(RenderContext& context);
 
 private:
     friend class HomeCall;
@@ -1871,16 +1865,6 @@ private:
     JINJA2CPP_NOINLINE_INLINE static void ThrowEndedWithCall(RenderContext& caller)
     {
         caller.GetRendererCallback()->ThrowRuntimeError(ErrorCode::TemplateExpired, {});
-    }
-    // The copy of the frames the closure was defined in, once they ended (ClosureCapture)
-    [[nodiscard]] std::shared_ptr<const InternalValueMap> Captured() const
-    {
-        if (m_capture)
-        {
-            return m_capture->names.lock();
-        }
-        const auto capture = m_weakCapture.lock();
-        return capture ? capture->names.lock() : nullptr;
     }
     [[nodiscard]] static ClosureHome Ended(RenderContext& caller)
     {
@@ -1929,10 +1913,8 @@ private:
     mutable uint8_t m_state = 0;
     // Defined in a module that ends with the host's call that made it (RenderContext::SetEndsWithCall)
     bool m_endsWithCall = false;
-    // Set by CaptureOnEnd, shared by the copies of the site
-    std::shared_ptr<ClosureCapture> m_capture;
-    // The capture of a Weakened copy
-    std::weak_ptr<ClosureCapture> m_weakCapture;
+    // Set by CaptureOnEnd, shared by the copies of the site; kept by the callables (CaptureOnEnd)
+    std::weak_ptr<ClosureCapture> m_capture;
 };
 
 // What a HomeCall that switches the home saves; at namespace scope, as Clang does not take
@@ -2229,17 +2211,17 @@ private:
             }
         }
         saved.bodyEpoch = context.m_epoch;
-        if (home.captured)
+        if (home.captured || home.capturedBase)
         {
-            EnterCaptured(context, *home.captured, home.link);
+            EnterCaptured(context, home, home.link);
         }
     }
     // The names a closure kept of its ended frames (ClosureHome::captured), in a scope of
     // their own on `context`, linked below `link`: the body's scope links to that scope,
     // which Leave removes
-    JINJA2CPP_NOINLINE_INLINE void EnterCaptured(RenderContext& context, const InternalValueMap& captured, size_t link)
+    JINJA2CPP_NOINLINE_INLINE void EnterCaptured(RenderContext& context, const ClosureHome& home, size_t link)
     {
-        context.EnterCapturedScope(captured, link);
+        context.EnterCapturedScope(home, link);
         m_link = context.GetScopesCount();
     }
     JINJA2CPP_NOINLINE_INLINE static void Leave(RenderContext& context, const HomeCallSaved& saved) // NOLINT(bugprone-exception-escape): leaving scopes and dropping views free memory only

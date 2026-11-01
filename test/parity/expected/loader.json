@@ -5173,6 +5173,85 @@
    "output": "<0><1><2>"
   },
   {
+   "id": "loader.include_nested_closure_reads_top_level_live",
+   "template": "{% set ns = namespace(f=none) %}{% include 'i' %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = 1 %}{% macro k() %}{% macro c() %}{{ y }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{{ k() }}{% set y = 2 %}{{ ns.f() }}"
+   },
+   "output": "2"
+  },
+  {
+   "id": "loader.include_nested_closure_after_include",
+   "template": "{% set ns = namespace(f=none) %}{% include 'i' %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = 1 %}{% macro k() %}{% macro c() %}{{ y }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{{ k() }}{% set y = 2 %}"
+   },
+   "output": "|2"
+  },
+  {
+   "id": "loader.include_nested_closure_later_macro",
+   "template": "{% set ns = namespace(f=none) %}{% include 'i' %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% macro k() %}{% macro c() %}{{ h() }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{{ k() }}{% macro h() %}H{% endmacro %}{{ ns.f() }}"
+   },
+   "output": "H"
+  },
+  {
+   "id": "loader.include_nested_closure_in_nested_include",
+   "template": "{% set ns = namespace(f=none) %}{% include 'i' %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = 1 %}{% macro k() %}{% macro c() %}{{ y }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{{ k() }}{% set y = 2 %}{% include 'j' %}",
+    "j": "{{ ns.f() }}"
+   },
+   "output": "2"
+  },
+  {
+   "id": "loader.include_nested_closure_calls_later_macros",
+   "template": "{% set ns = namespace(l=[]) %}{% include 'i' %}|{% for f in ns.l %}{{ f() }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = 'Y' %}{% macro a() %}a{{ y }}{% endmacro %}{% macro k(v) %}{% macro c() %}c{{ v }}{{ y }}{{ a() }}{{ b() }}{% endmacro %}{% set _ = ns.l.append(c) %}{% endmacro %}{{ k(1) }}{% macro b() %}b{{ y }}{% endmacro %}{% set _ = ns.l.append(a) %}"
+   },
+   "output": "|c1YaYbYaY"
+  },
+  {
+   "id": "loader.include_macro_kept_reads_self",
+   "template": "{% set ns = namespace(f=none) %}{% include 'i' %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = 'Y' %}{% macro a() %}a{{ y }}{{ self.blk() }}{% endmacro %}{% block blk %}B{{ y }}{% endblock %}{% set ns.f = a %}"
+   },
+   "output": "BY|aYBY"
+  },
+  {
    "id": "loader.include_macro_kept_snapshot",
    "template": "{% set ns = namespace(f=none) %}{% set x = 'X' %}{% include 'a' %}{% set x = 'X2' %}|{{ ns.f() }}",
    "context": {

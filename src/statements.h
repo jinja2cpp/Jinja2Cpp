@@ -803,12 +803,13 @@ public:
     // inside another body needs no lookup cache epoch of its own (HomeCall::Run)
     void SetReadsSlotsOnly(std::uint32_t slotReads) { m_readsSlotsOnly = !m_bodyReachesContext && slotReads == m_bodyNameRefs; }
     [[nodiscard]] bool ReadsSlotsOnly() const { return m_readsSlotsOnly; }
-    // For `value`, a macro that keeps `capture`, the copy of the frames it was defined in
-    // (ClosureSite::CaptureOnEnd): the same macro reading that copy through a weak reference
-    // (ClosureSite::Weakened), for the copy itself to hold. Else nothing. Throws std::bad_alloc
-    [[nodiscard]] static std::optional<InternalValue> WeakenCapture(const InternalValue& value, const ClosureCapture& capture);
-    // `value` as a call reads it out of a copy of the frames: a macro WeakenCapture made, as
-    // the macro it was made of; else `value`. Throws std::bad_alloc
+    // For `value`, a macro that keeps one of `captures` (ClosureSite::CaptureOnEnd): the same
+    // macro without keeping it (Callable::SetKeepAlive), for a copy of the frames to hold.
+    // Else nothing. Throws std::bad_alloc
+    [[nodiscard]] static std::optional<InternalValue> WeakenCapture(const InternalValue& value, Span<const std::shared_ptr<ClosureCapture>> captures);
+    // `value` as a call reads it out of a copy of the frames: a macro WeakenCapture made keeps
+    // its capture again, so that what the call stores elsewhere keeps it; else `value`. Throws
+    // std::bad_alloc
     [[nodiscard]] static InternalValue StrengthenCapture(const InternalValue& value);
 
 protected:

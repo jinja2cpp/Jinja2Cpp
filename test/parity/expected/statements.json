@@ -18883,6 +18883,166 @@
    "output": "missing7"
   },
   {
+   "id": "statements.macro_closure_loop_definitions_distinct",
+   "template": "{% set l = [] %}{% for i in [1, 2] %}{% macro m() %}{{ i }}{% endmacro %}{% set _ = l.append(m) %}{% endfor %}{{ l[0] is sameas l[1] }}{{ l[0] == l[1] }}{{ l[1] in [l[0]] }}{{ [l[0], l[1]]|unique|list|length }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "FalseFalseFalse2"
+  },
+  {
+   "id": "statements.macro_closure_per_call_distinct",
+   "template": "{% set ns = namespace(a=none, b=none, f=none, l=[]) %}{% macro outer(v) %}{% set y = v %}{% macro a() %}a{{ y }}{% endmacro %}{% set _ = ns.l.append(a) %}{% endmacro %}{{ outer(1) }}{{ outer(2) }}{{ outer(3) }}|{% for f in ns.l %}{{ f() }}{% endfor %}|{{ ns.l[0] is sameas ns.l[1] }}{{ ns.l[0] is sameas ns.l[0] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "|a1a2a3|FalseTrue"
+  },
+  {
+   "id": "statements.macro_closure_sibling_stored_from_copy",
+   "template": "{% set ns = namespace(a=none, b=none, f=none, l=[]) %}{% macro outer(v) %}{% macro m() %}{% endmacro %}{% macro k() %}{% set ns.b = m %}{{ m is sameas ns.b }}{% endmacro %}{% set ns.a = k %}{% endmacro %}{{ outer(2) }}|{{ ns.a() }}|{{ ns.a() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "|True|True"
+  },
+  {
+   "id": "statements.macro_closure_stored_then_dropped",
+   "template": "{% set ns = namespace(a=none, b=none, f=none, l=[]) %}{% macro outer(v) %}{% set y = v %}{% macro m() %}{{ y }}{% endmacro %}{% set ns.a = m %}{{ ns.a() }}{% set ns.a = none %}{% endmacro %}{{ outer(5) }}|{{ ns.a }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "5|None"
+  },
+  {
    "id": "statements.macro_closure_param_shadows_root",
    "template": "{% set n = 'root' %}{% set ns = namespace(f=none) %}{% macro outer(n) %}{% macro inner() %}{{ n }}{% endmacro %}{% set ns.f = inner %}{% endmacro %}{{ outer('p') }}{{ ns.f() }}{{ n }}",
    "context": {
