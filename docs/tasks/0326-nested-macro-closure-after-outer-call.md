@@ -1,8 +1,8 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: parity
-touches: [src/statements.cpp, test/parity/divergences/statements.txt]
+touches: [src/statements.cpp, test/parity/divergences/statements.txt, src/render_context.h, src/cycle_collector.h, src/cycle_collector.cpp, test/parity/cases/statements.py]
 ---
 # A macro defined in a macro loses the outer call's names after that call returned
 
@@ -24,3 +24,16 @@ and called in a later call `TemplateExpired`; this case is called after the call
 render) and 0049 P1's traversal of closures.
 
 **Done when.** The corpus case matches and its divergence line is deleted; ASan clean.
+
+**Fix (parity batch 2, group C).** A macro defined in a frame inside its template's top level
+registers a `ClosureCapture` with the context it is defined in (`ClosureSite::CaptureOnEnd`). When
+a macro call ends (`InvokeMacroRenderer`), the context copies, for each closure defined in the
+call's scope, the names that closure sees from there down to its template's top level
+(`RenderContext::CaptureClosures`), slots included. A later call that finds the frame ended
+(`ClosureSite::Resolve`, case 3) pushes the copy as a scope below the body, linked to the top
+level, which it still reads live. The render owns the copies (`CycleCollector::KeepUntilEnd`,
+released before the cycle walk); the site holds them weakly, so a namespace that stores the
+closure and is among the names copied forms no cycle. A macro defined in a loop and kept past
+the loop still reads the loop's names as undefined (Jinja2 prints its `missing` sentinel there;
+the deliberate lines stay). Also fixed: `statements.nested_macro_escapes_its_call` (0165's
+deliberate line). Corpus rows `statements.macro_closure_*`.

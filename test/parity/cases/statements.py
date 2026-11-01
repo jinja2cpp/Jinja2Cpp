@@ -271,6 +271,10 @@ CASES = [
     ("comment_begin_dash_at_end", "a{#-"),
     ("comment_begin_plus_at_end", "a{#+"),
     ("do", "{% do l.append(4) %}{% for i in l %}{{ i }},{% endfor %}", DO),
+    # A list changed while it is iterated (0049 P3, 0304): Jinja2 fetches the next item lazily
+    ("for_remove_current_item", "{% set q = [1, 2, 3] %}{% for x in q %}{{ x }}{% do q.remove(x) %}{% endfor %}", DO),
+    ("for_pop_context_list", "{% for i in l %}{% do l.pop() %}{{ i }}{% endfor %}|{{ l }}", DO),
+    ("for_length_after_append", "{% set q = [1, 2] %}{% for x in q %}{{ loop.length }}{{ loop.revindex }}{{ loop.last }}{% if loop.first %}{% do q.append(3) %}{% endif %};{% endfor %}", DO),
     ("do_without_extension", "{% do l.append(4) %}"),
     ("autoescape_block", "{% autoescape true %}{{ '<a>' }}{% endautoescape %}|{{ '<a>' }}"),
     ("autoescape_block_off", "{% autoescape false %}{{ '<a>' }}{% endautoescape %}"),

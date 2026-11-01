@@ -1,8 +1,8 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
-touches: [src/template_module.cpp, src/internal_value.cpp]
+touches: [src/template_module.cpp, src/internal_value.cpp, src/cycle_collector.h, src/error_info.cpp, include/jinja2cpp/error_info.h, docs/api-2.0.md, test/template_module_test.cpp]
 ---
 # Callables that do not cross a `Template::MakeModule` export
 
@@ -26,3 +26,19 @@ the owner ended fails with TemplateExpired). For 3, a live view would need the m
 mutex on every read: decide whether the snapshot is enough.
 
 **Done when** 1 and 2 round-trip with tests, and 3 is decided and documented.
+
+**Fix (parity batch 2, group C).**
+1. A template callable (macro, `caller`, built-in) passed to a host callable is lent for the
+   duration of that call (`CallableLease` in internal_value.cpp): the host gets a `UserCallable`
+   that, called during the call and on its thread, runs the callable in the render that passed
+   it, with that render's `CycleCollector` current again (`CycleCollector::Reentry`), so that
+   writes to the render's host data go to the render's cells, not to the module call's. Called
+   later it throws `TemplateExpired` with `extraParams[0] == "lent"`. A host's own callable that
+   was converted to a template callable comes back as itself (`HostCallableOf`).
+2. `ExportCopier` wraps a template callable found anywhere in an exported value, or in a call's
+   result, as a call in the module (`MakeModuleCall`), as top-level exports are.
+3. Decided: value exports stay a snapshot taken when the module was made. A live view would need
+   the module's mutex on every read and hand the host mutable state that the module's calls
+   change, which the immutability principle (host data immutable, renders independent) rules
+   out. Documented in docs/api-2.0.md (lifecycle items 6 and 8).
+Tests: `TemplateModuleTest.TemplateCallableArguments`, `TemplateModuleTest.NestedCallables`.

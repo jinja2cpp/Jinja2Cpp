@@ -10470,6 +10470,138 @@
    "output": "3,1,2,4,"
   },
   {
+   "id": "statements.for_remove_current_item",
+   "template": "{% set q = [1, 2, 3] %}{% for x in q %}{{ x }}{% do q.remove(x) %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "13"
+  },
+  {
+   "id": "statements.for_pop_context_list",
+   "template": "{% for i in l %}{% do l.pop() %}{{ i }}{% endfor %}|{{ l }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "31|[3]"
+  },
+  {
+   "id": "statements.for_length_after_append",
+   "template": "{% set q = [1, 2] %}{% for x in q %}{{ loop.length }}{{ loop.revindex }}{{ loop.last }}{% if loop.first %}{% do q.append(3) %}{% endif %};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "22False;21False;20True;"
+  },
+  {
    "id": "statements.do_without_extension",
    "template": "{% do l.append(4) %}",
    "context": {
