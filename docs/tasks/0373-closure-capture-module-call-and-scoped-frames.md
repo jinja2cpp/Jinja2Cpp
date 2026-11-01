@@ -8,7 +8,7 @@ touches: [src/statements.cpp, src/render_context.h, src/template_module.cpp, src
 # Closures kept past a module call or a scoped frame lose their names
 
 **Problem.** Found by the verifier of parity batch 2 group C (0326, 0323). A closure that keeps
-the names of the frame it was defined in (`ClosureCapture`) loses them in three cases, and one
+the names of the frame it was defined in (`ClosureCapture`) loses them in four cases, and one
 case holds memory until the render ends.
 
 1. *A host's module call.* The copies made during a call the host makes into a template module
@@ -23,7 +23,8 @@ case holds memory until the render ends.
    `later()` from the host gives `I`, and after the host calls `keep('host')` still `I`.
    Python Jinja2 3.1.6 gives `Itop`, then `Ihost`. No corpus case: the corpus renders
    templates, not host calls into a module; pin it in `test/template_module_test.cpp`.
-2. *A `with` or `block` frame inside an included template.* The include captures its context
+2. *A `with` or `block` frame inside an included template* (a `with` inside a macro call too:
+   `|4missing|4missing` in Python, `||` here). The include captures its context
    when it ends (`RenderIncludedTemplate`), but a closure defined in a `with` or `block` body
    there registered with the frame that ended first, so nothing is copied for it: the block
    case reads `a` and `q` as undefined (`|`, Python `|AQ`), the `with` case reads `q` as
@@ -36,6 +37,11 @@ case holds memory until the render ends.
    `ns.f()` after `outer(7)`, Python `missing7`. Corpus row
    `statements.macro_closure_in_loop_of_call`. The loop's capture is skipped because the loop's
    scope has ended when the call captures.
+5. *`self` of an ended include.* A macro of an included template kept past the include and
+   calling `self.<block>` fails: the `self` its call finds is rebuilt without the blocks
+   (`ns.f()` with `{% macro a() %}a{{ y }}{{ self.blk() }}{% endmacro %}{% block blk %}...`
+   in the include: Python `aYBY`, an undefined-attribute error here, at base 9fad25c too).
+   Corpus row `loader.include_macro_kept_reads_self`.
 4. *Memory.* A closure stored in a list, dict or namespace made in its own frame
    (`{% set lst = [] %}{% macro m() %}{{ lst|length }}{% endmacro %}{% set _ = lst.append(m) %}`)
    closes a cycle through the copy of the frame (copy, container, closure, capture), which the
@@ -52,6 +58,6 @@ render while it runs, as Python's generational collector does, or let the collec
 closure's capture and copy (ValueObject::Traverse) so a walk run when the copies pass a count
 frees the dead ones.
 
-**Done when.** The three corpus rows match and their divergence lines are deleted, a module-state
+**Done when.** The four corpus rows match and their divergence lines are deleted, a module-state
 test pins case 1, and the memory bound of 0326 (copies freed once no closure outside them
 holds the capture) still holds, and the case 4 loop stays in constant memory.

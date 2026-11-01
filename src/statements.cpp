@@ -1670,6 +1670,41 @@ void CheckBlockCallParams(const CallParams& params)
     }
 }
 
+// `callable` keeping `keepAlive` (Callable::SetKeepAlive)
+Callable WithKeepAlive(Callable&& callable, std::shared_ptr<const void> keepAlive)
+{
+    callable.SetKeepAlive(std::move(keepAlive));
+    return std::move(callable);
+}
+
+// What `home` kept of the frames a closure was defined in (ClosureHome::captured over
+// capturedBase), into `scope`, each closure keeping its capture again (StrengthenCapture)
+void CopyCaptured(ScopeRef& scope, const ClosureHome& home)
+{
+    // The frame's own names hide those of the top level
+    for (const auto* names : { home.capturedBase.get(), home.captured.get() })
+    {
+        if (!names)
+        {
+            continue;
+        }
+        for (const auto& [name, value] : *names)
+        {
+            scope[name] = MacroStatement::StrengthenCapture(value);
+        }
+    }
+}
+
+// CopyCaptured into the current scope of `context`, when `home` kept anything
+void CopyCaptured(RenderContext& context, const ClosureHome& home)
+{
+    if (home.captured || home.capturedBase)
+    {
+        auto scope = context.GetCurrentScope();
+        CopyCaptured(scope, home);
+    }
+}
+
 // `self` for the blocks of `stack`, Jinja2's TemplateReference printed with the context's
 // `name`: a callable per block. A call renders the block in the template `self` came from
 // while that template runs (the importer, for `self` passed to an imported macro), or while
@@ -1678,8 +1713,10 @@ void CheckBlockCallParams(const CallParams& params)
 // level, `site`, wherever it is called from, as a block function sees its template's context
 // in Jinja2 (docs/tasks/0194). Once the stack has ended, the call renders the blocks it held
 // (SelfBlocks), seeing the names `site` still has
-InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, const std::shared_ptr<const void>& keepAlive)
+InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName)
 {
+    // What the site keeps (ClosureSite::CaptureOnEnd), while the `self` lives; the caller holds it
+    const std::shared_ptr<const void> keepAlive = site.Capture();
     InternalValueMap self;
     if (!stack.blocks.empty() && !stack.self)
     {
@@ -1689,7 +1726,7 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
     {
         // `self` may outlive the stack and the trees its names are in
         std::string blockName(block.first);
-        Callable blockCall(Callable::Macro, [name = blockName, owner = stack.self, site, templateName](const CallParams& params, OutStream& stream, RenderContext& context) {
+        self[blockName] = MakeWrapped(WithKeepAlive(Callable(Callable::Macro, [name = blockName, owner = stack.self, site, templateName](const CallParams& params, OutStream& stream, RenderContext& context) {
             CheckBlockCallParams(params);
             auto* curFrame = context.GetTemplateFrame();
             TemplateFrame* frame = nullptr;
@@ -1712,17 +1749,7 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
             }
             RenderContext blockContext(*home.context, home.link);
             // Its template has ended: the block sees what that saw (ClosureCapture, 0323)
-            if (home.captured || home.capturedBase)
-            {
-                auto scope = blockContext.GetCurrentScope();
-                for (const auto* names : { home.capturedBase.get(), home.captured.get() })
-                {
-                    for (const auto& [captured, value] : names ? *names : InternalValueMap())
-                    {
-                        scope[captured] = MacroStatement::StrengthenCapture(value);
-                    }
-                }
-            }
+            CopyCaptured(blockContext, home);
             // The template has ended (an include that stored `self`): its blocks, in a frame
             // of their own
             TemplateFrame endedFrame;
@@ -1734,7 +1761,7 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
                 endedFrame.outer = curFrame;
                 // Its scopes have ended too: a `self` in the block renders the ended blocks,
                 // seeing what this one sees
-                endedFrame.self = MakeTemplateSelf(owner->ended, site, templateName, site.Capture());
+                endedFrame.self = MakeTemplateSelf(owner->ended, site, templateName);
                 frame = &endedFrame;
             }
             if (!frame)
@@ -1747,10 +1774,7 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
             }
             blockContext.SetTemplateFrame(frame);
             RenderBlockAt(*frame->blocks, name, 0, stream, blockContext);
-        });
-        // What the site keeps, while the `self` lives (ClosureSite::CaptureOnEnd)
-        blockCall.SetKeepAlive(keepAlive);
-        self[blockName] = MakeWrapped(std::move(blockCall));
+        }), keepAlive));
     }
     return CreateObjectAdapter(std::move(self), "TemplateReference", templateName.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(templateName)));
 }
@@ -1795,7 +1819,8 @@ LookupResult RenderContext::FindSelf(const std::string& name)
         {
             keepAlive = site.CaptureOnEnd(*home);
         }
-        return MakeTemplateSelf(*frame->blocks, site, frame->name, keepAlive);
+        // The blocks keep it (MakeTemplateSelf)
+        return MakeTemplateSelf(*frame->blocks, site, frame->name);
     };
     // In a block that sees more than the template's top level (a scoped one in a loop, or one
     // such a block's `self` renders), `self` passes on what it sees: Jinja2's TemplateReference
@@ -1920,16 +1945,14 @@ void RenderContext::CaptureClosuresImpl(size_t count)
             continue;
         }
         // Copied when its frame ended, in a context that ends before the render
+        if (!capture->names.expired() && contextEnds)
+        {
+            atEnd.push_back(std::move(capture));
+            continue;
+        }
         if (!capture->names.expired())
         {
-            if (contextEnds)
-            {
-                atEnd.push_back(std::move(capture));
-            }
-            else
-            {
-                sites[kept++] = std::move(site);
-            }
+            sites[kept++] = std::move(site);
             continue;
         }
         if (!HasScopeBelow(capture->depth, capture->serial))
@@ -1955,15 +1978,8 @@ void RenderContext::CaptureClosuresImpl(size_t count)
         {
             continue;
         }
-        auto names = std::make_shared<InternalValueMap>();
-        CollectNamesDownTo(*names, capture->lowest, Span<const std::shared_ptr<ClosureCapture>>(&capture, 1));
-        // Outside a render nothing would release the copy: the closure reads its frames as ended
-        if (!CycleCollector::KeepUntilEnd(names, capture))
-        {
-            continue;
-        }
-        capture->names = names;
-        if (m_endsBeforeRender)
+        // In a context that ends before the render, it waits for the context's end
+        if (CopyFrame(capture) && m_endsBeforeRender)
         {
             sites[kept++] = std::move(site);
         }
@@ -1972,28 +1988,47 @@ void RenderContext::CaptureClosuresImpl(size_t count)
     if (!atEnd.empty())
     {
         atEnd.insert(atEnd.end(), std::make_move_iterator(unheld.begin()), std::make_move_iterator(unheld.end()));
-        // One copy of the top level for all of them, holding their closures weakly
-        auto base = std::make_shared<InternalValueMap>();
-        CollectNamesDownTo(*base, 0, atEnd);
-        for (const auto& capture : atEnd)
-        {
-            if (!CycleCollector::KeepUntilEnd(base, capture))
-            {
-                continue;
-            }
-            if (capture->names.expired())
-            {
-                capture->names = base;
-            }
-            else
-            {
-                capture->base = base;
-            }
-        }
+        CopyTopLevel(atEnd);
     }
     if (sites.empty())
     {
         m_captures.reset();
+    }
+}
+
+bool RenderContext::CopyFrame(const std::shared_ptr<ClosureCapture>& capture)
+{
+    auto names = std::make_shared<InternalValueMap>();
+    CollectNamesDownTo(*names, capture->lowest, Span<const std::shared_ptr<ClosureCapture>>(&capture, 1));
+    // Outside a render nothing would release the copy: the closure reads its frames as ended
+    if (!CycleCollector::KeepUntilEnd(names, capture))
+    {
+        return false;
+    }
+    capture->names = names;
+    return true;
+}
+
+void RenderContext::CopyTopLevel(Span<const std::shared_ptr<ClosureCapture>> captures)
+{
+    // One copy of the top level for all of them, holding their closures weakly
+    auto base = std::make_shared<InternalValueMap>();
+    CollectNamesDownTo(*base, 0, captures);
+    for (const auto& capture : captures)
+    {
+        if (!CycleCollector::KeepUntilEnd(base, capture))
+        {
+            continue;
+        }
+        // A top-level closure's own frame is the top level
+        if (capture->names.expired())
+        {
+            capture->names = base;
+        }
+        else
+        {
+            capture->base = base;
+        }
     }
 }
 
@@ -2016,8 +2051,8 @@ bool RenderContext::CaptureEscapes(const std::shared_ptr<ClosureCapture>& captur
             return;
         }
         const auto* box = detail::InternalValueAccess::Object(value);
-        const auto end = held.begin() + static_cast<std::ptrdiff_t>(boxes);
-        if (const auto found = std::find_if(held.begin(), end, [box](const Held& h) { return h.box == box; }); found != end)
+        auto* const end = held.begin() + static_cast<std::ptrdiff_t>(boxes);
+        if (auto* const found = std::find_if(held.begin(), end, [box](const Held& h) { return h.box == box; }); found != end)
         {
             ++found->count;
         }
@@ -2058,9 +2093,9 @@ bool RenderContext::CaptureEscapes(const std::shared_ptr<ClosureCapture>& captur
     {
         return true;
     }
-    // use_count: never below the holders, all of which are counted here (the callables in their
-    // boxes, and `capture`), so a higher count only makes a copy that was not needed
-    if (capture.use_count() > static_cast<long>(boxes) + 1)
+    // The callables in their boxes hold `capture`, and so does the caller: a count never below
+    // the holders, so a higher one (another thread's, say) only makes a copy that was not needed
+    if (capture.use_count() > static_cast<long>(boxes) + 1) // use_count: a lower count than the holders is impossible
     {
         return true;
     }
@@ -2117,18 +2152,7 @@ void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowes
 void RenderContext::EnterCapturedScope(const ClosureHome& home, size_t link)
 {
     auto scope = EnterScope();
-    // The frame's own names hide those of the top level
-    for (const auto* names : { home.capturedBase.get(), home.captured.get() })
-    {
-        if (!names)
-        {
-            continue;
-        }
-        for (const auto& [name, value] : *names)
-        {
-            scope[name] = MacroStatement::StrengthenCapture(value);
-        }
-    }
+    CopyCaptured(scope, home);
     if (link < GetScopesCount() - 1)
     {
         PushFrameView({}, link);
