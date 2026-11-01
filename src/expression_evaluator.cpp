@@ -308,9 +308,11 @@ private:
     std::uint8_t m_fold = FoldAlways;
 };
 
+// A literal, the common operand of a literal list or `~` chain, is told by its kind without
+// a virtual call
 bool OperandFoldsAt(RenderContext& values, NodeRef<Expression> expr)
 {
-    return !expr || values.Nodes()[expr].IsFoldableAt(values);
+    return !expr || values.Nodes().Is<ConstantExpression>(expr) || values.Nodes()[expr].IsFoldableAt(values);
 }
 } // namespace
 
