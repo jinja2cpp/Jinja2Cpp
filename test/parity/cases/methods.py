@@ -180,5 +180,11 @@ CASES = [
     ('str_format_attr_missing_on_str', "{{ '{0.nope}'.format('a') }}"),
     ('str_format_attr_of_undefined', "{{ '{0.y}'.format(nope) }}"),
     ('str_format_ascii_conversion_edges', "{{ '{!a}'.format(['é', '😀', 'Ā', 'x']) }}|{{ '{!a}'.format(1) }}|{{ '{!a:>12}'.format('ü') }}|{{ '{0!a}{0!r}{0!s}'.format('ÿ') }}"),
+    ('str_format_item_of_namespace', "{% set ns = namespace(v=3) %}{{ '{0[v]}'.format(ns) }}"),
+    ('str_format_item_of_loop', "{% for i in [1] %}{{ '{0[index]}'.format(loop) }}{% endfor %}"),
+    ('str_format_item_missing_key', "{{ '{0[z]}'.format({'y': 1}) }}"),
+    ('str_format_item_list_index', "{{ '{0[1]}'.format(['a', 'b']) }}|{{ '{0[1]}'.format('xyz') }}"),
+    ('str_format_item_errors', "{{ '{0[5]}'.format([1]) }}"),
+    ('str_format_item_of_int', "{{ '{0[0]}'.format(5) }}"),
     ('markup_format_ascii_conversion', "{{ ('<p>{0!a}</p>'|safe).format('<é>') }}"),
 ]

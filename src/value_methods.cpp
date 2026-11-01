@@ -1498,6 +1498,44 @@ struct StrOps
         return std::move(*result);
     }
 
+    // Python's obj[key], as a field's [key] part looks it up: __getitem__ only, so an object
+    // such as namespace() or loop is not subscriptable and a missing key fails
+    static InternalValue FormatItem(const InternalValue& value, const InternalValue& key, RenderContext& context)
+    {
+        if (value.IsUndefined())
+        {
+            CheckUndefinedUse(value, UndefinedUse::Attribute);
+            return value;
+        }
+        std::optional<InternalValue> result;
+        auto map = AsMap(value);
+        if (const auto* host = GetHostObject(value))
+        {
+            result = host->GetItem(key);
+        }
+        else if (value.Kind() == ValueKind::Callable || (map && map->GetAttrPolicy() == MapAttrPolicy::KeysOnly))
+        {
+            Raise("'" + TypeName(value) + "' object is not subscriptable");
+        }
+        else
+        {
+            result = GetItem(value, key, &context);
+        }
+        if (!result || result->IsUndefined())
+        {
+            if (map)
+            {
+                Raise("KeyError: " + Narrow(View(ToStr(key, true))));
+            }
+            if (value.Kind() == ValueKind::List || value.Kind() == ValueKind::String)
+            {
+                Raise(TypeName(value) + " index out of range");
+            }
+            Raise("'" + TypeName(value) + "' object is not subscriptable");
+        }
+        return std::move(*result);
+    }
+
     // Applies the .attr and [key] parts that follow a field's first name
     static InternalValue ApplyAccessors(InternalValue value, View rest, RenderContext& context)
     {
@@ -1522,7 +1560,7 @@ struct StrOps
             }
             auto key = rest.substr(1, end - 1);
             InternalValue keyVal = IsDigits(key) ? InternalValue(ParseFieldNumber(key)) : InternalValue(Narrow(key));
-            value = GetItem(value, keyVal, &context);
+            value = FormatItem(value, keyVal, context);
             rest = rest.substr(end + 1);
             if (!rest.empty() && rest[0] != '.' && rest[0] != '[')
             {

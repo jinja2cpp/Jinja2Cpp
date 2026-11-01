@@ -3898,6 +3898,152 @@
    "output": "['\\xe9', '\\U0001f600', '\\u0100', 'x']|1|      '\\xfc'|'\\xff''ÿ'ÿ"
   },
   {
+   "id": "methods.str_format_item_of_namespace",
+   "template": "{% set ns = namespace(v=3) %}{{ '{0[v]}'.format(ns) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'Namespace' object is not subscriptable"
+   }
+  },
+  {
+   "id": "methods.str_format_item_of_loop",
+   "template": "{% for i in [1] %}{{ '{0[index]}'.format(loop) }}{% endfor %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'LoopContext' object is not subscriptable"
+   }
+  },
+  {
+   "id": "methods.str_format_item_missing_key",
+   "template": "{{ '{0[z]}'.format({'y': 1}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "KeyError",
+    "message": "'z'"
+   }
+  },
+  {
+   "id": "methods.str_format_item_list_index",
+   "template": "{{ '{0[1]}'.format(['a', 'b']) }}|{{ '{0[1]}'.format('xyz') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "b|y"
+  },
+  {
+   "id": "methods.str_format_item_errors",
+   "template": "{{ '{0[5]}'.format([1]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "IndexError",
+    "message": "list index out of range"
+   }
+  },
+  {
+   "id": "methods.str_format_item_of_int",
+   "template": "{{ '{0[0]}'.format(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not subscriptable"
+   }
+  },
+  {
    "id": "methods.markup_format_ascii_conversion",
    "template": "{{ ('<p>{0!a}</p>'|safe).format('<é>') }}",
    "context": {
