@@ -1176,8 +1176,10 @@ private:
     // no render to own it (CycleCollector::KeepUntilEnd). Defined in statements.cpp
     bool CopyFrame(const std::shared_ptr<ClosureCapture>& capture);
     // The copy of the top level and its parents for `captures`, when the context ends: their
-    // own copy for those of the top level, the base of the others. Defined in statements.cpp
-    void CopyTopLevel(Span<const std::shared_ptr<ClosureCapture>> captures);
+    // own copy for those of the top level, the base of the others. The first `escaping` are
+    // held outside it; the rest, top-level ones only it holds, live as long as it does.
+    // Defined in statements.cpp
+    void CopyTopLevel(Span<const std::shared_ptr<ClosureCapture>> captures, size_t escaping);
     // The serial of scope `depth - 1` (ScopeStack::Stamp), when it is one of this context's
     // own; 0 otherwise
     uint32_t SerialBelow(size_t depth)

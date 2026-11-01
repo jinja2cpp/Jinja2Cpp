@@ -41,11 +41,13 @@ keep-alive (`MacroStatement::WeakenCapture`), so it never holds itself; a call t
 copy gives the keep-alive back (`StrengthenCapture`), so recursion, sibling calls and a closure
 stored from a kept one all work, and all of them stay `sameas` the macro they copy (one function
 holder per definition). A frame end makes no copy when only the frame's own values hold its
-closures (`RenderContext::CaptureEscapes`, by value box and `use_count`), and a macro whose body
+closures (`RenderContext::CaptureEscapes`, by value box and `use_count`; a frame holding more than 32 closure
+boxes is copied as if one escaped), and a macro whose body
 reads no names keeps none: a frame whose nested macros never escape pays one capture per
 definition. A nested frame of an included template copies only its own scopes and reads the
 include's top level live; when the include ends, one copy of its top level and of what it saw of
-the includer becomes the base of every capture of that context (`ClosureCapture::base`).
+the includer becomes the base of every capture of that context (`ClosureCapture::base`); a top-level
+capture that only the base holds lives as long as the base.
 200k nested-macro calls or 100k includes in a loop stay at about 14 MB (180 MB in the first
 version). A module macro's result is copied without building a `std::function` per call
 (`ExportCopier`'s wrap is a function pointer). Corpus rows `statements.macro_closure_*`.
@@ -54,6 +56,7 @@ Limits, filed as 0373: copies made in a host's module call die with that call; a
 defined in a `with` or block of an included template, or in a loop of a macro call, keeps
 nothing of its frames (`loader.include_block_macro_kept`, `loader.include_with_macro_kept`,
 `statements.macro_closure_in_loop_of_call`); a kept include macro calling `self.<block>`
-(`loader.include_macro_kept_reads_self`); a closure stored in a container made in its own frame
+(`loader.include_macro_kept_reads_self`); a nested frame's copy of an enclosing call or loop
+that still runs (`statements.macro_closure_enclosing_*_live`); a closure stored in a container made in its own frame
 forms a cycle the render frees only when it ends, as every reference cycle (0110). Copying only
 the names a closure reads, as Python's closures do, is 0375.

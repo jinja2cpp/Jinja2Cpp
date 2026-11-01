@@ -19043,6 +19043,86 @@
    "output": "5|None"
   },
   {
+   "id": "statements.macro_closure_enclosing_call_live",
+   "template": "{% set ns = namespace(f=none) %}{% macro outer() %}{% set y = 1 %}{% macro k() %}{% macro c() %}{{ y }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{{ k() }}{% set y = 2 %}{{ ns.f() }}{% endmacro %}{{ outer() }}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "2|2"
+  },
+  {
+   "id": "statements.macro_closure_enclosing_loop_live",
+   "template": "{% set ns = namespace(f=none) %}{% macro outer() %}{% for y in [1, 2] %}{% macro k() %}{% macro c() %}{{ y }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{% if loop.first %}{{ k() }}{% else %}{{ ns.f() }}{% endif %}{% endfor %}{% endmacro %}{{ outer() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "2"
+  },
+  {
    "id": "statements.macro_closure_param_shadows_root",
    "template": "{% set n = 'root' %}{% set ns = namespace(f=none) %}{% macro outer(n) %}{% macro inner() %}{{ n }}{% endmacro %}{% set ns.f = inner %}{% endmacro %}{{ outer('p') }}{{ ns.f() }}{{ n }}",
    "context": {

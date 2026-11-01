@@ -5252,6 +5252,32 @@
    "output": "BY|aYBY"
   },
   {
+   "id": "loader.include_closure_calls_unheld_top_level_macro",
+   "template": "{% set ns = namespace(c=none) %}{% include 'i' %}|{{ ns.c() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = 'Y' %}{% macro t() %}t{{ y }}{% endmacro %}{% macro k(v) %}{% macro c() %}c{{ v }}{{ t() }}{{ y }}{% endmacro %}{% set ns.c = c %}{% endmacro %}{{ k(1) }}"
+   },
+   "output": "|c1tYY"
+  },
+  {
+   "id": "loader.include_in_loop_closure_calls_top_level_macro",
+   "template": "{% set ns = namespace(l=[]) %}{% for i in range(3) %}{% include 'i' %}{% endfor %}|{% for f in ns.l %}{{ f() }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = i %}{% macro t() %}t{{ y }}{% endmacro %}{% macro k(v) %}{% macro c() %}c{{ v }}{{ t() }}{% endmacro %}{% set _ = ns.l.append(c) %}{% endmacro %}{{ k(i) }}"
+   },
+   "output": "|c0t0c1t1c2t2"
+  },
+  {
    "id": "loader.include_macro_kept_snapshot",
    "template": "{% set ns = namespace(f=none) %}{% set x = 'X' %}{% include 'a' %}{% set x = 'X2' %}|{{ ns.f() }}",
    "context": {

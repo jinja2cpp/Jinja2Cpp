@@ -1988,8 +1988,9 @@ void RenderContext::CaptureClosuresImpl(size_t count)
     sites.resize(kept);
     if (!atEnd.empty())
     {
+        const size_t escaping = atEnd.size();
         atEnd.insert(atEnd.end(), std::make_move_iterator(unheld.begin()), std::make_move_iterator(unheld.end()));
-        CopyTopLevel(atEnd);
+        CopyTopLevel(atEnd, escaping);
     }
     if (sites.empty())
     {
@@ -2010,14 +2011,18 @@ bool RenderContext::CopyFrame(const std::shared_ptr<ClosureCapture>& capture)
     return true;
 }
 
-void RenderContext::CopyTopLevel(Span<const std::shared_ptr<ClosureCapture>> captures)
+void RenderContext::CopyTopLevel(Span<const std::shared_ptr<ClosureCapture>> captures, size_t escaping)
 {
     // One copy of the top level for all of them, holding their closures weakly
     auto base = std::make_shared<InternalValueMap>();
     CollectNamesDownTo(*base, 0, captures);
-    for (const auto& capture : captures)
+    for (size_t idx = 0; idx != captures.size(); ++idx)
     {
-        if (!CycleCollector::KeepUntilEnd(base, capture))
+        const auto& capture = captures[idx];
+        // Held by its closures in the copy only, which hold it weakly: it lives as long as the
+        // copy, which lives as long as one of the escaping ones
+        const bool kept = idx < escaping ? CycleCollector::KeepUntilEnd(base, capture) : CycleCollector::KeepUntilEnd(capture, base);
+        if (!kept)
         {
             continue;
         }
@@ -2042,7 +2047,7 @@ bool RenderContext::CaptureEscapes(const std::shared_ptr<ClosureCapture>& captur
         const ValueObject* box;
         unsigned count;
     };
-    std::array<Held, 8> held{};
+    std::array<Held, 32> held{};
     size_t boxes = 0;
     bool overflow = false;
     const auto note = [&held, &boxes, &overflow, &capture](const InternalValue& value) {
@@ -2052,8 +2057,9 @@ bool RenderContext::CaptureEscapes(const std::shared_ptr<ClosureCapture>& captur
             return;
         }
         const auto* box = detail::InternalValueAccess::Object(value);
-        auto* const end = held.begin() + static_cast<std::ptrdiff_t>(boxes);
-        if (auto* const found = std::find_if(held.begin(), end, [box](const Held& h) { return h.box == box; }); found != end)
+        // data(): std::array's iterator is a class in MSVC's library
+        Held* const end = held.data() + boxes;
+        if (Held* const found = std::find_if(held.data(), end, [box](const Held& h) { return h.box == box; }); found != end)
         {
             ++found->count;
         }
@@ -2101,7 +2107,7 @@ bool RenderContext::CaptureEscapes(const std::shared_ptr<ClosureCapture>& captur
         return true;
     }
     // use_count: as above, a box is held at least by the frame's values that hold it
-    return std::any_of(held.begin(), held.begin() + static_cast<std::ptrdiff_t>(boxes), [](const Held& h) { return !h.box || h.box->use_count() > h.count; });
+    return std::any_of(held.data(), held.data() + boxes, [](const Held& h) { return !h.box || h.box->use_count() > h.count; });
 }
 
 void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowest, Span<const std::shared_ptr<ClosureCapture>> captures) const
