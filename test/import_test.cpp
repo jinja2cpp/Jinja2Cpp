@@ -73,6 +73,12 @@ TEST_F(ImportTest, ModuleObjectPrintsAsTemplateModule)
     EXPECT_EQ(jinja2::ConvertString<std::wstring>(expected), wide.RenderAsString({}).value());
     m_env.GetSettings().autoescape = true;
     EXPECT_EQ("[A<b>B]&lt;TemplateModule &#39;out&#39;&gt;", Render(R"({% import "out" as m %}[{{ m }}]{{ m|pprint }})"));
+    // forceescape escapes even the trusted output
+    const std::string forced = R"({% import "out" as m %}{{ m|forceescape }})";
+    EXPECT_EQ("A&lt;b&gt;B", Render(forced));
+    jinja2::TemplateW wideForced(&m_env);
+    ASSERT_TRUE(!!wideForced.Load(jinja2::ConvertString<std::wstring>(forced)));
+    EXPECT_EQ(L"A&lt;b&gt;B", wideForced.RenderAsString({}).value());
 }
 
 TEST_F(ImportTest, TestImportSyntax)

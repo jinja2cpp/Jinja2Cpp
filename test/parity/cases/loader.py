@@ -331,6 +331,7 @@ CASES = [
     ("module_object_shared_is_one", "{% import 'out.j2' as m %}{% import 'out.j2' as n %}{{ m == n }}|{{ m is sameas n }}|{{ m != n }}", MODOBJ),
     ("module_object_with_context", "{% import 'out.j2' as m with context %}[{{ m }}]|{{ m|pprint }}", MODOBJ),
     ("module_object_autoescape", "{% import 'out.j2' as m %}[{{ m }}]|{{ m|e }}|{{ m ~ '' }}|{{ m|string }}", {**MODOBJ, "env": {"autoescape": True}}),
+    ("module_object_forceescape", "{% import 'out.j2' as m %}{{ m|forceescape }}|{{ m|striptags }}|{{ m|safe }}", {**MODOBJ, "env": {"autoescape": True}}),
     ("module_object_is_escaped", "{% import 'out.j2' as m %}{{ m is escaped }}", MODOBJ),
     ("module_object_length", "{% import 'out.j2' as m %}{{ m|length }}", MODOBJ),
     ("module_object_iterate", "{% import 'out.j2' as m %}{% for k in m %}{{ k }}{% endfor %}", MODOBJ),

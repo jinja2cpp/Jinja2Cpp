@@ -2124,6 +2124,11 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         {
             return Filter(host::Html(*host, context.GetRendererCallback()->IsWideTarget()), context);
         }
+        // A template module's __html__ is its output (docs/tasks/0309)
+        if (const auto map = AsMap(baseVal); map && map->GetStrValue())
+        {
+            return Filter(InternalValue(*map->GetStrValue()).SetMarkup(), context);
+        }
     }
     switch (m_mode)
     {
