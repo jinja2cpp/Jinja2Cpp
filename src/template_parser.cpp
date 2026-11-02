@@ -12,7 +12,6 @@
 #include "node_arena.h"
 #include "recursion_guard.h"
 #include "render_context.h"
-#include "span.h"
 #include "renderer.h"
 #include "small_vector.h"
 #include "statements.h"

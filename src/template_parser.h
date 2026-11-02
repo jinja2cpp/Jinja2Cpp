@@ -16,7 +16,6 @@
 #include "render_failure.h"
 #include "renderer.h"
 #include "small_vector.h"
-#include "span.h"
 #include "statements.h"
 #include "unicode_tables.h"
 #include "value_visitors.h"

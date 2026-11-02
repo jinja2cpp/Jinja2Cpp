@@ -773,7 +773,7 @@ public:
     void SetModuleImports(ModuleImports* imports) { m_moduleImports = imports; }
     // That record while the module's top level runs; null elsewhere
     // Whether a module's top level imported a name it has not bound again: one test for the rest
-    [[nodiscard]] bool HasModuleImports() const { return m_moduleImports && !m_moduleImports->empty(); }
+    [[nodiscard]] bool HasModuleImports() const { return m_moduleImports != nullptr && !m_moduleImports->empty(); }
     [[nodiscard]] ModuleImports* TopLevelModuleImports() const { return m_moduleImports && GetScopesCount() == 1 ? m_moduleImports : nullptr; }
     // Copies, for each closure defined here that keeps what it sees of its frames
     // (ClosureCapture) and was defined in the innermost scope, `count` being the number of
