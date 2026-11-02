@@ -38,6 +38,12 @@ bool IsDictMethodName(std::string_view name);
 // (MapAttrPolicy): for KeysFirst maps the caller checks the keys first.
 const MethodInfo* FindMethod(const InternalValue& self, std::string_view name);
 
+// Whether the lists and dicts of the render are read-only: transformers' ImmutableSandboxedEnvironment
+// (Dialect::Transformers), where the methods that change their receiver are unsafe attributes
+bool IsReadOnlyContainers(const RenderContext& context);
+// The value of such a method's name there: an undefined whose use fails with the sandbox's message
+InternalValue UnsafeMethod(const InternalValue& obj, std::string_view name, const RenderContext& context);
+
 // x.name: Python's getattr first, then the item, as Jinja2's Environment.getattr
 InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderContext* context);
 // x[key]: the item first, then a method of that name, as Jinja2's Environment.getitem

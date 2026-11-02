@@ -1,5 +1,6 @@
 ---
-status: in-progress
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/737
 priority: high
 area: parity
 touches: [test/chat_templates/]
@@ -53,7 +54,17 @@ With the public API alone (trim/lstrip blocks, loop controls, `raise_exception` 
   and Kimi-K2-Thinking with tools; Jinja2C++ renders.
 - 0297 `"x" in none` is a TypeError: gpt-oss and llm-jp with string tool-call arguments.
 
-**Phase 2: the preset** (after group A of parity batch 2 merges, and the API decision): the
-transformers `tojson`, the `generation` tag, immutable containers, the two globals with an
-injectable clock, the runner switched to it, bench cases next to `chat_llama`. Plan:
-/mnt/project-files/0360/plan.md (project files).
+**Phase 2: the preset** (decided by Ruslan 2026-11-01, docs/api-2.0.md 3.3 and 7.8).
+`jinja2cpp/chat_template.h`: `ConfigureForChatTemplates(TemplateEnv&, ChatTemplateOptions)`,
+behind the CMake option `JINJA2CPP_WITH_CHAT_TEMPLATES` (default ON; `JINJA2CPP_HAS_CHAT_TEMPLATES`
+and `JINJA2CPP_CHAT_TEMPLATES_TRANSFORMERS` in the generated `jinja2cpp/features.h`, included by
+`config.h`). It sets trim/lstrip blocks, loop controls, autoescape off and `maxRange` at most
+100000, adds `raise_exception` and `strftime_now` (injectable clock), and switches the
+environment's internal dialect (`src/dialect.h`, kept in `LoadSettings` like the big-int backend):
+transformers' `tojson` (a `Serialize` mode chosen at parse time), the `{% generation %}` tag (a
+scope like `{% with %}`; `break` does not cross it, as in transformers' call block) and read-only
+lists and dicts (the mutating methods are the sandbox's unsafe attributes). The dialect code is
+always in the core and dormant otherwise. All 722 renders match in narrow and wide mode;
+`divergences.txt` is empty. Bench cases `hf_qwen3`, `hf_gpt_oss`, `hf_deepseek_v31` and
+`hf_mistral_small` render real templates next to `chat_llama`. Follow-up: 0377 (assistant token
+mask, SecurityError code).

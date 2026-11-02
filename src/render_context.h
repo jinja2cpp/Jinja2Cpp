@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_RENDER_CONTEXT_H
 #define JINJA2CPP_SRC_RENDER_CONTEXT_H
 
+#include "dialect.h"
 #include "internal_value.h"
 #include "lookup_result.h"
 #include "node_arena.h"
@@ -121,6 +122,8 @@ struct IRendererCallback : IComparable
     // Always throws: callers rely on it not returning (docs/tasks/0055)
     [[noreturn]] virtual void ThrowRuntimeError(ErrorCode code, ValuesList extraParams) = 0;
     [[nodiscard]] virtual const Settings& GetSettings() const = 0;
+    // What a preset changed besides the settings (load_settings.h)
+    [[nodiscard]] virtual detail::Dialect GetDialect() const { return detail::Dialect::Jinja2; }
     // The environment the template was loaded in, if any
     [[nodiscard]] virtual TemplateEnv* GetEnv() const { return nullptr; }
     // The random generator of lipsum, one per render
@@ -959,6 +962,7 @@ public:
     }
     // Settings::userCallablesAsFilters of the template: whether a name that is no filter or test
     // of the template may be a callable among the values
+    [[nodiscard]] detail::Dialect GetDialect() const { return m_rendererCallback ? m_rendererCallback->GetDialect() : detail::Dialect::Jinja2; }
     [[nodiscard]] bool UserCallablesAsFilters() const { return m_rendererCallback ? m_rendererCallback->GetSettings().userCallablesAsFilters : false; }
     // A context for a nested render: with `includeCurrentContext` it sees all of this
     // context's names (see the constructor above for how long it may live), otherwise only

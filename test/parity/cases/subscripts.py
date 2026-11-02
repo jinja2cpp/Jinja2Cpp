@@ -46,4 +46,23 @@ CASES = [
     ('dict_subscript_missing_non_string', "[{{ {1: 'a'}[2] }}][{{ {1: 'a'}[none] }}]"),
     # task 0270: an index beyond int64 finds nothing; slice bounds clip by their sign
     ('big_index_and_slice', "[{{ l[18446744073709551615] }}]|{{ l[18446744073709551615:] }}|{{ l[:18446744073709551615] }}|{{ l[-18446744073709551615:] }}|{{ {18446744073709551615: 'k'}[18446744073709551615] }}"),
+    # task 0362: a slice goes to __getitem__ without getitem's fallback, so what has no items
+    # raises; a slice of literals folds through getitem, which makes it undefined
+    ("slice_int_variable", "{{ x[1:2] }}", {"ctx": {"x": 5}}),
+    ("slice_none_variable", "{{ x[1:2] }}", {"ctx": {"x": None}}),
+    ("slice_set_variable", "{% set x = 5 %}{{ x[1:2] }}"),
+    ("slice_dict_key_error", "{{ d[1:2] }}"),
+    ("slice_undefined", "{{ missing[1:2] }}"),
+    ("slice_namespace", "{{ namespace(a=1)[0:1] }}"),
+    ("slice_loop", "{% for i in [1] %}{{ loop[0:1] }}{% endfor %}"),
+    ("slice_function", "{{ lipsum[0:1] }}"),
+    ("slice_literals_fold", "[{{ 5[1:2] }}][{{ none[1:2] }}][{{ {'a': 1}[1:2] }}][{{ 1.5[0:1] is undefined }}]"),
+    # task 0383: a lazy filter result is a generator in Python, which takes no slice
+    ("slice_lazy_result", "{{ ([1, 2]|map('string'))[0:1] }}"),
+    # an undefined slice bound has no __index__; a literal slice folds to getitem's undefined,
+    # a slice of which fails
+    ("slice_undefined_bound", "{{ l[missing:] }}"),
+    ("slice_of_folded_slice", "{{ 5[1:][1:] }}"),
+    ("slice_folded_strict", "[{{ 5[1:] }}]", {"env": {"undefined": "strict"}}),
+    ("slice_folded_debug", "[{{ 5[1:] }}]", {"env": {"undefined": "debug"}}),
 ]

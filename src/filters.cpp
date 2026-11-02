@@ -437,7 +437,7 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     {
         if (isPlainDict || !map || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(attrName))
         {
-            return methods::MakeBoundMethod(baseVal, *method);
+            return method->isMutating && methods::IsReadOnlyContainers(context) ? methods::UnsafeMethod(baseVal, attrName, context) : methods::MakeBoundMethod(baseVal, *method);
         }
     }
     if (isPlainDict)
@@ -1093,6 +1093,25 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
     if (const auto* host = m_mode == LengthMode ? GetHostObject(baseVal) : nullptr)
     {
         return host::Len(*host);
+    }
+    // last is reversed() of it, which reverse tries before iterating it (docs/tasks/0362)
+    if (const auto* host = m_mode == LastItemMode || m_mode == ReverseMode ? GetHostObject(baseVal) : nullptr)
+    {
+        if (m_mode == LastItemMode)
+        {
+            const auto reversed = host::Reversed(*host);
+            auto it = reversed.begin();
+            return it != reversed.end() ? WithParent(baseVal, *it) : NoItem(context, "last");
+        }
+        if (auto reversed = host->Reversed())
+        {
+            auto items = reversed->ToValueList();
+            for (auto& item : items)
+            {
+                item = WithParent(baseVal, std::move(item));
+            }
+            return ListAdapter::CreateAdapter(std::move(items));
+        }
     }
     // Like Python, a string is a sequence of characters and a mapping one of its keys
     bool isConverted = false;

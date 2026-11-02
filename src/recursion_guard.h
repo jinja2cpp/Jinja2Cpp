@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_RECURSION_GUARD_H
 #define JINJA2CPP_SRC_RECURSION_GUARD_H
 
+#include "dialect.h"
 #include "engine_errors.h"
 
 #include <jinja2cpp/big_int_backend.h>
@@ -64,13 +65,14 @@ inline thread_local ThreadStack t_threadStack;
 
 bool StackNearlyExhaustedSlow(std::uintptr_t frame);
 
-// The parser's limits for the template being loaded (ParseLimitsScope), in a thread-local
-// rather than in each parser, which lives for one tag
+// The parser's limits and dialect for the template being loaded (ParseLimitsScope), in a
+// thread-local rather than in each parser, which lives for one tag
 struct ParseLimits
 {
     unsigned maxExpressionDepth = 70;
     unsigned maxExpressionOperators = 491;
     unsigned maxBlockNesting = 248;
+    Dialect dialect = Dialect::Jinja2;
 };
 static_assert(ParseLimits{}.maxExpressionDepth == Settings::Limits{}.maxExpressionDepth
               && ParseLimits{}.maxExpressionOperators == Settings::Limits{}.maxExpressionOperators
@@ -227,10 +229,10 @@ inline void AfterHostCall()
 class ParseLimitsScope
 {
 public:
-    explicit ParseLimitsScope(const Settings::Limits& limits)
+    explicit ParseLimitsScope(const Settings::Limits& limits, detail::Dialect dialect = detail::Dialect::Jinja2)
         : m_saved(detail::t_parseLimits)
     {
-        detail::t_parseLimits = { LimitOrNone(limits.maxExpressionDepth), LimitOrNone(limits.maxExpressionOperators), LimitOrNone(limits.maxBlockNesting) };
+        detail::t_parseLimits = { LimitOrNone(limits.maxExpressionDepth), LimitOrNone(limits.maxExpressionOperators), LimitOrNone(limits.maxBlockNesting), dialect };
     }
     ~ParseLimitsScope() { detail::t_parseLimits = m_saved; }
     ParseLimitsScope(const ParseLimitsScope&) = delete;

@@ -279,6 +279,28 @@ Every environment starts with the built-in one: none by default, `cpp_int` with
 sample for writing a backend over another library.
 Only int64 overflow calls the backend, so int64 arithmetic costs the same with or without one.
 
+**Chat-template preset (task 0360, decided by Ruslan 2026-11-01).** `jinja2cpp/chat_template.h`:
+`ConfigureForChatTemplates(TemplateEnv&, ChatTemplateOptions = {})` configures an environment as
+transformers' `apply_chat_template` does: trim/lstrip blocks, loop controls, autoescape off,
+`limits.maxRange` at most 100000, transformers' `tojson` (`json.dumps` with `ensure_ascii=False`,
+keys in insertion order, no HTML escaping, `indent`/`separators`/`sort_keys`), the
+`{% generation %}` tag (body rendered; no assistant mask), read-only lists and dicts
+(`ImmutableSandboxedEnvironment`: `append`, `update`, ... are unsafe attributes) and the globals
+`raise_exception` (`ErrorCode::TemplateRuntimeError`) and `strftime_now` (clock in
+`ChatTemplateOptions::now`). Later knobs are new fields of `ChatTemplateOptions`, not new entry points.
+The header and its one source file are built and installed only with the CMake option
+`JINJA2CPP_WITH_CHAT_TEMPLATES` (default ON); `JINJA2CPP_HAS_CHAT_TEMPLATES` (generated
+`jinja2cpp/features.h`, included by `config.h`) says whether they are, and
+`JINJA2CPP_CHAT_TEMPLATES_TRANSFORMERS` names the transformers version the preset follows (the pin
+of `test/chat_templates/requirements.txt`, which catches its drift). What the preset switches on is
+an internal dialect of the core, always compiled and dormant unless the preset sets it, so the
+option changes no other symbol or layout. Considered: a documented `AddGlobal`/`AddFilter` recipe
+(a correct transformers `tojson` is too easy to get wrong, and the tag and immutable containers
+need the core anyway) and an `ApplyChatTemplate(tpl, messages, ...)` mirror of transformers
+(can be added after 2.0 without breaking this one). Known limits: it is not the rest of
+`apply_chat_template` (the host builds `messages`, `tools`, `bos_token`, ...) and no security
+sandbox beyond what it lists.
+
 ### 3.4 Errors (`error_info.h`, `error_handler.h`)
 
 | Now | Problem | 2.0 | Migration |
@@ -765,6 +787,10 @@ Recommend A now, C only if someone asks.
    R1 no allocator parameters in 2.0; R2 `bad_alloc` only for system OOM, budgets are
    `ResourceLimitExceeded`; R3 `Render(ostream&)` stays all-or-nothing; R4 output targets as
    `RenderTo` overloads (string, sink) plus the header-only `ContainerSink`.
+8. **Chat-template preset** (0360, 3.3). *Decided by Ruslan 2026-11-01:* public, one entry point
+   `ConfigureForChatTemplates(TemplateEnv&, ChatTemplateOptions)` in its own header behind the CMake
+   option `JINJA2CPP_WITH_CHAT_TEMPLATES` (default ON) with a feature macro; the internals it enables
+   stay in the core, dormant otherwise.
 
 ## 8. Work breakdown
 

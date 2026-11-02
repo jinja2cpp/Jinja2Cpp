@@ -1268,17 +1268,28 @@ public:
     // held, which may own other (x = x[0])
     InternalValue& operator=(const InternalValue& other)
     {
-        if (this != &other)
-        {
-            if (other.m_obj && other.m_obj->ClonesOnCopy())
-            {
-                return *this = InternalValue(other);
-            }
-            ValueObjectPtr obj = other.m_obj;
-            m_imm = other.m_imm;
-            m_obj.swap(obj);
-        }
+        CopyFrom(other);
         return *this;
+    }
+
+    // The copy assignment, forced inline for the hot call sites that bind loop and slot
+    // values (Slot::Bind). GCC flipped operator= in and out of line in RenderLoopInSlots as
+    // statements.cpp grew; forcing operator= itself inline grows the argument binding in
+    // ParseCallParams past GCC's limits (docs/tasks/0330 item 0)
+    JINJA2CPP_HOT_INLINE void CopyFrom(const InternalValue& other)
+    {
+        if (this == &other)
+        {
+            return;
+        }
+        if (other.m_obj && other.m_obj->ClonesOnCopy())
+        {
+            *this = InternalValue(other);
+            return;
+        }
+        ValueObjectPtr obj = other.m_obj;
+        m_imm = other.m_imm;
+        m_obj.swap(obj);
     }
 
     InternalValue& operator=(InternalValue&& other) noexcept

@@ -1,7 +1,6 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the statements area (cases/statements.py).
 # Format and kinds: test/parity/README.md.
 
-statements.call_block_dict              accepts     0156 deliberate: Jinja2 cannot join the dict a call block returns (TypeError); Jinja2C++ prints it
 statements.caller_escapes_its_loop     output      0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
 statements.macro_escapes_its_loop      output      0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
 statements.block_reference_new_each_read output    0214 deliberate: self.b is one stored callable, so it equals itself; Jinja2 allocates a new BlockReference on each read

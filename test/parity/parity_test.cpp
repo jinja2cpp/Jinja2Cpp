@@ -3,6 +3,8 @@
 // Known divergences are listed in test/parity/divergences/<area>.txt; see test/parity/README.md.
 // ParityWideTest renders the same cases through TemplateW and lists only the cases where
 // the wide result differs from the narrow one, under a "wide." id prefix.
+// With JINJA2CPP_TEST_ORACLE_DIR set, ParityTest also compares against the expectations another
+// Python Jinja2 wrote there (generate.py --out) and writes report.md beside them (docs/tasks/0186).
 
 #include "jinja2cpp/value.h"
 #include <exception>
@@ -15,15 +17,18 @@
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
+#include <jinja2cpp/version.h>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <ostream>
@@ -170,6 +175,20 @@ std::string DivergenceProblem(const Divergence& d)
         return "unknown condition '" + d.condition + "'";
     }
     return {};
+}
+
+// An environment variable, or an empty string
+std::string GetEnv(const char* name)
+{
+#ifdef _MSC_VER
+    // std::getenv is C4996 under /W4 /WX
+    char* value = nullptr;
+    _dupenv_s(&value, nullptr, name);
+    std::unique_ptr<char, decltype(&std::free)> owner(value, &std::free);
+#else
+    const char* value = std::getenv(name);
+#endif
+    return value ? std::string(value) : std::string();
 }
 
 struct ParityCase
@@ -608,16 +627,11 @@ Result RenderCpp(const Json& c, const jinja2::Settings& settings, Context contex
 void RecordOutcome(const std::string& id, const char* outcome)
 {
     static std::unique_ptr<std::ofstream> out = []() -> std::unique_ptr<std::ofstream> {
-#ifdef _MSC_VER
-        // std::getenv is C4996 under /W4 /WX
-        char* path = nullptr;
-        _dupenv_s(&path, nullptr, "JINJA2CPP_PARITY_RESULTS");
-        std::unique_ptr<char, decltype(&std::free)> owner(path, &std::free);
-#else
-        const char* path = std::getenv("JINJA2CPP_PARITY_RESULTS");
-#endif
-        if (!path || !*path)
+        const auto path = GetEnv("JINJA2CPP_PARITY_RESULTS");
+        if (path.empty())
+        {
             return nullptr;
+        }
         auto file = std::make_unique<std::ofstream>(path, std::ios::binary | std::ios::app);
         *file << "# features:";
         for (const auto& feature : BuildFeatures())
@@ -643,6 +657,306 @@ Outcome Classify(const Json& c, const Result& cpp)
     if (cpp.ok)
         return Outcome::Accepts;
     return pyOk ? Outcome::Rejects : Outcome::Match;
+}
+
+// Another oracle (docs/tasks/0186, test/parity/README.md "Other oracles"). The allow-list is
+// written against the bundled Jinja2, so a case is judged by it only where the two oracles agree;
+// where they differ (a Jinja2 or Python version delta) the case is reported, and fails only
+// under JINJA2CPP_TEST_ORACLE_STRICT=1 when Jinja2C++ does not follow the other oracle.
+enum class OracleVerdict
+{
+    Agree,         // the oracles agree: judged by the allow-list as without an oracle
+    TracksBundled, // they differ and Jinja2C++ matches the bundled one
+    TracksOracle,  // they differ and Jinja2C++ matches the other one
+    Neither,       // they differ and Jinja2C++ matches neither
+    NotRun,        // they differ and the case does not run here (crash, unsupported, no name table)
+};
+
+const char* OracleVerdictName(OracleVerdict v)
+{
+    switch (v)
+    {
+    case OracleVerdict::Agree:
+        return "agree";
+    case OracleVerdict::TracksBundled:
+        return "tracks-bundled";
+    case OracleVerdict::TracksOracle:
+        return "tracks-oracle";
+    case OracleVerdict::Neither:
+        return "neither";
+    case OracleVerdict::NotRun:
+        return "not-run";
+    }
+    return "?";
+}
+
+// Whether two oracles agree on a case: the same output, or both an error (messages are not
+// compared, as Classify does not compare them)
+bool OraclesAgree(const Json& bundled, const Json& oracle)
+{
+    if (bundled.contains("output") != oracle.contains("output"))
+    {
+        return false;
+    }
+    return !bundled.contains("output") || bundled["output"] == oracle["output"];
+}
+
+// cpp is null when the case did not run
+OracleVerdict JudgeOracle(const Json& bundled, const Json& oracle, const Result* cpp)
+{
+    if (OraclesAgree(bundled, oracle))
+    {
+        return OracleVerdict::Agree;
+    }
+    if (!cpp)
+    {
+        return OracleVerdict::NotRun;
+    }
+    if (Classify(bundled, *cpp) == Outcome::Match)
+    {
+        return OracleVerdict::TracksBundled;
+    }
+    return Classify(oracle, *cpp) == Outcome::Match ? OracleVerdict::TracksOracle : OracleVerdict::Neither;
+}
+
+struct OracleRun
+{
+    std::string dir;                   // JINJA2CPP_TEST_ORACLE_DIR; empty = no other oracle
+    bool strict = false;               // JINJA2CPP_TEST_ORACLE_STRICT=1
+    Json versions;                     // oracle.json: python, jinja2, markupsafe
+    std::map<std::string, Json> cases; // by id
+    std::vector<std::string> problems; // reported by ParityRegistry.OracleCorpusMatches
+};
+
+const OracleRun& Oracle()
+{
+    static const OracleRun run = [] {
+        OracleRun r;
+        r.dir = GetEnv("JINJA2CPP_TEST_ORACLE_DIR");
+        r.strict = GetEnv("JINJA2CPP_TEST_ORACLE_STRICT") == "1";
+        if (r.dir.empty())
+        {
+            return r;
+        }
+        try
+        {
+            const auto versions = ReadFile(r.dir + "/oracle.json");
+            if (versions.empty())
+            {
+                r.problems.push_back("missing " + r.dir + "/oracle.json; run test/parity/generate.py --out " + r.dir + " --any-version");
+            }
+            else
+            {
+                r.versions = Json::parse(versions);
+            }
+            const auto index = ReadFile(r.dir + "/index.json");
+            if (index.empty())
+            {
+                r.problems.push_back("missing " + r.dir + "/index.json");
+                return r;
+            }
+            const auto areas = Json::parse(index)["areas"].get<std::vector<std::string>>();
+            for (const auto& area : areas)
+            {
+                const auto text = ReadFile(r.dir + "/" + area + ".json");
+                if (text.empty())
+                {
+                    r.problems.push_back("missing " + r.dir + "/" + area + ".json");
+                    continue;
+                }
+                auto doc = Json::parse(text); // named: a range-for over parse(text)["cases"] would outlive the document
+                for (auto& c : doc["cases"])
+                {
+                    r.cases.emplace(c["id"].get<std::string>(), std::move(c));
+                }
+            }
+        }
+        catch (const std::exception& ex) // a malformed file: a clear failure in OracleCorpusMatches
+        {
+            r.problems.push_back("cannot read " + r.dir + ": " + ex.what());
+        }
+        return r;
+    }();
+    return run;
+}
+
+struct OracleDelta
+{
+    std::string id;
+    std::string bundled;
+    std::string oracle;
+    std::string cpp;
+    OracleVerdict verdict;
+};
+
+std::vector<OracleDelta>& OracleDeltas()
+{
+    static std::vector<OracleDelta> deltas;
+    return deltas;
+}
+
+std::size_t& OracleAgreeCount()
+{
+    static std::size_t count = 0;
+    return count;
+}
+
+// One Markdown table cell: the text from byte skip on as a JSON string, so newlines and spaces
+// show, cut short
+std::string ReportCell(const std::string& text, std::size_t skip = 0)
+{
+    // Back to the start of a UTF-8 sequence, so the cell never begins inside a character
+    while (skip > 0 && skip < text.size() && (static_cast<unsigned char>(text[skip]) & 0xC0) == 0x80)
+    {
+        --skip;
+    }
+    auto cell = Json(text.substr(std::min(skip, text.size()))).dump();
+    if (skip > 0)
+    {
+        cell.insert(1, "...");
+    }
+    if (cell.size() > 100)
+    {
+        cell = cell.substr(0, 97) + "...";
+    }
+    std::string escaped;
+    for (char ch : cell)
+    {
+        if (ch == '|')
+        {
+            escaped += '\\';
+        }
+        escaped += ch;
+    }
+    return "`" + escaped + "`";
+}
+
+// Where the report cells of a delta start: long outputs that differ late (urlize) show the
+// difference rather than the shared head
+std::size_t ReportSkip(const std::string& bundled, const std::string& oracle)
+{
+    const auto common = static_cast<std::size_t>(std::mismatch(bundled.begin(), bundled.begin() + static_cast<std::ptrdiff_t>(std::min(bundled.size(), oracle.size())), oracle.begin()).first - bundled.begin());
+    return common > 40 ? common - 20 : 0;
+}
+
+std::string CppText(const Result* cpp)
+{
+    if (!cpp)
+    {
+        return "(not run)";
+    }
+    return cpp->ok ? cpp->text : "error: " + cpp->text;
+}
+
+// The pin of a package in test/parity/requirements.txt, or "?"
+std::string BundledPin(const std::string& package)
+{
+    std::istringstream in(ReadFile(std::string(JINJA2CPP_PARITY_DIR) + "/requirements.txt"));
+    std::string line;
+    while (std::getline(in, line))
+    {
+        if (line.compare(0, package.size() + 2, package + "==") == 0)
+        {
+            auto version = line.substr(package.size() + 2);
+            version.erase(std::find_if(version.begin(), version.end(), [](char ch) { return std::isspace(static_cast<unsigned char>(ch)) || ch == '#'; }),
+                          version.end());
+            return version;
+        }
+    }
+    return "?";
+}
+
+std::string OracleVersion(const char* key)
+{
+    const auto& v = Oracle().versions;
+    return v.is_object() && v.contains(key) && v[key].is_string() ? v[key].get<std::string>() : "?";
+}
+
+void WriteOracleReport()
+{
+    const auto& oracle = Oracle();
+    auto deltas = OracleDeltas();
+    if (oracle.dir.empty() || (deltas.empty() && OracleAgreeCount() == 0))
+    {
+        return;
+    }
+    std::sort(deltas.begin(), deltas.end(), [](const OracleDelta& a, const OracleDelta& b) { return a.id < b.id; });
+    std::map<OracleVerdict, std::size_t> counts;
+    for (const auto& d : deltas)
+    {
+        ++counts[d.verdict];
+    }
+
+    std::ostringstream os;
+    os << "# Parity against another oracle\n\n"
+       << "| | Python | Jinja2 | MarkupSafe |\n|---|---|---|---|\n"
+       << "| bundled | " << JINJA2CPP_ORACLE_PYTHON << " | " << JINJA2CPP_ORACLE_JINJA2 << " | " << BundledPin("markupsafe") << " |\n"
+       << "| oracle | " << OracleVersion("python") << " | " << OracleVersion("jinja2") << " | " << OracleVersion("markupsafe") << " |\n\n"
+       << "Jinja2C++ " << JINJA2CPP_VERSION_STRING << ". Cases where the oracles agree: " << OracleAgreeCount()
+       << " (judged by the allow-list as usual). Cases where they differ: " << deltas.size();
+    for (const auto verdict : { OracleVerdict::TracksBundled, OracleVerdict::TracksOracle, OracleVerdict::Neither, OracleVerdict::NotRun })
+    {
+        os << ", " << OracleVerdictName(verdict) << " " << counts[verdict];
+    }
+    os << ".\n\n";
+    if (!deltas.empty())
+    {
+        os << "| case | bundled | oracle | Jinja2C++ | verdict |\n|---|---|---|---|---|\n";
+        for (const auto& d : deltas)
+        {
+            const auto skip = ReportSkip(d.bundled, d.oracle);
+            os << "| " << d.id << " | " << ReportCell(d.bundled, skip) << " | " << ReportCell(d.oracle, skip) << " | " << ReportCell(d.cpp, skip) << " | "
+               << OracleVerdictName(d.verdict) << " |\n";
+        }
+    }
+    const auto path = oracle.dir + "/report.md";
+    std::ofstream(path, std::ios::binary) << os.str();
+    std::cout << "[parity oracle] Python " << OracleVersion("python") << ", Jinja2 " << OracleVersion("jinja2") << ": " << OracleAgreeCount()
+              << " cases agree with the bundled oracle, " << deltas.size() << " differ (tracks-bundled " << counts[OracleVerdict::TracksBundled]
+              << ", tracks-oracle " << counts[OracleVerdict::TracksOracle] << ", neither " << counts[OracleVerdict::Neither] << ", not-run "
+              << counts[OracleVerdict::NotRun] << "); report: " << path << std::endl;
+}
+
+// Writes report.md once every case has run, whatever the filter or order
+class OracleReportEnvironment : public ::testing::Environment
+{
+public:
+    void TearDown() override { WriteOracleReport(); }
+};
+
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization,cppcoreguidelines-owning-memory): only allocation can throw, at load time; gtest owns the environment
+[[maybe_unused]] const auto* const g_oracleReport = ::testing::AddGlobalTestEnvironment(new OracleReportEnvironment);
+
+// With another oracle: whether the case is judged by the allow-list (the oracles agree, or no
+// other oracle is set). Otherwise records the delta and, in strict mode, fails unless Jinja2C++
+// follows the other oracle. cpp is null when the case does not run.
+bool JudgedByAllowList(const std::string& id, const Json& c, const Result* cpp)
+{
+    const auto& oracle = Oracle();
+    if (oracle.dir.empty())
+    {
+        return true;
+    }
+    const auto found = oracle.cases.find(id);
+    if (found == oracle.cases.end())
+    {
+        ADD_FAILURE() << id << " is missing from " << oracle.dir << "; regenerate it with generate.py --out";
+        return true;
+    }
+    const auto verdict = JudgeOracle(c, found->second, cpp);
+    if (verdict == OracleVerdict::Agree)
+    {
+        ++OracleAgreeCount();
+        return true;
+    }
+    OracleDeltas().push_back({ id, PythonText(c), PythonText(found->second), CppText(cpp), verdict });
+    if (oracle.strict && verdict != OracleVerdict::TracksOracle)
+    {
+        ADD_FAILURE() << "JINJA2CPP_TEST_ORACLE_STRICT: " << id << " is " << OracleVerdictName(verdict) << "\n  template: " << c["template"].dump()
+                      << "\n  oracle:  " << ReportCell(PythonText(found->second)) << "\n  bundled: " << ReportCell(PythonText(c))
+                      << "\n  c++:     " << ReportCell(CppText(cpp));
+    }
+    return false;
 }
 
 std::string Details(const Json& c, const std::string& cppText)
@@ -723,11 +1037,13 @@ TEST_P(ParityTest, MatchesPython)
     const auto& c = GetParam().data;
     if (NeedsUnicodeNames(c))
     {
+        JudgedByAllowList(id, c, nullptr);
         GTEST_SKIP() << "built without the Unicode name table";
     }
     if (const auto* crash = ListedCrash(id))
     {
         RecordOutcome(id, "crash");
+        JudgedByAllowList(id, c, nullptr);
         GTEST_SKIP() << "crashes Jinja2C++, task " << crash->task << ": " << crash->reason;
     }
 
@@ -746,7 +1062,10 @@ TEST_P(ParityTest, MatchesPython)
         outcome = Classify(c, cpp);
     }
     RecordOutcome(id, OutcomeName(outcome));
-    CheckListed(id, outcome, Details(c, cpp.text));
+    if (JudgedByAllowList(id, c, outcome == Outcome::Unsupported ? nullptr : &cpp))
+    {
+        CheckListed(id, outcome, Details(c, cpp.text));
+    }
 }
 
 // The wide suite holds TemplateW to the narrow result rather than to Python, so that a
@@ -944,6 +1263,79 @@ TEST(ParityRegistry, BuildConditions)
               "new divergence (rejects): operators.a is listed as 'rejects@nobigint', which does not hold in this build, so it must match");
     EXPECT_EQ(ListingProblem(id, nullptr, Outcome::Rejects, with), "new divergence (rejects)");
     EXPECT_EQ(ListingProblem(id, nullptr, Outcome::Match, without), "");
+}
+
+// How a case is judged against another oracle (docs/tasks/0186)
+TEST(ParityRegistry, OracleVerdicts)
+{
+    const auto out = [](const char* text) { return Json{ { "output", text } }; };
+    const Json err = { { "error", { { "phase", "render" }, { "type", "TypeError" }, { "message", "m" } } } };
+    const Json errOther = { { "error", { { "phase", "compile" }, { "type", "TemplateSyntaxError" }, { "message", "other" } } } };
+    const Result cppA{ true, "a" };
+    const Result cppB{ true, "b" };
+    const Result cppC{ true, "c" };
+    const Result cppErr{ false, "render: x" };
+    struct Row
+    {
+        Json bundled;
+        Json oracle;
+        const Result* cpp;
+        OracleVerdict verdict;
+    };
+    const Row rows[] = {
+        { out("a"), out("a"), &cppB, OracleVerdict::Agree }, // judged by the allow-list, whatever C++ does
+        { err, errOther, &cppA, OracleVerdict::Agree },      // errors agree by presence
+        { out("a"), out("b"), &cppA, OracleVerdict::TracksBundled },
+        { out("a"), out("b"), &cppB, OracleVerdict::TracksOracle },
+        { out("a"), out("b"), &cppC, OracleVerdict::Neither },
+        { out("a"), out("b"), &cppErr, OracleVerdict::Neither },
+        { out("a"), err, &cppErr, OracleVerdict::TracksOracle },
+        { err, out("a"), &cppErr, OracleVerdict::TracksBundled },
+        { err, out("a"), &cppA, OracleVerdict::TracksOracle },
+        { out("a"), out("b"), nullptr, OracleVerdict::NotRun },
+        { out("a"), out("a"), nullptr, OracleVerdict::Agree },
+    };
+    for (const auto& row : rows)
+    {
+        EXPECT_STREQ(OracleVerdictName(JudgeOracle(row.bundled, row.oracle, row.cpp)), OracleVerdictName(row.verdict))
+            << row.bundled.dump() << " / " << row.oracle.dump() << " / " << CppText(row.cpp);
+    }
+    EXPECT_EQ(ReportCell("a|b\n"), "`\"a\\|b\\n\"`");
+    EXPECT_EQ(ReportCell("ab\xC3\xA9z", 3), "`\"...\xC3\xA9z\"`"); // not inside the two bytes of U+00E9
+    EXPECT_EQ(ReportSkip(std::string(50, 'x') + "a", std::string(50, 'x') + "b"), 30u);
+    EXPECT_EQ(ReportSkip("short a", "short b"), 0u);
+}
+
+// The other oracle's directory holds the same corpus: a stale or partial one would misreport
+TEST(ParityRegistry, OracleCorpusMatches)
+{
+    const auto& oracle = Oracle();
+    if (oracle.dir.empty())
+    {
+        GTEST_SKIP() << "JINJA2CPP_TEST_ORACLE_DIR is not set";
+    }
+    for (const auto& problem : oracle.problems)
+    {
+        ADD_FAILURE() << problem;
+    }
+    std::set<std::string> ids;
+    for (const auto& c : LoadCases())
+    {
+        ids.insert(c.id);
+        EXPECT_TRUE(oracle.cases.count(c.id)) << c.id << " is missing from " << oracle.dir;
+        if (oracle.cases.count(c.id))
+        {
+            // Every rendering input, so a directory generated before a case changed is caught
+            for (const char* input : { "template", "context", "env", "templates" })
+            {
+                EXPECT_EQ(oracle.cases.at(c.id).value(input, Json()), c.data.value(input, Json())) << c.id << " has another " << input << " in " << oracle.dir;
+            }
+        }
+    }
+    for (const auto& c : oracle.cases)
+    {
+        EXPECT_TRUE(ids.count(c.first)) << oracle.dir << " has case " << c.first << ", which the corpus does not";
+    }
 }
 
 TEST(ParityRegistry, DivergencesAreWellFormed)

@@ -16,12 +16,21 @@ The corpus lives in ``cases/<area>.py``. Each module defines ``CASES``, a list o
     python3 test/parity/generate.py           # rewrite expected/*.json
     python3 test/parity/generate.py --check   # fail if expected/*.json is stale
     python3 test/parity/generate.py --report  # parity table by area and task (Markdown)
+    python3 test/parity/generate.py --out DIR --any-version  # another oracle (docs/tasks/0186)
+
+``--out DIR`` writes the expectations to DIR instead of ``expected/``, with ``oracle.json``
+naming the Python, Jinja2 and MarkupSafe that produced them. ``--any-version`` accepts a
+Jinja2 other than the pinned one (only with ``--out``, so ``expected/`` keeps the pin);
+``parity_test.cpp`` compares against DIR when ``JINJA2CPP_TEST_ORACLE_DIR`` names it.
 """
 import argparse
 import difflib
+import importlib.metadata
 import importlib.util
 import json
 import pathlib
+import platform
+import re
 import sys
 
 import jinja2
@@ -41,6 +50,33 @@ def pinned_jinja2_version():
 
 
 JINJA2_VERSION = pinned_jinja2_version()
+
+# The oldest oracle generate.py supports with --any-version (test/parity/README.md, "Other oracles")
+MIN_PYTHON = (3, 10)
+MIN_JINJA2 = (3, 0)
+
+
+def package_version(name, module=None):
+    """A distribution's version, from its metadata: jinja2 and markupsafe deprecate __version__."""
+    try:
+        return importlib.metadata.version(name)
+    except importlib.metadata.PackageNotFoundError:
+        return getattr(module, "__version__", "unknown")
+
+
+def release_tuple(version):
+    """(3, 1) for "3.1.6", "3.2.0.dev0" or "3.0.0rc1"."""
+    match = re.match(r"(\d+)\.(\d+)", version)
+    return (int(match[1]), int(match[2])) if match else (0, 0)
+
+
+def oracle_versions():
+    import markupsafe  # a dependency of jinja2, so always present
+    return {"python": platform.python_version(), "jinja2": package_version("jinja2", jinja2),
+            "markupsafe": package_version("markupsafe", markupsafe)}
+
+
+JINJA2_FOUND = package_version("jinja2", jinja2)
 
 # Options the C++ harness knows how to map (or knows it cannot map yet).
 ENV_OPTIONS = {
@@ -128,7 +164,7 @@ def load_area(path):
             raise ValueError(f"{case['id']}: output is not deterministic")
         case.update(result)
         cases.append(case)
-    return {"generator": f"jinja2 {jinja2.__version__}", "area": path.stem, "cases": cases}
+    return {"generator": f"jinja2 {JINJA2_FOUND}", "area": path.stem, "cases": cases}
 
 
 def report():
@@ -172,15 +208,30 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--check", action="store_true", help="fail if expected/ is stale")
     parser.add_argument("--report", action="store_true", help="print the parity table and exit")
+    parser.add_argument("--out", type=pathlib.Path, help="write the expectations to this directory, not expected/")
+    parser.add_argument("--any-version", action="store_true",
+                        help=f"accept a Jinja2 other than the pinned {JINJA2_VERSION} (needs --out)")
     args = parser.parse_args()
     if args.report:
         return report()
-    if jinja2.__version__ != JINJA2_VERSION:
-        sys.exit(f"expected jinja2 {JINJA2_VERSION}, found {jinja2.__version__}; "
+    if args.any_version and not args.out:
+        sys.exit("--any-version needs --out: expected/ holds the pinned oracle's results")
+    if args.check and args.out:
+        sys.exit("--check compares expected/; it does not take --out")
+    versions = oracle_versions()
+    if args.any_version:
+        if sys.version_info[:2] < MIN_PYTHON or release_tuple(JINJA2_FOUND) < MIN_JINJA2:
+            sys.exit(f"unsupported oracle Python {versions['python']} with Jinja2 {JINJA2_FOUND}; "
+                     f"the parity oracle needs Python >= {'.'.join(map(str, MIN_PYTHON))} "
+                     f"and Jinja2 >= {'.'.join(map(str, MIN_JINJA2))}")
+    elif JINJA2_FOUND != JINJA2_VERSION:
+        sys.exit(f"expected jinja2 {JINJA2_VERSION}, found {JINJA2_FOUND}; "
                  f"pip install jinja2=={JINJA2_VERSION}")
 
-    out_dir = HERE / "expected"
-    out_dir.mkdir(exist_ok=True)
+    out_dir = args.out.resolve() if args.out else HERE / "expected"
+    if args.out and out_dir == (HERE / "expected").resolve():
+        sys.exit("--out names expected/; run generate.py without --out to regenerate it")
+    out_dir.mkdir(parents=True, exist_ok=True)
     stale, total = [], 0
     wanted = set()
     for path in sorted((HERE / "cases").glob("*.py")):
@@ -200,20 +251,26 @@ def main():
             target.write_text(text, encoding="utf-8")
     index = json.dumps({"areas": sorted(n[:-5] for n in wanted)}, indent=1) + "\n"
     wanted.add("index.json")
+    if args.out:
+        # Which oracle produced the directory, for the delta report of parity_test.cpp
+        (out_dir / "oracle.json").write_text(json.dumps(versions, indent=1) + "\n", encoding="utf-8")
+        wanted.add("oracle.json")
     index_path = out_dir / "index.json"
     if not index_path.exists() or index_path.read_text(encoding="utf-8") != index:
         if args.check:
             stale.append("index.json")
         else:
             index_path.write_text(index, encoding="utf-8")
-    for orphan in sorted(p.name for p in out_dir.glob("*.json") if p.name not in wanted):
+    # Only expected/ is swept: a --out directory may hold other files, and index.json lists the areas
+    for orphan in [] if args.out else sorted(p.name for p in out_dir.glob("*.json") if p.name not in wanted):
         if args.check:
             stale.append(orphan)
         else:
             (out_dir / orphan).unlink()
     if stale:
         sys.exit(f"stale expectations: {', '.join(stale)}; run test/parity/generate.py")
-    print(f"{total} cases, jinja2 {jinja2.__version__}")
+    print(f"{total} cases, Python {versions['python']}, jinja2 {versions['jinja2']}, "
+          f"markupsafe {versions['markupsafe']}" + (f", in {out_dir}" if args.out else ""))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_LOAD_SETTINGS_H
 #define JINJA2CPP_SRC_LOAD_SETTINGS_H
 
+#include "dialect.h"
 #include "recursion_guard.h"
 
 #include <jinja2cpp/big_int_backend.h>
@@ -99,7 +100,7 @@ private:
 // (TemplateEnvImpl::GetLoadSettings), instead of each copying the settings and rebuilding the delimiters
 struct LoadSettings
 {
-    explicit LoadSettings(const Settings& setts, const BigIntBackend* backend = nullptr)
+    explicit LoadSettings(const Settings& setts, const BigIntBackend* backend = nullptr, Dialect templateDialect = Dialect::Jinja2)
         : settings(setts)
         , narrow(setts)
         , wide(setts)
@@ -109,6 +110,7 @@ struct LoadSettings
         , hasRenderLimits(jinja2::HasRenderLimits(setts.limits) || backend != nullptr)
 #endif
         , bigIntBackend(backend)
+        , dialect(templateDialect)
     {
     }
 
@@ -134,6 +136,8 @@ struct LoadSettings
     bool hasRenderLimits;
     // The big-integer arithmetic the template's renders use (TemplateEnv::SetBigIntBackend); null for none
     const BigIntBackend* bigIntBackend;
+    // What a preset changed besides the settings (ConfigureForChatTemplates)
+    Dialect dialect;
 };
 
 using LoadSettingsPtr = std::shared_ptr<const LoadSettings>;

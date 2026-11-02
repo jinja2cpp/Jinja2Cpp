@@ -1240,7 +1240,10 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseSubscr
         auto& parts = bracket->parts;
         if (bracket->isSlice)
         {
-            return m_nodes.Make<SliceExpression>(valueRef, parts[0], parts[1], parts[2]);
+            // Whether Jinja2 folds it decides what a slice of a value without items gives
+            const auto slice = m_nodes.Make<SliceExpression>(valueRef, parts[0], parts[1], parts[2]);
+            m_nodes[slice].PrepareFold(m_nodes);
+            return slice;
         }
         indexExpr = parts[0];
     }
