@@ -6,6 +6,7 @@ name: CI-bindings
 # component. The default jobs test only the nlohmann_json binding and the toy traits, so this
 # runs on pull requests that touch the bindings or the contract they implement, nightly on
 # master, and on demand. The merge steward checks the nightly status before stacking a train.
+# The ASan job also runs the parity corpus with Reflect views of the contexts (docs/tasks/0322).
 
 on:
   pull_request:
@@ -19,6 +20,8 @@ on:
       - 'include/jinja2cpp/big_int_backend.h'
       - 'test/binding/**'
       - 'test/package/**'
+      - 'test/parity/parity_test.cpp'
+      - 'test/parity/divergences/reflect.txt'
       - 'cmake/public/**'
       - 'thirdparty/**'
       - 'CMakeLists.txt'
@@ -90,6 +93,15 @@ jobs:
     - name: Test
       run: .build/jinja2cpp_tests "--gtest_filter=${BINDING_TESTS}"
 
+    # The parity corpus with every context as views of the document instead of copies
+    # (docs/tasks/0322): a wide check of the view adapters and, under ASan, of the owner
+    # chain of every item a template reaches. Not in the per-PR matrix.
+    - name: Parity corpus through Reflect
+      if: matrix.sanitizer == 'address+undefined'
+      env:
+        JINJA2CPP_PARITY_CONTEXT: reflect
+      run: .build/jinja2cpp_tests "--gtest_filter=ParityReflect/*:ParityRegistry.*"
+
   msvc:
     name: bindings MSVC C++17 Release /MT static
     runs-on: windows-latest
@@ -117,8 +129,8 @@ jobs:
       run: .build\jinja2cpp_tests.exe "--gtest_filter=%BINDING_TESTS%"
 
   macos:
-    name: bindings macos-14 AppleClang C++17 Release
-    runs-on: macos-14
+    name: bindings macos-15 AppleClang C++17 Release
+    runs-on: macos-15
 
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -133,7 +145,7 @@ jobs:
 
     - uses: ./.github/actions/setup-ccache
       with:
-        key: bindings-macos-14
+        key: bindings-macos-15
         max-size: 500M
 
     - name: Configure
@@ -235,7 +247,7 @@ jobs:
 
     - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
       with:
-        python-version: '3.12'
+        python-version-file: .python-version
 
     - name: Install clang-tidy
       run: |

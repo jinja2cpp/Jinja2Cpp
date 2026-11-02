@@ -1,0 +1,37 @@
+{
+ "template": "CohereForAI-c4ai-command-r-plus-tool_use.jinja",
+ "renders": {
+  "single": {
+   "error": "TypeError"
+  },
+  "system": {
+   "error": "TypeError"
+  },
+  "nogen": {
+   "error": "TypeError"
+  },
+  "tools": {
+   "error": "UndefinedError",
+   "message": "'dict object' has no attribute 'description'"
+  },
+  "tool_args_str": {
+   "error": "UndefinedError",
+   "message": "'dict object' has no attribute 'description'"
+  },
+  "reasoning": {
+   "error": "TypeError"
+  },
+  "no_thinking": {
+   "error": "TypeError"
+  },
+  "parts": {
+   "error": "TypeError"
+  },
+  "documents": {
+   "error": "TypeError"
+  },
+  "no_alternation": {
+   "error": "TypeError"
+  }
+ }
+}

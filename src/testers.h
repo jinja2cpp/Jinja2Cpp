@@ -10,21 +10,25 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace jinja2
 {
 inline namespace v2
 {
 using TesterPtr = std::shared_ptr<IsExpression::ITester>;
-using TesterParams = CallParamsInfo;
+using TesterParams = FunctionArgs;
 
-extern TesterPtr CreateTester(std::string testerName, const CallParamsInfo& params);
+extern TesterPtr CreateTester(std::string testerName, FunctionArgs params);
 // The same in the arena of the template that names the test
 // A name that is no built-in test makes a UserDefinedTester and sets `*unknown`
-extern NodeRef<IsExpression::ITester> CreateTester(NodeArena& nodes, const std::string& testerName, const CallParamsInfo& params, bool* unknown = nullptr);
+extern NodeRef<IsExpression::ITester> CreateTester(NodeArena& nodes, const std::string& testerName, FunctionArgs params, bool* unknown = nullptr);
 // For tests named at render time (`select('name')`): a test added to the environment of the
 // template comes first, as in Jinja2's env.tests
-extern TesterPtr CreateTester(std::string testerName, const CallParamsInfo& params, RenderContext& context);
+extern TesterPtr CreateTester(std::string testerName, FunctionArgs params, RenderContext& context);
+// For a call that unpacks `*args` or `**kwargs` (docs/tasks/0306): the test is made from the
+// values each time the call runs. registered and unknown as for IsExpression::Make
+extern NodeRef<IsExpression::ITester> CreateUnpackingTester(NodeArena& nodes, const std::string& testerName, const CallArgsInfo& params, InternalValue registered, bool* unknown);
 // Whether `testerName` is one of the built-in tests
 bool IsBuiltinTester(std::string_view testerName);
 
@@ -111,12 +115,33 @@ public:
     void VisitRefs(detail::RefChecker& refs) const override
     {
         TesterBase::VisitRefs(refs);
-        VisitCallParams(refs, m_callParams);
+        m_callParams.VisitRefs(refs);
     }
 private:
     std::string m_testerName;
-    TesterParams m_callParams;
+    ForwardedArgs m_callParams;
     InternalValue m_callable;
+};
+// A test call that unpacks `*args` or `**kwargs`: Python binds it when it runs, so the test is
+// made then, from the values
+class UnpackingTester : public IsExpression::ITester
+{
+public:
+    UnpackingTester(std::string testerName, ArenaCallParams params, InternalValue registered)
+        : m_testerName(std::move(testerName))
+        , m_params(params)
+        , m_registered(std::move(registered))
+    {
+    }
+
+    bool Test(const InternalValue& baseVal, RenderContext& context) override;
+    void VisitRefs(detail::RefChecker& refs) const override { m_params.VisitRefs(refs); }
+
+private:
+    std::string m_testerName;
+    ArenaCallParams m_params;
+    // The test the environment adds under this name, if any
+    InternalValue m_registered;
 };
 } // namespace testers
 } // namespace v2

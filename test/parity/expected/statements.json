@@ -12554,6 +12554,258 @@
    "output": "<bound method LoopContext.cycle of <LoopContext 1/2>>;<bound method LoopContext.cycle of <LoopContext 2/2>>;"
   },
   {
+   "id": "statements.loop_bound_method_repr",
+   "template": "{% for x in 'ab' %}{{ loop.changed|string }};{{ [loop.cycle] }};{{ loop.cycle == loop.cycle }};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<bound method LoopContext.changed of <LoopContext 1/2>>;[<bound method LoopContext.cycle of <LoopContext 1/2>>];True;<bound method LoopContext.changed of <LoopContext 2/2>>;[<bound method LoopContext.cycle of <LoopContext 2/2>>];True;"
+  },
+  {
+   "id": "statements.loop_cycle_stored_repr",
+   "template": "{% set ns = namespace(c=none, f=none) %}{% for x in [1, 2, 3] %}{% set ns.c = loop.cycle %}{% endfor %}{% for x in [1, 2, 3]|select('odd') %}{% set ns.f = loop.cycle %}{% endfor %}{{ ns.c }}|{{ ns.f }}|{{ ns.c('a', 'b') }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<bound method LoopContext.cycle of <LoopContext 3/3>>|<bound method LoopContext.cycle of <LoopContext 2/2>>|a"
+  },
+  {
+   "id": "statements.loop_cycle_stored_repr_live",
+   "template": "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3] if x > 1 %}{% if loop.first %}{% set ns.c = loop.cycle %}{% endif %}{{ ns.c }};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<bound method LoopContext.cycle of <LoopContext 1/2>>;<bound method LoopContext.cycle of <LoopContext 2/2>>;"
+  },
+  {
+   "id": "statements.loop_cycle_repr_kept_loop",
+   "template": "{% set ns = namespace(c=none, l=none) %}{% for x in [1, 2, 3, 4]|select('odd') %}{% set ns.c = loop.cycle %}{% set ns.l = loop %}{% break %}{% endfor %}{{ ns.c }}|{{ ns.l }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "<bound method LoopContext.cycle of <LoopContext 1/2>>|<LoopContext 1/2>"
+  },
+  {
+   "id": "statements.loop_cycle_repr_after_break_lazy",
+   "template": "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3, 4] if x is odd %}{% set ns.c = loop.cycle %}{% break %}{% endfor %}{{ ns.c }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "<bound method LoopContext.cycle of <LoopContext 1/2>>"
+  },
+  {
+   "id": "statements.loop_cycle_repr_after_break",
+   "template": "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3, 4]|select('odd') %}{% set ns.c = loop.cycle %}{% break %}{% endfor %}{{ ns.c }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "<bound method LoopContext.cycle of <LoopContext 1/2>>"
+  },
+  {
    "id": "statements.call_star_args",
    "template": "{{ range(*[1, 3])|list }}",
    "context": {

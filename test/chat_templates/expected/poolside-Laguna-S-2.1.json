@@ -1,0 +1,37 @@
+{
+ "template": "poolside-Laguna-S-2.1.jinja",
+ "renders": {
+  "single": {
+   "output": "〈|EOS|〉<system>You are a helpful, conversationally-fluent assistant made by Poolside. You are here to be helpful to users through natural language conversations.</system>\n<user>Hello!</user>\n<assistant><think>"
+  },
+  "system": {
+   "output": "〈|EOS|〉<system>You are a helpful assistant.</system>\n<user>What is 2+2?</user>\n<assistant><think></think>2+2 = 4.</assistant>\n<user>And \"3+3\" <in> café ünïcode 日本 & emoji 🙂?</user>\n<assistant><think>"
+  },
+  "nogen": {
+   "output": "〈|EOS|〉<system>You are a helpful, conversationally-fluent assistant made by Poolside. You are here to be helpful to users through natural language conversations.</system>\n<user>Hi</user>\n<assistant><think></think>Hello! How can I help?</assistant>\n"
+  },
+  "tools": {
+   "output": "〈|EOS|〉<system>You can call tools.\n\n### Tools\n\nYou may call functions to assist with the user query.\nAll available function signatures are listed below:\n<available_tools>\n{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}\n</available_tools></system>\n<user>Weather in Paris?</user>\n<assistant><think></think><tool_call>get_weather<arg_key>city</arg_key><arg_value>Paris</arg_value><arg_key>unit</arg_key><arg_value>celsius</arg_value></tool_call></assistant>\n<tool_response>{\"temp\": 18, \"sky\": \"cloudy\"}</tool_response>\n<assistant><think></think>It is 18°C and cloudy in Paris.</assistant>\n<user>Thanks</user>\n<assistant><think>"
+  },
+  "tool_args_str": {
+   "error": "UndefinedError",
+   "message": "'str object' has no attribute 'items'"
+  },
+  "reasoning": {
+   "output": "〈|EOS|〉<system>You are a helpful, conversationally-fluent assistant made by Poolside. You are here to be helpful to users through natural language conversations.</system>\n<user>Is 17 prime?</user>\n<assistant><think>17 has no divisors other than 1 and itself.</think>Yes, 17 is prime.</assistant>\n<user>And 21?</user>\n<assistant><think>"
+  },
+  "no_thinking": {
+   "output": "〈|EOS|〉<system>You are a helpful, conversationally-fluent assistant made by Poolside. You are here to be helpful to users through natural language conversations.</system>\n<user>Quick: capital of France?</user>\n<assistant></think>"
+  },
+  "parts": {
+   "error": "UndefinedError",
+   "message": "'list object' has no attribute 'strip'"
+  },
+  "documents": {
+   "output": "〈|EOS|〉<system>You are a helpful, conversationally-fluent assistant made by Poolside. You are here to be helpful to users through natural language conversations.</system>\n<user>Who wrote it?</user>\n<assistant><think>"
+  },
+  "no_alternation": {
+   "output": "〈|EOS|〉<system>You are a helpful, conversationally-fluent assistant made by Poolside. You are here to be helpful to users through natural language conversations.</system>\n<user>First</user>\n<user>Second</user>\n<assistant><think>"
+  }
+ }
+}

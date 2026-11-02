@@ -55,6 +55,14 @@ const char* TypeName(const InternalValue& val)
     {
         return "NoneType";
     }
+    if (const auto* info = GetUndefinedInfo(val))
+    {
+        return UndefinedClassName(*info);
+    }
+    if (GetIf<UndefinedValue>(&val))
+    {
+        return "Undefined";
+    }
     if (val.Kind() == ValueKind::Map)
     {
         return "dict";
@@ -526,8 +534,13 @@ public:
             m_count = 1;
         }
         // A mapping is used by key, so it is never "not all arguments converted"; nor is a
-        // list, which Python's PyMapping_Check takes for one too
-        m_isMapping = m_map.has_value() || (list && !list->IsTuple());
+        // list, which Python's PyMapping_Check takes for one too, nor an undefined, whose
+        // __getitem__ makes it one: `'xy' % missing` is 'xy' (docs/tasks/0297)
+        if (GetIf<UndefinedValue>(&values))
+        {
+            m_undefined = &values;
+        }
+        m_isMapping = m_map.has_value() || (list && !list->IsTuple()) || m_undefined != nullptr;
     }
 
     Formatter(const InternalValue* args, size_t count, bool markup)
@@ -620,6 +633,15 @@ private:
     // Selects the mapping value named by "(key)" as the argument
     void Key(std::string_view name)
     {
+        // An undefined's item is an error, or for ChainableUndefined itself
+        if (m_undefined)
+        {
+            CheckUndefinedUse(*m_undefined, UndefinedUse::Attribute);
+            m_keyedValue = *m_undefined;
+            m_keyed = true;
+            m_keyedUsed = false;
+            return;
+        }
         if (!m_map)
         {
             throw TemplateRuntimeError("format requires a mapping");
@@ -691,6 +713,11 @@ private:
         case 's':
         case 'r':
         case 'a':
+            // str() of a StrictUndefined fails; its repr() does not
+            if (conversion == 's')
+            {
+                CheckUndefinedUse(arg, UndefinedUse::Operator);
+            }
             ConvertText(out, arg, conversion, spec, m_markup);
             break;
         case 'x':
@@ -714,6 +741,7 @@ private:
                     break;
                 }
             }
+            CheckUndefinedUse(arg, UndefinedUse::Arithmetic);
             ConvertInteger(out, arg, conversion, spec);
             break;
         case 'e':
@@ -730,6 +758,7 @@ private:
                     break;
                 }
             }
+            CheckUndefinedUse(arg, UndefinedUse::Arithmetic);
             ConvertFloat(out, arg, conversion, spec);
             break;
         case 'c':
@@ -939,6 +968,8 @@ private:
     }
 
     std::optional<MapRef> m_map;
+    // The undefined that is the whole right operand, a mapping to Python (Key)
+    const InternalValue* m_undefined = nullptr;
     bool m_isMapping = false;
     // Positional arguments: an array, or a tuple read by index
     const InternalValue* m_args = nullptr;

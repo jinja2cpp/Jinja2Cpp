@@ -1,0 +1,35 @@
+{
+ "template": "LFM2.5-8B-A1B.jinja",
+ "renders": {
+  "single": {
+   "output": "<|bos|><|im_start|>user\nHello!<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "system": {
+   "output": "<|bos|><|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nWhat is 2+2?<|im_end|>\n<|im_start|>assistant\n2+2 = 4.<|im_end|>\n<|im_start|>user\nAnd \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "nogen": {
+   "output": "<|bos|><|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\nHello! How can I help?<|im_end|>\n"
+  },
+  "tools": {
+   "output": "<|bos|><|im_start|>system\nYou can call tools.\nList of tools: [{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}]<|im_end|>\n<|im_start|>user\nWeather in Paris?<|im_end|>\n<|im_start|>assistant\n<|tool_call_start|>[get_weather(city='Paris', unit='celsius')]<|tool_call_end|><|im_end|>\n<|im_start|>tool\n{\"temp\": 18, \"sky\": \"cloudy\"}<|im_end|>\n<|im_start|>assistant\nIt is 18°C and cloudy in Paris.<|im_end|>\n<|im_start|>user\nThanks<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "tool_args_str": {
+   "error": "TypeError"
+  },
+  "reasoning": {
+   "output": "<|bos|><|im_start|>user\nIs 17 prime?<|im_end|>\n<|im_start|>assistant\nYes, 17 is prime.<|im_end|>\n<|im_start|>user\nAnd 21?<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "no_thinking": {
+   "output": "<|bos|><|im_start|>user\nQuick: capital of France?<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "parts": {
+   "output": "<|bos|><|im_start|>system\nBe brief.<|im_end|>\n<|im_start|>user\nDescribea cat.<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "documents": {
+   "output": "<|bos|><|im_start|>user\nWho wrote it?<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "no_alternation": {
+   "output": "<|bos|><|im_start|>user\nFirst<|im_end|>\n<|im_start|>user\nSecond<|im_end|>\n<|im_start|>assistant\n"
+  }
+ }
+}

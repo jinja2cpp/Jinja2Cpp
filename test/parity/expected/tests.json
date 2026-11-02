@@ -728,6 +728,56 @@
    }
   },
   {
+   "id": "tests.divisibleby_format_string",
+   "template": "{{ 'T' if '%d' is divisibleby 2 else 'F' }}{{ 'T' if '%s%%' is divisibleby 3 else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "output": "FF"
+  },
+  {
+   "id": "tests.divisibleby_empty_string",
+   "template": "{{ '' is divisibleby 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "s": "hello",
+    "S": "HELLO",
+    "l": [
+     1,
+     2
+    ],
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "t": true,
+    "e": ""
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "not all arguments converted during string formatting"
+   }
+  },
+  {
    "id": "tests.divisibleby_arity",
    "template": "{{ 6 is divisibleby() }}",
    "context": {

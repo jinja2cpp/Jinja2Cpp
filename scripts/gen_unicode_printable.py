@@ -4,18 +4,21 @@
 Python's str.__repr__ escapes every character for which str.isprintable() is false
 (categories Cc, Cf, Cs, Co, Cn, Zl, Zp and Zs other than the space). The table follows
 the Unicode database of the Python that runs this script, so it must be the Python the
-parity oracle runs on (.github/workflows/parity-expectations.yml); the script refuses
-any other version. When the oracle moves to a newer Python, bump ORACLE_PYTHON together
-with that workflow and regenerate.
+parity oracle runs on (.python-version); the script refuses any other version. When the oracle
+moves to a newer Python, follow the bump checklist in docs/parity.md.
 
     python3.12 scripts/gen_unicode_printable.py > src/unicode_printable.h
     python3.12 scripts/gen_unicode_printable.py --check src/unicode_printable.h
 """
 import io
+import pathlib
 import sys
 import unicodedata
 
-ORACLE_PYTHON = (3, 12)
+# The oracle's Python is pinned once, in .python-version at the repository root.
+ORACLE_PYTHON = tuple(
+    int(part) for part in
+    (pathlib.Path(__file__).resolve().parent.parent / ".python-version").read_text().split()[0].split(".")[:2])
 
 
 def ranges():

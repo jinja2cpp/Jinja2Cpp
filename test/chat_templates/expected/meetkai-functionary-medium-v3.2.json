@@ -1,0 +1,35 @@
+{
+ "template": "meetkai-functionary-medium-v3.2.jinja",
+ "renders": {
+  "single": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nYou are capable of executing available function(s) if required.\nOnly execute function(s) when absolutely necessary.\nAsk for the required input to:recipient==all\nUse JSON for function arguments.\nRespond in this format:\n>>>${recipient}\n${content}\nAvailable functions:\n// Supported function definitions that should be called when necessary.\nnamespace functions {\n\n} // namespace functions<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nHello!<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n>>>"
+  },
+  "system": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nYou are capable of executing available function(s) if required.\nOnly execute function(s) when absolutely necessary.\nAsk for the required input to:recipient==all\nUse JSON for function arguments.\nRespond in this format:\n>>>${recipient}\n${content}\nAvailable functions:\n// Supported function definitions that should be called when necessary.\nnamespace functions {\n\n} // namespace functions<|eot_id|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nWhat is 2+2?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n>>>all\n2+2 = 4.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nAnd \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n>>>"
+  },
+  "nogen": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nYou are capable of executing available function(s) if required.\nOnly execute function(s) when absolutely necessary.\nAsk for the required input to:recipient==all\nUse JSON for function arguments.\nRespond in this format:\n>>>${recipient}\n${content}\nAvailable functions:\n// Supported function definitions that should be called when necessary.\nnamespace functions {\n\n} // namespace functions<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nHi<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n>>>all\nHello! How can I help?<|eot_id|>"
+  },
+  "tools": {
+   "error": "TypeError"
+  },
+  "tool_args_str": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nYou are capable of executing available function(s) if required.\nOnly execute function(s) when absolutely necessary.\nAsk for the required input to:recipient==all\nUse JSON for function arguments.\nRespond in this format:\n>>>${recipient}\n${content}\nAvailable functions:\n// Supported function definitions that should be called when necessary.\nnamespace functions {\n\n// Get the current weather in a city.\ntype get_weather = (_: {\n// City name, e.g. Paris.\ncity: string,\nunit?: \"celsius\" | \"fahrenheit\",\n}) => any;\n\n} // namespace functions<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nWeather in Tokyo?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n>>>get_weather\n{\"city\": \"Tōkyō\"}<|eot_id|><|start_header_id|>tool<|end_header_id|>\n\nsunny<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n>>>"
+  },
+  "reasoning": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nYou are capable of executing available function(s) if required.\nOnly execute function(s) when absolutely necessary.\nAsk for the required input to:recipient==all\nUse JSON for function arguments.\nRespond in this format:\n>>>${recipient}\n${content}\nAvailable functions:\n// Supported function definitions that should be called when necessary.\nnamespace functions {\n\n} // namespace functions<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nIs 17 prime?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n>>>all\nYes, 17 is prime.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nAnd 21?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n>>>"
+  },
+  "no_thinking": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nYou are capable of executing available function(s) if required.\nOnly execute function(s) when absolutely necessary.\nAsk for the required input to:recipient==all\nUse JSON for function arguments.\nRespond in this format:\n>>>${recipient}\n${content}\nAvailable functions:\n// Supported function definitions that should be called when necessary.\nnamespace functions {\n\n} // namespace functions<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nQuick: capital of France?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n>>>"
+  },
+  "parts": {
+   "error": "TypeError"
+  },
+  "documents": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nYou are capable of executing available function(s) if required.\nOnly execute function(s) when absolutely necessary.\nAsk for the required input to:recipient==all\nUse JSON for function arguments.\nRespond in this format:\n>>>${recipient}\n${content}\nAvailable functions:\n// Supported function definitions that should be called when necessary.\nnamespace functions {\n\n} // namespace functions<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nWho wrote it?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n>>>"
+  },
+  "no_alternation": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\nYou are capable of executing available function(s) if required.\nOnly execute function(s) when absolutely necessary.\nAsk for the required input to:recipient==all\nUse JSON for function arguments.\nRespond in this format:\n>>>${recipient}\n${content}\nAvailable functions:\n// Supported function definitions that should be called when necessary.\nnamespace functions {\n\n} // namespace functions<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nFirst<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nSecond<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n>>>"
+  }
+ }
+}

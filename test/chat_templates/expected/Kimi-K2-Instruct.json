@@ -1,0 +1,37 @@
+{
+ "template": "Kimi-K2-Instruct.jinja",
+ "renders": {
+  "single": {
+   "output": "<|im_system|>system<|im_middle|>You are Kimi, an AI assistant created by Moonshot AI.<|im_end|>\n<|im_user|>user<|im_middle|>Hello!<|im_end|><|im_assistant|>assistant<|im_middle|>"
+  },
+  "system": {
+   "output": "<|im_system|>system<|im_middle|>You are a helpful assistant.<|im_end|><|im_user|>user<|im_middle|>What is 2+2?<|im_end|><|im_assistant|>assistant<|im_middle|>2+2 = 4.<|im_end|><|im_user|>user<|im_middle|>And \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|im_end|><|im_assistant|>assistant<|im_middle|>"
+  },
+  "nogen": {
+   "output": "<|im_system|>system<|im_middle|>You are Kimi, an AI assistant created by Moonshot AI.<|im_end|>\n<|im_user|>user<|im_middle|>Hi<|im_end|><|im_assistant|>assistant<|im_middle|>Hello! How can I help?<|im_end|>"
+  },
+  "tools": {
+   "error": "SecurityError",
+   "message": "access to attribute 'append' of 'list' object is unsafe."
+  },
+  "tool_args_str": {
+   "error": "SecurityError",
+   "message": "access to attribute 'append' of 'list' object is unsafe."
+  },
+  "reasoning": {
+   "output": "<|im_system|>system<|im_middle|>You are Kimi, an AI assistant created by Moonshot AI.<|im_end|>\n<|im_user|>user<|im_middle|>Is 17 prime?<|im_end|><|im_assistant|>assistant<|im_middle|>Yes, 17 is prime.<|im_end|><|im_user|>user<|im_middle|>And 21?<|im_end|><|im_assistant|>assistant<|im_middle|>"
+  },
+  "no_thinking": {
+   "output": "<|im_system|>system<|im_middle|>You are Kimi, an AI assistant created by Moonshot AI.<|im_end|>\n<|im_user|>user<|im_middle|>Quick: capital of France?<|im_end|><|im_assistant|>assistant<|im_middle|>"
+  },
+  "parts": {
+   "output": "<|im_system|>system<|im_middle|>Be brief.<|im_end|><|im_user|>user<|im_middle|>Describea cat.<|im_end|><|im_assistant|>assistant<|im_middle|>"
+  },
+  "documents": {
+   "output": "<|im_system|>system<|im_middle|>You are Kimi, an AI assistant created by Moonshot AI.<|im_end|>\n<|im_user|>user<|im_middle|>Who wrote it?<|im_end|><|im_assistant|>assistant<|im_middle|>"
+  },
+  "no_alternation": {
+   "output": "<|im_system|>system<|im_middle|>You are Kimi, an AI assistant created by Moonshot AI.<|im_end|>\n<|im_user|>user<|im_middle|>First<|im_end|><|im_user|>user<|im_middle|>Second<|im_end|><|im_assistant|>assistant<|im_middle|>"
+  }
+ }
+}

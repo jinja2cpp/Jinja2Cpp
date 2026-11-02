@@ -66,9 +66,10 @@ public:
     // the same value on every render, so the render decides it. PrepareFold, at Load, is
     // IsFoldable that also says whether the value may fold by such a choice (FoldBits), and
     // records that of the operands in one walk; then IsFoldableAt evaluates the tests. An
-    // error while evaluating one means not foldable, as in Jinja2
+    // error while evaluating one means not foldable, as in Jinja2. IsFoldableAt is called only
+    // on a node whose PrepareFold has run and was not 0, so by default it is true
     virtual std::uint8_t PrepareFold(const NodeArena& nodes);
-    [[nodiscard]] virtual bool IsFoldableAt(RenderContext& /*values*/) const { return false; }
+    [[nodiscard]] virtual bool IsFoldableAt(RenderContext& values) const;
     virtual void Render(OutStream& stream, RenderContext& values);
 protected:
     // Only the arena moves a node, when it seals the tree into one buffer
@@ -117,12 +118,10 @@ struct CallParamsInfo
     std::vector<NodeRef<Expression>> posParams;
 };
 
-// The arguments of a call as parsed: f(*args, **kwargs) is unpacked when the call is evaluated,
-// null when not written. Only calls take them, so filters and tests keep CallParamsInfo
-struct CallArgsInfo
+// The arguments of a call, a filter or a test as parsed: f(*args, **kwargs) is unpacked when
+// the call is evaluated, null when not written. A call without them is its CallParamsInfo
+struct CallArgsInfo : CallParamsInfo
 {
-    OrderedMap<std::string, NodeRef<Expression>> kwParams;
-    std::vector<NodeRef<Expression>> posParams;
     NodeRef<Expression> dynArgs;
     NodeRef<Expression> dynKwargs;
 };
@@ -466,6 +465,9 @@ public:
     virtual ~SubscriptExpression() = default;
     InternalValue Evaluate(RenderContext& values) override;
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
+    // Folds when every operand does, by a choice when one of them does so (docs/tasks/0307)
+    std::uint8_t PrepareFold(const NodeArena& nodes) override;
+    [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
     // x[expr], or x.name when attrName is set: x.name finds Python's methods before the
     // items, x[expr] the items first (Jinja2's getattr and getitem)
     void AddIndex(const NodeArena& nodes, NodeRef<Expression> value, std::string attrName = std::string());
@@ -549,6 +551,9 @@ public:
     FilteredExpression(const NodeArena& nodes, NodeRef<Expression> expression, NodeRef<ExpressionFilter> filter);
     InternalValue Evaluate(RenderContext&) override;
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
+    // Folds when every operand does, by a choice when one of them does so (docs/tasks/0307)
+    std::uint8_t PrepareFold(const NodeArena& nodes) override;
+    [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
 
 private:
     NodeRef<Expression> m_expression;
@@ -665,6 +670,9 @@ public:
 
     InternalValue Evaluate(RenderContext&) override;
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
+    // Folds when every operand does, by a choice when one of them does so (docs/tasks/0307)
+    std::uint8_t PrepareFold(const NodeArena& nodes) override;
+    [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
     [[nodiscard]] ArenaSpan<NodeRef<Expression>> GetItems() const { return m_exprs; }
 private:
     ArenaSpan<NodeRef<Expression>> m_exprs;
@@ -697,6 +705,9 @@ public:
 
     InternalValue Evaluate(RenderContext&) override;
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
+    // Folds when every operand does, by a choice when one of them does so (docs/tasks/0307)
+    std::uint8_t PrepareFold(const NodeArena& nodes) override;
+    [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
 private:
     Items m_exprs;
 };
@@ -723,6 +734,9 @@ public:
     {}
     InternalValue Evaluate(RenderContext&) override;
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
+    // Folds when every operand does, by a choice when one of them does so (docs/tasks/0307)
+    std::uint8_t PrepareFold(const NodeArena& nodes) override;
+    [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
 
 private:
     Operation m_oper;
@@ -779,6 +793,9 @@ public:
     }
     InternalValue Evaluate(RenderContext& context) override;
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
+    // Folds when every operand does, by a choice when one of them does so (docs/tasks/0307)
+    std::uint8_t PrepareFold(const NodeArena& nodes) override;
+    [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
 
 private:
     NodeRef<Expression> m_value;
@@ -940,6 +957,9 @@ public:
     }
     InternalValue Evaluate(RenderContext&) override;
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
+    // Folds when every operand does, by a choice when one of them does so (docs/tasks/0307)
+    std::uint8_t PrepareFold(const NodeArena& nodes) override;
+    [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
 
 private:
     NodeRef<Expression> m_first;
@@ -966,16 +986,25 @@ public:
     }
     InternalValue Evaluate(RenderContext&) override;
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
+    // Folds when every operand does, by a choice when one of them does so (docs/tasks/0307)
+    std::uint8_t PrepareFold(const NodeArena& nodes) override;
+    [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
     // A chain Jinja2 folds when the template is compiled joins with str(), never with
     // markup_join (ExpressionParser::ParseBinary)
     void SetFolded() { m_folded = true; }
+    // A chain whose operands Jinja2 folds by the side a foldable test picks: the render
+    // decides whether it is folded (IsFoldableAt)
+    void SetFoldedByChoice() { m_foldedByChoice = true; }
 
 private:
     InternalValue EvaluatePair(NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr, RenderContext& context) const;
+    // Joined with str() rather than markup_join (SetFolded, SetFoldedByChoice)
+    [[nodiscard]] bool IsFoldedAt(RenderContext& values) const;
 
     ArenaSpan<NodeRef<Expression>> m_operands;
     uint32_t m_lendFrom;
     bool m_folded = false;
+    bool m_foldedByChoice = false;
 };
 
 // value[start:stop:step]; omitted parts are null
@@ -1000,6 +1029,9 @@ public:
     }
     InternalValue Evaluate(RenderContext&) override;
     [[nodiscard]] bool IsFoldable(const NodeArena& nodes) const override;
+    // Folds when every operand does, by a choice when one of them does so (docs/tasks/0307)
+    std::uint8_t PrepareFold(const NodeArena& nodes) override;
+    [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
 
 private:
     NodeRef<Expression> m_value;
