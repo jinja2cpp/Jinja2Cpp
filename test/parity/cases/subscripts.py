@@ -57,7 +57,7 @@ CASES = [
     ("slice_loop", "{% for i in [1] %}{{ loop[0:1] }}{% endfor %}"),
     ("slice_function", "{{ lipsum[0:1] }}"),
     ("slice_literals_fold", "[{{ 5[1:2] }}][{{ none[1:2] }}][{{ {'a': 1}[1:2] }}][{{ 1.5[0:1] is undefined }}]"),
-    # task 0380: a lazy filter result is a generator in Python, which takes no slice
+    # task 0383: a lazy filter result is a generator in Python, which takes no slice
     ("slice_lazy_result", "{{ ([1, 2]|map('string'))[0:1] }}"),
     # an undefined slice bound has no __index__; a literal slice folds to getitem's undefined,
     # a slice of which fails

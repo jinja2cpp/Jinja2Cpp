@@ -431,7 +431,7 @@ CASES = [
     ("urlencode_two_char_strings", "{{ ['ab', 'cd']|urlencode }}"),
     ("urlencode_dict_item_keys", "{{ [{'a': 1, 'b': 2}]|urlencode }}"),
     ("urlencode_unpack_short", "{{ [[1]]|urlencode }}"),
-    # task 0380: a lazy result is a generator in Python, which reversed() refuses
+    # task 0383: a lazy result is a generator in Python, which reversed() refuses
     ("last_of_lazy_result", "{{ [1, 2]|select|last }}"),
     ("urlencode_undefined_debug", "[{{ missing|urlencode }}]", {"env": {"undefined": "debug"}}),
     ("urlencode_undefined_strict", "[{{ missing|urlencode }}]", {"env": {"undefined": "strict"}}),
