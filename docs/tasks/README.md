@@ -429,7 +429,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0357](0357-python-module-public-api.md) | Python module: move from the private seam to the public API before the G1 freeze | api | medium | open |
 | [0358](0358-prompt-autoescape.md) | Prompt autoescape: `fence`, `neutralize` and an escaping mode for LLM prompts | api | medium | open |
 | [0359](0359-token-budget-filters.md) | Token budget filters: `count_tokens`, `truncate_tokens` and `pack` | api | medium | open |
-| [0360](0360-hf-chat-template-compat.md) | Render Hugging Face chat templates as transformers does | parity | high | in-progress |
+| [0360](0360-hf-chat-template-compat.md) | Render Hugging Face chat templates as transformers does | parity | high | done |
 | [0361](0361-failed-call-top-view-reads-empty.md) | A failed module call's view of a module cell reads no items | lifetime | low | open |
 | [0362](0362-host-object-python-errors.md) | Host objects: Python's errors where generic filters guess | parity | low | done |
 | [0363](0363-cell-protocol-inductive-proof.md) | Prove the cell protocol's invariants inductively | robustness | low | open |
@@ -443,6 +443,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0371](0371-attr-filter-debug-undefined.md) | `|attr` of a missing attribute under DebugUndefined prints empty | parity | low | open |
 | [0372](0372-unicode-version-corpus-cases.md) | Corpus cases on code points whose Unicode properties changed after 15.0 | parity | low | open |
 | [0376](0376-same-string-getter-round-trip.md) | GetAsSameString moves its string through the PLT | perf | low | done |
+| [0377](0377-chat-template-assistant-mask-and-security-error.md) | Chat templates: the assistant token mask and the sandbox's SecurityError | api | low | open |
 | [0380](0380-markup-escape-copy-assignment.md) | MarkupEscape calls InternalValue's copy assignment out of line | perf | low | open |
 | [0381](0381-host-object-operators.md) | Host objects: arithmetic and ordering operators | parity | low | open |
 | [0382](0382-urlencode-of-loop.md) | `loop|urlencode` iterates the rest of the loop | parity | low | open |
