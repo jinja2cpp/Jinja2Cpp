@@ -1,6 +1,7 @@
 ---
-status: in-progress
+status: done
 priority: low
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/733
 area: parity
 touches: [src/template_module.cpp, src/internal_value.cpp, src/cycle_collector.h, src/error_info.cpp, include/jinja2cpp/error_info.h, docs/api-2.0.md, test/template_module_test.cpp]
 ---
