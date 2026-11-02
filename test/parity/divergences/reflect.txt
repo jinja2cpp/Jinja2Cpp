@@ -16,4 +16,5 @@ reflect.methods.alias_set_item_kept           output      0049 a JSON value read
 reflect.methods.attr_dict_method_before_key   output      0370 a JSON view is keys-first: the key items shadows the dict method for attr()
 reflect.methods.dict_method_before_key        rejects     0370 a JSON view is keys-first: dd.items is the key's string, so dd.items() is not callable
 reflect.sequences.mapping_is_sequence         output      0370 a JSON view is not a dict to `is sequence` (only methods-first maps are)
+reflect.statements.for_pop_context_list       output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): l.pop() misses the list the loop iterates
 reflect.subscripts.dot_shadows_method         output      0370 a JSON view is keys-first: d.items finds the key before the dict method

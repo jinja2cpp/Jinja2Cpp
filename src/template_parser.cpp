@@ -760,7 +760,12 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         }
         // Stored once the value is read, which may read the name itself
         m_names.AddStores(m_names.Current(), m_nodes[vars], m_nodes);
-        m_bodies.Add(m_nodes.Make<SetLineStatement>(vars, *expr), m_tagOffset);
+        const auto statement = m_nodes.Make<SetLineStatement>(vars, *expr);
+        if (AtTopLevel(statementsInfo))
+        {
+            m_nodes[statement].SetReexports();
+        }
+        m_bodies.Add(statement, m_tagOffset);
     }
     else if (lexer.EatIfEqual('|'))
     {
@@ -820,6 +825,10 @@ StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&, Stateme
     const auto& outer = statementsInfo.back();
     const auto kind = StatementInfo::OwnsFrame(outer.type) || IsLoopElse(statementsInfo) ? NameResolver::StoreKind::Store : NameResolver::StoreKind::Branch;
     m_names.AddStores(outer.frame, m_nodes[statement.GetTarget()], m_nodes, kind);
+    if (AtTopLevel(statementsInfo))
+    {
+        statement.SetReexports();
+    }
     m_bodies.Add(info.renderer, info.tagOffset);
 
     return {};
@@ -1131,9 +1140,19 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
     renderer.SetMainBody(TakeBody(info));
     renderer.SetBodyMarks(info.marks, m_nodes.Marks());
 
+    if (AtTopLevel(statementsInfo))
+    {
+        renderer.SetReexports();
+    }
     m_bodies.Add(info.renderer, info.tagOffset);
 
     return ParseResult();
+}
+
+bool StatementsParser::AtTopLevel(const StatementInfoList& statementsInfo)
+{
+    // Only `if` branches lie between the root and a top-level statement
+    return std::none_of(statementsInfo.begin() + (statementsInfo.empty() ? 0 : 1), statementsInfo.end(), [](const StatementInfo& info) { return StatementInfo::OwnsFrame(info.type); });
 }
 
 namespace

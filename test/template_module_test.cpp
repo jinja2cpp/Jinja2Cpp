@@ -61,6 +61,8 @@ protected:
         TemplateEnvFixture::SetUp();
         AddFile("a", "{% macro am() %}AM{% endmacro %}{% set ac = 1 %}");
         AddFile("base", "{% macro bm() %}BM{% endmacro %}{% set bv = 2 %}base-body");
+        AddFile("empty", "");
+        AddFile("sets_ac", "{% block b %}{% set am = 1 %}{% endblock %}{% if true %}{% set ac = 2 %}{% endif %}{% macro am() %}{% endmacro %}");
     }
 
     jinja2::TemplateModule Make(const std::string& source, const jinja2::ValuesMap& params = {})
@@ -86,9 +88,14 @@ const ModuleCase moduleCases[] = {
       "m,x", " body 1" },
     // Names an import binds are not exported
     { R"({% import "a" as a %}{% from "a" import am, ac %}{% set k = 1 %})", "k", "" },
-    // ... unless set again after it (to another object: task 0299)
+    // ... unless set again after it, to the same object too (task 0299)
     { R"({% from "a" import am %}{% set am = 2 %})", "am", "" },
+    { R"({% from "a" import am %}{% import "a" as a %}{% set am = am %}{% macro a() %}{% endmacro %})", "a,am", "" },
     { R"({% set am = 1 %}{% from "a" import am %})", "", "" },
+    // ... a failed `from` import too, which binds its alias undefined
+    { R"({% from "empty" import nope %}{% from "empty" import nope as n2 %}{% set k = 1 %})", "k", "" },
+    // ... and a top-level set or macro of the template it extends exports the name again
+    { R"({% from "a" import am, ac %}{% extends "sets_ac" %})", "ac,am", "" },
     // A set in a top-level `if`, tuple sets, a set block
     { "{% if true %}{% set i = 1 %}{% else %}{% set e = 2 %}{% endif %}{% set a, b = 1, 2 %}{% set blk %}x<y{% endset %}", "a,b,blk,i", "" },
     // The names of the template it extends, whose output is the body
@@ -273,6 +280,107 @@ TEST_F(TemplateModuleTest, ExportInAnotherRender)
     auto result = tpl.RenderAsString({ { "bad", module.exports["bad"] } });
     ASSERT_FALSE(!!result);
     EXPECT_EQ(jinja2::ErrorCode::TemplateRuntimeError, result.error().GetCode());
+}
+
+// A macro or `caller` of another render given to an export runs in that render while the call
+// lasts; called later, it fails with TemplateExpired (docs/tasks/0300)
+TEST_F(TemplateModuleTest, TemplateCallableArguments)
+{
+    auto module = Make(
+        "{% set ns = namespace(c=none) %}"
+        "{% macro wrap() %}<{{ caller() }}>{% endmacro %}"
+        "{% macro apply(fn) %}{{ fn(1, k=2) }}{% endmacro %}"
+        "{% macro count(fn) %}{{ fn(3) | list | length }}{% endmacro %}"
+        "{% macro keep() %}{% set ns.c = caller %}{{ caller() }}{% endmacro %}"
+        "{% macro later() %}{{ ns.c() }}{% endmacro %}");
+    const jinja2::ValuesMap params{ { "mod", module.exports }, { "l", jinja2::ValuesList{ 1 } } };
+    EXPECT_EQ("<X2>", Render("{% set y = 2 %}{% call mod.wrap() %}X{{ y }}{% endcall %}", params));
+    EXPECT_EQ("[1|2]", Render("{% macro f(a, k=0) %}[{{ a }}|{{ k }}]{% endmacro %}{{ mod.apply(f) }}", params));
+    // A builtin callable goes the same way
+    EXPECT_EQ("3", Render("{{ mod.count(range) }}", params));
+    // The caller's writes are its render's (its collector is current): the host's list is
+    // copied once, and the render sees the copy
+    EXPECT_EQ("<>[1, 3]", Render("{% call mod.wrap() %}{% set _ = l.append(3) %}{% endcall %}{{ l }}", params));
+    EXPECT_EQ("K", Render("{% call mod.keep() %}K{% endcall %}", params));
+    try
+    {
+        Call(module.exports["later"]);
+        FAIL() << "expected TemplateExpired";
+    }
+    catch (const jinja2::BadResultAccess<>& failure)
+    {
+        EXPECT_EQ(jinja2::ErrorCode::TemplateExpired, failure.error().GetCode());
+        ASSERT_EQ(1u, failure.error().GetExtraParams().size());
+        EXPECT_EQ(jinja2::Value(std::string("lent")), failure.error().GetExtraParams()[0]);
+        EXPECT_NE(std::string::npos, failure.error().ToString().find("A template callable was called after the host's call it was passed to ended"));
+    }
+}
+
+// A lent callable runs under the limits of the render that lent it, not of the module's call
+// that calls it back (Codex review of 0300), and what it uses of the budgets counts for that render
+TEST_F(TemplateModuleTest, LentCallableKeepsRenderLimits)
+{
+    auto module = Make("{% macro wrap() %}<{{ caller() }}>{% endmacro %}{% macro rep() %}{% for i in range(20) %}{{ caller() }}{% endfor %}{% endmacro %}");
+    const jinja2::ValuesMap params{ { "mod", module.exports } };
+    jinja2::Settings settings;
+    settings.limits.maxSequenceSize = 16;
+    settings.limits.maxRenderSteps = 1000;
+    jinja2::TemplateEnv env;
+    env.SetSettings(settings);
+    const auto render = [&env, &params](const char* source) {
+        jinja2::Template tpl(&env);
+        EXPECT_TRUE(!!tpl.Load(source));
+        return tpl.RenderAsString(params);
+    };
+    EXPECT_EQ("<10>", render("{% call mod.wrap() %}{{ ('x' * 10)|length }}{% endcall %}").value());
+    const auto expectLimit = [](const jinja2::Result<std::string>& result) {
+        ASSERT_FALSE(!!result);
+        EXPECT_EQ(jinja2::ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    };
+    expectLimit(render("{% call mod.wrap() %}{{ ('x' * 1000)|length }}{% endcall %}"));
+    // The steps of every call back count
+    expectLimit(render("{% call mod.rep() %}{% for j in range(100) %}{% endfor %}{% endcall %}"));
+    // ... and stay counted once the module's call returns
+    EXPECT_TRUE(!!render("{% call mod.wrap() %}{% for j in range(400) %}{% endfor %}{% endcall %}"));
+    expectLimit(render("{% call mod.wrap() %}{% for j in range(600) %}{% endfor %}{% endcall %}{% for j in range(600) %}{% endfor %}"));
+}
+
+// A host that catches what a lent callable throws and goes on finds the render's scopes as they
+// were (verifier round 1 of 0300): the failed body's scope and names are gone
+TEST_F(TemplateModuleTest, LentCallableFailureCaught)
+{
+    jinja2::UserCallable catcher(
+        [](const jinja2::UserCallableParams& params) {
+            try
+            {
+                Call(params.args.at("f"));
+            }
+            catch (...) // NOLINT(bugprone-empty-catch): the test checks what is left after it
+            {
+            }
+            return jinja2::Value(std::string("caught"));
+        },
+        { jinja2::ArgInfo("f") });
+    const jinja2::ValuesMap params{ { "catcher", catcher } };
+    EXPECT_EQ("caught7False", Render("{% set y = 7 %}{% macro bad() %}{% set z = 3 %}{{ 1 // 0 }}{% endmacro %}{{ catcher(bad) }}{{ y }}{{ z is defined }}", params));
+    EXPECT_EQ("caught5", Render("{% macro bad() %}{{ 1 // 0 }}{% endmacro %}{% macro outer() %}{% set q = 5 %}{{ catcher(bad) }}{{ q }}{% endmacro %}{{ outer() }}", params));
+    EXPECT_EQ("[caught]", Render("{% macro w() %}[{{ catcher(caller) }}]{% endmacro %}{% call w() %}{% set z = 1 %}{{ 1 // 0 }}{% endcall %}", params));
+}
+
+// A macro nested in an exported value, or returned by a call, is a call in the module too
+// (docs/tasks/0300); a host's callable goes back as it came
+TEST_F(TemplateModuleTest, NestedCallables)
+{
+    jinja2::UserCallable host([](const jinja2::UserCallableParams&) { return jinja2::Value(std::string("H")); }, {});
+    auto module = Make("{% macro m(a) %}M{{ a }}{% endmacro %}{% set d = {'m': m, 'l': [m], 'h': h} %}{% macro pass(x) %}{{ x(1) }}{% endmacro %}", { { "h", host } });
+    const auto& dict = module.exports["d"].AsMap();
+    EXPECT_EQ("M1", Call(dict.at("m"), { 1 }).AsString());
+    EXPECT_EQ("M2", Call(dict.at("l").AsList()[0], { 2 }).AsString());
+    ASSERT_TRUE(dict.at("h").IsCallable());
+    EXPECT_EQ("H", Call(dict.at("h")).AsString());
+    // A host's callable a template passes to another host's callable is the same callable
+    jinja2::UserCallable check([&host](const jinja2::UserCallableParams& params) { return jinja2::Value(params.args.at("f").As<jinja2::UserCallable>().IsEqual(host)); }, { jinja2::ArgInfo("f") });
+    EXPECT_EQ("True", Render("{{ check(h) }}", { { "check", check }, { "h", host } }));
 }
 
 // A container that holds itself is cut where it repeats; the module frees it (LSan)

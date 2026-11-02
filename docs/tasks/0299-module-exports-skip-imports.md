@@ -1,8 +1,8 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
-touches: [src/statements.cpp, src/statements.h]
+touches: [src/statements.cpp, src/statements.h, src/template_parser.cpp, src/template_parser.h, src/node_arena.h, src/node_arena.cpp, src/renderer.h, src/template_module.cpp, src/render_context.h, test/parity/cases/loader.py, test/template_module_test.cpp]
 ---
 # A module exports the names its top level imports, and keeps a re-set import hidden
 
@@ -29,3 +29,15 @@ record, which costs a check on every top-level assignment: only if it can be kep
 render path of templates that are not modules.
 
 **Done when** both examples match Jinja2, pinned by corpus cases (loader area).
+
+**Fix (parity batch 2, group C).** `ImportedModule` owns a record of the names its top level
+imported (`ModuleImports`, reached through `RenderContext::TopLevelModuleImports` at the module's
+top level only); `ImportNames` leaves them out of a namespace import and binds a `from` import
+of one undefined, as for any name a module does not export (Jinja2's "does not export the
+requested name"; this also hides a same-named outer value, as Jinja2 does). For the re-set, the
+parser marks every top-level `set` (line or block) and `macro` (`SetReexports`; a parent template
+shares its child's top level, so any of them may set again a name the child imported); run at a
+module's top level with imports recorded, it removes its names from the record. No node is
+added, and a template outside a module pays one check per top-level `set` or `macro`. `Template::MakeModule` uses the same record (the value-identity check and
+`IRendererCallback::ImportBound` are gone). Corpus rows `loader.module_*`,
+`loader.from_module_import_of_import`.

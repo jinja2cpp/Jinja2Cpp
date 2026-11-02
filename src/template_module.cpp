@@ -53,8 +53,25 @@ namespace
 class ExportCopier
 {
 public:
+    // What a template callable becomes: a call in the module `state`, whose errors name `name`
+    // (TemplateModuleState::Wrap). A plain function: a module call makes a copier for its
+    // result, which mostly holds no callable
+    using WrapCallable = Value (*)(void* state, const InternalValue& callable, const std::string& name);
+
+    ExportCopier(WrapCallable wrap, void* state, const std::string& name)
+        : m_wrap(wrap)
+        , m_state(state)
+        , m_name(name)
+    {
+    }
+
     Value Copy(const InternalValue& value)
     {
+        // A macro anywhere in a value, not only at the module's top level (docs/tasks/0300)
+        if (const auto* callable = GetIf<Callable>(&value); callable && callable->GetKind() != Callable::UserCallable)
+        {
+            return m_wrap(m_state, value, m_name);
+        }
         // Nesting comes from the template (a list built in a loop): stop where a render would
         CheckStack();
         // A string may view the template's source, which a Load replaces, or the module's
@@ -131,32 +148,12 @@ private:
         return Value(std::move(items));
     }
 
+    WrapCallable m_wrap;
+    void* m_state;
+    const std::string& m_name;
     // The containers being copied
     std::unordered_set<const void*> m_path;
 };
-
-// Whether `value` is still the object `imported` an import bound: Python's `is`, as `is sameas`
-// tests it
-bool IsSameImport(const InternalValue& imported, const InternalValue& value)
-{
-    if (const auto* callable = GetIf<Callable>(&imported))
-    {
-        const auto* other = GetIf<Callable>(&value);
-        return other != nullptr && callable->IsSame(*other);
-    }
-    if (auto map = AsMap(imported))
-    {
-        auto other = AsMap(value);
-        return other && other->GetIdentity() == map->GetIdentity();
-    }
-    if (auto list = AsList(imported))
-    {
-        auto other = AsList(value);
-        return other && other->GetIdentity() == list->GetIdentity();
-    }
-    // A scalar has no identity: an equal one counts as the same
-    return GetIf<Callable>(&value) == nullptr && !AsMap(value) && !AsList(value) && IntValue2Value(imported) == IntValue2Value(value);
-}
 
 // Whether `value`, set under the name with hash `hash`, is only the undefined a frame binds at
 // its entry to a name it sets later (RenderContext::IsEntryBinding): a name never set
@@ -202,28 +199,25 @@ InternalValue OwnedArgument(const Value& value)
 }
 } // namespace
 
+template<typename CharT>
+struct TemplateModuleState;
+// The host's callable for `callable`, a template callable of the module `state`, named `name`
+// in its errors: a call of it in the module (ModuleCall). Defined after ModuleCall
+template<typename CharT>
+Value MakeModuleCall(const std::shared_ptr<TemplateModuleState<CharT>>& state, const InternalValue& callable, const std::string& name);
+
 // The state the exports of one module share: the template and the module's context their calls
 // run in, kept alive by every export (docs/tasks/0284, decision D1)
 template<typename CharT>
-struct TemplateModuleState
+struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<CharT>>
 {
     using Impl = TemplateImpl<CharT>;
 
-    // The render callback of the module, which also notes the names its top level imports:
-    // those are not exported, as in Jinja2
+    // The render callback of the module, which keeps what the host's calls load apart
     class Callback final : public Impl::RendererCallback
     {
     public:
         using Impl::RendererCallback::RendererCallback;
-
-        void ImportBound(const RenderContext& values, std::string_view name, const InternalValue& value) override
-        {
-            // At the module's top level only: its own first scope, not a macro's or a loop's
-            if (&values == moduleContext && values.GetScopesCount() == 1)
-            {
-                imported.emplace_back(std::string(name), value);
-            }
-        }
 
         // The modules a call imports with context end with it (CallScope), but those a module
         // shared without context imports, which live as long as it does
@@ -261,9 +255,6 @@ struct TemplateModuleState
             return std::any_of(kept.begin(), kept.end(), [candidate](const KeptModule& entry) { return entry.module == candidate; });
         }
 
-        const RenderContext* moduleContext = nullptr;
-        // The names the top level imported, with the values imported
-        std::vector<std::pair<std::string, InternalValue>> imported;
         // The host's calls running, nested when a host callable calls the module again
         std::size_t calls = 0;
         // The top levels of modules imported without context rendering, and the modules they
@@ -378,7 +369,6 @@ struct TemplateModuleState
         callback = std::make_unique<Callback>(impl.get());
         callback->SetGlobals(&globals);
         module = std::make_unique<ImportedModule>(std::move(convertedParams), globals.values, callback.get(), &GetBuiltinGlobals(impl->m_settings->settings.extensions.i18n));
-        callback->moduleContext = &module->Context();
 
         OutStream stream(body);
         if (impl->m_settings->hasRenderLimits)
@@ -399,18 +389,10 @@ struct TemplateModuleState
     [[nodiscard]] std::vector<std::pair<std::string, const InternalValue*>> ExportedNames() const
     {
         std::vector<std::pair<std::string, const InternalValue*>> names;
-        const auto& imported = callback->imported;
         for (const auto& [name, value] : module->Names())
         {
-            if (name.empty() || name[0] == '_' || IsEntryBinding(value, HashedName::Hash(name)))
-            {
-                continue;
-            }
-            // Set again after the import, it is exported (Jinja2's exported_vars)
-            const auto isImported = std::any_of(imported.begin(), imported.end(), [&exportName = name, &exportValue = value](const auto& entry) {
-                return entry.first == exportName && IsSameImport(entry.second, exportValue);
-            });
-            if (isImported)
+            // Imported, and not set again since: not exported (Jinja2's exported_vars)
+            if (name.empty() || name[0] == '_' || IsEntryBinding(value, HashedName::Hash(name)) || !module->Exports(name))
             {
                 continue;
             }
@@ -487,7 +469,7 @@ struct TemplateModuleState
             {
                 callParams.kwParams[argName] = OwnedArgument(arg);
             }
-            auto result = ExportCopier().Copy(InvokeInModule(module->Context(), fn, callParams, output, impl->m_settings->hasRenderLimits));
+            auto result = ExportCopier(&Wrap, this, name).Copy(InvokeInModule(module->Context(), fn, callParams, output, impl->m_settings->hasRenderLimits));
             if (impl->m_settings->hasRenderLimits)
             {
                 detail::PollDeadline();
@@ -507,6 +489,13 @@ struct TemplateModuleState
         {
             throw BadResultAccess<CharT>(Named(detail::CurrentExceptionToError<CharT>(impl->m_templateName), name));
         }
+    }
+
+    // A template callable of the module found in a value handed to the host, whose errors name
+    // `name`, as a call in the module: a macro in an exported dict, or one a call returns
+    static Value Wrap(void* state, const InternalValue& callable, const std::string& name)
+    {
+        return MakeModuleCall(static_cast<TemplateModuleState*>(state)->shared_from_this(), callable, name);
     }
 
     std::shared_ptr<const Impl> impl;
@@ -539,6 +528,12 @@ struct ModuleCall
 } // namespace
 
 template<typename CharT>
+Value MakeModuleCall(const std::shared_ptr<TemplateModuleState<CharT>>& state, const InternalValue& callable, const std::string& name)
+{
+    return Value(UserCallable(ModuleCall<CharT>{ state, callable, name }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) }));
+}
+
+template<typename CharT>
 nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl<CharT>::MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params)
 {
     if (!self->m_renderer)
@@ -559,16 +554,15 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
         const auto limitsScope = state->MakeLimitsScope();
         // Into result.body, which outlives the limits that keep a pointer to it
         state->Render(result.body);
-        const std::vector<ArgInfo> argsInfo{ ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) };
         for (const auto& [name, value] : state->ExportedNames())
         {
-            if (const auto* callable = GetIf<Callable>(value))
+            if (GetIf<Callable>(value))
             {
-                result.exports[name] = UserCallable(ModuleCall<CharT>{ state, *value, name }, argsInfo);
+                result.exports[name] = MakeModuleCall(state, *value, name);
                 continue;
             }
             // Copied within the render's limits, which bound a lazy list read out
-            result.exports[name] = ExportCopier().Copy(*value);
+            result.exports[name] = ExportCopier(&TemplateModuleState<CharT>::Wrap, state.get(), name).Copy(*value);
         }
         cycles.Complete();
     }

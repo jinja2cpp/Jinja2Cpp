@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/673
 priority: low
 area: parity
@@ -90,3 +90,10 @@ Left for later phases:
   context map of the engine, a computed list), and stores the same value back for a cell.
 - what a host callable keeps of a host container the render wrote: done in 0331; P4's round
   trip of an exported container builds on its exports.
+
+**Closed (parity batch 2, group C, 2026-11-01).** No divergence line names 0049. The full
+suite and the parity corpus (2878 cases) pass under address+undefined with LeakSanitizer
+(Clang 18, RelWithDebInfo; 8356 tests, ctest 5 of 5), on the branch that also lands
+0326/0323/0299/0300. What remains moved to its own tasks: the loop rows (P3) to 0304
+(`statements.for_remove_current_item`), object keys, callables and the JSON accessor
+identity (P4, P5) to 0212.

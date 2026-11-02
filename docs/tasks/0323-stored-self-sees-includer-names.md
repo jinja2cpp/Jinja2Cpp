@@ -1,8 +1,8 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
-touches: [src/statements.cpp, test/parity/divergences/statements.txt]
+touches: [src/statements.cpp, test/parity/divergences/statements.txt, src/render_context.h, test/parity/divergences/loader.txt, test/parity/cases/loader.py]
 ---
 # A `self` an include stored does not see the names the includer set
 
@@ -23,3 +23,12 @@ functions close over the include's context, which includes the includer's names)
 for its frame.
 
 **Done when.** The corpus case matches and its divergence line is deleted; ASan clean.
+
+**Fix (parity batch 2, group C).** An included template's context ends before the render
+(`RenderContext::SetEndsBeforeRender`): its top-level macros and its `self` register a
+`ClosureCapture` (see 0326), and the include copies every name they see, the includer's
+included, when it ends (`RenderIncludedTemplate`). A stored `self` renders its ended blocks with
+the copy in the block context's scope, and a `self` inside them is made from the same site. Also
+fixed: `loader.include_defined_macro_escapes`, `loader.self_of_ended_include_reads_names`
+(0165's deliberate lines). Corpus rows `loader.include_macro_kept_*`, `loader.include_nested_macro_kept`,
+`loader.self_of_ended_include_last_one`, `loader.self_of_ended_include_calls_self`.

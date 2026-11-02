@@ -190,6 +190,24 @@ TEST(ChatTemplatePreset, JsonSeparatorsRespectSequenceLimit)
     }
 }
 
+// The dialect lives in the environment's load settings (docs/tasks/0384): set before any Load, it
+// survives a settings change that rebuilds them, and a template keeps the dialect it was loaded in
+TEST(ChatTemplatePreset, DialectSurvivesSettingsChange)
+{
+    jinja2::TemplateEnv env;
+    jinja2::ConfigureForChatTemplates(env);
+    env.GetSettings().limits.maxRange = 10;
+    jinja2::Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% set l = [1] %}{{ l.append(2) }}"));
+    auto result = tpl.RenderAsString({});
+    ASSERT_FALSE(result);
+    EXPECT_NE(jinja2::ToString(result.error().ToString()).find("access to attribute 'append' of 'list' object is unsafe."), std::string::npos);
+    env.GetSettings().limits.maxRange = 20;
+    jinja2::Template again(&env);
+    ASSERT_TRUE(again.Load("{{ {'b': 1, 'a': '<'}|tojson }}"));
+    EXPECT_EQ(again.RenderAsString({}).value(), R"({"b": 1, "a": "<"})");
+}
+
 TEST(ChatTemplatePreset, SettingsAndVersion)
 {
     jinja2::TemplateEnv env;
