@@ -795,6 +795,30 @@
    "env": {},
    "templates": {},
    "output": "False|True|True|True"
+  },
+  {
+   "id": "calls.call_block_joiner",
+   "template": "{% set j = joiner(',') %}{% call j() %}x{% endcall %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Joiner.__call__() got an unexpected keyword argument 'caller'"
+   }
+  },
+  {
+   "id": "calls.call_block_namespace_result",
+   "template": "{% call namespace() %}x{% endcall %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "sequence item 0: expected str instance, Namespace found"
+   }
   }
  ]
 }

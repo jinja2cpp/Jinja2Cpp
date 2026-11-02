@@ -197,6 +197,26 @@ int64_t Len(const IHostObject& host)
     return static_cast<int64_t>(*length);
 }
 
+InternalValue Slice(const IHostObject& host, const InternalValue& start, const InternalValue& stop, const InternalValue& step)
+{
+    auto result = host.GetSlice(start, stop, step);
+    if (!result)
+    {
+        throw TemplateRuntimeError(std::string("'") + host.TypeName() + "' object is not subscriptable");
+    }
+    return std::move(*result);
+}
+
+ListAdapter Reversed(const IHostObject& host)
+{
+    auto result = host.Reversed();
+    if (!result)
+    {
+        throw TemplateRuntimeError(std::string("'") + host.TypeName() + "' object is not reversible");
+    }
+    return std::move(*result);
+}
+
 bool Equal(const IHostObject* left, const InternalValue& leftValue, const IHostObject* right, const InternalValue& rightValue)
 {
     if (left)

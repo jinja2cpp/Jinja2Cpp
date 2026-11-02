@@ -95,4 +95,7 @@ CASES = [
     # Wherever a str or repr is taken (0305); lipsum is a function, which prints nothing here
     ("global_class_repr_sites", "{{ [range, dict] }}|{{ range ~ '' }}|{{ '%s' % cycler }}|{{ '{}'.format(joiner) }}|{{ namespace|string|length }}|{{ {'k': namespace} }}"),
     ("global_class_attr_undefined", "{{ range.name is defined }}|{{ range is callable }}|{{ range == range }}|{{ range != dict }}"),
+    # task 0362: a call block yields the call's result into the output as is: only a string joins it
+    ("call_block_joiner", "{% set j = joiner(',') %}{% call j() %}x{% endcall %}"),
+    ("call_block_namespace_result", "{% call namespace() %}x{% endcall %}"),
 ]
