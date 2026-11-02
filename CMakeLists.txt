@@ -580,6 +580,8 @@ if (JINJA2CPP_BUILD_TESTS)
 
     # Differential corpus against Python Jinja2, see test/parity/README.md
     add_test(NAME jinja2cpp_parity COMMAND jinja2cpp_tests --gtest_filter=Parity*)
+    # The same suite against another Python Jinja2, when JINJA2CPP_TEST_ORACLE asks (docs/tasks/0186)
+    include(cmake/parity_oracle.cmake)
     # Hugging Face chat templates against transformers, see test/chat_templates/README.md
     add_test(NAME jinja2cpp_chat_templates COMMAND jinja2cpp_tests --gtest_filter=ChatTemplate*)
     # Every jinja2 symbol the library defines is in the inline ABI namespace v2 (docs/tasks/0076)
