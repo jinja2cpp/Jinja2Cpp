@@ -962,6 +962,7 @@ struct StrOps
             const auto cp = CodePointValue(ch);
             if (cp < 0x80)
             {
+                CheckSequenceSize(static_cast<uint64_t>(result.size()) + ch.size(), "a string");
                 result.append(ch.begin(), ch.end());
                 continue;
             }
@@ -1478,6 +1479,10 @@ struct StrOps
         std::optional<InternalValue> result;
         auto map = AsMap(value);
         const bool isObject = map && (map->HasAttributes() || map->GetObjectClass() != nullptr);
+        // A named tuple (groupby's groups) has its fields as attributes
+        const auto list = AsList(value);
+        const auto* fields = list ? list->GetFieldNames() : nullptr;
+        const bool isField = fields && std::find(fields->begin(), fields->end(), attr) != fields->end();
         if (const auto* host = GetHostObject(value))
         {
             result = host->GetAttr(attr);
@@ -1486,16 +1491,38 @@ struct StrOps
         {
             result = MakeBoundMethod(value, *method);
         }
-        else if (isObject || value.Kind() == ValueKind::Callable)
+        else if (isObject || isField || value.Kind() == ValueKind::Callable)
         {
-            // The fields of a reflected object, of namespace() or loop, the attributes of a macro
+            // The fields of a reflected object, of namespace(), loop or a named tuple, the
+            // attributes of a macro
             result = Subscript(value, attr, &context);
         }
-        if (!result || result->IsUndefined())
+        // An attribute that holds an undefined value is there and formats as one
+        const bool present = isField || (isObject && map->HasValue(attr));
+        if (!result || (result->IsUndefined() && !present))
         {
             Raise("'" + TypeName(value) + "' object has no attribute '" + attr + "'");
         }
         return std::move(*result);
+    }
+
+    // Whether the key or index is in a map or list, so that an item that holds an undefined
+    // value is told from a missing one
+    static bool HasItem(const InternalValue& value, const InternalValue& key)
+    {
+        if (auto map = AsMap(value))
+        {
+            return IsStringValue(key) && map->HasValue(AsString(key));
+        }
+        const auto list = AsList(value);
+        const auto* idx = GetIf<int64_t>(&key);
+        const auto size = list ? list->GetSize() : std::nullopt;
+        if (!idx || !size)
+        {
+            return false;
+        }
+        const auto count = static_cast<int64_t>(*size);
+        return *idx >= -count && *idx < count;
     }
 
     // Python's obj[key], as a field's [key] part looks it up: __getitem__ only, so an object
@@ -1521,7 +1548,7 @@ struct StrOps
         {
             result = GetItem(value, key, &context);
         }
-        if (!result || result->IsUndefined())
+        if (!result || (result->IsUndefined() && !HasItem(value, key)))
         {
             if (map)
             {

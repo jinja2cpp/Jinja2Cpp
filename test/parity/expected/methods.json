@@ -3994,6 +3994,52 @@
    "output": "b|y"
   },
   {
+   "id": "methods.str_format_undefined_items",
+   "template": "{{ '[{0[x]}|{0[y]}]'.format({'x': nope, 'y': 1}) }}|{{ '[{0[0]}{0[-1]}]'.format([nope, 2]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "list indices must be integers or slices, not str"
+   }
+  },
+  {
+   "id": "methods.str_format_groupby_fields",
+   "template": "{% for g in [{'a': 1}, {'a': 2}]|groupby('a') %}{{ '{0.grouper}:{0.list}'.format(g) }},{% endfor %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "1:[{'a': 1}],2:[{'a': 2}],"
+  },
+  {
    "id": "methods.str_format_item_errors",
    "template": "{{ '{0[5]}'.format([1]) }}",
    "context": {

@@ -184,6 +184,8 @@ CASES = [
     ('str_format_item_of_loop', "{% for i in [1] %}{{ '{0[index]}'.format(loop) }}{% endfor %}"),
     ('str_format_item_missing_key', "{{ '{0[z]}'.format({'y': 1}) }}"),
     ('str_format_item_list_index', "{{ '{0[1]}'.format(['a', 'b']) }}|{{ '{0[1]}'.format('xyz') }}"),
+    ('str_format_undefined_items', "{{ '[{0[x]}|{0[y]}]'.format({'x': nope, 'y': 1}) }}|{{ '[{0[0]}{0[-1]}]'.format([nope, 2]) }}"),
+    ('str_format_groupby_fields', "{% for g in [{'a': 1}, {'a': 2}]|groupby('a') %}{{ '{0.grouper}:{0.list}'.format(g) }},{% endfor %}"),
     ('str_format_item_errors', "{{ '{0[5]}'.format([1]) }}"),
     ('str_format_item_of_int', "{{ '{0[0]}'.format(5) }}"),
     ('markup_format_ascii_conversion', "{{ ('<p>{0!a}</p>'|safe).format('<é>') }}"),

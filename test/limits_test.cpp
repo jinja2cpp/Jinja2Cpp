@@ -74,6 +74,9 @@ std::vector<LimitCase> Cases()
         // `loop` iterated or collected: a generator with no size, held to the limit as it grows
         { "LoopListOver", "{% for x in range(2000) %}{% set rest = loop|list %}{% endfor %}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
         { "LoopListAt", "{% for x in range(1001) %}{{ loop|list|length }}{% endfor %}", [](auto& l) { l.maxSequenceSize = 1000; }, "" },
+        // !a escapes grow the repr: 'é' plus 11 ASCII characters is 15 UTF-8 units, 17 escaped (0317)
+        { "AsciiConversionOver", "{{ '{!a}'.format('\xc3\xa9' ~ 'x' * 11) }}", [](auto& l) { l.maxSequenceSize = 16; }, "maxSequenceSize" },
+        { "AsciiConversionAt", "{{ '{!a}'.format('\xc3\xa9' ~ 'x' * 11) }}", [](auto& l) { l.maxSequenceSize = 17; }, "" },
         { "LoopLengthOver", "{% for x in range(2000) if x %}{{ loop.length }}{% endfor %}", [](auto& l) { l.maxSequenceSize = 1000; }, "maxSequenceSize" },
         { "SequenceAboveCap", "{{ ('x' * 1000)|length }}", [](auto& l) { l.maxSequenceSize = UINT64_MAX; }, "" },
         // Past the built-in cap as well: the render's own limit is reported
