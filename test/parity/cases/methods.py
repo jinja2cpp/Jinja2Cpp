@@ -164,9 +164,31 @@ CASES = [
     ('str_case_tests_unicode', "{{ 'T' if 'ÉA'.isupper() else 'F' }}{{ 'T' if 'éa'.islower() else 'F' }}{{ 'T' if 'ǅ'.isupper() else 'F' }}{{ 'T' if 'ª'.islower() else 'F' }}{{ 'T' if 'ÉA'.islower() else 'F' }}"),
     ('str_istitle', "{{ 'T' if 'Éa Bé'.istitle() else 'F' }}{{ 'T' if 'ǅa'.istitle() else 'F' }}{{ 'T' if 'AB'.istitle() else 'F' }}{{ 'T' if 'Ab 1'.istitle() else 'F' }}{{ 'T' if '1'.istitle() else 'F' }}{{ 'T' if 'aB'.istitle() else 'F' }}"),
     ('markup_case_unicode', "{{ ('<b>straße</b>'|safe).upper() }}|{{ ('é'|safe).swapcase() }}"),
-    # 0317: Unicode digit and numeric classes, str methods not implemented yet
+    # 0317: Unicode digit and numeric classes, casefold, isascii, isidentifier, isprintable, format .attr and !a
     ('str_digit_numeric_unicode', "{{ 'T' if '²'.isdigit() else 'F' }}{{ 'T' if '½'.isnumeric() else 'F' }}{{ 'T' if 'Ⅷ'.isnumeric() else 'F' }}{{ 'T' if '²'.isdecimal() else 'F' }}"),
     ('str_casefold_isascii', "{{ 'ßA'.casefold() }}|{{ 'T' if 'ab'.isascii() else 'F' }}|{{ 'T' if 'a1'.isidentifier() else 'F' }}|{{ 'T' if 'a\\n'.isprintable() else 'F' }}"),
     ('str_format_attr_is_not_item', "{{ '{x.y}'.format(x={'y': 1}) }}"),
     ('str_format_ascii_conversion', "{{ '{!a}'.format('é') }}"),
+    ('str_digit_numeric_edges', "{{ 'T' if '١٢'.isdigit() else 'F' }}{{ 'T' if '①'.isdigit() else 'F' }}{{ 'T' if '①'.isdecimal() else 'F' }}{{ 'T' if '七'.isnumeric() else 'F' }}{{ 'T' if '七'.isdigit() else 'F' }}{{ 'T' if ''.isdigit() else 'F' }}{{ 'T' if ''.isnumeric() else 'F' }}{{ 'T' if 'a1'.isnumeric() else 'F' }}{{ 'T' if '𝟘'.isdigit() else 'F' }}"),
+    ('str_casefold_unicode', "{{ 'ΣΑΣ'.casefold() }}|{{ 'ﬁ'.casefold() }}|{{ 'İ'.casefold()|length }}|{{ 'ᾈ'.casefold() }}|{{ 'ABC'.casefold() }}|{{ 'µ'.casefold() }}|{{ ''.casefold() }}|{{ 'Straße'.casefold() == 'STRASSE'.casefold() }}"),
+    ('str_isascii_isprintable_edges', "{{ 'T' if ''.isascii() else 'F' }}{{ 'T' if 'é'.isascii() else 'F' }}{{ 'T' if '\x7f'.isascii() else 'F' }}{{ 'T' if ''.isprintable() else 'F' }}{{ 'T' if 'é ü'.isprintable() else 'F' }}{{ 'T' if '­'.isprintable() else 'F' }}{{ 'T' if ' '.isprintable() else 'F' }}{{ 'T' if '😀'.isprintable() else 'F' }}"),
+    ('str_isidentifier_edges', "{{ 'T' if ''.isidentifier() else 'F' }}{{ 'T' if '_'.isidentifier() else 'F' }}{{ 'T' if '1a'.isidentifier() else 'F' }}{{ 'T' if 'été'.isidentifier() else 'F' }}{{ 'T' if 'a-b'.isidentifier() else 'F' }}{{ 'T' if 'x١'.isidentifier() else 'F' }}{{ 'T' if '١x'.isidentifier() else 'F' }}{{ 'T' if 'if'.isidentifier() else 'F' }}{{ 'T' if 'a·b'.isidentifier() else 'F' }}{{ 'T' if '℘'.isidentifier() else 'F' }}"),
+    ('markup_casefold_tests', "{{ ('<B>ß</B>'|safe).casefold() }}|{{ 'T' if ('<b>'|safe).isascii() else 'F' }}{{ 'T' if ('ab'|safe).isidentifier() else 'F' }}{{ 'T' if ('²'|safe).isdigit() else 'F' }}"),
+    ('str_new_methods_reject_args', "{{ 'a'.casefold(1) }}"),
+    ('str_format_attr_methods', "{{ '{0.upper}'.format('a')[:30] is string }}|{{ '{x.items}'.format(x={'items': 1}) != '1' }}|{{ '{0[y]}'.format({'y': 2}) }}"),
+    ('str_format_attr_namespace', "{% set ns = namespace(v=3) %}{{ '{0.v}'.format(ns) }}"),
+    ('str_format_attr_missing_on_str', "{{ '{0.nope}'.format('a') }}"),
+    ('str_format_attr_of_undefined', "{{ '{0.y}'.format(nope) }}"),
+    ('str_format_ascii_conversion_edges', "{{ '{!a}'.format(['é', '😀', 'Ā', 'x']) }}|{{ '{!a}'.format(1) }}|{{ '{!a:>12}'.format('ü') }}|{{ '{0!a}{0!r}{0!s}'.format('ÿ') }}"),
+    ('str_format_item_of_namespace', "{% set ns = namespace(v=3) %}{{ '{0[v]}'.format(ns) }}"),
+    ('str_format_item_of_loop', "{% for i in [1] %}{{ '{0[index]}'.format(loop) }}{% endfor %}"),
+    ('str_format_item_missing_key', "{{ '{0[z]}'.format({'y': 1}) }}"),
+    ('str_format_item_list_index', "{{ '{0[1]}'.format(['a', 'b']) }}|{{ '{0[1]}'.format('xyz') }}"),
+    ('str_format_undefined_items', "{{ '[{0[x]}|{0[y]}]'.format({'x': nope, 'y': 1}) }}|{{ '[{0[0]}{0[-1]}]'.format([nope, 2]) }}"),
+    ('str_format_groupby_fields', "{% for g in [{'a': 1}, {'a': 2}]|groupby('a') %}{{ '{0.grouper}:{0.list}'.format(g) }},{% endfor %}"),
+    ('str_format_item_errors', "{{ '{0[5]}'.format([1]) }}"),
+    ('str_format_item_of_int', "{{ '{0[0]}'.format(5) }}"),
+    ('markup_format_ascii_conversion', "{{ ('<p>{0!a}</p>'|safe).format('<é>') }}"),
+    # 0374: int and float data attributes
+    ('number_data_attributes', "{{ (3).real }}|{{ (3).denominator }}|{{ 2.5.imag }}|{{ '{0.numerator}'.format(4) }}|{{ 7|attr('real') }}"),
 ]

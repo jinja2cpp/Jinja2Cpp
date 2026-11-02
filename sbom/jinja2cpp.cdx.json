@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:1841dd53-7de7-5ea6-b51c-c98ba8202a8c",
+  "serialNumber": "urn:uuid:e735593c-3617-52c3-8490-b891b491856f",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -767,11 +767,11 @@
         },
         {
           "name": "jinja2cpp:file",
-          "value": "src/unicode_tables.h sha256:67feccba784328f3fa4f8ea65d5eb03ab0a118532df178c209777a72d38437c0"
+          "value": "src/unicode_tables.h sha256:a000529820b1d4d1e140a01eac1ecb553dccc03b0e0904cccafc22746d771d41"
         },
         {
           "name": "jinja2cpp:file",
-          "value": "src/unicode_case.h sha256:4da4af9a02a71f4324af6d601beda5dc7f2765d8d594a6c9e568b6089827d22d"
+          "value": "src/unicode_case.h sha256:9fd2eab97654354b5869a4ba1ee09f52fc2594675d142634d337d3988823b968"
         },
         {
           "name": "jinja2cpp:generator",
