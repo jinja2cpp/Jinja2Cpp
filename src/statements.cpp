@@ -2936,14 +2936,16 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     helpers::AddCallerParam(callParams, MakeCallable(values));
     if (callable->GetType() == Callable::Type::Expression)
     {
-        // Jinja2 yields the result into the output as it is: a string, which is not escaped,
-        // or the TypeError of joining the output (docs/tasks/0362)
+        // Jinja2 yields the result into the output as it is: only a string joins it, anything
+        // else is the TypeError of joining the output (docs/tasks/0362). A plain string is
+        // escaped under autoescape, where Jinja2 writes it raw: a deliberate divergence that
+        // keeps a callable's data escaped (Ruslan, 2026-11-02); Markup, as a macro's, is not
         const auto result = callable->GetExpressionCallable()(callParams, values);
         if (!IsStringValue(result))
         {
             throw TemplateRuntimeError("expected str instance, "s + Apply<visitors::PythonTypeNameGetter>(result) + " found");
         }
-        os.WriteValue(result);
+        WriteOutput(os, result, values);
         return;
     }
     callable->GetStatementCallable()(callParams, os, values);

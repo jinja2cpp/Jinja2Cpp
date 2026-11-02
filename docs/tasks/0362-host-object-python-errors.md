@@ -32,3 +32,9 @@ engine object shows the same gap.
 
 **Done when.** Each bullet renders or fails as Python does on the toy object, narrow and
 wide.
+
+**Decisions (Ruslan, 2026-11-02, #736).** A call block whose call returns something other
+than a string fails as in Jinja2, so `statements.call_block_dict` (0156) is no longer a
+deliberate divergence. A plain string result stays escaped under autoescape, where Jinja2
+writes it raw. This is a deliberate divergence that keeps a callable's data escaped; Markup
+results (macros) are written as they are.

@@ -439,9 +439,10 @@ TEST(HostObjectTest, CallBlockWritesTheResultAsIs)
     number.callable = true;
     number.callResult = InternalValue(int64_t{ 5 });
     const InternalValueMap params{ { "f", MakeToy(markup) }, { "n", MakeToy(number) } };
-    // Jinja2 yields a call block's result unescaped, and only a string joins the output
-    EXPECT_EQ("<s>|<s>", Render("{% call f() %}x{% endcall %}|{% autoescape true %}{% call f() %}x{% endcall %}{% endautoescape %}", params));
-    EXPECT_EQ(L"<s>", RenderW(L"{% autoescape true %}{% call f() %}x{% endcall %}{% endautoescape %}", params));
+    // Only a string joins the output. Jinja2 yields it unescaped; Jinja2C++ escapes a plain
+    // string under autoescape, a deliberate divergence (docs/tasks/0362)
+    EXPECT_EQ("<s>|&lt;s&gt;", Render("{% call f() %}x{% endcall %}|{% autoescape true %}{% call f() %}x{% endcall %}{% endautoescape %}", params));
+    EXPECT_EQ(L"&lt;s&gt;", RenderW(L"{% autoescape true %}{% call f() %}x{% endcall %}{% endautoescape %}", params));
     EXPECT_NE(std::string::npos, Render("{% call n() %}x{% endcall %}", params).find("expected str instance, int found"));
     // An engine object with a call operator is called, and refuses caller= as Python's does
     EXPECT_NE(std::string::npos, Render("{% set j = joiner() %}{% call j() %}x{% endcall %}", params).find("Joiner.__call__() got an unexpected keyword argument 'caller'"));

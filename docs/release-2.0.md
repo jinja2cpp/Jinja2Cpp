@@ -151,7 +151,8 @@ cannot happen before a tag exists, or it has no end state a release could wait f
 raises in the default build (0015; big integers are opt-in through 0178's backend),
 names captured by a closure that outlives its frame read as undefined (0165, 6 lines),
 `select`/`map`/`reject` results can be iterated twice (0101, 2 lines), `%c` of a lone
-surrogate in wide templates (0106).
+surrogate in wide templates (0106). Outside the corpus, a call block escapes a callable's
+plain string result under autoescape, which Jinja2 writes raw (0362, Ruslan 2026-11-02).
 Corpus on master `b0fb0ef`: 1929 cases, 1886 match.
 
 ## 6. Confirmed facts for this revision
