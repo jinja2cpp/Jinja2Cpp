@@ -4,8 +4,10 @@
 #include "internal_value.h"
 #include "loop_attr.h"
 #include "lookup_result.h"
+#include "dialect.h"
 #include "node_arena.h"
 #include <jinja2cpp/utils/ordered_map.h>
+#include "recursion_guard.h"
 #include "render_context.h"
 #include "slot_frame.h"
 #include "small_vector.h"
@@ -1061,6 +1063,7 @@ public:
         : m_valueRef(valueRef)
         , m_params(ArenaCallParams::Make(nodes, params))
         , m_isNamedCallee(nodes.Is<ValueRefExpression>(m_valueRef))
+        , m_readOnlyContainers(detail::t_parseLimits.dialect == detail::Dialect::Transformers)
     {
     }
 
@@ -1086,6 +1089,9 @@ private:
     NodeRef<Expression> m_valueRef;
     ArenaCallParams m_params;
     bool m_isNamedCallee = false;
+    // Whether the template was loaded in a dialect whose list and dict methods that change their receiver are unsafe
+    // (methods::IsReadOnlyContainers): read once at Load, so a render without the preset asks nothing (docs/tasks/0384)
+    bool m_readOnlyContainers = false;
 };
 
 class ExpressionFilter final : public ArenaNode

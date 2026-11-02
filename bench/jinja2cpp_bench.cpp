@@ -851,14 +851,29 @@ int main(int argc, char** argv)
     }
 
     std::vector<fs::path> dirs;
-    for (const auto& entry : fs::directory_iterator(casesDir))
+    if (!countName.empty())
     {
-        if (entry.is_directory() && fs::exists(entry.path() / "main.j2") && HasPresetOf(entry.path()))
+        // --count loads its own case only: the heap the counted loop starts from then does not
+        // depend on which other cases the directory has. Loading them all moved Load/strings by
+        // 0.45% under glibc's malloc when the hf_* cases came (docs/tasks/0384). Module/* needs none
+        const auto slash = countName.find('/');
+        const fs::path dir = casesDir / (slash == std::string::npos ? std::string() : countName.substr(slash + 1));
+        if (slash != std::string::npos && countName.compare(0, slash, "Module") != 0 && fs::exists(dir / "main.j2") && HasPresetOf(dir))
         {
-            dirs.push_back(entry.path());
+            dirs.push_back(dir);
         }
     }
-    std::sort(dirs.begin(), dirs.end());
+    else
+    {
+        for (const auto& entry : fs::directory_iterator(casesDir))
+        {
+            if (entry.is_directory() && fs::exists(entry.path() / "main.j2") && HasPresetOf(entry.path()))
+            {
+                dirs.push_back(entry.path());
+            }
+        }
+        std::sort(dirs.begin(), dirs.end());
+    }
 
     std::vector<std::unique_ptr<Case>> cases;
     cases.reserve(dirs.size());
