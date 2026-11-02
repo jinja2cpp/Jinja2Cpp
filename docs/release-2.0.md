@@ -147,11 +147,11 @@ cannot happen before a tag exists, or it has no end state a release could wait f
 | Publishing wheels to PyPI | publication part of 0248 | Like the other registries, it follows the tag. The drop-in module itself, its wheels built in CI and its test-suite pass rate are in scope (0248) |
 | Parity cases found after the freeze | — | The corpus keeps growing; new divergences found during the RC window are filed for 2.x unless they are crashes, leaks or silent wrong values, which block (G8) |
 
-**Deliberate divergences** stay documented, not bugs (14 corpus lines): integer overflow
+**Deliberate divergences** stay documented, not bugs (13 corpus lines): integer overflow
 raises in the default build (0015; big integers are opt-in through 0178's backend),
 names captured by a closure that outlives its frame read as undefined (0165, 6 lines),
 `select`/`map`/`reject` results can be iterated twice (0101, 2 lines), `%c` of a lone
-surrogate in wide templates (0106), a call block returning a dict prints it (0156).
+surrogate in wide templates (0106).
 Corpus on master `b0fb0ef`: 1929 cases, 1886 match.
 
 ## 6. Confirmed facts for this revision

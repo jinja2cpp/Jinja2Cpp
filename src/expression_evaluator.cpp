@@ -1168,16 +1168,23 @@ bool SliceExpression::IsFoldable(const NodeArena& nodes) const
 
 std::uint8_t SliceExpression::PrepareFold(const NodeArena& nodes)
 {
+    // The parser asks each slice as it makes it, so a chain of slices is walked once
+    if (m_foldPrepared)
+    {
+        return m_fold;
+    }
     if (FoldWalkTooDeep())
     {
         return 0;
     }
+    m_foldPrepared = true;
     AllOperandsFold fold(nodes);
     fold(m_value);
     fold(m_start);
     fold(m_stop);
     fold(m_step);
-    return fold.Result();
+    m_fold = fold.Result();
+    return m_fold;
 }
 
 bool SliceExpression::IsFoldableAt(RenderContext& values) const
@@ -1193,6 +1200,11 @@ InternalValue SliceExpression::Evaluate(RenderContext& context)
     auto start = part(m_start);
     auto stop = part(m_stop);
     auto step = part(m_step);
+    const auto kind = value.Kind();
+    if (kind != ValueKind::String && kind != ValueKind::List && kind != ValueKind::KeyValuePair)
+    {
+        return SliceOther(value, std::move(start), std::move(stop), std::move(step), context);
+    }
     auto result = Slice(value, start, stop, step);
     // A slice of Markup is Markup
     if (value.IsMarkup() && IsStringValue(result))
@@ -1200,6 +1212,47 @@ InternalValue SliceExpression::Evaluate(RenderContext& context)
         result.SetMarkup();
     }
     return result;
+}
+
+// Jinja2 compiles a slice to obj[slice(...)], without the fallback of Environment.getitem: what
+// has no items raises TypeError, a dict KeyError, an undefined value UndefinedError (Chainable
+// gives itself). A slice of literals Jinja2 folds through getitem, which turns those errors
+// into an undefined value
+InternalValue SliceExpression::SliceOther(const InternalValue& value, InternalValue start, InternalValue stop, InternalValue step, RenderContext& context) const
+{
+    if (const auto* host = GetHostObject(value))
+    {
+        // An omitted bound is None in Python's slice
+        auto bound = [](const NodeRef<Expression>& expr, InternalValue& part) { return expr ? std::move(part) : InternalValue(NoneValue{}); };
+        return host::Slice(*host, bound(m_start, start), bound(m_stop, stop), bound(m_step, step));
+    }
+    if (value.IsUndefined())
+    {
+        CheckUndefinedUse(value, UndefinedUse::Attribute);
+        return value;
+    }
+    if (m_fold == FoldAlways || (m_fold == FoldByChoice && IsFoldableAt(context)))
+    {
+        return {};
+    }
+    const auto map = AsMap(value);
+    if (map && map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst)
+    {
+        // A dict looks the slice up as a key (slices are hashable since Python 3.12)
+        auto bound = [](const NodeRef<Expression>& expr, const InternalValue& part) -> std::string {
+            if (!expr || part.IsNone())
+            {
+                return "None";
+            }
+            if (const auto* number = GetIf<int64_t>(&part))
+            {
+                return std::to_string(*number);
+            }
+            return IsStringValue(part) ? "'" + AsString(part) + "'" : "<" + std::string(Apply<visitors::PythonTypeNameGetter>(part)) + ">";
+        };
+        throw TemplateRuntimeError("slice(" + bound(m_start, start) + ", " + bound(m_stop, stop) + ", " + bound(m_step, step) + ")");
+    }
+    throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(value) + "' object is not subscriptable");
 }
 
 bool TupleCreator::IsFoldable(const NodeArena& nodes) const

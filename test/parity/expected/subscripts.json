@@ -1367,6 +1367,318 @@
    "env": {},
    "templates": {},
    "output": "[]|[]|[3, 1, 2, 5]|[3, 1, 2, 5]|k"
+  },
+  {
+   "id": "subscripts.slice_int_variable",
+   "template": "{{ x[1:2] }}",
+   "context": {
+    "x": 5
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not subscriptable"
+   }
+  },
+  {
+   "id": "subscripts.slice_none_variable",
+   "template": "{{ x[1:2] }}",
+   "context": {
+    "x": null
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'NoneType' object is not subscriptable"
+   }
+  },
+  {
+   "id": "subscripts.slice_set_variable",
+   "template": "{% set x = 5 %}{{ x[1:2] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not subscriptable"
+   }
+  },
+  {
+   "id": "subscripts.slice_dict_key_error",
+   "template": "{{ d[1:2] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "KeyError",
+    "message": "slice(1, 2, None)"
+   }
+  },
+  {
+   "id": "subscripts.slice_undefined",
+   "template": "{{ missing[1:2] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'missing' is undefined"
+   }
+  },
+  {
+   "id": "subscripts.slice_namespace",
+   "template": "{{ namespace(a=1)[0:1] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'Namespace' object is not subscriptable"
+   }
+  },
+  {
+   "id": "subscripts.slice_loop",
+   "template": "{% for i in [1] %}{{ loop[0:1] }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'LoopContext' object is not subscriptable"
+   }
+  },
+  {
+   "id": "subscripts.slice_function",
+   "template": "{{ lipsum[0:1] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'function' object is not subscriptable"
+   }
+  },
+  {
+   "id": "subscripts.slice_literals_fold",
+   "template": "[{{ 5[1:2] }}][{{ none[1:2] }}][{{ {'a': 1}[1:2] }}][{{ 1.5[0:1] is undefined }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[][][][True]"
+  },
+  {
+   "id": "subscripts.slice_lazy_result",
+   "template": "{{ ([1, 2]|map('string'))[0:1] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'generator' object is not subscriptable"
+   }
   }
  ]
 }

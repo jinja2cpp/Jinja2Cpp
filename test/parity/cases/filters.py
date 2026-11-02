@@ -427,4 +427,10 @@ CASES = [
     ("wordwrap_none", "{{ none|wordwrap(6, false) }}"),
     ("wordcount_unicode_underscore", "{{ '\u00e9\u4e2d x-y_z w\u00e9b 3.5'|wordcount }}|{{ '\U0001f600 a\u00b2b'|wordcount }}"),
     ("title_punctuation", "{{ 'hello-world foo_bar'|title }}|{{ 123|title }}"),
+    # task 0362: urlencode unpacks each item as `k, v`
+    ("urlencode_two_char_strings", "{{ ['ab', 'cd']|urlencode }}"),
+    ("urlencode_dict_item_keys", "{{ [{'a': 1, 'b': 2}]|urlencode }}"),
+    ("urlencode_unpack_short", "{{ [[1]]|urlencode }}"),
+    # task 0377: a lazy result is a generator in Python, which reversed() refuses
+    ("last_of_lazy_result", "{{ [1, 2]|select|last }}"),
 ]

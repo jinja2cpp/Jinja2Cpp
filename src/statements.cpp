@@ -2911,10 +2911,18 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
 {
     const auto& call = values.Nodes()[m_call];
     auto fnVal = values.Nodes()[call.GetValueRef()].Evaluate(values);
-    // An object of the host language that is callable takes caller= as any call
+    // An object of the host language that is callable takes caller= as any call, and so does
+    // an engine object with a call operator (joiner()), which refuses it as Python's does
     if (const auto* host = GetHostObject(fnVal))
     {
         fnVal = host::MakeCall(fnVal, *host);
+    }
+    else if (!GetIf<Callable>(&fnVal))
+    {
+        if (auto callOperator = Subscript(fnVal, "operator()"s, nullptr); GetIf<Callable>(&callOperator))
+        {
+            fnVal = std::move(callOperator);
+        }
     }
     const auto* callable = GetIf<Callable>(&fnVal);
     if (!callable)
@@ -2928,7 +2936,14 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
     helpers::AddCallerParam(callParams, MakeCallable(values));
     if (callable->GetType() == Callable::Type::Expression)
     {
-        WriteOutput(os, callable->GetExpressionCallable()(callParams, values), values);
+        // Jinja2 yields the result into the output as it is: a string, which is not escaped,
+        // or the TypeError of joining the output (docs/tasks/0362)
+        const auto result = callable->GetExpressionCallable()(callParams, values);
+        if (!IsStringValue(result))
+        {
+            throw TemplateRuntimeError("expected str instance, "s + Apply<visitors::PythonTypeNameGetter>(result) + " found");
+        }
+        os.WriteValue(result);
         return;
     }
     callable->GetStatementCallable()(callParams, os, values);

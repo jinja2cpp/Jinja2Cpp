@@ -1647,12 +1647,15 @@ StringConverter::StringConverter(const FilterParams& params, StringConverter::Mo
 
 InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, RenderContext& context)
 {
-    // A mapping or a sequence of pairs is a query string, anything else (an object such as
-    // namespace() too) is quoted as str()
+    // Jinja2's do_urlencode: a dict is a query string of its items, any other iterable one of
+    // the pairs it gives (each unpacked as `k, v`), anything else (an object such as namespace()
+    // too, and a host object that has no __iter__) is quoted as str()
     auto* callback = context.GetRendererCallback();
     auto asText = [callback](const InternalValue& val) { return IsStringValue(val) ? AsString(val) : AsString(InternalValue(callback->GetAsTargetString(val))); };
     const auto objectMap = AsMap(baseVal);
-    if (IsStringValue(baseVal) || (baseVal.Kind() != ValueKind::Map && baseVal.Kind() != ValueKind::List) || (objectMap && objectMap->GetObjectClass()))
+    const auto* host = objectMap ? objectMap->GetHostObject() : nullptr;
+    const bool hostIterates = host != nullptr && host->IsIterable();
+    if (IsStringValue(baseVal) || (baseVal.Kind() != ValueKind::Map && baseVal.Kind() != ValueKind::List) || (objectMap && objectMap->GetObjectClass() && !hostIterates))
     {
         return InternalValue(UrlQuote(asText(baseVal), false));
     }
@@ -1660,25 +1663,35 @@ InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, Rend
     auto appendPair = [&](const InternalValue& key, const InternalValue& value) {
         query += (query.empty() ? "" : "&") + UrlQuote(asText(key), true) + "=" + UrlQuote(asText(value), true);
     };
-    if (auto map = AsMap(baseVal))
+    if (objectMap && !host)
     {
-        for (auto& [key, value] : map->GetEntries())
+        for (auto& [key, value] : objectMap->GetEntries())
         {
             appendPair(key, value);
         }
+        return InternalValue(query);
     }
-    else if (auto list = AsList(baseVal))
+    bool isList = false;
+    const auto items = ConvertToList(baseVal, isList, false);
+    for (const auto& item : items)
     {
-        for (const auto& item : *list)
+        // `k, v = item`: any iterable of two, a string of two characters too
+        bool isPair = false;
+        const auto pair = ConvertToList(item, isPair, false);
+        if (!isPair)
         {
-            bool isList = false;
-            auto pair = ConvertToList(item, isList);
-            if (!isList || pair.GetSize().value_or(0) != 2)
-            {
-                context.GetRendererCallback()->ThrowRuntimeError(ErrorCode::InvalidValueType, ValuesList{});
-            }
-            appendPair(pair.GetValueByIndex(0), pair.GetValueByIndex(1));
+            throw TemplateRuntimeError(std::string("cannot unpack non-iterable ") + Apply<visitors::PythonTypeNameGetter>(item) + " object");
         }
+        const auto parts = pair.ToValueList();
+        if (parts.size() > 2)
+        {
+            throw TemplateRuntimeError("too many values to unpack (expected 2)");
+        }
+        if (parts.size() < 2)
+        {
+            throw TemplateRuntimeError("not enough values to unpack (expected 2, got " + std::to_string(parts.size()) + ")");
+        }
+        appendPair(parts[0], parts[1]);
     }
     return InternalValue(query);
 }
