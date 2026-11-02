@@ -132,6 +132,10 @@ public:
         {
             return "no wide strings";
         }
+        if (m_case.settings.value("transformers", false))
+        {
+            return "no transformers chat-template environment";
+        }
         m_env.set_trim_blocks(m_case.settings.value("trim_blocks", false));
         m_env.set_lstrip_blocks(m_case.settings.value("lstrip_blocks", false));
         m_env.set_search_included_templates_in_files(false);
@@ -172,6 +176,10 @@ public:
         if (m_case.settings.value("wide", false))
         {
             return "no wide strings";
+        }
+        if (m_case.settings.value("transformers", false))
+        {
+            return "no transformers chat-template environment";
         }
         if (!m_case.includes.empty())
         {

@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 #include <utility>
 #include <variant>
 
@@ -83,7 +84,14 @@ public:
     template<typename Value>
     void Bind(Value&& value)
     {
-        static_cast<InternalValue&>(*this) = std::forward<Value>(value);
+        if constexpr (std::is_same_v<Value, const InternalValue&> || std::is_same_v<Value, InternalValue&>)
+        {
+            CopyFrom(value);
+        }
+        else
+        {
+            static_cast<InternalValue&>(*this) = std::forward<Value>(value);
+        }
         if (auto* undefined = std::get_if<UndefinedValue>(&m_imm))
         {
             undefined->unbound = false;

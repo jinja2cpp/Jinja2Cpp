@@ -23,6 +23,7 @@
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -680,6 +681,12 @@ Serialize::Serialize(const FilterParams& params, const Serialize::Mode mode)
         ParseParams(args, params);
         break;
     }
+    case TransformersJsonMode:
+    {
+        static const auto args = MakeArgumentsTable({ { "ensure_ascii", false }, { "indent", false }, { "separators", false }, { "sort_keys", false } });
+        ParseParams(args, params);
+        break;
+    }
     default:
         ParseParams(NoArguments(), params);
         break;
@@ -708,21 +715,43 @@ uint32_t Utf8CharValue(std::string_view ch)
     return cp;
 }
 
-// Python's json.dumps(value, sort_keys=True, indent=indent) with the default ensure_ascii, as
-// Jinja2's htmlsafe_json_dumps escapes it: <, >, & and ' become \u escapes. Outside strings
-// those characters can only come from the indent, which is escaped once up front.
+// The arguments of Python's json.dumps that the two tojson filters pass
+struct JsonOptions
+{
+    std::optional<std::string> indent;
+    // Jinja2's htmlsafe_json_dumps: <, >, & and ' become \u escapes, also in the indent
+    bool htmlSafe = true;
+    bool ensureAscii = true;
+    bool sortKeys = true;
+    // separators: by default ", " and ": ", or "," and ": " with an indent
+    std::optional<std::pair<std::string, std::string>> separators;
+};
+
+// Python's json.dumps(value, ...) with the options above. Jinja2's tojson is sort_keys=True,
+// the default ensure_ascii and htmlsafe_json_dumps' escaping; transformers' is
+// ensure_ascii=False and insertion order, unescaped, with its arguments passed through.
+// Outside strings the escaped characters can only come from the indent, which is escaped once
+// up front.
 class PythonJsonWriter
 {
 public:
-    PythonJsonWriter(RenderContext& context, std::optional<std::string> indent)
+    PythonJsonWriter(RenderContext& context, JsonOptions options)
         : m_context(context)
-        , m_indent(HtmlSafeIndent(std::move(indent)))
+        , m_htmlSafe(options.htmlSafe)
+        , m_ensureAscii(options.ensureAscii)
+        , m_sortKeys(options.sortKeys)
+        , m_plainBytes(PlainBytesOf(options.htmlSafe, options.ensureAscii))
+        , m_indent(options.htmlSafe ? HtmlSafeIndent(std::move(options.indent)) : std::move(options.indent))
+        , m_itemSeparator(options.separators ? options.separators->first : DefaultItemSeparator(m_indent.has_value()))
+        , m_keySeparator(options.separators ? options.separators->second : ": ")
     {
     }
 
     InternalValue Write(const InternalValue& value)
     {
         WriteValue(value, 0);
+        // The loop checks before each item; the last item and the closing brackets are checked here
+        CheckSequenceSize(m_out.View().size(), "a JSON document");
         return m_out.Build();
     }
 
@@ -771,17 +800,61 @@ private:
             return;
         }
         m_out.push_back('\n');
+        const std::string_view indent = *m_indent;
         for (size_t n = 0; n != level; ++n)
         {
-            m_out += *m_indent;
+            Append(indent);
         }
     }
 
-    // Bytes json.dumps keeps as they are and htmlsafe_json_dumps does not escape: printable
-    // ASCII but ", \, <, >, & and '
-    static bool IsPlainJsonByte(unsigned char ch)
+    // Separators and the indent are the caller's strings of any length: each append is
+    // checked against the cap, so they cannot grow the document past it between items
+    void Append(std::string_view text)
     {
-        return ch >= 0x20 && ch < 0x7F && ch != '"' && ch != '\\' && ch != '<' && ch != '>' && ch != '&' && ch != '\'';
+        CheckSequenceSize(static_cast<uint64_t>(m_out.View().size()) + text.size(), "a JSON document");
+        m_out += text;
+    }
+
+    // Bytes json.dumps keeps as they are (and htmlsafe_json_dumps does not escape): printable
+    // ASCII but " and \ (and <, >, & and '); without ensure_ascii, also 0x7F and every byte of
+    // a character beyond ASCII
+    static constexpr bool IsPlainJsonByte(unsigned char ch, bool htmlSafe, bool ensureAscii)
+    {
+        if (ch < 0x20 || ch == '"' || ch == '\\')
+        {
+            return false;
+        }
+        if (ch >= 0x7F)
+        {
+            return !ensureAscii;
+        }
+        return !htmlSafe || (ch != '<' && ch != '>' && ch != '&' && ch != '\'');
+    }
+
+    // json.dumps: ", " between items, "," with an indent, whose newline follows it
+    static std::string DefaultItemSeparator(bool indented) { return indented ? "," : ", "; }
+
+    using PlainBytes = std::array<bool, 256>;
+    template<bool htmlSafe, bool ensureAscii>
+    static const PlainBytes& PlainBytesOf()
+    {
+        static constexpr PlainBytes table = [] {
+            PlainBytes result{};
+            for (unsigned ch = 0; ch != 256; ++ch)
+            {
+                result[ch] = IsPlainJsonByte(static_cast<unsigned char>(ch), htmlSafe, ensureAscii);
+            }
+            return result;
+        }();
+        return table;
+    }
+    static const PlainBytes& PlainBytesOf(bool htmlSafe, bool ensureAscii)
+    {
+        if (htmlSafe)
+        {
+            return ensureAscii ? PlainBytesOf<true, true>() : PlainBytesOf<true, false>();
+        }
+        return ensureAscii ? PlainBytesOf<false, true>() : PlainBytesOf<false, false>();
     }
 
     void AppendUnit(uint32_t unit)
@@ -804,7 +877,7 @@ private:
         while (pos != str.size())
         {
             auto start = pos;
-            while (pos != str.size() && IsPlainJsonByte(static_cast<unsigned char>(str[pos])))
+            while (pos != str.size() && m_plainBytes[static_cast<unsigned char>(str[pos])])
             {
                 ++pos;
             }
@@ -855,7 +928,7 @@ private:
             m_out += "\\f";
             break;
         default:
-            if (cp < 0x20 || cp >= 0x7F || cp == '<' || cp == '>' || cp == '&' || cp == '\'')
+            if (cp < 0x20 || (m_ensureAscii && cp >= 0x7F) || (m_htmlSafe && (cp == '<' || cp == '>' || cp == '&' || cp == '\'')))
             {
                 if (cp >= 0x10000)
                 {
@@ -886,7 +959,7 @@ private:
             CheckSequenceSize(m_out.View().size(), "a JSON document");
             if (!isFirst)
             {
-                m_out += m_indent ? "," : ", ";
+                Append(m_itemSeparator);
             }
             isFirst = false;
             if (m_indent)
@@ -931,6 +1004,10 @@ private:
         {
             m_out += JsonFloatText(*d);
         }
+        else if (const auto view = AsStringView<char>(value))
+        {
+            WriteString(*view);
+        }
         else if (auto str = GetAsSameString(std::string(), value))
         {
             WriteString(*str);
@@ -951,11 +1028,19 @@ private:
                 // namespace(), cycler() and joiner() are objects, which json.dumps rejects
                 throw TemplateRuntimeError("Object of type "s + objectClass + " is not JSON serializable");
             }
-            // sort_keys: Python orders str keys by code point, which is UTF-8 byte order
             auto entries = map->GetEntries();
             std::vector<std::pair<std::string, size_t>> order;
             order.reserve(entries.size());
-            if (std::all_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return IsStringValue(entry.key); }))
+            if (!m_sortKeys)
+            {
+                // Insertion order; json.dumps writes each key as it comes to it
+                for (size_t idx = 0; idx != entries.size(); ++idx)
+                {
+                    order.emplace_back(KeyText(entries[idx].key), idx);
+                }
+            }
+            // sort_keys: Python orders str keys by code point, which is UTF-8 byte order
+            else if (std::all_of(entries.begin(), entries.end(), [](const KeyValuePair& entry) { return IsStringValue(entry.key); }))
             {
                 for (size_t idx = 0; idx != entries.size(); ++idx)
                 {
@@ -969,7 +1054,7 @@ private:
             }
             WriteContainer('{', '}', order, level, [this, &entries, level](const std::pair<std::string, size_t>& item) {
                 WriteString(item.first);
-                m_out += ": ";
+                Append(m_keySeparator);
                 WriteValue(entries[item.second].value, level + 1);
             });
         }
@@ -1013,47 +1098,52 @@ private:
     // The keys of a mapping with a key that is not a string, in sort_keys order, with the JSON
     // spelling of each: 1 is "1", 2.5 is "2.5", True is "true" and None is "null". A tuple or
     // an object is no JSON key; keys of types Python cannot compare (a str and an int) are a TypeError
+    static std::string KeyText(const InternalValue& key)
+    {
+        if (IsStringValue(key))
+        {
+            return AsString(key);
+        }
+        if (const auto* i = GetIf<int64_t>(&key))
+        {
+            return std::to_string(*i);
+        }
+        if (const auto big = AsBigInt(key))
+        {
+            return std::string(CheckedDecimal(*big));
+        }
+        if (const auto* b = GetIf<bool>(&key))
+        {
+            return *b ? "true" : "false";
+        }
+        if (const auto* d = GetIf<double>(&key))
+        {
+            return JsonFloatText(*d);
+        }
+        if (key.IsNone())
+        {
+            return "null";
+        }
+        throw TemplateRuntimeError("keys must be str, int, float, bool or None, not "s + Apply<visitors::PythonTypeNameGetter>(key));
+    }
+
     static void OrderNonStringKeys(const std::vector<KeyValuePair>& entries, std::vector<std::pair<std::string, size_t>>& order)
     {
         for (size_t idx = 0; idx != entries.size(); ++idx)
         {
-            const auto& key = entries[idx].key;
-            std::string text;
-            if (const auto* i = GetIf<int64_t>(&key))
-            {
-                text = std::to_string(*i);
-            }
-            else if (const auto big = AsBigInt(key))
-            {
-                text = CheckedDecimal(*big);
-            }
-            else if (const auto* b = GetIf<bool>(&key))
-            {
-                text = *b ? "true" : "false";
-            }
-            else if (const auto* d = GetIf<double>(&key))
-            {
-                text = JsonFloatText(*d);
-            }
-            else if (key.IsNone())
-            {
-                text = "null";
-            }
-            else if (IsStringValue(key))
-            {
-                text = AsString(key);
-            }
-            else
-            {
-                throw TemplateRuntimeError("keys must be str, int, float, bool or None, not "s + Apply<visitors::PythonTypeNameGetter>(key));
-            }
-            order.emplace_back(std::move(text), idx);
+            order.emplace_back(KeyText(entries[idx].key), idx);
         }
         StableSortValues(order.begin(), order.end(), [&entries](const auto& left, const auto& right) { return KeyLess(entries[left.second].key, entries[right.second].key); });
     }
 
     RenderContext& m_context;
+    bool m_htmlSafe;
+    bool m_ensureAscii;
+    bool m_sortKeys;
+    const PlainBytes& m_plainBytes;
     std::optional<std::string> m_indent;
+    std::string m_itemSeparator;
+    std::string m_keySeparator;
     StringBuilder<char> m_out;
 };
 
@@ -1309,6 +1399,11 @@ private:
             scalar();
             WriteFloat(*d);
         }
+        else if (const auto view = AsStringView<char>(value))
+        {
+            scalar();
+            WriteString(*view);
+        }
         else if (auto str = GetAsSameString(std::string(), value))
         {
             scalar();
@@ -1414,6 +1509,92 @@ private:
     StringBuilder<char> m_out;
 };
 
+// json.dumps' indent: a string as it is, an int (a bool among them) as that many spaces, none
+// for None or no argument
+std::optional<std::string> JsonIndent(const InternalValue& indentVal)
+{
+    if (auto str = GetAsSameString(std::string(), indentVal))
+    {
+        return str;
+    }
+    if (const auto* count = GetIf<int64_t>(&indentVal))
+    {
+        const auto spaces = std::max<int64_t>(0, *count);
+        CheckSequenceSize(static_cast<uint64_t>(spaces), "an indentation");
+        return std::string(static_cast<size_t>(spaces), ' ');
+    }
+    if (const auto* flag = GetIf<bool>(&indentVal))
+    {
+        return std::string(*flag ? 1 : 0, ' ');
+    }
+    if (const auto* undefinedInfo = GetUndefinedInfo(indentVal))
+    {
+        ThrowUndefined(*undefinedInfo);
+    }
+    if (!IsEmpty(indentVal))
+    {
+        throw TemplateRuntimeError("can't multiply sequence by non-int of type '"s + Apply<visitors::PythonTypeNameGetter>(indentVal) + "'");
+    }
+    return std::nullopt;
+}
+
+// json.dumps' separators: a pair of strings (item separator, key separator), or None
+std::optional<std::pair<std::string, std::string>> JsonSeparators(const InternalValue& separatorsVal)
+{
+    if (const auto* undefinedInfo = GetUndefinedInfo(separatorsVal))
+    {
+        ThrowUndefined(*undefinedInfo);
+    }
+    if (IsEmpty(separatorsVal))
+    {
+        return std::nullopt;
+    }
+    // Any iterable of two strings unpacks, a string of two characters among them
+    InternalValueList items;
+    if (auto str = GetAsSameString(std::string(), separatorsVal))
+    {
+        // Two characters unpack; a third is already an error, so a long string stops there
+        for (size_t pos = 0; pos != str->size() && items.size() != 3;)
+        {
+            auto end = pos + 1;
+            while (end != str->size() && IsCodePointTail((*str)[end]))
+            {
+                ++end;
+            }
+            items.emplace_back(str->substr(pos, end - pos));
+            pos = end;
+        }
+    }
+    else if (auto list = AsList(separatorsVal))
+    {
+        items = list->ToValueList();
+    }
+    else if (auto map = AsMap(separatorsVal); map && !map->GetObjectClass())
+    {
+        // A dict unpacks its keys; a long one fails before they are copied
+        if (map->GetSize() > 2)
+        {
+            throw TemplateRuntimeError("too many values to unpack (expected 2)");
+        }
+        items = map->GetKeyValues();
+    }
+    else
+    {
+        throw TemplateRuntimeError("cannot unpack non-iterable "s + Apply<visitors::PythonTypeNameGetter>(separatorsVal) + " object");
+    }
+    if (items.size() != 2)
+    {
+        throw TemplateRuntimeError(items.size() > 2 ? "too many values to unpack (expected 2)" : "not enough values to unpack (expected 2, got " + std::to_string(items.size()) + ")");
+    }
+    auto item = GetAsSameString(std::string(), items[0]);
+    auto key = GetAsSameString(std::string(), items[1]);
+    if (!item || !key)
+    {
+        throw TemplateRuntimeError("tojson(): separators must be a pair of strings");
+    }
+    return std::make_pair(std::move(*item), std::move(*key));
+}
+
 } // namespace
 
 InternalValue Serialize::Filter(const InternalValue& value, RenderContext& context)
@@ -1424,39 +1605,27 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
         return YamlWriter(context).Write(value);
     }
 
-    // Jinja2's do_tojson: json.dumps with sort_keys=True, then htmlsafe_json_dumps escapes
-    // <, >, & and ' so the result is safe in HTML and <script> (PythonJsonWriter does both)
-    auto indentVal = this->GetArgumentValue("indent", context);
     // json.dumps encodes a str before it looks at indent, so only other values check it
-    if (!IsEmpty(indentVal) && (IsStringValue(value) || GetAsSameString(std::string(), value)))
+    const bool isString = IsStringValue(value) || GetAsSameString(std::string(), value);
+    JsonOptions options;
+    // The argument is still evaluated: a failing or host-callable indent runs as in Python
+    auto indentVal = this->GetArgumentValue("indent", context);
+    options.indent = JsonIndent(isString ? InternalValue() : indentVal);
+    if (m_mode == TransformersJsonMode)
     {
-        indentVal = InternalValue();
-    }
-    std::optional<std::string> indent;
-    if (auto str = GetAsSameString(std::string(), indentVal))
-    {
-        indent = *str;
-    }
-    else if (const auto* count = GetIf<int64_t>(&indentVal))
-    {
-        const auto spaces = std::max<int64_t>(0, *count);
-        CheckSequenceSize(static_cast<uint64_t>(spaces), "an indentation");
-        indent = std::string(static_cast<size_t>(spaces), ' ');
-    }
-    else if (const auto* flag = GetIf<bool>(&indentVal))
-    {
-        indent = std::string(*flag ? 1 : 0, ' ');
-    }
-    else if (const auto* undefinedInfo = GetUndefinedInfo(indentVal))
-    {
-        ThrowUndefined(*undefinedInfo);
-    }
-    else if (!IsEmpty(indentVal))
-    {
-        throw TemplateRuntimeError("can't multiply sequence by non-int of type '"s + Apply<visitors::PythonTypeNameGetter>(indentVal) + "'");
+        // transformers' tojson: json.dumps(x, ensure_ascii=False, indent=None, separators=None, sort_keys=False),
+        // a plain string
+        options.htmlSafe = false;
+        options.ensureAscii = ConvertToBool(this->GetArgumentValue("ensure_ascii", context));
+        options.sortKeys = ConvertToBool(this->GetArgumentValue("sort_keys", context));
+        // JSONEncoder reads separators when it is made, before it sees the value
+        options.separators = JsonSeparators(this->GetArgumentValue("separators", context));
+        return PythonJsonWriter(context, std::move(options)).Write(value);
     }
 
-    InternalValue resultVal = PythonJsonWriter(context, std::move(indent)).Write(value);
+    // Jinja2's do_tojson: json.dumps with sort_keys=True, then htmlsafe_json_dumps escapes
+    // <, >, & and ' so the result is safe in HTML and <script> (PythonJsonWriter does both)
+    InternalValue resultVal = PythonJsonWriter(context, std::move(options)).Write(value);
     // tojson output is always Markup
     resultVal.SetMarkup();
     return resultVal;

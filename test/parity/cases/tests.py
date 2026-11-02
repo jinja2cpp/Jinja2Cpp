@@ -70,4 +70,13 @@ CASES = [
     ("comparison_keyword_arg", "{{ 'T' if 1 is eq(b=1) else 'F' }}"),
     # task 0270: an integer beyond int64 is an int
     ('big_int_tests', "{{ 'T' if 18446744073709551615 is number else 'F' }}{{ 'T' if 18446744073709551615 is integer else 'F' }}{{ 'T' if 18446744073709551615 is odd else 'F' }}{{ 'T' if 18446744073709551616 is even else 'F' }}{{ 'T' if 18446744073709551615 is float else 'F' }}"),
+    # task 0362: odd and even are value % 2, which is a TypeError for what is no number
+    ("odd_string", "{{ s is odd }}"),
+    ("even_string", "{{ 'abc' is even }}"),
+    ("odd_format_string", "{{ '%d' is odd }}|{{ 'a%s' is even }}"),
+    ("odd_list", "{{ l is odd }}"),
+    ("even_dict", "{{ d is even }}"),
+    ("even_none", "{{ n is even }}"),
+    ("odd_undefined", "{{ missing is odd }}"),
+    ("odd_namespace", "{{ namespace() is odd }}"),
 ]

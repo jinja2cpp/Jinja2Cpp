@@ -3,15 +3,16 @@
 #include "big_int.h"
 #include "case_mapping.h"
 #include "cycle_collector.h"
+#include "dialect.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
+#include "host_object.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "render_context.h"
 #include "stable_sort_values.h"
 #include "template_dict.h"
 #include "undefined.h"
-#include "host_object.h"
 #include "unicode_case.h"
 #include "unicode_printable.h"
 #include "unicode_tables.h"
@@ -208,7 +209,7 @@ struct StrOps
         {
             Raise(std::string(name) + "() argument must be str, not " + TypeName(val));
         }
-        return *str;
+        return std::move(*str);
     }
 
     // The characters [b, e) of chars as a string
@@ -2668,14 +2669,39 @@ InternalValue MakeBoundMethod(const InternalValue& self, const MethodInfo& metho
     return result;
 }
 
+bool IsReadOnlyContainers(const RenderContext& context)
+{
+    return context.GetDialect() == detail::Dialect::Transformers;
+}
+
+InternalValue UnsafeMethod(const InternalValue& obj, std::string_view name, const RenderContext& context)
+{
+    // ImmutableSandboxedEnvironment.getattr: unsafe_undefined, a SecurityError when used
+    return MakeUndefinedWithHint(context, "access to attribute '" + std::string(name) + "' of '" + TypeName(obj) + "' object is unsafe.");
+}
+
+namespace
+{
+// FindMethod, but a method that changes its receiver is unsafe (`unsafe` set, null returned)
+// where containers are read-only
+const MethodInfo* FindSafeMethod(const InternalValue& obj, std::string_view name, const RenderContext* context, bool& unsafe)
+{
+    const auto* method = FindMethod(obj, name);
+    unsafe = method != nullptr && method->isMutating && context != nullptr && IsReadOnlyContainers(*context);
+    return unsafe ? nullptr : method;
+}
+} // namespace
+
 InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderContext* context)
 {
-    if (const auto* method = FindMethod(obj, name))
+    bool unsafe = false;
+    const auto* method = FindSafeMethod(obj, name, context, unsafe);
+    if (method || unsafe)
     {
         auto map = AsMap(obj);
         if (!map || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(name))
         {
-            return MakeBoundMethod(obj, *method);
+            return unsafe ? UnsafeMethod(obj, name, *context) : MakeBoundMethod(obj, *method);
         }
     }
     return Subscript(obj, name, context);
@@ -2692,9 +2718,14 @@ InternalValue GetItem(const InternalValue& obj, const InternalValue& key, Render
     }
     if (result.IsUndefined() && IsStringValue(key))
     {
-        if (const auto* method = FindMethod(obj, AsString(key)))
+        bool unsafe = false;
+        if (const auto* method = FindSafeMethod(obj, AsString(key), context, unsafe))
         {
             return MakeBoundMethod(obj, *method);
+        }
+        if (unsafe)
+        {
+            return UnsafeMethod(obj, AsString(key), *context);
         }
     }
     return result;

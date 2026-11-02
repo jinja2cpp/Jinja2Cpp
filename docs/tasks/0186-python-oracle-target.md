@@ -2,7 +2,7 @@
 status: in-progress
 priority: medium
 area: parity
-touches: [test/parity/requirements.txt, test/parity/generate.py, .github/workflows/parity-expectations.yml, docs/parity.md, .python-version, cmake/version.h.in]
+touches: [test/parity/requirements.txt, test/parity/generate.py, .github/workflows/parity-expectations.yml, docs/parity.md, .python-version, cmake/version.h.in, cmake/parity_oracle.cmake, cmake/parity_oracle_generate.cmake, test/parity/parity_test.cpp, test/parity/README.md]
 ---
 # Which Python and Jinja2 the parity oracle targets, and how users choose
 
@@ -50,13 +50,18 @@ Decisions: O2 yes (version macros, before the G1 freeze), O3 no, O4 report-only 
   `JINJA2CPP_ORACLE_PYTHON` and `JINJA2CPP_ORACLE_JINJA2`; `docs/parity.md` has the policy
   and the one-PR bump checklist ("Oracle pin"). This answers the policy question and the
   "where is it stated" question.
-- **Phase 1, open.** `cmake/parity_oracle.cmake` (`JINJA2CPP_TEST_ORACLE=bundled|python|venv`,
-  `_PYTHON`, `_REQUIREMENTS`), `generate.py --out DIR --any-version`, oracle-directory mode
-  in `parity_test.cpp` (env `JINJA2CPP_TEST_ORACLE_DIR`) that classifies each differing case
-  `tracks-bundled`, `tracks-oracle` or `neither`, writes `report.md`, and a task for the
-  corpus gap on code points changed after Unicode 15.0. Must land before 0355: the Python
-  module's parity proof (0355) waits on phase 1 and reuses its `generate.py --out` harness
-  and delta classification instead of a second one.
+- **Phase 1, done in this PR.** `cmake/parity_oracle.cmake` (`JINJA2CPP_TEST_ORACLE=bundled|python|venv`,
+  `_PYTHON`, `_REQUIREMENTS`; included from the test block) registers the CTest fixture
+  `jinja2cpp_parity_oracle_generate` (`cmake/parity_oracle_generate.cmake`: makes the venv,
+  runs `generate.py --out DIR --any-version`, which also writes `oracle.json`) and the test
+  `jinja2cpp_parity_oracle`. `parity_test.cpp` reads `JINJA2CPP_TEST_ORACLE_DIR`, judges a case
+  by the allow-list where the oracles agree, otherwise records it as `tracks-bundled`,
+  `tracks-oracle`, `neither` or `not-run` (failing only under `JINJA2CPP_TEST_ORACLE_STRICT=1`),
+  and writes `report.md`. Documented in test/parity/README.md, "Other oracles". The section 8
+  check holds: Jinja2 3.1.2 (MarkupSafe 2.1.5, Python 3.12) reports the 8 cases of plan
+  section 2 plus `string_filters.m168`, all `tracks-bundled`; 3.0.3 on Python 3.13 reports 22.
+  The Unicode-corpus gap is 0372. 0355 reuses `generate.py --out/--any-version`,
+  `JINJA2CPP_TEST_ORACLE_DIR` and the verdicts rather than a second harness.
 - **Phase 2, open.** `.github/workflows/parity-oracles.yml` modelled on `bindings.yml`
   (paths-filtered PRs plus nightly, actions pinned by SHA): Jinja2 main, 3.0.x, Python
   3.13/3.14 rows with the pinned Jinja2.

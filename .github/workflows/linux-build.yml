@@ -62,11 +62,13 @@ jobs:
   # One Debug row builds the borrowed-cell trace hooks (`celltrace`, JINJA2CPP_CELL_TRACE) and
   # checks the traces of the cell and module tests against tla/CellTrace.tla with TLC
   # (docs/tasks/0338 step B). It is a check after the tests, not an axis.
+  # One row builds without the chat-template preset (`chat: 'OFF'`, JINJA2CPP_WITH_CHAT_TEMPLATES,
+  # docs/tasks/0360): no chat_template.h, no test/chat_templates suite, the core the same.
   # JSON bindings are package components (docs/tasks/0311): these jobs test the nlohmann_json
   # binding and the JsonTraits contract on toy traits (JINJA2CPP_TEST_BINDINGS default);
   # bindings.yml tests every binding on PRs that touch them, and nightly.
   linux-build:
-    name: C++${{ matrix.std }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }}${{ matrix.noderef == 'OFF' && ' noderef=OFF' || '' }}${{ matrix.bigint && format(' bigint={0}', matrix.bigint) || '' }}
+    name: C++${{ matrix.std }} ${{ matrix.compiler }} ${{ matrix.config }} shared=${{ matrix.shared }}${{ matrix.noderef == 'OFF' && ' noderef=OFF' || '' }}${{ matrix.bigint && format(' bigint={0}', matrix.bigint) || '' }}${{ matrix.chat == 'OFF' && ' chat=OFF' || '' }}
     runs-on: ubuntu-24.04
 
     strategy:
@@ -79,7 +81,7 @@ jobs:
           - { std: 17, compiler: clang-20, config: Release, shared: 'OFF', package: 23, bigint: boost }
           - { std: 20, compiler: gcc-12,   config: RelWithDebInfo, shared: 'ON', abi: true }
           - { std: 20, compiler: gcc-14,   config: Release, shared: 'ON',  bigint: boost }
-          - { std: 20, compiler: clang-18, config: Debug,   shared: 'OFF' }
+          - { std: 20, compiler: clang-18, config: Debug,   shared: 'OFF', chat: 'OFF' }
           - { std: 20, compiler: clang-20, config: Debug,   shared: 'OFF', noderef: 'OFF', bigint: boost }
           - { std: 23, compiler: gcc-12,   config: Debug,   shared: 'OFF' }
           - { std: 23, compiler: gcc-14,   config: RelWithDebInfo, shared: 'ON', noderef: 'OFF', package: 17, abi: true }
@@ -98,7 +100,7 @@ jobs:
 
     - uses: ./.github/actions/setup-ccache
       with:
-        key: linux-${{ matrix.compiler }}-${{ matrix.config }}-${{ matrix.std }}-${{ matrix.shared }}-${{ matrix.noderef || 'default' }}-${{ matrix.bigint || 'none' }}
+        key: linux-${{ matrix.compiler }}-${{ matrix.config }}-${{ matrix.std }}-${{ matrix.shared }}-${{ matrix.noderef || 'default' }}-${{ matrix.bigint || 'none' }}-${{ matrix.chat || 'ON' }}
 
     - name: Configure
       run: |
@@ -111,6 +113,7 @@ jobs:
           -DJINJA2CPP_NODEREF_CHECKS=${{ matrix.noderef == 'OFF' && 'OFF' || '' }} \
           -DJINJA2CPP_WITH_BIGINT=${{ matrix.bigint || 'none' }} \
           -DJINJA2CPP_CELL_TRACE=${{ matrix.celltrace && 'ON' || 'OFF' }} \
+          -DJINJA2CPP_WITH_CHAT_TEMPLATES=${{ matrix.chat || 'ON' }} \
           "-DCMAKE_CXX_FLAGS=${{ startsWith(matrix.compiler, 'gcc') && '-Wno-error=maybe-uninitialized' || '' }}"
 
     - name: Build

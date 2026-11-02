@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/735
 priority: low
 area: perf
 touches: [src/value_visitors.h#SameStringGetter]

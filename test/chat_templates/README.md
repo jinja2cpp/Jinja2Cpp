@@ -40,10 +40,11 @@ uv venv -p python3.12 /tmp/py312 && uv pip install -p /tmp/py312/bin/python -r t
 
 Each template is rendered with each conversation. Where transformers renders, Jinja2C++ must
 render the same text; where transformers fails, Jinja2C++ must fail too, and a
-`raise_exception` message must appear in the Jinja2C++ error. Until the transformers preset
-lands (0360), the suite configures what the public API expresses (trim/lstrip blocks, loop
-controls, the two globals) and keeps Jinja2's own `tojson`; `divergences.txt` lists what
-differs. A listed render that matches fails the suite, so the list stays exact. To rebuild it:
+`raise_exception` message must appear in the Jinja2C++ error. The suite configures the
+environment with `ConfigureForChatTemplates` (`jinja2cpp/chat_template.h`, docs/tasks/0360) and
+runs only in builds with `JINJA2CPP_WITH_CHAT_TEMPLATES=ON`. `divergences.txt` lists the renders
+that differ, none at present. A listed render that matches fails the suite, so the list stays
+exact. To rebuild it:
 
 ```bash
 JINJA2CPP_CHAT_TEMPLATES_RESULTS=/tmp/chat.txt build/jinja2cpp_tests --gtest_filter='ChatTemplate*'

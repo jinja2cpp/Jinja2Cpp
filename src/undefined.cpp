@@ -82,6 +82,16 @@ InternalValue MakeUndefined(const RenderContext* context, const InternalValue& o
     return MakeUndefinedValue(std::move(info));
 }
 
+InternalValue MakeUndefinedItem(const RenderContext* context, const InternalValue& obj, std::string keyRepr)
+{
+    UndefinedInfo info;
+    info.policy = PolicyOf(context);
+    info.isAttr = false;
+    info.name = std::move(keyRepr);
+    info.objType = obj.IsNone() ? "None" : std::string(Apply<visitors::PythonTypeNameGetter>(obj)) + " object";
+    return MakeUndefinedValue(std::move(info));
+}
+
 std::string UndefinedMessage(const UndefinedInfo& info)
 {
     if (!info.hint.empty())
