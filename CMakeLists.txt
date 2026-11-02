@@ -59,6 +59,7 @@ option(JINJA2CPP_BUILD_FUZZERS "Build the libFuzzer targets in fuzz/ (clang only
 option(JINJA2CPP_STRICT_WARNINGS "Enable additional warnings and treat them as errors" ON)
 set(JINJA2CPP_NODEREF_CHECKS "" CACHE STRING "Checks of the handles that link a parse tree: OFF, ON (Seal and cross-template links), FULL (every access); empty picks FULL for Debug, sanitizer and fuzz builds, else ON")
 set_property(CACHE JINJA2CPP_NODEREF_CHECKS PROPERTY STRINGS "" ON FULL OFF)
+option(JINJA2CPP_WITH_CHAT_TEMPLATES "Build and install jinja2cpp/chat_template.h: ConfigureForChatTemplates renders Hugging Face chat templates as transformers does (docs/tasks/0360)" ON)
 option(JINJA2CPP_WITH_UNICODE_NAMES "Decode \\N{name} escapes in string literals with the Unicode name table (about 450 KB of data)" ON)
 option(JINJA2CPP_CELL_TRACE "Log the borrowed-cell protocol's events to the file the JINJA2CPP_CELL_TRACE environment variable names, for tla/check.py --trace (docs/tasks/0338); a test build only" OFF)
 option(JINJA2CPP_CHECK_SLOTS "Check every name read from a slot against its lookup by name (always on without NDEBUG)" OFF)
@@ -263,6 +264,15 @@ set(JINJA2CPP_SOURCES
 )
 
 CollectSources(PublicSources PublicHeaders ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include)
+# The chat-template preset is its header and one source file; what it switches on is in the core
+# either way, so the switch changes no other part of the library or its ABI (docs/tasks/0360)
+if (JINJA2CPP_WITH_CHAT_TEMPLATES)
+    list(APPEND JINJA2CPP_SOURCES src/chat_template.cpp)
+    set(JINJA2CPP_HAS_CHAT_TEMPLATES 1)
+else ()
+    list(REMOVE_ITEM PublicHeaders include/jinja2cpp/chat_template.h)
+    set(JINJA2CPP_HAS_CHAT_TEMPLATES 0)
+endif ()
 
 add_library(${LIB_TARGET_NAME} ${LIB_LINK_TYPE}
     ${JINJA2CPP_SOURCES}
@@ -284,10 +294,19 @@ endif()
 string(REGEX REPLACE "^([0-9]+\\.[0-9]+).*" "\\1" JINJA2CPP_ORACLE_PYTHON "${JINJA2CPP_ORACLE_PYTHON_LINE}")
 string(REGEX REPLACE "^[Jj]inja2==([^ #;]+).*" "\\1" JINJA2CPP_ORACLE_JINJA2 "${JINJA2CPP_ORACLE_JINJA2_LINE}")
 configure_file(cmake/version.h.in ${JINJA2CPP_GENERATED_INCLUDE_DIR}/jinja2cpp/version.h @ONLY)
+# jinja2cpp/features.h: the build options a user's code can test, and the transformers version the
+# chat-template preset follows, read from the pin of its test oracle
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/test/chat_templates/requirements.txt)
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/test/chat_templates/requirements.txt JINJA2CPP_CHAT_TEMPLATES_TRANSFORMERS_LINE REGEX "^transformers==[0-9]")
+if(NOT JINJA2CPP_CHAT_TEMPLATES_TRANSFORMERS_LINE)
+    message(FATAL_ERROR "Cannot read the transformers pin from test/chat_templates/requirements.txt")
+endif()
+string(REGEX REPLACE "^transformers==([^ #;]+).*" "\\1" JINJA2CPP_CHAT_TEMPLATES_TRANSFORMERS "${JINJA2CPP_CHAT_TEMPLATES_TRANSFORMERS_LINE}")
+configure_file(cmake/features.h.in ${JINJA2CPP_GENERATED_INCLUDE_DIR}/jinja2cpp/features.h @ONLY)
 
 target_sources(${LIB_TARGET_NAME}
     PUBLIC FILE_SET HEADERS
-    FILES ${PublicHeaders} ${JINJA2CPP_GENERATED_INCLUDE_DIR}/jinja2cpp/version.h
+    FILES ${PublicHeaders} ${JINJA2CPP_GENERATED_INCLUDE_DIR}/jinja2cpp/version.h ${JINJA2CPP_GENERATED_INCLUDE_DIR}/jinja2cpp/features.h
     BASE_DIRS include ${JINJA2CPP_GENERATED_INCLUDE_DIR}
 )
 
@@ -522,8 +541,10 @@ if (JINJA2CPP_BUILD_TESTS)
         test/v1_names_test.cpp
         test/value_ptr_test.cpp
         test/parity/parity_test.cpp
-        test/chat_templates/chat_template_test.cpp
     )
+    if (JINJA2CPP_WITH_CHAT_TEMPLATES)
+        list(APPEND JINJA2CPP_TEST_SOURCES test/chat_templates/chat_template_test.cpp test/chat_template_preset_test.cpp)
+    endif ()
     add_executable(jinja2cpp_tests ${JINJA2CPP_TEST_SOURCES})
     target_compile_options(jinja2cpp_tests PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
     # The parity corpus reads its cases with nlohmann::json and copies each context through the
@@ -581,7 +602,9 @@ if (JINJA2CPP_BUILD_TESTS)
     # Differential corpus against Python Jinja2, see test/parity/README.md
     add_test(NAME jinja2cpp_parity COMMAND jinja2cpp_tests --gtest_filter=Parity*)
     # Hugging Face chat templates against transformers, see test/chat_templates/README.md
-    add_test(NAME jinja2cpp_chat_templates COMMAND jinja2cpp_tests --gtest_filter=ChatTemplate*)
+    if (JINJA2CPP_WITH_CHAT_TEMPLATES)
+        add_test(NAME jinja2cpp_chat_templates COMMAND jinja2cpp_tests --gtest_filter=ChatTemplate*)
+    endif ()
     # Every jinja2 symbol the library defines is in the inline ABI namespace v2 (docs/tasks/0076)
     if (CMAKE_NM AND NOT MSVC)
         add_test(NAME jinja2cpp_abi_namespace

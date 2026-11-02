@@ -1613,6 +1613,12 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
 
     if (method->isMutating)
     {
+        if (methods::IsReadOnlyContainers(values))
+        {
+            // Calling the sandbox's unsafe attribute fails with its message
+            callee = methods::UnsafeMethod(receiver, *name, values);
+            return false;
+        }
         receiver = methods::MakeMutable(receiver);
     }
     auto callParams = helpers::EvaluateCallParams(m_params, values);

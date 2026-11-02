@@ -3,17 +3,18 @@
 // (expected/, written by generate.py). See test/chat_templates/README.md and docs/tasks/0360.
 
 #include <jinja2cpp/binding/nlohmann_json.h>
+#include <jinja2cpp/chat_template.h>
 #include <jinja2cpp/json_adapter.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
-#include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
 #include <cctype>
+#include <chrono>
 #include <cstdlib>
 #include <ctime>
 #include <exception>
@@ -30,7 +31,6 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #ifndef JINJA2CPP_CHAT_TEMPLATES_DIR
@@ -155,32 +155,9 @@ const std::map<std::string, Divergence>& Divergences()
     return result;
 }
 
-// The arguments of the globals arrive narrow or wide, as the template is
-std::string Narrow(const jinja2::Value& v)
-{
-    const auto& data = v.GetData();
-    if (const auto* s = v.GetIf<std::string>())
-    {
-        return *s;
-    }
-    if (const auto* s = std::get_if<std::string_view>(&data))
-    {
-        return std::string(*s);
-    }
-    if (const auto* s = v.GetIf<std::wstring>())
-    {
-        return jinja2::ConvertString<std::string>(*s);
-    }
-    if (const auto* s = std::get_if<std::wstring_view>(&data))
-    {
-        return jinja2::ConvertString<std::string>(*s);
-    }
-    throw std::runtime_error("expected a string");
-}
-
 // transformers' strftime_now reads datetime.now(); the suite and generate.py (FIXED_NOW) read
-// 2025-03-14 09:26:53, a Friday
-std::tm FixedNow()
+// 2025-03-14 09:26:53 local time, a Friday
+std::chrono::system_clock::time_point FixedNow()
 {
     std::tm t{};
     t.tm_year = 2025 - 1900;
@@ -189,33 +166,16 @@ std::tm FixedNow()
     t.tm_hour = 9;
     t.tm_min = 26;
     t.tm_sec = 53;
-    t.tm_wday = 5;
-    t.tm_yday = 72;
-    return t;
+    t.tm_isdst = -1;
+    return std::chrono::system_clock::from_time_t(std::mktime(&t));
 }
 
-// The environment transformers' apply_chat_template renders with, as far as the public API
-// expresses it today. Jinja2's own tojson stays: the transformers one comes with the preset
-// (docs/tasks/0360), and divergences.txt lists the renders that differ until then.
+// The environment transformers' apply_chat_template renders with (docs/tasks/0360)
 void ConfigureEnv(jinja2::TemplateEnv& env)
 {
-    jinja2::Settings settings;
-    settings.trimBlocks = true;
-    settings.lstripBlocks = true;
-    settings.extensions.loopControls = true;
-    env.SetSettings(settings);
-    env.AddGlobal("raise_exception",
-                  jinja2::UserCallable{ [](const jinja2::UserCallableParams& p) -> jinja2::Value { throw std::runtime_error(Narrow(p["message"])); },
-                                        { { "message", true } } });
-    env.AddGlobal("strftime_now",
-                  jinja2::UserCallable{ [](const jinja2::UserCallableParams& p) -> jinja2::Value {
-                                           const auto format = Narrow(p["format"]);
-                                           const auto now = FixedNow();
-                                           std::string out(256, '\0');
-                                           out.resize(std::strftime(out.data(), out.size(), format.c_str(), &now));
-                                           return out;
-                                       },
-                                        { { "format", true } } });
+    jinja2::ChatTemplateOptions options;
+    options.now = FixedNow;
+    jinja2::ConfigureForChatTemplates(env, options);
 }
 
 struct Result

@@ -324,7 +324,9 @@ struct StatementInfo
         WithStatement,
         FilterStatement,
         AutoescapeStatement,
-        TransStatement
+        TransStatement,
+        // transformers' `{% generation %}` (Dialect::Transformers)
+        GenerationStatement
     };
 
     Type type{};
@@ -351,7 +353,7 @@ struct StatementInfo
     {
         // One test of a mask, not a chain of compares: it runs for every statement (docs/tasks/0205)
         constexpr unsigned mask = (1U << TemplateRoot) | (1U << ForStatement) | (1U << BlockStatement) | (1U << MacroStatement) | (1U << MacroCallStatement) | (1U << WithStatement)
-                                  | (1U << SetStatement) | (1U << FilterStatement) | (1U << AutoescapeStatement);
+                                  | (1U << SetStatement) | (1U << FilterStatement) | (1U << AutoescapeStatement) | (1U << GenerationStatement);
         return ((mask >> type) & 1U) != 0;
     }
 
@@ -522,6 +524,8 @@ private:
     ParseResult ParseAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndAutoescape(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseGeneration(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParseEndGeneration(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseInTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParsePluralize(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndTrans(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);

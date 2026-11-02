@@ -339,7 +339,7 @@ public:
                 parser.SetAutoescape(autoescape);
             }
 
-            const ParseLimitsScope parseLimits(m_settings->settings.limits);
+            const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect);
             auto parseResult = parser.Parse();
             if (!parseResult)
             {
@@ -638,7 +638,7 @@ public:
         }
         NodeArena nodes;
         TemplateParser<CharT> parser(m_template.get(), *m_settings, m_env, m_templateName, nodes);
-        const ParseLimitsScope parseLimits(m_settings->settings.limits);
+        const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect);
         auto parseResult = parser.Parse();
         if (!parseResult)
         {
@@ -780,6 +780,7 @@ private:
         [[nodiscard]] bool IsWideTarget() const override { return std::is_same_v<CharT, wchar_t>; }
 
         [[nodiscard]] const Settings& GetSettings() const override { return m_host->m_settings->settings; }
+        [[nodiscard]] detail::Dialect GetDialect() const override { return m_host->m_settings->dialect; }
         [[nodiscard]] TemplateEnv* GetEnv() const override { return m_host->m_env; }
         std::minstd_rand& GetRandomEngine() override { return m_random; }
         void GlobalScopeWritten() override

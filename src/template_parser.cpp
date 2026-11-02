@@ -201,6 +201,19 @@ StatementsParser::ParseResult StatementsParser::ParseNonKeywordStatement(LexScan
     {
         return ParseTrans(lexer, statementsInfo, tok);
     }
+    // transformers' AssistantTracker extension (ConfigureForChatTemplates)
+    if (detail::t_parseLimits.dialect == detail::Dialect::Transformers && tok == Token::Identifier)
+    {
+        const auto name = lexer.GetAsString(tok);
+        if (name == "generation")
+        {
+            return ParseGeneration(lexer, statementsInfo, tok);
+        }
+        if (name == "endgeneration")
+        {
+            return ParseEndGeneration(lexer, statementsInfo, tok);
+        }
+    }
     return MakeParseError(ErrorCode::UnexpectedToken, tok);
 }
 
@@ -548,6 +561,7 @@ StatementsParser::ParseResult StatementsParser::ParseLoopControl(StatementInfoLi
         case StatementInfo::MacroStatement:
         case StatementInfo::MacroCallStatement:
         case StatementInfo::BlockStatement:
+        case StatementInfo::GenerationStatement: // a call block's body in transformers
         case StatementInfo::TemplateRoot:
             return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
         default:
@@ -1624,6 +1638,35 @@ StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer
 
     m_bodies.Add(info.renderer, info.tagOffset);
 
+    return ParseResult();
+}
+
+// transformers' `{% generation %}...{% endgeneration %}` renders its body, which is a call block's in transformers:
+// a scope of its own, as `{% with %}` opens, where `break` and `continue` do not reach an enclosing loop. transformers
+// records where the body's output lands only for return_assistant_tokens_mask, which Jinja2C++ does not offer
+StatementsParser::ParseResult StatementsParser::ParseGeneration(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    auto nextTok = lexer.PeekNextToken();
+    if (nextTok != Token::Eof)
+    {
+        return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof);
+    }
+    StatementInfo statementInfo = StatementInfo::Create(StatementInfo::GenerationStatement, stmtTok, m_tagOffset);
+    statementInfo.frame = m_names.PushWith(m_names.Current());
+    statementInfo.renderer = m_nodes.Make<WithStatement>();
+    Push(statementsInfo, std::move(statementInfo));
+    return ParseResult();
+}
+
+StatementsParser::ParseResult StatementsParser::ParseEndGeneration(LexScanner& /*lexer*/, StatementInfoList& statementsInfo, const Token& stmtTok)
+{
+    if (statementsInfo.size() <= 1 || statementsInfo.back().type != StatementInfo::GenerationStatement)
+    {
+        return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
+    }
+    auto info = PopStatement(statementsInfo);
+    m_nodes.Get<WithStatement>(info.renderer).SetMainBody(TakeBody(info));
+    m_bodies.Add(info.renderer, info.tagOffset);
     return ParseResult();
 }
 
