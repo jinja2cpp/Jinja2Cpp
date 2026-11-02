@@ -23,6 +23,7 @@
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -739,8 +740,9 @@ public:
         , m_htmlSafe(options.htmlSafe)
         , m_ensureAscii(options.ensureAscii)
         , m_sortKeys(options.sortKeys)
+        , m_plainBytes(PlainBytesOf(options.htmlSafe, options.ensureAscii))
         , m_indent(options.htmlSafe ? HtmlSafeIndent(std::move(options.indent)) : std::move(options.indent))
-        , m_itemSeparator(options.separators ? options.separators->first : m_indent ? "," : ", ")
+        , m_itemSeparator(options.separators ? options.separators->first : DefaultItemSeparator(m_indent.has_value()))
         , m_keySeparator(options.separators ? options.separators->second : ": ")
     {
     }
@@ -805,7 +807,7 @@ private:
     // Bytes json.dumps keeps as they are (and htmlsafe_json_dumps does not escape): printable
     // ASCII but " and \ (and <, >, & and '); without ensure_ascii, also 0x7F and every byte of
     // a character beyond ASCII
-    bool IsPlainJsonByte(unsigned char ch) const
+    static constexpr bool IsPlainJsonByte(unsigned char ch, bool htmlSafe, bool ensureAscii)
     {
         if (ch < 0x20 || ch == '"' || ch == '\\')
         {
@@ -813,9 +815,35 @@ private:
         }
         if (ch >= 0x7F)
         {
-            return !m_ensureAscii;
+            return !ensureAscii;
         }
-        return !m_htmlSafe || (ch != '<' && ch != '>' && ch != '&' && ch != '\'');
+        return !htmlSafe || (ch != '<' && ch != '>' && ch != '&' && ch != '\'');
+    }
+
+    // json.dumps: ", " between items, "," with an indent, whose newline follows it
+    static std::string DefaultItemSeparator(bool indented) { return indented ? "," : ", "; }
+
+    using PlainBytes = std::array<bool, 256>;
+    template<bool htmlSafe, bool ensureAscii>
+    static const PlainBytes& PlainBytesOf()
+    {
+        static constexpr PlainBytes table = [] {
+            PlainBytes result{};
+            for (unsigned ch = 0; ch != 256; ++ch)
+            {
+                result[ch] = IsPlainJsonByte(static_cast<unsigned char>(ch), htmlSafe, ensureAscii);
+            }
+            return result;
+        }();
+        return table;
+    }
+    static const PlainBytes& PlainBytesOf(bool htmlSafe, bool ensureAscii)
+    {
+        if (htmlSafe)
+        {
+            return ensureAscii ? PlainBytesOf<true, true>() : PlainBytesOf<true, false>();
+        }
+        return ensureAscii ? PlainBytesOf<false, true>() : PlainBytesOf<false, false>();
     }
 
     void AppendUnit(uint32_t unit)
@@ -838,7 +866,7 @@ private:
         while (pos != str.size())
         {
             auto start = pos;
-            while (pos != str.size() && IsPlainJsonByte(static_cast<unsigned char>(str[pos])))
+            while (pos != str.size() && m_plainBytes[static_cast<unsigned char>(str[pos])])
             {
                 ++pos;
             }
@@ -1097,6 +1125,7 @@ private:
     bool m_htmlSafe;
     bool m_ensureAscii;
     bool m_sortKeys;
+    const PlainBytes& m_plainBytes;
     std::optional<std::string> m_indent;
     std::string m_itemSeparator;
     std::string m_keySeparator;

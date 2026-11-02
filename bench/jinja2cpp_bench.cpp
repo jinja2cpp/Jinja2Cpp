@@ -40,6 +40,10 @@
 #include <jinja2cpp/binding/nlohmann_json.h>
 #include <nlohmann/json.hpp>
 
+#include <jinja2cpp/config.h>
+#if JINJA2CPP_HAS_CHAT_TEMPLATES
+#include <jinja2cpp/chat_template.h>
+#endif
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
@@ -54,9 +58,11 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -288,6 +294,17 @@ std::unique_ptr<jinja2::BasicTemplate<CharT>>& SharedOf(Case& c)
     }
 }
 
+// Whether this build has what the case's settings.json asks for: a "transformers" case needs
+// the chat-template preset (JINJA2CPP_WITH_CHAT_TEMPLATES)
+bool HasPresetOf(const fs::path& dir)
+{
+    if (JINJA2CPP_HAS_CHAT_TEMPLATES || !fs::exists(dir / "settings.json"))
+    {
+        return true;
+    }
+    return !nlohmann::json::parse(ReadFile(dir / "settings.json")).value("transformers", false);
+}
+
 std::unique_ptr<Case> LoadCase(const fs::path& dir, bool reflect)
 {
     auto result = std::make_unique<Case>();
@@ -302,6 +319,24 @@ std::unique_ptr<Case> LoadCase(const fs::path& dir, bool reflect)
         envSettings.trimBlocks = settings.value("trim_blocks", false);
         envSettings.lstripBlocks = settings.value("lstrip_blocks", false);
         envSettings.autoescape = settings.value("autoescape", false);
+#if JINJA2CPP_HAS_CHAT_TEMPLATES
+        // A Hugging Face chat template, rendered as transformers does; strftime_now reads the
+        // fixed clock python_bench.py sets
+        if (settings.value("transformers", false))
+        {
+            jinja2::ConfigureForChatTemplates(*result->env, { [] {
+                std::tm t{};
+                t.tm_year = 2025 - 1900;
+                t.tm_mon = 2;
+                t.tm_mday = 14;
+                t.tm_hour = 9;
+                t.tm_min = 26;
+                t.tm_sec = 53;
+                t.tm_isdst = -1;
+                return std::chrono::system_clock::from_time_t(std::mktime(&t));
+            } });
+        }
+#endif
     }
     if (result->wide)
     {
@@ -818,7 +853,7 @@ int main(int argc, char** argv)
     std::vector<fs::path> dirs;
     for (const auto& entry : fs::directory_iterator(casesDir))
     {
-        if (entry.is_directory() && fs::exists(entry.path() / "main.j2"))
+        if (entry.is_directory() && fs::exists(entry.path() / "main.j2") && HasPresetOf(entry.path()))
         {
             dirs.push_back(entry.path());
         }
