@@ -2266,35 +2266,26 @@ struct StringConverterImpl : public BaseVisitor<decltype(std::declval<Fn>()(std:
     const Fn& m_fn;
 };
 
+// Returns the value's string as a string of CharT, converting from the other character
+// type, and nullopt for any other value. The result is built in place in the optional, so
+// a string costs one copy and no move (docs/tasks/0376)
 template<typename CharT>
-struct SameStringGetter : public visitors::BaseVisitor<nonstd::expected<void, std::basic_string<CharT>>>
+struct SameStringGetter : public visitors::BaseVisitor<std::optional<std::basic_string<CharT>>>
 {
     using ResultString = std::basic_string<CharT>;
     using OtherString = std::conditional_t<std::is_same_v<CharT, char>, std::wstring, std::string>;
     using ResultStringView = std::basic_string_view<CharT>;
     using OtherStringView = std::conditional_t<std::is_same_v<CharT, char>, std::wstring_view, std::string_view>;
-    using Result = nonstd::expected<void, ResultString>;
+    using Result = std::optional<ResultString>;
     using BaseVisitor<Result>::operator();
 
-    Result operator()(const ResultString& str) const
-    {
-        return MakeUnexpected(str);
-    }
+    Result operator()(const ResultString& str) const { return Result(std::in_place, str); }
 
-    Result operator()(const ResultStringView& str) const
-    {
-        return MakeUnexpected(ResultString(str.begin(), str.end()));
-    }
+    Result operator()(const ResultStringView& str) const { return Result(std::in_place, str.begin(), str.end()); }
 
-    Result operator()(const OtherString& str) const
-    {
-        return MakeUnexpected(ConvertString<ResultString>(str));
-    }
+    Result operator()(const OtherString& str) const { return Result(std::in_place, ConvertString<ResultString>(str)); }
 
-    Result operator()(const OtherStringView& str) const
-    {
-        return MakeUnexpected(ConvertString<ResultString>(str));
-    }
+    Result operator()(const OtherStringView& str) const { return Result(std::in_place, ConvertString<ResultString>(str)); }
 
     Result operator()(const BigIntView&) const { return Result(); }
 };
@@ -2323,29 +2314,15 @@ auto ApplyStringConverter(const InternalValue& str, Fn&& fn)
 }
 
 template<typename CharT>
-auto GetAsSameString(const std::basic_string<CharT>&, const InternalValue& val)
+std::optional<std::basic_string<CharT>> GetAsSameString(const std::basic_string<CharT>&, const InternalValue& val)
 {
-    using Result = std::optional<std::basic_string<CharT>>;
-    auto result = Apply<visitors::SameStringGetter<CharT>>(val);
-    if (!result)
-    {
-        return Result(result.error());
-    }
-
-    return Result();
+    return Apply<visitors::SameStringGetter<CharT>>(val);
 }
 
 template<typename CharT>
-auto GetAsSameString(const std::basic_string_view<CharT>&, const InternalValue& val)
+std::optional<std::basic_string<CharT>> GetAsSameString(const std::basic_string_view<CharT>&, const InternalValue& val)
 {
-    using Result = std::optional<std::basic_string<CharT>>;
-    auto result = Apply<visitors::SameStringGetter<CharT>>(val);
-    if (!result)
-    {
-        return Result(result.error());
-    }
-
-    return Result();
+    return Apply<visitors::SameStringGetter<CharT>>(val);
 }
 
 namespace visitors
