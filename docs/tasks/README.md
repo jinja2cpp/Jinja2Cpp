@@ -123,7 +123,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0045](0045-ordering-none-and-undefined.md) | `sort`, `min` and `max` over `None`, undefined values or dicts | parity | low | done |
 | [0047](0047-none-leftovers.md) | None and undefined: what 0034 left behind | parity | medium | done |
 | [0048](0048-filter-behaviour-leftovers.md) | Filter behaviour: what 0019 left behind | parity | low | done |
-| [0049](0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | parity | low | open |
+| [0049](0049-aliasing-borrowed-containers.md) | Mutation follow-ups: aliases of context data, cycles, loops over changing lists | parity | low | done |
 | [0050](0050-error-location-quadratic.md) | Error reporting is quadratic for many errors on one long line | perf | low | done |
 | [0051](0051-markup-leftovers.md) | Markup: what 0025 left behind | parity | low | done |
 | [0052](0052-undefined-in-filters.md) | Undefined in filters, tests and global functions: what 0026 left behind | parity | low | done |
@@ -370,8 +370,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0296](0296-typed-string-view-dangling.md) | A typed `std::string_view` parameter given the other character width dangles | api | high | done |
 | [0297](0297-in-none-and-modulo-undefined.md) | `x in None` and `'text' % undefined` differ from Python | parity | low | done |
 | [0298](0298-include-of-extending-template-loop.md) | An included template that extends a parent reading `loop` | parity | low | done |
-| [0299](0299-module-exports-skip-imports.md) | A module exports the names its top level imports, and keeps a re-set import hidden | parity | low | open |
-| [0300](0300-module-export-callable-gaps.md) | Callables that do not cross a `Template::MakeModule` export | parity | low | open |
+| [0299](0299-module-exports-skip-imports.md) | A module exports the names its top level imports, and keeps a re-set import hidden | parity | low | in-progress |
+| [0300](0300-module-export-callable-gaps.md) | Callables that do not cross a `Template::MakeModule` export | parity | low | in-progress |
 | [0301](0301-module-call-loads-accumulate.md) | A `Template::MakeModule` module keeps what each of its calls loads | robustness | medium | done |
 | [0302](0302-simdjson-binding.md) | An optional simdjson binding | api | low | open |
 | [0303](0303-retire-rapidjson-backend.md) | Retire the built-in RapidJSON backend | build | medium | done |
@@ -392,10 +392,10 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0320](0320-typed-callable-omitted-argument.md) | A typed callable with an omitted optional argument is not called | api | low | done |
 | [0321](0321-load-copies-on-write.md) | Load replaces the template for its own object only | robustness | high | done |
 | [0322](0322-parity-corpus-through-reflect.md) | Run the parity corpus with the context as a JSON view | parity | low | in-progress |
-| [0323](0323-stored-self-sees-includer-names.md) | A `self` an include stored does not see the names the includer set | parity | low | open |
+| [0323](0323-stored-self-sees-includer-names.md) | A `self` an include stored does not see the names the includer set | parity | low | in-progress |
 | [0324](0324-nested-render-sees-global-changed-in-place.md) | A nested render does not see a global the outer render changed in place | robustness | medium | open |
 | [0325](0325-autoreload-date-before-read.md) | A reload can cache the new date with the old text | robustness | low | open |
-| [0326](0326-nested-macro-closure-after-outer-call.md) | A macro defined in a macro loses the outer call's names after that call returned | parity | medium | open |
+| [0326](0326-nested-macro-closure-after-outer-call.md) | A macro defined in a macro loses the outer call's names after that call returned | parity | medium | in-progress |
 | [0327](0327-change-globals-use-count-race.md) | Changing a global can race with a render that just dropped the globals map | robustness | medium | open |
 | [0328](0328-bench-meta-block.md) | A benchmark for `{% meta %}` and the internal JSON reader | perf | low | open |
 | [0329](0329-reflect-counts-in-ci.md) | Count `--data reflect` in the PR gate and the trend | perf | medium | open |
@@ -442,9 +442,13 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0370](0370-json-view-is-a-dict.md) | A JSON object seen through Reflect behaves as a reflected struct, not as a dict | parity | medium | open |
 | [0371](0371-attr-filter-debug-undefined.md) | `|attr` of a missing attribute under DebugUndefined prints empty | parity | low | open |
 | [0372](0372-unicode-version-corpus-cases.md) | Corpus cases on code points whose Unicode properties changed after 15.0 | parity | low | open |
+| [0373](0373-closure-capture-module-call-and-scoped-frames.md) | Closures kept past a module call or a scoped frame lose their names | parity | low | open |
+| [0375](0375-closure-capture-free-variables.md) | A kept closure copies only the names its body reads | perf | low | open |
 | [0376](0376-same-string-getter-round-trip.md) | GetAsSameString moves its string through the PLT | perf | low | done |
 | [0377](0377-chat-template-assistant-mask-and-security-error.md) | Chat templates: the assistant token mask and the sandbox's SecurityError | api | low | open |
 | [0380](0380-markup-escape-copy-assignment.md) | MarkupEscape calls InternalValue's copy assignment out of line | perf | low | open |
 | [0381](0381-host-object-operators.md) | Host objects: arithmetic and ordering operators | parity | low | open |
 | [0382](0382-urlencode-of-loop.md) | `loop|urlencode` iterates the rest of the loop | parity | low | open |
 | [0383](0383-lazy-filter-results-not-sequences.md) | A lazy filter result is no sequence: `last` and slicing it | parity | low | open |
+| [0384](0384-dormant-chat-preset-load-cost.md) | Keep the dormant chat-template preset free on every Load | perf | low | done |
+| [0385](0385-asan-gcc13-sign-conversion-expressions-test.md) | Sanitizer build with GCC 13 fails on a "\x80" literal in expressions_test | build | low | open |
