@@ -510,7 +510,7 @@ private:
     static bool AtTopLevel(const StatementInfoList& statementsInfo);
     void AddReexport(const StatementInfoList& statementsInfo, Span<const TargetNode> target, std::size_t tagOffset);
     void AddReexport(const StatementInfoList& statementsInfo, ArenaText name, std::size_t tagOffset);
-    void AddReexport(const std::vector<ArenaText>& names, std::size_t tagOffset);
+    void AddReexport(Span<const ArenaText> names, std::size_t tagOffset);
     ParseResult ParseWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);

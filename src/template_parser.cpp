@@ -1137,7 +1137,7 @@ void StatementsParser::AddReexport(const StatementInfoList& statementsInfo, Span
     {
         return;
     }
-    std::vector<ArenaText> names;
+    SmallVector<ArenaText, 4> names;
     for (const auto& node : target)
     {
         if (node.IsPlainName())
@@ -1145,18 +1145,18 @@ void StatementsParser::AddReexport(const StatementInfoList& statementsInfo, Span
             names.push_back(node.name);
         }
     }
-    AddReexport(names, tagOffset);
+    AddReexport(Span<const ArenaText>(names.data(), names.size()), tagOffset);
 }
 
 void StatementsParser::AddReexport(const StatementInfoList& statementsInfo, ArenaText name, std::size_t tagOffset)
 {
     if (AtTopLevel(statementsInfo))
     {
-        AddReexport(std::vector<ArenaText>{ name }, tagOffset);
+        AddReexport(Span<const ArenaText>(&name, 1), tagOffset);
     }
 }
 
-void StatementsParser::AddReexport(const std::vector<ArenaText>& names, std::size_t tagOffset)
+void StatementsParser::AddReexport(Span<const ArenaText> names, std::size_t tagOffset)
 {
     // Every top-level name, not only the ones this template imported: the template can be the
     // parent of one that imported it (RenderAsParent shares the child's top level)
