@@ -3653,6 +3653,483 @@
    "env": {},
    "templates": {},
    "output": "'\\xe9'"
+  },
+  {
+   "id": "methods.str_digit_numeric_edges",
+   "template": "{{ 'T' if '١٢'.isdigit() else 'F' }}{{ 'T' if '①'.isdigit() else 'F' }}{{ 'T' if '①'.isdecimal() else 'F' }}{{ 'T' if '七'.isnumeric() else 'F' }}{{ 'T' if '七'.isdigit() else 'F' }}{{ 'T' if ''.isdigit() else 'F' }}{{ 'T' if ''.isnumeric() else 'F' }}{{ 'T' if 'a1'.isnumeric() else 'F' }}{{ 'T' if '𝟘'.isdigit() else 'F' }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "TTFTFFFFT"
+  },
+  {
+   "id": "methods.str_casefold_unicode",
+   "template": "{{ 'ΣΑΣ'.casefold() }}|{{ 'ﬁ'.casefold() }}|{{ 'İ'.casefold()|length }}|{{ 'ᾈ'.casefold() }}|{{ 'ABC'.casefold() }}|{{ 'µ'.casefold() }}|{{ ''.casefold() }}|{{ 'Straße'.casefold() == 'STRASSE'.casefold() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "σασ|fi|2|ἀι|abc|μ||True"
+  },
+  {
+   "id": "methods.str_isascii_isprintable_edges",
+   "template": "{{ 'T' if ''.isascii() else 'F' }}{{ 'T' if 'é'.isascii() else 'F' }}{{ 'T' if ''.isascii() else 'F' }}{{ 'T' if ''.isprintable() else 'F' }}{{ 'T' if 'é ü'.isprintable() else 'F' }}{{ 'T' if '­'.isprintable() else 'F' }}{{ 'T' if ' '.isprintable() else 'F' }}{{ 'T' if '😀'.isprintable() else 'F' }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "TFTTTFFT"
+  },
+  {
+   "id": "methods.str_isidentifier_edges",
+   "template": "{{ 'T' if ''.isidentifier() else 'F' }}{{ 'T' if '_'.isidentifier() else 'F' }}{{ 'T' if '1a'.isidentifier() else 'F' }}{{ 'T' if 'été'.isidentifier() else 'F' }}{{ 'T' if 'a-b'.isidentifier() else 'F' }}{{ 'T' if 'x١'.isidentifier() else 'F' }}{{ 'T' if '١x'.isidentifier() else 'F' }}{{ 'T' if 'if'.isidentifier() else 'F' }}{{ 'T' if 'a·b'.isidentifier() else 'F' }}{{ 'T' if '℘'.isidentifier() else 'F' }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "FTFTFTFTTT"
+  },
+  {
+   "id": "methods.markup_casefold_tests",
+   "template": "{{ ('<B>ß</B>'|safe).casefold() }}|{{ 'T' if ('<b>'|safe).isascii() else 'F' }}{{ 'T' if ('ab'|safe).isidentifier() else 'F' }}{{ 'T' if ('²'|safe).isdigit() else 'F' }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "<b>ss</b>|TTT"
+  },
+  {
+   "id": "methods.str_new_methods_reject_args",
+   "template": "{{ 'a'.casefold(1) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "str.casefold() takes no arguments (1 given)"
+   }
+  },
+  {
+   "id": "methods.str_format_attr_methods",
+   "template": "{{ '{0.upper}'.format('a')[:30] is string }}|{{ '{x.items}'.format(x={'items': 1}) != '1' }}|{{ '{0[y]}'.format({'y': 2}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|True|2"
+  },
+  {
+   "id": "methods.str_format_attr_namespace",
+   "template": "{% set ns = namespace(v=3) %}{{ '{0.v}'.format(ns) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "3"
+  },
+  {
+   "id": "methods.str_format_attr_missing_on_str",
+   "template": "{{ '{0.nope}'.format('a') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "AttributeError",
+    "message": "'str' object has no attribute 'nope'"
+   }
+  },
+  {
+   "id": "methods.str_format_attr_of_undefined",
+   "template": "{{ '{0.y}'.format(nope) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "methods.str_format_ascii_conversion_edges",
+   "template": "{{ '{!a}'.format(['é', '😀', 'Ā', 'x']) }}|{{ '{!a}'.format(1) }}|{{ '{!a:>12}'.format('ü') }}|{{ '{0!a}{0!r}{0!s}'.format('ÿ') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "['\\xe9', '\\U0001f600', '\\u0100', 'x']|1|      '\\xfc'|'\\xff''ÿ'ÿ"
+  },
+  {
+   "id": "methods.str_format_item_of_namespace",
+   "template": "{% set ns = namespace(v=3) %}{{ '{0[v]}'.format(ns) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'Namespace' object is not subscriptable"
+   }
+  },
+  {
+   "id": "methods.str_format_item_of_loop",
+   "template": "{% for i in [1] %}{{ '{0[index]}'.format(loop) }}{% endfor %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'LoopContext' object is not subscriptable"
+   }
+  },
+  {
+   "id": "methods.str_format_item_missing_key",
+   "template": "{{ '{0[z]}'.format({'y': 1}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "KeyError",
+    "message": "'z'"
+   }
+  },
+  {
+   "id": "methods.str_format_item_list_index",
+   "template": "{{ '{0[1]}'.format(['a', 'b']) }}|{{ '{0[1]}'.format('xyz') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "b|y"
+  },
+  {
+   "id": "methods.str_format_undefined_items",
+   "template": "{{ '[{0[x]}|{0[y]}]'.format({'x': nope, 'y': 1}) }}|{{ '[{0[0]}{0[-1]}]'.format([nope, 2]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "list indices must be integers or slices, not str"
+   }
+  },
+  {
+   "id": "methods.str_format_groupby_fields",
+   "template": "{% for g in [{'a': 1}, {'a': 2}]|groupby('a') %}{{ '{0.grouper}:{0.list}'.format(g) }},{% endfor %}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "1:[{'a': 1}],2:[{'a': 2}],"
+  },
+  {
+   "id": "methods.str_format_item_errors",
+   "template": "{{ '{0[5]}'.format([1]) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "IndexError",
+    "message": "list index out of range"
+   }
+  },
+  {
+   "id": "methods.str_format_item_of_int",
+   "template": "{{ '{0[0]}'.format(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not subscriptable"
+   }
+  },
+  {
+   "id": "methods.markup_format_ascii_conversion",
+   "template": "{{ ('<p>{0!a}</p>'|safe).format('<é>') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "<p>&#39;&lt;\\xe9&gt;&#39;</p>"
+  },
+  {
+   "id": "methods.number_data_attributes",
+   "template": "{{ (3).real }}|{{ (3).denominator }}|{{ 2.5.imag }}|{{ '{0.numerator}'.format(4) }}|{{ 7|attr('real') }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "3|1|0.0|4|7"
   }
  ]
 }

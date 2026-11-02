@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Generate src/unicode_case.h: the full Unicode case mappings of str.upper(), str.lower()
-and str.title()'s per-character titlecase, the Cased and Case_Ignorable sets that
+"""Generate src/unicode_case.h: the full Unicode case mappings of str.upper(), str.lower(),
+str.casefold() and str.title()'s per-character titlecase, the Cased and Case_Ignorable sets that
 decide Python's Final_Sigma rule, and the Uppercase, Lowercase and titlecase sets that
 str.swapcase(), str.title() and the str.is*() case tests look at.
 
@@ -144,6 +144,8 @@ size_t MapCase(const CaseRun (&runs)[R], const CaseMulti (&multi)[M], uint32_t c
 inline size_t ToUpper(uint32_t cp, uint32_t (&out)[3]) { return MapCase(UpperRuns, UpperMulti, cp, out); }
 inline size_t ToLower(uint32_t cp, uint32_t (&out)[3]) { return MapCase(LowerRuns, LowerMulti, cp, out); }
 inline size_t ToTitle(uint32_t cp, uint32_t (&out)[3]) { return MapCase(TitleRuns, TitleMulti, cp, out); }
+// str.casefold() for one code point; unlike lower() it has no context rule
+inline size_t ToFold(uint32_t cp, uint32_t (&out)[3]) { return MapCase(FoldRuns, FoldMulti, cp, out); }
 
 // The Cased (and not Case_Ignorable) and Case_Ignorable sets of CPython's Final_Sigma rule
 inline bool IsCased(uint32_t cp) { return InRanges(CasedRanges, cp); }
@@ -173,6 +175,9 @@ def main():
         runs, multi = split(mappings(fn))
         parts.append(run_table(name, "str.{}() of one code point, single code point results".format(name.lower()), runs))
         parts.append(multi_table(name, "str.{}() of one code point, longer results".format(name.lower()), multi))
+    runs, multi = split(mappings(str.casefold))
+    parts.append(run_table("Fold", "str.casefold() of one code point, single code point results", runs))
+    parts.append(multi_table("Fold", "str.casefold() of one code point, longer results", multi))
     parts.append(range_table("Cased", "Cased and not Case_Ignorable", ranges(cased)))
     parts.append(range_table("CaseIgnorable", "Case_Ignorable (cased or not)", ranges(case_ignorable)))
     parts.append(range_table("Uppercase", "Uppercase: str.isupper() of one character", ranges(is_upper)))
