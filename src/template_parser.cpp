@@ -746,8 +746,12 @@ StatementsParser::ParseResult StatementsParser::ParseSet(LexScanner& lexer, Stat
         }
         // Stored once the value is read, which may read the name itself
         m_names.AddStores(m_names.Current(), m_nodes[vars], m_nodes);
-        m_bodies.Add(m_nodes.Make<SetLineStatement>(vars, *expr), m_tagOffset);
-        AddReexport(statementsInfo, m_nodes[vars], m_tagOffset);
+        const auto statement = m_nodes.Make<SetLineStatement>(vars, *expr);
+        if (AtTopLevel(statementsInfo))
+        {
+            m_nodes[statement].SetReexports();
+        }
+        m_bodies.Add(statement, m_tagOffset);
     }
     else if (lexer.EatIfEqual('|'))
     {
@@ -807,8 +811,11 @@ StatementsParser::ParseResult StatementsParser::ParseEndSet(LexScanner&, Stateme
     const auto& outer = statementsInfo.back();
     const auto kind = StatementInfo::OwnsFrame(outer.type) || IsLoopElse(statementsInfo) ? NameResolver::StoreKind::Store : NameResolver::StoreKind::Branch;
     m_names.AddStores(outer.frame, m_nodes[statement.GetTarget()], m_nodes, kind);
+    if (AtTopLevel(statementsInfo))
+    {
+        statement.SetReexports();
+    }
     m_bodies.Add(info.renderer, info.tagOffset);
-    AddReexport(statementsInfo, m_nodes[statement.GetTarget()], info.tagOffset);
 
     return {};
 }
@@ -1119,8 +1126,11 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
     renderer.SetMainBody(TakeBody(info));
     renderer.SetBodyMarks(info.marks, m_nodes.Marks());
 
+    if (AtTopLevel(statementsInfo))
+    {
+        renderer.SetReexports();
+    }
     m_bodies.Add(info.renderer, info.tagOffset);
-    AddReexport(statementsInfo, renderer.GetNameText(), info.tagOffset);
 
     return ParseResult();
 }
@@ -1129,41 +1139,6 @@ bool StatementsParser::AtTopLevel(const StatementInfoList& statementsInfo)
 {
     // Only `if` branches lie between the root and a top-level statement
     return std::none_of(statementsInfo.begin() + (statementsInfo.empty() ? 0 : 1), statementsInfo.end(), [](const StatementInfo& info) { return StatementInfo::OwnsFrame(info.type); });
-}
-
-void StatementsParser::AddReexport(const StatementInfoList& statementsInfo, Span<const TargetNode> target, std::size_t tagOffset)
-{
-    if (!AtTopLevel(statementsInfo))
-    {
-        return;
-    }
-    SmallVector<ArenaText, 4> names;
-    for (const auto& node : target)
-    {
-        if (node.IsPlainName())
-        {
-            names.push_back(node.name);
-        }
-    }
-    AddReexport(Span<const ArenaText>(names.data(), names.size()), tagOffset);
-}
-
-void StatementsParser::AddReexport(const StatementInfoList& statementsInfo, ArenaText name, std::size_t tagOffset)
-{
-    if (AtTopLevel(statementsInfo))
-    {
-        AddReexport(Span<const ArenaText>(&name, 1), tagOffset);
-    }
-}
-
-void StatementsParser::AddReexport(Span<const ArenaText> names, std::size_t tagOffset)
-{
-    // Every top-level name, not only the ones this template imported: the template can be the
-    // parent of one that imported it (RenderAsParent shares the child's top level)
-    if (!names.empty())
-    {
-        m_bodies.Add(m_nodes.Make<ReexportStatement>(m_nodes.MakeSpan(names)), tagOffset);
-    }
 }
 
 namespace

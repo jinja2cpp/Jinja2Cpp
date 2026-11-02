@@ -226,6 +226,14 @@ class RenderContext;
 class ClosureSite;
 struct ClosureCapture;
 struct ClosureHome;
+// What a call of a closure sees of the frames it was defined in, which have ended
+// (ClosureCapture, ClosureSite::Kept): the frames' own names over those below them, each
+// possibly null
+struct ClosureKept
+{
+    std::shared_ptr<const InternalValueMap> frames;
+    std::shared_ptr<const InternalValueMap> base;
+};
 // The names a module's top level imported and has not set again since: Jinja2 exports none of
 // them (docs/tasks/0299)
 using ModuleImports = std::vector<std::string>;
@@ -304,7 +312,7 @@ public:
     [[nodiscard]] bool empty() const { return m_size == 0; }
 
     template<typename... Args>
-    InternalValueMap& Push(Args&&... args)
+    JINJA2CPP_HOT_INLINE InternalValueMap& Push(Args&&... args)
     {
         if (m_size < ChunkSize)
         {
@@ -761,6 +769,8 @@ public:
     // which the module owns with the context (ImportedModule)
     void SetModuleImports(ModuleImports* imports) { m_moduleImports = imports; }
     // That record while the module's top level runs; null elsewhere
+    // Whether a module's top level imported a name it has not bound again: one test for the rest
+    [[nodiscard]] bool HasModuleImports() const { return m_moduleImports && !m_moduleImports->empty(); }
     [[nodiscard]] ModuleImports* TopLevelModuleImports() const { return m_moduleImports && GetScopesCount() == 1 ? m_moduleImports : nullptr; }
     // Copies, for each closure defined here that keeps what it sees of its frames
     // (ClosureCapture) and was defined in the innermost scope, `count` being the number of
@@ -1165,9 +1175,9 @@ private:
     // Adds a closure defined here that keeps what it sees (ClosureSite::CaptureOnEnd). Defined
     // in statements.cpp
     void AddClosureCapture(const std::shared_ptr<ClosureCapture>& capture);
-    // A scope holding what `home` kept (ClosureHome::captured over capturedBase), linked below
-    // `link` (HomeCall::EnterCaptured). Defined in statements.cpp. Throws std::bad_alloc
-    void EnterCapturedScope(const ClosureHome& home, size_t link);
+    // A scope holding what a closure kept (ClosureSite::Kept), linked below `link`
+    // (HomeCall::EnterCaptured). Defined in statements.cpp. Throws std::bad_alloc
+    void EnterCapturedScope(const ClosureKept& kept, size_t link);
     // Whether something outside the innermost scope, the frame of `capture` that ends, holds
     // one of the closures that keep `capture`: else no call can read the copy. Defined in
     // statements.cpp
@@ -1756,11 +1766,18 @@ struct ClosureHome
     // them for ScopeView::NoLink
     size_t link = ScopeView::NoLink;
     Epoch epoch = Epoch::Home;
-    // What the closure kept of the frames it was defined in, which have ended
-    // (ClosureCapture): the body sees these names first, below `link`, then those of
-    // `capturedBase`. Null for most calls
-    std::shared_ptr<const InternalValueMap> captured;
-    std::shared_ptr<const InternalValueMap> capturedBase;
+    // Whether the body sees what the closure kept of the frames it was defined in, which have
+    // ended (ClosureCapture, read through the site: ClosureSite::Kept). A marker rather than the
+    // copies, so that the calls that have none, nearly all, do not make or release references
+    enum class Kept : uint8_t
+    {
+        None,
+        // The frames' own names
+        Frames,
+        // Those over what the context and its parents held when it ended (ClosureCapture::base)
+        FramesAndBase
+    };
+    Kept kept = Kept::None;
 };
 
 // Where a closure (a macro, a call block's caller, a recursive loop's loop(), super()) was
@@ -1795,7 +1812,7 @@ public:
     //    context (ClosureCapture, docs/tasks/0323), the params, globals and built-ins. An
     //    imported module's context lives as long as the render (docs/tasks/0167). One that
     //    ended with the host's call that made it (docs/tasks/0301) fails with TemplateExpired
-    [[nodiscard]] ClosureHome Resolve(RenderContext& caller) const
+    [[nodiscard]] JINJA2CPP_HOT_INLINE ClosureHome Resolve(RenderContext& caller) const
     {
         ClosureHome home;
         if (IsDefinedIn(caller))
@@ -1813,10 +1830,9 @@ public:
                     ThrowEndedWithCall(caller);
                 }
                 auto ended = Ended(caller);
-                if (const auto capture = m_capture.lock())
+                if (!m_capture.expired())
                 {
-                    ended.captured = capture->names.lock();
-                    ended.capturedBase = capture->base.lock();
+                    ended.kept = ClosureHome::Kept::FramesAndBase;
                 }
                 return ended;
             }
@@ -1840,9 +1856,9 @@ public:
         }
         home.link = context.HasScopeBelow(m_rootDepth, m_rootSerial) ? m_rootDepth : context.m_parentDepth;
         home.epoch = ClosureHome::Epoch::Fresh;
-        if (const auto capture = m_capture.lock())
+        if (!m_capture.expired())
         {
-            home.captured = capture->names.lock();
+            home.kept = ClosureHome::Kept::Frames;
         }
         return home;
     }
@@ -1852,6 +1868,8 @@ public:
     [[nodiscard]] bool OutlivesItsFrames(const RenderContext& context) const { return (m_state & TopLevel) == 0 || context.m_endsBeforeRender; }
     // The capture CaptureOnEnd gave the closure, while a copy of the closure keeps it
     [[nodiscard]] std::shared_ptr<ClosureCapture> Capture() const { return m_capture.lock(); }
+    // What a call `home` resolved to sees of the closure's ended frames (ClosureHome::kept)
+    [[nodiscard]] ClosureKept Kept(const ClosureHome& home) const;
     // Makes the closure keep what it sees of its frames when they end (ClosureCapture). For a
     // site OutlivesItsFrames, made in `context` just now. The site holds the capture weakly:
     // the callable made of it keeps the result (Callable::SetKeepAlive), so that the copy of
@@ -2219,18 +2237,22 @@ private:
             }
         }
         saved.bodyEpoch = context.m_epoch;
-        if (home.captured || home.capturedBase)
+        if (home.kept != ClosureHome::Kept::None)
         {
-            EnterCaptured(context, home, home.link);
+            EnterCaptured(context, home);
         }
     }
     // The names a closure kept of its ended frames (ClosureHome::captured), in a scope of
     // their own on `context`, linked below `link`: the body's scope links to that scope,
     // which Leave removes
-    JINJA2CPP_NOINLINE_INLINE void EnterCaptured(RenderContext& context, const ClosureHome& home, size_t link)
+    JINJA2CPP_NOINLINE_INLINE void EnterCaptured(RenderContext& context, const ClosureHome& home)
     {
-        context.EnterCapturedScope(home, link);
-        m_link = context.GetScopesCount();
+        const auto kept = m_site.Kept(home);
+        if (kept.frames || kept.base)
+        {
+            context.EnterCapturedScope(kept, home.link);
+            m_link = context.GetScopesCount();
+        }
     }
     JINJA2CPP_NOINLINE_INLINE static void Leave(RenderContext& context, const HomeCallSaved& saved) // NOLINT(bugprone-exception-escape): leaving scopes and dropping views free memory only
     {

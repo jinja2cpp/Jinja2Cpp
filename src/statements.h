@@ -299,12 +299,19 @@ public:
     SetStatement& operator=(SetStatement&&) = delete;
 
     [[nodiscard]] AssignTarget GetTarget() const { return m_target; }
+    // A top-level `set`: at a module's top level its names are exported again, an import's too
+    // (Jinja2's exported_vars, docs/tasks/0299)
+    void SetReexports() { m_reexports = true; }
 
 protected:
     ~SetStatement() = default;
+    [[nodiscard]] bool Reexports() const { return m_reexports; }
+    // After the names are bound
+    void Reexport(RenderContext& values) const;
 
 private:
     const AssignTarget m_target;
+    bool m_reexports = false;
 };
 
 class SetLineStatement final : public SetStatement
@@ -624,29 +631,6 @@ private:
     mutable InternalValue m_object;
 };
 
-// After a `set` or a `macro` that binds a name an import bound before it in the template: at a
-// module's top level the name is exported again (Jinja2's exported_vars, docs/tasks/0299). The
-// parser adds one only after such a statement, so no other template pays for it
-class ReexportStatement final : public Statement
-{
-public:
-    static constexpr NodeKind Kind = NodeKind::ReexportStmt;
-    void VisitRefs(detail::RefChecker& refs) const
-    {
-        refs(m_names, [](detail::RefChecker& checker, const ArenaText& name) { checker(name); });
-    }
-
-    explicit ReexportStatement(ArenaSpan<ArenaText> names)
-        : m_names(names)
-    {
-    }
-
-    void Render(OutStream& os, RenderContext& values) override;
-
-private:
-    ArenaSpan<ArenaText> m_names;
-};
-
 class IncludeStatement final : public Statement
 {
 public:
@@ -784,6 +768,8 @@ public:
 
     // Jinja2: a declared `caller` argument of a macro that uses caller needs a default
     [[nodiscard]] bool HasInvalidCallerParam() const { return (m_specialNames & UsesCaller) != 0 && m_callerWithoutDefault; }
+    // As SetStatement::SetReexports
+    void SetReexports() { m_reexports = true; }
 
     void Render(OutStream& os, RenderContext& values) override;
     // The slots a call of the body takes (0117 P1)
@@ -855,6 +841,8 @@ protected:
     std::uint32_t m_bodyNameRefs = 0;
     bool m_bodyReachesContext = true;
     bool m_readsSlotsOnly = false;
+    // A top-level macro: as SetStatement::SetReexports
+    bool m_reexports = false;
     // `macro.name`, `macro.arguments` and the others, complete once the body is parsed
     std::shared_ptr<InternalValueMap> m_attributes;
     UnitLayout m_unitLayout;

@@ -1645,6 +1645,10 @@ void SetLineStatement::Render(OutStream&, RenderContext& values)
     }
     auto value = values.Nodes()[m_expr].Evaluate(values);
     AssignTo(values.Nodes()[GetTarget()], std::move(value), values.GetCurrentScope(), values);
+    if (Reexports() && values.HasModuleImports())
+    {
+        Reexport(values);
+    }
 }
 
 InternalValue SetBlockStatement::RenderBody(RenderContext& values)
@@ -1666,6 +1670,10 @@ void SetRawBlockStatement::Render(OutStream&, RenderContext& values)
     }
     body.SetMarkup(values.IsAutoescape());
     AssignTo(values.Nodes()[GetTarget()], std::move(body), values.GetCurrentScope(), values);
+    if (Reexports() && values.HasModuleImports())
+    {
+        Reexport(values);
+    }
 }
 
 void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
@@ -1688,6 +1696,10 @@ void SetFilteredBlockStatement::Render(OutStream&, RenderContext& values)
         result = MakeMarkup(result, values.GetRendererCallback());
     }
     AssignTo(values.Nodes()[GetTarget()], std::move(result), values.GetCurrentScope(), values);
+    if (Reexports() && values.HasModuleImports())
+    {
+        Reexport(values);
+    }
 }
 
 namespace
@@ -1747,12 +1759,12 @@ Callable WithKeepAlive(Callable&& callable, std::shared_ptr<const void> keepAliv
     return std::move(callable);
 }
 
-// What `home` kept of the frames a closure was defined in (ClosureHome::captured over
-// capturedBase), into `scope`, each closure keeping its capture again (StrengthenCapture)
-void CopyCaptured(ScopeRef& scope, const ClosureHome& home)
+// What `kept` holds of the frames a closure was defined in, into `scope`, each closure keeping
+// its capture again (StrengthenCapture)
+void CopyCaptured(ScopeRef& scope, const ClosureKept& kept)
 {
     // The frame's own names hide those of the top level
-    for (const auto* names : { home.capturedBase.get(), home.captured.get() })
+    for (const auto* names : { kept.base.get(), kept.frames.get() })
     {
         if (!names)
         {
@@ -1765,13 +1777,14 @@ void CopyCaptured(ScopeRef& scope, const ClosureHome& home)
     }
 }
 
-// CopyCaptured into the current scope of `context`, when `home` kept anything
-void CopyCaptured(RenderContext& context, const ClosureHome& home)
+// CopyCaptured into the current scope of `context`, when the call `home` of the closure of
+// `site` sees what it kept
+void CopyCaptured(RenderContext& context, const ClosureSite& site, const ClosureHome& home)
 {
-    if (home.captured || home.capturedBase)
+    if (home.kept != ClosureHome::Kept::None)
     {
         auto scope = context.GetCurrentScope();
-        CopyCaptured(scope, home);
+        CopyCaptured(scope, site.Kept(home));
     }
 }
 
@@ -1819,7 +1832,7 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
                                                         }
                                                         RenderContext blockContext(*home.context, home.link);
                                                         // Its template has ended: the block sees what that saw (ClosureCapture, 0323)
-                                                        CopyCaptured(blockContext, home);
+                                                        CopyCaptured(blockContext, site, home);
                                                         // The template has ended (an include that stored `self`): its blocks, in a frame
                                                         // of their own
                                                         TemplateFrame endedFrame;
@@ -1943,6 +1956,20 @@ ClosureSite::ClosureSite(RenderContext& context, size_t depth)
             m_state = TopLevel;
         }
     }
+}
+
+ClosureKept ClosureSite::Kept(const ClosureHome& home) const
+{
+    ClosureKept kept;
+    if (const auto capture = m_capture.lock())
+    {
+        kept.frames = capture->names.lock();
+        if (home.kept == ClosureHome::Kept::FramesAndBase)
+        {
+            kept.base = capture->base.lock();
+        }
+    }
+    return kept;
 }
 
 std::shared_ptr<ClosureCapture> ClosureSite::CaptureOnEnd(RenderContext& context)
@@ -2226,10 +2253,10 @@ void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowes
         });
 }
 
-void RenderContext::EnterCapturedScope(const ClosureHome& home, size_t link)
+void RenderContext::EnterCapturedScope(const ClosureKept& kept, size_t link)
 {
     auto scope = EnterScope();
-    CopyCaptured(scope, home);
+    CopyCaptured(scope, kept);
     if (link < GetScopesCount() - 1)
     {
         PushFrameView({}, link);
@@ -2837,7 +2864,7 @@ bool IsImported(const InternalValue& value)
 namespace
 {
 // An import at a module's top level hides the name from the module's exports, until a `set`
-// binds it again (ReexportStatement)
+// binds it again (SetStatement::SetReexports)
 void NoteModuleImport(const RenderContext& values, std::string_view name)
 {
     auto* imports = values.TopLevelModuleImports();
@@ -2888,19 +2915,21 @@ void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes,
     NoteModuleImport(values, nodes.Text(m_namespace));
 }
 
-void ReexportStatement::Render(OutStream& /*os*/, RenderContext& values)
+void SetStatement::Reexport(RenderContext& values) const
 {
-    // Every top-level binding has one; most modules import nothing
     auto* imports = values.TopLevelModuleImports();
-    if (!imports || imports->empty())
+    if (!imports)
     {
         return;
     }
     const auto& nodes = values.Nodes();
-    for (const auto& name : nodes[m_names])
+    for (const auto& node : nodes[m_target])
     {
-        const auto text = nodes.Text(name);
-        imports->erase(std::remove(imports->begin(), imports->end(), text), imports->end());
+        if (node.IsPlainName())
+        {
+            const auto text = nodes.Text(node.name);
+            imports->erase(std::remove(imports->begin(), imports->end(), text), imports->end());
+        }
     }
 }
 
@@ -3052,6 +3081,14 @@ InternalValue MacroStatement::StrengthenCapture(const InternalValue& value)
 void MacroStatement::Render(OutStream&, RenderContext& values)
 {
     values.GetCurrentScope().ForName({ values.Nodes().Text(m_name), m_nameHash }) = MakeCallable(values);
+    if (m_reexports && values.HasModuleImports())
+    {
+        if (auto* imports = values.TopLevelModuleImports())
+        {
+            const auto text = values.Nodes().Text(m_name);
+            imports->erase(std::remove(imports->begin(), imports->end(), text), imports->end());
+        }
+    }
 }
 
 void MacroStatement::CompleteAttributes()

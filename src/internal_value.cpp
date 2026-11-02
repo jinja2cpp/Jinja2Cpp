@@ -971,6 +971,12 @@ struct StringGetter : public visitors::BaseVisitor<std::string>
 
 std::string AsString(const InternalValue& val)
 {
+    // A narrow string, the common case, copied straight from its text rather than through the
+    // visitor, whose code for it GCC does not always inline
+    if (const auto text = AsStringView<char>(val))
+    {
+        return std::string(*text);
+    }
     return Apply<StringGetter>(val);
 }
 
@@ -4073,20 +4079,27 @@ struct LentCallable
     }
 };
 
+// The template callable `value` lent to a host's call made from `context` (CallableLease):
+// out of line, as few calls pass one
+JINJA2CPP_NOINLINE_INLINE Value LendToHost(const InternalValue& value, RenderContext& context, std::shared_ptr<CallableLease>& lease)
+{
+    if (!lease)
+    {
+        lease = std::make_shared<CallableLease>(CallableLease{ &context, CycleCollector::Current(), std::this_thread::get_id(), detail::t_renderLimits });
+    }
+    return Value(UserCallable(LentCallable{ lease, value }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) }));
+}
+
 // The host's form of an argument of a host's call made from `context`: a template callable is
-// lent (CallableLease), the rest as IntValue2Value gives it
-Value ArgumentToHost(const InternalValue& value, RenderContext& context, std::shared_ptr<CallableLease>& lease)
+// lent (LendToHost), the rest as IntValue2Value gives it
+JINJA2CPP_HOT_INLINE Value ArgumentToHost(const InternalValue& value, RenderContext& context, std::shared_ptr<CallableLease>& lease)
 {
     const auto* callable = GetIf<Callable>(&value);
     if (!callable || callable->GetKind() == Callable::UserCallable)
     {
         return IntValue2Value(value);
     }
-    if (!lease)
-    {
-        lease = std::make_shared<CallableLease>(CallableLease{ &context, CycleCollector::Current(), std::this_thread::get_id(), detail::t_renderLimits });
-    }
-    return Value(UserCallable(LentCallable{ lease, value }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) }));
+    return LendToHost(value, context, lease);
 }
 
 UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderContext& context, const std::vector<ArgumentInfo>& argsInfo, std::shared_ptr<CallableLease>& lease)

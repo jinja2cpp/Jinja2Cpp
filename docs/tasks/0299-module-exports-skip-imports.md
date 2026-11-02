@@ -35,9 +35,9 @@ imported (`ModuleImports`, reached through `RenderContext::TopLevelModuleImports
 top level only); `ImportNames` leaves them out of a namespace import and binds a `from` import
 of one undefined, as for any name a module does not export (Jinja2's "does not export the
 requested name"; this also hides a same-named outer value, as Jinja2 does). For the re-set, the
-parser adds a `ReexportStatement` after a `set` (line or block) or a `macro` that binds a name an
-import bound earlier in the template (`TemplateRootInfo::importedNames`); it removes the names from
-the record at a module's top level. No other template has that node, so the common render path
-is unchanged. `Template::MakeModule` uses the same record (the value-identity check and
+parser marks every top-level `set` (line or block) and `macro` (`SetReexports`; a parent template
+shares its child's top level, so any of them may set again a name the child imported); run at a
+module's top level with imports recorded, it removes its names from the record. No node is
+added, and a template outside a module pays one check per top-level `set` or `macro`. `Template::MakeModule` uses the same record (the value-identity check and
 `IRendererCallback::ImportBound` are gone). Corpus rows `loader.module_*`,
 `loader.from_module_import_of_import`.

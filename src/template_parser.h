@@ -505,12 +505,9 @@ private:
     ParseResult ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
-    // After a top-level statement that binds `names` (a target's plain names, or one name): a
-    // ReexportStatement of them, which exports again a name an import bound (docs/tasks/0299)
+    // Whether a `set` or `macro` there binds at the template's top level, which exports its names
+    // again from a module, an import's too (SetStatement::SetReexports, docs/tasks/0299)
     static bool AtTopLevel(const StatementInfoList& statementsInfo);
-    void AddReexport(const StatementInfoList& statementsInfo, Span<const TargetNode> target, std::size_t tagOffset);
-    void AddReexport(const StatementInfoList& statementsInfo, ArenaText name, std::size_t tagOffset);
-    void AddReexport(Span<const ArenaText> names, std::size_t tagOffset);
     ParseResult ParseWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseEndWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseFilter(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
