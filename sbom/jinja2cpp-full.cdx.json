@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:7c5c9460-6033-5624-a50e-12af7b6d0e89",
+  "serialNumber": "urn:uuid:71910c88-a934-5fe4-a398-1530ad67c3c4",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -1627,6 +1627,64 @@
       ]
     },
     {
+      "type": "library",
+      "bom-ref": "python-transformers",
+      "name": "transformers",
+      "version": "5.22.1",
+      "supplier": {
+        "name": "Hugging Face"
+      },
+      "scope": "excluded",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/transformers@5.22.1",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/huggingface/transformers"
+        }
+      ],
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "test"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "dev"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "none"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "system"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "pip install -r test/chat_templates/requirements.txt (parity-expectations CI job)"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "The chat-template oracle: regenerates test/chat_templates expectations with its own apply_chat_template environment (generate.py, docs/tasks/0360)"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "Inference servers render chat templates as transformers does; the expectations it produces are committed, so ordinary builds do not need it"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Not part of any build"
+        }
+      ]
+    },
+    {
       "type": "application",
       "bom-ref": "python",
       "name": "CPython",
@@ -1668,11 +1726,11 @@
         },
         {
           "name": "jinja2cpp:selected-by",
-          "value": "CI (actions/setup-python 3.12) and developers; not needed to build or install"
+          "value": "CI (actions/setup-python, version from .python-version) and developers; not needed to build or install"
         },
         {
           "name": "jinja2cpp:used-for",
-          "value": "Oracle runs, table generators (ORACLE_PYTHON 3.12), task and preflight scripts, bench drivers, this SBOM generator"
+          "value": "Oracle runs, table generators (ORACLE_PYTHON from .python-version), task and preflight scripts, bench drivers, this SBOM generator"
         },
         {
           "name": "jinja2cpp:why",
@@ -2551,6 +2609,7 @@
         "gperftools",
         "python-jinja2",
         "python-markupsafe",
+        "python-transformers",
         "python",
         "clang-tidy",
         "pyyaml",

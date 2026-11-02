@@ -36,6 +36,7 @@
 !.clang-tidy
 !.git-blame-ignore-revs
 !.gitignore
+!.python-version
 
 build/
 build-*/

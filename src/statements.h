@@ -601,6 +601,10 @@ public:
     // did not set it again, as Jinja2 does not (docs/tasks/0299). Names that start with an
     // underscore are the caller's to leave out
     [[nodiscard]] bool Exports(std::string_view name) const { return std::find(m_imports.begin(), m_imports.end(), name) == m_imports.end(); }
+    // The `import ... as m` object: the exported names as attributes, which prints as
+    // Jinja2's TemplateModule, its output as str() and <TemplateModule 'name'> as repr()
+    // (docs/tasks/0309). Made once: a module two imports share is one object, equal to itself
+    [[nodiscard]] InternalValue MakeObject(InternalValueMap&& exports) const;
     // The context the module's macros run in
     [[nodiscard]] RenderContext& Context() { return m_context; }
 
@@ -614,6 +618,10 @@ private:
     // refers to it
     ModuleImports m_imports;
     RenderContext m_context;
+    // The output of the module's top level, which str() of its object prints (Render(tpl))
+    InternalValue m_output;
+    // The object MakeObject made; the exports of a module do not change once it is rendered
+    mutable InternalValue m_object;
 };
 
 // After a `set` or a `macro` that binds a name an import bound before it in the template: at a

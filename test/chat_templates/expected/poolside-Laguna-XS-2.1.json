@@ -1,0 +1,37 @@
+{
+ "template": "poolside-Laguna-XS-2.1.jinja",
+ "renders": {
+  "single": {
+   "output": "〈|EOS|〉<user>\nHello!\n</user>\n<assistant>\n</think>"
+  },
+  "system": {
+   "output": "〈|EOS|〉<system>\n\nYou are a helpful assistant.\n</system>\n<user>\nWhat is 2+2?\n</user>\n<assistant>\n</think>\n2+2 = 4.\n</assistant>\n<user>\nAnd \"3+3\" <in> café ünïcode 日本 & emoji 🙂?\n</user>\n<assistant>\n</think>"
+  },
+  "nogen": {
+   "output": "〈|EOS|〉<user>\nHi\n</user>\n<assistant>\n</think>\nHello! How can I help?\n</assistant>\n"
+  },
+  "tools": {
+   "output": "〈|EOS|〉<system>\n\nYou can call tools.\n\n### Tools\n\nYou may call functions to assist with the user query.\nAll available function signatures are listed below:\n<available_tools>\n{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}\n</available_tools>\n\nFor each function call, return an unescaped XML-like object with function name and arguments within '<tool_call>' and '</tool_call>' tags, like here:\n<tool_call>function-name\n<arg_key>argument-key</arg_key>\n<arg_value>value-of-argument-key</arg_value>\n</tool_call>\n</system>\n<user>\nWeather in Paris?\n</user>\n<assistant>\n</think>\n<tool_call>get_weather\n<arg_key>city</arg_key>\n<arg_value>Paris</arg_value>\n<arg_key>unit</arg_key>\n<arg_value>celsius</arg_value>\n</tool_call>\n</assistant>\n<tool_response>\n{\"temp\": 18, \"sky\": \"cloudy\"}\n</tool_response>\n<assistant>\n</think>\nIt is 18°C and cloudy in Paris.\n</assistant>\n<user>\nThanks\n</user>\n<assistant>\n</think>"
+  },
+  "tool_args_str": {
+   "error": "UndefinedError",
+   "message": "'str object' has no attribute 'items'"
+  },
+  "reasoning": {
+   "output": "〈|EOS|〉<user>\nIs 17 prime?\n</user>\n<assistant>\n<think>\n17 has no divisors other than 1 and itself.\n</think>\nYes, 17 is prime.\n</assistant>\n<user>\nAnd 21?\n</user>\n<assistant>\n</think>"
+  },
+  "no_thinking": {
+   "output": "〈|EOS|〉<user>\nQuick: capital of France?\n</user>\n<assistant>\n</think>"
+  },
+  "parts": {
+   "error": "UndefinedError",
+   "message": "'list object' has no attribute 'strip'"
+  },
+  "documents": {
+   "output": "〈|EOS|〉<user>\nWho wrote it?\n</user>\n<assistant>\n</think>"
+  },
+  "no_alternation": {
+   "output": "〈|EOS|〉<user>\nFirst\n</user>\n<user>\nSecond\n</user>\n<assistant>\n</think>"
+  }
+ }
+}

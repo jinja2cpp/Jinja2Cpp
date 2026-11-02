@@ -231,6 +231,7 @@ set(JINJA2CPP_SOURCES
     src/filesystem_handler.cpp
     src/filter_factories.cpp
     src/filters.cpp
+    src/function_base.cpp
     src/json_reader.cpp
     src/generic_list.cpp
     src/global_functions.cpp
@@ -271,6 +272,17 @@ add_library(jinja2cpp::jinja2cpp ALIAS ${LIB_TARGET_NAME})
 
 # jinja2cpp/version.h carries project(VERSION) into JINJA2CPP_VERSION (docs/tasks/0069)
 set(JINJA2CPP_GENERATED_INCLUDE_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated/include)
+# The oracle pair (docs/parity.md, "Oracle pin") is read from the files CI installs from, so
+# JINJA2CPP_ORACLE_PYTHON / JINJA2CPP_ORACLE_JINJA2 in version.h cannot drift (docs/tasks/0186)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/.python-version ${CMAKE_CURRENT_SOURCE_DIR}/test/parity/requirements.txt)
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/.python-version JINJA2CPP_ORACLE_PYTHON_LINE REGEX "^[0-9]+\\.[0-9]+")
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/test/parity/requirements.txt JINJA2CPP_ORACLE_JINJA2_LINE REGEX "^[Jj]inja2==[0-9]")
+if(NOT JINJA2CPP_ORACLE_PYTHON_LINE OR NOT JINJA2CPP_ORACLE_JINJA2_LINE)
+    message(FATAL_ERROR "Cannot read the oracle pin from .python-version and test/parity/requirements.txt")
+endif()
+string(REGEX REPLACE "^([0-9]+\\.[0-9]+).*" "\\1" JINJA2CPP_ORACLE_PYTHON "${JINJA2CPP_ORACLE_PYTHON_LINE}")
+string(REGEX REPLACE "^[Jj]inja2==([^ #;]+).*" "\\1" JINJA2CPP_ORACLE_JINJA2 "${JINJA2CPP_ORACLE_JINJA2_LINE}")
 configure_file(cmake/version.h.in ${JINJA2CPP_GENERATED_INCLUDE_DIR}/jinja2cpp/version.h @ONLY)
 
 target_sources(${LIB_TARGET_NAME}
@@ -510,6 +522,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/v1_names_test.cpp
         test/value_ptr_test.cpp
         test/parity/parity_test.cpp
+        test/chat_templates/chat_template_test.cpp
     )
     add_executable(jinja2cpp_tests ${JINJA2CPP_TEST_SOURCES})
     target_compile_options(jinja2cpp_tests PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
@@ -563,10 +576,12 @@ if (JINJA2CPP_BUILD_TESTS)
 
     add_dependencies(jinja2cpp_tests CopyTestData)
 
-    add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests --gtest_filter=-Parity*)
+    add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests --gtest_filter=-Parity*:ChatTemplate*)
 
     # Differential corpus against Python Jinja2, see test/parity/README.md
     add_test(NAME jinja2cpp_parity COMMAND jinja2cpp_tests --gtest_filter=Parity*)
+    # Hugging Face chat templates against transformers, see test/chat_templates/README.md
+    add_test(NAME jinja2cpp_chat_templates COMMAND jinja2cpp_tests --gtest_filter=ChatTemplate*)
     # Every jinja2 symbol the library defines is in the inline ABI namespace v2 (docs/tasks/0076)
     if (CMAKE_NM AND NOT MSVC)
         add_test(NAME jinja2cpp_abi_namespace
@@ -590,6 +605,7 @@ if (JINJA2CPP_BUILD_TESTS)
     target_compile_definitions(jinja2cpp_tests
         PUBLIC
             -DJINJA2CPP_PARITY_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test/parity"
+            -DJINJA2CPP_CHAT_TEMPLATES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test/chat_templates"
     )
 
 endif ()

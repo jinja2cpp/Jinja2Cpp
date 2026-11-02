@@ -1,0 +1,143 @@
+# Renders where Jinja2C++ differs from transformers: "<template>.<conversation> <kind> <task> <reason>".
+# kind: output (both render, texts differ), rejects (only Jinja2C++ fails), accepts (only
+# transformers fails), message (both fail, raise_exception's message is lost). A "wide." prefix
+# limits a line to the wide run. A listed case that matches fails the suite, so the list stays
+# exact; regenerate it from a run with JINJA2CPP_CHAT_TEMPLATES_RESULTS (README.md).
+Apertus-8B-Instruct.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+Apertus-8B-Instruct.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+Bielik-11B-v3.0-Instruct.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+Cohere2MoE.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+Cohere2MoE.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+CohereForAI-c4ai-command-r7b-12-2024-tool_use.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+CohereForAI-c4ai-command-r7b-12-2024-tool_use.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+deepseek-ai-DeepSeek-R1-Distill-Qwen-32B.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+deepseek-ai-DeepSeek-R1-Distill-Qwen-32B.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+deepseek-ai-DeepSeek-V3.1.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+deepseek-ai-DeepSeek-V3.1.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+deepseek-ai-DeepSeek-V3.2.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+deepseek-ai-DeepSeek-V4-Flash-0731.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+deepseek-ai-DeepSeek-V4.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+GigaChat3-10B-A1.8B.parts rejects 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+GigaChat3-10B-A1.8B.tools rejects 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+GigaChat3.1-10B-A1.8B.parts rejects 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+GigaChat3.1-10B-A1.8B.tools rejects 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+GLM-4.6.tool_args_str message 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+GLM-4.6.tools rejects 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+GLM-4.7-Flash.tools rejects 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+ibm-granite-granite-3.3-2B-Instruct.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+ibm-granite-granite-4.0.documents output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+ibm-granite-granite-4.0.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+ibm-granite-granite-4.0.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+ibm-granite-granite-4.1.documents output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+ibm-granite-granite-4.1.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+ibm-granite-granite-4.1.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+IFM-K2-Horizon.documents rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+IFM-K2-Horizon.no_alternation rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+IFM-K2-Horizon.no_thinking rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+IFM-K2-Horizon.nogen message 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+IFM-K2-Horizon.reasoning rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+IFM-K2-Horizon.single rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+IFM-K2-Horizon.system message 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+IFM-K2-Horizon.tool_args_str message 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+IFM-K2-Horizon.tools message 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+inclusionai-ling-3.0-flash.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+Kimi-K2-Instruct.tool_args_str accepts 0360 transformers sandbox (ImmutableSandboxedEnvironment) rejects list.append
+Kimi-K2-Instruct.tools accepts 0360 transformers sandbox (ImmutableSandboxedEnvironment) rejects list.append
+Kimi-K2-Thinking.tool_args_str accepts 0360 transformers sandbox (ImmutableSandboxedEnvironment) rejects list.append
+Kimi-K2-Thinking.tools accepts 0360 transformers sandbox (ImmutableSandboxedEnvironment) rejects list.append
+Kimi-K3.tool_args_str rejects 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+Kimi-K3.tools rejects 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+LFM2-8B-A1B.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+LFM2-8B-A1B.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+LFM2.5-8B-A1B.documents rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM2.5-8B-A1B.no_alternation rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM2.5-8B-A1B.no_thinking rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM2.5-8B-A1B.nogen rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM2.5-8B-A1B.parts rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM2.5-8B-A1B.reasoning rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM2.5-8B-A1B.single rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM2.5-8B-A1B.system rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM2.5-8B-A1B.tools rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM2.5-Instruct.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+LFM2.5-Instruct.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+LFM3.documents rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM3.no_alternation rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM3.no_thinking rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM3.nogen rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM3.parts rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM3.reasoning rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM3.single rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM3.system rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM3.tool_args_str message 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+LFM3.tools rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+llm-jp-llm-jp-4.1-8b-thinking.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+meetkai-functionary-medium-v3.1.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+meetkai-functionary-medium-v3.1.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+meta-llama-Llama-3.1-8B-Instruct.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+meta-llama-Llama-3.1-8B-Instruct.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+meta-llama-Llama-3.2-3B-Instruct.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+meta-llama-Llama-3.2-3B-Instruct.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+meta-llama-Llama-3.3-70B-Instruct.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+meta-llama-Llama-3.3-70B-Instruct.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+MiMo-VL.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+MiMo-VL.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+MiniMax-M1.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+MiniMax-M1.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+MiniMax-M2.tools rejects 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+MiniMax-M3.tools rejects 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+Mistral-Small-3.2-24B-Instruct-2506.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+Mistral-Small-3.2-24B-Instruct-2506.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+mistralai-Ministral-3-14B-Reasoning-2512.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+mistralai-Mistral-Nemo-Instruct-2407.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+mistralai-Mistral-Nemo-Instruct-2407.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+moonshotai-Kimi-K2.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+moonshotai-Kimi-K2.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+muse-glimmer.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+muse-spark.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+NousResearch-Hermes-3-Llama-3.1-8B-tool_use.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+NousResearch-Hermes-3-Llama-3.1-8B-tool_use.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+NVIDIA-Nemotron-Nano-v2.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+NVIDIA-Nemotron-Nano-v2.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+openai-gpt-oss-120b.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+openbmb-MiniCPM5-1B.tools rejects 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+poolside-Laguna-S-2.1.documents rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-S-2.1.no_alternation rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-S-2.1.no_thinking rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-S-2.1.nogen rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-S-2.1.reasoning rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-S-2.1.single rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-S-2.1.system rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-S-2.1.tools rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS-2.1.documents rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS-2.1.no_alternation rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS-2.1.no_thinking rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS-2.1.nogen rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS-2.1.reasoning rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS-2.1.single rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS-2.1.system rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS-2.1.tools rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS.2.documents rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS.2.no_alternation rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS.2.no_thinking rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS.2.nogen rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS.2.reasoning rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS.2.single rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS.2.system rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+poolside-Laguna-XS.2.tools rejects 0360 `{% generation %}` (transformers AssistantTracker) is not a tag
+Qwen-Qwen2.5-7B-Instruct.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+Qwen-Qwen2.5-7B-Instruct.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+Qwen-Qwen3-0.6B.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+Qwen-QwQ-32B.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+Qwen3.5-4B.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+Reka-Edge.tool_args_str rejects 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+Reka-Edge.tools rejects 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+Spark2.5.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+StepFun3.5-Flash.tools rejects 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+tencent-Hy3.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+unsloth-Apriel-1.5.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+unsloth-Apriel-1.5.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+unsloth-mistral-Devstral-Small-2507.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+upstage-Solar-Open-100B.tool_args_str output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)
+upstage-Solar-Open-100B.tools output 0360 transformers tojson (insertion order, no HTML escaping, ensure_ascii/indent/separators)

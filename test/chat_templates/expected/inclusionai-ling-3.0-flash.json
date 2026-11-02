@@ -1,0 +1,36 @@
+{
+ "template": "inclusionai-ling-3.0-flash.jinja",
+ "renders": {
+  "single": {
+   "output": "<role>SYSTEM</role>detailed thinking on<|role_end|><role>HUMAN</role>Hello!<|role_end|><role>ASSISTANT</role>\n<think>"
+  },
+  "system": {
+   "output": "<role>SYSTEM</role>You are a helpful assistant.\ndetailed thinking on<|role_end|><role>HUMAN</role>What is 2+2?<|role_end|><role>ASSISTANT</role>\n<think></think>2+2 = 4.<|role_end|><role>HUMAN</role>And \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|role_end|><role>ASSISTANT</role>\n<think>"
+  },
+  "nogen": {
+   "output": "<role>SYSTEM</role>detailed thinking on<|role_end|><role>HUMAN</role>Hi<|role_end|><role>ASSISTANT</role>\n<think></think>Hello! How can I help?<|role_end|>"
+  },
+  "tools": {
+   "output": "<role>SYSTEM</role>You can call tools.\n# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}\n</tools>\n\nIf none of the functions can be used, point it out. If the given question lacks the parameters required by the function, also point it out.\nIf you need to use a function, for each function call, output the function name and arguments within the following XML format:\n<tool_call>{function-name}\n<arg_key>{arg-key-1}</arg_key>\n<arg_value>{arg-value-1}</arg_value>\n<arg_key>{arg-key-2}</arg_key>\n<arg_value>{arg-value-2}</arg_value>\n...\n</tool_call>\ndetailed thinking on<|role_end|><role>HUMAN</role>Weather in Paris?<|role_end|><role>ASSISTANT</role>\n<think></think><tool_call>get_weather\n<arg_key>city</arg_key>\n<arg_value>Paris</arg_value><arg_key>unit</arg_key>\n<arg_value>celsius</arg_value>\n</tool_call><|role_end|><role>OBSERVATION</role>\n<tool_response>\n{\"temp\": 18, \"sky\": \"cloudy\"}\n</tool_response><|role_end|><role>ASSISTANT</role>\n<think></think>It is 18°C and cloudy in Paris.<|role_end|><role>HUMAN</role>Thanks<|role_end|><role>ASSISTANT</role>\n<think>"
+  },
+  "tool_args_str": {
+   "error": "UndefinedError",
+   "message": "'str object' has no attribute 'items'"
+  },
+  "reasoning": {
+   "output": "<role>SYSTEM</role>detailed thinking on<|role_end|><role>HUMAN</role>Is 17 prime?<|role_end|><role>ASSISTANT</role>\n<think>17 has no divisors other than 1 and itself.</think>Yes, 17 is prime.<|role_end|><role>HUMAN</role>And 21?<|role_end|><role>ASSISTANT</role>\n<think>"
+  },
+  "no_thinking": {
+   "output": "<role>SYSTEM</role>detailed thinking off<|role_end|><role>HUMAN</role>Quick: capital of France?<|role_end|><role>ASSISTANT</role>\n<think></think>"
+  },
+  "parts": {
+   "error": "TypeError"
+  },
+  "documents": {
+   "output": "<role>SYSTEM</role>detailed thinking on<|role_end|><role>HUMAN</role>Who wrote it?<|role_end|><role>ASSISTANT</role>\n<think>"
+  },
+  "no_alternation": {
+   "output": "<role>SYSTEM</role>detailed thinking on<|role_end|><role>HUMAN</role>First<|role_end|><role>HUMAN</role>Second<|role_end|><role>ASSISTANT</role>\n<think>"
+  }
+ }
+}

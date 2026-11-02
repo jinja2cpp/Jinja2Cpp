@@ -1,0 +1,40 @@
+{
+ "template": "google-gemma-2-2b-it.jinja",
+ "renders": {
+  "single": {
+   "output": "<|bos|><start_of_turn>user\nHello!<end_of_turn>\n<start_of_turn>model\n"
+  },
+  "system": {
+   "error": "TemplateError",
+   "message": "System role not supported"
+  },
+  "nogen": {
+   "output": "<|bos|><start_of_turn>user\nHi<end_of_turn>\n<start_of_turn>model\nHello! How can I help?<end_of_turn>\n"
+  },
+  "tools": {
+   "error": "TemplateError",
+   "message": "System role not supported"
+  },
+  "tool_args_str": {
+   "error": "TemplateError",
+   "message": "Conversation roles must alternate user/assistant/user/assistant/..."
+  },
+  "reasoning": {
+   "output": "<|bos|><start_of_turn>user\nIs 17 prime?<end_of_turn>\n<start_of_turn>model\nYes, 17 is prime.<end_of_turn>\n<start_of_turn>user\nAnd 21?<end_of_turn>\n<start_of_turn>model\n"
+  },
+  "no_thinking": {
+   "output": "<|bos|><start_of_turn>user\nQuick: capital of France?<end_of_turn>\n<start_of_turn>model\n"
+  },
+  "parts": {
+   "error": "TemplateError",
+   "message": "System role not supported"
+  },
+  "documents": {
+   "output": "<|bos|><start_of_turn>user\nWho wrote it?<end_of_turn>\n<start_of_turn>model\n"
+  },
+  "no_alternation": {
+   "error": "TemplateError",
+   "message": "Conversation roles must alternate user/assistant/user/assistant/..."
+  }
+ }
+}

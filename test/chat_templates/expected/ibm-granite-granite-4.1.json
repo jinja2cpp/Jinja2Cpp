@@ -1,0 +1,35 @@
+{
+ "template": "ibm-granite-granite-4.1.jinja",
+ "renders": {
+  "single": {
+   "output": "<|start_of_role|>user<|end_of_role|>Hello!<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  },
+  "system": {
+   "output": "<|start_of_role|>system<|end_of_role|>You are a helpful assistant.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>What is 2+2?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>2+2 = 4.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>And \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  },
+  "nogen": {
+   "output": "<|start_of_role|>user<|end_of_role|>Hi<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>Hello! How can I help?<|end_of_text|>\n"
+  },
+  "tools": {
+   "output": "<|start_of_role|>system<|end_of_role|>You can call tools.\n\nYou are a helpful assistant with access to the following tools. You may call one or more tools to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}\n</tools>\n\nFor each tool call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call>. If a tool does not exist in the provided list of tools, notify the user that you do not have the ability to fulfill the request.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Weather in Paris?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|><tool_call>\n{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\", \"unit\": \"celsius\"}}\n</tool_call><|end_of_text|>\n<|start_of_role|>user<|end_of_role|>\n<tool_response>\n{\"temp\": 18, \"sky\": \"cloudy\"}\n</tool_response><|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>It is 18°C and cloudy in Paris.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Thanks<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  },
+  "tool_args_str": {
+   "output": "<|start_of_role|>system<|end_of_role|>You are a helpful assistant with access to the following tools. You may call one or more tools to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}\n</tools>\n\nFor each tool call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call>. If a tool does not exist in the provided list of tools, notify the user that you do not have the ability to fulfill the request.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Weather in Tokyo?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|><tool_call>\n{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Tōkyō\"}}\n</tool_call><|end_of_text|>\n<|start_of_role|>user<|end_of_role|>\n<tool_response>\nsunny\n</tool_response><|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  },
+  "reasoning": {
+   "output": "<|start_of_role|>user<|end_of_role|>Is 17 prime?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>Yes, 17 is prime.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>And 21?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  },
+  "no_thinking": {
+   "output": "<|start_of_role|>user<|end_of_role|>Quick: capital of France?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  },
+  "parts": {
+   "output": "<|start_of_role|>system<|end_of_role|>Be brief.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Describe\na cat.<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  },
+  "documents": {
+   "output": "<|start_of_role|>system<|end_of_role|>You are a helpful assistant with access to the following documents. You may use one or more documents to assist with the user query.\n\nYou are given a list of documents within <documents></documents> XML tags:\n<documents>\n{\"title\": \"Hamlet\", \"text\": \"A tragedy written by William Shakespeare.\"}\n{\"title\": \"Notes\", \"text\": \"Written around 1600.\"}\n</documents>\n\nWrite the response to the user's input by strictly aligning with the facts in the provided documents. If the information needed to answer the question is not available in the documents, inform the user that the question cannot be answered based on the available data.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Who wrote it?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  },
+  "no_alternation": {
+   "output": "<|start_of_role|>user<|end_of_role|>First<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Second<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  }
+ }
+}

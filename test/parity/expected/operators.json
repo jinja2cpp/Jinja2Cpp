@@ -2833,6 +2833,616 @@
     "type": "OverflowError",
     "message": "cannot fit 'int' into an index-sized integer"
    }
+  },
+  {
+   "id": "operators.in_none_raises",
+   "template": "{{ 1 in none }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'NoneType' is not iterable"
+   }
+  },
+  {
+   "id": "operators.not_in_none_raises",
+   "template": "{{ 1 not in n }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'NoneType' is not iterable"
+   }
+  },
+  {
+   "id": "operators.in_none_chained_raises",
+   "template": "{{ 0 < 1 in n }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'NoneType' is not iterable"
+   }
+  },
+  {
+   "id": "operators.in_test_none_raises",
+   "template": "{{ 1 is in none }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'NoneType' is not iterable"
+   }
+  },
+  {
+   "id": "operators.in_macro_raises",
+   "template": "{% macro m() %}{% endmacro %}{{ 1 in m }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'Macro' is not iterable"
+   }
+  },
+  {
+   "id": "operators.in_function_raises",
+   "template": "{{ 1 in lipsum }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "argument of type 'function' is not iterable"
+   }
+  },
+  {
+   "id": "operators.in_undefined_false",
+   "template": "{{ 'T' if 1 in nope else 'F' }}|{{ 'T' if 1 not in nope else 'F' }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T"
+  },
+  {
+   "id": "operators.mod_undefined_no_conversion",
+   "template": "{{ 'xy' % nope }}|{{ s % nope }}|{{ ('xy'|safe) % nope }}|{{ 'x%%y' % nope }}|{{ 'x%sy' % nope }}|{{ ('x%sy'|safe) % nope }}|{{ 'x%ry' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "xy|Hello|xy|x%y|xy|xy|xUndefinedy"
+  },
+  {
+   "id": "operators.mod_undefined_key_raises",
+   "template": "{{ 'x%(a)sy' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_int_raises",
+   "template": "{{ 'x%dy' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_float_raises",
+   "template": "{{ 'x%fy' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_hex_raises",
+   "template": "{{ 'x%xy' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "%x format: an integer is required, not Undefined"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_two_args_raises",
+   "template": "{{ 'x%sy%sy' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "not enough arguments for format string"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_in_tuple_raises",
+   "template": "{{ 'xy' % (nope,) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "not all arguments converted during string formatting"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_int_left_raises",
+   "template": "{{ 5 % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_strict",
+   "template": "{{ 'xy' % nope }}|{{ s % nope }}|{{ 'x%ry' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "output": "xy|Hello|xUndefinedy"
+  },
+  {
+   "id": "operators.mod_undefined_strict_str_raises",
+   "template": "{{ 'x%sy' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.mod_undefined_chainable_key",
+   "template": "{{ 'x%(a)sy' % nope }}|{{ 'x%(a)ry' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "output": "xy|xUndefinedy"
+  },
+  {
+   "id": "operators.mod_undefined_debug",
+   "template": "{{ 'x%sy' % nope }}|{{ 'xy' % nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "x{{ nope }}y|xy"
+  },
+  {
+   "id": "operators.undefined_plus_raises",
+   "template": "{{ 5 + nope }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.undefined_lt_raises",
+   "template": "{{ nope < 5 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.undefined_chained_lt_raises",
+   "template": "{{ 0 < nope < 5 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.undefined_pow_chainable_raises",
+   "template": "{{ nope ** 2 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {
+    "undefined": "chainable"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'nope' is undefined"
+   }
+  },
+  {
+   "id": "operators.undefined_eq_compares",
+   "template": "{{ 'T' if nope == 5 else 'F' }}|{{ 'T' if nope != 5 else 'F' }}|{{ 'T' if nope == nope else 'F' }}|{{ nope ~ 5 }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "F|T|T|5"
   }
  ]
 }

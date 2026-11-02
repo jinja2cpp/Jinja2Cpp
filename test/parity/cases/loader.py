@@ -45,6 +45,7 @@ MODULES = {"templates": {**T,
     "lvl.j2": "{% set y = x * 10 %}{% macro m() %}{{ y }}{% endmacro %}",
     "msib.j2": "{% macro k() %}H{% endmacro %}{% macro a() %}{{ k() }}{% endmacro %}{% set r = a() %}",
     "self_store.j2": "{% set ns = namespace(f=none) %}{% macro m() %}M{% endmacro %}{% set ns.f = m %}{% macro call_it() %}{{ ns.f() }}{% endmacro %}"}}
+MODOBJ = {"templates": {**T, "out.j2": "A<b>{% set x = 1 %}{% macro f() %}F{% endmacro %}B"}}
 MODULES2 = {"templates": {**T,
     "cnt.j2": "{% set ns = namespace(n=0) %}{% macro inc() %}{% set ns.n = ns.n + 1 %}{{ ns.n }}{% endmacro %}",
     "mloop.j2": "{% macro m() %}[{{ loop is defined }}]{% endmacro %}",
@@ -348,4 +349,18 @@ CASES = [
     ('module_import_after_set_hides', "{% import 'm3' as x %}[{{ x.am is defined }}|{{ x.f() }}]", {"templates": {'a': '{% macro am() %}AM{% endmacro %}', 'm3': "{% set am = 5 %}{% from 'a' import am %}{% macro f() %}{% from 'a' import am %}{{ am() }}{% endmacro %}"}}),
     ('module_macro_after_import_exported', "{% import 'm3' as x with context %}[{{ x.am() }}]", {"templates": {'a': '{% macro am() %}AM{% endmacro %}', 'm3': "{% from 'a' import am %}{% macro am() %}MINE{% endmacro %}"}}),
     ('module_parent_import_not_exported', "{% import 'c' as x %}[{{ x.am is defined }}{{ x.own() }}]", {"templates": {'a': '{% macro am() %}AM{% endmacro %}', 'p': "{% from 'a' import am %}", 'c': "{% extends 'p' %}{% macro own() %}O{% endmacro %}"}}),
+    # An imported module is Jinja2's TemplateModule: its output as str() and __html__,
+    # <TemplateModule 'name'> as repr, its exports as attributes (0309)
+    ("module_object_str_repr", "{% import 'out.j2' as m %}[{{ m }}]|{{ m|pprint }}|{{ [m] }}|{{ m|string }}|{{ m.x }}{{ m['x'] }}{{ m.f() }}|{{ m is mapping }}|{{ m.nope is defined }}|{{ m == m }}", MODOBJ),
+    ("module_object_shared_is_one", "{% import 'out.j2' as m %}{% import 'out.j2' as n %}{{ m == n }}|{{ m is sameas n }}|{{ m != n }}", MODOBJ),
+    ("module_object_with_context", "{% import 'out.j2' as m with context %}[{{ m }}]|{{ m|pprint }}", MODOBJ),
+    ("module_object_autoescape", "{% import 'out.j2' as m %}[{{ m }}]|{{ m|e }}|{{ m ~ '' }}|{{ m|string }}", {**MODOBJ, "env": {"autoescape": True}}),
+    ("module_object_forceescape", "{% import 'out.j2' as m %}{{ m|forceescape }}|{{ m|striptags }}|{{ m|safe }}", {**MODOBJ, "env": {"autoescape": True}}),
+    ("module_object_is_escaped", "{% import 'out.j2' as m %}{{ m is escaped }}", MODOBJ),
+    ("module_object_length", "{% import 'out.j2' as m %}{{ m|length }}", MODOBJ),
+    ("module_object_iterate", "{% import 'out.j2' as m %}{% for k in m %}{{ k }}{% endfor %}", MODOBJ),
+    ("module_object_list", "{% import 'out.j2' as m %}{{ m|list }}", MODOBJ),
+    ("module_object_items", "{% import 'out.j2' as m %}{{ m.items() }}", MODOBJ),
+    ("module_object_dictsort", "{% import 'out.j2' as m %}{{ m|dictsort }}", MODOBJ),
+    ("module_object_tojson", "{% import 'out.j2' as m %}{{ m|tojson }}", MODOBJ),
 ]

@@ -1490,15 +1490,15 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
         format = *formatView;
     }
     // str() of an undefined is empty, and Python's '' % args has an argument left over
-    if (GetUndefinedInfo(baseVal) && !m_params.posParams.empty())
+    if (GetUndefinedInfo(baseVal) && m_params.HasPositional())
     {
         throw TemplateRuntimeError("not all arguments converted during string formatting");
     }
-    if (!m_params.posParams.empty() && !m_params.kwParams.empty())
+    if (m_params.HasPositional() && m_params.HasKeywords())
     {
         throw TemplateRuntimeError("format(): can't handle positional and keyword arguments at the same time");
     }
-    auto params = helpers::EvaluateCallParams(m_params, context);
+    auto params = m_params.Evaluate(context);
     bool markup = baseVal.IsMarkup();
     std::string formatted;
     if (!params.kwParams.empty())
@@ -1540,13 +1540,13 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     auto escape = [](const std::string& str) { return EscapeHtml(std::string_view(str)); };
 
     // Port of Jinja2's do_xmlattr: key="escaped str(value)" in the mapping's order, None and
-    // undefined values left out. A macro prints its repr; other callables have no str() here
-    // (docs/tasks/0305)
+    // undefined values left out. A macro, a class among the globals and a bound method print
+    // their repr; other callables have no str() here, Python's names an address (docs/tasks/0305)
     std::string result;
     for (auto& [keyValue, value] : map->GetEntries())
     {
         const auto* callable = GetIf<Callable>(&value);
-        if (IsEmpty(value) || (callable && callable->GetKind() != Callable::Macro))
+        if (IsEmpty(value) || (callable && callable->GetKind() != Callable::Macro && !callable->GetRepr() && !callable->GetBoundReceiver()))
         {
             continue;
         }

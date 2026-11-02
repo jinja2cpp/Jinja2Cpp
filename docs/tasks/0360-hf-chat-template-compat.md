@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: high
 area: parity
 touches: [test/chat_templates/]
-shares: [src/filter_factories.cpp, src/serialize_filters.cpp, src/filters.h, include/jinja2cpp/template_env.h, docs/api-2.0.md, test/CMakeLists.txt]
+shares: [src/filter_factories.cpp, src/serialize_filters.cpp, src/filters.h, include/jinja2cpp/template_env.h, docs/api-2.0.md, CMakeLists.txt, .github/workflows/parity-expectations.yml]
 ---
 # Render Hugging Face chat templates as transformers does
 
@@ -32,3 +32,28 @@ for every conversation, in narrow and wide mode, and a CI job checks it. The ren
 times are added to the bench as cases next to `chat_llama`.
 
 **Next.** 0355 checks the same templates through the Python module; share the collection.
+
+## Progress
+
+**Phase 1: the collection (test files only).** `test/chat_templates/`: 72 templates from
+llama.cpp's `models/templates/` (the Hub is not reachable from the cloud runners), 10
+conversations plus 2 template-specific ones, expectations from transformers 5.22.1's own
+`_compile_jinja_template` under Python 3.12 (`generate.py --check` in the parity-expectations
+workflow), and a gtest suite, narrow and wide, `ctest -R chat_templates`. 722 renders per mode.
+
+With the public API alone (trim/lstrip blocks, loop controls, `raise_exception` and
+`strftime_now` as globals, Jinja2's `tojson`), 582 of 722 renders match. The 140 others are in
+`test/chat_templates/divergences.txt`:
+- 0360 transformers `tojson` (keys in insertion order, no HTML escaping, `ensure_ascii`,
+  `indent`, `separators`, `sort_keys`): most lines. A test-side transformers `tojson` (probe,
+  added with `AddFilter`) clears all of them.
+- 0360 `{% generation %}`: IFM-K2-Horizon, LFM2.5-8B-A1B, LFM3 and the three poolside Laguna
+  templates do not load.
+- 0360 transformers' `ImmutableSandboxedEnvironment` rejects `list.append`: Kimi-K2-Instruct
+  and Kimi-K2-Thinking with tools; Jinja2C++ renders.
+- 0297 `"x" in none` is a TypeError: gpt-oss and llm-jp with string tool-call arguments.
+
+**Phase 2: the preset** (after group A of parity batch 2 merges, and the API decision): the
+transformers `tojson`, the `generation` tag, immutable containers, the two globals with an
+injectable clock, the runner switched to it, bench cases next to `chat_llama`. Plan:
+/mnt/project-files/0360/plan.md (project files).

@@ -72,6 +72,14 @@ Callable MakeFunction(Callable::ExpressionCallable fn)
     return Callable(Callable::GlobalFunc, std::move(fn));
 }
 
+// A global that is a class in Jinja2, printed as Python prints the class (docs/tasks/0305)
+Callable MakeClass(Callable::ExpressionCallable fn, const char* repr)
+{
+    auto result = MakeFunction(std::move(fn));
+    result.SetRepr(repr);
+    return result;
+}
+
 ParsedArguments ParseArgs(const std::initializer_list<ArgumentInfo>& argsInfo, const CallParams& params, const char* fnName)
 {
     bool isSucceeded = true;
@@ -563,11 +571,12 @@ void SetupI18nGlobals(InternalValueMap& globalParams)
 
 void SetupGlobals(InternalValueMap& globalParams)
 {
-    globalParams.emplace("range", MakeFunction(CallRange));
-    globalParams.emplace("dict", MakeFunction(CallDict));
-    globalParams.emplace("cycler", MakeFunction(CallCycler));
-    globalParams.emplace("joiner", MakeFunction(CallJoiner));
-    globalParams.emplace("namespace", MakeFunction(CallNamespace));
+    globalParams.emplace("range", MakeClass(CallRange, "<class 'range'>"));
+    globalParams.emplace("dict", MakeClass(CallDict, "<class 'dict'>"));
+    globalParams.emplace("cycler", MakeClass(CallCycler, "<class 'jinja2.utils.Cycler'>"));
+    globalParams.emplace("joiner", MakeClass(CallJoiner, "<class 'jinja2.utils.Joiner'>"));
+    globalParams.emplace("namespace", MakeClass(CallNamespace, "<class 'jinja2.utils.Namespace'>"));
+    // A function, whose repr names its address: it prints nothing
     globalParams.emplace("lipsum", MakeFunction([](const CallParams& params, RenderContext& context) {
                              // Every render has a callback (TemplateImpl::Render)
                              return CallLipsum(params, context.GetRendererCallback()->GetRandomEngine());

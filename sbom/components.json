@@ -462,6 +462,24 @@
       "evidence": [{"file": "test/parity/requirements.txt", "contains": ["markupsafe==3.0.3"]}]
     },
     {
+      "id": "python-transformers",
+      "name": "transformers",
+      "version": "5.22.1",
+      "license": "Apache-2.0",
+      "supplier": "Hugging Face",
+      "url": "https://github.com/huggingface/transformers",
+      "purl": "pkg:pypi/transformers@5.22.1",
+      "delivery": "system",
+      "role": "test",
+      "phases": ["dev"],
+      "exposure": "none",
+      "selected_by": "pip install -r test/chat_templates/requirements.txt (parity-expectations CI job)",
+      "used_for": "The chat-template oracle: regenerates test/chat_templates expectations with its own apply_chat_template environment (generate.py, docs/tasks/0360)",
+      "why": "Inference servers render chat templates as transformers does; the expectations it produces are committed, so ordinary builds do not need it",
+      "lighten": "Not part of any build",
+      "evidence": [{"file": "test/chat_templates/requirements.txt", "contains": ["transformers==5.22.1"]}]
+    },
+    {
       "id": "python",
       "name": "CPython",
       "version": "3.12",
@@ -473,11 +491,11 @@
       "role": "tooling",
       "phases": ["dev"],
       "exposure": "none",
-      "selected_by": "CI (actions/setup-python 3.12) and developers; not needed to build or install",
-      "used_for": "Oracle runs, table generators (ORACLE_PYTHON 3.12), task and preflight scripts, bench drivers, this SBOM generator",
+      "selected_by": "CI (actions/setup-python, version from .python-version) and developers; not needed to build or install",
+      "used_for": "Oracle runs, table generators (ORACLE_PYTHON from .python-version), task and preflight scripts, bench drivers, this SBOM generator",
       "why": "Project tooling language",
       "lighten": "Not part of any build",
-      "evidence": [{"file": ".github/workflows/parity-expectations.yml", "contains": ["3.12"]}]
+      "evidence": [{"file": ".python-version", "contains": ["3.12"]}]
     },
     {
       "id": "clang-tidy",

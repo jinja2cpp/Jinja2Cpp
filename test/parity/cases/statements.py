@@ -329,6 +329,13 @@ CASES = [
     ("loop_kept_to_end", "{% set ns = namespace() %}{% for x in range(4) %}{% set ns.l = loop %}{% endfor %}{{ ns.l|list|length }}{{ ns.l.last }}"),
     ("loop_pprint", "{% for x in [1, 2] %}{{ loop|pprint }};{% endfor %}"),
     ("loop_cycle_string", "{% for x in [1, 2] %}{{ loop.cycle|string }};{% endfor %}"),
+    # The bound method prints its loop as it is when printed, and as it ended once over (0305)
+    ("loop_bound_method_repr", "{% for x in 'ab' %}{{ loop.changed|string }};{{ [loop.cycle] }};{{ loop.cycle == loop.cycle }};{% endfor %}"),
+    ("loop_cycle_stored_repr", "{% set ns = namespace(c=none, f=none) %}{% for x in [1, 2, 3] %}{% set ns.c = loop.cycle %}{% endfor %}{% for x in [1, 2, 3]|select('odd') %}{% set ns.f = loop.cycle %}{% endfor %}{{ ns.c }}|{{ ns.f }}|{{ ns.c('a', 'b') }}"),
+    ("loop_cycle_stored_repr_live", "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3] if x > 1 %}{% if loop.first %}{% set ns.c = loop.cycle %}{% endif %}{{ ns.c }};{% endfor %}"),
+    ("loop_cycle_repr_kept_loop", "{% set ns = namespace(c=none, l=none) %}{% for x in [1, 2, 3, 4]|select('odd') %}{% set ns.c = loop.cycle %}{% set ns.l = loop %}{% break %}{% endfor %}{{ ns.c }}|{{ ns.l }}", LC),
+    ("loop_cycle_repr_after_break_lazy", "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3, 4] if x is odd %}{% set ns.c = loop.cycle %}{% break %}{% endfor %}{{ ns.c }}", LC),
+    ("loop_cycle_repr_after_break", "{% set ns = namespace(c=none) %}{% for x in [1, 2, 3, 4]|select('odd') %}{% set ns.c = loop.cycle %}{% break %}{% endfor %}{{ ns.c }}", LC),
     # Argument unpacking in calls (0220)
     ("call_star_args", "{{ range(*[1, 3])|list }}"),
     ("call_star_kwargs", "{% macro m(a, b) %}{{ a }}{{ b }}{% endmacro %}{{ m(**{'a': 1, 'b': 2}) }}"),

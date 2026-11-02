@@ -1,0 +1,35 @@
+{
+ "template": "meetkai-functionary-medium-v3.1.jinja",
+ "renders": {
+  "single": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\n\nCutting Knowledge Date: December 2023\n\n<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nHello!<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "system": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\n\nCutting Knowledge Date: December 2023\n\n<|eot_id|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nWhat is 2+2?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n2+2 = 4.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nAnd \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "nogen": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\n\nCutting Knowledge Date: December 2023\n\n<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nHi<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\nHello! How can I help?<|eot_id|>"
+  },
+  "tools": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\n\nCutting Knowledge Date: December 2023\n\n\nYou have access to the following functions:\n\nUse the function 'get_weather' to 'Get the current weather in a city.'\n{&#34;name&#34;: &#34;get_weather&#34;, &#34;description&#34;: &#34;Get the current weather in a city.&#34;, &#34;parameters&#34;: {&#34;type&#34;: &#34;object&#34;, &#34;properties&#34;: {&#34;city&#34;: {&#34;type&#34;: &#34;string&#34;, &#34;description&#34;: &#34;City name, e.g. Paris&#34;}, &#34;unit&#34;: {&#34;type&#34;: &#34;string&#34;, &#34;enum&#34;: [&#34;celsius&#34;, &#34;fahrenheit&#34;]}}, &#34;required&#34;: [&#34;city&#34;]}}\n\n\nThink very carefully before calling functions.\nIf a you choose to call a function ONLY reply in the following format:\n<{start_tag}={function_name}>{parameters}{end_tag}\nwhere\n\nstart_tag => `<function`\nparameters => a JSON dict with the function argument name as key and function argument value as value.\nend_tag => `</function>`\n\nHere is an example,\n<function=example_function_name>{\"example_name\": \"example_value\"}</function>\n\nReminder:\n- If looking for real time information use relevant functions before falling back to brave_search\n- Function calls MUST follow the specified format, start with <function= and end with </function>\n- Required parameters MUST be specified\n- Only call one function at a time\n- Put the entire function call reply on one line\n\n<|eot_id|><|start_header_id|>system<|end_header_id|>\n\nYou can call tools.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nWeather in Paris?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n<function=get_weather>{\"city\": \"Paris\", \"unit\": \"celsius\"}</function><|eom_id|><|start_header_id|>ipython<|end_header_id|>\n\n{\"temp\": 18, \"sky\": \"cloudy\"}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\nIt is 18°C and cloudy in Paris.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nThanks<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "tool_args_str": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\n\nCutting Knowledge Date: December 2023\n\n\nYou have access to the following functions:\n\nUse the function 'get_weather' to 'Get the current weather in a city.'\n{&#34;name&#34;: &#34;get_weather&#34;, &#34;description&#34;: &#34;Get the current weather in a city.&#34;, &#34;parameters&#34;: {&#34;type&#34;: &#34;object&#34;, &#34;properties&#34;: {&#34;city&#34;: {&#34;type&#34;: &#34;string&#34;, &#34;description&#34;: &#34;City name, e.g. Paris&#34;}, &#34;unit&#34;: {&#34;type&#34;: &#34;string&#34;, &#34;enum&#34;: [&#34;celsius&#34;, &#34;fahrenheit&#34;]}}, &#34;required&#34;: [&#34;city&#34;]}}\n\n\nThink very carefully before calling functions.\nIf a you choose to call a function ONLY reply in the following format:\n<{start_tag}={function_name}>{parameters}{end_tag}\nwhere\n\nstart_tag => `<function`\nparameters => a JSON dict with the function argument name as key and function argument value as value.\nend_tag => `</function>`\n\nHere is an example,\n<function=example_function_name>{\"example_name\": \"example_value\"}</function>\n\nReminder:\n- If looking for real time information use relevant functions before falling back to brave_search\n- Function calls MUST follow the specified format, start with <function= and end with </function>\n- Required parameters MUST be specified\n- Only call one function at a time\n- Put the entire function call reply on one line\n\n<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nWeather in Tokyo?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n<function=get_weather>\"{\\\"city\\\": \\\"Tōkyō\\\"}\"</function><|eom_id|><|start_header_id|>ipython<|end_header_id|>\n\nsunny<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "reasoning": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\n\nCutting Knowledge Date: December 2023\n\n<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nIs 17 prime?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\nYes, 17 is prime.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nAnd 21?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "no_thinking": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\n\nCutting Knowledge Date: December 2023\n\n<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nQuick: capital of France?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "parts": {
+   "error": "TypeError"
+  },
+  "documents": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\n\nCutting Knowledge Date: December 2023\n\n<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nWho wrote it?<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  },
+  "no_alternation": {
+   "output": "<|bos|><|start_header_id|>system<|end_header_id|>\n\n\nCutting Knowledge Date: December 2023\n\n<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nFirst<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nSecond<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+  }
+ }
+}

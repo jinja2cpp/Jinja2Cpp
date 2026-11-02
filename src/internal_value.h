@@ -710,6 +710,9 @@ struct IMapAccessor : ValueObject
     // The value an object prints with as <Class value> (`self`, <TemplateReference 'name'>);
     // null for one that prints as <module.Class object at 0x...>
     [[nodiscard]] virtual const InternalValue* GetReprArgument() const { return nullptr; }
+    // The text str() of an object prints when it is not its repr (a template module's output,
+    // which is also its __html__); null for the others
+    [[nodiscard]] virtual const InternalValue* GetStrValue() const { return nullptr; }
     // A for loop's `loop` object puts the attribute `attr` in `value` and returns true when
     // it can be read without the generic lookup (`loop.index`, 0117 P1); others return false
     virtual bool GetLoopAttr(LoopAttr /*attr*/, InternalValue& /*value*/) const { return false; }
@@ -914,6 +917,7 @@ public:
     [[nodiscard]] bool IsNamespace() const { return m_accessor != nullptr && m_accessor->IsNamespace(); }
     [[nodiscard]] const char* GetObjectClass() const { return m_accessor ? m_accessor->GetObjectClass() : nullptr; }
     [[nodiscard]] const InternalValue* GetReprArgument() const { return m_accessor ? m_accessor->GetReprArgument() : nullptr; }
+    [[nodiscard]] const InternalValue* GetStrValue() const { return m_accessor ? m_accessor->GetStrValue() : nullptr; }
     // NOLINTNEXTLINE(modernize-use-nodiscard): see IMapAccessor::SetValue
     bool SetValue(std::string name, const InternalValue& val) const { return m_accessor != nullptr && m_accessor->SetValue(std::move(name), val); }
     [[nodiscard]] bool ShouldExtendLifetime() const { return m_accessor != nullptr && m_accessor->ShouldExtendLifetime(); }
@@ -1587,6 +1591,9 @@ MapAdapter CreateNamespaceAdapter(TemplateDict&& values);
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className);
 // An object of `className` that prints as <className repr(reprArgument)>
 MapAdapter CreateObjectAdapter(InternalValueMap&& values, const char* className, InternalValue reprArgument);
+// Jinja2's TemplateModule of an imported template named `name`: `values` are its exports,
+// `output` the text str() prints (docs/tasks/0309)
+MapAdapter CreateModuleAdapter(InternalValueMap&& values, InternalValue name, InternalValue output);
 MapAdapter CreateMapAdapter(const InternalValueMap* values);
 // Shares the map: the adapter keeps it alive (a loop object kept past its loop)
 MapAdapter CreateMapAdapter(std::shared_ptr<InternalValueMap> values);
@@ -1817,6 +1824,24 @@ inline bool IsStringView(const InternalValue& val)
 }
 
 
+// The object a bound method is bound to, as the method's repr prints it. It holds no
+// template value, so the cycle collector need not see it
+class IBoundReceiver
+{
+public:
+    IBoundReceiver() = default;
+    IBoundReceiver(const IBoundReceiver&) = delete;
+    IBoundReceiver(IBoundReceiver&&) = delete;
+    IBoundReceiver& operator=(const IBoundReceiver&) = delete;
+    IBoundReceiver& operator=(IBoundReceiver&&) = delete;
+    virtual ~IBoundReceiver() = default;
+
+    // The Python class of the object (LoopContext)
+    [[nodiscard]] virtual const char* GetClassName() const = 0;
+    // The repr of the object (<LoopContext 1/2>)
+    [[nodiscard]] virtual std::string Repr() const = 0;
+};
+
 class Callable
 {
 public:
@@ -1899,6 +1924,23 @@ public:
         m_boundSelf = self;
         m_boundMethod = method;
     }
+    // As above, with the object the method is bound to, which its repr prints:
+    // <bound method LoopContext.cycle of <LoopContext 1/2>> (docs/tasks/0305)
+    void SetBoundMethod(const void* self, const char* method, std::shared_ptr<const IBoundReceiver> receiver)
+    {
+        SetBoundMethod(self, method);
+        m_boundReceiver = std::move(receiver);
+    }
+    // The object of a bound method's repr; null for other callables
+    [[nodiscard]] const std::shared_ptr<const IBoundReceiver>& GetBoundReceiver() const { return m_boundReceiver; }
+    // The name of a bound method; null for other callables
+    [[nodiscard]] const char* GetBoundMethod() const { return m_boundMethod; }
+
+    // The str() and repr() of a callable whose Python counterpart prints without an address,
+    // such as the classes among the globals (<class 'range'>); a static text, not an
+    // attribute, so range.name stays undefined (docs/tasks/0305)
+    void SetRepr(const char* repr) { m_repr = repr; }
+    [[nodiscard]] const char* GetRepr() const { return m_repr; }
 
     // Python compares functions and macros by identity: the copies of one callable share its
     // function, and a user callable converted from the same jinja2::UserCallable is the same
@@ -1913,6 +1955,8 @@ private:
     std::shared_ptr<const InternalValueMap> m_attributes;
     const void* m_boundSelf = nullptr;
     const char* m_boundMethod = nullptr;
+    std::shared_ptr<const IBoundReceiver> m_boundReceiver;
+    const char* m_repr = nullptr;
     // What this copy of the callable keeps alive (MacroStatement::MakeCallable: the copy of
     // the frames a macro was defined in, ClosureCapture). Apart from the shared function, so
     // that a copy may drop it and stay the same callable (MacroStatement::WeakenCapture)
