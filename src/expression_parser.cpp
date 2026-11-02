@@ -3,6 +3,7 @@
 #include "engine_errors.h"
 #include "error_handling.h"
 #include "expression_evaluator.h"
+#include "filters.h"
 #include "internal_value.h"
 #include "lexer.h"
 #include "loop_attr.h"
@@ -13,6 +14,7 @@
 #include "render_context.h"
 #include "renderer.h"
 #include "small_vector.h"
+#include "testers.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
@@ -320,15 +322,19 @@ namespace
 // the function past what the compiler inlines into it, which every expression paid for at Load
 JINJA2CPP_NOINLINE_INLINE NodeRef<Expression> MakeConcat(NodeArena& nodes, SmallVectorBase<NodeRef<Expression>>& operands)
 {
-    // Jinja2 folds a chain of foldable operands into one str
-    const bool foldable = std::all_of(operands.begin(), operands.end(), [&nodes](const NodeRef<Expression>& operand) { return nodes[operand].IsFoldable(nodes); });
     // The pure operands after the last one that is not are read in place
     const auto lastImpure = std::find_if(operands.rbegin(), operands.rend(), [&nodes](const NodeRef<Expression>& operand) { return !nodes[operand].IsPure(nodes); });
     const auto lendFrom = static_cast<uint32_t>(operands.rend() - lastImpure);
     const auto node = nodes.Make<ConcatExpression>(nodes.MakeSpan(operands), lendFrom);
-    if (foldable)
+    // Jinja2 folds a chain of foldable operands into one str, also where an operand folds by
+    // the side a foldable test picks (docs/tasks/0307)
+    if (const auto fold = nodes[node].PrepareFold(nodes); fold == FoldAlways)
     {
         nodes[node].SetFolded();
+    }
+    else if (fold == FoldByChoice)
+    {
+        nodes[node].SetFoldedByChoice();
     }
     operands.clear();
     return node;
@@ -705,11 +711,11 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
         return MakeParseError(ErrorCode::ExpectedIdentifier, nameTok);
     }
 
-    CallParamsInfo params;
+    CallArgsInfo params;
     const auto& argTok = lexer.PeekNextToken();
     if (lexer.EatIfEqual('('))
     {
-        auto parsedParams = ParseCallParams(lexer);
+        auto parsedParams = ParseCallArgs(lexer);
         if (!parsedParams)
         {
             return MakeUnexpected(parsedParams.error());
@@ -759,7 +765,16 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
     try
     {
         bool unknown = false;
-        result = IsExpression::Make(m_nodes, valueRef, name, params, FindRegisteredTester(name), &unknown, !m_volatile);
+        if (params.dynArgs || params.dynKwargs)
+        {
+            // Bound to the test each time it runs (docs/tasks/0306)
+            const auto test = CreateUnpackingTester(m_nodes, name, params, FindRegisteredTester(name), &unknown);
+            result = m_nodes.Make<IsExpression>(valueRef, test, false);
+        }
+        else
+        {
+            result = IsExpression::Make(m_nodes, valueRef, name, params, FindRegisteredTester(name), &unknown, !m_volatile);
+        }
         if (unknown)
         {
             m_unknown.Add(nameTok, true);
@@ -953,19 +968,9 @@ std::optional<CallArgKind> ClassifyUnpacked(const Token& tok, const CallArgsInfo
     return params.dynKwargs || params.dynArgs ? std::nullopt : std::optional(CallArgKind::Args);
 }
 
-bool HasUnpacked(const CallParamsInfo& /*params*/)
-{
-    return false;
-}
-
 bool HasUnpacked(const CallArgsInfo& params)
 {
     return params.dynArgs || params.dynKwargs;
-}
-
-bool HasUnpackedKeywords(const CallParamsInfo& /*params*/)
-{
-    return false;
 }
 
 bool HasUnpackedKeywords(const CallArgsInfo& params)
@@ -977,15 +982,11 @@ bool HasUnpackedKeywords(const CallArgsInfo& params)
 // arguments, then keywords and one `*expr`, then one `**expr`. Nothing where it is out of that
 // order ("invalid syntax for function call expression") or a keyword is repeated; a keyword's
 // name goes to `name`
-template<typename Params>
-std::optional<CallArgKind> ClassifyCallArg(const Token& tok, LexScanner& lexer, const Params& params, std::string& name)
+std::optional<CallArgKind> ClassifyCallArg(const Token& tok, LexScanner& lexer, const CallArgsInfo& params, std::string& name)
 {
-    if constexpr (std::is_same_v<Params, CallArgsInfo>)
+    if (tok == '*' || tok == Token::MulMul)
     {
-        if (tok == '*' || tok == Token::MulMul)
-        {
-            return ClassifyUnpacked(tok, params);
-        }
+        return ClassifyUnpacked(tok, params);
     }
     if (tok == Token::Identifier && lexer.PeekNextToken() == '=')
     {
@@ -997,20 +998,10 @@ std::optional<CallArgKind> ClassifyCallArg(const Token& tok, LexScanner& lexer, 
 }
 } // namespace
 
-ExpressionParser::ParseResult<CallParamsInfo> ExpressionParser::ParseCallParams(LexScanner& lexer)
-{
-    return ParseArguments<CallParamsInfo>(lexer);
-}
-
+// The arguments of a call, a filter or a test, `*args` and `**kwargs` included
 ExpressionParser::ParseResult<CallArgsInfo> ExpressionParser::ParseCallArgs(LexScanner& lexer)
 {
-    return ParseArguments<CallArgsInfo>(lexer);
-}
-
-template<typename Params>
-ExpressionParser::ParseResult<Params> ExpressionParser::ParseArguments(LexScanner& lexer)
-{
-    Params result;
+    CallArgsInfo result;
 
     if (lexer.EatIfEqual(')'))
     {
@@ -1050,7 +1041,7 @@ ExpressionParser::ParseResult<Params> ExpressionParser::ParseArguments(LexScanne
         {
             result.kwParams[paramName] = *valueExpr;
         }
-        else if constexpr (std::is_same_v<Params, CallArgsInfo>)
+        else
         {
             (*kind == CallArgKind::Args ? result.dynArgs : result.dynKwargs) = *valueExpr;
         }
@@ -1295,16 +1286,13 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
             }
 
             std::string name = lexer.GetAsString(tok);
-            ParseResult<CallParamsInfo> params;
-
-            if (lexer.NextToken() == '(')
-            {
-                params = ParseCallParams(lexer);
-            }
-            else
+            const bool hasArgs = lexer.NextToken() == '(';
+            if (!hasArgs)
             {
                 lexer.ReturnToken();
             }
+            // Made in place: assigning an expected swaps the arguments
+            auto params = hasArgs ? ParseCallArgs(lexer) : ParseResult<CallArgsInfo>();
 
             if (!params)
             {
@@ -1312,7 +1300,17 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
             }
 
             bool unknown = false;
-            auto filter = ExpressionFilter::Make(m_nodes, name, *params, FindRegisteredFilter(name), &unknown, !m_volatile);
+            NodeRef<ExpressionFilter> filter;
+            if (params->dynArgs || params->dynKwargs)
+            {
+                // Bound to the filter each time it runs (docs/tasks/0306); such a call is not folded
+                const auto unpacking = CreateUnpackingFilter(m_nodes, name, *params, FindRegisteredFilter(name), &unknown);
+                filter = m_nodes.Make<ExpressionFilter>(unpacking, ArenaText(), false);
+            }
+            else
+            {
+                filter = ExpressionFilter::Make(m_nodes, name, *params, FindRegisteredFilter(name), &unknown, !m_volatile);
+            }
             if (unknown)
             {
                 m_unknown.Add(tok, false);

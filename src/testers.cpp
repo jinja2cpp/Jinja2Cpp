@@ -7,6 +7,7 @@
 #include "function_base.h"
 #include "host_object.h"
 #include "internal_value.h"
+#include "python_format.h"
 #include "render_context.h"
 #include "template_dict.h"
 #include "undefined.h"
@@ -41,7 +42,7 @@ Comparator::Comparator(const TesterParams& params, BinaryExpression::Operation o
     static const auto args = MakeArgumentsTable({ { "b", true } });
     ParseParams(args, params);
     // Python's operator.eq and friends take their arguments by position only
-    if (!params.kwParams.empty())
+    if (params.KwCount() != 0)
     {
         SetArgumentsError("takes no keyword arguments");
     }
@@ -481,7 +482,8 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
             return seqStr.find(substring) != std::string::npos;
         });
     }
-    else if (seqKind == TestKind::Integer || seqKind == TestKind::Double || seqKind == TestKind::Boolean || seqKind == TestKind::Object)
+    // None and the callables are not containers either: `x in none` is a TypeError (docs/tasks/0297)
+    else if (seqKind == TestKind::Integer || seqKind == TestKind::Double || seqKind == TestKind::Boolean || seqKind == TestKind::Object || seqKind == TestKind::Empty || seqKind == TestKind::Callable)
     {
         // An object of the host language answers through its __contains__ first
         const auto* host = seqKind == TestKind::Object ? GetHostObject(seq) : nullptr;
@@ -551,6 +553,21 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     {
         // Jinja2: value % num == 0, with Python's errors for zero and non-numbers
         auto num = GetArgumentValue("num", context);
+        if (IsStringValue(baseVal))
+        {
+            // str % num is printf-style formatting, which raises Python's TypeErrors; what it
+            // makes is a str, never equal to 0
+            if (const auto narrow = AsStringView<char>(baseVal))
+            {
+                PythonPercentFormat(*narrow, num, baseVal.IsMarkup());
+            }
+            else
+            {
+                PythonPercentFormat(ApplyStringConverter(baseVal, [](auto str) { return ConvertString<std::string>(str); }), num, baseVal.IsMarkup());
+            }
+            result = false;
+            break;
+        }
         auto rem = Apply2<visitors::BinaryMathOperation>(baseVal, num, BinaryExpression::DivRemainder);
         result = ConvertToBool(Apply2<visitors::BinaryMathOperation>(rem, InternalValue(static_cast<int64_t>(0)), BinaryExpression::LogicalEq));
         break;
@@ -651,7 +668,7 @@ bool UserDefinedTester::Test(const InternalValue& baseVal, RenderContext& contex
         throw TemplateRuntimeError("No test named '" + m_testerName + "' found.");
     }
 
-    CallParams tmpCallParams = helpers::EvaluateCallParams(m_callParams, context);
+    CallParams tmpCallParams = m_callParams.Evaluate(context);
     CallParams callParams;
     callParams.kwParams = std::move(tmpCallParams.kwParams);
     callParams.posParams.reserve(tmpCallParams.posParams.size() + 1);

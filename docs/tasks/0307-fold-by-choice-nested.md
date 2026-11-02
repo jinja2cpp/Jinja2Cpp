@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/723
 priority: low
 area: parity
 depends: [0291]
-touches: [src/expression_evaluator.cpp#ConcatExpression, src/expression_parser.cpp#ParseStringConcat]
+touches: [src/expression_evaluator.cpp, src/expression_evaluator.h, src/expression_parser.cpp#ParseStringConcat, test/parity/cases/autoescape.py]
 ---
 # Fold a choice that sits inside another foldable expression
 
@@ -25,3 +26,13 @@ record and check their operands the way `BinaryExpression` does, and make the co
 Markup drop follow `IsFoldableAt` when its operands fold by choice.
 
 **Done when.** No line of `test/parity/divergences/` names task 0307, and `ctest -R parity` passes.
+
+**Resolution.** Unary operators, `is` tests, subscripts, slices, comparisons, filters, tuple, list
+and dict literals and `~` chains override `PrepareFold`/`IsFoldableAt`: they fold when every
+operand does, and by a choice when one operand folds only by one (`AllOperandsFold`). A node
+without an override answers `IsFoldableAt` with true, as it is asked only after its `PrepareFold`
+said it folds. `MakeConcat` runs `PrepareFold` at Load: a chain that folds by a choice drops
+Markup when the render finds it folded (`ConcatExpression::IsFoldedAt`), in static autoescape
+too, as Jinja2's optimizer folds it anywhere. Cases in `autoescape.py`
+(`volatile_folded_choice_*`, `folded_choice_concat_drops_markup`,
+`env_on_finalize_folded_choice_composites`).

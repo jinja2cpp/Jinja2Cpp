@@ -34,6 +34,8 @@ CASES = [
     ("sameas_extra_arg", "{{ 1 is sameas(1, 2) }}"),
     # value % num == 0: a str is formatted, which fails without a format spec (docs/tasks/0308)
     ("divisibleby_string", "{{ 'a' is divisibleby 2 }}"),
+    ("divisibleby_format_string", "{{ 'T' if '%d' is divisibleby 2 else 'F' }}{{ 'T' if '%s%%' is divisibleby 3 else 'F' }}"),
+    ("divisibleby_empty_string", "{{ '' is divisibleby 2 }}"),
     ("divisibleby_arity", "{{ 6 is divisibleby() }}"),
     ("divisibleby_extra_arg", "{{ 6 is divisibleby(3, 2) }}"),
     ("in_arity", "{{ 1 is in() }}"),

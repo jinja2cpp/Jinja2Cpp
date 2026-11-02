@@ -1,0 +1,36 @@
+{
+ "template": "GLM-4.7-Flash.jinja",
+ "renders": {
+  "single": {
+   "output": "[gMASK]<sop><|user|>Hello!<|assistant|><think>"
+  },
+  "system": {
+   "output": "[gMASK]<sop><|system|>You are a helpful assistant.<|user|>What is 2+2?<|assistant|></think>2+2 = 4.<|user|>And \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|assistant|><think>"
+  },
+  "nogen": {
+   "output": "[gMASK]<sop><|user|>Hi<|assistant|></think>Hello! How can I help?"
+  },
+  "tools": {
+   "output": "[gMASK]<sop><|system|>\n# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}\n</tools>\n\nFor each function call, output the function name and arguments within the following XML format:\n<tool_call>{function-name}<arg_key>{arg-key-1}</arg_key><arg_value>{arg-value-1}</arg_value><arg_key>{arg-key-2}</arg_key><arg_value>{arg-value-2}</arg_value>...</tool_call><|system|>You can call tools.<|user|>Weather in Paris?<|assistant|></think><tool_call>get_weather<arg_key>city</arg_key><arg_value>Paris</arg_value><arg_key>unit</arg_key><arg_value>celsius</arg_value></tool_call><|observation|><tool_response>{\"temp\": 18, \"sky\": \"cloudy\"}</tool_response><|assistant|></think>It is 18°C and cloudy in Paris.<|user|>Thanks<|assistant|><think>"
+  },
+  "tool_args_str": {
+   "error": "UndefinedError",
+   "message": "'str object' has no attribute 'items'"
+  },
+  "reasoning": {
+   "output": "[gMASK]<sop><|user|>Is 17 prime?<|assistant|></think>Yes, 17 is prime.<|user|>And 21?<|assistant|><think>"
+  },
+  "no_thinking": {
+   "output": "[gMASK]<sop><|user|>Quick: capital of France?<|assistant|></think>"
+  },
+  "parts": {
+   "output": "[gMASK]<sop><|system|>Be brief.<|user|>Describea cat.<|assistant|><think>"
+  },
+  "documents": {
+   "output": "[gMASK]<sop><|user|>Who wrote it?<|assistant|><think>"
+  },
+  "no_alternation": {
+   "output": "[gMASK]<sop><|user|>First<|user|>Second<|assistant|><think>"
+  }
+ }
+}

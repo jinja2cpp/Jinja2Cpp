@@ -1,0 +1,48 @@
+{
+ "template": "google-translategemma-4b-it.jinja",
+ "renders": {
+  "single": {
+   "error": "TemplateError",
+   "message": "User role must provide `content` as an iterable with exactly one item. That item must be a `mapping(type:'text' | 'image', source_lang_code:string, target_lang_code:string, text:string | none, image:string | none)`."
+  },
+  "system": {
+   "error": "TemplateError",
+   "message": "Conversations must start with a user prompt."
+  },
+  "nogen": {
+   "error": "TemplateError",
+   "message": "User role must provide `content` as an iterable with exactly one item. That item must be a `mapping(type:'text' | 'image', source_lang_code:string, target_lang_code:string, text:string | none, image:string | none)`."
+  },
+  "tools": {
+   "error": "TemplateError",
+   "message": "Conversations must start with a user prompt."
+  },
+  "tool_args_str": {
+   "error": "TemplateError",
+   "message": "User role must provide `content` as an iterable with exactly one item. That item must be a `mapping(type:'text' | 'image', source_lang_code:string, target_lang_code:string, text:string | none, image:string | none)`."
+  },
+  "reasoning": {
+   "error": "TemplateError",
+   "message": "User role must provide `content` as an iterable with exactly one item. That item must be a `mapping(type:'text' | 'image', source_lang_code:string, target_lang_code:string, text:string | none, image:string | none)`."
+  },
+  "no_thinking": {
+   "error": "TemplateError",
+   "message": "User role must provide `content` as an iterable with exactly one item. That item must be a `mapping(type:'text' | 'image', source_lang_code:string, target_lang_code:string, text:string | none, image:string | none)`."
+  },
+  "parts": {
+   "error": "TemplateError",
+   "message": "Conversations must start with a user prompt."
+  },
+  "documents": {
+   "error": "TemplateError",
+   "message": "User role must provide `content` as an iterable with exactly one item. That item must be a `mapping(type:'text' | 'image', source_lang_code:string, target_lang_code:string, text:string | none, image:string | none)`."
+  },
+  "no_alternation": {
+   "error": "TemplateError",
+   "message": "User role must provide `content` as an iterable with exactly one item. That item must be a `mapping(type:'text' | 'image', source_lang_code:string, target_lang_code:string, text:string | none, image:string | none)`."
+  },
+  "google-translategemma-4b-it:translate": {
+   "output": "<|bos|><start_of_turn>user\nYou are a professional English (en) to German (de) translator. Your goal is to accurately convey the meaning and nuances of the original English text while adhering to German grammar, vocabulary, and cultural sensitivities.\nProduce only the German translation, without any additional explanations or commentary. Please translate the following English text into German:\n\n\nGood morning<end_of_turn>\n<start_of_turn>model\n"
+  }
+ }
+}

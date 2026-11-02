@@ -231,6 +231,7 @@ set(JINJA2CPP_SOURCES
     src/filesystem_handler.cpp
     src/filter_factories.cpp
     src/filters.cpp
+    src/function_base.cpp
     src/json_reader.cpp
     src/generic_list.cpp
     src/global_functions.cpp
@@ -521,6 +522,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/v1_names_test.cpp
         test/value_ptr_test.cpp
         test/parity/parity_test.cpp
+        test/chat_templates/chat_template_test.cpp
     )
     add_executable(jinja2cpp_tests ${JINJA2CPP_TEST_SOURCES})
     target_compile_options(jinja2cpp_tests PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
@@ -574,12 +576,14 @@ if (JINJA2CPP_BUILD_TESTS)
 
     add_dependencies(jinja2cpp_tests CopyTestData)
 
-    add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests --gtest_filter=-Parity*)
+    add_test(NAME jinja2cpp_tests COMMAND jinja2cpp_tests --gtest_filter=-Parity*:ChatTemplate*)
 
     # Differential corpus against Python Jinja2, see test/parity/README.md
     add_test(NAME jinja2cpp_parity COMMAND jinja2cpp_tests --gtest_filter=Parity*)
     # The same suite against another Python Jinja2, when JINJA2CPP_TEST_ORACLE asks (docs/tasks/0186)
     include(cmake/parity_oracle.cmake)
+    # Hugging Face chat templates against transformers, see test/chat_templates/README.md
+    add_test(NAME jinja2cpp_chat_templates COMMAND jinja2cpp_tests --gtest_filter=ChatTemplate*)
     # Every jinja2 symbol the library defines is in the inline ABI namespace v2 (docs/tasks/0076)
     if (CMAKE_NM AND NOT MSVC)
         add_test(NAME jinja2cpp_abi_namespace
@@ -603,6 +607,7 @@ if (JINJA2CPP_BUILD_TESTS)
     target_compile_definitions(jinja2cpp_tests
         PUBLIC
             -DJINJA2CPP_PARITY_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test/parity"
+            -DJINJA2CPP_CHAT_TEMPLATES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test/chat_templates"
     )
 
 endif ()

@@ -1,0 +1,36 @@
+{
+ "template": "tencent-Hy3.jinja",
+ "renders": {
+  "single": {
+   "output": "<｜hy_begin_of_sentence:opensource｜><｜reasoning_mode:opensource｜>reasoning_effort:no_think<｜hy_User:opensource｜>Hello!<｜hy_Assistant:opensource｜><think:opensource></think:opensource>"
+  },
+  "system": {
+   "output": "<｜hy_begin_of_sentence:opensource｜>You are a helpful assistant.<｜reasoning_mode:opensource｜>reasoning_effort:no_think<｜hy_User:opensource｜>What is 2+2?<｜hy_Assistant:opensource｜><think:opensource></think:opensource>2+2 = 4.<｜hy_eos:opensource｜><｜hy_User:opensource｜>And \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<｜hy_Assistant:opensource｜><think:opensource></think:opensource>"
+  },
+  "nogen": {
+   "output": "<｜hy_begin_of_sentence:opensource｜><｜reasoning_mode:opensource｜>reasoning_effort:no_think<｜hy_User:opensource｜>Hi<｜hy_Assistant:opensource｜><think:opensource></think:opensource>Hello! How can I help?"
+  },
+  "tools": {
+   "output": "<｜hy_begin_of_sentence:opensource｜>You can call tools.\n\n# Tools\n\nYou may call one or more functions to assist with the user query.\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}\n</tools>\n\nFor function call returns, you should first print <tool_calls:opensource>\nFor each function call, you should return object like:\n<tool_call:opensource>{function-name}<tool_sep:opensource>\n<arg_key:opensource>{arg-key-1}</arg_key:opensource>\n<arg_value:opensource>{arg-value-1}</arg_value:opensource>\n<arg_key:opensource>{arg-key-2}</arg_key:opensource>\n<arg_value:opensource>{arg-value-2}</arg_value:opensource>\n...\n</tool_call:opensource>\nAt the end of function call returns, you should print </tool_calls:opensource><｜reasoning_mode:opensource｜>reasoning_effort:no_think<｜hy_User:opensource｜>Weather in Paris?<｜hy_Assistant:opensource｜><think:opensource></think:opensource><tool_calls:opensource>\n<tool_call:opensource>get_weather<tool_sep:opensource>\n<arg_key:opensource>city</arg_key:opensource>\n<arg_value:opensource>Paris</arg_value:opensource>\n<arg_key:opensource>unit</arg_key:opensource>\n<arg_value:opensource>celsius</arg_value:opensource>\n</tool_call:opensource>\n</tool_calls:opensource><｜hy_eos:opensource｜><tool_responses:opensource>\n<tool_response:opensource>\n{\"temp\": 18, \"sky\": \"cloudy\"}\n</tool_response:opensource>\n</tool_responses:opensource><｜hy_Assistant:opensource｜><think:opensource></think:opensource>It is 18°C and cloudy in Paris.<｜hy_eos:opensource｜><｜hy_User:opensource｜>Thanks<｜hy_Assistant:opensource｜><think:opensource></think:opensource>"
+  },
+  "tool_args_str": {
+   "error": "UndefinedError",
+   "message": "'str object' has no attribute 'items'"
+  },
+  "reasoning": {
+   "output": "<｜hy_begin_of_sentence:opensource｜><｜reasoning_mode:opensource｜>reasoning_effort:no_think<｜hy_User:opensource｜>Is 17 prime?<｜hy_Assistant:opensource｜><think:opensource></think:opensource>Yes, 17 is prime.<｜hy_eos:opensource｜><｜hy_User:opensource｜>And 21?<｜hy_Assistant:opensource｜><think:opensource></think:opensource>"
+  },
+  "no_thinking": {
+   "output": "<｜hy_begin_of_sentence:opensource｜><｜reasoning_mode:opensource｜>reasoning_effort:no_think<｜hy_User:opensource｜>Quick: capital of France?<｜hy_Assistant:opensource｜><think:opensource></think:opensource>"
+  },
+  "parts": {
+   "output": "<｜hy_begin_of_sentence:opensource｜>Be brief.<｜reasoning_mode:opensource｜>reasoning_effort:no_think<｜hy_User:opensource｜>Describea cat.<｜hy_Assistant:opensource｜><think:opensource></think:opensource>"
+  },
+  "documents": {
+   "output": "<｜hy_begin_of_sentence:opensource｜><｜reasoning_mode:opensource｜>reasoning_effort:no_think<｜hy_User:opensource｜>Who wrote it?<｜hy_Assistant:opensource｜><think:opensource></think:opensource>"
+  },
+  "no_alternation": {
+   "output": "<｜hy_begin_of_sentence:opensource｜><｜reasoning_mode:opensource｜>reasoning_effort:no_think<｜hy_User:opensource｜>First<｜hy_User:opensource｜>Second<｜hy_Assistant:opensource｜><think:opensource></think:opensource>"
+  }
+ }
+}

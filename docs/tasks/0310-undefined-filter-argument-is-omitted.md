@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/728
 priority: low
 area: parity
 touches: [src/function_base.h, src/string_converter_filter.cpp]

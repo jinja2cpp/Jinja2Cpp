@@ -1,0 +1,35 @@
+{
+ "template": "ByteDance-Seed-OSS.jinja",
+ "renders": {
+  "single": {
+   "output": "<seed:bos>user\nHello!<seed:eos><seed:bos>assistant\n"
+  },
+  "system": {
+   "output": "<seed:bos>system\nYou are a helpful assistant.<seed:eos><seed:bos>user\nWhat is 2+2?<seed:eos><seed:bos>assistant\n2+2 = 4.<seed:eos><seed:bos>user\nAnd \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<seed:eos><seed:bos>assistant\n"
+  },
+  "nogen": {
+   "output": "<seed:bos>user\nHi<seed:eos><seed:bos>assistant\nHello! How can I help?<seed:eos>"
+  },
+  "tools": {
+   "output": "<seed:bos>system\nYou can call tools.\n\nFunction:\ndef get_weather(city: str,unit: str):\n    \"\"\"\n    Get the current weather in a city.\n\n    Args:\n    - city (str) [必填]: City name, e.g. Paris\n    - unit (str) [选填]: \n\n    \"\"\"\n工具调用请遵循如下格式:\n<seed:tool_call>\n<function=example_function_name>\n<parameter=example_parameter_1>value_1</parameter>\n<parameter=example_parameter_2>This is the value for the second parameter\nthat can span\nmultiple lines</parameter>\n</function>\n</seed:tool_call>\n<seed:eos><seed:bos>user\nWeather in Paris?<seed:eos><seed:bos>assistant\n<seed:tool_call>\n<function=get_weather>\n<parameter=city>Paris</parameter>\n<parameter=unit>celsius</parameter>\n</function>\n</seed:tool_call><seed:eos><seed:bos>tool\n{\"temp\": 18, \"sky\": \"cloudy\"}<seed:eos><seed:bos>assistant\nIt is 18°C and cloudy in Paris.<seed:eos><seed:bos>user\nThanks<seed:eos><seed:bos>assistant\n"
+  },
+  "tool_args_str": {
+   "error": "TypeError"
+  },
+  "reasoning": {
+   "output": "<seed:bos>user\nIs 17 prime?<seed:eos><seed:bos>assistant\n<seed:think>17 has no divisors other than 1 and itself.</seed:think>\nYes, 17 is prime.<seed:eos><seed:bos>user\nAnd 21?<seed:eos><seed:bos>assistant\n"
+  },
+  "no_thinking": {
+   "output": "<seed:bos>user\nQuick: capital of France?<seed:eos><seed:bos>assistant\n"
+  },
+  "parts": {
+   "error": "TypeError"
+  },
+  "documents": {
+   "output": "<seed:bos>user\nWho wrote it?<seed:eos><seed:bos>assistant\n"
+  },
+  "no_alternation": {
+   "output": "<seed:bos>user\nFirst<seed:eos><seed:bos>user\nSecond<seed:eos><seed:bos>assistant\n"
+  }
+ }
+}

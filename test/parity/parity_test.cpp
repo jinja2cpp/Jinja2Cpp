@@ -14,6 +14,7 @@
 #include <jinja2cpp/binding/nlohmann_json.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/json_adapter.h>
+#include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/version.h>
@@ -235,6 +236,7 @@ std::vector<ParityCase> LoadCases()
 }
 
 // The area a case id belongs to: "wide.literals.dict" and "literals.dict" are both "literals".
+// The reflect pass has one allow-list of its own: "reflect.literals.dict" is in "reflect".
 std::string AreaOf(const std::string& id)
 {
     const std::size_t start = id.compare(0, 5, "wide.") == 0 ? 5 : 0;
@@ -255,7 +257,9 @@ const std::map<std::string, Divergence>& Divergences()
 {
     static const std::map<std::string, Divergence> result = [] {
         std::map<std::string, Divergence> m;
-        for (const auto& area : AreaNames())
+        auto files = AreaNames();
+        files.emplace_back("reflect");
+        for (const auto& area : files)
         {
             std::istringstream in(ReadFile(std::string(JINJA2CPP_PARITY_DIR) + "/divergences/" + area + ".txt"));
             std::string line;
@@ -543,11 +547,19 @@ struct Result
     std::string text; // output, or error description
 };
 
+// How a case's context reaches the template: through the library's copy (jinja2::ToValue), as
+// in every build, or as views of one shared document (jinja2::Reflect, the ParityReflect pass).
+enum class Context
+{
+    Copy,
+    Reflect,
+};
+
 // Renders a case through jinja2::Template (char) or jinja2::TemplateW (wchar_t). The wide
 // path converts the template, the loader files and the context strings from UTF-8, and
 // the output back to UTF-8, so both paths compare with the same expectation.
 template<typename CharT>
-Result RenderCpp(const Json& c, const jinja2::Settings& settings)
+Result RenderCpp(const Json& c, const jinja2::Settings& settings, Context context = Context::Copy)
 {
     using Tpl = std::conditional_t<std::is_same_v<CharT, char>, jinja2::Template, jinja2::TemplateW>;
 
@@ -559,18 +571,37 @@ Result RenderCpp(const Json& c, const jinja2::Settings& settings)
         fs->AddFile(it.key(), FromUtf8<CharT>(it.value().get<std::string>()));
     env.AddFilesystemHandler(std::string(), fs);
 
-    // The context goes through the library's own copy (docs/tasks/0311), so the whole corpus checks it. Strings stay
+    // By default the context goes through the library's own copy (docs/tasks/0311), so the whole corpus checks it. Strings stay
     // UTF-8 in both runs, so the wide run renders narrow context values in a wide template and exercises
     // jinja2::ConvertString (docs/tasks/0035).
     jinja2::ValuesMap params;
-    for (auto it = c["context"].begin(); it != c["context"].end(); ++it)
+    if (context == Context::Reflect)
     {
-        auto value = jinja2::ToValue(it.value());
-        if (!value)
+        // Each value is an item of one view of a shared copy of the context, so the items, not
+        // this function, keep the document alive (docs/tasks/0322): under ASan the pass checks
+        // the owner chain of every item a template reaches.
+        const auto root = jinja2::Reflect(std::make_shared<Json>(c["context"]));
+        const auto* map = root.GetIf<jinja2::GenericMap>();
+        if (!map)
         {
-            return { false, "context: " + value.error().ToString() };
+            return { false, "context: not an object" };
         }
-        params[it.key()] = std::move(*value);
+        for (const auto& key : map->GetKeys())
+        {
+            params[key] = map->GetValueByName(key);
+        }
+    }
+    else
+    {
+        for (auto it = c["context"].begin(); it != c["context"].end(); ++it)
+        {
+            auto value = jinja2::ToValue(it.value());
+            if (!value)
+            {
+                return { false, "context: " + value.error().ToString() };
+            }
+            params[it.key()] = std::move(*value);
+        }
     }
 
     try
@@ -1076,6 +1107,71 @@ TEST_P(ParityWideTest, MatchesNarrow)
     CheckListed(id, outcome, Details(c, wide.text) + "\n  narrow: " + Json(narrow.text).dump());
 }
 
+// The ParityReflect pass (docs/tasks/0322) renders every case with its context as views of
+// the document (jinja2::Reflect) instead of copies, and holds the result to the copy's,
+// as the wide suite does, so a divergence of the copy is listed once. A view answers lookups,
+// iteration, comparisons and filters through the generic map and list adapters, which the
+// copy never reaches. A view is immutable, so cases that mutate the context diverge by
+// design; divergences/reflect.txt lists them as "reflect.<id>". The pass is nightly
+// (bindings.yml), so it runs only with JINJA2CPP_PARITY_CONTEXT=reflect.
+bool ReflectPassEnabled()
+{
+#ifdef _MSC_VER
+    char* value = nullptr;
+    _dupenv_s(&value, nullptr, "JINJA2CPP_PARITY_CONTEXT");
+    std::unique_ptr<char, decltype(&std::free)> owner(value, &std::free);
+#else
+    const char* value = std::getenv("JINJA2CPP_PARITY_CONTEXT");
+#endif
+    return value != nullptr && std::string_view(value) == "reflect";
+}
+
+std::vector<ParityCase> ReflectCases()
+{
+    return ReflectPassEnabled() ? LoadCases() : std::vector<ParityCase>{};
+}
+
+class ParityReflectTest : public ::testing::TestWithParam<ParityCase>
+{
+};
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(ParityReflectTest);
+
+TEST_P(ParityReflectTest, MatchesCopy)
+{
+    const auto& c = GetParam().data;
+    const auto& copyId = GetParam().id;
+    const auto id = "reflect." + copyId;
+    if (NeedsUnicodeNames(c))
+    {
+        GTEST_SKIP() << "built without the Unicode name table";
+    }
+    if (const auto* crash = ListedCrash(copyId))
+    {
+        GTEST_SKIP() << "crashes Jinja2C++, task " << crash->task << ": " << crash->reason;
+    }
+    if (const auto* crash = ListedCrash(id))
+    {
+        RecordOutcome(id, "crash");
+        GTEST_SKIP() << "crashes Jinja2C++ with a reflected context, task " << crash->task << ": " << crash->reason;
+    }
+
+    jinja2::Settings settings;
+    if (!ApplyEnv(c["env"], settings).empty())
+    {
+        return; // unsupported: reported by the narrow suite
+    }
+
+    auto copy = RenderCpp<char>(c, settings, Context::Copy);
+    auto view = RenderCpp<char>(c, settings, Context::Reflect);
+    auto outcome = Classify(c, view);
+    if (view.ok == copy.ok && (!view.ok || view.text == copy.text))
+    {
+        outcome = Outcome::Match;
+    }
+    RecordOutcome(id, OutcomeName(outcome));
+    CheckListed(id, outcome, Details(c, view.text) + "\n  copy:   " + Json(copy.text).dump());
+}
+
 std::string CaseName(const ::testing::TestParamInfo<ParityCase>& info)
 {
     std::string name = info.param.id;
@@ -1085,6 +1181,7 @@ std::string CaseName(const ::testing::TestParamInfo<ParityCase>& info)
 
 INSTANTIATE_TEST_SUITE_P(Parity, ParityTest, ::testing::ValuesIn(LoadCases()), CaseName);
 INSTANTIATE_TEST_SUITE_P(ParityWide, ParityWideTest, ::testing::ValuesIn(LoadCases()), CaseName);
+INSTANTIATE_TEST_SUITE_P(ParityReflect, ParityReflectTest, ::testing::ValuesIn(ReflectCases()), CaseName);
 
 TEST(ParityRegistry, CorpusPresent)
 {
@@ -1101,7 +1198,14 @@ TEST(ParityRegistry, DivergencesNameExistingCases)
         ids.insert(c.id);
     for (const auto& d : Divergences())
     {
-        const auto& id = d.first.compare(0, 5, "wide.") == 0 ? d.first.substr(5) : d.first;
+        auto id = d.first;
+        for (const char* prefix : { "wide.", "reflect." })
+        {
+            if (id.rfind(prefix, 0) == 0)
+            {
+                id.erase(0, std::char_traits<char>::length(prefix));
+            }
+        }
         EXPECT_TRUE(ids.count(id)) << "divergences/ names unknown case " << d.first;
         EXPECT_EQ(DivergenceProblem(d.second), "") << d.first;
     }

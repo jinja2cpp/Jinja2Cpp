@@ -1,0 +1,438 @@
+{
+    "origin": "https://github.com/ggml-org/llama.cpp/tree/dde879bc4f954b809892fd0d660515f42536394a/models/templates",
+    "llama_cpp_commit": "dde879bc4f954b809892fd0d660515f42536394a",
+    "templates": [
+        {
+            "file": "Apertus-8B-Instruct.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "dea688e9f24a339a0d2504f6840852adbcedb082373172a0b82ca2c55996768d"
+        },
+        {
+            "file": "Bielik-11B-v3.0-Instruct.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "a30b8c4531dda19196f35fb95ab84110dd8357acbd75eea3776c5543a70db5a9"
+        },
+        {
+            "file": "ByteDance-Seed-OSS.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "3f9e0dc4adeb8032287d0129dc75b6298fee8698a52ab41e863dbc89929330d3"
+        },
+        {
+            "file": "Cohere2MoE.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "d8366efb9f07c571da620ce6a924594fc52c80273a0fbb46a38b643972df95fd"
+        },
+        {
+            "file": "CohereForAI-c4ai-command-r-plus-tool_use.jinja",
+            "hf_repo": "CohereForAI/c4ai-command-r-plus",
+            "license": "cc-by-nc-4.0",
+            "sha256": "bf9e9ee8c0f2297c6ff60af5fab357d7b34bc4375884ed16ab6aa90597d7eb7d"
+        },
+        {
+            "file": "CohereForAI-c4ai-command-r7b-12-2024-tool_use.jinja",
+            "hf_repo": "CohereForAI/c4ai-command-r7b-12-2024",
+            "license": "cc-by-nc-4.0",
+            "sha256": "cc60b553279347d83df761f5dc55b4b2fb66bc1fa9a33e219911c13c11552fac"
+        },
+        {
+            "file": "deepseek-ai-DeepSeek-R1-Distill-Llama-8B.jinja",
+            "hf_repo": "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
+            "license": "mit",
+            "sha256": "dd2675619a64a449cdcdd2b93e605a0a50764cee41e344f244752bc93643936c"
+        },
+        {
+            "file": "deepseek-ai-DeepSeek-R1-Distill-Qwen-32B.jinja",
+            "hf_repo": "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
+            "license": "mit",
+            "sha256": "bbe594884b44d740667ee65a70bc8d333a565eab3d63ea59f291ea73ada84ba6"
+        },
+        {
+            "file": "deepseek-ai-DeepSeek-V3.1.jinja",
+            "hf_repo": "deepseek-ai/DeepSeek-V3.1",
+            "license": "mit",
+            "sha256": "d9f5f351b276cf9e81d009db08830db7d38e94927aecd09a7beb43e2aafee94e"
+        },
+        {
+            "file": "deepseek-ai-DeepSeek-V3.2.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "8e5a13fcc4bdd4d943311fc59064b805770fdeddfccbd7f1c252cc16e8acaf3d"
+        },
+        {
+            "file": "deepseek-ai-DeepSeek-V4-Flash-0731.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "aec3d906bce80d43a9e6e89922c04e8e752c05f71f10040ba3f61b746ebacd6d"
+        },
+        {
+            "file": "deepseek-ai-DeepSeek-V4.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "7bd4fbdf0c06cd7398ddb6913de6e4a5839b9d06569e74e5b2ec246b375ca9c9"
+        },
+        {
+            "file": "fireworks-ai-llama-3-firefunction-v2.jinja",
+            "hf_repo": "fireworks-ai/llama-3-firefunction-v2",
+            "license": "llama3",
+            "sha256": "fcb749f5c5d6bbc4240db4e86af5dfcefe9c7e85355235d0f304ab4319ba6b51"
+        },
+        {
+            "file": "GigaChat3-10B-A1.8B.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "bbbf2de800b645dfe032b1d85e1d6479d78fd82d38d4af0d8d5bb2dacacd20d6"
+        },
+        {
+            "file": "GigaChat3.1-10B-A1.8B.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "304f0d64aa3ba30ee85c281befdeb0e5b32aed232b06dee1752310daa1208a4b"
+        },
+        {
+            "file": "GLM-4.6.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "8804f445c761b9f259e3c1126a579d481a22ca09b2a3d32bcc4eb91bc36e0301"
+        },
+        {
+            "file": "GLM-4.7-Flash.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "d63ad536c3c81880043e22ec7fd08db42b4d8fb7c89c7138bc562bfa25281375"
+        },
+        {
+            "file": "google-gemma-2-2b-it.jinja",
+            "hf_repo": "google/gemma-2-2b-it",
+            "license": "gemma",
+            "sha256": "ecd6ae513fe103f0eb62e8ab5bfa8d0fe45c1074fa398b089c93a7e70c15cfd6"
+        },
+        {
+            "file": "google-gemma-4-31B-it-interleaved.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "65f93a25708c952457106a30e185ba7beffddd726121c8d7e3f3e08b23c16c67"
+        },
+        {
+            "file": "google-gemma-4-31B-it.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "85a08664d16d8f3be4416c92427b3ac10df1024ac566cc0b4bc3bab409393f98"
+        },
+        {
+            "file": "google-translategemma-4b-it.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "5e85514635b80a62b64c9982810bfdfbdd482be9a59ed12c25ded2bf3aabddaf"
+        },
+        {
+            "file": "HuggingFaceTB-SmolLM3-3B.jinja",
+            "hf_repo": "HuggingFaceTB/SmolLM3-3B",
+            "license": "apache-2.0",
+            "sha256": "19eacf64569032f07644ea92c8e2a87af06ee7008147557302c31e474912ca97"
+        },
+        {
+            "file": "ibm-granite-granite-3.3-2B-Instruct.jinja",
+            "hf_repo": "ibm-granite/granite-3.3-2b-instruct",
+            "license": "apache-2.0",
+            "sha256": "3c71df5f659987462c882bf9e295b597dc19902467a7312ea382c5896681bc02"
+        },
+        {
+            "file": "ibm-granite-granite-4.0.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "9524df67b77a7b25a2dfee898f75b316a157eb9d855b51e32aeac79d7c8a83ce"
+        },
+        {
+            "file": "ibm-granite-granite-4.1.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "fed2756d2d24e127b951dcf139d0b03ab7db8ef23a456128ebc9c2db4901d476"
+        },
+        {
+            "file": "IFM-K2-Horizon.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "a892cd0b0195599f283a8c706787520d9a6747640efb2f4dec4144b0abb62590"
+        },
+        {
+            "file": "inclusionai-ling-3.0-flash.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "b4ab3a1c8f748e6f874d9aea102333efe7ab82528e8ab81c2eb155851e8705c6"
+        },
+        {
+            "file": "Kimi-K2-Instruct.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "1d396d5b128cdb9b2a4ef73434fa08d31c75604a11daa77bcb4b622d32dddd41"
+        },
+        {
+            "file": "Kimi-K2-Thinking.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "2f6c593d50682612ccc3229f043ecd1bdeb5a32fdfe86ca2158203a61d885817"
+        },
+        {
+            "file": "Kimi-K3.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "4578103bf225f58d5b7ceb613ccc2ac8fe82b6707b7289211b3d4825e87806b3"
+        },
+        {
+            "file": "LFM2-8B-A1B.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "2294f49b51a0b9a1b0194add3f124237b5bd986599f43180eec49bba4de01365"
+        },
+        {
+            "file": "LFM2.5-8B-A1B.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "6d65c8804847ad74eea912dd7eca3dc1cf7a457b53a77f47d841a14121910963"
+        },
+        {
+            "file": "LFM2.5-Instruct.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "f05bf4b967dc993bdc7a2fe6e43759ee218eb0eb340d68b063e1c4f8ad148176"
+        },
+        {
+            "file": "LFM3.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "f45005c50cd2a97329722bf3a2dee9f16c04cdf825a589b280fb7e99e6827818"
+        },
+        {
+            "file": "llm-jp-llm-jp-4.1-8b-thinking.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "d5f35cbd545ce4d0fddc92827fb55891514aafa5fe52c1c4a543551eedad1e3d"
+        },
+        {
+            "file": "meetkai-functionary-medium-v3.1.jinja",
+            "hf_repo": "meetkai/functionary-medium-v3.1",
+            "license": "mit",
+            "sha256": "2fc9dbfaea552f864b4b8cdf9d17401e9a49cbda199498531f137eb0ec5ae1d8"
+        },
+        {
+            "file": "meetkai-functionary-medium-v3.2.jinja",
+            "hf_repo": "meetkai/functionary-medium-v3.2",
+            "license": "mit",
+            "sha256": "5c7c96c27cfecf3418411d1ebd0d11d691ab6bd2155bb38dacc62250fe47c3c8"
+        },
+        {
+            "file": "meta-llama-Llama-3.1-8B-Instruct.jinja",
+            "hf_repo": "meta-llama/Llama-3.1-8B-Instruct",
+            "license": "llama3.1",
+            "sha256": "e10ca381b1ccc5cf9db52e371f3b6651576caee0a630b452e2816b2d404d4b65"
+        },
+        {
+            "file": "meta-llama-Llama-3.2-3B-Instruct.jinja",
+            "hf_repo": "meta-llama/Llama-3.2-3B-Instruct",
+            "license": "llama3.2",
+            "sha256": "5816fce10444e03c2e9ee1ef8a4a1ea61ae7e69e438613f3b17b69d0426223a4"
+        },
+        {
+            "file": "meta-llama-Llama-3.3-70B-Instruct.jinja",
+            "hf_repo": "meta-llama/Llama-3.3-70B-Instruct",
+            "license": "llama3.3",
+            "sha256": "e10ca381b1ccc5cf9db52e371f3b6651576caee0a630b452e2816b2d404d4b65"
+        },
+        {
+            "file": "microsoft-Phi-3.5-mini-instruct.jinja",
+            "hf_repo": "microsoft/Phi-3.5-mini-instruct",
+            "license": "mit",
+            "sha256": "78d976a442bcde2f0be15aafbb8e3050e1104f86732266f68403251b89982a90"
+        },
+        {
+            "file": "MiMo-VL.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "10490379c20af484107413cc5fd93f6e587d0cb4364a183a89ab68849406b80d"
+        },
+        {
+            "file": "MiniMax-M1.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "e1790d8fbe1c587e6fc385e2a712363f86faf52ae1fb1fcbfc5ded3eb1fae70a"
+        },
+        {
+            "file": "MiniMax-M2.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "967ff7e387676f4b4340585da0585416532f1e6c5ee3f1ede64b2c21ef7ea001"
+        },
+        {
+            "file": "MiniMax-M3.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "11421244f67553498e5c8112dae02802025bcc4305ec45ad380af95c96f9fe64"
+        },
+        {
+            "file": "Mistral-Small-3.2-24B-Instruct-2506.jinja",
+            "hf_repo": "mistralai/Mistral-Small-3.2-24B-Instruct-2506",
+            "license": "apache-2.0",
+            "sha256": "5b8f31f11198696548d544dbe424a3c1ef244d00a475f4e1bffb351fda085608"
+        },
+        {
+            "file": "mistralai-Ministral-3-14B-Reasoning-2512.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "39f03c383413f531fd302c06c7e982ad98c83f0657a8339ae25478ccb81fdcda"
+        },
+        {
+            "file": "mistralai-Mistral-Nemo-Instruct-2407.jinja",
+            "hf_repo": "mistralai/Mistral-Nemo-Instruct-2407",
+            "license": "apache-2.0",
+            "sha256": "e4676cb56dffea7782fd3e2b577cfaf1e123537e6ef49b3ec7caa6c095c62272"
+        },
+        {
+            "file": "moonshotai-Kimi-K2.jinja",
+            "hf_repo": "moonshotai/Kimi-K2-Instruct",
+            "license": "modified-mit",
+            "sha256": "9fcc72b7c248a72020c81f70bb652f3094d18a750c93ca35dfcb3cf5fe23ff53"
+        },
+        {
+            "file": "muse-glimmer.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "cfc67e5f349f37690dfd31ed1f18bc4442a9dd32fe39a648f993cb4eb3cae678"
+        },
+        {
+            "file": "muse-spark.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "cb4bba2a98f56cbd925a93999f245b639d7c4912b087ee360233ec5e8211ef23"
+        },
+        {
+            "file": "NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja",
+            "hf_repo": "NousResearch/Hermes-2-Pro-Llama-3-8B",
+            "license": "apache-2.0",
+            "sha256": "7ce09d55d3690e06c70b5c07228cc7e8c99c43a23cdc027762be4011efcdea6c"
+        },
+        {
+            "file": "NousResearch-Hermes-3-Llama-3.1-8B-tool_use.jinja",
+            "hf_repo": "NousResearch/Hermes-3-Llama-3.1-8B",
+            "license": "llama3",
+            "sha256": "7ce09d55d3690e06c70b5c07228cc7e8c99c43a23cdc027762be4011efcdea6c"
+        },
+        {
+            "file": "NVIDIA-Nemotron-3-Nano-30B-A3B-BF16.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "ab7813c3abdd9cb655905a410728b26c7884eca45ddfab8d9f931553485a7862"
+        },
+        {
+            "file": "NVIDIA-Nemotron-Nano-v2.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "52ae8e50fa083e63a0a5726eeffc85502089b82064aceb1bddf0366f7317b3f8"
+        },
+        {
+            "file": "openai-gpt-oss-120b.jinja",
+            "hf_repo": "openai/gpt-oss-120b",
+            "license": "apache-2.0",
+            "sha256": "a4c9919cbbd4acdd51ccffe22da049264b1b73e59055fa58811a99efbd7c8146"
+        },
+        {
+            "file": "openbmb-MiniCPM5-1B.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "7451a05cf1e28a79d97d7c0bc951028c0b1915119bf9046acd06a0e3d931f47c"
+        },
+        {
+            "file": "poolside-Laguna-S-2.1.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "444819b8ad4612870827ac05b9147fe9e3344d3850cae8c2790898fc514099ff"
+        },
+        {
+            "file": "poolside-Laguna-XS-2.1.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "5f1bf14725b6a0e662678e7ca66d7b347bbaa436b09db038472045aba37da2f2"
+        },
+        {
+            "file": "poolside-Laguna-XS.2.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "cefcef90515772c003776b3d7db3c088f4e0ee89f8470679b95cf83210dc9e06"
+        },
+        {
+            "file": "Qwen-Qwen2.5-7B-Instruct.jinja",
+            "hf_repo": "Qwen/Qwen2.5-7B-Instruct",
+            "license": "apache-2.0",
+            "sha256": "cd8e9439f0570856fd70470bf8889ebd8b5d1107207f67a5efb46e342330527f"
+        },
+        {
+            "file": "Qwen-Qwen3-0.6B.jinja",
+            "hf_repo": "Qwen/Qwen3-0.6B",
+            "license": "apache-2.0",
+            "sha256": "87a2728cb8dc9fe424d624542f6060ec05a1d285ebbec578bb078900e33396b5"
+        },
+        {
+            "file": "Qwen-QwQ-32B.jinja",
+            "hf_repo": "Qwen/QwQ-32B",
+            "license": "apache-2.0",
+            "sha256": "5ed15374ce53e19a7798710736a2c9fe41c79f7385e8421a2080d6575a80ef1b"
+        },
+        {
+            "file": "Qwen3-Coder.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "d287fb2edf144207f868ae1b282755dc19db2a3f1c5b3a3d57e9e5abffa98392"
+        },
+        {
+            "file": "Qwen3.5-4B.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+            "file": "Reka-Edge.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "546b04dba74993efae8f9da3ba08e29f437f5ac3f4e40b5cb9a4de5901a841df"
+        },
+        {
+            "file": "Spark2.5.jinja",
+            "hf_repo": "XHToken/Spark-X2.5-4B",
+            "license": null,
+            "sha256": "afea0f7114d5d35b20ad9f44f7dd0782791412b8fcfc1b49e31f27c2da09e9cb"
+        },
+        {
+            "file": "StepFun3.5-Flash.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "b18b99dff7261214c43e0402cba9f573e3240be6f9bb7ccaa54bb8df97e49dca"
+        },
+        {
+            "file": "tencent-Hy3.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "84437b9746423f042920c15289ac84d4eba7a50a11ebc05e8b414c460f814873"
+        },
+        {
+            "file": "unsloth-Apriel-1.5.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "fae87682d3551b1cd3191fc92c5372c230e6e90115a98f049e35218cf4e13d8f"
+        },
+        {
+            "file": "unsloth-mistral-Devstral-Small-2507.jinja",
+            "hf_repo": "unsloth/Devstral-Small-2507",
+            "license": "apache-2.0",
+            "sha256": "039a4710e2aabaa79e85a233fa3daa4fbc030a4a8dc218cb7f34fb0c4b8c13b1"
+        },
+        {
+            "file": "upstage-Solar-Open-100B.jinja",
+            "hf_repo": null,
+            "license": null,
+            "sha256": "4618a1ec1a3442b9723d661d72bb1776d1bf8ebd7281a3bf3edd8bfd80e5ad4e"
+        }
+    ]
+}

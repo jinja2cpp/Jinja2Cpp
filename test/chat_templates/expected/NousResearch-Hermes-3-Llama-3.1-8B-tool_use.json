@@ -1,0 +1,35 @@
+{
+ "template": "NousResearch-Hermes-3-Llama-3.1-8B-tool_use.jinja",
+ "renders": {
+  "single": {
+   "error": "TypeError"
+  },
+  "system": {
+   "error": "TypeError"
+  },
+  "nogen": {
+   "error": "TypeError"
+  },
+  "tools": {
+   "output": "<|bos|><|im_start|>system\nYou are a function calling AI model. You are provided with function signatures within <tools></tools> XML tags. You may call one or more functions to assist with the user query. Don't make assumptions about what values to plug into functions. Here are the available tools: <tools> {\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"get_weather(city: str, unit: str) - Get the current weather in a city.\n\n    Args:\n        city(str): City name, e.g. Paris        unit(str): \", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}} </tools>Use the following pydantic model json schema for each tool call you will make: {\"properties\": {\"name\": {\"title\": \"Name\", \"type\": \"string\"}, \"arguments\": {\"title\": \"Arguments\", \"type\": \"object\"}}, \"required\": [\"name\", \"arguments\"], \"title\": \"FunctionCall\", \"type\": \"object\"}}\nFor each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-dict>}\n</tool_call><|im_end|>\n<|im_start|>system\nYou can call tools.<|im_end|>\n<|im_start|>user\nWeather in Paris?<|im_end|>\n<|im_start|>assistant\n<tool_call>\n{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\", \"unit\": \"celsius\"}}\n</tool_call><|im_end|>\n<|im_start|>tool\n<tool_response>\n{\"temp\": 18, \"sky\": \"cloudy\"}\n</tool_response>\n<|im_end|><|im_start|>assistant\nIt is 18°C and cloudy in Paris.<|im_end|>\n<|im_start|>user\nThanks<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "tool_args_str": {
+   "output": "<|bos|><|im_start|>system\nYou are a function calling AI model. You are provided with function signatures within <tools></tools> XML tags. You may call one or more functions to assist with the user query. Don't make assumptions about what values to plug into functions. Here are the available tools: <tools> {\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"get_weather(city: str, unit: str) - Get the current weather in a city.\n\n    Args:\n        city(str): City name, e.g. Paris        unit(str): \", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}} </tools>Use the following pydantic model json schema for each tool call you will make: {\"properties\": {\"name\": {\"title\": \"Name\", \"type\": \"string\"}, \"arguments\": {\"title\": \"Arguments\", \"type\": \"object\"}}, \"required\": [\"name\", \"arguments\"], \"title\": \"FunctionCall\", \"type\": \"object\"}}\nFor each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-dict>}\n</tool_call><|im_end|>\n<|im_start|>user\nWeather in Tokyo?<|im_end|>\n<|im_start|>assistant\n<tool_call>\n{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Tōkyō\"}}\n</tool_call><|im_end|>\n<|im_start|>tool\n<tool_response>\nsunny\n</tool_response><|im_end|><|im_start|>assistant\n"
+  },
+  "reasoning": {
+   "error": "TypeError"
+  },
+  "no_thinking": {
+   "error": "TypeError"
+  },
+  "parts": {
+   "error": "TypeError"
+  },
+  "documents": {
+   "error": "TypeError"
+  },
+  "no_alternation": {
+   "error": "TypeError"
+  }
+ }
+}

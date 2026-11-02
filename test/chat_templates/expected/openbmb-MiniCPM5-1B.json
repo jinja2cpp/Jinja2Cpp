@@ -1,0 +1,36 @@
+{
+ "template": "openbmb-MiniCPM5-1B.jinja",
+ "renders": {
+  "single": {
+   "output": "<|bos|><|im_start|>user\nHello!<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "system": {
+   "output": "<|bos|><|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\nWhat is 2+2?<|im_end|>\n<|im_start|>assistant\n2+2 = 4.<|im_end|>\n<|im_start|>user\nAnd \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "nogen": {
+   "output": "<|bos|><|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\nHello! How can I help?<|im_end|>\n"
+  },
+  "tools": {
+   "output": "<|bos|><|im_start|>system\nYou can call tools.\n\n# Tools\n\nYou are provided with function signatures within <tools></tools> XML tags:\n<tools>\n{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}}\n</tools>\n\nTool usage guidelines:\n- You may call zero or more functions. If no function calls are needed, just answer normally and do not include any <function ... </function>.\n- When calling a function, return an XML object within <function ... </function> using:\n<function name=\"function-name\"><param name=\"param-name\">param-value</param></function>\n- param-value may be multi-line. If it contains <, & or newline characters, wrap it in a CDATA block: <param name=\"param-name\"><![CDATA[...multi-line value...]]></param><|im_end|>\n<|im_start|>user\nWeather in Paris?<|im_end|>\n<|im_start|>assistant\n<function name=\"get_weather\"><param name=\"city\">Paris</param><param name=\"unit\">celsius</param></function><|im_end|>\n<|im_start|>user\n<tool_response>\n{\"temp\": 18, \"sky\": \"cloudy\"}\n</tool_response><|im_end|>\n<|im_start|>assistant\nIt is 18°C and cloudy in Paris.<|im_end|>\n<|im_start|>user\nThanks<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "tool_args_str": {
+   "error": "UndefinedError",
+   "message": "'str object' has no attribute 'items'"
+  },
+  "reasoning": {
+   "output": "<|bos|><|im_start|>user\nIs 17 prime?<|im_end|>\n<|im_start|>assistant\nYes, 17 is prime.<|im_end|>\n<|im_start|>user\nAnd 21?<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "no_thinking": {
+   "output": "<|bos|><|im_start|>user\nQuick: capital of France?<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+  },
+  "parts": {
+   "error": "TypeError"
+  },
+  "documents": {
+   "output": "<|bos|><|im_start|>user\nWho wrote it?<|im_end|>\n<|im_start|>assistant\n"
+  },
+  "no_alternation": {
+   "output": "<|bos|><|im_start|>user\nFirst<|im_end|>\n<|im_start|>user\nSecond<|im_end|>\n<|im_start|>assistant\n"
+  }
+ }
+}

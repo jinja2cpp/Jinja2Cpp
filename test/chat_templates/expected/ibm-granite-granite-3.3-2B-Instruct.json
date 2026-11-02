@@ -1,0 +1,35 @@
+{
+ "template": "ibm-granite-granite-3.3-2B-Instruct.jinja",
+ "renders": {
+  "single": {
+   "output": "<|start_of_role|>system<|end_of_role|>Knowledge Cutoff Date: April 2024. Today's Date: March 14, 2025. You are Granite, developed by IBM. You are a helpful AI assistant.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Hello!<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  },
+  "system": {
+   "output": "<|start_of_role|>system<|end_of_role|>You are a helpful assistant.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>What is 2+2?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>2+2 = 4.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>And \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  },
+  "nogen": {
+   "output": "<|start_of_role|>system<|end_of_role|>Knowledge Cutoff Date: April 2024. Today's Date: March 14, 2025. You are Granite, developed by IBM. You are a helpful AI assistant.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Hi<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>Hello! How can I help?<|end_of_text|>\n"
+  },
+  "tools": {
+   "output": "<|start_of_role|>system<|end_of_role|>You can call tools.<|end_of_text|>\n<|start_of_role|>available_tools<|end_of_role|>[\n    {\n        \"type\": \"function\",\n        \"function\": {\n            \"name\": \"get_weather\",\n            \"description\": \"Get the current weather in a city.\",\n            \"parameters\": {\n                \"type\": \"object\",\n                \"properties\": {\n                    \"city\": {\n                        \"type\": \"string\",\n                        \"description\": \"City name, e.g. Paris\"\n                    },\n                    \"unit\": {\n                        \"type\": \"string\",\n                        \"enum\": [\n                            \"celsius\",\n                            \"fahrenheit\"\n                        ]\n                    }\n                },\n                \"required\": [\n                    \"city\"\n                ]\n            }\n        }\n    }\n]<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Weather in Paris?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|><|end_of_text|>\n<|start_of_role|>tool<|end_of_role|>{\"temp\": 18, \"sky\": \"cloudy\"}<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>It is 18°C and cloudy in Paris.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Thanks<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  },
+  "tool_args_str": {
+   "error": "TypeError"
+  },
+  "reasoning": {
+   "output": "<|start_of_role|>system<|end_of_role|>Knowledge Cutoff Date: April 2024. Today's Date: March 14, 2025. You are Granite, developed by IBM. You are a helpful AI assistant.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Is 17 prime?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>Yes, 17 is prime.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>And 21?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  },
+  "no_thinking": {
+   "output": "<|start_of_role|>system<|end_of_role|>Knowledge Cutoff Date: April 2024. Today's Date: March 14, 2025. You are Granite, developed by IBM. You are a helpful AI assistant.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Quick: capital of France?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  },
+  "parts": {
+   "error": "TypeError"
+  },
+  "documents": {
+   "output": "<|start_of_role|>system<|end_of_role|>Knowledge Cutoff Date: April 2024. Today's Date: March 14, 2025. You are Granite, developed by IBM. Write the response to the user's input by strictly aligning with the facts in the provided documents. If the information needed to answer the question is not available in the documents, inform the user that the question cannot be answered based on the available data.<|end_of_text|>\n<|start_of_role|>document {\"document_id\": \"\"}<|end_of_role|>\nA tragedy written by William Shakespeare.<|end_of_text|>\n<|start_of_role|>document {\"document_id\": \"\"}<|end_of_role|>\nWritten around 1600.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Who wrote it?<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  },
+  "no_alternation": {
+   "output": "<|start_of_role|>system<|end_of_role|>Knowledge Cutoff Date: April 2024. Today's Date: March 14, 2025. You are Granite, developed by IBM. You are a helpful AI assistant.<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>First<|end_of_text|>\n<|start_of_role|>user<|end_of_role|>Second<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+  }
+ }
+}

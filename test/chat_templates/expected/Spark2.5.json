@@ -1,0 +1,36 @@
+{
+ "template": "Spark2.5.jinja",
+ "renders": {
+  "single": {
+   "output": "<｜start▁of▁sentence｜><|System|>\nyou are a helpful assistant.<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|User|>Hello!<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|Bot|><think>"
+  },
+  "system": {
+   "output": "<｜start▁of▁sentence｜><|System|>\nyou are a helpful assistant.\n\nYou are a helpful assistant.<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|User|>What is 2+2?<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|Bot|></think>2+2 = 4.<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|User|>And \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|Bot|><think>"
+  },
+  "nogen": {
+   "output": "<｜start▁of▁sentence｜><|System|>\nyou are a helpful assistant.<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|User|>Hi<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|Bot|></think>Hello! How can I help?<｜end▁of▁sentence｜>"
+  },
+  "tools": {
+   "output": "<｜start▁of▁sentence｜><|System|>\nyou are a helpful assistant.## Tools\nYou have access to the following functions:\n<tools>\n{\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}\n</tools>\n\nYou can call tools.<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|User|>Weather in Paris?<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|Bot|></think><tool_call>get_weather<arg_key>city</arg_key><arg_value>Paris</arg_value><arg_key>unit</arg_key><arg_value>celsius</arg_value></tool_call><｜end▁of▁sentence｜><｜start▁of▁sentence｜><|Tool|><tool_response>{\"temp\": 18, \"sky\": \"cloudy\"}</tool_response><｜end▁of▁sentence｜><｜start▁of▁sentence｜><|Bot|></think>It is 18°C and cloudy in Paris.<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|User|>Thanks<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|Bot|><think>"
+  },
+  "tool_args_str": {
+   "error": "TemplateError",
+   "message": "tool_call.function.arguments must be a dictionary; normalize JSON strings before apply_chat_template"
+  },
+  "reasoning": {
+   "output": "<｜start▁of▁sentence｜><|System|>\nyou are a helpful assistant.<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|User|>Is 17 prime?<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|Bot|><think>17 has no divisors other than 1 and itself.</think>Yes, 17 is prime.<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|User|>And 21?<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|Bot|><think>"
+  },
+  "no_thinking": {
+   "output": "<｜start▁of▁sentence｜><|System|>\nyou are a helpful assistant.<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|User|>Quick: capital of France?<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|Bot|></think>"
+  },
+  "parts": {
+   "output": "<｜start▁of▁sentence｜><|System|>\nyou are a helpful assistant.\n\nBe brief.<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|User|>Describea cat.<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|Bot|><think>"
+  },
+  "documents": {
+   "output": "<｜start▁of▁sentence｜><|System|>\nyou are a helpful assistant.<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|User|>Who wrote it?<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|Bot|><think>"
+  },
+  "no_alternation": {
+   "output": "<｜start▁of▁sentence｜><|System|>\nyou are a helpful assistant.<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|User|>First<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|User|>Second<｜end▁of▁sentence｜><｜start▁of▁sentence｜><|Bot|><think>"
+  }
+ }
+}

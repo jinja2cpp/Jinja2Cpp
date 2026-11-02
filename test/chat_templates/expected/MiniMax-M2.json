@@ -1,0 +1,36 @@
+{
+ "template": "MiniMax-M2.jinja",
+ "renders": {
+  "single": {
+   "output": "]~!b[]~b]system\nYou are a helpful assistant.[e~[\n]~b]user\nHello![e~[\n]~b]ai\n<think>\n"
+  },
+  "system": {
+   "output": "]~!b[]~b]system\nYou are a helpful assistant.[e~[\n]~b]user\nWhat is 2+2?[e~[\n]~b]ai\n2+2 = 4.[e~[\n]~b]user\nAnd \"3+3\" <in> café ünïcode 日本 & emoji 🙂?[e~[\n]~b]ai\n<think>\n"
+  },
+  "nogen": {
+   "output": "]~!b[]~b]system\nYou are a helpful assistant.[e~[\n]~b]user\nHi[e~[\n]~b]ai\nHello! How can I help?[e~[\n"
+  },
+  "tools": {
+   "output": "]~!b[]~b]system\nYou can call tools.\n\n# Tools\nYou may call one or more tools to assist with the user query.\nHere are the tools available in JSONSchema format:\n\n<tools>\n<tool>{\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}</tool>\n</tools>\n\nWhen making tool calls, use XML format to invoke tools and pass parameters:\n\n<minimax:tool_call>\n<invoke name=\"tool-name-1\">\n<parameter name=\"param-key-1\">param-value-1</parameter>\n<parameter name=\"param-key-2\">param-value-2</parameter>\n...\n</invoke>\n</minimax:tool_call>[e~[\n]~b]user\nWeather in Paris?[e~[\n]~b]ai\n\n<minimax:tool_call>\n<invoke name=\"get_weather\">\n<parameter name=\"city\">Paris</parameter>\n<parameter name=\"unit\">celsius</parameter>\n</invoke>\n</minimax:tool_call>[e~[\n]~b]tool\n<response>{\"temp\": 18, \"sky\": \"cloudy\"}</response>[e~[\n]~b]ai\nIt is 18°C and cloudy in Paris.[e~[\n]~b]user\nThanks[e~[\n]~b]ai\n<think>\n"
+  },
+  "tool_args_str": {
+   "error": "UndefinedError",
+   "message": "'str object' has no attribute 'items'"
+  },
+  "reasoning": {
+   "output": "]~!b[]~b]system\nYou are a helpful assistant.[e~[\n]~b]user\nIs 17 prime?[e~[\n]~b]ai\nYes, 17 is prime.[e~[\n]~b]user\nAnd 21?[e~[\n]~b]ai\n<think>\n"
+  },
+  "no_thinking": {
+   "output": "]~!b[]~b]system\nYou are a helpful assistant.[e~[\n]~b]user\nQuick: capital of France?[e~[\n]~b]ai\n<think>\n"
+  },
+  "parts": {
+   "output": "]~!b[]~b]system\nBe brief.[e~[\n]~b]user\nDescribea cat.[e~[\n]~b]ai\n<think>\n"
+  },
+  "documents": {
+   "output": "]~!b[]~b]system\nYou are a helpful assistant.[e~[\n]~b]user\nWho wrote it?[e~[\n]~b]ai\n<think>\n"
+  },
+  "no_alternation": {
+   "output": "]~!b[]~b]system\nYou are a helpful assistant.[e~[\n]~b]user\nFirst[e~[\n]~b]user\nSecond[e~[\n]~b]ai\n<think>\n"
+  }
+ }
+}

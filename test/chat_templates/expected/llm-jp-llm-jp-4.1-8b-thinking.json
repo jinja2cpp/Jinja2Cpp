@@ -1,0 +1,35 @@
+{
+ "template": "llm-jp-llm-jp-4.1-8b-thinking.jinja",
+ "renders": {
+  "single": {
+   "output": "<|start|>system<|message|>You are LLM-jp-4, a large language model trained by LLM-jp.\nKnowledge cutoff: 2025-12\nCurrent date: 2025-03-14\n\nReasoning: medium\n\n# Valid channels: analysis, commentary, final. Channel must be included for every message.<|end|><|start|>user<|message|>Hello!<|end|><|start|>assistant"
+  },
+  "system": {
+   "output": "<|start|>system<|message|>You are LLM-jp-4, a large language model trained by LLM-jp.\nKnowledge cutoff: 2025-12\nCurrent date: 2025-03-14\n\nReasoning: medium\n\n# Valid channels: analysis, commentary, final. Channel must be included for every message.<|end|><|start|>developer<|message|># Instructions\n\nYou are a helpful assistant.\n\n<|end|><|start|>user<|message|>What is 2+2?<|end|><|start|>assistant<|channel|>final<|message|>2+2 = 4.<|end|><|start|>user<|message|>And \"3+3\" <in> café ünïcode 日本 & emoji 🙂?<|end|><|start|>assistant"
+  },
+  "nogen": {
+   "output": "<|start|>system<|message|>You are LLM-jp-4, a large language model trained by LLM-jp.\nKnowledge cutoff: 2025-12\nCurrent date: 2025-03-14\n\nReasoning: medium\n\n# Valid channels: analysis, commentary, final. Channel must be included for every message.<|end|><|start|>user<|message|>Hi<|end|><|start|>assistant<|channel|>final<|message|>Hello! How can I help?<|return|>"
+  },
+  "tools": {
+   "output": "<|start|>system<|message|>You are LLM-jp-4, a large language model trained by LLM-jp.\nKnowledge cutoff: 2025-12\nCurrent date: 2025-03-14\n\nReasoning: medium\n\n# Valid channels: analysis, commentary, final. Channel must be included for every message.\nCalls to these tools must go to the commentary channel: 'functions'.<|end|><|start|>developer<|message|># Instructions\n\nYou can call tools.\n\n# Tools\n\n## functions\n\nnamespace functions {\n\n// Get the current weather in a city.\ntype get_weather = (_: {\n// City name, e.g. Paris\ncity: string,\nunit?: \"celsius\" | \"fahrenheit\",\n}) => any;\n\n} // namespace functions<|end|><|start|>user<|message|>Weather in Paris?<|end|><|start|>assistant to=functions.get_weather<|channel|>commentary <|constrain|> json<|message|>{\"city\": \"Paris\", \"unit\": \"celsius\"}<|call|><|start|>functions.get_weather to=assistant<|channel|>commentary<|message|>\"{\\\"temp\\\": 18, \\\"sky\\\": \\\"cloudy\\\"}\"<|end|><|start|>assistant<|channel|>final<|message|>It is 18°C and cloudy in Paris.<|end|><|start|>user<|message|>Thanks<|end|><|start|>assistant"
+  },
+  "tool_args_str": {
+   "error": "TypeError"
+  },
+  "reasoning": {
+   "output": "<|start|>system<|message|>You are LLM-jp-4, a large language model trained by LLM-jp.\nKnowledge cutoff: 2025-12\nCurrent date: 2025-03-14\n\nReasoning: medium\n\n# Valid channels: analysis, commentary, final. Channel must be included for every message.<|end|><|start|>user<|message|>Is 17 prime?<|end|><|start|>assistant<|channel|>final<|message|>Yes, 17 is prime.<|end|><|start|>user<|message|>And 21?<|end|><|start|>assistant"
+  },
+  "no_thinking": {
+   "output": "<|start|>system<|message|>You are LLM-jp-4, a large language model trained by LLM-jp.\nKnowledge cutoff: 2025-12\nCurrent date: 2025-03-14\n\nReasoning: medium\n\n# Valid channels: analysis, commentary, final. Channel must be included for every message.<|end|><|start|>user<|message|>Quick: capital of France?<|end|><|start|>assistant"
+  },
+  "parts": {
+   "error": "TypeError"
+  },
+  "documents": {
+   "output": "<|start|>system<|message|>You are LLM-jp-4, a large language model trained by LLM-jp.\nKnowledge cutoff: 2025-12\nCurrent date: 2025-03-14\n\nReasoning: medium\n\n# Valid channels: analysis, commentary, final. Channel must be included for every message.<|end|><|start|>user<|message|>Who wrote it?<|end|><|start|>assistant"
+  },
+  "no_alternation": {
+   "output": "<|start|>system<|message|>You are LLM-jp-4, a large language model trained by LLM-jp.\nKnowledge cutoff: 2025-12\nCurrent date: 2025-03-14\n\nReasoning: medium\n\n# Valid channels: analysis, commentary, final. Channel must be included for every message.<|end|><|start|>user<|message|>First<|end|><|start|>user<|message|>Second<|end|><|start|>assistant"
+  }
+ }
+}

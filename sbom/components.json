@@ -462,6 +462,24 @@
       "evidence": [{"file": "test/parity/requirements.txt", "contains": ["markupsafe==3.0.3"]}]
     },
     {
+      "id": "python-transformers",
+      "name": "transformers",
+      "version": "5.22.1",
+      "license": "Apache-2.0",
+      "supplier": "Hugging Face",
+      "url": "https://github.com/huggingface/transformers",
+      "purl": "pkg:pypi/transformers@5.22.1",
+      "delivery": "system",
+      "role": "test",
+      "phases": ["dev"],
+      "exposure": "none",
+      "selected_by": "pip install -r test/chat_templates/requirements.txt (parity-expectations CI job)",
+      "used_for": "The chat-template oracle: regenerates test/chat_templates expectations with its own apply_chat_template environment (generate.py, docs/tasks/0360)",
+      "why": "Inference servers render chat templates as transformers does; the expectations it produces are committed, so ordinary builds do not need it",
+      "lighten": "Not part of any build",
+      "evidence": [{"file": "test/chat_templates/requirements.txt", "contains": ["transformers==5.22.1"]}]
+    },
+    {
       "id": "python",
       "name": "CPython",
       "version": "3.12",

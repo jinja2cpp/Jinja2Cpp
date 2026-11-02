@@ -272,6 +272,94 @@ std::uint8_t Expression::PrepareFold(const NodeArena& nodes)
     return IsFoldable(nodes) ? FoldAlways : 0;
 }
 
+// A node without an override folds always when PrepareFold says it folds at all
+bool Expression::IsFoldableAt(RenderContext& /*values*/) const
+{
+    return true;
+}
+
+namespace
+{
+// Jinja2 folds a composite (`~`, unary operators, subscripts, slices, comparisons, tests,
+// filters, literals) by folding each operand, so one that folds by a choice makes the whole
+// fold by it (docs/tasks/0307). `operands(f)` calls f with each operand; a null one, an
+// omitted slice part, folds. Stops at the first that does not fold: the node then never asks
+// its operands IsFoldableAt
+class AllOperandsFold
+{
+public:
+    explicit AllOperandsFold(const NodeArena& nodes)
+        : m_nodes(nodes)
+    {
+    }
+    void operator()(NodeRef<Expression> expr)
+    {
+        if (m_fold == 0 || !expr)
+        {
+            return;
+        }
+        const auto fold = PrepareOperandFold(m_nodes, expr);
+        m_fold = fold == FoldAlways ? m_fold : (fold == 0 ? std::uint8_t{ 0 } : std::uint8_t{ FoldByChoice });
+    }
+    [[nodiscard]] std::uint8_t Result() const { return m_fold; }
+
+private:
+    const NodeArena& m_nodes;
+    std::uint8_t m_fold = FoldAlways;
+};
+
+// A literal, the common operand of a literal list or `~` chain, is told by its kind without
+// a virtual call
+bool OperandFoldsAt(RenderContext& values, NodeRef<Expression> expr)
+{
+    return !expr || values.Nodes().Is<ConstantExpression>(expr) || values.Nodes()[expr].IsFoldableAt(values);
+}
+} // namespace
+
+std::uint8_t UnaryExpression::PrepareFold(const NodeArena& nodes)
+{
+    return FoldWalkTooDeep() ? std::uint8_t{ 0 } : PrepareOperandFold(nodes, m_expr);
+}
+
+bool UnaryExpression::IsFoldableAt(RenderContext& values) const
+{
+    return !FoldWalkTooDeep() && OperandFoldsAt(values, m_expr);
+}
+
+std::uint8_t IsExpression::PrepareFold(const NodeArena& nodes)
+{
+    return !m_foldable || FoldWalkTooDeep() ? std::uint8_t{ 0 } : PrepareOperandFold(nodes, m_value);
+}
+
+bool IsExpression::IsFoldableAt(RenderContext& values) const
+{
+    return m_foldable && !FoldWalkTooDeep() && OperandFoldsAt(values, m_value);
+}
+
+std::uint8_t SubscriptExpression::PrepareFold(const NodeArena& nodes)
+{
+    if (FoldWalkTooDeep())
+    {
+        return 0;
+    }
+    AllOperandsFold fold(nodes);
+    fold(m_value);
+    for (const auto& idx : m_subscriptExprs)
+    {
+        fold(idx.isAttr ? NodeRef<Expression>() : idx.expr);
+    }
+    return fold.Result();
+}
+
+bool SubscriptExpression::IsFoldableAt(RenderContext& values) const
+{
+    if (FoldWalkTooDeep() || !OperandFoldsAt(values, m_value))
+    {
+        return false;
+    }
+    return std::all_of(m_subscriptExprs.begin(), m_subscriptExprs.end(), [&values](const Index& idx) { return idx.isAttr || OperandFoldsAt(values, idx.expr); });
+}
+
 bool UnaryExpression::IsFoldable(const NodeArena& nodes) const
 {
     return !FoldWalkTooDeep() && nodes[m_expr].IsFoldable(nodes);
@@ -505,6 +593,21 @@ bool FilteredExpression::IsFoldable(const NodeArena& nodes) const
     return nodes[m_expression].IsFoldable(nodes) && nodes[m_filter].IsFoldable(nodes);
 }
 
+std::uint8_t FilteredExpression::PrepareFold(const NodeArena& nodes)
+{
+    // The filter and its arguments fold always or not at all (ExpressionFilter::Make)
+    if (FoldWalkTooDeep() || !nodes[m_filter].IsFoldable(nodes))
+    {
+        return 0;
+    }
+    return PrepareOperandFold(nodes, m_expression);
+}
+
+bool FilteredExpression::IsFoldableAt(RenderContext& values) const
+{
+    return !FoldWalkTooDeep() && OperandFoldsAt(values, m_expression);
+}
+
 InternalValue FilteredExpression::Evaluate(RenderContext& values)
 {
     CheckStack();
@@ -706,8 +809,7 @@ InternalValue ConstFormatExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
     return WithRight(context, [this](const InternalValue& rightVal) {
-        // What Apply does for a narrow string on the left
-        CheckUndefinedUse(rightVal, UndefinedUse::Operator);
+        // What Apply does for a narrow string on the left: the directives check an undefined
         return InternalValue(TargetString(m_format->Format(rightVal)));
     });
 }
@@ -764,6 +866,17 @@ std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, co
 
 namespace
 {
+// Python's Undefined has no ordering or arithmetic (its __lt__ and __add__ raise), so an
+// undefined operand of one is an UndefinedError rather than a TypeError (docs/tasks/0297)
+void CheckUndefinedOperands(BinaryExpression::Operation oper, const InternalValue& leftVal, const InternalValue& rightVal)
+{
+    if (oper != BinaryExpression::LogicalEq && oper != BinaryExpression::LogicalNe)
+    {
+        CheckUndefinedUse(leftVal, UndefinedUse::Arithmetic);
+        CheckUndefinedUse(rightVal, UndefinedUse::Arithmetic);
+    }
+}
+
 // The comparison and arithmetic operators on values that are not both numbers
 InternalValue ApplyMathOperation(BinaryExpression::Operation oper, const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
 {
@@ -849,8 +962,8 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
     InternalValue result;
     // StrictUndefined fails on any operator; the others fail in the arithmetic below
     CheckUndefinedUse(leftVal, UndefinedUse::Operator);
-    CheckUndefinedUse(rightVal, UndefinedUse::Operator);
-
+    // A string formats an undefined right operand by its directives, so StrictUndefined fails
+    // only where one converts it: `'xy' % missing` is 'xy' (docs/tasks/0297)
     if (m_oper == DivRemainder)
     {
         if (auto formatted = ApplyPercentFormat(leftVal, rightVal))
@@ -858,6 +971,7 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
             return std::move(*formatted);
         }
     }
+    CheckUndefinedUse(rightVal, UndefinedUse::Operator);
 
     switch (m_oper)
     {
@@ -874,6 +988,7 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
     case jinja2::BinaryExpression::DivRemainder:
     case jinja2::BinaryExpression::DivInteger:
     case jinja2::BinaryExpression::Pow:
+        CheckUndefinedOperands(m_oper, leftVal, rightVal);
         result = ApplyMathOperation(m_oper, leftVal, rightVal, context);
         break;
     case jinja2::BinaryExpression::In:
@@ -908,7 +1023,7 @@ JINJA2CPP_HOT_INLINE InternalValue ConcatExpression::EvaluatePair(NodeRef<Expres
             CheckUndefinedUse(left, UndefinedUse::Operator);
             CheckUndefinedUse(right, UndefinedUse::Operator);
             const std::array<LookupResult, 2> values{ LookupResult(left), LookupResult(right) };
-            if ((left.IsMarkup() || right.IsMarkup()) && !m_folded && context.IsOutputAutoescape() && !context.IsVolatileAutoescape())
+            if ((left.IsMarkup() || right.IsMarkup()) && context.IsOutputAutoescape() && !context.IsVolatileAutoescape() && !IsFoldedAt(context))
             {
                 return MarkupJoin(values, context);
             }
@@ -961,7 +1076,7 @@ InternalValue ConcatExpression::Evaluate(RenderContext& context)
     // escaped and the result is Markup. Jinja2 3.1.6 joins as str in volatile code: it reads
     // eval_ctx.volatile at run time, which is never set (docs/tasks/0216)
     auto* callback = context.GetRendererCallback();
-    if (anyMarkup && !m_folded && context.IsOutputAutoescape() && !context.IsVolatileAutoescape())
+    if (anyMarkup && context.IsOutputAutoescape() && !context.IsVolatileAutoescape() && !IsFoldedAt(context))
     {
         return MarkupJoin(values, context);
     }
@@ -978,6 +1093,35 @@ bool ConcatExpression::IsFoldable(const NodeArena& nodes) const
     return std::all_of(operands.begin(), operands.end(), [&nodes](const NodeRef<Expression>& operand) { return nodes[operand].IsFoldable(nodes); });
 }
 
+std::uint8_t ConcatExpression::PrepareFold(const NodeArena& nodes)
+{
+    if (FoldWalkTooDeep())
+    {
+        return 0;
+    }
+    AllOperandsFold fold(nodes);
+    for (const auto operand : nodes[m_operands])
+    {
+        fold(operand);
+    }
+    return fold.Result();
+}
+
+bool ConcatExpression::IsFoldableAt(RenderContext& values) const
+{
+    if (FoldWalkTooDeep())
+    {
+        return false;
+    }
+    const auto operands = values.Nodes()[m_operands];
+    return std::all_of(operands.begin(), operands.end(), [&values](const NodeRef<Expression>& operand) { return OperandFoldsAt(values, operand); });
+}
+
+bool ConcatExpression::IsFoldedAt(RenderContext& values) const
+{
+    return m_folded || (m_foldedByChoice && IsFoldableAt(values));
+}
+
 InternalValue CompareExpression::Evaluate(RenderContext& context)
 {
     CheckStack();
@@ -992,11 +1136,14 @@ InternalValue CompareExpression::Evaluate(RenderContext& context)
         {
             result = testers::IsValueIn(left, right);
         }
+        else if (visitors::IsNumber(left) && visitors::IsNumber(right))
+        {
+            result = ConvertToBool(visitors::ApplyToNumbers(left, right, operand.operation));
+        }
         else
         {
-            result = ConvertToBool(visitors::IsNumber(left) && visitors::IsNumber(right)
-                                       ? visitors::ApplyToNumbers(left, right, operand.operation)
-                                       : Apply2<visitors::BinaryMathOperation>(left, right, operand.operation));
+            CheckUndefinedOperands(operand.operation, left, right);
+            result = ConvertToBool(Apply2<visitors::BinaryMathOperation>(left, right, operand.operation));
         }
 
         if (result == operand.negated)
@@ -1017,6 +1164,25 @@ bool SliceExpression::IsFoldable(const NodeArena& nodes) const
     }
     auto part = [&nodes](const NodeRef<Expression>& expr) { return !expr || nodes[expr].IsFoldable(nodes); };
     return nodes[m_value].IsFoldable(nodes) && part(m_start) && part(m_stop) && part(m_step);
+}
+
+std::uint8_t SliceExpression::PrepareFold(const NodeArena& nodes)
+{
+    if (FoldWalkTooDeep())
+    {
+        return 0;
+    }
+    AllOperandsFold fold(nodes);
+    fold(m_value);
+    fold(m_start);
+    fold(m_stop);
+    fold(m_step);
+    return fold.Result();
+}
+
+bool SliceExpression::IsFoldableAt(RenderContext& values) const
+{
+    return !FoldWalkTooDeep() && OperandFoldsAt(values, m_value) && OperandFoldsAt(values, m_start) && OperandFoldsAt(values, m_stop) && OperandFoldsAt(values, m_step);
 }
 
 InternalValue SliceExpression::Evaluate(RenderContext& context)
@@ -1044,6 +1210,30 @@ bool TupleCreator::IsFoldable(const NodeArena& nodes) const
     }
     const auto items = nodes[m_exprs];
     return std::all_of(items.begin(), items.end(), [&nodes](const NodeRef<Expression>& item) { return nodes[item].IsFoldable(nodes); });
+}
+
+std::uint8_t TupleCreator::PrepareFold(const NodeArena& nodes)
+{
+    if (FoldWalkTooDeep())
+    {
+        return 0;
+    }
+    AllOperandsFold fold(nodes);
+    for (const auto item : nodes[m_exprs])
+    {
+        fold(item);
+    }
+    return fold.Result();
+}
+
+bool TupleCreator::IsFoldableAt(RenderContext& values) const
+{
+    if (FoldWalkTooDeep())
+    {
+        return false;
+    }
+    const auto items = values.Nodes()[m_exprs];
+    return std::all_of(items.begin(), items.end(), [&values](const NodeRef<Expression>& item) { return OperandFoldsAt(values, item); });
 }
 
 InternalValue TupleCreator::Evaluate(RenderContext& context)
@@ -1074,6 +1264,31 @@ bool DictCreator::IsFoldable(const NodeArena& nodes) const
     }
     const auto items = nodes[m_exprs];
     return std::all_of(items.begin(), items.end(), [&nodes](const Item& item) { return nodes[item.key].IsFoldable(nodes) && nodes[item.value].IsFoldable(nodes); });
+}
+
+std::uint8_t DictCreator::PrepareFold(const NodeArena& nodes)
+{
+    if (FoldWalkTooDeep())
+    {
+        return 0;
+    }
+    AllOperandsFold fold(nodes);
+    for (const auto& item : nodes[m_exprs])
+    {
+        fold(item.key);
+        fold(item.value);
+    }
+    return fold.Result();
+}
+
+bool DictCreator::IsFoldableAt(RenderContext& values) const
+{
+    if (FoldWalkTooDeep())
+    {
+        return false;
+    }
+    const auto items = values.Nodes()[m_exprs];
+    return std::all_of(items.begin(), items.end(), [&values](const Item& item) { return OperandFoldsAt(values, item.key) && OperandFoldsAt(values, item.value); });
 }
 
 InternalValue DictCreator::Evaluate(RenderContext& context)
@@ -1296,6 +1511,31 @@ bool CompareExpression::IsFoldable(const NodeArena& nodes) const
     }
     const auto operands = nodes[m_operands];
     return nodes[m_first].IsFoldable(nodes) && std::all_of(operands.begin(), operands.end(), [&nodes](const Operand& operand) { return nodes[operand.expr].IsFoldable(nodes); });
+}
+
+std::uint8_t CompareExpression::PrepareFold(const NodeArena& nodes)
+{
+    if (FoldWalkTooDeep())
+    {
+        return 0;
+    }
+    AllOperandsFold fold(nodes);
+    fold(m_first);
+    for (const auto& operand : nodes[m_operands])
+    {
+        fold(operand.expr);
+    }
+    return fold.Result();
+}
+
+bool CompareExpression::IsFoldableAt(RenderContext& values) const
+{
+    if (FoldWalkTooDeep() || !OperandFoldsAt(values, m_first))
+    {
+        return false;
+    }
+    const auto operands = values.Nodes()[m_operands];
+    return std::all_of(operands.begin(), operands.end(), [&values](const Operand& operand) { return OperandFoldsAt(values, operand.expr); });
 }
 
 bool IfExpression::Evaluate(RenderContext& context)

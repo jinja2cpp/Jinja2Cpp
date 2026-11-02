@@ -1,0 +1,36 @@
+{
+ "template": "NVIDIA-Nemotron-Nano-v2.jinja",
+ "renders": {
+  "single": {
+   "output": "<SPECIAL_10>System\n\n\n<SPECIAL_11>User\nHello!\n<SPECIAL_11>Assistant\n<think>\n"
+  },
+  "system": {
+   "output": "<SPECIAL_10>System\nYou are a helpful assistant.\n\n<SPECIAL_11>User\nWhat is 2+2?\n<SPECIAL_11>Assistant\n2+2 = 4.\n<SPECIAL_12>\n<SPECIAL_11>User\nAnd \"3+3\" <in> café ünïcode 日本 & emoji 🙂?\n<SPECIAL_11>Assistant\n<think>\n"
+  },
+  "nogen": {
+   "output": "<SPECIAL_10>System\n\n\n<SPECIAL_11>User\nHi\n<SPECIAL_11>Assistant\n<think>\nHello! How can I help?\n<SPECIAL_12>\n"
+  },
+  "tools": {
+   "output": "<SPECIAL_10>System\nYou can call tools.\n\nYou can use the following tools to assist the user if required:\n<AVAILABLE_TOOLS>[{\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}]</AVAILABLE_TOOLS>\n\nIf you decide to call any tool(s), use the following format:\n<TOOLCALL>[{{\"name\": \"tool_name1\", \"arguments\": \"tool_args1\"}}, {{\"name\": \"tool_name2\", \"arguments\": \"tool_args2\"}}]</TOOLCALL>\n\nThe user will execute tool-calls and return responses from tool(s) in this format:\n<TOOL_RESPONSE>[{{\"tool_response1\"}}, {{\"tool_response2\"}}]</TOOL_RESPONSE>\n\nBased on the tool responses, you can call additional tools if needed, correct tool calls if any errors are found, or just respond to the user.\n\n<SPECIAL_11>User\nWeather in Paris?\n<SPECIAL_11>Assistant\n<TOOLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Paris\", \"unit\": \"celsius\"}}]</TOOLCALL>\n<SPECIAL_12>\n<SPECIAL_11>User\n<TOOL_RESPONSE>[{\"temp\": 18, \"sky\": \"cloudy\"}]</TOOL_RESPONSE><SPECIAL_11>Assistant\nIt is 18°C and cloudy in Paris.\n<SPECIAL_12>\n<SPECIAL_11>User\nThanks\n<SPECIAL_11>Assistant\n<think>\n"
+  },
+  "tool_args_str": {
+   "output": "<SPECIAL_10>System\nYou can use the following tools to assist the user if required:\n<AVAILABLE_TOOLS>[{\"name\": \"get_weather\", \"description\": \"Get the current weather in a city.\", \"parameters\": {\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name, e.g. Paris\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", \"fahrenheit\"]}}, \"required\": [\"city\"]}}]</AVAILABLE_TOOLS>\n\nIf you decide to call any tool(s), use the following format:\n<TOOLCALL>[{{\"name\": \"tool_name1\", \"arguments\": \"tool_args1\"}}, {{\"name\": \"tool_name2\", \"arguments\": \"tool_args2\"}}]</TOOLCALL>\n\nThe user will execute tool-calls and return responses from tool(s) in this format:\n<TOOL_RESPONSE>[{{\"tool_response1\"}}, {{\"tool_response2\"}}]</TOOL_RESPONSE>\n\nBased on the tool responses, you can call additional tools if needed, correct tool calls if any errors are found, or just respond to the user.\n\n<SPECIAL_11>User\nWeather in Tokyo?\n<SPECIAL_11>Assistant\n<TOOLCALL>[{\"name\": \"get_weather\", \"arguments\": {\"city\": \"Tōkyō\"}}]</TOOLCALL>\n<SPECIAL_12>\n<SPECIAL_11>User\n<TOOL_RESPONSE>[sunny]</TOOL_RESPONSE><SPECIAL_11>Assistant\n<think>\n"
+  },
+  "reasoning": {
+   "output": "<SPECIAL_10>System\n\n\n<SPECIAL_11>User\nIs 17 prime?\n<SPECIAL_11>Assistant\nYes, 17 is prime.\n<SPECIAL_12>\n<SPECIAL_11>User\nAnd 21?\n<SPECIAL_11>Assistant\n<think>\n"
+  },
+  "no_thinking": {
+   "output": "<SPECIAL_10>System\n\n\n<SPECIAL_11>User\nQuick: capital of France?\n<SPECIAL_11>Assistant\n<think>\n"
+  },
+  "parts": {
+   "error": "UndefinedError",
+   "message": "'list object' has no attribute 'replace'"
+  },
+  "documents": {
+   "output": "<SPECIAL_10>System\n\n\n<SPECIAL_11>User\nWho wrote it?\n<SPECIAL_11>Assistant\n<think>\n"
+  },
+  "no_alternation": {
+   "output": "<SPECIAL_10>System\n\n\n<SPECIAL_11>User\nFirst\n<SPECIAL_11>User\nSecond\n<SPECIAL_11>Assistant\n<think>\n"
+  }
+ }
+}
