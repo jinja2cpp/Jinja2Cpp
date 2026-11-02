@@ -386,7 +386,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0312](0312-module-kept-while-stored-macro-reaches-it.md) | A macro a module call stores keeps its module, as in Jinja2 | parity | low | open |
 | [0313](0313-module-keeps-every-use-reloads.md) | A module keeps every tree `TemplateLookup::EveryUse` reloads | robustness | low | open |
 | [0314](0314-method-sort-format-unicode-case.md) | Methods 0020 left out: list.sort, nested format fields, Unicode case | parity | low | done |
-| [0317](0317-str-numeric-classes-and-missing-methods.md) | str methods: Unicode digit and numeric classes, casefold, isascii, isidentifier, isprintable, format leftovers | parity | low | open |
+| [0317](0317-str-numeric-classes-and-missing-methods.md) | str methods: Unicode digit and numeric classes, casefold, isascii, isidentifier, isprintable, format leftovers | parity | low | done |
 | [0318](0318-kept-globals-keep-their-snapshot.md) | A list or map from the globals keeps the globals it was read from | robustness | high | done |
 | [0319](0319-makecallable-value-parameter.md) | MakeCallable with a Value parameter does not compile | api | medium | done |
 | [0320](0320-typed-callable-omitted-argument.md) | A typed callable with an omitted optional argument is not called | api | low | done |
@@ -443,6 +443,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0371](0371-attr-filter-debug-undefined.md) | `|attr` of a missing attribute under DebugUndefined prints empty | parity | low | open |
 | [0372](0372-unicode-version-corpus-cases.md) | Corpus cases on code points whose Unicode properties changed after 15.0 | parity | low | open |
 | [0373](0373-closure-capture-module-call-and-scoped-frames.md) | Closures kept past a module call or a scoped frame lose their names | parity | low | open |
+| [0374](0374-number-data-attributes.md) | int and float data attributes: real, imag, numerator, denominator | parity | low | open |
 | [0375](0375-closure-capture-free-variables.md) | A kept closure copies only the names its body reads | perf | low | open |
 | [0376](0376-same-string-getter-round-trip.md) | GetAsSameString moves its string through the PLT | perf | low | done |
 | [0377](0377-chat-template-assistant-mask-and-security-error.md) | Chat templates: the assistant token mask and the sandbox's SecurityError | api | low | open |
