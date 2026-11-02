@@ -137,8 +137,11 @@ if [ "$perf" = 1 ]; then
         "-DCMAKE_CXX_FLAGS=-ffile-prefix-map=$src=S -ffile-prefix-map=$PWD/$dir=B" >/dev/null \
         && cmake --build "$dir" --target jinja2cpp_bench --parallel 2 >/dev/null || ok=0
     done
+    # As CI: a base driver that does not know a newer settings.json key counts its own cases
+    base_cases=bench/cases
+    grep -q '"transformers"' "$wt/bench/jinja2cpp_bench.cpp" || base_cases=$wt/bench/cases
     if [ $ok = 1 ] \
-       && python3 bench/count.py --bench build-preflight-base/bench/jinja2cpp_bench --out /tmp/preflight-base.json >/dev/null \
+       && python3 bench/count.py --bench build-preflight-base/bench/jinja2cpp_bench --cases-dir "$base_cases" --out /tmp/preflight-base.json >/dev/null \
        && python3 bench/count.py --bench build-preflight-head/bench/jinja2cpp_bench \
             --baseline /tmp/preflight-base.json --threshold 0.03; then
       record PASS "instruction gate (+3% per benchmark)"
