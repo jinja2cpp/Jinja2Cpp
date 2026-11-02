@@ -27,6 +27,8 @@ struct Node
 
 void CycleCollector::Finish() noexcept
 {
+    // First: what only these held is gone before the walk counts the references
+    m_notes->kept.clear();
     m_notes->cells.Release(this);
     if (!m_outer)
     {
@@ -45,6 +47,28 @@ void CycleCollector::Finish() noexcept
         // What the outer one did not take is collected here: the render that made it ended
         Collect();
     }
+}
+
+bool CycleCollector::KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner)
+{
+    auto* collector = s_current;
+    if (!collector)
+    {
+        return false;
+    }
+    if (!collector->m_notes)
+    {
+        collector->m_notes = std::make_unique<Notes>();
+    }
+    auto& notes = *collector->m_notes;
+    auto& kept = notes.kept;
+    if (kept.size() >= notes.keptPruneAt)
+    {
+        kept.erase(std::remove_if(kept.begin(), kept.end(), [](const auto& entry) { return entry.first.expired(); }), kept.end());
+        notes.keptPruneAt = std::max(Notes::MinPruneAt, kept.size() * 2);
+    }
+    kept.emplace_back(std::move(owner), std::move(object));
+    return true;
 }
 
 BorrowedCells* CycleCollector::CellsForWrite()

@@ -11,6 +11,7 @@
 #include "slot_frame.h"
 #include "span.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -298,12 +299,19 @@ public:
     SetStatement& operator=(SetStatement&&) = delete;
 
     [[nodiscard]] AssignTarget GetTarget() const { return m_target; }
+    // A top-level `set`: at a module's top level its names are exported again, an import's too
+    // (Jinja2's exported_vars, docs/tasks/0299)
+    void SetReexports() { m_reexports = true; }
 
 protected:
     ~SetStatement() = default;
+    [[nodiscard]] bool Reexports() const { return m_reexports; }
+    // After the names are bound
+    void Reexport(RenderContext& values) const;
 
 private:
     const AssignTarget m_target;
+    bool m_reexports = false;
 };
 
 class SetLineStatement final : public SetStatement
@@ -596,6 +604,10 @@ public:
     void Render(const Tpl& tpl, OutStream& os);
     // The names the module's top level set
     [[nodiscard]] const InternalValueMap& Names() const { return m_context.GetCurrentScope(); }
+    // Whether the module exports `name`, one of Names(): not when its top level imported it and
+    // did not set it again, as Jinja2 does not (docs/tasks/0299). Names that start with an
+    // underscore are the caller's to leave out
+    [[nodiscard]] bool Exports(std::string_view name) const { return std::find(m_imports.begin(), m_imports.end(), name) == m_imports.end(); }
     // The `import ... as m` object: the exported names as attributes, which prints as
     // Jinja2's TemplateModule, its output as str() and <TemplateModule 'name'> as repr()
     // (docs/tasks/0309). Made once: a module two imports share is one object, equal to itself
@@ -609,6 +621,9 @@ private:
     BlocksStack m_blocks;
     // The module's template, for its macros' `self`
     TemplateFrame m_frame;
+    // What its top level imported (RenderContext::SetModuleImports); before the context, which
+    // refers to it
+    ModuleImports m_imports;
     RenderContext m_context;
     // The output of the module's top level, which str() of its object prints (Render(tpl))
     InternalValue m_output;
@@ -694,6 +709,8 @@ class MacroStatement : public Statement
 {
 public:
     [[nodiscard]] ArenaSpan<MacroParam> GetParams() const { return m_params; }
+    // The macro's name; empty for the caller of a call block
+    [[nodiscard]] ArenaText GetNameText() const { return m_name; }
     static constexpr NodeKind Kind = NodeKind::MacroStmt;
     void VisitRefs(detail::RefChecker& refs) const
     {
@@ -751,6 +768,8 @@ public:
 
     // Jinja2: a declared `caller` argument of a macro that uses caller needs a default
     [[nodiscard]] bool HasInvalidCallerParam() const { return (m_specialNames & UsesCaller) != 0 && m_callerWithoutDefault; }
+    // As SetStatement::SetReexports
+    void SetReexports() { m_reexports = true; }
 
     void Render(OutStream& os, RenderContext& values) override;
     // The slots a call of the body takes (0117 P1)
@@ -778,6 +797,14 @@ public:
     // inside another body needs no lookup cache epoch of its own (HomeCall::Run)
     void SetReadsSlotsOnly(std::uint32_t slotReads) { m_readsSlotsOnly = !m_bodyReachesContext && slotReads == m_bodyNameRefs; }
     [[nodiscard]] bool ReadsSlotsOnly() const { return m_readsSlotsOnly; }
+    // For `value`, a macro that keeps one of `captures` (ClosureSite::CaptureOnEnd): the same
+    // macro without keeping it (Callable::SetKeepAlive), for a copy of the frames to hold.
+    // Else nothing. Throws std::bad_alloc
+    [[nodiscard]] static std::optional<InternalValue> WeakenCapture(const InternalValue& value, Span<const std::shared_ptr<ClosureCapture>> captures);
+    // `value` as a call reads it out of a copy of the frames: a macro WeakenCapture made keeps
+    // its capture again, so that what the call stores elsewhere keeps it; else `value`. Throws
+    // std::bad_alloc
+    [[nodiscard]] static InternalValue StrengthenCapture(const InternalValue& value);
 
 protected:
     // What MakeCallable's callable holds; defined in statements.cpp
@@ -814,6 +841,8 @@ protected:
     std::uint32_t m_bodyNameRefs = 0;
     bool m_bodyReachesContext = true;
     bool m_readsSlotsOnly = false;
+    // A top-level macro: as SetStatement::SetReexports
+    bool m_reexports = false;
     // `macro.name`, `macro.arguments` and the others, complete once the body is parsed
     std::shared_ptr<InternalValueMap> m_attributes;
     UnitLayout m_unitLayout;

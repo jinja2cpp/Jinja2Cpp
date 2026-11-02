@@ -1913,6 +1913,9 @@ public:
         return std::get<StatementCallable>(*m_callable);
     }
 
+    void SetKeepAlive(std::shared_ptr<const void> keepAlive) { m_keepAlive = std::move(keepAlive); }
+    [[nodiscard]] const void* GetKeepAlive() const { return m_keepAlive.get(); }
+
     // Attributes visible through `callable.name` (macro.name, macro.arguments, ...)
     void SetAttributes(std::shared_ptr<const InternalValueMap> attributes)
     {
@@ -1965,6 +1968,10 @@ private:
     const char* m_boundMethod = nullptr;
     std::shared_ptr<const IBoundReceiver> m_boundReceiver;
     const char* m_repr = nullptr;
+    // What this copy of the callable keeps alive (MacroStatement::MakeCallable: the copy of
+    // the frames a macro was defined in, ClosureCapture). Apart from the shared function, so
+    // that a copy may drop it and stay the same callable (MacroStatement::WeakenCapture)
+    std::shared_ptr<const void> m_keepAlive;
 };
 
 // The function of a method bound to its receiver (methods::MakeBoundMethod): a type of its

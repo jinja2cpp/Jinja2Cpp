@@ -5108,6 +5108,371 @@
    "output": "C|C"
   },
   {
+   "id": "loader.include_macro_kept_sees_includer",
+   "template": "{% set ns = namespace(f=none) %}{% for x in 'XY' %}{% include 'inc' %}{% endfor %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "inc": "{% macro m() %}M{{ x }}{% endmacro %}{% set ns.f = m %}"
+   },
+   "output": "|MY"
+  },
+  {
+   "id": "loader.include_macro_kept_recursive",
+   "template": "{% set ns = namespace(f=none) %}{% include 'r' %}{{ ns.f(2) }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "r": "{% macro i(n) %}{{ n }}{% if n %}{{ i(n - 1) }}{% endif %}{% endmacro %}{% set ns.f = i %}"
+   },
+   "output": "210"
+  },
+  {
+   "id": "loader.include_block_macro_kept",
+   "template": "{% set ns = namespace(f=none) %}{% include 'b' %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "b": "{% set q = 'Q' %}{% block b %}{% set a = 'A' %}{% macro m() %}{{ a }}{{ q }}{% endmacro %}{% set ns.f = m %}{% endblock %}"
+   },
+   "output": "|AQ"
+  },
+  {
+   "id": "loader.include_with_macro_kept",
+   "template": "{% set ns = namespace(f=none) %}{% include 'w' %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "w": "{% set q = 'Q' %}{% with a = 'A' %}{% macro m() %}{{ a }}{{ q }}{% endmacro %}{% set ns.f = m %}{% endwith %}"
+   },
+   "output": "|missingQ"
+  },
+  {
+   "id": "loader.include_macro_kept_sibling_in_loop",
+   "template": "{% set ns = namespace(l=[]) %}{% for i in range(3) %}{% include 'i' %}{% endfor %}{% for f in ns.l %}{{ f() }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = i %}{% macro b() %}{{ y }}{% endmacro %}{% macro a2() %}<{{ b() }}>{% endmacro %}{% set _ = ns.l.append(a2) %}"
+   },
+   "output": "<0><1><2>"
+  },
+  {
+   "id": "loader.include_nested_closure_reads_top_level_live",
+   "template": "{% set ns = namespace(f=none) %}{% include 'i' %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = 1 %}{% macro k() %}{% macro c() %}{{ y }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{{ k() }}{% set y = 2 %}{{ ns.f() }}"
+   },
+   "output": "2"
+  },
+  {
+   "id": "loader.include_nested_closure_after_include",
+   "template": "{% set ns = namespace(f=none) %}{% include 'i' %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = 1 %}{% macro k() %}{% macro c() %}{{ y }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{{ k() }}{% set y = 2 %}"
+   },
+   "output": "|2"
+  },
+  {
+   "id": "loader.include_nested_closure_later_macro",
+   "template": "{% set ns = namespace(f=none) %}{% include 'i' %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% macro k() %}{% macro c() %}{{ h() }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{{ k() }}{% macro h() %}H{% endmacro %}{{ ns.f() }}"
+   },
+   "output": "H"
+  },
+  {
+   "id": "loader.include_nested_closure_in_nested_include",
+   "template": "{% set ns = namespace(f=none) %}{% include 'i' %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = 1 %}{% macro k() %}{% macro c() %}{{ y }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{{ k() }}{% set y = 2 %}{% include 'j' %}",
+    "j": "{{ ns.f() }}"
+   },
+   "output": "2"
+  },
+  {
+   "id": "loader.include_nested_closure_calls_later_macros",
+   "template": "{% set ns = namespace(l=[]) %}{% include 'i' %}|{% for f in ns.l %}{{ f() }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = 'Y' %}{% macro a() %}a{{ y }}{% endmacro %}{% macro k(v) %}{% macro c() %}c{{ v }}{{ y }}{{ a() }}{{ b() }}{% endmacro %}{% set _ = ns.l.append(c) %}{% endmacro %}{{ k(1) }}{% macro b() %}b{{ y }}{% endmacro %}{% set _ = ns.l.append(a) %}"
+   },
+   "output": "|c1YaYbYaY"
+  },
+  {
+   "id": "loader.include_macro_kept_reads_self",
+   "template": "{% set ns = namespace(f=none) %}{% include 'i' %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = 'Y' %}{% macro a() %}a{{ y }}{{ self.blk() }}{% endmacro %}{% block blk %}B{{ y }}{% endblock %}{% set ns.f = a %}"
+   },
+   "output": "BY|aYBY"
+  },
+  {
+   "id": "loader.include_closure_calls_unheld_top_level_macro",
+   "template": "{% set ns = namespace(c=none) %}{% include 'i' %}|{{ ns.c() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = 'Y' %}{% macro t() %}t{{ y }}{% endmacro %}{% macro k(v) %}{% macro c() %}c{{ v }}{{ t() }}{{ y }}{% endmacro %}{% set ns.c = c %}{% endmacro %}{{ k(1) }}"
+   },
+   "output": "|c1tYY"
+  },
+  {
+   "id": "loader.include_in_loop_closure_calls_top_level_macro",
+   "template": "{% set ns = namespace(l=[]) %}{% for i in range(3) %}{% include 'i' %}{% endfor %}|{% for f in ns.l %}{{ f() }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "i": "{% set y = i %}{% macro t() %}t{{ y }}{% endmacro %}{% macro k(v) %}{% macro c() %}c{{ v }}{{ t() }}{% endmacro %}{% set _ = ns.l.append(c) %}{% endmacro %}{{ k(i) }}"
+   },
+   "output": "|c0t0c1t1c2t2"
+  },
+  {
+   "id": "loader.include_macro_kept_snapshot",
+   "template": "{% set ns = namespace(f=none) %}{% set x = 'X' %}{% include 'a' %}{% set x = 'X2' %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro m() %}{{ x }}{% endmacro %}{% set ns.f = m %}"
+   },
+   "output": "|X"
+  },
+  {
+   "id": "loader.include_macro_kept_nested_includes",
+   "template": "{% set ns = namespace(f=none) %}{% set x = 'X' %}{% include 'a' %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% set y = 'Y' %}{% include 'b' %}",
+    "b": "{% set z = 'Z' %}{% macro m() %}{{ x }}{{ y }}{{ z }}{% endmacro %}{% set ns.f = m %}"
+   },
+   "output": "|XYZ"
+  },
+  {
+   "id": "loader.include_nested_macro_kept",
+   "template": "{% set ns = namespace(f=none) %}{% set x = 'X' %}{% include 'a' %}|{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% set y = 'Y' %}{% macro o(p) %}{% macro i() %}{{ x }}{{ y }}{{ p }}{% endmacro %}{% set ns.f = i %}{% endmacro %}{{ o('P') }}"
+   },
+   "output": "|XYP"
+  },
+  {
+   "id": "loader.self_of_ended_include_last_one",
+   "template": "{% set ns = namespace(s=none) %}{% for x in 'XY' %}{% include 'inc' %}{% endfor %}|{{ ns.s.blk() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "inc": "{% block blk %}B{{ x }}{% endblock %}{% set ns.s = self %}"
+   },
+   "output": "BXBY|BY"
+  },
+  {
+   "id": "loader.self_of_ended_include_calls_self",
+   "template": "{% set ns = namespace(s=none) %}{% set x = 'X' %}{% include 'inc' %}|{{ ns.s.a() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "inc": "{% block a %}A{{ x }}{{ self.b() }}{% endblock %}{% block b %}B{{ x }}{% endblock %}{% set ns.s = self %}"
+   },
+   "output": "AXBXBX|AXBX"
+  },
+  {
+   "id": "loader.module_exports_skip_imports",
+   "template": "{% import 'm2' as x %}[{{ x.am is defined }}|{{ x.aa is defined }}|{{ x.own() }}]",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro am() %}AM{% endmacro %}",
+    "m2": "{% from 'a' import am %}{% import 'a' as aa %}{% macro own() %}O{% endmacro %}"
+   },
+   "output": "[False|False|O]"
+  },
+  {
+   "id": "loader.from_module_import_of_import",
+   "template": "{% set am = 1 %}{% from 'm2' import am %}[{{ am is defined }}]",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro am() %}AM{% endmacro %}",
+    "m2": "{% from 'a' import am %}{% import 'a' as aa %}{% macro own() %}O{% endmacro %}"
+   },
+   "output": "[False]"
+  },
+  {
+   "id": "loader.module_reexports_reset_import",
+   "template": "{% import 'm3' as x %}[{{ x.am is defined }}|{{ x.aa is defined }}|{{ x.b }}]",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro am() %}AM{% endmacro %}",
+    "m3": "{% from 'a' import am %}{% import 'a' as aa %}{% set am = am %}{% set aa, b = aa, 2 %}"
+   },
+   "output": "[True|True|2]"
+  },
+  {
+   "id": "loader.module_import_after_set_hides",
+   "template": "{% import 'm3' as x %}[{{ x.am is defined }}|{{ x.f() }}]",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro am() %}AM{% endmacro %}",
+    "m3": "{% set am = 5 %}{% from 'a' import am %}{% macro f() %}{% from 'a' import am %}{{ am() }}{% endmacro %}"
+   },
+   "output": "[False|AM]"
+  },
+  {
+   "id": "loader.module_macro_after_import_exported",
+   "template": "{% import 'm3' as x with context %}[{{ x.am() }}]",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro am() %}AM{% endmacro %}",
+    "m3": "{% from 'a' import am %}{% macro am() %}MINE{% endmacro %}"
+   },
+   "output": "[MINE]"
+  },
+  {
+   "id": "loader.module_parent_import_not_exported",
+   "template": "{% import 'c' as x %}[{{ x.am is defined }}{{ x.own() }}]",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro am() %}AM{% endmacro %}",
+    "p": "{% from 'a' import am %}",
+    "c": "{% extends 'p' %}{% macro own() %}O{% endmacro %}"
+   },
+   "output": "[FalseO]"
+  },
+  {
+   "id": "loader.module_parent_set_reexports_child_import",
+   "template": "{% import 'c' as x %}{% from 'c' import b %}[{{ x.b }}|{{ b }}|{{ x.am() }}]",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% macro am() %}AM{% endmacro %}{% set b = 1 %}",
+    "p": "{% if true %}{% set b = 2 %}{% endif %}{% macro am() %}PM{% endmacro %}",
+    "c": "{% from 'a' import am, b %}{% extends 'p' %}"
+   },
+   "output": "[2|2|PM]"
+  },
+  {
+   "id": "loader.module_parent_block_set_not_reexported",
+   "template": "{% import 'c' as x %}[{{ x.b is defined }}]",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "a": "{% set b = 1 %}",
+    "p": "{% block k %}{% set b = 2 %}{% endblock %}{% for i in [1] %}{% set b = 3 %}{% endfor %}",
+    "c": "{% from 'a' import b %}{% extends 'p' %}"
+   },
+   "output": "[False]"
+  },
+  {
+   "id": "loader.module_failed_import_not_exported",
+   "template": "{% import 'm' as x %}[{{ x.nope is defined }}|{{ x.n2 is defined }}|{{ x.y }}]",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "e": "",
+    "m": "{% from 'e' import nope %}{% from 'e' import nope as n2 %}{% set y = 1 %}"
+   },
+   "output": "[False|False|1]"
+  },
+  {
    "id": "loader.module_object_str_repr",
    "template": "{% import 'out.j2' as m %}[{{ m }}]|{{ m|pprint }}|{{ [m] }}|{{ m|string }}|{{ m.x }}{{ m['x'] }}{{ m.f() }}|{{ m is mapping }}|{{ m.nope is defined }}|{{ m == m }}",
    "context": {

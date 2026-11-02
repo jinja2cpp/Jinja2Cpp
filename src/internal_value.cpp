@@ -2,11 +2,14 @@
 
 #include "big_int.h"
 #include "borrowed_cells.h"
+#include "cycle_collector.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
+#include "out_stream.h"
 #include "intrusive_ptr.h"
 #include "recursion_guard.h"
+#include "render_context.h"
 #include "render_failure.h"
 #include "shared_owner.h"
 #include "span.h"
@@ -38,6 +41,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -967,6 +971,12 @@ struct StringGetter : public visitors::BaseVisitor<std::string>
 
 std::string AsString(const InternalValue& val)
 {
+    // A narrow string, the common case, copied straight from its text rather than through the
+    // visitor, whose code for it GCC does not always inline
+    if (const auto text = AsStringView<char>(val))
+    {
+        return std::string(*text);
+    }
     return Apply<StringGetter>(val);
 }
 
@@ -3808,6 +3818,10 @@ MapAdapter CreateMapAdapter(ValuesMap&& values)
     return MapAdapter(MakeRef<OwnedAdapter<ValuesMapAdapter<BySharedVal>>>(std::move(values)));
 }
 
+// The host's own callable a Callable was made from (InputValueConvertor::ConvertUserCallable),
+// which goes back as it came; an empty Value for a template callable. Defined below
+Value HostCallableOf(const Callable& callable);
+
 struct OutputValueConvertor
 {
     using result_t = Value;
@@ -3818,7 +3832,7 @@ struct OutputValueConvertor
     result_t operator()(const ListRef& adapter) const { return result_t(adapter.CreateGenericList()); }
     result_t operator()(const ValueRef& ref) const { return ref.get(); }
     result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", IntValue2Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }
-    result_t operator()(const Callable&) const { return result_t(); }
+    result_t operator()(const Callable& callable) const { return HostCallableOf(callable); }
     result_t operator()(const UserCallable&) const { return result_t(); }
     result_t operator()(const std::shared_ptr<IRendererBase>&) const { return result_t(); }
     // A big integer leaves a render as a BigInt, never as the value's own object (docs/tasks/0270)
@@ -3926,7 +3940,169 @@ private:
     RenderContext* m_context;
 };
 
-UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderContext& context, const std::vector<ArgumentInfo>& argsInfo)
+namespace
+{
+// The template callables a host's call got as arguments, lent for the duration of that call
+// (docs/tasks/0300): a macro or `caller` passed to a module's macro (Template::MakeModule) from
+// another render, which runs in that render when the module calls it back. Made with the first
+// such argument; the call ends it (LeaseEnd), and the host's later calls fail with
+// TemplateExpired, as the render that owns the callable may be gone. The pointers are valid
+// while the lease is: the call is running further down the thread's stack
+struct CallableLease
+{
+    RenderContext* context;
+    // The render's, which the callable's code notes its writes to
+    CycleCollector* collector;
+    std::thread::id thread;
+    // The render's resource limits and what is left of its budgets: taken when the call starts,
+    // run under by every call back (the host may have installed another render's limits, a
+    // module's call does) and given back to the render when the call ends (LeaseEnd)
+    detail::RenderLimits limits;
+    bool isActive = true;
+    bool calledBack = false;
+};
+
+class LeaseEnd
+{
+public:
+    explicit LeaseEnd(const std::shared_ptr<CallableLease>& lease)
+        : m_lease(lease)
+    {
+    }
+    LeaseEnd(const LeaseEnd&) = delete;
+    LeaseEnd(LeaseEnd&&) = delete;
+    LeaseEnd& operator=(const LeaseEnd&) = delete;
+    LeaseEnd& operator=(LeaseEnd&&) = delete;
+    ~LeaseEnd()
+    {
+        if (m_lease)
+        {
+            m_lease->isActive = false;
+            if (m_lease->calledBack)
+            {
+                detail::InstallRenderLimits(m_lease->limits);
+            }
+        }
+    }
+
+private:
+    const std::shared_ptr<CallableLease>& m_lease;
+};
+
+// A call back runs under the limits of the render that lent the callable, not of the host
+// call's (a module's call installs its own), and keeps what it used of their budgets
+class LentLimitsScope
+{
+public:
+    explicit LentLimitsScope(CallableLease& lease)
+        : m_lease(lease)
+        , m_saved(detail::t_renderLimits)
+    {
+        lease.calledBack = true;
+        detail::InstallRenderLimits(lease.limits);
+    }
+    LentLimitsScope(const LentLimitsScope&) = delete;
+    LentLimitsScope(LentLimitsScope&&) = delete;
+    LentLimitsScope& operator=(const LentLimitsScope&) = delete;
+    LentLimitsScope& operator=(LentLimitsScope&&) = delete;
+    ~LentLimitsScope()
+    {
+        m_lease.limits = detail::t_renderLimits;
+        detail::InstallRenderLimits(m_saved);
+    }
+
+private:
+    CallableLease& m_lease;
+    detail::RenderLimits m_saved;
+};
+
+// The host's form of a lent template callable: called during the lease, on its thread, it runs
+// the callable in the render that lent it, with its collector current; its result goes back as
+// IntValue2Value gives it
+struct LentCallable
+{
+    std::shared_ptr<CallableLease> lease;
+    InternalValue callable;
+
+    Value operator()(const UserCallableParams& params) const
+    {
+        // The thread first: it never changes, while another thread must not read isActive
+        if (lease->thread != std::this_thread::get_id() || !lease->isActive)
+        {
+            ThrowExpired();
+        }
+        // Converted by value: the callable may keep an argument past the call (a namespace)
+        const auto own = [](const Value& value) { return std::visit(visitors::InputValueConvertor(true, false), value.GetData()); };
+        CallParams callParams;
+        for (const auto& [name, value] : params.args)
+        {
+            callParams.kwParams[name] = own(value);
+        }
+        if (const auto* posArgs = params.extraPosArgs.GetIf<ValuesList>())
+        {
+            for (const auto& arg : *posArgs)
+            {
+                callParams.posParams.push_back(own(arg));
+            }
+        }
+        if (const auto* kwArgs = params.extraKwArgs.GetIf<ValuesMap>())
+        {
+            for (const auto& [name, arg] : *kwArgs)
+            {
+                callParams.kwParams[name] = own(arg);
+            }
+        }
+        auto& context = *lease->context;
+        const LentLimitsScope limits(*lease);
+        const CycleCollector::Reentry collector(lease->collector);
+        // A host may catch what the callable throws and go on: the scopes and views a failed
+        // body left on the render's context go, as a HomeCall that switched would drop them
+        const HomeCall::Restore restore(context);
+        const auto& fn = *GetIf<Callable>(&callable);
+        if (fn.GetType() == Callable::Type::Expression)
+        {
+            return IntValue2Value(fn.GetExpressionCallable()(callParams, context));
+        }
+        InternalValue result = RenderToString(context.GetRendererCallback(), [&](OutStream& stream) { fn.GetStatementCallable()(callParams, stream, context); });
+        result.SetMarkup(context.IsAutoescape());
+        return IntValue2Value(result);
+    }
+
+    [[noreturn]] static void ThrowExpired()
+    {
+        ErrorInfo::Data errorData;
+        errorData.code = ErrorCode::TemplateExpired;
+        errorData.srcLoc.line = 1;
+        errorData.srcLoc.col = 1;
+        errorData.extraParams.emplace_back(std::string("lent"));
+        throw ErrorInfo(std::move(errorData));
+    }
+};
+
+// The template callable `value` lent to a host's call made from `context` (CallableLease):
+// out of line, as few calls pass one
+JINJA2CPP_NOINLINE_INLINE Value LendToHost(const InternalValue& value, RenderContext& context, std::shared_ptr<CallableLease>& lease)
+{
+    if (!lease)
+    {
+        lease = std::make_shared<CallableLease>(CallableLease{ &context, CycleCollector::Current(), std::this_thread::get_id(), detail::t_renderLimits });
+    }
+    return Value(UserCallable(LentCallable{ lease, value }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) }));
+}
+
+// The host's form of an argument of a host's call made from `context`: a template callable is
+// lent (LendToHost), the rest as IntValue2Value gives it
+JINJA2CPP_HOT_INLINE Value ArgumentToHost(const InternalValue& value, RenderContext& context, std::shared_ptr<CallableLease>& lease)
+{
+    const auto* callable = GetIf<Callable>(&value);
+    if (!callable || callable->GetKind() == Callable::UserCallable)
+    {
+        return IntValue2Value(value);
+    }
+    return LendToHost(value, context, lease);
+}
+
+UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderContext& context, const std::vector<ArgumentInfo>& argsInfo, std::shared_ptr<CallableLease>& lease)
 {
     UserCallableParams result;
 
@@ -3956,26 +4132,27 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
         }
 
         const auto& v = p->second;
-        result.args[argInfo.name] = IntValue2Value(v);
+        result.args[argInfo.name] = ArgumentToHost(v, context, lease);
     }
 
     ValuesMap extraKwArgs;
     for (auto& [name, value] : args.extraKwArgs)
     {
-        extraKwArgs[name] = IntValue2Value(value);
+        extraKwArgs[name] = ArgumentToHost(value, context, lease);
     }
     result.extraKwArgs = Value(std::move(extraKwArgs));
 
     ValuesList extraPosArgs;
     for (auto& p : args.extraPosArgs)
     {
-        extraPosArgs.push_back(IntValue2Value(p));
+        extraPosArgs.push_back(ArgumentToHost(p, context, lease));
     }
     result.extraPosArgs = Value(std::move(extraPosArgs));
     result.context = GenericMap(std::make_shared<const ContextMapper>(&context));
 
     return result;
 }
+} // namespace
 
 namespace visitors
 {
@@ -3991,7 +4168,9 @@ struct UserCallableBody
 
     InternalValue operator()(const CallParams& params, RenderContext& context) const
     {
-        auto ucParams = PrepareUserCallableParams(params, context, argsInfo);
+        std::shared_ptr<CallableLease> lease;
+        const LeaseEnd leaseEnd(lease);
+        auto ucParams = PrepareUserCallableParams(params, context, argsInfo, lease);
         auto result = Value2IntValue(CallHost(ucParams));
         AfterHostCall();
         return result;
@@ -4081,6 +4260,18 @@ InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const Use
 }
 
 } // namespace visitors
+
+Value HostCallableOf(const Callable& callable)
+{
+    if (callable.GetKind() == Callable::UserCallable && callable.GetType() == Callable::Type::Expression)
+    {
+        if (const auto* body = callable.GetExpressionCallable().target<visitors::UserCallableBody>())
+        {
+            return Value(body->val);
+        }
+    }
+    return Value();
+}
 
 void TraverseBoxed(const KeyValuePair& pair, const TraverseFn& fn)
 {

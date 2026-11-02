@@ -21,6 +21,13 @@ where Jinja2 prints `2b3c3aFalse;4dTrue;`. The same early fetch makes the inner 
 yields what is left (0219 verifier). `loop|list` and loops that do not read the outer state
 are not affected.
 
+The same early fetch applies to every unfiltered loop over a list the body changes: removing
+the current item visits a different set of items (`{% set q = [1, 2, 3] %}{% for x in q %}{{ x }}{% do q.remove(x) %}{% endfor %}`
+gives `12`, Python `13`; `statements.for_remove_current_item`, moved here from 0049's P3 list,
+which 0049 closed with). `loop.length`, `loop.revindex` and `loop.last` after an append already
+match (`statements.for_length_after_append`), as does `pop` in a loop over context data
+(`statements.for_pop_context_list`).
+
 Also left by 0219: `loop|urlencode` quotes the loop's repr; Jinja2 iterates it as a sequence
 of pairs (`1=%3CLoopContext+2%2F3%3E&...`). Pin it with a case when this is taken up.
 
