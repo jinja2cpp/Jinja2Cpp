@@ -3948,7 +3948,12 @@ struct CallableLease
     // The render's, which the callable's code notes its writes to
     CycleCollector* collector;
     std::thread::id thread;
+    // The render's resource limits and what is left of its budgets: taken when the call starts,
+    // run under by every call back (the host may have installed another render's limits, a
+    // module's call does) and given back to the render when the call ends (LeaseEnd)
+    detail::RenderLimits limits;
     bool isActive = true;
+    bool calledBack = false;
 };
 
 class LeaseEnd
@@ -3967,11 +3972,42 @@ public:
         if (m_lease)
         {
             m_lease->isActive = false;
+            if (m_lease->calledBack)
+            {
+                detail::InstallRenderLimits(m_lease->limits);
+            }
         }
     }
 
 private:
     const std::shared_ptr<CallableLease>& m_lease;
+};
+
+// A call back runs under the limits of the render that lent the callable, not of the host
+// call's (a module's call installs its own), and keeps what it used of their budgets
+class LentLimitsScope
+{
+public:
+    explicit LentLimitsScope(CallableLease& lease)
+        : m_lease(lease)
+        , m_saved(detail::t_renderLimits)
+    {
+        lease.calledBack = true;
+        detail::InstallRenderLimits(lease.limits);
+    }
+    LentLimitsScope(const LentLimitsScope&) = delete;
+    LentLimitsScope(LentLimitsScope&&) = delete;
+    LentLimitsScope& operator=(const LentLimitsScope&) = delete;
+    LentLimitsScope& operator=(LentLimitsScope&&) = delete;
+    ~LentLimitsScope()
+    {
+        m_lease.limits = detail::t_renderLimits;
+        detail::InstallRenderLimits(m_saved);
+    }
+
+private:
+    CallableLease& m_lease;
+    detail::RenderLimits m_saved;
 };
 
 // The host's form of a lent template callable: called during the lease, on its thread, it runs
@@ -4011,6 +4047,7 @@ struct LentCallable
             }
         }
         auto& context = *lease->context;
+        const LentLimitsScope limits(*lease);
         const CycleCollector::Reentry collector(lease->collector);
         // A host may catch what the callable throws and go on: the scopes and views a failed
         // body left on the render's context go, as a HomeCall that switched would drop them
@@ -4047,7 +4084,7 @@ Value ArgumentToHost(const InternalValue& value, RenderContext& context, std::sh
     }
     if (!lease)
     {
-        lease = std::make_shared<CallableLease>(CallableLease{ &context, CycleCollector::Current(), std::this_thread::get_id() });
+        lease = std::make_shared<CallableLease>(CallableLease{ &context, CycleCollector::Current(), std::this_thread::get_id(), detail::t_renderLimits });
     }
     return Value(UserCallable(LentCallable{ lease, value }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) }));
 }

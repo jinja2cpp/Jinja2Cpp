@@ -316,6 +316,35 @@ TEST_F(TemplateModuleTest, TemplateCallableArguments)
     }
 }
 
+// A lent callable runs under the limits of the render that lent it, not of the module's call
+// that calls it back (Codex review of 0300), and what it uses of the budgets counts for that render
+TEST_F(TemplateModuleTest, LentCallableKeepsRenderLimits)
+{
+    auto module = Make("{% macro wrap() %}<{{ caller() }}>{% endmacro %}{% macro rep() %}{% for i in range(20) %}{{ caller() }}{% endfor %}{% endmacro %}");
+    const jinja2::ValuesMap params{ { "mod", module.exports } };
+    jinja2::Settings settings;
+    settings.limits.maxSequenceSize = 16;
+    settings.limits.maxRenderSteps = 1000;
+    jinja2::TemplateEnv env;
+    env.SetSettings(settings);
+    const auto render = [&env, &params](const char* source) {
+        jinja2::Template tpl(&env);
+        EXPECT_TRUE(!!tpl.Load(source));
+        return tpl.RenderAsString(params);
+    };
+    EXPECT_EQ("<10>", render("{% call mod.wrap() %}{{ ('x' * 10)|length }}{% endcall %}").value());
+    const auto expectLimit = [](const jinja2::Result<std::string>& result) {
+        ASSERT_FALSE(!!result);
+        EXPECT_EQ(jinja2::ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    };
+    expectLimit(render("{% call mod.wrap() %}{{ ('x' * 1000)|length }}{% endcall %}"));
+    // The steps of every call back count
+    expectLimit(render("{% call mod.rep() %}{% for j in range(100) %}{% endfor %}{% endcall %}"));
+    // ... and stay counted once the module's call returns
+    EXPECT_TRUE(!!render("{% call mod.wrap() %}{% for j in range(400) %}{% endfor %}{% endcall %}"));
+    expectLimit(render("{% call mod.wrap() %}{% for j in range(600) %}{% endfor %}{% endcall %}{% for j in range(600) %}{% endfor %}"));
+}
+
 // A host that catches what a lent callable throws and goes on finds the render's scopes as they
 // were (verifier round 1 of 0300): the failed body's scope and names are gone
 TEST_F(TemplateModuleTest, LentCallableFailureCaught)
