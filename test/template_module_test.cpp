@@ -61,6 +61,8 @@ protected:
         TemplateEnvFixture::SetUp();
         AddFile("a", "{% macro am() %}AM{% endmacro %}{% set ac = 1 %}");
         AddFile("base", "{% macro bm() %}BM{% endmacro %}{% set bv = 2 %}base-body");
+        AddFile("empty", "");
+        AddFile("sets_ac", "{% block b %}{% set am = 1 %}{% endblock %}{% if true %}{% set ac = 2 %}{% endif %}{% macro am() %}{% endmacro %}");
     }
 
     jinja2::TemplateModule Make(const std::string& source, const jinja2::ValuesMap& params = {})
@@ -90,6 +92,10 @@ const ModuleCase moduleCases[] = {
     { R"({% from "a" import am %}{% set am = 2 %})", "am", "" },
     { R"({% from "a" import am %}{% import "a" as a %}{% set am = am %}{% macro a() %}{% endmacro %})", "a,am", "" },
     { R"({% set am = 1 %}{% from "a" import am %})", "", "" },
+    // ... a failed `from` import too, which binds its alias undefined
+    { R"({% from "empty" import nope %}{% from "empty" import nope as n2 %}{% set k = 1 %})", "k", "" },
+    // ... and a top-level set or macro of the template it extends exports the name again
+    { R"({% from "a" import am, ac %}{% extends "sets_ac" %})", "ac,am", "" },
     // A set in a top-level `if`, tuple sets, a set block
     { "{% if true %}{% set i = 1 %}{% else %}{% set e = 2 %}{% endif %}{% set a, b = 1, 2 %}{% set blk %}x<y{% endset %}", "a,b,blk,i", "" },
     // The names of the template it extends, whose output is the body

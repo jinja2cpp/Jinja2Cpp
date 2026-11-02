@@ -2863,14 +2863,11 @@ void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes,
         {
             const auto p = moduleNames.find(HashedName{ nodes.Text(name.name), name.nameHash });
             // A name the module does not export (one it imported is not its own) is bound
-            // undefined, as Jinja2 binds it, hiding the same name outside
+            // undefined, as Jinja2 binds it, hiding the same name outside. Either way the alias
+            // is an import, which this module does not export
             auto& bound = scope.ForName({ nodes.Text(name.alias), name.aliasHash });
-            if (p == moduleNames.end() || !IsImported(p->second) || !module.Exports(p->first))
-            {
-                bound = MakeUndefined(values, std::string(nodes.Text(name.alias)));
-                continue;
-            }
-            bound = p->second;
+            const bool exported = p != moduleNames.end() && IsImported(p->second) && module.Exports(p->first);
+            bound = exported ? p->second : MakeUndefined(values, std::string(nodes.Text(name.alias)));
             NoteModuleImport(values, nodes.Text(name.alias));
         }
         return;
@@ -2893,8 +2890,9 @@ void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes,
 
 void ReexportStatement::Render(OutStream& /*os*/, RenderContext& values)
 {
+    // Every top-level binding has one; most modules import nothing
     auto* imports = values.TopLevelModuleImports();
-    if (!imports)
+    if (!imports || imports->empty())
     {
         return;
     }
