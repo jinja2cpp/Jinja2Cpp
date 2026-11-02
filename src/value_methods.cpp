@@ -1482,7 +1482,7 @@ struct StrOps
         // A named tuple (groupby's groups) has its fields as attributes
         const auto list = AsList(value);
         const auto* fields = list ? list->GetFieldNames() : nullptr;
-        const bool isField = fields && std::find(fields->begin(), fields->end(), attr) != fields->end();
+        const bool isField = fields != nullptr && std::find(fields->begin(), fields->end(), attr) != fields->end();
         if (const auto* host = GetHostObject(value))
         {
             result = host->GetAttr(attr);
