@@ -1674,7 +1674,7 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
 
     if (method->isMutating)
     {
-        if (methods::IsReadOnlyContainers(values))
+        if (m_readOnlyContainers)
         {
             // Calling the sandbox's unsafe attribute fails with its message
             callee = methods::UnsafeMethod(receiver, *name, values);

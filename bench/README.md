@@ -251,6 +251,13 @@ request that touches the engine, building the base commit and the PR head on the
 runner. Instructions are not time (cache misses and branch mispredictions do not show), so
 confirm a real improvement with `run.py` as well.
 
+In `--count` mode the driver loads only the case it counts, not the whole cases directory:
+the heap the counted loop starts from then does not depend on the other cases. With all of
+them loaded, glibc's malloc took other paths once four cases were added, and `Load/strings`
+moved by 0.45% with no change in the library (docs/tasks/0384). A count that moves while
+allocations stay the same is often heap layout; `LD_PRELOAD=libjemalloc.so.2` under
+callgrind tells layout from code.
+
 The driver also replaces the global `operator new` and reports heap allocations and
 bytes per iteration; `count.py` prints them next to the instructions (with the change
 against a baseline that has them) but does not gate on them. One benchmark by hand:

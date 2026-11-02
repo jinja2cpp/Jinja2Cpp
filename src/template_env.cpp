@@ -275,15 +275,11 @@ const BigIntBackend* TemplateEnvImpl::GetBigIntBackend() const noexcept
 void TemplateEnvImpl::SetDialect(Dialect dialect)
 {
     const WriterLock<Mutex> l(m_loadSettingsGuard);
-    if (m_dialect == dialect)
+    if (dialect == DialectLocked())
     {
         return;
     }
-    m_dialect = dialect;
-    if (m_loadSettings)
-    {
-        m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), dialect);
-    }
+    m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), dialect);
 }
 
 Dialect TemplateEnvImpl::GetDialect() const

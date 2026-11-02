@@ -98,19 +98,18 @@ public:
     bool SetBigIntBackend(const BigIntBackend* backend) noexcept;
     const BigIntBackend* GetBigIntBackend() const noexcept;
     // The dialect of templates loaded from now on (ConfigureForChatTemplates), kept in m_loadSettings like the
-    // backend
+    // backend: a field of its own pushed the environment's allocation into the next malloc size class, which every
+    // Load of a fresh environment paid for without the preset (docs/tasks/0384)
     void SetDialect(Dialect dialect);
     Dialect GetDialect() const;
 
 private:
     const BigIntBackend* BigIntBackendLocked() const noexcept JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_loadSettings ? m_loadSettings->bigIntBackend : GetBuiltinBigIntBackend(); }
 
-    Dialect DialectLocked() const JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_dialect; }
+    Dialect DialectLocked() const noexcept JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_loadSettings ? m_loadSettings->dialect : Dialect::Jinja2; }
 
     mutable Mutex m_loadSettingsGuard;
-    // Equals m_loadSettings->dialect once that is made
-    Dialect m_dialect JINJA2CPP_GUARDED_BY(m_loadSettingsGuard) = Dialect::Jinja2;
-    // Made on the first Load, or by SetBigIntBackend when the backend differs from the built-in one
+    // Made on the first Load, or by SetBigIntBackend or SetDialect when they change what it holds
     mutable LoadSettingsPtr m_loadSettings JINJA2CPP_GUARDED_BY(m_loadSettingsGuard);
 };
 
