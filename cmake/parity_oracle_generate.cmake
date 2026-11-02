@@ -2,7 +2,7 @@
 # parity corpus with the other oracle into OUT.
 #   cmake -DPYTHON=<interpreter> -DGENERATE=<generate.py> -DOUT=<dir> [-DREQUIREMENTS=<file>] -P parity_oracle_generate.cmake
 # With REQUIREMENTS, PYTHON is the base of a venv in OUT/venv that pip fills from that file. The venv
-# is rebuilt when the file changes; delete OUT/venv to pick up a new commit of a branch requirement.
+# is rebuilt when the file or PYTHON changes; delete OUT/venv to pick up a new commit of a branch requirement.
 foreach (_var PYTHON GENERATE OUT)
     if (NOT ${_var})
         message(FATAL_ERROR "parity_oracle_generate.cmake needs -D${_var}=...")
@@ -17,11 +17,13 @@ if (REQUIREMENTS)
     else ()
         set(_python ${_venv}/bin/python)
     endif ()
+    # The base interpreter and the requirements the venv was made from: a change to either rebuilds it
     set(_stamp ${_venv}/jinja2cpp-requirements.txt)
+    file(READ ${REQUIREMENTS} _wanted)
+    string(PREPEND _wanted "# base: ${PYTHON}\n")
     set(_fresh FALSE)
     if (EXISTS ${_stamp} AND EXISTS ${_python})
         file(READ ${_stamp} _installed)
-        file(READ ${REQUIREMENTS} _wanted)
         if (_installed STREQUAL _wanted)
             set(_fresh TRUE)
         endif ()
@@ -36,7 +38,7 @@ if (REQUIREMENTS)
         if (NOT _result EQUAL 0)
             message(FATAL_ERROR "pip install -r ${REQUIREMENTS} failed (${_result}); the venv oracle needs network access to the package index")
         endif ()
-        configure_file(${REQUIREMENTS} ${_stamp} COPYONLY)
+        file(WRITE ${_stamp} "${_wanted}")
     endif ()
 endif ()
 

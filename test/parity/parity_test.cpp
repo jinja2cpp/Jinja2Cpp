@@ -1325,7 +1325,11 @@ TEST(ParityRegistry, OracleCorpusMatches)
         EXPECT_TRUE(oracle.cases.count(c.id)) << c.id << " is missing from " << oracle.dir;
         if (oracle.cases.count(c.id))
         {
-            EXPECT_EQ(oracle.cases.at(c.id)["template"], c.data["template"]) << c.id << " has another template in " << oracle.dir;
+            // Every rendering input, so a directory generated before a case changed is caught
+            for (const char* input : { "template", "context", "env", "templates" })
+            {
+                EXPECT_EQ(oracle.cases.at(c.id).value(input, Json()), c.data.value(input, Json())) << c.id << " has another " << input << " in " << oracle.dir;
+            }
         }
     }
     for (const auto& c : oracle.cases)
