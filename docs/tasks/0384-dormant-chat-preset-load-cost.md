@@ -3,6 +3,7 @@ status: done
 priority: low
 area: perf
 depends: [0360]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/744
 touches: [src/template_env.cpp, src/template_env_impl.h, src/expression_evaluator.h, bench/jinja2cpp_bench.cpp]
 shares: [src/template_env.cpp, src/template_impl.h, src/recursion_guard.h]
 ---
