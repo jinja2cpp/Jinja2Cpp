@@ -5,9 +5,11 @@
 
 #include "expression_evaluator.h"
 #include "engine_errors.h"
+#include "dialect.h"
 #include "function_base.h"
 #include "internal_value.h"
 #include "node_arena.h"
+#include "recursion_guard.h"
 #include "render_context.h"
 #include "value_visitors.h"
 
@@ -127,17 +129,23 @@ const std::vector<FilterEntry>& BuiltinFilters()
     return filters;
 }
 
-const FilterEntry* FindBuiltinFilter(std::string_view filterName)
+const FilterEntry* FindBuiltinFilter(std::string_view filterName, detail::Dialect dialect)
 {
+    // transformers' tojson replaces Jinja2's in its dialect, and no name reaches it otherwise
+    if (dialect == detail::Dialect::Transformers && filterName == "tojson")
+    {
+        static const auto transformersToJson = Entry<filters::Serialize, filters::Serialize::TransformersJsonMode>("tojson");
+        return &transformersToJson;
+    }
     const auto& filters = BuiltinFilters();
     auto p = std::lower_bound(filters.begin(), filters.end(), filterName, [](const FilterEntry& entry, std::string_view name) { return entry.name < name; });
     return p != filters.end() && p->name == filterName ? &*p : nullptr;
 }
 } // namespace
 
-FilterPtr CreateFilter(std::string_view filterName, FunctionArgs params)
+FilterPtr CreateFilter(std::string_view filterName, FunctionArgs params, detail::Dialect dialect)
 {
-    if (const auto* entry = FindBuiltinFilter(filterName))
+    if (const auto* entry = FindBuiltinFilter(filterName, dialect))
     {
         return entry->create(params);
     }
@@ -146,7 +154,8 @@ FilterPtr CreateFilter(std::string_view filterName, FunctionArgs params)
 
 NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& nodes, std::string_view filterName, FunctionArgs params, bool* unknown)
 {
-    if (const auto* entry = FindBuiltinFilter(filterName))
+    // Made while the template loads, in the dialect of its settings
+    if (const auto* entry = FindBuiltinFilter(filterName, detail::t_parseLimits.dialect))
     {
         return entry->make(nodes, params);
     }
@@ -163,7 +172,7 @@ FilterPtr CreateFilter(const std::string& filterName, FunctionArgs params, Rende
     auto registered = env ? env->FindFilter(filterName) : std::optional<UserCallable>();
     if (!registered)
     {
-        return CreateFilter(filterName, params);
+        return CreateFilter(filterName, params, context.GetDialect());
     }
     auto callable = visitors::InputValueConvertor::ConvertUserCallable(*registered);
     return std::make_shared<filters::UserDefinedFilter>(filterName, params, std::move(callable));
@@ -171,7 +180,7 @@ FilterPtr CreateFilter(const std::string& filterName, FunctionArgs params, Rende
 
 NodeRef<ExpressionFilter::IExpressionFilter> CreateUnpackingFilter(NodeArena& nodes, const std::string& filterName, const CallArgsInfo& params, InternalValue registered, bool* unknown)
 {
-    if (unknown && !GetIf<Callable>(&registered) && !FindBuiltinFilter(filterName))
+    if (unknown && !GetIf<Callable>(&registered) && !FindBuiltinFilter(filterName, detail::Dialect::Jinja2))
     {
         *unknown = true;
     }
@@ -258,7 +267,7 @@ InternalValue UnpackingFilter::Filter(const InternalValue& baseVal, RenderContex
 {
     const auto args = helpers::EvaluateCallParams(m_params, context);
     // Filters added to the environment take precedence over the builtins (ExpressionFilter::Make)
-    const FilterPtr filter = GetIf<Callable>(&m_registered) ? std::make_shared<UserDefinedFilter>(m_filterName, args, m_registered) : CreateFilter(m_filterName, args);
+    const FilterPtr filter = GetIf<Callable>(&m_registered) ? std::make_shared<UserDefinedFilter>(m_filterName, args, m_registered) : CreateFilter(m_filterName, args, context.GetDialect());
     if (auto error = filter->GetArgumentsError(); !error.empty())
     {
         throw TemplateRuntimeError(m_filterName + "() " + error);

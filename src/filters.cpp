@@ -437,7 +437,7 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     {
         if (isPlainDict || !map || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(attrName))
         {
-            return methods::MakeBoundMethod(baseVal, *method);
+            return method->isMutating && methods::IsReadOnlyContainers(context) ? methods::UnsafeMethod(baseVal, attrName, context) : methods::MakeBoundMethod(baseVal, *method);
         }
     }
     if (isPlainDict)
