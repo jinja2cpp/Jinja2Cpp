@@ -3,6 +3,7 @@
 #include "big_int.h"
 #include "case_mapping.h"
 #include "cycle_collector.h"
+#include "dialect.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "internal_value.h"
@@ -2495,7 +2496,7 @@ namespace
 const MethodInfo* FindSafeMethod(const InternalValue& obj, std::string_view name, const RenderContext* context, bool& unsafe)
 {
     const auto* method = FindMethod(obj, name);
-    unsafe = method && method->isMutating && context && IsReadOnlyContainers(*context);
+    unsafe = method != nullptr && method->isMutating && context != nullptr && IsReadOnlyContainers(*context);
     return unsafe ? nullptr : method;
 }
 } // namespace

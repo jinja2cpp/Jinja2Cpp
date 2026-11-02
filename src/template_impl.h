@@ -2,6 +2,7 @@
 #define JINJA2CPP_SRC_TEMPLATE_IMPL_H
 
 #include "cycle_collector.h"
+#include "dialect.h"
 #include "error_boundary.h"
 #include "internal_value.h"
 #include "json_reader.h"

@@ -6,6 +6,7 @@
 // JINJA2CPP_HAS_CHAT_TEMPLATES in config.h tells whether it is.
 
 #include "config.h"
+#include "features.h" // IWYU pragma: keep (JINJA2CPP_HAS_CHAT_TEMPLATES)
 #include "template_env.h"
 
 #include <chrono>

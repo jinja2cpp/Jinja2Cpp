@@ -6,6 +6,7 @@
 
 #include <jinja2cpp/chat_template.h>
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/features.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
@@ -15,6 +16,7 @@
 #include <chrono>
 #include <ctime>
 #include <string>
+#include <type_traits>
 
 namespace
 {

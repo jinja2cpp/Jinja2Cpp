@@ -1,5 +1,6 @@
 #include "template_parser.h"
 
+#include "dialect.h"
 #include "error_handling.h"
 #include "expression_evaluator.h"
 #include "expression_parser.h"

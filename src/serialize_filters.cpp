@@ -1495,7 +1495,7 @@ std::optional<std::string> JsonIndent(const InternalValue& indentVal)
 {
     if (auto str = GetAsSameString(std::string(), indentVal))
     {
-        return *str;
+        return str;
     }
     if (const auto* count = GetIf<int64_t>(&indentVal))
     {

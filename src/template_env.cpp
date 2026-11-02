@@ -5,6 +5,7 @@
 #include "load_settings.h"
 #include "make_unexpected.h"
 #include "shared_owner.h"
+#include "dialect.h"
 #include "template_env_impl.h"
 #include "thread_annotations.h"
 
