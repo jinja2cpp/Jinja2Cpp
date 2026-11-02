@@ -370,8 +370,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0296](0296-typed-string-view-dangling.md) | A typed `std::string_view` parameter given the other character width dangles | api | high | done |
 | [0297](0297-in-none-and-modulo-undefined.md) | `x in None` and `'text' % undefined` differ from Python | parity | low | done |
 | [0298](0298-include-of-extending-template-loop.md) | An included template that extends a parent reading `loop` | parity | low | done |
-| [0299](0299-module-exports-skip-imports.md) | A module exports the names its top level imports, and keeps a re-set import hidden | parity | low | in-progress |
-| [0300](0300-module-export-callable-gaps.md) | Callables that do not cross a `Template::MakeModule` export | parity | low | in-progress |
+| [0299](0299-module-exports-skip-imports.md) | A module exports the names its top level imports, and keeps a re-set import hidden | parity | low | done |
+| [0300](0300-module-export-callable-gaps.md) | Callables that do not cross a `Template::MakeModule` export | parity | low | done |
 | [0301](0301-module-call-loads-accumulate.md) | A `Template::MakeModule` module keeps what each of its calls loads | robustness | medium | done |
 | [0302](0302-simdjson-binding.md) | An optional simdjson binding | api | low | open |
 | [0303](0303-retire-rapidjson-backend.md) | Retire the built-in RapidJSON backend | build | medium | done |
@@ -392,10 +392,10 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0320](0320-typed-callable-omitted-argument.md) | A typed callable with an omitted optional argument is not called | api | low | done |
 | [0321](0321-load-copies-on-write.md) | Load replaces the template for its own object only | robustness | high | done |
 | [0322](0322-parity-corpus-through-reflect.md) | Run the parity corpus with the context as a JSON view | parity | low | in-progress |
-| [0323](0323-stored-self-sees-includer-names.md) | A `self` an include stored does not see the names the includer set | parity | low | in-progress |
+| [0323](0323-stored-self-sees-includer-names.md) | A `self` an include stored does not see the names the includer set | parity | low | done |
 | [0324](0324-nested-render-sees-global-changed-in-place.md) | A nested render does not see a global the outer render changed in place | robustness | medium | open |
 | [0325](0325-autoreload-date-before-read.md) | A reload can cache the new date with the old text | robustness | low | open |
-| [0326](0326-nested-macro-closure-after-outer-call.md) | A macro defined in a macro loses the outer call's names after that call returned | parity | medium | in-progress |
+| [0326](0326-nested-macro-closure-after-outer-call.md) | A macro defined in a macro loses the outer call's names after that call returned | parity | medium | done |
 | [0327](0327-change-globals-use-count-race.md) | Changing a global can race with a render that just dropped the globals map | robustness | medium | open |
 | [0328](0328-bench-meta-block.md) | A benchmark for `{% meta %}` and the internal JSON reader | perf | low | open |
 | [0329](0329-reflect-counts-in-ci.md) | Count `--data reflect` in the PR gate and the trend | perf | medium | open |
