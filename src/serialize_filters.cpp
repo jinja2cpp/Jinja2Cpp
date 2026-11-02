@@ -750,6 +750,8 @@ public:
     InternalValue Write(const InternalValue& value)
     {
         WriteValue(value, 0);
+        // The loop checks before each item; the last item and the closing brackets are checked here
+        CheckSequenceSize(m_out.View().size(), "a JSON document");
         return m_out.Build();
     }
 
@@ -798,10 +800,19 @@ private:
             return;
         }
         m_out.push_back('\n');
+        const std::string_view indent = *m_indent;
         for (size_t n = 0; n != level; ++n)
         {
-            m_out += *m_indent;
+            Append(indent);
         }
+    }
+
+    // Separators and the indent are the caller's strings of any length: each append is
+    // checked against the cap, so they cannot grow the document past it between items
+    void Append(std::string_view text)
+    {
+        CheckSequenceSize(static_cast<uint64_t>(m_out.View().size()) + text.size(), "a JSON document");
+        m_out += text;
     }
 
     // Bytes json.dumps keeps as they are (and htmlsafe_json_dumps does not escape): printable
@@ -948,7 +959,7 @@ private:
             CheckSequenceSize(m_out.View().size(), "a JSON document");
             if (!isFirst)
             {
-                m_out += m_itemSeparator;
+                Append(m_itemSeparator);
             }
             isFirst = false;
             if (m_indent)
@@ -1039,7 +1050,7 @@ private:
             }
             WriteContainer('{', '}', order, level, [this, &entries, level](const std::pair<std::string, size_t>& item) {
                 WriteString(item.first);
-                m_out += m_keySeparator;
+                Append(m_keySeparator);
                 WriteValue(entries[item.second].value, level + 1);
             });
         }
@@ -1548,6 +1559,15 @@ std::optional<std::pair<std::string, std::string>> JsonSeparators(const Internal
     else if (auto list = AsList(separatorsVal))
     {
         items = list->ToValueList();
+    }
+    else if (auto map = AsMap(separatorsVal); map && !map->GetObjectClass())
+    {
+        // A dict unpacks its keys; a long one fails before they are copied
+        if (map->GetSize() > 2)
+        {
+            throw TemplateRuntimeError("too many values to unpack (expected 2)");
+        }
+        items = map->GetKeyValues();
     }
     else
     {

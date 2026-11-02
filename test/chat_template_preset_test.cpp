@@ -109,6 +109,8 @@ INSTANTIATE_TEST_SUITE_P(Preset, ChatTemplatePresetTest, ::testing::Values(
     ChatCase{ "{{ [1]|tojson(separators=(',',)) }}", "error: not enough values to unpack (expected 2, got 1)" },
     ChatCase{ "{{ [1]|tojson(separators=1) }}", "error: cannot unpack non-iterable int object" },
     ChatCase{ "{{ [1]|tojson(separators='abcdefgh') }}", "error: too many values to unpack (expected 2)" },
+    ChatCase{ "{{ [1]|tojson(separators={'a': 1, 'b': 2, 'c': 3}) }}", "error: too many values to unpack (expected 2)" },
+    ChatCase{ "{{ [1, {'a': 2}]|tojson(separators={',': 0, '=': 0}) }}", R"([1,{"a"=2}])" },
     ChatCase{ "{{ 's'|tojson(indent=raise_exception('bad indent')) }}", "error: bad indent" },
     ChatCase{ "{{ x|tojson }}", "error: Object of type Undefined is not JSON serializable" },
     ChatCase{ "{{ ['a']|map('tojson')|join }}", R"("a")" },
@@ -165,6 +167,27 @@ TEST(ChatTemplatePreset, StrftimeNowRespectsSequenceLimit)
     auto result = tpl.RenderAsString({ { "f", "%f%f" } });
     ASSERT_FALSE(result);
     EXPECT_EQ(result.error().GetCode(), jinja2::ErrorCode::ResourceLimitExceeded) << jinja2::ToString(result.error().ToString());
+}
+
+// Separators and the indent are host strings of any length: the document stays under the cap
+TEST(ChatTemplatePreset, JsonSeparatorsRespectSequenceLimit)
+{
+    jinja2::TemplateEnv env;
+    jinja2::ConfigureForChatTemplates(env);
+    env.GetSettings().limits.maxSequenceSize = 8;
+    jinja2::Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% set s = [1, 2]|tojson(separators=(sep, ':')) %}{{ s|length }}|{% set t = {'a': 1}|tojson(separators=(',', sep)) %}"));
+    auto ok = tpl.RenderAsString({ { "sep", "," } });
+    ASSERT_TRUE(ok) << jinja2::ToString(ok.error().ToString());
+    EXPECT_EQ(*ok, "5|");
+    for (const char* t : { "{% set s = [1, 2]|tojson(separators=(sep, ':')) %}", "{% set s = {'a': 1}|tojson(separators=(',', sep)) %}", "{% set s = [[1]]|tojson(indent=sep) %}" })
+    {
+        jinja2::Template big(&env);
+        ASSERT_TRUE(big.Load(t));
+        auto result = big.RenderAsString({ { "sep", "12345678" } });
+        ASSERT_FALSE(result) << t;
+        EXPECT_EQ(result.error().GetCode(), jinja2::ErrorCode::ResourceLimitExceeded) << t << ": " << jinja2::ToString(result.error().ToString());
+    }
 }
 
 TEST(ChatTemplatePreset, SettingsAndVersion)
