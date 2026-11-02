@@ -3,6 +3,7 @@
 #include <jinja2cpp/chat_template.h>
 
 #include "dialect.h"
+#include "internal_value.h"
 #include "template_env_impl.h"
 
 #include <jinja2cpp/error_info.h>
@@ -113,14 +114,20 @@ std::string StrftimeNow(const std::string& format, std::chrono::system_clock::ti
     }
     const auto local = LocalTime(time);
 
+    // Directives expand (%f is 6 characters, %c over 20), so the result is checked against
+    // the sequence cap before it grows: a template may keep it without writing it
     std::string result;
-    result.reserve(format.size() + 16);
+    result.reserve(format.size());
+    const auto append = [&result](std::string_view text) {
+        CheckSequenceSize(std::uint64_t{ result.size() } + text.size(), "a string");
+        result += text;
+    };
     std::size_t pos = 0;
     while (pos < format.size())
     {
         if (format[pos] != '%' || pos + 1 == format.size())
         {
-            result.push_back(format[pos++]);
+            append(std::string_view(format).substr(pos++, 1));
             continue;
         }
         const auto start = pos++;
@@ -133,7 +140,7 @@ std::string StrftimeNow(const std::string& format, std::chrono::system_clock::ti
             continue;
         }
         auto text = FormatDirective(local, micros, directive, noPadding);
-        result += text ? *text : format.substr(start, pos - start);
+        append(text ? std::string_view(*text) : std::string_view(format).substr(start, pos - start));
     }
     return result;
 }
@@ -171,15 +178,24 @@ const char* PythonTypeName(const Value& value)
 // A string argument, narrow or wide as the template is, as UTF-8; null for any other value
 std::optional<std::string> StringArgument(const Value& value)
 {
+    // A string reaches a callable as a string or, from host data, as a view of one
     std::string_view narrow;
     if (value.AsString(narrow))
     {
         return std::string(narrow);
     }
+    if (const auto* view = value.GetIf<std::string_view>())
+    {
+        return std::string(*view);
+    }
     std::wstring_view wide;
     if (value.AsWString(wide))
     {
         return ConvertString<std::string>(std::wstring(wide));
+    }
+    if (const auto* view = value.GetIf<std::wstring_view>())
+    {
+        return ConvertString<std::string>(std::wstring(*view));
     }
     return std::nullopt;
 }

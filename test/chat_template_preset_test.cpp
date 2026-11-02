@@ -108,6 +108,8 @@ INSTANTIATE_TEST_SUITE_P(Preset, ChatTemplatePresetTest, ::testing::Values(
     ChatCase{ "{{ {1: 2, none: 3, true: 4, 2.5: 5}|tojson }}", R"({"1": 4, "null": 3, "2.5": 5})" },
     ChatCase{ "{{ [1]|tojson(separators=(',',)) }}", "error: not enough values to unpack (expected 2, got 1)" },
     ChatCase{ "{{ [1]|tojson(separators=1) }}", "error: cannot unpack non-iterable int object" },
+    ChatCase{ "{{ [1]|tojson(separators='abcdefgh') }}", "error: too many values to unpack (expected 2)" },
+    ChatCase{ "{{ 's'|tojson(indent=raise_exception('bad indent')) }}", "error: bad indent" },
     ChatCase{ "{{ x|tojson }}", "error: Object of type Undefined is not JSON serializable" },
     ChatCase{ "{{ ['a']|map('tojson')|join }}", R"("a")" },
     // `{% generation %}` renders its body in a scope of its own
@@ -147,6 +149,22 @@ TEST(ChatTemplatePreset, RaiseExceptionIsTemplateRuntimeError)
     auto result = tpl.RenderAsString({});
     ASSERT_FALSE(result);
     EXPECT_EQ(result.error().GetCode(), jinja2::ErrorCode::TemplateRuntimeError);
+}
+
+// strftime_now's result counts against maxSequenceSize as it grows, written or not
+TEST(ChatTemplatePreset, StrftimeNowRespectsSequenceLimit)
+{
+    jinja2::TemplateEnv env;
+    jinja2::ConfigureForChatTemplates(env, { FixedNow });
+    env.GetSettings().limits.maxSequenceSize = 8;
+    jinja2::Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% set t = strftime_now(f) %}{{ t|length }}"));
+    auto ok = tpl.RenderAsString({ { "f", "%f" } });
+    ASSERT_TRUE(ok) << jinja2::ToString(ok.error().ToString());
+    EXPECT_EQ(*ok, "6");
+    auto result = tpl.RenderAsString({ { "f", "%f%f" } });
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error().GetCode(), jinja2::ErrorCode::ResourceLimitExceeded) << jinja2::ToString(result.error().ToString());
 }
 
 TEST(ChatTemplatePreset, SettingsAndVersion)

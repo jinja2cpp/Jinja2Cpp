@@ -1533,7 +1533,8 @@ std::optional<std::pair<std::string, std::string>> JsonSeparators(const Internal
     InternalValueList items;
     if (auto str = GetAsSameString(std::string(), separatorsVal))
     {
-        for (size_t pos = 0; pos != str->size();)
+        // Two characters unpack; a third is already an error, so a long string stops there
+        for (size_t pos = 0; pos != str->size() && items.size() != 3;)
         {
             auto end = pos + 1;
             while (end != str->size() && IsCodePointTail((*str)[end]))
@@ -1578,7 +1579,9 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     // json.dumps encodes a str before it looks at indent, so only other values check it
     const bool isString = IsStringValue(value) || GetAsSameString(std::string(), value);
     JsonOptions options;
-    options.indent = JsonIndent(isString ? InternalValue() : this->GetArgumentValue("indent", context));
+    // The argument is still evaluated: a failing or host-callable indent runs as in Python
+    auto indentVal = this->GetArgumentValue("indent", context);
+    options.indent = JsonIndent(isString ? InternalValue() : indentVal);
     if (m_mode == TransformersJsonMode)
     {
         // transformers' tojson: json.dumps(x, ensure_ascii=False, indent=None, separators=None, sort_keys=False),
