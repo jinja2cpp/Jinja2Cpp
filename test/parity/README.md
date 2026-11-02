@@ -185,3 +185,9 @@ Against Jinja2 3.1.2 with MarkupSafe 2.1.5 on Python 3.12 that is 9 rows, all
 fails when the directory does not hold the same cases as the corpus (a stale generation).
 The wide suite is held to the narrow result rather than to an oracle, so the oracle test does
 not run it.
+
+CI runs these oracles in `.github/workflows/parity-oracles.yml`, nightly on master, on
+demand, and on pull requests that touch the harness: Jinja2's main branch and 3.0.3 on the
+pinned Python, and the pinned Jinja2 on Python 3.13 and 3.14. Each job puts its `report.md`
+in the job summary and uploads it. A delta there fails nothing; when Jinja2's main branch shows
+one, it becomes a parity task, decided like any other.
