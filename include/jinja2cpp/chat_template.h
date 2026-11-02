@@ -43,8 +43,9 @@ struct ChatTemplateOptions
  * - read-only lists and dicts, as in `ImmutableSandboxedEnvironment`: `append`, `pop`, `update` and the other methods
  *   that change their receiver are unsafe attributes, undefined whose use fails with the sandbox's message;
  * - the globals `raise_exception(message)`, which fails the render with ErrorCode::TemplateRuntimeError and the
- *   message, and `strftime_now(format)`, the time of `options.now` formatted as Python's `strftime` does in the "C"
- *   locale.
+ *   message (`str(message)`), and `strftime_now(format)`, the time of `options.now` formatted as CPython on Linux
+ *   formats it in the "C" locale: the C++ `std::put_time` directives, `%f`, empty `%z`/`%Z` and glibc's `-` flag
+ *   (`%-d`); other directives are copied as written.
  *
  * Templates loaded before keep what they were loaded with. It is not the rest of `apply_chat_template`: the host builds
  * the context (`messages`, `tools`, `add_generation_prompt`, `bos_token`, ...), and it is no security sandbox beyond what

@@ -1529,12 +1529,29 @@ std::optional<std::pair<std::string, std::string>> JsonSeparators(const Internal
     {
         return std::nullopt;
     }
-    auto list = IsStringValue(separatorsVal) ? std::nullopt : AsList(separatorsVal);
-    if (!list)
+    // Any iterable of two strings unpacks, a string of two characters among them
+    InternalValueList items;
+    if (auto str = GetAsSameString(std::string(), separatorsVal))
+    {
+        for (size_t pos = 0; pos != str->size();)
+        {
+            auto end = pos + 1;
+            while (end != str->size() && IsCodePointTail((*str)[end]))
+            {
+                ++end;
+            }
+            items.emplace_back(str->substr(pos, end - pos));
+            pos = end;
+        }
+    }
+    else if (auto list = AsList(separatorsVal))
+    {
+        items = list->ToValueList();
+    }
+    else
     {
         throw TemplateRuntimeError("cannot unpack non-iterable "s + Apply<visitors::PythonTypeNameGetter>(separatorsVal) + " object");
     }
-    const auto items = list->ToValueList();
     if (items.size() != 2)
     {
         throw TemplateRuntimeError(items.size() > 2 ? "too many values to unpack (expected 2)" : "not enough values to unpack (expected 2, got " + std::to_string(items.size()) + ")");

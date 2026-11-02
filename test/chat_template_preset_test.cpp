@@ -131,7 +131,11 @@ INSTANTIATE_TEST_SUITE_P(Preset, ChatTemplatePresetTest, ::testing::Values(
     ChatCase{ "{% for i in [1, 2, 3] %}\n  {% if i == 2 %}\n{% continue %}\n{% endif %}\n{{ i }}{% endfor %}", "13" },
     // the globals
     ChatCase{ "{{ raise_exception('Conversation roles must alternate') }}", "error: Conversation roles must alternate" },
-    ChatCase{ "{{ strftime_now('%d %b %Y %H:%M:%S %a %f|%z|%Z|%%') }}", "14 Mar 2025 09:26:53 Fri 000042|||%" }));
+    ChatCase{ "{{ [1, {'a': 2}]|tojson(separators=',=') }}", R"([1,{"a"=2}])" },
+    ChatCase{ "{{ strftime_now('%d %b %Y %H:%M:%S %a %f|%z|%Z|%%') }}", "14 Mar 2025 09:26:53 Fri 000042|||%" },
+    ChatCase{ "{{ strftime_now('%-d/%-m %-H:%M %Q %:z 100%') }}", "14/3 9:26 %Q  100%" },
+    ChatCase{ "{{ strftime_now(5) }}", "error: strftime() argument 1 must be str, not int" },
+    ChatCase{ "{{ raise_exception(5) }}", "error: 5" }));
 // clang-format on
 
 TEST(ChatTemplatePreset, RaiseExceptionIsTemplateRuntimeError)
