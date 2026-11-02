@@ -15,6 +15,7 @@
 #include <jinja2cpp/error_info.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstddef>
@@ -1689,14 +1690,25 @@ InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, Rend
         {
             throw TemplateRuntimeError(std::string("cannot unpack non-iterable ") + Apply<visitors::PythonTypeNameGetter>(item) + " object");
         }
-        const auto parts = pair.ToValueList();
-        if (parts.size() > 2)
+        // Unpacking reads a third value at most, as Python's does
+        std::array<InternalValue, 2> parts;
+        size_t count = 0;
+        pair.ForEach([&parts, &count](InternalValue&& part) {
+            if (count == parts.size())
+            {
+                ++count;
+                return false;
+            }
+            parts[count++] = std::move(part);
+            return true;
+        });
+        if (count > parts.size())
         {
             throw TemplateRuntimeError("too many values to unpack (expected 2)");
         }
-        if (parts.size() < 2)
+        if (count < parts.size())
         {
-            throw TemplateRuntimeError("not enough values to unpack (expected 2, got " + std::to_string(parts.size()) + ")");
+            throw TemplateRuntimeError("not enough values to unpack (expected 2, got " + std::to_string(count) + ")");
         }
         appendPair(parts[0], parts[1]);
     }
