@@ -50,6 +50,9 @@ InternalValue MakeUndefinedWithHint(const RenderContext& context, std::string hi
 // The undefined result of the missing attribute or item key of obj. A value that is
 // already undefined with info is returned as is
 InternalValue MakeUndefined(const RenderContext* context, const InternalValue& obj, const InternalValue& key);
+// The undefined result of the item of obj whose repr is keyRepr, a key the engine has no value
+// for (a slice: Jinja2 folds a slice of literals through getitem, docs/tasks/0362)
+InternalValue MakeUndefinedItem(const RenderContext* context, const InternalValue& obj, std::string keyRepr);
 
 inline const UndefinedInfo* GetUndefinedInfo(const InternalValue& val)
 {

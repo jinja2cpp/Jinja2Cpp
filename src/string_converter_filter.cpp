@@ -1652,6 +1652,13 @@ InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, Rend
     // too, and a host object that has no __iter__) is quoted as str()
     auto* callback = context.GetRendererCallback();
     auto asText = [callback](const InternalValue& val) { return IsStringValue(val) ? AsString(val) : AsString(InternalValue(callback->GetAsTargetString(val))); };
+    // An undefined value iterates as nothing (StrictUndefined refuses)
+    if (baseVal.IsUndefined())
+    {
+        bool isList = false;
+        static_cast<void>(ConvertToList(baseVal, isList, false));
+        return InternalValue(std::string());
+    }
     const auto objectMap = AsMap(baseVal);
     const auto* host = objectMap ? objectMap->GetHostObject() : nullptr;
     const bool hostIterates = host != nullptr && host->IsIterable();

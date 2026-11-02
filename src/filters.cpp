@@ -1105,7 +1105,12 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
         }
         if (auto reversed = host->Reversed())
         {
-            return ListAdapter::CreateAdapter(reversed->ToValueList());
+            auto items = reversed->ToValueList();
+            for (auto& item : items)
+            {
+                item = WithParent(baseVal, std::move(item));
+            }
+            return ListAdapter::CreateAdapter(std::move(items));
         }
     }
     // Like Python, a string is a sequence of characters and a mapping one of its keys

@@ -433,4 +433,8 @@ CASES = [
     ("urlencode_unpack_short", "{{ [[1]]|urlencode }}"),
     # task 0377: a lazy result is a generator in Python, which reversed() refuses
     ("last_of_lazy_result", "{{ [1, 2]|select|last }}"),
+    ("urlencode_undefined_debug", "[{{ missing|urlencode }}]", {"env": {"undefined": "debug"}}),
+    ("urlencode_undefined_strict", "[{{ missing|urlencode }}]", {"env": {"undefined": "strict"}}),
+    # task 0379: Jinja2 iterates `loop` (what is left of the loop)
+    ("urlencode_loop", "{% for i in [1] %}[{{ loop|urlencode }}]{% endfor %}"),
 ]

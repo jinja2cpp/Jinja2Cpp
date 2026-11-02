@@ -59,4 +59,10 @@ CASES = [
     ("slice_literals_fold", "[{{ 5[1:2] }}][{{ none[1:2] }}][{{ {'a': 1}[1:2] }}][{{ 1.5[0:1] is undefined }}]"),
     # task 0377: a lazy filter result is a generator in Python, which takes no slice
     ("slice_lazy_result", "{{ ([1, 2]|map('string'))[0:1] }}"),
+    # an undefined slice bound has no __index__; a literal slice folds to getitem's undefined,
+    # a slice of which fails
+    ("slice_undefined_bound", "{{ l[missing:] }}"),
+    ("slice_of_folded_slice", "{{ 5[1:][1:] }}"),
+    ("slice_folded_strict", "[{{ 5[1:] }}]", {"env": {"undefined": "strict"}}),
+    ("slice_folded_debug", "[{{ 5[1:] }}]", {"env": {"undefined": "debug"}}),
 ]

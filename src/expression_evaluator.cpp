@@ -1205,6 +1205,11 @@ InternalValue SliceExpression::Evaluate(RenderContext& context)
     {
         return SliceOther(value, std::move(start), std::move(stop), std::move(step), context);
     }
+    // An omitted bound is None; an undefined one has no __index__, under every policy
+    if ((m_start && start.IsUndefined()) || (m_stop && stop.IsUndefined()) || (m_step && step.IsUndefined()))
+    {
+        throw TemplateRuntimeError("slice indices must be integers or None or have an __index__ method");
+    }
     auto result = Slice(value, start, stop, step);
     // A slice of Markup is Markup
     if (value.IsMarkup() && IsStringValue(result))
@@ -1231,26 +1236,29 @@ InternalValue SliceExpression::SliceOther(const InternalValue& value, InternalVa
         CheckUndefinedUse(value, UndefinedUse::Attribute);
         return value;
     }
+    // repr(slice(...)) for the KeyError of a dict and for the undefined result of a fold
+    auto bound = [](const NodeRef<Expression>& expr, const InternalValue& part) -> std::string {
+        if (!expr || part.IsNone())
+        {
+            return "None";
+        }
+        if (const auto* number = GetIf<int64_t>(&part))
+        {
+            return std::to_string(*number);
+        }
+        return IsStringValue(part) ? "'" + AsString(part) + "'" : "<" + std::string(Apply<visitors::PythonTypeNameGetter>(part)) + ">";
+    };
+    auto sliceRepr = "slice(" + bound(m_start, start) + ", " + bound(m_stop, stop) + ", " + bound(m_step, step) + ")";
     if (m_fold == FoldAlways || (m_fold == FoldByChoice && IsFoldableAt(context)))
     {
-        return {};
+        // getitem's undefined, which the policy prints or refuses, and a slice of which fails
+        return MakeUndefinedItem(&context, value, std::move(sliceRepr));
     }
     const auto map = AsMap(value);
     if (map && map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst)
     {
         // A dict looks the slice up as a key (slices are hashable since Python 3.12)
-        auto bound = [](const NodeRef<Expression>& expr, const InternalValue& part) -> std::string {
-            if (!expr || part.IsNone())
-            {
-                return "None";
-            }
-            if (const auto* number = GetIf<int64_t>(&part))
-            {
-                return std::to_string(*number);
-            }
-            return IsStringValue(part) ? "'" + AsString(part) + "'" : "<" + std::string(Apply<visitors::PythonTypeNameGetter>(part)) + ">";
-        };
-        throw TemplateRuntimeError("slice(" + bound(m_start, start) + ", " + bound(m_stop, stop) + ", " + bound(m_step, step) + ")");
+        throw TemplateRuntimeError(sliceRepr);
     }
     throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(value) + "' object is not subscriptable");
 }
