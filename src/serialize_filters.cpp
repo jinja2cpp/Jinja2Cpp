@@ -931,6 +931,10 @@ private:
         {
             m_out += JsonFloatText(*d);
         }
+        else if (const auto view = AsStringView<char>(value))
+        {
+            WriteString(*view);
+        }
         else if (auto str = GetAsSameString(std::string(), value))
         {
             WriteString(*str);
@@ -1308,6 +1312,11 @@ private:
         {
             scalar();
             WriteFloat(*d);
+        }
+        else if (const auto view = AsStringView<char>(value))
+        {
+            scalar();
+            WriteString(*view);
         }
         else if (auto str = GetAsSameString(std::string(), value))
         {

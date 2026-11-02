@@ -47,6 +47,10 @@ the gate already has.
 0. Force-inline `InternalValue`'s copy assignment where `RenderLoopInSlots` unpacks
    loop variables, or the whole operator if no case grows. Check that `Render/dict_ops`
    stays at master's count when `statements.cpp` changes.
+   *Done* (with 0376): `InternalValue::CopyFrom` is the copy assignment forced inline,
+   and `Slot::Bind` calls it for an lvalue. Forcing `operator=` itself inline grew
+   `BindArg` and `FillDefaultArgs` out of `ParseCallParams` (`Render/for_range` +0.10%),
+   so `operator=` stays a plain inline call to it.
 1. `count.py --keep-profiles DIR` keeps each case's callgrind output instead of
    deleting it.
 2. A new `bench/frames.py base_dir head_dir` compares the two sets per case. It lists

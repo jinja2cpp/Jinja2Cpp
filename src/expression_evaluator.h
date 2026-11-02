@@ -1034,10 +1034,16 @@ public:
     [[nodiscard]] bool IsFoldableAt(RenderContext& values) const override;
 
 private:
+    // The slice of a value that is no string, list or pair (docs/tasks/0362)
+    InternalValue SliceOther(const InternalValue& value, InternalValue start, InternalValue stop, InternalValue step, RenderContext& context) const;
+
     NodeRef<Expression> m_value;
     NodeRef<Expression> m_start;
     NodeRef<Expression> m_stop;
     NodeRef<Expression> m_step;
+    // PrepareFold's result, which the parser asks for each slice
+    std::uint8_t m_fold = 0;
+    bool m_foldPrepared = false;
 };
 
 class CallExpression final : public Expression

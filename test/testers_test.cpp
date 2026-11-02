@@ -292,11 +292,9 @@ INSTANTIATE_TEST_SUITE_P(EvenTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"12.0 is even",           "true"},
                             InputOutputPair{"(-4.0) is even",         "true"},
                             InputOutputPair{"1e300 is even",          "true"},
-                            InputOutputPair{"'intList' is even",      "false"},
                             InputOutputPair{"false is even",          "true"},
                             InputOutputPair{"0.2 is even",            "false"},
                             InputOutputPair{"intValue is even",       "false"},
-                            InputOutputPair{"stringValue is even",    "false"},
                             InputOutputPair{"doubleValue is even",    "false"},
                             InputOutputPair{"boolFalseValue is even", "true"},
                             InputOutputPair{"boolTrueValue is even",  "false"}
@@ -311,11 +309,9 @@ INSTANTIATE_TEST_SUITE_P(OddTest, TestersGenericTest, ::testing::Values(
                             InputOutputPair{"12.0 is odd",           "false"},
                             InputOutputPair{"(-3.0) is odd",         "true"},
                             InputOutputPair{"1e300 is odd",          "false"},
-                            InputOutputPair{"'intList' is odd",      "false"},
                             InputOutputPair{"false is odd",          "false"},
                             InputOutputPair{"0.2 is odd",            "false"},
                             InputOutputPair{"intValue is odd",       "true"},
-                            InputOutputPair{"stringValue is odd",    "false"},
                             InputOutputPair{"doubleValue is odd",    "false"},
                             InputOutputPair{"boolFalseValue is odd", "false"},
                             InputOutputPair{"boolTrueValue is odd",  "true"}

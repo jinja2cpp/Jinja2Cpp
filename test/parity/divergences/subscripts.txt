@@ -1,3 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the subscripts area (cases/subscripts.py).
 # Format and kinds: test/parity/README.md.
 
+subscripts.slice_lazy_result            accepts     0383 a map/select result answers as a list; Python's generator takes no slice

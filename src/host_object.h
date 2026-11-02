@@ -31,8 +31,10 @@ class RenderContext;
 // - printing: Str(), and Repr() inside a container; Html() under autoescape when IsMarkupLike()
 // - x.name: GetAttr, then GetItem with the name, as Jinja2's Environment.getattr
 // - x[key]: GetItem, then GetAttr for a string key, as Jinja2's Environment.getitem
+// - x[start:stop:step]: GetSlice, which Jinja2 passes to __getitem__ without getitem's fallback
 // - x(...): Call, when IsCallable()
 // - iteration (for, list(), `in` without Contains): Iterate
+// - reversed() (the last filter, then the reverse filter before it iterates): Reversed
 // - len(): Len; truth: Truth
 // - ==, !=: Equals of the left operand, then of the right one, then identity
 // - a dict key: Hash says whether it is hashable; the key is the object's Identity()
@@ -65,6 +67,13 @@ public:
     [[nodiscard]] virtual std::optional<InternalValue> GetAttr(const std::string& name) const = 0;
     // x[key]; nullopt when there is no such item or the object has no items
     [[nodiscard]] virtual std::optional<InternalValue> GetItem(const InternalValue& /*key*/) const { return std::nullopt; }
+    // x[slice(start, stop, step)], where an omitted bound is an empty value (None); nullopt for
+    // an object that has no items, which the engine reports as Python's TypeError. An object with
+    // items that takes no slice throws its own error, as a mapping's KeyError
+    [[nodiscard]] virtual std::optional<InternalValue> GetSlice(const InternalValue& /*start*/, const InternalValue& /*stop*/, const InternalValue& /*step*/) const
+    {
+        return std::nullopt;
+    }
     // callable(x), and the call x(*params.posParams, **params.kwParams)
     [[nodiscard]] virtual bool IsCallable() const { return false; }
     virtual InternalValue Call(const CallParams& params, RenderContext& context) const;
@@ -72,6 +81,9 @@ public:
     // that may be single-pass (ListAdapter::CreateAdapter of a generator function)
     [[nodiscard]] virtual bool IsIterable() const { return false; }
     [[nodiscard]] virtual std::optional<ListAdapter> Iterate() const { return std::nullopt; }
+    // reversed(x), the items last first; nullopt where reversed() raises TypeError: an object
+    // with neither __reversed__ nor the sequence protocol (__len__ and __getitem__)
+    [[nodiscard]] virtual std::optional<ListAdapter> Reversed() const { return std::nullopt; }
     // item in x, as __contains__; nullopt makes the engine iterate, as Python does without it
     [[nodiscard]] virtual std::optional<bool> Contains(const InternalValue& /*item*/) const { return std::nullopt; }
     // len(x); nullopt for an object without a length
@@ -167,6 +179,10 @@ Callable MakeCall(const InternalValue& object, const IHostObject& host);
 InternalValue Html(const IHostObject& host, bool wideTarget);
 // len(x), or Python's TypeError
 int64_t Len(const IHostObject& host);
+// x[start:stop:step], or Python's TypeError for an object without items
+InternalValue Slice(const IHostObject& host, const InternalValue& start, const InternalValue& stop, const InternalValue& step);
+// reversed(x), or Python's TypeError
+ListAdapter Reversed(const IHostObject& host);
 // x == other by Python's rules: left.__eq__, then right.__eq__, then identity. Null hosts
 // stand for operands that are no host objects
 bool Equal(const IHostObject* left, const InternalValue& leftValue, const IHostObject* right, const InternalValue& rightValue);

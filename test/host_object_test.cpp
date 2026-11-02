@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -48,6 +49,10 @@ struct ToySpec
     std::optional<std::string> html;
     // __getitem__ answers every other key with the name of its type
     bool typeKeys = false;
+    // A sequence: __getitem__ takes a slice of it, and __reversed__ gives it last first
+    std::optional<std::vector<InternalValue>> sequence;
+    // What a call returns instead of describing its arguments
+    std::optional<InternalValue> callResult;
 };
 
 class ToyObject final : public IHostObject
@@ -78,12 +83,37 @@ public:
         }
         return std::nullopt;
     }
+    [[nodiscard]] std::optional<InternalValue> GetSlice(const InternalValue& start, const InternalValue& stop, const InternalValue& step) const override
+    {
+        if (!m_spec->sequence)
+        {
+            return std::nullopt;
+        }
+        // Python's slice holds None for an omitted bound
+        if (start.IsUndefined() || stop.IsUndefined() || step.IsUndefined())
+        {
+            throw std::runtime_error("a bound of the slice is undefined");
+        }
+        return Slice(InternalValue(ListAdapter::CreateAdapter(InternalValueList(*m_spec->sequence))), start, stop, step);
+    }
+    [[nodiscard]] std::optional<ListAdapter> Reversed() const override
+    {
+        if (!m_spec->sequence)
+        {
+            return std::nullopt;
+        }
+        return ListAdapter::CreateAdapter(InternalValueList(m_spec->sequence->rbegin(), m_spec->sequence->rend()));
+    }
     [[nodiscard]] bool IsCallable() const override { return m_spec->callable; }
     InternalValue Call(const CallParams& params, RenderContext& context) const override
     {
         if (!m_spec->callable)
         {
             return IHostObject::Call(params, context);
+        }
+        if (m_spec->callResult)
+        {
+            return *m_spec->callResult;
         }
         std::string result = "called(" + std::to_string(params.posParams.size());
         for (const auto& [name, value] : params.kwParams)
@@ -342,6 +372,80 @@ TEST(HostObjectTest, PublicViewReadsAttributes)
     EXPECT_TRUE(generic.HasValue("name"));
     EXPECT_EQ("attr-name", generic.GetValueByName("name").As<std::string>());
     EXPECT_EQ("item-key", generic.GetValueByName("key").As<std::string>());
+}
+
+// docs/tasks/0362: where Python asks the object or raises, generic filters and tests do not guess
+
+TEST(HostObjectTest, SliceAsksTheObject)
+{
+    ToySpec sequence;
+    sequence.sequence = std::vector<InternalValue>{ InternalValue(int64_t{ 1 }), InternalValue(int64_t{ 2 }), InternalValue(int64_t{ 3 }) };
+    const InternalValueMap params{ { "x", MakeToy(sequence) }, { "o", MakeToy(Rich()) } };
+    // __getitem__ gets slice(1, None, None) and slice(None, None, -1)
+    EXPECT_EQ("[2, 3]|[3, 2, 1]|[2]", Render("{{ x[1:] }}|{{ x[::-1] }}|{{ x[1:2] }}", params));
+    EXPECT_EQ(L"[2, 3]", RenderW(L"{{ x[1:] }}", params));
+    // An object without items: Jinja2 passes the slice to __getitem__ without getitem's fallback
+    EXPECT_NE(std::string::npos, Render("{{ o[1:2] }}", params).find("'Toy' object is not subscriptable"));
+    EXPECT_NE(std::wstring::npos, RenderW(L"{{ o[1:2] }}", params).find(L"'Toy' object is not subscriptable"));
+}
+
+TEST(HostObjectTest, LastAndReverseAskReversed)
+{
+    ToySpec sequence;
+    sequence.sequence = std::vector<InternalValue>{ InternalValue(int64_t{ 1 }), InternalValue(int64_t{ 2 }), InternalValue(int64_t{ 3 }) };
+    ToySpec empty;
+    empty.sequence = std::vector<InternalValue>{};
+    ToySpec iterator;
+    iterator.iteration = std::vector<InternalValue>{ InternalValue(int64_t{ 1 }), InternalValue(std::string("b")) };
+    const InternalValueMap params{ { "x", MakeToy(sequence) }, { "e", MakeToy(empty) }, { "it", MakeToy(iterator) } };
+    EXPECT_EQ("3|[3, 2, 1]|True", Render("{{ x|last }}|{{ x|reverse|list }}|{{ e|last is undefined }}", params));
+    EXPECT_EQ(L"3", RenderW(L"{{ x|last }}", params));
+    // last is next(reversed(x)): an iterator is not reversible; reverse falls back to list(x)
+    EXPECT_NE(std::string::npos, Render("{{ it|last }}", params).find("'Toy' object is not reversible"));
+    EXPECT_EQ("['b', 1]", Render("{{ it|reverse|list }}", params));
+    EXPECT_NE(std::wstring::npos, RenderW(L"{{ it|last }}", params).find(L"'Toy' object is not reversible"));
+}
+
+TEST(HostObjectTest, OddAndEvenTakeTheRemainder)
+{
+    // `x is odd` is x % 2 == 1, and the object has no __mod__
+    const InternalValueMap params{ { "o", MakeToy() } };
+    EXPECT_NE(std::string::npos, Render("{{ o is odd }}", params).find("unsupported operand type(s) for %: 'Toy' and 'int'"));
+    EXPECT_NE(std::string::npos, Render("{{ o is even }}", params).find("unsupported operand type(s) for %: 'Toy' and 'int'"));
+    EXPECT_NE(std::wstring::npos, RenderW(L"{{ o is odd }}", params).find(L"unsupported operand type(s) for %: 'Toy' and 'int'"));
+}
+
+TEST(HostObjectTest, UrlencodeIteratesPairsOrQuotesStr)
+{
+    ToySpec pairs;
+    pairs.iteration = std::vector<InternalValue>{ InternalValue(ListAdapter::CreateAdapter(InternalValueList{ InternalValue(std::string("a")), InternalValue(std::string("b c")) })),
+                                                  InternalValue(std::string("de")) };
+    ToySpec items;
+    items.iteration = std::vector<InternalValue>{ InternalValue(int64_t{ 1 }) };
+    const InternalValueMap params{ { "o", MakeToy() }, { "p", MakeToy(pairs) }, { "i", MakeToy(items) } };
+    // Without __iter__ the object is quoted as str(); an iterable gives the pairs, each
+    // unpacked as `k, v` (a two-character string too)
+    EXPECT_EQ("%D0%A2%D0%BE%D1%83|a=b+c&d=e", Render("{{ o|urlencode }}|{{ p|urlencode }}", params));
+    EXPECT_EQ(L"a=b+c&d=e", RenderW(L"{{ p|urlencode }}", params));
+    EXPECT_NE(std::string::npos, Render("{{ i|urlencode }}", params).find("cannot unpack non-iterable int object"));
+}
+
+TEST(HostObjectTest, CallBlockWritesTheResultAsIs)
+{
+    ToySpec markup;
+    markup.callable = true;
+    markup.callResult = InternalValue(std::string("<s>"));
+    ToySpec number;
+    number.callable = true;
+    number.callResult = InternalValue(int64_t{ 5 });
+    const InternalValueMap params{ { "f", MakeToy(markup) }, { "n", MakeToy(number) } };
+    // Only a string joins the output. Jinja2 yields it unescaped; Jinja2C++ escapes a plain
+    // string under autoescape, a deliberate divergence (docs/tasks/0362)
+    EXPECT_EQ("<s>|&lt;s&gt;", Render("{% call f() %}x{% endcall %}|{% autoescape true %}{% call f() %}x{% endcall %}{% endautoescape %}", params));
+    EXPECT_EQ(L"&lt;s&gt;", RenderW(L"{% autoescape true %}{% call f() %}x{% endcall %}{% endautoescape %}", params));
+    EXPECT_NE(std::string::npos, Render("{% call n() %}x{% endcall %}", params).find("expected str instance, int found"));
+    // An engine object with a call operator is called, and refuses caller= as Python's does
+    EXPECT_NE(std::string::npos, Render("{% set j = joiner() %}{% call j() %}x{% endcall %}", params).find("Joiner.__call__() got an unexpected keyword argument 'caller'"));
 }
 
 #endif // JINJA2CPP_LINK_AS_SHARED

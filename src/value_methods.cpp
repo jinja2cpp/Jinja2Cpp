@@ -204,7 +204,7 @@ struct StrOps
         {
             Raise(std::string(name) + "() argument must be str, not " + TypeName(val));
         }
-        return *str;
+        return std::move(*str);
     }
 
     // The characters [b, e) of chars as a string

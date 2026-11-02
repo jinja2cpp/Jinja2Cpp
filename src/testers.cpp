@@ -297,7 +297,34 @@ bool IsSameObject(const InternalValue& left, const InternalValue& right)
     }
 }
 
-// Python's value % 2 == 0 (`even`) or == 1 for the number kinds, false for the others
+// value % 2 of a value that is no number, which is never 0 or 1: str formats 2, Undefined fails
+// under every policy, and anything else (a host object too, docs/tasks/0362) has no `%`
+[[noreturn]] void ThrowNoRemainder(const InternalValue& val)
+{
+    throw TemplateRuntimeError("unsupported operand type(s) for %: '"s + Apply<visitors::PythonTypeNameGetter>(val) + "' and 'int'");
+}
+
+bool NotANumberIsEvenOrOdd(const InternalValue& val)
+{
+    CheckUndefinedUse(val, UndefinedUse::Arithmetic);
+    if (!IsStringValue(val))
+    {
+        ThrowNoRemainder(val);
+    }
+    // "%d" % 2 is the string "2"; a format that takes no argument, or two, is a TypeError
+    const InternalValue two(int64_t{ 2 });
+    if (const auto narrow = AsStringView<char>(val))
+    {
+        static_cast<void>(PythonPercentFormat(*narrow, two));
+    }
+    else
+    {
+        static_cast<void>(PythonPercentFormat(ApplyStringConverter(val, [](auto str) { return ConvertString<std::string>(str); }), two));
+    }
+    return false;
+}
+
+// Python's value % 2 == 0 (`even`) or == 1
 bool IsEvenOrOdd(const InternalValue& val, TestKind valKind, bool even)
 {
     bool result = false;
@@ -317,6 +344,10 @@ bool IsEvenOrOdd(const InternalValue& val, TestKind valKind, bool even)
         // outside int64_t's range would overflow; inf and nan are neither
         auto remainder = std::fabs(std::fmod(ConvertToDouble(val), 2.0));
         result = remainder == (even ? 0.0 : 1.0);
+    }
+    else
+    {
+        result = NotANumberIsEvenOrOdd(val);
     }
     return result;
 }
