@@ -7,6 +7,7 @@
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
+#include "dialect.h"
 #include "load_settings.h"
 #include "thread_annotations.h"
 
@@ -96,11 +97,19 @@ public:
     // m_loadSettings rather than in a field of its own, so GetLoadSettings compares nothing more than the settings
     bool SetBigIntBackend(const BigIntBackend* backend) noexcept;
     const BigIntBackend* GetBigIntBackend() const noexcept;
+    // The dialect of templates loaded from now on (ConfigureForChatTemplates), kept in m_loadSettings like the
+    // backend
+    void SetDialect(Dialect dialect);
+    Dialect GetDialect() const;
 
 private:
     const BigIntBackend* BigIntBackendLocked() const noexcept JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_loadSettings ? m_loadSettings->bigIntBackend : GetBuiltinBigIntBackend(); }
 
+    Dialect DialectLocked() const JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_dialect; }
+
     mutable Mutex m_loadSettingsGuard;
+    // Equals m_loadSettings->dialect once that is made
+    Dialect m_dialect JINJA2CPP_GUARDED_BY(m_loadSettingsGuard) = Dialect::Jinja2;
     // Made on the first Load, or by SetBigIntBackend when the backend differs from the built-in one
     mutable LoadSettingsPtr m_loadSettings JINJA2CPP_GUARDED_BY(m_loadSettingsGuard);
 };

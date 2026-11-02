@@ -23,12 +23,14 @@ render (docs/tasks/0119):
 | Case | What it is |
 |---|---|
 | `chat_llama`, `chat_qwen`, `chat_mistral` | LLM chat templates in the style of Llama 3.1, Qwen 2.5 (ChatML) and Mistral v3, with tool definitions and tool calls (`tojson`, `trim`, slicing, `namespace`, `loop.index0` lookbehind), over a 23-message conversation; `trim_blocks` and `lstrip_blocks` as Hugging Face sets them |
+| `hf_qwen3`, `hf_gpt_oss`, `hf_deepseek_v31`, `hf_mistral_small` | real Hugging Face chat templates (copies from `test/chat_templates/templates/`, Apache-2.0 and MIT model licenses) with the suite's `tools` conversation, in transformers' environment: `"transformers": true` in `settings.json` (`ConfigureForChatTemplates` in C++, the same `ImmutableSandboxedEnvironment` setup in `python_bench.py`; other engines skip them) |
 | `html_autoescape` | a shop page with `autoescape` on: escaped user text, `safe`, `e`, imported macros for form fields |
 | `config_file` | an nginx-style config built from many small `include`s and imported macros, `dictsort`, `trim_blocks` |
 | `mitsuhiko_table_wide` | `mitsuhiko_table` with `TemplateW`, so the two compare narrow and wide rendering |
 
 Real Hugging Face templates run in an environment whose `tojson` neither sorts keys nor
-escapes HTML characters; these cases use Jinja2's own `tojson`, which both engines share.
+escapes HTML characters; the `chat_*` cases use Jinja2's own `tojson`, which every engine shares,
+and the `hf_*` cases the real templates in transformers' environment (docs/tasks/0360).
 
 Each case gives two benchmarks: `Load/<case>` parses `main.j2`, `Render/<case>` renders
 the parsed template to a string. To add a workload, add a directory; both drivers pick it

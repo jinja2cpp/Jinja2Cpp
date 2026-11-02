@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_FILTERS_H
 #define JINJA2CPP_SRC_FILTERS_H
 
+#include "dialect.h"
 #include "expression_evaluator.h"
 #include "function_base.h"
 #include "internal_value.h"
@@ -21,7 +22,7 @@ inline namespace v2
 using FilterPtr = std::shared_ptr<ExpressionFilter::IExpressionFilter>;
 using FilterParams = FunctionArgs;
 
-extern FilterPtr CreateFilter(std::string_view filterName, FunctionArgs params);
+extern FilterPtr CreateFilter(std::string_view filterName, FunctionArgs params, detail::Dialect dialect = detail::Dialect::Jinja2);
 // The same in the arena of the template that names the filter
 // A name that is no built-in filter makes a UserDefinedFilter and sets `*unknown`
 extern NodeRef<ExpressionFilter::IExpressionFilter> CreateFilter(NodeArena& nodes, std::string_view filterName, FunctionArgs params, bool* unknown = nullptr);
@@ -168,7 +169,9 @@ public:
     enum Mode
     {
         JsonMode,
-        YamlMode
+        YamlMode,
+        // transformers' tojson (Dialect::Transformers)
+        TransformersJsonMode
     };
 
     Serialize(const FilterParams& params, Mode mode);
