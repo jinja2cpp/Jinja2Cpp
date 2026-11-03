@@ -556,6 +556,22 @@ struct IListAccessorEnumerator : virtual IComparable
 
 using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 
+// A list value that is a Python iterator, not a sequence: the generator a lazy filter returns
+// (map, select, batch, ...) or what reversed() makes of a sequence. It iterates as a list does
+// but has no len(), reversed(), slices or list methods (docs/tasks/0383)
+enum class IteratorKind : uint8_t
+{
+    None,
+    Generator,
+    ListReverse,
+    TupleReverse,
+    RangeIterator,
+    DictReverseKey
+};
+
+// The Python type of an iterator (generator, list_reverseiterator, ...), null for None
+const char* IteratorTypeName(IteratorKind kind) noexcept;
+
 // The arguments of a range() call, kept so that the range prints as range(0, 3)
 struct RangeInfo
 {
@@ -604,6 +620,8 @@ struct IListAccessor : ValueObject
     [[nodiscard]] virtual const void* GetIdentity() const { return this; }
     // Set only for the lists made by range()
     [[nodiscard]] virtual const RangeInfo* GetRangeInfo() const { return nullptr; }
+    // Set only for a list that is an iterator (ListAdapter::CreateIterator)
+    [[nodiscard]] virtual IteratorKind GetIteratorKind() const { return IteratorKind::None; }
     // The items of a list the template owns (shared by every copy of the value, as a
     // Python list is), so that methods like append() can change them; null for borrowed
     // and computed lists (docs/tasks/0020)
@@ -754,6 +772,7 @@ public:
     void ForEach(IListAccessor::ItemVisitor fn) const;
     [[nodiscard]] const void* GetIdentity() const { return m_accessor ? m_accessor->GetIdentity() : nullptr; }
     [[nodiscard]] const RangeInfo* GetRangeInfo() const { return m_accessor ? m_accessor->GetRangeInfo() : nullptr; }
+    [[nodiscard]] IteratorKind GetIteratorKind() const { return m_accessor ? m_accessor->GetIteratorKind() : IteratorKind::None; }
     [[nodiscard]] InternalValueList* GetMutableItems() const { return m_accessor ? m_accessor->GetMutableItems() : nullptr; }
     [[nodiscard]] GenericList CreateGenericList() const { return m_accessor ? m_accessor->CreateGenericList() : GenericList(); }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const;
@@ -823,6 +842,9 @@ public:
     }
 
     static ListAdapter CreateAdapter(InternalValueList&& values);
+    // A list of these items that is a Python iterator of this kind, not a sequence: a lazy
+    // filter's generator, reversed() of a sequence (docs/tasks/0383)
+    static ListAdapter CreateIterator(InternalValueList&& values, IteratorKind kind);
     static ListAdapter CreateAdapter(const GenericList& values);
     static ListAdapter CreateAdapter(const ValuesList& values);
     static ListAdapter CreateAdapter(GenericList&& values);
@@ -862,6 +884,7 @@ public:
     void ForEach(IListAccessor::ItemVisitor fn) const { Ref().ForEach(fn); }
     [[nodiscard]] const void* GetIdentity() const { return Ref().GetIdentity(); }
     [[nodiscard]] const RangeInfo* GetRangeInfo() const { return Ref().GetRangeInfo(); }
+    [[nodiscard]] IteratorKind GetIteratorKind() const { return Ref().GetIteratorKind(); }
     [[nodiscard]] InternalValueList* GetMutableItems() const { return Ref().GetMutableItems(); }
     [[nodiscard]] GenericList CreateGenericList() const { return Ref().CreateGenericList(); }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const { return Ref().GetEnumerator(); }

@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 touches: [src/value_methods.cpp#GetAttr, src/value_methods.cpp#IsMethodName, src/filters.cpp#Attribute]

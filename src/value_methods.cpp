@@ -2609,6 +2609,11 @@ const MethodInfo* FindMethodByKind(const InternalValue& self, std::string_view n
     case ValueKind::List:
         if (auto list = AsList(self))
         {
+            // An iterator (a lazy filter's generator) has none of a list's methods (docs/tasks/0383)
+            if (list->GetIteratorKind() != IteratorKind::None)
+            {
+                return nullptr;
+            }
             return list->IsTuple() || list->GetRangeInfo() ? FindIn(TupleMethods, name) : FindIn(ListMethods, name);
         }
         return nullptr;

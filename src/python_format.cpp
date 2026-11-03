@@ -69,6 +69,10 @@ const char* TypeName(const InternalValue& val)
     }
     if (auto list = AsList(val))
     {
+        if (const char* iterator = IteratorTypeName(list->GetIteratorKind()))
+        {
+            return iterator;
+        }
         return list->IsTuple() ? "tuple" : "list";
     }
     return "str";

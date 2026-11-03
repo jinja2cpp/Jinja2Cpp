@@ -635,6 +635,11 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     case IsSequenceMode:
         // A dict is a sequence in Python (len and __getitem__), a reflected object is not
         result = valKind == TestKind::List || valKind == TestKind::KVPair || valKind == TestKind::String;
+        // An iterator (a lazy filter's generator) has no len() (docs/tasks/0383)
+        if (const auto list = valKind == TestKind::List ? AsList(baseVal) : std::nullopt; list && list->GetIteratorKind() != IteratorKind::None)
+        {
+            result = false;
+        }
         if (valKind == TestKind::Map)
         {
             auto map = AsMap(baseVal);

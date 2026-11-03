@@ -434,6 +434,25 @@ CASES = [
     ("urlencode_unpack_long", "{{ [range(10000000)]|urlencode }}"),
     # task 0383: a lazy result is a generator in Python, which reversed() refuses
     ("last_of_lazy_result", "{{ [1, 2]|select|last }}"),
+    ("last_of_lazy_results", "{{ [[1, 2]]|batch(1)|last }}"),
+    ("last_of_items_result", "{{ {'a': 1}|items|last }}"),
+    ("last_of_empty_lazy_result", "{{ none|map('string')|last }}"),
+    ("length_of_lazy_result", "{{ [1, 2]|selectattr('real')|length }}"),
+    ("count_of_lazy_result", "{{ [1, 2]|unique|count }}"),
+    ("random_of_lazy_result", "{{ [1, 2]|slice(1)|random }}"),
+    # reversed() of a sequence is an iterator of the sequence's type; of an iterator, a list
+    ("last_of_reversed_list", "{{ [1, 2]|reverse|last }}"),
+    ("last_of_reversed_tuple", "{{ (1, 2)|reverse|last }}"),
+    ("last_of_reversed_range", "{{ range(3)|reverse|last }}"),
+    ("last_of_reversed_dict", "{{ {'a': 1}|reverse|last }}"),
+    ("last_of_reversed_lazy_result", "{{ [1, 2]|select|reverse|last }}|{{ [1, 2]|reject|reverse|reverse|join }}"),
+    # what works on a generator: iterating it, and through list()
+    ("lazy_result_iterates", "{{ [1, 2]|select|first }}|{{ [1, 2]|map('string')|join(',') }}|{{ [2, 1]|select|sort }}|{{ 2 in [1, 2]|select }}|{{ [1, 2]|select|list|last }}|{{ ([1, 2]|reject|list)[0:1] }}|{% for x in [1, 2]|select %}{{ x }}{% endfor %}"),
+    # task 0386: a generator equals only itself, has no JSON form and no + or *
+    ("lazy_result_equals", "{{ [1]|select == [1] }}|{{ [1]|reverse != [1] }}"),
+    ("lazy_result_tojson", "{{ [1]|select|tojson }}"),
+    ("lazy_result_concat", "{{ ([1]|select) + [2] }}"),
+    ("lazy_result_is_no_sequence", "{{ [1, 2]|select is sequence }}|{{ [1, 2]|select is iterable }}|{{ ([1, 2]|select)[0] is defined }}|{{ ([1, 2]|select).append is defined }}|{{ ([1, 2]|select|list).append is defined }}"),
     ("urlencode_undefined_debug", "[{{ missing|urlencode }}]", {"env": {"undefined": "debug"}}),
     ("urlencode_undefined_strict", "[{{ missing|urlencode }}]", {"env": {"undefined": "strict"}}),
     # task 0382: Jinja2 iterates `loop` (what is left of the loop)
