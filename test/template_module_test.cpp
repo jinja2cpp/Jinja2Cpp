@@ -192,6 +192,18 @@ TEST_F(TemplateModuleTest, KeptArgumentIsOwned)
     EXPECT_EQ("['" + std::string(40, 'b') + "']" + std::string(64, 'a') + ",['" + std::string(40, 'b') + "']", Call(module.exports["get"]).AsString());
 }
 
+// A closure a macro stores in the module's values keeps the macro's names past the host's call,
+// read live by the calls that follow (docs/tasks/0373)
+TEST_F(TemplateModuleTest, ClosureKeptPastAHostCall)
+{
+    auto module = Make("{% set ns = namespace(f=none) %}{% macro keep(n) %}{% macro i() %}I{{ n }}{% endmacro %}{% set ns.f = i %}{% endmacro %}"
+                       "{% macro later() %}{{ ns.f() }}{% endmacro %}{{ keep('top') }}");
+    EXPECT_EQ("Itop", Call(module.exports["later"]).AsString());
+    Call(module.exports["keep"], { std::string("host") });
+    EXPECT_EQ("Ihost", Call(module.exports["later"]).AsString());
+    EXPECT_EQ("Ihost", Call(module.exports["later"]).AsString());
+}
+
 TEST_F(TemplateModuleTest, ExportOutlivesTemplate)
 {
     jinja2::Value m;

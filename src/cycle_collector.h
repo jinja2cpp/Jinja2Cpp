@@ -16,6 +16,21 @@ namespace jinja2
 inline namespace v2
 {
 
+// What CycleCollector::KeepUntilEnd holds, each object with the owner it is of use to: released
+// once its owner has expired, or all at once
+class KeptObjects
+{
+public:
+    // Throws std::bad_alloc
+    void Keep(std::shared_ptr<const void> object, std::weak_ptr<const void> owner);
+    void Clear() noexcept { m_kept.clear(); }
+
+private:
+    static constexpr size_t MinPruneAt = 64;
+    std::vector<std::pair<std::weak_ptr<const void>, std::shared_ptr<const void>>> m_kept;
+    size_t m_pruneAt = MinPruneAt;
+};
+
 // Frees the reference cycles among the values a render makes (docs/tasks/0110, 0251). Lists,
 // dicts and namespaces are shared by reference count, as Python's are, so a container that
 // holds itself (`{% set ns.a = ns %}`, `l.append(l)`) keeps itself alive, possibly through
@@ -44,10 +59,12 @@ public:
     {
         s_current = this;
     }
-    // A collector whose writes to the host's data go to `cells`, which outlive it: a template
-    // module's, whose values live across its calls (docs/tasks/0049)
-    explicit CycleCollector(BorrowedCells& cells) noexcept
+    // A collector whose writes to the host's data go to `cells`, and what KeepUntilEnd holds to
+    // `kept`, which outlive it: a template module's, whose values live across its calls
+    // (docs/tasks/0049, 0373)
+    CycleCollector(BorrowedCells& cells, KeptObjects& kept) noexcept
         : m_external(&cells)
+        , m_externalKept(&kept)
     {
         s_current = this;
     }
@@ -89,7 +106,9 @@ public:
     // Holds `object` until the render running on this thread ends, and releases it before the
     // walk, so that what only it held is freed rather than counted as held from outside: the
     // names a closure keeps of its ended frames (ClosureCapture), which the closure reaches
-    // weakly. False outside a render. Throws std::bad_alloc
+    // weakly. In a call of a template module, until the module ends, since the closures the
+    // call stores in the module's values live as long (docs/tasks/0373). False outside a
+    // render. Throws std::bad_alloc
     // Released earlier once `owner` has expired: the copy is of no use without it, and a loop
     // that makes one per iteration stays in constant memory (pruned as Add prunes candidates)
     static bool KeepUntilEnd(std::shared_ptr<const void> object, std::weak_ptr<const void> owner);
@@ -140,9 +159,8 @@ private:
         // Candidates held by nothing else are dropped when there are this many (Add)
         static constexpr size_t MinPruneAt = 64;
         size_t pruneAt = MinPruneAt;
-        // What KeepUntilEnd holds, with the owner each is of use to
-        std::vector<std::pair<std::weak_ptr<const void>, std::shared_ptr<const void>>> kept;
-        size_t keptPruneAt = MinPruneAt;
+        // What KeepUntilEnd holds
+        KeptObjects kept;
         // The render's copies of the host's data, released before the walk: detaching them
         // frees what only they held
         BorrowedCells cells;
@@ -152,6 +170,8 @@ private:
     std::unique_ptr<Notes> m_notes;
     // The cells of a template module, which outlive the call (docs/tasks/0049); null for a render
     BorrowedCells* m_external = nullptr;
+    // What KeepUntilEnd holds for a template module (docs/tasks/0373); null for a render
+    KeptObjects* m_externalKept = nullptr;
 };
 
 // A call of a template module: it runs as a new call of the module's cells (BorrowedCells::BeginCall),
@@ -160,10 +180,10 @@ private:
 class ModuleCallCollector
 {
 public:
-    explicit ModuleCallCollector(BorrowedCells& cells) noexcept
+    ModuleCallCollector(BorrowedCells& cells, KeptObjects& kept) noexcept
         : m_cells(cells)
         , m_outerCall(cells.BeginCall())
-        , m_collector(cells)
+        , m_collector(cells, kept)
     {
     }
     ~ModuleCallCollector()

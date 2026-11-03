@@ -19533,6 +19533,526 @@
    "env": {},
    "templates": {},
    "output": "|N"
+  },
+  {
+   "id": "statements.macro_closure_three_calls_live",
+   "template": "{% set ns = namespace(f=none) %}{% macro a(x) %}{% set t = 0 %}{% macro b(y) %}{% macro c() %}{{ x }}{{ y }}{{ t }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{{ b(2) }}{% set t = 9 %}{{ ns.f() }}{% endmacro %}{{ a(1) }}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "129|129"
+  },
+  {
+   "id": "statements.macro_closure_enclosing_call_later_macro",
+   "template": "{% set ns = namespace(f=none) %}{% macro o() %}{% macro k() %}{% macro c() %}{{ h() }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{{ k() }}{% macro h() %}H{% endmacro %}{{ ns.f() }}{% endmacro %}{{ o() }}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "H|H"
+  },
+  {
+   "id": "statements.macro_closure_in_with_of_call_live",
+   "template": "{% set ns = namespace(f=none) %}{% macro o(v) %}{% set y = 1 %}{% with a = 4 %}{% macro m() %}{{ v }}{{ y }}{% endmacro %}{% set ns.f = m %}{% endwith %}{% set y = 2 %}{{ ns.f() }}{% endmacro %}{{ o(4) }}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "42|42"
+  },
+  {
+   "id": "statements.macro_closure_in_loop_of_call_live",
+   "template": "{% set ns = namespace(f=none) %}{% macro o() %}{% set y = 1 %}{% for j in [1] %}{% macro m() %}{{ y }}{% endmacro %}{% set ns.f = m %}{% endfor %}{% set y = 2 %}{{ ns.f() }}{% endmacro %}{{ o() }}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "2|2"
+  },
+  {
+   "id": "statements.macro_closure_in_with_reads_top_level_live",
+   "template": "{% set ns = namespace(f=none) %}{% set y = 1 %}{% with a = 4 %}{% macro m() %}{{ y }}{% endmacro %}{% set ns.f = m %}{% endwith %}{% set y = 2 %}{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "2"
+  },
+  {
+   "id": "statements.macro_closure_in_filter_block",
+   "template": "{% set ns = namespace(f=none) %}{% macro o(v) %}{% filter upper %}{% set z = 'z' %}{% macro i() %}{{ v }}{{ z }}{% endmacro %}{% set ns.f = i %}{% endfilter %}{% endmacro %}{{ o('v') }}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "|v"
+  },
+  {
+   "id": "statements.macro_closure_in_autoescape_block",
+   "template": "{% set ns = namespace(f=none) %}{% macro o(v) %}{% autoescape true %}{% set z = 'z' %}{% macro i() %}{{ v }}{{ z }}{% endmacro %}{% set ns.f = i %}{% endautoescape %}{% endmacro %}{{ o('v') }}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "|v"
+  },
+  {
+   "id": "statements.macro_closure_in_call_body_live",
+   "template": "{% set ns = namespace(f=none) %}{% macro w() %}{{ caller() }}{% endmacro %}{% macro o(n) %}{% set y = 1 %}{% call w() %}{% set z = 5 %}{% macro i() %}{{ n }}{{ y }}{{ z }}{% endmacro %}{% set ns.f = i %}{% endcall %}{% set y = 2 %}{{ ns.f() }}{% endmacro %}{{ o('N') }}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "N25|N25"
+  },
+  {
+   "id": "statements.macro_closure_defined_in_kept_call",
+   "template": "{% set ns = namespace(f=none, l=[]) %}{% macro o(v) %}{% macro i(w) %}{% macro j() %}{{ v }}{{ w }}{% endmacro %}{% set ns.l = ns.l + [j] %}{% endmacro %}{% set ns.f = i %}{% endmacro %}{{ o(1) }}{{ ns.f(2) }}{{ ns.l[0]() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "12"
+  },
+  {
+   "id": "statements.macro_closure_nested_call_reads_args",
+   "template": "{% set ns = namespace(f=none) %}{% macro o(v) %}{% set y = 1 %}{% macro k() %}{% macro c() %}{{ v }}{{ y }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{{ k() }}{% set y = 2 %}{{ ns.f() }}{% endmacro %}{{ o(3) }}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "32|32"
+  },
+  {
+   "id": "statements.macro_closure_in_block",
+   "template": "{% set ns = namespace(f=none) %}{% set q = 1 %}{% block b %}{% set a = 'A' %}{% macro m() %}{{ a }}{{ q }}{{ h() }}{% endmacro %}{% set ns.f = m %}{% endblock %}{% macro h() %}H{% endmacro %}{% set q = 2 %}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "|A2H"
+  },
+  {
+   "id": "statements.macro_closure_in_set_block_of_call",
+   "template": "{% set ns = namespace(f=none) %}{% macro o(a) %}{% set r %}{% macro m() %}{{ a }}{% endmacro %}{% set ns.f = m %}{% endset %}{% endmacro %}{{ o(1) }}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "|1"
+  },
+  {
+   "id": "statements.macro_closure_in_scoped_block_of_loop",
+   "template": "{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% if loop.first %}{% block b scoped %}{% macro m() %}{{ i }}{% endmacro %}{% set ns.f = m %}{% endblock %}{% endif %}{{ ns.f() }}{% endfor %}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "11|1"
   }
  ]
 }
