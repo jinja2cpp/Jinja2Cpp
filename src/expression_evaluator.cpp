@@ -1202,7 +1202,8 @@ InternalValue SliceExpression::Evaluate(RenderContext& context)
     auto step = part(m_step);
     const auto kind = value.Kind();
     // An iterator (a lazy filter's generator, docs/tasks/0383) takes no slice either
-    if ((kind != ValueKind::String && kind != ValueKind::List && kind != ValueKind::KeyValuePair) || (kind == ValueKind::List && AsList(value)->GetIteratorKind() != IteratorKind::None))
+    const auto list = kind == ValueKind::List ? AsList(value) : std::nullopt;
+    if ((kind != ValueKind::String && kind != ValueKind::List && kind != ValueKind::KeyValuePair) || (list && list->GetIteratorKind() != IteratorKind::None))
     {
         return SliceOther(value, std::move(start), std::move(stop), std::move(step), context);
     }

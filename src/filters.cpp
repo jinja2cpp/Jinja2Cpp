@@ -153,6 +153,14 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
         // An undefined step has no attributes, unless its policy is Chainable
         CheckUndefinedUse(result, UndefinedUse::Attribute);
         auto next = Subscript(result, part, &context);
+        // getitem falls back to getattr: a number's data attributes (docs/tasks/0374)
+        if (next.IsUndefined() && IsStringValue(part))
+        {
+            if (auto attr = methods::GetNumberDataAttr(result, AsString(part)))
+            {
+                next = std::move(*attr);
+            }
+        }
         if (next.IsUndefined() && !GetUndefinedInfo(next))
         {
             // A missing step knows where it came from, like a missing attribute in an expression

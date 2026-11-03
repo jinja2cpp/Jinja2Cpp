@@ -48,5 +48,5 @@ a plain list, as Jinja2's `list(value)` fallback does. A marked list refuses `|l
 (not reversible), `|length`, `|count` and `|random` (no len()) and slices (not subscriptable),
 indexes to undefined (Jinja2 swallows getitem's TypeError), is no sequence, has no list methods,
 and `PythonTypeName` names its Python type. Iteration, `|first`, `|list`, `|join`, `|sort`,
-`in` and for loops are unchanged. Left for 0386: `==`, `+`/`*`, tojson and the printed form;
-the MIGRATION.md note is 0387.
+`in` and for loops are unchanged. Left for 0387: `==`, `+`/`*`, tojson and the printed form;
+the MIGRATION.md note is 0388.

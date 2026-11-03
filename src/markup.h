@@ -151,7 +151,7 @@ inline bool HasHtml(const InternalValue& val)
         return true;
     }
     const auto map = AsMap(val);
-    return map && map->GetStrValue();
+    return map && map->GetStrValue() != nullptr;
 }
 
 // markupsafe.escape: Markup is returned as is, anything else becomes Markup of its escaped str().

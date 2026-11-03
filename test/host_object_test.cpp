@@ -342,6 +342,9 @@ TEST(HostObjectTest, MarkupLikeObjectUnderAutoescape)
     EXPECT_EQ("<b>Тоу</b>&lt;i&gt;|&lt;i&gt;&lt;plain&gt;&lt;plain&gt;|&lt;plain&gt;&lt;i&gt;|&lt;i&gt;&lt;plain&gt;&lt;plain&gt;|<plain><i>",
               Render("{% autoescape true %}{{ [m, '<i>']|join }}|{{ ['<i>', p]|join(m) }}|{{ m ~ '<i>' }}|{{ '<i>' ~ p ~ m }}{% endautoescape %}|{{ m ~ '<i>' }}", params));
     EXPECT_EQ(L"<b>Тоу</b>&lt;i&gt;", RenderW(L"{% autoescape true %}{{ [m, '<i>']|join }}{% endautoescape %}", params));
+    // xmlattr takes escape() of each value, which is __html__() of one that has it (docs/tasks/0367)
+    EXPECT_EQ(R"( a="<b>Тоу</b>" b="&lt;plain&gt;")", Render("{{ dict(a=m, b=p)|xmlattr }}", params));
+    EXPECT_EQ(LR"( a="<b>Тоу</b>" b="&lt;plain&gt;")", RenderW(L"{% autoescape true %}{{ dict(a=m, b=p)|xmlattr }}{% endautoescape %}", params));
 }
 
 TEST(HostObjectTest, DictKeysByIdentity)
