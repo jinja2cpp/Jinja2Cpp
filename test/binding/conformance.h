@@ -25,6 +25,7 @@
 #include <jinja2cpp/json_adapter.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
@@ -747,6 +748,29 @@ TYPED_TEST_P(JsonConformance, DictMethods)
     jc::RunRows<TypeParam>(jc::DictMethodsRows(), jc::kAllModes);
 }
 
+// A module exports a JSON object as a dict (0370): the copy keeps to maxSequenceSize (Codex review of 0370)
+TYPED_TEST_P(JsonConformance, ModuleExportLimits)
+{
+    if constexpr (TypeParam::kViewable)
+    {
+        const typename TypeParam::Json small = TypeParam::Parse(R"({"a":1,"b":2,"c":3})");
+        const typename TypeParam::Json large = TypeParam::Parse(R"({"a":1,"b":2,"c":3,"d":4})");
+        jinja2::Settings settings;
+        settings.limits.maxSequenceSize = 3;
+        jinja2::TemplateEnv env;
+        env.SetSettings(settings);
+        jinja2::Template tpl(&env);
+        ASSERT_TRUE(!!tpl.Load("{% set x = j %}"));
+        auto module = tpl.MakeModule({ { "j", jinja2::Reflect(std::as_const(small)) } });
+        ASSERT_TRUE(!!module) << module.error().ToString();
+        EXPECT_EQ(3u, module->exports["x"].AsMap().size());
+        EXPECT_EQ(jinja2::Value(int64_t{ 2 }), module->exports["x"].AsMap().at("b"));
+        auto over = tpl.MakeModule({ { "j", jinja2::Reflect(std::as_const(large)) } });
+        ASSERT_FALSE(!!over);
+        EXPECT_EQ(jinja2::ErrorCode::ResourceLimitExceeded, over.error().GetCode());
+    }
+}
+
 TYPED_TEST_P(JsonConformance, LifetimeInTemplates)
 {
     // Task 0125: a callable returns a reflected document that nothing else holds; its items outlive the call
@@ -965,6 +989,6 @@ struct JsonBindingNames
     }
 };
 
-REGISTER_TYPED_TEST_SUITE_P(JsonConformance, Scalars, BigIntegers, Nesting, KeyOrder, MissingKeysAndIndexes, EmptyContainers, NullMemberAndNullItem, Strings, IterationAndFilters, EnumeratorPastTheEnd, Equality, DictMethods, LifetimeInTemplates, LifetimeOfItemsWithoutEngine, ConcurrentRenders, CopyLimits, RepeatedKeys, DeepViewRendersOrFailsCleanly);
+REGISTER_TYPED_TEST_SUITE_P(JsonConformance, Scalars, BigIntegers, Nesting, KeyOrder, MissingKeysAndIndexes, EmptyContainers, NullMemberAndNullItem, Strings, IterationAndFilters, EnumeratorPastTheEnd, Equality, DictMethods, ModuleExportLimits, LifetimeInTemplates, LifetimeOfItemsWithoutEngine, ConcurrentRenders, CopyLimits, RepeatedKeys, DeepViewRendersOrFailsCleanly);
 
 #endif // JINJA2CPP_TEST_BINDING_CONFORMANCE_H
