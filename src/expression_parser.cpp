@@ -559,7 +559,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
             break;
         }
         auto ref = ValueRefExpression::Make(m_nodes, name);
-        m_names.AddUse(ref, HashedName::Hash(name));
+        m_names.AddUse(ref, m_nodes[ref].GetHashedName(m_nodes).hash);
         value = ref;
         break;
     }

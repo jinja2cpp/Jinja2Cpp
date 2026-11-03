@@ -1848,7 +1848,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
         else
         {
             const auto ref = ValueRefExpression::Make(m_nodes, name);
-            m_names.AddUse(ref, HashedName::Hash(name));
+            m_names.AddUse(ref, m_nodes[ref].GetHashedName(m_nodes).hash);
             value = ref;
         }
         trans->variables.emplace_back(name, std::move(value));
@@ -1969,7 +1969,7 @@ void AddTransMessageNames(NodeArena& nodes, NameResolver& names, TransInfo& tran
             if (!trans.HasVariable(name))
             {
                 const auto ref = ValueRefExpression::Make(nodes, name);
-                names.AddUse(ref, HashedName::Hash(name));
+                names.AddUse(ref, nodes[ref].GetHashedName(nodes).hash);
                 trans.variables.emplace_back(name, ref);
             }
         }

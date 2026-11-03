@@ -2079,6 +2079,11 @@ void ClosureCapture::AddReads(Span<const std::size_t> hashes)
         reads.assign(hashes.begin(), hashes.end());
         return;
     }
+    // The closures of a scope defined again (in a loop, by each call) read the same names
+    if (std::includes(reads.begin(), reads.end(), hashes.begin(), hashes.end()))
+    {
+        return;
+    }
     std::vector<std::size_t> merged;
     merged.reserve(reads.size() + hashes.size());
     std::set_union(reads.begin(), reads.end(), hashes.begin(), hashes.end(), std::back_inserter(merged));
