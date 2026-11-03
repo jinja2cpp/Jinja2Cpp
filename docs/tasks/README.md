@@ -391,7 +391,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0319](0319-makecallable-value-parameter.md) | MakeCallable with a Value parameter does not compile | api | medium | done |
 | [0320](0320-typed-callable-omitted-argument.md) | A typed callable with an omitted optional argument is not called | api | low | done |
 | [0321](0321-load-copies-on-write.md) | Load replaces the template for its own object only | robustness | high | done |
-| [0322](0322-parity-corpus-through-reflect.md) | Run the parity corpus with the context as a JSON view | parity | low | in-progress |
+| [0322](0322-parity-corpus-through-reflect.md) | Run the parity corpus with the context as a JSON view | parity | low | done |
 | [0323](0323-stored-self-sees-includer-names.md) | A `self` an include stored does not see the names the includer set | parity | low | done |
 | [0324](0324-nested-render-sees-global-changed-in-place.md) | A nested render does not see a global the outer render changed in place | robustness | medium | open |
 | [0325](0325-autoreload-date-before-read.md) | A reload can cache the new date with the old text | robustness | low | open |
