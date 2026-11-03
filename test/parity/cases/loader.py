@@ -90,6 +90,10 @@ CASES = [
     ("extends_two_levels", "{% extends 'child.j2' %}{% block head %}h{% endblock %}", L),
     ("extends_super", "{% extends 'child_super.j2' %}", L),
     ("extends_super_chain", "{% extends 'grandchild.j2' %}", L),
+    # A block in a scoped statement (autoescape, with) outside any block of a child template is
+    # rendered in place too; one in an `if` is not (docs/tasks/0389)
+    ("extends_block_in_scoped_statement", "{% extends 'base.j2' %}{% autoescape true %}<i>{% block head %}h{% endblock %}{% endautoescape %}{% if true %}{% block body %}b{% endblock %}{% endif %}", L),
+    ("extends_block_in_with", "{% extends 'base.j2' %}{% with %}{% block body %}b{% endblock %}{% endwith %}", L),
     ("extends_content_outside_blocks", "{% extends 'base.j2' %}ignored{% block body %}b{% endblock %}", L),
     ("extends_variable", "{% set p = 'base.j2' %}{% extends p %}", L),
     ("extends_conditional", "{% if true %}{% extends 'base.j2' %}{% endif %}", L),

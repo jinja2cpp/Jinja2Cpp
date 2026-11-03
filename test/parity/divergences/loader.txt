@@ -6,3 +6,5 @@ loader.include_block_macro_kept output 0373 a macro defined in a block of an inc
 loader.include_with_macro_kept output 0373 a macro defined in a `with` of an included template and kept past the include reads the include's top-level names as undefined (Jinja2 prints `missing` for the `with` name, then the top-level name)
 loader.include_macro_kept_reads_self rejects 0373 a macro of an included template kept past the include and calling `self.<block>` finds no blocks: the ended include's `self` is rebuilt without them
 loader.module_object_is_escaped        output      0367 `is escaped` of an imported module is False; Jinja2's TemplateModule has __html__, so it is True
+loader.extends_block_in_scoped_statement output 0389 a block inside `{% autoescape %}` outside the blocks of a child template is not rendered in place; Jinja2 renders it there and at the parent's block
+loader.extends_block_in_with output 0389 a block inside `{% with %}` outside the blocks of a child template is not rendered in place; Jinja2 renders it there and at the parent's block
