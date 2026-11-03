@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: parity
 depends: [0049]
@@ -35,3 +35,15 @@ land the marker here with only the dict answer.
 **Done when.** The six `reflect.*` lines naming 0370 in `test/parity/divergences/reflect.txt`
 are gone, the conformance suite (`test/binding/conformance.h`) has a row for a key shadowing
 a dict method on every binding, and a reflected struct keeps its keys-first lookup.
+
+**As built (parity batch 3, group E).** `include/jinja2cpp/json_adapter.h` adds the exported
+marker `jinja2::IJsonNode` (empty for now), which `json::ObjectAccessor` and
+`json::ArrayAccessor` derive from. `GenericMapAdapter` detects it once, in its constructor
+(`dynamic_cast`), and then answers `MethodsFirst` and `HasAttributes() == false`; any other host
+map, such as a reflected struct, keeps `KeysFirst`. Everything that asks those two questions
+follows: `is sequence`, `attr()`, `map('attr')`, the `dict` type name, and tuple unpacking
+(`{% set x, y = j %}` now unpacks the keys, the third bullet of 0212). Rows: the six
+`reflect.*` lines are gone, `DictMethods` in `test/binding/conformance.h` (every binding, all
+four modes, including `unpack_keys`), and `ExpressionTest.ReflectedStructFieldComesBeforeADictMethod`.
+Whether the marker gets 0212's `NodeIdentity()` virtual before this merges is decision D6 of
+`/mnt/project-files/release-2.0/0212-plan.md`.

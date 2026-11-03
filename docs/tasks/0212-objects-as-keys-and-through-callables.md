@@ -36,3 +36,8 @@ a JSON value viewed through `jinja2::Reflect` and read twice gives two accessors
 through one read misses the other. The six `0212` lines in
 `test/parity/divergences/reflect.txt` (the 0322 pass) are these cases; they go when a view has
 a stable identity.
+
+**Plan (2026-11-03).** Architect plan with decisions D1-D8 for Ruslan:
+`/mnt/project-files/release-2.0/0212-plan.md`. 0370 already makes a JSON object unpack its keys
+(it answers `HasAttributes() == false` through the `IJsonNode` marker). Macros passed to a user
+callable no longer arrive as None (0300); what remains is the way back (`ident(m)()`).

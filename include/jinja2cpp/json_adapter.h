@@ -126,6 +126,18 @@ struct JsonCopyLimits
     std::uint64_t maxSequenceSize = 0;
 };
 
+/*!
+ * \brief Marks the accessors of the JSON views that \ref Reflect makes (docs/tasks/0370)
+ *
+ * The engine tells a JSON object from a reflected struct by this base: a JSON object is a dict to the template, as
+ * Python's `json.loads` gives one (`d.items` is the dict method even with a key `items`, `attr()` does not see the
+ * keys, `is sequence` holds), while the fields of a reflected struct are its attributes. The accessors of
+ * \ref Reflect for a type with \ref JsonTraits derive from it; other accessors do not need to.
+ */
+struct JINJA2CPP_EXPORT IJsonNode
+{
+};
+
 namespace detail::json
 {
 template<typename T>
@@ -401,6 +413,7 @@ inline std::optional<Value> BigIntValue(std::string_view text)
 template<typename J>
 class ObjectAccessor final : public IMapItemAccessor
     , public detail::OwnedAccessor
+    , public IJsonNode
 {
 public:
     explicit ObjectAccessor(Ref<J> ref)
@@ -493,6 +506,7 @@ template<typename J>
 class ArrayAccessor final : public IListItemAccessor
     , public IIndexBasedAccessor
     , public detail::OwnedAccessor
+    , public IJsonNode
 {
 public:
     explicit ArrayAccessor(Ref<J> ref)

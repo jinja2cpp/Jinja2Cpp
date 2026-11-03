@@ -20,6 +20,7 @@
 #include <jinja2cpp/exception.h>
 #include <jinja2cpp/big_int.h>
 #include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/json_adapter.h>
 #include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
@@ -3160,6 +3161,7 @@ public:
     template<typename U, typename = std::enable_if_t<!std::is_same_v<std::decay_t<U>, GenericMapAdapter>>>
     explicit GenericMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
+        , m_isDict(dynamic_cast<const IJsonNode*>(m_values.Get().GetAccessor()) != nullptr)
     {
         // As OwnedAdapter
         this->SetTraversable();
@@ -3236,7 +3238,9 @@ public:
             return self;
         }
     }
-    [[nodiscard]] bool HasAttributes() const override { return true; }
+    // A JSON object is a dict (IJsonNode, docs/tasks/0370); the names of any other host map, such as a
+    // reflected struct, are its attributes
+    [[nodiscard]] bool HasAttributes() const override { return !m_isDict; }
     [[nodiscard]] const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
     [[nodiscard]] TemplateDict* GetMutableItems() const override
     {
@@ -3249,7 +3253,7 @@ public:
         return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
-    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysFirst; }
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return m_isDict ? MapAttrPolicy::MethodsFirst : MapAttrPolicy::KeysFirst; }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
@@ -3299,6 +3303,8 @@ private:
     }
 
     Holder<GenericMap> m_values;
+    // A JSON object (IJsonNode), which looks names up as a dict (docs/tasks/0370)
+    bool m_isDict;
     // The render's copy of the map once the render wrote to it (docs/tasks/0049)
     AutoCellLink m_link;
 };

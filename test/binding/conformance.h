@@ -294,6 +294,25 @@ inline const std::vector<Row>& EqualityRows()
     return rows;
 }
 
+inline const std::vector<Row>& DictMethodsRows()
+{
+    static const std::vector<Row> rows = {
+        { "shadowed_method", R"J2({"items":"own","keys":1,"name":"bob","o":{"get":"g"},"l":[{"name":"x"},{"v":1}]})J2",
+          R"J2({{ j.items is callable }}|{{ j.items()|list }}|{{ j['items'] }}|{{ j.o.get('get') }}|{{ j.keys()|list }})J2",
+          R"J2(True|[('items', 'own'), ('keys', 1), ('name', 'bob'), ('o', {'get': 'g'}), ('l', [{'name': 'x'}, {'v': 1}])]|own|g|['items', 'keys', 'name', 'o', 'l'])J2", R"J2(True|[('items', 'own'), ('keys', 1), ('l', [{'name': 'x'}, {'v': 1}]), ('name', 'bob'), ('o', {'get': 'g'})]|own|g|['items', 'keys', 'l', 'name', 'o'])J2", nullptr },
+        { "attr_filter", R"J2({"items":"own","keys":1,"name":"bob","o":{"get":"g"},"l":[{"name":"x"},{"v":1}]})J2",
+          R"J2({{ j|attr('items') is callable }}|[{{ j|attr('name') }}]|{{ j.l|map('attr', 'name')|select('defined')|list }}|{{ j.l|map(attribute='name')|select('defined')|list }})J2",
+          R"J2(True|[]|[]|['x'])J2", nullptr, nullptr },
+        { "tests", R"J2({"items":"own","keys":1,"name":"bob","o":{"get":"g"},"l":[{"name":"x"},{"v":1}]})J2",
+          R"J2({{ j is mapping }}|{{ j is sequence }}|{{ j is iterable }}|{{ j.o is sequence }})J2",
+          R"J2(True|True|True|True)J2", nullptr, nullptr },
+        { "unpack_keys", R"J2({"p":{"x":1,"y":2}})J2",
+          R"J2({% set a, b = j.p %}{{ a }}{{ b }}|{% for k, v in j.p|dictsort %}{{ k }}{{ v }}{% endfor %})J2",
+          R"J2(xy|x1y2)J2", nullptr, nullptr },
+    };
+    return rows;
+}
+
 inline const std::vector<Row>& LifetimeRows()
 {
     static const std::vector<Row> rows = {
@@ -722,6 +741,12 @@ TYPED_TEST_P(JsonConformance, Equality)
     }
 }
 
+// Task 0370: a JSON object is a dict in every mode, not a host object whose keys come before the dict methods
+TYPED_TEST_P(JsonConformance, DictMethods)
+{
+    jc::RunRows<TypeParam>(jc::DictMethodsRows(), jc::kAllModes);
+}
+
 TYPED_TEST_P(JsonConformance, LifetimeInTemplates)
 {
     // Task 0125: a callable returns a reflected document that nothing else holds; its items outlive the call
@@ -940,6 +965,6 @@ struct JsonBindingNames
     }
 };
 
-REGISTER_TYPED_TEST_SUITE_P(JsonConformance, Scalars, BigIntegers, Nesting, KeyOrder, MissingKeysAndIndexes, EmptyContainers, NullMemberAndNullItem, Strings, IterationAndFilters, EnumeratorPastTheEnd, Equality, LifetimeInTemplates, LifetimeOfItemsWithoutEngine, ConcurrentRenders, CopyLimits, RepeatedKeys, DeepViewRendersOrFailsCleanly);
+REGISTER_TYPED_TEST_SUITE_P(JsonConformance, Scalars, BigIntegers, Nesting, KeyOrder, MissingKeysAndIndexes, EmptyContainers, NullMemberAndNullItem, Strings, IterationAndFilters, EnumeratorPastTheEnd, Equality, DictMethods, LifetimeInTemplates, LifetimeOfItemsWithoutEngine, ConcurrentRenders, CopyLimits, RepeatedKeys, DeepViewRendersOrFailsCleanly);
 
 #endif // JINJA2CPP_TEST_BINDING_CONFORMANCE_H
