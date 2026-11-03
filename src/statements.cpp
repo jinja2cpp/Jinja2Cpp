@@ -1182,6 +1182,7 @@ void ForStatement::RenderElse(OutStream& os, RenderContext& values)
 {
     values.EnterScope();
     values.Nodes()[m_elseBody].Render(os, values);
+    values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount()));
     values.ExitScope();
 }
 
@@ -1286,6 +1287,8 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
             hasItem = !state->isLast;
         }
     }
+    // A closure defined in the body and kept past the loop sees the frame below it (0373)
+    values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount() - 1));
     values.ExitScope(state->bodyScope);
 
     // A loop object kept past the loop (`set ns.x = loop`) can no longer run the filter,
@@ -1456,6 +1459,7 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     state->lazyFilter = nullptr;
 
     guard.Unbind();
+    values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount()));
     values.PopFrameView();
     values.ExitScope(state->bodyScope);
     if (!loopRendered && m_elseBody)
@@ -1763,14 +1767,10 @@ Callable WithKeepAlive(Callable&& callable, std::shared_ptr<const void> keepAliv
 // its capture again (StrengthenCapture)
 void CopyCaptured(ScopeRef& scope, const ClosureKept& kept)
 {
-    // The frame's own names hide those of the top level
-    for (const auto* names : { kept.base.get(), kept.frames.get() })
+    // An inner frame's names hide those of the frames below it
+    for (auto frame = kept.frames.rbegin(); frame != kept.frames.rend(); ++frame)
     {
-        if (!names)
-        {
-            continue;
-        }
-        for (const auto& [name, value] : *names)
+        for (const auto& [name, value] : **frame)
         {
             scope[name] = MacroStatement::StrengthenCapture(value);
         }
@@ -1796,10 +1796,12 @@ void CopyCaptured(RenderContext& context, const ClosureSite& site, const Closure
 // level, `site`, wherever it is called from, as a block function sees its template's context
 // in Jinja2 (docs/tasks/0194). Once the stack has ended, the call renders the blocks it held
 // (SelfBlocks), seeing the names `site` still has
-InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName)
+// `keepsCapture` false: the `self` does not keep what the site keeps, which keeps it (the copy
+// of an ended include's names, RenderContext::KeepEndedSelf)
+InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, bool keepsCapture = true)
 {
     // What the site keeps (ClosureSite::CaptureOnEnd), while the `self` lives; the caller holds it
-    const std::shared_ptr<const void> keepAlive = site.Capture();
+    const std::shared_ptr<const void> keepAlive = keepsCapture ? site.Capture() : nullptr;
     InternalValueMap self;
     if (!stack.blocks.empty() && !stack.self)
     {
@@ -1958,15 +1960,61 @@ ClosureSite::ClosureSite(RenderContext& context, size_t depth)
     }
 }
 
+std::shared_ptr<RenderContext> ClosureSite::LiveHome(const ClosureCapture& capture)
+{
+    auto home = capture.home.lock();
+    if (home && !capture.ended && home->HasScopeBelow(capture.depth, capture.serial))
+    {
+        return home;
+    }
+    return nullptr;
+}
+
+ClosureHome ClosureSite::ResolveKept(RenderContext& caller) const
+{
+    const auto capture = m_capture.lock();
+    for (const auto* frame = capture.get(); frame; frame = frame->outer.get())
+    {
+        auto home = LiveHome(*frame);
+        if (!home)
+        {
+            continue;
+        }
+        ClosureHome result;
+        // The caller is alive: no lock
+        if (home.get() == &caller)
+        {
+            result.context = &caller;
+        }
+        else
+        {
+            result.context = home.get();
+            result.lock = std::move(home);
+        }
+        result.link = frame->depth;
+        result.epoch = ClosureHome::Epoch::Fresh;
+        result.kept = ClosureHome::Kept::Frames;
+        return result;
+    }
+    auto ended = Ended(caller);
+    ended.kept = ClosureHome::Kept::Frames;
+    return ended;
+}
+
 ClosureKept ClosureSite::Kept(const ClosureHome& home) const
 {
     ClosureKept kept;
-    if (const auto capture = m_capture.lock())
+    if (home.kept == ClosureHome::Kept::None)
     {
-        kept.frames = capture->names.lock();
-        if (home.kept == ClosureHome::Kept::FramesAndBase)
+        return kept;
+    }
+    const auto capture = m_capture.lock();
+    // The copies of the ended frames, down to the first one still there (ResolveKept)
+    for (const auto* frame = capture.get(); frame && !LiveHome(*frame); frame = frame->outer.get())
+    {
+        if (auto names = frame->names.lock())
         {
-            kept.base = capture->base.lock();
+            kept.frames.push_back(std::move(names));
         }
     }
     return kept;
@@ -1974,31 +2022,58 @@ ClosureKept ClosureSite::Kept(const ClosureHome& home) const
 
 std::shared_ptr<ClosureCapture> ClosureSite::CaptureOnEnd(RenderContext& context)
 {
-    // A frame inside the template's top level copies its own scopes: the top level stays live
-    // while the context does, and an include's adds itself when the include ends (base)
-    const uint32_t lowest = (m_state & TopLevel) != 0 ? 0 : m_rootDepth;
-    // The closures of one frame share its copy: each sees the others there, and the copy lives
-    // while any of them is held outside it
-    if (context.m_captures)
+    // The closures of one scope share its capture: each sees the others in its copy, and the
+    // copy lives while any of them is held outside it
+    auto capture = context.CaptureOfScope(m_depth);
+    m_capture = capture;
+    return capture;
+}
+
+std::shared_ptr<ClosureCapture> RenderContext::CaptureOfScope(size_t depth)
+{
+    if (depth == 0)
     {
-        // The latest ones: those of the nested frames copied since wait for the context's end
-        const auto& sites = context.m_captures->sites;
-        for (size_t idx = sites.size(), seen = 0; idx != 0 && seen != 8; --idx, ++seen)
+        return nullptr;
+    }
+    // The context whose own scope it is
+    auto* owner = this;
+    while (depth <= owner->m_parentDepth && owner->m_parent)
+    {
+        owner = owner->m_parent;
+    }
+    if (depth <= owner->m_parentDepth)
+    {
+        return nullptr;
+    }
+    const uint32_t serial = owner->SerialBelow(depth);
+    if (owner->m_captures)
+    {
+        // A scope holding what a call of a kept closure sees stands for the closure's frames
+        for (const auto& kept : owner->m_captures->kept)
         {
-            auto last = sites[idx - 1].lock();
-            if (last && last->depth == m_depth && last->serial == m_serial && last->lowest == lowest && last->names.expired())
+            if (kept.depth == depth && kept.serial == serial)
             {
-                m_capture = last;
-                return last;
+                if (auto capture = kept.capture.lock())
+                {
+                    return capture;
+                }
+            }
+        }
+        const auto& sites = owner->m_captures->sites;
+        for (auto site = sites.rbegin(); site != sites.rend(); ++site)
+        {
+            auto capture = site->lock();
+            if (capture && capture->depth == depth && capture->serial == serial && !capture->ended)
+            {
+                return capture;
             }
         }
     }
     auto capture = std::make_shared<ClosureCapture>();
-    capture->depth = m_depth;
-    capture->serial = m_serial;
-    capture->lowest = lowest;
-    context.AddClosureCapture(capture);
-    m_capture = capture;
+    capture->home = owner->Anchor();
+    capture->depth = static_cast<uint32_t>(depth);
+    capture->serial = serial;
+    owner->AddClosureCapture(capture);
     return capture;
 }
 
@@ -2015,122 +2090,80 @@ void RenderContext::AddClosureCapture(const std::shared_ptr<ClosureCapture>& cap
         sites.erase(std::remove_if(sites.begin(), sites.end(),
                                    [this](const std::weak_ptr<ClosureCapture>& site) {
                                        const auto p = site.lock();
-                                       // A copied one waits for its context's end (CaptureClosuresImpl)
-                                       return !p || (!HasScopeBelow(p->depth, p->serial) && p->names.expired());
+                                       return !p || p->ended || !HasScopeBelow(p->depth, p->serial);
                                    }),
                     sites.end());
+        auto& kept = m_captures->kept;
+        kept.erase(std::remove_if(kept.begin(), kept.end(), [this](const ClosureCaptures::Kept& k) { return k.capture.expired() || !HasScopeBelow(k.depth, k.serial); }),
+                   kept.end());
         m_captures->pruneAt = std::max(ClosureCaptures{}.pruneAt, sites.size() * 2);
     }
     sites.push_back(capture);
 }
 
-void RenderContext::CaptureClosuresImpl(size_t count)
+void RenderContext::CaptureClosuresImpl(const FrameEnd& end)
 {
+    // The frame's scopes: from `count - 1` up, all of this context's own when it ends
+    const size_t count = end.count != 0 ? end.count : m_parentDepth + 1;
+    // The `self` of an included template that ends, made before its blocks went (KeepEndedSelf)
+    const auto endedSelf = end.count == 0 ? std::move(m_captures->endedSelf) : nullptr;
     auto& sites = m_captures->sites;
-    // The context ends (RenderIncludedTemplate): the closures of its top level, and those of its
-    // nested frames, copied when those ended, keep what the top level and its parents hold
-    const bool contextEnds = count == 0;
-    std::vector<std::shared_ptr<ClosureCapture>> atEnd;
-    // At the context's end: the top level's captures that nothing outside holds yet, which the
-    // copy of the top level holds once one is made
-    std::vector<std::shared_ptr<ClosureCapture>> unheld;
+    std::vector<std::shared_ptr<ClosureCapture>> ending;
     size_t kept = 0;
     for (auto& site : sites)
     {
         auto capture = site.lock();
-        if (!capture)
+        if (!capture || capture->ended || !HasScopeBelow(capture->depth, capture->serial))
         {
             continue;
         }
-        // Copied when its frame ended, in a context that ends before the render
-        if (!capture->names.expired() && contextEnds)
-        {
-            atEnd.push_back(std::move(capture));
-            continue;
-        }
-        if (!capture->names.expired())
-        {
-            sites[kept++] = std::move(site);
-            continue;
-        }
-        if (!HasScopeBelow(capture->depth, capture->serial))
-        {
-            continue;
-        }
-        // Defined below the frame that ends: it stays
         if (capture->depth < count)
         {
             sites[kept++] = std::move(site);
             continue;
         }
-        // Its frame is the innermost scope
-        assert(capture->depth == GetScopesCount());
-        const bool escapes = CaptureEscapes(capture);
-        if (contextEnds)
-        {
-            (escapes ? atEnd : unheld).push_back(std::move(capture));
-            continue;
-        }
-        // Nothing that outlives the frame holds its closures
-        if (!escapes)
-        {
-            continue;
-        }
-        // In a context that ends before the render, it waits for the context's end
-        if (CopyFrame(capture) && m_endsBeforeRender)
-        {
-            sites[kept++] = std::move(site);
-        }
+        ending.push_back(std::move(capture));
     }
     sites.resize(kept);
-    if (!atEnd.empty())
+    // Something outside the frame holds one of its closures, or a capture of a frame above
+    // it: those see what the frame held. The others are dropped with the frame
+    if (ending.empty() || std::none_of(ending.begin(), ending.end(), [this](const auto& capture) { return CaptureEscapes(capture); }))
     {
-        const size_t escaping = atEnd.size();
-        atEnd.insert(atEnd.end(), std::make_move_iterator(unheld.begin()), std::make_move_iterator(unheld.end()));
-        CopyTopLevel(atEnd, escaping);
+        if (sites.empty() && m_captures->kept.empty())
+        {
+            m_captures.reset();
+        }
+        return;
     }
-    if (sites.empty())
+    // One copy for the frame, holding its closures weakly
+    std::shared_ptr<InternalValueMap> names;
+    if (end.copies)
     {
-        m_captures.reset();
+        names = std::make_shared<InternalValueMap>();
+        CollectNamesDownTo(*names, end.copyFrom, ending);
+        // Read as `self` in the scopes over the caller's top level (FindSelf), unless set there
+        if (endedSelf)
+        {
+            names->emplace("self", std::move(*endedSelf));
+        }
     }
-}
-
-bool RenderContext::CopyFrame(const std::shared_ptr<ClosureCapture>& capture)
-{
-    auto names = std::make_shared<InternalValueMap>();
-    CollectNamesDownTo(*names, capture->lowest, Span<const std::shared_ptr<ClosureCapture>>(&capture, 1));
-    // Outside a render nothing would release the copy: the closure reads its frames as ended
-    if (!CycleCollector::KeepUntilEnd(names, capture))
+    // Made before the frame's captures leave the list: the frame below is another scope
+    const auto outer = CaptureOfScope(end.continuation);
+    for (auto& capture : ending)
     {
-        return false;
-    }
-    capture->names = names;
-    return true;
-}
-
-void RenderContext::CopyTopLevel(Span<const std::shared_ptr<ClosureCapture>> captures, size_t escaping)
-{
-    // One copy of the top level for all of them, holding their closures weakly
-    auto base = std::make_shared<InternalValueMap>();
-    CollectNamesDownTo(*base, 0, captures);
-    for (size_t idx = 0; idx != captures.size(); ++idx)
-    {
-        const auto& capture = captures[idx];
-        // Held by its closures in the copy only, which hold it weakly: it lives as long as the
-        // copy, which lives as long as one of the escaping ones
-        const bool kept = idx < escaping ? CycleCollector::KeepUntilEnd(base, capture) : CycleCollector::KeepUntilEnd(capture, base);
-        if (!kept)
+        capture->ended = true;
+        capture->outer = outer;
+        if (!names)
         {
             continue;
         }
-        // A top-level closure's own frame is the top level
-        if (capture->names.expired())
+        // The ones held outside keep the copy; the others, which only closures in the copy
+        // reach, live as long as it does. Outside a render nothing would release the copy:
+        // the closures read the frame as one whose names are undefined
+        const bool isHeld = CaptureEscapes(capture);
+        if (isHeld ? CycleCollector::KeepUntilEnd(names, capture) : CycleCollector::KeepUntilEnd(capture, names))
         {
-            capture->names = base;
-        }
-        else
-        {
-            capture->base = base;
+            capture->names = names;
         }
     }
 }
@@ -2253,10 +2286,21 @@ void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowes
         });
 }
 
-void RenderContext::EnterCapturedScope(const ClosureKept& kept, size_t link)
+void RenderContext::EnterCapturedScope(const ClosureKept& kept, size_t link, std::shared_ptr<ClosureCapture> capture)
 {
     auto scope = EnterScope();
     CopyCaptured(scope, kept);
+    // A frame of the call that ends sees the closure's frames below it (CaptureOfScope)
+    if (capture)
+    {
+        const auto depth = static_cast<uint32_t>(GetScopesCount());
+        const uint32_t serial = SerialBelow(depth);
+        if (!m_captures)
+        {
+            m_captures = std::make_unique<ClosureCaptures>();
+        }
+        m_captures->kept.push_back({ depth, serial, std::move(capture) });
+    }
     if (link < GetScopesCount() - 1)
     {
         PushFrameView({}, link);
@@ -2342,6 +2386,13 @@ void BlockStatement::RenderBody(OutStream& os, RenderContext& values, size_t dep
     // derived context shares its EvalContext
     OutputAutoescapeGuard autoescapeGuard(values, m_autoescape);
     values.Nodes()[m_mainBody].Render(os, values);
+    // A closure defined in the block and kept past it sees what the block saw above its
+    // template's top level, as Jinja2's block function sees its derived context (0373)
+    {
+        const size_t count = values.GetScopesCount();
+        const size_t root = frame ? std::min(frame->baseDepth, count - 1) : count - 1;
+        values.CaptureClosures(FrameEnd{ count, true, root, root });
+    }
     values.ExitScope();
     values.SetSelfFromContext(prevSelfFromContext);
     values.SetSelfDepth(prevSelfDepth);
@@ -2427,6 +2478,7 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     if (!m_hasExtends)
     {
         values.Nodes()[m_body].Render(os, values);
+        KeepEndedSelf(values, frame);
         return;
     }
     // The output tags after an `extends` are dropped or skipped (OutputCheckStatement); what
@@ -2440,6 +2492,24 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
         assert(stack);
         parent.node.RenderAsParent(os, values, *stack, name);
     }
+    KeepEndedSelf(values, frame);
+}
+
+void TemplateRenderer::KeepEndedSelf(RenderContext& values, const TemplateFrame& frame)
+{
+    // An included template whose closures something outside holds: they read `self` once it
+    // has ended, as Jinja2's macros read the template's root function's (docs/tasks/0373)
+    if (!values.KeepsClosures() || !frame.blocks || frame.blocks->blocks.empty() || frame.baseDepth != values.GetScopesCount())
+    {
+        return;
+    }
+    // Held by the copy of the template's names, which its site's capture keeps: it holds the
+    // capture weakly, so that the copy does not keep itself
+    ClosureSite site(values, frame.baseDepth);
+    // The capture of the top level, shared with its closures and held by the frames above it
+    // that something outside holds; dropped here when none holds it
+    [[maybe_unused]] const auto capture = site.CaptureOnEnd(values);
+    values.KeepEndedSelf(MakeTemplateSelf(*frame.blocks, site, frame.name, false));
 }
 
 template<typename Result, typename Fn>
@@ -2611,14 +2681,15 @@ void RenderIncludedTemplate(const TemplateImpl<CharT>& tpl, bool withContext, Ou
             HideIncludingLoop(values, innerContext, hidden);
             innerContext.SetNodes(tpl.Nodes());
             innerContext.Nodes()[tpl.GetRenderer()].RenderNamed(os, innerContext, tpl.SelfName());
-            innerContext.CaptureClosures(0);
+            innerContext.CaptureClosures(FrameEnd{ 0, true, 0, 0 });
             return;
         }
     }
 
     innerContext.SetNodes(tpl.Nodes());
     innerContext.Nodes()[tpl.GetRenderer()].RenderNamed(os, innerContext, tpl.SelfName());
-    innerContext.CaptureClosures(0);
+    // What it saw, its parents' names too: Jinja2 renders it with a copy of the context
+    innerContext.CaptureClosures(FrameEnd{ 0, true, 0, 0 });
 }
 
 void IncludeStatement::Render(OutStream& os, RenderContext& values)
@@ -3367,7 +3438,7 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
         });
         context.Nodes()[m_mainBody].Render(stream, context);
         // A macro defined in the body and kept past the call sees what the call had (0326)
-        context.CaptureClosures(context.GetScopesCount());
+        context.CaptureClosures(FrameEnd::Call(context.GetScopesCount(), link));
         if (isLinked)
         {
             context.PopFrameView();
@@ -3386,7 +3457,7 @@ void MacroStatement::InvokeMacroRenderer(const CallParams& callParams, OutStream
         context.BindSlot(slots[slot], names[slot].hash, std::forward<decltype(value)>(value));
     });
     context.Nodes()[m_mainBody].Render(stream, context);
-    context.CaptureClosures(context.GetScopesCount());
+    context.CaptureClosures(FrameEnd::Call(context.GetScopesCount(), link));
 
     guard.Unbind();
     context.PopFrameView();
@@ -3455,6 +3526,7 @@ void WithStatement::Render(OutStream& os, RenderContext& values)
 
     values.Nodes()[m_mainBody].Render(os, innerValues);
 
+    innerValues.CaptureClosuresAtSoftEnd();
     innerValues.ExitScope();
     values.SetLoopControl(innerValues.GetLoopControl());
 }
@@ -3481,6 +3553,7 @@ void FilterStatement::Render(OutStream& os, RenderContext& values)
 {
     auto innerValues = values.Clone(true);
     TargetString arg = RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { values.Nodes()[m_body].Render(stream, innerValues); });
+    innerValues.CaptureClosuresAtSoftEnd();
     // A `break` or `continue` in the body drops its output, as in Jinja2
     values.SetLoopControl(innerValues.GetLoopControl());
     if (values.HasLoopControl())
@@ -3500,6 +3573,7 @@ void AutoescapeStatement::Render(OutStream& os, RenderContext& values)
     const auto autoescapeGuard = AutoescapeGuard::Statement(values, ConvertToBool(values.Nodes()[m_expr].Evaluate(values)), m_isVolatile);
     values.EnterScope();
     values.Nodes()[m_body].Render(os, values);
+    values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount()));
     values.ExitScope();
 }
 

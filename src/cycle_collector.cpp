@@ -28,7 +28,7 @@ struct Node
 void CycleCollector::Finish() noexcept
 {
     // First: what only these held is gone before the walk counts the references
-    m_notes->kept.clear();
+    m_notes->kept.Clear();
     m_notes->cells.Release(this);
     if (!m_outer)
     {
@@ -56,19 +56,27 @@ bool CycleCollector::KeepUntilEnd(std::shared_ptr<const void> object, std::weak_
     {
         return false;
     }
+    if (collector->m_externalKept)
+    {
+        collector->m_externalKept->Keep(std::move(object), std::move(owner));
+        return true;
+    }
     if (!collector->m_notes)
     {
         collector->m_notes = std::make_unique<Notes>();
     }
-    auto& notes = *collector->m_notes;
-    auto& kept = notes.kept;
-    if (kept.size() >= notes.keptPruneAt)
-    {
-        kept.erase(std::remove_if(kept.begin(), kept.end(), [](const auto& entry) { return entry.first.expired(); }), kept.end());
-        notes.keptPruneAt = std::max(Notes::MinPruneAt, kept.size() * 2);
-    }
-    kept.emplace_back(std::move(owner), std::move(object));
+    collector->m_notes->kept.Keep(std::move(object), std::move(owner));
     return true;
+}
+
+void KeptObjects::Keep(std::shared_ptr<const void> object, std::weak_ptr<const void> owner)
+{
+    if (m_kept.size() >= m_pruneAt)
+    {
+        m_kept.erase(std::remove_if(m_kept.begin(), m_kept.end(), [](const auto& entry) { return entry.first.expired(); }), m_kept.end());
+        m_pruneAt = std::max(MinPruneAt, m_kept.size() * 2);
+    }
+    m_kept.emplace_back(std::move(owner), std::move(object));
 }
 
 BorrowedCells* CycleCollector::CellsForWrite()
