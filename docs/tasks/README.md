@@ -259,7 +259,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0183](0183-context-callable-positional-arg.md) | A user callable taking `*context` gets None for a positional argument | api | high | done |
 | [0184](0184-gcc13-sanitizer-stringop-overflow.md) | The GCC 13 sanitizer build fails with -Wstringop-overflow | build | low | open |
 | [0185](0185-fuzz-oom-below-sequence-cap.md) | The fuzz job fails on lists below the sequence cap | robustness | medium | done |
-| [0186](0186-python-oracle-target.md) | Which Python and Jinja2 the parity oracle targets, and how users choose | parity | medium | in-progress |
+| [0186](0186-python-oracle-target.md) | Which Python and Jinja2 the parity oracle targets, and how users choose | parity | medium | done |
 | [0187](0187-generated-data-acquisition.md) | How generated tables and third-party data are acquired (SBOM) | build | low | in-progress |
 | [0188](0188-stored-loop-cycle-follows-loop.md) | A stored `loop.cycle` keeps the position it was read at | parity | low | done |
 | [0189](0189-casefold-non-ascii.md) | Case-insensitive comparison folds only ASCII | parity | low | done |
