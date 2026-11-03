@@ -1,0 +1,114 @@
+name: parity-oracles
+
+# The parity suite against Python Jinja2 versions other than the pinned pair (docs/tasks/0186
+# phase 2, test/parity/README.md "Other oracles"): Jinja2's main branch, the oldest supported
+# 3.0.x, and the pinned Jinja2 under newer Pythons. A case where the two oracles agree is judged
+# by the allow-list as in every build job; a case where they differ is a version delta and only
+# reported (decision O4), in the job summary and the uploaded report.md. The main-branch row is
+# the early warning before a Jinja2 release; each delta it shows is a parity task to decide on
+# its own. Runs on pull requests that touch the oracle harness, nightly on master and on demand.
+
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - 'test/parity/generate.py'
+      - 'test/parity/parity_test.cpp'
+      - 'test/parity/requirements.txt'
+      - 'cmake/parity_oracle.cmake'
+      - 'cmake/parity_oracle_generate.cmake'
+      - '.github/workflows/parity-oracles.yml'
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  oracle:
+    name: oracle ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Unreleased Jinja2, on the pinned Python
+          - name: jinja2 main
+            python: '3.12'
+            requirements: 'jinja2 @ git+https://github.com/pallets/jinja@main'
+          # The oldest Jinja2 line generate.py supports (3.0.x), with the MarkupSafe it was released with
+          - name: jinja2 3.0.3
+            python: '3.12'
+            requirements: 'jinja2==3.0.3;markupsafe==2.1.5'
+          # The pinned Jinja2 and MarkupSafe under newer Pythons: stdlib and Unicode deltas
+          - name: python 3.13
+            python: '3.13'
+            requirements: 'jinja2==3.1.6;markupsafe==3.0.3'
+          - name: python 3.14
+            python: '3.14'
+            requirements: 'jinja2==3.1.6;markupsafe==3.0.3'
+
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      id: python
+      with:
+        python-version: ${{ matrix.python }}
+
+    - name: Install toolchain
+      uses: ./.github/actions/install-toolchain
+      with:
+        compiler: gcc-14
+
+    # One key for every row: the test binary does not depend on the oracle
+    - uses: ./.github/actions/setup-ccache
+      with:
+        key: parity-oracles-gcc-14
+
+    - name: Configure
+      env:
+        ORACLE_PYTHON: ${{ steps.python.outputs.python-path }}
+        ORACLE_REQUIREMENTS: ${{ matrix.requirements }}
+      run: |
+        cmake -S . -B .build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DJINJA2CPP_DEPS_MODE=internal \
+          -DJINJA2CPP_STRICT_WARNINGS=ON \
+          -DCMAKE_CXX_FLAGS=-Wno-error=maybe-uninitialized \
+          -DJINJA2CPP_TEST_ORACLE=venv \
+          "-DJINJA2CPP_TEST_ORACLE_PYTHON=${ORACLE_PYTHON}" \
+          "-DJINJA2CPP_TEST_ORACLE_REQUIREMENTS=${ORACLE_REQUIREMENTS}"
+
+    - name: Build
+      run: cmake --build .build --parallel --target jinja2cpp_tests
+
+    - name: Parity against the oracle
+      run: ctest --test-dir .build -R parity_oracle --output-on-failure
+
+    - name: Report
+      if: always()
+      run: |
+        if [ -f .build/parity-oracle/report.md ]; then
+          cat .build/parity-oracle/report.md >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "No report: the oracle did not generate (see the test step)." >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Upload the report
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: parity-oracle-${{ matrix.python }}-${{ strategy.job-index }}
+        path: |
+          .build/parity-oracle/report.md
+          .build/parity-oracle/oracle.json
+        if-no-files-found: ignore

@@ -2,7 +2,7 @@
 status: in-progress
 priority: medium
 area: parity
-touches: [test/parity/requirements.txt, test/parity/generate.py, .github/workflows/parity-expectations.yml, docs/parity.md, .python-version, cmake/version.h.in, cmake/parity_oracle.cmake, cmake/parity_oracle_generate.cmake, test/parity/parity_test.cpp, test/parity/README.md]
+touches: [test/parity/requirements.txt, test/parity/generate.py, .github/workflows/parity-expectations.yml, docs/parity.md, .python-version, cmake/version.h.in, cmake/parity_oracle.cmake, cmake/parity_oracle_generate.cmake, test/parity/parity_test.cpp, test/parity/README.md, .github/workflows/parity-oracles.yml]
 ---
 # Which Python and Jinja2 the parity oracle targets, and how users choose
 
@@ -44,13 +44,13 @@ revised there (section 10): phases 0-2, phase 3 (selectable Unicode table sets) 
 Decisions: O2 yes (version macros, before the G1 freeze), O3 no, O4 report-only by default
 (`JINJA2CPP_TEST_ORACLE_STRICT=1` fails), O5 no version-gated C++ semantics.
 
-- **Phase 0, done in this PR.** `.python-version` is the one Python pin (five workflows use
+- **Phase 0, done (#719).** `.python-version` is the one Python pin (five workflows use
   `python-version-file`; the two table generators and the SBOM evidence read it);
   `generate.py` reads Jinja2 from `requirements.txt`; `jinja2cpp/version.h` has
   `JINJA2CPP_ORACLE_PYTHON` and `JINJA2CPP_ORACLE_JINJA2`; `docs/parity.md` has the policy
   and the one-PR bump checklist ("Oracle pin"). This answers the policy question and the
   "where is it stated" question.
-- **Phase 1, done in this PR.** `cmake/parity_oracle.cmake` (`JINJA2CPP_TEST_ORACLE=bundled|python|venv`,
+- **Phase 1, done (#725).** `cmake/parity_oracle.cmake` (`JINJA2CPP_TEST_ORACLE=bundled|python|venv`,
   `_PYTHON`, `_REQUIREMENTS`; included from the test block) registers the CTest fixture
   `jinja2cpp_parity_oracle_generate` (`cmake/parity_oracle_generate.cmake`: makes the venv,
   runs `generate.py --out DIR --any-version`, which also writes `oracle.json`) and the test
@@ -62,8 +62,12 @@ Decisions: O2 yes (version macros, before the G1 freeze), O3 no, O4 report-only 
   section 2 plus `string_filters.m168`, all `tracks-bundled`; 3.0.3 on Python 3.13 reports 22.
   The Unicode-corpus gap is 0372. 0355 reuses `generate.py --out/--any-version`,
   `JINJA2CPP_TEST_ORACLE_DIR` and the verdicts rather than a second harness.
-- **Phase 2, open.** `.github/workflows/parity-oracles.yml` modelled on `bindings.yml`
-  (paths-filtered PRs plus nightly, actions pinned by SHA): Jinja2 main, 3.0.x, Python
-  3.13/3.14 rows with the pinned Jinja2.
+- **Phase 2, done in this PR.** `.github/workflows/parity-oracles.yml` (modelled on
+  `bindings.yml`: paths-filtered pull requests, nightly on master, on demand; actions pinned
+  by SHA) runs `JINJA2CPP_TEST_ORACLE=venv` with four rows: Jinja2 main and 3.0.3 on Python
+  3.12, and Jinja2 3.1.6 on Python 3.13 and 3.14. The report goes to the job summary and an
+  artifact. Measured locally on 2972 cases: Jinja2 main (3.2.0.dev0) agrees on every case;
+  Python 3.14 shows the same 4 deltas as 3.13 (`\N{}` name rules, `textwrap`), all
+  `tracks-bundled`. With phases 0-2 done and phase 3 dropped, this PR closes 0186.
 - Open for 0353: the Python module's `pyproject.toml` names MarkupSafe, a sixth pin site to
   align with `requirements.txt`.
