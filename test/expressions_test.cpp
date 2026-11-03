@@ -684,10 +684,10 @@ std::wstring Utf8ToWide(const std::string& utf8)
     {
         const auto lead = static_cast<unsigned char>(utf8[pos]);
         const size_t len = lead < 0x80 ? 1 : (lead < 0xE0 ? 2 : (lead < 0xF0 ? 3 : 4));
-        uint32_t code = len == 1 ? lead : (lead & (0xFF >> (len + 1)));
+        uint32_t code = len == 1 ? lead : (lead & (0xFFU >> (len + 1)));
         for (size_t n = 1; n != len; ++n)
         {
-            code = (code << 6) | (static_cast<unsigned char>(utf8[pos + n]) & 0x3F);
+            code = (code << 6) | (static_cast<unsigned char>(utf8[pos + n]) & 0x3FU);
         }
         pos += len;
         if (sizeof(wchar_t) == 2 && code > 0xFFFF)

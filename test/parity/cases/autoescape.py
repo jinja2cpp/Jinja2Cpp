@@ -169,6 +169,13 @@ CASES = [
     ("env_on_finalize_folded_choice_composites", "{{ ('<' if 1 > 0 else x)|upper }}|{{ ('<' if 1 > 0 else x)[0] }}|{{ ('<' if 1 > 0 else x) ~ 'a' }}|{{ ('<' if x else x)[0] }}", {"env": {"autoescape": True, "finalize": "brackets"}, "ctx": {"x": "<"}}),
     # Jinja2 3.1.6 passes template text in volatile code through finalize too (docs/tasks/0369)
     ("volatile_finalize_template_data", "{% autoescape on %}a{{ 1 }}{% endautoescape %}|{% autoescape true %}a{{ 1 }}{% endautoescape %}", {"env": {"finalize": "brackets"}, "ctx": {"on": True}}),
+    # Each piece of text is finalized as Markup by the runtime setting, then escaped by it: in a
+    # macro, filter, set block and nested constant autoescape too, but not in a block
+    ("volatile_finalize_template_data_escaped", "{% autoescape on %}<a>{{ '<' }}{% endautoescape %}<t>", {"env": {"finalize": "brackets"}, "ctx": {"on": True}}),
+    ("volatile_finalize_template_data_off", "{% autoescape on %}<a>{{ '<' }}{% endautoescape %}<t>", {"env": {"finalize": "brackets"}, "ctx": {"on": False}}),
+    ("volatile_finalize_template_data_markup", "{% autoescape on %}<a>{{ '<' }}{% endautoescape %}", {"env": {"finalize": "none_marker"}, "ctx": {"on": True}}),
+    ("volatile_finalize_template_data_nodes", "{% autoescape on %}a{# c #}b{% raw %}<r>{% endraw %}{% if 1 %}c{% endif %}{% for i in [1, 2] %}x{% endfor %}{% filter upper %}f{% endfilter %}{% set s %}<s>{% endset %}{{ s }}{% macro m() %}<m>{% endmacro %}{{ m() }}{% block b %}<b>{% endblock %}{% autoescape false %}<n>{% endautoescape %}{% endautoescape %}<t>", {"env": {"finalize": "brackets"}, "ctx": {"on": True}}),
+    ("volatile_finalize_template_data_lines", "{% autoescape on %}\na\n  {%- if 1 %}\nb\n{% endif %}\n{% endautoescape %}", {"env": {"finalize": "brackets", "trim_blocks": True}, "ctx": {"on": True}}),
     ("env_on_finalize_folded_none", "{{ none }}|{{ y }}|{{ x|safe }}", {"env": {"autoescape": True, "finalize": "none_to_empty"}, "ctx": {"x": "<", "y": None}}),
     ("env_on_finalize_folded_choice", "{{ '<'|safe if 1 > 0 else x }}{{ ('<'|safe) or x }}", {"env": {"autoescape": True, "finalize": "brackets"}, "ctx": {"x": "<"}}),
     # Jinja2 folds by the side a foldable test or `and`/`or` operand picks (docs/tasks/0291)

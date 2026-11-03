@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: build
 touches: [test/expressions_test.cpp]
@@ -21,3 +21,9 @@ be inside a helper reached from that block), then make it explicit, for example
 
 **Done when.** The GCC 13 address+undefined build compiles with strict warnings and no extra
 flags, and `jinja2cpp_tests` passes in it.
+
+**Resolution.** The conversion was in the test's `Utf8ToWide` helper, inlined at the `"\x80"`
+line: `lead & (0xFF >> (len + 1))` is an `int` that the ternary assigns to `uint32_t`. The masks
+are now unsigned (`0xFFU`, `0x3FU`), so the expression is unsigned throughout. Reproduced and
+checked with GCC 13.3 `-DJINJA2CPP_WITH_SANITIZERS=address+undefined`, RelWithDebInfo, strict
+warnings.

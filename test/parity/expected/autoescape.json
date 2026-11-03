@@ -2280,6 +2280,67 @@
    "output": "[a][1]|a[1]"
   },
   {
+   "id": "autoescape.volatile_finalize_template_data_escaped",
+   "template": "{% autoescape on %}<a>{{ '<' }}{% endautoescape %}<t>",
+   "context": {
+    "on": true
+   },
+   "env": {
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[&lt;a&gt;][<]<t>"
+  },
+  {
+   "id": "autoescape.volatile_finalize_template_data_off",
+   "template": "{% autoescape on %}<a>{{ '<' }}{% endautoescape %}<t>",
+   "context": {
+    "on": false
+   },
+   "env": {
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[<a>][<]<t>"
+  },
+  {
+   "id": "autoescape.volatile_finalize_template_data_markup",
+   "template": "{% autoescape on %}<a>{{ '<' }}{% endautoescape %}",
+   "context": {
+    "on": true
+   },
+   "env": {
+    "finalize": "none_marker"
+   },
+   "templates": {},
+   "output": "<a><"
+  },
+  {
+   "id": "autoescape.volatile_finalize_template_data_nodes",
+   "template": "{% autoescape on %}a{# c #}b{% raw %}<r>{% endraw %}{% if 1 %}c{% endif %}{% for i in [1, 2] %}x{% endfor %}{% filter upper %}f{% endfilter %}{% set s %}<s>{% endset %}{{ s }}{% macro m() %}<m>{% endmacro %}{{ m() }}{% block b %}<b>{% endblock %}{% autoescape false %}<n>{% endautoescape %}{% endautoescape %}<t>",
+   "context": {
+    "on": true
+   },
+   "env": {
+    "finalize": "brackets"
+   },
+   "templates": {},
+   "output": "[a][b][&lt;r&gt;][c][x][x][F][[&amp;lt;s&amp;gt;]][[&amp;lt;m&amp;gt;]]<b>[<n>]<t>"
+  },
+  {
+   "id": "autoescape.volatile_finalize_template_data_lines",
+   "template": "{% autoescape on %}\na\n  {%- if 1 %}\nb\n{% endif %}\n{% endautoescape %}",
+   "context": {
+    "on": true
+   },
+   "env": {
+    "finalize": "brackets",
+    "trim_blocks": true
+   },
+   "templates": {},
+   "output": "[a][b\n]"
+  },
+  {
    "id": "autoescape.env_on_finalize_folded_none",
    "template": "{{ none }}|{{ y }}|{{ x|safe }}",
    "context": {
