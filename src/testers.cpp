@@ -6,6 +6,7 @@
 #include "filters.h"
 #include "function_base.h"
 #include "host_object.h"
+#include "markup.h"
 #include "internal_value.h"
 #include "python_format.h"
 #include "render_context.h"
@@ -559,13 +560,9 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         }
         break;
     case IsEscapedMode:
-        // Python checks for __html__, which Markup has, and an object of the host language may
-        if (const auto* host = GetHostObject(baseVal))
-        {
-            result = host->IsMarkupLike();
-            break;
-        }
-        result = baseVal.IsMarkup();
+        // Python checks for __html__, which Markup, a template module and an object of the host
+        // language may have
+        result = HasHtml(baseVal);
         break;
     case IsFalseMode:
         result = valKind == TestKind::Boolean && !ConvertToBool(baseVal);

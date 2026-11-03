@@ -281,7 +281,7 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
 
     // Python join converts every item and the delimiter with str(). Under autoescape a
     // Markup delimiter or item makes it a Markup join, which escapes the rest. An item with
-    // __html__ (a host object) counts, a delimiter with it does not: Jinja2 takes str() of that
+    // __html__ (a host object or a template module) counts, a delimiter with it does not: Jinja2 takes str() of that
     // delimiter first, as markup_join (`~`) does of every operand
     auto* renderer = context.GetRendererCallback();
     InternalValue delimiterVal = GetArgumentValue("d", context);
@@ -293,7 +293,7 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
         isMarkup = delimiterVal.IsMarkup();
         for (const InternalValue& val : values)
         {
-            isMarkup = isMarkup || val.IsMarkup() || host::IsMarkupLike(val);
+            isMarkup = isMarkup || HasHtml(val);
             items.push_back(val);
         }
         values = ListAdapter::CreateAdapter(std::move(items));
