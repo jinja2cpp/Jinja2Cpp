@@ -2479,7 +2479,10 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
     if (!m_hasExtends)
     {
         values.Nodes()[m_body].Render(os, values);
-        KeepEndedSelf(values, frame);
+        if (stack && values.KeepsClosures())
+        {
+            KeepEndedSelf(values, frame);
+        }
         return;
     }
     // The output tags after an `extends` are dropped or skipped (OutputCheckStatement); what
@@ -2493,14 +2496,17 @@ void TemplateRenderer::RenderBody(OutStream& os, RenderContext& values, BlocksSt
         assert(stack);
         parent.node.RenderAsParent(os, values, *stack, name);
     }
-    KeepEndedSelf(values, frame);
+    if (values.KeepsClosures())
+    {
+        KeepEndedSelf(values, frame);
+    }
 }
 
 void TemplateRenderer::KeepEndedSelf(RenderContext& values, const TemplateFrame& frame)
 {
     // An included template whose closures something outside holds: they read `self` once it
     // has ended, as Jinja2's macros read the template's root function's (docs/tasks/0373)
-    if (!values.KeepsClosures() || !frame.blocks || frame.blocks->blocks.empty() || frame.baseDepth != values.GetScopesCount())
+    if (!frame.blocks || frame.blocks->blocks.empty() || frame.baseDepth != values.GetScopesCount())
     {
         return;
     }
