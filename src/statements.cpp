@@ -364,7 +364,21 @@ struct LoopState : ValueObject
         {
             throw TemplateRuntimeError("'loop' is undefined in the loop filter");
         }
-        isLast = !FetchNext(Item(index0 + 1));
+        // Most peeks are `loop.last` in an unfiltered loop: its enumerator alone, in this call
+        if (!lazyFilter && enumerator)
+        {
+            isAdvancing = true;
+            isLast = !(*enumerator)->MoveNext();
+            isAdvancing = false;
+            if (!isLast)
+            {
+                Item(index0 + 1) = (*enumerator)->GetCurrent();
+            }
+        }
+        else
+        {
+            isLast = !FetchNext(Item(index0 + 1));
+        }
         isPeeked = true;
     }
 
@@ -531,18 +545,23 @@ JINJA2CPP_NOINLINE_INLINE std::optional<size_t> LengthOfLoopObject(const Interna
 }
 
 // Fetches the item after `itemIdx` once the body is done with it, through the enumerator
-// alone (a loop that is not filtered lazily)
-JINJA2CPP_ALWAYS_INLINE void FetchAfterBody(LoopState& state, size_t itemIdx)
+// alone (a loop that is not filtered lazily). True when there is one: the caller goes on to
+// it, whose pass marks it not peeked again, so that only the end of the loop is stored
+JINJA2CPP_ALWAYS_INLINE bool FetchAfterBody(LoopState& state, size_t itemIdx)
 {
-    auto& enumerator = state.enumerator;
+    // The loop's enumerator, which only the loop's end lets go of
+    auto& enumerator = *state.enumerator;
     state.isAdvancing = true;
-    state.isLast = !enumerator || !(*enumerator)->MoveNext();
+    const bool hasNext = enumerator->MoveNext();
     state.isAdvancing = false;
-    if (!state.isLast)
+    if (!hasNext)
     {
-        state.Item(itemIdx + 1) = (*enumerator)->GetCurrent();
+        state.isLast = true;
+        state.isPeeked = true;
+        return false;
     }
-    state.isPeeked = true;
+    state.Item(itemIdx + 1) = enumerator->GetCurrent();
+    return true;
 }
 
 // Assigns the current item to the loop target. A plain name is stored straight into its
@@ -1307,9 +1326,9 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
         }
         // The body took items by iterating `loop` (LoopAccessor::GetIteration): go on after them
         itemIdx = state->index0;
-        if (!state->isPeeked)
+        if (!state->isPeeked && FetchAfterBody(*state, itemIdx))
         {
-            FetchAfterBody(*state, itemIdx);
+            continue;
         }
         hasItem = !state->isLast;
     }
@@ -1465,9 +1484,9 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
                 state->isLast = !fetchNext(state->Item(itemIdx + 1));
                 state->isPeeked = true;
             }
-            else
+            else if (FetchAfterBody(*state, itemIdx))
             {
-                FetchAfterBody(*state, itemIdx);
+                continue;
             }
         }
         hasItem = !state->isLast;
