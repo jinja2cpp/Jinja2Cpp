@@ -2127,7 +2127,8 @@ void RenderContext::CaptureClosuresImpl(const FrameEnd& end)
     // The `self` of an included template that ends, made before its blocks went (KeepEndedSelf)
     const auto endedSelf = end.count == 0 ? std::move(m_captures->endedSelf) : nullptr;
     auto& sites = m_captures->sites;
-    std::vector<std::shared_ptr<ClosureCapture>> ending;
+    // Most frames end with one capture, or a few: no allocation on the macro call path
+    SmallVector<std::shared_ptr<ClosureCapture>, 4> ending;
     size_t kept = 0;
     for (auto& site : sites)
     {
