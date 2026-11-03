@@ -6,6 +6,7 @@
 // that library's value type.
 
 #include <jinja2cpp/big_int.h>
+#include <jinja2cpp/config.h>
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/reflected_value.h>
