@@ -19975,6 +19975,46 @@
    "output": "|A2H"
   },
   {
+   "id": "statements.macro_closure_in_set_block_of_call",
+   "template": "{% set ns = namespace(f=none) %}{% macro o(a) %}{% set r %}{% macro m() %}{{ a }}{% endmacro %}{% set ns.f = m %}{% endset %}{% endmacro %}{{ o(1) }}|{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "|1"
+  },
+  {
    "id": "statements.macro_closure_in_scoped_block_of_loop",
    "template": "{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% if loop.first %}{% block b scoped %}{% macro m() %}{{ i }}{% endmacro %}{% set ns.f = m %}{% endblock %}{% endif %}{{ ns.f() }}{% endfor %}|{{ ns.f() }}",
    "context": {

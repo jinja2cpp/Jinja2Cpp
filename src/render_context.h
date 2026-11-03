@@ -1220,6 +1220,16 @@ private:
     // (HomeCall::EnterCaptured); `capture` is the closure's (CaptureOfScope finds it for the
     // scope). Defined in statements.cpp. Throws std::bad_alloc
     void EnterCapturedScope(const ClosureKept& kept, size_t link, std::shared_ptr<ClosureCapture> capture);
+    // Forgets the scopes of what kept closures saw (EnterCapturedScope) from `depth` up, which
+    // a call leaves
+    void DropKeptAbove(size_t depth) noexcept
+    {
+        auto& kept = m_captures->kept;
+        while (!kept.empty() && kept.back().depth > depth)
+        {
+            kept.pop_back();
+        }
+    }
     // Whether something outside the innermost scope, the frame of `capture` that ends, holds
     // one of the closures that keep `capture`: else no call can read the copy. Defined in
     // statements.cpp
@@ -2310,6 +2320,11 @@ private:
     JINJA2CPP_NOINLINE_INLINE static void Leave(RenderContext& context, const HomeCallSaved& saved) // NOLINT(bugprone-exception-escape): leaving scopes and dropping views free memory only
     {
         const size_t scopes = saved.scopes;
+        // The scope of what a kept closure saw, if the call entered one (EnterCapturedScope)
+        if (context.m_captures && !context.m_captures->kept.empty())
+        {
+            context.DropKeptAbove(context.m_parentDepth + scopes);
+        }
         // Left by an exception: the scopes and views the body pushed are still there
         if (context.m_scopes.size() != scopes)
         {

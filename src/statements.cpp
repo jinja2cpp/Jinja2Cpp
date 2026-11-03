@@ -1659,6 +1659,7 @@ InternalValue SetBlockStatement::RenderBody(RenderContext& values)
 {
     auto innerValues = values.Clone(true);
     TargetString result = RenderToString(values.GetRendererCallback(), [&](OutStream& stream) { values.Nodes()[m_body].Render(stream, innerValues); });
+    innerValues.CaptureClosuresAtSoftEnd();
     values.SetLoopControl(innerValues.GetLoopControl());
     return result;
 }

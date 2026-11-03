@@ -537,5 +537,6 @@ CASES = [
     ('macro_closure_defined_in_kept_call', '{% set ns = namespace(f=none, l=[]) %}{% macro o(v) %}{% macro i(w) %}{% macro j() %}{{ v }}{{ w }}{% endmacro %}{% set ns.l = ns.l + [j] %}{% endmacro %}{% set ns.f = i %}{% endmacro %}{{ o(1) }}{{ ns.f(2) }}{{ ns.l[0]() }}'),
     ('macro_closure_nested_call_reads_args', '{% set ns = namespace(f=none) %}{% macro o(v) %}{% set y = 1 %}{% macro k() %}{% macro c() %}{{ v }}{{ y }}{% endmacro %}{% set ns.f = c %}{% endmacro %}{{ k() }}{% set y = 2 %}{{ ns.f() }}{% endmacro %}{{ o(3) }}|{{ ns.f() }}'),
     ('macro_closure_in_block', "{% set ns = namespace(f=none) %}{% set q = 1 %}{% block b %}{% set a = 'A' %}{% macro m() %}{{ a }}{{ q }}{{ h() }}{% endmacro %}{% set ns.f = m %}{% endblock %}{% macro h() %}H{% endmacro %}{% set q = 2 %}|{{ ns.f() }}"),
+    ('macro_closure_in_set_block_of_call', "{% set ns = namespace(f=none) %}{% macro o(a) %}{% set r %}{% macro m() %}{{ a }}{% endmacro %}{% set ns.f = m %}{% endset %}{% endmacro %}{{ o(1) }}|{{ ns.f() }}"),
     ('macro_closure_in_scoped_block_of_loop', '{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% if loop.first %}{% block b scoped %}{% macro m() %}{{ i }}{% endmacro %}{% set ns.f = m %}{% endblock %}{% endif %}{{ ns.f() }}{% endfor %}|{{ ns.f() }}'),
 ]
