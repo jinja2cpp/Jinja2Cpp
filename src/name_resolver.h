@@ -6,6 +6,7 @@
 #include "small_vector.h"
 #include "span.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -97,16 +98,41 @@ public:
     void AddStores(FrameId frame, Span<const TargetNode> target, const NodeArena& nodes) { AddStores(frame, target, nodes, m_inBranch ? StoreKind::Branch : StoreKind::Store); }
 
     [[nodiscard]] FrameId Current() const { return m_current; }
-    // The hashes of the names read so far, wherever: by a name expression (AddUse), or as the
-    // namespace of a `set ns.attr` target (AddStores). Two marks taken around a macro give the
-    // names its parameters and body read (MacroStatement::SetBodyReads)
-    [[nodiscard]] std::uint32_t ReadMark() const { return static_cast<std::uint32_t>(m_readHashes.size()); }
-    [[nodiscard]] Span<const std::size_t> ReadsSince(std::uint32_t mark) const { return Span<const std::size_t>(m_readHashes.data() + mark, m_readHashes.size() - mark); }
+    // The hashes of the names read inside a macro or call block, wherever: by a name expression
+    // (AddUse), or as the namespace of a `set ns.attr` target (AddStores). BeginReads before its
+    // parameters and EndReads after its body give the names they read (MacroStatement::SetBodyReads);
+    // outside every macro nothing is recorded
+    [[nodiscard]] std::uint32_t BeginReads()
+    {
+        if (m_readsOpen++ == 0 && m_readHashes.capacity() == 0)
+        {
+            m_readHashes.reserve(32);
+        }
+        return static_cast<std::uint32_t>(m_readHashes.size());
+    }
+    // The reads since `mark`, sorted and unique in place: the enclosing macros read them too
+    [[nodiscard]] Span<const std::size_t> EndReads(std::uint32_t mark)
+    {
+        const auto first = m_readHashes.begin() + mark;
+        std::sort(first, m_readHashes.end());
+        m_readHashes.erase(std::unique(first, m_readHashes.end()), m_readHashes.end());
+        if (m_readsOpen != 0)
+        {
+            --m_readsOpen;
+        }
+        return Span<const std::size_t>(m_readHashes.data() + mark, m_readHashes.size() - mark);
+    }
     // A read of the name with hash `hash` that no name expression makes: a filter or test that
     // falls back to a value of its name, the gettext function a `trans` calls
-    void AddRead(std::size_t hash) { m_readHashes.push_back(hash); }
+    void AddRead(std::size_t hash)
+    {
+        if (m_readsOpen != 0)
+        {
+            m_readHashes.push_back(hash);
+        }
+    }
     // A read of every name in sight: an include or import with context, `applymacro`, a block
-    void AddReadOfAll() { m_readHashes.push_back(AllNames); }
+    void AddReadOfAll() { AddRead(AllNames); }
     // The hash AddReadOfAll records; a name of the same hash only keeps a closure's every name
     static constexpr std::size_t AllNames = ~std::size_t{ 0 };
     void SetCurrent(FrameId frame) { m_current = frame; }
@@ -116,7 +142,7 @@ public:
     // A name expression made in the current frame, of the name with hash `hash`
     void AddUse(NodeRef<ValueRefExpression> ref, std::size_t hash)
     {
-        m_readHashes.push_back(hash);
+        AddRead(hash);
         if (m_current == NoFrame)
         {
             return;
@@ -286,8 +312,9 @@ private:
     // The names stored in frames, in parse order; most templates store a few
     SmallVector<Store, 8, SmallVectorDoubling> m_stores;
     std::vector<EntryName> m_entryNames;
-    // ReadMark
+    // BeginReads
     std::vector<std::size_t> m_readHashes;
+    std::uint32_t m_readsOpen = 0;
     FrameId m_current = NoFrame;
     bool m_inBranch = false;
     bool m_hasSlots = false;

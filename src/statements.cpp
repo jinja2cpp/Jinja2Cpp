@@ -2087,10 +2087,7 @@ void ClosureCapture::AddReads(Span<const std::size_t> hashes)
 
 void MacroStatement::SetBodyReads(NodeArena& nodes, Span<const std::size_t> reads)
 {
-    std::vector<std::size_t> sorted(reads.begin(), reads.end());
-    std::sort(sorted.begin(), sorted.end());
-    sorted.erase(std::unique(sorted.begin(), sorted.end()), sorted.end());
-    m_bodyReads = nodes.MakeSpan(sorted);
+    m_bodyReads = nodes.MakeSpan(reads);
 }
 
 std::shared_ptr<ClosureCapture> RenderContext::CaptureOfScope(size_t depth)

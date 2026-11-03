@@ -796,7 +796,7 @@ public:
         m_bodyNameRefs = after.nameRefs - before.nameRefs;
         m_bodyReachesContext = after.contextNodes - before.contextNodes != 1;
     }
-    // The hashes of the names the parameters' defaults and the body read (NameResolver::ReadsSince):
+    // The hashes of the names the parameters' defaults and the body read (NameResolver::EndReads, sorted and unique):
     // what a closure keeps of the frames it was defined in (ClosureCapture::reads, 0375).
     // Defined in statements.cpp
     void SetBodyReads(NodeArena& nodes, Span<const std::size_t> reads);

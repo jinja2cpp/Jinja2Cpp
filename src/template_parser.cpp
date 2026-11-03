@@ -969,7 +969,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     std::string macroName = lexer.GetAsString(nextTok);
     // The parameters' defaults count with the body
     const auto marks = m_nodes.Marks();
-    const auto useMark = m_names.ReadMark();
+    const auto useMark = m_names.BeginReads();
     const auto outerFrame = m_names.Current();
     // In the arena now: the resolver keeps a view of the name
     const auto nameText = m_nodes.MakeText(macroName);
@@ -1143,7 +1143,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
     }
     renderer.SetMainBody(TakeBody(info));
     renderer.SetBodyMarks(info.marks, m_nodes.Marks());
-    renderer.SetBodyReads(m_nodes, m_names.ReadsSince(info.useMark));
+    renderer.SetBodyReads(m_nodes, m_names.EndReads(info.useMark));
 
     if (AtTopLevel(statementsInfo))
     {
@@ -1202,7 +1202,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     MacroParamsInfo callbackParams;
     // The parameters' defaults count with the body, the arguments of the call do not
     auto marks = m_nodes.Marks();
-    const auto useMark = m_names.ReadMark();
+    const auto useMark = m_names.BeginReads();
 
     if (lexer.EatIfEqual('('))
     {
@@ -1279,7 +1279,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner&, Statem
     }
     renderer.SetMainBody(TakeBody(info));
     renderer.SetBodyMarks(info.marks, m_nodes.Marks());
-    renderer.SetBodyReads(m_nodes, m_names.ReadsSince(info.useMark));
+    renderer.SetBodyReads(m_nodes, m_names.EndReads(info.useMark));
 
     m_bodies.Add(info.renderer, info.tagOffset);
 
