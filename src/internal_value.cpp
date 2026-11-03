@@ -2403,13 +2403,11 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
     {
     public:
         Adapter(InternalValueList&& values, IteratorKind iteratorKind)
-            : m_iteratorKind(iteratorKind)
-            , m_values(std::move(values))
+            : m_values(std::move(values))
         {
             SetTraversable();
+            SetIteratorKind(iteratorKind);
         }
-
-        [[nodiscard]] IteratorKind GetIteratorKind() const override { return m_iteratorKind; }
 
         [[nodiscard]] size_t GetItemsCountImpl() const { return m_values.Get().size(); }
         [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
@@ -2465,8 +2463,6 @@ ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iterato
         }
 
     private:
-        // Before m_values: in the tail padding of the base, where the ABI reuses it
-        IteratorKind m_iteratorKind;
         BySharedMutable<InternalValueList> m_values;
     };
 

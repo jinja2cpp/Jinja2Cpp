@@ -41,10 +41,10 @@ and a template shared with Python (chat templates) that works here but fails the
 worse surprise; `|list` fixes it in both engines.
 
 **As built.** `ListAdapter::CreateIterator(items, IteratorKind)` makes the same shared list
-adapter with an iterator kind (`IListAccessor::GetIteratorKind`, one byte in the base's tail
-padding). The lazy filters mark their results `Generator`; `reverse` marks `ListReverse`,
+adapter with an iterator kind (three bits of `ValueObject`'s flags, read without a virtual call).
+The lazy filters mark their results `Generator`; `reverse` marks `ListReverse`,
 `TupleReverse`, `RangeIterator` or `DictReverseKey` by its input, and reverses an iterator into
-a plain list, as Jinja2's `list(value)` fallback does. A marked list refuses `|last`
+a plain list, as Jinja2's `list(value)` fallback does; so is reverse of a host object without reversed(). A marked list refuses `|last`
 (not reversible), `|length`, `|count` and `|random` (no len()) and slices (not subscriptable),
 indexes to undefined (Jinja2 swallows getitem's TypeError), is no sequence, has no list methods,
 and `PythonTypeName` names its Python type. Iteration, `|first`, `|list`, `|join`, `|sort`,

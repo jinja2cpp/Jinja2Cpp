@@ -105,6 +105,19 @@ struct GenericAccessorAccess
 };
 } // namespace detail
 
+// A list value that is a Python iterator, not a sequence: the generator a lazy filter returns
+// (map, select, batch, ...) or what reversed() makes of a sequence. It iterates as a list does
+// but has no len(), reversed(), slices or list methods (docs/tasks/0383)
+enum class IteratorKind : uint8_t
+{
+    None,
+    Generator,
+    ListReverse,
+    TupleReverse,
+    RangeIterator,
+    DictReverseKey
+};
+
 // The base of every object a value owns: a long string, a list or map accessor, a pair, a
 // callable, the info of an undefined value. Values share such objects through one
 // IntrusivePtr (docs/tasks/0140), so the rest of a value is trivially copyable and
@@ -153,6 +166,9 @@ public:
     [[nodiscard]] bool IsGlobalData() const noexcept { return (m_flags & GlobalFlag) != 0; }
     // Marks the object as IsGlobalData says, before anything else shares it
     void MarkGlobalData() noexcept { m_flags |= GlobalFlag; }
+    // The kind of a list accessor that is a Python iterator (ListAdapter::CreateIterator), None for others;
+    // kept in the flags so that indexing a list reads it without a virtual call
+    [[nodiscard]] IteratorKind GetIteratorKind() const noexcept { return static_cast<IteratorKind>((m_flags & IteratorMask) >> IteratorShift); }
     // The thread's snapshot of the globals reaches the object: a global's own adapter, or an item
     // in the block of item adapters such an adapter reads now, whose link to a cell is listed in
     // the cell (CellLink, docs/tasks/0346). Set before the object is shared; cleared on the
@@ -189,12 +205,16 @@ protected:
     // Set by the constructor of a class whose Traverse visits something
     void SetTraversable() noexcept { m_flags |= TraverseFlag; }
     void SetInSnapshot(bool inSnapshot) const noexcept { m_inSnapshot = inSnapshot; }
+    // Set by the constructor, before anything shares the object
+    void SetIteratorKind(IteratorKind kind) noexcept { m_flags = static_cast<uint8_t>((m_flags & ~IteratorMask) | (static_cast<uint8_t>(kind) << IteratorShift)); }
 
 private:
     static constexpr uint8_t CloneFlag = 1;
     static constexpr uint8_t AnchorFlag = 2;
     static constexpr uint8_t TraverseFlag = 4;
     static constexpr uint8_t GlobalFlag = 8;
+    static constexpr uint8_t IteratorShift = 4;
+    static constexpr uint8_t IteratorMask = 0x70;
     mutable std::atomic<unsigned> m_refCount{ 0 };
     uint8_t m_flags = 0;
     // In the padding after m_flags, so that the object keeps its size
@@ -556,18 +576,7 @@ struct IListAccessorEnumerator : virtual IComparable
 
 using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 
-// A list value that is a Python iterator, not a sequence: the generator a lazy filter returns
-// (map, select, batch, ...) or what reversed() makes of a sequence. It iterates as a list does
-// but has no len(), reversed(), slices or list methods (docs/tasks/0383)
-enum class IteratorKind : uint8_t
-{
-    None,
-    Generator,
-    ListReverse,
-    TupleReverse,
-    RangeIterator,
-    DictReverseKey
-};
+static_assert(static_cast<uint8_t>(IteratorKind::DictReverseKey) < 8, "IteratorKind fits three bits of ValueObject's flags");
 
 // The Python type of an iterator (generator, list_reverseiterator, ...), null for None
 const char* IteratorTypeName(IteratorKind kind) noexcept;
@@ -620,8 +629,6 @@ struct IListAccessor : ValueObject
     [[nodiscard]] virtual const void* GetIdentity() const { return this; }
     // Set only for the lists made by range()
     [[nodiscard]] virtual const RangeInfo* GetRangeInfo() const { return nullptr; }
-    // Set only for a list that is an iterator (ListAdapter::CreateIterator)
-    [[nodiscard]] virtual IteratorKind GetIteratorKind() const { return IteratorKind::None; }
     // The items of a list the template owns (shared by every copy of the value, as a
     // Python list is), so that methods like append() can change them; null for borrowed
     // and computed lists (docs/tasks/0020)

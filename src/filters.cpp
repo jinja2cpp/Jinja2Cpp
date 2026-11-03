@@ -974,9 +974,10 @@ InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
                                                                                            : IteratorKind::ListReverse;
         }
     }
-    else if (const auto map = AsMap(baseVal); map && map->GetAttrPolicy() == MapAttrPolicy::KeysOnly)
+    else if (const auto map = AsMap(baseVal); map && map->GetAttrPolicy() != MapAttrPolicy::MethodsFirst && map->GetAttrPolicy() != MapAttrPolicy::KeysFirst)
     {
-        // An object that iterates (loop) has no __reversed__ either
+        // An object that iterates (loop) or one of the host language without reversed() has no
+        // __reversed__: list() of it is reversed
         kind = IteratorKind::None;
     }
 

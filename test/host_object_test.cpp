@@ -415,6 +415,8 @@ TEST(HostObjectTest, LastAndReverseAskReversed)
     // last is next(reversed(x)): an iterator is not reversible; reverse falls back to list(x)
     EXPECT_NE(std::string::npos, Render("{{ it|last }}", params).find("'Toy' object is not reversible"));
     EXPECT_EQ("['b', 1]", Render("{{ it|reverse|list }}", params));
+    // That fallback is a list, not a reversed() iterator (docs/tasks/0383)
+    EXPECT_EQ("1|2", Render("{{ it|reverse|last }}|{{ it|reverse|length }}", params));
     EXPECT_NE(std::wstring::npos, RenderW(L"{{ it|last }}", params).find(L"'Toy' object is not reversible"));
 }
 
