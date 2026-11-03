@@ -438,4 +438,6 @@ CASES = [
     ("urlencode_undefined_strict", "[{{ missing|urlencode }}]", {"env": {"undefined": "strict"}}),
     # task 0382: Jinja2 iterates `loop` (what is left of the loop)
     ("urlencode_loop", "{% for i in [1] %}[{{ loop|urlencode }}]{% endfor %}"),
+    ("urlencode_loop_rest", "{% for i in [1, 2, 3] %}{% if loop.first %}[{{ loop|urlencode }}]{% endif %}{{ loop.index }}{{ i }};{% endfor %}"),
+    ("urlencode_loop_rest_lists", "{% for i in [[1, 2], [3, 4], [5, 6]] %}{% if loop.first %}[{{ loop|urlencode }}]{% endif %}{{ loop.index }}{{ i }};{% endfor %}"),
 ]

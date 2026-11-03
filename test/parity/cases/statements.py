@@ -273,6 +273,12 @@ CASES = [
     ("do", "{% do l.append(4) %}{% for i in l %}{{ i }},{% endfor %}", DO),
     # A list changed while it is iterated (0049 P3, 0304): Jinja2 fetches the next item lazily
     ("for_remove_current_item", "{% set q = [1, 2, 3] %}{% for x in q %}{{ x }}{% do q.remove(x) %}{% endfor %}", DO),
+    # task 0304: the next item is fetched after the body, as Jinja2's LoopContext does; recursive
+    # loops keep their names in scopes, the others in slots
+    ("for_remove_current_item_recursive", "{% set q = [1, 2, 3] %}{% for x in q recursive %}{{ x }}{% do q.remove(x) %}{% endfor %}", DO),
+    ("for_append_in_body", "{% set q = [1, 2] %}{% for x in q %}{{ x }}{% if x < 4 %}{% do q.append(x + 2) %}{% endif %}{% endfor %}", DO),
+    ("for_filter_sees_body_write_recursive", "{% set ns = namespace(n=0) %}{% for x in [1, 2, 3, 4] if x > ns.n recursive %}{{ x }}{% set ns.n = x + 1 %}{% endfor %}"),
+    ("for_filter_sees_body_write", "{% set ns = namespace(n=0) %}{% for x in [1, 2, 3, 4] if x > ns.n %}{{ x }}{% set ns.n = x + 1 %}{% endfor %}"),
     ("for_pop_context_list", "{% for i in l %}{% do l.pop() %}{{ i }}{% endfor %}|{{ l }}", DO),
     ("for_length_after_append", "{% set q = [1, 2] %}{% for x in q %}{{ loop.length }}{{ loop.revindex }}{{ loop.last }}{% if loop.first %}{% do q.append(3) %}{% endif %};{% endfor %}", DO),
     ("do_without_extension", "{% do l.append(4) %}"),
@@ -319,6 +325,9 @@ CASES = [
     ("loop_items_refused", "{% for x in [1] %}{{ loop|items|list }}{% endfor %}"),
     ("loop_tojson_refused", "{% for x in [1] %}{{ loop|tojson }}{% endfor %}"),
     ("loop_iter_inner_body_reads_index", "{% for x in 'abcd' %}{% for y in loop %}{{ y[1].index }}{{ y[0] }}{% if y[0] == 'c' %}{% break %}{% endif %}{% endfor %}{{ loop.index }}{{ x }}{{ loop.last }};{% endfor %}", {"env": {"extensions": ["loopcontrols"]}}),
+    ("loop_iter_inner_length", "{% for x in [1, 2, 3] %}{% for a in loop %}{{ loop.length }}{{ loop.index }}{{ loop }}{% endfor %};{% endfor %}"),
+    ("loop_iter_item_loop_again", "{% for x in [1, 2, 3, 4] %}{% for a in loop %}{{ a[0] }}[{{ a[1]|map(attribute=0)|join(',') }}]{% endfor %};{% endfor %}"),
+    ("loop_iter_inner_break_recursive", "{% for x in 'abcd' recursive %}{% for y in loop %}{{ y[1].index }}{{ y[0] }}{% if y[0] == 'c' %}{% break %}{% endif %}{% endfor %}{{ loop.index }}{{ x }}{{ loop.last }};{% endfor %}", LC),
     ("loop_iter_filtered", "{% for x in [1, 2, 3, 4] if x > 1 %}{{ x }}{{ loop|map(attribute=0)|list }}{{ loop.index }};{% endfor %}"),
     ("loop_iter_twice", "{% for x in [1, 2] %}{{ loop|list|length }}{{ loop|list|length }}{{ loop.index }}{{ loop.last }};{% else %}E{% endfor %}"),
     ("loop_has_no_dict_methods", "{% for x in [1] %}{{ loop.items is defined }}{{ loop['index'] is defined }}{{ loop.keys is defined }}{% endfor %}"),

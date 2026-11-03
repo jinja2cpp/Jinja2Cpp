@@ -10514,6 +10514,174 @@
    "output": "13"
   },
   {
+   "id": "statements.for_remove_current_item_recursive",
+   "template": "{% set q = [1, 2, 3] %}{% for x in q recursive %}{{ x }}{% do q.remove(x) %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "13"
+  },
+  {
+   "id": "statements.for_append_in_body",
+   "template": "{% set q = [1, 2] %}{% for x in q %}{{ x }}{% if x < 4 %}{% do q.append(x + 2) %}{% endif %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "12345"
+  },
+  {
+   "id": "statements.for_filter_sees_body_write_recursive",
+   "template": "{% set ns = namespace(n=0) %}{% for x in [1, 2, 3, 4] if x > ns.n recursive %}{{ x }}{% set ns.n = x + 1 %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "13"
+  },
+  {
+   "id": "statements.for_filter_sees_body_write",
+   "template": "{% set ns = namespace(n=0) %}{% for x in [1, 2, 3, 4] if x > ns.n %}{{ x }}{% set ns.n = x + 1 %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "13"
+  },
+  {
    "id": "statements.for_pop_context_list",
    "template": "{% for i in l %}{% do l.pop() %}{{ i }}{% endfor %}|{{ l }}",
    "context": {
@@ -12232,6 +12400,130 @@
   {
    "id": "statements.loop_iter_inner_body_reads_index",
    "template": "{% for x in 'abcd' %}{% for y in loop %}{{ y[1].index }}{{ y[0] }}{% if y[0] == 'c' %}{% break %}{% endif %}{% endfor %}{{ loop.index }}{{ x }}{{ loop.last }};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "2b3c3aFalse;4dTrue;"
+  },
+  {
+   "id": "statements.loop_iter_inner_length",
+   "template": "{% for x in [1, 2, 3] %}{% for a in loop %}{{ loop.length }}{{ loop.index }}{{ loop }}{% endfor %};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "31<LoopContext 1/3>32<LoopContext 2/3>;"
+  },
+  {
+   "id": "statements.loop_iter_item_loop_again",
+   "template": "{% for x in [1, 2, 3, 4] %}{% for a in loop %}{{ a[0] }}[{{ a[1]|map(attribute=0)|join(',') }}]{% endfor %};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "2[3,4];"
+  },
+  {
+   "id": "statements.loop_iter_inner_break_recursive",
+   "template": "{% for x in 'abcd' recursive %}{% for y in loop %}{{ y[1].index }}{{ y[0] }}{% if y[0] == 'c' %}{% break %}{% endif %}{% endfor %}{{ loop.index }}{{ x }}{{ loop.last }};{% endfor %}",
    "context": {
     "l": [
      3,

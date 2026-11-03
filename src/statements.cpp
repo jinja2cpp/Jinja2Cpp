@@ -516,6 +516,35 @@ std::string LoopCycleCell::Repr() const
     return "<LoopContext " + std::to_string(index0 + 1) + "/?>";
 }
 
+// A loop over `loop` takes its length from len(loop) as Jinja2's LoopContext.length does:
+// the length of the loop iterated, not the number of items it has left (docs/tasks/0304)
+JINJA2CPP_NOINLINE_INLINE std::optional<size_t> LengthOfLoopObject(const InternalValue& loopVal)
+{
+    const auto map = AsMap(loopVal);
+    InternalValue length;
+    if (!map || !map->Iterates() || !map->GetLoopAttr(LoopAttr::Length, length))
+    {
+        return std::nullopt;
+    }
+    const auto* count = GetIf<int64_t>(&length);
+    return count ? std::optional<size_t>(static_cast<size_t>(*count)) : std::nullopt;
+}
+
+// Fetches the item after `itemIdx` once the body is done with it, through the enumerator
+// alone (a loop that is not filtered lazily)
+JINJA2CPP_ALWAYS_INLINE void FetchAfterBody(LoopState& state, size_t itemIdx)
+{
+    auto& enumerator = state.enumerator;
+    state.isAdvancing = true;
+    state.isLast = !enumerator || !(*enumerator)->MoveNext();
+    state.isAdvancing = false;
+    if (!state.isLast)
+    {
+        state.Item(itemIdx + 1) = (*enumerator)->GetCurrent();
+    }
+    state.isPeeked = true;
+}
+
 // Assigns the current item to the loop target. A plain name is stored straight into its
 // slot, made by the first item so that the `else` body of an empty loop does not see the
 // name. The map keeps its nodes in place, so the slot survives other names being added
@@ -1238,10 +1267,16 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     {
         loopItems.RebindEnumerator(enumerator);
         state->listSize = loopItems.GetSize();
+        if (!state->listSize)
+        {
+            state->listSize = LengthOfLoopObject(loopVal);
+        }
     }
 
     bool loopRendered = false;
-    // These loops fetch the next item before the body runs, so the filter runs one item ahead
+    // The next item is fetched after the body, or when the body peeks (`loop.last`), as
+    // Jinja2's LoopContext does: a body that changes the list or iterates `loop` sees the
+    // items Jinja2's does (docs/tasks/0304). A filtered loop runs its filter then too
     bool hasItem = state->FetchNext(state->Item(0));
     // One scope for the body, emptied after each pass, so `set` in the body stays local
     // to one iteration without a map being made for each
@@ -1251,15 +1286,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     for (size_t itemIdx = 0; hasItem; ++itemIdx)
     {
         state->SetIndex(itemIdx);
-        state->isAdvancing = true;
-        state->isLast = !(*enumerator)->MoveNext();
-        state->isAdvancing = false;
-        state->isPeeked = true;
-        if (!state->isLast)
-        {
-            state->Item(itemIdx + 1) = (*enumerator)->GetCurrent();
-        }
-        hasItem = !state->isLast;
+        state->isPeeked = false;
         const auto& curValue = state->Item(itemIdx);
 
         AssignLoopTarget(target, curValue, context, targetSlots, values);
@@ -1279,12 +1306,12 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
             loopRendered = true;
         }
         // The body took items by iterating `loop` (LoopAccessor::GetIteration): go on after them
-        if (state->index0 != itemIdx)
+        itemIdx = state->index0;
+        if (!state->isPeeked)
         {
-            itemIdx = state->index0;
-            state->Peek();
-            hasItem = !state->isLast;
+            FetchAfterBody(*state, itemIdx);
         }
+        hasItem = !state->isLast;
     }
     values.ExitScope(state->bodyScope);
 
@@ -1354,6 +1381,10 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     else
     {
         state->listSize = loopItems.GetSize();
+        if (!state->listSize)
+        {
+            state->listSize = LengthOfLoopObject(loopVal);
+        }
     }
     // The next item, filtered in place while the filter is still lazy
     auto fetchNext = [this, &state, &values, frameSlots, slots, names](InternalValue& item) {
@@ -1392,18 +1423,8 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     for (size_t itemIdx = 0; hasItem; ++itemIdx)
     {
         state->SetIndex(itemIdx);
-        // An unfiltered loop, or one whose rest is collected, fetches the next item first
-        state->isPeeked = state->lazyFilter == nullptr;
-        if (state->isPeeked)
-        {
-            state->isAdvancing = true;
-            state->isLast = !(*enumerator)->MoveNext();
-            state->isAdvancing = false;
-            if (!state->isLast)
-            {
-                state->Item(itemIdx + 1) = (*enumerator)->GetCurrent();
-            }
-        }
+        // The next item is fetched after the body, or when the body peeks (docs/tasks/0304)
+        state->isPeeked = false;
         const auto& curValue = state->Item(itemIdx);
 
         if (!root.isTuple)
@@ -1439,8 +1460,15 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
         itemIdx = state->index0;
         if (!state->isPeeked)
         {
-            state->isLast = !fetchNext(state->Item(itemIdx + 1));
-            state->isPeeked = true;
+            if (state->lazyFilter)
+            {
+                state->isLast = !fetchNext(state->Item(itemIdx + 1));
+                state->isPeeked = true;
+            }
+            else
+            {
+                FetchAfterBody(*state, itemIdx);
+            }
         }
         hasItem = !state->isLast;
     }
