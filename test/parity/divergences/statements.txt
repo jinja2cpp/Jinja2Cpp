@@ -6,7 +6,5 @@ statements.macro_escapes_its_loop      output      0165 deliberate: a closure ca
 statements.block_reference_new_each_read output    0214 deliberate: self.b is one stored callable, so it equals itself; Jinja2 allocates a new BlockReference on each read
 statements.loop_iter_inner_body_reads_index output    0304 a for loop over `loop` fetches its next item before the body runs, advancing the outer loop early; Jinja2's LoopContext fetches lazily
 statements.for_remove_current_item     output      0304 a for loop fetches its next item before the body runs: removing the current item visits a different set of items; Jinja2 fetches lazily
-statements.macro_closure_in_loop_of_call output 0373 a macro defined in a loop of a macro call and kept past the call loses the call's names too, not only the loop's (Jinja2 prints `missing` for the loop variable, then the call's names)
-statements.macro_closure_enclosing_call_live output 0373 a closure from a nested frame reads the enclosing macro call's names as copied when the nested frame ended, not live while that call runs
-statements.macro_closure_enclosing_loop_live output 0373 a closure from a nested frame reads the enclosing loop's names as copied when the nested frame ended, not live in the next iteration
+statements.macro_closure_in_loop_of_call output 0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
 statements.loop_cycle_repr_after_break_lazy output      0366 a loop.cycle kept past a `break` out of a lazily filtered loop prints its length as ?; Jinja2 iterates the rest to count it

@@ -320,6 +320,8 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         // allocates; when that fails, the cycles noted so far are still freed and the rest leak.
         // The cells freeze first, noted to the collector: a cycle through one is then one among
         // the module's values (docs/tasks/0331)
+        // What only the copies the closures kept held is freed rather than counted as held
+        kept.Clear();
         CycleCollector cycles;
         cells.Release(&cycles);
         if (module)
@@ -433,7 +435,7 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         try
         {
             // First, so that it ends last: when nothing of the call holds values any more
-            ModuleCallCollector cycles(cells);
+            ModuleCallCollector cycles(cells, kept);
             // Then what the call loads, which its collector sees go
             const CallScope callScope(*callback);
             // Then the module's context as the call found it, which a failed call would leave
@@ -508,6 +510,9 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
     // The module's copies of the host's data it wrote to: its values live across its calls
     // (docs/tasks/0049). Released before the module's values, by the destructor
     BorrowedCells cells;
+    // What the closures its calls keep past their frames hold (CycleCollector::KeepUntilEnd):
+    // the module's values may store them. Released first by the destructor
+    KeptObjects kept;
     // Calls of the exports take turns: the context is not shared by concurrent calls
     std::recursive_mutex mutex;
 };
@@ -550,7 +555,7 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
     BasicTemplateModule<CharT> result;
     try
     {
-        ModuleCallCollector cycles(state->cells);
+        ModuleCallCollector cycles(state->cells, state->kept);
         const auto limitsScope = state->MakeLimitsScope();
         // Into result.body, which outlives the limits that keep a pointer to it
         state->Render(result.body);

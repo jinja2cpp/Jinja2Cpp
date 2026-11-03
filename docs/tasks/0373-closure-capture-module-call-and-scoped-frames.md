@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0326, 0323]
@@ -70,3 +70,16 @@ frees the dead ones.
 **Done when.** The corpus rows above match and their divergence lines are deleted, a module-state
 test pins case 1, and the memory bound of 0326 (copies freed once no closure outside them
 holds the capture) still holds, and the case 4 loop stays in constant memory.
+
+**Resolution.** Each scope a kept closure sees has a `ClosureCapture`, shared by the closures
+defined there and linked to the frame below it (`outer`); a call after the closure's scope has
+ended runs on the first frame still there, linked to it, seeing the copies of the ended ones
+(`ClosureSite::ResolveKept`). Macro calls, blocks and included templates copy their own names
+when they end (`FrameEnd`); loops and `with`, `filter` and `autoescape` bodies end with names
+that read as undefined, the deliberate 0165 divergence (Jinja2 prints `missing`), so
+`statements.macro_closure_in_loop_of_call` and `loader.include_with_macro_kept` stay on the
+allow-list as deliberate. Items 1, 2, 3, 5 and 6 are fixed; a module call's copies belong to
+the module (`KeptObjects`), and an ended include's closures read its `self` from their copy.
+Item 4 is split: 0375 frees the cycle when the stored closure does not read the container,
+0386 the rest.
+

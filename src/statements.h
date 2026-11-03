@@ -546,6 +546,9 @@ public:
     // `self` prints (TemplateImpl::SelfName)
     void RenderNamed(OutStream& os, RenderContext& values, std::string_view name);
     void Render(OutStream& os, RenderContext& values) override { RenderNamed(os, values, {}); }
+    // Gives `values`, an included template's context, the `self` of `frame` for the closures
+    // kept past the include (RenderContext::KeepEndedSelf)
+    static void KeepEndedSelf(RenderContext& values, const TemplateFrame& frame);
     // Renders the template as the parent of the one rendering now: its blocks go below
     // the child's on the child's `stack`; `childName` is the name of the first template
     // of the chain, which `self` prints in every template of it, as in Jinja2
