@@ -1796,10 +1796,74 @@ void CopyCaptured(RenderContext& context, const ClosureSite& site, const Closure
 // stored), else in the template running then. The block sees the names of the template's top
 // level, `site`, wherever it is called from, as a block function sees its template's context
 // in Jinja2 (docs/tasks/0194). Once the stack has ended, the call renders the blocks it held
-// (SelfBlocks), seeing the names `site` still has
-// `keepsCapture` false: the `self` does not keep what the site keeps, which keeps it (the copy
-// of an ended include's names, RenderContext::KeepEndedSelf)
-InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, bool keepsCapture = true)
+// (SelfBlocks), seeing the names `site` still has. `keepsCapture` false: the `self` does not
+// keep what the site keeps, which keeps it (the copy of an ended include's names,
+// RenderContext::KeepEndedSelf)
+InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, bool keepsCapture = true);
+
+// A block of `self` (MakeTemplateSelf), named `name`: renders it in the template `self` came
+// from while that runs, else where the comment of MakeTemplateSelf says
+struct SelfBlockCall
+{
+    // `self` may outlive the stack and the trees its names are in
+    std::string name;
+    std::shared_ptr<SelfBlocks> owner;
+    ClosureSite site;
+    std::string_view templateName;
+
+    void operator()(const CallParams& params, OutStream& stream, RenderContext& context) const
+    {
+        CheckBlockCallParams(params);
+        auto* curFrame = context.GetTemplateFrame();
+        TemplateFrame* frame = nullptr;
+        for (auto* f = curFrame; f && owner->live; f = f->outer)
+        {
+            if (f->blocks == owner->live)
+            {
+                frame = f;
+                break;
+            }
+        }
+        const auto home = site.Resolve(context);
+        // A frame of a context that is alive is in place: its guard restores the one before
+        if (!frame && owner->live)
+        {
+            if (auto* homeFrame = home.context->GetTemplateFrame(); homeFrame && homeFrame->blocks == owner->live)
+            {
+                frame = homeFrame;
+            }
+        }
+        RenderContext blockContext(*home.context, home.link);
+        // Its template has ended: the block sees what that saw (ClosureCapture, 0323)
+        CopyCaptured(blockContext, site, home);
+        // The template has ended (an include that stored `self`): its blocks, in a frame
+        // of their own
+        TemplateFrame endedFrame;
+        if (!frame && !owner->live)
+        {
+            endedFrame.blocks = &owner->ended;
+            endedFrame.baseDepth = home.link;
+            endedFrame.name = templateName;
+            endedFrame.outer = curFrame;
+            // Its scopes have ended too: a `self` in the block renders the ended blocks,
+            // seeing what this one sees
+            endedFrame.self = MakeTemplateSelf(owner->ended, site, templateName);
+            frame = &endedFrame;
+        }
+        if (!frame)
+        {
+            if (!curFrame || !curFrame->blocks)
+            {
+                return;
+            }
+            frame = curFrame;
+        }
+        blockContext.SetTemplateFrame(frame);
+        RenderBlockAt(*frame->blocks, name, 0, stream, blockContext);
+    }
+};
+
+InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site, std::string_view templateName, bool keepsCapture)
 {
     // What the site keeps (ClosureSite::CaptureOnEnd), while the `self` lives; the caller holds it
     const std::shared_ptr<const void> keepAlive = keepsCapture ? site.Capture() : nullptr;
@@ -1810,58 +1874,8 @@ InternalValue MakeTemplateSelf(const BlocksStack& stack, const ClosureSite& site
     }
     for (const auto& block : stack.blocks)
     {
-        // `self` may outlive the stack and the trees its names are in
         std::string blockName(block.first);
-        self[blockName] = MakeWrapped(WithKeepAlive(Callable(Callable::Macro, [name = blockName, owner = stack.self, site, templateName](const CallParams& params, OutStream& stream, RenderContext& context) {
-                                                        CheckBlockCallParams(params);
-                                                        auto* curFrame = context.GetTemplateFrame();
-                                                        TemplateFrame* frame = nullptr;
-                                                        for (auto* f = curFrame; f && owner->live; f = f->outer)
-                                                        {
-                                                            if (f->blocks == owner->live)
-                                                            {
-                                                                frame = f;
-                                                                break;
-                                                            }
-                                                        }
-                                                        const auto home = site.Resolve(context);
-                                                        // A frame of a context that is alive is in place: its guard restores the one before
-                                                        if (!frame && owner->live)
-                                                        {
-                                                            if (auto* homeFrame = home.context->GetTemplateFrame(); homeFrame && homeFrame->blocks == owner->live)
-                                                            {
-                                                                frame = homeFrame;
-                                                            }
-                                                        }
-                                                        RenderContext blockContext(*home.context, home.link);
-                                                        // Its template has ended: the block sees what that saw (ClosureCapture, 0323)
-                                                        CopyCaptured(blockContext, site, home);
-                                                        // The template has ended (an include that stored `self`): its blocks, in a frame
-                                                        // of their own
-                                                        TemplateFrame endedFrame;
-                                                        if (!frame && !owner->live)
-                                                        {
-                                                            endedFrame.blocks = &owner->ended;
-                                                            endedFrame.baseDepth = home.link;
-                                                            endedFrame.name = templateName;
-                                                            endedFrame.outer = curFrame;
-                                                            // Its scopes have ended too: a `self` in the block renders the ended blocks,
-                                                            // seeing what this one sees
-                                                            endedFrame.self = MakeTemplateSelf(owner->ended, site, templateName);
-                                                            frame = &endedFrame;
-                                                        }
-                                                        if (!frame)
-                                                        {
-                                                            if (!curFrame || !curFrame->blocks)
-                                                            {
-                                                                return;
-                                                            }
-                                                            frame = curFrame;
-                                                        }
-                                                        blockContext.SetTemplateFrame(frame);
-                                                        RenderBlockAt(*frame->blocks, name, 0, stream, blockContext);
-                                                    }),
-                                                    keepAlive));
+        self[blockName] = MakeWrapped(WithKeepAlive(Callable(Callable::Macro, SelfBlockCall{ blockName, stack.self, site, templateName }), keepAlive));
     }
     return CreateObjectAdapter(std::move(self), "TemplateReference", templateName.empty() ? InternalValue(NoneValue()) : InternalValue(std::string(templateName)));
 }
@@ -2011,8 +2025,12 @@ ClosureKept ClosureSite::Kept(const ClosureHome& home) const
     }
     const auto capture = m_capture.lock();
     // The copies of the ended frames, down to the first one still there (ResolveKept)
-    for (const auto* frame = capture.get(); frame && !LiveHome(*frame); frame = frame->outer.get())
+    for (const auto* frame = capture.get(); frame; frame = frame->outer.get())
     {
+        if (LiveHome(*frame))
+        {
+            break;
+        }
         if (auto names = frame->names.lock())
         {
             kept.frames.push_back(std::move(names));
@@ -2287,7 +2305,7 @@ void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowes
         });
 }
 
-void RenderContext::EnterCapturedScope(const ClosureKept& kept, size_t link, std::shared_ptr<ClosureCapture> capture)
+void RenderContext::EnterCapturedScope(const ClosureKept& kept, size_t link, const std::shared_ptr<ClosureCapture>& capture)
 {
     auto scope = EnterScope();
     CopyCaptured(scope, kept);
@@ -2300,7 +2318,7 @@ void RenderContext::EnterCapturedScope(const ClosureKept& kept, size_t link, std
         {
             m_captures = std::make_unique<ClosureCaptures>();
         }
-        m_captures->kept.push_back({ depth, serial, std::move(capture) });
+        m_captures->kept.push_back({ depth, serial, capture });
     }
     if (link < GetScopesCount() - 1)
     {

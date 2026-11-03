@@ -1219,7 +1219,7 @@ private:
     // A scope holding what a closure kept (ClosureSite::Kept), linked below `link`
     // (HomeCall::EnterCaptured); `capture` is the closure's (CaptureOfScope finds it for the
     // scope). Defined in statements.cpp. Throws std::bad_alloc
-    void EnterCapturedScope(const ClosureKept& kept, size_t link, std::shared_ptr<ClosureCapture> capture);
+    void EnterCapturedScope(const ClosureKept& kept, size_t link, const std::shared_ptr<ClosureCapture>& capture);
     // Forgets the scopes of what kept closures saw (EnterCapturedScope) from `depth` up, which
     // a call leaves
     void DropKeptAbove(size_t depth) noexcept
