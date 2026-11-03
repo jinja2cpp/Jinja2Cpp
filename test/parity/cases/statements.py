@@ -328,6 +328,8 @@ CASES = [
     ("loop_iter_inner_length", "{% for x in [1, 2, 3] %}{% for a in loop %}{{ loop.length }}{{ loop.index }}{{ loop }}{% endfor %};{% endfor %}"),
     ("loop_iter_item_loop_again", "{% for x in [1, 2, 3, 4] %}{% for a in loop %}{{ a[0] }}[{{ a[1]|map(attribute=0)|join(',') }}]{% endfor %};{% endfor %}"),
     ("loop_iter_inner_break_recursive", "{% for x in 'abcd' recursive %}{% for y in loop %}{{ y[1].index }}{{ y[0] }}{% if y[0] == 'c' %}{% break %}{% endif %}{% endfor %}{{ loop.index }}{{ x }}{{ loop.last }};{% endfor %}", LC),
+    ("loop_iter_inner_break_fetches_one", "{% set seen = [] %}{% for x in [1, 2, 3, 4] if seen.append(x) is none %}{% for a in loop %}{{ a[0] }}{% break %}{% endfor %}{% break %}{% endfor %}|{{ seen }}", LC),
+    ("loop_iter_inner_length_fetches_rest", "{% set seen = [] %}{% for x in [1, 2, 3, 4] if seen.append(x) is none %}{% for a in loop %}{{ a[0] }}{{ seen|length }}{{ loop.length }}{{ seen|length }}{% break %}{% endfor %}{% break %}{% endfor %}", LC),
     ("loop_iter_filtered", "{% for x in [1, 2, 3, 4] if x > 1 %}{{ x }}{{ loop|map(attribute=0)|list }}{{ loop.index }};{% endfor %}"),
     ("loop_iter_twice", "{% for x in [1, 2] %}{{ loop|list|length }}{{ loop|list|length }}{{ loop.index }}{{ loop.last }};{% else %}E{% endfor %}"),
     ("loop_has_no_dict_methods", "{% for x in [1] %}{{ loop.items is defined }}{{ loop['index'] is defined }}{{ loop.keys is defined }}{% endfor %}"),

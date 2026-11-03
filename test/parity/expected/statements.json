@@ -12566,6 +12566,94 @@
    "output": "2b3c3aFalse;4dTrue;"
   },
   {
+   "id": "statements.loop_iter_inner_break_fetches_one",
+   "template": "{% set seen = [] %}{% for x in [1, 2, 3, 4] if seen.append(x) is none %}{% for a in loop %}{{ a[0] }}{% break %}{% endfor %}{% break %}{% endfor %}|{{ seen }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "2|[1, 2]"
+  },
+  {
+   "id": "statements.loop_iter_inner_length_fetches_rest",
+   "template": "{% set seen = [] %}{% for x in [1, 2, 3, 4] if seen.append(x) is none %}{% for a in loop %}{{ a[0] }}{{ seen|length }}{{ loop.length }}{{ seen|length }}{% break %}{% endfor %}{% break %}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "2244"
+  },
+  {
    "id": "statements.loop_iter_filtered",
    "template": "{% for x in [1, 2, 3, 4] if x > 1 %}{{ x }}{{ loop|map(attribute=0)|list }}{{ loop.index }};{% endfor %}",
    "context": {

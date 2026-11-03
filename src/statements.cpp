@@ -291,6 +291,8 @@ struct LoopState : ValueObject
     // Shared with the callables loop.cycle and loop.changed made, kept up to date once one
     // is made (LoopCycleCell)
     std::shared_ptr<LoopCycleCell> cycleCell;
+    // The `loop` this loop runs over, whose len() is this loop's length once read (IsLoopObject)
+    InternalValue lengthOf;
     // Whether the item after the current one is fetched, isLast telling if there is one
     bool isPeeked = false;
     // Whether the enumerator runs over indexedList, the rest the state collected
@@ -449,9 +451,14 @@ struct LoopState : ValueObject
         lazyFilter = nullptr;
         lazyContext = nullptr;
         lazyNodes = ArenaView();
+        if (!lengthOf.IsUndefined())
+        {
+            DropLengthOf();
+        }
     }
 
     JINJA2CPP_NOINLINE_INLINE void DropLastChanged() { lastChanged = InternalValue(); }
+    JINJA2CPP_NOINLINE_INLINE void DropLengthOf() { lengthOf = InternalValue(); }
 
     // A loop object kept past a statement that ended without collecting its rest (an error
     // thrown in the body) can no longer fetch: its enumerator may run over a list the
@@ -474,6 +481,28 @@ struct LoopState : ValueObject
         {
             return *listSize;
         }
+        if (!lengthOf.IsUndefined())
+        {
+            return LengthOfIterated();
+        }
+        return CollectRest();
+    }
+
+    // len() of the `loop` this loop runs over, kept as this loop's length
+    JINJA2CPP_NOINLINE_INLINE size_t LengthOfIterated()
+    {
+        InternalValue length;
+        const auto map = AsMap(lengthOf);
+        if (map && map->GetLoopAttr(LoopAttr::Length, length))
+        {
+            if (const auto* count = GetIf<int64_t>(&length))
+            {
+                listSize = static_cast<size_t>(*count);
+                lengthOf = InternalValue();
+                return *listSize;
+            }
+        }
+        lengthOf = InternalValue();
         return CollectRest();
     }
 
@@ -531,18 +560,14 @@ std::string LoopCycleCell::Repr() const
     return "<LoopContext " + std::to_string(index0 + 1) + "/?>";
 }
 
-// A loop over `loop` takes its length from len(loop) as Jinja2's LoopContext.length does:
-// the length of the loop iterated, not the number of items it has left (docs/tasks/0304)
-JINJA2CPP_NOINLINE_INLINE std::optional<size_t> LengthOfLoopObject(const InternalValue& loopVal)
+// Whether the loop runs over `loop`, whose len() is its length as Jinja2's LoopContext.length
+// takes len(iterable): the length of the loop iterated, not the number of items it has left
+// (docs/tasks/0304). Asked only of a list of unknown size
+JINJA2CPP_NOINLINE_INLINE bool IsLoopObject(const InternalValue& loopVal)
 {
     const auto map = AsMap(loopVal);
-    InternalValue length;
-    if (!map || !map->Iterates() || !map->GetLoopAttr(LoopAttr::Length, length))
-    {
-        return std::nullopt;
-    }
-    const auto* count = GetIf<int64_t>(&length);
-    return count ? std::optional<size_t>(static_cast<size_t>(*count)) : std::nullopt;
+    const char* objectClass = map ? map->GetObjectClass() : nullptr;
+    return objectClass && map->Iterates() && std::string_view(objectClass) == "LoopContext";
 }
 
 // Fetches the item after `itemIdx` once the body is done with it, through the enumerator
@@ -898,6 +923,7 @@ struct LoopFrame : LoopState
     void Traverse(const TraverseFn& fn) const override
     {
         TraverseValue(lastChanged, fn);
+        TraverseValue(lengthOf, fn);
         if (const auto* list = indexedList.Ref().GetOwner())
         {
             fn(list);
@@ -1287,9 +1313,10 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     {
         loopItems.RebindEnumerator(enumerator);
         state->listSize = loopItems.GetSize();
-        if (!state->listSize)
+        if (!state->listSize && IsLoopObject(loopVal))
         {
-            state->listSize = LengthOfLoopObject(loopVal);
+            // Read when the length is: reading it collects the rest of the loop iterated
+            state->lengthOf = loopVal;
         }
     }
 
@@ -1401,9 +1428,10 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     else
     {
         state->listSize = loopItems.GetSize();
-        if (!state->listSize)
+        if (!state->listSize && IsLoopObject(loopVal))
         {
-            state->listSize = LengthOfLoopObject(loopVal);
+            // Read when the length is: reading it collects the rest of the loop iterated
+            state->lengthOf = loopVal;
         }
     }
     // The next item, filtered in place while the filter is still lazy
