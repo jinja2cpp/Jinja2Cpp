@@ -438,7 +438,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0366](0366-bound-loop-method-repr-after-break.md) | A kept `loop.cycle` prints `?` for the length of a lazily filtered loop it broke out of | parity | low | open |
 | [0367](0367-module-object-is-escaped.md) | `m is escaped` of an imported module | parity | low | open |
 | [0368](0368-callable-python-type-names.md) | Python type names of callables in error messages | parity | low | open |
-| [0369](0369-finalize-template-data-in-volatile-code.md) | Template text in volatile autoescape code goes through finalize | parity | low | open |
+| [0369](0369-finalize-template-data-in-volatile-code.md) | Template text in volatile autoescape code goes through finalize | parity | low | done |
 | [0370](0370-json-view-is-a-dict.md) | A JSON object seen through Reflect behaves as a reflected struct, not as a dict | parity | medium | open |
 | [0371](0371-attr-filter-debug-undefined.md) | `|attr` of a missing attribute under DebugUndefined prints empty | parity | low | open |
 | [0372](0372-unicode-version-corpus-cases.md) | Corpus cases on code points whose Unicode properties changed after 15.0 | parity | low | open |
@@ -452,5 +452,6 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0382](0382-urlencode-of-loop.md) | `loop|urlencode` iterates the rest of the loop | parity | low | open |
 | [0383](0383-lazy-filter-results-not-sequences.md) | A lazy filter result is no sequence: `last` and slicing it | parity | low | open |
 | [0384](0384-dormant-chat-preset-load-cost.md) | Keep the dormant chat-template preset free on every Load | perf | low | done |
-| [0385](0385-asan-gcc13-sign-conversion-expressions-test.md) | Sanitizer build with GCC 13 fails on a "\x80" literal in expressions_test | build | low | open |
+| [0385](0385-asan-gcc13-sign-conversion-expressions-test.md) | Sanitizer build with GCC 13 fails on a "\x80" literal in expressions_test | build | low | done |
 | [0386](0386-collect-cycles-through-kept-closures-during-render.md) | Free cycles through a kept closure's copy while the render runs | perf | low | open |
+| [0389](0389-block-in-scoped-statement-of-child-template.md) | A block in a scoped statement of a child template also renders in place | parity | low | open |
