@@ -566,8 +566,12 @@ std::string LoopCycleCell::Repr() const
 JINJA2CPP_NOINLINE_INLINE bool IsLoopObject(const InternalValue& loopVal)
 {
     const auto map = AsMap(loopVal);
-    const char* objectClass = map ? map->GetObjectClass() : nullptr;
-    return objectClass && map->Iterates() && std::string_view(objectClass) == "LoopContext";
+    if (!map || !map->Iterates())
+    {
+        return false;
+    }
+    const char* objectClass = map->GetObjectClass();
+    return objectClass != nullptr && std::string_view(objectClass) == "LoopContext";
 }
 
 // Fetches the item after `itemIdx` once the body is done with it, through the enumerator
