@@ -30,3 +30,9 @@ question for the 2.0 Value design (0072).
 **Done when** `globals.object_dict_key` matches or is marked deliberate, and an object
 returned from a user callable compares equal to the one passed in, and a JSON object
 unpacks its keys.
+
+**Also owns 0049 P5 (2026-11-03).** 0049 closed and moved the JSON accessor identity here:
+a JSON value viewed through `jinja2::Reflect` and read twice gives two accessors, so a write
+through one read misses the other. The six `0212` lines in
+`test/parity/divergences/reflect.txt` (the 0322 pass) are these cases; they go when a view has
+a stable identity.
