@@ -44,6 +44,7 @@
 #include <string_view>
 #include <thread>
 #include <type_traits>
+#include <typeinfo>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -3153,6 +3154,35 @@ InternalValue Value2IntValue(Value&& val)
     return std::visit(visitors::InputValueConvertor(true, false), val.GetData());
 }
 
+// Whether a host map is a JSON object (IJsonNode, docs/tasks/0370). A cross-cast costs tens of
+// nanoseconds and every lent map item asks, so the answer is kept per most-derived type: the last
+// type found to be a JSON node and the last found not to be. Each slot is a fact about a type, so
+// a race between renders only costs another cast
+namespace
+{
+bool IsJsonNode(const IMapItemAccessor* accessor)
+{
+    if (!accessor)
+    {
+        return false;
+    }
+    static std::atomic<const std::type_info*> lastJson{ nullptr };
+    static std::atomic<const std::type_info*> lastOther{ nullptr };
+    const std::type_info* type = &typeid(*accessor);
+    if (type == lastJson.load(std::memory_order_relaxed))
+    {
+        return true;
+    }
+    if (type == lastOther.load(std::memory_order_relaxed))
+    {
+        return false;
+    }
+    const bool isJson = dynamic_cast<const IJsonNode*>(accessor) != nullptr;
+    (isJson ? lastJson : lastOther).store(type, std::memory_order_relaxed);
+    return isJson;
+}
+} // namespace
+
 template<template<typename> class Holder>
 class GenericMapAdapter : public MapAccessorImpl<GenericMapAdapter<Holder>>
 {
@@ -3161,7 +3191,7 @@ public:
     template<typename U, typename = std::enable_if_t<!std::is_same_v<std::decay_t<U>, GenericMapAdapter>>>
     explicit GenericMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
-        , m_isDict(dynamic_cast<const IJsonNode*>(m_values.Get().GetAccessor()) != nullptr)
+        , m_isDict(IsJsonNode(m_values.Get().GetAccessor()))
     {
         // As OwnedAdapter
         this->SetTraversable();
