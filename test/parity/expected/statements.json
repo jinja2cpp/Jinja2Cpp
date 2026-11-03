@@ -10682,6 +10682,138 @@
    "output": "13"
   },
   {
+   "id": "statements.for_length_after_clear",
+   "template": "{% set l = [1, 2, 3, 4, 5] %}{% for x in l %}{{ x }}{% do l.clear() %}{{ loop.length }}{{ loop.last }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "10True"
+  },
+  {
+   "id": "statements.loop_iter_inner_length_after_pop",
+   "template": "{% set l = [1, 2, 3, 4, 5] %}{% for x in l %}{% for a in loop %}{% do l.pop() %}{{ loop.length }}{% endfor %};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "44;"
+  },
+  {
+   "id": "statements.loop_iter_inner_kept_length",
+   "template": "{% set ns = namespace(k=none) %}{% for x in [1, 2, 3, 4, 5] %}{% if x == 2 %}{% for a in loop %}{% set ns.k = loop %}{% break %}{% endfor %}{% endif %}{% endfor %}{{ ns.k.length }}{{ ns.k.index }}{{ ns.k.last }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "51True"
+  },
+  {
    "id": "statements.for_pop_context_list",
    "template": "{% for i in l %}{% do l.pop() %}{{ i }}{% endfor %}|{{ l }}",
    "context": {

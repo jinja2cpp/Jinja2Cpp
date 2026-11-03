@@ -8,3 +8,6 @@ statements.macro_closure_in_loop_of_call output 0373 a macro defined in a loop o
 statements.macro_closure_enclosing_call_live output 0373 a closure from a nested frame reads the enclosing macro call's names as copied when the nested frame ended, not live while that call runs
 statements.macro_closure_enclosing_loop_live output 0373 a closure from a nested frame reads the enclosing loop's names as copied when the nested frame ended, not live in the next iteration
 statements.loop_cycle_repr_after_break_lazy output      0366 deliberate: a loop.cycle kept past a `break` out of a lazily filtered loop prints its length as ?; counting the rest would keep the filter and its names alive past the loop (Ruslan 2026-11-03)
+statements.for_length_after_clear         output      0390 loop.length is the list's size when the loop starts; Jinja2 takes len() of the list on the first read
+statements.loop_iter_inner_length_after_pop output    0390 a loop over loop that pops the list reads the outer length from the start; Jinja2 takes len() when first read
+statements.loop_iter_inner_kept_length    output      0390 a loop over loop kept past a break forgets the outer loop's rest; Jinja2 goes on through it

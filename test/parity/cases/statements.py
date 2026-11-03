@@ -279,6 +279,10 @@ CASES = [
     ("for_append_in_body", "{% set q = [1, 2] %}{% for x in q %}{{ x }}{% if x < 4 %}{% do q.append(x + 2) %}{% endif %}{% endfor %}", DO),
     ("for_filter_sees_body_write_recursive", "{% set ns = namespace(n=0) %}{% for x in [1, 2, 3, 4] if x > ns.n recursive %}{{ x }}{% set ns.n = x + 1 %}{% endfor %}"),
     ("for_filter_sees_body_write", "{% set ns = namespace(n=0) %}{% for x in [1, 2, 3, 4] if x > ns.n %}{{ x }}{% set ns.n = x + 1 %}{% endfor %}"),
+    # task 0390: loop.length is len() of the list when first read, not at the loop's start
+    ("for_length_after_clear", "{% set l = [1, 2, 3, 4, 5] %}{% for x in l %}{{ x }}{% do l.clear() %}{{ loop.length }}{{ loop.last }}{% endfor %}", DO),
+    ("loop_iter_inner_length_after_pop", "{% set l = [1, 2, 3, 4, 5] %}{% for x in l %}{% for a in loop %}{% do l.pop() %}{{ loop.length }}{% endfor %};{% endfor %}", DO),
+    ("loop_iter_inner_kept_length", "{% set ns = namespace(k=none) %}{% for x in [1, 2, 3, 4, 5] %}{% if x == 2 %}{% for a in loop %}{% set ns.k = loop %}{% break %}{% endfor %}{% endif %}{% endfor %}{{ ns.k.length }}{{ ns.k.index }}{{ ns.k.last }}", LC),
     ("for_pop_context_list", "{% for i in l %}{% do l.pop() %}{{ i }}{% endfor %}|{{ l }}", DO),
     ("for_length_after_append", "{% set q = [1, 2] %}{% for x in q %}{{ loop.length }}{{ loop.revindex }}{{ loop.last }}{% if loop.first %}{% do q.append(3) %}{% endif %};{% endfor %}", DO),
     ("do_without_extension", "{% do l.append(4) %}"),
