@@ -185,6 +185,14 @@ protected:
     NodeRef<Expression> m_expression;
 };
 
+// finalize(value), finalize being Settings::finalize as a callable
+inline InternalValue CallFinalize(const InternalValue& finalize, InternalValue value, RenderContext& values)
+{
+    CallParams params;
+    params.posParams.push_back(std::move(value));
+    return GetIf<Callable>(&finalize)->GetExpressionCallable()(params, values);
+}
+
 // `{{ ... }}` when Settings::finalize is set: only such templates pay for the callable.
 // Jinja2 writes escape(finalize(value)), escaped by the output setting, for a value it
 // evaluates at run time, and str(finalize(escape(value))), escaped by the static setting, for
@@ -244,9 +252,7 @@ private:
         {
             value = TextValue(value, values.GetRendererCallback());
         }
-        CallParams params;
-        params.posParams.push_back(std::move(value));
-        return GetIf<Callable>(&m_finalize)->GetExpressionCallable()(params, values);
+        return CallFinalize(m_finalize, std::move(value), values);
     }
 
     // Finalize, or nothing when the callable raises an error of its own or of its call
@@ -299,6 +305,38 @@ public:
 
 private:
     bool m_byChoice;
+};
+
+// Template text in volatile code (RenderContext::IsVolatileAutoescape) when Settings::finalize
+// is set. Jinja2 cannot fold the text there, so it writes
+// (escape if autoescape else str)(finalize((Markup if autoescape else identity)(text))) at run
+// time, by the runtime setting (CodeGenerator.visit_TemplateData, docs/tasks/0369). Elsewhere
+// the text is a RawTextRenderer and never meets finalize
+class FinalizedTextRenderer final : public IRendererBase
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::FinalizedText;
+    // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+    void VisitRefs(detail::RefChecker& /*refs*/) const {}
+
+    // text: the template text as a string of the template's character type; finalize:
+    // Settings::finalize as a callable
+    FinalizedTextRenderer(InternalValue text, InternalValue finalize)
+        : m_text(std::move(text))
+        , m_finalize(std::move(finalize))
+    {
+    }
+
+    void Render(OutStream& os, RenderContext& values) override
+    {
+        InternalValue text = m_text;
+        text.SetMarkup(values.IsOutputAutoescape());
+        WriteOutput(os, CallFinalize(m_finalize, std::move(text), values), values);
+    }
+
+private:
+    InternalValue m_text;
+    InternalValue m_finalize;
 };
 
 // finalize: Settings::finalize as a callable, or undefined. isVolatile: in volatile code

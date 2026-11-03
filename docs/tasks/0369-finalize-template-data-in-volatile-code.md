@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/753
 priority: low
 area: parity
 depends: []
-touches: [src/renderer.h, src/template_parser.cpp, test/parity/divergences/autoescape.txt]
+touches: [src/renderer.h, src/template_parser.h, src/node_arena.h, src/node_arena.cpp, test/parity/cases/autoescape.py, test/parity/divergences/autoescape.txt]
 ---
 # Template text in volatile autoescape code goes through finalize
 
@@ -19,3 +20,12 @@ takes the run-time path that calls finalize. Case: `autoescape.volatile_finalize
 run-time path of `FinalizedExpressionRenderer` does, escaping by the runtime setting.
 
 **Done when** the case's divergence line is deleted and `ctest -R parity` passes.
+
+**Resolution.** `FinalizedTextRenderer` (src/renderer.h): the parser makes it for template text in
+volatile code when `Settings::finalize` is set (`TemplateParser::FineParseRawText`). At run time
+the text is Markup when the output setting (the runtime one, in volatile code) is on, goes through
+finalize, and is written by `WriteOutput`. Other text stays a `RawTextRenderer`, so templates
+without finalize or without a volatile `{% autoescape %}` are unchanged. Cases
+`autoescape.volatile_finalize_template_data_*` cover escaping, Markup input, comments, raw,
+if/for/filter/set/macro bodies, nested constant autoescape, the non-volatile block body and
+whitespace control.

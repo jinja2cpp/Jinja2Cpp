@@ -1586,6 +1586,15 @@ private:
         return m_nodes.Make<RawTextRenderer>(converted.data(), converted.size());
     }
 
+    // Text in volatile code with Settings::finalize set, which goes through finalize at run time
+    // (FinalizedTextRenderer). Out of line: rarely needed
+    JINJA2CPP_NOINLINE_INLINE NodeRef<IRendererBase> MakeFinalizedTextRenderer(const CharRange& range)
+    {
+        const CharT* text = m_template->data() + range.startOffset;
+        string_t converted = m_settings.newlineSequence == "\n" ? string_t(text, range.size()) : ApplyNewlineSequence(text, range.size());
+        return m_nodes.Make<FinalizedTextRenderer>(InternalValue(std::move(converted)), visitors::InputValueConvertor::ConvertUserCallable(m_settings.finalize));
+    }
+
     // The message of a `{% trans %}` block that the text goes to: the plural one after `{% pluralize %}`
     static string_t& TransMessage(TransInfo& trans)
     {
@@ -1728,7 +1737,7 @@ private:
             }
         }
         // One call: a second makes the compiler outline the function
-        NodeRef<IRendererBase> text = MakeRawTextRenderer(range);
+        NodeRef<IRendererBase> text = m_settings.finalize.callable && IsInVolatileCode(statementsStack) ? MakeFinalizedTextRenderer(range) : NodeRef<IRendererBase>(MakeRawTextRenderer(range));
         if (check == OutputCheck::Guard)
         {
             text = m_nodes.Make<OutputCheckStatement>(text);
