@@ -962,7 +962,8 @@ InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
         }
         else
         {
-            kind = source->IsTuple() ? IteratorKind::TupleReverse : source->GetRangeInfo() ? IteratorKind::RangeIterator : IteratorKind::ListReverse;
+            kind = source->IsTuple() ? IteratorKind::TupleReverse : source->GetRangeInfo() ? IteratorKind::RangeIterator
+                                                                                           : IteratorKind::ListReverse;
         }
     }
     else if (const auto map = AsMap(baseVal); map && map->GetAttrPolicy() == MapAttrPolicy::KeysOnly)
