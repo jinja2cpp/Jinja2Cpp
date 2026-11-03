@@ -347,6 +347,8 @@ struct StatementInfo
     // A macro's or call block's: the tree's marks before its parameters, less what the tags
     // between them and its body made (MacroStatement::SetBodyMarks)
     NodeArena::ContextMarks marks;
+    // A macro's or call block's: the resolver's mark of name expressions before its parameters
+    std::uint32_t useMark = 0;
 
     // Whether the body of a statement of `type` is a frame of the resolver of its own
     static bool OwnsFrame(Type type)

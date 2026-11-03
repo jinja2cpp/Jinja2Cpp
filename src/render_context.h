@@ -1208,7 +1208,8 @@ private:
     // closures that keep one of them go in weakened (MacroStatement::WeakenCapture): holding
     // them as they are, the copy would keep them alive, and they the copy, until the render
     // ends. Defined in statements.cpp
-    void CollectNamesDownTo(InternalValueMap& collected, size_t lowest, Span<const std::shared_ptr<ClosureCapture>> captures) const;
+    // Only the names `keeps` reads (ClosureCapture::Reads) when it is not null
+    void CollectNamesDownTo(InternalValueMap& collected, size_t lowest, Span<const std::shared_ptr<ClosureCapture>> captures, const ClosureCapture* keeps) const;
     // The capture of scope `depth - 1`, which this context or one it was made from has: the one
     // its closures share, else a new one there (ClosureSite::CaptureOnEnd), or what a call of a
     // kept closure sees there (EnterCapturedScope). Null for depth 0. Defined in statements.cpp.
@@ -1802,6 +1803,26 @@ struct ClosureCapture
     uint32_t serial = 0;
     // Its frame has ended (CaptureClosures)
     bool ended = false;
+    // The closures that see the scope read every name there (an include with context, `self`):
+    // the copy keeps them all, else only `reads`
+    bool readsAll = false;
+    // The hashes of the names the closures that see the scope read, sorted, unique: the closures
+    // of the scope, and those of the frames above it that ended (docs/tasks/0375)
+    std::vector<std::size_t> reads;
+
+    // Adds the names of `hashes`, sorted and unique; NameResolver::AllNames among them reads all
+    void AddReads(Span<const std::size_t> hashes);
+    void AddReads(const ClosureCapture& other)
+    {
+        if (other.readsAll)
+        {
+            readsAll = true;
+            return;
+        }
+        AddReads(Span<const std::size_t>(other.reads.data(), other.reads.size()));
+    }
+    // Whether the copy keeps the name of hash `hash`
+    [[nodiscard]] bool Reads(std::size_t hash) const { return readsAll || std::binary_search(reads.begin(), reads.end(), hash); }
 };
 
 // Where a call of a closure runs its body (ClosureSite::Resolve)
@@ -1937,8 +1958,9 @@ public:
     // site OutlivesItsFrames, made in `context` just now. The site holds the capture weakly:
     // the callable made of it keeps the result (Callable::SetKeepAlive), so that the copy of
     // the frames can hold the closure without holding itself (MacroStatement::WeakenCapture).
+    // The closure reads the names of `reads` (ClosureCapture::reads), every name for `readsAll`.
     // Throws std::bad_alloc
-    [[nodiscard]] std::shared_ptr<ClosureCapture> CaptureOnEnd(RenderContext& context);
+    [[nodiscard]] std::shared_ptr<ClosureCapture> CaptureOnEnd(RenderContext& context, Span<const std::size_t> reads, bool readsAll);
 
 private:
     friend class HomeCall;

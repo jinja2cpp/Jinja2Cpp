@@ -539,4 +539,12 @@ CASES = [
     ('macro_closure_in_block', "{% set ns = namespace(f=none) %}{% set q = 1 %}{% block b %}{% set a = 'A' %}{% macro m() %}{{ a }}{{ q }}{{ h() }}{% endmacro %}{% set ns.f = m %}{% endblock %}{% macro h() %}H{% endmacro %}{% set q = 2 %}|{{ ns.f() }}"),
     ('macro_closure_in_set_block_of_call', "{% set ns = namespace(f=none) %}{% macro o(a) %}{% set r %}{% macro m() %}{{ a }}{% endmacro %}{% set ns.f = m %}{% endset %}{% endmacro %}{{ o(1) }}|{{ ns.f() }}"),
     ('macro_closure_in_scoped_block_of_loop', '{% set ns = namespace(f=none) %}{% for i in [1, 2] %}{% if loop.first %}{% block b scoped %}{% macro m() %}{{ i }}{% endmacro %}{% set ns.f = m %}{% endblock %}{% endif %}{{ ns.f() }}{% endfor %}|{{ ns.f() }}'),
+    # A kept closure keeps only the names it and the closures it sees read (0375): a namespace it
+    # sets an attribute of, a sibling it calls, a parameter's default, varargs, a name set later
+    ('macro_closure_sets_attr_of_frame_namespace', '{% set ns = namespace(f=none) %}{% macro o() %}{% set st = namespace(c=0) %}{% macro inc() %}{% set st.c = st.c + 1 %}{{ st.c }}{% endmacro %}{% set ns.f = inc %}{% endmacro %}{{ o() }}{{ ns.f() }}{{ ns.f() }}'),
+    ('macro_closure_reads_one_of_frame', '{% set ns = namespace(f=none) %}{% macro o(a, b, c) %}{% set d = 4 %}{% macro k() %}{{ b }}{{ x is defined }}{% endmacro %}{% set ns.f = k %}{% endmacro %}{{ o(1, 2, 3) }}{{ ns.f() }}'),
+    ('macro_closure_sibling_reads_other_name', '{% set ns = namespace(f=none) %}{% macro o(a, b) %}{% macro s() %}{{ b }}{% endmacro %}{% macro k() %}{{ s() }}{{ a }}{% endmacro %}{% set ns.f = k %}{% endmacro %}{{ o(1, 2) }}{{ ns.f() }}'),
+    ('macro_closure_default_reads_frame', '{% set ns = namespace(f=none) %}{% macro o(a) %}{% macro k(p=a) %}{{ p }}{% endmacro %}{% set ns.f = k %}{% endmacro %}{{ o(5) }}{{ ns.f() }}'),
+    ('macro_closure_reads_name_set_later', '{% set ns = namespace(f=none) %}{% macro o() %}{% macro k() %}{{ y }}{% endmacro %}{% set ns.f = k %}{% set y = 3 %}{% endmacro %}{{ o() }}{{ ns.f() }}'),
+    ('macro_closure_nested_reads_outer_call', '{% set ns = namespace(f=none) %}{% macro o(a, z) %}{% for i in [1] %}{% macro k() %}{% macro k2() %}{{ a }}{% endmacro %}{{ k2() }}{% endmacro %}{% set ns.f = k %}{% endfor %}{% endmacro %}{{ o(1, 9) }}{{ ns.f() }}'),
 ]

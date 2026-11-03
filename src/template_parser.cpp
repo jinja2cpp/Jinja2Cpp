@@ -848,6 +848,8 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     }
 
     const auto blockName = m_nodes.MakeText(lexer.GetAsString(nextTok));
+    // Its body reads names where it is rendered, and may be rendered again by `self` and `super()`
+    m_names.AddReadOfAll();
 
     // Jinja2 accepts `scoped`, then `required`, in this order
     bool isScoped = lexer.EatIfEqual(Keyword::Scoped);
@@ -967,6 +969,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     std::string macroName = lexer.GetAsString(nextTok);
     // The parameters' defaults count with the body
     const auto marks = m_nodes.Marks();
+    const auto useMark = m_names.ReadMark();
     const auto outerFrame = m_names.Current();
     // In the arena now: the resolver keeps a view of the name
     const auto nameText = m_nodes.MakeText(macroName);
@@ -987,6 +990,7 @@ StatementsParser::ParseResult StatementsParser::ParseMacro(LexScanner& lexer, St
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroStatement, stmtTok, m_tagOffset);
     statementInfo.renderer = renderer;
     statementInfo.marks = marks;
+    statementInfo.useMark = useMark;
     statementInfo.frame = m_names.PushMacro(outerFrame, renderer);
     Push(statementsInfo, std::move(statementInfo));
 
@@ -1139,6 +1143,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndMacro(LexScanner&, State
     }
     renderer.SetMainBody(TakeBody(info));
     renderer.SetBodyMarks(info.marks, m_nodes.Marks());
+    renderer.SetBodyReads(m_nodes, m_names.ReadsSince(info.useMark));
 
     if (AtTopLevel(statementsInfo))
     {
@@ -1197,6 +1202,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     MacroParamsInfo callbackParams;
     // The parameters' defaults count with the body, the arguments of the call do not
     auto marks = m_nodes.Marks();
+    const auto useMark = m_names.ReadMark();
 
     if (lexer.EatIfEqual('('))
     {
@@ -1245,6 +1251,7 @@ StatementsParser::ParseResult StatementsParser::ParseCall(LexScanner& lexer, Sta
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::MacroCallStatement, stmtTok, m_tagOffset);
     statementInfo.renderer = renderer;
     statementInfo.marks = marks;
+    statementInfo.useMark = useMark;
     statementInfo.frame = m_names.PushMacro(m_names.Current(), renderer);
     Push(statementsInfo, std::move(statementInfo));
 
@@ -1272,6 +1279,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndCall(LexScanner&, Statem
     }
     renderer.SetMainBody(TakeBody(info));
     renderer.SetBodyMarks(info.marks, m_nodes.Marks());
+    renderer.SetBodyReads(m_nodes, m_names.ReadsSince(info.useMark));
 
     m_bodies.Add(info.renderer, info.tagOffset);
 
@@ -1349,6 +1357,10 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
         return MakeParseError(ErrorCode::TemplateEnvAbsent, stmtTok);
     }
 
+    if (isWithContext)
+    {
+        m_names.AddReadOfAll();
+    }
     auto renderer = m_nodes.Make<IncludeStatement>(isIgnoreMissing, isWithContext);
     m_nodes[renderer].SetIncludeNamesExpr(valueExpr, m_nodes[valueExpr].GetConstant(m_nodes) != nullptr);
     m_bodies.Add(renderer, m_tagOffset);
@@ -1410,6 +1422,10 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
         return MakeParseErrorTL(ErrorCode::UnexpectedToken, nextTok, Token::Eof, Token::With, Token::Without);
     }
 
+    if (isWithContext)
+    {
+        m_names.AddReadOfAll();
+    }
     auto renderer = m_nodes.Make<ImportStatement>(isWithContext);
     m_nodes[renderer].SetImportNameExpr(valueExpr);
     const auto namespaceName = lexer.GetAsString(name);
@@ -1546,6 +1562,10 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
         return MakeParseErrorTL(ErrorCode::ExpectedToken, nextTok, Token::Eof, Token::Comma, Token::With, Token::Without);
     }
 
+    if (isWithContext)
+    {
+        m_names.AddReadOfAll();
+    }
     auto renderer = m_nodes.Make<ImportStatement>(isWithContext);
     m_nodes[renderer].SetImportNameExpr(valueExpr);
 
@@ -1828,7 +1848,7 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
         else
         {
             const auto ref = ValueRefExpression::Make(m_nodes, name);
-            m_names.AddUse(ref);
+            m_names.AddUse(ref, HashedName::Hash(name));
             value = ref;
         }
         trans->variables.emplace_back(name, std::move(value));
@@ -1949,7 +1969,7 @@ void AddTransMessageNames(NodeArena& nodes, NameResolver& names, TransInfo& tran
             if (!trans.HasVariable(name))
             {
                 const auto ref = ValueRefExpression::Make(nodes, name);
-                names.AddUse(ref);
+                names.AddUse(ref, HashedName::Hash(name));
                 trans.variables.emplace_back(name, ref);
             }
         }
@@ -2017,6 +2037,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     }
 
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    m_names.AddRead(HashedName::Hash(fnName));
     auto call = m_nodes.Make<CallExpression>(m_nodes, ValueRefExpression::Make(m_nodes, fnName), std::move(params));
     auto output = MakeExpressionRenderer(m_nodes, call, exprParser.GetFinalize());
     std::vector<NodeRef<Expression>> values;

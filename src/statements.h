@@ -723,6 +723,7 @@ public:
             r(param.defaultValue);
         });
         refs(m_mainBody);
+        refs(m_bodyReads);
         detail::VisitSlotNameRefs(refs, m_slotNames);
     }
     // A call block's caller is a macro too
@@ -795,6 +796,10 @@ public:
         m_bodyNameRefs = after.nameRefs - before.nameRefs;
         m_bodyReachesContext = after.contextNodes - before.contextNodes != 1;
     }
+    // The hashes of the names the parameters' defaults and the body read (NameResolver::ReadsSince):
+    // what a closure keeps of the frames it was defined in (ClosureCapture::reads, 0375).
+    // Defined in statements.cpp
+    void SetBodyReads(NodeArena& nodes, Span<const std::size_t> reads);
     // Set by the resolver once every name is placed: whether the body reads names only from
     // its own arguments' slots and can reach the context in no other way, so that a call
     // inside another body needs no lookup cache epoch of its own (HomeCall::Run)
@@ -844,6 +849,8 @@ protected:
     std::uint32_t m_bodyNameRefs = 0;
     bool m_bodyReachesContext = true;
     bool m_readsSlotsOnly = false;
+    // The hashes of the names the body reads, sorted, unique (SetBodyReads)
+    ArenaSpan<std::size_t> m_bodyReads;
     // A top-level macro: as SetStatement::SetReexports
     bool m_reexports = false;
     // `macro.name`, `macro.arguments` and the others, complete once the body is parsed

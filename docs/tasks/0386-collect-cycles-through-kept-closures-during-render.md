@@ -21,8 +21,9 @@ of calls of
 grows by about 1.2 KB a call in a Debug build (22 MB at 10k calls, 60 MB at 40k); with a
 body that reads no name it stays at 13 MB, since such a macro keeps no copy. Python's
 generational collector frees the cycle during the render. A plain cycle made in a macro
-(`{% set l = [] %}{% set _ = l.append(l) %}`) grows the same way, by less per call. 0375 removes
-the case where the stored closure does not read the container (its copy then lacks it).
+(`{% set l = [] %}{% set _ = l.append(l) %}`) grows the same way, by less per call. 0375 removed
+the case where the stored closure does not read the container (its copy then lacks it); a
+sibling closure of the same frame that reads the container still keeps it in the copy they share.
 
 **Proposal.** Let the collector see a closure's keep-alive and the copy it leads to
 (`ValueObject::Traverse` of a `Callable` reporting its `ClosureCapture`'s copy, which the

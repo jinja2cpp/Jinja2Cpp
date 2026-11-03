@@ -117,6 +117,11 @@ void NameResolver::AddStores(FrameId frame, Span<const TargetNode> target, const
         {
             AddStore(frame, nodes.Text(node.name), kind);
         }
+        else if (!node.attr.empty())
+        {
+            // `set ns.attr` reads `ns`
+            m_readHashes.push_back(HashedName::Hash(nodes.Text(node.name)));
+        }
     }
 }
 
