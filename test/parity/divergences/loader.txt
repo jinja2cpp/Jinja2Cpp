@@ -4,3 +4,5 @@
 loader.self_of_ended_scoped_block_loses_loop output 0165 deliberate: a `self` kept past its scoped block loses the loop variable, as a macro kept past its loop does
 loader.include_with_macro_kept output 0165 deliberate: a closure called after its `with` reads the `with`'s names as undefined; Jinja2 prints its missing sentinel
 loader.module_object_is_escaped        output      0367 `is escaped` of an imported module is False; Jinja2's TemplateModule has __html__, so it is True
+loader.extends_block_in_scoped_statement output 0389 a block inside `{% autoescape %}` outside the blocks of a child template is not rendered in place; Jinja2 renders it there and at the parent's block
+loader.extends_block_in_with output 0389 a block inside `{% with %}` outside the blocks of a child template is not rendered in place; Jinja2 renders it there and at the parent's block

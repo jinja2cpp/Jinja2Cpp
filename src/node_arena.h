@@ -89,6 +89,7 @@ enum class NodeKind : std::uint8_t
     ExprRenderer,
     FinalizedExprRenderer,
     StaticExprRenderer,
+    FinalizedText,
     TemplateRoot,
     ForStmt,
     IfStmt,
