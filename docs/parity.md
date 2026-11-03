@@ -14,32 +14,32 @@ Legend: ✅ matches Jinja2 · 🟡 works with differences · ❌ missing or brok
 
 ## Summary
 
-Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Oct 2026):
+Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Nov 2026):
 
 | area | cases | match | output | rejects | accepts | unsupported | platform | crash | tasks |
 |---|---|---|---|---|---|---|---|---|---|
-| autoescape | 158 | 157 | 1 | 0 | 0 | 0 | 0 | 0 | 0307 |
-| calls | 57 | 50 | 3 | 4 | 0 | 0 | 0 | 0 | 0214, 0305, 0306 |
+| autoescape | 163 | 162 | 1 | 0 | 0 | 0 | 0 | 0 | 0369 |
+| calls | 83 | 82 | 1 | 0 | 0 | 0 | 0 | 0 | 0214 |
 | custom | 28 | 28 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | errors | 129 | 129 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| filters | 381 | 378 | 2 | 0 | 1 | 0 | 0 | 0 | 0101, 0309, 0310 |
+| filters | 406 | 403 | 2 | 0 | 1 | 0 | 0 | 0 | 0101, 0382, 0383 |
 | fuzz | 32 | 32 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | globals | 79 | 77 | 1 | 1 | 0 | 0 | 0 | 0 | 0178, 0212 |
 | i18n | 54 | 54 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | literals | 84 | 84 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| loader | 187 | 184 | 3 | 0 | 0 | 0 | 0 | 0 | 0165 |
-| methods | 159 | 155 | 2 | 1 | 1 | 0 | 0 | 0 | 0317 |
-| operators | 126 | 123 | 0 | 3 | 0 | 0 | 0 | 0 | 0178 |
+| loader | 226 | 221 | 4 | 1 | 0 | 0 | 0 | 0 | 0165, 0367, 0373 |
+| methods | 180 | 179 | 0 | 1 | 0 | 0 | 0 | 0 | 0374 |
+| operators | 150 | 147 | 0 | 3 | 0 | 0 | 0 | 0 | 0178 |
 | options | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | output | 38 | 38 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | sequences | 47 | 47 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| statements | 447 | 438 | 8 | 0 | 1 | 0 | 0 | 0 | 0156, 0165, 0214, 0304, 0305, 0323, 0326 |
+| statements | 476 | 467 | 9 | 0 | 0 | 0 | 0 | 0 | 0165, 0214, 0304, 0366, 0373 |
 | string_filters | 540 | 540 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| subscripts | 43 | 43 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| tests | 60 | 58 | 0 | 1 | 1 | 0 | 0 | 0 | 0101, 0308 |
+| subscripts | 57 | 56 | 0 | 0 | 1 | 0 | 0 | 0 | 0383 |
+| tests | 70 | 69 | 0 | 1 | 0 | 0 | 0 | 0 | 0101 |
 | undefined | 112 | 112 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | whitespace | 54 | 54 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| **total** | **2850** | **2816** | **20** | **10** | **4** | **0** | **0** | **0** | |
+| **total** | **3043** | **3016** | **18** | **7** | **2** | **0** | **0** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment

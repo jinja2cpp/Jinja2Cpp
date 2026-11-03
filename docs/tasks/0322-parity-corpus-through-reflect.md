@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/722
 priority: low
 area: parity
@@ -27,3 +27,7 @@ lifetime check of the view's owner chain, tasks 0125 and 0311), not in the per-P
 
 **Done when.** The reflect pass runs nightly and is green; its allow-list holds only
 mutation cases, each with a reason; any other difference found is fixed or filed.
+
+**Closed (2026-11-03).** #722 merged the reflect pass. The nightly `bindings.yml` run has been
+green on master three days running (runs 57, 70 and 84, the last on 7e18f42). Its allow-list
+holds six mutation lines, now owned by 0212 (0049 P5), and six keys-first lines filed as 0370.

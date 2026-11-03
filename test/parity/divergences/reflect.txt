@@ -1,18 +1,18 @@
 # Divergences of the ParityReflect pass (docs/tasks/0322): cases whose result with the
 # context as views of the document (jinja2::Reflect) differs from the result with copies
 # (jinja2::ToValue). The host's data is never written, so cases that mutate the context through
-# two reads of one JSON value diverge until 0049 P5 gives a view a stable identity.
+# two reads of one JSON value diverge until a view has a stable identity (0049 P5, moved to 0212).
 # Ids are "reflect.<case id>"; kinds are relative to Python. Format: test/parity/README.md.
 # The 0370 lines are not mutation cases: a JSON object viewed through Reflect is looked up
 # keys-first, as a reflected struct, where Python (and the copy) treat it as a dict.
 
 reflect.filters.attr                          output      0370 a JSON view is keys-first: attr('name') finds the key, Python's getattr does not see keys
 reflect.filters.map_attr_filter               output      0370 a JSON view is keys-first: map('attr', 'name') finds the keys
-reflect.methods.alias_item_then_owner         output      0049 a JSON value read twice gives two accessors until P5's stable identity: the write through messages[0] misses m
-reflect.methods.alias_loop_var_kept           output      0049 a JSON value read twice gives two accessors until P5's stable identity: the write through the loop item misses messages
-reflect.methods.alias_loop_var_update         output      0049 a JSON value read twice gives two accessors until P5's stable identity: the write through the loop item misses messages
-reflect.methods.alias_owner_then_item         output      0049 a JSON value read twice gives two accessors until P5's stable identity: the write through m misses messages
-reflect.methods.alias_set_item_kept           output      0049 a JSON value read twice gives two accessors until P5's stable identity: the write through nd['k'] misses a
+reflect.methods.alias_item_then_owner         output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): the write through messages[0] misses m
+reflect.methods.alias_loop_var_kept           output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): the write through the loop item misses messages
+reflect.methods.alias_loop_var_update         output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): the write through the loop item misses messages
+reflect.methods.alias_owner_then_item         output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): the write through m misses messages
+reflect.methods.alias_set_item_kept           output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): the write through nd['k'] misses a
 reflect.methods.attr_dict_method_before_key   output      0370 a JSON view is keys-first: the key items shadows the dict method for attr()
 reflect.methods.dict_method_before_key        rejects     0370 a JSON view is keys-first: dd.items is the key's string, so dd.items() is not callable
 reflect.sequences.mapping_is_sequence         output      0370 a JSON view is not a dict to `is sequence` (only methods-first maps are)
