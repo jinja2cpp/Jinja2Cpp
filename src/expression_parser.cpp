@@ -559,7 +559,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
             break;
         }
         auto ref = ValueRefExpression::Make(m_nodes, name);
-        m_names.AddUse(ref);
+        m_names.AddUse(ref, m_nodes[ref].GetHashedName(m_nodes).hash);
         value = ref;
         break;
     }
@@ -778,6 +778,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
         if (unknown)
         {
             m_unknown.Add(nameTok, true);
+            m_names.AddRead(HashedName::Hash(name));
         }
     }
     catch (const TemplateRuntimeError&)
@@ -1317,6 +1318,11 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
             if (unknown)
             {
                 m_unknown.Add(tok, false);
+                m_names.AddRead(HashedName::Hash(name));
+            }
+            else
+            {
+                NoteNamedCallables(name, *params);
             }
             if (result && !AddOperator())
             {
@@ -1345,6 +1351,50 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
         return MakeParseError(ErrorCode::UnexpectedException, startTok);
     }
     return result;
+}
+
+void ExpressionParser::NoteNamedCallables(const std::string& name, const CallArgsInfo& params)
+{
+    if (name == "applymacro")
+    {
+        m_names.AddReadOfAll();
+        return;
+    }
+    if (name != "map" && name != "select" && name != "reject" && name != "selectattr" && name != "rejectattr")
+    {
+        return;
+    }
+    if (params.dynArgs || params.dynKwargs)
+    {
+        m_names.AddReadOfAll();
+        return;
+    }
+    for (const auto& arg : params.posParams)
+    {
+        const auto* constant = m_nodes[arg].GetConstant(m_nodes);
+        if (!constant)
+        {
+            // Named when the filter runs
+            m_names.AddReadOfAll();
+            return;
+        }
+        const auto text = AsStringView<char>(*constant);
+        if (!text)
+        {
+            if (AsStringView<wchar_t>(*constant))
+            {
+                m_names.AddReadOfAll();
+                return;
+            }
+            continue;
+        }
+        if (*text == "applymacro")
+        {
+            m_names.AddReadOfAll();
+            return;
+        }
+        m_names.AddRead(HashedName::Hash(*text));
+    }
 }
 
 ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfExpression(LexScanner& lexer)

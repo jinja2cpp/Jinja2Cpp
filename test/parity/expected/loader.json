@@ -5315,6 +5315,32 @@
    "output": "|c1tYY"
   },
   {
+   "id": "loader.macro_closure_includes_with_frame_names",
+   "template": "{% set ns = namespace(f=none) %}{% macro o(a) %}{% set b = 2 %}{% macro k() %}{% include 'inc' %}{% endmacro %}{% set ns.f = k %}{% endmacro %}{{ o(1) }}{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "inc": "[{{ a }}|{{ b }}]"
+   },
+   "output": "[1|2]"
+  },
+  {
+   "id": "loader.macro_closure_imports_with_context",
+   "template": "{% set ns = namespace(f=none) %}{% macro o(a) %}{% set b = 2 %}{% macro k() %}{% from 'm' import g with context %}{{ g() }}{% endmacro %}{% set ns.f = k %}{% endmacro %}{{ o(1) }}{{ ns.f() }}",
+   "context": {
+    "x": 3,
+    "name": "world"
+   },
+   "env": {},
+   "templates": {
+    "m": "{% macro g() %}<{{ a }}/{{ b }}>{% endmacro %}"
+   },
+   "output": "<1/2>"
+  },
+  {
    "id": "loader.include_in_loop_closure_calls_top_level_macro",
    "template": "{% set ns = namespace(l=[]) %}{% for i in range(3) %}{% include 'i' %}{% endfor %}|{% for f in ns.l %}{{ f() }}{% endfor %}",
    "context": {
