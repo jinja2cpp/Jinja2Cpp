@@ -1808,7 +1808,8 @@ struct ClosureCapture
     bool readsAll = false;
     // The hashes of the names the closures that see the scope read, sorted, unique: the closures
     // of the scope, and those of the frames above it that ended (docs/tasks/0375)
-    std::vector<std::size_t> reads;
+    // Inline: most closures read a few names, and a capture that never escapes allocates nothing more
+    SmallVector<std::size_t, 8> reads;
 
     // Adds the names of `hashes`, sorted and unique; NameResolver::AllNames among them reads all
     void AddReads(Span<const std::size_t> hashes);

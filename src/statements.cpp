@@ -2071,7 +2071,7 @@ void ClosureCapture::AddReads(Span<const std::size_t> hashes)
     if (hashes.back() == NameResolver::AllNames)
     {
         readsAll = true;
-        reads = {};
+        reads.clear();
         return;
     }
     if (reads.empty())
@@ -2084,7 +2084,7 @@ void ClosureCapture::AddReads(Span<const std::size_t> hashes)
     {
         return;
     }
-    std::vector<std::size_t> merged;
+    SmallVector<std::size_t, 8> merged;
     merged.reserve(reads.size() + hashes.size());
     std::set_union(reads.begin(), reads.end(), hashes.begin(), hashes.end(), std::back_inserter(merged));
     reads = std::move(merged);
