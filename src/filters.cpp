@@ -444,6 +444,10 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     {
         return GetArgumentValue("default", context);
     }
+    if (auto attr = methods::GetNumberDataAttr(baseVal, attrName))
+    {
+        return std::move(*attr);
+    }
     auto result = Subscript(baseVal, attrNameVal, &context);
     if (result.IsUndefined())
     {

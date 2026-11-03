@@ -1492,6 +1492,10 @@ struct StrOps
         {
             result = MakeBoundMethod(value, *method);
         }
+        else if (auto attrValue = GetNumberDataAttr(value, attr))
+        {
+            result = std::move(attrValue);
+        }
         else if (isObject || isField || value.Kind() == ValueKind::Callable)
         {
             // The fields of a reflected object, of namespace(), loop or a named tuple, the
@@ -2579,6 +2583,10 @@ const MethodInfo FloatMethods[] = {
     { "is_integer", FloatIsInteger, false },
 };
 
+// The data attributes of int, bool and float (docs/tasks/0374): x.real, x.imag, and for an int
+// x.numerator and x.denominator. A bool is an int here, as in Python (True.real is 1)
+constexpr std::string_view NumberDataAttributes[] = { "real", "imag", "numerator", "denominator" };
+
 template<size_t N>
 const MethodInfo* FindIn(const MethodInfo (&table)[N], std::string_view name)
 {
@@ -2642,6 +2650,11 @@ bool IsMethodName(std::string_view name)
         add(DictMethods);
         add(IntMethods);
         add(FloatMethods);
+        // The data attributes take the same getattr path
+        for (const auto attr : NumberDataAttributes)
+        {
+            result[std::min(attr.size(), maxLength)].push_back(attr);
+        }
         for (auto& sameLength : result)
         {
             std::sort(sameLength.begin(), sameLength.end());
@@ -2650,6 +2663,44 @@ bool IsMethodName(std::string_view name)
     }();
     const auto& sameLength = names[std::min(name.size(), maxLength)];
     return std::binary_search(sameLength.begin(), sameLength.end(), name);
+}
+
+std::optional<InternalValue> GetNumberDataAttr(const InternalValue& self, std::string_view name)
+{
+    const auto kind = self.Kind();
+    if (kind == ValueKind::Double)
+    {
+        if (name == "real")
+        {
+            return self;
+        }
+        if (name == "imag")
+        {
+            return InternalValue(0.0);
+        }
+        return std::nullopt;
+    }
+    if (kind != ValueKind::Int && kind != ValueKind::BigInt && kind != ValueKind::Bool)
+    {
+        return std::nullopt;
+    }
+    if (name == "real" || name == "numerator")
+    {
+        if (const auto* flag = GetIf<bool>(&self))
+        {
+            return InternalValue(static_cast<int64_t>(*flag ? 1 : 0));
+        }
+        return self;
+    }
+    if (name == "imag")
+    {
+        return InternalValue(static_cast<int64_t>(0));
+    }
+    if (name == "denominator")
+    {
+        return InternalValue(static_cast<int64_t>(1));
+    }
+    return std::nullopt;
 }
 
 bool IsDictMethodName(std::string_view name)
@@ -2703,6 +2754,10 @@ InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderC
         {
             return unsafe ? UnsafeMethod(obj, name, *context) : MakeBoundMethod(obj, *method);
         }
+    }
+    if (auto attr = GetNumberDataAttr(obj, name))
+    {
+        return std::move(*attr);
     }
     return Subscript(obj, name, context);
 }

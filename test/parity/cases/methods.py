@@ -191,4 +191,6 @@ CASES = [
     ('markup_format_ascii_conversion', "{{ ('<p>{0!a}</p>'|safe).format('<é>') }}"),
     # 0374: int and float data attributes
     ('number_data_attributes', "{{ (3).real }}|{{ (3).denominator }}|{{ 2.5.imag }}|{{ '{0.numerator}'.format(4) }}|{{ 7|attr('real') }}"),
+    # A bool and a big int have them too; attr finds them, a dict's key of that name stays an item (0374)
+    ('number_data_attributes_kinds', "{{ true.real }}|{{ false.denominator }}|{{ (-3).numerator }}|{{ 2.5.real }}|{{ 1.5|attr('imag') }}|{{ 'a'|attr('real') }}|{{ '{0.imag}|{0.real}'.format(2.0) }}|{{ (12345678901234567890123).real }}|{{ (3).imag is integer }}|{{ {'real': 5}.real }}|{{ (3).nope is defined }}"),
 ]
