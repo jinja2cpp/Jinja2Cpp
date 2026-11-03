@@ -367,12 +367,13 @@ struct LoopState : ValueObject
         // Most peeks are `loop.last` in an unfiltered loop: its enumerator alone, in this call
         if (!lazyFilter && enumerator)
         {
+            auto& current = *enumerator;
             isAdvancing = true;
-            isLast = !(*enumerator)->MoveNext();
+            isLast = !current->MoveNext();
             isAdvancing = false;
             if (!isLast)
             {
-                Item(index0 + 1) = (*enumerator)->GetCurrent();
+                Item(index0 + 1) = current->GetCurrent();
             }
         }
         else
@@ -550,7 +551,7 @@ JINJA2CPP_NOINLINE_INLINE std::optional<size_t> LengthOfLoopObject(const Interna
 JINJA2CPP_ALWAYS_INLINE bool FetchAfterBody(LoopState& state, size_t itemIdx)
 {
     // The loop's enumerator, which only the loop's end lets go of
-    auto& enumerator = *state.enumerator;
+    auto& enumerator = *state.enumerator; // NOLINT(bugprone-unchecked-optional-access): set while the loop runs
     state.isAdvancing = true;
     const bool hasNext = enumerator->MoveNext();
     state.isAdvancing = false;
