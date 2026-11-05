@@ -1,6 +1,7 @@
 #include "name_resolver.h"
 
 #include "expression_evaluator.h"
+#include "expression_parser.h"
 #include "internal_value.h"
 #include "node_arena.h"
 #include "renderer.h"
@@ -116,6 +117,11 @@ void NameResolver::AddStores(FrameId frame, Span<const TargetNode> target, const
         if (node.IsPlainName())
         {
             AddStore(frame, nodes.Text(node.name), kind);
+        }
+        else if (!node.attr.empty() && m_readsOpen != 0)
+        {
+            // `set ns.attr` reads `ns`
+            AddRead(HashedName::Hash(nodes.Text(node.name)));
         }
     }
 }
@@ -620,6 +626,67 @@ std::vector<std::string_view> NameResolver::UndeclaredNames(const NodeArena& nod
         }
     }
     return names;
+}
+
+void NameResolver::RecordRead(std::size_t hash)
+{
+    m_readHashes.push_back(hash);
+}
+
+void NameResolver::AddReadOfName(std::string_view name)
+{
+    RecordRead(HashedName::Hash(name));
+}
+
+void NameResolver::AddReadOf(const NodeArena& nodes, NodeRef<ValueRefExpression> ref)
+{
+    RecordRead(nodes[ref].GetNameHash());
+}
+
+// Here rather than in expression_parser.cpp: there it made GCC stop inlining the name hash
+// into ExpressionParser::ParseValueExpression (bench/count.py, Load rows)
+void ExpressionParser::NoteNamedCallables(const std::string& name, const CallArgsInfo& params)
+{
+    if (name == "applymacro")
+    {
+        m_names.AddReadOfAll();
+        return;
+    }
+    if (name != "map" && name != "select" && name != "reject" && name != "selectattr" && name != "rejectattr")
+    {
+        return;
+    }
+    if (params.dynArgs || params.dynKwargs)
+    {
+        m_names.AddReadOfAll();
+        return;
+    }
+    for (const auto& arg : params.posParams)
+    {
+        const auto* constant = m_nodes[arg].GetConstant(m_nodes);
+        if (!constant)
+        {
+            // Named when the filter runs
+            m_names.AddReadOfAll();
+            return;
+        }
+        const auto text = AsStringView<char>(*constant);
+        if (!text)
+        {
+            if (AsStringView<wchar_t>(*constant))
+            {
+                m_names.AddReadOfAll();
+                return;
+            }
+            continue;
+        }
+        if (*text == "applymacro")
+        {
+            m_names.AddReadOfAll();
+            return;
+        }
+        m_names.AddReadOfName(*text);
+    }
 }
 } // namespace v2
 } // namespace jinja2

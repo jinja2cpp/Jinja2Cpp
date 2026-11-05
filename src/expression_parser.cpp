@@ -560,6 +560,10 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
         }
         auto ref = ValueRefExpression::Make(m_nodes, name);
         m_names.AddUse(ref);
+        if (m_names.ReadsOpen())
+        {
+            m_names.AddReadOf(m_nodes, ref);
+        }
         value = ref;
         break;
     }
@@ -778,6 +782,10 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseTest(L
         if (unknown)
         {
             m_unknown.Add(nameTok, true);
+            if (m_names.ReadsOpen())
+            {
+                m_names.AddReadOfName(name);
+            }
         }
     }
     catch (const TemplateRuntimeError&)
@@ -1317,6 +1325,14 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
             if (unknown)
             {
                 m_unknown.Add(tok, false);
+                if (m_names.ReadsOpen())
+                {
+                    m_names.AddReadOfName(name);
+                }
+            }
+            else if (m_names.ReadsOpen())
+            {
+                NoteNamedCallables(name, *params);
             }
             if (result && !AddOperator())
             {

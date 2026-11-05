@@ -285,6 +285,15 @@ MULTISTR_TEST(MacroTest, ContextCallableInABodySeesTheDefinitionSite, R"({% set 
                                             jinja2::ArgInfo{ "name" });
 }
 
+// A kept closure keeps the names it reads (docs/tasks/0375): `applymacro` names a macro by a
+// string, directly, through `map`, or from a value, and so reads them all
+MULTISTR_TEST(MacroTest, KeptClosureAppliesMacroByName, R"({% set ns = namespace(f=none) %}{% macro o(a) %}{% macro s(v) %}<{{ v }}{{ a }}>{% endmacro %}{% macro k() %}{{ 1|applymacro(macro='s') }}{{ [2]|map('applymacro', macro='s')|join }}{{ [3]|map('applymacro', macro=a)|join }}{% endmacro %}{% set ns.f = k %}{% endmacro %}{{ o('s') }}{{ ns.f() }})",
+              //--------------
+              R"(<1s><2s><3s>)")
+{
+    params = PrepareTestData();
+}
+
 // A recursive call does not see the names the outer call set
 MULTISTR_TEST(MacroTest, RecursiveCallHidesTheOuterCallsSet, R"({% macro m(n) %}{% if n %}{% set v = 'A' %}{% endif %}[{{ v }}]{% if n %}{{ m(0) }}{% endif %}{% endmacro %}{{ m(1) }})",
               //--------------

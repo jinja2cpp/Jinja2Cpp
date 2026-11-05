@@ -10,6 +10,7 @@
 #include "lookup_result.h"
 #include "loop_attr.h"
 #include "markup.h"
+#include "name_resolver.h"
 #include "node_arena.h"
 #include "out_stream.h"
 #include "recursion_guard.h"
@@ -1998,7 +1999,8 @@ LookupResult RenderContext::FindSelf(const std::string& name)
         std::shared_ptr<const void> keepAlive;
         if (site.OutlivesItsFrames(*home))
         {
-            keepAlive = site.CaptureOnEnd(*home);
+            // Its blocks read any name
+            keepAlive = site.CaptureOnEnd(*home, {}, true);
         }
         // The blocks keep it (MakeTemplateSelf)
         return MakeTemplateSelf(*frame->blocks, site, frame->name);
@@ -2119,13 +2121,58 @@ ClosureKept ClosureSite::Kept(const ClosureHome& home) const
     return kept;
 }
 
-std::shared_ptr<ClosureCapture> ClosureSite::CaptureOnEnd(RenderContext& context)
+std::shared_ptr<ClosureCapture> ClosureSite::CaptureOnEnd(RenderContext& context, Span<const std::size_t> reads, bool readsAll)
 {
     // The closures of one scope share its capture: each sees the others in its copy, and the
     // copy lives while any of them is held outside it
     auto capture = context.CaptureOfScope(m_depth);
+    if (capture)
+    {
+        if (readsAll)
+        {
+            capture->readsAll = true;
+        }
+        else
+        {
+            capture->AddReads(reads);
+        }
+    }
     m_capture = capture;
     return capture;
+}
+
+void ClosureCapture::AddReads(Span<const std::size_t> hashes)
+{
+    if (readsAll || hashes.empty())
+    {
+        return;
+    }
+    // Sorted, so the sentinel comes last
+    if (hashes.back() == NameResolver::AllNames)
+    {
+        readsAll = true;
+        reads.clear();
+        return;
+    }
+    if (reads.empty())
+    {
+        reads.assign(hashes.begin(), hashes.end());
+        return;
+    }
+    // The closures of a scope defined again (in a loop, by each call) read the same names
+    if (std::includes(reads.begin(), reads.end(), hashes.begin(), hashes.end()))
+    {
+        return;
+    }
+    SmallVector<std::size_t, 8> merged;
+    merged.reserve(reads.size() + hashes.size());
+    std::set_union(reads.begin(), reads.end(), hashes.begin(), hashes.end(), std::back_inserter(merged));
+    reads = std::move(merged);
+}
+
+void MacroStatement::SetBodyReads(NodeArena& nodes, Span<const std::size_t> reads)
+{
+    m_bodyReads = nodes.MakeSpan(reads);
 }
 
 std::shared_ptr<ClosureCapture> RenderContext::CaptureOfScope(size_t depth)
@@ -2235,12 +2282,21 @@ void RenderContext::CaptureClosuresImpl(const FrameEnd& end)
         }
         return;
     }
+    // What the closures of the frame and of the frames above it read there: the copy keeps
+    // those, the frame below sees them read too. An included template's top level keeps every
+    // name, as Jinja2's context of the include does
+    ClosureCapture keeps;
+    keeps.readsAll = end.count == 0;
+    for (const auto& capture : ending)
+    {
+        keeps.AddReads(*capture);
+    }
     // One copy for the frame, holding its closures weakly
     std::shared_ptr<InternalValueMap> names;
     if (end.copies)
     {
         names = std::make_shared<InternalValueMap>();
-        CollectNamesDownTo(*names, end.copyFrom, ending);
+        CollectNamesDownTo(*names, end.copyFrom, ending, keeps.readsAll ? nullptr : &keeps);
         // Read as `self` in the scopes over the caller's top level (FindSelf), unless set there
         if (endedSelf)
         {
@@ -2249,6 +2305,10 @@ void RenderContext::CaptureClosuresImpl(const FrameEnd& end)
     }
     // Made before the frame's captures leave the list: the frame below is another scope
     const auto outer = CaptureOfScope(end.continuation);
+    if (outer)
+    {
+        outer->AddReads(keeps);
+    }
     for (auto& capture : ending)
     {
         capture->ended = true;
@@ -2340,47 +2400,59 @@ bool RenderContext::CaptureEscapes(const std::shared_ptr<ClosureCapture>& captur
     return std::any_of(held.data(), held.data() + boxes, [](const Held& h) { return !h.box || h.box->use_count() > h.count; });
 }
 
-void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowest, Span<const std::shared_ptr<ClosureCapture>> captures) const
+namespace
+{
+// Adds `name` to a copy of frames (RenderContext::CollectNamesDownTo), weakened when it is a
+// closure keeping one of `captures`
+void AddCollected(InternalValueMap& collected, std::string name, const InternalValue& value, Span<const std::shared_ptr<ClosureCapture>> captures)
+{
+    if (auto weakened = MacroStatement::WeakenCapture(value, captures))
+    {
+        collected.emplace(std::move(name), std::move(*weakened));
+        return;
+    }
+    collected.emplace(std::move(name), value);
+}
+} // namespace
+
+void RenderContext::CollectNamesDownTo(InternalValueMap& collected, size_t lowest, Span<const std::shared_ptr<ClosureCapture>> captures, const ClosureCapture* keeps) const
 {
     const size_t entryPassDepth = m_entryPassDepth;
     VisitScopes(
         *this,
-        [&collected, lowest, entryPassDepth, captures](const InternalValueMap* scope, size_t depth) {
+        [&collected, lowest, entryPassDepth, captures, keeps](const InternalValueMap* scope, size_t depth) {
             if (depth < lowest)
             {
                 return true;
             }
             for (const auto& [name, value] : *scope)
             {
+                const auto hash = HashedName::Hash(name);
+                if (keeps && !keeps->Reads(hash))
+                {
+                    continue;
+                }
                 // The names an include's context passes over (PassOverEntryBindings)
-                if (depth < entryPassDepth && IsEntryBinding(value, HashedName::Hash(name)))
+                if (depth < entryPassDepth && IsEntryBinding(value, hash))
                 {
                     continue;
                 }
-                if (auto weakened = MacroStatement::WeakenCapture(value, captures))
-                {
-                    collected.emplace(name, std::move(*weakened));
-                    continue;
-                }
-                collected.emplace(name, value);
+                AddCollected(collected, name, value, captures);
             }
             return false;
         },
-        [&collected, captures](const FrameView& view, size_t /*depth*/) {
+        [&collected, captures, keeps](const FrameView& view, size_t /*depth*/) {
             for (size_t idx = 0; idx != view.names.size(); ++idx)
             {
                 if (!view.slots[idx].IsBound())
                 {
                     continue;
                 }
-                const auto& value = static_cast<const InternalValue&>(view.slots[idx]);
-                std::string name(view.nodes.Text(view.names[idx].name));
-                if (auto weakened = MacroStatement::WeakenCapture(value, captures))
+                if (keeps && !keeps->Reads(view.names[idx].hash))
                 {
-                    collected.emplace(std::move(name), std::move(*weakened));
                     continue;
                 }
-                collected.emplace(std::move(name), value);
+                AddCollected(collected, std::string(view.nodes.Text(view.names[idx].name)), static_cast<const InternalValue&>(view.slots[idx]), captures);
             }
             return false;
         });
@@ -2614,7 +2686,7 @@ void TemplateRenderer::KeepEndedSelf(RenderContext& values, const TemplateFrame&
     ClosureSite site(values, frame.baseDepth);
     // The capture of the top level, shared with its closures and held by the frames above it
     // that something outside holds; dropped here when none holds it
-    [[maybe_unused]] const auto capture = site.CaptureOnEnd(values);
+    [[maybe_unused]] const auto capture = site.CaptureOnEnd(values, {}, true);
     values.KeepEndedSelf(MakeTemplateSelf(*frame.blocks, site, frame.name, false));
 }
 
@@ -3191,7 +3263,7 @@ Callable MacroStatement::MakeCallable(RenderContext& values) const
     std::shared_ptr<const void> capture;
     if ((m_bodyNameRefs != 0 || m_bodyReachesContext) && site.OutlivesItsFrames(values))
     {
-        capture = site.CaptureOnEnd(values);
+        capture = site.CaptureOnEnd(values, values.Nodes()[m_bodyReads], false);
     }
     Callable result(Callable::Macro, CallableBody{ this, values.Nodes(), values.IsStaticAutoescape(), values.IsVolatileAutoescape(), std::move(site), m_readsSlotsOnly });
     result.SetAttributes(m_attributes);
