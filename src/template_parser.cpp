@@ -867,6 +867,12 @@ StatementsParser::ParseResult StatementsParser::ParseBlock(LexScanner& lexer, St
     }
 
     auto blockRenderer = m_nodes.Make<BlockStatement>(blockName, isScoped, isRequired);
+    // Only `if` keeps Jinja2's frame at the top level (Frame.soft); every other statement
+    // around the block opens an inner frame, where `visit_Block` calls the block unguarded
+    const bool inPlace = std::any_of(statementsInfo.begin(), statementsInfo.end(), [](const StatementInfo& info) {
+        return info.type != StatementInfo::TemplateRoot && info.type != StatementInfo::IfStatement && info.type != StatementInfo::ElseIfStatement;
+    });
+    m_nodes.Get<BlockStatement>(blockRenderer).SetInPlace(inPlace);
     if (!m_root.AddBlock(m_nodes, blockRenderer))
     {
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);

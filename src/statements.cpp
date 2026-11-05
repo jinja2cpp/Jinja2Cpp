@@ -2492,8 +2492,9 @@ void BlockStatement::Render(OutStream& os, RenderContext& values)
         return;
     }
 
-    // A block after `extends` is only a definition: the parent decides where it goes
-    if (frame->parent)
+    // A top-level block after `extends` is only a definition: the parent decides where it
+    // goes. Jinja2 calls one in a scoped statement where it stands as well (docs/tasks/0389)
+    if (frame->parent && !m_inPlace)
     {
         return;
     }
