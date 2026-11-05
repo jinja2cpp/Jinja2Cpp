@@ -4386,7 +4386,7 @@ bool Callable::IsEqual(const Callable& other) const
     }
     const auto left = GetIdentity();
     const auto right = other.GetIdentity();
-    return left.call && right.call && left.call->invoke == right.call->invoke && SameMethodReceiver(left.call->self, right.call->self);
+    return left.call != nullptr && right.call != nullptr && left.call->invoke == right.call->invoke && SameMethodReceiver(left.call->self, right.call->self);
 }
 
 } // namespace v2
