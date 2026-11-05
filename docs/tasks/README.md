@@ -444,7 +444,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0372](0372-unicode-version-corpus-cases.md) | Corpus cases on code points whose Unicode properties changed after 15.0 | parity | low | open |
 | [0373](0373-closure-capture-module-call-and-scoped-frames.md) | Closures kept past a module call or a scoped frame lose their names | parity | low | done |
 | [0374](0374-number-data-attributes.md) | int and float data attributes: real, imag, numerator, denominator | parity | low | done |
-| [0375](0375-closure-capture-free-variables.md) | A kept closure copies only the names its body reads | perf | low | open |
+| [0375](0375-closure-capture-free-variables.md) | A kept closure copies only the names its body reads | perf | low | done |
 | [0376](0376-same-string-getter-round-trip.md) | GetAsSameString moves its string through the PLT | perf | low | done |
 | [0377](0377-chat-template-assistant-mask-and-security-error.md) | Chat templates: the assistant token mask and the sandbox's SecurityError | api | low | open |
 | [0380](0380-markup-escape-copy-assignment.md) | MarkupEscape calls InternalValue's copy assignment out of line | perf | low | open |
