@@ -68,16 +68,19 @@ CharFileStreamPtr MemoryFileSystem::OpenStream(const std::string& name) const
         return result;
     }
 
-    auto& content = p->second;
+    const auto& content = p->second;
 
     if (!content.narrowContent && !content.wideContent)
     {
         return result;
     }
 
+    // A file stored in the other width is converted on each open and not kept: this member is const
+    // and may run on many threads at once (docs/tasks/0264)
     if (!content.narrowContent)
     {
-        content.narrowContent = ConvertString<std::string>(content.wideContent.value());
+        result.reset(new std::istringstream(ConvertString<std::string>(content.wideContent.value())));
+        return result;
     }
 
     result.reset(new std::istringstream(content.narrowContent.value()));
@@ -94,16 +97,19 @@ WCharFileStreamPtr MemoryFileSystem::OpenWStream(const std::string& name) const
         return result;
     }
 
-    auto& content = p->second;
+    const auto& content = p->second;
 
     if (!content.narrowContent && !content.wideContent)
     {
         return result;
     }
 
+    // A file stored in the other width is converted on each open and not kept: this member is const
+    // and may run on many threads at once (docs/tasks/0264)
     if (!content.wideContent)
     {
-        content.wideContent = ConvertString<std::wstring>(content.narrowContent.value());
+        result.reset(new std::wistringstream(ConvertString<std::wstring>(content.narrowContent.value())));
+        return result;
     }
 
     result.reset(new std::wistringstream(content.wideContent.value()));
