@@ -323,10 +323,8 @@ private:
 #endif
 
     // Whether nothing can read the cell any more but the registry: no value holds it, its
-    // source alone holds its data and no other adapter is attached to it (BorrowedCells::DropUnheld).
-    // `betweenCalls`: no call of the module runs, so a cell whose identity the source does not keep
-    // (m_unheldIdentity) goes once the host cannot lend the source again
-    [[nodiscard]] bool IsUnheld(bool betweenCalls) const noexcept;
+    // source alone holds its data and no other adapter is attached to it (BorrowedCells::DropUnheld)
+    [[nodiscard]] bool IsUnheld() const noexcept;
     // Whether the cell's storage alone holds the items: no value of an ended call shares them
     [[nodiscard]] bool OwnsItemsAlone() const noexcept;
     void Bind() const noexcept;
@@ -362,10 +360,9 @@ private:
     // (docs/tasks/0331 decision D8, 0335: CallExports::Pin)
     mutable bool m_shared = false;
     bool m_isList;
-    // The identity is the address of a value the source does not keep alive (CellLink::Adopt): the
-    // cell of the host's data then goes between two calls of the module like a call's own data,
-    // once the host cannot lend the source again, so that a later call never finds it at a reused
-    // address. Not while a call runs: another read of the value finds the cell by that address
+    // The identity is the address of a value the source does not keep alive (CellLink::Adopt): in a
+    // template module the cell lives for one call (BorrowedCells::FreezeCallScoped), so that a later
+    // call never finds it at an address the host reused or a document the host changed
     bool m_unheldIdentity;
     // Set when the render ends (BorrowedCells::Finish)
     mutable bool m_frozen = false;
@@ -622,9 +619,13 @@ public:
     // lived for one call of a template module (an argument, a user callable's result), which
     // the module's cells would otherwise keep until the module goes. A cell of the host's data
     // stays, as a later call may write it again
-    // `betweenCalls` (no call of the module runs): also the cells of the host's JSON values the host
-    // cannot lend again, whose identity is an address the host may reuse (docs/tasks/0212)
-    void DropUnheld(bool betweenCalls = false) noexcept;
+    void DropUnheld() noexcept;
+    // The outermost call of a template module ended: the cells whose identity is an address their
+    // source does not keep alive (a borrowed JSON document's value, BorrowedCell::m_unheldIdentity)
+    // freeze and leave the registry, as a render's cells do at its end (Finish). The host may change
+    // or free the document before the next call, which then reads the host's data; the values that
+    // outlived the call keep the frozen cell they read (docs/tasks/0212)
+    void FreezeCallScoped(CycleCollector* collector) noexcept;
 
 private:
     friend class CellLink;
@@ -633,7 +634,7 @@ private:
 
     void Finish(CycleCollector* collector) noexcept;
     // One pass of DropUnheld; false when it dropped none
-    bool DropUnheldOnce(bool betweenCalls) noexcept;
+    bool DropUnheldOnce() noexcept;
 
     std::unique_ptr<Table> m_cells;
     // The template module's call that runs, or 0 for a render's registry

@@ -1069,44 +1069,53 @@ TYPED_TEST_P(JsonConformance, MidLoopCell)
     jc::RunRows<TypeParam>(jc::MidLoopCellRows(), jc::kAllModes);
 }
 
-// Task 0212: a template module keeps the cells of the host's data across its calls (0049 P2), and a JSON value's
-// cell is keyed by the value's address, which a borrowed view does not keep alive. Once the host can no longer lend
-// the view again, the cell goes at the call's end: a later call never reads it for another value at that address
+// Task 0212: a JSON value's cell is keyed by the value's address, which a borrowed view does not keep alive, and
+// the host may change or free the document between two calls of a template module. The cell lives for one call:
+// within it two reads of a value are one object, and the next call reads the host's data, whoever keeps a view
 TYPED_TEST_P(JsonConformance, ModuleCallsOfABorrowedDocument)
 {
     if constexpr (TypeParam::kViewable)
     {
         jinja2::Template tpl;
-        ASSERT_TRUE(!!tpl.Load("{% macro f(d) %}{{ d }}{% set _ = d.update(k=1) %}{% endmacro %}{% macro g(l) %}{{ l }}{% set _ = l.append(1) %}{% endmacro %}"));
+        ASSERT_TRUE(!!tpl.Load("{% set store = [] %}"
+                               "{% macro f(d) %}{{ d }}{% set _ = d.update(k=1) %}{% endmacro %}"
+                               "{% macro keep(d) %}{% set _ = d.update(k=1) %}{% set _ = store.append(d) %}{{ d is sameas store[-1] }}{% endmacro %}"
+                               "{% macro show() %}{{ store }}{% endmacro %}"
+                               "{% macro g(l) %}{{ l }}{% set _ = l.append(1) %}{{ l|length }}{% endmacro %}"));
         auto module = tpl.MakeModule({});
         ASSERT_TRUE(!!module) << module.error().ToString();
-        const auto call = [&module](const char* name, jinja2::Value arg) {
+        const auto call = [&module](const char* name, jinja2::ValuesList args) {
             jinja2::UserCallableParams params;
-            params.extraPosArgs = jinja2::ValuesList{ std::move(arg) };
+            params.extraPosArgs = std::move(args);
             const jinja2::Value result = module->exports[name].template As<jinja2::UserCallable>().callable(params);
             return jc::AsText(result);
         };
         // The host reassigns the document between the calls, at the same address
         typename TypeParam::Json doc = TypeParam::Parse(R"({"a":1})");
-        EXPECT_EQ("{'a': 1}", call("f", jinja2::Reflect(std::as_const(doc))));
+        EXPECT_EQ("{'a': 1}", call("f", { jinja2::Reflect(std::as_const(doc)) }));
         doc = TypeParam::Parse(R"({"a":2})");
-        EXPECT_EQ("{'a': 2}", call("f", jinja2::Reflect(std::as_const(doc))));
-        doc = TypeParam::Parse(R"({"a":3})");
-        EXPECT_EQ("{'a': 3}", call("f", jinja2::Reflect(std::as_const(doc))));
-        // The host keeps the view and lends it again: each call sees the writes of the one before, as in Python
-        const typename TypeParam::Json list = TypeParam::Parse(R"([0])");
+        EXPECT_EQ("{'a': 2}", call("f", { jinja2::Reflect(std::as_const(doc)) }));
+        // ... also while the host keeps a view of it, and while the module keeps one
         {
-            const jinja2::Value kept = jinja2::Reflect(std::as_const(list));
-            EXPECT_EQ("[0]", call("g", kept));
-            EXPECT_EQ("[0, 1]", call("g", kept));
-            // Another view of the same value, while the host keeps the first, is the same object (traits with Identity)
-            const bool hasIdentity = jinja2::detail::json::HasIdentity<typename TypeParam::Json>::value;
-            EXPECT_EQ(hasIdentity ? "[0, 1, 1]" : "[0]", call("g", jinja2::Reflect(std::as_const(list))));
+            const jinja2::Value kept = jinja2::Reflect(std::as_const(doc));
+            EXPECT_EQ("{'a': 2}", call("f", { kept }));
+            doc = TypeParam::Parse(R"({"a":3})");
+            EXPECT_EQ("{'a': 3}", call("f", { jinja2::Reflect(std::as_const(doc)) }));
+            EXPECT_EQ("True", call("keep", { kept }));
         }
-        // Once the host let go of every view, a fresh view in each call starts clean, as before 0212; Python's would
-        // show the writes (docs/tasks/0402)
-        EXPECT_EQ("[0]", call("g", jinja2::Reflect(std::as_const(list))));
-        EXPECT_EQ("[0]", call("g", jinja2::Reflect(std::as_const(list))));
+        doc = TypeParam::Parse(R"({"a":4})");
+        EXPECT_EQ("{'a': 4}", call("f", { jinja2::Reflect(std::as_const(doc)) }));
+        // Traits without an Identity hook key a cell by the view's accessor, which the cell keeps alive: it stays
+        // across the calls as for any host container (0049 P2), and the view the host lends again keeps the writes
+        const bool hasIdentity = jinja2::detail::json::HasIdentity<typename TypeParam::Json>::value;
+        // The module's own value keeps what the call left in it
+        EXPECT_EQ(hasIdentity ? "[{'a': 3, 'k': 1}]" : "[{'a': 2, 'k': 1}]", call("show", {}));
+        // Within one call two views of the value are one object; the next call starts from the host's data, also for
+        // a view the host lends again (Python's would keep the writes: docs/tasks/0402)
+        const typename TypeParam::Json list = TypeParam::Parse(R"([0])");
+        const jinja2::Value kept = jinja2::Reflect(std::as_const(list));
+        EXPECT_EQ("[0]2", call("g", { kept }));
+        EXPECT_EQ(hasIdentity ? "[0]2" : "[0, 1]3", call("g", { kept }));
     }
 }
 

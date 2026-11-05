@@ -10,26 +10,30 @@ touches: [src/borrowed_cells.h, src/borrowed_cells.cpp, src/cycle_collector.h, t
 **Problem.** 0212 P3 keys the cell of a JSON value by the value's address
 (`IJsonNode::NodeIdentity`), so two reads of one value are one object within a render or a module
 call. A borrowed document (`jinja2::Reflect(const J&)`) is not kept alive by the cell, and the host
-may free or reassign it between two calls of a template module; a cell found at that address in a
-later call would show the earlier call's document (verifier finding on the 0212 P3 PR). P3 therefore
-drops such a cell between two calls once the host can no longer lend its source again
-(`BorrowedCell::m_unheldIdentity`, `ModuleCallCollector::DropBetweenCalls`; test
-`JsonConformance.ModuleCallsOfABorrowedDocument`). What remains differs from Python, as on master
-before P3:
-- Once the host has let go of every view, a fresh view of the same, unchanged document in each call
-  starts clean: Python passes the same dict, so `{% macro g(l) %}{{ l }}{% set _ = l.append(1) %}{% endmacro %}`
-  called twice with a fresh `Reflect(doc)` prints `[0]` both times where Python prints `[0]`, `[0, 1]`.
-  While the host keeps a view and lends it, or another view of the same value, the writes are kept.
-- A nested value of a kept view (`d.l` of a kept `d`) is read through a fresh accessor in each call,
-  so its cell goes between the calls too.
-- The TLA+ model (tla/CellProtocol.tla, `Unheld`) has no identity the source does not keep alive:
-  the rule "drop between calls, never during one" is not checked by TLC or the trace validation.
+may change or free it between two calls of a template module, while views of it are alive or not; a
+cell found at that address in a later call would show the earlier call's document (verifier findings
+F1 and F2 on #778). P3 therefore makes these cells call-scoped: at the end of a module's outermost
+call they freeze and leave the registry (`BorrowedCells::FreezeCallScoped`, the advisor's option g;
+test `JsonConformance.ModuleCallsOfABorrowedDocument`). What differs from Python:
+- A view the host keeps and lends to every call starts from the host's data in each call: Python
+  passes the same dict, so `{% macro g(l) %}{{ l }}{% set _ = l.append(1) %}{% endmacro %}` called
+  twice with one kept `Reflect(doc)` prints `[0]` both times where Python prints `[0]`, `[0, 1]`.
+  Before P3 that view kept the writes (0049 P2, the accessor key); a fresh view never did.
+- A view the module keeps (`{% set _ = store.append(d) %}`) keeps what the call left in it and
+  copies on a later write, as a value kept after a render does (0331).
+- Owned or shared documents (`Reflect(J&&)`, `Reflect(shared_ptr)`) are kept alive by the cell and
+  cannot change, so their cells could live across calls with Python's behaviour; the library cannot
+  tell them from borrowed ones without a hook (`IJsonNode::KeepsDocument()`, additive, before G1).
+- The TLA+ model (tla/CellProtocol.tla) and the cell trace have no call-scoped freeze: it is the
+  render's FinishFreeze for a subset of the cells at a module call's end, not checked by TLC.
 
-**Proposal.** Model unheld identities in CellProtocol.tla (an address the host may reuse once it lets
-go of its views) and check that no call reads a cell of another value. Then decide whether a cell may
-outlive the calls when the host promises the document's lifetime (for example an owned or shared
-view, whose cell keeps the document alive), which would give Python's behaviour for the first two
-cases.
+**Decision for Ruslan.** Should a borrowed JSON view the host lends again keep a module's writes
+across calls (0049 P2 for JSON)? If yes: re-key the cell under the view's accessor at the call's end
+and let `CellLink::Find` try that key on a miss (advisor option a', about 100-150 lines and a new
+model action). If no: record the first bullet as deliberate.
 
-**Done when** the model covers unheld identities, and the two cases above either match Python or
-are recorded as deliberate divergences with a test.
+**Proposal.** The `KeepsDocument()` hook for owned documents, the model's call-scoped freeze, and the
+decision above.
+
+**Done when** the model covers the call-scoped freeze, owned documents keep their cells across calls,
+and the borrowed case either matches Python or is recorded as deliberate with a test.

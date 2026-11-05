@@ -142,18 +142,14 @@ void BorrowedCell::TraceExport(bool live) const noexcept
 }
 #endif
 
-bool BorrowedCell::IsUnheld(bool betweenCalls) const noexcept
+bool BorrowedCell::IsUnheld() const noexcept
 {
     // The registry's reference alone, for data that lives only as long as its adapters, and the
     // reference of the source's own link. The only other adapters of the data are the anchors of
     // copied items (LifetimeAnchor), which are never read; so when nothing but the cell holds the
     // source, no adapter of the data can be read or made again, and no later call finds the cell.
-    // The data of the host, or of a global, can be lent again at any time: its cell stays. Unless
-    // its identity is an address the source does not keep (a JSON value, docs/tasks/0212): once
-    // the host cannot lend the source again, a later call may find a value at that address that is
-    // not this one (a document the host freed or reassigned), so the cell goes as a call's own,
-    // between two calls: within one, another read of the value finds the cell by its address
-    if (m_frozen || !m_links.empty() || (m_owner.expired() && !(betweenCalls && m_unheldIdentity)))
+    // The data of the host, or of a global, can be lent again at any time: its cell stays
+    if (m_frozen || !m_links.empty() || m_owner.expired())
     {
         return false;
     }
@@ -481,21 +477,21 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     return true;
 }
 
-void BorrowedCells::DropUnheld(bool betweenCalls) noexcept
+void BorrowedCells::DropUnheld() noexcept
 {
     // A dropped cell lets go of its items, which may hold the only source of another cell (the
     // adapter of a nested list): again until a pass drops none
-    while (m_cells && DropUnheldOnce(betweenCalls))
+    while (m_cells && DropUnheldOnce())
     {
     }
 }
 
-bool BorrowedCells::DropUnheldOnce(bool betweenCalls) noexcept
+bool BorrowedCells::DropUnheldOnce() noexcept
 {
     size_t count = 0;
     for (const auto& [identity, cell] : *m_cells)
     {
-        count += cell->IsUnheld(betweenCalls) ? 1U : 0U;
+        count += cell->IsUnheld() ? 1U : 0U;
     }
     if (count == 0)
     {
@@ -517,7 +513,7 @@ bool BorrowedCells::DropUnheldOnce(bool betweenCalls) noexcept
     // (docs/tasks/0336): a cell that became unheld since the count waits for the next pass
     for (auto entry = m_cells->begin(); entry != m_cells->end();)
     {
-        if (dropped.size() != count && entry->second->IsUnheld(betweenCalls))
+        if (dropped.size() != count && entry->second->IsUnheld())
         {
             JINJA2CPP_CELL_TRACE_EVENT("drop", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Ptr("c", Trace::Space::Cell, entry->second.get()),
                                        Trace::Links("links", entry->second->m_links.data(), entry->second->m_links.size()));
@@ -554,8 +550,7 @@ void BorrowedCells::Finish(CycleCollector* collector) noexcept
     // cell's items, or a cycle
     for (const auto& [identity, cell] : *m_cells)
     {
-        JINJA2CPP_CELL_TRACE_EVENT("freeze", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Ptr("c", Trace::Space::Cell, cell.get()),
-                                   Trace::Links("held", cell->m_links.data(), cell->m_links.size()));
+        // Not an event of the cell trace yet: the model has no call-scoped cell (docs/tasks/0402)
         cell->m_frozen = true;
         for (const auto* link : cell->m_links)
         {
@@ -592,6 +587,63 @@ void BorrowedCells::Finish(CycleCollector* collector) noexcept
     // An adapter that read a cell of this render, or found none while it ran, looks again
     [[maybe_unused]] const auto epoch = detail::CellCounters::NextEpoch();
     JINJA2CPP_CELL_TRACE_EVENT("finished", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("e", static_cast<int64_t>(epoch)), Trace::Num("live", detail::CellCounters::Live()));
+}
+
+void BorrowedCells::FreezeCallScoped(CycleCollector* collector) noexcept
+{
+    if (!m_cells)
+    {
+        return;
+    }
+    // As Finish, for these cells only: the sources first, while every cell is live
+    uint32_t count = 0;
+    for (const auto& [identity, cell] : *m_cells)
+    {
+        if (cell->m_unheldIdentity)
+        {
+            cell->m_source = InternalValue();
+            ++count;
+        }
+    }
+    if (count == 0)
+    {
+        return;
+    }
+    for (auto entry = m_cells->begin(); entry != m_cells->end();)
+    {
+        if (!entry->second->m_unheldIdentity)
+        {
+            ++entry;
+            continue;
+        }
+        const IntrusivePtr<const BorrowedCell> cell = entry->second;
+        // Not an event of the cell trace yet: the model has no call-scoped cell (docs/tasks/0402)
+        cell->m_frozen = true;
+        for (const auto* link : cell->m_links)
+        {
+            link->m_cell = nullptr;
+            link->m_state = 0;
+        }
+        cell->m_links.clear();
+        cell->m_links.shrink_to_fit();
+        entry = m_cells->erase(entry);
+        // The registry's reference is gone: a value that still reads the cell may hold a cycle
+        // through it, which the collector walks from it
+        if (collector && cell->use_count() > 1)
+        {
+            try
+            {
+                collector->NoteFrozen(ValueObjectPtr(cell));
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
+            {
+                // Out of memory: a cycle through the cell leaks (docs/tasks/0283)
+            }
+        }
+    }
+    detail::CellCounters::RemoveLive(count);
+    // An adapter that read one of these cells, or found none while the call ran, looks again
+    detail::CellCounters::NextEpoch();
 }
 
 void BorrowedCells::AdoptExports(std::shared_ptr<CallExports> exports) noexcept
