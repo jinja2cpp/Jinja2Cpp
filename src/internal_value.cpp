@@ -1816,6 +1816,13 @@ const void* HostIdentity(const IJsonNode* node, const void* accessor) noexcept
     const void* identity = node ? node->NodeIdentity() : nullptr;
     return identity ? identity : accessor;
 }
+
+// Whether HostIdentity is the document value's address, which the accessor does not keep alive
+// for a borrowed document (CellLink::Adopt's unheldIdentity)
+bool HasNodeIdentity(const IJsonNode* node) noexcept
+{
+    return node != nullptr && node->NodeIdentity() != nullptr;
+}
 } // namespace
 
 GenericList ExportCallList(BorrowedCells& call, const void* identity, InternalValue container)
@@ -2015,7 +2022,8 @@ public:
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override
     {
         // A global's data is the host's, whatever holds it
-        return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values));
+        return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values),
+                            HasNodeIdentity(m_node));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
     [[nodiscard]] bool IsBorrowed() const override { return true; }
@@ -3415,10 +3423,11 @@ public:
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override
     {
         // As GenericListAdapter's
-        return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values));
+        return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values),
+                            HasNodeIdentity(m_node));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
-    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return m_node != nullptr ? MapAttrPolicy::MethodsFirst : MapAttrPolicy::KeysFirst; }
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return m_node ? MapAttrPolicy::MethodsFirst : MapAttrPolicy::KeysFirst; }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {

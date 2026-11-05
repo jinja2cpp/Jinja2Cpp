@@ -1069,6 +1069,47 @@ TYPED_TEST_P(JsonConformance, MidLoopCell)
     jc::RunRows<TypeParam>(jc::MidLoopCellRows(), jc::kAllModes);
 }
 
+// Task 0212: a template module keeps the cells of the host's data across its calls (0049 P2), and a JSON value's
+// cell is keyed by the value's address, which a borrowed view does not keep alive. Once the host can no longer lend
+// the view again, the cell goes at the call's end: a later call never reads it for another value at that address
+TYPED_TEST_P(JsonConformance, ModuleCallsOfABorrowedDocument)
+{
+    if constexpr (TypeParam::kViewable)
+    {
+        jinja2::Template tpl;
+        ASSERT_TRUE(!!tpl.Load("{% macro f(d) %}{{ d }}{% set _ = d.update(k=1) %}{% endmacro %}{% macro g(l) %}{{ l }}{% set _ = l.append(1) %}{% endmacro %}"));
+        auto module = tpl.MakeModule({});
+        ASSERT_TRUE(!!module) << module.error().ToString();
+        const auto call = [&module](const char* name, jinja2::Value arg) {
+            jinja2::UserCallableParams params;
+            params.extraPosArgs = jinja2::ValuesList{ std::move(arg) };
+            const jinja2::Value result = module->exports[name].template As<jinja2::UserCallable>().callable(params);
+            return jc::AsText(result);
+        };
+        // The host reassigns the document between the calls, at the same address
+        typename TypeParam::Json doc = TypeParam::Parse(R"({"a":1})");
+        EXPECT_EQ("{'a': 1}", call("f", jinja2::Reflect(std::as_const(doc))));
+        doc = TypeParam::Parse(R"({"a":2})");
+        EXPECT_EQ("{'a': 2}", call("f", jinja2::Reflect(std::as_const(doc))));
+        doc = TypeParam::Parse(R"({"a":3})");
+        EXPECT_EQ("{'a': 3}", call("f", jinja2::Reflect(std::as_const(doc))));
+        // The host keeps the view and lends it again: each call sees the writes of the one before, as in Python
+        const typename TypeParam::Json list = TypeParam::Parse(R"([0])");
+        {
+            const jinja2::Value kept = jinja2::Reflect(std::as_const(list));
+            EXPECT_EQ("[0]", call("g", kept));
+            EXPECT_EQ("[0, 1]", call("g", kept));
+            // Another view of the same value, while the host keeps the first, is the same object (traits with Identity)
+            const bool hasIdentity = jinja2::detail::json::HasIdentity<typename TypeParam::Json>::value;
+            EXPECT_EQ(hasIdentity ? "[0, 1, 1]" : "[0]", call("g", jinja2::Reflect(std::as_const(list))));
+        }
+        // Once the host let go of every view, a fresh view in each call starts clean, as before 0212; Python's would
+        // show the writes (docs/tasks/0402)
+        EXPECT_EQ("[0]", call("g", jinja2::Reflect(std::as_const(list))));
+        EXPECT_EQ("[0]", call("g", jinja2::Reflect(std::as_const(list))));
+    }
+}
+
 // Test names for INSTANTIATE_TYPED_TEST_SUITE_P: clang's -Wpedantic rejects the macro without its optional argument
 struct JsonBindingNames
 {
@@ -1079,6 +1120,6 @@ struct JsonBindingNames
     }
 };
 
-REGISTER_TYPED_TEST_SUITE_P(JsonConformance, Scalars, BigIntegers, Nesting, KeyOrder, MissingKeysAndIndexes, EmptyContainers, NullMemberAndNullItem, Strings, IterationAndFilters, EnumeratorPastTheEnd, Equality, DictMethods, ModuleExportLimits, LifetimeInTemplates, LifetimeOfItemsWithoutEngine, ConcurrentRenders, CopyLimits, RepeatedKeys, DeepViewRendersOrFailsCleanly, Identity, MidLoopCell);
+REGISTER_TYPED_TEST_SUITE_P(JsonConformance, Scalars, BigIntegers, Nesting, KeyOrder, MissingKeysAndIndexes, EmptyContainers, NullMemberAndNullItem, Strings, IterationAndFilters, EnumeratorPastTheEnd, Equality, DictMethods, ModuleExportLimits, LifetimeInTemplates, LifetimeOfItemsWithoutEngine, ConcurrentRenders, CopyLimits, RepeatedKeys, DeepViewRendersOrFailsCleanly, Identity, MidLoopCell, ModuleCallsOfABorrowedDocument);
 
 #endif // JINJA2CPP_TEST_BINDING_CONFORMANCE_H

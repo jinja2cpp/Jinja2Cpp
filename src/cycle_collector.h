@@ -181,7 +181,7 @@ class ModuleCallCollector
 {
 public:
     ModuleCallCollector(BorrowedCells& cells, KeptObjects& kept) noexcept
-        : m_cells(cells)
+        : m_cells(DropBetweenCalls(cells))
         , m_outerCall(cells.BeginCall())
         , m_collector(cells, kept)
     {
@@ -192,7 +192,7 @@ public:
         // values the call handed out keep what they read now, before a cell of theirs is dropped
         // (Complete did that already, unless the call failed)
         m_cells.PinExportsOrSkip();
-        m_cells.DropUnheld();
+        m_cells.DropUnheld(m_outerCall.call == 0);
         m_cells.EndCall(std::move(m_outerCall));
     }
     // The call succeeded: its values keep what they read now, or the call fails with
@@ -205,6 +205,17 @@ public:
     ModuleCallCollector& operator=(ModuleCallCollector&&) = delete;
 
 private:
+    // Before the first call of a module runs (no other is running): the host has let go of what it
+    // lent the calls before, which may have been a document now gone (docs/tasks/0212)
+    static BorrowedCells& DropBetweenCalls(BorrowedCells& cells) noexcept
+    {
+        if (!cells.InCall())
+        {
+            cells.DropUnheld(true);
+        }
+        return cells;
+    }
+
     BorrowedCells& m_cells;
     BorrowedCells::CallFrame m_outerCall;
     CycleCollector m_collector;

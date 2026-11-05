@@ -193,7 +193,11 @@ public:
     // global's (ValueObject::IsGlobalData); `listed`: the thread's snapshot reaches it
     // (ValueObject::IsInSnapshot). `owner`: what owns data that lives only as long as its
     // adapters (a user callable's result, a module call's argument), empty for the host's data
-    bool Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, bool listed, std::weak_ptr<const void> owner = {}) const;
+    // `unheldIdentity`: the identity is the address of a value the source does not keep alive (a
+    // JSON document's value, IJsonNode::NodeIdentity, which the host may free or reassign between
+    // two calls of a template module, docs/tasks/0212)
+    bool Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, bool listed, std::weak_ptr<const void> owner = {},
+               bool unheldIdentity = false) const;
 
 private:
     friend class BorrowedCell;
@@ -248,7 +252,8 @@ private:
 class BorrowedCell final : public ValueObject
 {
 public:
-    BorrowedCell(InternalValue storage, InternalValue source, const void* identity, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner = {});
+    BorrowedCell(InternalValue storage, InternalValue source, const void* identity, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner = {},
+                 bool unheldIdentity = false);
     BorrowedCell(const BorrowedCell&) = delete;
     BorrowedCell(BorrowedCell&&) = delete;
     BorrowedCell& operator=(const BorrowedCell&) = delete;
@@ -320,8 +325,10 @@ private:
 #endif
 
     // Whether nothing can read the cell any more but the registry: no value holds it, its
-    // source alone holds its data and no other adapter is attached to it (BorrowedCells::DropUnheld)
-    [[nodiscard]] bool IsUnheld() const noexcept;
+    // source alone holds its data and no other adapter is attached to it (BorrowedCells::DropUnheld).
+    // `betweenCalls`: no call of the module runs, so a cell whose identity the source does not keep
+    // (m_unheldIdentity) goes once the host cannot lend the source again
+    [[nodiscard]] bool IsUnheld(bool betweenCalls) const noexcept;
     // Whether the cell's storage alone holds the items: no value of an ended call shares them
     [[nodiscard]] bool OwnsItemsAlone() const noexcept;
     void Bind() const noexcept;
@@ -357,6 +364,11 @@ private:
     // (docs/tasks/0331 decision D8, 0335: CallExports::Pin)
     mutable bool m_shared = false;
     bool m_isList;
+    // The identity is the address of a value the source does not keep alive (CellLink::Adopt): the
+    // cell of the host's data then goes between two calls of the module like a call's own data,
+    // once the host cannot lend the source again, so that a later call never finds it at a reused
+    // address. Not while a call runs: another read of the value finds the cell by that address
+    bool m_unheldIdentity;
     // Set when the render ends (BorrowedCells::Finish)
     mutable bool m_frozen = false;
     // The links of the adapters the thread's snapshot of the globals reaches attached to the live
@@ -612,7 +624,9 @@ public:
     // lived for one call of a template module (an argument, a user callable's result), which
     // the module's cells would otherwise keep until the module goes. A cell of the host's data
     // stays, as a later call may write it again
-    void DropUnheld() noexcept;
+    // `betweenCalls` (no call of the module runs): also the cells of the host's JSON values the host
+    // cannot lend again, whose identity is an address the host may reuse (docs/tasks/0212)
+    void DropUnheld(bool betweenCalls = false) noexcept;
 
 private:
     friend class CellLink;
@@ -621,7 +635,7 @@ private:
 
     void Finish(CycleCollector* collector) noexcept;
     // One pass of DropUnheld; false when it dropped none
-    bool DropUnheldOnce() noexcept;
+    bool DropUnheldOnce(bool betweenCalls) noexcept;
 
     std::unique_ptr<Table> m_cells;
     // The template module's call that runs, or 0 for a render's registry
