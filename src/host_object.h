@@ -98,6 +98,14 @@ public:
     [[nodiscard]] virtual std::optional<size_t> Hash() const;
     // The object behind this view: the same for two views of one host object (a PyObject*)
     [[nodiscard]] virtual const void* Identity() const { return this; }
+    // isinstance(x, collections.abc.Mapping): the engine reads the object as a map where Python
+    // asks for a mapping (`is mapping`, dictsort, items, tojson, xmlattr): its keys are what
+    // Iterate gives, each value GetItem of its key (HostObjectAccessor::GetEntries). Every other
+    // operation still asks the object, as above
+    [[nodiscard]] virtual bool IsMapping() const { return false; }
+    // isinstance(x, (list, tuple)): tojson writes the items of Iterate as a JSON array, as
+    // json.dumps does
+    [[nodiscard]] virtual bool IsSequence() const { return false; }
     // Whether the object has __html__, and its result: the object prints as that Markup under
     // autoescape, and is `escaped`
     [[nodiscard]] virtual bool IsMarkupLike() const { return false; }
@@ -105,8 +113,9 @@ public:
 };
 
 // The map accessor that carries a host object into the engine's values. Reading it as a map
-// (GetItem, HasValue, FindItem) follows the attribute and item rules above; it has no keys of
-// its own to enumerate, so a mapping is iterated through Iterate
+// (GetItem, HasValue, FindItem) follows the attribute and item rules above. Only a mapping
+// (IsMapping) has keys and entries to enumerate, and no object class; every object iterates
+// through Iterate
 class HostObjectAccessor : public IMapAccessor
 {
 public:
@@ -186,6 +195,20 @@ ListAdapter Reversed(const IHostObject& host);
 // x == other by Python's rules: left.__eq__, then right.__eq__, then identity. Null hosts
 // stand for operands that are no host objects
 bool Equal(const IHostObject* left, const InternalValue& leftValue, const IHostObject* right, const InternalValue& rightValue);
+
+// The function of a jinja2::UserCallable made by EngineUserCallable
+struct EngineCallableBody
+{
+    InternalValue callable;
+    // A call through the public API, outside a template, which has no values of the engine to
+    // pass: refused with std::logic_error
+    Value operator()(const UserCallableParams& params) const;
+};
+// A jinja2::UserCallable for TemplateEnv::AddFilter, AddTest and Settings::finalize that the
+// engine takes back as `callable` itself (InputValueConvertor::ConvertUserCallable): a
+// Callable of kind UserCallable, called with the engine's values, so the arguments of a host's
+// filter keep their identity (the Python module, docs/tasks/0353)
+UserCallable EngineUserCallable(InternalValue callable);
 } // namespace host
 
 } // namespace v2

@@ -126,6 +126,14 @@ inline thread_local RenderLimits t_renderLimits;
 
 void PollDeadline();
 void InstallRenderLimits(const RenderLimits& limits);
+
+// A host's poll of the renders on this thread (docs/tasks/0353): the Python module checks for
+// signals there, so Ctrl-C stops a long render. A render with limits calls it every
+// HostPollSteps steps; it may throw to stop the render. Null, the default, costs nothing: the
+// slow path of the step count reads it, not the step
+using HostPoll = void (*)();
+inline thread_local HostPoll t_hostPoll = nullptr;
+inline constexpr std::uint64_t HostPollSteps = 1024;
 } // namespace detail
 
 // Installs a render's limits for as long as it lives and puts back the ones of the render it

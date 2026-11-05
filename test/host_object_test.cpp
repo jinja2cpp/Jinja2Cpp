@@ -53,6 +53,9 @@ struct ToySpec
     std::optional<std::vector<InternalValue>> sequence;
     // What a call returns instead of describing its arguments
     std::optional<InternalValue> callResult;
+    // A collections.abc.Mapping (its keys are `iteration`), a list or tuple
+    bool mapping = false;
+    bool listOrTuple = false;
 };
 
 class ToyObject final : public IHostObject
@@ -163,6 +166,8 @@ public:
     [[nodiscard]] std::optional<size_t> Hash() const override { return m_spec->hashable ? IHostObject::Hash() : std::nullopt; }
     // Every view of one spec is one object, as two proxies of one PyObject are
     [[nodiscard]] const void* Identity() const override { return m_spec.get(); }
+    [[nodiscard]] bool IsMapping() const override { return m_spec->mapping; }
+    [[nodiscard]] bool IsSequence() const override { return m_spec->listOrTuple; }
     [[nodiscard]] bool IsMarkupLike() const override { return m_spec->html.has_value(); }
     [[nodiscard]] std::string Html() const override { return m_spec->html.value_or(""); }
 
@@ -463,3 +468,51 @@ TEST(HostObjectTest, CallBlockWritesTheResultAsIs)
 }
 
 #endif // JINJA2CPP_LINK_AS_SHARED
+
+// A mapping is read as a map where Python wants one; every other operation still asks it (0353)
+TEST(HostObjectTest, MappingReadsAsAMap)
+{
+    ToySpec spec;
+    spec.mapping = true;
+    spec.iteration = std::vector<InternalValue>{ InternalValue(std::string("b")), InternalValue(std::string("a")) };
+    spec.items = { { "a", InternalValue(int64_t{ 1 }) }, { "b", InternalValue(std::string("x")) } };
+    spec.attrs = { { "keys", InternalValue(std::string("attr-keys")) } };
+    spec.contains = std::vector<std::string>{ "a", "b" };
+    spec.len = 2;
+    const InternalValueMap params{ { "m", MakeToy(spec) }, { "o", MakeToy(Rich()) } };
+    EXPECT_EQ("True False|[('a', 1), ('b', 'x')]|[('b', 'x'), ('a', 1)]|{\"a\": 1, \"b\": \"x\"}| b=\"x\" a=\"1\"",
+              Render("{{ m is mapping }} {{ o is mapping }}|{{ m|dictsort }}|{{ m|items|list }}|{{ m|tojson }}|{{ m|xmlattr }}", params));
+    // `in` asks __contains__, not the attributes; x.name is still getattr first
+    EXPECT_EQ("True False attr-keys 1 ['b', 'a'] 2 Тоу", Render("{{ 'a' in m }} {{ 'keys' in m }} {{ m.keys }} {{ m.a }} {{ m|list }} {{ m|length }} {{ m }}", params));
+    EXPECT_EQ(L"[('a', 1), ('b', 'x')]", RenderW(L"{{ m|dictsort }}", params));
+    EXPECT_NE(std::string::npos, Render("{{ o|dictsort }}", params).find("'Toy' object has no attribute 'items'"));
+}
+
+TEST(HostObjectTest, ListOrTupleIsAJsonArrayAndASequence)
+{
+    ToySpec spec;
+    spec.listOrTuple = true;
+    spec.iteration = std::vector<InternalValue>{ InternalValue(int64_t{ 1 }), InternalValue(std::string("b")) };
+    spec.len = 2;
+    spec.attrs = { { "__getitem__", InternalValue(true) } };
+    ToySpec sized;
+    sized.len = 1;
+    const InternalValueMap params{ { "l", MakeToy(spec) }, { "s", MakeToy(sized) } };
+    EXPECT_EQ("[1, \"b\"] True False", Render("{{ l|tojson }} {{ l is sequence }} {{ s is sequence }}", params));
+    EXPECT_EQ(L"[1, \"b\"]", RenderW(L"{{ l|tojson }}", params));
+    EXPECT_NE(std::string::npos, Render("{{ s|tojson }}", params).find("Object of type Toy is not JSON serializable"));
+}
+
+// A method that may change its receiver (append) is the host's own attribute: the engine never
+// copies the object to change the copy
+TEST(HostObjectTest, MutatingMethodNameCallsTheObject)
+{
+    ToySpec method;
+    method.callable = true;
+    ToySpec spec = Rich();
+    spec.attrs.emplace("append", MakeToy(method));
+    spec.listOrTuple = true;
+    const InternalValueMap params{ { "x", MakeToy(spec) } };
+    EXPECT_EQ("called(1) attr-name", Render("{{ x.append(1) }} {{ x.name }}", params));
+    EXPECT_EQ(L"called(1)", RenderW(L"{{ x.append(1) }}", params));
+}

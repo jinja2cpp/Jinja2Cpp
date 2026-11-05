@@ -2850,7 +2850,9 @@ bool IsMutable(const InternalValue& value)
     }
     if (auto map = AsMap(value))
     {
-        return map->GetMutableItems() != nullptr;
+        // A host object changes through its own methods (`x.append` is its attribute): the
+        // engine never copies it to change the copy
+        return map->IsHost() || map->GetMutableItems() != nullptr;
     }
     return false;
 }
