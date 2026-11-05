@@ -375,7 +375,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0301](0301-module-call-loads-accumulate.md) | A `Template::MakeModule` module keeps what each of its calls loads | robustness | medium | done |
 | [0302](0302-simdjson-binding.md) | An optional simdjson binding | api | low | open |
 | [0303](0303-retire-rapidjson-backend.md) | Retire the built-in RapidJSON backend | build | medium | done |
-| [0304](0304-loop-over-loop-peeks-early.md) | A for loop over `loop` advances the outer loop early | parity | low | open |
+| [0304](0304-loop-over-loop-peeks-early.md) | A for loop over `loop` advances the outer loop early | parity | low | done |
 | [0305](0305-builtin-class-repr.md) | The builtin classes print as `<class 'range'>` | parity | low | done |
 | [0306](0306-filter-test-argument-unpacking.md) | `*args` and `**kwargs` in filter and test calls | parity | low | done |
 | [0307](0307-fold-by-choice-nested.md) | Fold a choice that sits inside another foldable expression | parity | low | done |
@@ -435,7 +435,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0363](0363-cell-protocol-inductive-proof.md) | Prove the cell protocol's invariants inductively | robustness | low | open |
 | [0364](0364-frozen-version-deep-validation.md) | Validate a frozen version deeply, from time to time | robustness | medium | open |
 | [0365](0365-fresh-generic-items-of-a-call-argument.md) | A fresh generic container nested in a call's argument keeps its module cell | robustness | low | open |
-| [0366](0366-bound-loop-method-repr-after-break.md) | A kept `loop.cycle` prints `?` for the length of a lazily filtered loop it broke out of | parity | low | open |
+| [0366](0366-bound-loop-method-repr-after-break.md) | A kept `loop.cycle` prints `?` for the length of a lazily filtered loop it broke out of | parity | low | done |
 | [0367](0367-module-object-is-escaped.md) | `m is escaped` of an imported module | parity | low | done |
 | [0368](0368-callable-python-type-names.md) | Python type names of callables in error messages | parity | low | open |
 | [0369](0369-finalize-template-data-in-volatile-code.md) | Template text in volatile autoescape code goes through finalize | parity | low | done |
@@ -449,7 +449,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0377](0377-chat-template-assistant-mask-and-security-error.md) | Chat templates: the assistant token mask and the sandbox's SecurityError | api | low | open |
 | [0380](0380-markup-escape-copy-assignment.md) | MarkupEscape calls InternalValue's copy assignment out of line | perf | low | open |
 | [0381](0381-host-object-operators.md) | Host objects: arithmetic and ordering operators | parity | low | open |
-| [0382](0382-urlencode-of-loop.md) | `loop|urlencode` iterates the rest of the loop | parity | low | open |
+| [0382](0382-urlencode-of-loop.md) | `loop|urlencode` iterates the rest of the loop | parity | low | done |
 | [0383](0383-lazy-filter-results-not-sequences.md) | A lazy filter result is no sequence: `last` and slicing it | parity | low | done |
 | [0384](0384-dormant-chat-preset-load-cost.md) | Keep the dormant chat-template preset free on every Load | perf | low | done |
 | [0385](0385-asan-gcc13-sign-conversion-expressions-test.md) | Sanitizer build with GCC 13 fails on a "\x80" literal in expressions_test | build | low | done |
@@ -457,3 +457,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0387](0387-iterator-repr-equality-json.md) | A generator still prints, compares and serializes as a list | parity | low | open |
 | [0388](0388-migration-iterator-results.md) | MIGRATION.md: lazy filter results are no longer sequences | release | low | open |
 | [0389](0389-block-in-scoped-statement-of-child-template.md) | A block in a scoped statement of a child template also renders in place | parity | low | open |
+| [0390](0390-loop-length-and-kept-loop-leftovers.md) | Loop length and kept loops: leftovers of 0304 | parity | low | open |
