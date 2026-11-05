@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/767
 priority: high
 area: release
 touches: [CMakeLists.txt#JINJA2CPP_INSTALL, docs/licensing.md]
@@ -30,3 +31,9 @@ metadata mismatch or missing license file.
 owned package metadata, required notices appear in source and installed artifacts,
 and 0225 asserts their presence. The upstream recipe correction is linked with its
 actual status; a submitted request is not described as a published package update.
+
+**Status (2026-11-05, #767).** Conclusions and the artifact inventory: docs/licensing.md (MPL-2.0
+at every tag; ConanCenter's `license = "MIT"` is wrong for 1.1.0, 1.2.1, 1.3.2).
+`THIRD-PARTY-NOTICES.txt` and `LICENSE` are installed to `share/doc/Jinja2Cpp/`, and 0225's check
+asserts them. The upstream recipe correction rides the 2.0 version bump we submit ourselves
+(Ruslan 2026-11-05): task 0397.

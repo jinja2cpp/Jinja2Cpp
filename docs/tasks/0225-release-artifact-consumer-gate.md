@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/767
 priority: high
 area: release
 depends: [0226]
@@ -36,3 +37,11 @@ and test offline consumption only when the required dependencies are preprovided
 runs in release validation on the supported platforms, and builds/runs its consumer
 with tests disabled in the library. A missing public header, wrong package version,
 missing notice, or undeclared checkout dependency makes the check fail.
+
+**Status (2026-11-05, #767).** `scripts/check_release_artifact.py` (`--git-ref` or `--archive`)
+runs in one row each of linux-build (static), macos-build (shared) and windows-build (static)
+and uploads its JSON report; `test/release/` unit-tests each failure class in format-check. Not
+covered yet: the external and Conan dependency modes and the JSON binding components through
+this check (`--deps-mode external` works given installed deps; add rows when 0006 publishes a
+package), and a published archive rather than `git archive` of the CI commit (pass `--archive`
+at RC time, 0221).
