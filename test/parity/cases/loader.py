@@ -364,6 +364,9 @@ CASES = [
     ("module_object_autoescape", "{% import 'out.j2' as m %}[{{ m }}]|{{ m|e }}|{{ m ~ '' }}|{{ m|string }}", {**MODOBJ, "env": {"autoescape": True}}),
     ("module_object_forceescape", "{% import 'out.j2' as m %}{{ m|forceescape }}|{{ m|striptags }}|{{ m|safe }}", {**MODOBJ, "env": {"autoescape": True}}),
     ("module_object_is_escaped", "{% import 'out.j2' as m %}{{ m is escaped }}", MODOBJ),
+    # join and xmlattr take __html__ of a module, as of Markup (0367)
+    ("module_object_join_xmlattr_autoescape", "{% import 'out.j2' as m %}{{ [m]|join }}|{{ [m, '<']|join(',') }}|{{ dict(a=m)|xmlattr }}", {**MODOBJ, "env": {"autoescape": True}}),
+    ("module_object_join_xmlattr", "{% import 'out.j2' as m %}{{ [m]|join }}|{{ [m, '<']|join(',') }}|{{ dict(a=m)|xmlattr }}", MODOBJ),
     ("module_object_length", "{% import 'out.j2' as m %}{{ m|length }}", MODOBJ),
     ("module_object_iterate", "{% import 'out.j2' as m %}{% for k in m %}{{ k }}{% endfor %}", MODOBJ),
     ("module_object_list", "{% import 'out.j2' as m %}{{ m|list }}", MODOBJ),

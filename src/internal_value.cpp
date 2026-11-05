@@ -480,7 +480,9 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     InternalValue operator()(const ListRef& values, int64_t index) const
     {
         auto size = values.GetSize();
-        if (!size || !NormalizeIndex(index, *size))
+        // An iterator (a lazy filter's generator) has no items: Jinja2 swallows the TypeError
+        // (docs/tasks/0383)
+        if (!size || !NormalizeIndex(index, *size) || values.GetIteratorKind() != IteratorKind::None)
         {
             return InternalValue();
         }
@@ -2371,17 +2373,40 @@ private:
     mutable IntrusivePtr<ItemAdapters<std::is_same_v<Holder<ValuesList>, ByHeldRef<ValuesList>>>> m_items;
 };
 
-ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
+const char* IteratorTypeName(IteratorKind kind) noexcept
+{
+    switch (kind)
+    {
+    case IteratorKind::Generator:
+        return "generator";
+    case IteratorKind::ListReverse:
+        return "list_reverseiterator";
+    case IteratorKind::TupleReverse:
+        return "reversed";
+    case IteratorKind::RangeIterator:
+        return "range_iterator";
+    case IteratorKind::DictReverseKey:
+        return "dict_reversekeyiterator";
+    case IteratorKind::None:
+        break;
+    }
+    return nullptr;
+}
+
+namespace
+{
+ListAdapter CreateValuesAdapter(InternalValueList&& values, IteratorKind iteratorKind)
 {
     // The items are shared by every copy of the list, as a Python list is shared by its
     // names: an append() through one is seen through all, and `a is sameas b` holds
     class Adapter final : public IndexedListAccessorImpl<Adapter>
     {
     public:
-        explicit Adapter(InternalValueList&& values)
+        Adapter(InternalValueList&& values, IteratorKind iteratorKind)
             : m_values(std::move(values))
         {
             SetTraversable();
+            SetIteratorKind(iteratorKind);
         }
 
         [[nodiscard]] size_t GetItemsCountImpl() const { return m_values.Get().size(); }
@@ -2441,7 +2466,18 @@ ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
         BySharedMutable<InternalValueList> m_values;
     };
 
-    return ListAdapter(MakeRef<Adapter>(std::move(values)));
+    return ListAdapter(MakeRef<Adapter>(std::move(values), iteratorKind));
+}
+} // namespace
+
+ListAdapter ListAdapter::CreateAdapter(InternalValueList&& values)
+{
+    return CreateValuesAdapter(std::move(values), IteratorKind::None);
+}
+
+ListAdapter ListAdapter::CreateIterator(InternalValueList&& values, IteratorKind kind)
+{
+    return CreateValuesAdapter(std::move(values), kind);
 }
 
 InternalValue IListAccessor::LifetimeAnchor(const InternalValue& self) const

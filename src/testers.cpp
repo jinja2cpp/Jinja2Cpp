@@ -6,6 +6,7 @@
 #include "filters.h"
 #include "function_base.h"
 #include "host_object.h"
+#include "markup.h"
 #include "internal_value.h"
 #include "python_format.h"
 #include "render_context.h"
@@ -559,13 +560,9 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
         }
         break;
     case IsEscapedMode:
-        // Python checks for __html__, which Markup has, and an object of the host language may
-        if (const auto* host = GetHostObject(baseVal))
-        {
-            result = host->IsMarkupLike();
-            break;
-        }
-        result = baseVal.IsMarkup();
+        // Python checks for __html__, which Markup, a template module and an object of the host
+        // language may have
+        result = HasHtml(baseVal);
         break;
     case IsFalseMode:
         result = valKind == TestKind::Boolean && !ConvertToBool(baseVal);
@@ -638,6 +635,11 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
     case IsSequenceMode:
         // A dict is a sequence in Python (len and __getitem__), a reflected object is not
         result = valKind == TestKind::List || valKind == TestKind::KVPair || valKind == TestKind::String;
+        // An iterator (a lazy filter's generator) has no len() (docs/tasks/0383)
+        if (const auto list = valKind == TestKind::List ? AsList(baseVal) : std::nullopt; list && list->GetIteratorKind() != IteratorKind::None)
+        {
+            result = false;
+        }
         if (valKind == TestKind::Map)
         {
             auto map = AsMap(baseVal);

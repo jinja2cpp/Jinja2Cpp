@@ -1681,6 +1681,74 @@
    }
   },
   {
+   "id": "subscripts.slice_reversed_list",
+   "template": "{{ ([1, 2]|select|reverse|reverse)[1:] }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'list_reverseiterator' object is not subscriptable"
+   }
+  },
+  {
+   "id": "subscripts.slice_reversed_literal_fold",
+   "template": "[{{ ([1, 2]|reverse)[0:1] }}][{{ ([1, 2]|reverse)[0] }}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[][]"
+  },
+  {
    "id": "subscripts.slice_undefined_bound",
    "template": "{{ l[missing:] }}",
    "context": {

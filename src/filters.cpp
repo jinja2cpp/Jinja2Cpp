@@ -153,6 +153,14 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
         // An undefined step has no attributes, unless its policy is Chainable
         CheckUndefinedUse(result, UndefinedUse::Attribute);
         auto next = Subscript(result, part, &context);
+        // getitem falls back to getattr: a number's data attributes (docs/tasks/0374)
+        if (next.IsUndefined() && IsStringValue(part))
+        {
+            if (auto attr = methods::GetNumberDataAttr(result, AsString(part)))
+            {
+                next = std::move(*attr);
+            }
+        }
         if (next.IsUndefined() && !GetUndefinedInfo(next))
         {
             // A missing step knows where it came from, like a missing attribute in an expression
@@ -281,7 +289,7 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
 
     // Python join converts every item and the delimiter with str(). Under autoescape a
     // Markup delimiter or item makes it a Markup join, which escapes the rest. An item with
-    // __html__ (a host object) counts, a delimiter with it does not: Jinja2 takes str() of that
+    // __html__ (a host object or a template module) counts, a delimiter with it does not: Jinja2 takes str() of that
     // delimiter first, as markup_join (`~`) does of every operand
     auto* renderer = context.GetRendererCallback();
     InternalValue delimiterVal = GetArgumentValue("d", context);
@@ -293,7 +301,7 @@ InternalValue Join::Filter(const InternalValue& baseVal, RenderContext& context)
         isMarkup = delimiterVal.IsMarkup();
         for (const InternalValue& val : values)
         {
-            isMarkup = isMarkup || val.IsMarkup() || host::IsMarkupLike(val);
+            isMarkup = isMarkup || HasHtml(val);
             items.push_back(val);
         }
         values = ListAdapter::CreateAdapter(std::move(items));
@@ -443,6 +451,10 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     if (isPlainDict)
     {
         return GetArgumentValue("default", context);
+    }
+    if (auto attr = methods::GetNumberDataAttr(baseVal, attrName))
+    {
+        return std::move(*attr);
     }
     auto result = Subscript(baseVal, attrNameVal, &context);
     if (result.IsUndefined())
@@ -727,7 +739,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
                 // Jinja2 starts with `if value:`, so None, False and 0 give nothing
                 if (!ConvertToBool(baseVal))
                 {
-                    return ListAdapter::CreateAdapter(InternalValueList());
+                    return ListAdapter::CreateIterator(InternalValueList(), IteratorKind::Generator);
                 }
                 ThrowNotIterable(baseVal);
             }
@@ -743,7 +755,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
             resultList.push_back(GetAttributeByPath(item, path, defaultVal, context));
             return true;
         });
-        return ListAdapter::CreateAdapter(std::move(resultList));
+        return ListAdapter::CreateIterator(std::move(resultList), IteratorKind::Generator);
     }
 
     InternalValue filterName = GetArgumentValue("filter", context);
@@ -770,7 +782,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         // Jinja2 starts with `if value:`, so None, False and 0 give nothing
         if (!ConvertToBool(baseVal))
         {
-            return ListAdapter::CreateAdapter(InternalValueList());
+            return ListAdapter::CreateIterator(InternalValueList(), IteratorKind::Generator);
         }
         ThrowNotIterable(baseVal);
     }
@@ -794,7 +806,7 @@ InternalValue Map::Filter(const InternalValue& baseVal, RenderContext& context)
         return true;
     });
 
-    return ListAdapter::CreateAdapter(std::move(resultList));
+    return ListAdapter::CreateIterator(std::move(resultList), IteratorKind::Generator);
 }
 Random::Random(const FilterParams& /*params*/) {}
 
@@ -947,6 +959,28 @@ InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
         });
     }
 
+    // reversed() of a sequence is an iterator of its type; an iterator is not reversible, so
+    // Jinja2 reverses list() of it into a list (docs/tasks/0383)
+    auto kind = IteratorKind::DictReverseKey;
+    if (const auto source = AsList(baseVal))
+    {
+        if (source->GetIteratorKind() != IteratorKind::None)
+        {
+            kind = IteratorKind::None;
+        }
+        else
+        {
+            kind = source->IsTuple() ? IteratorKind::TupleReverse : source->GetRangeInfo() ? IteratorKind::RangeIterator
+                                                                                           : IteratorKind::ListReverse;
+        }
+    }
+    else if (const auto map = AsMap(baseVal); map && map->GetAttrPolicy() != MapAttrPolicy::MethodsFirst && map->GetAttrPolicy() != MapAttrPolicy::KeysFirst)
+    {
+        // An object that iterates (loop) or one of the host language without reversed() has no
+        // __reversed__: list() of it is reversed
+        kind = IteratorKind::None;
+    }
+
     const auto& listSize = list.GetSize();
     if (listSize)
     {
@@ -957,7 +991,7 @@ InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
         {
             resultList[size - n - 1] = WithParent(baseVal, list.GetValueByIndex(static_cast<int64_t>(n)));
         }
-        return ListAdapter::CreateAdapter(std::move(resultList));
+        return ListAdapter::CreateIterator(std::move(resultList), kind);
     }
 
     InternalValueList resultList;
@@ -966,7 +1000,7 @@ InternalValue Reverse(const ListAdapter& list, const InternalValue& baseVal)
         return true;
     });
     std::reverse(resultList.begin(), resultList.end());
-    return ListAdapter::CreateAdapter(std::move(resultList));
+    return ListAdapter::CreateIterator(std::move(resultList), kind);
 }
 
 // start: what the call passes, or nothing for Python's 0
@@ -1062,7 +1096,7 @@ InternalValue Unique(const ListAdapter& list,
     {
         resultList.push_back(WithParent(baseVal, std::move(values[static_cast<size_t>(i.idx)])));
     }
-    return ListAdapter::CreateAdapter(std::move(resultList));
+    return ListAdapter::CreateIterator(std::move(resultList), IteratorKind::Generator);
 }
 } // namespace
 
@@ -1111,6 +1145,22 @@ InternalValue SequenceAccessor::Filter(const InternalValue& baseVal, RenderConte
                 item = WithParent(baseVal, std::move(item));
             }
             return ListAdapter::CreateAdapter(std::move(items));
+        }
+    }
+    // An iterator (a lazy filter's generator, reversed() of a sequence) has no len() and is
+    // not reversible (docs/tasks/0383)
+    if (m_mode == LastItemMode || m_mode == LengthMode || m_mode == RandomMode)
+    {
+        if (const auto iterated = AsList(baseVal))
+        {
+            if (const char* iterator = IteratorTypeName(iterated->GetIteratorKind()))
+            {
+                if (m_mode == LastItemMode)
+                {
+                    throw TemplateRuntimeError("'"s + iterator + "' object is not reversible");
+                }
+                throw TemplateRuntimeError("object of type '"s + iterator + "' has no len()");
+            }
         }
     }
     // Like Python, a string is a sequence of characters and a mapping one of its keys
@@ -1282,7 +1332,7 @@ InternalValue Slice::Filter(const InternalValue& baseVal, RenderContext& context
         }
     }
 
-    return ListAdapter::CreateAdapter(std::move(resultList));
+    return ListAdapter::CreateIterator(std::move(resultList), IteratorKind::Generator);
 }
 
 InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
@@ -1329,7 +1379,7 @@ InternalValue Slice::Batch(const InternalValue& baseVal, RenderContext& context)
         }
         resultList.emplace_back(ListAdapter::CreateAdapter(std::move(row)));
     }
-    return ListAdapter::CreateAdapter(std::move(resultList));
+    return ListAdapter::CreateIterator(std::move(resultList), IteratorKind::Generator);
 }
 
 StringFormat::StringFormat(const FilterParams& params)
@@ -1366,7 +1416,7 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
         // Jinja2 starts with `if value:`, so None, False and 0 give nothing
         if (!ConvertToBool(baseVal))
         {
-            return ListAdapter::CreateAdapter(InternalValueList());
+            return ListAdapter::CreateIterator(InternalValueList(), IteratorKind::Generator);
         }
         ThrowNotIterable(baseVal);
     }
@@ -1412,7 +1462,7 @@ InternalValue Tester::Filter(const InternalValue& baseVal, RenderContext& contex
         return true;
     });
 
-    return ListAdapter::CreateAdapter(std::move(resultList));
+    return ListAdapter::CreateIterator(std::move(resultList), IteratorKind::Generator);
 }
 
 ValueConverter::ValueConverter(const FilterParams& params, ValueConverter::Mode mode)
@@ -2329,7 +2379,7 @@ InternalValue ValueConverter::Items(const InternalValue& baseVal, RenderContext&
     // An undefined value yields no items, anything but a mapping is a TypeError
     if (baseVal.IsUndefined())
     {
-        return ListAdapter::CreateAdapter(InternalValueList());
+        return ListAdapter::CreateIterator(InternalValueList(), IteratorKind::Generator);
     }
     auto map = AsMap(baseVal);
     if (!map || map->GetObjectClass())
@@ -2341,7 +2391,8 @@ InternalValue ValueConverter::Items(const InternalValue& baseVal, RenderContext&
     {
         items.emplace_back(ListAdapter::CreateAdapter(InternalValueList{ std::move(key), std::move(value) }).MarkAsTuple());
     }
-    InternalValue result = ListAdapter::CreateAdapter(std::move(items));
+    // A generator, as Jinja2's do_items is (docs/tasks/0383)
+    InternalValue result = ListAdapter::CreateIterator(std::move(items), IteratorKind::Generator);
     if (baseVal.ShouldExtendLifetime())
     {
         result.SetParentData(baseVal);

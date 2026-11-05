@@ -1730,8 +1730,10 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
         {
             throw TemplateRuntimeError("xmlattr(): invalid character in attribute name: '" + key + "'");
         }
-        auto text = AsString(InternalValue(context.GetRendererCallback()->GetAsTargetString(value)));
-        result += (result.empty() ? "" : " ") + escape(key) + "=\"" + (value.IsMarkup() ? text : escape(text)) + "\"";
+        // escape() takes __html__ of a value that has it: Markup, a host object, a template module
+        auto* renderer = context.GetRendererCallback();
+        auto text = HasHtml(value) ? AsString(MarkupEscape(value, renderer)) : escape(AsString(InternalValue(renderer->GetAsTargetString(value))));
+        result += (result.empty() ? "" : " ") + escape(key) + "=\"" + text + "\"";
     }
 
     if (!result.empty() && ConvertToBool(GetArgumentValue("autospace", context)))
