@@ -142,6 +142,18 @@ std::basic_string<CharT> EscapeHtml(std::basic_string_view<CharT> str)
     return result;
 }
 
+// hasattr(x, '__html__'): Markup, a host object that has it, and a template module, whose
+// __html__ is its output as Markup (docs/tasks/0309, 0367)
+inline bool HasHtml(const InternalValue& val)
+{
+    if (val.IsMarkup() || host::IsMarkupLike(val))
+    {
+        return true;
+    }
+    const auto map = AsMap(val);
+    return map && map->GetStrValue() != nullptr;
+}
+
 // markupsafe.escape: Markup is returned as is, anything else becomes Markup of its escaped str().
 // A string of the template's character type is escaped from its own text (docs/tasks/0126).
 inline InternalValue MarkupEscape(const InternalValue& val, IRendererCallback* callback)

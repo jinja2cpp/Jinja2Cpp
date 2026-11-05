@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/754
 priority: low
 area: parity
 depends: [0101]
@@ -35,3 +36,18 @@ errors. `|list|last` and `(x|list)[a:b]` work in both engines. The options:
 
 **Done when.** Ruslan has chosen. The two corpus lines are then either gone, with the
 mark in place and checked narrow and wide, or marked deliberate.
+
+**Decision (Ruslan, 2026-11-03).** (a): raise as Python does. 2.0 is the breaking release,
+and a template shared with Python (chat templates) that works here but fails there is the
+worse surprise; `|list` fixes it in both engines.
+
+**As built.** `ListAdapter::CreateIterator(items, IteratorKind)` makes the same shared list
+adapter with an iterator kind (three bits of `ValueObject`'s flags, read without a virtual call).
+The lazy filters mark their results `Generator`; `reverse` marks `ListReverse`,
+`TupleReverse`, `RangeIterator` or `DictReverseKey` by its input, and reverses an iterator into
+a plain list, as Jinja2's `list(value)` fallback does; so is reverse of a host object without reversed(). A marked list refuses `|last`
+(not reversible), `|length`, `|count` and `|random` (no len()) and slices (not subscriptable),
+indexes to undefined (Jinja2 swallows getitem's TypeError), is no sequence, has no list methods,
+and `PythonTypeName` names its Python type. Iteration, `|first`, `|list`, `|join`, `|sort`,
+`in` and for loops are unchanged. Left for 0387: `==`, `+`/`*`, tojson and the printed form;
+the MIGRATION.md note is 0388.

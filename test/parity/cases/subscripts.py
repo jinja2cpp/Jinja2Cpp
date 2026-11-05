@@ -59,6 +59,9 @@ CASES = [
     ("slice_literals_fold", "[{{ 5[1:2] }}][{{ none[1:2] }}][{{ {'a': 1}[1:2] }}][{{ 1.5[0:1] is undefined }}]"),
     # task 0383: a lazy filter result is a generator in Python, which takes no slice
     ("slice_lazy_result", "{{ ([1, 2]|map('string'))[0:1] }}"),
+    ("slice_reversed_list", "{{ ([1, 2]|select|reverse|reverse)[1:] }}"),
+    # a slice of a folded literal reverse is getitem's undefined (Jinja2 folds |reverse)
+    ("slice_reversed_literal_fold", "[{{ ([1, 2]|reverse)[0:1] }}][{{ ([1, 2]|reverse)[0] }}]"),
     # an undefined slice bound has no __index__; a literal slice folds to getitem's undefined,
     # a slice of which fails
     ("slice_undefined_bound", "{{ l[missing:] }}"),

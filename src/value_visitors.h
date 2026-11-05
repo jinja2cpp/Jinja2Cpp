@@ -970,6 +970,10 @@ const char* PythonTypeName(const std::basic_string_view<CharT>&)
 }
 inline const char* PythonTypeName(const ListRef& list)
 {
+    if (const char* iterator = IteratorTypeName(list.GetIteratorKind()))
+    {
+        return iterator;
+    }
     return list.IsTuple() ? "tuple" : "list";
 }
 inline const char* PythonTypeName(const MapRef& map)

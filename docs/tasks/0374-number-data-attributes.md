@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/754
 priority: low
 area: parity
 touches: [src/value_methods.cpp#GetAttr, src/value_methods.cpp#IsMethodName, src/filters.cpp#Attribute]

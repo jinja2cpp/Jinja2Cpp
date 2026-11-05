@@ -3,6 +3,7 @@
 
 #include "internal_value.h"
 
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -27,9 +28,11 @@ struct MethodInfo
     bool isMutating;
 };
 
-// Whether any value kind has a method of this name; the parser asks once per `x.name`, so a
+// Whether any value kind has a method or a data attribute (0374) of this name; the parser asks once per `x.name`, so a
 // name that is no method costs nothing at render time
 bool IsMethodName(std::string_view name);
+// x.real, x.imag, x.numerator or x.denominator of an int, bool or float, or nothing
+std::optional<InternalValue> GetNumberDataAttr(const InternalValue& self, std::string_view name);
 // Whether a dict has a method of this name (items, get, ...), for a parser that tells
 // map attributes apart from the methods of other kinds (title of a string)
 bool IsDictMethodName(std::string_view name);

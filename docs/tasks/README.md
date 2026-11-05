@@ -436,22 +436,24 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0364](0364-frozen-version-deep-validation.md) | Validate a frozen version deeply, from time to time | robustness | medium | open |
 | [0365](0365-fresh-generic-items-of-a-call-argument.md) | A fresh generic container nested in a call's argument keeps its module cell | robustness | low | open |
 | [0366](0366-bound-loop-method-repr-after-break.md) | A kept `loop.cycle` prints `?` for the length of a lazily filtered loop it broke out of | parity | low | open |
-| [0367](0367-module-object-is-escaped.md) | `m is escaped` of an imported module | parity | low | open |
+| [0367](0367-module-object-is-escaped.md) | `m is escaped` of an imported module | parity | low | done |
 | [0368](0368-callable-python-type-names.md) | Python type names of callables in error messages | parity | low | open |
 | [0369](0369-finalize-template-data-in-volatile-code.md) | Template text in volatile autoescape code goes through finalize | parity | low | done |
 | [0370](0370-json-view-is-a-dict.md) | A JSON object seen through Reflect behaves as a reflected struct, not as a dict | parity | medium | open |
 | [0371](0371-attr-filter-debug-undefined.md) | `|attr` of a missing attribute under DebugUndefined prints empty | parity | low | open |
 | [0372](0372-unicode-version-corpus-cases.md) | Corpus cases on code points whose Unicode properties changed after 15.0 | parity | low | open |
 | [0373](0373-closure-capture-module-call-and-scoped-frames.md) | Closures kept past a module call or a scoped frame lose their names | parity | low | done |
-| [0374](0374-number-data-attributes.md) | int and float data attributes: real, imag, numerator, denominator | parity | low | open |
+| [0374](0374-number-data-attributes.md) | int and float data attributes: real, imag, numerator, denominator | parity | low | done |
 | [0375](0375-closure-capture-free-variables.md) | A kept closure copies only the names its body reads | perf | low | open |
 | [0376](0376-same-string-getter-round-trip.md) | GetAsSameString moves its string through the PLT | perf | low | done |
 | [0377](0377-chat-template-assistant-mask-and-security-error.md) | Chat templates: the assistant token mask and the sandbox's SecurityError | api | low | open |
 | [0380](0380-markup-escape-copy-assignment.md) | MarkupEscape calls InternalValue's copy assignment out of line | perf | low | open |
 | [0381](0381-host-object-operators.md) | Host objects: arithmetic and ordering operators | parity | low | open |
 | [0382](0382-urlencode-of-loop.md) | `loop|urlencode` iterates the rest of the loop | parity | low | open |
-| [0383](0383-lazy-filter-results-not-sequences.md) | A lazy filter result is no sequence: `last` and slicing it | parity | low | open |
+| [0383](0383-lazy-filter-results-not-sequences.md) | A lazy filter result is no sequence: `last` and slicing it | parity | low | done |
 | [0384](0384-dormant-chat-preset-load-cost.md) | Keep the dormant chat-template preset free on every Load | perf | low | done |
 | [0385](0385-asan-gcc13-sign-conversion-expressions-test.md) | Sanitizer build with GCC 13 fails on a "\x80" literal in expressions_test | build | low | done |
 | [0386](0386-collect-cycles-through-kept-closures-during-render.md) | Free cycles through a kept closure's copy while the render runs | perf | low | open |
+| [0387](0387-iterator-repr-equality-json.md) | A generator still prints, compares and serializes as a list | parity | low | open |
+| [0388](0388-migration-iterator-results.md) | MIGRATION.md: lazy filter results are no longer sequences | release | low | open |
 | [0389](0389-block-in-scoped-statement-of-child-template.md) | A block in a scoped statement of a child template also renders in place | parity | low | open |
