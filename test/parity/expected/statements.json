@@ -20565,6 +20565,246 @@
    "env": {},
    "templates": {},
    "output": "11|1"
+  },
+  {
+   "id": "statements.macro_closure_sets_attr_of_frame_namespace",
+   "template": "{% set ns = namespace(f=none) %}{% macro o() %}{% set st = namespace(c=0) %}{% macro inc() %}{% set st.c = st.c + 1 %}{{ st.c }}{% endmacro %}{% set ns.f = inc %}{% endmacro %}{{ o() }}{{ ns.f() }}{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "12"
+  },
+  {
+   "id": "statements.macro_closure_reads_one_of_frame",
+   "template": "{% set ns = namespace(f=none) %}{% macro o(a, b, c) %}{% set d = 4 %}{% macro k() %}{{ b }}{{ x is defined }}{% endmacro %}{% set ns.f = k %}{% endmacro %}{{ o(1, 2, 3) }}{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "2True"
+  },
+  {
+   "id": "statements.macro_closure_sibling_reads_other_name",
+   "template": "{% set ns = namespace(f=none) %}{% macro o(a, b) %}{% macro s() %}{{ b }}{% endmacro %}{% macro k() %}{{ s() }}{{ a }}{% endmacro %}{% set ns.f = k %}{% endmacro %}{{ o(1, 2) }}{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "21"
+  },
+  {
+   "id": "statements.macro_closure_default_reads_frame",
+   "template": "{% set ns = namespace(f=none) %}{% macro o(a) %}{% macro k(p=a) %}{{ p }}{% endmacro %}{% set ns.f = k %}{% endmacro %}{{ o(5) }}{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "5"
+  },
+  {
+   "id": "statements.macro_closure_reads_name_set_later",
+   "template": "{% set ns = namespace(f=none) %}{% macro o() %}{% macro k() %}{{ y }}{% endmacro %}{% set ns.f = k %}{% set y = 3 %}{% endmacro %}{{ o() }}{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "3"
+  },
+  {
+   "id": "statements.macro_closure_nested_reads_outer_call",
+   "template": "{% set ns = namespace(f=none) %}{% macro o(a, z) %}{% for i in [1] %}{% macro k() %}{% macro k2() %}{{ a }}{% endmacro %}{{ k2() }}{% endmacro %}{% set ns.f = k %}{% endfor %}{% endmacro %}{{ o(1, 9) }}{{ ns.f() }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "1"
   }
  ]
 }

@@ -153,6 +153,10 @@ public:
     // The arguments of a call, a filter or a test, `*args` and `**kwargs` included
     ParseResult<CallArgsInfo> ParseCallArgs(LexScanner& lexer);
     ParseResult<NodeRef<ExpressionFilter>> ParseFilterExpression(LexScanner& lexer);
+    // The names a filter `name` called with `params` reads besides its own: `applymacro` reads a
+    // macro by name, `map`, `select` and the like a filter or test that may fall back to a value
+    // (NameResolver::AddRead)
+    void NoteNamedCallables(const std::string& name, const CallArgsInfo& params);
     // Settings::finalize as a callable; undefined if it is not set
     [[nodiscard]] const InternalValue& GetFinalize() const { return m_finalize; }
     [[nodiscard]] NodeArena& Nodes() const { return m_nodes; }
