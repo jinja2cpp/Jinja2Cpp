@@ -200,11 +200,20 @@ class ApplyTest(unittest.TestCase):
                                       "jinja2::UserCallable::Function b;\n"
                                       "struct S : UserCallable { UserCallable::Function c; };\n")
 
-    def test_msvc_without_column_rewrites_every_occurrence_on_the_line_once(self):
-        self.write("return a.isString() && b.isString();\nreturn c.isString();\n")
+    def test_msvc_without_column_rewrites_a_single_occurrence(self):
+        self.write("return a.isString();\nreturn c.isString();\n")
         report, _ = self.apply([MSVC_NO_COLUMN.format(line=1)] * 2)
-        self.assertEqual(self.read(), "return a.IsString() && b.IsString();\nreturn c.isString();\n")
-        self.assertEqual(len(report.changes), 2)
+        self.assertEqual(self.read(), "return a.IsString();\nreturn c.isString();\n")
+        self.assertEqual(len(report.changes), 1)
+
+    def test_msvc_without_column_leaves_an_ambiguous_line(self):
+        # The warning names one call; buffer.data() may be another type's member (Codex, #767)
+        data = MSVC_NO_COLUMN.format(line=1).replace("isString", "data").replace("IsString", "GetData")
+        self.write("consume(v.data(), buffer.data());\n")
+        report, _ = self.apply([data])
+        self.assertEqual(self.read(), "consume(v.data(), buffer.data());\n")
+        self.assertEqual(report.changes, [])
+        self.assertIn("several times", report.human[0][1])
 
     def test_msvc_column_counts_characters(self):
         self.write("auto s = \"\u00e4\u00f6\" + v.isString();\n")  # two two-byte characters before the call
@@ -265,16 +274,19 @@ class RewriteTest(unittest.TestCase):
         self.assertEqual(text, "BasicErrorInfo<char> a; jinja2::BasicErrorInfo<wchar_t> b; MyErrorInfoTpl c;\n")
 
     def test_use_line_statements(self):
+        # "= false" stays an assignment: it may undo an earlier "#", or be an unbraced if's body (Codex, #767)
         text, report = self.rewrite("s.useLineStatements = true;\n"
                                     "    s.useLineStatements = false; // the default\n"
                                     "s.useLineStatements = flag;\n"
-                                    "if (x) s.useLineStatements = false;\n")
+                                    "if (x)\n    s.useLineStatements = false;\nrender();\n")
         self.assertEqual(text, 's.lineStatementPrefix = "#";\n'
+                               '    s.lineStatementPrefix = ""; // the default\n'
                                "s.useLineStatements = flag;\n"
-                               "if (x) s.useLineStatements = false;\n")
-        self.assertEqual([h[0] for h in report.human], ["x.cpp:3", "x.cpp:4"])
+                               'if (x)\n    s.lineStatementPrefix = "";\nrender();\n')
+        self.assertEqual([h[0] for h in report.human], ["x.cpp:3"])
         self.assertEqual([(c[1], c[3]) for c in report.changes],
-                         [(1, 'lineStatementPrefix = "#"'), (2, "(removed)")])
+                         [(1, 'lineStatementPrefix = "#"'), (2, 'lineStatementPrefix = ""'),
+                          (5, 'lineStatementPrefix = ""')])
 
     def test_compat_mode_and_removed_headers_are_reported(self):
         text, report = self.rewrite("s.jinja2CompatMode = Jinja2CompatMode::None;\n"
@@ -317,11 +329,12 @@ class RewriteTest(unittest.TestCase):
     def test_get_unexpected(self):
         text, report = self.rewrite("return r.get_unexpected();\nreturn a.b->c.get_unexpected( );\n"
                                     "return f().get_unexpected();\nreturn std::move(r).get_unexpected();\n"
-                                    "return ns::r.get_unexpected();\n")
+                                    "return ns::r.get_unexpected();\nreturn p->get_unexpected();\n")
         self.assertEqual(text, "return nonstd::make_unexpected(r.error());\n"
                                "return nonstd::make_unexpected(a.b->c.error());\n"
                                "return f().get_unexpected();\nreturn std::move(r).get_unexpected();\n"
-                               "return ns::r.get_unexpected();\n")
+                               "return ns::r.get_unexpected();\n"
+                               "return nonstd::make_unexpected(p->error());\n")  # pointer receiver (Codex, #767)
         self.assertEqual([h[0] for h in report.human], ["x.cpp:3", "x.cpp:4", "x.cpp:5"])
 
     def test_migration_is_idempotent(self):

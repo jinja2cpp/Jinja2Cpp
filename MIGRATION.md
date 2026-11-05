@@ -21,7 +21,7 @@ checker: every 1.x name that 2.0 keeps is `[[deprecated]]` with a message that s
 # 1. Fix what no longer compiles (renamed Settings fields, removed headers, expected-lite spellings)
 python3 jinja2cpp/scripts/jinja2cpp_migrate.py --rewrite src/ include/
 # 2. Build once with deprecation warnings on and keep the log (not -Werror for this build)
-cmake --build build 2>&1 | tee build.log          # MSVC: C4996 is on at /W3
+cmake --build build 2>&1 | tee build.log          # MSVC: C4996 is on at /W3; add /diagnostics:column
 # 3. Rename at every reported location
 python3 jinja2cpp/scripts/jinja2cpp_migrate.py --log build.log --root .
 # 4. Rebuild; repeat 2-3 until no jinja2cpp-2 warning remains (MSVC can report only one
@@ -62,7 +62,7 @@ the 1.x names are removed in 3.0. CI runs the script on a 1.x-style copy of our 
 |---|---|---|
 | `settings.m_defaultMetadataType` | `settings.defaultMetadataType` | `--rewrite` |
 | `settings.extensions.Do` | `settings.extensions.doStatement` | `--rewrite` |
-| `settings.useLineStatements = true` | `settings.lineStatementPrefix = "#"` | `--rewrite` (`= false` lines are deleted) |
+| `settings.useLineStatements = true` | `settings.lineStatementPrefix = "#"` | `--rewrite` (`= false` becomes `lineStatementPrefix = ""`) |
 | `settings.jinja2CompatMode`, `Jinja2CompatMode` | removed: the library never read them | by hand: delete the line |
 | `#include <jinja2cpp/error_handler.h>`, `IErrorHandler` | removed: an empty class used nowhere | `--rewrite` deletes the include |
 | `#include <jinja2cpp/polymorphic_value.h>` | removed; `Value` holds `jinja2::detail` value types (`value_ptr.h`) | by hand |

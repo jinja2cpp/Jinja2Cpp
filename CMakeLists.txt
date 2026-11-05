@@ -630,8 +630,9 @@ if (JINJA2CPP_BUILD_TESTS)
                 CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
                 CXX_STANDARD_REQUIRED ON)
         if (MSVC)
-            # C4996 is a level 3 warning; /WX- undoes a /WX from the environment
-            target_compile_options(jinja2cpp_migration_fixture PRIVATE /W3 /WX-)
+            # C4996 is a level 3 warning; /WX- undoes a /WX from the environment; with columns the
+            # script can place two calls of one name on a line
+            target_compile_options(jinja2cpp_migration_fixture PRIVATE /W3 /WX- /diagnostics:column)
         else ()
             target_compile_options(jinja2cpp_migration_fixture PRIVATE -Wdeprecated-declarations -Wno-error)
         endif ()

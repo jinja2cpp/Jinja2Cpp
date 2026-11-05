@@ -155,11 +155,13 @@ def find_occurrences(line, diag):
 
     Clang's column is the identifier. GCC's can be the `(` of the call or elsewhere in the
     expression, so look back from the column first, then forward. MSVC may have no column:
-    then every whole-word occurrence on the line is replaced.
+    then the name is replaced only when it occurs once on the line, because the warning names
+    one call and another type's `data()` or `get()` may share the line (the caller reports it).
     """
     word = _word_regex(diag.old)
     if diag.col is None:
-        return [m.start() for m in word.finditer(line)]
+        found = [m.start() for m in word.finditer(line)]
+        return found if len(found) == 1 else []
     col = min(_char_column(line, diag), len(line))
     before = [m.start() for m in word.finditer(line) if m.start() <= col]
     if before:
@@ -249,7 +251,10 @@ def apply_diagnostics(diagnostics, root, report, dry_run=False, out=None):
                 report.left(where, "line %d is outside the file" % diag.line)
                 continue
             starts = find_occurrences(lines[diag.line - 1], diag)
-            if not starts:
+            if not starts and diag.col is None and _word_regex(diag.old).search(lines[diag.line - 1]):
+                report.left(where, "%s occurs several times on the line and the log has no column"
+                            " (MSVC: build with /diagnostics:column), wanted %s" % (diag.old, diag.new))
+            elif not starts:
                 report.left(where, "%s is not on the reported line (macro expansion or generated code?),"
                             " wanted %s" % (diag.old, diag.new))
             for start in starts:
@@ -269,7 +274,7 @@ def apply_diagnostics(diagnostics, root, report, dry_run=False, out=None):
 _ERROR_INFO_ARG = re.compile(r"^(?:jinja2::(?:v2::)?)?(ErrorInfo|ErrorInfoW)$")
 _EXPECTED_OPEN = re.compile(r"(?<![\w:])nonstd::expected\s*<")
 _UNEXPECTED_RECEIVER = re.compile(
-    r"(?<![\w.>:\)\]])(?P<recv>[A-Za-z_]\w*(?:(?:\.|->)[A-Za-z_]\w*)*)(?:\.|->)get_unexpected\s*\(\s*\)")
+    r"(?<![\w.>:\)\]])(?P<recv>[A-Za-z_]\w*(?:(?:\.|->)[A-Za-z_]\w*)*)(?P<op>\.|->)get_unexpected\s*\(\s*\)")
 _BRACKETS = {"<": ">", "(": ")", "[": "]", "{": "}"}
 
 # Rows that replace text: (regex, replacement template). All of them keep the line count.
@@ -277,12 +282,13 @@ _SIMPLE_ROWS = [
     (re.compile(r"(\.|->)m_defaultMetadataType\b"), r"\1defaultMetadataType"),
     (re.compile(r"(\bextensions\s*(?:\.|->)\s*)Do\b"), r"\1doStatement"),
     (re.compile(r"\buseLineStatements(\s*)=(\s*)true\b"), r'lineStatementPrefix\1=\2"#"'),
+    # Kept as an assignment, not deleted: it may undo an earlier "#", or be an unbraced if's body
+    (re.compile(r"\buseLineStatements(\s*)=(\s*)false\b"), r'lineStatementPrefix\1=\2""'),
     # Deprecated, but Clang does not warn about a deprecated alias template, so the log never names it
     (re.compile(r"\bErrorInfoTpl\b"), "BasicErrorInfo"),
 ]
 # Rows that remove a whole line
 _LINE_REMOVALS = [
-    re.compile(r"^[ \t]*[\w.\->]*\buseLineStatements[ \t]*=[ \t]*false[ \t]*;[ \t]*(?://[^\n]*)?\n", re.MULTILINE),
     re.compile(r"^[ \t]*#[ \t]*include[ \t]*[<\"]jinja2cpp/error_handler\.h[>\"][^\n]*\n", re.MULTILINE),
 ]
 # Rows that only report: (regex, what to tell the human)
@@ -366,7 +372,7 @@ def collect_edits(text):
     for pattern, template in _SIMPLE_ROWS:
         edits.extend((m.start(), m.end(), m.expand(template)) for m in pattern.finditer(text))
     edits.extend((m.start(), m.end(), "") for pattern in _LINE_REMOVALS for m in pattern.finditer(text))
-    edits.extend((m.start(), m.end(), "nonstd::make_unexpected(%s.error())" % m.group("recv"))
+    edits.extend((m.start(), m.end(), "nonstd::make_unexpected(%s%serror())" % (m.group("recv"), m.group("op")))
                  for m in _UNEXPECTED_RECEIVER.finditer(text))
     edits.extend(_expected_to_result(text)[1])
     edits.sort()
