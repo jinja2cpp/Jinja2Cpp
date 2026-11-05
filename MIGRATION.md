@@ -1,7 +1,209 @@
 # Migrating from Jinja2C++ 1.x to 2.0
 
-This file lists the changes a 1.x user has to act on. Task 0077 collects the full list and a
-migration script; each change below names the task that made it.
+This file lists the changes a 1.x user has to act on, with the task that made each one.
+Most C++ renames are mechanical and `scripts/jinja2cpp_migrate.py` does them; template
+behaviour changes need a look at your templates, and the examples below show the before
+and after. The API decisions behind them are in [docs/api-2.0.md](docs/api-2.0.md).
+
+Requirements for 2.0: a C++17 compiler (CI builds with GCC 12 and 14, Clang 18 and 20, MSVC 2022 and
+Apple Clang on macOS 15 and 26, at C++17, 20, 23 and 26), CMake 3.23 or newer, and expected-lite,
+fmt and fast_float (fetched by the default internal dependency mode). Boost is no longer a
+dependency of the library.
+
+## Migrating your code with the script
+
+`scripts/jinja2cpp_migrate.py` (Python 3.8+, no packages) uses your compiler as the type
+checker: every 1.x name that 2.0 keeps is `[[deprecated]]` with a message that starts with
+`jinja2cpp-2:` and names the replacement, so the build log already says which call is a
+`jinja2::Value` member and where it is. GCC, Clang and MSVC logs are read.
+
+```sh
+# 1. Fix what no longer compiles (renamed Settings fields, removed headers, expected-lite spellings)
+python3 jinja2cpp/scripts/jinja2cpp_migrate.py --rewrite src/ include/
+# 2. Build once with deprecation warnings on and keep the log (not -Werror for this build)
+cmake --build build 2>&1 | tee build.log          # MSVC: C4996 is on at /W3
+# 3. Rename at every reported location
+python3 jinja2cpp/scripts/jinja2cpp_migrate.py --log build.log --root .
+# 4. Rebuild: no jinja2cpp-2 warnings remain
+```
+
+Add `--dry-run` to see a diff instead of writing. The script prints each change and a list
+of what it left for a human: a name produced by a macro, a diagnostic it could not place,
+and the rows below marked *by hand*. It never edits the library's own headers. A program
+that wants to upgrade first and rename later defines `JINJA2CPP_NO_DEPRECATION_WARNINGS`;
+the 1.x names are removed in 3.0. CI runs the script on a 1.x-style copy of our own tests
+(`test/migration/`) with every compiler it builds with.
+
+## C++ API
+
+### Renamed, deprecated until 3.0 (the script renames them)
+
+*Tasks 0072, 0074 ([docs/api-2.0.md](docs/api-2.0.md) section 3).*
+
+| 1.x | 2.0 | Note |
+|---|---|---|
+| `v.isString()`, `isWString()`, `isList()`, `isMap()` | `IsString()`, `IsWString()`, `IsList()`, `IsMap()` | |
+| `v.isEmpty()` | `IsNone()` | an empty `Value` is Python's `None` (below) |
+| `v.asString()`, `asWString()`, `asList()`, `asMap()` | `AsString()`, `AsWString()`, `AsList()`, `AsMap()` | |
+| `v.get<T>()` | `As<T>()` | `As` returns a reference; `get` copied |
+| `v.getPtr<T>()` | `GetIf<T>()` | |
+| `v.data()` | `GetData()` | |
+| free `AsString(x)`, `AsWString(x)` (strings, string views, `Value`) | `ToString(x)`, `ToWString(x)` | on a non-string `Value` the old functions return `""`; `ToString` prints it as `{{ v }}` does |
+| `EmptyValue` | `NoneValue` | its implicit conversion to any type is gone |
+| `UserCallable::UserCallableFunctionPtr` | `UserCallable::Function` | |
+| `ErrorInfoTpl<CharT>` | `BasicErrorInfo<CharT>` | Clang does not warn about a deprecated alias template, so `--rewrite` renames this one |
+
+### Removed or renamed without a deprecation (compile errors)
+
+*Tasks 0028, 0043, 0074, 0076.*
+
+| 1.x | 2.0 | Script |
+|---|---|---|
+| `settings.m_defaultMetadataType` | `settings.defaultMetadataType` | `--rewrite` |
+| `settings.extensions.Do` | `settings.extensions.doStatement` | `--rewrite` |
+| `settings.useLineStatements = true` | `settings.lineStatementPrefix = "#"` | `--rewrite` (`= false` lines are deleted) |
+| `settings.jinja2CompatMode`, `Jinja2CompatMode` | removed: the library never read them | by hand: delete the line |
+| `#include <jinja2cpp/error_handler.h>`, `IErrorHandler` | removed: an empty class used nowhere | `--rewrite` deletes the include |
+| `#include <jinja2cpp/polymorphic_value.h>` | removed; `Value` holds `jinja2::detail` value types (`value_ptr.h`) | by hand |
+| `#include <jinja2cpp/binding/rapid_json.h>` | removed; see [RapidJSON binding removed](#rapidjson-binding-removed) | by hand |
+| `TemplateEnv::IsEqual`, `TimePoint`, `TimeStamp` | implementation details, gone | by hand |
+| `ApplyGlobals(ValuesMap&)` callbacks | take `const ValuesMap&` | by hand |
+| `ValuesMap` as a `std::unordered_map` | `jinja2::OrderedMap`: insertion order, no bucket API, node handles, `hash_function`, `key_eq`, `get_allocator` | by hand |
+| `namespace jinja2 { class Value; }` forward declarations | `#include <jinja2cpp/fwd.h>` (everything is in the inline namespace `jinja2::v2`) | by hand |
+| `namespace jinja2 { namespace detail { template<> struct Reflector<T> ... } }` | `template<> struct jinja2::detail::Reflector<T>` (MSVC does not see through the inline namespace) | by hand |
+
+The ABI changes (inline namespace `v2`, SOVERSION 2, install layout) are in
+[README.md, "Compatibility and versioning"](README.md#compatibility-and-versioning).
+
+### `Value(float)` stores a `float`
+
+*Task 0039.* `jinja2::Value` has a `float` alternative. `IsDouble()`, `AsDouble()` and
+`GetIf<double>()` do not see a value built from a C++ `float`; code that read it back as a
+`double` tests `IsFloat()` too, or converts first. No compiler warning points at this.
+
+```cpp
+jinja2::Value v(1.5f);
+v.IsDouble();                     // 1.x: true; 2.0: false
+v.IsFloat() ? double(v.AsFloat()) : v.AsDouble();   // 2.0: either kind
+```
+
+Values a template computes are `double`, as before.
+
+### `Result<T>` and expected-lite
+
+*Task 0070.* `Load` and `Render` return `jinja2::Result<T>` (`ResultW<T>` for wide
+templates), which is `nonstd::expected<T, BasicErrorInfo<CharT>>` from expected-lite,
+pinned. That is not a 2.0 break, but code that names the expected-lite type or uses its
+extensions ties itself to expected-lite. Keep to the subset `std::expected` has, so that a
+later switch of `Result<T>` to `std::expected` (once C++23 is the floor) is a recompile:
+
+| Instead of | Write | Script |
+|---|---|---|
+| `nonstd::expected<T, jinja2::ErrorInfo>` | `jinja2::Result<T>` | `--rewrite` |
+| `r.get_unexpected()` | `nonstd::make_unexpected(r.error())` | `--rewrite` |
+| other expected-lite extensions | the `std::expected` members: `has_value()`, `value()`, `error()`, `value_or()`, `and_then()`, `transform()`, `or_else()` | by hand |
+
+`nonstd::make_unexpected` itself stays until that switch (our own tests use it).
+
+## Template behaviour
+
+These need no code change but render differently. Each example is what Python Jinja2 at the
+pinned version renders, which 2.0 now matches ([docs/parity.md](docs/parity.md)).
+
+### `None` and undefined are different
+
+*Tasks 0026, 0034.* An empty `jinja2::Value()` in the context, in globals or returned by a
+callable is Python's `None`; a missing name, attribute or item is undefined.
+
+| Template | 1.x | 2.0 |
+|---|---|---|
+| `{{ x }}` with `x = jinja2::Value()` | (empty) | `None` |
+| `{{ x is defined }}` with `x = jinja2::Value()` | `false` | `True` |
+| `{{ missing }}` | (empty) | (empty) |
+| `{{ missing == none }}` | `true` | `False` |
+| `{{ user.adress.city }}` (typo) | (empty) | an error, `ErrorCode::UndefinedError` |
+
+To keep 1.x's forgiving lookups for a template, select `Settings::undefinedPolicy =
+UndefinedPolicy::Chainable` (attributes of undefined stay undefined); `Strict` and `Debug`
+follow Jinja2's other `Undefined` classes. Print an empty string for `None` with
+`{{ x if x is not none }}` or `{{ x | default('', true) }}`.
+
+### Values print as Python prints them
+
+*Task 0012.*
+
+| Template | 1.x | 2.0 |
+|---|---|---|
+| `{{ true }}` | `true` | `True` |
+| `{{ 2.0 }}`, `{{ 0.1 + 0.2 }}` | `2`, `0.3` | `2.0`, `0.30000000000000004` |
+| `{{ [1, 'a'] }}`, `{{ {'a': 1} }}` | (empty) | `[1, 'a']`, `{'a': 1}` |
+| `{{ [1, 2] \| join(',') }}` with non-string items | items dropped | `1,2` |
+| `{{ 10 % 3 }}` | `1.0` | `1` |
+
+Templates that compared printed booleans with `"true"` compare the value instead
+(`{% if flag %}`), and `{{ x | lower }}` gives `true` if a lower-case word is needed.
+Dicts print in insertion order (see `ValuesMap` above).
+
+### Whitespace
+
+*Task 0024.*
+
+| Template | 1.x | 2.0 |
+|---|---|---|
+| `"Hello\n"` (trailing newline) | `Hello\n` | `Hello` (set `Settings::keepTrailingNewline` to keep it) |
+| `"a\r\nb"` | `a\r\nb` | `a\nb` (or `Settings::newlineSequence`) |
+| `{% if true %}  \nA{% endif %}` with `trimBlocks` | `A` (spaces and newline removed) | `  \nA`: only a newline directly after the tag is removed |
+| `{% if true -%}\n\n\nb{% endif %}` | stopped at the first newline | all following whitespace removed: `b` |
+
+### `format` is printf-style only
+
+*Task 0048.* As in Jinja2, the `format` filter is Python `%`-formatting. 1.x also accepted
+`{}` placeholders; 2.0 raises "not all arguments converted" for them.
+
+```jinja
+{{ "%s-%d" | format("a", 1) }}   {# a-1, both versions #}
+{{ "{}-{}" | format(1, 2) }}     {# 1.x: 1-2; 2.0: error #}
+{{ "{}-{}".format(1, 2) }}       {# 2.0: 1-2, the str.format method #}
+```
+
+### Macros see the names where they are defined
+
+*Task 0038.* A macro body, a `{% call %}` body, a recursive `loop(...)` and `super()` resolve
+names in the scope that defines them, as Jinja2 does, not in the caller's. A macro that read
+its caller's loop variable or a `{% set %}` from the calling template takes it as an argument:
+
+```jinja
+{# 1.x: worked by accident; 2.0: item is undefined inside row #}
+{% macro row() %}{{ item }}{% endmacro %}{% for item in items %}{{ row() }}{% endfor %}
+{# both #}
+{% macro row(item) %}{{ item }}{% endmacro %}{% for item in items %}{{ row(item) }}{% endfor %}
+```
+
+A `{% call %}` body reads the names around the `{% call %}`, not the macro's locals; pass
+values to it with `caller(value)`.
+
+### Unknown filters and tests fail at load
+
+*[docs/api-2.0.md](docs/api-2.0.md) section 5.6, task 0193.* `{{ x | nosuch }}` fails `Load`
+with `ErrorCode::UnknownFilter`, as in Jinja2 (inside an `if` it fails when it runs). 1.x let
+a `UserCallable` in the render parameters or globals act as a filter or test; register them
+with `TemplateEnv::AddFilter` and `AddTest` instead, or set
+`Settings::userCallablesAsFilters = true` to keep the old lookup.
+
+## Template syntax 2.0 no longer accepts
+
+*Tasks 0094 (decided 2026-10-12), 0294.* Jinja2 rejects each of these too; 1.x accepted them.
+
+| 1.x | 2.0 |
+|---|---|
+| `{% macro m %}...{% endmacro %}` | `{% macro m() %}...{% endmacro %}` |
+| `{% call m %}...{% endcall %}` | `{% call m() %}...{% endcall %}` |
+| `{'a' = 1}` | `{'a': 1}` |
+| `{{ x +}}` (a `+` meaning "keep whitespace" before `}}`) | `{{ x }}`: in an expression `+` is the operator. `+%}` on statements is unchanged |
+| `f(a=1, 2)`, `applymacro(macro='m', x)` | positional arguments first: `f(2, a=1)`, `applymacro(x, macro='m')` |
+
+A template with any of these fails to load with a syntax error that names the line; nothing
+renders differently.
 
 ## Build and packaging
 
