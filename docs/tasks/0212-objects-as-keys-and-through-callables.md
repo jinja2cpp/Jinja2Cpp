@@ -41,3 +41,4 @@ a stable identity.
 `/mnt/project-files/release-2.0/0212-plan.md`. 0370 already makes a JSON object unpack its keys
 (it answers `HasAttributes() == false` through the `IJsonNode` marker). Macros passed to a user
 callable no longer arrive as None (0300); what remains is the way back (`ident(m)()`).
+D6 answered 2026-11-05 (option a): `IJsonNode::NodeIdentity()` lands in 0370 (#752).
