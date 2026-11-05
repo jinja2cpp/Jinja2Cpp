@@ -456,7 +456,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0386](0386-collect-cycles-through-kept-closures-during-render.md) | Free cycles through a kept closure's copy while the render runs | perf | low | open |
 | [0387](0387-iterator-repr-equality-json.md) | A generator still prints, compares and serializes as a list | parity | low | open |
 | [0388](0388-migration-iterator-results.md) | MIGRATION.md: lazy filter results are no longer sequences | release | low | open |
-| [0389](0389-block-in-scoped-statement-of-child-template.md) | A block in a scoped statement of a child template also renders in place | parity | low | open |
+| [0389](0389-block-in-scoped-statement-of-child-template.md) | A block in a scoped statement of a child template also renders in place | parity | low | done |
 | [0390](0390-loop-length-and-kept-loop-leftovers.md) | Loop length and kept loops: leftovers of 0304 | parity | low | open |
 | [0391](0391-loop-last-peek-cost.md) | `loop.last` peeks out of line since 0304 | perf | low | open |
 | [0392](0392-prompt-nfkc-specials.md) | NFKC-folded special token matching in `neutralize` | api | low | open |
