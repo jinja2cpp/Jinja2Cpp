@@ -36,5 +36,5 @@ test or filter per `MoveNext`, owning a copy of the source value and of the eval
 arguments; `GetSize()` unknown. Or mark the first three deliberate next to 0101 if the cost
 or the lifetime risk is too high.
 
-**Done when.** The three corpus lines naming 0392 are gone, or marked deliberate with
+**Done when.** The three corpus lines naming 0399 are gone, or marked deliberate with
 Ruslan's word.

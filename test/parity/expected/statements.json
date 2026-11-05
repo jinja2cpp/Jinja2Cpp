@@ -11388,6 +11388,140 @@
    "output": "44"
   },
   {
+   "id": "statements.for_ctx_length_after_append",
+   "template": "{% for x in l %}{{ x }}{% do l.append(4) if loop.first %}{{ loop.length }}{{ loop.revindex }};{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "do"
+    ]
+   },
+   "templates": {},
+   "output": "344;143;242;441;"
+  },
+  {
+   "id": "statements.for_ctx_kept_length_append_in_body",
+   "template": "{% set ns = namespace(k=none) %}{% for x in l %}{% set ns.k = loop %}{% do l.append(4) if loop.first %}{% break %}{% endfor %}{{ ns.k.length }}{{ ns.k.revindex }}|{% for b in ns.k %}{{ b }}{% endfor %}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "do",
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "44|(1, <LoopContext 2/4>)(2, <LoopContext 3/4>)(4, <LoopContext 4/4>)"
+  },
+  {
+   "id": "statements.for_ctx_kept_length_pop_in_body",
+   "template": "{% set ns = namespace(k=none) %}{% for x in l %}{% set ns.k = loop %}{% do l.pop() %}{% break %}{% endfor %}{{ ns.k.length }}{{ ns.k.revindex }}{{ ns.k.index }}",
+   "context": {
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "e": [],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "x": 3,
+    "tree": [
+     {
+      "n": "a",
+      "c": [
+       {
+        "n": "b",
+        "c": []
+       },
+       {
+        "n": "c",
+        "c": [
+         {
+          "n": "d",
+          "c": []
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "extensions": [
+     "do",
+     "loopcontrols"
+    ]
+   },
+   "templates": {},
+   "output": "221"
+  },
+  {
    "id": "statements.do_without_extension",
    "template": "{% do l.append(4) %}",
    "context": {

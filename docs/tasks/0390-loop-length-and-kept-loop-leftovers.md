@@ -43,7 +43,11 @@ deliberate with Ruslan's word.
   repr, kept from then on (`SetLengthSource`, `TakeLengthOf`). `revindex` is signed: it can
   be negative once the list shrinks, as in Python. A collected rest keeps a length already
   taken. New cases: `for_revindex_after_clear`, `for_length_read_then_clear`,
-  `for_length_after_appends`, `for_kept_length_read_then_clear`.
+  `for_length_after_appends`, `for_kept_length_read_then_clear`, and over a list of the
+  render context `for_ctx_length_after_append`, `for_ctx_kept_length_append_in_body`,
+  `for_ctx_kept_length_pop_in_body`. The list is a view (`LoopState::sizeOfList`) asked
+  whether it can change only when the length is first read, and let go of when the
+  statement ends.
 - 2 fixed: an unfiltered loop over `loop` kept past its statement no longer collects the
   outer loop's rest; it keeps its enumerator and the statement's adapter
   (`KeepLoopState`, `LoopState::keepsEnumerator`), so the outer loop goes on through its
@@ -51,11 +55,12 @@ deliberate with Ruslan's word.
   the enumerator and collects its own rest at its end. New cases:
   `loop_iter_inner_kept_outer_goes_on`, `loop_iter_inner_kept_read_in_outer`,
   `loop_iter_inner_kept_iterated_after`.
-- 3 moved to 0392, which pins the template-visible part (a list changed while a
+- 3 moved to 0399, which pins the template-visible part (a list changed while a
   `select`/`map` result is iterated) with three corpus cases.
 - 4 and `statements.for_kept_length_after_append` (a loop kept past its statement takes its
   length from the list at the statement's end; Jinja2 reads len() later) are proposed as
   deliberate: a kept loop cannot hold the statement's enumerator or list past the statement
   (0188). Ruslan chose deliberate on 2026-11-05 ("Deliberate, as 0188 and 0366"); the
   corpus line is marked deliberate in `test/parity/divergences/statements.txt`.
-
+- Found by the verifier, the same on master: a kept loop over `loop` whose items hold the
+  namespace that keeps it leaks through the iteration's lambda; filed as 0400.

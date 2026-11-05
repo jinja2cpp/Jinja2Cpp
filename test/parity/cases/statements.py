@@ -299,6 +299,10 @@ CASES = [
     ("for_length_after_appends", "{% set l = [1, 2, 3] %}{% for x in l %}{% do l.append(x) if loop.index < 3 %}{{ loop.length }}{% endfor %}", DO),
     ("for_kept_length_after_append", "{% set ns = namespace(k=none) %}{% set l = [1, 2, 3] %}{% for x in l %}{% set ns.k = loop %}{% break %}{% endfor %}{% do l.append(4) %}{{ ns.k.length }}", DO_LC),
     ("for_kept_length_read_then_clear", "{% set ns = namespace(k=none) %}{% set l = [1, 2, 3, 4] %}{% for x in l %}{{ loop.length }}{% do l.clear() %}{% set ns.k = loop %}{% break %}{% endfor %}{{ ns.k.length }}", DO_LC),
+    # the same over a list of the render context (l = [3, 1, 2])
+    ("for_ctx_length_after_append", "{% for x in l %}{{ x }}{% do l.append(4) if loop.first %}{{ loop.length }}{{ loop.revindex }};{% endfor %}", DO),
+    ("for_ctx_kept_length_append_in_body", "{% set ns = namespace(k=none) %}{% for x in l %}{% set ns.k = loop %}{% do l.append(4) if loop.first %}{% break %}{% endfor %}{{ ns.k.length }}{{ ns.k.revindex }}|{% for b in ns.k %}{{ b }}{% endfor %}", DO_LC),
+    ("for_ctx_kept_length_pop_in_body", "{% set ns = namespace(k=none) %}{% for x in l %}{% set ns.k = loop %}{% do l.pop() %}{% break %}{% endfor %}{{ ns.k.length }}{{ ns.k.revindex }}{{ ns.k.index }}", DO_LC),
     ("do_without_extension", "{% do l.append(4) %}"),
     ("autoescape_block", "{% autoescape true %}{{ '<a>' }}{% endautoescape %}|{{ '<a>' }}"),
     ("autoescape_block_off", "{% autoescape false %}{{ '<a>' }}{% endautoescape %}"),
