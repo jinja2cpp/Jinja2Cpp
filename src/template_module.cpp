@@ -340,6 +340,9 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
             {
             }
         }
+        // A cycle a call made among the module's values, below a value that is in none, has no
+        // note left: the walk reaches it from the module's names
+        cycles.WalkFromEveryNote();
         module.reset();
         callback.reset();
     }

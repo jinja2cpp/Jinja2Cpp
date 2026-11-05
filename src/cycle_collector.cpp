@@ -134,7 +134,7 @@ void CycleCollector::Add(ValueObjectPtr object)
         candidates.pop_back();
         throw;
     }
-    if (candidates.size() < m_notes->pruneAt)
+    if (candidates.size() < m_notes->pruneAt || m_notes->walkFromEvery)
     {
         return;
     }
@@ -191,7 +191,8 @@ void CycleCollector::CollectOnce()
 {
     // Most of what a render noted is garbage by now with no cycle in it (a list built and
     // printed): releasing it frees it, and what only it held, without a walk
-    while (DropUnshared())
+    // Not when a dropped one may hold a cycle no note names (WalkFromEveryNote)
+    while (!m_notes->walkFromEvery && DropUnshared())
     {
     }
     auto& candidates = m_notes->candidates;
