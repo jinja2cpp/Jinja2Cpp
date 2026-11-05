@@ -18,16 +18,16 @@ relicenses anything.
 
 | Where | Declares | Status |
 |---|---|---|
-| ConanCenter recipe [`recipes/jinja2cpp/all/conanfile.py`](https://github.com/conan-io/conan-center-index/blob/master/recipes/jinja2cpp/all/conanfile.py), versions 1.1.0, 1.2.1, 1.3.2 (`config.yml`) | `license = "MIT"` (line 15), while its `package()` copies the MPL-2.0 `LICENSE` into `licenses/` | Wrong; the correction below is **not filed yet** |
+| ConanCenter recipe [`recipes/jinja2cpp/all/conanfile.py`](https://github.com/conan-io/conan-center-index/blob/master/recipes/jinja2cpp/all/conanfile.py), versions 1.1.0, 1.2.1, 1.3.2 (`config.yml`) | `license = "MIT"` (line 15), while its `package()` copies the MPL-2.0 `LICENSE` into `licenses/` | Wrong; corrected with the 2.0 recipe bump (task 0397) |
 | Historical recipe repositories (jinja2cpp/conan-recipes, the conan-center-index fork) | MIT | Not maintained; their fate is decided in task 0227 |
 | Owned metadata in this repository: `sbom/components.json` (and the generated SPDX and CycloneDX documents), `LICENSE`, README badge | MPL-2.0 | Correct. `conanfile.txt` and `jinja2cpp.pc.in` carry no license field |
 
-Proposed upstream correction (an issue or pull request on conan-io/conan-center-index,
-filed by a maintainer): change `license = "MIT"` to `license = "MPL-2.0"` in
-`recipes/jinja2cpp/all/conanfile.py`, which covers every packaged version (1.1.0, 1.2.1,
-1.3.2: their `LICENSE` is MPL-2.0); for a 2.0 recipe, also copy `THIRD-PARTY-NOTICES.txt`
-into `licenses/`. Link the submitted request here with its actual state; a submitted
-request is not a published package update.
+Upstream correction: not filed separately (decided 2026-11-05). The conan-center-index pull
+request that bumps the recipe to 2.0, which we submit ourselves, also changes
+`license = "MIT"` to `license = "MPL-2.0"` in `recipes/jinja2cpp/all/conanfile.py` (covering the
+1.x versions in that folder) and copies `THIRD-PARTY-NOTICES.txt` into `licenses/`: task
+[0397](tasks/0397-conancenter-recipe-license-at-2-0.md). Until it merges, the published packages
+still say MIT.
 
 ## Third-party code and data in the artifacts
 
