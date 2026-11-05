@@ -1337,6 +1337,16 @@ public:
 
     ~InternalValue() = default;
 
+    // Replaces the value with a number or a bool, written in place rather than moved from a
+    // temporary: for the hot attribute reads of LoopAccessor::GetLoopAttr (docs/tasks/0391)
+    template<typename T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0>
+    JINJA2CPP_HOT_INLINE void SetImmediate(T val) noexcept
+    {
+        ValueObjectPtr old;
+        old.swap(m_obj);
+        m_imm = InternalValue(val).m_imm;
+    }
+
     void SetParentData(const InternalValue& val);
 
     [[nodiscard]] bool ShouldExtendLifetime() const
