@@ -10,7 +10,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <istream>
 #include <memory>
 #include <string>
 #include <thread>

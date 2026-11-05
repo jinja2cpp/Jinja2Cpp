@@ -297,7 +297,7 @@ TEST(EmbeddingLifecycleTest, A6_LeastRecentlyUsedEviction)
     {
         CountingFs fs;
         std::string name = "a.j2";
-        for (int i = 0; i != 20; ++i, name = "./" + name)
+        for (int i = 0; i != 20; ++i, name.insert(0, "./"))
         {
             fs.Set(name, "a");
         }
@@ -310,7 +310,7 @@ TEST(EmbeddingLifecycleTest, A6_LeastRecentlyUsedEviction)
         std::string last = "a.j2";
         for (int i = 0; i != 19; ++i)
         {
-            last = "./" + last;
+            last.insert(0, "./");
         }
         // The last four names are cached, the first is not
         std::string cached = last;

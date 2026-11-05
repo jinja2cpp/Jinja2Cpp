@@ -1395,7 +1395,9 @@ TEST(SharedOwnerTest, ListGlobalReplacedWhileTwoThreadsRender)
             {
                 const auto out = tpl.RenderAsString({}).value_or("error");
                 const auto n = out.substr(0, out.find(','));
-                if (out != n + ',' + n + ',' + n)
+                std::string whole = n;
+                whole.append(1, ',').append(n).append(1, ',').append(n);
+                if (out != whole)
                 {
                     bad.fetch_add(1, std::memory_order_relaxed);
                 }
