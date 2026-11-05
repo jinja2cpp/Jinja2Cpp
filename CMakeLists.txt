@@ -664,6 +664,16 @@ if(JINJA2CPP_INSTALL)
             ${CMAKE_INSTALL_LIBDIR}/pkgconfig
     )
 
+    # The library's license and the notices of the third-party code and data it carries
+    # (docs/licensing.md, docs/tasks/0226)
+    install(
+        FILES
+            LICENSE
+            THIRD-PARTY-NOTICES.txt
+        DESTINATION
+            ${CMAKE_INSTALL_DOCDIR}
+    )
+
     # The library SBOM, generated from sbom/components.json by scripts/sbom.py (docs/tasks/0187)
     install(
         FILES
