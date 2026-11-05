@@ -75,7 +75,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { std: 17, compiler: gcc-12,   config: Release, shared: 'OFF', noderef: 'OFF', bigint: boost }
+          - { std: 17, compiler: gcc-12,   config: Release, shared: 'OFF', noderef: 'OFF', bigint: boost, artifact: true }
           - { std: 17, compiler: gcc-14,   config: Debug,   shared: 'OFF', celltrace: true }
           - { std: 17, compiler: clang-18, config: RelWithDebInfo, shared: 'ON', abi: true }
           - { std: 17, compiler: clang-20, config: Release, shared: 'OFF', package: 23, bigint: boost }
@@ -121,6 +121,18 @@ jobs:
 
     - name: Test
       run: ctest --test-dir .build --output-on-failure
+
+    # The commit's source archive, built with tests off outside the checkout, installed and
+    # used by test/package (docs/tasks/0225); the report is the RC signoff record (0221)
+    - name: Release source artifact
+      if: matrix.artifact
+      run: python3 scripts/check_release_artifact.py --git-ref HEAD --work "$RUNNER_TEMP/release-artifact" --report "$RUNNER_TEMP/release-artifact.json"
+
+    - if: ${{ !cancelled() && matrix.artifact }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: release-artifact-linux
+        path: ${{ runner.temp }}/release-artifact.json
 
     # The same stable TLC release and hash as tla-model.yml, kept in the Actions cache under its
     # hash so a later rebuild of the upstream asset cannot change what runs

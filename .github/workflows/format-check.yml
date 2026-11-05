@@ -66,6 +66,11 @@ jobs:
     - name: Check and validate the SBOM
       run: python3 scripts/sbom.py --check --validate
 
+    # The release artifact check's install checks (missing header, wrong version, missing
+    # notice) on fabricated trees; the build itself runs in the platform workflows (docs/tasks/0225)
+    - name: Release artifact check, unit tests
+      run: python3 -m unittest discover -s test/release -v
+
   task-index:
     name: task index (stale index warns, duplicate numbers fail)
     runs-on: ubuntu-24.04
