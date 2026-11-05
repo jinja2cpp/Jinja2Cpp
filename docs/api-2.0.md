@@ -421,8 +421,10 @@ extends or imports, and its snapshot of the globals.
    first asks the handler for the file's time; a handler that gives none (`MemoryFileSystem`)
    never reloads. A reload makes a **new** template: templates the host holds, renders in flight
    and modules made earlier keep the old one, as Python's `get_template` returns a new object.
-2. `cacheSize` is on/off until [0264](tasks/0264-template-cache-bound.md) adds the LRU; an
-   eviction then follows the rule of a reload.
+2. `cacheSize` bounds each width's cache, as Jinja2's `cache_size` does (default 400, 0 off, a
+   negative size unbounded): past it the least recently used template is dropped
+   ([0264](tasks/0264-template-cache-bound.md)). An eviction follows the rule of a reload. The
+   key is the name as given, as in Jinja2, so `a.j2` and `./a.j2` are two entries.
 3. `include`, `extends` and `import` go through the same cache. `TemplateLookup::OncePerRender`
    (the default) looks a name up once per render; `EveryUse` looks it up on each use and keeps
    every version it got until the render ends.

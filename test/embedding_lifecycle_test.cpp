@@ -225,6 +225,105 @@ TEST(EmbeddingLifecycleTest, A4_NoCacheOpensEveryLookupAndFreesParses)
     }
 }
 
+namespace
+{
+template<typename CharT>
+void CheckLeastRecentlyUsedEviction()
+{
+    CountingFs fs;
+    for (int i = 0; i != 9; ++i)
+    {
+        fs.Set("t" + std::to_string(i), std::to_string(i));
+    }
+    TemplateEnv env;
+    env.GetSettings().cacheSize = 4;
+    env.AddFilesystemHandler("", fs);
+    auto held = LoadFrom(env, "t1", Tag<CharT>{});
+    ASSERT_TRUE(held);
+    for (const char* name : { "t0", "t2", "t3", "t0" })
+    {
+        ASSERT_TRUE(LoadFrom(env, name, Tag<CharT>{}));
+    }
+    // t1 is the least recently used: t4 takes its place, and the others stay
+    ASSERT_TRUE(LoadFrom(env, "t4", Tag<CharT>{}));
+    for (const char* name : { "t0", "t2", "t3", "t4" })
+    {
+        ASSERT_TRUE(LoadFrom(env, name, Tag<CharT>{}));
+        EXPECT_EQ(1, fs.TotalOpens(name)) << name;
+    }
+    auto reloaded = LoadFrom(env, "t1", Tag<CharT>{});
+    ASSERT_TRUE(reloaded);
+    EXPECT_EQ(2, fs.TotalOpens("t1"));
+    EXPECT_FALSE(*reloaded == *held);
+    // The template the host held keeps working
+    EXPECT_EQ(Str<CharT>("1"), Text(held->RenderAsString({})));
+}
+} // namespace
+
+// 3.10 caching 2: past cacheSize the least recently used template is dropped, as a reload drops it. The host's template
+// and a render that holds the dropped one keep it; a long run of new names keeps at most cacheSize of them (0264)
+TEST(EmbeddingLifecycleTest, A6_LeastRecentlyUsedEviction)
+{
+    CheckLeastRecentlyUsedEviction<char>();
+    CheckLeastRecentlyUsedEviction<wchar_t>();
+
+    // A render holds an include that a callable evicts while it runs: the second include of the name renders the
+    // template the render took (OncePerRender), and the next lookup opens the file again
+    {
+        CountingFs fs;
+        for (int i = 0; i != 6; ++i)
+        {
+            fs.Set("t" + std::to_string(i), std::to_string(i));
+        }
+        TemplateEnv env;
+        env.GetSettings().cacheSize = 4;
+        env.AddFilesystemHandler("", fs);
+        const ValuesMap params{ { "churn", MakeCallable([&env]() {
+                                      for (const char* name : { "t2", "t3", "t4", "t5" })
+                                      {
+                                          EXPECT_TRUE(env.LoadTemplate(name));
+                                      }
+                                      return std::string("|");
+                                  }) } };
+        auto main = env.FromString("{% include 't1' %}{{ churn() }}{% include 't1' %}");
+        ASSERT_TRUE(main) << main.error().ToString();
+        EXPECT_EQ("1|1", Out(main->RenderAsString(params)));
+        EXPECT_EQ(1, fs.Opens("t1"));
+        EXPECT_TRUE(env.LoadTemplate("t1"));
+        EXPECT_EQ(2, fs.Opens("t1"));
+    }
+
+    // Names that differ only in `./` pieces are cached apart, as Jinja2 caches them, and the cache stays bounded
+    {
+        CountingFs fs;
+        std::string name = "a.j2";
+        for (int i = 0; i != 20; ++i, name = "./" + name)
+        {
+            fs.Set(name, "a");
+        }
+        TemplateEnv env;
+        env.GetSettings().cacheSize = 4;
+        env.AddFilesystemHandler("", fs);
+        auto main = env.FromString("{% for i in range(20) %}{% include './' * i ~ 'a.j2' %}{% endfor %}");
+        ASSERT_TRUE(main) << main.error().ToString();
+        EXPECT_EQ(std::string(20, 'a'), Out(main->RenderAsString({})));
+        std::string last = "a.j2";
+        for (int i = 0; i != 19; ++i)
+        {
+            last = "./" + last;
+        }
+        // The last four names are cached, the first is not
+        std::string cached = last;
+        for (int i = 0; i != 4; ++i, cached = cached.substr(2))
+        {
+            EXPECT_TRUE(env.LoadTemplate(cached));
+            EXPECT_EQ(1, fs.Opens(cached)) << cached;
+        }
+        EXPECT_TRUE(env.LoadTemplate("a.j2"));
+        EXPECT_EQ(2, fs.Opens("a.j2"));
+    }
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // B. Destruction order
 

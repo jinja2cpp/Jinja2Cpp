@@ -134,7 +134,7 @@ private:
             return !(*this == other);
         }
     };
-    mutable std::unordered_map<std::string, FileContent> m_filesMap;
+    std::unordered_map<std::string, FileContent> m_filesMap;
 };
 
 /*!

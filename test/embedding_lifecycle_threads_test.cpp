@@ -1,6 +1,7 @@
 #include "embedding_lifecycle_test.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
@@ -9,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <istream>
 #include <memory>
 #include <string>
 #include <thread>
@@ -335,4 +337,62 @@ TEST(EmbeddingLifecycleTest, C6_ReloadsRaceRendersOfTheIncluder)
     fs.Touch("inc.j2");
     EXPECT_TRUE(env.LoadTemplate("inc.j2"));
     EXPECT_EQ("last|last", Out(main->RenderAsString({})));
+}
+
+// 3.10 threads: two threads open a wide-stored MemoryFileSystem file through the narrow API, directly and through an
+// environment that does not cache. Each open converts the text on its own; nothing is written to the handler (0264, TSan)
+TEST(EmbeddingLifecycleTest, C7_WideStoredMemoryFileOpenedNarrowOnTwoThreads)
+{
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("w.j2", std::wstring(L"wide {{ n }}"));
+    fs->AddFile("n.j2", std::string("narrow {{ n }}"));
+    TemplateEnv env;
+    env.GetSettings().cacheSize = 0;
+    env.AddFilesystemHandler("", fs);
+
+    Latch start(2);
+    Failures failures;
+    std::vector<std::thread> workers;
+    workers.reserve(2);
+    for (int w = 0; w < 2; ++w)
+    {
+        workers.emplace_back([&, w] {
+            start.CountDown();
+            if (!start.Wait())
+            {
+                failures.Add("start");
+                return;
+            }
+            for (int i = 0; i < 50; ++i)
+            {
+                auto stream = fs->OpenStream("w.j2");
+                std::string text;
+                if (stream)
+                {
+                    std::getline(*stream, text);
+                }
+                auto wstream = fs->OpenWStream("n.j2");
+                std::wstring wtext;
+                if (wstream)
+                {
+                    std::getline(*wstream, wtext);
+                }
+                if (text != "wide {{ n }}" || wtext != L"narrow {{ n }}")
+                {
+                    failures.Add("direct open: " + text);
+                }
+                auto tpl = env.LoadTemplate("w.j2");
+                const std::string out = tpl ? Out(tpl->RenderAsString({ { "n", w } })) : std::string("load failed");
+                if (out != "wide " + std::to_string(w))
+                {
+                    failures.Add("render: " + out);
+                }
+            }
+        });
+    }
+    for (auto& worker : workers)
+    {
+        worker.join();
+    }
+    EXPECT_EQ("", failures.Summary());
 }

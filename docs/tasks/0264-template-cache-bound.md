@@ -1,8 +1,9 @@
 ---
-status: open
+status: done
+pr: PRLINK
 priority: medium
 area: robustness
-touches: [src/template_env.cpp, src/template_env_impl.h, src/filesystem_handler.cpp, test/template_env_test.cpp, test/filesystem_handler_test.cpp]
+touches: [src/template_env.cpp, src/template_env_impl.h, src/filesystem_handler.cpp, include/jinja2cpp/filesystem_handler.h, include/jinja2cpp/template_env.h, test/embedding_lifecycle_test.cpp, test/embedding_lifecycle_threads_test.cpp]
 ---
 # The template cache ignores its size, and `MemoryFileSystem` writes in a const path
 
@@ -25,3 +26,14 @@ path (a mutex member would change the class layout).
 **Done when.** Both rows pass, the TSan job included.
 
 **Trust model.** When this lands, update its entry under Known gaps in [docs/security.md](../security.md) (0224).
+
+**Outcome.** Each width's cache is an LRU bounded by `cacheSize` (0 off, negative unbounded, as
+Python). A lookup stamps its entry with a process-wide tick (one relaxed `fetch_add`, under the
+shared lock it already took); a miss that inserts past the size evicts the entry with the least
+tick by a linear scan under the writer lock, and releases the evicted templates after the lock.
+The key stays the name as given, not a normalised one: Python caches by
+`(loader, name)` too, and a normalised key would hand a custom handler's `./a.j2` the template of
+`a.j2`, or `MemoryFileSystem` a template for a name it does not have. The bound alone stops the
+growth. `MemoryFileSystem` converts the other width on each open and keeps nothing (the member is
+no longer `mutable`; the layout is unchanged), so equality no longer depends on which widths were
+opened. Rows: A6 and C7 of the 0223 suite.
