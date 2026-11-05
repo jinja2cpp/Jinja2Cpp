@@ -1874,32 +1874,21 @@ public:
             m_next = 0;
             m_onCell = false;
         }
+        // The host's step stays a tail call: one load and a compare of the epoch before it
         bool MoveNext() override
         {
-            if (!m_onCell && m_list && JINJA2CPP_CELL_UNLIKELY(m_list->m_link.MayHaveCell()) && m_list->m_link.Get(*m_list))
+            if (JINJA2CPP_CELL_UNLIKELY(m_onCell || m_list->m_link.MayHaveCell()))
             {
-                m_onCell = true;
+                return CellOrHostMoveNext();
             }
-            if (m_onCell)
-            {
-                // The size is read at each step, as CellEnumerator's
-                if (m_next >= m_list->GetSize().value_or(0))
-                {
-                    return false;
-                }
-                ++m_next;
-                return true;
-            }
-            if (!m_enum || !(*m_enum)->MoveNext())
-            {
-                return false;
-            }
+            // Counts the calls; a step past the end ends the enumeration, so the count is the
+            // index of the next item while there is one
             ++m_next;
-            return true;
+            return m_enum && (*m_enum)->MoveNext();
         }
         [[nodiscard]] InternalValue GetCurrent() const override
         {
-            if (m_onCell)
+            if (JINJA2CPP_CELL_UNLIKELY(m_onCell))
             {
                 return m_next == 0 ? InternalValue() : m_list->GetItem(static_cast<int64_t>(m_next - 1)).value_or(InternalValue());
             }
@@ -1926,6 +1915,27 @@ public:
             moved.m_next = m_next;
             moved.m_onCell = m_onCell;
             return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(moved));
+        }
+
+        // A step once the list may have a cell: the cell's item at the index reached, its size read
+        // at each step as CellEnumerator's
+        JINJA2CPP_CELL_NOINLINE bool CellOrHostMoveNext()
+        {
+            if (!m_onCell && m_list->m_link.Get(*m_list))
+            {
+                m_onCell = true;
+            }
+            if (!m_onCell)
+            {
+                ++m_next;
+                return m_enum && (*m_enum)->MoveNext();
+            }
+            if (m_next >= m_list->GetSize().value_or(0))
+            {
+                return false;
+            }
+            ++m_next;
+            return true;
         }
         [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
