@@ -756,6 +756,50 @@ TEST_F(AllocationFailureTest, NestedRenderAfterAFailedGlobalsConversion)
     EXPECT_LT(n, maxAllocations);
 }
 
+// A cache miss that fails to allocate, while it inserts or evicts, leaves the cache as it was or
+// complete: a later load finds the file and renders it (docs/tasks/0264)
+TEST_F(AllocationFailureTest, CacheMissAfterAFailedInsert)
+{
+    JINJA2CPP_SKIP_UNREACHED_INJECTION();
+    long n = 0;
+    for (; n != maxAllocations; ++n)
+    {
+        auto fs = std::make_shared<MemoryFileSystem>();
+        fs->AddFile("a.j2", std::string("A"));
+        fs->AddFile("b.j2", std::string("B"));
+        TemplateEnv env;
+        env.GetSettings().cacheSize = 1;
+        env.AddFilesystemHandler("", fs);
+        ASSERT_TRUE(!!env.LoadTemplate("b.j2"));
+        bool fired = false;
+        {
+            const Injection injection(n);
+            try
+            {
+                static_cast<void>(env.LoadTemplate("a.j2"));
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): a failed load is one of the outcomes checked
+            {
+            }
+            fired = Injection::Fired();
+        }
+        for (const char* name : { "a.j2", "b.j2", "a.j2" })
+        {
+            auto tpl = env.LoadTemplate(name);
+            ASSERT_TRUE(!!tpl) << "allocation " << n;
+            std::string out;
+            OnFreshThread([&] { out = tpl->RenderAsString({}).value_or("error"); });
+            EXPECT_EQ(name[0] == 'a' ? "A" : "B", out) << "allocation " << n;
+        }
+        if (!fired)
+        {
+            break;
+        }
+    }
+    EXPECT_LT(0, n) << "no allocation reached the injection";
+    EXPECT_LT(n, maxAllocations);
+}
+
 // Two names of the host's data in a module: an allocation failure while the second attaches to
 // the cell the first made leaves it looking again, not reading the host's data for good
 // (docs/tasks/0049)

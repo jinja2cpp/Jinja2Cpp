@@ -229,6 +229,7 @@ void EvictLeastRecentlyUsed(Cache& cache, int cacheSize, std::vector<TemplateT>&
                 oldest = p;
             }
         }
+        released.reserve(released.size() + 1); // may throw: nothing is moved or erased yet
         released.push_back(std::move(oldest->second.tpl));
         cache.erase(oldest);
     }
@@ -379,6 +380,8 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
                     // a reload) or evicts are released after the lock: one may hold the last handle
                     // to this environment, and ~TemplateEnv takes the same lock
                     std::vector<decltype(tpl)> released;
+                    // Reserved before the cache changes: a bad_alloc then leaves no half-made entry
+                    released.reserve(1);
                     const detail::WriterLock<detail::SharedMutex> l(guard);
                     if (owner)
                     {
