@@ -70,6 +70,16 @@ CASES = [
     ("{{ p }} {{ p.x }} {{ p[1] }} {{ p|list }} {{ p|tojson }} {{ p|length }}", {"p": Point(1, 2)}),
     ("{{ ps|map(attribute='y')|list }} {{ ps|sort(attribute='x')|map(attribute='x')|list }}", {"ps": [Point(3, 1), Point(1, 2)]}),
     ("{{ l is sequence }} {{ t is iterable }} {{ l|tojson }} {{ l|sum }} {{ l|max }} {{ t|join('-') }}", {"l": [3, 1, 2], "t": ("a", "b")}),
+    # operators, sort, min, max and `%` read a list or tuple as Jinja2's own (verifier N1)
+    ("{{ a + b }} {{ a + [3] }} {{ [0] + a }} {{ t + (3,) }} {{ a * 2 }} {{ 2 * t }}", {"a": [1], "b": [2], "t": (1, 2)}),
+    ("{{ a < b }} {{ t >= (1, 2) }} {{ a == [1] }} {{ t == (1, 2) }} {{ a != t }}", {"a": [1], "b": [2], "t": (1, 2)}),
+    ("{{ l|sort }} {{ l|min }} {{ l|max }} {{ n|sort(reverse=true) }} {{ n|max }}", {"l": [(2, "b"), (1, "a")], "n": [[2], [1], [3]]}),
+    ("{{ '%s' % (1,) }} {{ '%s' % t }} {{ '%s' % l }} {{ 'x' % l }} {{ '%s-%s' % u }} {{ '%s-%s' % p }} {{ '%(a)s' % d }}",
+     {"t": (1,), "l": [1], "u": (1, 2), "p": Point(1, 2), "d": {"a": 1}}),
+    ("{{ d|urlencode }} {{ l|urlencode }} {{ t|reverse|list }}", {"d": {"a": 1, "b": "x y"}, "l": [("a", 1)], "t": (1, 2)}),
+    # a loop follows the live end of a list the template changes (verifier N3)
+    ("{% for x in l %}{{ loop.length }}{{ x }}{% do l.pop() %}{% endfor %}", {"l": [1, 2, 3, 4]}),
+    ("{% for x in l %}{{ x }}{% if l|length < 4 %}{% do l.append(9) %}{% endif %}{% endfor %}", {"l": [1, 2]}),
     # mutation is seen both ways
     ("{% do l.append(3) %}{% do d.update(z=1) %}{{ l }} {{ d }}", {"l": [1], "d": {"a": 0}}),
     # objects: attributes, methods, str/repr, __html__, getattr before getitem
@@ -93,6 +103,24 @@ CASES = [
 @pytest.mark.parametrize("source,context", CASES)
 def test_matches_jinja2(source, context):
     assert_same(source, context, {"extensions": ["jinja2.ext.do"]})
+
+
+TYPE_ERRORS = [
+    ("{{ a + t }}", {"a": [1], "t": (2,)}),
+    ("{{ a - a }}", {"a": [1]}),
+    ("{{ d < d }}", {"d": {}}),
+    ("{{ '%s' % t }}", {"t": (1, 2)}),
+]
+
+
+@pytest.mark.parametrize("source,context", TYPE_ERRORS)
+def test_type_errors_of_lists_and_tuples(source, context):
+    # Jinja2's TypeError is TemplateRuntimeError here, with Python's message (docs/python.md)
+    with pytest.raises(TypeError) as expected:
+        jinja2.Environment().from_string(source).render(**context)
+    with pytest.raises(jinja2cpp.TemplateRuntimeError) as got:
+        jinja2cpp.Environment().from_string(source).render(**context)
+    assert str(got.value) == str(expected.value)
 
 
 @pytest.mark.parametrize("autoescape", [False, True])

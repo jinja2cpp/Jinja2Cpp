@@ -77,7 +77,7 @@ same object (`x is y`). Strings are copied in UTF-8, and a lone surrogate raises
 | `None`, `bool`, `int`, `float`, `str` | native values; an `int` beyond 64 bits is a big integer |
 | `markupsafe.Markup` (`jinja2cpp.Markup` is the same class) | Markup |
 | `dict` and other `collections.abc.Mapping` | a mapping: keys of any hashable type, `x.name` as `getattr` then item |
-| `list`, `tuple`, namedtuple | sequences; a tuple prints as a tuple, namedtuple fields are attributes |
+| `list`, `tuple`, namedtuple | sequences; a tuple prints as a tuple, namedtuple fields are attributes; `+`, `*`, `<`, `sort`, `min`, `max` and `%` treat them as Jinja2 does, and a loop follows the live length of a list it changes |
 | generators and iterators | read once, as in Python |
 | callables | called with Python's own argument binding |
 | any other object | `getattr` first, then items; `str()`, `repr()` and `__html__` as Python uses them |
@@ -94,6 +94,18 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
 - `tojson` writes any mapping and any list or tuple; Python's `json.dumps` takes only `dict`.
 - A dict literal of the template keyed by a Python object that defines its own `__hash__`
   (a tuple from Python, a frozen dataclass) keys it by identity (0248 plan, section 7).
+- Methods of the engine's own values are the engine's: `x.hex()` on a float (and other
+  Python methods Jinja2 lets a template call on an `int`, `float` or `str` the engine has no
+  method for) raises `TemplateRuntimeError`, for values from Python as for literals.
+- `urlencode` reads any mapping as a dict; Jinja2 does so only for a `dict` and iterates
+  another `Mapping`, which gives its keys.
+- A template keeps the `Environment.globals` dict it was made with, as Jinja2's does, but
+  `get_template` makes a new `Template` with the dict of that moment, and an imported template
+  sees the importer's: after `env.globals = {...}` Jinja2's cached templates still see the old
+  dict.
+- An environment keeps every filter, test, `finalize`, `autoescape` callable and loader it was
+  ever given alive for as long as it lives, because a template loaded earlier may still call
+  one: replacing `env.filters` entries in a loop grows the environment.
 - Not yet: the sandbox, `pass_context` and the other decorators, i18n, `make_module`,
   `select_template`, the other loaders' engine paths, custom extensions, async, the fallback to
   real Jinja2 (docs/tasks/0354).

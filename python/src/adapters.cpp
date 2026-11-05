@@ -3,6 +3,7 @@
 #include "convert.h"
 
 #include "expression_evaluator.h"
+#include "generic_adapters.h"
 #include "host_object.h"
 #include "internal_value.h"
 
@@ -57,6 +58,42 @@ bool ClearTypeError()
 {
     throw nb::python_error();
 }
+
+// The items of a list or tuple by index, so the engine may read them more than once and knows
+// their length (loop.length). The length is the live one: iteration stops at the end of a list
+// the template shortens while it loops, and goes on into one it extends, as Python's list
+// iterator does (IndexedListAccessorImpl's enumerator asks GetItemsCountImpl at every step)
+class PySequenceItems final : public jinja2::IndexedListAccessorImpl<PySequenceItems>
+{
+public:
+    PySequenceItems(PyRef sequence, bool isList)
+        : m_sequence(std::move(sequence))
+        , m_isList(isList)
+    {
+    }
+
+    [[nodiscard]] size_t GetItemsCountImpl() const
+    {
+        return static_cast<size_t>(m_isList ? PyList_Size(m_sequence.Get()) : PyTuple_Size(m_sequence.Get()));
+    }
+    [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
+    {
+        PyObject* item = m_isList ? PyList_GetItem(m_sequence.Get(), static_cast<Py_ssize_t>(idx)) : PyTuple_GetItem(m_sequence.Get(), static_cast<Py_ssize_t>(idx));
+        if (!item)
+        {
+            // An index past the end the template shortened the list to
+            PyErr_Clear();
+            return std::nullopt;
+        }
+        return ToEngine(item);
+    }
+    [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
+    [[nodiscard]] jinja2::GenericList CreateGenericList() const override { return jinja2::GenericList(std::make_shared<const PySequenceItems>(*this)); }
+
+private:
+    PyRef m_sequence;
+    bool m_isList;
+};
 
 nb::object Steal(PyObject* object)
 {
@@ -271,22 +308,7 @@ std::optional<ListAdapter> PyHost::Iterate() const
 {
     if (m_kind == Kind::List || m_kind == Kind::Tuple)
     {
-        // Indexed, so the engine may read it more than once and knows its length (loop.length).
-        // The length is read when the loop starts, as the engine reads a list's
-        const bool isList = m_kind == Kind::List;
-        const auto size = static_cast<size_t>(isList ? PyList_Size(m_object) : PyTuple_Size(m_object));
-        auto ref = PyRef::Borrow(m_object);
-        return ListAdapter::CreateAdapter(size, [ref = std::move(ref), isList](size_t index) -> InternalValue {
-            const auto at = static_cast<Py_ssize_t>(index);
-            PyObject* item = isList ? PyList_GetItem(ref.Get(), at) : PyTuple_GetItem(ref.Get(), at);
-            if (!item)
-            {
-                // The template shortened the list while it read it
-                PyErr_Clear();
-                return InternalValue(jinja2::NoneValue{});
-            }
-            return ToEngine(item);
-        });
+        return ListAdapter(jinja2::MakeRef<PySequenceItems>(PyRef::Borrow(m_object), m_kind == Kind::List));
     }
     PyObject* iterator = PyObject_GetIter(m_object);
     if (!iterator)
@@ -397,6 +419,11 @@ bool PyHost::IsMapping() const
 bool PyHost::IsSequence() const
 {
     return m_kind == Kind::List || m_kind == Kind::Tuple || PyList_Check(m_object) || PyTuple_Check(m_object);
+}
+
+bool PyHost::IsTuple() const
+{
+    return m_kind == Kind::Tuple || PyTuple_Check(m_object);
 }
 
 bool PyHost::IsMarkupLike() const

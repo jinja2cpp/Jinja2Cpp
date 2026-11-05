@@ -17,6 +17,7 @@ on:
       - 'pyproject.toml'
       - 'CMakeLists.txt'
       - 'thirdparty/**'
+      - 'cmake/**'
       - '.github/workflows/python.yml'
   pull_request:
     branches:
@@ -29,6 +30,7 @@ on:
       - 'pyproject.toml'
       - 'CMakeLists.txt'
       - 'thirdparty/**'
+      - 'cmake/**'
       - '.github/workflows/python.yml'
   workflow_dispatch:
 

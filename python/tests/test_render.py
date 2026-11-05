@@ -145,6 +145,30 @@ def test_globals_seen_by_imported_template():
         assert env.get_template("main").render() == "G"
 
 
+def test_template_globals_seen_by_imported_template():
+    # Jinja2 3.1 passes the importer's template globals on to the module it imports (verifier N4)
+    for module in (jinja2cpp, jinja2):
+        lib = "{% macro f() %}[{{ g }}|{{ e }}]{% endmacro %}{% set top = g %}"
+        env = module.Environment(loader=module.DictLoader({"lib": lib, "main": "{% import 'lib' as m %}{{ m.f() }}{{ m.top }}", "from": "{% from 'lib' import f %}{{ f() }}", "inc": "{% include 'leaf' %}", "leaf": "{{ g }}"}))
+        env.globals["e"] = "E"
+        assert env.get_template("main", globals={"g": "G"}).render() == "[G|E]G"
+        assert env.get_template("from", globals={"g": "G"}).render() == "[G|E]"
+        assert env.get_template("inc", globals={"g": "G"}).render() == "G"
+
+
+def test_template_keeps_the_globals_dict_it_was_made_with():
+    # Jinja2's template.globals chains the Environment.globals dict of its time: a dict set
+    # later is not seen, a change to that dict is (verifier N4)
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment()
+        env.globals["e"] = "E"
+        before = env.from_string("{{ e }}")
+        env.globals = {"e": "NEW"}
+        after = env.from_string("{{ e }}")
+        env.globals["e"] = "MUT"
+        assert (before.render(), after.render()) == ("E", "MUT"), module.__name__
+
+
 def test_filter_added_after_load_binds_at_next_load():
     env = jinja2cpp.Environment()
     env.filters["f"] = lambda v: "one"

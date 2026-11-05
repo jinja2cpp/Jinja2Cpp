@@ -103,9 +103,12 @@ public:
     // Iterate gives, each value GetItem of its key (HostObjectAccessor::GetEntries). Every other
     // operation still asks the object, as above
     [[nodiscard]] virtual bool IsMapping() const { return false; }
-    // isinstance(x, (list, tuple)): tojson writes the items of Iterate as a JSON array, as
-    // json.dumps does
+    // isinstance(x, (list, tuple)): the engine reads the object as a list of its own (the items
+    // of Iterate, host::AsSequence) where Python's list or tuple has an operation the object's
+    // own methods do not give the template: + * < <= > >= (and sort, min, max through them),
+    // `str % x`, and tojson's JSON array. IsTuple marks a tuple (a namedtuple too)
     [[nodiscard]] virtual bool IsSequence() const { return false; }
+    [[nodiscard]] virtual bool IsTuple() const { return false; }
     // Whether the object has __html__, and its result: the object prints as that Markup under
     // autoescape, and is `escaped`
     [[nodiscard]] virtual bool IsMarkupLike() const { return false; }
@@ -192,6 +195,9 @@ int64_t Len(const IHostObject& host);
 InternalValue Slice(const IHostObject& host, const InternalValue& start, const InternalValue& stop, const InternalValue& step);
 // reversed(x), or Python's TypeError
 ListAdapter Reversed(const IHostObject& host);
+// A list or tuple (IsSequence) as a list of the engine, marked as a tuple for a tuple; nullopt
+// for every other object
+std::optional<ListAdapter> AsSequence(const IHostObject& host);
 // x == other by Python's rules: left.__eq__, then right.__eq__, then identity. Null hosts
 // stand for operands that are no host objects
 bool Equal(const IHostObject* left, const InternalValue& leftValue, const IHostObject* right, const InternalValue& rightValue);

@@ -56,6 +56,7 @@ struct ToySpec
     // A collections.abc.Mapping (its keys are `iteration`), a list or tuple
     bool mapping = false;
     bool listOrTuple = false;
+    bool tuple = false;
 };
 
 class ToyObject final : public IHostObject
@@ -168,6 +169,7 @@ public:
     [[nodiscard]] const void* Identity() const override { return m_spec.get(); }
     [[nodiscard]] bool IsMapping() const override { return m_spec->mapping; }
     [[nodiscard]] bool IsSequence() const override { return m_spec->listOrTuple; }
+    [[nodiscard]] bool IsTuple() const override { return m_spec->tuple; }
     [[nodiscard]] bool IsMarkupLike() const override { return m_spec->html.has_value(); }
     [[nodiscard]] std::string Html() const override { return m_spec->html.value_or(""); }
 
@@ -514,6 +516,33 @@ TEST(HostObjectTest, MutatingMethodNameCallsTheObject)
     const InternalValueMap params{ { "x", MakeToy(spec) } };
     EXPECT_EQ("called(1) attr-name", Render("{{ x.append(1) }} {{ x.name }}", params));
     EXPECT_EQ(L"called(1)", RenderW(L"{{ x.append(1) }}", params));
+}
+
+// A list or tuple has the operators, ordering and `%` of the engine's own (0353)
+TEST(HostObjectTest, ListOrTupleOperatesAsTheEnginesOwn)
+{
+    auto items = [](std::vector<InternalValue> values, bool tuple) {
+        ToySpec spec;
+        spec.listOrTuple = true;
+        spec.tuple = tuple;
+        spec.len = values.size();
+        spec.iteration = std::move(values);
+        return MakeToy(spec);
+    };
+    const InternalValue one(int64_t{ 1 });
+    const InternalValue two(int64_t{ 2 });
+    const InternalValueMap params{ { "l", items({ one }, false) },
+                                   { "m", items({ two }, false) },
+                                   { "t", items({ one, two }, true) },
+                                   { "u", items({ one }, true) },
+                                   { "ls", ListAdapter::CreateAdapter(InternalValueList{ items({ two }, true), items({ one }, true) }) } };
+    EXPECT_EQ("[1, 2] [1, 3] (1, 2, 1, 2) (1, 1) True False", Render("{{ l + m }} {{ l + [3] }} {{ t * 2 }} {{ 2 * u }} {{ l < m }} {{ t < (1, 2) }}", params));
+    EXPECT_EQ("[1, 2] 1 2", Render("{{ ls|sort|map('first')|list }} {{ ls|min|first }} {{ ls|max|first }}", params));
+    // A list is one argument, printed with str()
+    EXPECT_EQ("1 1-2 Тоу x", Render("{{ '%s' % u }} {{ '%s-%s' % t }} {{ '%s' % l }} {{ 'x' % l }}", params));
+    EXPECT_EQ(L"1-2", RenderW(L"{{ '%s-%s' % t }}", params));
+    EXPECT_NE(std::string::npos, Render("{{ l + u }}", params).find("can only concatenate list (not \"tuple\") to list"));
+    EXPECT_NE(std::string::npos, Render("{{ l - m }}", params).find("unsupported operand type(s) for -: 'list' and 'list'"));
 }
 
 #endif // JINJA2CPP_LINK_AS_SHARED

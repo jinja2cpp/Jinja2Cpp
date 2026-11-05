@@ -1353,6 +1353,10 @@ struct BinaryMathOperation : BaseVisitor<>
             {
                 return HostCompare(left, right);
             }
+            if (auto result = HostSequenceOperation(left, right))
+            {
+                return std::move(*result);
+            }
         }
         if (m_oper == BinaryExpression::LogicalEq)
         {
@@ -1402,6 +1406,36 @@ struct BinaryMathOperation : BaseVisitor<>
         }
         const bool equal = host::Equal(leftHost, HostOperand(left), rightHost, HostOperand(right));
         return m_oper == BinaryExpression::LogicalEq ? equal : !equal;
+    }
+
+    // A host list or tuple as a list of the engine (host::AsSequence); nullopt for every other operand
+    template<typename T>
+    [[nodiscard]] static std::optional<ListAdapter> HostSequence(const T& val)
+    {
+        if constexpr (std::is_same_v<T, MapRef>)
+        {
+            if (val.IsHost())
+            {
+                return host::AsSequence(*val.GetHostObject());
+            }
+        }
+        return std::nullopt;
+    }
+
+    // An operation other than == and != with a host list or tuple on either side, as on the
+    // engine's own list (IHostObject::IsSequence); nullopt when neither operand is one
+    template<typename L, typename R>
+    [[nodiscard]] JINJA2CPP_COLD_INLINE std::optional<InternalValue> HostSequenceOperation(const L& left, const R& right) const
+    {
+        auto leftList = HostSequence(left);
+        auto rightList = HostSequence(right);
+        if (!leftList && !rightList)
+        {
+            return std::nullopt;
+        }
+        const InternalValue leftValue = leftList ? InternalValue(std::move(*leftList)) : HostOperand(left);
+        const InternalValue rightValue = rightList ? InternalValue(std::move(*rightList)) : HostOperand(right);
+        return Apply2<BinaryMathOperation>(leftValue, rightValue, m_oper, m_compType);
     }
 
     // printf-style `str % args` is task 0020's; until it lands the result is empty

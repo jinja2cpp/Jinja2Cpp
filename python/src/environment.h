@@ -109,6 +109,9 @@ private:
     jinja2::Template m_template;
     nb::object m_environment;
     nb::object m_globals;
+    // The environment's globals dict when the template was made: Jinja2's template.globals is a
+    // ChainMap over that dict, so replacing Environment.globals later leaves it as it was
+    nb::object m_envGlobals;
     nb::object m_name;
     nb::object m_filename;
 };

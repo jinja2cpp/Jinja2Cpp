@@ -674,13 +674,16 @@ PyTemplate::PyTemplate(nb::handle source, nb::kwargs kwargs)
     , m_filename(nb::none())
 {
     // Jinja2 makes an environment of the arguments
-    m_template = nb::cast<PyEnvironment&>(m_environment).Load(source);
+    auto& env = nb::cast<PyEnvironment&>(m_environment);
+    m_template = env.Load(source);
+    m_envGlobals = env.Globals();
 }
 
 PyTemplate::PyTemplate(jinja2::Template tpl, nb::object environment, nb::object globals, nb::object name, nb::object filename)
     : m_template(std::move(tpl))
     , m_environment(std::move(environment))
     , m_globals(std::move(globals))
+    , m_envGlobals(nb::cast<PyEnvironment&>(m_environment).Globals())
     , m_name(std::move(name))
     , m_filename(std::move(filename))
 {
@@ -708,7 +711,7 @@ nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
     AddParams(params, kwargs);
     // The globals: the environment's, then the template's over them
     jinja2::InternalValueMap globals;
-    AddParams(globals, env.Globals());
+    AddParams(globals, m_envGlobals);
     if (!m_globals.is_none())
     {
         AddParams(globals, m_globals);
@@ -736,6 +739,7 @@ int PyTemplate::Traverse(visitproc visit, void* arg) const
 {
     Py_VISIT(m_environment.ptr());
     Py_VISIT(m_globals.ptr());
+    Py_VISIT(m_envGlobals.ptr());
     Py_VISIT(m_name.ptr());
     Py_VISIT(m_filename.ptr());
     return 0;
@@ -745,6 +749,7 @@ void PyTemplate::Clear() noexcept
 {
     m_environment = nb::none();
     m_globals = nb::none();
+    m_envGlobals = nb::none();
     m_name = nb::none();
     m_filename = nb::none();
 }

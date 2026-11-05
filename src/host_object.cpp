@@ -241,6 +241,20 @@ ListAdapter Reversed(const IHostObject& host)
     return std::move(*result);
 }
 
+std::optional<ListAdapter> AsSequence(const IHostObject& host)
+{
+    if (!host.IsSequence())
+    {
+        return std::nullopt;
+    }
+    auto items = host.Iterate();
+    if (items && host.IsTuple())
+    {
+        items->MarkAsTuple();
+    }
+    return items;
+}
+
 bool Equal(const IHostObject* left, const InternalValue& leftValue, const IHostObject* right, const InternalValue& rightValue)
 {
     if (left)

@@ -59,6 +59,7 @@ public:
     [[nodiscard]] const void* Identity() const override { return m_object; }
     [[nodiscard]] bool IsMapping() const override;
     [[nodiscard]] bool IsSequence() const override;
+    [[nodiscard]] bool IsTuple() const override;
     [[nodiscard]] bool IsMarkupLike() const override;
     [[nodiscard]] std::string Html() const override;
 

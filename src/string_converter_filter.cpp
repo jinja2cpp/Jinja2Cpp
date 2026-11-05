@@ -1662,8 +1662,9 @@ InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, Rend
     }
     const auto objectMap = AsMap(baseVal);
     // An iterable object (a host object with __iter__, Jinja2's LoopContext, which gives the
-    // rest of its loop as (item, loop) pairs: docs/tasks/0382) gives its items
-    const bool objectIterates = objectMap && objectMap->Iterates();
+    // rest of its loop as (item, loop) pairs: docs/tasks/0382) gives its items; a host mapping (a Python dict) is a dict to it
+    const auto* hostObject = objectMap ? objectMap->GetHostObject() : nullptr;
+    const bool objectIterates = objectMap && objectMap->Iterates() && !(hostObject && hostObject->IsMapping());
     if (IsStringValue(baseVal) || (baseVal.Kind() != ValueKind::Map && baseVal.Kind() != ValueKind::List) || (objectMap && objectMap->GetObjectClass() && !objectIterates))
     {
         return InternalValue(UrlQuote(asText(baseVal), false));
