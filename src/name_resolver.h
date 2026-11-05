@@ -104,16 +104,13 @@ public:
     // outside every macro nothing is recorded
     [[nodiscard]] std::uint32_t BeginReads()
     {
-        if (m_readsOpen++ == 0 && m_readHashes.capacity() == 0)
-        {
-            m_readHashes.reserve(32);
-        }
+        ++m_readsOpen;
         return static_cast<std::uint32_t>(m_readHashes.size());
     }
     // The reads since `mark`, sorted and unique in place: the enclosing macros read them too
     [[nodiscard]] Span<const std::size_t> EndReads(std::uint32_t mark)
     {
-        const auto first = m_readHashes.begin() + mark;
+        auto* const first = m_readHashes.begin() + mark;
         std::sort(first, m_readHashes.end());
         m_readHashes.erase(std::unique(first, m_readHashes.end()), m_readHashes.end());
         if (m_readsOpen != 0)
@@ -323,8 +320,9 @@ private:
     // Out of line: the parse of every name expression inlines the check of AddRead
     void RecordRead(std::size_t hash);
 
-    // BeginReads
-    std::vector<std::size_t> m_readHashes;
+    // BeginReads. Inline: a template's macros read a few dozen names, and a heap buffer showed
+    // in Load/macros (bench/count.py)
+    SmallVector<std::size_t, 32> m_readHashes;
     std::uint32_t m_readsOpen = 0;
     FrameId m_current = NoFrame;
     bool m_inBranch = false;
