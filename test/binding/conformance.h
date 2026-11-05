@@ -739,6 +739,29 @@ TYPED_TEST_P(JsonConformance, Equality)
         const jinja2::Value again = borrowed; // NOLINT(performance-unnecessary-copy-initialization): the copy is the subject
         EXPECT_TRUE(borrowed.ToGenericMap() == again.ToGenericMap());
         EXPECT_TRUE(borrowed.ToGenericMap() == jinja2::Reflect(std::as_const(doc)).ToGenericMap());
+
+        // Two reads of one value have one NodeIdentity when the traits give one, and none otherwise (0212)
+        const auto nodeOf = [](const auto* accessor) { return dynamic_cast<const jinja2::IJsonNode*>(accessor); };
+        const jinja2::GenericMap root = borrowed.ToGenericMap();
+        const jinja2::GenericMap firstRead = root.GetValueByName("a").ToGenericMap();
+        const jinja2::GenericMap secondRead = root.GetValueByName("a").ToGenericMap();
+        const jinja2::GenericList listRead = root.GetValueByName("l").ToGenericList();
+        const auto* firstA = nodeOf(firstRead.GetAccessor());
+        const auto* secondA = nodeOf(secondRead.GetAccessor());
+        const auto* list = nodeOf(listRead.GetAccessor());
+        ASSERT_TRUE(firstA && secondA && list);
+        if constexpr (jinja2::detail::json::HasIdentity<typename TypeParam::Json>::value)
+        {
+            EXPECT_NE(nullptr, firstA->NodeIdentity());
+            EXPECT_EQ(firstA->NodeIdentity(), secondA->NodeIdentity());
+            EXPECT_NE(firstA->NodeIdentity(), list->NodeIdentity());
+            EXPECT_NE(firstA->NodeIdentity(), nodeOf(root.GetAccessor())->NodeIdentity());
+        }
+        else
+        {
+            EXPECT_EQ(nullptr, firstA->NodeIdentity());
+            EXPECT_EQ(nullptr, list->NodeIdentity());
+        }
     }
 }
 
