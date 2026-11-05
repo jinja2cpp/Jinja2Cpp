@@ -13,6 +13,8 @@ The `LICENSE` file is the Mozilla Public License 2.0 at every tag of the reposit
 `git show <tag>:LICENSE`). The README badge says Mozilla, and the SBOM records `MPL-2.0`
 for the root component. No release was ever published under MIT, and nothing here
 relicenses anything.
+2.0 stays MPL-2.0 (Ruslan, 2026-11-05): its file-level copyleft leaves embedding in closed
+products free, and relicensing would need every copyright holder's consent (there is no CLA).
 
 ### Metadata that disagrees
 
