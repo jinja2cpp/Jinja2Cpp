@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: []
-touches: [src/template_parser.h, src/statements.cpp, test/parity/divergences/loader.txt]
+touches: [src/template_parser.cpp, src/statements.h, src/statements.cpp, test/parity/cases/loader.py, test/parity/divergences/loader.txt]
 ---
 # A block in a scoped statement of a child template also renders in place
 
@@ -24,3 +24,11 @@ those statements, guarded as Jinja2 guards it (`if parent_template is None` when
 not known at that point).
 
 **Done when** both divergence lines are deleted and `ctest -R parity` passes.
+
+**Resolution.** Jinja2's compiler keeps `frame.toplevel` only through `if` (`Frame.soft`);
+`with`, `autoescape` (a `Scope`), `for`, `filter`, call blocks, macros, set blocks and blocks open
+an inner frame, where `visit_Block` calls the block with no extends check. The parser marks a
+block under any of those (`BlockStatement::SetInPlace`), and `BlockStatement::Render` renders
+a marked one even when the template has a parent. Text next to it is still dropped as before.
+Cases: `loader.extends_block_in_*`, `loader.extends_conditional_*block_in_*`,
+`loader.extends_nested_block_*`.
