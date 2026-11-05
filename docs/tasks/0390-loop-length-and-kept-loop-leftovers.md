@@ -56,5 +56,6 @@ deliberate with Ruslan's word.
 - 4 and `statements.for_kept_length_after_append` (a loop kept past its statement takes its
   length from the list at the statement's end; Jinja2 reads len() later) are proposed as
   deliberate: a kept loop cannot hold the statement's enumerator or list past the statement
-  (0188). Waiting for Ruslan's word.
+  (0188). Ruslan chose deliberate on 2026-11-05 ("Deliberate, as 0188 and 0366"); the
+  corpus line is marked deliberate in `test/parity/divergences/statements.txt`.
 

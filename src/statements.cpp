@@ -292,11 +292,16 @@ struct LoopState : ValueObject
     // Shared with the callables loop.cycle and loop.changed made, kept up to date once one
     // is made (LoopCycleCell)
     std::shared_ptr<LoopCycleCell> cycleCell;
-    // What this loop's length is taken from when first read, as Jinja2's LoopContext.length
-    // takes len(iterable) then: the `loop` this loop runs over (IsLoopObject), or a list the
-    // template can change while the loop runs (docs/tasks/0390). A loop object stays here
-    // once read, so that the cycle collector sees it while the enumerator runs over it
+    // The `loop` this loop runs over (IsLoopObject), whose len() is this loop's length once
+    // read. It stays here once read, so that the cycle collector sees it while the
+    // enumerator runs over it (docs/tasks/0390)
     InternalValue lengthOf;
+    // The statement's list, asked on the first read of the length whether the template can
+    // change it (GetMutableItems): then its len() at that read is the length, as Jinja2's
+    // LoopContext.length takes len(iterable) then, not listSize from the start
+    // (docs/tasks/0390). A view, let go of when the statement ends; asked only then, so that
+    // a loop that never reads its length pays no call for it
+    std::optional<ListRef> sizeOfList;
     // Whether the item after the current one is fetched, isLast telling if there is one
     bool isPeeked = false;
     // Whether the enumerator can run past the statement: over indexedList, the rest the state
@@ -344,11 +349,7 @@ struct LoopState : ValueObject
     JINJA2CPP_NOINLINE_INLINE void DetachCycleCell()
     {
         cycleCell->live = nullptr;
-        if (const auto list = listSize ? std::nullopt : AsList(lengthOf))
-        {
-            cycleCell->length = list->GetSize();
-        }
-        else if (listSize)
+        if (listSize)
         {
             cycleCell->length = listSize;
         }
@@ -437,6 +438,7 @@ struct LoopState : ValueObject
             enumerator.reset();
         }
         listSize.reset();
+        sizeOfList.reset();
         index0 = 0;
         isLast = false;
         isAdvancing = false;
@@ -474,12 +476,8 @@ struct LoopState : ValueObject
     // statement owned, its filter in the render that failed
     void LetGoOfStatement()
     {
-        // Nor can it hold the statement's list for its length
-        if (const auto list = AsList(lengthOf))
-        {
-            listSize = list->GetSize();
-            lengthOf = InternalValue();
-        }
+        // Nor read the size of its list, which may be gone
+        sizeOfList.reset();
         if (!keepsEnumerator)
         {
             enumerator.reset();
@@ -492,36 +490,49 @@ struct LoopState : ValueObject
     // The length of a filtered loop is known once the rest of the items are collected
     size_t GetLength()
     {
-        if (listSize)
+        if (listSize && !sizeOfList)
         {
             return *listSize;
         }
-        if (!lengthOf.IsUndefined())
-        {
-            return LengthOfIterated();
-        }
-        return CollectRest();
+        return LengthOnFirstRead();
     }
 
-    // len() of what lengthOf holds, kept as this loop's length
-    JINJA2CPP_NOINLINE_INLINE size_t LengthOfIterated()
+    // len() of the list or the `loop` the loop runs over, kept as its length, or the length
+    // the rest of the items gives
+    JINJA2CPP_NOINLINE_INLINE size_t LengthOnFirstRead()
     {
         if (TakeLengthOf())
         {
-            return *listSize;
+            return listSize.value_or(0);
         }
         return CollectRest();
     }
 
-    // Takes len() of what lengthOf holds into listSize; false when it has none. Lets go of a
-    // list, which may be the statement's
-    bool TakeLengthOf()
+    // Takes len() of the statement's list as the length if the template can change it, and
+    // lets go of the list
+    JINJA2CPP_NOINLINE_INLINE void TakeListSize()
     {
-        if (const auto list = AsList(lengthOf))
+        if (sizeOfList->GetMutableItems()) // NOLINT(bugprone-unchecked-optional-access): asked only when set
         {
-            listSize = list->GetSize();
-            lengthOf = InternalValue();
-            return listSize.has_value();
+            listSize = sizeOfList->GetSize(); // NOLINT(bugprone-unchecked-optional-access): as above
+        }
+        sizeOfList.reset();
+    }
+
+    // Takes len() of sizeOfList or lengthOf into listSize; false when neither gives one
+    JINJA2CPP_NOINLINE_INLINE bool TakeLengthOf()
+    {
+        if (sizeOfList)
+        {
+            TakeListSize();
+            if (listSize)
+            {
+                return true;
+            }
+        }
+        if (lengthOf.IsUndefined())
+        {
+            return false;
         }
         InternalValue length;
         const auto map = AsMap(lengthOf);
@@ -548,7 +559,7 @@ struct LoopState : ValueObject
         // running it. Jinja2 has no `loop` in the filter at all
         Peek();
         // A length taken from what the loop runs over stays: Jinja2 keeps the first len()
-        if (!listSize && !lengthOf.IsUndefined())
+        if (!listSize || sizeOfList)
         {
             TakeLengthOf();
         }
@@ -614,13 +625,9 @@ JINJA2CPP_NOINLINE_INLINE bool IsLoopObject(const InternalValue& loopVal)
 // template can change it (GetMutableItems), whose len() is taken when the length is first
 // read, as Jinja2's LoopContext.length takes len(iterable) (docs/tasks/0390); or len() of
 // the `loop` the loop runs over, read then too
-JINJA2CPP_NOINLINE_INLINE void SetLengthSource(LoopState& state, const ListAdapter& loopItems, const InternalValue& loopVal)
+JINJA2CPP_ALWAYS_INLINE void SetLengthSource(LoopState& state, const ListAdapter& loopItems, const InternalValue& loopVal)
 {
-    if (loopItems.GetMutableItems())
-    {
-        state.lengthOf = InternalValue(loopItems);
-        return;
-    }
+    state.sizeOfList = loopItems.Ref();
     state.listSize = loopItems.GetSize();
     if (!state.listSize && IsLoopObject(loopVal))
     {
@@ -1445,6 +1452,12 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     {
         KeepLoopState(*state, static_cast<bool>(m_ifExpr), loopVal, std::move(loopItems));
     }
+    // The list may go with the statement: loop.cycle callables kept past it print its size
+    if (state->cycleCell && state->sizeOfList)
+    {
+        state->TakeListSize();
+    }
+    state->sizeOfList.reset();
 
     values.ExitScope(state->loopScope);
     state->ReleaseScopeValues();
@@ -1598,6 +1611,12 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     {
         KeepLoopState(*state, static_cast<bool>(m_ifExpr), loopVal, std::move(loopItems));
     }
+    // The list may go with the statement: loop.cycle callables kept past it print its size
+    if (state->cycleCell && state->sizeOfList)
+    {
+        state->TakeListSize();
+    }
+    state->sizeOfList.reset();
     state->lazyFilter = nullptr;
 
     guard.Unbind();
