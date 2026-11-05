@@ -1,0 +1,47 @@
+# The Python module (docs/python.md): `pip install .` builds jinja2cpp with scikit-build-core from
+# the root CMakeLists.txt and -DJINJA2CPP_BUILD_PYTHON=ON (docs/tasks/0248, 0353)
+[build-system]
+# nanobind: the pin of thirdparty/internal_deps.cmake (python/CMakeLists.txt checks they agree)
+requires = ["scikit-build-core>=0.10", "nanobind==3.1.0"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "jinja2cpp"
+version = "2.0.0"
+description = "Jinja2C++ as a Python module: Jinja2's templates rendered by a C++ engine"
+readme = "docs/python.md"
+license = "MPL-2.0"
+requires-python = ">=3.12"
+dependencies = ["markupsafe>=2.0"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C++",
+    "Topic :: Text Processing :: Markup :: HTML",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "jinja2==3.1.6"]
+
+[project.urls]
+Homepage = "https://github.com/jinja2cpp/Jinja2Cpp"
+
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+cmake.version = ">=3.23"
+cmake.build-type = "Release"
+# One wheel for CPython 3.12 and later (abi3)
+wheel.py-api = "cp312"
+wheel.packages = ["python/jinja2cpp"]
+build-dir = "build/{wheel_tag}"
+sdist.exclude = ["build*", ".claude", "tla", "fuzz", "bench", "abi"]
+
+[tool.scikit-build.cmake.define]
+JINJA2CPP_BUILD_PYTHON = "ON"
+JINJA2CPP_BUILD_TESTS = "OFF"
+JINJA2CPP_INSTALL = "OFF"
+JINJA2CPP_WITH_UNICODE_NAMES = "ON"
+# Python's int: arithmetic beyond int64 is exact, with the built-in big-integer backend (0248 D4)
+JINJA2CPP_WITH_BIGINT = "boost"
+
+[tool.pytest.ini_options]
+testpaths = ["python/tests"]
