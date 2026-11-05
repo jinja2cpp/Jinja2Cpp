@@ -86,6 +86,12 @@ if (JINJA2CPP_BUILD_PYTHON)
         message(FATAL_ERROR "JINJA2CPP_BUILD_PYTHON links the library statically: the module uses internal symbols a shared library hides")
     endif ()
     set(JINJA2CPP_PIC ON)
+    # In a module the interpreter loads with dlopen, the thread-locals that every render step
+    # reads would use the dynamic TLS model, a call into the loader per access
+    # (JINJA2CPP_HOT_TLS in src/recursion_guard.h)
+    if (UNIX AND NOT APPLE)
+        add_compile_definitions(JINJA2CPP_HOT_TLS_INITIAL_EXEC)
+    endif ()
 endif ()
 
 if (NOT JINJA2CPP_DEPS_MODE)
