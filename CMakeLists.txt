@@ -243,6 +243,8 @@ set(JINJA2CPP_SOURCES
     src/name_resolver.cpp
     src/node_arena.cpp
     src/out_stream.cpp
+    src/prompt_escape.cpp
+    src/prompt_filters.cpp
     src/python_format.cpp
     src/recursion_guard.cpp
     src/render_failure.cpp
