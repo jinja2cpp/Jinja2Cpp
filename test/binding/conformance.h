@@ -364,6 +364,53 @@ inline const std::vector<Row>& RepeatedKeysRows()
     return rows;
 }
 
+inline const std::vector<Row>& IdentityRows()
+{
+    static const std::vector<Row> rows = {
+        { "sameas", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({{ j.messages[0] is sameas j.messages[0] }}|{{ j.nd.k is sameas j.nd.k }}|{{ j.messages is sameas j['messages'] }}|{{ j.nd is sameas j.messages[0] }}|{{ j.messages[0] is sameas j.messages[1] }})J2",
+          R"J2(True|True|True|False|False)J2", nullptr, nullptr },
+        { "loop_var_update", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% for m in j.messages %}{% set _ = m.update(x=1) %}{% endfor %}{{ j.messages }})J2",
+          R"J2([{'r': 'u', 'x': 1}, {'r': 'a', 'x': 1}])J2", nullptr, nullptr },
+        { "loop_var_kept", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% for m in j.messages %}{% set ns = m %}{% set _ = ns.update(z=1) %}{% endfor %}{{ j.messages }})J2",
+          R"J2([{'r': 'u', 'z': 1}, {'r': 'a', 'z': 1}])J2", nullptr, nullptr },
+        { "item_then_owner", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% set m = j.messages[0] %}{% set _ = j.messages[0].update(y=2) %}{{ m }})J2",
+          R"J2({'r': 'u', 'y': 2})J2", nullptr, nullptr },
+        { "owner_then_item", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% set m = j.messages[0] %}{% set _ = m.update(y=2) %}{{ j.messages }})J2",
+          R"J2([{'r': 'u', 'y': 2}, {'r': 'a'}])J2", nullptr, nullptr },
+        { "set_item_kept", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% set a = j.nd.k %}{% set _ = j.nd['k'].append(2) %}{{ a }}|{{ j.nd }})J2",
+          R"J2([1, 2]|{'k': [1, 2]})J2", nullptr, nullptr },
+        { "loop_pop", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% for i in j.l %}{% set _ = j.l.pop() %}{{ i }}{% endfor %}|{{ j.l }})J2",
+          R"J2(31|[3])J2", nullptr, nullptr },
+        { "nested_seen", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% set e = j.nd %}{% set _ = j.nd.k.append(5) %}{{ e }}|{{ j.nd.k is sameas e.k }})J2",
+          R"J2({'k': [1, 5]}|True)J2", nullptr, nullptr },
+    };
+    return rows;
+}
+
+inline const std::vector<Row>& MidLoopCellRows()
+{
+    static const std::vector<Row> rows = {
+        { "pop", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% set l = j.l %}{% for i in l %}{% set _ = l.pop() %}{{ i }}{% endfor %}|{{ l }})J2",
+          R"J2(31|[3])J2", nullptr, nullptr },
+        { "append", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% set l = j.l %}{% for i in l %}{% if loop.first %}{% set _ = l.append(9) %}{% endif %}{{ i }}{% endfor %}|{{ l }})J2",
+          R"J2(3129|[3, 1, 2, 9])J2", nullptr, nullptr },
+        { "pop_first", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% set l = j.l %}{% for i in l %}{% if loop.first %}{% set _ = l.pop(0) %}{% endif %}{{ i }}{% endfor %}|{{ l }})J2",
+          R"J2(32|[1, 2])J2", nullptr, nullptr },
+    };
+    return rows;
+}
+
 // Runs a row in the given modes, narrow and wide
 constexpr int kViewModes = 1;
 constexpr int kCopyMode = 2;
@@ -1002,6 +1049,26 @@ TYPED_TEST_P(JsonConformance, DeepViewRendersOrFailsCleanly)
     });
 }
 
+// Task 0212: two reads of one JSON value are one object when the traits give it an identity (JsonTraits::Identity),
+// so a write through one is seen through the other, as in Python. Without the hook each read is an object of its own
+TYPED_TEST_P(JsonConformance, Identity)
+{
+    constexpr bool kHasIdentity = jinja2::detail::json::HasIdentity<typename TypeParam::Json>::value;
+    jc::RunRows<TypeParam>(jc::IdentityRows(), kHasIdentity ? jc::kAllModes : jc::kCopyMode);
+    if constexpr (TypeParam::kViewable && !kHasIdentity)
+    {
+        jc::ForEachMode<TypeParam>(R"({"messages":[{"r":"u"}],"nd":{"k":[1]}})", jc::kViewModes, [](const jinja2::Value& j) {
+            jc::RenderBoth({ { "j", j } }, "{{ j.messages[0] is sameas j.messages[0] }}|{{ j.nd.k is sameas j.nd.k }}|{% set e = j.nd %}{{ e is sameas e }}", "False|False|True");
+        });
+    }
+}
+
+// Task 0212: a loop over a list reads the render's copy of it once the loop body made one, from the index it reached
+TYPED_TEST_P(JsonConformance, MidLoopCell)
+{
+    jc::RunRows<TypeParam>(jc::MidLoopCellRows(), jc::kAllModes);
+}
+
 // Test names for INSTANTIATE_TYPED_TEST_SUITE_P: clang's -Wpedantic rejects the macro without its optional argument
 struct JsonBindingNames
 {
@@ -1012,6 +1079,6 @@ struct JsonBindingNames
     }
 };
 
-REGISTER_TYPED_TEST_SUITE_P(JsonConformance, Scalars, BigIntegers, Nesting, KeyOrder, MissingKeysAndIndexes, EmptyContainers, NullMemberAndNullItem, Strings, IterationAndFilters, EnumeratorPastTheEnd, Equality, DictMethods, ModuleExportLimits, LifetimeInTemplates, LifetimeOfItemsWithoutEngine, ConcurrentRenders, CopyLimits, RepeatedKeys, DeepViewRendersOrFailsCleanly);
+REGISTER_TYPED_TEST_SUITE_P(JsonConformance, Scalars, BigIntegers, Nesting, KeyOrder, MissingKeysAndIndexes, EmptyContainers, NullMemberAndNullItem, Strings, IterationAndFilters, EnumeratorPastTheEnd, Equality, DictMethods, ModuleExportLimits, LifetimeInTemplates, LifetimeOfItemsWithoutEngine, ConcurrentRenders, CopyLimits, RepeatedKeys, DeepViewRendersOrFailsCleanly, Identity, MidLoopCell);
 
 #endif // JINJA2CPP_TEST_BINDING_CONFORMANCE_H

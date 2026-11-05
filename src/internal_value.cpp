@@ -1762,6 +1762,60 @@ Container ExportCallFirst(BorrowedCells& call, const void* identity, InternalVal
     call.AdoptExports(std::shared_ptr<CallExports>(block, &block->exports));
     return Container(std::shared_ptr<const Accessor>(std::move(block), view));
 }
+
+// The JSON node (IJsonNode, docs/tasks/0370 and 0212) a host map or list is, or null. A cross-cast
+// costs tens of nanoseconds and every lent JSON item asks, so each thread keeps the answer for the
+// last type found to be a JSON node, with the offset of its IJsonNode base, and for the last type
+// found not to be. A type is the most-derived one of a complete object (the accessors are made by
+// make_shared), so the offset from its accessor base to its IJsonNode base is fixed per type
+template<typename Accessor>
+const IJsonNode* JsonNodeOf(const Accessor* accessor) noexcept
+{
+    struct Cache
+    {
+        const std::type_info* json = nullptr;
+        std::ptrdiff_t offset = 0;
+        const std::type_info* other = nullptr;
+    };
+    thread_local Cache cache;
+    if (!accessor)
+    {
+        return nullptr;
+    }
+    const std::type_info* type = &typeid(*accessor);
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast,cppcoreguidelines-pro-bounds-pointer-arithmetic): the address of
+    // the IJsonNode base of the same complete object, at the offset the cast found for its type
+    const auto* base = reinterpret_cast<const char*>(accessor);
+    if (type == cache.json)
+    {
+        return reinterpret_cast<const IJsonNode*>(base + cache.offset);
+    }
+    if (type == cache.other)
+    {
+        return nullptr;
+    }
+    const auto* node = dynamic_cast<const IJsonNode*>(accessor);
+    if (node)
+    {
+        cache.json = type;
+        cache.offset = reinterpret_cast<const char*>(node) - base;
+    }
+    // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast,cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    else
+    {
+        cache.other = type;
+    }
+    return node;
+}
+
+// The identity of a host container's views: for a JSON node, the document value it shows when the
+// traits tell it, so that two reads of one value are one object (docs/tasks/0212); else the
+// accessor, and each view is an object of its own
+const void* HostIdentity(const IJsonNode* node, const void* accessor) noexcept
+{
+    const void* identity = node ? node->NodeIdentity() : nullptr;
+    return identity ? identity : accessor;
+}
 } // namespace
 
 GenericList ExportCallList(BorrowedCells& call, const void* identity, InternalValue container)
@@ -1788,14 +1842,25 @@ template<template<typename> class Holder>
 class GenericListAdapter : public IListAccessor
 {
 public:
+    // An enumeration of the host's list that turns to the list's cell once the render made one
+    // in the loop body (a pop() or an append() through another read of the list), at the index
+    // it reached, as Python's list iterator does (docs/tasks/0212). An enumeration made after
+    // the cell is a CellEnumerator
     struct Enumerator : public IListAccessorEnumerator
     {
         std::optional<ListEnumeratorPtr> m_enum;
         std::shared_ptr<const void> m_owner;
+        // The list the enumeration reads: the loop holds it while the enumeration runs, as for
+        // CellEnumerator
+        const GenericListAdapter* m_list = nullptr;
+        // The index of the next item, and whether the enumeration reads the cell from it on
+        size_t m_next = 0;
+        bool m_onCell = false;
 
-        explicit Enumerator(std::optional<ListEnumeratorPtr> e, std::shared_ptr<const void> owner)
+        Enumerator(std::optional<ListEnumeratorPtr> e, std::shared_ptr<const void> owner, const GenericListAdapter* list)
             : m_enum(std::move(e))
             , m_owner(std::move(owner))
+            , m_list(list)
         {
         }
 
@@ -1806,21 +1871,70 @@ public:
             {
                 (*m_enum)->Reset();
             }
+            m_next = 0;
+            m_onCell = false;
         }
-        bool MoveNext() override { return !m_enum ? false : (*m_enum)->MoveNext(); }
-        [[nodiscard]] InternalValue GetCurrent() const override { return !m_enum ? InternalValue() : LendGenericItem(m_owner, (*m_enum)->GetCurrent()); }
+        bool MoveNext() override
+        {
+            if (!m_onCell && m_list && JINJA2CPP_CELL_UNLIKELY(m_list->m_link.MayHaveCell()) && m_list->m_link.Get(*m_list))
+            {
+                m_onCell = true;
+            }
+            if (m_onCell)
+            {
+                // The size is read at each step, as CellEnumerator's
+                if (m_next >= m_list->GetSize().value_or(0))
+                {
+                    return false;
+                }
+                ++m_next;
+                return true;
+            }
+            if (!m_enum || !(*m_enum)->MoveNext())
+            {
+                return false;
+            }
+            ++m_next;
+            return true;
+        }
+        [[nodiscard]] InternalValue GetCurrent() const override
+        {
+            if (m_onCell)
+            {
+                return m_next == 0 ? InternalValue() : m_list->GetItem(static_cast<int64_t>(m_next - 1)).value_or(InternalValue());
+            }
+            return !m_enum ? InternalValue() : LendGenericItem(m_owner, (*m_enum)->GetCurrent());
+        }
         [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
         {
-            return !m_enum ? std::optional<ListAccessorEnumeratorPtr>{} : std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, (*m_enum)->Clone(), m_owner);
+            if (!m_enum)
+            {
+                return {};
+            }
+            Enumerator copy((*m_enum)->Clone(), m_owner, m_list);
+            copy.m_next = m_next;
+            copy.m_onCell = m_onCell;
+            return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(copy));
         }
         std::optional<ListAccessorEnumeratorPtr> Transfer() override
         {
-            return !m_enum ? std::optional<ListAccessorEnumeratorPtr>{} : std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(*m_enum), std::move(m_owner));
+            if (!m_enum)
+            {
+                return {};
+            }
+            Enumerator moved(std::move(*m_enum), std::move(m_owner), m_list);
+            moved.m_next = m_next;
+            moved.m_onCell = m_onCell;
+            return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(moved));
         }
         [[nodiscard]] bool IsEqual(const IComparable& other) const override
         {
             auto* val = dynamic_cast<const Enumerator*>(&other);
             if (!val)
+            {
+                return false;
+            }
+            if (m_list != val->m_list || m_next != val->m_next || m_onCell != val->m_onCell)
             {
                 return false;
             }
@@ -1840,6 +1954,7 @@ public:
     template<typename U, typename = std::enable_if_t<!std::is_same_v<std::decay_t<U>, GenericListAdapter>>>
     explicit GenericListAdapter(U&& values)
         : m_values(std::forward<U>(values))
+        , m_node(JsonNodeOf(m_values.Get().GetAccessor()))
     {
         // As OwnedAdapter
         this->SetTraversable();
@@ -1881,7 +1996,7 @@ public:
             return self;
         }
     }
-    [[nodiscard]] const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
+    [[nodiscard]] const void* GetIdentity() const override { return HostIdentity(m_node, m_values.Get().GetAccessor()); }
     [[nodiscard]] InternalValueList* GetMutableItems() const override
     {
         const auto* cell = m_link.Get(*this);
@@ -1949,7 +2064,7 @@ public:
         {
             return {};
         }
-        return ListAccessorEnumeratorPtr(Enumerator(m_values.Get().GetAccessor()->CreateEnumerator(), GenericOwner(m_values)));
+        return ListAccessorEnumeratorPtr(Enumerator(accessor->CreateEnumerator(), GenericOwner(m_values), this));
     }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericList CreateGenericList() const override
@@ -1970,6 +2085,9 @@ public:
 
 private:
     Holder<GenericList> m_values;
+    // The accessor as a JSON array, which has the identity of the document value it shows
+    // (docs/tasks/0212); null for any other host list. The accessor m_values holds owns it
+    const IJsonNode* m_node;
     // The render's copy of the list once the render wrote to it (docs/tasks/0049)
     AutoCellLink m_link;
 };
@@ -3190,35 +3308,6 @@ InternalValue Value2IntValue(Value&& val)
     return std::visit(visitors::InputValueConvertor(true, false), val.GetData());
 }
 
-// Whether a host map is a JSON object (IJsonNode, docs/tasks/0370). A cross-cast costs tens of
-// nanoseconds and every lent map item asks, so the answer is kept per most-derived type: the last
-// type found to be a JSON node and the last found not to be. Each slot is a fact about a type, so
-// a race between renders only costs another cast
-namespace
-{
-bool IsJsonNode(const IMapItemAccessor* accessor)
-{
-    if (!accessor)
-    {
-        return false;
-    }
-    static std::atomic<const std::type_info*> lastJson{ nullptr };
-    static std::atomic<const std::type_info*> lastOther{ nullptr };
-    const std::type_info* type = &typeid(*accessor);
-    if (type == lastJson.load(std::memory_order_relaxed))
-    {
-        return true;
-    }
-    if (type == lastOther.load(std::memory_order_relaxed))
-    {
-        return false;
-    }
-    const bool isJson = dynamic_cast<const IJsonNode*>(accessor) != nullptr;
-    (isJson ? lastJson : lastOther).store(type, std::memory_order_relaxed);
-    return isJson;
-}
-} // namespace
-
 template<template<typename> class Holder>
 class GenericMapAdapter : public MapAccessorImpl<GenericMapAdapter<Holder>>
 {
@@ -3227,7 +3316,7 @@ public:
     template<typename U, typename = std::enable_if_t<!std::is_same_v<std::decay_t<U>, GenericMapAdapter>>>
     explicit GenericMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
-        , m_isDict(IsJsonNode(m_values.Get().GetAccessor()))
+        , m_node(JsonNodeOf(m_values.Get().GetAccessor()))
     {
         // As OwnedAdapter
         this->SetTraversable();
@@ -3306,8 +3395,8 @@ public:
     }
     // A JSON object is a dict (IJsonNode, docs/tasks/0370); the names of any other host map, such as a
     // reflected struct, are its attributes
-    [[nodiscard]] bool HasAttributes() const override { return !m_isDict; }
-    [[nodiscard]] const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
+    [[nodiscard]] bool HasAttributes() const override { return !m_node; }
+    [[nodiscard]] const void* GetIdentity() const override { return HostIdentity(m_node, m_values.Get().GetAccessor()); }
     [[nodiscard]] TemplateDict* GetMutableItems() const override
     {
         const auto* cell = m_link.Get(*this);
@@ -3319,7 +3408,7 @@ public:
         return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
-    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return m_isDict ? MapAttrPolicy::MethodsFirst : MapAttrPolicy::KeysFirst; }
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return m_node ? MapAttrPolicy::MethodsFirst : MapAttrPolicy::KeysFirst; }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
@@ -3369,8 +3458,10 @@ private:
     }
 
     Holder<GenericMap> m_values;
-    // A JSON object (IJsonNode), which looks names up as a dict (docs/tasks/0370)
-    bool m_isDict;
+    // The accessor as a JSON object, which looks names up as a dict (docs/tasks/0370) and has the
+    // identity of the document value it shows (docs/tasks/0212); null for any other host map. The
+    // accessor m_values holds owns it
+    const IJsonNode* m_node;
     // The render's copy of the map once the render wrote to it (docs/tasks/0049)
     AutoCellLink m_link;
 };

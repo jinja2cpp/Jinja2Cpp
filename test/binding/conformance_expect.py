@@ -27,6 +27,7 @@ NULLS = '{"x":null,"l":[1,null,3],"o":{"n":null}}'
 ITER = '{"l":[3,1,2],"w":["b","a","c"],"o":[{"n":"x","v":2},{"n":"y","v":1},{"n":"z","v":3}],"f":[1.5,0.5],"e":[]}'
 DICT = '{"items":"own","keys":1,"name":"bob","o":{"get":"g"},"l":[{"name":"x"},{"v":1}]}'
 EQUAL = '{"a":{"x":[1,2],"y":{"z":null}},"b":{"x":[1,2],"y":{"z":null}},"c":{"x":[1,3]},"l":[1,2]}'
+ALIAS = '{"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]}'
 
 # group -> [(row name, JSON document, template)]
 ROWS = {
@@ -147,6 +148,26 @@ ROWS = {
         ("macro", LIFETIME_DOC, "{% macro m(x) %}{{ x.b|join('+') }}{% endmacro %}{{ m(rjson().obj) }}"),
         ("filters", LIFETIME_DOC, "{{ rjson().obj.b|map('string')|join(',') }}|{{ (rjson().list|sort)[0] }}"),
         ("list_of_roots", LIFETIME_DOC, "{% set l = [rjson().obj, rjson().obj] %}{{ l[0].b }}|{{ l|length }}|{{ l[1].a }}"),
+    ],
+    # Two reads of one JSON value are one object (docs/tasks/0212): a write through one is seen through the other.
+    # Views of traits without an Identity hook are an object per read, so these rows run on their copy only
+    "Identity": [
+        ("sameas", ALIAS,
+         "{{ j.messages[0] is sameas j.messages[0] }}|{{ j.nd.k is sameas j.nd.k }}|{{ j.messages is sameas j['messages'] }}|"
+         "{{ j.nd is sameas j.messages[0] }}|{{ j.messages[0] is sameas j.messages[1] }}"),
+        ("loop_var_update", ALIAS, "{% for m in j.messages %}{% set _ = m.update(x=1) %}{% endfor %}{{ j.messages }}"),
+        ("loop_var_kept", ALIAS, "{% for m in j.messages %}{% set ns = m %}{% set _ = ns.update(z=1) %}{% endfor %}{{ j.messages }}"),
+        ("item_then_owner", ALIAS, "{% set m = j.messages[0] %}{% set _ = j.messages[0].update(y=2) %}{{ m }}"),
+        ("owner_then_item", ALIAS, "{% set m = j.messages[0] %}{% set _ = m.update(y=2) %}{{ j.messages }}"),
+        ("set_item_kept", ALIAS, "{% set a = j.nd.k %}{% set _ = j.nd['k'].append(2) %}{{ a }}|{{ j.nd }}"),
+        ("loop_pop", ALIAS, "{% for i in j.l %}{% set _ = j.l.pop() %}{{ i }}{% endfor %}|{{ j.l }}"),
+        ("nested_seen", ALIAS, "{% set e = j.nd %}{% set _ = j.nd.k.append(5) %}{{ e }}|{{ j.nd.k is sameas e.k }}"),
+    ],
+    # A loop over a list follows the render's copy of it made in the loop body (docs/tasks/0212), whatever the traits
+    "MidLoopCell": [
+        ("pop", ALIAS, "{% set l = j.l %}{% for i in l %}{% set _ = l.pop() %}{{ i }}{% endfor %}|{{ l }}"),
+        ("append", ALIAS, "{% set l = j.l %}{% for i in l %}{% if loop.first %}{% set _ = l.append(9) %}{% endif %}{{ i }}{% endfor %}|{{ l }}"),
+        ("pop_first", ALIAS, "{% set l = j.l %}{% for i in l %}{% if loop.first %}{% set _ = l.pop(0) %}{% endif %}{{ i }}{% endfor %}|{{ l }}"),
     ],
     "RepeatedKeys": [
         ("full", '{"a":1,"b":2,"a":3}', "{{ j }}|{{ j.a }}|{{ j|length }}|{{ j|list }}"),
