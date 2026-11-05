@@ -291,6 +291,8 @@ struct LoopState : ValueObject
     // Shared with the callables loop.cycle and loop.changed made, kept up to date once one
     // is made (LoopCycleCell)
     std::shared_ptr<LoopCycleCell> cycleCell;
+    // The `loop` this loop runs over, whose len() is this loop's length once read (IsLoopObject)
+    InternalValue lengthOf;
     // Whether the item after the current one is fetched, isLast telling if there is one
     bool isPeeked = false;
     // Whether the enumerator runs over indexedList, the rest the state collected
@@ -364,7 +366,22 @@ struct LoopState : ValueObject
         {
             throw TemplateRuntimeError("'loop' is undefined in the loop filter");
         }
-        isLast = !FetchNext(Item(index0 + 1));
+        // Most peeks are `loop.last` in an unfiltered loop: its enumerator alone, in this call
+        if (!lazyFilter && enumerator)
+        {
+            auto& current = *enumerator;
+            isAdvancing = true;
+            isLast = !current->MoveNext();
+            isAdvancing = false;
+            if (!isLast)
+            {
+                Item(index0 + 1) = current->GetCurrent();
+            }
+        }
+        else
+        {
+            isLast = !FetchNext(Item(index0 + 1));
+        }
         isPeeked = true;
     }
 
@@ -434,9 +451,14 @@ struct LoopState : ValueObject
         lazyFilter = nullptr;
         lazyContext = nullptr;
         lazyNodes = ArenaView();
+        if (!lengthOf.IsUndefined())
+        {
+            DropLengthOf();
+        }
     }
 
     JINJA2CPP_NOINLINE_INLINE void DropLastChanged() { lastChanged = InternalValue(); }
+    JINJA2CPP_NOINLINE_INLINE void DropLengthOf() { lengthOf = InternalValue(); }
 
     // A loop object kept past a statement that ended without collecting its rest (an error
     // thrown in the body) can no longer fetch: its enumerator may run over a list the
@@ -459,6 +481,28 @@ struct LoopState : ValueObject
         {
             return *listSize;
         }
+        if (!lengthOf.IsUndefined())
+        {
+            return LengthOfIterated();
+        }
+        return CollectRest();
+    }
+
+    // len() of the `loop` this loop runs over, kept as this loop's length
+    JINJA2CPP_NOINLINE_INLINE size_t LengthOfIterated()
+    {
+        InternalValue length;
+        const auto map = AsMap(lengthOf);
+        if (map && map->GetLoopAttr(LoopAttr::Length, length))
+        {
+            if (const auto* count = GetIf<int64_t>(&length))
+            {
+                listSize = static_cast<size_t>(*count);
+                lengthOf = InternalValue();
+                return *listSize;
+            }
+        }
+        lengthOf = InternalValue();
         return CollectRest();
     }
 
@@ -514,6 +558,40 @@ std::string LoopCycleCell::Repr() const
         return "<LoopContext " + std::to_string(index0 + 1) + "/" + std::to_string(*length) + ">";
     }
     return "<LoopContext " + std::to_string(index0 + 1) + "/?>";
+}
+
+// Whether the loop runs over `loop`, whose len() is its length as Jinja2's LoopContext.length
+// takes len(iterable): the length of the loop iterated, not the number of items it has left
+// (docs/tasks/0304). Asked only of a list of unknown size
+JINJA2CPP_NOINLINE_INLINE bool IsLoopObject(const InternalValue& loopVal)
+{
+    const auto map = AsMap(loopVal);
+    if (!map || !map->Iterates())
+    {
+        return false;
+    }
+    const char* objectClass = map->GetObjectClass();
+    return objectClass != nullptr && std::string_view(objectClass) == "LoopContext";
+}
+
+// Fetches the item after `itemIdx` once the body is done with it, through the enumerator
+// alone (a loop that is not filtered lazily). True when there is one: the caller goes on to
+// it, whose pass marks it not peeked again, so that only the end of the loop is stored
+JINJA2CPP_ALWAYS_INLINE bool FetchAfterBody(LoopState& state, size_t itemIdx)
+{
+    // The loop's enumerator, which only the loop's end lets go of
+    auto& enumerator = *state.enumerator; // NOLINT(bugprone-unchecked-optional-access): set while the loop runs
+    state.isAdvancing = true;
+    const bool hasNext = enumerator->MoveNext();
+    state.isAdvancing = false;
+    if (!hasNext)
+    {
+        state.isLast = true;
+        state.isPeeked = true;
+        return false;
+    }
+    state.Item(itemIdx + 1) = enumerator->GetCurrent();
+    return true;
 }
 
 // Assigns the current item to the loop target. A plain name is stored straight into its
@@ -849,6 +927,7 @@ struct LoopFrame : LoopState
     void Traverse(const TraverseFn& fn) const override
     {
         TraverseValue(lastChanged, fn);
+        TraverseValue(lengthOf, fn);
         if (const auto* list = indexedList.Ref().GetOwner())
         {
             fn(list);
@@ -1239,10 +1318,17 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     {
         loopItems.RebindEnumerator(enumerator);
         state->listSize = loopItems.GetSize();
+        if (!state->listSize && IsLoopObject(loopVal))
+        {
+            // Read when the length is: reading it collects the rest of the loop iterated
+            state->lengthOf = loopVal;
+        }
     }
 
     bool loopRendered = false;
-    // These loops fetch the next item before the body runs, so the filter runs one item ahead
+    // The next item is fetched after the body, or when the body peeks (`loop.last`), as
+    // Jinja2's LoopContext does: a body that changes the list or iterates `loop` sees the
+    // items Jinja2's does (docs/tasks/0304). A filtered loop runs its filter then too
     bool hasItem = state->FetchNext(state->Item(0));
     // One scope for the body, emptied after each pass, so `set` in the body stays local
     // to one iteration without a map being made for each
@@ -1252,15 +1338,7 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
     for (size_t itemIdx = 0; hasItem; ++itemIdx)
     {
         state->SetIndex(itemIdx);
-        state->isAdvancing = true;
-        state->isLast = !(*enumerator)->MoveNext();
-        state->isAdvancing = false;
-        state->isPeeked = true;
-        if (!state->isLast)
-        {
-            state->Item(itemIdx + 1) = (*enumerator)->GetCurrent();
-        }
-        hasItem = !state->isLast;
+        state->isPeeked = false;
         const auto& curValue = state->Item(itemIdx);
 
         AssignLoopTarget(target, curValue, context, targetSlots, values);
@@ -1280,12 +1358,12 @@ void ForStatement::RenderLoopInScopes(const InternalValue& loopVal, OutStream& o
             loopRendered = true;
         }
         // The body took items by iterating `loop` (LoopAccessor::GetIteration): go on after them
-        if (state->index0 != itemIdx)
+        itemIdx = state->index0;
+        if (!state->isPeeked && FetchAfterBody(*state, itemIdx))
         {
-            itemIdx = state->index0;
-            state->Peek();
-            hasItem = !state->isLast;
+            continue;
         }
+        hasItem = !state->isLast;
     }
     // A closure defined in the body and kept past the loop sees the frame below it (0373)
     values.CaptureClosures(FrameEnd::Soft(values.GetScopesCount() - 1));
@@ -1357,6 +1435,11 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     else
     {
         state->listSize = loopItems.GetSize();
+        if (!state->listSize && IsLoopObject(loopVal))
+        {
+            // Read when the length is: reading it collects the rest of the loop iterated
+            state->lengthOf = loopVal;
+        }
     }
     // The next item, filtered in place while the filter is still lazy
     auto fetchNext = [this, &state, &values, frameSlots, slots, names](InternalValue& item) {
@@ -1395,18 +1478,8 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
     for (size_t itemIdx = 0; hasItem; ++itemIdx)
     {
         state->SetIndex(itemIdx);
-        // An unfiltered loop, or one whose rest is collected, fetches the next item first
-        state->isPeeked = state->lazyFilter == nullptr;
-        if (state->isPeeked)
-        {
-            state->isAdvancing = true;
-            state->isLast = !(*enumerator)->MoveNext();
-            state->isAdvancing = false;
-            if (!state->isLast)
-            {
-                state->Item(itemIdx + 1) = (*enumerator)->GetCurrent();
-            }
-        }
+        // The next item is fetched after the body, or when the body peeks (docs/tasks/0304)
+        state->isPeeked = false;
         const auto& curValue = state->Item(itemIdx);
 
         if (!root.isTuple)
@@ -1442,8 +1515,15 @@ void ForStatement::RenderLoopInSlots(const InternalValue& loopVal, OutStream& os
         itemIdx = state->index0;
         if (!state->isPeeked)
         {
-            state->isLast = !fetchNext(state->Item(itemIdx + 1));
-            state->isPeeked = true;
+            if (state->lazyFilter)
+            {
+                state->isLast = !fetchNext(state->Item(itemIdx + 1));
+                state->isPeeked = true;
+            }
+            else if (FetchAfterBody(*state, itemIdx))
+            {
+                continue;
+            }
         }
         hasItem = !state->isLast;
     }
