@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/755
 priority: low
 area: parity
 depends: [0219]
@@ -37,3 +38,11 @@ loop's iteration) fetch lazily, as the filtered loop over slots already does
 worth it with the loop code open for something else; no template in the wild iterates `loop`.
 
 **Done when.** No line of `test/parity/divergences/` names 0304.
+
+**Done (parity batch 3, group B).** Every loop now fetches its next item after the body, or
+when the body peeks (`last`, `nextitem`, `length`, `revindex`), as the slotted filtered loop
+already did: `FetchAfterBody` in `RenderLoopInScopes` and `RenderLoopInSlots`. A loop over
+`loop` also takes its length from `len(loop)` (the iterated loop's length), as Jinja2's
+`LoopContext.length` does. Cases: `for_remove_current_item_recursive`, `for_append_in_body`,
+`for_filter_sees_body_write(_recursive)`, `loop_iter_inner_length`, `loop_iter_item_loop_again`,
+`loop_iter_inner_break_recursive`.

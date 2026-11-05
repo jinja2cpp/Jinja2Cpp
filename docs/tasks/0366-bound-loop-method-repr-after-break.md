@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/755
 priority: low
 area: parity
 depends: [0305]
@@ -23,3 +24,9 @@ shares it at the loop's end, and collect the rest on the first repr. Only worth 
 in the wild prints such a callable; otherwise mark the line deliberate.
 
 **Done when** the line is gone from `test/parity/divergences/statements.txt` or marked deliberate.
+
+**Decision (Ruslan, 2026-11-03).** Deliberate. Counting the rest at repr time would keep the
+loop's enumerator, its list, the filter's expression and the names the filter reads alive past
+the loop statement and its frame (a closure capture of its own, against the 0188 `use_count`
+check and the cycle collector), for the repr of a bound method kept past a `break` and printed.
+The divergence line stays, marked deliberate.

@@ -1661,9 +1661,10 @@ InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, Rend
         return InternalValue(std::string());
     }
     const auto objectMap = AsMap(baseVal);
-    const auto* host = objectMap ? objectMap->GetHostObject() : nullptr;
-    const bool hostIterates = host != nullptr && host->IsIterable();
-    if (IsStringValue(baseVal) || (baseVal.Kind() != ValueKind::Map && baseVal.Kind() != ValueKind::List) || (objectMap && objectMap->GetObjectClass() && !hostIterates))
+    // An iterable object (a host object with __iter__, Jinja2's LoopContext, which gives the
+    // rest of its loop as (item, loop) pairs: docs/tasks/0382) gives its items
+    const bool objectIterates = objectMap && objectMap->Iterates();
+    if (IsStringValue(baseVal) || (baseVal.Kind() != ValueKind::Map && baseVal.Kind() != ValueKind::List) || (objectMap && objectMap->GetObjectClass() && !objectIterates))
     {
         return InternalValue(UrlQuote(asText(baseVal), false));
     }
@@ -1671,7 +1672,7 @@ InternalValue StringConverter::ApplyUrlEncode(const InternalValue& baseVal, Rend
     auto appendPair = [&](const InternalValue& key, const InternalValue& value) {
         query += (query.empty() ? "" : "&") + UrlQuote(asText(key), true) + "=" + UrlQuote(asText(value), true);
     };
-    if (objectMap && !host)
+    if (objectMap && !objectIterates)
     {
         for (auto& [key, value] : objectMap->GetEntries())
         {

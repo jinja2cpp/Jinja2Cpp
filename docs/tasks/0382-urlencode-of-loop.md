@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/755
 priority: low
 area: parity
 depends: []
@@ -21,3 +22,8 @@ loop). Then unpack them as for any iterable.
 
 **Done when.** `filters.urlencode_loop` matches, narrow and wide, and a case with items
 left behaves as Python does.
+
+**Done (parity batch 3, group B).** `ApplyUrlEncode` iterates any object whose accessor
+iterates (`IMapAccessor::Iterates`: host objects with `__iter__`, `loop`), so `loop|urlencode`
+takes the rest of the loop as `(item, loop)` pairs. Cases `urlencode_loop_rest` and
+`urlencode_loop_rest_lists` pin a loop with items left.
