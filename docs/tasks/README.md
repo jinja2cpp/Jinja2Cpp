@@ -457,7 +457,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0387](0387-iterator-repr-equality-json.md) | A generator still prints, compares and serializes as a list | parity | low | open |
 | [0388](0388-migration-iterator-results.md) | MIGRATION.md: lazy filter results are no longer sequences | release | low | open |
 | [0389](0389-block-in-scoped-statement-of-child-template.md) | A block in a scoped statement of a child template also renders in place | parity | low | done |
-| [0390](0390-loop-length-and-kept-loop-leftovers.md) | Loop length and kept loops: leftovers of 0304 | parity | low | open |
+| [0390](0390-loop-length-and-kept-loop-leftovers.md) | Loop length and kept loops: leftovers of 0304 | parity | low | done |
 | [0391](0391-loop-last-peek-cost.md) | `loop.last` peeks out of line since 0304 | perf | low | open |
 | [0392](0392-prompt-nfkc-specials.md) | NFKC-folded special token matching in `neutralize` | api | low | open |
 | [0393](0393-prompt-fragment-lint.md) | Warn about a special token fragment written next to `{{ }}` in prompt mode | api | low | open |
@@ -465,3 +465,5 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0395](0395-running-token-budget.md) | Running token budget across a render | api | low | open |
 | [0396](0396-batch-token-count.md) | Batch count callback for `pack` | api | low | open |
 | [0398](0398-lean-proof-pilot-neutralize.md) | Lean 4 proof pilot: the `neutralize` edge rule | robustness | low | open |
+| [0399](0399-select-map-fetch-per-step.md) | select and map fetch one item per step | parity | low | open |
+| [0400](0400-loop-iteration-cycle-leak.md) | A kept loop over `loop` leaks through a cycle the collector cannot see | robustness | low | open |
