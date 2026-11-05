@@ -36,6 +36,7 @@ struct JINJA2CPP_EXPORT OwnedAccessor : std::enable_shared_from_this<OwnedAccess
 };
 //! Internal: the library's view of the accessor a \ref GenericList or \ref GenericMap holds
 struct GenericAccessorAccess;
+struct UserCallableAccess;
 } // namespace detail
 
 /*!

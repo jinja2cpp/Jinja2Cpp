@@ -4346,16 +4346,23 @@ Callable::Identity Callable::GetIdentity() const
 {
     if (m_boundSelf)
     {
-        return { m_boundSelf, m_boundMethod, nullptr };
+        return { m_boundSelf, m_boundMethod, nullptr, 0 };
     }
     if (const auto* fnCall = std::get_if<ExpressionCallable>(m_callable.get()))
     {
         if (const auto* bound = fnCall->target<BoundMethodCall>())
         {
-            return { nullptr, nullptr, bound };
+            return { nullptr, nullptr, bound, 0 };
+        }
+        if (m_kind == UserCallable)
+        {
+            if (const auto* body = fnCall->target<visitors::UserCallableBody>())
+            {
+                return { nullptr, nullptr, nullptr, detail::UserCallableAccess::Generation(body->val) };
+            }
         }
     }
-    return { m_callable.get(), nullptr, nullptr };
+    return { m_callable.get(), nullptr, nullptr, 0 };
 }
 
 bool Callable::IsSame(const Callable& other) const

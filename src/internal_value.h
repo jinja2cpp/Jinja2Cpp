@@ -103,6 +103,13 @@ struct GenericAccessorAccess
     static const std::shared_ptr<const IListItemAccessor>& Get(const GenericList& list) noexcept { return list.m_accessor; }
     static const std::shared_ptr<const IMapItemAccessor>& Get(const GenericMap& map) noexcept { return map.m_accessor; }
 };
+
+// The generation of a jinja2::UserCallable, which its copies share: UserCallable::IsEqual as a
+// number, for a dict key (Callable::GetIdentity, docs/tasks/0212)
+struct UserCallableAccess
+{
+    static uint64_t Generation(const UserCallable& callable) noexcept { return callable.m_counter; }
+};
 } // namespace detail
 
 // A list value that is a Python iterator, not a sequence: the generator a lazy filter returns
@@ -1995,6 +2002,9 @@ public:
         const char* method = nullptr;
         // A method bound to a value (BoundMethodCall): the function and the receiver decide
         const BoundMethodCall* call = nullptr;
+        // A user callable: the generation of its jinja2::UserCallable, as each read of one from a
+        // host container converts it anew (object is null then)
+        uint64_t userCallable = 0;
     };
     [[nodiscard]] Identity GetIdentity() const;
 

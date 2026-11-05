@@ -43,6 +43,7 @@ constexpr char KindObject = 'o';
 constexpr char KindBoundMethod = 'm';
 constexpr char KindMethodCall = 'f';
 constexpr char KindUndefined = 'u';
+constexpr char KindUserCallable = 'c';
 
 // The type of a value Python's hash() rejects, also inside a tuple
 struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
@@ -335,6 +336,13 @@ struct KeyTokenBuilder
             out.push_back(KindMethodCall);
             AppendBytes(out, identity.call->invoke);
             AddReceiver(out, identity.call->self);
+            return;
+        }
+        if (identity.userCallable != 0)
+        {
+            out.push_back(DictKeyMark);
+            out.push_back(KindUserCallable);
+            AppendBytes(out, identity.userCallable);
             return;
         }
         AppendObjectKey(out, identity.object);
