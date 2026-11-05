@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: api
 depends: [0358]
@@ -27,6 +27,15 @@ one, a documented byte-based estimate is used. Filters on top of it:
 The callback signature is public API: architect plan and a recorded decision in
 `docs/api-2.0.md` first; it lands in the API wave before the G1 freeze. 0358 comes first
 because both add environment settings and should share one design pass.
+
+**Decision (Ruslan 2026-11-05, docs/api-2.0.md 3.3 and section 7 item 9).** `Tokenizer` in
+`jinja2cpp/prompt.h`: `count(std::string_view utf8)` required, `prefix(text, maxTokens)` optional,
+UTF-8 only (wide templates convert), results clamped, exceptions become `UserCallableException`;
+without one, `ceil(utf8_bytes / 4)`. `pack(budget, attribute=none, by=none, reverse=false,
+reserve=0, stop=false)` replaces the `key`/`order` naming above; no per-item overhead argument.
+Specification: docs/cpp-only-filters.md. Lands after 0358 PR 2 (same files), with a fake
+tokenizer test table (narrow and wide) and a `prompt_budget` bench case asserting at most one
+count call per item. Running budget: 0395.
 
 **Done when.** Tests with a fake tokenizer callback (narrow and wide) cover counting,
 truncation on token boundaries, `pack` ordering, an item larger than the budget, an

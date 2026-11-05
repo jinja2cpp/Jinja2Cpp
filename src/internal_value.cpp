@@ -20,6 +20,7 @@
 #include <jinja2cpp/exception.h>
 #include <jinja2cpp/big_int.h>
 #include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/json_adapter.h>
 #include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
@@ -43,6 +44,7 @@
 #include <string_view>
 #include <thread>
 #include <type_traits>
+#include <typeinfo>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -3193,6 +3195,35 @@ InternalValue Value2IntValue(Value&& val)
     return std::visit(visitors::InputValueConvertor(true, false), val.GetData());
 }
 
+// Whether a host map is a JSON object (IJsonNode, docs/tasks/0370). A cross-cast costs tens of
+// nanoseconds and every lent map item asks, so the answer is kept per most-derived type: the last
+// type found to be a JSON node and the last found not to be. Each slot is a fact about a type, so
+// a race between renders only costs another cast
+namespace
+{
+bool IsJsonNode(const IMapItemAccessor* accessor)
+{
+    if (!accessor)
+    {
+        return false;
+    }
+    static std::atomic<const std::type_info*> lastJson{ nullptr };
+    static std::atomic<const std::type_info*> lastOther{ nullptr };
+    const std::type_info* type = &typeid(*accessor);
+    if (type == lastJson.load(std::memory_order_relaxed))
+    {
+        return true;
+    }
+    if (type == lastOther.load(std::memory_order_relaxed))
+    {
+        return false;
+    }
+    const bool isJson = dynamic_cast<const IJsonNode*>(accessor) != nullptr;
+    (isJson ? lastJson : lastOther).store(type, std::memory_order_relaxed);
+    return isJson;
+}
+} // namespace
+
 template<template<typename> class Holder>
 class GenericMapAdapter : public MapAccessorImpl<GenericMapAdapter<Holder>>
 {
@@ -3201,6 +3232,7 @@ public:
     template<typename U, typename = std::enable_if_t<!std::is_same_v<std::decay_t<U>, GenericMapAdapter>>>
     explicit GenericMapAdapter(U&& values)
         : m_values(std::forward<U>(values))
+        , m_isDict(IsJsonNode(m_values.Get().GetAccessor()))
     {
         // As OwnedAdapter
         this->SetTraversable();
@@ -3277,7 +3309,9 @@ public:
             return self;
         }
     }
-    [[nodiscard]] bool HasAttributes() const override { return true; }
+    // A JSON object is a dict (IJsonNode, docs/tasks/0370); the names of any other host map, such as a
+    // reflected struct, are its attributes
+    [[nodiscard]] bool HasAttributes() const override { return !m_isDict; }
     [[nodiscard]] const void* GetIdentity() const override { return m_values.Get().GetAccessor(); }
     [[nodiscard]] TemplateDict* GetMutableItems() const override
     {
@@ -3290,7 +3324,7 @@ public:
         return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
-    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return MapAttrPolicy::KeysFirst; }
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return m_isDict ? MapAttrPolicy::MethodsFirst : MapAttrPolicy::KeysFirst; }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
@@ -3340,6 +3374,8 @@ private:
     }
 
     Holder<GenericMap> m_values;
+    // A JSON object (IJsonNode), which looks names up as a dict (docs/tasks/0370)
+    bool m_isDict;
     // The render's copy of the map once the render wrote to it (docs/tasks/0049)
     AutoCellLink m_link;
 };

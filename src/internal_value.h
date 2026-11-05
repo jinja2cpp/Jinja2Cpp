@@ -683,7 +683,7 @@ enum class MapAttrPolicy
     // A Python dict (dict literals, kwargs, context mappings): dict methods first, as
     // Python's getattr finds them before the items
     MethodsFirst,
-    // A host object (reflected structs, JSON bindings): its keys, then dict methods
+    // A host object (reflected structs; a JSON view is a dict, MethodsFirst): its keys, then dict methods
     KeysFirst,
     // An object of a host language (IMapAccessor::GetHostObject, host_object.h): the object's
     // own attributes, then its items, as Python's getattr; the engine adds no methods

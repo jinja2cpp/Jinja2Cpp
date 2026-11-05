@@ -138,6 +138,9 @@ private:
         // A ValuesMap has string keys only: another key is spelled as str() spells it, as the
         // public view of such a dict has it (SharedDictAdapter::CreateSnapshot), and keys that
         // spell alike collapse into the first one's position with the later value
+        // Within the limits before the entries are read out: a host map, such as a JSON view
+        // (docs/tasks/0370), may be larger than the render could have built
+        CheckSequenceSize(map.GetSize(), "a dict");
         ValuesMap items;
         for (const auto& entry : map.GetEntries())
         {

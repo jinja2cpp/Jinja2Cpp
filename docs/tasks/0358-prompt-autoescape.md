@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: api
 touches: [src/prompt_escape.cpp, src/prompt_escape.h]
@@ -30,6 +30,24 @@ handled.
 The settings field and its type are public API: get an architect plan and a recorded
 decision in `docs/api-2.0.md` before implementing, and land it in the API wave before
 the G1 freeze.
+
+**Decision (Ruslan 2026-11-05, docs/api-2.0.md 3.3 and section 7 item 9).** All recommendations
+of the architect plan were approved; the filters and the mode are specified in
+docs/cpp-only-filters.md. Steps, one PR each, in order:
+1. PR 0 (docs): the decision and the filter specification; follow-ups 0392-0396.
+2. PR 1: `include/jinja2cpp/prompt.h` (`PromptEscapeOptions`, `PromptEscaper`), the
+   `Settings::promptEscaper` field, `src/prompt_escape.{h,cpp}` (a trie over the patterns and one
+   over the reversed patterns for the edge rule, a first-unit table so text without a first
+   character is one scan), the `neutralize` and `fence` filters, a `PromptFilterTest` fixture
+   (narrow and wide) with the specials `<|im_start|>`, `<|im_end|>`, `[INST]` and the tag
+   `document`. Codex review and security review.
+3. PR 2: `Settings::autoescapeMode`, prompt mode (escaper chosen in the slow path of
+   `WriteEscaped`/`MarkupEscape` through a non-virtual accessor on the renderer callback; no
+   change to `WriteOutput`), string literals prompt-safe in prompt mode, the escape-site audit
+   (`|e`, `forceescape`, `urlize`, `xmlattr`, `tojson`), the fuzz target
+   `fuzz/fuzz_prompt_escape.cpp` (specials from private-use code points the template source never
+   contains; property: no output holds a configured special) with a fixed-seed gtest sample,
+   `bench/count.py` on `html_autoescape` and two cases without autoescape.
 
 **Done when.** Table rows in `test/filters_test.cpp` (narrow and wide) show that
 untrusted text containing the configured specials, tags and backtick runs cannot close

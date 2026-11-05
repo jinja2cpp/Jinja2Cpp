@@ -50,4 +50,4 @@ a stable identity.
   per-call export table). "A macro arrives as None" was fixed by 0300.
 - P3, JSON identity: `IJsonNode::NodeIdentity` (added by 0370) gives two reads of one JSON value
   one identity; the GenericList enumerator follows a cell made mid-loop; the six `0212` lines in
-  reflect.txt go.
+  reflect.txt go. PR #778; D6 (a) landed with 0370 (#752).

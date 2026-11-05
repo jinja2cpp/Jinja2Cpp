@@ -3,6 +3,7 @@ CONTEXT = {"l": [3, 1, 2], "e": [], "d": {"a": 1, "b": 2}, "x": 3,
            "tree": [{"n": "a", "c": [{"n": "b", "c": []}, {"n": "c", "c": [{"n": "d", "c": []}]}]}]}
 LC = {"env": {"extensions": ["loopcontrols"]}}
 DO = {"env": {"extensions": ["do"]}}
+DO_LC = {"env": {"extensions": ["do", "loopcontrols"]}}
 UNSORTED = {"ctx": {"u": {"zeta": 1, "alpha": 2, "Mid": 3, "beta": 4},
                     "big": {k: i for i, k in enumerate("qwertyuiopasdfghjklzxcvbnm")}}}
 CASES = [
@@ -283,8 +284,25 @@ CASES = [
     ("for_length_after_clear", "{% set l = [1, 2, 3, 4, 5] %}{% for x in l %}{{ x }}{% do l.clear() %}{{ loop.length }}{{ loop.last }}{% endfor %}", DO),
     ("loop_iter_inner_length_after_pop", "{% set l = [1, 2, 3, 4, 5] %}{% for x in l %}{% for a in loop %}{% do l.pop() %}{{ loop.length }}{% endfor %};{% endfor %}", DO),
     ("loop_iter_inner_kept_length", "{% set ns = namespace(k=none) %}{% for x in [1, 2, 3, 4, 5] %}{% if x == 2 %}{% for a in loop %}{% set ns.k = loop %}{% break %}{% endfor %}{% endif %}{% endfor %}{{ ns.k.length }}{{ ns.k.index }}{{ ns.k.last }}", LC),
+    ("loop_iter_inner_kept_outer_goes_on", "{% set ns = namespace(k=none) %}{% for x in [1, 2, 3, 4, 5] %}{{ x }}{% if x == 2 %}{% for a in loop %}{% set ns.k = loop %}{% break %}{% endfor %}{% endif %}{% endfor %}|{{ ns.k.length }}{{ ns.k.last }}", LC),
+    ("loop_iter_inner_kept_read_in_outer", "{% set ns = namespace(k=none) %}{% for x in [1, 2, 3, 4, 5] %}{% if x == 1 %}{% for a in loop %}{% set ns.k = loop %}{% break %}{% endfor %}{% else %}{{ x }}{{ ns.k.last }}{% endif %}{% endfor %}", LC),
+    ("loop_iter_inner_kept_iterated_after", "{% set ns = namespace(k=none) %}{% for x in [1, 2, 3, 4, 5] %}{% if x == 2 %}{% for a in loop %}{% set ns.k = loop %}{% break %}{% endfor %}{% endif %}{% endfor %}{% for b in ns.k %}{{ b }}{% endfor %}.", LC),
+    # select/map are generators that fetch one item per step from the list's iterator
+    ("for_over_select_sees_append", "{% set l = [1, 2, 3] %}{% for x in l|select('odd') %}{{ x }}{% do l.append(7) if loop.first %}{% endfor %}", DO),
+    ("for_over_map_sees_append", "{% set l = [1, 2, 3] %}{% for x in l|map('string') %}{{ x }}{% do l.append(7) if loop.first %}{% endfor %}", DO),
+    ("select_kept_sees_later_append", "{% set l = [1, 2, 3] %}{% set s = l|select('odd') %}{% do l.append(5) %}{{ s|list }}", DO),
     ("for_pop_context_list", "{% for i in l %}{% do l.pop() %}{{ i }}{% endfor %}|{{ l }}", DO),
     ("for_length_after_append", "{% set q = [1, 2] %}{% for x in q %}{{ loop.length }}{{ loop.revindex }}{{ loop.last }}{% if loop.first %}{% do q.append(3) %}{% endif %};{% endfor %}", DO),
+    # docs/tasks/0390: the length is len() of the list when first read, and stays
+    ("for_revindex_after_clear", "{% set l = [1, 2, 3] %}{% for x in l %}{% do l.clear() %}{{ loop.revindex }},{{ loop.revindex0 }};{% endfor %}", DO),
+    ("for_length_read_then_clear", "{% set l = [1, 2, 3] %}{% for x in l %}{{ loop.length }}{% do l.clear() %}{{ loop.length }}{{ loop.revindex }}{% endfor %}", DO),
+    ("for_length_after_appends", "{% set l = [1, 2, 3] %}{% for x in l %}{% do l.append(x) if loop.index < 3 %}{{ loop.length }}{% endfor %}", DO),
+    ("for_kept_length_after_append", "{% set ns = namespace(k=none) %}{% set l = [1, 2, 3] %}{% for x in l %}{% set ns.k = loop %}{% break %}{% endfor %}{% do l.append(4) %}{{ ns.k.length }}", DO_LC),
+    ("for_kept_length_read_then_clear", "{% set ns = namespace(k=none) %}{% set l = [1, 2, 3, 4] %}{% for x in l %}{{ loop.length }}{% do l.clear() %}{% set ns.k = loop %}{% break %}{% endfor %}{{ ns.k.length }}", DO_LC),
+    # the same over a list of the render context (l = [3, 1, 2])
+    ("for_ctx_length_after_append", "{% for x in l %}{{ x }}{% do l.append(4) if loop.first %}{{ loop.length }}{{ loop.revindex }};{% endfor %}", DO),
+    ("for_ctx_kept_length_append_in_body", "{% set ns = namespace(k=none) %}{% for x in l %}{% set ns.k = loop %}{% do l.append(4) if loop.first %}{% break %}{% endfor %}{{ ns.k.length }}{{ ns.k.revindex }}|{% for b in ns.k %}{{ b }}{% endfor %}", DO_LC),
+    ("for_ctx_kept_length_pop_in_body", "{% set ns = namespace(k=none) %}{% for x in l %}{% set ns.k = loop %}{% do l.pop() %}{% break %}{% endfor %}{{ ns.k.length }}{{ ns.k.revindex }}{{ ns.k.index }}", DO_LC),
     ("do_without_extension", "{% do l.append(4) %}"),
     ("autoescape_block", "{% autoescape true %}{{ '<a>' }}{% endautoescape %}|{{ '<a>' }}"),
     ("autoescape_block_off", "{% autoescape false %}{{ '<a>' }}{% endautoescape %}"),

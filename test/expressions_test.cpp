@@ -16,9 +16,36 @@
 #include <iostream>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace jinja2;
+
+namespace
+{
+// A reflected struct with fields named like dict methods (docs/tasks/0370)
+struct ShadowingStruct
+{
+    std::string items = "field";
+    std::string name = "bob";
+};
+} // namespace
+
+namespace jinja2
+{
+template<>
+struct TypeReflection<ShadowingStruct> : TypeReflected<ShadowingStruct>
+{
+    static auto& GetAccessors()
+    {
+        static std::unordered_map<std::string, FieldAccessor> accessors = {
+            { "items", [](const ShadowingStruct& obj) { return Reflect(obj.items); } },
+            { "name", [](const ShadowingStruct& obj) { return Reflect(obj.name); } },
+        };
+        return accessors;
+    }
+};
+} // namespace jinja2
 
 using ExpressionsMultiStrTest = BasicTemplateRenderer;
 
@@ -287,6 +314,17 @@ TEST(ExpressionTest, MapKeyNamedLikeADictMethodUsesTheMethod)
     ASSERT_TRUE(tpl.Load("{{ m.items is callable }}|{{ m.keys is callable }}|{{ m['items'] }}|{{ m['keys'] }}|{{ m.items()|list|length }}|{{ m.keys()|list|sort|join(',') }}|{{ m.get is callable }}|{{ m.get('get') }}"));
     ValuesMap params = { { "m", ValuesMap{ { "items", 1 }, { "keys", 2 }, { "get", 3 } } } };
     EXPECT_EQ("True|True|1|2|3|get,items,keys|True|3", tpl.RenderAsString(params).value());
+}
+
+TEST(ExpressionTest, ReflectedStructFieldComesBeforeADictMethod)
+{
+    // The fields of a reflected struct are its attributes, so they come before the dict methods; a JSON object viewed
+    // through Reflect is a dict instead (test/binding/conformance.h, DictMethods)
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ s.items }}|{{ s.items is callable }}|{{ s|attr('name') }}|{{ s is sequence }}"));
+    const ShadowingStruct data;
+    ValuesMap params = { { "s", Reflect(data) } };
+    EXPECT_EQ("field|False|bob|False", tpl.RenderAsString(params).value());
 }
 
 // A namespace, dict or list that holds itself is a reference cycle, which the render frees
