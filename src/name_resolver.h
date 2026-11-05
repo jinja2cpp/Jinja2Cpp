@@ -122,15 +122,24 @@ public:
         }
         return Span<const std::size_t>(m_readHashes.data() + mark, m_readHashes.size() - mark);
     }
+    // Whether a macro or call block is being parsed: the reads are recorded only then
+    [[nodiscard]] bool ReadsOpen() const { return m_readsOpen != 0; }
     // A read of the name with hash `hash` that no name expression makes: a filter or test that
     // falls back to a value of its name, the gettext function a `trans` calls
     void AddRead(std::size_t hash)
     {
         if (m_readsOpen != 0)
         {
-            m_readHashes.push_back(hash);
+            RecordRead(hash);
         }
     }
+    // The read of the name expression `ref`, while ReadsOpen. Out of line, so that the parse of
+    // a name expression keeps its own code small
+    void AddReadOf(const NodeArena& nodes, NodeRef<ValueRefExpression> ref);
+    // AddRead of the name `name`, while ReadsOpen. Out of line, hashing there: another call of
+    // the name hash in the expression parser made GCC stop inlining it into the parse of every
+    // name expression (bench/count.py, Load rows)
+    void AddReadOfName(std::string_view name);
     // A read of every name in sight: an include or import with context, `applymacro`, a block
     void AddReadOfAll() { AddRead(AllNames); }
     // The hash AddReadOfAll records; a name of the same hash only keeps a closure's every name
@@ -139,10 +148,9 @@ public:
     // The statements parsed next are in a branch of the current frame's body (`if`, `elif`,
     // `else`, a loop's `else`)
     void SetInBranch(bool inBranch) { m_inBranch = inBranch; }
-    // A name expression made in the current frame, of the name with hash `hash`
-    void AddUse(NodeRef<ValueRefExpression> ref, std::size_t hash)
+    // A name expression made in the current frame; its read is noted apart (AddRead)
+    void AddUse(NodeRef<ValueRefExpression> ref)
     {
-        AddRead(hash);
         if (m_current == NoFrame)
         {
             return;
@@ -312,6 +320,9 @@ private:
     // The names stored in frames, in parse order; most templates store a few
     SmallVector<Store, 8, SmallVectorDoubling> m_stores;
     std::vector<EntryName> m_entryNames;
+    // Out of line: the parse of every name expression inlines the check of AddRead
+    void RecordRead(std::size_t hash);
+
     // BeginReads
     std::vector<std::size_t> m_readHashes;
     std::uint32_t m_readsOpen = 0;

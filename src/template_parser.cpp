@@ -1848,7 +1848,11 @@ StatementsParser::ParseResult StatementsParser::ParseTrans(LexScanner& lexer, St
         else
         {
             const auto ref = ValueRefExpression::Make(m_nodes, name);
-            m_names.AddUse(ref, m_nodes[ref].GetHashedName(m_nodes).hash);
+            m_names.AddUse(ref);
+            if (m_names.ReadsOpen())
+            {
+                m_names.AddReadOf(m_nodes, ref);
+            }
             value = ref;
         }
         trans->variables.emplace_back(name, std::move(value));
@@ -1969,7 +1973,11 @@ void AddTransMessageNames(NodeArena& nodes, NameResolver& names, TransInfo& tran
             if (!trans.HasVariable(name))
             {
                 const auto ref = ValueRefExpression::Make(nodes, name);
-                names.AddUse(ref, nodes[ref].GetHashedName(nodes).hash);
+                names.AddUse(ref);
+                if (names.ReadsOpen())
+                {
+                    names.AddReadOf(nodes, ref);
+                }
                 trans.variables.emplace_back(name, ref);
             }
         }
@@ -2037,7 +2045,10 @@ StatementsParser::ParseResult StatementsParser::ParseEndTrans(LexScanner& /*lexe
     }
 
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
-    m_names.AddRead(HashedName::Hash(fnName));
+    if (m_names.ReadsOpen())
+    {
+        m_names.AddReadOfName(fnName);
+    }
     auto call = m_nodes.Make<CallExpression>(m_nodes, ValueRefExpression::Make(m_nodes, fnName), std::move(params));
     auto output = MakeExpressionRenderer(m_nodes, call, exprParser.GetFinalize());
     std::vector<NodeRef<Expression>> values;

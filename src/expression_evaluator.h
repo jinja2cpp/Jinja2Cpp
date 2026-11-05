@@ -399,6 +399,7 @@ public:
     {
         return HashedName{ GetName(nodes), m_nameHash };
     }
+    [[nodiscard]] size_t GetNameHash() const { return m_nameHash; }
 
 protected:
     // Nothing destroys a reference through this base; its name lives in the tree, so the
