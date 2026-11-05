@@ -1883,6 +1883,8 @@ public:
     [[nodiscard]] virtual std::string Repr() const = 0;
 };
 
+struct BoundMethodCall;
+
 class Callable
 {
 public:
@@ -1983,8 +1985,25 @@ public:
     void SetRepr(const char* repr) { m_repr = repr; }
     [[nodiscard]] const char* GetRepr() const { return m_repr; }
 
-    // Python compares functions and macros by identity: the copies of one callable share its
-    // function, and a user callable converted from the same jinja2::UserCallable is the same
+    // Who the callable is, as Python hashes and compares (==) a function or a method: dict keys
+    // (MakeDictKey) and IsEqual both read it, so the two cannot disagree (docs/tasks/0212)
+    struct Identity
+    {
+        // The function the copies share; for a bound method (SetBoundMethod), the object
+        const void* object = nullptr;
+        // A bound method's name (SetBoundMethod); null otherwise
+        const char* method = nullptr;
+        // A method bound to a value (BoundMethodCall): the function and the receiver decide
+        const BoundMethodCall* call = nullptr;
+    };
+    [[nodiscard]] Identity GetIdentity() const;
+
+    // Python's ==: functions and macros equal themselves (the copies of one callable share its
+    // function), a user callable converted from the same jinja2::UserCallable is the same, and
+    // two reads of a method equal each other when their receivers are the same (l.append)
+    [[nodiscard]] bool IsEqual(const Callable& other) const;
+    // Python's `is` (sameas): as IsEqual, except that two reads of a method bound to a value
+    // are two objects, made anew on each read
     [[nodiscard]] bool IsSame(const Callable& other) const;
 
 private:

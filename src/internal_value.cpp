@@ -520,16 +520,20 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     InternalValue operator()(const BigIntView& /*values*/, const BigIntView& /*index*/) const { return InternalValue(); }
 
-    // An object of the host language is a key by its identity (ObjectKey, template_dict.cpp).
+    // An object is a key by its identity (ObjectKey, template_dict.cpp): an object of the host
+    // language, or one of the engine's (namespace(), cycler(), a reflected struct; docs/tasks/0212).
     // A host object's own __getitem__ takes any key, hashable or not
     InternalValue operator()(const MapRef& values, const MapRef& key) const
     {
-        if (!values.IsHost() && !key.GetHostObject())
+        if (!values.IsHost() && !key.GetHostObject() && !key.GetObjectClass() && key.GetAttrPolicy() != MapAttrPolicy::KeysFirst)
         {
             return InternalValue();
         }
         return FindKey(values, InternalValue(key.ToAdapter()));
     }
+    // Functions, macros and methods by Callable::GetIdentity, and the undefined key (docs/tasks/0212)
+    InternalValue operator()(const MapRef& values, const Callable& key) const { return FindKey(values, InternalValue(key)); }
+    InternalValue operator()(const MapRef& values, const UndefinedValue& key) const { return FindKey(values, InternalValue(key)); }
 
     InternalValue operator()(const MapRef& values, const ListRef& key) const
     {
@@ -4338,6 +4342,22 @@ void TraverseBoxed(const Callable& callable, const TraverseFn& fn)
     }
 }
 
+Callable::Identity Callable::GetIdentity() const
+{
+    if (m_boundSelf)
+    {
+        return { m_boundSelf, m_boundMethod, nullptr };
+    }
+    if (const auto* fnCall = std::get_if<ExpressionCallable>(m_callable.get()))
+    {
+        if (const auto* bound = fnCall->target<BoundMethodCall>())
+        {
+            return { nullptr, nullptr, bound };
+        }
+    }
+    return { m_callable.get(), nullptr, nullptr };
+}
+
 bool Callable::IsSame(const Callable& other) const
 {
     if (m_callable == other.m_callable)
@@ -4356,6 +4376,17 @@ bool Callable::IsSame(const Callable& other) const
     const auto* left = GetExpressionCallable().target<visitors::UserCallableBody>();
     const auto* right = other.GetExpressionCallable().target<visitors::UserCallableBody>();
     return left != nullptr && right != nullptr && left->val.IsEqual(right->val);
+}
+
+bool Callable::IsEqual(const Callable& other) const
+{
+    if (IsSame(other))
+    {
+        return true;
+    }
+    const auto left = GetIdentity();
+    const auto right = other.GetIdentity();
+    return left.call && right.call && left.call->invoke == right.call->invoke && SameMethodReceiver(left.call->self, right.call->self);
 }
 
 } // namespace v2

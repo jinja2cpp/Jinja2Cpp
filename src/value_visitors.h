@@ -2084,7 +2084,7 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             return Mismatch(left, right);
         }
-        const bool same = left.IsSame(right);
+        const bool same = left.IsEqual(right);
         return m_oper == BinaryExpression::LogicalEq ? same : !same;
     }
 
