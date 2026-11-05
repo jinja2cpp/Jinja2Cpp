@@ -427,8 +427,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0355](0355-python-module-proof.md) | Python module P3: upstream test suite, parity corpus, chat templates, bench row | parity | medium | open |
 | [0356](0356-python-module-wheels.md) | Python module P4: wheels for Linux, macOS and Windows; free-threaded audit | build | medium | open |
 | [0357](0357-python-module-public-api.md) | Python module: move from the private seam to the public API before the G1 freeze | api | medium | open |
-| [0358](0358-prompt-autoescape.md) | Prompt autoescape: `fence`, `neutralize` and an escaping mode for LLM prompts | api | medium | open |
-| [0359](0359-token-budget-filters.md) | Token budget filters: `count_tokens`, `truncate_tokens` and `pack` | api | medium | open |
+| [0358](0358-prompt-autoescape.md) | Prompt autoescape: `fence`, `neutralize` and an escaping mode for LLM prompts | api | medium | in-progress |
+| [0359](0359-token-budget-filters.md) | Token budget filters: `count_tokens`, `truncate_tokens` and `pack` | api | medium | in-progress |
 | [0360](0360-hf-chat-template-compat.md) | Render Hugging Face chat templates as transformers does | parity | high | done |
 | [0361](0361-failed-call-top-view-reads-empty.md) | A failed module call's view of a module cell reads no items | lifetime | low | open |
 | [0362](0362-host-object-python-errors.md) | Host objects: Python's errors where generic filters guess | parity | low | done |
@@ -439,7 +439,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0367](0367-module-object-is-escaped.md) | `m is escaped` of an imported module | parity | low | done |
 | [0368](0368-callable-python-type-names.md) | Python type names of callables in error messages | parity | low | open |
 | [0369](0369-finalize-template-data-in-volatile-code.md) | Template text in volatile autoescape code goes through finalize | parity | low | done |
-| [0370](0370-json-view-is-a-dict.md) | A JSON object seen through Reflect behaves as a reflected struct, not as a dict | parity | medium | open |
+| [0370](0370-json-view-is-a-dict.md) | A JSON object seen through Reflect behaves as a reflected struct, not as a dict | parity | medium | done |
 | [0371](0371-attr-filter-debug-undefined.md) | `|attr` of a missing attribute under DebugUndefined prints empty | parity | low | open |
 | [0372](0372-unicode-version-corpus-cases.md) | Corpus cases on code points whose Unicode properties changed after 15.0 | parity | low | open |
 | [0373](0373-closure-capture-module-call-and-scoped-frames.md) | Closures kept past a module call or a scoped frame lose their names | parity | low | done |
@@ -459,3 +459,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0389](0389-block-in-scoped-statement-of-child-template.md) | A block in a scoped statement of a child template also renders in place | parity | low | open |
 | [0390](0390-loop-length-and-kept-loop-leftovers.md) | Loop length and kept loops: leftovers of 0304 | parity | low | open |
 | [0391](0391-loop-last-peek-cost.md) | `loop.last` peeks out of line since 0304 | perf | low | open |
+| [0392](0392-prompt-nfkc-specials.md) | NFKC-folded special token matching in `neutralize` | api | low | open |
+| [0393](0393-prompt-fragment-lint.md) | Warn about a special token fragment written next to `{{ }}` in prompt mode | api | low | open |
+| [0394](0394-chat-template-prompt-safe-params.md) | Name the prompt-safe chat template params and read specials from a tokenizer config | api | low | open |
+| [0395](0395-running-token-budget.md) | Running token budget across a render | api | low | open |
+| [0396](0396-batch-token-count.md) | Batch count callback for `pack` | api | low | open |
+| [0398](0398-lean-proof-pilot-neutralize.md) | Lean 4 proof pilot: the `neutralize` edge rule | robustness | low | open |
