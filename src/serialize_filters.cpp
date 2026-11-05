@@ -1063,6 +1063,11 @@ private:
                 WriteValue(entries[item.second].value, level + 1);
             });
         }
+        else if (const auto* callable = GetIf<Callable>(&value))
+        {
+            // json.dumps names the callable's type (docs/tasks/0368)
+            throw TemplateRuntimeError("Object of type "s + visitors::PythonTypeName(*callable) + " is not JSON serializable");
+        }
         else
         {
             Fail();
@@ -1720,10 +1725,18 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     std::string result;
     for (auto& [keyValue, value] : map->GetEntries())
     {
-        const auto* callable = GetIf<Callable>(&value);
-        if (IsEmpty(value) || (callable && callable->GetKind() != Callable::Macro && !callable->GetRepr() && !callable->GetBoundReceiver() && visitors::FunctionRepr(*callable).empty()))
+        if (IsEmpty(value))
         {
             continue;
+        }
+        if (const auto* callable = GetIf<Callable>(&value))
+        {
+            std::string text;
+            visitors::ValueRenderer<char>(text, false)(*callable);
+            if (text.empty())
+            {
+                continue;
+            }
         }
         // Jinja2 searches the key for whitespace with a regular expression, which only takes text
         if (!IsStringValue(keyValue))

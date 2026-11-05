@@ -749,6 +749,14 @@
    "env": {},
    "templates": {},
    "output": "range(0, 18446744073709551615)"
+  },
+  {
+   "id": "globals.cycler_method_prints",
+   "template": "{{ (cycler(1).next|string).split(' at ')[0] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<bound method Cycler.next of <jinja2.utils.Cycler object"
   }
  ]
 }

@@ -476,4 +476,10 @@ CASES = [
     ("attr_missing_debug", "[{{ 'x'|attr('f') }}|{{ {'k': 1}|attr('k') }}|{{ 1|attr('nope') }}|{% set ns = namespace(a=1) %}{{ ns|attr('b') }}]", {"env": {"undefined": "debug"}}),
     ("attr_missing_strict", "{{ 'x'|attr('f') }}", {"env": {"undefined": "strict"}}),
     ("attr_missing_strict_dict_item", "{{ {'k': 1}|attr('k') }}", {"env": {"undefined": "strict"}}),
+    # task 0368: json.dumps names a callable's type
+    ("tojson_callable", "{{ lipsum|tojson }}"),
+    # task 0401: a generator still answers as a list to truncate's len() and to unique's hash
+    ("lazy_result_truncate", "{{ [1, 2, 3]|select|truncate(5) is string }}"),
+    ("lazy_result_unique_hash", "{% set g = [1, 2, 3]|select %}{{ [g, g]|unique|list|length }}"),
+    ("range_tojson", "{{ range(2)|tojson }}"),
 ]
