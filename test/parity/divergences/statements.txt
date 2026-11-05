@@ -6,6 +6,7 @@ statements.macro_escapes_its_loop      output      0165 deliberate: a closure ca
 statements.block_reference_new_each_read output    0214 deliberate: self.b is one stored callable, so it equals itself; Jinja2 allocates a new BlockReference on each read
 statements.macro_closure_in_loop_of_call output 0165 deliberate: a closure called after its loop reads the loop's names as undefined; Jinja2 prints its missing sentinel
 statements.loop_cycle_repr_after_break_lazy output      0366 deliberate: a loop.cycle kept past a `break` out of a lazily filtered loop prints its length as ?; counting the rest would keep the filter and its names alive past the loop (Ruslan 2026-11-03)
-statements.for_length_after_clear         output      0390 loop.length is the list's size when the loop starts; Jinja2 takes len() of the list on the first read
-statements.loop_iter_inner_length_after_pop output    0390 a loop over loop that pops the list reads the outer length from the start; Jinja2 takes len() when first read
-statements.loop_iter_inner_kept_length    output      0390 a loop over loop kept past a break forgets the outer loop's rest; Jinja2 goes on through it
+statements.for_kept_length_after_append output     0390 a loop kept past its statement takes its length from the list when the statement ends; Jinja2 takes len() when the length is first read
+statements.for_over_select_sees_append output      0392 select collects its result when called; Python's generator fetches one item per step, so it sees items appended meanwhile
+statements.for_over_map_sees_append output         0392 map collects its result when called; Python's generator fetches one item per step, so it sees items appended meanwhile
+statements.select_kept_sees_later_append output    0392 a stored select result is collected when made; Python's generator reads the list when iterated
