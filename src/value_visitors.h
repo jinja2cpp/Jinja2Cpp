@@ -1055,22 +1055,29 @@ inline std::string FunctionRepr(const Callable& callable)
 {
     const void* address = &callable.GetCallable();
     const auto& attributes = callable.GetAttributes();
-    const auto self = attributes ? attributes->find("__self__") : InternalValueMap::const_iterator();
-    if (const char* method = callable.GetBoundMethod(); method && attributes && self != attributes->end())
+    if (!attributes)
     {
-        // Python names the address of the object the method is bound to
-        if (const auto list = AsList(self->second))
-        {
-            address = list->GetIdentity();
-        }
-        else if (const auto map = AsMap(self->second))
-        {
-            address = map->GetIdentity();
-        }
-        return fmt::format("<built-in method {} of {} object at {}>", method, Apply<PythonTypeNameGetter>(self->second), address);
+        return std::string();
     }
-    const auto name = attributes ? attributes->find("__name__") : InternalValueMap::const_iterator();
-    if (attributes && name != attributes->end() && IsStringValue(name->second))
+    const auto self = attributes->find("__self__");
+    if (const char* method = callable.GetBoundMethod())
+    {
+        if (self != attributes->end())
+        {
+            // Python names the address of the object the method is bound to
+            if (const auto list = AsList(self->second))
+            {
+                address = list->GetIdentity();
+            }
+            else if (const auto map = AsMap(self->second))
+            {
+                address = map->GetIdentity();
+            }
+            return fmt::format("<built-in method {} of {} object at {}>", method, Apply<PythonTypeNameGetter>(self->second), address);
+        }
+    }
+    const auto name = attributes->find("__name__");
+    if (name != attributes->end() && IsStringValue(name->second))
     {
         return fmt::format("<function {} at {}>", AsString(name->second), address);
     }

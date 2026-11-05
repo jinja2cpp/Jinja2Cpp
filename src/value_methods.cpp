@@ -2724,7 +2724,7 @@ InternalValue MakeBoundMethod(const InternalValue& self, const MethodInfo& metho
     // The name its repr prints (<built-in method upper of str object at 0x...>, docs/tasks/0368);
     // without the object, which a string has no identity for, so that it compares as before.
     // The method table's names are literals
-    result.SetBoundMethod(nullptr, method.name.data());
+    result.SetBoundMethod(nullptr, method.name.data()); // NOLINT(bugprone-suspicious-stringview-data-usage)
     result.SetAttributes(std::make_shared<const InternalValueMap>(InternalValueMap{ { "__self__", self } }));
     return result;
 }
