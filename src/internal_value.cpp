@@ -531,8 +531,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
         }
         return FindKey(values, InternalValue(key.ToAdapter()));
     }
-    // Functions, macros and methods by Callable::GetIdentity, and the undefined key (docs/tasks/0212)
-    InternalValue operator()(const MapRef& values, const Callable& key) const { return FindKey(values, InternalValue(key)); }
+    // The undefined key (docs/tasks/0212); a callable key is looked up before the visitor (Subscript)
     InternalValue operator()(const MapRef& values, const UndefinedValue& key) const { return FindKey(values, InternalValue(key)); }
 
     InternalValue operator()(const MapRef& values, const ListRef& key) const
@@ -710,7 +709,9 @@ inline void ResolveCallOperator(InternalValue& result, RenderContext* values)
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values)
 {
-    auto result = Apply2<SubscriptionVisitor>(val, subscript);
+    // A function or macro key (docs/tasks/0212): looked up as it is, as the visitor would box a copy
+    const auto map = GetIf<Callable>(&subscript) ? AsMap(val) : std::nullopt;
+    auto result = map ? map->FindItem(subscript).value_or(InternalValue()) : Apply2<SubscriptionVisitor>(val, subscript);
     ResolveCallOperator(result, values);
     return result;
 }

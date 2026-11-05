@@ -454,6 +454,30 @@ std::optional<std::string> MakeDictKey(const InternalValue& key, const char** un
 
 bool SameMethodReceiver(const InternalValue& left, const InternalValue& right)
 {
+    // Containers by identity, strings by their text, without copying either
+    const auto leftList = AsList(left);
+    const auto rightList = AsList(right);
+    if (leftList || rightList)
+    {
+        return leftList && rightList && leftList->GetIdentity() == rightList->GetIdentity();
+    }
+    const auto leftMap = AsMap(left);
+    const auto rightMap = AsMap(right);
+    if (leftMap || rightMap)
+    {
+        return leftMap && rightMap && leftMap->GetIdentity() == rightMap->GetIdentity();
+    }
+    if (const auto leftText = AsStringView<char>(left))
+    {
+        const auto rightText = AsStringView<char>(right);
+        return rightText && *leftText == *rightText;
+    }
+    if (const auto leftText = AsStringView<wchar_t>(left))
+    {
+        const auto rightText = AsStringView<wchar_t>(right);
+        return rightText && *leftText == *rightText;
+    }
+    // A number or none: a token of a few bytes
     std::string leftKey;
     std::string rightKey;
     KeyTokenBuilder::AddReceiver(leftKey, left);
