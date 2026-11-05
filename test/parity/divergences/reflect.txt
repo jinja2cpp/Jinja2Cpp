@@ -10,3 +10,5 @@ reflect.methods.alias_loop_var_update         output      0212 a JSON value read
 reflect.methods.alias_owner_then_item         output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): the write through m misses messages
 reflect.methods.alias_set_item_kept           output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): the write through nd['k'] misses a
 reflect.statements.for_pop_context_list       output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): l.pop() misses the list the loop iterates
+reflect.statements.for_ctx_length_after_append output 0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): l.append(4) misses the list the loop iterates
+reflect.statements.for_ctx_kept_length_append_in_body output 0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): l.append(4) misses the list the kept loop iterates
