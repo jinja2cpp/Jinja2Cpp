@@ -1922,7 +1922,7 @@ public:
             {
                 return {};
             }
-            Enumerator moved(std::move(*m_enum), std::move(m_owner), m_list);
+            Enumerator moved(std::move(m_enum), std::move(m_owner), m_list);
             moved.m_next = m_next;
             moved.m_onCell = m_onCell;
             return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(moved));
@@ -3395,7 +3395,7 @@ public:
     }
     // A JSON object is a dict (IJsonNode, docs/tasks/0370); the names of any other host map, such as a
     // reflected struct, are its attributes
-    [[nodiscard]] bool HasAttributes() const override { return !m_node; }
+    [[nodiscard]] bool HasAttributes() const override { return m_node == nullptr; }
     [[nodiscard]] const void* GetIdentity() const override { return HostIdentity(m_node, m_values.Get().GetAccessor()); }
     [[nodiscard]] TemplateDict* GetMutableItems() const override
     {
@@ -3408,7 +3408,7 @@ public:
         return m_link.Adopt(self, GetIdentity(), false, copy, this->IsGlobalData(), this->IsInSnapshot(), this->IsGlobalData() ? std::weak_ptr<const void>() : AdaptersOwner(m_values));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
-    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return m_node ? MapAttrPolicy::MethodsFirst : MapAttrPolicy::KeysFirst; }
+    [[nodiscard]] MapAttrPolicy GetAttrPolicy() const override { return m_node != nullptr ? MapAttrPolicy::MethodsFirst : MapAttrPolicy::KeysFirst; }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericMap CreateGenericMap() const override
     {
