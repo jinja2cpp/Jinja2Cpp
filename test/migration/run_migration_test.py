@@ -61,30 +61,31 @@ def main():
     if step.returncode:
         return fail("--rewrite exited with %d" % step.returncode)
 
-    touch()
-    first = run(build)
-    logs.append(("first build", first.stdout))
-    with open(log_path, "w", encoding="utf-8") as f:
-        f.write(first.stdout)
-    if first.returncode:
-        return fail("the fixture does not build after --rewrite")
-    if MARKER not in first.stdout:
-        return fail("the first build reported no '%s' deprecation: the test would pass vacuously" % MARKER)
-
-    step = run(migrate + ["--log", log_path, "--root", args.build_dir])
-    logs.append(("migrate --log", step.stdout))
-    if step.returncode:
-        return fail("--log exited with %d" % step.returncode)
-
-    touch()
-    second = run(build)
-    logs.append(("second build", second.stdout))
-    if second.returncode:
-        return fail("the migrated fixture does not build")
-    left = [line for line in second.stdout.splitlines()
-            if MARKER in line or ("legacy_api" in line and "warning" in line.lower())]
-    if left:
-        return fail("the rebuild still reports:\n" + "\n".join(left))
+    # MSVC reports a warning number once per source line (two deprecated calls on one line give
+    # one C4996), so a line can need a second pass: repeat build and --log until the build is
+    # clean, as MIGRATION.md tells users to. Three passes cover the fixture on every compiler.
+    passes = 0
+    while True:
+        touch()
+        build_step = run(build)
+        logs.append(("build %d" % (passes + 1), build_step.stdout))
+        if build_step.returncode:
+            return fail("the fixture does not build (pass %d)" % (passes + 1))
+        if passes == 0 and MARKER not in build_step.stdout:
+            return fail("the first build reported no '%s' deprecation: the test would pass vacuously" % MARKER)
+        left = [line for line in build_step.stdout.splitlines()
+                if MARKER in line or ("legacy_api" in line and "warning" in line.lower())]
+        if not left:
+            break
+        if passes == 3:
+            return fail("still reported after %d --log passes:\n%s" % (passes, "\n".join(left)))
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write(build_step.stdout)
+        step = run(migrate + ["--log", log_path, "--root", args.build_dir])
+        logs.append(("migrate --log %d" % (passes + 1), step.stdout))
+        if step.returncode:
+            return fail("--log exited with %d" % step.returncode)
+        passes += 1
 
     with open(fixture, "rb") as f:
         migrated = f.read()

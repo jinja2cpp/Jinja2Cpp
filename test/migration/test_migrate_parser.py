@@ -129,7 +129,8 @@ class ApplyTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
 
-    def write(self, text, name="a.cpp", newline=None):
+    def write(self, text, name="a.cpp", newline=""):
+        # newline="": the bytes as written here, so Windows does not turn \n into \r\n
         path = os.path.join(self.tmp.name, name)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", newline=newline, encoding="utf-8") as f:
