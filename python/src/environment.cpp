@@ -1,0 +1,789 @@
+#include "environment.h"
+
+#include "convert.h"
+#include "errors.h"
+#include "loaders.h"
+
+#include "host_object.h"
+#include "internal_value.h"
+#include "recursion_guard.h"
+#include "template_impl.h"
+
+#include <jinja2cpp/template.h>
+#include <jinja2cpp/template_env.h>
+
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace jinja2cpp_py
+{
+using namespace nb::literals;
+
+namespace
+{
+// Ctrl-C during a render: the engine calls this every few steps (detail::t_hostPoll), and
+// KeyboardInterrupt stops the render as it stops Python Jinja2's
+void PollSignals()
+{
+    if (PyErr_CheckSignals() != 0)
+    {
+        throw nb::python_error();
+    }
+}
+
+class HostPollScope
+{
+public:
+    HostPollScope() noexcept
+        : m_saved(std::exchange(jinja2::detail::t_hostPoll, &PollSignals))
+    {
+    }
+    ~HostPollScope() { jinja2::detail::t_hostPoll = m_saved; }
+    HostPollScope(const HostPollScope&) = delete;
+    HostPollScope& operator=(const HostPollScope&) = delete;
+    HostPollScope(HostPollScope&&) = delete;
+    HostPollScope& operator=(HostPollScope&&) = delete;
+
+private:
+    jinja2::detail::HostPoll m_saved;
+};
+
+bool Truth(nb::handle value)
+{
+    const int truth = PyObject_IsTrue(value.ptr());
+    if (truth < 0)
+    {
+        throw nb::python_error();
+    }
+    return truth != 0;
+}
+
+std::string OptionalText(nb::handle value)
+{
+    return value.is_none() ? std::string() : Utf8(value);
+}
+
+jinja2::UndefinedPolicy PolicyOf(nb::handle type)
+{
+    if (!PyType_Check(type.ptr()))
+    {
+        RaiseTypeError("undefined must be a class");
+    }
+    const auto mro = nb::steal(PyObject_GetAttrString(type.ptr(), "__mro__"));
+    if (!mro)
+    {
+        throw nb::python_error();
+    }
+    for (auto base : mro)
+    {
+        if (IsJinjaClass(base, "StrictUndefined"))
+        {
+            return jinja2::UndefinedPolicy::Strict;
+        }
+        if (IsJinjaClass(base, "ChainableUndefined"))
+        {
+            return jinja2::UndefinedPolicy::Chainable;
+        }
+        if (IsJinjaClass(base, "DebugUndefined"))
+        {
+            return jinja2::UndefinedPolicy::Debug;
+        }
+        if (IsJinjaClass(base, "Undefined"))
+        {
+            return jinja2::UndefinedPolicy::Default;
+        }
+    }
+    RaiseTypeError("undefined must be Undefined, StrictUndefined, ChainableUndefined, DebugUndefined or a subclass of them");
+}
+
+// Name/value pairs of a dict, in its order
+std::vector<std::pair<std::string, PyObject*>> Entries(nb::handle mapping, const char* what)
+{
+    if (!PyDict_Check(mapping.ptr()))
+    {
+        RaiseTypeError(std::string("Environment.") + what + " must be a dict");
+    }
+    std::vector<std::pair<std::string, PyObject*>> entries;
+    for (auto [name, value] : nb::borrow<nb::dict>(mapping))
+    {
+        entries.emplace_back(Utf8(name), value.ptr());
+    }
+    return entries;
+}
+
+// The params of a render: the str keys of a mapping as values of the engine
+void AddParams(jinja2::InternalValueMap& params, nb::handle mapping)
+{
+    for (auto [name, value] : nb::borrow<nb::dict>(mapping))
+    {
+        if (PyUnicode_Check(name.ptr()))
+        {
+            params[std::string(Utf8View(name))] = ToEngine(value);
+        }
+    }
+}
+
+int EnvironmentTraverse(PyObject* self, visitproc visit, void* arg)
+{
+    Py_VISIT(Py_TYPE(self));
+    if (!nb::inst_ready(self))
+    {
+        return 0;
+    }
+    return nb::inst_ptr<PyEnvironment>(self)->Traverse(visit, arg);
+}
+
+int EnvironmentClear(PyObject* self)
+{
+    if (nb::inst_ready(self))
+    {
+        nb::inst_ptr<PyEnvironment>(self)->Clear();
+    }
+    return 0;
+}
+
+int TemplateTraverse(PyObject* self, visitproc visit, void* arg)
+{
+    Py_VISIT(Py_TYPE(self));
+    if (!nb::inst_ready(self))
+    {
+        return 0;
+    }
+    return nb::inst_ptr<PyTemplate>(self)->Traverse(visit, arg);
+}
+
+int TemplateClear(PyObject* self)
+{
+    if (nb::inst_ready(self))
+    {
+        nb::inst_ptr<PyTemplate>(self)->Clear();
+    }
+    return 0;
+}
+
+PyType_Slot g_environmentSlots[] = { { Py_tp_traverse, reinterpret_cast<void*>(&EnvironmentTraverse) }, { Py_tp_clear, reinterpret_cast<void*>(&EnvironmentClear) }, { 0, nullptr } };
+PyType_Slot g_templateSlots[] = { { Py_tp_traverse, reinterpret_cast<void*>(&TemplateTraverse) }, { Py_tp_clear, reinterpret_cast<void*>(&TemplateClear) }, { 0, nullptr } };
+
+// Environment's keyword arguments that are settings of the engine
+const char* const g_options[] = { "block_start_string", "block_end_string", "variable_start_string", "variable_end_string", "comment_start_string", "comment_end_string",
+                                  "line_statement_prefix", "line_comment_prefix", "trim_blocks", "lstrip_blocks", "newline_sequence", "keep_trailing_newline",
+                                  "extensions", "optimized", "undefined", "finalize", "autoescape", "loader", "cache_size", "auto_reload", "bytecode_cache", "enable_async" };
+} // namespace
+
+PyEnvironment::PyEnvironment(nb::kwargs kwargs)
+    : m_globals(nb::dict())
+    , m_filters(nb::dict())
+    , m_tests(nb::dict())
+    , m_undefined(Names().undefinedType)
+    , m_extensions(nb::list())
+    , m_options(nb::dict())
+{
+    // Counts the steps of every render, so that Ctrl-C is polled (PollSignals): UINT64_MAX
+    // steps is no limit, but a limit is set
+    m_settings.limits.maxRenderSteps = UINT64_MAX;
+    m_options["optimized"] = nb::bool_(true);
+    m_options["bytecode_cache"] = nb::none();
+    m_options["enable_async"] = nb::bool_(false);
+    for (auto [name, value] : kwargs)
+    {
+        SetOption(Utf8(name), value);
+    }
+}
+
+PyEnvironment::~PyEnvironment() = default;
+
+void PyEnvironment::Keep(nb::handle object)
+{
+    for (const auto& kept : m_kept)
+    {
+        if (kept.ptr() == object.ptr())
+        {
+            return;
+        }
+    }
+    m_kept.push_back(nb::borrow(object));
+}
+
+void PyEnvironment::SetOption(const std::string& name, nb::handle value)
+{
+    CheckAlive();
+    auto& settings = m_settings;
+    auto text = [&](std::string& field) { field = Utf8(value); };
+    if (name == "block_start_string")
+    {
+        text(settings.blockStartString);
+    }
+    else if (name == "block_end_string")
+    {
+        text(settings.blockEndString);
+    }
+    else if (name == "variable_start_string")
+    {
+        text(settings.variableStartString);
+    }
+    else if (name == "variable_end_string")
+    {
+        text(settings.variableEndString);
+    }
+    else if (name == "comment_start_string")
+    {
+        text(settings.commentStartString);
+    }
+    else if (name == "comment_end_string")
+    {
+        text(settings.commentEndString);
+    }
+    else if (name == "line_statement_prefix")
+    {
+        settings.lineStatementPrefix = OptionalText(value);
+    }
+    else if (name == "line_comment_prefix")
+    {
+        settings.lineCommentPrefix = OptionalText(value);
+    }
+    else if (name == "trim_blocks")
+    {
+        settings.trimBlocks = Truth(value);
+    }
+    else if (name == "lstrip_blocks")
+    {
+        settings.lstripBlocks = Truth(value);
+    }
+    else if (name == "keep_trailing_newline")
+    {
+        settings.keepTrailingNewline = Truth(value);
+    }
+    else if (name == "newline_sequence")
+    {
+        auto sequence = Utf8(value);
+        if (sequence != "\n" && sequence != "\r\n" && sequence != "\r")
+        {
+            // Jinja2's _environment_config_check
+            PyErr_SetString(PyExc_AssertionError, "newline_sequence set to unknown line ending string.");
+            throw nb::python_error();
+        }
+        settings.newlineSequence = std::move(sequence);
+    }
+    else if (name == "extensions")
+    {
+        SetExtensions(value);
+    }
+    else if (name == "undefined")
+    {
+        settings.undefinedPolicy = PolicyOf(value);
+        m_undefined = nb::borrow(value);
+    }
+    else if (name == "finalize")
+    {
+        m_finalize = nb::borrow(value);
+        if (value.is_none())
+        {
+            settings.finalize = jinja2::UserCallable();
+        }
+        else
+        {
+            Keep(value);
+            settings.finalize = jinja2::host::EngineUserCallable(BorrowedCallable(value));
+        }
+    }
+    else if (name == "autoescape")
+    {
+        SetAutoescape(value);
+    }
+    else if (name == "loader")
+    {
+        SetLoader(value);
+    }
+    else if (name == "cache_size")
+    {
+        settings.cacheSize = nb::cast<int>(value);
+    }
+    else if (name == "auto_reload")
+    {
+        settings.autoReload = Truth(value);
+    }
+    else if (name == "enable_async")
+    {
+        if (Truth(value))
+        {
+            PyErr_SetString(PyExc_NotImplementedError, "jinja2cpp does not support enable_async yet (docs/python.md)");
+            throw nb::python_error();
+        }
+        m_options["enable_async"] = nb::borrow(value);
+    }
+    else if (name == "optimized" || name == "bytecode_cache")
+    {
+        // They change Jinja2's speed, not its output
+        m_options[name.c_str()] = nb::borrow(value);
+    }
+    else
+    {
+        RaiseTypeError("Environment.__init__() got an unexpected keyword argument '" + name + "'");
+    }
+    // Templates loaded from now on take the change; loaded ones keep what they had, as in Jinja2
+    m_env.reset();
+}
+
+nb::object PyEnvironment::GetOption(const std::string& name) const
+{
+    const auto& settings = m_settings;
+    auto optional = [](const std::string& text) { return text.empty() ? nb::none() : MakeStr(text); };
+    if (name == "block_start_string")
+    {
+        return MakeStr(settings.blockStartString);
+    }
+    if (name == "block_end_string")
+    {
+        return MakeStr(settings.blockEndString);
+    }
+    if (name == "variable_start_string")
+    {
+        return MakeStr(settings.variableStartString);
+    }
+    if (name == "variable_end_string")
+    {
+        return MakeStr(settings.variableEndString);
+    }
+    if (name == "comment_start_string")
+    {
+        return MakeStr(settings.commentStartString);
+    }
+    if (name == "comment_end_string")
+    {
+        return MakeStr(settings.commentEndString);
+    }
+    if (name == "line_statement_prefix")
+    {
+        return optional(settings.lineStatementPrefix);
+    }
+    if (name == "line_comment_prefix")
+    {
+        return optional(settings.lineCommentPrefix);
+    }
+    if (name == "trim_blocks")
+    {
+        return nb::bool_(settings.trimBlocks);
+    }
+    if (name == "lstrip_blocks")
+    {
+        return nb::bool_(settings.lstripBlocks);
+    }
+    if (name == "keep_trailing_newline")
+    {
+        return nb::bool_(settings.keepTrailingNewline);
+    }
+    if (name == "newline_sequence")
+    {
+        return MakeStr(settings.newlineSequence);
+    }
+    if (name == "extensions")
+    {
+        return m_extensions;
+    }
+    if (name == "undefined")
+    {
+        return m_undefined;
+    }
+    if (name == "finalize")
+    {
+        return m_finalize;
+    }
+    if (name == "autoescape")
+    {
+        return m_autoescape;
+    }
+    if (name == "loader")
+    {
+        return m_loader;
+    }
+    if (name == "cache_size")
+    {
+        return nb::int_(settings.cacheSize);
+    }
+    if (name == "auto_reload")
+    {
+        return nb::bool_(settings.autoReload);
+    }
+    return m_options[name.c_str()];
+}
+
+nb::object PyEnvironment::GetDict(const std::string& name) const
+{
+    return name == "globals" ? m_globals : name == "filters" ? m_filters
+                                                             : m_tests;
+}
+
+void PyEnvironment::SetDict(const std::string& name, nb::handle value)
+{
+    CheckAlive();
+    if (!PyDict_Check(value.ptr()))
+    {
+        RaiseTypeError("Environment." + name + " must be a dict");
+    }
+    (name == "globals" ? m_globals : name == "filters" ? m_filters
+                                                       : m_tests) = nb::borrow(value);
+}
+
+void PyEnvironment::SetAutoescape(nb::handle value)
+{
+    m_autoescape = nb::borrow(value);
+    if (PyCallable_Check(value.ptr()))
+    {
+        Keep(value);
+        PyObject* selector = value.ptr();
+        // Jinja2 passes the template's name, None for a template from a string
+        m_settings.autoescapeSelector = [selector](const std::string& templateName) {
+            const auto name = templateName.empty() ? nb::none() : MakeStr(templateName);
+            PyObject* result = PyObject_CallFunctionObjArgs(selector, name.ptr(), nullptr);
+            if (!result)
+            {
+                throw nb::python_error();
+            }
+            return Truth(nb::steal(result));
+        };
+        m_settings.autoescape = false;
+        return;
+    }
+    m_settings.autoescapeSelector = jinja2::AutoescapeSelector();
+    m_settings.autoescape = Truth(value);
+}
+
+void PyEnvironment::SetExtensions(nb::handle value)
+{
+    auto& extensions = m_settings.extensions;
+    extensions.doStatement = false;
+    extensions.loopControls = false;
+    nb::list list;
+    for (auto extension : value)
+    {
+        std::string name;
+        if (PyUnicode_Check(extension.ptr()))
+        {
+            name = Utf8(extension);
+            // "jinja2.ext.do" and "jinja2cpp.ext.do" alike
+            if (const auto dot = name.rfind('.'); dot != std::string::npos)
+            {
+                name = name.substr(dot + 1);
+            }
+        }
+        else if (PyType_Check(extension.ptr()) && IsJinjaClass(extension, Utf8(extension.attr("__name__"))))
+        {
+            name = Utf8(extension.attr("__name__"));
+        }
+        if (name == "do" || name == "ExprStmtExtension")
+        {
+            extensions.doStatement = true;
+        }
+        else if (name == "loopcontrols" || name == "LoopControlExtension")
+        {
+            extensions.loopControls = true;
+        }
+        else
+        {
+            PyErr_Format(PyExc_NotImplementedError, "jinja2cpp does not support the extension %R yet (docs/python.md)", extension.ptr());
+            throw nb::python_error();
+        }
+        list.append(extension);
+    }
+    m_extensions = std::move(list);
+}
+
+void PyEnvironment::SetLoader(nb::handle loader)
+{
+    m_loader = nb::borrow(loader);
+    // Templates loaded with an earlier loader keep reading it
+    if (!loader.is_none())
+    {
+        Keep(loader);
+    }
+    m_loaderHandler.reset();
+}
+
+void PyEnvironment::Rebuild()
+{
+    m_env = std::make_unique<jinja2::TemplateEnv>();
+    m_env->SetSettings(m_settings);
+    if (!m_loaderHandler && !m_loader.is_none())
+    {
+        m_loaderHandler = MakeLoader(m_loader, nb::find(this));
+    }
+    if (m_loaderHandler)
+    {
+        m_loaderHandler->Install(*m_env);
+    }
+    m_boundFilters.clear();
+    m_boundTests.clear();
+}
+
+jinja2::TemplateEnv& PyEnvironment::Prepared()
+{
+    CheckAlive();
+    if (!m_env)
+    {
+        Rebuild();
+    }
+    // A template binds the filters and tests when it loads, as in Jinja2
+    auto sync = [this](nb::handle dict, const char* what, std::vector<std::pair<std::string, PyObject*>>& bound, bool filters) {
+        auto entries = Entries(dict, what);
+        if (entries == bound)
+        {
+            return;
+        }
+        for (const auto& [name, object] : bound)
+        {
+            filters ? m_env->RemoveFilter(name) : m_env->RemoveTest(name);
+        }
+        for (const auto& [name, object] : entries)
+        {
+            Keep(object);
+            auto callable = jinja2::host::EngineUserCallable(BorrowedCallable(object));
+            filters ? m_env->AddFilter(name, std::move(callable)) : m_env->AddTest(name, std::move(callable));
+        }
+        bound = std::move(entries);
+    };
+    sync(m_filters, "filters", m_boundFilters, true);
+    sync(m_tests, "tests", m_boundTests, false);
+    return *m_env;
+}
+
+void PyEnvironment::CheckAlive() const
+{
+    if (m_cleared)
+    {
+        RaiseTemplateRuntimeError("the environment was cleared by the garbage collector");
+    }
+}
+
+ErrorSource PyEnvironment::SourceOf(const std::string& name) const
+{
+    if (m_loaderHandler)
+    {
+        return m_loaderHandler->SourceOf(name);
+    }
+    ErrorSource source;
+    source.name = MakeStr(name);
+    return source;
+}
+
+nb::object PyEnvironment::MakeTemplate(jinja2::Template tpl, nb::handle globals, nb::object name, nb::object filename)
+{
+    auto self = nb::find(this);
+    // A copy, as Jinja2's make_globals takes a ChainMap of it
+    auto templateGlobals = globals.is_none() ? nb::none() : Names().dictType(globals);
+    return nb::cast(new PyTemplate(std::move(tpl), nb::borrow(self), std::move(templateGlobals), std::move(name), std::move(filename)), nb::rv_policy::take_ownership);
+}
+
+jinja2::Template PyEnvironment::Load(nb::handle source)
+{
+    auto& env = Prepared();
+    const auto text = Utf8(source);
+    auto result = env.FromString(std::string_view(text));
+    if (!result)
+    {
+        ErrorSource where;
+        where.source = nb::borrow(source);
+        RaiseError(result.error(), where);
+    }
+    return std::move(result).value();
+}
+
+nb::object PyEnvironment::FromString(nb::handle source, nb::handle globals)
+{
+    if (nb::isinstance<PyTemplate>(source))
+    {
+        return nb::borrow(source);
+    }
+    return MakeTemplate(Load(source), globals, nb::none(), nb::none());
+}
+
+nb::object PyEnvironment::GetTemplate(nb::handle name, nb::handle /*parent*/, nb::handle globals)
+{
+    if (nb::isinstance<PyTemplate>(name))
+    {
+        return nb::borrow(name);
+    }
+    auto& env = Prepared();
+    if (m_loader.is_none())
+    {
+        RaiseTypeError("no loader for this environment specified");
+    }
+    if (!PyUnicode_Check(name.ptr()))
+    {
+        // An Undefined name raises its UndefinedError, as in Jinja2
+        if (nb::isinstance(name, Names().undefinedType))
+        {
+            name.attr("_fail_with_undefined_error")();
+        }
+        RaiseTemplateNotFound(name);
+    }
+    const auto text = Utf8(name);
+    auto result = env.LoadTemplate(text);
+    if (!result)
+    {
+        const auto& error = result.error();
+        if (error.GetCode() == jinja2::ErrorCode::FileNotFound || error.GetCode() == jinja2::ErrorCode::TemplateNotFound)
+        {
+            RaiseTemplateNotFound(name);
+        }
+        RaiseError(error, SourceOf(text));
+    }
+    auto where = SourceOf(text);
+    return MakeTemplate(std::move(result).value(), globals, nb::borrow(name), where.filename);
+}
+
+int PyEnvironment::Traverse(visitproc visit, void* arg) const
+{
+    for (const auto* object : { &m_globals, &m_filters, &m_tests, &m_loader, &m_undefined, &m_finalize, &m_autoescape, &m_extensions, &m_options })
+    {
+        Py_VISIT(object->ptr());
+    }
+    for (const auto& object : m_kept)
+    {
+        Py_VISIT(object.ptr());
+    }
+    return 0;
+}
+
+void PyEnvironment::Clear() noexcept
+{
+    // The engine borrows what goes now: it is dropped first, and the environment is unusable
+    m_cleared = true;
+    m_env.reset();
+    m_loaderHandler.reset();
+    m_boundFilters.clear();
+    m_boundTests.clear();
+    m_globals = nb::none();
+    m_filters = nb::none();
+    m_tests = nb::none();
+    m_loader = nb::none();
+    m_undefined = nb::none();
+    m_finalize = nb::none();
+    m_autoescape = nb::none();
+    m_extensions = nb::none();
+    m_options = nb::none();
+    m_kept.clear();
+}
+
+PyTemplate::PyTemplate(nb::handle source, nb::kwargs kwargs)
+    : m_environment(nb::cast(new PyEnvironment(kwargs), nb::rv_policy::take_ownership))
+    , m_globals(nb::none())
+    , m_name(nb::none())
+    , m_filename(nb::none())
+{
+    // Jinja2 makes an environment of the arguments
+    m_template = nb::cast<PyEnvironment&>(m_environment).Load(source);
+}
+
+PyTemplate::PyTemplate(jinja2::Template tpl, nb::object environment, nb::object globals, nb::object name, nb::object filename)
+    : m_template(std::move(tpl))
+    , m_environment(std::move(environment))
+    , m_globals(std::move(globals))
+    , m_name(std::move(name))
+    , m_filename(std::move(filename))
+{
+}
+
+nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
+{
+    if (!m_environment.is_valid() || m_environment.is_none())
+    {
+        RaiseTemplateRuntimeError("the template was cleared by the garbage collector");
+    }
+    auto& env = nb::cast<PyEnvironment&>(m_environment);
+    env.CheckAlive();
+    // dict(*args, **kwargs), as Jinja2's render
+    jinja2::InternalValueMap params;
+    if (args.size() > 1)
+    {
+        RaiseTypeError("dict expected at most 1 argument, got " + std::to_string(args.size()));
+    }
+    if (args.size() == 1)
+    {
+        nb::object first = args[0];
+        AddParams(params, PyDict_CheckExact(first.ptr()) ? first : Names().dictType(first));
+    }
+    AddParams(params, kwargs);
+    // The globals: the environment's, then the template's over them
+    jinja2::InternalValueMap globals;
+    AddParams(globals, env.Globals());
+    if (!m_globals.is_none())
+    {
+        AddParams(globals, m_globals);
+    }
+    RenderState state;
+    state.undefinedClass = env.UndefinedClass();
+    std::string output;
+    std::optional<jinja2::ErrorInfo> error;
+    {
+        const RenderScope scope(state);
+        const HostPollScope poll;
+        error = jinja2::TemplateImpl<char>::RenderInternal(m_template, output, params, &globals);
+    }
+    if (error)
+    {
+        ErrorSource where;
+        where.name = m_name;
+        where.filename = m_filename;
+        RaiseError(*error, where);
+    }
+    return MakeStr(output);
+}
+
+int PyTemplate::Traverse(visitproc visit, void* arg) const
+{
+    Py_VISIT(m_environment.ptr());
+    Py_VISIT(m_globals.ptr());
+    Py_VISIT(m_name.ptr());
+    Py_VISIT(m_filename.ptr());
+    return 0;
+}
+
+void PyTemplate::Clear() noexcept
+{
+    m_environment = nb::none();
+    m_globals = nb::none();
+    m_name = nb::none();
+    m_filename = nb::none();
+}
+
+void BindEnvironment(nb::module_& module)
+{
+    auto environment = nb::class_<PyEnvironment>(module, "Environment", nb::type_slots(g_environmentSlots), nb::is_weak_referenceable())
+                           .def(nb::init<nb::kwargs>())
+                           .def(
+                               "from_string",
+                               [](PyEnvironment& self, nb::handle source, nb::handle globals, nb::handle /*templateClass*/) { return self.FromString(source, globals); },
+                               "source"_a,
+                               "globals"_a = nb::none(),
+                               "template_class"_a = nb::none())
+                           .def(
+                               "get_template",
+                               [](PyEnvironment& self, nb::handle name, nb::handle parent, nb::handle globals) { return self.GetTemplate(name, parent, globals); },
+                               "name"_a,
+                               "parent"_a = nb::none(),
+                               "globals"_a = nb::none())
+                           .def_prop_rw(
+                               "globals", [](const PyEnvironment& self) { return self.GetDict("globals"); }, [](PyEnvironment& self, nb::handle value) { self.SetDict("globals", value); })
+                           .def_prop_rw(
+                               "filters", [](const PyEnvironment& self) { return self.GetDict("filters"); }, [](PyEnvironment& self, nb::handle value) { self.SetDict("filters", value); })
+                           .def_prop_rw(
+                               "tests", [](const PyEnvironment& self) { return self.GetDict("tests"); }, [](PyEnvironment& self, nb::handle value) { self.SetDict("tests", value); });
+    for (const char* option : g_options)
+    {
+        const std::string name = option;
+        environment.def_prop_rw(
+            option, [name](const PyEnvironment& self) { return self.GetOption(name); }, [name](PyEnvironment& self, nb::handle value) { self.SetOption(name, value); });
+    }
+
+    nb::class_<PyTemplate>(module, "Template", nb::type_slots(g_templateSlots), nb::is_weak_referenceable())
+        .def(nb::init<nb::handle, nb::kwargs>(), "source"_a, "kwargs"_a)
+        .def("render", &PyTemplate::Render)
+        .def_prop_ro("environment", &PyTemplate::Environment)
+        .def_prop_ro("name", &PyTemplate::Name)
+        .def_prop_ro("filename", &PyTemplate::Filename)
+        .def_prop_ro("globals", [](const PyTemplate& self) { return self.TemplateGlobals().is_none() ? nb::object(nb::dict()) : self.TemplateGlobals(); });
+}
+} // namespace jinja2cpp_py
