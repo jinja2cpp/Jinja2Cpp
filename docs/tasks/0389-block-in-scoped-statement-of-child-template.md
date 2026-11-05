@@ -1,5 +1,6 @@
 ---
 status: in-progress
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/768
 priority: low
 area: parity
 depends: []
@@ -9,8 +10,8 @@ touches: [src/template_parser.cpp, src/statements.h, src/statements.cpp, test/pa
 
 **Problem.** Found by the 0369 verifier. In a template that extends another, Jinja2 3.1.6 drops
 output outside blocks, and a `{% block %}` at the top level only defines the block. A block
-nested in `{% autoescape %}` or `{% with %}` (statements that open a scope but no new frame
-level for `CodeGenerator.visit_Block`'s `frame.toplevel` check) is rendered at its position as
+nested in `{% autoescape %}` or `{% with %}` (statements that open an inner frame, so
+`CodeGenerator.visit_Block`'s `frame.toplevel` check does not apply) is rendered at its position as
 well: with `base.j2` = `<{% block head %}H{% endblock %}|{% block body %}B{% endblock %}>`,
 `{% extends 'base.j2' %}{% with %}{% block body %}b{% endblock %}{% endwith %}` renders
 `b<H|b>` in Python and `<H|b>` in Jinja2C++. Text next to the block (`<i>` inside the
