@@ -19,8 +19,8 @@ Typical use:
   python3 jinja2cpp_migrate.py --log build.log --root .
 
 Use `--dry-run` to see a unified diff and write nothing. GCC prints display columns by
-default; `-fdiagnostics-column-unit=byte` makes them exact, but the script also finds the
-name when the column is off, as long as it is on the reported line.
+default (a tab counts up to 8); the script converts them. A GCC build with
+-fdiagnostics-column-unit=byte needs `--gcc-column-unit=byte`.
 
 Requires Python 3.8 or later and the standard library only.
 Exit status: 0 on success (also when nothing is left to do), 2 on usage errors.
@@ -31,6 +31,7 @@ import difflib
 import os
 import re
 import sys
+import unicodedata
 
 MARKER = "jinja2cpp-2: "
 SOURCE_SUFFIXES = (".h", ".hpp", ".hh", ".hxx", ".c", ".cc", ".cpp", ".cxx", ".ipp", ".inl")
@@ -53,13 +54,13 @@ _NEW_NAME = re.compile(r"[^\s'\"’\[]+")
 
 
 class Diagnostic:
-    def __init__(self, path, line, col, old, new, col_in_bytes):
+    def __init__(self, path, line, col, old, new, col_unit):
         self.path = path
         self.line = line
         self.col = col  # 1-based, or None when the log has no column
         self.old = old
         self.new = new
-        self.col_in_bytes = col_in_bytes
+        self.col_unit = col_unit  # "char" (MSVC), "byte" (Clang) or "display" (GCC: tabs expanded)
 
     def key(self):
         return (self.path, self.line, self.col, self.old)
@@ -94,13 +95,18 @@ def old_name_of(declaration):
     return names[-1] if names else None
 
 
-def parse_diagnostic(text):
-    """Returns a Diagnostic for a line that reports a jinja2cpp-2 deprecation, else None."""
+def parse_diagnostic(text, gcc_column_unit="display"):
+    """Returns a Diagnostic for a line that reports a jinja2cpp-2 deprecation, else None.
+
+    MSVC counts characters and Clang bytes. GCC counts display columns unless built with
+    -fdiagnostics-column-unit=byte (`gcc_column_unit`). The two GNU-style compilers are told
+    apart by the quoted declaration: Clang quotes the bare name ('isString'), GCC the
+    declaration ('bool jinja2::v2::Value::isString() const', 'jinja2::v2::ErrorInfo')."""
     if MARKER not in text:
         return None
     text = text.rstrip("\r\n")
     match = _MSVC_LINE.match(text)
-    col_in_bytes = False
+    col_unit = "char"  # MSVC counts characters, a tab as one
     if match:
         msg = _PROJECT_SUFFIX.sub("", match.group("msg"))
         # 'jinja2::v2::Value::isString': jinja2cpp-2: IsString
@@ -110,25 +116,26 @@ def parse_diagnostic(text):
         if not match:
             return None
         msg = match.group("msg")
-        col_in_bytes = True
         decl = re.match("[%s](?P<decl>.+?)[%s] is deprecated" % (_QUOTE_OPEN, _QUOTE_CLOSE), msg)
     if not decl or MARKER not in msg:
         return None
     old = old_name_of(decl.group("decl"))
+    if match.re is _GNU_LINE:
+        col_unit = "byte" if decl.group("decl").strip() == old else gcc_column_unit
     new_match = _NEW_NAME.match(msg[msg.index(MARKER) + len(MARKER):])
     if not old or not new_match:
         return None
     col = match.group("col")
     return Diagnostic(match.group("path").strip(), int(match.group("line")), int(col) if col else None,
-                      old, new_match.group(0), col_in_bytes)
+                      old, new_match.group(0), col_unit)
 
 
-def parse_log(lines):
+def parse_log(lines, gcc_column_unit="display"):
     """Diagnostics of the log, deduplicated by (file, line, column, old name), in log order."""
     seen = set()
     result = []
     for text in lines:
-        diag = parse_diagnostic(text)
+        diag = parse_diagnostic(text, gcc_column_unit)
         if diag and diag.key() not in seen:
             seen.add(diag.key())
             result.append(diag)
@@ -143,31 +150,58 @@ def _word_regex(name):
     return re.compile(r"(?<![\w])%s(?![\w])" % re.escape(name))
 
 
-def _char_column(line, diag):
-    """0-based index into the decoded line for the 1-based column of the log."""
-    if diag.col_in_bytes:
-        return len(line.encode("utf-8", "surrogateescape")[:diag.col - 1].decode("utf-8", "surrogateescape"))
-    return diag.col - 1
+def _byte_index(line, col):
+    """0-based index into the decoded line for a 1-based byte column (Clang, MSVC, GCC with
+    -fdiagnostics-column-unit=byte)."""
+    return len(line.encode("utf-8", "surrogateescape")[:col - 1].decode("utf-8", "surrogateescape"))
+
+
+def _display_index(line, col, tabstop=8):
+    """0-based index into the decoded line for a 1-based display column, GCC's default unit:
+    a tab advances to the next multiple of -ftabstop (8), a wide character takes two columns."""
+    width = 0
+    for index, ch in enumerate(line):
+        if width >= col - 1:
+            return index
+        if ch == "\t":
+            width += tabstop - width % tabstop
+        elif unicodedata.east_asian_width(ch) in ("W", "F"):
+            width += 2
+        elif not unicodedata.combining(ch):
+            width += 1
+    return len(line)
+
+
+def _occurrence_at(starts, col):
+    """The occurrence the column names: the last one at or before it, else the first after it."""
+    before = [s for s in starts if s <= col]
+    if before:
+        return before[-1]
+    after = [s for s in starts if s > col]
+    return after[0] if after else None
 
 
 def find_occurrences(line, diag):
     """Start offsets in `line` where the old name should be replaced.
 
     Clang's column is the identifier. GCC's can be the `(` of the call or elsewhere in the
-    expression, so look back from the column first, then forward. MSVC may have no column:
-    then the name is replaced only when it occurs once on the line, because the warning names
-    one call and another type's `data()` or `get()` may share the line (the caller reports it).
+    expression, so look back from the column first, then forward. GCC's default display
+    columns are converted (a tab before the call moves the column past a later call of the
+    same name). MSVC may have no column: then the name is replaced only when it occurs once
+    on the line, because the warning names one call and another type's `data()` or `get()`
+    may share the line (the caller reports it).
     """
-    word = _word_regex(diag.old)
+    found = [m.start() for m in _word_regex(diag.old).finditer(line)]
     if diag.col is None:
-        found = [m.start() for m in word.finditer(line)]
         return found if len(found) == 1 else []
-    col = min(_char_column(line, diag), len(line))
-    before = [m.start() for m in word.finditer(line) if m.start() <= col]
-    if before:
-        return [before[-1]]
-    after = [m.start() for m in word.finditer(line) if m.start() > col]
-    return after[:1]
+    if diag.col_unit == "display":
+        col = _display_index(line, diag.col)
+    elif diag.col_unit == "char":
+        col = min(diag.col - 1, len(line))
+    else:
+        col = min(_byte_index(line, diag.col), len(line))
+    start = _occurrence_at(found, col)
+    return [] if start is None else [start]
 
 
 def replacement_for(line, start, diag):
@@ -439,6 +473,9 @@ def main(argv=None):
                         help="files or directories to apply the table of hard breaks to")
     parser.add_argument("--root", default=os.getcwd(), metavar="DIR",
                         help="directory relative paths of the log are resolved against (default: cwd)")
+    parser.add_argument("--gcc-column-unit", choices=("display", "byte"), default="display",
+                        help="column unit of GCC's log: display (GCC's default, tabs expanded to 8) or"
+                             " byte (-fdiagnostics-column-unit=byte)")
     parser.add_argument("--dry-run", action="store_true", help="print a unified diff, write nothing")
     args = parser.parse_args(argv)
     if not args.log and not args.rewrite:
@@ -458,7 +495,7 @@ def main(argv=None):
                     lines.extend(f.read().splitlines())
             except OSError as e:
                 parser.error("cannot read %s: %s" % (name, e.strerror))
-        diagnostics = parse_log(lines)
+        diagnostics = parse_log(lines, args.gcc_column_unit)
         if not diagnostics:
             print("Note: the log has no '%s' deprecation diagnostics." % MARKER.strip())
         apply_diagnostics(diagnostics, args.root, report, args.dry_run)

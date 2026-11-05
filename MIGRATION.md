@@ -24,6 +24,8 @@ python3 jinja2cpp/scripts/jinja2cpp_migrate.py --rewrite src/ include/
 cmake --build build 2>&1 | tee build.log          # MSVC: C4996 is on at /W3; add /diagnostics:column
 # 3. Rename at every reported location
 python3 jinja2cpp/scripts/jinja2cpp_migrate.py --log build.log --root .
+#    (GCC built with -fdiagnostics-column-unit=byte: add --gcc-column-unit=byte; GCC's
+#    default display columns, where a tab counts up to 8, are converted)
 # 4. Rebuild; repeat 2-3 until no jinja2cpp-2 warning remains (MSVC can report only one
 #    of several deprecated calls on a line, so a line may need a second pass)
 ```

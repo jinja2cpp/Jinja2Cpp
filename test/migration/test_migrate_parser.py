@@ -34,11 +34,13 @@ def parse(text):
 
 
 class ParseTest(unittest.TestCase):
-    def check(self, text, old, new, line=1, col=1, bytes_=True):
+    def check(self, text, old, new, line=1, col=1, unit=None):
         diag = parse(text)
         self.assertIsNotNone(diag, text)
-        self.assertEqual((diag.path, diag.line, diag.col, diag.old, diag.new, diag.col_in_bytes),
-                         ("a.cpp", line, col, old, new, bytes_))
+        self.assertEqual((diag.path, diag.line, diag.col, diag.old, diag.new),
+                         ("a.cpp", line, col, old, new))
+        if unit:
+            self.assertEqual(diag.col_unit, unit)
 
     def test_gcc(self):
         self.check(GCC.format(line=52, col=26), "isString", "IsString", 52, 26)
@@ -80,7 +82,7 @@ class ParseTest(unittest.TestCase):
         self.check("   " + CLANG.format(line=3, col=4).replace("warning", "error"), "isString", "IsString", 3, 4)
 
     def test_msvc_with_column(self):
-        self.check(MSVC.format(line=52, col=26), "isString", "IsString", 52, 26, bytes_=False)
+        self.check(MSVC.format(line=52, col=26), "isString", "IsString", 52, 26, unit="char")
 
     def test_msvc_without_column(self):
         diag = parse(MSVC_NO_COLUMN.format(line=52))
@@ -174,6 +176,43 @@ class ApplyTest(unittest.TestCase):
         self.write("\tauto s = v.isString();\n")
         self.apply([GCC.format(line=1, col=24)])  # a tab counted as 8 columns
         self.assertEqual(self.read(), "\tauto s = v.IsString();\n")
+
+    def test_gcc_display_column_after_tabs(self):
+        # Codex on #767, reproduced with GCC 14: two tabs count 16 display columns, so 35 is
+        # the `(` of v.isString() and 49 that of b.isString(); read as bytes, 35 is b's `(`
+        line = "\t\tconsume(v.isString(), b.isString());\n"
+        self.write(line)
+        report, _ = self.apply([GCC.format(line=1, col=35)])
+        self.assertEqual(self.read(), "\t\tconsume(v.IsString(), b.isString());\n")
+        self.assertEqual(report.human, [])
+        self.write(line)
+        self.apply([GCC.format(line=1, col=35), GCC.format(line=1, col=49)])
+        self.assertEqual(self.read(), "\t\tconsume(v.IsString(), b.IsString());\n")
+
+    def test_gcc_byte_columns_when_asked(self):
+        self.write("\t\tconsume(v.isString(), b.isString());\n")
+        report = migrate.Report()
+        diags = migrate.parse_log([GCC.format(line=1, col=21)], gcc_column_unit="byte")
+        migrate.apply_diagnostics(diags, self.tmp.name, report)
+        self.assertEqual(self.read(), "\t\tconsume(v.IsString(), b.isString());\n")
+
+    def test_clang_columns_after_tabs_are_bytes(self):
+        # Clang quotes the bare name and counts a tab as one column: 27 is b.isString()
+        self.write("\t\tconsume(v.isString(), b.isString());\n")
+        self.apply([CLANG.format(line=1, col=27)])
+        self.assertEqual(self.read(), "\t\tconsume(v.isString(), b.IsString());\n")
+
+    def test_column_units_by_compiler(self):
+        self.assertEqual(parse(GCC.format(line=1, col=1)).col_unit, "display")
+        self.assertEqual(parse(CLANG.format(line=1, col=1)).col_unit, "byte")
+        self.assertEqual(parse(MSVC.format(line=1, col=1)).col_unit, "char")
+        self.assertEqual(migrate.parse_diagnostic(GCC.format(line=1, col=1), "byte").col_unit, "byte")
+
+    def test_display_column_counts_wide_characters_twice(self):
+        mod = migrate
+        self.assertEqual(mod._display_index("\u4e2d\u6587x", 5), 2)
+        self.assertEqual(mod._display_index("\tx", 9), 1)
+        self.assertEqual(mod._display_index("  \tx", 9), 3)
 
     def test_name_after_the_column_is_found_forward(self):
         self.write("auto s = v.isString();\n")
