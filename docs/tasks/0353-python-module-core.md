@@ -1,10 +1,10 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: api
 depends: [0352]
 touches: [python/, pyproject.toml, .github/workflows/python.yml, thirdparty/internal_deps.cmake#nanobind, sbom/components.json]
-shares: [CMakeLists.txt]
+shares: [CMakeLists.txt, src/host_object.h, src/host_object.cpp, src/testers.cpp, src/serialize_filters.cpp, src/value_methods.cpp, src/recursion_guard.h, src/recursion_guard.cpp, src/template_impl.h, src/internal_value.cpp, test/host_object_test.cpp, docs/python.md]
 ---
 # Python module P1b: build, Environment/Template/render, value crossing
 
