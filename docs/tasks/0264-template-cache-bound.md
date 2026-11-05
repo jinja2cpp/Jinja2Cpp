@@ -1,6 +1,6 @@
 ---
 status: done
-pr: PRLINK
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/772
 priority: medium
 area: robustness
 touches: [src/template_env.cpp, src/template_env_impl.h, src/filesystem_handler.cpp, include/jinja2cpp/filesystem_handler.h, include/jinja2cpp/template_env.h, test/embedding_lifecycle_test.cpp, test/embedding_lifecycle_threads_test.cpp]

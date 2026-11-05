@@ -1,6 +1,6 @@
 ---
 status: done
-pr: PRLINK
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/772
 priority: medium
 area: robustness
 touches: [test/borrowed_cells_test.cpp]

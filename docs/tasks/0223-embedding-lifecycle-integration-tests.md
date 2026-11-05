@@ -1,6 +1,6 @@
 ---
 status: done
-pr: PRLINK
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/772
 priority: high
 area: robustness
 touches: [test/embedding_lifecycle_test.cpp, CMakeLists.txt#JINJA2CPP_TEST_SOURCES]
