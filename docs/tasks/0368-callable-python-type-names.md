@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: []
-touches: [src/value_visitors.h#PythonTypeName, test/parity/cases/operators.py]
+touches: [src/value_visitors.h#PythonTypeName, src/value_visitors.h#FunctionRepr, src/global_functions.cpp#SetupGlobals, src/internal_value.h#BoundMethodCall, src/value_methods.cpp#MakeBoundMethod, src/serialize_filters.cpp#XmlAttr, test/expressions_test.cpp]
 ---
 # Python type names of callables in error messages
 
@@ -33,3 +33,14 @@ work on builtin class reprs first, which already distinguishes some of these.
 empty (`{{ lipsum }}`, `{{ 'a'.upper }}`, `{{ 'a'|attr('upper') }}`) where Python prints its repr
 (`<function generate_lorem_ipsum at 0x...>`, `<built-in method upper of str object at 0x...>`).
 The addresses make exact parity impossible; decide with 0305's reprs what to print.
+
+**Resolution.** `PythonTypeName(const Callable&)` names a macro or caller `Macro`, a class among
+the globals `type`, a value's method `builtin_function_or_method`, a bound method of an engine
+object `method`, and the rest `function` (unit test `ExpressionsTest.CallableTypeNamesInErrors`,
+narrow and wide). A range is `range`. Printing (Ruslan 2026-11-05, decision card: Python's repr
+with the identity address): `lipsum` prints `<function generate_lorem_ipsum at 0x...>` (and has
+`__name__`), a value's method `<built-in method upper of str object at 0x...>`, the address being
+the receiver's for a list or dict and the callable's otherwise. A host callable still prints
+nothing (pprint `<callable>`): its Python repr would be the host's, and an address would make a
+host's output differ between runs. Corpus: `filters.callable_prints` (text before the address).
+Parity batch 4 group A.

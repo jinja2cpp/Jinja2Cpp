@@ -1,6 +1,7 @@
 #include "undefined.h"
 
 #include "engine_errors.h"
+#include "host_object.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "render_context.h"
@@ -42,6 +43,35 @@ std::string Repr(const InternalValue& val)
     Apply<visitors::ValueRenderer<char>>(val, result, true);
     return result;
 }
+
+// Jinja2's object_type_repr: a builtin type by its name, an engine class with its module
+// (jinja2.utils.Namespace, jinja2.runtime.LoopContext, jinja2.runtime.Macro), followed by
+// "object". A host object is named by its own class
+std::string ObjectTypeRepr(const InternalValue& obj)
+{
+    if (obj.IsNone())
+    {
+        return "None";
+    }
+    if (!GetHostObject(obj))
+    {
+        const auto map = AsMap(obj);
+        if (const char* objectClass = map ? map->GetObjectClass() : nullptr)
+        {
+            const std::string_view name(objectClass);
+            const char* module = name == "TemplateModule"                               ? "jinja2.environment."
+                                 : name == "LoopContext" || name == "TemplateReference" ? "jinja2.runtime."
+                                                                                        : "jinja2.utils.";
+            return module + std::string(name) + " object";
+        }
+        const auto* callable = GetIf<Callable>(&obj);
+        if (callable && callable->GetKind() == Callable::Macro)
+        {
+            return "jinja2.runtime.Macro object";
+        }
+    }
+    return std::string(Apply<visitors::PythonTypeNameGetter>(obj)) + " object";
+}
 } // namespace
 
 InternalValue MakeUndefined(const RenderContext& context, std::string name)
@@ -78,7 +108,17 @@ InternalValue MakeUndefined(const RenderContext* context, const InternalValue& o
     // Python looks up a string item as an attribute too, and names it so
     info.isAttr = IsStringValue(key);
     info.name = info.isAttr ? AsString(key) : Repr(key);
-    info.objType = obj.IsNone() ? "None" : std::string(Apply<visitors::PythonTypeNameGetter>(obj)) + " object";
+    info.objType = ObjectTypeRepr(obj);
+    return MakeUndefinedValue(std::move(info));
+}
+
+InternalValue MakeUndefinedAttr(const RenderContext* context, const InternalValue& obj, std::string name)
+{
+    UndefinedInfo info;
+    info.policy = PolicyOf(context);
+    info.isAttr = true;
+    info.name = std::move(name);
+    info.objType = ObjectTypeRepr(obj);
     return MakeUndefinedValue(std::move(info));
 }
 
@@ -88,7 +128,7 @@ InternalValue MakeUndefinedItem(const RenderContext* context, const InternalValu
     info.policy = PolicyOf(context);
     info.isAttr = false;
     info.name = std::move(keyRepr);
-    info.objType = obj.IsNone() ? "None" : std::string(Apply<visitors::PythonTypeNameGetter>(obj)) + " object";
+    info.objType = ObjectTypeRepr(obj);
     return MakeUndefinedValue(std::move(info));
 }
 

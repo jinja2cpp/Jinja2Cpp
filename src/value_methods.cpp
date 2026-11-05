@@ -2720,7 +2720,7 @@ const MethodInfo* FindMethod(const InternalValue& self, std::string_view name)
 
 InternalValue MakeBoundMethod(const InternalValue& self, const MethodInfo& method)
 {
-    Callable result(Callable::GlobalFunc, BoundMethodCall{ self, method.invoke });
+    Callable result(Callable::GlobalFunc, BoundMethodCall{ self, method.invoke, method.name });
     result.SetAttributes(std::make_shared<const InternalValueMap>(InternalValueMap{ { "__self__", self } }));
     return result;
 }

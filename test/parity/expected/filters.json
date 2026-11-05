@@ -28005,6 +28005,760 @@
    }
   },
   {
+   "id": "filters.lazy_result_equals_itself",
+   "template": "{% set g = [1]|select %}{% set r = [1]|reverse %}{{ g == g }}|{{ g != g }}|{{ r == r }}|{{ g == r }}|{{ g == 1 }}|{{ (1, 2)|reverse == (2, 1) }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|False|True|False|False|False"
+  },
+  {
+   "id": "filters.lazy_result_prints",
+   "template": "{% for g in [[1]|select, [1]|reject, [1]|selectattr('real'), [1]|rejectattr('real'), [1]|map('string'), [1]|batch(1), [1]|slice(1), [1]|unique, {1: 2}|items, [1]|reverse, (1, 2)|reverse, range(2)|reverse, {1: 2}|reverse] %}{{ (g|string).split(' at ')[0] }}|{% endfor %}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<generator object select_or_reject|<generator object select_or_reject|<generator object select_or_reject|<generator object select_or_reject|<generator object sync_do_map|<generator object do_batch|<generator object sync_do_slice|<generator object sync_do_unique|<generator object do_items|<list_reverseiterator object|<reversed object|<range_iterator object|<dict_reversekeyiterator object|"
+  },
+  {
+   "id": "filters.lazy_result_repr_forms",
+   "template": "{{ ([[1]|select]|string).split(' at ')[0] }}|{{ (([1]|select)|pprint).split(' at ')[0] }}|{{ ('%s'|format([1]|select)).split(' at ')[0] }}|{% set g = [1]|select %}{{ g|string == g|string }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[<generator object select_or_reject|<generator object select_or_reject|<generator object select_or_reject|True"
+  },
+  {
+   "id": "filters.callable_prints",
+   "template": "{{ (lipsum|string).split(' at ')[0] }}|{{ ('a'.upper|string).split(' at ')[0] }}|{{ ((1).bit_length|string).split(' at ')[0] }}|{{ ([].append|string).split(' at ')[0] }}|{{ ('a'|attr('upper')|string).split(' at ')[0] }}|{{ ([lipsum]|string).split(' at ')[0] }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "<function generate_lorem_ipsum|<built-in method upper of str object|<built-in method bit_length of int object|<built-in method append of list object|<built-in method upper of str object|[<function generate_lorem_ipsum"
+  },
+  {
+   "id": "filters.lazy_result_list_plus",
+   "template": "{{ [2] + [1]|select }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can only concatenate list (not \"generator\") to list"
+   }
+  },
+  {
+   "id": "filters.lazy_result_tuple_plus",
+   "template": "{{ (2,) + [1]|reverse }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can only concatenate tuple (not \"list_reverseiterator\") to tuple"
+   }
+  },
+  {
+   "id": "filters.lazy_result_repeat",
+   "template": "{{ ([1]|select) * 2 }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for *: 'generator' and 'int'"
+   }
+  },
+  {
+   "id": "filters.lazy_result_repeat_left",
+   "template": "{{ 2 * ([1]|map('string')) }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for *: 'int' and 'generator'"
+   }
+  },
+  {
+   "id": "filters.lazy_result_less",
+   "template": "{{ ([1]|select) < [2] }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'<' not supported between instances of 'generator' and 'list'"
+   }
+  },
+  {
+   "id": "filters.lazy_result_tojson_nested",
+   "template": "{{ {'a': [1]|reverse}|tojson }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "Object of type list_reverseiterator is not JSON serializable"
+   }
+  },
+  {
+   "id": "filters.lazy_result_dictsort_pair_plus",
+   "template": "{% for p in {'a': 1}|dictsort %}{{ p + [1]|select }}{% endfor %}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can only concatenate tuple (not \"generator\") to tuple"
+   }
+  },
+  {
    "id": "filters.lazy_result_is_no_sequence",
    "template": "{{ [1, 2]|select is sequence }}|{{ [1, 2]|select is iterable }}|{{ ([1, 2]|select)[0] is defined }}|{{ ([1, 2]|select).append is defined }}|{{ ([1, 2]|select|list).append is defined }}",
    "context": {
@@ -28407,6 +29161,218 @@
    "env": {},
    "templates": {},
    "output": "[%5B3%2C+4%5D=%3CLoopContext+2%2F3%3E&%5B5%2C+6%5D=%3CLoopContext+3%2F3%3E]3[1, 2];"
+  },
+  {
+   "id": "filters.attr_missing_debug",
+   "template": "[{{ 'x'|attr('f') }}|{{ {'k': 1}|attr('k') }}|{{ 1|attr('nope') }}|{% set ns = namespace(a=1) %}{{ ns|attr('b') }}]",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "[{{ no such element: str object['f'] }}|{{ no such element: dict object['k'] }}|{{ no such element: int object['nope'] }}|{{ no such element: jinja2.utils.Namespace object['b'] }}]"
+  },
+  {
+   "id": "filters.attr_missing_strict",
+   "template": "{{ 'x'|attr('f') }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'str object' has no attribute 'f'"
+   }
+  },
+  {
+   "id": "filters.attr_missing_strict_dict_item",
+   "template": "{{ {'k': 1}|attr('k') }}",
+   "context": {
+    "x": 3,
+    "neg": -3,
+    "y": 2.567,
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "dup": [
+     3,
+     1,
+     3,
+     2,
+     1
+    ],
+    "words": [
+     "b",
+     "A",
+     "c"
+    ],
+    "d": {
+     "b": 2,
+     "a": 1,
+     "C": 3
+    },
+    "e": [],
+    "n": null,
+    "html": "<b>Tom & \"Jerry\"</b>",
+    "long": "The quick brown fox jumps over the lazy dog",
+    "users": [
+     {
+      "name": "bob",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "alice",
+      "age": 25,
+      "city": "Rome"
+     },
+     {
+      "name": "carl",
+      "age": 30,
+      "city": "Oslo"
+     },
+     {
+      "name": "dan",
+      "age": 41
+     }
+    ],
+    "lines": "a\nb\n\nc",
+    "nums_str": [
+     "10",
+     "9",
+     "100"
+    ]
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'dict object' has no attribute 'k'"
+   }
   }
  ]
 }

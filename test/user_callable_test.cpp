@@ -618,10 +618,10 @@ INSTANTIATE_TEST_SUITE_P(UserDefinedFilter, UserCallableFilterTest, ::testing::V
                             InputOutputPair{"'Hello World' | surround('### ', ' ###')",    "### Hello World ###"},
                             InputOutputPair{"'Hello World' | joiner('1', '2', '3', delim=', ')", "Hello World, 1, 2, 3"},
                             InputOutputPair{"'Hello World' | joiner(delim=', ')", "Hello World"},
-                            InputOutputPair{"('A', 'B', 'C') | map('surround', before='> ', after=' <') | pprint", "['> A <', '> B <', '> C <']"},
+                            InputOutputPair{"('A', 'B', 'C') | map('surround', before='> ', after=' <') | list | pprint", "['> A <', '> B <', '> C <']"},
                             InputOutputPair{"'str1' if 'str1' is tester('str1') else 'str2'", "str1"},
                             InputOutputPair{"'str1' if 'str3' is tester(pattern='str1') else 'str2'", "str2"},
-                            InputOutputPair{"('str1', 'A', 'str1', 'B', 'str1', 'C') | select('tester', 'str1') | map('surround', before='> ', after=' <') | pprint", "['> str1 <', '> str1 <', '> str1 <']"}
+                            InputOutputPair{"('str1', 'A', 'str1', 'B', 'str1', 'C') | select('tester', 'str1') | map('surround', before='> ', after=' <') | list | pprint", "['> str1 <', '> str1 <', '> str1 <']"}
                             ));
 // clang-format on
 

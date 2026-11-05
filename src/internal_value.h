@@ -115,7 +115,15 @@ enum class IteratorKind : uint8_t
     ListReverse,
     TupleReverse,
     RangeIterator,
-    DictReverseKey
+    DictReverseKey,
+    // Generators named by the Jinja2 function that makes them, which their repr prints
+    // (<generator object select_or_reject at 0x...>, docs/tasks/0387)
+    SelectOrReject,
+    MapGenerator,
+    BatchGenerator,
+    SliceGenerator,
+    UniqueGenerator,
+    ItemsGenerator
 };
 
 // The base of every object a value owns: a long string, a list or map accessor, a pair, a
@@ -214,7 +222,7 @@ private:
     static constexpr uint8_t TraverseFlag = 4;
     static constexpr uint8_t GlobalFlag = 8;
     static constexpr uint8_t IteratorShift = 4;
-    static constexpr uint8_t IteratorMask = 0x70;
+    static constexpr uint8_t IteratorMask = 0xF0;
     mutable std::atomic<unsigned> m_refCount{ 0 };
     uint8_t m_flags = 0;
     // In the padding after m_flags, so that the object keeps its size
@@ -576,10 +584,12 @@ struct IListAccessorEnumerator : virtual IComparable
 
 using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 
-static_assert(static_cast<uint8_t>(IteratorKind::DictReverseKey) < 8, "IteratorKind fits three bits of ValueObject's flags");
+static_assert(static_cast<uint8_t>(IteratorKind::ItemsGenerator) < 16, "IteratorKind fits four bits of ValueObject's flags");
 
 // The Python type of an iterator (generator, list_reverseiterator, ...), null for None
 const char* IteratorTypeName(IteratorKind kind) noexcept;
+// The function a generator's repr names (select_or_reject); null for the other kinds
+const char* GeneratorFunctionName(IteratorKind kind) noexcept;
 
 // The arguments of a range() call, kept so that the range prints as range(0, 3)
 struct RangeInfo
@@ -2014,6 +2024,8 @@ struct BoundMethodCall
 
     InternalValue self;
     Method invoke;
+    // The method's name, which its repr prints (<built-in method upper of str object at 0x...>)
+    std::string_view name{};
 };
 
 
