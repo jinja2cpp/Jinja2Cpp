@@ -2024,9 +2024,6 @@ struct BoundMethodCall
 
     InternalValue self;
     Method invoke;
-    // The method's name, which its repr prints (<built-in method upper of str object at 0x...>)
-    // The braces keep GCC's -Wmissing-field-initializers quiet where a site leaves the name out
-    std::string_view name{}; // NOLINT(readability-redundant-member-init)
 };
 
 

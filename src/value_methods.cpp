@@ -2720,7 +2720,11 @@ const MethodInfo* FindMethod(const InternalValue& self, std::string_view name)
 
 InternalValue MakeBoundMethod(const InternalValue& self, const MethodInfo& method)
 {
-    Callable result(Callable::GlobalFunc, BoundMethodCall{ self, method.invoke, method.name });
+    Callable result(Callable::GlobalFunc, BoundMethodCall{ self, method.invoke });
+    // The name its repr prints (<built-in method upper of str object at 0x...>, docs/tasks/0368);
+    // without the object, which a string has no identity for, so that it compares as before.
+    // The method table's names are literals
+    result.SetBoundMethod(nullptr, method.name.data());
     result.SetAttributes(std::make_shared<const InternalValueMap>(InternalValueMap{ { "__self__", self } }));
     return result;
 }
