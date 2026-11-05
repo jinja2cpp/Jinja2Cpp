@@ -591,6 +591,9 @@ void BorrowedCells::Finish(CycleCollector* collector) noexcept
 
 void BorrowedCells::FreezeCallScoped(CycleCollector* collector) noexcept
 {
+    // The kept cells nothing reads any more go
+    m_callFrozen.erase(std::remove_if(m_callFrozen.begin(), m_callFrozen.end(), [](const IntrusivePtr<const BorrowedCell>& cell) { return cell->use_count() == 1; }),
+                       m_callFrozen.end());
     if (!m_cells)
     {
         return;
@@ -627,13 +630,17 @@ void BorrowedCells::FreezeCallScoped(CycleCollector* collector) noexcept
         cell->m_links.clear();
         cell->m_links.shrink_to_fit();
         entry = m_cells->erase(entry);
-        // The registry's reference is gone: a value that still reads the cell may hold a cycle
-        // through it, which the collector walks from it
-        if (collector && cell->use_count() > 1)
+        // A value that still reads the cell may hold a cycle through it: the call's collector walks
+        // from it now, and the module's when it goes, as the cycle can form in a later call
+        if (cell->use_count() > 1)
         {
             try
             {
-                collector->NoteFrozen(ValueObjectPtr(cell));
+                if (collector)
+                {
+                    collector->NoteFrozen(ValueObjectPtr(cell));
+                }
+                m_callFrozen.push_back(cell);
             }
             catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
             {
@@ -644,6 +651,29 @@ void BorrowedCells::FreezeCallScoped(CycleCollector* collector) noexcept
     detail::CellCounters::RemoveLive(count);
     // An adapter that read one of these cells, or found none while the call ran, looks again
     detail::CellCounters::NextEpoch();
+}
+
+void BorrowedCells::ReleaseCallFrozen(CycleCollector* collector) noexcept
+{
+    if (collector)
+    {
+        try
+        {
+            for (const auto& cell : m_callFrozen)
+            {
+                if (cell->use_count() > 1)
+                {
+                    collector->NoteFrozen(ValueObjectPtr(cell));
+                }
+            }
+        }
+        catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
+        {
+            // Out of memory: the cycles through the cells not noted leak (docs/tasks/0283)
+        }
+    }
+    m_callFrozen.clear();
+    m_callFrozen.shrink_to_fit();
 }
 
 void BorrowedCells::AdoptExports(std::shared_ptr<CallExports> exports) noexcept

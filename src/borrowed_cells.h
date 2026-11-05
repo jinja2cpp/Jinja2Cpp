@@ -564,6 +564,7 @@ public:
         {
             Finish(collector);
         }
+        ReleaseCallFrozen(collector);
     }
 
     // The cells by the identity of the host's data (IListAccessor::GetIdentity)
@@ -633,6 +634,8 @@ private:
     friend class CallExports;
 
     void Finish(CycleCollector* collector) noexcept;
+    // Gives `collector` the call-scoped cells values still read, and lets go of them
+    void ReleaseCallFrozen(CycleCollector* collector) noexcept;
     // One pass of DropUnheld; false when it dropped none
     bool DropUnheldOnce() noexcept;
 
@@ -643,6 +646,10 @@ private:
     uint32_t m_lastCall = 0;
     // What the running call handed out, made on its first export
     std::shared_ptr<CallExports> m_exports;
+    // The call-scoped cells that values of the module still read when their call ended
+    // (FreezeCallScoped): a cycle through one is out of the reach of the module's names, so Release
+    // gives them to the module's collector. Pruned of the cells nothing else holds at each call's end
+    std::vector<IntrusivePtr<const BorrowedCell>> m_callFrozen;
 };
 
 } // namespace v2

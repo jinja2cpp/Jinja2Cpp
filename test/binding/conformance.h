@@ -1081,7 +1081,10 @@ TYPED_TEST_P(JsonConformance, ModuleCallsOfABorrowedDocument)
                                "{% macro f(d) %}{{ d }}{% set _ = d.update(k=1) %}{% endmacro %}"
                                "{% macro keep(d) %}{% set _ = d.update(k=1) %}{% set _ = store.append(d) %}{{ d is sameas store[-1] }}{% endmacro %}"
                                "{% macro show() %}{{ store }}{% endmacro %}"
-                               "{% macro g(l) %}{{ l }}{% set _ = l.append(1) %}{{ l|length }}{% endmacro %}"));
+                               "{% macro g(l) %}{{ l }}{% set _ = l.append(1) %}{{ l|length }}{% endmacro %}"
+                               "{% set cycles = [] %}"
+                               "{% macro cyc(d) %}{% set _ = cycles.append(d) %}{% set _ = d.a.append(d) %}{{ d.a|length }}{% endmacro %}"
+                               "{% macro cyc2() %}{% set _ = cycles[0].a.append(cycles[0]) %}{{ cycles[0].a|length }}{% endmacro %}"));
         auto module = tpl.MakeModule({});
         ASSERT_TRUE(!!module) << module.error().ToString();
         const auto call = [&module](const char* name, jinja2::ValuesList args) {
@@ -1116,6 +1119,10 @@ TYPED_TEST_P(JsonConformance, ModuleCallsOfABorrowedDocument)
         const jinja2::Value kept = jinja2::Reflect(std::as_const(list));
         EXPECT_EQ("[0]2", call("g", { kept }));
         EXPECT_EQ(hasIdentity ? "[0]2" : "[0, 1]3", call("g", { kept }));
+        // Cycles through a cell the module keeps, made in its call and in a later one: freed with the module (LSan)
+        const typename TypeParam::Json withList = TypeParam::Parse(R"({"a":[0]})");
+        EXPECT_EQ("2", call("cyc", { jinja2::Reflect(std::as_const(withList)) }));
+        EXPECT_EQ("3", call("cyc2", {}));
     }
 }
 
