@@ -301,6 +301,28 @@ need the core anyway) and an `ApplyChatTemplate(tpl, messages, ...)` mirror of t
 `apply_chat_template` (the host builds `messages`, `tools`, `bos_token`, ...) and no security
 sandbox beyond what it lists.
 
+**Prompt escaping and token budgets (tasks 0358, 0359, decided by Ruslan 2026-11-05).** A new,
+always installed header `jinja2cpp/prompt.h` (core, included by `template_env.h`, not behind
+`JINJA2CPP_WITH_CHAT_TEMPLATES`, whose switch must not change the core ABI) adds:
+`enum class AutoescapeMode { Html, Prompt }`; `PromptEscapeOptions` (special tokens, tag names,
+separator, default a space); `PromptEscaper`, the compiled patterns, immutable and shared by
+copies (`shared_ptr<const Impl>`, equality by identity, as `AutoescapeSelector`), with a throwing
+constructor and a `noexcept` `IsValid` (2.1 rule 5) and `Neutralize` for host code; and
+`Tokenizer`, a host callback pair on UTF-8 text (`count`, required; `prefix(text, maxTokens)`,
+optional), with the estimate `ceil(utf8_bytes / 4)` when unset. `Settings` gains
+`autoescapeMode`, `promptEscaper` and `tokenizer`. Prompt-safe is the Markup flag: in prompt mode
+autoescape neutralizes instead of HTML-escaping, string literals are prompt-safe, `|e` neutralizes,
+and one environment escapes for one mode. The filters `neutralize`, `fence`, `count_tokens`,
+`truncate_tokens` and `pack` are specified in docs/cpp-only-filters.md; their exact output is part
+of the contract. The library keeps no per-model list of special tokens. Cost: renders without
+autoescape run the same instructions; HTML-autoescape renders pay one load and branch per escaped
+value, shown within count.py's noise or moved out. Considered: a second "prompt-safe" mark beside
+Markup (a new bit in every value, and Markup crossing between modes), a pluggable escaper callback
+(a call and an allocation per `{{ }}`, and the composition rule left to the host), a zero-width
+separator (deleted by BERT-style normalizers, which re-forms the token) and a 1-token-per-byte
+estimate (a bound for byte-level BPE, about 4x too high for English). Steps and
+test rows: docs/tasks/0358; follow-ups 0392-0396.
+
 ### 3.4 Errors (`error_info.h`, `error_handler.h`)
 
 | Now | Problem | 2.0 | Migration |
@@ -791,6 +813,15 @@ Recommend A now, C only if someone asks.
    `ConfigureForChatTemplates(TemplateEnv&, ChatTemplateOptions)` in its own header behind the CMake
    option `JINJA2CPP_WITH_CHAT_TEMPLATES` (default ON) with a feature macro; the internals it enables
    stay in the core, dormant otherwise.
+
+9. **Prompt escaping and token budgets** (0358, 0359, 3.3). *Decided by Ruslan 2026-11-05 (all as
+   recommended):* Markup is the prompt-safe flag with `Settings::autoescapeMode` per environment;
+   string literals are prompt-safe in prompt mode; the separator is a visible space after the
+   first code point, specials also matched ASCII case-insensitively; `AutoescapeMode`,
+   `PromptEscaper` and `Tokenizer` in `jinja2cpp/prompt.h` with no specials registry in the
+   library; the estimate `ceil(utf8_bytes / 4)`; `pack(budget, attribute, by, reverse, reserve,
+   stop)` with no per-item overhead argument; core, not behind the chat-template switch; one load
+   and branch per escaped value on the HTML-autoescape path, if count.py shows it within noise.
 
 ## 8. Work breakdown
 

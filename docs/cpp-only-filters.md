@@ -12,6 +12,15 @@ here (docs/tasks/0233); before, `camelize`, `underscorize`, `escapecpp`, `toxml`
 | `underscorize` | An identifier in snake_case |
 | `escapecpp` | The text escaped for a C++ string literal |
 | `toyaml` | The value as a block-style YAML document |
+| `neutralize(specials=none, tags=none, separator=none)` | The text with every special token and tag of an LLM prompt broken by a separator |
+| `fence(lang="")` | The text in a Markdown code fence its content cannot close |
+| `count_tokens` | The number of tokens in the text, by the environment's tokenizer |
+| `truncate_tokens(n, end="...")` | The text cut to at most `n` tokens |
+| `pack(budget, attribute=none, by=none, reverse=false, reserve=0, stop=false)` | The items of a list whose text fits in a token budget, in their original order |
+
+The five prompt filters and the prompt escaping mode are specified at the end of this file
+(docs/tasks/0358, 0359; decided by Ruslan 2026-11-05, docs/api-2.0.md 3.3). Until those tasks
+land, a template that uses them fails to load with `ErrorCode::UnknownFilter`.
 
 `toxml` was removed in 2.0: JSON-like data has no single XML mapping, so it would be a format
 of our own to define and support (docs/release-2.0.md, D16). A template that uses it fails
@@ -83,3 +92,124 @@ tls:
 ```
 
 The result is an ordinary string: under autoescape it is HTML-escaped like any other.
+
+## Prompt filters
+
+Templates that build prompts for a language model put untrusted text (user messages, retrieved
+documents, tool output) into the channel that carries the instructions. What breaks out of a
+prompt is a string the model or its tokenizer trusts: a special token (`<|im_start|>`,
+`<|eot_id|>`, `[INST]`) or a closing tag or fence. These filters, the `Tokenizer` callback and
+the prompt escaping mode are set up on the environment (`jinja2cpp/prompt.h`):
+
+```cpp
+auto& s = env.GetSettings();
+s.autoescape = true;
+s.autoescapeMode = jinja2::AutoescapeMode::Prompt;
+s.promptEscaper = jinja2::PromptEscaper({ { "<|im_start|>", "<|im_end|>" }, { "document" } });
+s.tokenizer = jinja2::Tokenizer([&tok](std::string_view text) { return tok.Count(text); });
+```
+
+The library keeps no list of a model's special tokens: the host reads them from its tokenizer
+(the added tokens marked `special`) and registers them once.
+
+### `neutralize`
+
+`neutralize(specials=none, tags=none, separator=none)` takes the value's `str()`, Markup
+included (it is an explicit request, like `forceescape`). Each argument defaults to the
+environment's `PromptEscaper`; one that is given replaces it for that call. The output is part
+of the 2.0 contract:
+
+1. **Patterns.** Each special token, matched exactly and also ASCII case-insensitively. Each tag
+   name `t` gives `<t` and `</t` followed by a tag boundary (`>`, `/`, a space, tab, CR, LF or the
+   end of the text), ASCII case-insensitive. Empty specials are ignored.
+2. **Inside.** At every position where a pattern starts, overlapping matches included, the
+   separator is inserted after the first code point of the match (a whole UTF-8 sequence, or a
+   whole surrogate pair in a 16-bit `wchar_t`). `<|im_start|>x` becomes `< |im_start|>x`.
+3. **Edges.** If the text starts with a non-empty proper suffix of a special, the separator is
+   prepended; if it ends with a non-empty proper prefix of a special or tag pattern, it is
+   appended. So `'a<|im_'|neutralize ~ 'start|>'|neutralize` is `a<|im_  start|>`: two values
+   joined cannot form a special.
+4. **Separator.** Default a space. It must be non-empty and occur in no pattern; anything else is
+   an argument error (and `PromptEscaper`'s constructor throws `std::invalid_argument`).
+
+A zero-width separator (`separator='\u2060'`) is accepted, but it is a control character (Unicode
+category Cf) that BERT-style text cleaning and many text pipelines delete, which puts the special
+token back together. A visible space survives every normalizer.
+
+The result is Markup when the input was Markup, or when the template autoescapes in prompt mode;
+a plain string otherwise.
+
+**Guarantee.** In prompt mode, a special token in the output lies inside trusted text (the
+template's own text and literals, Markup values), or begins and ends in trusted text. The one
+case the escaper cannot see is a template that writes a fragment around a value,
+`<|{{ role }}|>` with `role = "im_start"`, as `<scr{{ x }}` in HTML.
+
+### `fence`
+
+`fence(lang="")` wraps the text in a Markdown code fence of `n` backticks, `n` being 3 or one
+more than the longest run of backticks in the text, so the content cannot close it: `n`
+backticks, `lang`, a newline, the content, a newline unless the content ends with one, `n`
+backticks. `lang` must match `[A-Za-z0-9_+.#-]*`; anything else (a backtick, a newline) is an
+argument error. The content is escaped first with the active escaper, so a fence never skips
+escaping: neutralized in prompt mode and with autoescape off (with the environment's specials;
+none means unchanged), HTML-escaped in HTML mode; Markup content is not escaped again. The
+result is Markup when autoescape is on, a plain string otherwise. To cut a long text, truncate
+before fencing: `doc|truncate_tokens(500)|fence`.
+
+### Prompt escaping mode
+
+`Settings::autoescapeMode` selects what autoescape escapes for: `Html` (the default, Jinja2's)
+or `Prompt`. With `Prompt` and autoescape on, every `{{ }}` that is not Markup is neutralized
+with the environment's `PromptEscaper`, and Markup means "prompt-safe". `|safe`,
+`is escaped`, `{% autoescape %}` and Markup values work as in HTML mode. In prompt mode:
+
+- String literals of the template are prompt-safe, so `'<|im_start|>' ~ role` keeps its special
+  token and breaks one inside `role`; chat templates written for transformers work unchanged.
+  Host values that carry special tokens on purpose (`bos_token`) are passed as `jinja2::Markup`.
+- `|e`, `|escape` and `|forceescape` neutralize instead of writing HTML entities, and the
+  results of `urlize`, `xmlattr` and `tojson` are neutralized.
+- One environment escapes for one mode: HTML and prompt templates use separate environments.
+
+`ConfigureForChatTemplates` does not switch prompt mode on: transformers renders with autoescape
+off.
+
+### `count_tokens`
+
+The number of tokens in the value's `str()`, as an integer. The environment's `Tokenizer` counts
+UTF-8 text (a wide template converts it first); an empty text is 0 without a call. Without a
+tokenizer the count is the estimate `ceil(utf8_bytes / 4)`, which can undercount CJK text, digits
+and code: a hard context limit needs a tokenizer. An exception from the callback fails the render
+with `ErrorCode::UserCallableException`. Renders on several threads may call the callback at
+once.
+
+### `truncate_tokens`
+
+`truncate_tokens(n, end="...")` returns the text unchanged when it is at most `n` tokens.
+Otherwise it cuts it on a token boundary and appends `end`, so that the result, `end` included,
+is at most `n` tokens; an `end` longer than `n` tokens is an error, as for Jinja2's `truncate`.
+The cut uses the tokenizer's prefix function when the host gives one (a length past the end or
+inside a UTF-8 sequence is clamped down), else a binary search on the count; without a tokenizer,
+`4 * m` bytes rounded down to a code point. The result is a plain string.
+
+### `pack`
+
+`pack(budget, attribute=none, by=none, reverse=false, reserve=0, stop=false)` keeps the items of
+a list whose text fits in `budget - reserve` tokens:
+
+- The items are iterated once, so generators work, and kept as owned values.
+- An item's text is `str(item[attribute])` (a dotted path, as `sort` and `map` take), else
+  `str(item)`, measured before escaping.
+- Items are considered in their order, or ordered as `sort(attribute=by, reverse=reverse)` would
+  order them (`by='score', reverse=true` keeps the best retrieved chunks); without `by`,
+  `reverse=true` considers the last item first (a history keeps the newest turns).
+- An item is taken when it fits in what is left; one that does not is skipped, or with
+  `stop=true` ends the packing (a history stays contiguous).
+- The tokenizer runs at most once per item, and not at all after the budget is spent.
+- The kept items come back in their original order, as a list. `reserve > budget` gives an
+  empty list; a negative `budget` or `reserve` is an argument error.
+
+```
+{% for doc in docs|pack(3000, attribute='text', by='score', reverse=true) %}
+{{ doc.text|fence }}
+{% endfor %}
+```
