@@ -150,3 +150,22 @@ def test_render_from_threads():
     for t in threads:
         t.join()
     assert results == ["12v"] * 200
+
+
+def test_classes_made_at_run_time_are_collected():
+    # The module remembers per class whether it is an Undefined; that must not keep classes alive
+    tpl = jinja2cpp.Template("{{ o }}{{ o.x }}{{ [o]|length }}")
+    refs = []
+    for i in range(200):
+        cls = type(f"Made{i}", (), {"x": i, "__str__": lambda self: "o"})
+        assert tpl.render(o=cls()) == f"o{i}1"
+        refs.append(weakref.ref(cls))
+        del cls
+    gc.collect()
+    assert all(r() is None for r in refs)
+    # Classes that live on keep their answer: an Undefined subclass is still undefined
+    class Missing(jinja2cpp.Undefined):
+        pass
+
+    for _ in range(3):
+        assert jinja2cpp.Template("[{{ u }}]").render(u=Missing(name="u")) == "[]"

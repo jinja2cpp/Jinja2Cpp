@@ -104,16 +104,51 @@ UndefinedPolicy PolicyOfClass(nb::handle type)
     return UndefinedPolicy::Default;
 }
 
+// The answers of IsUndefinedType, per type. A static type lives as long as the interpreter; a
+// heap type (a class of Python code, which may be made and dropped at run time) is held by a
+// weak reference whose callback drops the entry, so the cache keeps no class alive
+struct TypeAnswer
+{
+    bool undefined = false;
+    PyRef weakref; // null for a static type
+};
+std::unordered_map<const PyTypeObject*, TypeAnswer>& KnownTypes()
+{
+    // Never freed: the interpreter may be gone when static objects are destroyed
+    static auto* known = new std::unordered_map<const PyTypeObject*, TypeAnswer>();
+    return *known;
+}
+
+void RememberType(PyTypeObject* type, bool undefined)
+{
+    auto* typeObject = reinterpret_cast<PyObject*>(type);
+    TypeAnswer answer;
+    answer.undefined = undefined;
+    if ((PyType_GetFlags(type) & Py_TPFLAGS_HEAPTYPE) != 0)
+    {
+        const PyTypeObject* key = type;
+        auto forget = nb::cpp_function([key](nb::handle) { KnownTypes().erase(key); });
+        PyObject* weakref = PyWeakref_NewRef(typeObject, forget.ptr());
+        if (!weakref)
+        {
+            // Not weakly referenceable: asked again each time rather than kept alive
+            PyErr_Clear();
+            return;
+        }
+        answer.weakref = PyRef::Steal(weakref);
+    }
+    KnownTypes().insert_or_assign(type, std::move(answer));
+}
+
 // Whether instances of `type` are Undefined, of jinja2cpp or of Jinja2 itself, found without
 // importing jinja2: a base named Undefined from a jinja2 module. Asked for every Python object a
-// template reads that is no dict, list, tuple or scalar, so the answer is kept per type; the
-// cache holds a reference to each type, so that no other type takes its address
+// template reads that is no dict, list, tuple or scalar, so the answer is kept per type
 bool IsUndefinedType(PyTypeObject* type)
 {
-    static std::unordered_map<const PyTypeObject*, bool> known;
+    const auto& known = KnownTypes();
     if (const auto found = known.find(type); found != known.end())
     {
-        return found->second;
+        return found->second.undefined;
     }
     auto* typeObject = reinterpret_cast<PyObject*>(type);
     bool undefined = false;
@@ -141,8 +176,7 @@ bool IsUndefinedType(PyTypeObject* type)
     {
         PyErr_Clear();
     }
-    Py_INCREF(typeObject);
-    known.emplace(type, undefined);
+    RememberType(type, undefined);
     return undefined;
 }
 
