@@ -45,8 +45,7 @@ void CellCounters::AdvanceEpochForTesting(uint64_t count) noexcept
 }
 } // namespace detail
 
-BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, const void* identity, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner,
-                           bool unheldIdentity)
+BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, const void* identity, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner, bool unheldIdentity)
     : m_storage(std::move(storage))
     , m_source(std::move(source))
     , m_owner(std::move(owner))
@@ -403,8 +402,7 @@ const CellLink* CellLink::TraceSourceLink(const BorrowedCell& cell, bool isList)
 }
 #endif
 
-bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, bool listed, std::weak_ptr<const void> owner,
-                     bool unheldIdentity) const
+bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, bool listed, std::weak_ptr<const void> owner, bool unheldIdentity) const
 {
     // An adapter of a value kept after its render: nothing writes the frozen cell, and the caller
     // writes its copy instead (docs/tasks/0331)

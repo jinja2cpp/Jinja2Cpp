@@ -196,8 +196,7 @@ public:
     // `unheldIdentity`: the identity is the address of a value the source does not keep alive (a
     // JSON document's value, IJsonNode::NodeIdentity, which the host may free or reassign between
     // two calls of a template module, docs/tasks/0212)
-    bool Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, bool listed, std::weak_ptr<const void> owner = {},
-               bool unheldIdentity = false) const;
+    bool Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, bool listed, std::weak_ptr<const void> owner = {}, bool unheldIdentity = false) const;
 
 private:
     friend class BorrowedCell;
@@ -252,8 +251,7 @@ private:
 class BorrowedCell final : public ValueObject
 {
 public:
-    BorrowedCell(InternalValue storage, InternalValue source, const void* identity, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner = {},
-                 bool unheldIdentity = false);
+    BorrowedCell(InternalValue storage, InternalValue source, const void* identity, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner = {}, bool unheldIdentity = false);
     BorrowedCell(const BorrowedCell&) = delete;
     BorrowedCell(BorrowedCell&&) = delete;
     BorrowedCell& operator=(const BorrowedCell&) = delete;
