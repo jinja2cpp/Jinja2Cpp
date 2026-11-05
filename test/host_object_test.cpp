@@ -467,7 +467,6 @@ TEST(HostObjectTest, CallBlockWritesTheResultAsIs)
     EXPECT_NE(std::string::npos, Render("{% set j = joiner() %}{% call j() %}x{% endcall %}", params).find("Joiner.__call__() got an unexpected keyword argument 'caller'"));
 }
 
-#endif // JINJA2CPP_LINK_AS_SHARED
 
 // A mapping is read as a map where Python wants one; every other operation still asks it (0353)
 TEST(HostObjectTest, MappingReadsAsAMap)
@@ -516,3 +515,5 @@ TEST(HostObjectTest, MutatingMethodNameCallsTheObject)
     EXPECT_EQ("called(1) attr-name", Render("{{ x.append(1) }} {{ x.name }}", params));
     EXPECT_EQ(L"called(1)", RenderW(L"{{ x.append(1) }}", params));
 }
+
+#endif // JINJA2CPP_LINK_AS_SHARED
