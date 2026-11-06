@@ -722,10 +722,15 @@ void RenderValue(const InternalValue& val, std::basic_string<CharT>& os, bool as
     }
 }
 
+// Python's repr of a function or a method of a value, with the callable's identity for the
+// address: <function generate_lorem_ipsum at 0x...>, <built-in method upper of str object at
+// 0x...> (docs/tasks/0368); empty for a host callable
+std::string FunctionRepr(const Callable& callable);
+
 // A macro prints as Python's Macro: <Macro 'name'>, or <Macro anonymous> for a call block's
 // caller; a class among the globals as the class (<class 'range'>) and a bound method with
-// its object (<bound method LoopContext.cycle of <LoopContext 1/2>>, docs/tasks/0305). Other
-// callables print nothing: Python's repr of a function names its address
+// its object (<bound method LoopContext.cycle of <LoopContext 1/2>>, docs/tasks/0305), and
+// lipsum or a value's method as Python's function (FunctionRepr). A host callable prints nothing
 template<typename CharT>
 void ValueRendererBase<CharT>::operator()(const Callable& val) const
 {
@@ -746,7 +751,12 @@ void ValueRendererBase<CharT>::operator()(const Callable& val) const
         return;
     }
     const auto& attributes = val.GetAttributes();
-    if (val.GetKind() != Callable::Macro || !attributes)
+    if (val.GetKind() != Callable::Macro)
+    {
+        AppendAscii(FunctionRepr(val).c_str());
+        return;
+    }
+    if (!attributes)
     {
         return;
     }
@@ -790,6 +800,15 @@ bool ValueRendererBase<CharT>::EnterContainer(const void* id, ContainerStack& co
 template<typename CharT>
 void ValueRendererBase<CharT>::operator()(const ListRef& list) const
 {
+    // A generator or reversed() iterator prints as Python's repr of it, with the list's
+    // identity for the address (docs/tasks/0387)
+    if (const char* iterator = IteratorTypeName(list.GetIteratorKind()))
+    {
+        const char* function = GeneratorFunctionName(list.GetIteratorKind());
+        AppendAscii(function ? fmt::format("<generator object {} at {}>", function, list.GetIdentity()).c_str()
+                             : fmt::format("<{} object at {}>", iterator, list.GetIdentity()).c_str());
+        return;
+    }
     if (const auto* range = list.GetRangeInfo())
     {
         // Python prints a range by its arguments, the step only when it is not 1
@@ -974,6 +993,10 @@ inline const char* PythonTypeName(const ListRef& list)
     {
         return iterator;
     }
+    if (list.GetRangeInfo())
+    {
+        return "range";
+    }
     return list.IsTuple() ? "tuple" : "list";
 }
 inline const char* PythonTypeName(const MapRef& map)
@@ -988,8 +1011,29 @@ inline const char* PythonTypeName(const KeyValuePair&)
 
 // A dictsort pair as the 2-tuple (key, value) it stands for in Python
 ListAdapter PairAsTuple(const KeyValuePair& pair);
-inline const char* PythonTypeName(const Callable&)
+// Python's type of a callable (docs/tasks/0368): a macro or a call block's caller is a Macro,
+// a class among the globals (range, dict, cycler, ...) a type, a method of a value bound to
+// it ('a'.upper) a builtin_function_or_method, a bound method of an engine object
+// (loop.cycle) a method; the rest, lipsum and the host's callables, are functions
+inline const char* PythonTypeName(const Callable& callable)
 {
+    if (callable.GetRepr())
+    {
+        return "type";
+    }
+    if (callable.GetKind() == Callable::Macro)
+    {
+        return "Macro";
+    }
+    if (callable.GetBoundReceiver())
+    {
+        return "method";
+    }
+    const auto& attributes = callable.GetAttributes();
+    if (attributes && attributes->find("__self__") != attributes->end())
+    {
+        return "builtin_function_or_method";
+    }
     return "function";
 }
 template<typename T>
@@ -1006,6 +1050,41 @@ struct PythonTypeNameGetter
         return PythonTypeName(val);
     }
 };
+
+inline std::string FunctionRepr(const Callable& callable)
+{
+    const void* address = &callable.GetCallable();
+    const auto& attributes = callable.GetAttributes();
+    if (!attributes)
+    {
+        return std::string();
+    }
+    const auto self = attributes->find("__self__");
+    if (const char* method = callable.GetBoundMethod())
+    {
+        if (self != attributes->end())
+        {
+            // Python names the address of the object the method is bound to
+            if (const auto list = AsList(self->second))
+            {
+                address = list->GetIdentity();
+            }
+            else if (const auto map = AsMap(self->second))
+            {
+                address = map->GetIdentity();
+            }
+            return fmt::format("<built-in method {} of {} object at {}>", method, Apply<PythonTypeNameGetter>(self->second), address);
+        }
+    }
+    const auto name = attributes->find("__name__");
+    if (name != attributes->end() && IsStringValue(name->second))
+    {
+        return fmt::format("<function {} at {}>", AsString(name->second), address);
+    }
+    // A host callable, or an engine function without a Python name, prints nothing: its
+    // Python repr would be the host's, with an address that differs on each run
+    return std::string();
+}
 
 template<typename T>
 struct IsStringType : std::false_type
@@ -1911,6 +1990,10 @@ struct BinaryMathOperation : BaseVisitor<>
 
     ResultType operator()(const ListRef& left, const ListRef& right) const
     {
+        if (left.GetIteratorKind() != IteratorKind::None || right.GetIteratorKind() != IteratorKind::None)
+        {
+            return IteratorOperands(left, right);
+        }
         // A list and a tuple are never equal and do not combine
         if (left.IsTuple() != right.IsTuple())
         {
@@ -1986,10 +2069,26 @@ struct BinaryMathOperation : BaseVisitor<>
     ResultType operator()(const ListRef& left, bool right) const { return RepeatList(left, static_cast<int64_t>(right), left, right); }
     ResultType operator()(bool left, const ListRef& right) const { return RepeatList(right, static_cast<int64_t>(left), left, right); }
 
+    // A generator or reversed() iterator (docs/tasks/0387) equals only itself and has no
+    // other operation; a list or tuple on the left names itself, as list.__add__ does
+    [[nodiscard]] ResultType IteratorOperands(const ListRef& left, const ListRef& right) const
+    {
+        if (m_oper == jinja2::BinaryExpression::LogicalEq || m_oper == jinja2::BinaryExpression::LogicalNe)
+        {
+            return (left.GetIdentity() == right.GetIdentity()) == (m_oper == jinja2::BinaryExpression::LogicalEq);
+        }
+        if (m_oper == jinja2::BinaryExpression::Plus && left.GetIteratorKind() == IteratorKind::None)
+        {
+            using namespace std::string_literals;
+            throw TemplateRuntimeError("can only concatenate "s + PythonTypeName(left) + " (not \"" + PythonTypeName(right) + "\") to " + PythonTypeName(left));
+        }
+        ThrowUnsupported(left, right);
+    }
+
     template<typename L, typename R>
     [[nodiscard]] ResultType RepeatList(const ListRef& list, int64_t count, const L& left, const R& right) const
     {
-        if (m_oper != jinja2::BinaryExpression::Mul)
+        if (m_oper != jinja2::BinaryExpression::Mul || list.GetIteratorKind() != IteratorKind::None)
         {
             return Mismatch(left, right);
         }

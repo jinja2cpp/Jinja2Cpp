@@ -2380,6 +2380,12 @@ const char* IteratorTypeName(IteratorKind kind) noexcept
     switch (kind)
     {
     case IteratorKind::Generator:
+    case IteratorKind::SelectOrReject:
+    case IteratorKind::MapGenerator:
+    case IteratorKind::BatchGenerator:
+    case IteratorKind::SliceGenerator:
+    case IteratorKind::UniqueGenerator:
+    case IteratorKind::ItemsGenerator:
         return "generator";
     case IteratorKind::ListReverse:
         return "list_reverseiterator";
@@ -2393,6 +2399,29 @@ const char* IteratorTypeName(IteratorKind kind) noexcept
         break;
     }
     return nullptr;
+}
+
+const char* GeneratorFunctionName(IteratorKind kind) noexcept
+{
+    switch (kind)
+    {
+    case IteratorKind::SelectOrReject:
+        return "select_or_reject";
+    case IteratorKind::MapGenerator:
+        return "sync_do_map";
+    case IteratorKind::BatchGenerator:
+        return "do_batch";
+    case IteratorKind::SliceGenerator:
+        return "sync_do_slice";
+    case IteratorKind::UniqueGenerator:
+        return "sync_do_unique";
+    case IteratorKind::ItemsGenerator:
+        return "do_items";
+    case IteratorKind::Generator:
+        return "<genexpr>";
+    default:
+        return nullptr;
+    }
 }
 
 namespace
