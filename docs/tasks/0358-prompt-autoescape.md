@@ -1,5 +1,6 @@
 ---
-status: in-progress
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/784
 priority: medium
 area: api
 touches: [src/prompt_escape.cpp, src/prompt_escape.h]
