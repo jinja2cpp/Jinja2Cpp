@@ -254,7 +254,71 @@ std::vector<InternalValueList> SortKeyPaths(const InternalValue& attrName, bool 
     return paths;
 }
 
+// Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python
+bool IsLessKey(const InternalValue& key1, const InternalValue& key2, BinaryExpression::Operation oper, BinaryExpression::CompareType compType, bool& isEqual)
+{
+    isEqual = ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, BinaryExpression::LogicalEq, compType));
+    return !isEqual && ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, oper, compType));
+}
+
 } // namespace
+
+// sorted(key=...) takes each item's key once, so a key that fails fails for one item too.
+// The key lists compare item by item, like Python lists
+std::vector<size_t> SortedOrderByPaths(const InternalValueList& values, const std::vector<InternalValueList>& paths, BinaryExpression::Operation oper,
+                                       BinaryExpression::CompareType compType, RenderContext& context)
+{
+    const size_t width = paths.size();
+    InternalValueList keys;
+    keys.reserve(values.size() * width);
+    for (const auto& val : values)
+    {
+        for (const auto& path : paths)
+        {
+            keys.push_back(GetAttributeByPath(val, path, InternalValue(), context));
+        }
+    }
+    std::vector<size_t> order(values.size());
+    std::iota(order.begin(), order.end(), size_t{ 0 });
+    StableSortValues(order.begin(), order.end(), [&](size_t idx1, size_t idx2) {
+        for (size_t n = 0; n != width; ++n)
+        {
+            bool isEqual = false;
+            auto result = IsLessKey(keys[(idx1 * width) + n], keys[(idx2 * width) + n], oper, compType, isEqual);
+            if (!isEqual)
+            {
+                return result;
+            }
+        }
+        return false;
+    });
+    return order;
+}
+
+std::vector<InternalValueList> AttributeSortPaths(const InternalValue& attrName, bool isSet)
+{
+    return SortKeyPaths(attrName, isSet);
+}
+
+InternalValueList AttributePathOf(const InternalValue& attribute)
+{
+    return AttributePath(attribute);
+}
+
+InternalValue ItemAttribute(const InternalValue& item, const InternalValueList& path, RenderContext& context)
+{
+    return GetAttributeByPath(item, path, InternalValue(), context);
+}
+
+bool IsNotIterableValue(const InternalValue& val)
+{
+    return IsNotIterable(val);
+}
+
+void ThrowNotIterableValue(const InternalValue& val)
+{
+    ThrowNotIterable(val);
+}
 
 Join::Join(const FilterParams& params)
 {
@@ -363,11 +427,7 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
 
     std::vector<InternalValueList> paths = SortKeyPaths(attrName, IsArgumentSet(attrName, attrGiven));
 
-    auto isLess = [oper, compType](const InternalValue& key1, const InternalValue& key2, bool& isEqual) {
-        // Equal items never reach `<`, so a list of equal dicts or Nones sorts as in Python
-        isEqual = ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, BinaryExpression::LogicalEq, compType));
-        return !isEqual && ConvertToBool(Apply2<visitors::BinaryMathOperation>(key1, key2, oper, compType));
-    };
+    auto isLess = [oper, compType](const InternalValue& key1, const InternalValue& key2, bool& isEqual) { return IsLessKey(key1, key2, oper, compType, isEqual); };
     // Python's sorted() is stable
     if (paths.empty())
     {
@@ -378,32 +438,7 @@ InternalValue Sort::Filter(const InternalValue& baseVal, RenderContext& context)
         return ListAdapter::CreateAdapter(std::move(values));
     }
 
-    // sorted(key=...) takes each item's key once, so a key that fails fails for one item too.
-    // The key lists compare item by item, like Python lists
-    const size_t width = paths.size();
-    InternalValueList keys;
-    keys.reserve(values.size() * width);
-    for (const auto& val : values)
-    {
-        for (const auto& path : paths)
-        {
-            keys.push_back(GetAttributeByPath(val, path, InternalValue(), context));
-        }
-    }
-    std::vector<size_t> order(values.size());
-    std::iota(order.begin(), order.end(), size_t{ 0 });
-    StableSortValues(order.begin(), order.end(), [&](size_t idx1, size_t idx2) {
-        for (size_t n = 0; n != width; ++n)
-        {
-            bool isEqual = false;
-            auto result = isLess(keys[(idx1 * width) + n], keys[(idx2 * width) + n], isEqual);
-            if (!isEqual)
-            {
-                return result;
-            }
-        }
-        return false;
-    });
+    const auto order = SortedOrderByPaths(values, paths, oper, compType, context);
     InternalValueList sorted;
     sorted.reserve(values.size());
     for (auto idx : order)

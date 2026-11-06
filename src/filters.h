@@ -14,6 +14,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace jinja2
 {
@@ -35,6 +36,17 @@ extern NodeRef<ExpressionFilter::IExpressionFilter> CreateUnpackingFilter(NodeAr
 
 namespace filters
 {
+// What sort does, for filters that order or read items as it does (token_budget.cpp)
+//! The order sorted(key=...) gives the values by the key paths (SortKeyPaths of Jinja2's "a,b.c"), stable
+std::vector<size_t> SortedOrderByPaths(const InternalValueList& values, const std::vector<InternalValueList>& paths, BinaryExpression::Operation oper,
+                                       BinaryExpression::CompareType compType, RenderContext& context);
+std::vector<InternalValueList> AttributeSortPaths(const InternalValue& attrName, bool isSet);
+InternalValueList AttributePathOf(const InternalValue& attribute);
+InternalValue ItemAttribute(const InternalValue& item, const InternalValueList& path, RenderContext& context);
+// Jinja2's filters iterate their input: None, a bool, a number or a callable is not iterable
+bool IsNotIterableValue(const InternalValue& val);
+[[noreturn]] void ThrowNotIterableValue(const InternalValue& val);
+
 // The ASCII text Python's int() and float() parse for a string value of either width, or
 // nullopt for a value that is no string or has characters they reject
 std::optional<std::string> PythonNumberText(const InternalValue& val);
@@ -160,6 +172,28 @@ private:
     // The escaper built from the last arguments of neutralize that replace the environment's (a call from several
     // threads shares it)
     std::unique_ptr<Cache> m_cache;
+};
+
+// count_tokens, truncate_tokens and pack (docs/tasks/0359): the filters that fit text to a token budget
+class TokenBudget : public FilterBase
+{
+public:
+    enum Mode
+    {
+        CountMode,
+        TruncateMode,
+        PackMode
+    };
+
+    TokenBudget(const FilterParams& params, Mode mode);
+
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+
+private:
+    InternalValue Truncate(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Pack(const InternalValue& baseVal, RenderContext& context);
+
+    Mode m_mode;
 };
 
 class Random : public FilterBase

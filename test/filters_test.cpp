@@ -12,9 +12,11 @@
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <random>
 #include <regex>
@@ -23,6 +25,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -1862,4 +1865,464 @@ TEST(PromptEscaper, MalformedUtf8PassesThrough)
             ASSERT_TRUE(isTag && !boundary) << "found " << pattern << " in " << lowered << " from " << text;
         }
     }
+}
+
+// docs/tasks/0359: count_tokens, truncate_tokens and pack, with a fake tokenizer that counts whitespace-separated words
+// (and a call counter), narrow and wide. The expected text is written out by hand from docs/cpp-only-filters.md
+namespace
+{
+struct TokenCalls
+{
+    std::atomic<std::size_t> count{ 0 };
+    std::atomic<std::size_t> prefix{ 0 };
+};
+
+std::size_t CountWords(std::string_view text)
+{
+    std::size_t words = 0;
+    bool inWord = false;
+    for (const char ch : text)
+    {
+        const bool space = ch == ' ' || ch == '\n' || ch == '\t';
+        words += (!space && !inWord) ? 1 : 0;
+        inWord = !space;
+    }
+    return words;
+}
+
+// The bytes of the longest prefix of at most maxWords words, with the whitespace that follows the last one
+std::size_t WordsPrefix(std::string_view text, std::size_t maxWords)
+{
+    std::size_t words = 0;
+    std::size_t pos = 0;
+    while (pos < text.size())
+    {
+        while (pos < text.size() && (text[pos] == ' ' || text[pos] == '\n' || text[pos] == '\t'))
+        {
+            ++pos;
+        }
+        if (pos == text.size() || words == maxWords)
+        {
+            break;
+        }
+        ++words;
+        while (pos < text.size() && text[pos] != ' ' && text[pos] != '\n' && text[pos] != '\t')
+        {
+            ++pos;
+        }
+    }
+    return maxWords == 0 ? 0 : pos;
+}
+
+enum class TokenizerKind
+{
+    None,
+    Words,
+    WordsWithPrefix
+};
+
+Tokenizer MakeWordTokenizer(const std::shared_ptr<TokenCalls>& calls, bool withPrefix)
+{
+    Tokenizer::CountFunction count = [calls](std::string_view text) {
+        ++calls->count;
+        return CountWords(text);
+    };
+    if (!withPrefix)
+    {
+        return Tokenizer(std::move(count));
+    }
+    return Tokenizer(std::move(count), [calls](std::string_view text, std::size_t maxTokens) {
+        ++calls->prefix;
+        return WordsPrefix(text, maxTokens);
+    });
+}
+
+struct TokenRow
+{
+    std::string tpl;
+    std::string result;
+    ValuesMap params = {};
+    TokenizerKind tokenizer = TokenizerKind::Words;
+
+    friend std::ostream& operator<<(std::ostream& os, const TokenRow& row) { return os << row.tpl << " -> " << row.result; }
+};
+
+void ConfigureTokenEnv(TemplateEnv& env, TokenizerKind kind, const std::shared_ptr<TokenCalls>& calls)
+{
+    if (kind != TokenizerKind::None)
+    {
+        env.GetSettings().tokenizer = MakeWordTokenizer(calls, kind == TokenizerKind::WordsWithPrefix);
+    }
+}
+
+// Retrieved chunks: id, text and score
+ValuesList TokenDocs()
+{
+    auto doc = [](const char* id, const char* text, int64_t score) { return Value(ValuesMap{ { "id", id }, { "t", text }, { "score", score } }); };
+    return { doc("A", "a b", 1), doc("B", "c d", 5), doc("C", "e", 3), doc("D", "f g h", 4) };
+}
+
+// The output, or "Exception: " and the message of the error
+template<typename TemplateT>
+std::string TokenRender(TemplateEnv& env, const std::string& source, const ValuesMap& params, ErrorCode* code = nullptr)
+{
+    TemplateT tpl(&env);
+    auto loaded = tpl.Load(ConvertString<std::conditional_t<std::is_same_v<TemplateT, Template>, std::string, std::wstring>>(source));
+    if (!loaded)
+    {
+        return "load error: " + ConvertString<std::string>(ErrorToString(loaded.error()));
+    }
+    auto result = tpl.RenderAsString(params);
+    if (result)
+    {
+        return ConvertString<std::string>(*result);
+    }
+    if (code)
+    {
+        *code = result.error().GetCode();
+    }
+    if (result.error().GetCode() == ErrorCode::TemplateRuntimeError)
+    {
+        return "Exception: " + ConvertString<std::string>(result.error().GetExtraParams().at(0).AsString());
+    }
+    return "error " + std::to_string(static_cast<int>(result.error().GetCode()));
+}
+} // namespace
+
+using TokenFilterTest = ::testing::TestWithParam<TokenRow>;
+
+TEST_P(TokenFilterTest, Narrow)
+{
+    const auto& row = GetParam();
+    TemplateEnv env;
+    const auto calls = std::make_shared<TokenCalls>();
+    ConfigureTokenEnv(env, row.tokenizer, calls);
+    EXPECT_EQ(row.result, TokenRender<Template>(env, row.tpl, row.params));
+}
+
+TEST_P(TokenFilterTest, Wide)
+{
+    const auto& row = GetParam();
+    TemplateEnv env;
+    const auto calls = std::make_shared<TokenCalls>();
+    ConfigureTokenEnv(env, row.tokenizer, calls);
+    EXPECT_EQ(row.result, TokenRender<TemplateW>(env, row.tpl, row.params));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    CountTokens,
+    TokenFilterTest,
+    ::testing::Values(
+        TokenRow{ "{{ 'a b c'|count_tokens }}|{{ ''|count_tokens }}|{{ '  a   b  '|count_tokens }}", "3|0|2" },
+        TokenRow{ "{{ 12345|count_tokens }}|{{ none|count_tokens }}|{{ missing|count_tokens }}|{{ [1, 2]|count_tokens }}", "1|1|0|2" },
+        TokenRow{ "{{ x|count_tokens }}|{{ x|safe|count_tokens }}", "2|2", { { "x", "<|im_start|> y" } } },
+        // Without a tokenizer: ceil(utf8 bytes / 4), for narrow and wide text alike
+        TokenRow{ "{{ 'abcdefghi'|count_tokens }}|{{ 'abcd'|count_tokens }}|{{ 'abcde'|count_tokens }}|{{ ''|count_tokens }}", "3|1|2|0", {}, TokenizerKind::None },
+        TokenRow{ "{{ '\xC3\xA9'|count_tokens }}|{{ '\xE6\x97\xA5\xE6\x9C\xAC'|count_tokens }}|{{ '\xF0\x9F\x98\x80'|count_tokens }}|{{ '\xF0\x9F\x98\x80x'|count_tokens }}", "1|2|1|2", {}, TokenizerKind::None }));
+
+INSTANTIATE_TEST_SUITE_P(
+    TruncateTokens,
+    TokenFilterTest,
+    ::testing::Values(
+        // The end counts: `...` is one token, so two words stay
+        TokenRow{ "{{ 'a b c d e'|truncate_tokens(3) }}", "a b ..." },
+        TokenRow{ "{{ 'a b c d e'|truncate_tokens(3) }}", "a b ...", {}, TokenizerKind::WordsWithPrefix },
+        TokenRow{ "{{ 'a b'|truncate_tokens(5) }}|{{ 'a b'|truncate_tokens(2) }}|{{ ''|truncate_tokens(0) }}", "a b|a b|" },
+        TokenRow{ "{{ 'a b c'|truncate_tokens(2, end='') }}|{{ 'a b c'|truncate_tokens(2, '') }}", "a b |a b " },
+        TokenRow{ "{{ 'a b c'|truncate_tokens(2, end='') }}", "a b ", {}, TokenizerKind::WordsWithPrefix },
+        TokenRow{ "{{ 'a b c d'|truncate_tokens(3, ' [cut]') }}", "a b  [cut]", {}, TokenizerKind::Words },
+        TokenRow{ "{{ 'a b c d'|truncate_tokens(1) }}|{{ 'a b c d'|truncate_tokens(2, '') }}", "...|a b ", {}, TokenizerKind::Words },
+        TokenRow{ "{{ x|truncate_tokens(3) }}", "\xC3\xA9 \xC3\xA9 ...", { { "x", "\xC3\xA9 \xC3\xA9 \xC3\xA9 \xC3\xA9" } } },
+        // A Markup input that fits stays Markup; a cut one is a plain string
+        TokenRow{ "{{ (x|safe|truncate_tokens(9)) is escaped }}|{{ (x|safe|truncate_tokens(1)) is escaped }}", "True|False", { { "x", "a b" } } },
+        // No tokenizer: 4 * m bytes of the text, rounded down to a code point
+        TokenRow{ "{{ 'abcdefghijklmnopqrstuvwxyz'|truncate_tokens(4) }}|{{ 'abcdefghi'|truncate_tokens(3, '') }}", "abcdefghijkl...|abcdefghi", {}, TokenizerKind::None },
+        TokenRow{ "{{ '\xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9'|truncate_tokens(2, '') }}", "\xC3\xA9\xC3\xA9\xC3\xA9\xC3\xA9", {}, TokenizerKind::None },
+        TokenRow{ "{{ 'abcdef'|truncate_tokens(1, '') }}", "abcd", {}, TokenizerKind::None }));
+
+INSTANTIATE_TEST_SUITE_P(
+    PackTokens,
+    TokenFilterTest,
+    ::testing::Values(
+        // A and B (2 tokens each) fill the budget: the rest is not considered; the items come back in their order
+        TokenRow{ "{{ docs|pack(4, attribute='t')|map(attribute='id')|join }}", "AB", { { "docs", TokenDocs() } } },
+        TokenRow{ "{{ docs|pack(5, attribute='t')|map(attribute='id')|join }}", "ABC", { { "docs", TokenDocs() } } },
+        TokenRow{ "{{ docs|pack(4, 't')|map(attribute='id')|join }}", "AB", { { "docs", TokenDocs() } } },
+        // By score, the best first: B (2), D (3) does not fit what is left, C (1), A (2) does not fit
+        TokenRow{ "{{ docs|pack(4, attribute='t', by='score', reverse=true)|map(attribute='id')|join }}", "BC", { { "docs", TokenDocs() } } },
+        TokenRow{ "{{ docs|pack(4, attribute='t', by='score', reverse=true, stop=true)|map(attribute='id')|join }}", "B", { { "docs", TokenDocs() } } },
+        TokenRow{ "{{ docs|pack(4, attribute='t', by='score')|map(attribute='id')|join }}", "AC", { { "docs", TokenDocs() } } },
+        TokenRow{ "{{ docs|pack(9, attribute='t', by='score', reverse=true)|map(attribute='id')|join }}", "ABCD", { { "docs", TokenDocs() } } },
+        // The measured text is the attribute's; without one, the item's
+        TokenRow{ "{{ docs|pack(1, attribute='id')|map(attribute='id')|join }}|{{ docs|pack(2, attribute='id')|map(attribute='id')|join }}", "A|AB", { { "docs", TokenDocs() } } },
+        TokenRow{ "{{ ['a b', 'c', 'd e f']|pack(3)|join('|') }}", "a b|c" },
+        TokenRow{ "{{ [1, 22, 333]|pack(2)|join('|') }}", "1|22" },
+        // reverse without by considers the last item first: a history keeps its newest turns
+        TokenRow{ "{{ h|pack(4, reverse=true, stop=true)|join('|') }}", "f|g h", { { "h", ValuesList{ "a", "c d e", "f", "g h" } } } },
+        TokenRow{ "{{ h|pack(4, reverse=true)|join('|') }}", "a|f|g h", { { "h", ValuesList{ "a", "c d e", "f", "g h" } } } },
+        TokenRow{ "{{ h|pack(3, stop=true)|join('|') }}", "a", { { "h", ValuesList{ "a", "c d e", "f", "g h" } } } },
+        TokenRow{ "{{ h|pack(4)|join('|') }}", "a|c d e", { { "h", ValuesList{ "a", "c d e", "f", "g h" } } } },
+        // An item larger than the budget is skipped, or with stop ends the packing
+        TokenRow{ "{{ h|pack(3)|join('|') }}|{{ h|pack(3, stop=true)|join('|') }}", "a|b c|a", { { "h", ValuesList{ "a", "w x y z", "b c" } } } },
+        TokenRow{ "{{ h|pack(2)|join('|') }}|{{ h|pack(2, stop=true)|join('|') }}", "b|", { { "h", ValuesList{ "w x y z", "b" } } } },
+        // reserve is taken off the budget
+        TokenRow{ "{{ h|pack(4, reserve=1)|join('|') }}|{{ h|pack(4, reserve=4)|join('|') }}|{{ h|pack(4, reserve=5)|join('|') }}", "a|b c||", { { "h", ValuesList{ "a", "b c", "d" } } } },
+        TokenRow{ "{{ []|pack(10) }}|{{ []|pack(10, reserve=20) }}|{{ [1]|pack(0) }}|{{ missing|pack(3) }}", "[]|[]|[]|[]" },
+        // A generator, and the packed list is a list the template can use
+        TokenRow{ "{{ range(5)|map('string')|pack(3)|join(',') }}|{{ range(9)|pack(2)|length }}", "0,1,2|2" },
+        TokenRow{ "{% for d in docs|pack(3, attribute='t') %}{{ d.id }}{% endfor %}", "AC", { { "docs", TokenDocs() } } },
+        TokenRow{ "{{ 'abc'|pack(2)|join }}", "ab" },
+        TokenRow{ "{{ x|pack(3)|join }}", "", { { "x", Value(ValuesMap{}) } } },
+        // Without a tokenizer: ceil(bytes / 4) per item
+        TokenRow{ "{{ ['abcd', 'abcde', 'a']|pack(3)|join('|') }}", "abcd|abcde", {}, TokenizerKind::None }));
+
+TEST(TokenBudget, FilterErrors)
+{
+    TemplateEnv env;
+    const auto calls = std::make_shared<TokenCalls>();
+    ConfigureTokenEnv(env, TokenizerKind::Words, calls);
+    const ValuesMap docs{ { "docs", TokenDocs() } };
+    auto check = [&](const std::string& source, const std::string& expected) {
+        EXPECT_EQ(expected, TokenRender<Template>(env, source, docs)) << source;
+        EXPECT_EQ(expected, TokenRender<TemplateW>(env, source, docs)) << source;
+    };
+    // The end is longer than n, as Jinja2's truncate asserts
+    check("{{ 'a b c'|truncate_tokens(0) }}", "Exception: truncate_tokens(): expected n >= 1 (the tokens of end), got 0");
+    check("{{ 'a b c'|truncate_tokens(-1, '') }}", "Exception: truncate_tokens(): expected n >= 0 (the tokens of end), got -1");
+    check("{{ 'a b c'|truncate_tokens(2, 'x y z') }}", "Exception: truncate_tokens(): expected n >= 3 (the tokens of end), got 2");
+    check("{{ 'a b c'|truncate_tokens('x') }}", "Exception: truncate_tokens(): n must be an integer");
+    check("{{ 'a b c'|truncate_tokens(2.5) }}", "Exception: truncate_tokens(): n must be an integer");
+    check("{{ 'a b c'|truncate_tokens(2, end=3) }}", "Exception: truncate_tokens(): end must be a string");
+    check("{{ [1]|pack(-1) }}", "Exception: pack(): budget and reserve must not be negative");
+    check("{{ [1]|pack(3, reserve=-1) }}", "Exception: pack(): budget and reserve must not be negative");
+    check("{{ [1]|pack('3') }}", "Exception: pack(): budget must be an integer");
+    check("{{ [1]|pack(3, reserve=1.5) }}", "Exception: pack(): reserve must be an integer");
+    check("{{ 5|pack(3) }}", "Exception: 'int' object is not iterable");
+    check("{{ [1]|pack }}", "Exception: pack() missing required argument: 'budget'");
+}
+
+TEST(TokenBudget, UndefinedPolicy)
+{
+    TemplateEnv env;
+    env.GetSettings().undefinedPolicy = UndefinedPolicy::Strict;
+    for (const char* source : { "{{ missing|count_tokens }}", "{{ missing|truncate_tokens(3) }}", "{{ missing|pack(3) }}", "{{ 'a'|truncate_tokens(3, end=missing) }}" })
+    {
+        ErrorCode code = ErrorCode::Unspecified;
+        TokenRender<Template>(env, source, {}, &code);
+        EXPECT_EQ(ErrorCode::UndefinedError, code) << source;
+    }
+    EXPECT_EQ("0", TokenRender<Template>(env, "{{ ''|count_tokens }}", {}));
+}
+
+TEST(TokenBudget, CallsPerItem)
+{
+    TemplateEnv env;
+    const auto calls = std::make_shared<TokenCalls>();
+    ConfigureTokenEnv(env, TokenizerKind::Words, calls);
+    ValuesList items;
+    for (int n = 0; n != 100; ++n)
+    {
+        items.emplace_back("w" + std::to_string(n));
+    }
+    const ValuesMap params{ { "items", items } };
+    // One token each: the budget of 10 is spent after 10 items, and no item after that is measured
+    EXPECT_EQ("10", TokenRender<Template>(env, "{{ items|pack(10)|length }}", params));
+    EXPECT_EQ(10u, calls->count.load());
+    calls->count = 0;
+    EXPECT_EQ("10", TokenRender<TemplateW>(env, "{{ items|pack(10)|length }}", params));
+    EXPECT_EQ(10u, calls->count.load());
+    // A budget that is never spent measures every item once; so does skipping the ones that do not fit
+    calls->count = 0;
+    EXPECT_EQ("100", TokenRender<Template>(env, "{{ items|pack(1000)|length }}", params));
+    EXPECT_EQ(100u, calls->count.load());
+    calls->count = 0;
+    EXPECT_EQ("0", TokenRender<Template>(env, "{{ items|pack(0)|length }}|{{ items|pack(5, reserve=5)|length }}", params).substr(0, 1));
+    EXPECT_EQ(0u, calls->count.load());
+    // stop ends it at the first item that does not fit
+    calls->count = 0;
+    ValuesList big{ "a", "b c d e", "f", "g" };
+    EXPECT_EQ("1", TokenRender<Template>(env, "{{ big|pack(3, stop=true)|length }}", { { "big", big } }));
+    EXPECT_EQ(2u, calls->count.load());
+    calls->count = 0;
+    EXPECT_EQ("3", TokenRender<Template>(env, "{{ big|pack(3)|length }}", { { "big", big } }));
+    EXPECT_EQ(4u, calls->count.load());
+    // by sorts without measuring; an empty text is 0 without a call
+    calls->count = 0;
+    EXPECT_EQ("2", TokenRender<Template>(env, "{{ ['', 'a b', '']|pack(2, by='nothing')|length }}", {}).substr(0, 1));
+    EXPECT_EQ(1u, calls->count.load());
+    // A truncation: the text, the end, the result (and the prefix once, with a prefix function)
+    calls->count = 0;
+    EXPECT_EQ("a b ...", TokenRender<Template>(env, "{{ 'a b c d e'|truncate_tokens(3) }}", {}));
+    EXPECT_LE(calls->count.load(), 12u);
+    const auto withPrefix = std::make_shared<TokenCalls>();
+    TemplateEnv prefixEnv;
+    ConfigureTokenEnv(prefixEnv, TokenizerKind::WordsWithPrefix, withPrefix);
+    EXPECT_EQ("a b ", TokenRender<Template>(prefixEnv, "{{ 'a b c'|truncate_tokens(2, end='') }}", {}));
+    EXPECT_EQ(1u, withPrefix->prefix.load());
+    EXPECT_EQ(2u, withPrefix->count.load());
+}
+
+TEST(TokenBudget, HostResultsAreClamped)
+{
+    TemplateEnv env;
+    auto prefixCalls = std::make_shared<std::size_t>(0);
+    auto tokenizer = [&](Tokenizer::PrefixFunction prefix) { env.GetSettings().tokenizer = Tokenizer([](std::string_view text) { return CountWords(text); }, std::move(prefix)); };
+    // Past the end of the text: the text, which still has too many tokens, so m drops until nothing is left
+    tokenizer([prefixCalls](std::string_view text, std::size_t) {
+        ++*prefixCalls;
+        return text.size() + 10;
+    });
+    EXPECT_EQ("", TokenRender<Template>(env, "{{ 'a b c'|truncate_tokens(2, end='') }}", {}));
+    EXPECT_EQ(2u, *prefixCalls);
+    EXPECT_EQ("", TokenRender<TemplateW>(env, "{{ 'a b c'|truncate_tokens(2, end='') }}", {}));
+    // Inside a UTF-8 sequence: rounded down to the start of it
+    tokenizer([](std::string_view, std::size_t) { return std::size_t{ 2 }; });
+    EXPECT_EQ("a", TokenRender<Template>(env, "{{ x|truncate_tokens(1, end='') }}", { { "x", "a\xC3\xA9 b" } }));
+    EXPECT_EQ("a", TokenRender<TemplateW>(env, "{{ x|truncate_tokens(1, end='') }}", { { "x", "a\xC3\xA9 b" } }));
+    tokenizer([](std::string_view, std::size_t) { return std::size_t{ 4 }; });
+    EXPECT_EQ("a\xC3\xA9 ", TokenRender<Template>(env, "{{ x|truncate_tokens(1, end='') }}", { { "x", "a\xC3\xA9 b" } }));
+    EXPECT_EQ("a\xC3\xA9 ", TokenRender<TemplateW>(env, "{{ x|truncate_tokens(1, end='') }}", { { "x", "a\xC3\xA9 b" } }));
+    // A code point beyond the BMP (two units of a 16-bit wchar_t) is cut whole
+    tokenizer([](std::string_view, std::size_t) { return std::size_t{ 3 }; });
+    EXPECT_EQ("a", TokenRender<Template>(env, "{{ x|truncate_tokens(1, end='') }}", { { "x", "a\xF0\x9F\x98\x80 b" } }));
+    EXPECT_EQ("a", TokenRender<TemplateW>(env, "{{ x|truncate_tokens(1, end='') }}", { { "x", "a\xF0\x9F\x98\x80 b" } }));
+    tokenizer([](std::string_view, std::size_t) { return std::size_t{ 5 }; });
+    EXPECT_EQ("a\xF0\x9F\x98\x80", TokenRender<TemplateW>(env, "{{ x|truncate_tokens(1, end='') }}", { { "x", "a\xF0\x9F\x98\x80 b" } }));
+}
+
+TEST(TokenBudget, MergingTokensAcrossTheJoin)
+{
+    // "bc" costs one more token: the prefix that fits and the end merge into more tokens than n, so the prefix shrinks
+    TemplateEnv env;
+    env.GetSettings().tokenizer = Tokenizer([](std::string_view text) { return text.size() + (text.find("bc") != std::string_view::npos ? 1 : 0); });
+    EXPECT_EQ("aaaac", TokenRender<Template>(env, "{{ 'aaaabcdd'|truncate_tokens(6, 'c') }}", {}));
+    EXPECT_EQ("aaaac", TokenRender<TemplateW>(env, "{{ 'aaaabcdd'|truncate_tokens(6, 'c') }}", {}));
+}
+
+TEST(TokenBudget, TokenizerValue)
+{
+    const Tokenizer none;
+    EXPECT_FALSE(static_cast<bool>(none));
+    EXPECT_EQ(none, Tokenizer());
+    EXPECT_EQ(0u, none.Count(""));
+    EXPECT_EQ(3u, none.Count("abcdefghi"));
+    EXPECT_EQ(1u, none.Count("\xC3\xA9"));
+
+    std::size_t calls = 0;
+    const Tokenizer counting([&calls](std::string_view text) {
+        ++calls;
+        return CountWords(text);
+    });
+    EXPECT_TRUE(static_cast<bool>(counting));
+    EXPECT_EQ(0u, counting.Count(""));
+    EXPECT_EQ(0u, calls);
+    EXPECT_EQ(2u, counting.Count("a b"));
+    EXPECT_EQ(1u, calls);
+    const Tokenizer copy = counting; // NOLINT(performance-unnecessary-copy-initialization): the copy is what the test compares
+    const Tokenizer other([](std::string_view) { return std::size_t{ 1 }; });
+    EXPECT_EQ(counting, copy);
+    EXPECT_NE(counting, other);
+    EXPECT_NE(counting, none);
+    EXPECT_TRUE(counting != other);
+    // An empty count function is the estimate; a prefix function alone is no tokenizer
+    EXPECT_FALSE(static_cast<bool>(Tokenizer(Tokenizer::CountFunction())));
+    EXPECT_THROW(Tokenizer(Tokenizer::CountFunction(), [](std::string_view, std::size_t) { return std::size_t{ 0 }; }), std::invalid_argument);
+
+    Settings lhs;
+    Settings rhs;
+    EXPECT_EQ(lhs, rhs);
+    lhs.tokenizer = counting;
+    EXPECT_NE(lhs, rhs);
+    rhs.tokenizer = copy;
+    EXPECT_EQ(lhs, rhs);
+    rhs.tokenizer = other;
+    EXPECT_NE(lhs, rhs);
+}
+
+TEST(TokenBudget, CallbackExceptionsFailTheRender)
+{
+    auto check = [](const Tokenizer& tokenizer, const std::string& source, const ValuesMap& params) {
+        TemplateEnv env;
+        env.GetSettings().tokenizer = tokenizer;
+        for (const bool wide : { false, true })
+        {
+            std::optional<ErrorInfo> narrowError;
+            std::optional<ErrorInfoW> wideError;
+            if (wide)
+            {
+                TemplateW tpl(&env);
+                ASSERT_TRUE(tpl.Load(ConvertString<std::wstring>(source)).has_value());
+                auto result = tpl.RenderAsString(params);
+                ASSERT_FALSE(result.has_value()) << source;
+                wideError = result.error();
+            }
+            else
+            {
+                Template tpl(&env);
+                ASSERT_TRUE(tpl.Load(source).has_value());
+                auto result = tpl.RenderAsString(params);
+                ASSERT_FALSE(result.has_value()) << source;
+                narrowError = result.error();
+            }
+            const auto code = wide ? wideError->GetCode() : narrowError->GetCode();
+            const auto exception = wide ? wideError->GetException() : narrowError->GetException();
+            EXPECT_EQ(ErrorCode::UserCallableException, code) << source;
+            ASSERT_TRUE(exception) << source;
+            try
+            {
+                std::rethrow_exception(exception);
+                ADD_FAILURE() << "rethrow_exception returned";
+            }
+            catch (const std::runtime_error& e)
+            {
+                EXPECT_STREQ("tokenizer failed", e.what());
+            }
+        }
+    };
+    const Tokenizer throwing([](std::string_view) -> std::size_t { throw std::runtime_error("tokenizer failed"); });
+    const ValuesMap items{ { "items", ValuesList{ "a", "b" } } };
+    check(throwing, "{{ 'a b'|count_tokens }}", {});
+    check(throwing, "{{ 'a b'|truncate_tokens(1) }}", {});
+    check(throwing, "{{ items|pack(1) }}", items);
+    // The prefix function, after a count that works
+    const Tokenizer throwingPrefix([](std::string_view text) { return CountWords(text); }, [](std::string_view, std::size_t) -> std::size_t { throw std::runtime_error("tokenizer failed"); });
+    check(throwingPrefix, "{{ 'a b c'|truncate_tokens(2) }}", {});
+    // Not an std::exception
+    TemplateEnv env;
+    env.GetSettings().tokenizer = Tokenizer([](std::string_view) -> std::size_t { throw 42; });
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{{ 'a'|count_tokens }}").has_value());
+    auto result = tpl.RenderAsString({});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::UserCallableException, result.error().GetCode());
+}
+
+TEST(TokenBudget, GeneratorsAndHostLists)
+{
+    TemplateEnv env;
+    const auto calls = std::make_shared<TokenCalls>();
+    ConfigureTokenEnv(env, TokenizerKind::Words, calls);
+    // A generator is read once
+    int produced = 0;
+    auto generator = [&produced] {
+        return MakeGenericList([&produced]() -> std::optional<Value> { return produced < 6 ? std::optional<Value>(Value("w" + std::to_string(produced++))) : std::nullopt; });
+    };
+    EXPECT_EQ("w0,w1,w2", TokenRender<Template>(env, "{{ g|pack(3)|join(',') }}", { { "g", generator() } }));
+    EXPECT_EQ(6, produced);
+    // A list of the host whose items are lent from its vector, and a reflected one
+    std::vector<std::string> hostItems = { "alpha beta", "gamma", "delta epsilon zeta", "eta" };
+    EXPECT_EQ("alpha beta|gamma|eta", TokenRender<Template>(env, "{{ l|pack(4)|join('|') }}", { { "l", MakeGenericList(hostItems.begin(), hostItems.end()) } }));
+    EXPECT_EQ("alpha beta|gamma|eta", TokenRender<Template>(env, "{{ l|pack(4)|join('|') }}", { { "l", Reflect(&hostItems) } }));
+    EXPECT_EQ("alpha beta|gamma|eta", TokenRender<TemplateW>(env, "{{ l|pack(4)|join('|') }}", { { "l", Reflect(&hostItems) } }));
+    EXPECT_EQ("gamma|eta", TokenRender<Template>(env, "{{ l|pack(2, reverse=true)|join('|') }}", { { "l", Reflect(&hostItems) } }));
+    // The packed list outlives the statement that made it
+    EXPECT_EQ("alpha beta,gamma,eta", TokenRender<Template>(env, "{% set p = l|pack(4) %}{% set q = p %}{{ q|join(',') }}", { { "l", Reflect(&hostItems) } }));
+    // The sequence cap holds for a generator with no end
+    Settings::Limits limits;
+    limits.maxSequenceSize = 1000;
+    env.GetSettings().limits = limits;
+    auto endless = MakeGenericList([n = 0]() mutable -> std::optional<Value> { return Value("w" + std::to_string(n++)); });
+    ErrorCode code = ErrorCode::Unspecified;
+    TokenRender<Template>(env, "{{ g|pack(10)|length }}", { { "g", std::move(endless) } }, &code);
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, code);
 }
