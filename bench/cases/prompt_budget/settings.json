@@ -1,0 +1,1 @@
+{"cpp_only": true, "tokenizer": "words", "max_token_calls": 200, "prompt_specials": ["<|im_start|>", "<|im_end|>"], "prompt_tags": ["document"]}

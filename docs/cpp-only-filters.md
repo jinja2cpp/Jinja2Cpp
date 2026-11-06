@@ -19,9 +19,7 @@ here (docs/tasks/0233); before, `camelize`, `underscorize`, `escapecpp`, `toxml`
 | `pack(budget, attribute=none, by=none, reverse=false, reserve=0, stop=false)` | The items of a list whose text fits in a token budget, in their original order |
 
 The five prompt filters and the prompt escaping mode are specified at the end of this file
-(docs/tasks/0358, 0359; decided by Ruslan 2026-11-05, docs/api-2.0.md 3.3). `neutralize` and
-`fence` are implemented; until the rest of those tasks land, a template that uses
-`count_tokens`, `truncate_tokens` or `pack` fails to load with `ErrorCode::UnknownFilter`.
+(docs/tasks/0358, 0359; decided by Ruslan 2026-11-05, docs/api-2.0.md 3.3) and implemented.
 
 `toxml` was removed in 2.0: JSON-like data has no single XML mapping, so it would be a format
 of our own to define and support (docs/release-2.0.md, D16). A template that uses it fails

@@ -262,6 +262,7 @@ set(JINJA2CPP_SOURCES
     src/out_stream.cpp
     src/prompt_escape.cpp
     src/prompt_filters.cpp
+    src/token_budget.cpp
     src/python_format.cpp
     src/recursion_guard.cpp
     src/render_failure.cpp

@@ -153,6 +153,9 @@ struct Settings
     //! The special tokens and tags of the prompts the `neutralize` and `fence` filters protect (docs/cpp-only-filters.md,
     //! "Prompt filters"). None by default, so the filters change nothing until the host registers its model's tokens
     PromptEscaper promptEscaper;
+    //! Counts tokens for the `count_tokens`, `truncate_tokens` and `pack` filters (docs/cpp-only-filters.md). Unset, they
+    //! use the estimate `ceil(utf8_bytes / 4)`
+    Tokenizer tokenizer;
     //! How undefined values behave (Jinja2 `undefined`). A failed use reports ErrorCode::UndefinedError
     UndefinedPolicy undefinedPolicy = UndefinedPolicy::Default;
     //! When `include`, `extends` and `import` look up their template in the environment. `OncePerRender` (default) takes the

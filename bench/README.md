@@ -14,7 +14,12 @@ Each directory in `cases/` is one workload:
 - `settings.json` (optional) sets environment options: `trim_blocks`, `lstrip_blocks`
   and `autoescape`, as in Python's `Environment`, and `"wide": true`, which runs the case
   with `TemplateW` and `std::wstring` data in C++ (Python renders it as usual; the output
-  is compared as UTF-8).
+  is compared as UTF-8). `"cpp_only": true` marks a case that uses C++-only filters
+  (docs/cpp-only-filters.md): Python and the other engines skip it. The prompt filters read
+  `"prompt_specials"` and `"prompt_tags"` (lists of strings, `Settings::promptEscaper`) and
+  `"tokenizer": "words"`, a tokenizer that counts whitespace-separated words; with
+  `"max_token_calls": N`, `--dump-dir` (so `run.py`) fails when one render calls it more than
+  N times.
 
 The cases fall into two groups. The synthetic ones isolate one engine feature each
 (`substitute`, `for_range`, `filters`, `macros`, ...). The realistic ones are what people
@@ -24,6 +29,7 @@ render (docs/tasks/0119):
 |---|---|
 | `chat_llama`, `chat_qwen`, `chat_mistral` | LLM chat templates in the style of Llama 3.1, Qwen 2.5 (ChatML) and Mistral v3, with tool definitions and tool calls (`tojson`, `trim`, slicing, `namespace`, `loop.index0` lookbehind), over a 23-message conversation; `trim_blocks` and `lstrip_blocks` as Hugging Face sets them |
 | `hf_qwen3`, `hf_gpt_oss`, `hf_deepseek_v31`, `hf_mistral_small` | real Hugging Face chat templates (copies from `test/chat_templates/templates/`, Apache-2.0 and MIT model licenses) with the suite's `tools` conversation, in transformers' environment: `"transformers": true` in `settings.json` (`ConfigureForChatTemplates` in C++, the same `ImmutableSandboxedEnvironment` setup in `python_bench.py`; other engines skip them) |
+| `prompt_budget` | 200 retrieved chunks packed into a token budget by score (`pack`), each `neutralize`d and `fence`d; C++ only; the word-counting tokenizer must be called at most once per chunk (docs/tasks/0359) |
 | `html_autoescape` | a shop page with `autoescape` on: escaped user text, `safe`, `e`, imported macros for form fields |
 | `config_file` | an nginx-style config built from many small `include`s and imported macros, `dictsort`, `trim_blocks` |
 | `mitsuhiko_table_wide` | `mitsuhiko_table` with `TemplateW`, so the two compare narrow and wide rendering |
