@@ -321,6 +321,24 @@ def test_shared_references_in_module_arguments_are_bounded():
         tpl.module.m(y, y, y)
     assert tpl.module.m(y) == "1"
 
+
+def test_module_argument_changed_by_a_key_str_during_the_copy():
+    tpl = jinja2cpp.Template("{% macro m(x) %}{{ x|length }}{% endmacro %}")
+    arg = []
+    holder = {}
+
+    class Key:
+        def __str__(self):
+            arg.clear()
+            holder.clear()
+            return "k"
+
+    arg.extend([{Key(): 0}, 0, [1, 2]])
+    assert tpl.module.m(arg) == "3"
+    holder.update({Key(): 1, "b": 2})
+    assert tpl.module.m(holder) in ("1", "2")
+    assert tpl.make_module({"x": [{Key(): 0}, 1]}) is not None
+
 def test_moderately_nested_module_arguments_work_and_cycles_are_cut():
     tpl = jinja2cpp.Template("{% macro m(x) %}{{ x|length }}{% endmacro %}")
     assert tpl.module.m(_nested("list", 500)) == "1"

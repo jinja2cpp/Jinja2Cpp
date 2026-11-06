@@ -96,13 +96,19 @@ public:
                 return jinja2::Value();
             }
             jinja2::ValuesList items;
-            // A tuple becomes a list: the host API has no tuple. Converting an item cannot change
-            // the list, as no Python code runs for these types
-            const bool isList = PyList_CheckExact(raw);
-            const Py_ssize_t size = isList ? PyList_Size(raw) : PyTuple_Size(raw);
+            // A tuple becomes a list: the host API has no tuple. The items are read from a
+            // snapshot that owns them: converting a dict key runs its __str__, which may change
+            // this list
+            const auto snapshot = nb::steal(PySequence_Tuple(raw));
+            if (!snapshot)
+            {
+                throw nb::python_error();
+            }
+            const Py_ssize_t size = PyTuple_Size(snapshot.ptr());
+            items.reserve(static_cast<size_t>(size));
             for (Py_ssize_t i = 0; i < size; ++i)
             {
-                items.push_back(Convert(isList ? PyList_GetItem(raw, i) : PyTuple_GetItem(raw, i)));
+                items.push_back(Convert(PyTuple_GetItem(snapshot.ptr(), i)));
             }
             Leave(raw);
             return jinja2::Value(std::move(items));
@@ -114,9 +120,18 @@ public:
                 return jinja2::Value();
             }
             jinja2::ValuesMap items;
-            for (auto [key, value] : nb::borrow<nb::dict>(object))
+            // A snapshot of the entries that owns them, for the same reason (a key's __str__ may
+            // change the dict)
+            const auto entries = nb::steal(PyDict_Items(raw));
+            if (!entries)
             {
-                items[Utf8(key)] = Convert(value);
+                throw nb::python_error();
+            }
+            const Py_ssize_t size = PyList_Size(entries.ptr());
+            for (Py_ssize_t i = 0; i < size; ++i)
+            {
+                PyObject* entry = PyList_GetItem(entries.ptr(), i);
+                items[Utf8(PyTuple_GetItem(entry, 0))] = Convert(PyTuple_GetItem(entry, 1));
             }
             Leave(raw);
             return jinja2::Value(std::move(items));
