@@ -1,5 +1,6 @@
 #include "adapters.h"
 
+#include "context.h"
 #include "convert.h"
 
 #include "expression_evaluator.h"
@@ -449,15 +450,23 @@ const PyHost* AsPyHost(const InternalValue& value)
 InternalValue CallPython(PyObject* callable, const CallParams& params, RenderContext& context)
 {
     const LeaseScope lease(context);
-    const size_t positional = params.posParams.size();
+    // pass_context and its kin: the argument the callable asked for goes first
+    const PassArg pass = PassArgOf(callable);
+    const size_t extra = pass != PassArg::None ? 1 : 0;
+    const size_t positional = extra + params.posParams.size();
     const size_t keywords = params.kwParams.size();
     // The arguments live in `objects`; `args` has a free first slot for the vectorcall protocol
     std::vector<nb::object> objects;
     objects.reserve(positional + keywords);
     std::vector<PyObject*> args(1 + positional + keywords, nullptr);
-    for (size_t i = 0; i < positional; ++i)
+    if (extra != 0)
     {
-        objects.push_back(ToPython(params.posParams[i]));
+        objects.push_back(MakePassArgument(pass, context));
+        args[1] = objects.back().ptr();
+    }
+    for (size_t i = extra; i < positional; ++i)
+    {
+        objects.push_back(ToPython(params.posParams[i - extra]));
         args[1 + i] = objects.back().ptr();
     }
     nb::object names;

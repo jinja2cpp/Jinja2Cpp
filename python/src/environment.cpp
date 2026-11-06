@@ -713,6 +713,8 @@ nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
     }
     RenderState state;
     state.undefinedClass = env.UndefinedClass();
+    state.environment = m_environment.ptr();
+    state.templateGlobals = m_globals.ptr();
     std::string output;
     std::optional<jinja2::ErrorInfo> error;
     {

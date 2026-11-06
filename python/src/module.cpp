@@ -1,4 +1,5 @@
 #include "common.h"
+#include "context.h"
 #include "convert.h"
 #include "environment.h"
 #include "errors.h"
@@ -164,6 +165,7 @@ NB_MODULE(_jinja2cpp, module) // NOLINT: nanobind's entry point
     module.doc() = "Jinja2C++ rendering Jinja2 templates (docs/python.md)";
     BindEnvironment(module);
     BindTemplateModule(module);
+    BindContext(module);
     nb::class_<TemplateValue>(module, "TemplateValue", nb::type_slots(g_templateValueSlots))
         .def("__call__", &TemplateValue::Call)
         .def("__getattr__", &TemplateValue::GetAttr)
