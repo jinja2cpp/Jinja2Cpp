@@ -624,13 +624,13 @@ struct InputValueConvertor
         if (m_byValue)
         {
             GenericMap newVals(vals);
-            return result_t(CreateMapAdapter(std::move(newVals)));
+            return MapValueOf(std::move(newVals));
         }
 
-        return result_t(CreateMapAdapter(vals));
+        return MapValueOf(vals);
     }
 
-    result_t operator()(GenericMap& vals) const { return result_t(CreateMapAdapter(std::move(vals))); }
+    result_t operator()(GenericMap& vals) const { return MapValueOf(std::move(vals)); }
 
     result_t operator()(const UserCallable& val) const { return ConvertUserCallable(val); }
 

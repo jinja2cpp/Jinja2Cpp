@@ -1677,6 +1677,11 @@ MapAdapter CreateMapAdapter(const InternalValueMap* values);
 MapAdapter CreateMapAdapter(std::shared_ptr<InternalValueMap> values);
 MapAdapter CreateMapAdapter(const GenericMap& values);
 MapAdapter CreateMapAdapter(GenericMap&& values);
+// The value of a host's map: a map over its accessor, or, where the accessor carries a host object
+// (IMapItemAccessor::AsHostObject, public_host_object.h), the object as the engine reads it. The
+// one virtual call is all a native map pays for the check
+InternalValue MapValueOf(const GenericMap& values);
+InternalValue MapValueOf(GenericMap&& values);
 MapAdapter CreateMapAdapter(const ValuesMap& values);
 MapAdapter CreateMapAdapter(ValuesMap&& values);
 
