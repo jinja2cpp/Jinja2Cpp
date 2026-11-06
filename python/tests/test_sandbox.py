@@ -894,3 +894,87 @@ def test_an_overridden_is_safe_attribute_judges_the_public_names_of_engine_value
             except Exception as error:  # noqa: BLE001
                 results.append(("exception", type(error).__name__))
         assert results[0] == results[1], source
+
+
+def _outcome_of(env, source, **context):
+    try:
+        return ("ok", env.from_string(source).render(**context))
+    except Exception as error:  # noqa: BLE001
+        return ("exception", type(error).__name__)
+
+
+@pytest.mark.parametrize("name", ["call", "getattr", "getitem"])
+def test_an_overridden_call_getattr_or_getitem_is_refused_not_ignored(name):
+    def body(self, *args, **kwargs):
+        raise SecurityError("no")
+
+    # Jinja2 calls the override; the engine would not, so loading refuses (the 0412 rule of the interception)
+    sub = type("Sub", (SandboxedEnvironment,), {name: body})
+    with pytest.raises(jinja2cpp.UnsupportedError, match=name):
+        sub().from_string("{{ f() }}")
+    # the same set on the instance, and on the immutable form
+    env = ImmutableSandboxedEnvironment()
+    setattr(env, name, body.__get__(env))
+    with pytest.raises(jinja2cpp.UnsupportedError, match=name):
+        env.from_string("{{ f() }}")
+    # a subclass of another kind is untouched
+    assert type("Plain", (SandboxedEnvironment,), {})().from_string("{{ f() }}").render(f=lambda: 1) == "1"
+
+
+def test_a_call_override_is_the_one_jinja2_runs():
+    class E(j2sandbox.SandboxedEnvironment):
+        def call(self, ctx, obj, *a, **k):
+            raise SecurityError("no calls")
+
+    with pytest.raises(SecurityError):
+        E().from_string("{{ f() }}").render(f=lambda: 1)
+
+
+DENY_SOURCES = [
+    "{% for i in [1] %}{{ loop.index }}{% endfor %}",
+    "{% for i in [1] %}{{ loop.first }}{% endfor %}",
+    "{% for i in [1, 2] %}{{ loop.cycle('a', 'b') }}{% endfor %}",
+    "{% for i in [1, 2] %}{{ loop.changed(i) }}{% endfor %}",
+    "{% set c = cycler(1, 2) %}{{ c.next() }}",
+    "{% set c = cycler(1, 2) %}{{ c.current }}",
+    "{% set ns = namespace(a=1) %}{{ ns.a }}",
+    "{% macro m() %}x{% endmacro %}{{ m.name }}",
+    "{% macro m() %}x{% endmacro %}{{ m.arguments }}",
+    "{{ 'x'.upper() }}",
+    "{{ [1].count(1) }}",
+]
+
+
+@pytest.mark.parametrize("source", DENY_SOURCES)
+def test_an_overridden_is_safe_attribute_judges_public_names_of_loop_cycler_namespace_and_macro(source):
+    def deny(self, obj, attr, value):
+        return False
+
+    ours = type("Deny", (SandboxedEnvironment,), {"is_safe_attribute": deny})()
+    oracle = type("DenyJ2", (j2sandbox.SandboxedEnvironment,), {"is_safe_attribute": deny})()
+    assert _outcome_of(ours, source) == _outcome_of(oracle, source), source
+
+
+def test_public_names_of_loop_are_not_asked_by_the_default_sandbox():
+    env = SandboxedEnvironment()
+    assert env.from_string("{% for i in [1, 2] %}{{ loop.index }}{{ loop.cycle('a', 'b') }}{% endfor %}").render() == "1a2b"
+    assert env.from_string("{% set ns = namespace(a=1) %}{{ ns.a }}").render() == "1"
+
+
+@pytest.mark.parametrize("patch_instance", [False, True])
+def test_is_safe_attribute_replaced_after_the_first_load_is_seen_by_the_next_load(patch_instance):
+    class Env(SandboxedEnvironment):
+        pass
+
+    env = Env()
+    source = "{% for i in [1] %}{{ loop.index }}{% endfor %}"
+    assert env.from_string(source).render() == "1"
+
+    def deny_public(obj, attr, value):
+        return attr.startswith("_") is False and False
+
+    if patch_instance:
+        env.is_safe_attribute = deny_public
+    else:
+        Env.is_safe_attribute = lambda self, obj, attr, value: False
+    assert env.from_string(source).render() == ""

@@ -223,6 +223,16 @@ class SandboxedEnvironment(Environment):
             raise UnsupportedError(
                 "jinja2cpp does not support intercepted_binops and intercepted_unops of the sandbox yet (docs/python.md)"
             )
+        # The engine calls getattr, getitem and call itself (is_safe_attribute and is_safe_callable are the hooks it
+        # asks): an override, on the class or the instance, would be ignored, and ignoring a sandbox's override is
+        # fail-open, so it is refused as the interception is
+        for name in ("call", "getattr", "getitem"):
+            method = getattr(self, name)
+            if getattr(method, "__func__", method) is not getattr(SandboxedEnvironment, name):
+                raise UnsupportedError(
+                    f"jinja2cpp does not support an overridden {name}() of the sandbox yet; override is_safe_attribute or "
+                    "is_safe_callable (docs/python.md)"
+                )
 
     def from_string(self, source: t.Any, globals: t.Optional[t.Mapping[str, t.Any]] = None, template_class: t.Any = None) -> t.Any:
         self._check_interception()
@@ -318,7 +328,8 @@ class SandboxedEnvironment(Environment):
     def _sandbox_judges_public_names(self) -> bool:
         """Whether the engine asks `is_safe_attribute` about the public names of its own values too: only when
         the method is not Jinja2's, whose answer for them the engine gives itself (docs/python.md)."""
-        method = type(self).is_safe_attribute
+        method = self.is_safe_attribute
+        method = getattr(method, "__func__", method)
         return method not in (SandboxedEnvironment.is_safe_attribute, ImmutableSandboxedEnvironment.is_safe_attribute)
 
     def _sandbox_check_call(self, obj: t.Any) -> None:

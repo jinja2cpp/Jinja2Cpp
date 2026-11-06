@@ -24,8 +24,8 @@ missing name that starts with `_` as the attribute Python's object would have an
   anything it did not hold.
 - Under `StrictUndefined`, a private name an engine object does not have (`loop._x`) raises
   `SecurityError`; Jinja2 raises `UndefinedError` because Python's object lacks the name.
-- An overridden `getattr` / `getitem` of the environment is not called (the checkpoint is
-  `_sandbox_attribute`).
+- An overridden `call`, `getattr` or `getitem` of the environment is refused with `UnsupportedError`
+  when a template loads (the checkpoint is `_sandbox_attribute`), not called.
 
 **Proposal.** Let the policy (ISandboxPolicy) see dict keys that shadow an attribute and a bound
 method's `__self__`. Decide whether `f.__call__` and `__self__` should be

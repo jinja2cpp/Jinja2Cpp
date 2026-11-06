@@ -2766,8 +2766,26 @@ const MethodInfo* FindSafeMethod(const InternalValue& obj, std::string_view name
 }
 } // namespace
 
+std::optional<InternalValue> SandboxedSyntheticAttribute(RenderContext* context, const InternalValue& obj, const std::string& name)
+{
+    if (!context || !context->GetSandboxPolicy())
+    {
+        return std::nullopt;
+    }
+    const auto map = AsMap(obj);
+    if ((map && (map->GetObjectClass() || map->IsNamespace())) || GetIf<Callable>(&obj))
+    {
+        return SandboxedNativeAttribute(context, obj, name);
+    }
+    return std::nullopt;
+}
+
 InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderContext* context)
 {
+    if (auto replacement = SandboxedSyntheticAttribute(context, obj, name))
+    {
+        return std::move(*replacement);
+    }
     bool unsafe = false;
     const auto* method = FindSafeMethod(obj, name, context, unsafe);
     if (method || unsafe)

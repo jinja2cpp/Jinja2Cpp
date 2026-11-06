@@ -3,8 +3,8 @@
 
 #include "dialect.h"
 #include "prompt_escape.h"
-#include "sandbox_policy.h"
 #include "recursion_guard.h"
+#include "sandbox_policy.h"
 
 #include <jinja2cpp/big_int_backend.h>
 #include <jinja2cpp/prompt.h>

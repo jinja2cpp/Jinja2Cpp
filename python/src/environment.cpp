@@ -522,9 +522,11 @@ void PyEnvironment::Rebuild()
     {
         jinja2::detail::TemplateEnvAccess::GetImpl(*m_env)->SetDialect(jinja2::detail::Dialect::ImmutableSandbox);
     }
+    m_sandboxed = sandboxed;
     if (sandboxed)
     {
-        jinja2::detail::TemplateEnvAccess::GetImpl(*m_env)->SetSandboxPolicy(MakePythonSandboxPolicy(nb::find(this)));
+        m_sandboxPublicNames = SandboxJudgesPublicNames(nb::find(this));
+        jinja2::detail::TemplateEnvAccess::GetImpl(*m_env)->SetSandboxPolicy(MakePythonSandboxPolicy(nb::find(this), m_sandboxPublicNames));
     }
     if (!m_loaderHandler && !m_loader.is_none())
     {
@@ -573,6 +575,16 @@ jinja2::TemplateEnv& PyEnvironment::Prepared()
     if (!m_env)
     {
         Rebuild();
+    }
+    if (m_sandboxed)
+    {
+        // is_safe_attribute may have been replaced since the last load, on the class or the instance
+        const auto self = nb::find(this);
+        if (const bool judges = SandboxJudgesPublicNames(self); judges != m_sandboxPublicNames)
+        {
+            m_sandboxPublicNames = judges;
+            jinja2::detail::TemplateEnvAccess::GetImpl(*m_env)->SetSandboxPolicy(MakePythonSandboxPolicy(self, judges));
+        }
     }
     // A template binds the filters and tests when it loads, as in Jinja2
     auto sync = [this](nb::handle dict, const char* what, std::vector<std::pair<std::string, PyObject*>>& bound, bool filters) {

@@ -74,6 +74,9 @@ private:
     nb::object MakeTemplate(jinja2::Template tpl, nb::handle globals, nb::object name, nb::object filename, nb::handle templateClass);
 
     std::unique_ptr<jinja2::TemplateEnv> m_env;
+    // A SandboxedEnvironment, and whether its is_safe_attribute judges the engine's public names (read at each load)
+    bool m_sandboxed = false;
+    bool m_sandboxPublicNames = false;
     jinja2::Settings m_settings;
     nb::object m_globals;
     nb::object m_filters;

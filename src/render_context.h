@@ -1023,10 +1023,11 @@ public:
     {
         return m_rendererCallback ? m_rendererCallback->GetEnv() : nullptr;
     }
-    // Settings::userCallablesAsFilters of the template: whether a name that is no filter or test
-    // of the template may be a callable among the values
+    // The sandbox policy of the template (src/sandbox_policy.h), null for none
     [[nodiscard]] const ISandboxPolicy* GetSandboxPolicy() const noexcept { return m_rendererCallback ? m_rendererCallback->GetSandboxPolicy() : nullptr; }
     [[nodiscard]] detail::Dialect GetDialect() const { return m_rendererCallback ? m_rendererCallback->GetDialect() : detail::Dialect::Jinja2; }
+    // Settings::userCallablesAsFilters of the template: whether a name that is no filter or test
+    // of the template may be a callable among the values
     [[nodiscard]] bool UserCallablesAsFilters() const { return m_rendererCallback ? m_rendererCallback->GetSettings().userCallablesAsFilters : false; }
     // A context for a nested render: with `includeCurrentContext` it sees all of this
     // context's names (see the constructor above for how long it may live), otherwise only

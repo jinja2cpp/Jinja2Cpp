@@ -63,6 +63,10 @@ public:
         {
             return InternalValue(Callable(Callable::UserCallable, [](const CallParams&, RenderContext&) { return InternalValue(std::string("replaced upper")); }));
         }
+        if (name == "index" || name == "judged")
+        {
+            return InternalValue(std::string("judged ") + name);
+        }
         if (name == "nothing_here")
         {
             return InternalValue(std::string("a missing name, answered"));
@@ -148,6 +152,18 @@ TEST(SandboxEngineTest, PolicyIsAskedOnTheAttributeAndTheMethodCallPath)
     // A host that takes the policy away gets Jinja2's engine again; templates loaded before keep theirs
     detail::TemplateEnvAccess::GetImpl(env)->SetSandboxPolicy(nullptr);
     EXPECT_EQ(RenderOrError(env, "{{ 'x'.upper() }}"), "X");
+}
+
+TEST(SandboxEngineTest, PolicyIsAskedAboutTheAttributesOfLoopNamespaceAndMacro)
+{
+    TemplateEnv env;
+    EXPECT_EQ(RenderOrError(env, "{% for i in [1] %}{{ loop.index }}{% endfor %}"), "1");
+    detail::TemplateEnvAccess::GetImpl(env)->SetSandboxPolicy(std::make_shared<ToyPolicy>());
+    EXPECT_EQ(RenderOrError(env, "{% for i in [1] %}{{ loop.index }}{% endfor %}"), "judged index");
+    EXPECT_EQ(RenderOrError(env, "{% set ns = namespace(judged=1) %}{{ ns.judged }}"), "judged judged");
+    EXPECT_EQ(RenderOrError(env, "{% macro m() %}x{% endmacro %}{{ m.judged }}"), "judged judged");
+    // a name the policy leaves alone is read as it was
+    EXPECT_EQ(RenderOrError(env, "{% for i in [1] %}{{ loop.first }}{% endfor %}"), "True");
 }
 
 TEST(SandboxEngineTest, PolicyFormatsStringsBothWays)

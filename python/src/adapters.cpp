@@ -544,16 +544,12 @@ public:
         }
         bool synthetic = false;
         const auto representative = Representative(obj, synthetic);
-        if (synthetic && !isPrivate)
-        {
-            // loop, a macro: no Python class to ask about a public name
-            return std::nullopt;
-        }
         const auto pyName = MakeStr(name);
         nb::object owned = nb::none();
         // A real Python object has the attribute or has not. An object of the engine that is only
-        // a stand-in (loop, a macro, self) is taken to have every private one: the refusal is the
-        // safe answer where Python's class might have it (its mangled names)
+        // a stand-in (loop, a macro, self) is taken to have every name, private or public that a custom
+        // is_safe_attribute judges: the refusal is the safe answer where Python's class might have it (its
+        // mangled names). Its `value` is None: the engine does not build one for the question
         PyObject* value = synthetic ? nullptr : PyObject_GetAttr(representative.ptr(), pyName.ptr());
         if (!value && !synthetic)
         {
@@ -594,14 +590,19 @@ private:
 };
 } // namespace
 
-std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle environment)
+bool SandboxJudgesPublicNames(nb::handle environment)
 {
     const auto all = nb::steal(PyObject_CallMethod(environment.ptr(), "_sandbox_judges_public_names", nullptr));
     if (!all)
     {
         throw nb::python_error();
     }
-    return std::make_shared<PySandboxPolicy>(environment.ptr(), PyObject_IsTrue(all.ptr()) != 0);
+    return PyObject_IsTrue(all.ptr()) != 0;
+}
+
+std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle environment, bool allNames)
+{
+    return std::make_shared<PySandboxPolicy>(environment.ptr(), allNames);
 }
 
 const PyHost* AsPyHost(const InternalValue& value)

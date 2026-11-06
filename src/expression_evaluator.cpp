@@ -404,7 +404,7 @@ InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const I
 // One returned object, so that it is constructed in the caller's storage
 InternalValue SubscriptExpression::LookupDefinedIndex(const InternalValue& cur, const Index& idx, const InternalValue* key, RenderContext& values)
 {
-    auto result = !key ? (idx.maybeMethod ? methods::GetAttr(cur, idx.attrName, &values) : Subscript(cur, idx.attrName, &values))
+    auto result = !key ? (idx.maybeMethod || values.GetSandboxPolicy() ? methods::GetAttr(cur, idx.attrName, &values) : Subscript(cur, idx.attrName, &values))
                        : methods::GetItem(cur, *key, &values);
     if (result.IsUndefined() && !GetUndefinedInfo(result))
     {
@@ -457,7 +457,8 @@ InternalValue SubscriptExpression::Evaluate(RenderContext& values)
     {
         // x.name of a mapping, the common case, straight to the map's lookup (docs/tasks/0154)
         const auto& idx = m_subscriptExprs[0];
-        if (idx.isAttr && !idx.maybeDictMethod && AsMap(*root))
+        // (a sandbox policy is asked about the attributes of loop, a namespace or a macro by GetAttr)
+        if (idx.isAttr && !idx.maybeDictMethod && AsMap(*root) && !values.GetSandboxPolicy())
         {
             auto result = Subscript(*root, idx.attrName, &values);
             if (result.IsUndefined())
@@ -489,7 +490,13 @@ InternalValue SubscriptExpression::ApplyFirstIndex(const InternalValue& root, Re
 InternalValue LoopAttrExpression::Evaluate(RenderContext& values)
 {
     CheckStack();
-    if (const auto root = values.Nodes()[m_value].EvaluateRef(values))
+    // A sandbox policy is asked about loop's attributes by name (GetAttr), so the resolved attribute is not read
+    LookupResult root;
+    if (!values.GetSandboxPolicy())
+    {
+        root = values.Nodes()[m_value].EvaluateRef(values);
+    }
+    if (root)
     {
         if (const auto loop = AsMap(*root))
         {
@@ -510,7 +517,7 @@ InternalValue LoopAttrExpression::Evaluate(RenderContext& values)
 bool LoopAttrExpression::TryCallCycle(RenderContext& values, const ArenaCallParams& params, InternalValue& result) const
 {
     // loop.cycle(*items) takes the general call
-    if (m_attr != LoopAttr::Cycle || m_subscriptExprs.size() != 1 || params.HasUnpacking())
+    if (m_attr != LoopAttr::Cycle || m_subscriptExprs.size() != 1 || params.HasUnpacking() || values.GetSandboxPolicy())
     {
         return false;
     }
@@ -1668,6 +1675,11 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
         if (receiver.ShouldExtendLifetime())
         {
             callee.SetParentData(receiver);
+        }
+        if (auto replacement = methods::SandboxedSyntheticAttribute(&values, receiver, *name))
+        {
+            callee = std::move(*replacement);
+            return false;
         }
         if (callee.IsUndefined() && !GetUndefinedInfo(callee))
         {

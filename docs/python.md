@@ -233,8 +233,14 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   attribute (`{'__class__': 1}.__class__`) reads the key, `f.__call__` of a macro or global
   function is the function itself (0214), and under `StrictUndefined` a private name an engine
   object lacks (`loop._x`) raises `SecurityError` where Jinja2 raises `UndefinedError`. An
-  overridden `getattr` or `getitem` of the environment is not called; override
-  `is_safe_attribute`. The template's `{{ x|attr('__class__') }}` of an undefined `x` is an
+  overridden `call`, `getattr` or `getitem` of the environment (on the subclass or the instance) is
+  refused with `UnsupportedError` when a template loads, as the engine would not call it and Jinja2
+  does (a subclass that calls `super()` is refused too); override `is_safe_attribute` or
+  `is_safe_callable`. A subclass whose `is_safe_attribute` is not Jinja2's is also asked about the
+  public names of `loop`, `cycler`, a namespace and a macro (with `None` as the value, as the engine
+  builds none for the question); that is read again at each load, so a method replaced on the class
+  or the instance between loads counts for the templates loaded after it, not for those already
+  loaded. The groupby tuple's `grouper` and `list` are not asked (0425). The template's `{{ x|attr('__class__') }}` of an undefined `x` is an
   `UndefinedError`. `sort` and `unique` of an unsafe or missing attribute under
   `StrictUndefined` do not raise as Jinja2's do (0413). `sum(attribute=)` of a missing attribute
   is now an `UndefinedError` as in Jinja2 (it was a `TemplateRuntimeError`).
