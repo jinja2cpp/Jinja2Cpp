@@ -47,7 +47,14 @@ a stable identity.
   `bound_method_key`, `cycler_key`, `loop_key`. A string receiver of a method stands for itself
   by value (Python compares `__self__` by identity), a deliberate approximation.
 - P2, round trip: an object a user callable is handed comes back as itself within that call (a
-  per-call export table). "A macro arrives as None" was fixed by 0300.
+  per-call export table). "A macro arrives as None" was fixed by 0300. Built as `HostCallScope`
+  in internal_value.cpp: each map or list argument is recorded by the accessor of the GenericMap
+  or GenericList it was exported as, and a template callable by its lease; the call's result,
+  a list the host built of those (one level), and the arguments of a call back to a lent
+  callable come back as the template's own objects. The call's parameters hold each export until
+  the call ends, so a raw accessor address suffices (the plan's `weak_ptr` is not needed).
+  Limits, documented in user_callable.h: an object the host keeps and returns in a later call
+  comes back as a view (copy-on-write), and Undefined comes back as None (D4).
 - P3, JSON identity: `IJsonNode::NodeIdentity` (added by 0370) gives two reads of one JSON value
   one identity; the GenericList enumerator follows a cell made mid-loop; the six `0212` lines in
   reflect.txt go. PR #778; D6 (a) landed with 0370 (#752).

@@ -11,15 +11,18 @@
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -408,7 +411,8 @@ INSTANTIATE_TEST_SUITE_P(DoubleParamConvert, UserCallableParamConvertTest, ::tes
 INSTANTIATE_TEST_SUITE_P(VarArgsParamsConvert, UserCallableParamConvertTest, ::testing::Values(
                             InputOutputPair{"VarArgsFn()",                   "[]"},
                             InputOutputPair{"VarArgsFn(10, 'abc', false)", "[10, 'abc', False]"},
-                            InputOutputPair{"VarArgsFn(10.123, (1, 2, 3), arg=1)", "[10.123, [1, 2, 3]]"}
+                            // The tuple the call was handed comes back as itself, as in Python (docs/tasks/0212)
+                            InputOutputPair{"VarArgsFn(10.123, (1, 2, 3), arg=1)", "[10.123, (1, 2, 3)]"}
                             ));
 // clang-format on
 
@@ -541,7 +545,8 @@ INSTANTIATE_TEST_SUITE_P(ListParamConvert, UserCallableParamConvertTest, ::testi
                             InputOutputPair{"GListFn([1, 2, 3, 4])",       "[1, 2, 3, 4]"},
                             InputOutputPair{"GListFn(intList)",            "[9, 0, 8, 1, 7, 2, 6, 3, 5, 4]"},
                             InputOutputPair{"GListFn(reflectedIntVector)", "[9, 0, 8, 1, 7, 2, 6, 3, 5, 4]"},
-                            InputOutputPair{"GListFn(range(10))", "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"},
+                            // ... and so does the range (docs/tasks/0212)
+                            InputOutputPair{"GListFn(range(10))", "range(0, 10)"},
                             InputOutputPair{"GListFn([1, 2, 3, 4] | sort)","[1, 2, 3, 4]"},
                             InputOutputPair{"GListFn(intList | sort)",     "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"},
                             InputOutputPair{"GListFn(reflectedVal.tmpStructList)",
@@ -1392,4 +1397,177 @@ TEST(UserCallableTestSingle, UserCallableAsDictKey)
         ASSERT_TRUE(result) << row.source << ": " << result.error().ToString();
         EXPECT_EQ(row.expected, result.value()) << row.source;
     }
+}
+
+// What a host's call is handed comes back as the template's own object while the call runs
+// (docs/tasks/0212 P2): the expected outputs are Python Jinja2's, with `ident` returning its
+// argument, `wrap` returning it in a list and `callWith` calling its first argument with its second
+TEST(UserCallableTestSingle, HandedObjectsComeBackAsThemselves)
+{
+    ValuesMap params;
+    params["ident"] = UserCallable([](const UserCallableParams& p) { return p["v"]; }, { ArgInfo{ "v" } });
+    params["wrap"] = UserCallable([](const UserCallableParams& p) { return Value(ValuesList{ p["v"] }); }, { ArgInfo{ "v" } });
+    params["call0"] = UserCallable([](const UserCallableParams& p) { return p["f"].GetIf<UserCallable>()->callable(UserCallableParams{}); }, { ArgInfo{ "f" } });
+    params["callWith"] = UserCallable(
+        [](const UserCallableParams& p) {
+            UserCallableParams args;
+            args.extraPosArgs = Value(ValuesList{ p["v"] });
+            args.extraKwArgs = Value(ValuesMap{});
+            return p["f"].GetIf<UserCallable>()->callable(args);
+        },
+        { ArgInfo{ "f" }, ArgInfo{ "v" } });
+    params["ctxl"] = ValuesList{ 1 };
+    struct Row
+    {
+        const char* source;
+        const char* expected; // nullptr: the render fails
+    };
+    const Row rows[] = {
+        { "{% set n = namespace(a=1) %}{{ ident(n) is sameas n }}|{{ ident(n) == n }}|{{ {ident(n): 1}[n] }}", "True|True|1" },
+        { "{% set c = cycler(1, 2) %}{{ ident(c) == c }}|{{ ident(c) is sameas c }}|{{ ident(c).next() }}{{ c.next() }}", "True|True|12" },
+        { "{% set n = namespace(a=1) %}{% set m = ident(n) %}{% set m.a = 2 %}{{ n.a }}|{{ ident(n) }}", "2|<Namespace {'a': 2}>" },
+        { "{% set l = [1] %}{% do ident(l).append(2) %}{{ l }}|{{ ident(l) is sameas l }}", "[1, 2]|True" },
+        { "{% set d = {'a': 1} %}{% do ident(d).update(b=2) %}{{ d }}|{{ ident(d) is sameas d }}", "{'a': 1, 'b': 2}|True" },
+        { "{% macro m() %}hi{% endmacro %}{{ ident(m)() }}|{{ ident(m) is sameas m }}", "hi|True" },
+        { "{{ ident(range)(2)|list }}", "[0, 1]" },
+        { "{% set j = joiner('/') %}{{ ident(j)() }}{{ j() }}", "/" },
+        { "{% for i in [1] %}{{ ident(loop).index }}{% endfor %}", "1" },
+        { "{% set n = namespace() %}{{ wrap(n)[0] is sameas n }}|{{ ident([n])[0] is sameas n }}", "True|True" },
+        { "{{ ident(ctxl) is sameas ctxl }}|{% do ident(ctxl).append(7) %}{{ ctxl }}", "True|[1, 7]" },
+        // Python: TypeError, Object of type Namespace is not JSON serializable
+        { "{% set n = namespace(a=1) %}{{ ident(n)|tojson }}", nullptr },
+        // A call back gets what the call was handed as itself
+        { "{% set n = namespace() %}{% macro m(x) %}{{ x is sameas n }}{% endmacro %}{{ callWith(m, n) }}", "True" },
+        { "{% macro m() %}hi{% endmacro %}{{ call0(ident(m)) }}", "hi" },
+    };
+    for (const auto& row : rows)
+    {
+        const std::string source = row.source;
+        TemplateEnv env;
+        env.GetSettings().extensions.doStatement = true;
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load(source)) << source;
+        auto result = tpl.RenderAsString(params);
+        TemplateW tplW(&env);
+        ASSERT_TRUE(tplW.Load(ConvertString<std::wstring>(source))) << source;
+        auto resultW = tplW.RenderAsString(params);
+        if (!row.expected)
+        {
+            EXPECT_FALSE(result) << source;
+            EXPECT_FALSE(resultW) << source;
+            continue;
+        }
+        ASSERT_TRUE(result) << source << ": " << result.error().ToString();
+        EXPECT_EQ(row.expected, result.value()) << source;
+        ASSERT_TRUE(resultW) << source << ": " << ConvertString<std::string>(resultW.error().ToString());
+        EXPECT_EQ(ConvertString<std::wstring>(std::string(row.expected)), resultW.value()) << source;
+    }
+}
+
+// An object the host keeps past the call comes back in a later call as a view of what it was
+// exported as, never as the template's object (docs/tasks/0212 P2): a later render that writes to
+// it writes to its own copy, so renders never share a mutable object
+TEST(UserCallableTestSingle, KeptObjectsComeBackAsViews)
+{
+    Value kept;
+    ValuesMap params;
+    params["keep"] = UserCallable(
+        [&kept](const UserCallableParams& p) {
+            kept = p["v"];
+            return Value();
+        },
+        { ArgInfo{ "v" } });
+    params["give"] = UserCallable([&kept](const UserCallableParams&) { return kept; }, {});
+    TemplateEnv env;
+    env.GetSettings().extensions.doStatement = true;
+    const auto render = [&](const std::string& source) {
+        Template tpl(&env);
+        EXPECT_TRUE(tpl.Load(source)) << source;
+        auto result = tpl.RenderAsString(params);
+        EXPECT_TRUE(result) << source << ": " << result.error().ToString();
+        return result ? result.value() : std::string();
+    };
+
+    // Python gives True for `give() is sameas d`: the call that returns the dict is not the one it was handed to
+    EXPECT_EQ("1|True|False", render("{% set d = {'a': 1} %}{% do keep(d) %}{{ give().a }}|{{ give() is sameas give() }}|{{ give() is sameas d }}"));
+    // The next render's write to the kept dict reaches its own copy only
+    EXPECT_EQ("{'a': 1, 'b': 2}|{'a': 1, 'b': 2}", render("{% set x = give() %}{% do x.update(b=2) %}{{ x }}|{{ x }}"));
+    const auto* map = kept.GetIf<GenericMap>();
+    ASSERT_NE(nullptr, map);
+    EXPECT_TRUE(map->GetValueByName("b").IsNone());
+    EXPECT_EQ(1, map->GetValueByName("a").As<int64_t>());
+    EXPECT_EQ("{'a': 1}", render("{{ give() }}"));
+}
+
+// Two renders on two threads swap their dicts through a host callable: each writes only to its own
+// copy of the other's dict, never to the dict itself (docs/tasks/0212 P2; the TSan job checks it)
+TEST(UserCallableTestSingle, SwappedObjectsStayInTheirRender)
+{
+    std::mutex mutex;
+    Value kept;
+    ValuesMap params;
+    params["swap"] = UserCallable(
+        [&](const UserCallableParams& p) {
+            const std::scoped_lock lock(mutex);
+            Value previous = std::move(kept);
+            kept = p["v"];
+            return previous;
+        },
+        { ArgInfo{ "v" } });
+    TemplateEnv env;
+    env.GetSettings().extensions.doStatement = true;
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% set d = {'n': 0} %}{% set x = swap(d) %}{% if x %}{% do x.update(n=1) %}{{ x.n }}{% endif %}|{{ d.n }}"));
+    const auto run = [&] {
+        for (int i = 0; i < 200; ++i)
+        {
+            auto result = tpl.RenderAsString(params);
+            ASSERT_TRUE(result) << result.error().ToString();
+            ASSERT_TRUE(result.value() == "1|0" || result.value() == "|0") << result.value();
+        }
+    };
+    std::thread first(run);
+    std::thread second(run);
+    first.join();
+    second.join();
+    const std::scoped_lock lock(mutex);
+    kept = Value();
+}
+
+// A call handed many containers finds each one in log time, not by a scan per item (docs/tasks/0212)
+TEST(UserCallableTestSingle, ManyHandedContainersComeBack)
+{
+    ValuesMap params;
+    params["va"] = UserCallable([](const UserCallableParams& p) { return p.extraPosArgs; }, { ArgInfo{ "*args" } });
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% set big = range(20000)|batch(1)|list %}{% set r = va(*big) %}{{ r|length }}|{{ r[0] is sameas big[0] }}|{{ r[19999] is sameas big[19999] }}"));
+    auto result = tpl.RenderAsString(params);
+    ASSERT_TRUE(result) << result.error().ToString();
+    EXPECT_EQ("20000|True|True", result.value());
+}
+
+// A list of handed containers the host returns counts against maxSequenceSize when it becomes a
+// template list (docs/tasks/0212)
+TEST(UserCallableTestSingle, RestoredListObeysTheSequenceLimit)
+{
+    ValuesMap params;
+    params["many"] = UserCallable(
+        [](const UserCallableParams& p) {
+            const auto count = p["n"].As<int64_t>();
+            return Value(ValuesList(static_cast<size_t>(count), p["v"]));
+        },
+        { ArgInfo{ "v" }, ArgInfo{ "n" } });
+    Settings settings;
+    settings.limits.maxSequenceSize = 16;
+    TemplateEnv env;
+    env.SetSettings(settings);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% set n = namespace() %}{{ many(n, 16)|length }}|{{ many(n, 16)[15] is sameas n }}"));
+    auto result = tpl.RenderAsString(params);
+    ASSERT_TRUE(result) << result.error().ToString();
+    EXPECT_EQ("16|True", result.value());
+    ASSERT_TRUE(tpl.Load("{% set n = namespace() %}{{ many(n, 17)|length }}"));
+    result = tpl.RenderAsString(params);
+    ASSERT_FALSE(result);
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
 }
