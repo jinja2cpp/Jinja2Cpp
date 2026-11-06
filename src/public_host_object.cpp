@@ -523,7 +523,9 @@ InternalValue HostMapToInternal(const GenericMap& map)
     {
         return UndefinedFromDescription(carrier->Description());
     }
-    return InternalValue(MapAdapter(MakeRef<const HostBridge>(map.AsHostObject().get(), map.AsHostObject(), false)).MarkAsHost());
+    auto object = map.AsHostObject();
+    const IHostObject* raw = object.get();
+    return InternalValue(MapAdapter(MakeRef<const HostBridge>(raw, std::move(object), false)).MarkAsHost());
 }
 
 Value UndefinedToHost(const UndefinedValue& undefined)
