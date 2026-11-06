@@ -1025,7 +1025,7 @@ private:
                 // A generator or reversed() iterator is no list to json.dumps (docs/tasks/0387)
                 throw TemplateRuntimeError("Object of type "s + iterator + " is not JSON serializable");
             }
-            if (list->GetRangeInfo())
+            if (list->IsRange())
             {
                 // Nor is a range (docs/tasks/0401)
                 throw TemplateRuntimeError("Object of type range is not JSON serializable");

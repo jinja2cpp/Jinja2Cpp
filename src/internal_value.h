@@ -915,6 +915,7 @@ public:
     void ForEach(IListAccessor::ItemVisitor fn) const { Ref().ForEach(fn); }
     [[nodiscard]] const void* GetIdentity() const { return Ref().GetIdentity(); }
     [[nodiscard]] const RangeInfo* GetRangeInfo() const { return Ref().GetRangeInfo(); }
+    [[nodiscard]] bool IsRange() const noexcept { return Ref().IsRange(); }
     [[nodiscard]] IteratorKind GetIteratorKind() const { return Ref().GetIteratorKind(); }
     [[nodiscard]] InternalValueList* GetMutableItems() const { return Ref().GetMutableItems(); }
     [[nodiscard]] GenericList CreateGenericList() const { return Ref().CreateGenericList(); }
