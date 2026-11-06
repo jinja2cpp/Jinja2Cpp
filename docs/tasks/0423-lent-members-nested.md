@@ -15,7 +15,9 @@ the argument itself holds are wrapped (`LendingMapView`, `LendingListView`); whe
 levels down (`read([{'k': m}])`, `read({'a': {'m': m}})`) is lent is not tested, and the
 implementer reported it as unverified. Python passes the macro at any depth. A lent view a C++
 callable keeps after the call degrades to `None` for its callable members rather than raising
-`TemplateExpired`, which also differs from a top-level lent callable.
+`TemplateExpired`, which also differs from a top-level lent callable. And a dict with a key that is not a string is
+exported as an eager copy (`CreateSnapshot`) outside the lending frame, so its callables arrive as
+`None` (verifier note, reasoned, not run).
 
 **Proposal.** Wrap containers read through a lending view as lending views too (the thread-local
 frame is already there), so depth does not matter, and make a member read after the call raise
