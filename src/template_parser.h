@@ -388,8 +388,10 @@ struct TemplateRootInfo
     // be in volatile code (TemplateParser::IsInVolatileCode)
     bool hasVolatileAutoescape = false;
     // The template names of the `extends`, `include`, `import` and `from` tags in source order
-    // (jinja2.meta.find_referenced_templates), read after the parse
+    // (jinja2.meta.find_referenced_templates), read after the parse. Collected only by the parse
+    // of that walk (collectReferenced), so that a Load allocates nothing for it
     std::vector<NodeRef<Expression>> referenced;
+    bool collectReferenced = false;
 
     // False if a block of this name is defined already. Most templates define few blocks,
     // whose names are compared one by one; past those, the names go to a set, so that a
@@ -688,6 +690,8 @@ public:
     [[nodiscard]] const NameResolver& GetNames() const { return m_names; }
     // The name expressions of the template's references to other templates
     [[nodiscard]] const std::vector<NodeRef<Expression>>& GetReferenced() const { return m_root.referenced; }
+    // Collect them in the next Parse (TemplateImpl::FindReferencedTemplates)
+    void CollectReferenced() { m_root.collectReferenced = true; }
 
     // Text the tree points to besides the source, null if none: kept as long as the tree.
     // A list, so that the texts do not move as more are added

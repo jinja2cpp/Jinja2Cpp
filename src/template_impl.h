@@ -710,6 +710,7 @@ public:
         }
         NodeArena nodes;
         TemplateParser<CharT> parser(m_template.get(), *m_settings, m_env, m_templateName, nodes);
+        parser.CollectReferenced();
         const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect);
         auto parseResult = parser.Parse();
         if (!parseResult)
