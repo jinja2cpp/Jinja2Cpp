@@ -27,13 +27,15 @@ test `JsonConformance.ModuleCallsOfABorrowedDocument`). What differs from Python
 - The TLA+ model (tla/CellProtocol.tla) and the cell trace have no call-scoped freeze: it is the
   render's FinishFreeze for a subset of the cells at a module call's end, not checked by TLC.
 
-**Decision for Ruslan.** Should a borrowed JSON view the host lends again keep a module's writes
-across calls (0049 P2 for JSON)? If yes: re-key the cell under the view's accessor at the call's end
-and let `CellLink::Find` try that key on a miss (advisor option a', about 100-150 lines and a new
-model action). If no: record the first bullet as deliberate.
+**Decision (Ruslan, 2026-11-06): option b.** A borrowed JSON view the host lends again does not keep
+a module's writes across calls: each call starts from the host's data, as the first bullet says. This
+is deliberate and follows the 2026-10-26 principle that host data is immutable and calls are
+independent. Option a' (re-key the cell under the view's accessor at the call's end, about 100-150
+lines and a new model action) stays possible later if a user asks for Python's behaviour. The cost
+of b: a host `ValuesList` lent again keeps the writes (0049 P2) while a borrowed JSON view does not.
 
-**Proposal.** The `KeepsDocument()` hook for owned documents, the model's call-scoped freeze, and the
-decision above.
+**Proposal.** The `KeepsDocument()` hook for owned documents, the model's call-scoped freeze, and a
+test that pins the borrowed case's per-call behaviour (with a comment naming this decision).
 
 **Done when** the model covers the call-scoped freeze, owned documents keep their cells across calls,
-and the borrowed case either matches Python or is recorded as deliberate with a test.
+and the borrowed case is pinned as deliberate by a test.
