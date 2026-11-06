@@ -241,3 +241,9 @@ def test_package_loader_reloads_a_changed_file(package_dir):
 
     os.utime(path, (os.path.getmtime(path) + 5, os.path.getmtime(path) + 5))
     assert env.get_template("inc.html").render() == "[changed]"
+
+
+def test_jinja2_package_loader_in_our_environment(package_dir):
+    env = jinja2cpp.Environment(loader=jinja2.ChoiceLoader([jinja2.DictLoader({"own": "{% include 'inc.html' %}"}), jinja2.PackageLoader(package_dir.name)]))
+    assert env.get_template("own").render() == "[inc]"
+    assert env.get_template("page.html").render(x=1) == "index 1"

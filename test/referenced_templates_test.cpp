@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <string_view>

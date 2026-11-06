@@ -4,6 +4,7 @@
 #include "cycle_collector.h"
 #include "dialect.h"
 #include "error_boundary.h"
+#include "expression_evaluator.h"
 #include "internal_value.h"
 #include "json_reader.h"
 #include "load_settings.h"

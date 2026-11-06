@@ -274,3 +274,11 @@ def test_module_macro_takes_callables_and_big_numbers():
 def test_module_tuple_argument_arrives_as_a_list():
     mod = jinja2cpp.Template("{% macro show(x) %}{{ x }}{% endmacro %}").module
     assert mod.show((1, "a")) == "[1, 'a']"  # Jinja2: (1, 'a'); the host API has no tuple (docs/python.md)
+
+
+def test_module_macro_called_from_another_render():
+    env = jinja2cpp.Environment()
+    mod = env.from_string("{% macro greet(n) %}hi {{ n }}{% endmacro %}{% macro bad(n) %}{{ 1 // n }}{% endmacro %}").make_module()
+    assert env.from_string("{{ greet('x') }}|{{ greet(n='y') }}").render(greet=mod.greet) == "hi x|hi y"
+    with pytest.raises(jinja2cpp.TemplateRuntimeError):
+        env.from_string("{{ bad(0) }}").render(bad=mod.bad)
