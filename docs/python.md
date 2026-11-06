@@ -96,16 +96,16 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   (a tuple from Python, a frozen dataclass) keys it by identity (0248 plan, section 7).
 - Methods of the engine's own values are the engine's: `x.hex()` on a float (and other
   Python methods Jinja2 lets a template call on an `int`, `float` or `str` the engine has no
-  method for) raises `TemplateRuntimeError`, for values from Python as for literals.
+  method for) raises `TemplateRuntimeError`, for values from Python as for literals (0403).
 - `urlencode` reads any mapping as a dict; Jinja2 does so only for a `dict` and iterates
-  another `Mapping`, which gives its keys.
+  another `Mapping`, which gives its keys (0404).
 - A template keeps the `Environment.globals` dict it was made with, as Jinja2's does, but
   `get_template` makes a new `Template` with the dict of that moment, and an imported template
   sees the importer's: after `env.globals = {...}` Jinja2's cached templates still see the old
-  dict.
+  dict (0405).
 - An environment keeps every filter, test, `finalize`, `autoescape` callable and loader it was
   ever given alive for as long as it lives, because a template loaded earlier may still call
-  one: replacing `env.filters` entries in a loop grows the environment.
+  one: replacing `env.filters` entries in a loop grows the environment (0406).
 - Not yet: the sandbox, `pass_context` and the other decorators, i18n, `make_module`,
   `select_template`, the other loaders' engine paths, custom extensions, async, the fallback to
   real Jinja2 (docs/tasks/0354).
