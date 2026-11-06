@@ -212,7 +212,7 @@ std::size_t TokenMeter::PrefixSize<char>(std::string_view text, std::size_t maxT
 template<>
 std::size_t TokenMeter::PrefixSize<wchar_t>(std::wstring_view text, std::size_t maxTokens) const
 {
-    const std::string utf8 = ConvertString<std::string>(text);
+    const auto utf8 = ConvertString<std::string>(text);
     const std::size_t bytes = PrefixUtf8(utf8, maxTokens);
     // The same number of code points of the wide text: the conversion keeps one per code point
     auto codePoints = static_cast<std::size_t>(std::count_if(utf8.begin(), utf8.begin() + static_cast<std::ptrdiff_t>(bytes), [](char ch) { return !IsContinuation(ch); }));
