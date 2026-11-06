@@ -466,9 +466,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0396](0396-batch-token-count.md) | Batch count callback for `pack` | api | low | open |
 | [0397](0397-conancenter-recipe-license-at-2-0.md) | Correct the ConanCenter recipe license with the 2.0 version bump | release | medium | open |
 | [0398](0398-lean-proof-pilot-neutralize.md) | Lean 4 proof pilot: the `neutralize` edge rule | robustness | low | open |
-| [0399](0399-select-map-fetch-per-step.md) | select and map fetch one item per step | parity | low | open |
+| [0399](0399-select-map-fetch-per-step.md) | select and map fetch one item per step | parity | low | done |
 | [0400](0400-loop-iteration-cycle-leak.md) | A kept loop over `loop` leaks through a cycle the collector cannot see | robustness | low | open |
-| [0401](0401-callable-and-generator-leftovers.md) | Callables, generators and ranges: leftovers of 0387 and 0368 | parity | low | open |
+| [0401](0401-callable-and-generator-leftovers.md) | Callables, generators and ranges: leftovers of 0387 and 0368 | parity | low | done |
 | [0402](0402-json-identity-across-module-calls.md) | JSON values across the calls of a template module | parity | low | open |
 | [0403](0403-python-methods-on-native-values.md) | Python methods of int, float and str the engine does not implement | parity | low | open |
 | [0404](0404-urlencode-non-dict-mapping.md) | urlencode of a Python Mapping that is not a dict | parity | low | open |
@@ -477,3 +477,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0407](0407-module-call-leaks-through-exports-and-closures.md) | Leaks in template module calls through call exports and closure frames | robustness | medium | open |
 | [0408](0408-bench-gate-driver-capabilities.md) | Detect the base bench driver's features by a capability marker | ci | low | open |
 | [0409](0409-truncate-tokens-shrink-bound.md) | Bound the host calls of truncate_tokens' shrink loop | robustness | low | open |
+| [0420](0420-range-and-engine-object-leftovers.md) | Range and engine-object leftovers of 0401 | parity | low | open |
