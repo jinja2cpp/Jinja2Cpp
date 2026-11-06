@@ -430,6 +430,7 @@ void PyEnvironment::SetExtensions(nb::handle value)
     auto& extensions = m_settings.extensions;
     extensions.doStatement = false;
     extensions.loopControls = false;
+    extensions.i18n = false;
     nb::list list;
     for (auto extension : value)
     {
@@ -454,6 +455,10 @@ void PyEnvironment::SetExtensions(nb::handle value)
         else if (name == "loopcontrols" || name == "LoopControlExtension")
         {
             extensions.loopControls = true;
+        }
+        else if (name == "i18n" || name == "InternationalizationExtension")
+        {
+            extensions.i18n = true;
         }
         else
         {
@@ -490,6 +495,35 @@ void PyEnvironment::Rebuild()
     }
     m_boundFilters.clear();
     m_boundTests.clear();
+    ApplyGettext();
+}
+
+void PyEnvironment::ApplyGettext()
+{
+    if (!m_env)
+    {
+        return;
+    }
+    // A callable left out stays unset: the message is not translated
+    const auto callable = [](PyObject* object) { return object ? jinja2::host::EngineUserCallable(BorrowedCallable(object)) : jinja2::UserCallable(); };
+    m_env->InstallGettextCallables(callable(m_gettext[0]), callable(m_gettext[1]), callable(m_gettext[2]), callable(m_gettext[3]));
+}
+
+void PyEnvironment::SetGettext(nb::handle gettext, nb::handle ngettext, nb::handle pgettext, nb::handle npgettext)
+{
+    CheckAlive();
+    const nb::handle callables[4] = { gettext, ngettext, pgettext, npgettext };
+    for (size_t i = 0; i < 4; ++i)
+    {
+        if (callables[i].is_none())
+        {
+            m_gettext[i] = nullptr;
+            continue;
+        }
+        Keep(callables[i]);
+        m_gettext[i] = callables[i].ptr();
+    }
+    ApplyGettext();
 }
 
 jinja2::TemplateEnv& PyEnvironment::Prepared()
@@ -779,6 +813,32 @@ void BindEnvironment(nb::module_& module)
                                "filename"_a.none(),
                                "globals"_a.none(),
                                "template_class"_a)
+                           .def("_set_gettext", &PyEnvironment::SetGettext, "gettext"_a.none(), "ngettext"_a.none(), "pgettext"_a.none(), "npgettext"_a.none())
+                           .def_prop_rw(
+                               "newstyle_gettext", [](const PyEnvironment& self) { return self.NewstyleGettext(); }, [](PyEnvironment& self, bool value) { self.SetNewstyleGettext(value); })
+                           .def(
+                               "install_gettext_translations",
+                               [](nb::handle self, nb::handle translations, nb::handle newstyle) { return nb::module_::import_("jinja2cpp.ext").attr("_install")(self, translations, newstyle); },
+                               "translations"_a,
+                               "newstyle"_a.none() = nb::none())
+                           .def(
+                               "install_null_translations",
+                               [](nb::handle self, nb::handle newstyle) { return nb::module_::import_("jinja2cpp.ext").attr("_install_null")(self, newstyle); },
+                               "newstyle"_a.none() = nb::none())
+                           .def(
+                               "install_gettext_callables",
+                               [](nb::handle self, nb::handle gettext, nb::handle ngettext, nb::handle newstyle, nb::handle pgettext, nb::handle npgettext) {
+                                   return nb::module_::import_("jinja2cpp.ext").attr("_install_callables")(self, gettext, ngettext, newstyle, pgettext, npgettext);
+                               },
+                               "gettext"_a,
+                               "ngettext"_a,
+                               "newstyle"_a = nb::none(),
+                               "pgettext"_a = nb::none(),
+                               "npgettext"_a = nb::none())
+                           .def(
+                               "uninstall_gettext_translations",
+                               [](nb::handle self, nb::handle translations) { return nb::module_::import_("jinja2cpp.ext").attr("_uninstall")(self, translations); },
+                               "translations"_a)
                            .def_prop_rw(
                                "globals", [](const PyEnvironment& self) { return self.GetDict("globals"); }, [](PyEnvironment& self, nb::handle value) { self.SetDict("globals", value); })
                            .def_prop_rw(

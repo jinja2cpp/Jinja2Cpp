@@ -37,6 +37,12 @@ public:
     [[nodiscard]] nb::object GetDict(const std::string& name) const;
     void SetDict(const std::string& name, nb::handle value);
 
+    // The translation callables of the i18n extension, as the engine takes them (None for none):
+    // gettext, ngettext, pgettext, npgettext. The environment keeps them alive
+    void SetGettext(nb::handle gettext, nb::handle ngettext, nb::handle pgettext, nb::handle npgettext);
+    [[nodiscard]] bool NewstyleGettext() const noexcept { return m_newstyleGettext; }
+    void SetNewstyleGettext(bool newstyle) noexcept { m_newstyleGettext = newstyle; }
+
     // The template of a source or of a loader's name, an instance of `templateClass` (Jinja2's
     // Environment.template_class: a subclass of Template)
     nb::object FromString(nb::handle source, nb::handle globals, nb::handle templateClass);
@@ -64,6 +70,7 @@ private:
     void SetAutoescape(nb::handle value);
     void SetExtensions(nb::handle value);
     void Keep(nb::handle object);
+    void ApplyGettext();
     nb::object MakeTemplate(jinja2::Template tpl, nb::handle globals, nb::object name, nb::object filename, nb::handle templateClass);
 
     std::unique_ptr<jinja2::TemplateEnv> m_env;
@@ -83,6 +90,9 @@ private:
     std::vector<nb::object> m_kept;
     std::vector<std::pair<std::string, PyObject*>> m_boundFilters;
     std::vector<std::pair<std::string, PyObject*>> m_boundTests;
+    // The i18n callables, borrowed from m_kept; null for none
+    PyObject* m_gettext[4] = {};
+    bool m_newstyleGettext = false;
     bool m_cleared = false;
 };
 

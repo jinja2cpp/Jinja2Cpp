@@ -48,7 +48,7 @@ engines on a Release build of the module.
   `keep_trailing_newline`, `newline_sequence`, `line_statement_prefix`,
   `line_comment_prefix`, `autoescape` (a bool or a callable such as `select_autoescape()`),
   `undefined`, `finalize`, `loader`, `cache_size`, `auto_reload`, and the extensions
-  `jinja2.ext.do` and `jinja2.ext.loopcontrols` (by name or class, Jinja2's or ours).
+  `jinja2.ext.do`, `jinja2.ext.loopcontrols` and `jinja2.ext.i18n` (by name or class, Jinja2's or ours).
   `optimized`, `bytecode_cache` and `enable_async=False` are accepted and change nothing.
 - `env.from_string`, `env.get_template(name, parent=None, globals=None)`, `Template(source, **options)`,
   and `render(*args, **kwargs)` with Jinja2's `dict(*args, **kwargs)` rule.
@@ -89,6 +89,20 @@ engines on a Release build of the module.
   `jinja2cpp.UnsupportedError` is a `TemplateError` and a `NotImplementedError`: what the subset
   does not do raises it or `NotImplementedError`.
   An exception that a Python filter, test, global or attribute raises is raised as itself.
+- `pass_context`, `pass_eval_context` and `pass_environment` (`jinja2cpp.pass_context`, also in
+  `jinja2cpp.utils`; a function marked by Jinja2's own decorators works too, the marker
+  `jinja_pass_arg` is read by its name). They apply as in Jinja2 to filters, tests, globals,
+  `finalize`, callables passed as render values and methods of objects. The callable gets the
+  environment (the object itself), an `EvalContext` (`autoescape`, `volatile`, `environment`),
+  or a read-only `Context`: `get`, `[]`, `in`, `resolve`, `resolve_or_missing`, `get_all`, `call`,
+  `keys`, `values`, `items`, `parent`, `vars`, `name`, `environment`, `eval_ctx`. A `Context` is
+  lent for the call that received it: using it afterwards raises `TemplateRuntimeError`.
+- i18n: `{% trans %}` (variables, `pluralize`, `trimmed`, a message context) and the `_`,
+  `gettext`, `ngettext`, `pgettext` and `npgettext` globals, with `install_gettext_translations`,
+  `install_null_translations`, `install_gettext_callables` and `uninstall_gettext_translations`.
+  Newstyle gettext (`newstyle=True`, Flask-Babel's choice) runs in the engine
+  (`TemplateEnv::InstallGettextCallables`); oldstyle, Jinja2's default, installs Python wrappers
+  as the four globals.
 - Ctrl-C (KeyboardInterrupt) stops a long render. The GIL is held for the whole render.
 
 ## How values cross
@@ -149,5 +163,19 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   source order, `None` for a name that is not a literal.
 - `generate()` gives the output as one item, so `stream().enable_buffering(n)` has nothing to
   combine and an error in the template surfaces at the first `next()` (0355).
-- Not yet: the sandbox, `pass_context` and the other decorators, i18n, custom extensions, async,
-  the fallback to real Jinja2 (docs/tasks/0354).
+- The `Context` a `pass_context` callable gets sees every variable of the call site, the loop
+  variables, `{% with %}` names and macro locals included, where Jinja2's holds only the
+  arguments, the globals and the template's top-level names; its `vars` and `parent` both hold
+  all of them (0416). `eval_ctx.volatile` is always False. `Context.derived`, `blocks` and
+  `exported_vars` (empty) are not there.
+- Oldstyle gettext is emulated with Python wrappers, which cannot tell a `{% trans %}` block from
+  a direct call: `{% trans %}100% sure{% endtrans %}` without variables passes `100%% sure` to the
+  translations and prints it; a count named `num` is not formatted (`%(num)s` stays); a block
+  without variables is escaped under autoescape; `gettext('x %(a)s', a=1)` formats instead of
+  raising TypeError (0415). Newstyle is exact.
+- Without installed translations (and after `uninstall_gettext_translations`) the engine's
+  `_()` and `{% trans %}` render the message untranslated; Jinja2 raises `UndefinedError`
+  because it has no `gettext` global yet (0417). A `gettext` set in `env.globals` replaces the
+  installed one in both.
+- Not yet: the sandbox, custom extensions, async, the fallback to real Jinja2
+  (docs/tasks/0354).

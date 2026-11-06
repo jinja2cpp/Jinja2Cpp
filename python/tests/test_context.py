@@ -297,3 +297,48 @@ def test_pass_arg_markers_reading_by_name():
     assert env.from_string("{% set x = 1 %}{{ f() }}").render() == "1"
     f.jinja_pass_arg = "context"  # a marker that is no enum member
     assert jinja2cpp.Environment().from_string("{{ 1 }}").render() == "1"
+
+
+def test_filters_applied_by_map_select_and_finalize():
+    def make(module):
+        @module.pass_context
+        def f(ctx, value):
+            return f"{value}{ctx.get('x')}"
+
+        @module.pass_environment
+        def fin(environment, value):
+            return f"<{value}{type(environment).__name__}>"
+
+        @module.pass_eval_context
+        def is_big(eval_ctx, value):
+            return value > 1 and eval_ctx.autoescape is False
+
+        env = module.Environment(finalize=fin)
+        env.filters["f"] = f
+        env.tests["big"] = is_big
+        return env
+
+    both(make, "{% set x = 7 %}{{ 1 }}{{ [1, 2]|map('f')|list }}{{ [1, 2, 3]|select('big')|list }}{{ 2|f }}{{ 3 is big }}")
+
+
+_STASHED = []
+
+
+def test_context_stored_in_a_global_is_dead_after_the_render():
+    @jinja2cpp.pass_context
+    def stash(ctx):
+        _STASHED.append(ctx)
+        # the loop variable and a macro are lent values: a value taken from the context is too
+        return ctx.get("loop") is None
+
+    env = jinja2cpp.Environment()
+    env.globals["stash"] = stash
+    for _ in range(3):
+        env.from_string("{% macro m() %}{{ stash() }}{% endmacro %}{% for i in range(3) %}{{ m() }}{% endfor %}").render()
+    gc.collect()
+    for ctx in _STASHED:
+        with pytest.raises(jinja2cpp.TemplateRuntimeError):
+            ctx.get("i")
+        with pytest.raises(jinja2cpp.TemplateRuntimeError):
+            ctx.get_all()
+    _STASHED.clear()

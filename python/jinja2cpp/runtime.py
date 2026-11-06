@@ -201,6 +201,21 @@ class Context:
         rv = self.resolve_or_missing(key)
         return default if rv is missing else rv
 
+    def call(self, obj: t.Callable[..., t.Any], /, *args: t.Any, **kwargs: t.Any) -> t.Any:
+        """Calls obj as a template does: a pass_context, pass_eval_context or pass_environment
+        callable gets the argument it asks for first."""
+        marker = getattr(obj, "jinja_pass_arg", None)
+        if marker is None:
+            marker = getattr(getattr(type(obj), "__call__", None), "jinja_pass_arg", None)
+        kind = getattr(marker, "name", None)
+        if kind == "context":
+            args = (self, *args)
+        elif kind == "eval_context":
+            args = (self.eval_ctx, *args)
+        elif kind == "environment":
+            args = (self.environment, *args)
+        return obj(*args, **kwargs)
+
     def get_all(self) -> t.Dict[str, t.Any]:
         names = self._handle.names()
         names.extend(self.environment.globals)
