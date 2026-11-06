@@ -696,6 +696,13 @@ struct ArgDescrHasType<ArgInfoT<T>...> : std::true_type
  * class with one const, non-template `operator()`; for a generic lambda or an overload set describe them with
  * \ref ArgInfoT (a generic callable with untyped descriptors is limited to two parameters).
  *
+ * A map, list or template callable (a macro, `range`) the function is handed comes back as the template's own object when
+ * the function returns it, or a list of it, or passes it to a template callable it was handed, during the same call:
+ * `ident(x) is sameas x` holds, and a write through the result reaches `x`. One the host keeps and returns in a later
+ * call comes back as a view of what it was given, which a write copies, so that two renders never share a mutable
+ * object; a template callable kept past its call fails with TemplateExpired when called. An undefined argument reaches
+ * the function as None, and so comes back as None, not as undefined (Python keeps the Undefined).
+ *
  * \param f  Function which should be called
  * \param ad Function param descriptors
  *
