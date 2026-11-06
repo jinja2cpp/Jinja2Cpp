@@ -824,6 +824,28 @@ Recommend A now, C only if someone asks.
    library; the estimate `ceil(utf8_bytes / 4)`; `pack(budget, attribute, by, reverse, reserve,
    stop)` with no per-item overhead argument; core, not behind the chat-template switch; one load
    and branch per escaped value on the HTML-autoescape path, if count.py shows it within noise.
+10. **The Python module on the public API only** (0357, plan in
+   [design/0357-python-module-public-api.md](design/0357-python-module-public-api.md)).
+   *Decided by Ruslan 2026-11-06: every recommendation, after the advisor's and Codex's
+   reviews.*
+   - **What is added.** A standalone public `jinja2::IHostObject` in `jinja2cpp/host_object.h`,
+     built by composition: `MakeHostValue`, plus an `AsHostObject()` slot on
+     `IMapItemAccessor`. It does not derive from the map accessor.
+   - **Export views.** The public export views gain lossless entries (non-string keys), a tuple
+     flag and a stable identity token.
+   - **Undefined values.** Free functions `MakeUndefined` and `UndefinedOf`, and an opt-in
+     `UserCallable::keepUndefined`. `None` stays the default.
+   - **Rendering.** `RenderOptions`, with per-render globals and a `std::function` poll;
+     call-site information for `*context` callables; hex digits for `BigInt`;
+     `Template::FindReferencedTemplates`.
+   - **Sandbox.** An optional public `ISandboxPolicy`, at no cost when it is unset. Both the
+     native attribute path and the direct method-call path honour it.
+   - **Growth after the freeze.** Through `IHostObject2 : IHostObject`, found once per object.
+     There is no `Query` escape hatch.
+   - **Kept template objects.** A kept `loop` or namespace becomes a readable snapshot. Lent
+     macros still expire.
+   - **Perf gate.** The module must beat Python Jinja2 on every case. No case may lose more
+     than 5% of its margin, measured in instruction counts.
 
 ## 8. Work breakdown
 

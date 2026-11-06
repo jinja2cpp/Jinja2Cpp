@@ -1,6 +1,6 @@
 # 0357 plan: the Python module on the public API only
 
-Status: PROPOSED, 2026-11-06. Awaiting Ruslan's decisions D1-D7 (section 5; D6 in detail in section 8; Codex review and resulting changes in section 9).
+Status: APPROVED by Ruslan, 2026-11-06. Taken: every recommendation as amended by sections 7 and 9, so D1a with composition, D2a conditional on S1b, D3 through `IHostObject2`, D4 as free functions with opt-in `keepUndefined`, D5 accepted, D6b (optional public `ISandboxPolicy`) and D7 measured in instruction counts. Recorded in docs/api-2.0.md section 7 item 10.
 Checked against master 93392d4, PR #794 (branch `claude/project-thread-9gbcmg`, merge base master) and the described 0354 PR2/PR3. Written by the architect role; the advisor's second opinion (section 7) revises B1, B3, D3, D4 and D7 and the sequencing. Where they differ, section 7 is the current recommendation.
 
 ## 0. The tension
