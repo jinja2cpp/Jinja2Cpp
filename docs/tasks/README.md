@@ -285,7 +285,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0209](0209-include-sees-loop.md) | A template included in a loop sees `loop` | parity | low | done |
 | [0210](0210-markup-percent-int-of-string.md) | `%d` and `%f` of a string in Markup's `%` | parity | low | done |
 | [0211](0211-self-nested-store-and-globals.md) | `self` stored in a nested scope of a block; globals changed in place | parity | low | done |
-| [0212](0212-objects-as-keys-and-through-callables.md) | Objects as dict keys and through user callables | parity | low | in-progress |
+| [0212](0212-objects-as-keys-and-through-callables.md) | Objects as dict keys and through user callables | parity | low | done |
 | [0213](0213-if-condexpr-and-unclosed-raw.md) | An `if` test with a conditional expression, and an unclosed raw block at the end | parity | low | done |
 | [0214](0214-macro-value-leftovers.md) | Macros and methods as values: what 0208 and 0145 left over | parity | low | done |
 | [0215](0215-pprint-width.md) | `pprint` does not wrap at Python's width, and other repr gaps | parity | low | done |
@@ -422,7 +422,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0350](0350-tla-runs-in-ci.md) | Run the long TLC checks of the cell model in GitHub Actions, and halve the two-thread runs | ci | medium | done |
 | [0351](0351-cell-model-past-the-depth-bound.md) | Check the cell model past its depth bound | robustness | medium | open |
 | [0352](0352-python-host-object-seam.md) | Python module P1a: a private host-object seam in the engine | api | medium | done |
-| [0353](0353-python-module-core.md) | Python module P1b: build, Environment/Template/render, value crossing | api | medium | open |
+| [0353](0353-python-module-core.md) | Python module P1b: build, Environment/Template/render, value crossing | api | medium | in-progress |
 | [0354](0354-python-module-subset.md) | Python module P2: the supported subset, sandbox and fallback | api | medium | open |
 | [0355](0355-python-module-proof.md) | Python module P3: upstream test suite, parity corpus, chat templates, bench row | parity | medium | open |
 | [0356](0356-python-module-wheels.md) | Python module P4: wheels for Linux, macOS and Windows; free-threaded audit | build | medium | open |
@@ -469,3 +469,9 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0399](0399-select-map-fetch-per-step.md) | select and map fetch one item per step | parity | low | open |
 | [0400](0400-loop-iteration-cycle-leak.md) | A kept loop over `loop` leaks through a cycle the collector cannot see | robustness | low | open |
 | [0401](0401-callable-and-generator-leftovers.md) | Callables, generators and ranges: leftovers of 0387 and 0368 | parity | low | open |
+| [0402](0402-json-identity-across-module-calls.md) | JSON values across the calls of a template module | parity | low | open |
+| [0403](0403-python-methods-on-native-values.md) | Python methods of int, float and str the engine does not implement | parity | low | open |
+| [0404](0404-urlencode-non-dict-mapping.md) | urlencode of a Python Mapping that is not a dict | parity | low | open |
+| [0405](0405-python-globals-replaced-under-cache.md) | Templates cached before env.globals is replaced see the new dict | parity | low | open |
+| [0406](0406-python-environment-keep-bounded.md) | Bound the callables an Environment keeps alive | robustness | low | open |
+| [0407](0407-module-call-leaks-through-exports-and-closures.md) | Leaks in template module calls through call exports and closure frames | robustness | medium | open |
