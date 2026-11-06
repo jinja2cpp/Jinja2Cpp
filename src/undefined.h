@@ -6,6 +6,7 @@
 #include <jinja2cpp/template_env.h>
 
 #include <exception>
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
