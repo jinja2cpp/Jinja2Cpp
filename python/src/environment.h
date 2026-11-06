@@ -101,6 +101,7 @@ public:
     [[nodiscard]] const nb::object& Name() const { return m_name; }
     [[nodiscard]] const nb::object& Filename() const { return m_filename; }
     [[nodiscard]] const nb::object& TemplateGlobals() const { return m_globals; }
+    [[nodiscard]] const nb::object& EnvironmentGlobals() const { return m_envGlobals; }
 
     int Traverse(visitproc visit, void* arg) const;
     void Clear() noexcept;

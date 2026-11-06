@@ -572,7 +572,8 @@ nb::object PyEnvironment::MakeTemplate(jinja2::Template tpl, nb::handle globals,
 {
     auto self = nb::find(this);
     // A copy, as Jinja2's make_globals takes a ChainMap of it
-    auto templateGlobals = globals.is_none() ? nb::none() : Names().dictType(globals);
+    // (one mapping per template, which Template.globals shows and Render reads)
+    nb::object templateGlobals = globals.is_none() ? nb::object(nb::dict()) : Names().dictType(globals);
     return nb::cast(new PyTemplate(std::move(tpl), nb::borrow(self), std::move(templateGlobals), std::move(name), std::move(filename)), nb::rv_policy::take_ownership);
 }
 
@@ -669,7 +670,7 @@ void PyEnvironment::Clear() noexcept
 
 PyTemplate::PyTemplate(nb::handle source, nb::kwargs kwargs)
     : m_environment(nb::cast(new PyEnvironment(kwargs), nb::rv_policy::take_ownership))
-    , m_globals(nb::none())
+    , m_globals(nb::dict())
     , m_name(nb::none())
     , m_filename(nb::none())
 {
@@ -789,6 +790,12 @@ void BindEnvironment(nb::module_& module)
         .def_prop_ro("environment", &PyTemplate::Environment)
         .def_prop_ro("name", &PyTemplate::Name)
         .def_prop_ro("filename", &PyTemplate::Filename)
-        .def_prop_ro("globals", [](const PyTemplate& self) { return self.TemplateGlobals().is_none() ? nb::object(nb::dict()) : self.TemplateGlobals(); });
+        .def_prop_ro(
+            "globals",
+            [](const PyTemplate& self) {
+                // Jinja2's ChainMap of the template's own globals over the environment's: a write
+                // lands in the template's, which its renders read
+                return nb::module_::import_("collections").attr("ChainMap")(self.TemplateGlobals(), self.EnvironmentGlobals());
+            });
 }
 } // namespace jinja2cpp_py

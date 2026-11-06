@@ -182,3 +182,16 @@ def test_filter_added_after_load_binds_at_next_load():
 
 def test_unicode():
     assert_same("{{ s }} {{ s|upper }} {{ s|length }} {{ s[1] }}", {"s": "żółw 🐢"})
+
+
+def test_template_globals_is_one_mapping_that_renders_read():
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment()
+        env.globals["e"] = "E"
+        tpl = env.from_string("{{ x }}{{ e }}")
+        assert tpl.globals["e"] == "E", module.__name__
+        tpl.globals["x"] = 1
+        assert tpl.render() == "1E", module.__name__
+        assert "x" not in env.globals, module.__name__
+        env.globals["e"] = "F"
+        assert tpl.render() == "1F", module.__name__
