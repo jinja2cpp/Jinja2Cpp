@@ -17,7 +17,8 @@ but these smaller differences remain (Jinja2 3.1.6):
 2. `{% set g = [1, 2, 3]|select %}{{ [g, g]|unique|list|length }}`: Python 1 (a generator hashes
    by identity); Jinja2C++ raises `unhashable type: 'list'`. Pin `filters.lazy_result_unique_hash`.
 3. A value's bound methods compare unequal: `{{ 'a'.upper == 'a'.upper }}` is True in Python
-   (same receiver, same function). Pin `operators.bound_method_equals`.
+   (same receiver, same function). Pin `operators.bound_method_equals`. Closed by #769 (0212 P1)
+   once #774 landed: the case now matches and its allowance is removed.
 4. A range acts as a list: `range(3) == [0, 1, 2]` is True, `range(3) + [1]`, `range(3) * 2`,
    `range(3) < range(4)` work, and `range(2)|tojson` gives `[0, 1]`; Python's range equals only a
    range and has none of these. Pins `operators.range_equals_list`, `operators.range_concat`,
@@ -40,4 +41,4 @@ a list with `GetRangeInfo()` as a range: equal only to a range with the same ite
 ordering a TypeError; tojson refuses it. 5: give the cycler and joiner methods a bound receiver
 (`SetBoundMethod` with an `IBoundReceiver`), as `loop.cycle` has.
 
-**Done when** the seven 0401 lines are gone from `test/parity/divergences/`.
+**Done when** the remaining six 0401 lines are gone from `test/parity/divergences/`.
