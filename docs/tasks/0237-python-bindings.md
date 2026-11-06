@@ -1,5 +1,5 @@
 ---
-status: open
+status: dropped
 priority: low
 area: parity
 issues: ["https://github.com/jinja2cpp/Jinja2Cpp/issues/256"]
@@ -29,3 +29,7 @@ owns the binding.
 hand-picked subset. The subset is the allow-list
 `python/tests/upstream/expected-failures.txt`, with the classes `internals`, `async`,
 `extension`, `deliberate` and `divergence`. Running it is 0355, which closes this task.
+
+**Dropped (2026-11-06).** The decision this task kept open (which upstream tests to adapt) is
+0355's: it runs pallets/jinja's suite through the module and counts passed / (collected −
+internals). Nothing is left here.
