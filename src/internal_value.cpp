@@ -4074,12 +4074,13 @@ struct CallableLease
 };
 
 // A container a host's call was handed (docs/tasks/0212): the accessor of the GenericMap or
-// GenericList it was exported as, and the template's own value. The call's parameters hold the
-// export until the call ends, so the address cannot be reused while the record exists
+// GenericList it was exported as, and the template's own value, among the call's parsed
+// arguments. The call's parameters hold the export and the parsed arguments the value until the
+// call ends, so neither the address nor the pointer can go stale while the record exists
 struct HostCallExport
 {
     const void* accessor;
-    InternalValue original;
+    const InternalValue* original;
 };
 
 // One host's call (UserCallableBody): the lease of the template callables it was handed and the
@@ -4097,9 +4098,20 @@ struct HostCallScope
     // containers looks each one up in log time
     void Seal()
     {
+        if (exports.size() > 1)
+        {
+            Sort();
+        }
+    }
+
+private:
+    JINJA2CPP_NOINLINE_INLINE void Sort()
+    {
         std::sort(exports.begin(), exports.end(), [](const HostCallExport& left, const HostCallExport& right) { return std::less<>()(left.accessor, right.accessor); });
     }
 
+
+public:
     // The value of the host's `value`, given back during the call made from `context`
     [[nodiscard]] InternalValue ToInternal(Value&& value, const RenderContext& context) const;
     [[nodiscard]] InternalValue ToInternal(const Value& value, const RenderContext& context) const;
@@ -4257,7 +4269,7 @@ JINJA2CPP_NOINLINE_INLINE Value ExportToHost(const InternalValue& value, HostCal
     }
     if (accessor)
     {
-        scope.exports.push_back(HostCallExport{ accessor, value });
+        scope.exports.push_back(HostCallExport{ accessor, &value });
     }
     return result;
 }
@@ -4320,7 +4332,7 @@ const InternalValue* HostCallScope::Original(const Value& value, const RenderCon
         return nullptr;
     }
     const auto* const found = std::lower_bound(exports.begin(), exports.end(), accessor, [](const HostCallExport& item, const void* key) { return std::less<>()(item.accessor, key); });
-    return found != exports.end() && found->accessor == accessor ? &found->original : nullptr;
+    return found != exports.end() && found->accessor == accessor ? found->original : nullptr;
 }
 
 // The template list of a list the host built of items it was handed, or null when none was
@@ -4368,11 +4380,10 @@ InternalValue HostCallScope::ToInternal(Value&& value, const RenderContext& cont
     return Value2IntValue(std::move(value));
 }
 
-UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderContext& context, const std::vector<ArgumentInfo>& argsInfo, HostCallScope& scope)
+// The host's parameters of a call made from `context` with the arguments `args` parsed, which
+// `scope` records point into
+void PrepareUserCallableParams(const ParsedArguments& args, RenderContext& context, const std::vector<ArgumentInfo>& argsInfo, UserCallableParams& result, HostCallScope& scope)
 {
-    UserCallableParams result;
-
-    ParsedArguments args = helpers::ParseCallParams(argsInfo, params, result.paramsParsed);
     if (args.multipleValues)
     {
         // Python's TypeError; a missing argument still reaches the callable as paramsParsed == false
@@ -4380,7 +4391,7 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
     }
     if (!result.paramsParsed)
     {
-        return result;
+        return;
     }
 
     for (const auto& argInfo : argsInfo)
@@ -4402,21 +4413,19 @@ UserCallableParams PrepareUserCallableParams(const CallParams& params, RenderCon
     }
 
     ValuesMap extraKwArgs;
-    for (auto& [name, value] : args.extraKwArgs)
+    for (const auto& [name, value] : args.extraKwArgs)
     {
         extraKwArgs[name] = ArgumentToHost(value, context, scope);
     }
     result.extraKwArgs = Value(std::move(extraKwArgs));
 
     ValuesList extraPosArgs;
-    for (auto& p : args.extraPosArgs)
+    for (const auto& p : args.extraPosArgs)
     {
         extraPosArgs.push_back(ArgumentToHost(p, context, scope));
     }
     result.extraPosArgs = Value(std::move(extraPosArgs));
     result.context = GenericMap(std::make_shared<const ContextMapper>(&context));
-
-    return result;
 }
 } // namespace
 
@@ -4436,7 +4445,10 @@ struct UserCallableBody
     {
         HostCallScope scope;
         const LeaseEnd leaseEnd(scope.lease);
-        auto ucParams = PrepareUserCallableParams(params, context, argsInfo, scope);
+        UserCallableParams ucParams;
+        // Kept for the call: the scope's records point into it
+        const ParsedArguments args = helpers::ParseCallParams(argsInfo, params, ucParams.paramsParsed);
+        PrepareUserCallableParams(args, context, argsInfo, ucParams, scope);
         scope.Seal();
         // Converted while the call's scope is live: what it was handed comes back as itself
         auto result = scope.ToInternal(CallHost(ucParams), context);
