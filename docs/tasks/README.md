@@ -150,7 +150,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0074](0074-template-env-api-2-0.md) | 2.0 API: `TemplateEnv` pimpl and `Settings` | release | medium | done |
 | [0075](0075-containers-reflection-api-2-0.md) | 2.0 API: containers, reflection, errors | release | medium | done |
 | [0076](0076-abi-namespace-and-headers.md) | 2.0: inline ABI namespace, header layout, version | release | high | done |
-| [0077](0077-migration-script.md) | 2.0 migration script and notes | release | high | open |
+| [0077](0077-migration-script.md) | 2.0 migration script and notes | release | high | done |
 | [0078](0078-nix-toolchains.md) | Pinned toolchains from Nix for the tool and bleeding-edge rows | ci | low | open |
 | [0079](0079-msvc-runtime-shared-override.md) | Warn when `JINJA2CPP_MSVC_RUNTIME_TYPE` is overridden by a shared build | build | low | open |
 | [0080](0080-nodiscard-result-void.md) | `[[nodiscard]]` on `Load` and `Render`, whose only output is an error | api | low | done |
@@ -294,10 +294,10 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0220](0220-call-argument-unpacking.md) | `f(*args, **kwargs)` in calls | parity | medium | done |
 | [0221](0221-release-acceptance-and-rc-signoff.md) | Define 2.0 release gates and release-candidate signoff | release | high | in-progress |
 | [0222](0222-downstream-1x-migration-trial.md) | Prove a downstream upgrade from 1.3.2 to 2.0 | release | high | open |
-| [0223](0223-embedding-lifecycle-integration-tests.md) | Test embedding behavior across lifetime, cache and callback boundaries | robustness | high | open |
+| [0223](0223-embedding-lifecycle-integration-tests.md) | Test embedding behavior across lifetime, cache and callback boundaries | robustness | high | done |
 | [0224](0224-template-trust-and-loader-boundary.md) | Define the template trust model and filesystem-loader boundary | robustness | high | done |
-| [0225](0225-release-artifact-consumer-gate.md) | Validate the release source artifact from a clean downstream consumer | release | high | open |
-| [0226](0226-license-metadata-and-distribution.md) | Reconcile package license metadata and ship required notices | release | high | open |
+| [0225](0225-release-artifact-consumer-gate.md) | Validate the release source artifact from a clean downstream consumer | release | high | done |
+| [0226](0226-license-metadata-and-distribution.md) | Reconcile package license metadata and ship required notices | release | high | done |
 | [0227](0227-supported-docs-and-example-surface.md) | Choose and verify the documentation and examples supported for 2.0 | release | high | open |
 | [0228](0228-task-number-uniqueness.md) | Two task files can share a number | agents | medium | done |
 | [0229](0229-unused-boost-components.md) | Drop the Boost libraries and includes nothing uses | build | low | done |
@@ -335,7 +335,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0261](0261-windows-package-link-check.md) | Run the installed-package test and the ABI link probe on Windows | ci | low | open |
 | [0262](0262-settings-limits.md) | `Settings::Limits`: one place for every limit a template can hit | api | high | done |
 | [0263](0263-per-operation-size-checks.md) | Every growth operation checks its size before allocating | robustness | high | open |
-| [0264](0264-template-cache-bound.md) | The template cache ignores its size, and `MemoryFileSystem` writes in a const path | robustness | medium | open |
+| [0264](0264-template-cache-bound.md) | The template cache ignores its size, and `MemoryFileSystem` writes in a const path | robustness | medium | done |
 | [0265](0265-hardening-by-default.md) | Build hardening on by default; invariant checks that fail the render, not the process | build | medium | open |
 | [0266](0266-confined-filesystem.md) | `ConfinedFileSystem`: a loader that never leaves its root | api | medium | done |
 | [0267](0267-untrusted-mode-fuzzing.md) | Fuzz targets for templates written by untrusted users | robustness | high | open |
@@ -396,7 +396,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0324](0324-nested-render-sees-global-changed-in-place.md) | A nested render does not see a global the outer render changed in place | robustness | medium | open |
 | [0325](0325-autoreload-date-before-read.md) | A reload can cache the new date with the old text | robustness | low | open |
 | [0326](0326-nested-macro-closure-after-outer-call.md) | A macro defined in a macro loses the outer call's names after that call returned | parity | medium | done |
-| [0327](0327-change-globals-use-count-race.md) | Changing a global can race with a render that just dropped the globals map | robustness | medium | open |
+| [0327](0327-change-globals-use-count-race.md) | Changing a global can race with a render that just dropped the globals map | robustness | medium | done |
 | [0328](0328-bench-meta-block.md) | A benchmark for `{% meta %}` and the internal JSON reader | perf | low | open |
 | [0329](0329-reflect-counts-in-ci.md) | Count `--data reflect` in the PR gate and the trend | perf | medium | open |
 | [0330](0330-gate-reports-newly-outlined-frames.md) | The PR gate names hot functions that GCC stopped inlining | perf | low | open |
@@ -464,6 +464,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0394](0394-chat-template-prompt-safe-params.md) | Name the prompt-safe chat template params and read specials from a tokenizer config | api | low | open |
 | [0395](0395-running-token-budget.md) | Running token budget across a render | api | low | open |
 | [0396](0396-batch-token-count.md) | Batch count callback for `pack` | api | low | open |
+| [0397](0397-conancenter-recipe-license-at-2-0.md) | Correct the ConanCenter recipe license with the 2.0 version bump | release | medium | open |
 | [0398](0398-lean-proof-pilot-neutralize.md) | Lean 4 proof pilot: the `neutralize` edge rule | robustness | low | open |
 | [0399](0399-select-map-fetch-per-step.md) | select and map fetch one item per step | parity | low | open |
 | [0400](0400-loop-iteration-cycle-leak.md) | A kept loop over `loop` leaks through a cycle the collector cannot see | robustness | low | open |

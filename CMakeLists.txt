@@ -614,6 +614,35 @@ if (JINJA2CPP_BUILD_TESTS)
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/test/abi_symbols.cmake)
     endif ()
 
+    # The 1.x to 2.0 migration script (docs/tasks/0077). The parser test needs only Python; the
+    # round trip migrates a 1.x style translation unit and rebuilds it without deprecation warnings
+    find_package(Python3 COMPONENTS Interpreter)
+    if (Python3_Interpreter_FOUND)
+        set(JINJA2CPP_MIGRATION_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test/migration)
+        add_test(NAME jinja2cpp_migration_parser
+            COMMAND ${Python3_EXECUTABLE} ${JINJA2CPP_MIGRATION_DIR}/test_migrate_parser.py)
+        # The fixture is compiled with deprecation warnings on and not as errors: the test reads them
+        file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/migration)
+        configure_file(${JINJA2CPP_MIGRATION_DIR}/legacy_api_1x.cpp ${CMAKE_BINARY_DIR}/migration/legacy_api.cpp COPYONLY)
+        add_library(jinja2cpp_migration_fixture OBJECT EXCLUDE_FROM_ALL ${CMAKE_BINARY_DIR}/migration/legacy_api.cpp)
+        target_link_libraries(jinja2cpp_migration_fixture PRIVATE ${LIB_TARGET_NAME})
+        set_target_properties(jinja2cpp_migration_fixture PROPERTIES
+                CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
+                CXX_STANDARD_REQUIRED ON)
+        if (MSVC)
+            # C4996 is a level 3 warning; /WX- undoes a /WX from the environment; with columns the
+            # script can place two calls of one name on a line
+            target_compile_options(jinja2cpp_migration_fixture PRIVATE /W3 /WX- /diagnostics:column)
+        else ()
+            target_compile_options(jinja2cpp_migration_fixture PRIVATE -Wdeprecated-declarations -Wno-error)
+        endif ()
+        add_test(NAME jinja2cpp_migration
+            COMMAND ${Python3_EXECUTABLE} ${JINJA2CPP_MIGRATION_DIR}/run_migration_test.py
+                --build-dir ${CMAKE_BINARY_DIR} --config $<CONFIG>)
+        # Rebuilds the fixture in the build tree, so it cannot run beside another build step
+        set_tests_properties(jinja2cpp_migration PROPERTIES RUN_SERIAL TRUE)
+    endif ()
+
     # Replaces the global operator new, so it cannot share the main test binary (docs/tasks/0253).
     # The TSan and MSan runtimes define operator new themselves, so those builds go without it.
     if (NOT JINJA2CPP_WITH_SANITIZERS MATCHES "thread|memory")
@@ -662,6 +691,16 @@ if(JINJA2CPP_INSTALL)
             ${CMAKE_BINARY_DIR}/jinja2cpp.pc
         DESTINATION
             ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+    )
+
+    # The library's license and the notices of the third-party code and data it carries
+    # (docs/licensing.md, docs/tasks/0226)
+    install(
+        FILES
+            LICENSE
+            THIRD-PARTY-NOTICES.txt
+        DESTINATION
+            ${CMAKE_INSTALL_DOCDIR}
     )
 
     # The library SBOM, generated from sbom/components.json by scripts/sbom.py (docs/tasks/0187)
