@@ -2,6 +2,7 @@
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/make_generic_list.h>
+#include <jinja2cpp/prompt.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
@@ -15,10 +16,12 @@
 #include <regex>
 #include <set>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 using namespace jinja2;
 
@@ -1196,4 +1199,521 @@ TEST(FilterUnicode, PercentAEscapesNonAscii)
     EXPECT_EQ("['\\xe9', 'x']", RenderOrError("{{ '%a'|format(['\303\251', 'x']) }}", {}));
     EXPECT_EQ("'\\xe9'|'\\xdf'|'\\U0001f600'", RenderOrError("{{ '%5a|%-6a|%a'|format('\303\251', '\303\237', '\360\237\230\200') }}", {}));
     EXPECT_EQ("'\\u65e5\\u672c'|'\346\227\245\346\234\254'", RenderOrError("{{ '%a|%r'|format('\346\227\245\346\234\254', '\346\227\245\346\234\254') }}", {}));
+}
+
+// docs/tasks/0358: neutralize and fence, with the specials `<|im_start|>`, `<|im_end|>` and `[INST]` and the tag `document`
+// registered on the environment. The expected text is written out by hand from docs/cpp-only-filters.md
+namespace
+{
+PromptEscapeOptions PromptTestOptions()
+{
+    PromptEscapeOptions options;
+    options.specialTokens = { "<|im_start|>", "<|im_end|>", "[INST]" };
+    options.tags = { "document" };
+    return options;
+}
+
+struct PromptRow
+{
+    std::string tpl;
+    std::string result;
+    bool autoescape = false;
+    ValuesMap params = {};
+
+    friend std::ostream& operator<<(std::ostream& os, const PromptRow& row) { return os << row.tpl << " -> " << row.result; }
+};
+
+void ConfigurePromptEnv(TemplateEnv& env, bool autoescape)
+{
+    env.GetSettings().autoescape = autoescape;
+    env.GetSettings().promptEscaper = PromptEscaper(PromptTestOptions());
+}
+
+// The output, or "Exception: " and the message of the error
+std::string PromptRender(const std::string& source, const ValuesMap& params = {}, bool autoescape = false, const Settings::Limits& limits = {})
+{
+    TemplateEnv env;
+    ConfigurePromptEnv(env, autoescape);
+    env.GetSettings().limits = limits;
+    Template tpl(&env);
+    auto loaded = tpl.Load(source);
+    if (!loaded)
+    {
+        return "load error: " + ErrorToString(loaded.error());
+    }
+    auto result = tpl.RenderAsString(params);
+    if (result)
+    {
+        return *result;
+    }
+    if (result.error().GetCode() == ErrorCode::TemplateRuntimeError)
+    {
+        return "Exception: " + result.error().GetExtraParams().at(0).AsString();
+    }
+    return "error " + std::to_string(static_cast<int>(result.error().GetCode()));
+}
+} // namespace
+
+struct PromptFilterTestTag;
+using PromptFilterTest = ::testing::TestWithParam<PromptRow>;
+
+TEST_P(PromptFilterTest, Narrow)
+{
+    const auto& row = GetParam();
+    TemplateEnv env;
+    ConfigurePromptEnv(env, row.autoescape);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load(row.tpl).has_value());
+    auto result = tpl.RenderAsString(row.params);
+    ASSERT_TRUE(result.has_value()) << ErrorToString(result.error());
+    EXPECT_EQ(row.result, *result);
+}
+
+TEST_P(PromptFilterTest, Wide)
+{
+    const auto& row = GetParam();
+    TemplateEnv env;
+    ConfigurePromptEnv(env, row.autoescape);
+    TemplateW tpl(&env);
+    ASSERT_TRUE(tpl.Load(ConvertString<std::wstring>(row.tpl)).has_value());
+    auto result = tpl.RenderAsString(row.params);
+    ASSERT_TRUE(result.has_value()) << ConvertString<std::string>(ErrorToString(result.error()));
+    EXPECT_EQ(ConvertString<std::wstring>(row.result), *result);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    Neutralize,
+    PromptFilterTest,
+    ::testing::Values(
+        // The pattern is broken after its first code point, whatever the case of its ASCII letters
+        PromptRow{ "{{ '<|im_start|>x'|neutralize }}", "< |im_start|>x" },
+        PromptRow{ "{{ '<|IM_START|>'|neutralize }}", "< |IM_START|>" },
+        PromptRow{ "{{ '[INST] [inst] [Inst]'|neutralize }}", "[ INST] [ inst] [ Inst]" },
+        PromptRow{ "{{ 'plain text'|neutralize }}", "plain text" },
+        PromptRow{ "{{ ''|neutralize }}", "" },
+        // Overlapping matches: matching resumes one code point after a match start
+        PromptRow{ "{{ '<|<|im_start|>'|neutralize }}", "<|< |im_start|>" },
+        PromptRow{ "{{ '<|im_start|im_end|>'|neutralize }}", "<|im_start|im_end|>" },
+        PromptRow{ "{{ '<|im_end|><|im_end|>'|neutralize }}", "< |im_end|>< |im_end|>" },
+        // A tag is `<name` or `</name` and a boundary: `>`, `/`, a space, a tab, CR, LF or the end
+        PromptRow{ "{{ '</document ><Document>'|neutralize }}", "< /document >< Document>" },
+        PromptRow{ "{{ '<documentation>'|neutralize }}", "<documentation>" },
+        PromptRow{ "{{ '<document'|neutralize }}|{{ '<DOCUMENT/>'|neutralize }}|{{ '<document\\t'|neutralize }}", "< document|< DOCUMENT/>|< document\t" },
+        PromptRow{ "{{ 'document>'|neutralize }}", "document>" },
+        // The edges: two neutralized values side by side cannot form a special
+        PromptRow{ "{{ 'a<|im_'|neutralize ~ 'start|>'|neutralize }}", "a<|im_  start|>" },
+        PromptRow{ "{{ '<'|neutralize }}|{{ '>x'|neutralize }}|{{ 'x]'|neutralize }}|{{ ']x'|neutralize }}", "< | >x|x]| ]x" },
+        PromptRow{ "{{ 'a</doc'|neutralize }}|{{ 'a<'|neutralize }}", "a</doc |a< " },
+        PromptRow{ "{{ 'a['|neutralize ~ 'INST]'|neutralize }}", "a[  INST]" },
+        // Separators go after whole code points: ü is two bytes, the smiley two UTF-16 units in a 16-bit wchar_t
+        PromptRow{ "{{ '\xC3\xBC<|im_end|>'|neutralize }}", "\xC3\xBC< |im_end|>" },
+        PromptRow{ "{{ '\xF0\x9F\x98\x80<|im_end|>'|neutralize }}", "\xF0\x9F\x98\x80< |im_end|>" },
+        PromptRow{ "{{ '\xF0\x9F\x98\x80z'|neutralize(specials=['\xF0\x9F\x98\x80z']) }}", "\xF0\x9F\x98\x80 z" },
+        PromptRow{ "{{ '\xC3\xBC' ~ 'x'|neutralize(specials=['\xC3\xBC' 'x']) }}", "\xC3\xBC x" },
+        // Arguments replace the environment's options for the call
+        PromptRow{ "{{ 'a[[x <|im_start|>'|neutralize(specials=['[[']) }}", "a[ [x <|im_start|>" },
+        PromptRow{ "{{ '<document>'|neutralize(tags=[]) }}|{{ '<document>'|neutralize(tags=['doc', 'document']) }}", "<document>|< document>" },
+        PromptRow{ "{{ '<|im_start|>'|neutralize(specials=[]) }}", "<|im_start|>" },
+        PromptRow{ "{{ '<|im_end|>'|neutralize(separator='-') }}", "<-|im_end|>" },
+        PromptRow{ "{{ '<|im_end|>'|neutralize(separator='\xE2\x81\xA0') }}", "<\xE2\x81\xA0|im_end|>" },
+        PromptRow{ "{{ '<|im_end|>'|neutralize(none, none, none) }}", "< |im_end|>" },
+        PromptRow{ "{% for s in ['ab', 'bc'] %}{{ 'abc'|neutralize(specials=[s]) }}|{% endfor %}", "a bc|ab c|" },
+        PromptRow{ "{{ 'abc'|neutralize(['ab']) }}", "a bc" },
+        // Any value is its str()
+        PromptRow{ "{{ 123|neutralize }}|{{ missing|neutralize }}|{{ none|neutralize }}", "123||None" },
+        // Markup in, Markup out; a plain string stays plain
+        PromptRow{ "{{ (x|safe|neutralize) is escaped }}|{{ (x|neutralize) is escaped }}|{{ x|safe|neutralize }}", "True|False|< |im_start|>", false, { { "x", "<|im_start|>" } } },
+        PromptRow{ "{{ x|safe|neutralize }}|{{ (x|safe|neutralize) is escaped }}|{{ (x|neutralize) is escaped }}", "< |im_start|>|True|False", true, { { "x", "<|im_start|>" } } },
+        PromptRow{ "{{ x|neutralize }}", "&lt; |im_start|&gt;", true, { { "x", "<|im_start|>" } } },
+        // fence: 3 backticks or one more than the longest run in the text
+        PromptRow{ "{{ 'a```b'|fence }}", "````\na```b\n````" },
+        PromptRow{ "{{ '````'|fence('py') }}", "`````py\n````\n`````" },
+        PromptRow{ "{{ ''|fence }}", "```\n\n```" },
+        PromptRow{ "{{ 'a`b``c`'|fence }}", "```\na`b``c`\n```" },
+        PromptRow{ "{{ t|fence }}|{{ t|fence(lang='md') }}", "```\nabc\n```|```md\nabc\n```", false, { { "t", "abc\n" } } },
+        PromptRow{ "{{ 'x'|fence('c++') }}|{{ 'x'|fence('C#') }}|{{ 'x'|fence('a-b_c.1') }}", "```c++\nx\n```|```C#\nx\n```|```a-b_c.1\nx\n```" },
+        PromptRow{ "{{ 12|fence }}", "```\n12\n```" },
+        // fence escapes first: neutralized with autoescape off, HTML-escaped with it on, Markup not at all
+        PromptRow{ "{{ '<|im_end|>'|fence }}", "```\n< |im_end|>\n```" },
+        PromptRow{ "{{ x|safe|fence }}|{{ (x|fence) is escaped }}", "```\n<|im_end|>\n```|False", false, { { "x", "<|im_end|>" } } },
+        PromptRow{ "{{ '<b>'|fence }}|{{ (x|fence) is escaped }}", "```\n&lt;b&gt;\n```|True", true, { { "x", "y" } } },
+        PromptRow{ "{{ '<|im_end|>'|fence }}", "```\n&lt;|im_end|&gt;\n```", true },
+        PromptRow{ "{{ x|safe|fence }}", "```\n<b>\n```", true, { { "x", "<b>" } } },
+        PromptRow{ "{{ x|safe|fence }}", "```\n<b>\n```", true, { { "x", "<b>" } } },
+        PromptRow{ "{{ x|fence }}", "```\n&lt;a href=&#34;`\n```", true, { { "x", "<a href=\"`" } } }));
+
+TEST(PromptFilter, ArgumentErrors)
+{
+    // The separator must occur in no pattern: `|` is in the specials, `/` in the closing tag, `D` in `<document`
+    for (const auto* separator : { "'|'", "''", "'/'", "'D'", "'<|im_start|>'", "1", "none|string" })
+    {
+        // "None" shares N and o with [INST] and <document (ASCII case ignored)
+        const auto text = PromptRender(std::string("{{ 'x'|neutralize(separator=") + separator + ") }}");
+        EXPECT_NE(std::string::npos, text.find("Exception: neutralize(): ")) << separator << " gave " << text;
+    }
+    EXPECT_NE(std::string::npos, PromptRender("{{ 'x'|neutralize(specials='ab') }}").find("specials must be a list of strings"));
+    EXPECT_NE(std::string::npos, PromptRender("{{ 'x'|neutralize(tags=[1]) }}").find("tags must be a list of strings"));
+    // lang is [A-Za-z0-9_+.#-]*
+    for (const auto* lang : { "'a`b'", "'a b'", "'a\\nb'", "'a\\\"b'", "'\xC3\xBC'", "1", "['x']" })
+    {
+        const auto text = PromptRender(std::string("{{ 'x'|fence(") + lang + ") }}");
+        EXPECT_NE(std::string::npos, text.find("Exception: fence(): ")) << lang << " gave " << text;
+    }
+    EXPECT_NE(std::string::npos, PromptRender("{{ 'x'|fence(lang='a`b') }}").find("Exception: fence(): "));
+    EXPECT_EQ("Exception: fence(): lang may hold only letters, digits and _+.#-", PromptRender("{{ x|fence(lang) }}", { { "x", "t" }, { "lang", "a\nb" } }));
+    // Too many or unknown arguments are reported as for any filter
+    EXPECT_NE(std::string::npos, PromptRender("{{ 'x'|neutralize(1, 2, 3, 4) }}").find("Exception"));
+    EXPECT_NE(std::string::npos, PromptRender("{{ 'x'|fence(1, 2) }}").find("Exception"));
+    EXPECT_NE(std::string::npos, PromptRender("{{ 'x'|fence(nope='c') }}").find("Exception"));
+}
+
+TEST(PromptFilter, WithoutPatternsNothingChanges)
+{
+    // The default environment has no specials: the filters do not break anything, and fence only wraps
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{{ '<|im_start|>[INST]</document>'|neutralize }}|{{ '<|im_start|>'|fence }}").has_value());
+    auto result = tpl.RenderAsString({});
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ("<|im_start|>[INST]</document>|```\n<|im_start|>\n```", *result);
+}
+
+TEST(PromptFilter, ArgumentsOfSeveralRendersOnOneTemplate)
+{
+    // The escaper built from the arguments is cached in the filter; a different argument builds another
+    TemplateEnv env;
+    ConfigurePromptEnv(env, false);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{{ 'abc'|neutralize(specials=s) }}").has_value());
+    for (const char* special : { "ab", "bc", "ab", "abc", "ab" })
+    {
+        auto result = tpl.RenderAsString({ { "s", ValuesList{ special } } });
+        ASSERT_TRUE(result.has_value()) << result.error().ToString();
+        const std::string expected = std::string(special) == "ab" ? "a bc" : std::string(special) == "bc" ? "ab c"
+                                                                                                          : "a bc";
+        EXPECT_EQ(expected, *result) << special;
+    }
+}
+
+TEST(PromptFilter, EnvironmentOptionsAreTheDefaults)
+{
+    TemplateEnv env;
+    PromptEscapeOptions options;
+    options.specialTokens = { "<<" };
+    options.separator = "~";
+    env.GetSettings().promptEscaper = PromptEscaper(options);
+    Template tpl(&env);
+    // Only the specials are replaced: the separator of the environment is kept
+    auto loaded = tpl.Load("{{ 'a<<b'|neutralize }}|{{ 'a<<b'|neutralize(specials=['<<b']) }}|{{ 'a<<b'|neutralize(separator='.') }}");
+    ASSERT_TRUE(loaded.has_value()) << loaded.error().ToString();
+    auto result = tpl.RenderAsString({});
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ("a<~<b|a<~<b|a<.<b", *result);
+}
+
+TEST(PromptFilter, SizeLimits)
+{
+    // A text of `<` with the special `<<` grows to 2n + 1 characters: a separator after each of the first n - 1, one for
+    // the start edge and one for the end edge (the first and the last `<`)
+    constexpr std::size_t size = std::size_t{ 1 } << 20;
+    PromptEscapeOptions options;
+    options.specialTokens = { "<<" };
+    const std::string text(size, '<');
+    for (const bool wide : { false, true })
+    {
+        TemplateEnv env;
+        env.GetSettings().promptEscaper = PromptEscaper(options);
+        const std::string source = "{{ x|neutralize|length }}";
+        auto render = [&](std::uint64_t limit) -> std::string {
+            env.GetSettings().limits.maxSequenceSize = limit;
+            if (wide)
+            {
+                TemplateW tpl(&env);
+                if (!tpl.Load(ConvertString<std::wstring>(source)))
+                {
+                    return "load error";
+                }
+                auto result = tpl.RenderAsString({ { "x", text } });
+                return result ? ConvertString<std::string>(*result) : "error " + std::to_string(static_cast<int>(result.error().GetCode()));
+            }
+            Template tpl(&env);
+            if (!tpl.Load(source))
+            {
+                return "load error";
+            }
+            auto result = tpl.RenderAsString({ { "x", text } });
+            return result ? *result : "error " + std::to_string(static_cast<int>(result.error().GetCode()));
+        };
+        const auto expectedLength = std::to_string((2 * size) + 1);
+        EXPECT_EQ(expectedLength, render((2 * size) + 1)) << wide;
+        EXPECT_EQ("error " + std::to_string(static_cast<int>(ErrorCode::ResourceLimitExceeded)), render(2 * size)) << wide;
+        EXPECT_EQ("error " + std::to_string(static_cast<int>(ErrorCode::ResourceLimitExceeded)), render(size + (size / 2))) << wide;
+        // The built-in cap of 2^26 holds a longer text; no limit set
+        EXPECT_EQ(expectedLength, render(0)) << wide;
+    }
+    // A pattern list from a host generator obeys the cap while it is read, before the options are checked
+    {
+        TemplateEnv env;
+        env.GetSettings().limits.maxSequenceSize = 100;
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load("{{ 'x'|neutralize(specials=g) }}").has_value());
+        auto endless = MakeGenericList([n = int64_t{ 0 }]() mutable -> std::optional<Value> { return Value("t" + std::to_string(n++)); });
+        auto result = tpl.RenderAsString({ { "g", endless } });
+        ASSERT_FALSE(result.has_value());
+        EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    }
+    // fence has its own check
+    TemplateEnv env;
+    env.GetSettings().limits.maxSequenceSize = size;
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{{ x|fence }}").has_value());
+    auto result = tpl.RenderAsString({ { "x", text } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+}
+
+TEST(PromptEscaper, IsValid)
+{
+    PromptEscapeOptions options = PromptTestOptions();
+    EXPECT_TRUE(PromptEscaper::IsValid(PromptEscapeOptions{}));
+    EXPECT_TRUE(PromptEscaper::IsValid(options));
+    options.separator = "\xE2\x81\xA0";
+    EXPECT_TRUE(PromptEscaper::IsValid(options));
+    PromptEscapeOptions tagsOnly;
+    tagsOnly.tags = { "document" };
+    tagsOnly.separator = ">";
+    EXPECT_TRUE(PromptEscaper::IsValid(tagsOnly)) << "`>` is in no pattern: tags are `<name` and `</name`, the boundary is not part of them";
+    // Empty, or in a pattern; the case of ASCII letters does not matter, as it does not for matching
+    for (const char* separator : { "", "|", "<", "/", "_", "INST", "inst", "S", "s", "D", "ocu", "</d", "<|", "t|>" })
+    {
+        options.separator = separator;
+        EXPECT_FALSE(PromptEscaper::IsValid(options)) << '"' << separator << '"';
+    }
+    options.separator = " ";
+    options.specialTokens.emplace_back("[ X]");
+    EXPECT_FALSE(PromptEscaper::IsValid(options));
+    // Empty patterns are ignored and need nothing
+    options = PromptEscapeOptions{};
+    options.specialTokens = { "" };
+    options.tags = { "" };
+    EXPECT_TRUE(PromptEscaper::IsValid(options));
+    EXPECT_FALSE(PromptEscaper::IsValid([] {
+        PromptEscapeOptions bad;
+        bad.separator.clear();
+        return bad;
+    }()));
+}
+
+TEST(PromptEscaper, SeparatorSharesNoCharacterWithAPattern)
+{
+    // "ab" is in no pattern as a whole, but its "b" would complete the special "by" after the insertion in "xyz"
+    PromptEscapeOptions options;
+    options.specialTokens = { "xyz", "by" };
+    options.separator = "ab";
+    EXPECT_FALSE(PromptEscaper::IsValid(options));
+    options.separator = "Q";
+    EXPECT_TRUE(PromptEscaper::IsValid(options));
+    options.specialTokens.emplace_back(257, 'x');
+    EXPECT_FALSE(PromptEscaper::IsValid(options)) << "a pattern longer than 256 bytes";
+    options.specialTokens.back().resize(256);
+    EXPECT_TRUE(PromptEscaper::IsValid(options));
+    // Malformed UTF-8 would become U+FFFD in the wide patterns only: a separator \xFF there would equal the special's U+FFFD
+    {
+        PromptEscapeOptions bad;
+        bad.specialTokens = { "\xEF\xBF\xBD"
+                              "x" };
+        bad.separator = "\xFF";
+        EXPECT_FALSE(PromptEscaper::IsValid(bad));
+        bad.separator = " ";
+        EXPECT_TRUE(PromptEscaper::IsValid(bad));
+        bad.specialTokens = { "a\xC0\xAF"
+                              "b" };
+        EXPECT_FALSE(PromptEscaper::IsValid(bad)) << "overlong form";
+        bad.specialTokens = { "ab" };
+        bad.tags = { "d\xED\xA0\x80" };
+        EXPECT_FALSE(PromptEscaper::IsValid(bad)) << "surrogate";
+    }
+    // A special of one code point cannot be broken by a separator after its first code point
+    for (const char* single : { "x", "\xEE\x80\x80" })
+    {
+        PromptEscapeOptions one;
+        one.specialTokens = { single };
+        EXPECT_FALSE(PromptEscaper::IsValid(one)) << single;
+    }
+}
+
+TEST(PromptEscaper, SeparatorAfterATagNameCountsAsABoundary)
+{
+    // The special "ab" gets a space after its "a", which would make "<a" the tag <a followed by a boundary
+    PromptEscapeOptions options;
+    options.specialTokens = { "ab" };
+    options.tags = { "a" };
+    const PromptEscaper escaper(options);
+    EXPECT_EQ("< a b", escaper.Neutralize(std::string_view("<ab")));
+    EXPECT_EQ(L"< a b", escaper.Neutralize(std::wstring_view(L"<ab")));
+    EXPECT_EQ("xa b", escaper.Neutralize(std::string_view("xab")));
+}
+
+TEST(PromptEscaper, ConstructorThrowsForInvalidOptions)
+{
+    PromptEscapeOptions options = PromptTestOptions();
+    options.separator = "|";
+    EXPECT_THROW(PromptEscaper{ options }, std::invalid_argument);
+    options.separator.clear();
+    EXPECT_THROW(PromptEscaper{ options }, std::invalid_argument);
+    options.separator = " ";
+    EXPECT_NO_THROW(PromptEscaper{ options });
+}
+
+TEST(PromptEscaper, EqualityIsByIdentityOfTheCompiledPatterns)
+{
+    const PromptEscaper none;
+    const PromptEscaper none2;
+    EXPECT_EQ(none, none2);
+    const PromptEscaper first(PromptTestOptions());
+    const PromptEscaper copy = first; // NOLINT(performance-unnecessary-copy-initialization): the copy is what the test compares
+    const PromptEscaper second(PromptTestOptions());
+    EXPECT_EQ(first, copy);
+    EXPECT_NE(first, second);
+    EXPECT_NE(first, none);
+    EXPECT_TRUE(first != second);
+
+    Settings lhs;
+    Settings rhs;
+    EXPECT_EQ(lhs, rhs);
+    lhs.promptEscaper = first;
+    EXPECT_NE(lhs, rhs);
+    rhs.promptEscaper = copy;
+    EXPECT_EQ(lhs, rhs);
+    rhs.promptEscaper = second;
+    EXPECT_NE(lhs, rhs);
+}
+
+TEST(PromptEscaper, OptionsAreKept)
+{
+    const PromptEscaper none;
+    EXPECT_TRUE(none.Options().specialTokens.empty());
+    EXPECT_TRUE(none.Options().tags.empty());
+    EXPECT_EQ(" ", none.Options().separator);
+    EXPECT_EQ("<|im_start|>x", none.Neutralize("<|im_start|>x"));
+    EXPECT_EQ(L"<|im_start|>x", none.Neutralize(L"<|im_start|>x"));
+
+    const PromptEscaper escaper(PromptTestOptions());
+    EXPECT_EQ(PromptTestOptions().specialTokens, escaper.Options().specialTokens);
+    EXPECT_EQ(PromptTestOptions().tags, escaper.Options().tags);
+}
+
+TEST(PromptEscaper, NeutralizeNarrowAndWide)
+{
+    const PromptEscaper escaper(PromptTestOptions());
+    struct Case
+    {
+        std::wstring text;
+        std::wstring expected;
+    };
+    const std::vector<Case> cases = {
+        { L"", L"" },
+        { L"hello", L"hello" },
+        { L"<|im_start|>user", L"< |im_start|>user" },
+        { L"<|IM_END|><|Im_End|>", L"< |IM_END|>< |Im_End|>" },
+        { L"<|<|im_start|>", L"<|< |im_start|>" },
+        { L"a<|im_", L"a<|im_ " },
+        { L"start|>", L" start|>" },
+        { L"<", L"< " },
+        { L">", L" >" },
+        { L"]", L" ]" },
+        { L"[INST]", L"[ INST]" },
+        { L"[INST", L"[INST " },
+        { L"INST]", L" INST]" },
+        { L"</DOCUMENT>", L"< /DOCUMENT>" },
+        { L"<documents>", L"<documents>" },
+        { L"</document", L"< /document" },
+        { L"x<docum", L"x<docum " },
+        // Non-ASCII text and a code point beyond the BMP before and inside the pattern
+        { L"ü<|im_end|>", L"ü< |im_end|>" },
+        { L"\U0001F600<|im_end|>\U0001F600", L"\U0001F600< |im_end|>\U0001F600" },
+        { L"\U0001F600[INST]", L"\U0001F600[ INST]" },
+    };
+    for (const auto& c : cases)
+    {
+        EXPECT_EQ(c.expected, escaper.Neutralize(std::wstring_view(c.text))) << ConvertString<std::string>(c.text);
+        EXPECT_EQ(ConvertString<std::string>(c.expected), escaper.Neutralize(std::string_view(ConvertString<std::string>(c.text)))) << ConvertString<std::string>(c.text);
+    }
+
+    // A special that starts with a code point beyond the BMP (a surrogate pair in a 16-bit wchar_t) and one with a
+    // multi-byte first character: the separator follows the whole code point
+    PromptEscapeOptions options;
+    options.specialTokens = { "\xF0\x9F\x98\x80"
+                              "ab",
+                              "\xEF\xBC\x9C"
+                              "|x|"
+                              "\xEF\xBC\x9E" };
+    const PromptEscaper wideFirst(options);
+    EXPECT_EQ("\xF0\x9F\x98\x80 ab", wideFirst.Neutralize("\xF0\x9F\x98\x80"
+                                                          "ab"));
+    EXPECT_EQ(L"\U0001F600 ab", wideFirst.Neutralize(L"\U0001F600ab"));
+    EXPECT_EQ("\xEF\xBC\x9C |x|\xEF\xBC\x9E", wideFirst.Neutralize("\xEF\xBC\x9C|x|\xEF\xBC\x9E"));
+    EXPECT_EQ(L"＜ |x|＞", wideFirst.Neutralize(L"＜|x|＞"));
+    // Edges that start or end inside a multi-unit pattern
+    EXPECT_EQ(" ab\xEF\xBC\x9C ", wideFirst.Neutralize("ab\xEF\xBC\x9C"));
+}
+
+TEST(PromptEscaper, MalformedUtf8PassesThrough)
+{
+    const PromptEscaper escaper(PromptTestOptions());
+    // Truncated sequences, lone continuation bytes and bytes that never occur: only the separators are added, the
+    // bytes around them are not touched
+    EXPECT_EQ("\xF0\x9F< |im_end|>\xC3", escaper.Neutralize("\xF0\x9F<|im_end|>\xC3"));
+    EXPECT_EQ("\x80\x80\xFF\xFE", escaper.Neutralize("\x80\x80\xFF\xFE"));
+    EXPECT_EQ("\xE2\x82[ INST]\xE2", escaper.Neutralize("\xE2\x82[INST]\xE2"));
+    EXPECT_EQ("\xC3", escaper.Neutralize("\xC3"));
+
+    // Bytes drawn from an alphabet of the pattern's characters and every non-ASCII value, no space: the output holds no
+    // pattern, and without the separators it is the input
+    const std::string alphabet = "<|>/[]_INSTimdoucenrtasp\x80\x81\xBF\xC3\xE2\xF0\xFF";
+    const std::vector<std::string> patterns = { "<|im_start|>", "<|im_end|>", "[inst]", "<document", "</document" };
+    std::uint32_t state = 12345;
+    auto next = [&state] {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        return state;
+    };
+    for (int round = 0; round != 3000; ++round)
+    {
+        std::string text;
+        const auto length = next() % 48;
+        for (std::uint32_t idx = 0; idx != length; ++idx)
+        {
+            text += alphabet[next() % alphabet.size()];
+        }
+        // Sometimes a whole special in the middle
+        if (round % 3 == 0)
+        {
+            text.insert(next() % (text.size() + 1), patterns[next() % patterns.size()] + (round % 2 ? ">" : ""));
+        }
+        const auto out = escaper.Neutralize(text);
+        std::string lowered;
+        std::string stripped;
+        for (const char ch : out)
+        {
+            lowered += static_cast<char>(ch >= 'A' && ch <= 'Z' ? ch - 'A' + 'a' : ch);
+            if (ch != ' ')
+            {
+                stripped += ch;
+            }
+        }
+        ASSERT_EQ(text, stripped) << round;
+        for (const auto& pattern : patterns)
+        {
+            // `<document` and `</document` need no boundary to be found here: they are found when one follows
+            const auto at = lowered.find(pattern);
+            if (at == std::string::npos)
+            {
+                continue;
+            }
+            const bool isTag = pattern.find("document") != std::string::npos;
+            const bool boundary = at + pattern.size() == lowered.size() || std::string(">/ \t\r\n").find(lowered[at + pattern.size()]) != std::string::npos;
+            ASSERT_TRUE(isTag && !boundary) << "found " << pattern << " in " << lowered << " from " << text;
+        }
+    }
 }

@@ -19,8 +19,9 @@ here (docs/tasks/0233); before, `camelize`, `underscorize`, `escapecpp`, `toxml`
 | `pack(budget, attribute=none, by=none, reverse=false, reserve=0, stop=false)` | The items of a list whose text fits in a token budget, in their original order |
 
 The five prompt filters and the prompt escaping mode are specified at the end of this file
-(docs/tasks/0358, 0359; decided by Ruslan 2026-11-05, docs/api-2.0.md 3.3). Until those tasks
-land, a template that uses them fails to load with `ErrorCode::UnknownFilter`.
+(docs/tasks/0358, 0359; decided by Ruslan 2026-11-05, docs/api-2.0.md 3.3). `neutralize` and
+`fence` are implemented; until the rest of those tasks land, a template that uses
+`count_tokens`, `truncate_tokens` or `pack` fails to load with `ErrorCode::UnknownFilter`.
 
 `toxml` was removed in 2.0: JSON-like data has no single XML mapping, so it would be a format
 of our own to define and support (docs/release-2.0.md, D16). A template that uses it fails
@@ -129,8 +130,13 @@ of the 2.0 contract:
    prepended; if it ends with a non-empty proper prefix of a special or tag pattern, it is
    appended. So `'a<|im_'|neutralize ~ 'start|>'|neutralize` is `a<|im_  start|>`: two values
    joined cannot form a special.
-4. **Separator.** Default a space. It must be non-empty and occur in no pattern; anything else is
-   an argument error (and `PromptEscaper`'s constructor throws `std::invalid_argument`).
+4. **Separator.** Default a space. It must be non-empty and share no character (ASCII case
+   ignored) with any pattern, a special must be at least two code points (one cannot be broken
+   by an insertion), patterns and separator must be well-formed UTF-8, and no special or tag
+   name may be longer than 256 bytes; anything
+   else is an argument error (and `PromptEscaper`'s constructor throws `std::invalid_argument`).
+   A tag name followed in the output by a separator counts as followed by a boundary, so a
+   special that starts with a tag name's last letter cannot turn `<ab` into the tag `<a b`.
 
 A zero-width separator (`separator='\u2060'`) is accepted, but it is a control character (Unicode
 category Cf) that BERT-style text cleaning and many text pipelines delete, which puts the special

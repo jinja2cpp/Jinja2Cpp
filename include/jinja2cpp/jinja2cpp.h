@@ -12,6 +12,7 @@
 #include <jinja2cpp/generic_list.h>          // IWYU pragma: export
 #include <jinja2cpp/generic_list_iterator.h> // IWYU pragma: export
 #include <jinja2cpp/make_generic_list.h>     // IWYU pragma: export
+#include <jinja2cpp/prompt.h>                // IWYU pragma: export
 #include <jinja2cpp/reflected_value.h>       // IWYU pragma: export
 #include <jinja2cpp/string_helpers.h>        // IWYU pragma: export
 #include <jinja2cpp/template.h>              // IWYU pragma: export

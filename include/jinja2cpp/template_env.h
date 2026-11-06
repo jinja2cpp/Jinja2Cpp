@@ -5,6 +5,7 @@
 #include "config.h"
 #include "error_info.h" // IWYU pragma: export
 #include "filesystem_handler.h"
+#include "prompt.h"
 #include "template.h"
 
 #include <jinja2cpp/value.h>
@@ -145,6 +146,9 @@ struct Settings
     //! When set, decides \ref autoescape for each template by its name instead (Jinja2 `autoescape` given a callable),
     //! for example `SelectAutoescape({"html", "xml"})`. A template keeps what it was loaded with
     AutoescapeSelector autoescapeSelector;
+    //! The special tokens and tags of the prompts the `neutralize` and `fence` filters protect (docs/cpp-only-filters.md,
+    //! "Prompt filters"). None by default, so the filters change nothing until the host registers its model's tokens
+    PromptEscaper promptEscaper;
     //! How undefined values behave (Jinja2 `undefined`). A failed use reports ErrorCode::UndefinedError
     UndefinedPolicy undefinedPolicy = UndefinedPolicy::Default;
     //! When `include`, `extends` and `import` look up their template in the environment. `OncePerRender` (default) takes the
