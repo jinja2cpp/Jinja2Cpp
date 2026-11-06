@@ -632,7 +632,7 @@ void BorrowedCells::HandOverReleasedCallFrozen(CycleCollector* collector) noexce
                     ++it;
                     continue;
                 }
-                collector->NoteRoot(ValueObjectPtr(*it));
+                collector->NoteRoot(*it);
                 it = m_callFrozen.erase(it);
             }
         }
@@ -640,6 +640,13 @@ void BorrowedCells::HandOverReleasedCallFrozen(CycleCollector* collector) noexce
         {
             // Out of memory: the cells not handed over stay in the list
         }
+    }
+    // A cell in a cycle is never the list's alone: a walk frees the generations nothing outside
+    // the cycle reads, as the list's reference counts as one of the walk's
+    if (m_callFrozen.size() >= m_callFrozenWalkAt)
+    {
+        CycleCollector::CollectKeeping(m_callFrozen);
+        m_callFrozenWalkAt = std::max(MinCallFrozenWalk, 2 * m_callFrozen.size());
     }
 }
 
@@ -692,7 +699,7 @@ void BorrowedCells::FreezeCallScoped(CycleCollector* collector) noexcept
                 {
                     collector->NoteFrozen(ValueObjectPtr(cell));
                 }
-                m_callFrozen.push_back(cell);
+                m_callFrozen.emplace_back(cell);
             }
             catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
             {
@@ -714,7 +721,7 @@ void BorrowedCells::ReleaseCallFrozen(CycleCollector* collector) noexcept
             // Also one nothing else reads: what it holds may be a cycle an earlier call made
             for (const auto& cell : m_callFrozen)
             {
-                collector->NoteRoot(ValueObjectPtr(cell));
+                collector->NoteRoot(cell);
             }
         }
         catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost

@@ -203,9 +203,10 @@ void CycleCollector::Collect() noexcept
 
 namespace
 {
-// The walk of CollectOnce from `candidates` and `roots`, which it empties: the garbage among what
-// they reach is emptied, which breaks its cycles. Throws std::bad_alloc
-void WalkAndClear(std::vector<ValueObjectPtr>& candidates, std::vector<ValueObjectPtr>& roots)
+// The walk of CollectOnce from `candidates` and `roots`, which it empties, or, with `keepRoots`,
+// leaves with the roots that are not garbage: the garbage among what they reach is emptied, which
+// breaks its cycles. Throws std::bad_alloc, and then changes nothing
+void WalkAndClear(std::vector<ValueObjectPtr>& candidates, std::vector<ValueObjectPtr>& roots, bool keepRoots = false)
 {
     std::unordered_map<const ValueObject*, Node> nodes;
     // In the order found: `order` grows while it is walked
@@ -281,13 +282,37 @@ void WalkAndClear(std::vector<ValueObjectPtr>& candidates, std::vector<ValueObje
     }
     // Nothing below allocates. The tables are not read again: emptying may free what they name
     candidates.clear();
-    roots.clear();
+    if (keepRoots)
+    {
+        // The garbage holds the roots it takes
+        roots.erase(std::remove_if(roots.begin(), roots.end(), [&nodes](const ValueObjectPtr& root) {
+                        const auto node = nodes.find(root.get());
+                        return node != nodes.end() && !node->second.reachable;
+                    }),
+                    roots.end());
+    }
+    else
+    {
+        roots.clear();
+    }
     for (const auto& object : garbage)
     {
         object->Clear();
     }
 }
 } // namespace
+
+void CycleCollector::CollectKeeping(std::vector<ValueObjectPtr>& roots) noexcept
+{
+    std::vector<ValueObjectPtr> none;
+    try
+    {
+        WalkAndClear(none, roots, true);
+    }
+    catch (...) // NOLINT(bugprone-empty-catch): the roots stay as they were, for the next walk
+    {
+    }
+}
 
 void CycleCollector::CollectFrom(std::vector<ValueObjectPtr> roots) noexcept
 {

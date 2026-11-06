@@ -651,8 +651,12 @@ private:
     std::shared_ptr<CallExports> m_exports;
     // The call-scoped cells that values of the module still read when their call ended
     // (FreezeCallScoped): a cycle through one is out of the reach of the module's names, so Release
-    // gives them to the module's collector. Pruned of the cells nothing else holds at each call's end
-    std::vector<IntrusivePtr<const BorrowedCell>> m_callFrozen;
+    // gives them to the module's collector. Pruned of the cells nothing else holds at each call's end,
+    // and walked once it has doubled, so that cyclic generations of a value lent to every call
+    // (`d.update(self=d)`) do not pile up (Codex review of #778)
+    std::vector<ValueObjectPtr> m_callFrozen;
+    size_t m_callFrozenWalkAt = MinCallFrozenWalk;
+    static constexpr size_t MinCallFrozenWalk = 8;
 };
 
 } // namespace v2

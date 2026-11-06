@@ -144,6 +144,9 @@ public:
     // Walks from `roots` now, apart from any render's notes, and empties the garbage among what
     // they reach: what the cells a template module's call drops held (BorrowedCells::DropUnheld)
     static void CollectFrom(std::vector<ValueObjectPtr> roots) noexcept;
+    // The same, keeping in `roots` the ones that are not garbage: the call-scoped cells a template
+    // module keeps, whose cycles no later note may name (BorrowedCells::FreezeCallScoped)
+    static void CollectKeeping(std::vector<ValueObjectPtr>& roots) noexcept;
     // The walk starts from every note, also one that nothing else holds any more: a template
     // module's values when it goes, where such a value may hold a cycle that a call made and
     // whose note went with that call's collector (docs/tasks/0212)

@@ -1088,7 +1088,8 @@ TYPED_TEST_P(JsonConformance, ModuleCallsOfABorrowedDocument)
                                "{% macro cyc2() %}{% set _ = cycles[0].a.append(cycles[0]) %}{{ cycles[0].a|length }}{% endmacro %}"
                                "{% set held = [] %}"
                                "{% macro nest(d) %}{% set l = [] %}{% set _ = l.append(l) %}{% set _ = d.update(l=l) %}{% set _ = held.append(d) %}{% endmacro %}"
-                               "{% macro drop() %}{% set _ = held.clear() %}{{ held|length }}{% endmacro %}"));
+                               "{% macro drop() %}{% set _ = held.clear() %}{{ held|length }}{% endmacro %}"
+                               "{% macro selfref(d, f) %}{% set _ = d.update(self=d, f=f) %}{% endmacro %}"));
         auto module = tpl.MakeModule({});
         ASSERT_TRUE(!!module) << module.error().ToString();
         const auto call = [&module](const char* name, jinja2::ValuesList args) {
@@ -1133,6 +1134,16 @@ TYPED_TEST_P(JsonConformance, ModuleCallsOfABorrowedDocument)
         EXPECT_EQ("", call("nest", { jinja2::Reflect(std::as_const(withList)) }));
         EXPECT_EQ("0", call("drop", {}));
         EXPECT_EQ("0", call("drop", {}));
+        // A cyclic generation of a value lent to every call goes with a later call, not only with the module
+        // (Codex review of #778): what the callable holds counts the generations still alive
+        auto token = std::make_shared<int>(0);
+        const jinja2::UserCallable counted([token](const jinja2::UserCallableParams&) { return jinja2::Value(); }, {});
+        const jinja2::Value lent = jinja2::Reflect(std::as_const(withList));
+        for (int n = 0; n != 40; ++n)
+        {
+            EXPECT_EQ("", call("selfref", { lent, counted }));
+        }
+        EXPECT_GT(20, token.use_count());
     }
 }
 
