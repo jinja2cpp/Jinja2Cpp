@@ -4093,6 +4093,13 @@ struct HostCallScope
     std::shared_ptr<CallableLease> lease;
     SmallVector<HostCallExport, 2> exports;
 
+    // Orders the exports by accessor once the arguments are made, so that a call handed many
+    // containers looks each one up in log time
+    void Seal()
+    {
+        std::sort(exports.begin(), exports.end(), [](const HostCallExport& left, const HostCallExport& right) { return std::less<>()(left.accessor, right.accessor); });
+    }
+
     // The value of the host's `value`, given back during the call made from `context`
     [[nodiscard]] InternalValue ToInternal(Value&& value, const RenderContext& context) const;
     [[nodiscard]] InternalValue ToInternal(const Value& value, const RenderContext& context) const;
@@ -4312,14 +4319,8 @@ const InternalValue* HostCallScope::Original(const Value& value, const RenderCon
     {
         return nullptr;
     }
-    for (const auto& item : exports)
-    {
-        if (item.accessor == accessor)
-        {
-            return &item.original;
-        }
-    }
-    return nullptr;
+    const auto* const found = std::lower_bound(exports.begin(), exports.end(), accessor, [](const HostCallExport& item, const void* key) { return std::less<>()(item.accessor, key); });
+    return found != exports.end() && found->accessor == accessor ? &found->original : nullptr;
 }
 
 // The template list of a list the host built of items it was handed, or null when none was
@@ -4436,6 +4437,7 @@ struct UserCallableBody
         HostCallScope scope;
         const LeaseEnd leaseEnd(scope.lease);
         auto ucParams = PrepareUserCallableParams(params, context, argsInfo, scope);
+        scope.Seal();
         // Converted while the call's scope is live: what it was handed comes back as itself
         auto result = scope.ToInternal(CallHost(ucParams), context);
         AfterHostCall();

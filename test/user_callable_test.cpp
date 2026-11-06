@@ -1507,7 +1507,7 @@ TEST(UserCallableTestSingle, SwappedObjectsStayInTheirRender)
     ValuesMap params;
     params["swap"] = UserCallable(
         [&](const UserCallableParams& p) {
-            const std::lock_guard<std::mutex> lock(mutex);
+            const std::scoped_lock lock(mutex);
             Value previous = std::move(kept);
             kept = p["v"];
             return previous;
@@ -1529,6 +1529,18 @@ TEST(UserCallableTestSingle, SwappedObjectsStayInTheirRender)
     std::thread second(run);
     first.join();
     second.join();
-    const std::lock_guard<std::mutex> lock(mutex);
+    const std::scoped_lock lock(mutex);
     kept = Value();
+}
+
+// A call handed many containers finds each one in log time, not by a scan per item (docs/tasks/0212)
+TEST(UserCallableTestSingle, ManyHandedContainersComeBack)
+{
+    ValuesMap params;
+    params["va"] = UserCallable([](const UserCallableParams& p) { return p.extraPosArgs; }, { ArgInfo{ "*args" } });
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% set big = range(20000)|batch(1)|list %}{% set r = va(*big) %}{{ r|length }}|{{ r[0] is sameas big[0] }}|{{ r[19999] is sameas big[19999] }}"));
+    auto result = tpl.RenderAsString(params);
+    ASSERT_TRUE(result) << result.error().ToString();
+    EXPECT_EQ("20000|True|True", result.value());
 }
