@@ -106,3 +106,57 @@ def test_custom_and_jinja2_loaders(tree):
 def test_list_templates(tree):
     assert jinja2cpp.DictLoader(TEMPLATES).list_templates() == jinja2.DictLoader(TEMPLATES).list_templates()
     assert jinja2cpp.FileSystemLoader(tree / "t").list_templates() == jinja2.FileSystemLoader(tree / "t").list_templates()
+
+
+def test_syntax_error_source_never_comes_from_outside_the_search_path(tmp_path):
+    # dir1/x.html links out of the root (the confined loader rejects it); dir2/x.html is the template
+    # that loads, and its source is the diagnostic's, not the file outside
+    outside = tmp_path / "outside.html"
+    outside.write_text("OUTSIDE {% if %}")
+    dir1 = tmp_path / "dir1"
+    dir2 = tmp_path / "dir2"
+    dir1.mkdir()
+    dir2.mkdir()
+    try:
+        (dir1 / "x.html").symlink_to(outside)
+    except OSError:
+        pytest.skip("no symlinks")
+    (dir2 / "x.html").write_text("INSIDE {% if %}")
+    env = jinja2cpp.Environment(loader=jinja2cpp.FileSystemLoader([str(dir1), str(dir2)]))
+    with pytest.raises(jinja2cpp.TemplateSyntaxError) as info:
+        env.get_template("x.html")
+    assert info.value.source in (None, "INSIDE {% if %}")
+    assert "OUTSIDE" not in str(info.value.source)
+    assert info.value.filename in (None, os.path.join(str(dir2), "x.html"))
+
+
+def test_uptodate_callback_may_load_another_template():
+    # The freshness check ran under the engine's cache lock, so a nested load deadlocked
+    import subprocess
+    import sys
+    import textwrap
+
+    code = textwrap.dedent(
+        """
+        import jinja2cpp
+
+        class Loader(jinja2cpp.BaseLoader):
+            calls = 0
+
+            def get_source(self, environment, template):
+                def uptodate():
+                    if template == "a":
+                        # A template not cached yet, on each check
+                        Loader.calls += 1
+                        environment.get_template("b%d" % Loader.calls)
+                    return True
+                return template.upper(), None, uptodate
+
+        env = jinja2cpp.Environment(loader=Loader(), auto_reload=True)
+        env.get_template("a")
+        print(env.get_template("a").render())
+        """
+    )
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=60, env=dict(os.environ))
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "A"

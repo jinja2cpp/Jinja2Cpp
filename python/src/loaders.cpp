@@ -312,6 +312,7 @@ public:
     {
         for (const auto& path : m_paths)
         {
+            m_readers.push_back(std::make_shared<jinja2::ConfinedFileSystem>(path));
             if (utf8)
             {
                 m_handlers.push_back(std::make_shared<jinja2::ConfinedFileSystem>(path));
@@ -333,25 +334,28 @@ public:
     {
         ErrorSource source;
         source.name = MakeStr(name);
-        // As Jinja2: the path in the first directory that has the file, read again for the source
+        // The first directory the engine reads the file from: the same confined reads as the
+        // loading, so a link out of the directory never supplies the diagnostic's source
         const auto os = nb::module_::import_("os.path");
-        for (const auto& path : m_paths)
+        for (std::size_t i = 0; i < m_paths.size(); ++i)
         {
-            auto full = os.attr("join")(MakeStr(path), MakeStr(name));
-            if (nb::cast<bool>(os.attr("isfile")(full)))
+            auto bytes = m_readers[i]->OpenByteStream(name);
+            if (!bytes)
             {
-                source.filename = full;
-                PyObject* text = PyObject_CallMethod(nb::module_::import_("pathlib").attr("Path")(full).ptr(), "read_text", "s", m_encoding.c_str());
-                if (text)
-                {
-                    source.source = nb::steal(text);
-                }
-                else
-                {
-                    PyErr_Clear();
-                }
-                break;
+                continue;
             }
+            source.filename = os.attr("join")(MakeStr(m_paths[i]), MakeStr(name));
+            const std::string data((std::istreambuf_iterator<char>(*bytes)), std::istreambuf_iterator<char>());
+            PyObject* text = PyUnicode_Decode(data.data(), static_cast<Py_ssize_t>(data.size()), m_encoding.c_str(), "strict");
+            if (text)
+            {
+                source.source = nb::steal(text);
+            }
+            else
+            {
+                PyErr_Clear();
+            }
+            break;
         }
         return source;
     }
@@ -360,6 +364,8 @@ private:
     std::vector<std::string> m_paths;
     std::string m_encoding;
     std::vector<jinja2::FilesystemHandlerPtr> m_handlers;
+    // One confined reader per directory, for the diagnostic source
+    std::vector<std::shared_ptr<jinja2::ConfinedFileSystem>> m_readers;
 };
 
 class SourceLoaderImpl final : public Loader
