@@ -388,7 +388,7 @@ InternalValue HostMapToInternal(const GenericMap& map)
         return InternalValue(MapAdapter(IntrusivePtr<const HostBridge>(bridge)).MarkAsHost());
     }
     // An accessor of the host's own that carries an object
-    if (const auto* carrier = AsCarrier(accessor->AsHostObject()))
+    if (const auto* carrier = accessor ? AsCarrier(accessor->AsHostObject()) : nullptr)
     {
         return UndefinedFromDescription(carrier->Description());
     }

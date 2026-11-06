@@ -30,6 +30,7 @@ using namespace jinja2;
 // does the same against the engine's private interface)
 namespace
 {
+// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): a test's spec, read for clarity, not size
 struct ToySpec
 {
     std::string str = "Тоу";
@@ -155,7 +156,7 @@ public:
         }
         // Python's slice holds None for an omitted bound
         const auto& seq = *m_spec->sequence;
-        const int64_t size = static_cast<int64_t>(seq.size());
+        const auto size = static_cast<int64_t>(seq.size());
         const int64_t stride = step.IsInt() ? step.AsInt() : 1;
         int64_t from = start.IsInt() ? start.AsInt() : (stride > 0 ? 0 : size - 1);
         int64_t to = stop.IsInt() ? stop.AsInt() : (stride > 0 ? size : -1);
@@ -188,7 +189,7 @@ public:
         return MakeList(std::move(items));
     }
     [[nodiscard]] bool IsCallable() const override { return m_spec->callable; }
-    Value Call(const UserCallableParams& params) const override
+    [[nodiscard]] Value Call(const UserCallableParams& params) const override
     {
         if (!m_spec->callable)
         {
@@ -347,7 +348,7 @@ UserCallable Probe(std::function<Value(const UserCallableParams&)> fn)
 }
 
 template<typename Fn>
-bool Throws(Fn&& fn, ErrorCode code)
+bool Throws(const Fn& fn, ErrorCode code)
 {
     try
     {
@@ -443,7 +444,7 @@ TEST(PublicHostObjectTest, IdentityHoldsAcrossCalls)
     const auto object = MakeToy(spec);
     std::vector<Value> kept;
     auto keep = Probe([&kept](const UserCallableParams& params) {
-        kept.push_back(params["x"]);
+        kept.emplace_back(params["x"]);
         return params["x"];
     });
     const ValuesMap params{ { "ident", Ident() }, { "keep", std::move(keep) }, { "o", object }, { "o2", MakeToy(spec) }, { "other", MakeToy() } };
@@ -675,24 +676,24 @@ TEST(PublicHostObjectTest, UndefinedReachesTheObjectDescribed)
         ASSERT_EQ(1u, spec->seen.size());
         const auto described = UndefinedOf(spec->seen[0]);
         ASSERT_TRUE(described.has_value());
-        EXPECT_EQ(policy, described->policy);
-        EXPECT_EQ("nope", described->name);
-        EXPECT_EQ("", described->objType);
+        EXPECT_EQ(policy, described.value().policy);
+        EXPECT_EQ("nope", described.value().name);
+        EXPECT_EQ("", described.value().objType);
         EXPECT_FALSE(UndefinedOf(Value(1)).has_value());
     }
     // A missing attribute and an item key
     Render("{{ f(f.missing) }}", params);
     auto described = UndefinedOf(spec->seen[0]);
     ASSERT_TRUE(described.has_value());
-    EXPECT_EQ("missing", described->name);
-    EXPECT_EQ("Toy object", described->objType);
-    EXPECT_TRUE(described->isAttr);
+    EXPECT_EQ("missing", described.value().name);
+    EXPECT_EQ("Toy object", described.value().objType);
+    EXPECT_TRUE(described.value().isAttr);
     // An undefined key reaches GetItem described as well
     auto keyed = std::make_shared<const ToySpec>(Rich());
     Render("{{ k[nope] }}", { { "k", MakeToy(keyed) } });
     ASSERT_EQ(1u, keyed->seen.size());
     ASSERT_TRUE(UndefinedOf(keyed->seen[0]).has_value());
-    EXPECT_EQ("nope", UndefinedOf(keyed->seen[0])->name);
+    EXPECT_EQ("nope", UndefinedOf(keyed->seen[0]).value().name);
 }
 
 TEST(PublicHostObjectTest, UndefinedComesBackAsUndefined)
@@ -712,7 +713,7 @@ TEST(PublicHostObjectTest, UndefinedComesBackAsUndefined)
     EXPECT_NE(std::string::npos, Render("{{ o.plain.x }}", params).find("'plain' is undefined"));
 
     // A host callable that returns it
-    auto make = [](UndefinedDescription description) {
+    auto make = [](const UndefinedDescription& description) {
         return UserCallable([description](const UserCallableParams&) { return MakeUndefined(description); }, {});
     };
     const ValuesMap callables{ { "plain", make({ UndefinedPolicy::Default, "p", "", true, "" }) }, { "strict", make({ UndefinedPolicy::Strict, "s", "", true, "strict hint" }) } };
@@ -728,7 +729,7 @@ TEST(PublicHostObjectTest, KeepUndefinedGivesCallablesUndefined)
     std::vector<Value> seen;
     auto record = [&seen](const UserCallableParams& params) {
         seen.clear();
-        seen.push_back(params["x"]);
+        seen.emplace_back(params["x"]);
         if (const auto* positional = params.extraPosArgs.GetIf<ValuesList>())
         {
             seen.insert(seen.end(), positional->begin(), positional->end());
@@ -770,7 +771,7 @@ TEST(PublicHostObjectTest, KeepUndefinedGivesCallablesUndefined)
         {
             const auto described = UndefinedOf(seen[i]);
             ASSERT_TRUE(described.has_value()) << name << i;
-            EXPECT_EQ(expected[i], described->name);
+            EXPECT_EQ(expected[i], described.value().name);
         }
     }
     // A defined value is untouched, a missing attribute is described as one
@@ -779,8 +780,8 @@ TEST(PublicHostObjectTest, KeepUndefinedGivesCallablesUndefined)
     EXPECT_TRUE(seen[0].IsInt());
     const auto described = UndefinedOf(seen[1]);
     ASSERT_TRUE(described.has_value());
-    EXPECT_EQ("nope", described->name);
-    EXPECT_EQ("dict object", described->objType);
+    EXPECT_EQ("nope", described.value().name);
+    EXPECT_EQ("dict object", described.value().objType);
     EXPECT_TRUE(seen[2].IsList());
     // And it goes back: the template sees undefined, with the policy it had
     // Without the flag it comes back as None
@@ -797,7 +798,7 @@ TEST(PublicHostObjectTest, ExportedEngineValuesKeepTupleIdentityAndKeys)
 {
     std::vector<Value> seen;
     auto probe = Probe([&seen](const UserCallableParams& params) {
-        seen.push_back(params["x"]);
+        seen.emplace_back(params["x"]);
         return Value(1);
     });
     const ValuesMap params{ { "probe", std::move(probe) } };
@@ -902,7 +903,7 @@ TEST(PublicHostObjectTest, ExportedEngineContainersHaveAStableIdentity)
     });
     std::vector<Value> seen;
     auto probe = Probe([&seen](const UserCallableParams& params) {
-        seen.push_back(params["x"]);
+        seen.emplace_back(params["x"]);
         return Value(1);
     });
     const ValuesMap params{ { "walk", std::move(walk) }, { "probe", std::move(probe) } };
@@ -933,7 +934,7 @@ TEST(PublicHostObjectTest, MembersOfTemplateObjectsAreLentForTheCall)
         const auto* fn = callable.GetIf<UserCallable>();
         if (!fn)
         {
-            results.push_back("<none>");
+            results.emplace_back("<none>");
             return;
         }
         UserCallableParams params;

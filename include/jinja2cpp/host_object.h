@@ -94,7 +94,7 @@ public:
      * ValuesMap, as for a \ref UserCallable declared with \ref ArgInfo::VarArgs and \ref ArgInfo::VarKwArgs. The
      * default throws Python's `TypeError` ("object is not callable").
      */
-    virtual Value Call(const UserCallableParams& params) const;
+    [[nodiscard]] virtual Value Call(const UserCallableParams& params) const;
     //! Whether `iter(x)` works, asked without iterating
     [[nodiscard]] virtual bool IsIterable() const;
     //! The items `iter(x)` gives; the list may be single-pass (no size, no indexer). Empty when \ref IsIterable is false

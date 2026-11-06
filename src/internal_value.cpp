@@ -4616,7 +4616,7 @@ private:
 };
 
 class LendingListView final : public IListItemAccessor
-    , private IIndexBasedAccessor
+    , public IIndexBasedAccessor
 {
 public:
     LendingListView(GenericList inner, LendFrame frame)
@@ -4643,14 +4643,13 @@ public:
         const auto* view = dynamic_cast<const LendingListView*>(&other);
         return m_inner.GetAccessor()->IsEqual(view ? *view->m_inner.GetAccessor() : other);
     }
-
-private:
     [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
     {
         const LendFrameScope scope(m_frame);
         return LendMembers(m_inner.GetAccessor()->GetIndexer()->GetItemByIndex(idx), m_frame);
     }
 
+private:
     GenericList m_inner;
     LendFrame m_frame;
 };
@@ -4659,7 +4658,12 @@ private:
 bool MayHoldTemplateCallables(const GenericMap& map)
 {
     const auto* accessor = dynamic_cast<const IMapAccessor*>(map.GetAccessor());
-    return accessor != nullptr && !accessor->GetHostObject() && (accessor->GetObjectClass() != nullptr || accessor->GetMutableItems() != nullptr);
+    if (!accessor)
+    {
+        return false;
+    }
+    const bool isHost = accessor->GetHostObject() != nullptr;
+    return !isHost && (accessor->GetObjectClass() != nullptr || accessor->GetMutableItems() != nullptr);
 }
 
 bool MayHoldTemplateCallables(const GenericList& list)
