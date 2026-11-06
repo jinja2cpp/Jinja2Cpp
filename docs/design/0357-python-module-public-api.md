@@ -1,6 +1,6 @@
 # 0357 plan: the Python module on the public API only
 
-Status: PROPOSED, 2026-11-06. Awaiting Ruslan's decisions D1-D7 (section 5; D6 in detail in section 8).
+Status: PROPOSED, 2026-11-06. Awaiting Ruslan's decisions D1-D7 (section 5; D6 in detail in section 8; Codex review and resulting changes in section 9).
 Checked against master 93392d4, PR #794 (branch `claude/project-thread-9gbcmg`, merge base master) and the described 0354 PR2/PR3. Written by the architect role; the advisor's second opinion (section 7) revises B1, B3, D3, D4 and D7 and the sequencing. Where they differ, section 7 is the current recommendation.
 
 ## 0. The tension
@@ -164,3 +164,19 @@ There are two ways to go:
   - It gives full parity for subclassed sandboxes.
   - Cost: one more interface frozen at G1.
   - Cost: a host call on the attribute and format paths of engine values, in sandboxed renders only.
+
+## 9. Codex review (2026-11-06, third opinion)
+
+Codex agrees with option 2 and with composition (D1). It also agrees with D3: an `IHostObject2` found and cached once, not `Query`. It agrees with D4: free undefined functions plus an opt-in `keepUndefined`, with `None` staying the default. It found four gaps in the plan and disagrees on D6. The cited code was checked, and every claim holds.
+
+- **Native dict keys are lost.** A template dict exported through the public view stringifies non-string keys, and keys that spell alike collapse (`SharedDictAdapter::CreateSnapshot`, `src/internal_value.cpp:3261-3279`). The module today converts the original keys through `GetEntries` (`python/src/convert.cpp:297-302`). After the switch, `record({1: 'a', '1': 'b'})` would get one entry instead of two.
+  - Needed: a public, lossless way to enumerate entries, for example `GenericMap` entries whose keys are `Value`s. The alternative is that Ruslan accepts this as a divergence.
+- **Native tuples are lost.** `OutputValueConvertor` exports a `ListRef` as a plain `GenericList` (`src/internal_value.cpp:4057`), so the tuple flag on `ListAdapter` does not reach the public side. `python/tests/test_values.py:146-153` needs a nested template tuple to arrive in Python as a tuple.
+  - Needed: a tuple flag on the public list export, for example `GenericList::IsTuple()`, plus a row in S1a.
+- **The cycle memo can't key on accessor addresses.** `CreateGenericList()` allocates a new accessor on every call (`src/internal_value.cpp:2617-2626`). So `{% set xs = [] %}{% do xs.append(xs) %}{{ record(xs) }}` never sees the same address twice, while the module today keys its memo on the underlying list (`python/src/convert.cpp:258-266`).
+  - Needed: a stable public identity token on exported `GenericList`/`GenericMap`, which can be the same `Identity()` notion as B1.
+- **The perf claim is too broad.** `InputValueConvertor` also runs during evaluation, not only when a render starts. A native generic map's `HostItem` goes through `LendGenericItem` and `Value2IntValue` for a nested map (`src/internal_value.cpp:1280-1294, 3498-3511`). So the `AsHostObject()` probe adds one virtual call each time a nested native `GenericMap` is read. That read already allocates an adapter, so the relative cost is small, but it is not zero.
+  - Needed: limit the "unchanged" claim to the `IsHost()` dispatch sites, and add instruction-count coverage in S1b for nested generic, reflected and JSON maps.
+- **D6: Codex disagrees with the switch-only sandbox.** Under B7 alone, a subclassed `SandboxedEnvironment` that rejects a native method never sees that operation. Native methods are resolved and called directly (`src/expression_evaluator.cpp:1685-1696`), and native attribute safety is decided in `src/value_methods.cpp:2747-2764`. So the loss is in what the policy enforces, not only in message text. Codex prefers an optional public policy callback, with no cost when it is unset, honoured on both the native attribute path and the direct method-call path. A fixed built-in sandbox is acceptable only as an explicit, owner-approved reduction of the drop-in contract.
+
+**Effect on the plan.** B1 gains three export capabilities: lossless entries, the tuple flag and the identity token. All three belong to the public `GenericList`/`GenericMap` export views and also help C++ users. The D6 recommendation changes to **D6b, an optional `ISandboxPolicy`**, because parity in what the policy enforces is a goal and ordinary renders pay nothing.
