@@ -15,6 +15,7 @@
 #include <jinja2cpp/string_helpers.h>
 
 #include <algorithm>
+#include <limits>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -353,7 +354,9 @@ InternalValue TokenBudget::Filter(const InternalValue& baseVal, RenderContext& c
     {
         auto* callback = context.GetRendererCallback();
         const TokenMeter meter(callback->GetSettings().tokenizer);
-        return InternalValue(static_cast<int64_t>(CountValue(meter, baseVal, callback)));
+        // A host count above the int range saturates rather than wrapping negative
+        const std::size_t count = CountValue(meter, baseVal, callback);
+        return InternalValue(static_cast<int64_t>(std::min<std::size_t>(count, static_cast<std::size_t>(std::numeric_limits<int64_t>::max()))));
     }
     case TruncateMode:
         return Truncate(baseVal, context);
