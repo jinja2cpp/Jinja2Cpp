@@ -215,7 +215,7 @@ public:
         {
             m_cells.FreezeCallScoped(&m_collector);
         }
-        m_cells.DropUnheld();
+        m_cells.DropUnheld(&m_collector);
         m_cells.EndCall(std::move(m_outerCall));
     }
     // The call succeeded: its values keep what they read now, or the call fails with

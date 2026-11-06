@@ -477,16 +477,16 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     return true;
 }
 
-void BorrowedCells::DropUnheld() noexcept
+void BorrowedCells::DropUnheld(CycleCollector* collector) noexcept
 {
     // A dropped cell lets go of its items, which may hold the only source of another cell (the
     // adapter of a nested list): again until a pass drops none
-    while (m_cells && DropUnheldOnce())
+    while (m_cells && DropUnheldOnce(collector))
     {
     }
 }
 
-bool BorrowedCells::DropUnheldOnce() noexcept
+bool BorrowedCells::DropUnheldOnce(CycleCollector* collector) noexcept
 {
     size_t count = 0;
     for (const auto& [identity, cell] : *m_cells)
@@ -529,6 +529,28 @@ bool BorrowedCells::DropUnheldOnce() noexcept
     {
         // The source's adapter detaches from the cell, which is still alive
         cell->m_source = InternalValue();
+    }
+    // What the cells' items hold may be a cycle an earlier call of a template module made, which
+    // no note names any more: the call's collector walks from their storage (Codex review of #778)
+    if (collector)
+    {
+        try
+        {
+            for (const auto& cell : dropped)
+            {
+                for (const auto* storage : { &cell->m_storage, &cell->m_retired })
+                {
+                    if (auto object = OwnObjectOf(*storage))
+                    {
+                        collector->NoteRoot(std::move(object));
+                    }
+                }
+            }
+        }
+        catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
+        {
+            // Out of memory: a cycle through the cells not handed over leaks (docs/tasks/0283)
+        }
     }
     const auto removed = static_cast<uint32_t>(dropped.size());
     dropped.clear();
