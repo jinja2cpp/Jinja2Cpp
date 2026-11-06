@@ -530,30 +530,57 @@ bool BorrowedCells::DropUnheldOnce(CycleCollector* collector) noexcept
         // The source's adapter detaches from the cell, which is still alive
         cell->m_source = InternalValue();
     }
+    const auto removed = static_cast<uint32_t>(dropped.size());
     // What the cells' items hold may be a cycle an earlier call of a template module made, which
-    // no note names any more: the call's collector walks from their storage (Codex review of #778)
+    // no note names any more (Codex review of #778): the call's collector walks from it. Only from
+    // what may be in one, so that the nested cells whose sources the rest held go in the next pass
+    std::vector<ValueObjectPtr> storages;
     if (collector)
     {
         try
         {
+            storages.reserve(2 * dropped.size());
             for (const auto& cell : dropped)
             {
                 for (const auto* storage : { &cell->m_storage, &cell->m_retired })
                 {
                     if (auto object = OwnObjectOf(*storage))
                     {
-                        collector->NoteRoot(std::move(object));
+                        storages.push_back(std::move(object));
                     }
                 }
             }
         }
         catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
         {
-            // Out of memory: a cycle through the cells not handed over leaks (docs/tasks/0283)
+            // Out of memory: a cycle through the storages not handed over leaks (docs/tasks/0283)
         }
     }
-    const auto removed = static_cast<uint32_t>(dropped.size());
     dropped.clear();
+    try
+    {
+        for (const auto& storage : storages)
+        {
+            // Held by something else too, a cycle through it among them; else only what it holds
+            // may be in one
+            if (storage->use_count() > 1)
+            {
+                collector->NoteRoot(storage);
+                continue;
+            }
+            storage->Traverse([collector](const ValueObject* item) {
+                if (item->IsTraversable() && item->use_count() > 1)
+                {
+                    collector->NoteRoot(ValueObjectPtr(item));
+                }
+            });
+        }
+    }
+    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
+    {
+        // Out of memory: a cycle through the storages not handed over leaks (docs/tasks/0283)
+    }
+    storages.clear();
     detail::CellCounters::RemoveLive(removed);
     JINJA2CPP_CELL_TRACE_EVENT("dropped", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("n", removed), Trace::Num("live", detail::CellCounters::Live()));
     return true;
