@@ -126,7 +126,16 @@ constexpr std::uint64_t StepsPerPoll = 16;
 // Starts the next countdown: to the end of the step budget, or to the next clock poll
 void Refill(RenderLimits& limits)
 {
-    std::uint64_t chunk = limits.hasDeadline ? StepsPerPoll : UINT64_MAX;
+    // A host's poll (t_hostPoll) runs at each refill: every HostPollSteps steps, or at each clock poll
+    std::uint64_t chunk = UINT64_MAX;
+    if (limits.hasDeadline)
+    {
+        chunk = StepsPerPoll;
+    }
+    else if (t_hostPoll)
+    {
+        chunk = HostPollSteps;
+    }
     if (limits.maxSteps != 0)
     {
         // The step after the last allowed one reaches the slow path, which fails it
@@ -167,6 +176,11 @@ void StepsSlow()
     }
     PollDeadline();
     Refill(limits);
+    // Last, with the count refilled: the poll may throw, and the render stops
+    if (const auto poll = t_hostPoll)
+    {
+        poll();
+    }
 }
 } // namespace
 

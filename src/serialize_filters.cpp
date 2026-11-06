@@ -3,6 +3,7 @@
 #include "expression_evaluator.h"
 #include "filters.h"
 #include "function_base.h"
+#include "host_object.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "out_stream.h" // IWYU pragma: keep (GetStreamOnString returns an OutStream by value)
@@ -1028,6 +1029,15 @@ private:
         }
         else if (auto map = AsMap(value))
         {
+            // A host's list or tuple is an array
+            if (const auto* host = map->GetHostObject(); host && host->IsSequence())
+            {
+                if (auto items = host->Iterate())
+                {
+                    WriteContainer('[', ']', *items, level, [this, level](const InternalValue& item) { WriteValue(item, level + 1); });
+                    return;
+                }
+            }
             if (const char* objectClass = map->GetObjectClass())
             {
                 // namespace(), cycler() and joiner() are objects, which json.dumps rejects

@@ -67,6 +67,10 @@ option(JINJA2CPP_BUILD_SHARED "Build shared linkage version of Jinja2Cpp" OFF)
 option(JINJA2CPP_PIC "Control -fPIC option for library build" OFF)
 option(JINJA2CPP_VERBOSE "Add extra debug output to the build scripts" OFF)
 option(JINJA2CPP_INSTALL "Add installation rules for JinjaCpp targets" ${JINJA2CPP_IS_MAIN_PROJECT})
+# The Python module jinja2cpp._jinja2cpp (docs/python.md, docs/tasks/0353), which pyproject.toml
+# builds for the wheel. It links its own static copy of the library, which it reaches through
+# private headers (src/host_object.h), so the library is built static and position-independent
+option(JINJA2CPP_BUILD_PYTHON "Build the Python module (python/); pyproject.toml turns it on" OFF)
 
 if (DEFINED BUILD_SHARED_LIBS)
     set(JINJA2CPP_BUILD_SHARED ${BUILD_SHARED_LIBS})
@@ -75,6 +79,19 @@ endif ()
 if (JINJA2CPP_BUILD_SHARED)
     set(JINJA2CPP_PIC ON)
     set(JINJA2CPP_MSVC_RUNTIME_TYPE "/MD")
+endif ()
+
+if (JINJA2CPP_BUILD_PYTHON)
+    if (JINJA2CPP_BUILD_SHARED)
+        message(FATAL_ERROR "JINJA2CPP_BUILD_PYTHON links the library statically: the module uses internal symbols a shared library hides")
+    endif ()
+    set(JINJA2CPP_PIC ON)
+    # In a module the interpreter loads with dlopen, the thread-locals that every render step
+    # reads would use the dynamic TLS model, a call into the loader per access
+    # (JINJA2CPP_HOT_TLS in src/recursion_guard.h)
+    if (UNIX AND NOT APPLE)
+        add_compile_definitions(JINJA2CPP_HOT_TLS_INITIAL_EXEC)
+    endif ()
 endif ()
 
 if (NOT JINJA2CPP_DEPS_MODE)
@@ -668,6 +685,10 @@ endif ()
 
 if (JINJA2CPP_BUILD_BENCHMARKS)
     add_subdirectory(bench)
+endif ()
+
+if (JINJA2CPP_BUILD_PYTHON)
+    add_subdirectory(python)
 endif ()
 
 if (JINJA2CPP_BUILD_TESTS OR JINJA2CPP_BUILD_FUZZERS)

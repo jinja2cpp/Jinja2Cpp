@@ -389,16 +389,33 @@ public:
 
     // Renders `tpl` with params that are values of the engine already, such as host objects
     // (host_object.h): the private entry of the Python module, which links the library
-    // statically (docs/tasks/0352)
-    static std::optional<BasicErrorInfo<CharT>> RenderInternal(const BasicTemplate<CharT>& tpl, std::basic_string<CharT>& os, const InternalValueMap& params)
+    // statically (docs/tasks/0352). `globals`, when given, are the render's globals instead of
+    // the environment's: the module's env.globals, which imported templates see too (0353)
+    static std::optional<BasicErrorInfo<CharT>> RenderInternal(const BasicTemplate<CharT>& tpl,
+                                                               std::basic_string<CharT>& os,
+                                                               const InternalValueMap& params,
+                                                               const InternalValueMap* globals = nullptr)
     {
-        return static_cast<const TemplateImpl*>(tpl.m_impl.get())->Render(os, params);
+        const auto* impl = static_cast<const TemplateImpl*>(tpl.m_impl.get());
+        // A separate instantiation, so that the ordinary Render keeps its shape and cost
+        if (globals)
+        {
+            return impl->template RenderCore<true>(os, params, globals);
+        }
+        return impl->template RenderCore<false>(os, params, nullptr);
     }
 
     // Renders with the params of a ValuesMap or a GenericMap, appending to a string or writing to a
     // host's sink. Rendering reads the template only, so several threads may render one template at once.
     template<typename Target, typename ParamsMap>
     std::optional<BasicErrorInfo<CharT>> Render(Target& os, const ParamsMap& params) const
+    {
+        return RenderCore<false>(os, params, nullptr);
+    }
+
+    // `hostGlobals` (with hasHostGlobals set) replaces the environment's globals (RenderInternal)
+    template<bool hasHostGlobals, typename Target, typename ParamsMap>
+    std::optional<BasicErrorInfo<CharT>> RenderCore(Target& os, const ParamsMap& params, const InternalValueMap* hostGlobals) const
     {
         static_assert(std::is_same_v<Target, std::basic_string<CharT>> || std::is_same_v<Target, BasicOutputSink<CharT>>);
         std::optional<BasicErrorInfo<CharT>> normalResult;
@@ -434,7 +451,7 @@ public:
             };
 
             static const InternalValueMap noGlobals;
-            const auto globals = m_env ? GetGlobalsSnapshot(*detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
+            const auto globals = m_env && !hasHostGlobals ? GetGlobalsSnapshot(*detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
 
             // A GenericMap returns values by copy; the context refers to them, so they live here
             std::list<Value> genericValues;
@@ -461,8 +478,10 @@ public:
             }
             RendererCallback callback(this);
             callback.SetGlobals(globals.get());
+            const InternalValueMap& renderGlobals = hasHostGlobals ? *hostGlobals : globals ? globals->values
+                                                                                            : noGlobals;
             RenderContext context(intParams,
-                                  globals ? globals->values : noGlobals,
+                                  renderGlobals,
                                   &callback,
                                   &GetBuiltinGlobals(m_settings->settings.extensions.i18n),
                                   maps.TopScope());

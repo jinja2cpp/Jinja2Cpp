@@ -53,6 +53,10 @@ struct ToySpec
     std::optional<std::vector<InternalValue>> sequence;
     // What a call returns instead of describing its arguments
     std::optional<InternalValue> callResult;
+    // A collections.abc.Mapping (its keys are `iteration`), a list or tuple
+    bool mapping = false;
+    bool listOrTuple = false;
+    bool tuple = false;
 };
 
 class ToyObject final : public IHostObject
@@ -163,6 +167,9 @@ public:
     [[nodiscard]] std::optional<size_t> Hash() const override { return m_spec->hashable ? IHostObject::Hash() : std::nullopt; }
     // Every view of one spec is one object, as two proxies of one PyObject are
     [[nodiscard]] const void* Identity() const override { return m_spec.get(); }
+    [[nodiscard]] bool IsMapping() const override { return m_spec->mapping; }
+    [[nodiscard]] bool IsSequence() const override { return m_spec->listOrTuple; }
+    [[nodiscard]] bool IsTuple() const override { return m_spec->tuple; }
     [[nodiscard]] bool IsMarkupLike() const override { return m_spec->html.has_value(); }
     [[nodiscard]] std::string Html() const override { return m_spec->html.value_or(""); }
 
@@ -460,6 +467,82 @@ TEST(HostObjectTest, CallBlockWritesTheResultAsIs)
     EXPECT_NE(std::string::npos, Render("{% call n() %}x{% endcall %}", params).find("expected str instance, int found"));
     // An engine object with a call operator is called, and refuses caller= as Python's does
     EXPECT_NE(std::string::npos, Render("{% set j = joiner() %}{% call j() %}x{% endcall %}", params).find("Joiner.__call__() got an unexpected keyword argument 'caller'"));
+}
+
+
+// A mapping is read as a map where Python wants one; every other operation still asks it (0353)
+TEST(HostObjectTest, MappingReadsAsAMap)
+{
+    ToySpec spec;
+    spec.mapping = true;
+    spec.iteration = std::vector<InternalValue>{ InternalValue(std::string("b")), InternalValue(std::string("a")) };
+    spec.items = { { "a", InternalValue(int64_t{ 1 }) }, { "b", InternalValue(std::string("x")) } };
+    spec.attrs = { { "keys", InternalValue(std::string("attr-keys")) } };
+    spec.contains = std::vector<std::string>{ "a", "b" };
+    spec.len = 2;
+    const InternalValueMap params{ { "m", MakeToy(spec) }, { "o", MakeToy(Rich()) } };
+    EXPECT_EQ("True False|[('a', 1), ('b', 'x')]|[('b', 'x'), ('a', 1)]|{\"a\": 1, \"b\": \"x\"}| b=\"x\" a=\"1\"",
+              Render("{{ m is mapping }} {{ o is mapping }}|{{ m|dictsort }}|{{ m|items|list }}|{{ m|tojson }}|{{ m|xmlattr }}", params));
+    // `in` asks __contains__, not the attributes; x.name is still getattr first
+    EXPECT_EQ("True False attr-keys 1 ['b', 'a'] 2 Тоу", Render("{{ 'a' in m }} {{ 'keys' in m }} {{ m.keys }} {{ m.a }} {{ m|list }} {{ m|length }} {{ m }}", params));
+    EXPECT_EQ(L"[('a', 1), ('b', 'x')]", RenderW(L"{{ m|dictsort }}", params));
+    EXPECT_NE(std::string::npos, Render("{{ o|dictsort }}", params).find("'Toy' object has no attribute 'items'"));
+}
+
+TEST(HostObjectTest, ListOrTupleIsAJsonArrayAndASequence)
+{
+    ToySpec spec;
+    spec.listOrTuple = true;
+    spec.iteration = std::vector<InternalValue>{ InternalValue(int64_t{ 1 }), InternalValue(std::string("b")) };
+    spec.len = 2;
+    spec.attrs = { { "__getitem__", InternalValue(true) } };
+    ToySpec sized;
+    sized.len = 1;
+    const InternalValueMap params{ { "l", MakeToy(spec) }, { "s", MakeToy(sized) } };
+    EXPECT_EQ("[1, \"b\"] True False", Render("{{ l|tojson }} {{ l is sequence }} {{ s is sequence }}", params));
+    EXPECT_EQ(L"[1, \"b\"]", RenderW(L"{{ l|tojson }}", params));
+    EXPECT_NE(std::string::npos, Render("{{ s|tojson }}", params).find("Object of type Toy is not JSON serializable"));
+}
+
+// A method that may change its receiver (append) is the host's own attribute: the engine never
+// copies the object to change the copy
+TEST(HostObjectTest, MutatingMethodNameCallsTheObject)
+{
+    ToySpec method;
+    method.callable = true;
+    ToySpec spec = Rich();
+    spec.attrs.emplace("append", MakeToy(method));
+    spec.listOrTuple = true;
+    const InternalValueMap params{ { "x", MakeToy(spec) } };
+    EXPECT_EQ("called(1) attr-name", Render("{{ x.append(1) }} {{ x.name }}", params));
+    EXPECT_EQ(L"called(1)", RenderW(L"{{ x.append(1) }}", params));
+}
+
+// A list or tuple has the operators, ordering and `%` of the engine's own (0353)
+TEST(HostObjectTest, ListOrTupleOperatesAsTheEnginesOwn)
+{
+    auto items = [](std::vector<InternalValue> values, bool tuple) {
+        ToySpec spec;
+        spec.listOrTuple = true;
+        spec.tuple = tuple;
+        spec.len = values.size();
+        spec.iteration = std::move(values);
+        return MakeToy(spec);
+    };
+    const InternalValue one(int64_t{ 1 });
+    const InternalValue two(int64_t{ 2 });
+    const InternalValueMap params{ { "l", items({ one }, false) },
+                                   { "m", items({ two }, false) },
+                                   { "t", items({ one, two }, true) },
+                                   { "u", items({ one }, true) },
+                                   { "ls", ListAdapter::CreateAdapter(InternalValueList{ items({ two }, true), items({ one }, true) }) } };
+    EXPECT_EQ("[1, 2] [1, 3] (1, 2, 1, 2) (1, 1) True False", Render("{{ l + m }} {{ l + [3] }} {{ t * 2 }} {{ 2 * u }} {{ l < m }} {{ t < (1, 2) }}", params));
+    EXPECT_EQ("[1, 2] 1 2", Render("{{ ls|sort|map('first')|list }} {{ ls|min|first }} {{ ls|max|first }}", params));
+    // A list is one argument, printed with str()
+    EXPECT_EQ("1 1-2 Тоу x", Render("{{ '%s' % u }} {{ '%s-%s' % t }} {{ '%s' % l }} {{ 'x' % l }}", params));
+    EXPECT_EQ(L"1-2", RenderW(L"{{ '%s-%s' % t }}", params));
+    EXPECT_NE(std::string::npos, Render("{{ l + u }}", params).find("can only concatenate list (not \"tuple\") to list"));
+    EXPECT_NE(std::string::npos, Render("{{ l - m }}", params).find("unsupported operand type(s) for -: 'list' and 'list'"));
 }
 
 #endif // JINJA2CPP_LINK_AS_SHARED

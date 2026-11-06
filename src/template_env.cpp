@@ -334,23 +334,41 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
         auto& cache = Functions::GetCache(*this);
 
         {
-            const detail::ReaderLock l(guard);
-            auto p = cache.find(fileName);
-            if (p != cache.end())
+            // The freshness check is host code (a handler may load another template), so it runs
+            // outside the lock: a nested load takes it exclusively. The entry is copied under
+            // the lock
+            std::optional<decltype(cache.begin()->second.tpl)> cachedTpl; // empty on a hit: a default template allocates
+            FilesystemHandlerPtr cachedHandler;
+            std::optional<TimePoint> cachedModification;
             {
-                if (settings.autoReload)
+                const detail::ReaderLock l(guard);
+                auto p = cache.find(fileName);
+                if (p != cache.end())
                 {
-                    auto lastModified = p->second.handler->GetLastModificationDate(fileName);
-                    if (!lastModified || (p->second.lastModification && lastModified.value() <= p->second.lastModification.value()))
+                    if (!settings.autoReload)
                     {
                         p->second.lastUse.store(NewCacheTick(), std::memory_order_relaxed);
                         return ResultType(p->second.tpl);
                     }
+                    cachedTpl = p->second.tpl;
+                    cachedHandler = p->second.handler;
+                    cachedModification = p->second.lastModification;
                 }
-                else
+            }
+            if (cachedHandler && cachedTpl)
+            {
+                auto lastModified = cachedHandler->GetLastModificationDate(fileName);
+                if (!lastModified || (cachedModification && lastModified.value() <= cachedModification.value()))
                 {
-                    p->second.lastUse.store(NewCacheTick(), std::memory_order_relaxed);
-                    return ResultType(p->second.tpl);
+                    const detail::ReaderLock l(guard);
+                    auto p = cache.find(fileName);
+                    // Still the entry that was checked; if it was replaced meanwhile, the template
+                    // just checked is still a valid answer for this call
+                    if (p != cache.end() && p->second.tpl == *cachedTpl)
+                    {
+                        p->second.lastUse.store(NewCacheTick(), std::memory_order_relaxed);
+                    }
+                    return ResultType(*cachedTpl);
                 }
             }
         }

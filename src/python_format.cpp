@@ -3,6 +3,7 @@
 #include "big_int.h"
 #include "engine_errors.h"
 #include "filters.h"
+#include "host_object.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "undefined.h"
@@ -511,6 +512,27 @@ public:
         : m_map(AsMap(values))
         , m_markup(markup)
     {
+        // A host list or tuple is read as the engine's own (IHostObject::IsSequence)
+        if (m_map && m_map->IsHost())
+        {
+            if (auto items = host::AsSequence(*m_map->GetHostObject()))
+            {
+                m_map.reset();
+                if (items->IsTuple())
+                {
+                    m_owned = items->ToValueList();
+                    m_args = m_owned.data();
+                    m_count = m_owned.size();
+                }
+                else
+                {
+                    m_args = &values;
+                    m_count = 1;
+                    m_isMapping = true;
+                }
+                return;
+            }
+        }
         // An object such as namespace() is one argument, not a mapping of them
         if (m_map && m_map->GetObjectClass())
         {

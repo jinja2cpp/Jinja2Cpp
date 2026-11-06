@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:138ada0f-6f1f-5cbe-9dda-d4d3ec1c88b9",
+  "serialNumber": "urn:uuid:1d18bee1-7fc5-5031-b3a1-60ba1c48ccdf",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -1213,6 +1213,132 @@
     },
     {
       "type": "library",
+      "bom-ref": "nanobind",
+      "name": "nanobind",
+      "version": "3.1.0",
+      "supplier": {
+        "name": "Wenzel Jakob"
+      },
+      "scope": "optional",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "6661e3dc1434d78781ccf7913442d90361dab395c3424efadb63bbb6ddea7ea3"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/nanobind@3.1.0",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/wjakob/nanobind"
+        },
+        {
+          "type": "distribution",
+          "url": "https://files.pythonhosted.org/packages/c7/1f/e28fae715401e8f57400e72aeaff4fde12046d31828164f34f61f0816da8/nanobind-3.1.0.tar.gz"
+        }
+      ],
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "optional"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "build"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "internal"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "fetched"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "JINJA2CPP_BUILD_PYTHON (OFF; pyproject.toml turns it on): the nanobind of the build's Python when it is exactly this version (pyproject.toml's build requirement, which python/CMakeLists.txt checks), else this sdist"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "The Python module jinja2cpp._jinja2cpp (python/src/, docs/python.md): bindings, a stable-ABI (abi3) module with nanobind's runtime linked in (NB_STATIC); the sdist carries robin-map (MIT, ext/robin_map)"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "Lower per-call overhead than pybind11 for the Python callables templates call, the CPython 3.12 stable ABI, and type slots for tp_traverse/tp_clear (0248 plan D2)"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Only the Python module builds it; the library and its packages never see it. The PyPI sdist rather than a GitHub archive, which lacks the robin_map submodule"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "bom-ref": "scikit-build-core",
+      "name": "scikit-build-core",
+      "version": ">=0.10",
+      "supplier": {
+        "name": "scikit-build"
+      },
+      "scope": "excluded",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/scikit-build-core",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/scikit-build/scikit-build-core"
+        }
+      ],
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "tooling"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "build"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "none"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "system"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "pip install . (pyproject.toml's build backend), installed by pip in an isolated build environment"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "Builds the Python module's wheel from the root CMakeLists.txt with -DJINJA2CPP_BUILD_PYTHON=ON (docs/python.md)"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "The CMake build backend nanobind documents; it runs the project's own CMake build (0248 plan D2, D11)"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Only wheel builds use it"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "inja",
       "name": "inja",
       "version": "v3.5.0",
@@ -1598,7 +1724,7 @@
         },
         {
           "name": "jinja2cpp:phases",
-          "value": "dev"
+          "value": "dev,runtime"
         },
         {
           "name": "jinja2cpp:exposure",
@@ -1610,19 +1736,23 @@
         },
         {
           "name": "jinja2cpp:selected-by",
-          "value": "pip install -r test/parity/requirements.txt"
+          "value": "pip install -r test/parity/requirements.txt; a runtime dependency of the Python module too (pyproject.toml: markupsafe>=2.0)"
+        },
+        {
+          "name": "jinja2cpp:also-roles",
+          "value": "mandatory"
         },
         {
           "name": "jinja2cpp:used-for",
-          "value": "Jinja2's escaping dependency, pinned with it"
+          "value": "Jinja2's escaping dependency, pinned with it; the Python module's Markup, which is jinja2cpp.Markup (0248 plan D6)"
         },
         {
           "name": "jinja2cpp:why",
-          "value": "Transitive dependency of the oracle"
+          "value": "Transitive dependency of the oracle; the module shares Jinja2's Markup type, so that Markup crosses between the two"
         },
         {
           "name": "jinja2cpp:lighten",
-          "value": "Not part of any build"
+          "value": "Not part of the library's build; only the Python module needs it, at run time"
         }
       ]
     },
@@ -2602,6 +2732,8 @@
         "json-test-suite",
         "googletest",
         "google-benchmark",
+        "nanobind",
+        "scikit-build-core",
         "inja",
         "minja",
         "minijinja",
