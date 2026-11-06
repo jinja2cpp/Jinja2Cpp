@@ -592,9 +592,29 @@ void BorrowedCells::Finish(CycleCollector* collector) noexcept
 
 void BorrowedCells::FreezeCallScoped(CycleCollector* collector) noexcept
 {
-    // The kept cells nothing reads any more go
-    m_callFrozen.erase(std::remove_if(m_callFrozen.begin(), m_callFrozen.end(), [](const IntrusivePtr<const BorrowedCell>& cell) { return cell->use_count() == 1; }),
-                       m_callFrozen.end());
+    // The kept cells nothing reads any more go to the call's collector, which walks from them: what
+    // they hold may be a cycle an earlier call made, which no note names any more (Codex review of
+    // #778). One it cannot take stays until the next call or the module's end
+    if (collector)
+    {
+        try
+        {
+            for (auto it = m_callFrozen.begin(); it != m_callFrozen.end();)
+            {
+                if ((*it)->use_count() != 1)
+                {
+                    ++it;
+                    continue;
+                }
+                collector->NoteRoot(ValueObjectPtr(*it));
+                it = m_callFrozen.erase(it);
+            }
+        }
+        catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
+        {
+            // Out of memory: the cells not handed over stay in the list
+        }
+    }
     if (!m_cells)
     {
         return;
@@ -660,12 +680,10 @@ void BorrowedCells::ReleaseCallFrozen(CycleCollector* collector) noexcept
     {
         try
         {
+            // Also one nothing else reads: what it holds may be a cycle an earlier call made
             for (const auto& cell : m_callFrozen)
             {
-                if (cell->use_count() > 1)
-                {
-                    collector->NoteFrozen(ValueObjectPtr(cell));
-                }
+                collector->NoteRoot(ValueObjectPtr(cell));
             }
         }
         catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost

@@ -137,6 +137,10 @@ public:
     // A frozen cell that values outliving the render still read: a candidate of this collector
     // (BorrowedCells::Release, docs/tasks/0331). Throws std::bad_alloc
     void NoteFrozen(ValueObjectPtr cell) { Add(std::move(cell)); }
+    // A frozen cell a template module let go of: the walk starts from it although nothing else
+    // holds it, as what it holds may be a cycle that an earlier call made, whose note went with
+    // that call's collector (BorrowedCells::FreezeCallScoped). Throws std::bad_alloc
+    void NoteRoot(ValueObjectPtr cell);
     // The walk starts from every note, also one that nothing else holds any more: a template
     // module's values when it goes, where such a value may hold a cycle that a call made and
     // whose note went with that call's collector (docs/tasks/0212)
@@ -171,6 +175,8 @@ private:
         size_t pruneAt = MinPruneAt;
         // WalkFromEveryNote: nothing is dropped before the walk
         bool walkFromEvery = false;
+        // NoteRoot: walked, never dropped before the walk
+        std::vector<ValueObjectPtr> roots;
         // What KeepUntilEnd holds
         KeptObjects kept;
         // The render's copies of the host's data, released before the walk: detaching them

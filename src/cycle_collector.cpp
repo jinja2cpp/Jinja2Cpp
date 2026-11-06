@@ -41,6 +41,10 @@ void CycleCollector::Finish() noexcept
         {
             m_outer->Add(candidate);
         }
+        for (const auto& root : m_notes->roots)
+        {
+            m_outer->NoteRoot(root);
+        }
     }
     catch (...) // NOLINT(bugprone-empty-catch): out of memory; the outer collector misses what is not handed over
     {
@@ -108,6 +112,15 @@ void CycleCollector::NoteStore(const InternalValue& container)
     {
         collector->Add(std::move(object));
     }
+}
+
+void CycleCollector::NoteRoot(ValueObjectPtr cell)
+{
+    if (!m_notes)
+    {
+        m_notes = std::make_unique<Notes>();
+    }
+    m_notes->roots.push_back(std::move(cell));
 }
 
 void CycleCollector::Add(ValueObjectPtr object)
@@ -185,6 +198,7 @@ void CycleCollector::Collect() noexcept
     }
     m_notes->candidates.clear();
     m_notes->noted.clear();
+    m_notes->roots.clear();
 }
 
 void CycleCollector::CollectOnce()
@@ -196,7 +210,8 @@ void CycleCollector::CollectOnce()
     {
     }
     auto& candidates = m_notes->candidates;
-    if (candidates.empty())
+    auto& roots = m_notes->roots;
+    if (candidates.empty() && roots.empty())
     {
         return;
     }
@@ -221,6 +236,10 @@ void CycleCollector::CollectOnce()
     for (const auto& candidate : candidates)
     {
         visit(candidate.get());
+    }
+    for (const auto& root : roots)
+    {
+        visit(root.get());
     }
     // NOLINTNEXTLINE(modernize-loop-convert): Traverse appends to `order`, which a range-for would not see
     for (size_t next = 0; next != order.size(); ++next)
@@ -270,6 +289,7 @@ void CycleCollector::CollectOnce()
     }
     // Nothing below allocates. The tables are not read again: emptying may free what they name
     candidates.clear();
+    roots.clear();
     for (const auto& object : garbage)
     {
         object->Clear();
