@@ -184,6 +184,9 @@ public:
     // The kind of a list accessor that is a Python iterator (ListAdapter::CreateIterator), None for others;
     // kept in the flags so that indexing a list reads it without a virtual call
     [[nodiscard]] IteratorKind GetIteratorKind() const noexcept { return static_cast<IteratorKind>((m_flags & IteratorMask) >> IteratorShift); }
+    // Whether the object is the list accessor of a range() (IListAccessor::GetRangeInfo), so that
+    // an operator on two lists tells a range without a virtual call (docs/tasks/0401)
+    [[nodiscard]] bool IsRange() const noexcept { return m_isRange; }
     // The thread's snapshot of the globals reaches the object: a global's own adapter, or an item
     // in the block of item adapters such an adapter reads now, whose link to a cell is listed in
     // the cell (CellLink, docs/tasks/0346). Set before the object is shared; cleared on the
@@ -222,6 +225,8 @@ protected:
     void SetInSnapshot(bool inSnapshot) const noexcept { m_inSnapshot = inSnapshot; }
     // Set by the constructor, before anything shares the object
     void SetIteratorKind(IteratorKind kind) noexcept { m_flags = static_cast<uint8_t>((m_flags & ~IteratorMask) | (static_cast<uint8_t>(kind) << IteratorShift)); }
+    // Set by the constructor of a range()'s accessor
+    void SetRange() noexcept { m_isRange = true; }
 
 private:
     static constexpr uint8_t CloneFlag = 1;
@@ -234,6 +239,7 @@ private:
     uint8_t m_flags = 0;
     // In the padding after m_flags, so that the object keeps its size
     mutable bool m_inSnapshot = false;
+    bool m_isRange = false;
 };
 
 using ValueObjectPtr = IntrusivePtr<const ValueObject>;
@@ -796,6 +802,7 @@ public:
     void ForEach(IListAccessor::ItemVisitor fn) const;
     [[nodiscard]] const void* GetIdentity() const { return m_accessor ? m_accessor->GetIdentity() : nullptr; }
     [[nodiscard]] const RangeInfo* GetRangeInfo() const { return m_accessor ? m_accessor->GetRangeInfo() : nullptr; }
+    [[nodiscard]] bool IsRange() const noexcept { return m_accessor != nullptr && m_accessor->IsRange(); }
     [[nodiscard]] IteratorKind GetIteratorKind() const { return m_accessor ? m_accessor->GetIteratorKind() : IteratorKind::None; }
     [[nodiscard]] InternalValueList* GetMutableItems() const { return m_accessor ? m_accessor->GetMutableItems() : nullptr; }
     [[nodiscard]] GenericList CreateGenericList() const { return m_accessor ? m_accessor->CreateGenericList() : GenericList(); }

@@ -2055,7 +2055,7 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             return IteratorOperands(left, right);
         }
-        if (left.GetRangeInfo() || right.GetRangeInfo())
+        if (left.IsRange() || right.IsRange())
         {
             return RangeOperands(left, right);
         }
@@ -2179,7 +2179,7 @@ struct BinaryMathOperation : BaseVisitor<>
     template<typename L, typename R>
     [[nodiscard]] ResultType RepeatList(const ListRef& list, int64_t count, const L& left, const R& right) const
     {
-        if (m_oper != jinja2::BinaryExpression::Mul || list.GetIteratorKind() != IteratorKind::None || list.GetRangeInfo())
+        if (m_oper != jinja2::BinaryExpression::Mul || list.GetIteratorKind() != IteratorKind::None || list.IsRange())
         {
             return Mismatch(left, right);
         }
