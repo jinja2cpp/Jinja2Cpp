@@ -33,6 +33,16 @@ def split_template_path(template: str) -> t.List[str]:
     return pieces
 
 
+def _confined(searchpath: str, filename: str) -> bool:
+    """Whether `filename` is inside `searchpath` once links are followed, as the engine's own
+    file system loader reads (a link that leaves the directory is not a template). get_source
+    runs when a FileSystemLoader sits inside a ChoiceLoader or PrefixLoader, or in a fallback
+    to Jinja2, and must not read what the engine refuses."""
+    root = os.path.realpath(searchpath)
+    real = os.path.realpath(filename)
+    return real == root or real.startswith(root.rstrip(os.path.sep) + os.path.sep)
+
+
 class BaseLoader:
     """Base class of loaders: a subclass implements get_source."""
 
@@ -91,7 +101,7 @@ class FileSystemLoader(BaseLoader):
         pieces = split_template_path(template)
         for searchpath in self.searchpath:
             filename = os.path.join(searchpath, *pieces)
-            if os.path.isfile(filename):
+            if os.path.isfile(filename) and _confined(searchpath, filename):
                 break
         else:
             raise TemplateNotFound(template)
