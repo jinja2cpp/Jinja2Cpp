@@ -466,6 +466,8 @@ TEST(PublicHostObjectTest, IdentityHoldsAcrossCalls)
     ToySpec unhashable;
     unhashable.hashable = false;
     EXPECT_NE(std::string::npos, Render("{{ {u: 1} }}", { { "u", MakeToy(unhashable) } }).find("unhashable type: 'Toy'"));
+    // What an object saw can hold the object itself: a cycle the test breaks
+    spec->seen.clear();
 }
 
 TEST(PublicHostObjectTest, MappingReadsAsAMap)
@@ -634,6 +636,9 @@ TEST(PublicHostObjectTest, EqualityAsksEitherOperandThenIdentity)
     Render("{{ x == m }}", { { "x", MakeToy(spec) }, { "m", MakeToy(shared) } });
     ASSERT_EQ(1u, spec->seen.size());
     EXPECT_EQ(shared.get(), spec->seen[0].GetIf<GenericMap>()->AsHostObject()->Identity());
+    // What an object saw can hold the object itself: a cycle the test breaks
+    spec->seen.clear();
+    shared->seen.clear();
 }
 
 TEST(PublicHostObjectTest, CallsWithPositionalAndKeywordArguments)
