@@ -1544,3 +1544,29 @@ TEST(UserCallableTestSingle, ManyHandedContainersComeBack)
     ASSERT_TRUE(result) << result.error().ToString();
     EXPECT_EQ("20000|True|True", result.value());
 }
+
+// A list of handed containers the host returns counts against maxSequenceSize when it becomes a
+// template list (docs/tasks/0212)
+TEST(UserCallableTestSingle, RestoredListObeysTheSequenceLimit)
+{
+    ValuesMap params;
+    params["many"] = UserCallable(
+        [](const UserCallableParams& p) {
+            const auto count = p["n"].As<int64_t>();
+            return Value(ValuesList(static_cast<size_t>(count), p["v"]));
+        },
+        { ArgInfo{ "v" }, ArgInfo{ "n" } });
+    Settings settings;
+    settings.limits.maxSequenceSize = 16;
+    TemplateEnv env;
+    env.SetSettings(settings);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% set n = namespace() %}{{ many(n, 16)|length }}|{{ many(n, 16)[15] is sameas n }}"));
+    auto result = tpl.RenderAsString(params);
+    ASSERT_TRUE(result) << result.error().ToString();
+    EXPECT_EQ("16|True", result.value());
+    ASSERT_TRUE(tpl.Load("{% set n = namespace() %}{{ many(n, 17)|length }}"));
+    result = tpl.RenderAsString(params);
+    ASSERT_FALSE(result);
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+}

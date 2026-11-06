@@ -4423,7 +4423,7 @@ std::optional<InternalValue> HostCallScope::RestoreItems(const Value& value, con
         return {};
     }
     InternalValueList items;
-    items.reserve(list->size());
+    ReserveHint(items, list->size());
     for (const auto& item : *list)
     {
         const auto* original = Original(item, context);
