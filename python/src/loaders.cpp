@@ -245,6 +245,17 @@ public:
         return handler && handler->m_loader == m_loader;
     }
 
+    int Traverse(visitproc visit, void* arg) const
+    {
+        for (const auto& [name, entry] : m_entries)
+        {
+            Py_VISIT(entry.filename.Get());
+            Py_VISIT(entry.uptodate.Get());
+        }
+        return 0;
+    }
+    void Clear() const noexcept { m_entries.clear(); }
+
     [[nodiscard]] nb::object Filename(const std::string& name) const
     {
         auto found = m_entries.find(name);
@@ -359,6 +370,8 @@ public:
     {
     }
     void Install(jinja2::TemplateEnv& env) const override { env.AddFilesystemHandler(std::string(), m_handler); }
+    int Traverse(visitproc visit, void* arg) const override { return m_handler->Traverse(visit, arg); }
+    void Clear() const noexcept override { m_handler->Clear(); }
     [[nodiscard]] ErrorSource SourceOf(const std::string& name) const override
     {
         ErrorSource source;

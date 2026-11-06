@@ -645,6 +645,10 @@ int PyEnvironment::Traverse(visitproc visit, void* arg) const
     {
         Py_VISIT(object.ptr());
     }
+    if (m_loaderHandler)
+    {
+        return m_loaderHandler->Traverse(visit, arg);
+    }
     return 0;
 }
 
@@ -653,6 +657,10 @@ void PyEnvironment::Clear() noexcept
     // The engine borrows what goes now: it is dropped first, and the environment is unusable
     m_cleared = true;
     m_env.reset();
+    if (m_loaderHandler)
+    {
+        m_loaderHandler->Clear();
+    }
     m_loaderHandler.reset();
     m_boundFilters.clear();
     m_boundTests.clear();

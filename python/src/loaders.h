@@ -26,6 +26,10 @@ public:
     virtual ~Loader() = default;
 
     virtual void Install(jinja2::TemplateEnv& env) const = 0;
+    // The Python objects the loader keeps (a get_source's uptodate callback may close over the
+    // environment): visited by the environment's tp_traverse and dropped by its tp_clear
+    virtual int Traverse(visitproc /*visit*/, void* /*arg*/) const { return 0; }
+    virtual void Clear() const noexcept {}
     // The name, filename and source of a template it gives, for TemplateSyntaxError
     [[nodiscard]] virtual ErrorSource SourceOf(const std::string& name) const = 0;
 };

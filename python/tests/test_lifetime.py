@@ -169,3 +169,21 @@ def test_classes_made_at_run_time_are_collected():
 
     for _ in range(3):
         assert jinja2cpp.Template("[{{ u }}]").render(u=Missing(name="u")) == "[]"
+
+
+def test_loader_uptodate_closure_over_environment_is_collected():
+    # get_source's uptodate callback is cached by the loader's native handler; a closure over the
+    # environment makes a cycle environment -> handler -> closure -> environment
+    class Loader(jinja2cpp.BaseLoader):
+        def get_source(self, environment, template):
+            return "x", None, lambda: environment is not None
+
+    gc.collect()
+    refs = []
+    for _ in range(5):
+        env = jinja2cpp.Environment(loader=Loader())
+        assert env.get_template("a").render() == "x"
+        refs.append(weakref.ref(env))
+        del env
+    gc.collect()
+    assert [ref() for ref in refs] == [None] * 5
