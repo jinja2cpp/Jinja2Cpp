@@ -26,20 +26,20 @@ Snapshot of `python3 test/parity/generate.py --report` (Jinja2 3.1.6, Nov 2026):
 | fuzz | 32 | 32 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | globals | 95 | 93 | 1 | 1 | 0 | 0 | 0 | 0 | 0178, 0401 |
 | i18n | 54 | 54 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| literals | 84 | 84 | 0 | 0 | 0 | 0 | 0 | 0 |  |
+| literals | 90 | 90 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | loader | 248 | 246 | 2 | 0 | 0 | 0 | 0 | 0 | 0165 |
-| methods | 182 | 182 | 0 | 0 | 0 | 0 | 0 | 0 |  |
+| methods | 185 | 185 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | operators | 153 | 148 | 1 | 3 | 1 | 0 | 0 | 0 | 0178, 0401 |
 | options | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | output | 38 | 38 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | sequences | 47 | 47 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | statements | 538 | 529 | 9 | 0 | 0 | 0 | 0 | 0 | 0165, 0214, 0366, 0390, 0399 |
-| string_filters | 540 | 540 | 0 | 0 | 0 | 0 | 0 | 0 |  |
+| string_filters | 544 | 544 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | subscripts | 59 | 59 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | tests | 70 | 69 | 0 | 1 | 0 | 0 | 0 | 0 | 0101 |
 | undefined | 115 | 115 | 0 | 0 | 0 | 0 | 0 | 0 |  |
 | whitespace | 54 | 54 | 0 | 0 | 0 | 0 | 0 | 0 |  |
-| **total** | **3194** | **3170** | **15** | **6** | **3** | **0** | **0** | **0** | |
+| **total** | **3207** | **3183** | **15** | **6** | **3** | **0** | **0** | **0** | |
 
 *output*: both render, text differs. *rejects*: C++ errors on a valid template.
 *accepts*: C++ renders a template Jinja2 rejects. *unsupported*: needs an Environment

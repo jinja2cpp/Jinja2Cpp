@@ -441,7 +441,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0369](0369-finalize-template-data-in-volatile-code.md) | Template text in volatile autoescape code goes through finalize | parity | low | done |
 | [0370](0370-json-view-is-a-dict.md) | A JSON object seen through Reflect behaves as a reflected struct, not as a dict | parity | medium | done |
 | [0371](0371-attr-filter-debug-undefined.md) | `|attr` of a missing attribute under DebugUndefined prints empty | parity | low | done |
-| [0372](0372-unicode-version-corpus-cases.md) | Corpus cases on code points whose Unicode properties changed after 15.0 | parity | low | open |
+| [0372](0372-unicode-version-corpus-cases.md) | Corpus cases on code points whose Unicode properties changed after 15.0 | parity | low | done |
 | [0373](0373-closure-capture-module-call-and-scoped-frames.md) | Closures kept past a module call or a scoped frame lose their names | parity | low | done |
 | [0374](0374-number-data-attributes.md) | int and float data attributes: real, imag, numerator, denominator | parity | low | done |
 | [0375](0375-closure-capture-free-variables.md) | A kept closure copies only the names its body reads | perf | low | done |
