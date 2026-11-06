@@ -87,4 +87,13 @@ CASES = [
     ('int_min_literal', "{{ -9223372036854775808 }}|{{ (-9223372036854775808) is integer }}|{{ 9223372036854775808 }}"),
     ('int_digits_limit', "{{ " + "1" * 4301 + " }}"),
     ('int_big_context', "{{ n }}|{{ n is integer }}|{{ [n] }}|{{ n > 9223372036854775807 }}", {"ctx": {"n": 18446744073709551615}}),
+    # Code points assigned in Unicode 15.1 (Python 3.13) and 16.0 (Python 3.14): the pinned 3.12
+    # (15.0) escapes them in repr and knows no name, so the other-Python oracle rows report the
+    # delta as tracks-bundled until the tables move (docs/tasks/0372)
+    ("unicode_15_1_repr", r"{{ ['\U0002ebf0', '⿼', '㇯'] }}"),
+    ("unicode_16_0_repr", r"{{ ['\U00010d50', 'Ᲊ', 'ࢗ'] }}"),
+    ("unicode_15_1_named_computed", r"{{ '\N{CJK UNIFIED IDEOGRAPH-2EBF0}' == '\U0002ebf0' }}"),
+    ("unicode_15_1_named_stored", r"{{ '\N{IDEOGRAPHIC DESCRIPTION CHARACTER SUBTRACTION}'|length }}"),
+    ("unicode_16_0_named", r"{{ '\N{GARAY CAPITAL LETTER A}' == '\U00010d50' }}"),
+    ("unicode_16_0_named_any_case", r"{{ '\N{latin capital letter rams horn}'|length }}"),
 ]

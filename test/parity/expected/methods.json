@@ -4172,6 +4172,69 @@
    "env": {},
    "templates": {},
    "output": "7,2.5|2|13|[1]"
+  },
+  {
+   "id": "methods.unicode_15_1_isnumeric",
+   "template": "{{ '两'.isnumeric() }}|{{ '\\U0002ebf0'.isalpha() }}|{{ '\\U0002ebf0'.isidentifier() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "False|False|False"
+  },
+  {
+   "id": "methods.unicode_16_0_classes",
+   "template": "{{ '\\U00010d41'.isdigit() }}|{{ '\\U00010d41'.isdecimal() }}|{{ '\\U00010d50'.isalpha() }}|{{ '\\U00010d50'.isupper() }}|{{ 'ƛ'.islower() }}|{{ '\\U00010d50x'.isidentifier() }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "False|False|False|False|True|False"
+  },
+  {
+   "id": "methods.unicode_16_0_case_methods",
+   "template": "{{ 'ƛ\\U00010d70'.upper() == 'Ƛ\\U00010d50' }}|{{ 'Ɤ'.casefold() == 'ɤ' }}|{{ 'Ᲊ'.swapcase() == 'ᲊ' }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "False|False|False"
   }
  ]
 }

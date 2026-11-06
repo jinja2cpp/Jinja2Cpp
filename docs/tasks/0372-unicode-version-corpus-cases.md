@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0186]
-touches: [test/parity/cases/literals.py, test/parity/cases/string_filters.py, test/parity/expected/literals.json, test/parity/expected/string_filters.json]
+touches: [test/parity/cases/literals.py, test/parity/cases/string_filters.py, test/parity/cases/methods.py, test/parity/expected/literals.json, test/parity/expected/string_filters.json, test/parity/expected/methods.json]
 ---
 # Corpus cases on code points whose Unicode properties changed after 15.0
 
@@ -29,3 +29,13 @@ then report them as `tracks-bundled`, which is the record that the Python axis i
 
 **Done when.** The cases are in the corpus, the bundled suite matches them, and an oracle run
 under Python 3.13 lists them in `report.md`.
+
+**Result.** Thirteen cases: `literals` (`repr` of 15.1/16.0 code points, `\N{}` computed,
+stored and any-case names), `methods` (`isnumeric` on U+4E24, whose numeric value 15.1 added;
+digit/alpha/upper/identifier classes and `upper`/`casefold`/`swapcase` on Garay, U+019B, U+A7CB,
+U+1C89), `string_filters` (`upper`/`lower`/`title`/`capitalize`, `int`/`float` on Garay,
+Sunuwar and Myanmar Pao digits, `wordcount`). All match the pinned 3.12 without an allow-list
+line. Oracle runs (`JINJA2CPP_TEST_ORACLE_DIR` on a `generate.py --out --any-version`
+directory): Python 3.13.18 (Unicode 15.1) reports the five 15.1 cases `tracks-bundled`;
+Python 3.14.6 (Unicode 16.0) reports all thirteen `tracks-bundled`, none `tracks-oracle`,
+`neither` or `not-run`.

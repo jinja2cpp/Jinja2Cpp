@@ -5593,6 +5593,38 @@
    },
    "templates": {},
    "output": "[39]"
+  },
+  {
+   "id": "string_filters.unicode_16_0_upper_lower",
+   "template": "{{ '\\U00010d70ɤƛ'|upper == '\\U00010d50ꟋꟜ' }}|{{ '\\U00010d50ꟋᲉ'|lower == '\\U00010d70ɤᲊ' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "False|False"
+  },
+  {
+   "id": "string_filters.unicode_16_0_title_capitalize",
+   "template": "{{ '\\U00010d70\\U00010d71 ƛx'|title == '\\U00010d50\\U00010d71 Ƛx' }}|{{ 'ɤꟋ'|capitalize == 'Ɤɤ' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "False|False"
+  },
+  {
+   "id": "string_filters.unicode_16_0_int_float",
+   "template": "{{ '\\U00010d41\\U00010d42'|int }}|{{ '\\U00011bf7'|int(5) }}|{{ '\\U000116d3.5'|float }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "0|5|0.0"
+  },
+  {
+   "id": "string_filters.unicode_16_0_wordcount",
+   "template": "{{ '\\U00010d50 \\U00010d41 \\U0002ebf0'|wordcount }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "0"
   }
  ]
 }
