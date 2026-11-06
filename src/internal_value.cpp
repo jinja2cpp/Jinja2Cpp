@@ -12,7 +12,6 @@
 #include "render_context.h"
 #include "render_failure.h"
 #include "shared_owner.h"
-#include "small_vector.h"
 #include "span.h"
 #include "template_dict.h"
 #include "undefined.h"
@@ -4074,51 +4073,65 @@ struct CallableLease
 };
 
 // A container a host's call was handed (docs/tasks/0212): the accessor of the GenericMap or
-// GenericList it was exported as, and the template's own value, among the call's parsed
-// arguments. The call's parameters hold the export and the parsed arguments the value until the
-// call ends, so neither the address nor the pointer can go stale while the record exists
+// GenericList it was exported as, and the template's own value among the call's parsed
+// arguments
 struct HostCallExport
 {
     const void* accessor;
     const InternalValue* original;
 };
 
-// One host's call (UserCallableBody): the lease of the template callables it was handed and the
-// containers it was handed. What the host gives back during the call, as its result or as an
-// argument of a call back, comes back as the template's own object when it is one of these, so
-// Python's `ident(x) is x` holds within the call. An object the host keeps and gives back in a
-// later call comes back as a view of what it was exported as; nothing is restored across calls,
-// and so across renders (the design principle: no mutable object shared between renders)
+// One host's call (UserCallableBody): the lease of the template callables it was handed, and the
+// parsed arguments with the host's form of each. What the host gives back during the call, as
+// its result or as an argument of a call back, comes back as the template's own object when it
+// is one of those, so Python's `ident(x) is x` holds within the call. An object the host keeps
+// and gives back in a later call comes back as a view of what it was exported as; nothing is
+// restored across calls, and so across renders (the design principle: no mutable object shared
+// between renders). Both the parsed arguments and the host's parameters live until the call
+// ends, so an accessor matched there is the export itself, not a reused address
 struct HostCallScope
 {
     std::shared_ptr<CallableLease> lease;
-    SmallVector<HostCallExport, 2> exports;
+    const ParsedArguments* args = nullptr;
+    const UserCallableParams* params = nullptr;
 
-    // Orders the exports by accessor once the arguments are made, so that a call handed many
-    // containers looks each one up in log time
-    void Seal()
+    // The value of the host's `value`, given back during the call made from `context`. A value
+    // that cannot be a container or a callable it was handed converts as it always did, without
+    // a call out of line
+    [[nodiscard]] InternalValue ToInternal(Value&& value, const RenderContext& context) const
     {
-        if (exports.size() > 1)
+        if (!MayBeRestored(value))
         {
-            Sort();
+            return Value2IntValue(std::move(value));
         }
+        return Restore(std::move(value), context);
     }
-
-private:
-    JINJA2CPP_NOINLINE_INLINE void Sort()
+    [[nodiscard]] InternalValue ToInternal(const Value& value, const RenderContext& context) const
     {
-        std::sort(exports.begin(), exports.end(), [](const HostCallExport& left, const HostCallExport& right) { return std::less<>()(left.accessor, right.accessor); });
+        if (!MayBeRestored(value))
+        {
+            return std::visit(visitors::InputValueConvertor(true, false), value.GetData());
+        }
+        return Restore(value, context);
     }
-
-
-public:
-    // The value of the host's `value`, given back during the call made from `context`
-    [[nodiscard]] InternalValue ToInternal(Value&& value, const RenderContext& context) const;
-    [[nodiscard]] InternalValue ToInternal(const Value& value, const RenderContext& context) const;
 
 private:
     [[nodiscard]] const InternalValue* Original(const Value& value, const RenderContext& context) const;
+    [[nodiscard]] const InternalValue* FindExport(const void* accessor) const;
     [[nodiscard]] std::optional<InternalValue> RestoreItems(const Value& value, const RenderContext& context) const;
+    [[nodiscard]] InternalValue Restore(Value&& value, const RenderContext& context) const;
+    [[nodiscard]] InternalValue Restore(const Value& value, const RenderContext& context) const;
+
+    // A map, a list or a callable: what Restore may give back as an original
+    [[nodiscard]] static bool MayBeRestored(const Value& value) noexcept
+    {
+        return value.GetIf<GenericMap>() != nullptr || value.GetIf<GenericList>() != nullptr || value.GetIf<ValuesList>() != nullptr || value.GetIf<UserCallable>() != nullptr;
+    }
+
+    // The containers the call was handed, ordered by accessor: made on the first lookup of a call
+    // handed many, so that a list of them comes back in N log N
+    mutable std::vector<HostCallExport> m_index;
+    mutable bool m_indexed = false;
 };
 
 class LeaseEnd
@@ -4253,29 +4266,8 @@ JINJA2CPP_NOINLINE_INLINE Value LendToHost(const InternalValue& value, RenderCon
     return Value(UserCallable(LentCallable{ lease, value }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) }));
 }
 
-// A template map or list handed to a host's call: exported as IntValue2Value gives it, and
-// recorded, so that it comes back as itself (HostCallScope). Out of line, as few calls pass one
-JINJA2CPP_NOINLINE_INLINE Value ExportToHost(const InternalValue& value, HostCallScope& scope)
-{
-    Value result = IntValue2Value(value);
-    const void* accessor = nullptr;
-    if (const auto* map = result.GetIf<GenericMap>())
-    {
-        accessor = detail::GenericAccessorAccess::Get(*map).get();
-    }
-    else if (const auto* list = result.GetIf<GenericList>())
-    {
-        accessor = detail::GenericAccessorAccess::Get(*list).get();
-    }
-    if (accessor)
-    {
-        scope.exports.push_back(HostCallExport{ accessor, &value });
-    }
-    return result;
-}
-
 // The host's form of an argument of a host's call made from `context`: a template callable is
-// lent (LendToHost), a map or a list recorded (ExportToHost), the rest as IntValue2Value gives it
+// lent (LendToHost), the rest as IntValue2Value gives it
 JINJA2CPP_HOT_INLINE Value ArgumentToHost(const InternalValue& value, RenderContext& context, HostCallScope& scope)
 {
     if (const auto* callable = GetIf<Callable>(&value))
@@ -4285,11 +4277,6 @@ JINJA2CPP_HOT_INLINE Value ArgumentToHost(const InternalValue& value, RenderCont
             return IntValue2Value(value);
         }
         return LendToHost(value, context, scope);
-    }
-    const auto& data = detail::InternalValueAccess::Data(value);
-    if (std::holds_alternative<detail::MapHandle>(data) || std::holds_alternative<detail::ListHandle>(data))
-    {
-        return ExportToHost(value, scope);
     }
     return IntValue2Value(value);
 }
@@ -4327,12 +4314,103 @@ const InternalValue* HostCallScope::Original(const Value& value, const RenderCon
     {
         return LentOriginal(value, context);
     }
-    if (!accessor)
+    return accessor ? FindExport(accessor) : nullptr;
+}
+
+// The accessor of the GenericMap or GenericList `value` holds, or null
+const void* ExportedAccessor(const Value& value)
+{
+    if (const auto* map = value.GetIf<GenericMap>())
+    {
+        return detail::GenericAccessorAccess::Get(*map).get();
+    }
+    if (const auto* list = value.GetIf<GenericList>())
+    {
+        return detail::GenericAccessorAccess::Get(*list).get();
+    }
+    return nullptr;
+}
+
+bool IsContainer(const InternalValue& value)
+{
+    const auto& data = detail::InternalValueAccess::Data(value);
+    return std::holds_alternative<detail::MapHandle>(data) || std::holds_alternative<detail::ListHandle>(data);
+}
+
+// Calls `fn(accessor, original)` with each container among the parsed arguments `args` and the
+// export of it in the host's parameters `params`
+template<typename Fn>
+void ForEachExport(const ParsedArguments& args, const UserCallableParams& params, const Fn& fn)
+{
+    for (const auto& [name, original] : args.args)
+    {
+        if (IsContainer(original))
+        {
+            auto exported = params.args.find(name);
+            if (exported != params.args.end())
+            {
+                fn(ExportedAccessor(exported->second), &original);
+            }
+        }
+    }
+    if (const auto* kwArgs = params.extraKwArgs.GetIf<ValuesMap>())
+    {
+        for (const auto& [name, original] : args.extraKwArgs)
+        {
+            if (IsContainer(original))
+            {
+                auto exported = kwArgs->find(name);
+                if (exported != kwArgs->end())
+                {
+                    fn(ExportedAccessor(exported->second), &original);
+                }
+            }
+        }
+    }
+    if (const auto* posArgs = params.extraPosArgs.GetIf<ValuesList>(); posArgs && posArgs->size() == args.extraPosArgs.size())
+    {
+        for (size_t idx = 0; idx != posArgs->size(); ++idx)
+        {
+            if (IsContainer(args.extraPosArgs[idx]))
+            {
+                fn(ExportedAccessor((*posArgs)[idx]), &args.extraPosArgs[idx]);
+            }
+        }
+    }
+}
+
+const InternalValue* HostCallScope::FindExport(const void* accessor) const
+{
+    if (!args || !params)
     {
         return nullptr;
     }
-    const auto* const found = std::lower_bound(exports.begin(), exports.end(), accessor, [](const HostCallExport& item, const void* key) { return std::less<>()(item.accessor, key); });
-    return found != exports.end() && found->accessor == accessor ? found->original : nullptr;
+    // Few arguments: a scan, which costs nothing until a container comes back
+    constexpr size_t scanLimit = 8;
+    if (!m_indexed && args->args.size() + args->extraKwArgs.size() + args->extraPosArgs.size() <= scanLimit)
+    {
+        const InternalValue* found = nullptr;
+        ForEachExport(*args, *params, [&](const void* exported, const InternalValue* original) {
+            if (!found && exported == accessor)
+            {
+                found = original;
+            }
+        });
+        return found;
+    }
+    if (!m_indexed)
+    {
+        ForEachExport(*args, *params, [&](const void* exported, const InternalValue* original) {
+            if (exported)
+            {
+                m_index.push_back(HostCallExport{ exported, original });
+            }
+        });
+        std::sort(m_index.begin(), m_index.end(), [](const HostCallExport& left, const HostCallExport& right) { return std::less<>()(left.accessor, right.accessor); });
+        m_indexed = true;
+    }
+    const auto found = std::lower_bound(m_index.begin(), m_index.end(), accessor, [](const HostCallExport& item, const void* key) { return std::less<>()(item.accessor, key); });
+    return found != m_index.end() && found->accessor == accessor ? found->original : nullptr;
 }
 
 // The template list of a list the host built of items it was handed, or null when none was
@@ -4354,7 +4432,7 @@ std::optional<InternalValue> HostCallScope::RestoreItems(const Value& value, con
     return InternalValue(ListAdapter::CreateAdapter(std::move(items)));
 }
 
-InternalValue HostCallScope::ToInternal(const Value& value, const RenderContext& context) const
+InternalValue HostCallScope::Restore(const Value& value, const RenderContext& context) const
 {
     if (const auto* original = Original(value, context))
     {
@@ -4367,7 +4445,7 @@ InternalValue HostCallScope::ToInternal(const Value& value, const RenderContext&
     return std::visit(visitors::InputValueConvertor(true, false), value.GetData());
 }
 
-InternalValue HostCallScope::ToInternal(Value&& value, const RenderContext& context) const
+InternalValue HostCallScope::Restore(Value&& value, const RenderContext& context) const
 {
     if (const auto* original = Original(value, context))
     {
@@ -4449,7 +4527,8 @@ struct UserCallableBody
         // Kept for the call: the scope's records point into it
         const ParsedArguments args = helpers::ParseCallParams(argsInfo, params, ucParams.paramsParsed);
         PrepareUserCallableParams(args, context, argsInfo, ucParams, scope);
-        scope.Seal();
+        scope.args = &args;
+        scope.params = &ucParams;
         // Converted while the call's scope is live: what it was handed comes back as itself
         auto result = scope.ToInternal(CallHost(ucParams), context);
         AfterHostCall();
