@@ -6,6 +6,7 @@
 // that library's value type.
 
 #include <jinja2cpp/big_int.h>
+#include <jinja2cpp/config.h>
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/reflected_value.h>
@@ -75,6 +76,8 @@ using JsonResult = nonstd::expected<T, std::string>;
  *                                                 // Size and At when absent
  * static std::optional<std::uint64_t> Location(Node);     // byte offset of the value in the input, for errors
  * static bool SameNode(Node, Node);               // identity, for IComparable; operator== when absent
+ * static const void* Identity(Node);             // the value's address, equal for two nodes of one value while the
+ *                                                 // document lives (IJsonNode::NodeIdentity); null identity when absent
  * static constexpr bool IsHandle = true;          // Json does not own its storage: Reflect(Json) borrows it
  * ```
  * Random access, which \ref Reflect needs and \ref ToValue does not:
@@ -107,6 +110,7 @@ struct DomJsonTraits
     using Node = std::reference_wrapper<const Json>;
     static Node Root(const Json& doc) { return std::cref(doc); }
     static bool SameNode(Node a, Node b) { return &a.get() == &b.get(); }
+    static const void* Identity(Node n) { return &n.get(); }
 };
 
 //! The built-in cap on the items of one array or object and the characters of one string (the engine's own cap)
@@ -124,6 +128,34 @@ struct JsonCopyLimits
     //! Items of one array, members of one object, code units of one string; 0 means JsonDefaultMaxSequenceSize,
     //! and a larger value is lowered to it
     std::uint64_t maxSequenceSize = 0;
+};
+
+/*!
+ * \brief Marks the accessors of the JSON views that \ref Reflect makes (docs/tasks/0370)
+ *
+ * The engine tells a JSON object from a reflected struct by this base: a JSON object is a dict to the template, as
+ * Python's `json.loads` gives one (`d.items` is the dict method even with a key `items`, `attr()` does not see the
+ * keys, `is sequence` holds), while the fields of a reflected struct are its attributes. The accessors of
+ * \ref Reflect for a type with \ref JsonTraits derive from it; other accessors do not need to.
+ */
+struct JINJA2CPP_EXPORT IJsonNode
+{
+    /*!
+     * \brief The document value this view shows (docs/tasks/0212)
+     *
+     * Two views of one value of a document return the same address while the document lives, so the engine can
+     * treat them as one object. Null when the traits have no `Identity` hook: each view is then an object of its own.
+     */
+    [[nodiscard]] virtual const void* NodeIdentity() const noexcept = 0;
+
+protected:
+    IJsonNode() = default;
+    IJsonNode(const IJsonNode&) = default;
+    IJsonNode(IJsonNode&&) = default;
+    IJsonNode& operator=(const IJsonNode&) = default;
+    IJsonNode& operator=(IJsonNode&&) = default;
+    // Not deleted through this base: the accessors are owned as themselves
+    ~IJsonNode() = default;
 };
 
 namespace detail::json
@@ -262,6 +294,15 @@ struct HasSameNode<J, std::void_t<decltype(Traits<J>::SameNode(std::declval<Node
 };
 
 template<typename J, typename = void>
+struct HasIdentity : std::false_type
+{
+};
+template<typename J>
+struct HasIdentity<J, std::void_t<decltype(Traits<J>::Identity(std::declval<NodeOf<J>>()))>> : std::true_type
+{
+};
+
+template<typename J, typename = void>
 struct IsHandle : std::false_type
 {
 };
@@ -345,6 +386,19 @@ bool SameNode(const NodeOf<J>& a, const NodeOf<J>& b)
     }
 }
 
+template<typename J>
+const void* NodeIdentityOf(const NodeOf<J>& node) noexcept
+{
+    if constexpr (HasIdentity<J>::value)
+    {
+        return Traits<J>::Identity(node);
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
 template<typename S>
 Value StringValue(S&& str)
 {
@@ -401,6 +455,7 @@ inline std::optional<Value> BigIntValue(std::string_view text)
 template<typename J>
 class ObjectAccessor final : public IMapItemAccessor
     , public detail::OwnedAccessor
+    , public IJsonNode
 {
 public:
     explicit ObjectAccessor(Ref<J> ref)
@@ -431,6 +486,7 @@ public:
     }
     // A null member is none and a missing key undefined, as in Python
     [[nodiscard]] bool EmptyIsNone() const override { return true; }
+    [[nodiscard]] const void* NodeIdentity() const noexcept override { return NodeIdentityOf<J>(m_ref.node); }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const ObjectAccessor*>(&other);
@@ -493,6 +549,7 @@ template<typename J>
 class ArrayAccessor final : public IListItemAccessor
     , public IIndexBasedAccessor
     , public detail::OwnedAccessor
+    , public IJsonNode
 {
 public:
     explicit ArrayAccessor(Ref<J> ref)
@@ -515,6 +572,7 @@ public:
         }
         return MakeValue<J>(Ref<J>{ Traits<J>::At(m_ref.node, static_cast<std::size_t>(idx)), m_ref.owner });
     }
+    [[nodiscard]] const void* NodeIdentity() const noexcept override { return NodeIdentityOf<J>(m_ref.node); }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* val = dynamic_cast<const ArrayAccessor*>(&other);

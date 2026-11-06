@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/767
 priority: high
 area: release
 depends: [0072, 0074, 0076]
@@ -54,3 +55,10 @@ Coordinate the supported repository/example inventory through 0227.
 The external-consumer upgrade trial is tracked separately as 0222. Its failures
 feed this task's migration notes/tool; passing the project's own warning-rewrite
 tests alone does not establish a successful downstream upgrade.
+
+**Status (2026-11-05, #767).** `scripts/jinja2cpp_migrate.py` with `--rewrite` (hard breaks,
+plus `ErrorInfoTpl`, which Clang does not warn about) and `--log` (GCC, Clang, MSVC); ctests
+`jinja2cpp_migration` (round trip of `test/migration/legacy_api_1x.cpp` to the golden 2.0 file,
+no `jinja2cpp-2` warnings left) and `jinja2cpp_migration_parser`. `MIGRATION.md` and the README
+install routes are updated; the 1.x columns of its behaviour tables come from the changelog, the
+downstream trial (0222) may add rows. The docs site follows through 0242 and 0227.

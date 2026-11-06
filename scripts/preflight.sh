@@ -39,8 +39,9 @@ tidy_excludes=(':!bindings/boost_*' ':!test/binding/boost_json*'
   ':!include/jinja2cpp/polymorphic_value/*' ':!src/robin_hood.h' ':!src/lexertk.h'
   ':!src/unicode_tables.h'
   # Generated test data, included by a test; the installed-package consumers, which
-  # check_package.cmake builds outside this build's compile database
-  ':!test/*.inc' ':!test/package/*')
+  # check_package.cmake builds outside this build's compile database; the 1.x migration
+  # fixture (does not compile until migrated) and its golden copy
+  ':!test/*.inc' ':!test/package/*' ':!test/migration/*')
 
 # 1. clang-format, as .github/workflows/format-check.yml
 mapfile -t whole < <(changed 'src/**.h' 'src/**.cpp' 'include/**.h' 'bindings/**.h')

@@ -48,7 +48,9 @@ public:
     struct BaseTemplateInfo
     {
         std::optional<TimePoint> lastModification;
-        TimeStamp lastAccessTime;
+        // The tick (NewCacheTick) of the load or lookup that last returned it: when the cache is over
+        // Settings::cacheSize, the entry with the least is evicted (docs/tasks/0264). Not part of equality
+        std::atomic<uint64_t> lastUse{ 0 };
         FilesystemHandlerPtr handler;
         bool operator==(const BaseTemplateInfo& other) const;
         bool operator!=(const BaseTemplateInfo& other) const { return !(*this == other); }
@@ -75,6 +77,8 @@ public:
     LoadSettingsPtr GetLoadSettings() const;
     // A number that no other state of the globals of any environment has had
     static uint64_t NewGlobalsGeneration();
+    // A number greater than every one it returned before: orders the uses of cached templates
+    static uint64_t NewCacheTick() noexcept;
 
     std::vector<FsHandler> filesystemHandlers;
     Settings settings;

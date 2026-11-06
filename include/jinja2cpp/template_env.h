@@ -109,7 +109,9 @@ struct Settings
     bool trimBlocks = false;
     //! Enables blocks stripping (from the left) the same way as it does python Jinja2 engine
     bool lstripBlocks = false;
-    //! Templates cache size
+    //! How many templates \ref TemplateEnv::LoadTemplate keeps for each character width (Jinja2 `cache_size`). Past it the
+    //! least recently used one is dropped; templates and renders that hold it keep it. 0 disables the cache, a negative
+    //! size never drops one. Templates are cached by the name they were loaded with
     int cacheSize = 400;
     //! If auto_reload is set to true (default) every time a template is requested the loader checks if the source changed and if yes, it will reload the template.
     //! How often a render requests the templates it includes, extends or imports is \ref templateLookup

@@ -25,6 +25,7 @@ MISSING = '{"l":[10,20,30],"o":{"k":1}}'
 EMPTY = '{"e":{},"a":[],"s":""}'
 NULLS = '{"x":null,"l":[1,null,3],"o":{"n":null}}'
 ITER = '{"l":[3,1,2],"w":["b","a","c"],"o":[{"n":"x","v":2},{"n":"y","v":1},{"n":"z","v":3}],"f":[1.5,0.5],"e":[]}'
+DICT = '{"items":"own","keys":1,"name":"bob","o":{"get":"g"},"l":[{"name":"x"},{"v":1}]}'
 EQUAL = '{"a":{"x":[1,2],"y":{"z":null}},"b":{"x":[1,2],"y":{"z":null}},"c":{"x":[1,3]},"l":[1,2]}'
 
 # group -> [(row name, JSON document, template)]
@@ -125,6 +126,14 @@ ROWS = {
          "{{ j.a == j.b }}|{{ j.a == j.c }}|{{ j.a != j.c }}|{{ j.a == j.a }}|{{ j.a.x == j.b.x }}|{{ j.a.y == j.b.y }}"),
         ("list", EQUAL, "{{ j.l == [1, 2] }}|{{ j.l == [2, 1] }}|{{ j.l == j.a.x }}|{{ j.a.x in [j.b.x] }}|{{ j.l != [1] }}"),
         ("literal", EQUAL, "{{ j.c == {'x': [1, 3]} }}|{{ j.a.y == {'z': none} }}"),
+    ],
+    # A JSON object is a dict (docs/tasks/0370): its methods come before its keys, and getattr does not see the keys
+    "DictMethods": [
+        ("shadowed_method", DICT, "{{ j.items is callable }}|{{ j.items()|list }}|{{ j['items'] }}|{{ j.o.get('get') }}|{{ j.keys()|list }}"),
+        ("attr_filter", DICT,
+         "{{ j|attr('items') is callable }}|[{{ j|attr('name') }}]|{{ j.l|map('attr', 'name')|select('defined')|list }}|{{ j.l|map(attribute='name')|select('defined')|list }}"),
+        ("tests", DICT, "{{ j is mapping }}|{{ j is sequence }}|{{ j is iterable }}|{{ j.o is sequence }}"),
+        ("unpack_keys", '{"p":{"x":1,"y":2}}', "{% set a, b = j.p %}{{ a }}{{ b }}|{% for k, v in j.p|dictsort %}{{ k }}{{ v }}{% endfor %}"),
     ],
     "Lifetime": [
         ("sort", LIFETIME_DOC, "{% set r = rjson().list | sort %}{{ r }}"),

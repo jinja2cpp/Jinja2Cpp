@@ -56,6 +56,8 @@ MODULES2 = {"templates": {**T,
     "pbasen.j2": "{% set pv = 'P' %}{% set w = 'pw' %}{% block x %}BX{{ w }}{% endblock %}{% macro pm() %}PM{% endmacro %}",
     "mextn.j2": "{% extends 'pbasen.j2' %}{% set w = 'cw' %}{% macro f() %}F{{ self.x() }}{% endmacro %}",
     "mst.j2": "{% block b %}MB[{{ v }}]{% endblock %}{% set v = 'mv' %}{% macro st(ns) %}{% set ns.s = self %}{% endmacro %}"}}
+# A child whose `with` block is called in place, extended once more (docs/tasks/0389)
+INPLACE = {"templates": {**T, "mid_with.j2": "{% extends 'base.j2' %}{% with %}{% block body %}m{% endblock %}{% endwith %}"}}
 INC_SELF = {"templates": {**T, "inc_self.j2": "{% block b %}IB{% endblock %}{% set ns.s = self %}",
                     "inc_selfx.j2": "{% set x = 1 %}{% block b %}[{{ x }}{{ name }}]{% endblock %}{% set ns.s = self %}",
                     "other_self.j2": "{% block b %}OT{% endblock %}{{ ns.s.b() }}", "mset.j2": "{% set self = 5 %}",
@@ -94,6 +96,24 @@ CASES = [
     # rendered in place too; one in an `if` is not (docs/tasks/0389)
     ("extends_block_in_scoped_statement", "{% extends 'base.j2' %}{% autoescape true %}<i>{% block head %}h{% endblock %}{% endautoescape %}{% if true %}{% block body %}b{% endblock %}{% endif %}", L),
     ("extends_block_in_with", "{% extends 'base.j2' %}{% with %}{% block body %}b{% endblock %}{% endwith %}", L),
+    # Every statement but `if` opens an inner frame in Jinja2's compiler: a block there is
+    # called where it stands after `extends`, with no `parent_template is None` guard
+    ("extends_block_in_for", "{% extends 'base.j2' %}{% for i in [1, 2] %}{{ i }}{% block body %}b{{ i | default('u') }}{% endblock %}{% endfor %}", L),
+    ("extends_block_in_for_scoped", "{% extends 'base.j2' %}{% for i in [1, 2] %}{% block body scoped %}b{{ i }}{% endblock %}{% endfor %}", L),
+    ("extends_block_in_filter", "{% extends 'base.j2' %}{% filter upper %}x{% block body %}b{% endblock %}{% endfilter %}", L),
+    ("extends_block_in_call", "{% macro m() %}[{{ caller() }}]{% endmacro %}{% extends 'base.j2' %}{% call m() %}{% block body %}b{% endblock %}{% endcall %}", L),
+    ("extends_block_in_macro", "{% extends 'base.j2' %}{% macro m() %}[{% block head %}h{% endblock %}]{% endmacro %}{% block body %}{{ m() }}{% endblock %}", L),
+    ("extends_block_in_set_block", "{% extends 'base.j2' %}{% set v %}{% block body %}b{% endblock %}{% endset %}{% block head %}{{ v }}{% endblock %}", L),
+    ("extends_block_in_with_in_if", "{% extends 'base.j2' %}{% if true %}{% with %}{% block body %}b{% endblock %}{% endwith %}{% endif %}", L),
+    ("extends_block_in_with_super", "{% extends 'base.j2' %}{% with %}{% block body %}b{{ super() }}{% endblock %}{% endwith %}", L),
+    ("extends_block_in_with_required", "{% extends 'base.j2' %}{% with %}{% block body required %}{% endblock %}{% endwith %}", L),
+    ("extends_block_in_with_before_extends", "{% with %}{% block body %}b{% endblock %}{% endwith %}{% extends 'base.j2' %}", L),
+    ("extends_conditional_block_in_with", "{% if true %}{% extends 'base.j2' %}{% endif %}{% with %}{% block body %}b{% endblock %}{% endwith %}", L),
+    ("extends_conditional_false_block_in_with", "{% if false %}{% extends 'base.j2' %}{% endif %}{% with %}{% block body %}b{% endblock %}{% endwith %}", L),
+    ("extends_conditional_block_in_if", "{% if true %}{% extends 'base.j2' %}{% endif %}{% if true %}{% block body %}b{% endblock %}{% endif %}", L),
+    ("extends_nested_block_in_child_block", "{% extends 'base.j2' %}{% block body %}[{% block inner %}i{% endblock %}]{% endblock %}", L),
+    ("extends_nested_block_overridden", "{% extends 'nested_blocks.j2' %}{% block outer %}[{% block inner %}c{% endblock %}]{% endblock %}", L),
+    ("extends_block_in_with_overridden", "{% extends 'mid_with.j2' %}{% block body %}g{% endblock %}", INPLACE),
     ("extends_content_outside_blocks", "{% extends 'base.j2' %}ignored{% block body %}b{% endblock %}", L),
     ("extends_variable", "{% set p = 'base.j2' %}{% extends p %}", L),
     ("extends_conditional", "{% if true %}{% extends 'base.j2' %}{% endif %}", L),

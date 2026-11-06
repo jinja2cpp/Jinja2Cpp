@@ -127,7 +127,7 @@ last to support C++14.
 
 Every pull request is built and tested with:
 -  Linux GCC 12 and 14, Clang 18 and 20: C++17, C++20, C++23 (C++26: GCC 14, Clang 20)
--  macOS 14 and 15, Apple Clang: C++17, C++20, C++23
+-  macOS 15 and 26, Apple Clang: C++17, C++20, C++23
 -  Windows, MSVC 2022 x64: C++17, C++20, C++23 (`/std:c++latest` until MSVC ships `/std:c++23`)
 
 ### Build status
@@ -139,9 +139,10 @@ Every pull request is built and tested with:
 | Windows | [![](https://github.com/jinja2cpp/Jinja2Cpp/workflows/CI-windows-build/badge.svg)](https://github.com/jinja2cpp/Jinja2Cpp/actions?query=workflow%3ACI-windows-build) |
 
 ## Build and install
-Jinja2C++ has two external dependencies:
--  `nonstd::expected-lite` [https://github.com/martinmoene/expected-lite](https://github.com/martinmoene/expected-lite)
+Jinja2C++ has three external dependencies:
+-  `nonstd::expected-lite` [https://github.com/nonstd-lite/expected-lite](https://github.com/nonstd-lite/expected-lite)
 -  `fmtlib::fmt` [https://github.com/fmtlib/fmt](https://github.com/fmtlib/fmt)
+-  `fast_float` [https://github.com/fastfloat/fast_float](https://github.com/fastfloat/fast_float) (header-only, used at build time only)
 
 Boost is used only by opt-in pieces: Boost.Multiprecision (with Boost.Config) for
 `-DJINJA2CPP_WITH_BIGINT=boost` and the `jinja2cpp/big_int/boost_cpp_int.h` adapter, and
@@ -156,40 +157,28 @@ bringing its own library (`find_package(jinja2cpp COMPONENTS nlohmann_json)` and
 Why each dependency is needed, which are optional, and the CycloneDX and SPDX SBOMs installed with
 the package: [docs/dependencies.md](docs/dependencies.md).
 
-Examples of build scripts and different build configurations could be found here: [https://github.com/jinja2cpp/examples-build](https://github.com/jinja2cpp/examples-build)
+To build and install Jinja2C++ you need CMake 3.23 or newer, Ninja (or another CMake
+generator) and a C++17 compiler; see [Supported standards and compilers](#supported-standards-and-compilers).
 
-In simplest case to compile Jinja2C++ you need:
-
-1.  Install CMake build system (at least version 3.23)
-2.  Clone jinja2cpp repository:
-
-```
-> git clone https://github.com/flexferrum/Jinja2Cpp.git
-```
-
-3.  Create build directory:
-
-```
-> cd Jinja2Cpp
-> mkdir build
+```sh
+git clone https://github.com/jinja2cpp/Jinja2Cpp.git
+cmake -S Jinja2Cpp -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJINJA2CPP_BUILD_TESTS=OFF
+cmake --build build --parallel
+cmake --install build --prefix <install folder>
 ```
 
-4.  Run CMake and build the library:
+The default `internal` dependencies mode downloads the pinned expected-lite, fmt and
+fast_float and installs fmt and expected-lite next to the library; `-DJINJA2CPP_DEPS_MODE=external`
+takes them from `CMAKE_PREFIX_PATH` instead (see [Additional CMake build flags](#additional-cmake-build-flags)).
+Leave out `-DJINJA2CPP_BUILD_TESTS=OFF` to build and run the tests (`ctest --test-dir build`),
+which also fetches GoogleTest and nlohmann/json. A release source archive builds the same way
+without Git; `scripts/check_release_artifact.py` checks that (docs/tasks/0225).
 
-```
-> cd build
-> cmake .. -DCMAKE_INSTALL_PREFIX=<path to install folder>
-> cmake --build . --target all
-```
-"Path to install folder" here is a path to the folder where you want to install Jinja2C++ lib.
+The install contains the license (MPL-2.0) and the notices of the third-party code the library
+carries in `share/doc/Jinja2Cpp/` ([docs/licensing.md](docs/licensing.md)).
 
-5. Install library:
-
-```
-> cmake --build . --target install
-```
-
-In this case, Jinja2C++ will be built with internally-shipped dependencies and install them respectively. But Jinja2C++ supports builds with externally-provided deps.
+Moving from 1.x: [MIGRATION.md](MIGRATION.md) lists every change and `scripts/jinja2cpp_migrate.py`
+renames the deprecated 1.x names in your code.
 
 ### Using the installed library
 
@@ -237,51 +226,22 @@ default internal dependencies mode). The un-namespaced `jinja2cpp` target of
   releases keep the ABI.
 
 ### Usage with conan.io dependency manager
-Jinja2C++ can be used as conan.io package. In this case, you should do the following steps:
 
-1. Install conan.io according to the documentation ( https://docs.conan.io/en/latest/installation.html )
-2. Add a reference to Jinja2C++ package (`jinja2cpp/1.2.1`) to your conanfile.txt, conanfile.py or CMakeLists.txt. For instance, with the usage of `conan-cmake` integration it could be written this way:
+ConanCenter's `jinja2cpp` package is 1.3.2 at most; a 2.0 package is not published yet
+(docs/tasks/0006), and its recipe declares the wrong license (MIT; Jinja2C++ is MPL-2.0, see
+[docs/licensing.md](docs/licensing.md)). Until then, Conan 2 can provide Jinja2C++'s
+dependencies while you build it from source, as the `conan-build` CI job does:
 
-```cmake
-
-cmake_minimum_required(VERSION 3.24)
-project(Jinja2CppSampleConan CXX)
-
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
-list(APPEND CMAKE_PREFIX_PATH ${CMAKE_BINARY_DIR})
-
-set(CMAKE_CXX_STANDARD 17)
-
-if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
-  message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
-  file(DOWNLOAD "https://raw.githubusercontent.com/conan-io/cmake-conan/0.18.1/conan.cmake"
-                "${CMAKE_BINARY_DIR}/conan.cmake"
-                TLS_VERIFY ON)
-endif()
-include(${CMAKE_BINARY_DIR}/conan.cmake)
-
-conan_cmake_autodetect(settings)
-conan_cmake_run(REQUIRES
-                    jinja2cpp/1.1.0
-                    gtest/1.14.0
-                BASIC_SETUP
-                ${CONAN_SETTINGS}
-                OPTIONS
-                    jinja2cpp/*:shared=False
-                    gtest/*:shared=False
-                BUILD missing)
-
-set (TARGET_NAME jinja2cpp_build_test)
-
-add_executable (${TARGET_NAME} main.cpp)
-
-target_link_libraries (${TARGET_NAME} ${CONAN_LIBS})
-set_target_properties (${TARGET_NAME} PROPERTIES
-            CXX_STANDARD 14
-            CXX_STANDARD_REQUIRED ON)
-
+```sh
+conan profile detect   # once, if there is no default profile
+conan install . -of .conan --build=missing -s compiler.cppstd=17 -s build_type=Release
+cmake -S . -B build-conan -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_TOOLCHAIN_FILE=.conan/conan_toolchain.cmake -DJINJA2CPP_DEPS_MODE=conan-build
+cmake --build build-conan --parallel
+cmake --install build-conan --prefix <install folder>
 ```
 
+Then use the install as in [Using the installed library](#using-the-installed-library).
 
 ### Additional CMake build flags
 You can define (via -D command-line CMake option) the following build flags:

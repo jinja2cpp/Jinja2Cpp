@@ -1,8 +1,9 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/772
 priority: medium
 area: robustness
-touches: [src/template_env.cpp, test/user_callable_test.cpp]
+touches: [test/borrowed_cells_test.cpp]
 ---
 # Changing a global can race with a render that just dropped the globals map
 
@@ -20,3 +21,10 @@ third replaces a list global, and is clean.
 
 **Limits.** Only the decision to edit in place is affected. Holders that are still alive keep
 their own map, because a count above 1 copies it.
+
+**Outcome.** The code fix landed with 0339 (#708): `ChangeGlobals` tests `IsSoleOwner`
+(`src/shared_owner.h`), which issues an acquire fence after `use_count() == 1`, and a TSan build
+turns that into an acquire on the control block. The row
+`SharedOwnerTest.ListGlobalReplacedWhileTwoThreadsRender` (`test/borrowed_cells_test.cpp`) renders
+on two threads while a third replaces a list global 199 times, and checks that each render saw
+one whole list.

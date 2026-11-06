@@ -133,7 +133,7 @@ deprecated alias of `internal`, removed in 3.0.
    immutably (SHA-256 or commit SHA).
 
 Distribution notices for the redistributed code (fmt and expected-lite in an
-internal-mode install, Boost.Multiprecision compiled into a `bigint=boost` build, fast_float compiled into every build, value_types in the installed headers) are docs/tasks/0226.
+internal-mode install, Boost.Multiprecision compiled into a `bigint=boost` build, fast_float compiled into every build, value_types in the installed headers, the generated Unicode and HTML tables) are in `THIRD-PARTY-NOTICES.txt`, installed with `LICENSE` to `share/doc/Jinja2Cpp/`; which artifact carries what: [licensing.md](licensing.md) (docs/tasks/0226).
 
 ## Maintaining the inventory
 
