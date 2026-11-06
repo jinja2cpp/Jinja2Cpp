@@ -1,6 +1,6 @@
 ---
 status: open
-priority: low
+priority: medium
 area: api
 depends: [0360]
 touches: [include/jinja2cpp/chat_template.h, src/chat_template.cpp]
@@ -29,3 +29,6 @@ narrow offsets need converting). For the error, either a new `ErrorCode::Securit
 **Done when.** The decision is recorded; if taken, tests render a template with generation
 blocks and compare the offsets with transformers' `generation_indices` for the
 test/chat_templates conversations.
+
+**Timing (Ruslan 2026-11-06).** Lands before the G1 freeze, with the API wave: it adds to the
+public headers `chat_template.h` and `error_info.h`.
