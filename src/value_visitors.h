@@ -2152,7 +2152,7 @@ struct BinaryMathOperation : BaseVisitor<>
 
     // A range (docs/tasks/0401) equals only a range of the same items and has no other
     // operation; a list or tuple on the left names itself, as list.__add__ does
-    [[nodiscard]] ResultType RangeOperands(const ListRef& left, const ListRef& right) const
+    [[nodiscard]] JINJA2CPP_COLD_INLINE ResultType RangeOperands(const ListRef& left, const ListRef& right) const
     {
         const auto* leftRange = left.GetRangeInfo();
         const auto* rightRange = right.GetRangeInfo();

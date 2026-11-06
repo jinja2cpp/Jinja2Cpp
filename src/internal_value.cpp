@@ -470,12 +470,24 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     // Find, which a 1.x accessor answers with HasValue first, as its contract allows
     [[nodiscard]] static InternalValue GetField(const MapRef& values, const std::string& field)
     {
-        // An engine object that is called (joiner()) names its call __call__ (docs/tasks/0401)
-        if (field == "__call__" && values.GetObjectClass() != nullptr && !values.IsNamespace() && values.HasValue("operator()"))
+        auto result = values.GetValueByName(field);
+        // Only a missing name can be the call of an engine object, off the lookup's fast path
+        if (result.IsUndefined() && field == "__call__")
+        {
+            return GetCallSlot(values, std::move(result));
+        }
+        return result;
+    }
+
+    // An engine object that is called (joiner()) names its call __call__ (docs/tasks/0401);
+    // `missing` is the lookup's undefined for any other map
+    JINJA2CPP_COLD_INLINE static InternalValue GetCallSlot(const MapRef& values, InternalValue missing)
+    {
+        if (values.GetObjectClass() != nullptr && !values.IsNamespace() && values.HasValue("operator()"))
         {
             return values.GetValueByName("operator()");
         }
-        return values.GetValueByName(field);
+        return missing;
     }
 
     // Python indexing: a negative index counts from the end

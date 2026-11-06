@@ -241,6 +241,8 @@ private:
     mutable bool m_inSnapshot = false;
     bool m_isRange = false;
 };
+// The flags and m_isRange share the padding after the count: every value's object stays this size
+static_assert(sizeof(ValueObject) <= sizeof(void*) + sizeof(unsigned) + 4, "ValueObject grew");
 
 using ValueObjectPtr = IntrusivePtr<const ValueObject>;
 
