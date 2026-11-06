@@ -304,7 +304,7 @@ sandbox beyond what it lists.
 **Prompt escaping and token budgets (tasks 0358, 0359, decided by Ruslan 2026-11-05).** A new,
 always installed header `jinja2cpp/prompt.h` (core, included by `template_env.h`, not behind
 `JINJA2CPP_WITH_CHAT_TEMPLATES`, whose switch must not change the core ABI) adds:
-`enum class AutoescapeMode { Html, Prompt }`; `PromptEscapeOptions` (special tokens, tag names,
+`enum class AutoescapeMode : unsigned char { Html, Prompt }`; `PromptEscapeOptions` (special tokens, tag names,
 separator, default a space); `PromptEscaper`, the compiled patterns, immutable and shared by
 copies (`shared_ptr<const Impl>`, equality by identity, as `AutoescapeSelector`), with a throwing
 constructor and a `noexcept` `IsValid` (2.1 rule 5) and `Neutralize` for host code; and

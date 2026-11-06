@@ -170,7 +170,9 @@ with the environment's `PromptEscaper`, and Markup means "prompt-safe". `|safe`,
 `is escaped`, `{% autoescape %}` and Markup values work as in HTML mode. In prompt mode:
 
 - String literals of the template are prompt-safe, so `'<|im_start|>' ~ role` keeps its special
-  token and breaks one inside `role`; chat templates written for transformers work unchanged.
+  token and breaks one inside `role`; chat templates written for transformers work unchanged,
+  with two Markup effects: printing a container or repr of literals shows `Markup('a')`, and a
+  literal format string rejects `%x`, `%o`, `%c` and `%*d` as markupsafe does.
   Host values that carry special tokens on purpose (`bos_token`) are passed as `jinja2::Markup`.
 - `|e`, `|escape` and `|forceescape` neutralize instead of writing HTML entities, and the
   results of `urlize`, `xmlattr` and `tojson` are neutralized (`tojson` always, as its result is
@@ -187,8 +189,8 @@ with the environment's `PromptEscaper`, and Markup means "prompt-safe". `|safe`,
 - One environment escapes for one mode: HTML and prompt templates use separate environments.
 
 The guarantee holds for the escaping and composing constructs. A template that edits escaped
-text on purpose can still join two halves: slicing or reversing Markup, `trim` of it (the
-default separator is a space, which `trim` removes from the edges), or `neutralize` with
+text on purpose can still join two halves: slicing or reversing Markup, `trim` or `replace` of it
+(the default separator is a space, which `trim` removes from the edges), or `neutralize` with
 arguments of its own. As with `<|{{ role }}|>`, that is the template author's text.
 
 `ConfigureForChatTemplates` does not switch prompt mode on: transformers renders with autoescape
