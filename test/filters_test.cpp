@@ -2200,6 +2200,28 @@ TEST(TokenBudget, MergingTokensAcrossTheJoin)
     EXPECT_EQ("aaaac", TokenRender<TemplateW>(env, "{{ 'aaaabcdd'|truncate_tokens(6, 'c') }}", {}));
 }
 
+TEST(TokenBudget, TruncatedTextObeysTheSequenceCap)
+{
+    // Host text may be longer than the cap; the truncated result is checked before it is built
+    TemplateEnv env;
+    env.GetSettings().limits.maxSequenceSize = 8;
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{{ x|truncate_tokens(3, '') }}").has_value());
+    auto result = tpl.RenderAsString({ { "x", std::string(16, 'a') } });
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    TemplateW tplW(&env);
+    ASSERT_TRUE(tplW.Load(L"{{ x|truncate_tokens(3, '') }}").has_value());
+    auto resultW = tplW.RenderAsString({ { "x", std::wstring(16, L'a') } });
+    ASSERT_FALSE(resultW.has_value());
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, resultW.error().GetCode());
+    // Within the cap it renders
+    env.GetSettings().limits.maxSequenceSize = 100;
+    Template ok(&env);
+    ASSERT_TRUE(ok.Load("{{ x|truncate_tokens(3, '') }}").has_value());
+    EXPECT_EQ(std::string(12, 'a'), ok.RenderAsString({ { "x", std::string(16, 'a') } }).value());
+}
+
 TEST(TokenBudget, TokenizerValue)
 {
     const Tokenizer none;

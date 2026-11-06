@@ -287,7 +287,10 @@ InternalValue TruncateText(const TokenMeter& meter, const InternalValue& value, 
     auto budget = static_cast<std::size_t>(static_cast<std::uint64_t>(length) - endTokens);
     for (;;)
     {
-        String result(view->substr(0, meter.PrefixSize<CharT>(*view, budget)));
+        const std::size_t prefixSize = meter.PrefixSize<CharT>(*view, budget);
+        // Host text may exceed the cap, and a token budget does not bound characters
+        CheckSequenceSize(static_cast<std::uint64_t>(prefixSize) + end.size(), "a truncated string");
+        String result(view->substr(0, prefixSize));
         result.append(end);
         const std::size_t tokens = budget == 0 ? 0 : meter.Count<CharT>(result);
         if (budget == 0 || tokens <= static_cast<std::uint64_t>(length))
