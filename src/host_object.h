@@ -175,43 +175,6 @@ inline const IHostObject* GetHostObject(const InternalValue& value)
     return map ? map->GetHostObject() : nullptr;
 }
 
-// The sandbox of the Python module (jinja2cpp.sandbox, 0354): what the engine asks the host when a template
-// of a SandboxedEnvironment reads a value of the engine as Python's objects, which the engine has no attributes
-// for. The host installs it for the duration of a render (HostSandboxScope); a render without one pays a
-// thread-local load where a missing attribute is made and a string's format is called
-class IHostSandbox
-{
-public:
-    IHostSandbox() = default;
-    IHostSandbox(const IHostSandbox&) = delete;
-    IHostSandbox& operator=(const IHostSandbox&) = delete;
-    virtual ~IHostSandbox() = default;
-
-    // The attribute `name` of `obj`, a value of the engine that has none of that name (never a host object): what
-    // Python's object of that kind has, unsafe or not, as the sandbox reads it; nullopt where it is undefined
-    [[nodiscard]] virtual std::optional<InternalValue> NativeAttribute(const InternalValue& obj, const std::string& name) = 0;
-    // s.format(*args, **kwargs), or s.format_map(mapping), of a string of the engine, through SandboxedFormatter
-    virtual InternalValue Format(const InternalValue& self, bool formatMap, const CallParams& params, RenderContext& context) = 0;
-};
-
-// The sandbox installed for this thread's render, or null
-IHostSandbox* ActiveHostSandbox() noexcept;
-
-// Installs `sandbox` (null for none) until it goes out of scope; renders nest
-class HostSandboxScope
-{
-public:
-    explicit HostSandboxScope(IHostSandbox* sandbox) noexcept;
-    ~HostSandboxScope();
-    HostSandboxScope(const HostSandboxScope&) = delete;
-    HostSandboxScope& operator=(const HostSandboxScope&) = delete;
-    HostSandboxScope(HostSandboxScope&&) = delete;
-    HostSandboxScope& operator=(HostSandboxScope&&) = delete;
-
-private:
-    IHostSandbox* m_outer;
-};
-
 // The Python operations of a host object the engine reaches outside the accessor
 namespace host
 {

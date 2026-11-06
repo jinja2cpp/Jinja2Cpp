@@ -1671,7 +1671,7 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
         }
         if (callee.IsUndefined() && !GetUndefinedInfo(callee))
         {
-            if (auto replacement = SandboxedNativeAttribute(receiver, *name))
+            if (auto replacement = SandboxedNativeAttribute(&values, receiver, *name))
             {
                 callee = std::move(*replacement);
                 return false;
@@ -1690,6 +1690,15 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
         return false;
     }
 
+    if (values.GetSandboxPolicy())
+    {
+        // The policy decides about a method of a value, as about an attribute (ISandboxPolicy::NativeAttribute)
+        if (auto replacement = SandboxedNativeAttribute(&values, receiver, *name))
+        {
+            callee = std::move(*replacement);
+            return false;
+        }
+    }
     if (method->isMutating)
     {
         if (m_readOnlyContainers)

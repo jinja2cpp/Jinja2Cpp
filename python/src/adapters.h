@@ -5,6 +5,9 @@
 
 #include "host_object.h"
 
+#include "sandbox_policy.h"
+
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -73,9 +76,9 @@ private:
     mutable std::string m_typeName;
 };
 
-// The sandbox of a SandboxedEnvironment render (RenderState::sandbox) for the values of the engine:
-// installed by RenderScope
-jinja2::IHostSandbox& PythonSandbox();
+// The sandbox policy the engine asks for the values it makes (src/sandbox_policy.h) in the renders of the
+// SandboxedEnvironment `environment`, which it borrows
+std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle environment);
 
 // The PyHost a value of the engine carries, if any
 const PyHost* AsPyHost(const InternalValue& value);

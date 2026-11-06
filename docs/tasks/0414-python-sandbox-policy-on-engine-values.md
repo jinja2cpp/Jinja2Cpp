@@ -13,8 +13,8 @@ for every attribute of a Python object. The values the engine makes itself (the 
 `int`, `list`, `dict`, `loop`, `cycler`, macros) have no Python attributes, so the module treats a
 missing name that starts with `_` as the attribute Python's object would have and asks
 `is_safe_attribute` with a stand-in object (IHostSandbox::NativeAttribute). What stays different:
-- A public name of an engine value (`s.upper`, `d.items`) never reaches `is_safe_attribute`; a
-  subclass that refuses `upper` or `items` is not asked. The immutable form's refusal of the
+- A public name of an engine value (`s.upper`, `d.items`) reaches `is_safe_attribute` only when
+  the subclass overrides it (judged with a stand-in object). The immutable form's refusal of the
   methods that change a list or dict is the engine's own (Dialect::ImmutableSandbox), whatever
   `is_safe_attribute` says.
 - A dict key that is also an attribute name (`{'__class__': 1}.__class__`) reads the key; Jinja2
@@ -27,9 +27,8 @@ missing name that starts with `_` as the attribute Python's object would have an
 - An overridden `getattr` / `getitem` of the environment is not called (the checkpoint is
   `_sandbox_attribute`).
 
-**Proposal.** Route a public-name read of an engine value through the same hook when the
-environment's `is_safe_attribute` is overridden (the base class's answer is known), and let the
-hook see dict keys that shadow an attribute. Decide whether `f.__call__` and `__self__` should be
+**Proposal.** Let the policy (ISandboxPolicy) see dict keys that shadow an attribute and a bound
+method's `__self__`. Decide whether `f.__call__` and `__self__` should be
 refused in a sandbox render.
 
 **Done when** the sweep in python/tests/test_sandbox.py has a case for each item above, either

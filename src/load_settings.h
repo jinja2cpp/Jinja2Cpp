@@ -3,6 +3,7 @@
 
 #include "dialect.h"
 #include "prompt_escape.h"
+#include "sandbox_policy.h"
 #include "recursion_guard.h"
 
 #include <jinja2cpp/big_int_backend.h>
@@ -102,7 +103,7 @@ private:
 // (TemplateEnvImpl::GetLoadSettings), instead of each copying the settings and rebuilding the delimiters
 struct LoadSettings
 {
-    explicit LoadSettings(const Settings& setts, const BigIntBackend* backend = nullptr, Dialect templateDialect = Dialect::Jinja2)
+    explicit LoadSettings(const Settings& setts, const BigIntBackend* backend = nullptr, Dialect templateDialect = Dialect::Jinja2, std::shared_ptr<const ISandboxPolicy> policy = nullptr)
         : settings(setts)
         , narrow(setts)
         , wide(setts)
@@ -113,6 +114,7 @@ struct LoadSettings
 #endif
         , bigIntBackend(backend)
         , dialect(templateDialect)
+        , sandboxPolicy(std::move(policy))
         , promptEscaper(AutoescapePromptEscaper(settings))
     {
     }
@@ -141,6 +143,8 @@ struct LoadSettings
     const BigIntBackend* bigIntBackend;
     // What a preset changed besides the settings (ConfigureForChatTemplates)
     Dialect dialect;
+    // The sandbox of templates loaded with these settings (src/sandbox_policy.h); null for none
+    std::shared_ptr<const ISandboxPolicy> sandboxPolicy;
     // The escaper of AutoescapeMode::Prompt, null in HTML mode: chosen once here, so a render only copies it into its
     // callback (docs/tasks/0358). Points into settings.promptEscaper, or to the one without patterns
     const PromptEscaperImpl* promptEscaper;

@@ -5,6 +5,7 @@
 #include "loaders.h"
 #include "poll.h"
 
+#include "adapters.h"
 #include "dialect.h"
 #include "host_object.h"
 #include "internal_value.h"
@@ -507,8 +508,10 @@ void PyEnvironment::Rebuild()
     m_env = std::make_unique<jinja2::TemplateEnv>();
     auto settings = m_settings;
     bool immutable = false;
+    bool sandboxed = false;
     if (const auto self = nb::find(this); self.is_valid() && SandboxOf(self))
     {
+        sandboxed = true;
         // SandboxedEnvironment: safe_range's MAX_RANGE is the engine's range limit, and the immutable
         // form has the engine's list and dict methods that change their receiver refused
         settings.limits.maxRange = nb::cast<std::uint64_t>(nb::module_::import_("jinja2cpp.sandbox").attr("MAX_RANGE"));
@@ -518,6 +521,10 @@ void PyEnvironment::Rebuild()
     if (immutable)
     {
         jinja2::detail::TemplateEnvAccess::GetImpl(*m_env)->SetDialect(jinja2::detail::Dialect::ImmutableSandbox);
+    }
+    if (sandboxed)
+    {
+        jinja2::detail::TemplateEnvAccess::GetImpl(*m_env)->SetSandboxPolicy(MakePythonSandboxPolicy(nb::find(this)));
     }
     if (!m_loaderHandler && !m_loader.is_none())
     {

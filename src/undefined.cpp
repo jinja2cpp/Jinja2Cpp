@@ -76,14 +76,14 @@ std::string ObjectTypeRepr(const InternalValue& obj)
 }
 } // namespace
 
-std::optional<InternalValue> SandboxedNativeAttribute(const InternalValue& obj, const std::string& name)
+std::optional<InternalValue> SandboxedNativeAttribute(const RenderContext* context, const InternalValue& obj, const std::string& name)
 {
-    auto* sandbox = ActiveHostSandbox();
-    if (!sandbox || GetHostObject(obj))
+    const auto* policy = context ? context->GetSandboxPolicy() : nullptr;
+    if (!policy || GetHostObject(obj))
     {
         return std::nullopt;
     }
-    return sandbox->NativeAttribute(obj, name);
+    return policy->NativeAttribute(obj, name);
 }
 
 InternalValue MakeUndefined(const RenderContext& context, std::string name)
@@ -110,7 +110,7 @@ InternalValue MakeUndefined(const RenderContext* context, const InternalValue& o
     }
     if (IsStringValue(key))
     {
-        if (auto replacement = SandboxedNativeAttribute(obj, AsString(key)))
+        if (auto replacement = SandboxedNativeAttribute(context, obj, AsString(key)))
         {
             return std::move(*replacement);
         }
@@ -133,7 +133,7 @@ InternalValue MakeUndefined(const RenderContext* context, const InternalValue& o
 
 InternalValue MakeUndefinedAttr(const RenderContext* context, const InternalValue& obj, std::string name)
 {
-    if (auto replacement = SandboxedNativeAttribute(obj, name))
+    if (auto replacement = SandboxedNativeAttribute(context, obj, name))
     {
         return std::move(*replacement);
     }

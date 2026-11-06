@@ -450,7 +450,6 @@ void InitRenderState(RenderState& state, nb::handle environment)
 
 RenderScope::RenderScope(RenderState& state) noexcept
     : m_state(state)
-    , m_sandbox(state.sandbox ? &PythonSandbox() : nullptr)
 {
     state.outer = t_render;
     t_render = &state;

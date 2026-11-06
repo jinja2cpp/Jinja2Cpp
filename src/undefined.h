@@ -47,10 +47,10 @@ enum class UndefinedUse
     Method,     // what Undefined has no method for: dictsort's items(), indent's +=, wordwrap; every policy refuses
 };
 
-// What the sandbox of the render (IHostSandbox) gives for the attribute `name` that the value `obj` of the engine has
+// What the sandbox policy of the render (ISandboxPolicy) gives for the attribute `name` that the value `obj` of the engine has
 // none of: the unsafe undefined of an attribute Python's object has and the sandbox refuses, or a method the engine
 // lacks; nothing without a sandbox, and for a host object, which the host reads itself
-std::optional<InternalValue> SandboxedNativeAttribute(const InternalValue& obj, const std::string& name);
+std::optional<InternalValue> SandboxedNativeAttribute(const RenderContext* context, const InternalValue& obj, const std::string& name);
 
 // The undefined result of looking up the missing variable name
 InternalValue MakeUndefined(const RenderContext& context, std::string name);

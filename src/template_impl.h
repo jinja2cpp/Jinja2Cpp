@@ -862,6 +862,7 @@ private:
             : m_host(host)
         {
             SetPromptEscaper(host->m_settings->promptEscaper);
+            SetSandboxPolicy(host->m_settings->sandboxPolicy.get());
         }
 
         TargetString GetAsTargetString(const InternalValue& val) override

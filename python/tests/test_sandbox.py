@@ -863,3 +863,34 @@ def test_sum_of_a_missing_attribute_fails_as_undefined():
             except Exception as error:  # noqa: BLE001
                 outcomes.append((type(error).__name__, str(error)))
         assert outcomes[0] == outcomes[1] == ("UndefinedError", "'dict object' has no attribute 'z'")
+
+
+def test_an_overridden_is_safe_attribute_judges_the_public_names_of_engine_values():
+    class NoUpper(SandboxedEnvironment):
+        def is_safe_attribute(self, obj, attr, value):
+            return attr not in ("upper", "items", "index") and super().is_safe_attribute(obj, attr, value)
+
+    class NoUpperJ2(j2sandbox.SandboxedEnvironment):
+        def is_safe_attribute(self, obj, attr, value):
+            return attr not in ("upper", "items", "index") and super().is_safe_attribute(obj, attr, value)
+
+    for source in (
+        "{{ 'x'.upper() }}",
+        "{{ 'x'.lower() }}",
+        "{{ 'x'.upper }}",
+        "{{ {'a': 1}.items() }}",
+        "{{ {'a': 1}.keys()|list }}",
+        "{{ [1].index(1) }}",
+        "{{ [1].count(1) }}",
+        "{{ ('x'|attr('upper'))() }}",
+        "{{ 'x'['upper'] }}",
+        "{% set s = 'x' %}{{ s.upper() }}",
+        "{{ loop }}",
+    ):
+        results = []
+        for env_class in (NoUpper, NoUpperJ2):
+            try:
+                results.append(("ok", env_class().from_string(source).render()))
+            except Exception as error:  # noqa: BLE001
+                results.append(("exception", type(error).__name__))
+        assert results[0] == results[1], source

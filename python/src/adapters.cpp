@@ -516,29 +516,39 @@ nb::object Representative(const InternalValue& obj, bool& synthetic)
     }
 }
 
-class PySandbox final : public jinja2::IHostSandbox
+// The ISandboxPolicy of a SandboxedEnvironment: the environment's own is_safe_attribute and wrap_str_format, asked
+// for the engine's values. It borrows the environment, which holds the engine environment that holds this
+class PySandboxPolicy final : public jinja2::ISandboxPolicy
 {
 public:
-    [[nodiscard]] std::optional<InternalValue> NativeAttribute(const InternalValue& obj, const std::string& name) override
+    PySandboxPolicy(PyObject* environment, bool allNames)
+        : m_environment(environment)
+        , m_allNames(allNames)
     {
-        const auto* render = CurrentRender();
-        if (!render || !render->sandbox)
-        {
-            return std::nullopt;
-        }
+    }
+
+    [[nodiscard]] std::optional<InternalValue> NativeAttribute(const InternalValue& obj, const std::string& name) const override
+    {
         if (name == "format_map" && jinja2::IsStringValue(obj))
         {
             // The engine's strings have no format_map; the sandbox's is SandboxedFormatter's
-            return InternalValue(jinja2::Callable(jinja2::Callable::UserCallable, [obj](const CallParams& params, RenderContext& context) { return PythonSandbox().Format(obj, true, params, context); }));
+            return InternalValue(jinja2::Callable(jinja2::Callable::UserCallable, [obj, this](const CallParams& params, RenderContext& context) { return Format(obj, true, params, context); }));
         }
         // Python's objects have attributes the engine's values have not: __class__, __init__, ...
-        // A name without the underscore of a private one is left to the environment's own policy
-        if (name.empty() || name[0] != '_')
+        // A public name is the environment's to judge only when its is_safe_attribute is not Jinja2's, which
+        // refuses private names and the methods of lists and dicts that change them (the engine does the latter)
+        const bool isPrivate = !name.empty() && name[0] == '_';
+        if (!isPrivate && !m_allNames)
         {
             return std::nullopt;
         }
         bool synthetic = false;
         const auto representative = Representative(obj, synthetic);
+        if (synthetic && !isPrivate)
+        {
+            // loop, a macro: no Python class to ask about a public name
+            return std::nullopt;
+        }
         const auto pyName = MakeStr(name);
         nb::object owned = nb::none();
         // A real Python object has the attribute or has not. An object of the engine that is only
@@ -557,7 +567,7 @@ public:
         {
             owned = nb::steal(value);
         }
-        const auto checked = Steal(PyObject_CallMethod(render->sandbox, "_sandbox_attribute", "OOO", representative.ptr(), pyName.ptr(), owned.ptr()));
+        const auto checked = Steal(PyObject_CallMethod(m_environment, "_sandbox_attribute", "OOO", representative.ptr(), pyName.ptr(), owned.ptr()));
         auto result = ToEngine(checked);
         if (result.IsUndefined())
         {
@@ -566,25 +576,32 @@ public:
         return std::nullopt;
     }
 
-    InternalValue Format(const InternalValue& self, bool formatMap, const CallParams& params, RenderContext& context) override
+    InternalValue Format(const InternalValue& self, bool formatMap, const CallParams& params, RenderContext& context) const override
     {
-        const auto* render = CurrentRender();
         const auto text = ToPython(self);
         const auto method = Steal(PyObject_GetAttrString(text.ptr(), formatMap ? "format_map" : "format"));
-        auto wrapped = Steal(PyObject_CallMethod(render->sandbox, "wrap_str_format", "O", method.ptr()));
+        auto wrapped = Steal(PyObject_CallMethod(m_environment, "wrap_str_format", "O", method.ptr()));
         if (wrapped.is_none())
         {
             wrapped = method;
         }
         return CallPython(wrapped.ptr(), params, context);
     }
+
+private:
+    PyObject* m_environment;
+    bool m_allNames;
 };
 } // namespace
 
-jinja2::IHostSandbox& PythonSandbox()
+std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle environment)
 {
-    static PySandbox sandbox;
-    return sandbox;
+    const auto all = nb::steal(PyObject_CallMethod(environment.ptr(), "_sandbox_judges_public_names", nullptr));
+    if (!all)
+    {
+        throw nb::python_error();
+    }
+    return std::make_shared<PySandboxPolicy>(environment.ptr(), PyObject_IsTrue(all.ptr()) != 0);
 }
 
 const PyHost* AsPyHost(const InternalValue& value)

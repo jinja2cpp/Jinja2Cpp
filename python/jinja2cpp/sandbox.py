@@ -315,6 +315,12 @@ class SandboxedEnvironment(Environment):
             return value
         return self.unsafe_undefined(obj, attribute)
 
+    def _sandbox_judges_public_names(self) -> bool:
+        """Whether the engine asks `is_safe_attribute` about the public names of its own values too: only when
+        the method is not Jinja2's, whose answer for them the engine gives itself (docs/python.md)."""
+        method = type(self).is_safe_attribute
+        return method not in (SandboxedEnvironment.is_safe_attribute, ImmutableSandboxedEnvironment.is_safe_attribute)
+
     def _sandbox_check_call(self, obj: t.Any) -> None:
         """Raises SecurityError for a call of `obj` that is not safe: what ``call`` checks."""
         if not self.is_safe_callable(obj):

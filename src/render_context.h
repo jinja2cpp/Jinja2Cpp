@@ -5,6 +5,7 @@
 #include "internal_value.h"
 #include "lookup_result.h"
 #include "node_arena.h"
+#include "sandbox_policy.h"
 #include "robin_hood.h"
 #include "slot_frame.h"
 #include "small_vector.h"
@@ -125,6 +126,9 @@ struct IRendererCallback : IComparable
     [[nodiscard]] virtual const Settings& GetSettings() const = 0;
     // What a preset changed besides the settings (load_settings.h)
     [[nodiscard]] virtual detail::Dialect GetDialect() const { return detail::Dialect::Jinja2; }
+    // The sandbox policy of the template (src/sandbox_policy.h), null for none. A field, not a virtual: the methods of
+    // a value ask it each time one is found
+    [[nodiscard]] const ISandboxPolicy* GetSandboxPolicy() const noexcept { return m_sandboxPolicy; }
     // The environment the template was loaded in, if any
     [[nodiscard]] virtual TemplateEnv* GetEnv() const { return nullptr; }
     // The random generator of lipsum, one per render
@@ -159,9 +163,11 @@ struct IRendererCallback : IComparable
 protected:
     // Called once, when the template's callback is made
     void SetPromptEscaper(const detail::PromptEscaperImpl* escaper) noexcept { m_promptEscaper = escaper; }
+    void SetSandboxPolicy(const ISandboxPolicy* policy) noexcept { m_sandboxPolicy = policy; }
 
 private:
     const detail::PromptEscaperImpl* m_promptEscaper = nullptr;
+    const ISandboxPolicy* m_sandboxPolicy = nullptr;
 };
 
 // The slots where names were last found (docs/tasks/0100 idea 7). An entry holds the slot
@@ -1019,6 +1025,7 @@ public:
     }
     // Settings::userCallablesAsFilters of the template: whether a name that is no filter or test
     // of the template may be a callable among the values
+    [[nodiscard]] const ISandboxPolicy* GetSandboxPolicy() const noexcept { return m_rendererCallback ? m_rendererCallback->GetSandboxPolicy() : nullptr; }
     [[nodiscard]] detail::Dialect GetDialect() const { return m_rendererCallback ? m_rendererCallback->GetDialect() : detail::Dialect::Jinja2; }
     [[nodiscard]] bool UserCallablesAsFilters() const { return m_rendererCallback ? m_rendererCallback->GetSettings().userCallablesAsFilters : false; }
     // A context for a nested render: with `includeCurrentContext` it sees all of this

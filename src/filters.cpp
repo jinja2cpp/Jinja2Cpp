@@ -491,7 +491,18 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     {
         if (isPlainDict || !map || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(attrName))
         {
-            return method->isMutating && methods::IsReadOnlyContainers(context) ? methods::UnsafeMethod(baseVal, attrName, context) : methods::MakeBoundMethod(baseVal, *method);
+            if (method->isMutating && methods::IsReadOnlyContainers(context))
+            {
+                return methods::UnsafeMethod(baseVal, attrName, context);
+            }
+            if (context.GetSandboxPolicy())
+            {
+                if (auto replacement = SandboxedNativeAttribute(&context, baseVal, attrName))
+                {
+                    return std::move(*replacement);
+                }
+            }
+            return methods::MakeBoundMethod(baseVal, *method);
         }
     }
     if (isPlainDict)

@@ -59,27 +59,6 @@ std::optional<InternalValue> AttrThenItem(const IHostObject& host, const std::st
 }
 } // namespace
 
-namespace
-{
-thread_local IHostSandbox* t_sandbox = nullptr;
-} // namespace
-
-IHostSandbox* ActiveHostSandbox() noexcept
-{
-    return t_sandbox;
-}
-
-HostSandboxScope::HostSandboxScope(IHostSandbox* sandbox) noexcept
-    : m_outer(t_sandbox)
-{
-    t_sandbox = sandbox;
-}
-
-HostSandboxScope::~HostSandboxScope()
-{
-    t_sandbox = m_outer;
-}
-
 InternalValue IHostObject::Call(const CallParams& /*params*/, RenderContext& /*context*/) const
 {
     throw TemplateRuntimeError(std::string("'") + TypeName() + "' object is not callable");

@@ -58,8 +58,6 @@ public:
 
 private:
     RenderState& m_state;
-    // The sandbox of a SandboxedEnvironment render (RenderState::sandbox)
-    jinja2::HostSandboxScope m_sandbox;
 };
 
 class TemplateValue;

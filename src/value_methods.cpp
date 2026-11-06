@@ -1825,9 +1825,9 @@ JINJA2CPP_STR_METHOD(Rindex)
 JINJA2CPP_STR_METHOD(Count)
 InternalValue StrFormat(const InternalValue& self, const CallParams& params, RenderContext& context)
 {
-    if (auto* sandbox = ActiveHostSandbox())
+    if (const auto* policy = context.GetSandboxPolicy())
     {
-        return sandbox->Format(self, false, params, context);
+        return policy->Format(self, false, params, context);
     }
     return ApplyStringConverter(self, [&params, &context](auto sv) -> InternalValue {
         using CharT = typename decltype(sv)::value_type;
@@ -1970,9 +1970,9 @@ InternalValue MarkupJoin(const InternalValue& self, const CallParams& params, Re
 
 InternalValue MarkupFormat(const InternalValue& self, const CallParams& params, RenderContext& context)
 {
-    if (auto* sandbox = ActiveHostSandbox())
+    if (const auto* policy = context.GetSandboxPolicy())
     {
-        return sandbox->Format(self, false, params, context);
+        return policy->Format(self, false, params, context);
     }
     return MarkupResult(ApplyStringConverter(self, [&params, &context](auto sv) -> InternalValue {
         using CharT = typename decltype(sv)::value_type;
@@ -2775,7 +2775,19 @@ InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderC
         auto map = AsMap(obj);
         if (!map || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(name))
         {
-            return unsafe ? UnsafeMethod(obj, name, *context) : MakeBoundMethod(obj, *method);
+            if (unsafe)
+            {
+                return UnsafeMethod(obj, name, *context);
+            }
+            // A sandbox policy decides about the method too (ISandboxPolicy::NativeAttribute)
+            if (context && context->GetSandboxPolicy())
+            {
+                if (auto replacement = SandboxedNativeAttribute(context, obj, name))
+                {
+                    return std::move(*replacement);
+                }
+            }
+            return MakeBoundMethod(obj, *method);
         }
     }
     if (auto attr = GetNumberDataAttr(obj, name))
@@ -2799,6 +2811,13 @@ InternalValue GetItem(const InternalValue& obj, const InternalValue& key, Render
         bool unsafe = false;
         if (const auto* method = FindSafeMethod(obj, AsString(key), context, unsafe))
         {
+            if (context && context->GetSandboxPolicy())
+            {
+                if (auto replacement = SandboxedNativeAttribute(context, obj, AsString(key)))
+                {
+                    return std::move(*replacement);
+                }
+            }
             return MakeBoundMethod(obj, *method);
         }
         if (unsafe)
