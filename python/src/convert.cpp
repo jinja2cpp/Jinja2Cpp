@@ -9,6 +9,7 @@
 #include "host_object.h"
 #include "internal_value.h"
 #include "out_stream.h"
+#include "recursion_guard.h"
 #include "render_context.h"
 #include "undefined.h"
 #include "value_visitors.h"
@@ -306,6 +307,13 @@ nb::object MapToPython(const InternalValue& value, Memo& memo)
 
 nb::object ToPythonImpl(const InternalValue& value, Memo& memo)
 {
+    // A template can nest lists without nested syntax (a loop that wraps a list in a list), so
+    // the conversion stops where the engine's own recursion does: when the stack runs low
+    if (jinja2::StackNearlyExhausted())
+    {
+        PyErr_SetString(PyExc_RecursionError, "maximum recursion depth exceeded while converting a template value");
+        throw nb::python_error();
+    }
     switch (value.Kind())
     {
     case ValueKind::Undefined:

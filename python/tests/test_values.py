@@ -209,3 +209,25 @@ def test_caller_and_loop_passed_to_python():
     env.globals["idx"] = lambda loop: loop.index
     assert env.from_string("{% call wrap() %}body{% endcall %}").render() == "[body]"
     assert env.from_string("{% for x in 'ab' %}{{ idx(loop) }}{% endfor %}").render() == "12"
+
+
+def test_deeply_nested_list_to_callable_raises_not_crashes():
+    # A loop nests lists without nested syntax; converting the result for a Python callable
+    # used to overflow the native stack
+    env = jinja2cpp.Environment()
+    template = env.from_string(
+        "{% set ns = namespace(x=[]) %}{% for i in range(100000) %}{% set ns.x = [ns.x] %}{% endfor %}{{ f(ns.x) }}"
+    )
+    with pytest.raises((RecursionError, jinja2cpp.TemplateError)):
+        template.render(f=lambda value: "ok")
+
+
+def test_deeply_nested_python_list_in_is_safe():
+    deep = []
+    for _ in range(100000):
+        deep = [deep]
+    env = jinja2cpp.Environment()
+    try:
+        env.from_string("{{ x }}{{ x|length }}{{ x|tojson }}").render(x=deep)
+    except (RecursionError, jinja2cpp.TemplateError):
+        pass
