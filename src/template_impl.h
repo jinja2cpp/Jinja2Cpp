@@ -396,14 +396,22 @@ public:
                                                                const InternalValueMap& params,
                                                                const InternalValueMap* globals = nullptr)
     {
-        return static_cast<const TemplateImpl*>(tpl.m_impl.get())->Render(os, params, globals);
+        const auto* impl = static_cast<const TemplateImpl*>(tpl.m_impl.get());
+        // A separate instantiation, so that the ordinary Render keeps its shape and cost
+        return globals ? impl->template RenderCore<true>(os, params, globals) : impl->template RenderCore<false>(os, params, nullptr);
     }
 
     // Renders with the params of a ValuesMap or a GenericMap, appending to a string or writing to a
     // host's sink. Rendering reads the template only, so several threads may render one template at once.
-    // `hostGlobals` replaces the environment's globals (RenderInternal)
     template<typename Target, typename ParamsMap>
-    std::optional<BasicErrorInfo<CharT>> Render(Target& os, const ParamsMap& params, const InternalValueMap* hostGlobals = nullptr) const
+    std::optional<BasicErrorInfo<CharT>> Render(Target& os, const ParamsMap& params) const
+    {
+        return RenderCore<false>(os, params, nullptr);
+    }
+
+    // `hostGlobals` (with HostGlobals set) replaces the environment's globals (RenderInternal)
+    template<bool HostGlobals, typename Target, typename ParamsMap>
+    std::optional<BasicErrorInfo<CharT>> RenderCore(Target& os, const ParamsMap& params, const InternalValueMap* hostGlobals) const
     {
         static_assert(std::is_same_v<Target, std::basic_string<CharT>> || std::is_same_v<Target, BasicOutputSink<CharT>>);
         std::optional<BasicErrorInfo<CharT>> normalResult;
@@ -439,7 +447,7 @@ public:
             };
 
             static const InternalValueMap noGlobals;
-            const auto globals = m_env && !hostGlobals ? GetGlobalsSnapshot(*detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
+            const auto globals = m_env && !HostGlobals ? GetGlobalsSnapshot(*detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
 
             // A GenericMap returns values by copy; the context refers to them, so they live here
             std::list<Value> genericValues;
@@ -466,13 +474,10 @@ public:
             }
             RendererCallback callback(this);
             callback.SetGlobals(globals.get());
-            const InternalValueMap* renderGlobals = hostGlobals;
-            if (!renderGlobals)
-            {
-                renderGlobals = globals ? &globals->values : &noGlobals;
-            }
+            const InternalValueMap& renderGlobals = HostGlobals ? *hostGlobals : globals ? globals->values
+                                                                                         : noGlobals;
             RenderContext context(intParams,
-                                  *renderGlobals,
+                                  renderGlobals,
                                   &callback,
                                   &GetBuiltinGlobals(m_settings->settings.extensions.i18n),
                                   maps.TopScope());
