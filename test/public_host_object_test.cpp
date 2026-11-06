@@ -10,6 +10,7 @@
 #include <jinja2cpp/value.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -20,6 +21,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -1028,4 +1030,166 @@ TEST(PublicHostObjectTest, MembersOfTemplateObjectsAreLentForTheCall)
         none.paramsParsed = true;
         EXPECT_TRUE(Throws([&] { callable.GetIf<UserCallable>()->callable(none); }, ErrorCode::TemplateExpired));
     }
+}
+
+namespace
+{
+// An object that counts its constructions and destructions, to see when the value that carries it lets go of it
+struct LifeCount
+{
+    int alive = 0;
+    int made = 0;
+};
+
+class Counted final : public IHostObject
+{
+public:
+    Counted(LifeCount& count, std::string name)
+        : m_count(&count)
+        , m_name(std::move(name))
+    {
+        ++m_count->alive;
+        ++m_count->made;
+    }
+    Counted(const Counted&) = delete;
+    Counted& operator=(const Counted&) = delete;
+    ~Counted() override { --m_count->alive; }
+
+    [[nodiscard]] const char* TypeName() const override { return "Counted"; }
+    [[nodiscard]] std::string Str() const override { return m_name; }
+    [[nodiscard]] std::string Repr() const override { return "<" + m_name + ">"; }
+    [[nodiscard]] std::optional<Value> GetAttr(std::string_view name) const override { return name == "name" ? std::optional<Value>(Value(m_name)) : std::nullopt; }
+    [[nodiscard]] bool IsCallable() const override { return true; }
+    [[nodiscard]] Value Call(const UserCallableParams& params) const override { return Value(m_name + "!" + AsString(params.extraPosArgs.GetIf<ValuesList>()->size())); }
+
+private:
+    static std::string AsString(size_t n) { return std::to_string(n); }
+
+    LifeCount* m_count;
+    std::string m_name;
+};
+
+// More aligned than `new` guarantees: made in its own allocation, as the library cannot place it in a block of its own
+class alignas(64) WideCounted final : public IHostObject
+{
+public:
+    explicit WideCounted(LifeCount& count)
+        : m_count(&count)
+    {
+        ++m_count->alive;
+    }
+    WideCounted(const WideCounted&) = delete;
+    WideCounted& operator=(const WideCounted&) = delete;
+    ~WideCounted() override { --m_count->alive; }
+
+    [[nodiscard]] const char* TypeName() const override { return "WideCounted"; }
+    [[nodiscard]] std::string Str() const override { return std::to_string(reinterpret_cast<uintptr_t>(this) % 64); }
+    [[nodiscard]] std::string Repr() const override { return Str(); }
+    [[nodiscard]] std::optional<Value> GetAttr(std::string_view) const override { return std::nullopt; }
+
+private:
+    LifeCount* m_count;
+};
+
+class ThrowsOnConstruction final : public IHostObject
+{
+public:
+    explicit ThrowsOnConstruction(LifeCount& count)
+    {
+        ++count.made;
+        throw std::runtime_error("no object");
+    }
+    [[nodiscard]] const char* TypeName() const override { return "ThrowsOnConstruction"; }
+    [[nodiscard]] std::string Str() const override { return {}; }
+    [[nodiscard]] std::string Repr() const override { return {}; }
+    [[nodiscard]] std::optional<Value> GetAttr(std::string_view) const override { return std::nullopt; }
+};
+} // namespace
+
+TEST(PublicHostObjectTest, ValueMadeInPlaceOwnsItsObjectUntilTheLastReference)
+{
+    LifeCount count;
+    {
+        Value first = MakeHostValue<Counted>(count, "obj");
+        EXPECT_EQ(1, count.alive);
+        {
+            // A copy shares the object; a render's own reference to it ends with the render
+            Value second = first;
+            const ValuesMap params{ { "o", second } };
+            EXPECT_EQ("obj|obj|[<obj>]|obj!2", Render("{{ o }}|{{ o.name }}|{{ [o] }}|{{ o(1, 2) }}", params));
+            // The map hands out the object, which keeps the value alive
+            const auto object = first.GetIf<GenericMap>()->AsHostObject();
+            ASSERT_NE(nullptr, object);
+            second = Value();
+            first = Value();
+            EXPECT_EQ(1, count.alive);
+            EXPECT_STREQ("Counted", object->TypeName());
+        }
+        EXPECT_EQ(0, count.alive);
+    }
+    EXPECT_EQ(1, count.made);
+}
+
+TEST(PublicHostObjectTest, ValueMadeInPlaceSurvivesTheRenderAndComesBackAsItself)
+{
+    LifeCount count;
+    Value kept;
+    auto keep = Probe([&kept](const UserCallableParams& params) {
+        kept = params["x"];
+        return params["x"];
+    });
+    {
+        const ValuesMap params{ { "keep", std::move(keep) }, { "o", MakeHostValue<Counted>(count, "obj") } };
+        EXPECT_EQ("obj|True", Render("{{ keep(o) }}|{{ keep(o) is sameas o }}", params));
+        EXPECT_EQ(1, count.alive);
+    }
+    // The params are gone; the host still holds what the call was handed
+    ASSERT_NE(nullptr, kept.GetIf<GenericMap>());
+    EXPECT_EQ(1, count.alive);
+    EXPECT_EQ("obj", Render("{{ o }}", { { "o", kept } }));
+    kept = Value();
+    EXPECT_EQ(0, count.alive);
+}
+
+TEST(PublicHostObjectTest, ValueMadeInPlaceHandlesOverAlignedAndFailingObjects)
+{
+    LifeCount count;
+    {
+        const Value wide = MakeHostValue<WideCounted>(count);
+        EXPECT_EQ(1, count.alive);
+        EXPECT_EQ("0", Render("{{ o }}", { { "o", wide } }));
+    }
+    EXPECT_EQ(0, count.alive);
+    EXPECT_THROW(MakeHostValue<ThrowsOnConstruction>(count), std::runtime_error);
+    EXPECT_EQ(1, count.made);
+}
+
+TEST(PublicHostObjectTest, ValueMadeInPlaceLivesAcrossThreads)
+{
+    LifeCount count;
+    Value value = MakeHostValue<Counted>(count, "obj");
+    std::vector<std::thread> threads;
+    std::atomic<int> rendered{ 0 };
+    for (int i = 0; i < 4; ++i)
+    {
+        threads.emplace_back([&value, &rendered] {
+            for (int n = 0; n < 200; ++n)
+            {
+                Value copy = value;
+                const ValuesMap params{ { "o", copy } };
+                if (Render("{{ o.name }}", params) == "obj")
+                {
+                    ++rendered;
+                }
+            }
+        });
+    }
+    for (auto& thread : threads)
+    {
+        thread.join();
+    }
+    EXPECT_EQ(800, rendered.load());
+    EXPECT_EQ(1, count.alive);
+    value = Value();
+    EXPECT_EQ(0, count.alive);
 }

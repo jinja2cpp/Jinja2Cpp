@@ -1289,6 +1289,11 @@ GenericMap WithOwner(std::shared_ptr<const void> owner, GenericMap&& nested)
 
 InternalValue LendGenericItem(const std::shared_ptr<const void>& owner, Value&& item)
 {
+    // A number is no container: no owner to lend, and no visit to find that out
+    if (const auto* number = std::get_if<int64_t>(&item.GetData()))
+    {
+        return InternalValue(*number);
+    }
     if (owner)
     {
         // An invalid container stays invalid: a wrapper's provider would hand out a null accessor
@@ -1884,6 +1889,10 @@ public:
         // The list the enumeration reads: the loop holds it while the enumeration runs, as for
         // CellEnumerator
         const GenericListAdapter* m_list = nullptr;
+        // A random-access list (a size and an indexer) is read by index, with no enumerator of the host's:
+        // the size is read at each step, as the host's own enumerator would (m_enum is empty then)
+        const IListItemAccessor* m_accessor = nullptr;
+        const IIndexBasedAccessor* m_indexer = nullptr;
         // The index of the next item, and whether the enumeration reads the cell from it on
         size_t m_next = 0;
         bool m_onCell = false;
@@ -1892,6 +1901,13 @@ public:
             : m_enum(std::move(e))
             , m_owner(std::move(owner))
             , m_list(list)
+        {
+        }
+        Enumerator(const IListItemAccessor* accessor, const IIndexBasedAccessor* indexer, std::shared_ptr<const void> owner, const GenericListAdapter* list)
+            : m_owner(std::move(owner))
+            , m_list(list)
+            , m_accessor(accessor)
+            , m_indexer(indexer)
         {
         }
 
@@ -1915,6 +1931,10 @@ public:
             // Counts the calls; a step past the end ends the enumeration, so the count is the
             // index of the next item while there is one
             ++m_next;
+            if (m_indexer)
+            {
+                return m_next <= m_accessor->GetSize().value_or(0);
+            }
             return m_enum && (*m_enum)->MoveNext();
         }
         [[nodiscard]] InternalValue GetCurrent() const override
@@ -1923,26 +1943,30 @@ public:
             {
                 return m_next == 0 ? InternalValue() : m_list->GetItem(static_cast<int64_t>(m_next - 1)).value_or(InternalValue());
             }
+            if (m_indexer)
+            {
+                return m_next == 0 ? InternalValue() : LendGenericItem(m_owner, m_indexer->GetItemByIndex(static_cast<int64_t>(m_next - 1)));
+            }
             return !m_enum ? InternalValue() : LendGenericItem(m_owner, (*m_enum)->GetCurrent());
         }
         [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
         {
-            if (!m_enum)
+            if (!m_enum && !m_indexer)
             {
                 return {};
             }
-            Enumerator copy((*m_enum)->Clone(), m_owner, m_list);
+            Enumerator copy = m_indexer ? Enumerator(m_accessor, m_indexer, m_owner, m_list) : Enumerator((*m_enum)->Clone(), m_owner, m_list);
             copy.m_next = m_next;
             copy.m_onCell = m_onCell;
             return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(copy));
         }
         std::optional<ListAccessorEnumeratorPtr> Transfer() override
         {
-            if (!m_enum)
+            if (!m_enum && !m_indexer)
             {
                 return {};
             }
-            Enumerator moved(std::move(m_enum), std::move(m_owner), m_list);
+            Enumerator moved = m_indexer ? Enumerator(m_accessor, m_indexer, std::move(m_owner), m_list) : Enumerator(std::move(m_enum), std::move(m_owner), m_list);
             moved.m_next = m_next;
             moved.m_onCell = m_onCell;
             return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(moved));
@@ -1959,6 +1983,10 @@ public:
             if (!m_onCell)
             {
                 ++m_next;
+                if (m_indexer)
+                {
+                    return m_next <= m_accessor->GetSize().value_or(0);
+                }
                 return m_enum && (*m_enum)->MoveNext();
             }
             if (m_next >= m_list->GetSize().value_or(0))
@@ -1976,6 +2004,10 @@ public:
                 return false;
             }
             if (m_list != val->m_list || m_next != val->m_next || m_onCell != val->m_onCell)
+            {
+                return false;
+            }
+            if (m_indexer != val->m_indexer)
             {
                 return false;
             }
@@ -2105,6 +2137,10 @@ public:
         if (!accessor)
         {
             return {};
+        }
+        if (const auto* indexer = accessor->GetIndexer(); indexer && accessor->GetSize())
+        {
+            return ListAccessorEnumeratorPtr(Enumerator(accessor, indexer, GenericOwner(m_values), this));
         }
         return ListAccessorEnumeratorPtr(Enumerator(accessor->CreateEnumerator(), GenericOwner(m_values), this));
     }
