@@ -1241,7 +1241,7 @@ struct UnaryOperation : BaseVisitor<InternalValue>
     UnaryExpression::Operation m_oper;
 };
 
-// A visited operand as a value again, for a host object's __eq__ (IHostObject::Equals). Strings
+// A visited operand as a value again, for a host object's __eq__ (IEngineHostObject::Equals). Strings
 // are copied, as the host may keep its argument; an operand no host compares with (a renderer)
 // is undefined
 template<typename T>
@@ -1421,8 +1421,8 @@ struct BinaryMathOperation : BaseVisitor<>
     template<typename L, typename R>
     [[nodiscard]] JINJA2CPP_COLD_INLINE ResultType HostCompare(const L& left, const R& right) const
     {
-        const IHostObject* leftHost = nullptr;
-        const IHostObject* rightHost = nullptr;
+        const IEngineHostObject* leftHost = nullptr;
+        const IEngineHostObject* rightHost = nullptr;
         if constexpr (std::is_same_v<L, MapRef>)
         {
             leftHost = left.GetHostObject();
@@ -1450,7 +1450,7 @@ struct BinaryMathOperation : BaseVisitor<>
     }
 
     // An operation other than == and != with a host list or tuple on either side, as on the
-    // engine's own list (IHostObject::IsSequence); nullopt when neither operand is one
+    // engine's own list (IEngineHostObject::IsSequence); nullopt when neither operand is one
     template<typename L, typename R>
     [[nodiscard]] JINJA2CPP_COLD_INLINE std::optional<InternalValue> HostSequenceOperation(const L& left, const R& right) const
     {

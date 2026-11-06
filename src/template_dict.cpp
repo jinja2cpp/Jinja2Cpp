@@ -123,7 +123,7 @@ void AppendBigInt(std::string& out, std::string_view decimal)
 // ObjectKey: the key of an object by its identity, as Python's default __hash__ and __eq__
 // have it. The dict's table of first spellings (TemplateDict::KeyOf) holds the key, which keeps
 // the object, and so its address, alive while the entry is there. An object of the host
-// language is keyed by IHostObject::Identity (docs/tasks/0352), so that two views of one host
+// language is keyed by IEngineHostObject::Identity (docs/tasks/0352), so that two views of one host
 // object are one key; the engine's objects by the identity their copies share (docs/tasks/0212).
 // A token that holds an address is never kept past the dict nor compared across renders
 void AppendObjectKey(std::string& out, const void* identity)

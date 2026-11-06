@@ -708,7 +708,7 @@ enum class MapAttrPolicy
     Host
 };
 
-class IHostObject;
+class IEngineHostObject;
 
 struct IMapAccessor : ValueObject
 {
@@ -772,7 +772,7 @@ struct IMapAccessor : ValueObject
     // Whether GetIteration gives items, asked without making them
     [[nodiscard]] virtual bool Iterates() const { return false; }
     // The object of a host language this map stands for (host_object.h); null for the others
-    [[nodiscard]] virtual const IHostObject* GetHostObject() const { return nullptr; }
+    [[nodiscard]] virtual const IEngineHostObject* GetHostObject() const { return nullptr; }
 };
 
 // A non-owning view of a list: code outside internal_value.* reads list values through it,
@@ -987,7 +987,7 @@ public:
     // The object of a host language this map stands for (host_object.h); null for the others,
     // which IsHost tells without asking the accessor
     [[nodiscard]] bool IsHost() const noexcept { return m_isHost; }
-    [[nodiscard]] const IHostObject* GetHostObject() const { return m_isHost ? m_accessor->GetHostObject() : nullptr; }
+    [[nodiscard]] const IEngineHostObject* GetHostObject() const { return m_isHost ? m_accessor->GetHostObject() : nullptr; }
 
     // An owning copy, which shares the map as copying the value does
     [[nodiscard]] MapAdapter ToAdapter() const;
@@ -1039,7 +1039,7 @@ public:
     [[nodiscard]] GenericMap CreateGenericMap() const { return Ref().CreateGenericMap(); }
     // See IMapAccessor::GetLoopAttr
     bool GetLoopAttr(LoopAttr attr, InternalValue& value) const { return Ref().GetLoopAttr(attr, value); }
-    // Marks the accessor as a host object's (MakeHostValue)
+    // Marks the accessor as a host object's (MakeEngineHostValue)
     MapAdapter& MarkAsHost() noexcept
     {
         m_isHost = true;

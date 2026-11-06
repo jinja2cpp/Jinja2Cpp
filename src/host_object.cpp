@@ -49,7 +49,7 @@ private:
 };
 
 // x.name, as Jinja2's Environment.getattr: the attribute, else the item under the name
-std::optional<InternalValue> AttrThenItem(const IHostObject& host, const std::string& name)
+std::optional<InternalValue> AttrThenItem(const IEngineHostObject& host, const std::string& name)
 {
     if (auto attr = host.GetAttr(name))
     {
@@ -59,18 +59,18 @@ std::optional<InternalValue> AttrThenItem(const IHostObject& host, const std::st
 }
 } // namespace
 
-InternalValue IHostObject::Call(const CallParams& /*params*/, RenderContext& /*context*/) const
+InternalValue IEngineHostObject::Call(const CallParams& /*params*/, RenderContext& /*context*/) const
 {
     throw TemplateRuntimeError(std::string("'") + TypeName() + "' object is not callable");
 }
 
-bool IHostObject::Truth() const
+bool IEngineHostObject::Truth() const
 {
     const auto length = Len();
     return !length || *length != 0;
 }
 
-std::optional<size_t> IHostObject::Hash() const
+std::optional<size_t> IEngineHostObject::Hash() const
 {
     return std::hash<const void*>()(Identity());
 }
@@ -193,7 +193,7 @@ bool HostObjectAccessor::GetIteration(ListAdapter& items) const
 
 namespace host
 {
-Callable MakeCall(const InternalValue& object, const IHostObject& host)
+Callable MakeCall(const InternalValue& object, const IEngineHostObject& host)
 {
     if (!host.IsCallable())
     {
@@ -203,7 +203,7 @@ Callable MakeCall(const InternalValue& object, const IHostObject& host)
     return Callable(Callable::GlobalFunc, [object](const CallParams& params, RenderContext& context) { return GetHostObject(object)->Call(params, context); });
 }
 
-InternalValue Html(const IHostObject& host, bool wideTarget)
+InternalValue Html(const IEngineHostObject& host, bool wideTarget)
 {
     const auto html = host.Html();
     auto result = wideTarget ? InternalValue(ConvertString<std::wstring>(html)) : InternalValue(html);
@@ -211,7 +211,7 @@ InternalValue Html(const IHostObject& host, bool wideTarget)
     return result;
 }
 
-int64_t Len(const IHostObject& host)
+int64_t Len(const IEngineHostObject& host)
 {
     const auto length = host.Len();
     if (!length)
@@ -221,7 +221,7 @@ int64_t Len(const IHostObject& host)
     return static_cast<int64_t>(*length);
 }
 
-InternalValue Slice(const IHostObject& host, const InternalValue& start, const InternalValue& stop, const InternalValue& step)
+InternalValue Slice(const IEngineHostObject& host, const InternalValue& start, const InternalValue& stop, const InternalValue& step)
 {
     auto result = host.GetSlice(start, stop, step);
     if (!result)
@@ -231,7 +231,7 @@ InternalValue Slice(const IHostObject& host, const InternalValue& start, const I
     return std::move(*result);
 }
 
-ListAdapter Reversed(const IHostObject& host)
+ListAdapter Reversed(const IEngineHostObject& host)
 {
     auto result = host.Reversed();
     if (!result)
@@ -241,7 +241,7 @@ ListAdapter Reversed(const IHostObject& host)
     return std::move(*result);
 }
 
-std::optional<ListAdapter> AsSequence(const IHostObject& host)
+std::optional<ListAdapter> AsSequence(const IEngineHostObject& host)
 {
     if (!host.IsSequence())
     {
@@ -255,7 +255,7 @@ std::optional<ListAdapter> AsSequence(const IHostObject& host)
     return items;
 }
 
-bool Equal(const IHostObject* left, const InternalValue& leftValue, const IHostObject* right, const InternalValue& rightValue)
+bool Equal(const IEngineHostObject* left, const InternalValue& leftValue, const IEngineHostObject* right, const InternalValue& rightValue)
 {
     if (left)
     {
