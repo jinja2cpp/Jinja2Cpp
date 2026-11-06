@@ -30,11 +30,11 @@ struct UndefinedInfo final : ValueObject
     std::string objType;
     // A string key, reported as an attribute
     bool isAttr = true;
-    // Replaces the message built from the fields above when set
-    std::string hint;
     // The sandbox refused the attribute (Jinja2's unsafe_undefined, exc=SecurityError): a use that fails
     // reports a SecurityError, which ErrorInfo marks with extraParams[1] == SecurityErrorMarker
     bool security = false;
+    // Replaces the message built from the fields above when set
+    std::string hint;
 };
 
 // The ways a template uses a value that an undefined value may refuse

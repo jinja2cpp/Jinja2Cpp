@@ -112,8 +112,8 @@ struct LoadSettings
 #else
         , hasRenderLimits(jinja2::HasRenderLimits(setts.limits) || backend != nullptr)
 #endif
-        , bigIntBackend(backend)
         , dialect(templateDialect)
+        , bigIntBackend(backend)
         , sandboxPolicy(std::move(policy))
         , promptEscaper(AutoescapePromptEscaper(settings))
     {
@@ -139,10 +139,10 @@ struct LoadSettings
     // settings.limits differs from the defaults, or (outside a -DJINJA2CPP_WITH_BIGINT=boost build, where every
     // template has one and RenderLimitsScope swaps just the pointer, docs/tasks/0272) the template has a backend
     bool hasRenderLimits;
-    // The big-integer arithmetic the template's renders use (TemplateEnv::SetBigIntBackend); null for none
-    const BigIntBackend* bigIntBackend;
     // What a preset changed besides the settings (ConfigureForChatTemplates)
     Dialect dialect;
+    // The big-integer arithmetic the template's renders use (TemplateEnv::SetBigIntBackend); null for none
+    const BigIntBackend* bigIntBackend;
     // The sandbox of templates loaded with these settings (src/sandbox_policy.h); null for none
     std::shared_ptr<const ISandboxPolicy> sandboxPolicy;
     // The escaper of AutoescapeMode::Prompt, null in HTML mode: chosen once here, so a render only copies it into its
