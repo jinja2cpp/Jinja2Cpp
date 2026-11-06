@@ -180,8 +180,19 @@ public:
 
     static LookupCache& ForThisThread()
     {
+#ifdef JINJA2CPP_HOT_TLS_INITIAL_EXEC
+        // On the heap: the module's thread-locals then fit the static TLS reserve
+        // (JINJA2CPP_HOT_TLS in recursion_guard.h)
+        thread_local std::unique_ptr<LookupCache> cache;
+        if (!cache)
+        {
+            cache = std::make_unique<LookupCache>();
+        }
+        return *cache;
+#else
         thread_local LookupCache cache;
         return cache;
+#endif
     }
 
     // An entry is kept as its key, in an array of the keys, and the rest: dropping the

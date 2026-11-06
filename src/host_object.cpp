@@ -13,6 +13,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -74,20 +75,41 @@ std::optional<size_t> IHostObject::Hash() const
     return std::hash<const void*>()(Identity());
 }
 
-
 std::vector<std::string> HostObjectAccessor::GetKeys() const
 {
-    return {};
+    std::vector<std::string> keys;
+    for (auto& key : GetKeyValues())
+    {
+        if (IsStringValue(key))
+        {
+            keys.push_back(AsString(key));
+        }
+    }
+    return keys;
 }
 
+// A mapping's items: its keys, as iter(x) gives them, with x[key]
 std::vector<KeyValuePair> HostObjectAccessor::GetEntries() const
 {
-    return {};
+    std::vector<KeyValuePair> entries;
+    const auto* host = GetHostObject();
+    for (auto& key : GetKeyValues())
+    {
+        auto value = host->GetItem(key);
+        entries.push_back(KeyValuePair{ std::move(key), value ? std::move(*value) : InternalValue() });
+    }
+    return entries;
 }
 
 InternalValueList HostObjectAccessor::GetKeyValues() const
 {
-    return {};
+    const auto* host = GetHostObject();
+    if (!host->IsMapping())
+    {
+        return {};
+    }
+    const auto keys = host->Iterate();
+    return keys ? keys->ToValueList() : InternalValueList();
 }
 
 bool HostObjectAccessor::ShouldExtendLifetime() const
@@ -112,7 +134,9 @@ MapAttrPolicy HostObjectAccessor::GetAttrPolicy() const
 
 const char* HostObjectAccessor::GetObjectClass() const
 {
-    return GetHostObject()->TypeName();
+    // A mapping is a map to the engine's generic code; any other object is an object
+    const auto* host = GetHostObject();
+    return host->IsMapping() ? nullptr : host->TypeName();
 }
 
 bool HostObjectAccessor::Iterates() const
@@ -217,6 +241,20 @@ ListAdapter Reversed(const IHostObject& host)
     return std::move(*result);
 }
 
+std::optional<ListAdapter> AsSequence(const IHostObject& host)
+{
+    if (!host.IsSequence())
+    {
+        return std::nullopt;
+    }
+    auto items = host.Iterate();
+    if (items && host.IsTuple())
+    {
+        items->MarkAsTuple();
+    }
+    return items;
+}
+
 bool Equal(const IHostObject* left, const InternalValue& leftValue, const IHostObject* right, const InternalValue& rightValue)
 {
     if (left)
@@ -235,6 +273,16 @@ bool Equal(const IHostObject* left, const InternalValue& leftValue, const IHostO
     }
     // Python's default __eq__: the same object
     return left != nullptr && right != nullptr && left->Identity() == right->Identity();
+}
+
+Value EngineCallableBody::operator()(const UserCallableParams& /*params*/) const
+{
+    throw std::logic_error("a filter or test of the engine's values is called by templates only");
+}
+
+UserCallable EngineUserCallable(InternalValue callable)
+{
+    return UserCallable(EngineCallableBody{ std::move(callable) }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) });
 }
 } // namespace host
 

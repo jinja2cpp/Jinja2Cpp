@@ -9,7 +9,10 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <exception>
+#include <functional>
+#include <future>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -600,4 +603,57 @@ TEST(EmbeddingLifecycleTest, B6_GlobalMacroCycleBrokenByRemoveGlobal)
     EXPECT_TRUE(ReleaseThreadCaches());
     EXPECT_TRUE(watchFs.expired());
     EXPECT_TRUE(probe.Expired());
+}
+
+namespace
+{
+// A handler whose date check loads another template, as a host's freshness callback may
+class LoadingInDateCheckFs : public CountingFs
+{
+public:
+    LoadingInDateCheckFs()
+        : CountingFs(true)
+    {
+    }
+    std::function<void()> onDateCheck;
+    std::optional<std::chrono::system_clock::time_point> GetLastModificationDate(const std::string& name) const override
+    {
+        if (onDateCheck)
+        {
+            onDateCheck();
+        }
+        return CountingFs::GetLastModificationDate(name);
+    }
+};
+} // namespace
+
+// The date check of a cache hit runs outside the cache lock: loading an uncached template from it must not deadlock
+TEST(EmbeddingLifecycleTest, A2_DateCheckMayLoadAnotherTemplate)
+{
+    auto result = std::make_shared<std::promise<bool>>();
+    auto done = result->get_future();
+    std::thread worker([result] {
+        LoadingInDateCheckFs fs;
+        fs.Set("a.j2", "A");
+        fs.Set("b.j2", "B");
+        TemplateEnv env;
+        env.AddFilesystemHandler("", fs);
+        auto first = env.LoadTemplate("a.j2");
+        fs.onDateCheck = [&] {
+            // Once: loading b checks its date too
+            auto hook = std::move(fs.onDateCheck);
+            fs.onDateCheck = nullptr;
+            EXPECT_TRUE(env.LoadTemplate("b.j2"));
+        };
+        auto second = env.LoadTemplate("a.j2");
+        fs.onDateCheck = nullptr;
+        result->set_value(first && second && *first == *second);
+    });
+    if (done.wait_for(std::chrono::seconds(20)) != std::future_status::ready)
+    {
+        worker.detach();
+        FAIL() << "deadlock: the date check could not load a template";
+    }
+    worker.join();
+    EXPECT_TRUE(done.get());
 }

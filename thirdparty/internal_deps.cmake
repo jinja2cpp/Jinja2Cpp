@@ -49,3 +49,19 @@ if (JINJA2CPP_BUILD_TESTS)
     FetchContent_MakeAvailable(nlohmann_json)
 jinja2cpp_mark_system("${nlohmann_json_SOURCE_DIR}")
 endif()
+
+# nanobind, for the Python module only (JINJA2CPP_BUILD_PYTHON, docs/tasks/0353). The one pin:
+# python/CMakeLists.txt uses a nanobind of exactly this version that the build's Python already
+# has (scikit-build-core installs pyproject.toml's build requirement, which a configure check
+# keeps equal to it), else this source. The PyPI sdist, not a GitHub archive: it carries the
+# robin_map submodule (ext/robin_map) that an archive of the tag lacks
+if (JINJA2CPP_BUILD_PYTHON)
+    set(JINJA2CPP_NANOBIND_VERSION 3.1.0)
+    FetchContent_Declare(
+        nanobind
+        URL https://files.pythonhosted.org/packages/c7/1f/e28fae715401e8f57400e72aeaff4fde12046d31828164f34f61f0816da8/nanobind-3.1.0.tar.gz
+        URL_HASH SHA256=6661e3dc1434d78781ccf7913442d90361dab395c3424efadb63bbb6ddea7ea3
+        # Its own CMakeLists.txt is not added: the package config in cmake/ is all the module needs
+        SOURCE_SUBDIR cmake
+    )
+endif()

@@ -482,8 +482,15 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
     else if (seqKind == TestKind::Map)
     {
         // `key in dict` tests the keys: any hashable value for a dict the template owns, strings
-        // for every other map
+        // for every other map. A host's mapping answers through its __contains__
         auto map = AsMap(seq);
+        if (const auto* host = map ? map->GetHostObject() : nullptr)
+        {
+            if (const auto found = host->Contains(baseVal))
+            {
+                return *found;
+            }
+        }
         if (map && Apply<ValueKindGetter>(baseVal) == TestKind::String)
         {
             result = map->HasValue(AsString(baseVal));
@@ -645,6 +652,11 @@ bool ValueTester::Test(const InternalValue& baseVal, RenderContext& context)
             auto map = AsMap(baseVal);
             // Dicts only: a reflected object, loop and namespace() are not
             result = map && map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst;
+        }
+        // A host's object: Jinja2's test calls len(x) and reads x.__getitem__
+        if (const auto* host = valKind == TestKind::Map || valKind == TestKind::Object ? GetHostObject(baseVal) : nullptr)
+        {
+            result = host->Len().has_value() && host->GetAttr("__getitem__").has_value();
         }
         break;
     case IsStringMode:

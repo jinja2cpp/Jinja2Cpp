@@ -46,6 +46,16 @@ constexpr unsigned LimitOrNone(std::uint32_t limit)
     return limit != 0 ? limit : UINT_MAX;
 }
 
+// The thread-locals every render step reads. In the Python module, a library the interpreter
+// loads with dlopen, they would take the dynamic TLS model: a call into the dynamic loader at
+// each access, a fifth of a render's instructions. The module's build (JINJA2CPP_BUILD_PYTHON)
+// gives these few the initial-exec model, which the loader's static TLS reserve has room for
+#ifdef JINJA2CPP_HOT_TLS_INITIAL_EXEC
+#define JINJA2CPP_HOT_TLS __attribute__((tls_model("initial-exec")))
+#else
+#define JINJA2CPP_HOT_TLS
+#endif
+
 namespace detail
 {
 // The current thread's stack below `limit` is the reserve that StackNearlyExhausted keeps
@@ -61,7 +71,7 @@ struct ThreadStack
     std::uintptr_t low = 0;
     std::uintptr_t renderLimit = UINTPTR_MAX;
 };
-inline thread_local ThreadStack t_threadStack;
+inline thread_local ThreadStack t_threadStack JINJA2CPP_HOT_TLS;
 
 bool StackNearlyExhaustedSlow(std::uintptr_t frame);
 
@@ -122,10 +132,18 @@ struct RenderLimits
 };
 static_assert(RenderLimits{}.maxRenderDepth == Settings::Limits{}.maxRenderDepth);
 // Constant-initialised, so that reading it needs no guard
-inline thread_local RenderLimits t_renderLimits;
+inline thread_local RenderLimits t_renderLimits JINJA2CPP_HOT_TLS;
 
 void PollDeadline();
 void InstallRenderLimits(const RenderLimits& limits);
+
+// A host's poll of the renders on this thread (docs/tasks/0353): the Python module checks for
+// signals there, so Ctrl-C stops a long render. A render with limits calls it every
+// HostPollSteps steps; it may throw to stop the render. Null, the default, costs nothing: the
+// slow path of the step count reads it, not the step
+using HostPoll = void (*)();
+inline thread_local HostPoll t_hostPoll JINJA2CPP_HOT_TLS = nullptr;
+inline constexpr std::uint64_t HostPollSteps = 1024;
 } // namespace detail
 
 // Installs a render's limits for as long as it lives and puts back the ones of the render it
