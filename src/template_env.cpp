@@ -4,6 +4,7 @@
 #include "error_boundary.h"
 #include "load_settings.h"
 #include "make_unexpected.h"
+#include "sandbox_policy.h"
 #include "shared_owner.h"
 #include "dialect.h"
 #include "template_env_impl.h"

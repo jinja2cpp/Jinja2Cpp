@@ -108,7 +108,7 @@ InternalValue MakeUndefined(const RenderContext* context, const InternalValue& o
     {
         return obj;
     }
-    if (IsStringValue(key))
+    if (context && context->GetSandboxPolicy() && IsStringValue(key))
     {
         if (auto replacement = SandboxedNativeAttribute(context, obj, AsString(key)))
         {

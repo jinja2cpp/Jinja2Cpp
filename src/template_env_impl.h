@@ -8,6 +8,7 @@
 #include <jinja2cpp/value.h>
 
 #include "dialect.h"
+#include "sandbox_policy.h"
 #include "load_settings.h"
 #include "thread_annotations.h"
 
