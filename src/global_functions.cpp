@@ -8,6 +8,7 @@
 #include "undefined.h"
 #include "value_visitors.h"
 
+#include <fmt/format.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
@@ -301,6 +302,34 @@ InternalValue CyclerReset(const InternalValue& self, const CallParams& callParam
     return InternalValue(NoneValue());
 }
 
+// The cycler or joiner a method of it is bound to, as the method's repr prints it:
+// <bound method Cycler.next of <jinja2.utils.Cycler object at 0x...>> (docs/tasks/0401). It
+// holds the object's address only to print it, set once the object is made
+struct UtilsObjectReceiver final : IBoundReceiver
+{
+    explicit UtilsObjectReceiver(const char* name)
+        : className(name)
+    {
+    }
+
+    [[nodiscard]] const char* GetClassName() const override { return className; }
+    [[nodiscard]] std::string Repr() const override { return fmt::format("<jinja2.utils.{} object at {}>", className, address); }
+
+    const char* className;
+    const void* address = nullptr;
+};
+
+// A method of a cycler or joiner, which `state` is the receiver of
+Callable MakeUtilsMethod(const InternalValue& state, BoundMethodCall::Method method, const char* name, const std::shared_ptr<const UtilsObjectReceiver>& receiver)
+{
+    auto result = MakeFunction(BoundMethodCall{ state, method });
+    if (const auto list = AsList(state))
+    {
+        result.SetBoundMethod(list->GetIdentity(), name, receiver);
+    }
+    return result;
+}
+
 // cycler(*items): next(), reset(), current, items, pos
 InternalValue CallCycler(const CallParams& params, RenderContext&)
 {
@@ -323,9 +352,12 @@ InternalValue CallCycler(const CallParams& params, RenderContext&)
     cycler["items"] = ListAdapter::CreateAdapter(InternalValueList(params.posParams)).MarkAsTuple();
     cycler["pos"] = MakeDynamicProperty(BoundMethodCall{ state, &CyclerPosProperty });
     cycler["current"] = MakeDynamicProperty(BoundMethodCall{ state, &CyclerCurrent });
-    cycler["next"] = MakeFunction(BoundMethodCall{ state, &CyclerNext });
-    cycler["reset"] = MakeFunction(BoundMethodCall{ state, &CyclerReset });
-    return CreateObjectAdapter(std::move(cycler), "Cycler");
+    auto receiver = std::make_shared<UtilsObjectReceiver>("Cycler");
+    cycler["next"] = MakeUtilsMethod(state, &CyclerNext, "next", receiver);
+    cycler["reset"] = MakeUtilsMethod(state, &CyclerReset, "reset", receiver);
+    auto result = CreateObjectAdapter(std::move(cycler), "Cycler");
+    receiver->address = result.GetIdentity();
+    return result;
 }
 
 // joiner(sep=', '): a callable that returns '' the first time, then sep
@@ -353,8 +385,11 @@ InternalValue CallJoiner(const CallParams& params, RenderContext&)
     const InternalValue state = ListAdapter::CreateAdapter(InternalValueList{ InternalValue(false), args["sep"] });
     InternalValueMap joiner;
     joiner["sep"] = args["sep"];
-    joiner["operator()"] = MakeFunction(BoundMethodCall{ state, &CallJoinerObject });
-    return CreateObjectAdapter(std::move(joiner), "Joiner");
+    auto receiver = std::make_shared<UtilsObjectReceiver>("Joiner");
+    joiner["operator()"] = MakeUtilsMethod(state, &CallJoinerObject, "__call__", receiver);
+    auto result = CreateObjectAdapter(std::move(joiner), "Joiner");
+    receiver->address = result.GetIdentity();
+    return result;
 }
 
 std::string Capitalize(std::string word)

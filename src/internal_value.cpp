@@ -468,7 +468,15 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     // Undefined for a missing name; a user's accessor (IMapItemAccessor) is asked through
     // Find, which a 1.x accessor answers with HasValue first, as its contract allows
-    [[nodiscard]] static InternalValue GetField(const MapRef& values, const std::string& field) { return values.GetValueByName(field); }
+    [[nodiscard]] static InternalValue GetField(const MapRef& values, const std::string& field)
+    {
+        // An engine object that is called (joiner()) names its call __call__ (docs/tasks/0401)
+        if (field == "__call__" && values.GetObjectClass() && values.HasValue("operator()"))
+        {
+            return values.GetValueByName("operator()");
+        }
+        return values.GetValueByName(field);
+    }
 
     // Python indexing: a negative index counts from the end
     static bool NormalizeIndex(int64_t& index, size_t size)
@@ -539,7 +547,8 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue operator()(const MapRef& values, const ListRef& key) const
     {
-        if (!values.IsHost() && !key.IsTuple() && !key.GetRangeInfo())
+        // A generator is a key by its identity (docs/tasks/0401)
+        if (!values.IsHost() && !key.IsTuple() && !key.GetRangeInfo() && key.GetIteratorKind() == IteratorKind::None)
         {
             return InternalValue();
         }

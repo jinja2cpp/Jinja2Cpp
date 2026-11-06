@@ -163,4 +163,10 @@ CASES = [
     ('bound_method_equals', "{{ 'a'.upper == 'a'.upper }}|{% set l = [1] %}{{ l.append == l.append }}"),
     ('range_equals_list', "{{ range(3) == [0, 1, 2] }}"),
     ('range_concat', "{{ range(3) + [1] }}"),
+    ('range_equals_range', "{{ range(0) == range(2, 2) }}|{{ range(3) == range(0, 3, 1) }}|{{ range(1, 2) == range(1, 5, 9) }}|{{ range(3) != range(4) }}|{{ range(0, 4, 2) == range(0, 3, 2) }}|{{ range(3) == (0, 1, 2) }}"),
+    ('list_concat_range', "{{ [1] + range(2) }}"),
+    ('tuple_concat_range', "{{ (1,) + range(2) }}"),
+    ('range_repeat', "{{ range(2) * 2 }}"),
+    ('range_ordering', "{{ range(3) < range(4) }}"),
+    ('range_in_list', "{{ range(2) in [[0, 1]] }}|{{ range(2) in [range(0, 2)] }}"),
 ]

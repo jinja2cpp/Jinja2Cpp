@@ -1873,8 +1873,9 @@ InternalValue StringConverter::TruncateNonString(const InternalValue& baseVal, R
     {
         size = map->GetSize();
     }
-    else if (auto list = AsList(baseVal))
+    else if (auto list = AsList(baseVal); list && list->GetIteratorKind() == IteratorKind::None)
     {
+        // A generator has no len() (docs/tasks/0401)
         size = list->GetSize();
     }
     if (!size)

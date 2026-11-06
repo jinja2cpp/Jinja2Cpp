@@ -100,4 +100,7 @@ CASES = [
     ('range_big_bounds', "{{ range(18446744073709551615) }}"),
     # task 0401: an engine object's method prints as a bound method of it
     ('cycler_method_prints', "{{ (cycler(1).next|string).split(' at ')[0] }}"),
+    ('cycler_reset_prints', "{{ (cycler(1).reset|string).split(' at ')[0] }}"),
+    ('joiner_call_prints', "{{ (joiner().__call__|string).split(' at ')[0] }}"),
+    ('cycler_method_equals', "{% set c = cycler(1, 2) %}{{ c.next == c.next }}|{{ c.next == c.reset }}|{{ c.next == cycler(1, 2).next }}"),
 ]

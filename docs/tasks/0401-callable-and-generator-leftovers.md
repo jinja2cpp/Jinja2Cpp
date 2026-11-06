@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0387, 0368]
-touches: [src/value_visitors.h#BinaryMathOperation, src/value_visitors.h#FunctionRepr, src/global_functions.cpp#CallCycler, src/global_functions.cpp#CallJoiner, src/string_converter_filter.cpp, src/filters.cpp#Unique, src/serialize_filters.cpp#ToJson]
+touches: [src/value_visitors.h#BinaryMathOperation, src/value_visitors.h#FunctionRepr, src/global_functions.cpp#CallCycler, src/global_functions.cpp#CallJoiner, src/string_converter_filter.cpp, src/filters.cpp#Unique, src/serialize_filters.cpp#ToJson, src/template_dict.cpp#KeyTokenBuilder, src/internal_value.cpp#SubscriptionVisitor]
 shares: [test/parity/divergences/filters.txt, test/parity/divergences/operators.txt, test/parity/divergences/globals.txt]
 ---
 # Callables, generators and ranges: leftovers of 0387 and 0368
@@ -42,3 +42,20 @@ ordering a TypeError; tojson refuses it. 5: give the cycler and joiner methods a
 (`SetBoundMethod` with an `IBoundReceiver`), as `loop.cycle` has.
 
 **Done when** the remaining six 0401 lines are gone from `test/parity/divergences/`.
+
+**Resolution.** Items 1, 2, 4 and 5 fixed; item 3 closed by #769; item 6 stays unpinned.
+- truncate: a generator has no len() (`TruncateNonString`).
+- A generator or iterator is hashable by its identity, which its copies share: unique, dict
+  keys and `{g: 1}[g]` (`KeyTokenBuilder`, `UnhashableTypeGetter`, the subscript of a dict
+  by a list).
+- A range equals only a range of the same items (by length, first item and step, without
+  walking them); `+`, `*` and ordering are TypeErrors with Python's messages, including
+  `[1] + range(2)`; tojson refuses it. `RecursionLimitsTest.HugeSequencesFailFast` now
+  checks the concat and repeat limits with a lazy tuple, as a range no longer combines.
+- cycler's `next`/`reset` and joiner's `__call__` are bound methods of a receiver that prints
+  `<jinja2.utils.Cycler object at 0x...>` with the object's address; `joiner().__call__`
+  reads the joiner's call.
+New corpus cases: `operators.range_equals_range`, `list_concat_range`, `tuple_concat_range`,
+`range_repeat`, `range_ordering`, `range_in_list`; `globals.cycler_reset_prints`,
+`joiner_call_prints`, `cycler_method_equals`; `filters.lazy_result_dict_key`,
+`lazy_result_truncate_list`.
