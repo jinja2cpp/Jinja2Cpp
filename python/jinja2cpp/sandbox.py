@@ -12,6 +12,7 @@ their receiver.
 """
 
 import operator
+import re
 import types
 import typing as t
 from collections import abc
@@ -27,6 +28,7 @@ try:
 except ImportError:  # pragma: no cover - CPython has it
     formatter_field_name_split = None
 
+from . import _jinja2cpp
 from .environment import Environment
 from .exceptions import SecurityError
 from .exceptions import UnsupportedError
@@ -382,6 +384,7 @@ class SandboxedEnvironment(Environment):
                 kwargs = args[0]
                 args = ()
 
+            formatter._written = 0
             return str_type(vformat(f_self, args, kwargs))
 
         return update_wrapper(wrapper, value)
@@ -420,10 +423,32 @@ class ImmutableSandboxedEnvironment(SandboxedEnvironment):
         return not modifies_known_mutable(obj, attr)
 
 
+# [[fill]align][sign][z][#][0][width][grouping][.precision][type] (the format-spec mini-language)
+_FORMAT_SPEC = re.compile(r"(?:.?[<>=^])?[-+ ]?z?#?0?(?P<width>[0-9]+)?[,_]?(?:\.(?P<precision>[0-9]+))?(?P<type>[a-zA-Z%]?)\Z", re.DOTALL)
+
+
 class SandboxedFormatter(Formatter):
     def __init__(self, env: Environment, **kwargs: t.Any) -> None:
         self._env = env
+        self._written = 0
         super().__init__(**kwargs)
+
+    def format_field(self, value: t.Any, format_spec: str) -> t.Any:
+        # The width and the precision of a field build a string of that length before the engine sees it, so the
+        # render's cap on sequences (MaxSequenceSize, Settings::Limits::maxSequenceSize) is checked first, as the
+        # engine's own str.format does; so is what the fields have written together
+        match = _FORMAT_SPEC.match(format_spec) if format_spec else None
+        if match:
+            size = int(match.group("width") or 0)
+            # A precision only truncates a string; a number's pads with digits
+            if match.group("precision") and (match.group("type") in ("e", "E", "f", "F", "g", "G", "n", "%") or isinstance(value, float)):
+                size = max(size, int(match.group("precision")))
+            _jinja2cpp._check_sequence_size(size)
+        text = super().format_field(value, format_spec)
+        if isinstance(text, str):
+            self._written += len(text)
+            _jinja2cpp._check_sequence_size(self._written)
+        return text
 
     def get_field(self, field_name: str, args: t.Sequence[t.Any], kwargs: t.Mapping[str, t.Any]) -> t.Tuple[t.Any, str]:
         first, rest = formatter_field_name_split(field_name)

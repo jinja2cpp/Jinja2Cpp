@@ -240,7 +240,11 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   public names of `loop`, `cycler`, a namespace and a macro (with `None` as the value, as the engine
   builds none for the question); that is read again at each load, so a method replaced on the class
   or the instance between loads counts for the templates loaded after it, not for those already
-  loaded. The groupby tuple's `grouper` and `list` are not asked (0425). The template's `{{ x|attr('__class__') }}` of an undefined `x` is an
+  loaded. The groupby tuple's `grouper` and `list` are not asked (0425).
+  `str.format`, `format_map` and `Markup.format` go through Jinja2's `SandboxedFormatter`; a field's
+  width or precision, and the text the fields write together, are checked against the render's
+  sequence cap (64 MiB or `Limits.max_sequence_size`) before Python builds the string, and fail with
+  the `TemplateRuntimeError` the engine's own `str.format` raises (Jinja2 itself builds it). The template's `{{ x|attr('__class__') }}` of an undefined `x` is an
   `UndefinedError`. `sort` and `unique` of an unsafe or missing attribute under
   `StrictUndefined` do not raise as Jinja2's do (0413). `sum(attribute=)` of a missing attribute
   is now an `UndefinedError` as in Jinja2 (it was a `TemplateRuntimeError`).

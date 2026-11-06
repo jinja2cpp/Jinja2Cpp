@@ -509,6 +509,11 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     {
         return missing();
     }
+    // loop, a cycler, a namespace, a macro: the sandbox policy judges their attributes (zero cost without one)
+    if (auto replacement = methods::SandboxedSyntheticAttribute(&context, baseVal, attrName))
+    {
+        return std::move(*replacement);
+    }
     if (auto attr = methods::GetNumberDataAttr(baseVal, attrName))
     {
         return std::move(*attr);

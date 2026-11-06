@@ -225,8 +225,8 @@ void SubscriptExpression::AddIndex(const NodeArena& nodes, NodeRef<Expression> v
     idx.maybeMethod = idx.isAttr && methods::IsMethodName(attrName);
     idx.maybeDictMethod = idx.maybeMethod && methods::IsDictMethodName(attrName);
     // x.name of a map is then no plain item lookup either: the policy is asked first
-    idx.sandboxed = idx.isAttr && detail::t_parseLimits.sandboxed;
-    idx.maybeDictMethod = idx.maybeDictMethod || idx.sandboxed;
+    idx.sandboxed = detail::t_parseLimits.sandboxed;
+    idx.maybeDictMethod = idx.maybeDictMethod || (idx.sandboxed && idx.isAttr);
     if (m_subscriptExprs.empty())
     {
         m_firstIndexIsPure = idx.isAttr || nodes[idx.expr].IsPure(nodes);
@@ -407,9 +407,11 @@ InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const I
 // One returned object, so that it is constructed in the caller's storage
 InternalValue SubscriptExpression::LookupDefinedIndex(const InternalValue& cur, const Index& idx, const InternalValue* key, RenderContext& values)
 {
-    if (idx.sandboxed && !key)
+    if (idx.sandboxed)
     {
-        if (auto replacement = methods::SandboxedSyntheticAttribute(&values, cur, idx.attrName))
+        // x.name, and x["name"] of an object that has no __getitem__ in Python (loop, a cycler, a macro)
+        if (auto replacement = !key ? methods::SandboxedSyntheticAttribute(&values, cur, idx.attrName) : IsStringValue(*key) ? methods::SandboxedSyntheticAttribute(&values, cur, AsString(*key), true)
+                                                                                                                             : std::nullopt)
         {
             return std::move(*replacement);
         }

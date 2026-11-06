@@ -978,3 +978,61 @@ def test_is_safe_attribute_replaced_after_the_first_load_is_seen_by_the_next_loa
     else:
         Env.is_safe_attribute = lambda self, obj, attr, value: False
     assert env.from_string(source).render() == ""
+
+
+ATTR_ITEM_SOURCES = [
+    "{% set ns = namespace(secret=42) %}{{ ns|attr('secret') }}|{{ ns.secret }}|{{ ns['secret'] }}",
+    "{% for i in [1] %}{{ loop|attr('index') }}|{{ loop.index }}|{{ loop['index'] }}{% endfor %}",
+    "{% macro m() %}x{% endmacro %}{{ m|attr('name') }}|{{ m.name }}|{{ m['name'] }}",
+    "{% set c = cycler(1, 2) %}{{ c|attr('current') }}|{{ c.current }}|{{ c['current'] }}",
+]
+
+
+@pytest.mark.parametrize("source", ATTR_ITEM_SOURCES)
+@pytest.mark.parametrize("immutable", [False, True], ids=["sandbox", "immutable"])
+def test_attr_filter_and_items_of_loop_namespace_and_macro_reach_is_safe_attribute(source, immutable):
+    def deny(self, obj, attr, value):
+        return False
+
+    base_ours, base_oracle = (ImmutableSandboxedEnvironment, j2sandbox.ImmutableSandboxedEnvironment) if immutable else (SandboxedEnvironment, j2sandbox.SandboxedEnvironment)
+    ours = type("Deny", (base_ours,), {"is_safe_attribute": deny})()
+    oracle = type("DenyJ2", (base_oracle,), {"is_safe_attribute": deny})()
+    assert _outcome_of(ours, source) == _outcome_of(oracle, source), source
+    # and the default sandbox reads them all
+    default = _outcome_of(SandboxedEnvironment(), source)
+    assert default == _outcome_of(j2sandbox.SandboxedEnvironment(), source), source
+    assert default[0] == "ok" and default[1] != "||", source
+
+
+TOO_LONG = [
+    "{{ '{0:200000000}'.format('x')|length }}",
+    "{{ '{0:>200000000}'.format('x')|length }}",
+    "{{ '{0:.200000000f}'.format(1.5)|length }}",
+    "{{ '{0:{1}}'.format('x', 200000000)|length }}",
+    "{{ '{a:200000000}'.format_map({'a': 'x'})|length }}",
+    "{{ ('{0:200000000}'|safe).format('x')|length }}",
+    "{{ '{0:30000000}{0:30000000}{0:30000000}'.format('x')|length }}",
+    "{{ '{0:99999999999999999999999}'.format('x')|length }}",
+]
+
+
+@pytest.mark.parametrize("source", TOO_LONG)
+@pytest.mark.parametrize("env_class", [SandboxedEnvironment, ImmutableSandboxedEnvironment])
+def test_str_format_in_the_sandbox_is_capped_before_it_allocates(source, env_class):
+    # Python would build the string first; the engine's cap (MaxSequenceSize) is checked from the width, the
+    # precision and what the fields wrote, and fails as the engine's own str.format does
+    with pytest.raises(TemplateRuntimeError, match="too long"):
+        env_class().from_string(source).render()
+    with pytest.raises(TemplateRuntimeError, match="too (long|big)"):
+        Environment().from_string(source.replace("'{a:200000000}'.format_map({'a': 'x'})", "'{0:200000000}'.format('x')")).render()
+
+
+def test_str_format_in_the_sandbox_still_formats_what_fits():
+    for source in (
+        "{{ '{0:>10}|{1:.3f}|{2:,}|{3:{4}}|{0:^7}'.format('x', 1.23456, 1234567, 'y', 6) }}",
+        "{{ '{a:*<8}'.format_map({'a': 'x'}) }}",
+        "{{ ('{0:>6}'|safe).format('<b>') }}",
+        "{{ '{0:.100000000s}'.format('abc') }}",
+        "{{ '{0:08.3f}{0:+d}'.format(3) if false else '{0:08.3f}'.format(3.5) }}",
+    ):
+        assert _outcome_of(SandboxedEnvironment(), source) == _outcome_of(j2sandbox.SandboxedEnvironment(), source), source

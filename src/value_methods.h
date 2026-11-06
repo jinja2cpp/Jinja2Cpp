@@ -51,8 +51,9 @@ InternalValue UnsafeMethod(const InternalValue& obj, std::string_view name, cons
 InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderContext* context);
 // What the sandbox policy of the render says about the attribute `name` that `obj` has, when `obj` is loop, a cycler,
 // a namespace or a macro, which have no Python class to ask about their public names (ISandboxPolicy::NativeAttribute);
-// nothing without a policy or for another value
-std::optional<InternalValue> SandboxedSyntheticAttribute(RenderContext* context, const InternalValue& obj, const std::string& name);
+// nothing without a policy or for another value. With `viaItem` (x["name"]) a namespace is left alone: Python's
+// Namespace has __getitem__, which the sandbox does not check
+std::optional<InternalValue> SandboxedSyntheticAttribute(RenderContext* context, const InternalValue& obj, const std::string& name, bool viaItem = false);
 // x[key]: the item first, then a method of that name, as Jinja2's Environment.getitem
 InternalValue GetItem(const InternalValue& obj, const InternalValue& key, RenderContext* context);
 
