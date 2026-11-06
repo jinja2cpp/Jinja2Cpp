@@ -2782,10 +2782,6 @@ std::optional<InternalValue> SandboxedSyntheticAttribute(RenderContext* context,
 
 InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderContext* context)
 {
-    if (auto replacement = SandboxedSyntheticAttribute(context, obj, name))
-    {
-        return std::move(*replacement);
-    }
     bool unsafe = false;
     const auto* method = FindSafeMethod(obj, name, context, unsafe);
     if (method || unsafe)

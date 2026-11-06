@@ -83,6 +83,9 @@ struct ParseLimits
     unsigned maxExpressionOperators = 491;
     unsigned maxBlockNesting = 248;
     Dialect dialect = Dialect::Jinja2;
+    // The template is loaded for an environment with a sandbox policy (src/sandbox_policy.h): the nodes that read
+    // an attribute of loop, a namespace or a macro are made to ask it, so a render without one pays nothing
+    bool sandboxed = false;
 };
 static_assert(ParseLimits{}.maxExpressionDepth == Settings::Limits{}.maxExpressionDepth
               && ParseLimits{}.maxExpressionOperators == Settings::Limits{}.maxExpressionOperators
@@ -247,10 +250,10 @@ inline void AfterHostCall()
 class ParseLimitsScope
 {
 public:
-    explicit ParseLimitsScope(const Settings::Limits& limits, detail::Dialect dialect = detail::Dialect::Jinja2)
+    explicit ParseLimitsScope(const Settings::Limits& limits, detail::Dialect dialect = detail::Dialect::Jinja2, bool sandboxed = false)
         : m_saved(detail::t_parseLimits)
     {
-        detail::t_parseLimits = { LimitOrNone(limits.maxExpressionDepth), LimitOrNone(limits.maxExpressionOperators), LimitOrNone(limits.maxBlockNesting), dialect };
+        detail::t_parseLimits = { LimitOrNone(limits.maxExpressionDepth), LimitOrNone(limits.maxExpressionOperators), LimitOrNone(limits.maxBlockNesting), dialect, sandboxed };
     }
     ~ParseLimitsScope() { detail::t_parseLimits = m_saved; }
     ParseLimitsScope(const ParseLimitsScope&) = delete;

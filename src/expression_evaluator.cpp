@@ -224,6 +224,9 @@ void SubscriptExpression::AddIndex(const NodeArena& nodes, NodeRef<Expression> v
     idx.isAttr = !attrName.empty();
     idx.maybeMethod = idx.isAttr && methods::IsMethodName(attrName);
     idx.maybeDictMethod = idx.maybeMethod && methods::IsDictMethodName(attrName);
+    // x.name of a map is then no plain item lookup either: the policy is asked first
+    idx.sandboxed = idx.isAttr && detail::t_parseLimits.sandboxed;
+    idx.maybeDictMethod = idx.maybeDictMethod || idx.sandboxed;
     if (m_subscriptExprs.empty())
     {
         m_firstIndexIsPure = idx.isAttr || nodes[idx.expr].IsPure(nodes);
@@ -404,7 +407,14 @@ InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const I
 // One returned object, so that it is constructed in the caller's storage
 InternalValue SubscriptExpression::LookupDefinedIndex(const InternalValue& cur, const Index& idx, const InternalValue* key, RenderContext& values)
 {
-    auto result = !key ? (idx.maybeMethod || values.GetSandboxPolicy() ? methods::GetAttr(cur, idx.attrName, &values) : Subscript(cur, idx.attrName, &values))
+    if (idx.sandboxed && !key)
+    {
+        if (auto replacement = methods::SandboxedSyntheticAttribute(&values, cur, idx.attrName))
+        {
+            return std::move(*replacement);
+        }
+    }
+    auto result = !key ? (idx.maybeMethod ? methods::GetAttr(cur, idx.attrName, &values) : Subscript(cur, idx.attrName, &values))
                        : methods::GetItem(cur, *key, &values);
     if (result.IsUndefined() && !GetUndefinedInfo(result))
     {
@@ -457,8 +467,7 @@ InternalValue SubscriptExpression::Evaluate(RenderContext& values)
     {
         // x.name of a mapping, the common case, straight to the map's lookup (docs/tasks/0154)
         const auto& idx = m_subscriptExprs[0];
-        // (a sandbox policy is asked about the attributes of loop, a namespace or a macro by GetAttr)
-        if (idx.isAttr && !idx.maybeDictMethod && AsMap(*root) && !values.GetSandboxPolicy())
+        if (idx.isAttr && !idx.maybeDictMethod && AsMap(*root))
         {
             auto result = Subscript(*root, idx.attrName, &values);
             if (result.IsUndefined())
@@ -490,13 +499,7 @@ InternalValue SubscriptExpression::ApplyFirstIndex(const InternalValue& root, Re
 InternalValue LoopAttrExpression::Evaluate(RenderContext& values)
 {
     CheckStack();
-    // A sandbox policy is asked about loop's attributes by name (GetAttr), so the resolved attribute is not read
-    LookupResult root;
-    if (!values.GetSandboxPolicy())
-    {
-        root = values.Nodes()[m_value].EvaluateRef(values);
-    }
-    if (root)
+    if (const auto root = values.Nodes()[m_value].EvaluateRef(values))
     {
         if (const auto loop = AsMap(*root))
         {
@@ -517,7 +520,7 @@ InternalValue LoopAttrExpression::Evaluate(RenderContext& values)
 bool LoopAttrExpression::TryCallCycle(RenderContext& values, const ArenaCallParams& params, InternalValue& result) const
 {
     // loop.cycle(*items) takes the general call
-    if (m_attr != LoopAttr::Cycle || m_subscriptExprs.size() != 1 || params.HasUnpacking() || values.GetSandboxPolicy())
+    if (m_attr != LoopAttr::Cycle || m_subscriptExprs.size() != 1 || params.HasUnpacking())
     {
         return false;
     }
@@ -1676,10 +1679,13 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
         {
             callee.SetParentData(receiver);
         }
-        if (auto replacement = methods::SandboxedSyntheticAttribute(&values, receiver, *name))
+        if (m_sandboxed)
         {
-            callee = std::move(*replacement);
-            return false;
+            if (auto replacement = methods::SandboxedSyntheticAttribute(&values, receiver, *name))
+            {
+                callee = std::move(*replacement);
+                return false;
+            }
         }
         if (callee.IsUndefined() && !GetUndefinedInfo(callee))
         {
