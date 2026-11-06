@@ -15,7 +15,6 @@ import jinja2cpp.ext
 import jinja2cpp.sandbox
 import pytest
 from jinja2 import nodes
-from jinja2cpp import fallback
 from jinja2cpp.nativetypes import NativeEnvironment
 
 # A statement of Jinja2 the engine does not parse (a candidate; test_candidate_is_unparsable checks it)
