@@ -193,7 +193,10 @@ public:
     // global's (ValueObject::IsGlobalData); `listed`: the thread's snapshot reaches it
     // (ValueObject::IsInSnapshot). `owner`: what owns data that lives only as long as its
     // adapters (a user callable's result, a module call's argument), empty for the host's data
-    bool Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, bool listed, std::weak_ptr<const void> owner = {}) const;
+    // `unheldIdentity`: the identity is the address of a value the source does not keep alive (a
+    // JSON document's value, IJsonNode::NodeIdentity, which the host may free or reassign between
+    // two calls of a template module, docs/tasks/0212)
+    bool Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, bool listed, std::weak_ptr<const void> owner = {}, bool unheldIdentity = false) const;
 
 private:
     friend class BorrowedCell;
@@ -248,7 +251,7 @@ private:
 class BorrowedCell final : public ValueObject
 {
 public:
-    BorrowedCell(InternalValue storage, InternalValue source, const void* identity, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner = {});
+    BorrowedCell(InternalValue storage, InternalValue source, const void* identity, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner = {}, bool unheldIdentity = false);
     BorrowedCell(const BorrowedCell&) = delete;
     BorrowedCell(BorrowedCell&&) = delete;
     BorrowedCell& operator=(const BorrowedCell&) = delete;
@@ -357,6 +360,10 @@ private:
     // (docs/tasks/0331 decision D8, 0335: CallExports::Pin)
     mutable bool m_shared = false;
     bool m_isList;
+    // The identity is the address of a value the source does not keep alive (CellLink::Adopt): in a
+    // template module the cell lives for one call (BorrowedCells::FreezeCallScoped), so that a later
+    // call never finds it at an address the host reused or a document the host changed
+    bool m_unheldIdentity;
     // Set when the render ends (BorrowedCells::Finish)
     mutable bool m_frozen = false;
     // The links of the adapters the thread's snapshot of the globals reaches attached to the live
@@ -557,6 +564,7 @@ public:
         {
             Finish(collector);
         }
+        ReleaseCallFrozen(collector);
     }
 
     // The cells by the identity of the host's data (IListAccessor::GetIdentity)
@@ -611,8 +619,22 @@ public:
     // Drops the cells nothing reads any more and nothing can find again: the cells of data that
     // lived for one call of a template module (an argument, a user callable's result), which
     // the module's cells would otherwise keep until the module goes. A cell of the host's data
-    // stays, as a later call may write it again
-    void DropUnheld() noexcept;
+    // stays, as a later call may write it again. `walk`: a walk from what the cells held frees
+    // the cycles in it (CycleCollector::CollectFrom)
+    void DropUnheld(bool walk = false) noexcept;
+    // The outermost call of a template module ended: the cells whose identity is an address their
+    // source does not keep alive (a borrowed JSON document's value, BorrowedCell::m_unheldIdentity)
+    // freeze and leave the registry, as a render's cells do at its end (Finish). The host may change
+    // or free the document before the next call, which then reads the host's data; the values that
+    // outlived the call keep the frozen cell they read (docs/tasks/0212)
+    void FreezeCallScoped(CycleCollector* collector) noexcept
+    {
+        // Most modules read no borrowed JSON value: their calls end without a look at the table
+        if (m_hasUnheldIdentity || !m_callFrozen.empty())
+        {
+            FreezeCallScopedSlow(collector);
+        }
+    }
 
 private:
     friend class CellLink;
@@ -620,16 +642,32 @@ private:
     friend class CallExports;
 
     void Finish(CycleCollector* collector) noexcept;
+    // Gives `collector` the call-scoped cells values still read, and lets go of them
+    void ReleaseCallFrozen(CycleCollector* collector) noexcept;
+    // Hands the call-scoped cells nothing reads any more to `collector` (FreezeCallScoped)
+    void HandOverReleasedCallFrozen(CycleCollector* collector) noexcept;
+    void FreezeCallScopedSlow(CycleCollector* collector) noexcept;
     // One pass of DropUnheld; false when it dropped none
-    bool DropUnheldOnce() noexcept;
+    bool DropUnheldOnce(bool walk) noexcept;
 
     std::unique_ptr<Table> m_cells;
+    // Whether the table may hold a cell with BorrowedCell::m_unheldIdentity: set when one goes in,
+    // cleared when FreezeCallScoped has taken them all out
+    bool m_hasUnheldIdentity = false;
     // The template module's call that runs, or 0 for a render's registry
     uint32_t m_call = 0;
     // The last call number given out
     uint32_t m_lastCall = 0;
     // What the running call handed out, made on its first export
     std::shared_ptr<CallExports> m_exports;
+    // The call-scoped cells that values of the module still read when their call ended
+    // (FreezeCallScoped): a cycle through one is out of the reach of the module's names, so Release
+    // gives them to the module's collector. Pruned of the cells nothing else holds at each call's end,
+    // and walked once it has doubled, so that cyclic generations of a value lent to every call
+    // (`d.update(self=d)`) do not pile up (Codex review of #778)
+    std::vector<ValueObjectPtr> m_callFrozen;
+    size_t m_callFrozenWalkAt = MinCallFrozenWalk;
+    static constexpr size_t MinCallFrozenWalk = 8;
 };
 
 } // namespace v2

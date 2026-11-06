@@ -364,6 +364,53 @@ inline const std::vector<Row>& RepeatedKeysRows()
     return rows;
 }
 
+inline const std::vector<Row>& IdentityRows()
+{
+    static const std::vector<Row> rows = {
+        { "sameas", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({{ j.messages[0] is sameas j.messages[0] }}|{{ j.nd.k is sameas j.nd.k }}|{{ j.messages is sameas j['messages'] }}|{{ j.nd is sameas j.messages[0] }}|{{ j.messages[0] is sameas j.messages[1] }})J2",
+          R"J2(True|True|True|False|False)J2", nullptr, nullptr },
+        { "loop_var_update", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% for m in j.messages %}{% set _ = m.update(x=1) %}{% endfor %}{{ j.messages }})J2",
+          R"J2([{'r': 'u', 'x': 1}, {'r': 'a', 'x': 1}])J2", nullptr, nullptr },
+        { "loop_var_kept", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% for m in j.messages %}{% set ns = m %}{% set _ = ns.update(z=1) %}{% endfor %}{{ j.messages }})J2",
+          R"J2([{'r': 'u', 'z': 1}, {'r': 'a', 'z': 1}])J2", nullptr, nullptr },
+        { "item_then_owner", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% set m = j.messages[0] %}{% set _ = j.messages[0].update(y=2) %}{{ m }})J2",
+          R"J2({'r': 'u', 'y': 2})J2", nullptr, nullptr },
+        { "owner_then_item", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% set m = j.messages[0] %}{% set _ = m.update(y=2) %}{{ j.messages }})J2",
+          R"J2([{'r': 'u', 'y': 2}, {'r': 'a'}])J2", nullptr, nullptr },
+        { "set_item_kept", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% set a = j.nd.k %}{% set _ = j.nd['k'].append(2) %}{{ a }}|{{ j.nd }})J2",
+          R"J2([1, 2]|{'k': [1, 2]})J2", nullptr, nullptr },
+        { "loop_pop", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% for i in j.l %}{% set _ = j.l.pop() %}{{ i }}{% endfor %}|{{ j.l }})J2",
+          R"J2(31|[3])J2", nullptr, nullptr },
+        { "nested_seen", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% set e = j.nd %}{% set _ = j.nd.k.append(5) %}{{ e }}|{{ j.nd.k is sameas e.k }})J2",
+          R"J2({'k': [1, 5]}|True)J2", nullptr, nullptr },
+    };
+    return rows;
+}
+
+inline const std::vector<Row>& MidLoopCellRows()
+{
+    static const std::vector<Row> rows = {
+        { "pop", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% set l = j.l %}{% for i in l %}{% set _ = l.pop() %}{{ i }}{% endfor %}|{{ l }})J2",
+          R"J2(31|[3])J2", nullptr, nullptr },
+        { "append", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% set l = j.l %}{% for i in l %}{% if loop.first %}{% set _ = l.append(9) %}{% endif %}{{ i }}{% endfor %}|{{ l }})J2",
+          R"J2(3129|[3, 1, 2, 9])J2", nullptr, nullptr },
+        { "pop_first", R"J2({"messages":[{"r":"u"},{"r":"a"}],"nd":{"k":[1]},"l":[3,1,2]})J2",
+          R"J2({% set l = j.l %}{% for i in l %}{% if loop.first %}{% set _ = l.pop(0) %}{% endif %}{{ i }}{% endfor %}|{{ l }})J2",
+          R"J2(32|[1, 2])J2", nullptr, nullptr },
+    };
+    return rows;
+}
+
 // Runs a row in the given modes, narrow and wide
 constexpr int kViewModes = 1;
 constexpr int kCopyMode = 2;
@@ -1002,6 +1049,104 @@ TYPED_TEST_P(JsonConformance, DeepViewRendersOrFailsCleanly)
     });
 }
 
+// Task 0212: two reads of one JSON value are one object when the traits give it an identity (JsonTraits::Identity),
+// so a write through one is seen through the other, as in Python. Without the hook each read is an object of its own
+TYPED_TEST_P(JsonConformance, Identity)
+{
+    constexpr bool kHasIdentity = jinja2::detail::json::HasIdentity<typename TypeParam::Json>::value;
+    jc::RunRows<TypeParam>(jc::IdentityRows(), kHasIdentity ? jc::kAllModes : jc::kCopyMode);
+    if constexpr (TypeParam::kViewable && !kHasIdentity)
+    {
+        jc::ForEachMode<TypeParam>(R"({"messages":[{"r":"u"}],"nd":{"k":[1]}})", jc::kViewModes, [](const jinja2::Value& j) {
+            jc::RenderBoth({ { "j", j } }, "{{ j.messages[0] is sameas j.messages[0] }}|{{ j.nd.k is sameas j.nd.k }}|{% set e = j.nd %}{{ e is sameas e }}", "False|False|True");
+        });
+    }
+}
+
+// Task 0212: a loop over a list reads the render's copy of it once the loop body made one, from the index it reached
+TYPED_TEST_P(JsonConformance, MidLoopCell)
+{
+    jc::RunRows<TypeParam>(jc::MidLoopCellRows(), jc::kAllModes);
+}
+
+// Task 0212: a JSON value's cell is keyed by the value's address, which a borrowed view does not keep alive, and
+// the host may change or free the document between two calls of a template module. The cell lives for one call:
+// within it two reads of a value are one object, and the next call reads the host's data, whoever keeps a view
+TYPED_TEST_P(JsonConformance, ModuleCallsOfABorrowedDocument)
+{
+    if constexpr (TypeParam::kViewable)
+    {
+        jinja2::Template tpl;
+        ASSERT_TRUE(!!tpl.Load("{% set store = [] %}"
+                               "{% macro f(d) %}{{ d }}{% set _ = d.update(k=1) %}{% endmacro %}"
+                               "{% macro keep(d) %}{% set _ = d.update(k=1) %}{% set _ = store.append(d) %}{{ d is sameas store[-1] }}{% endmacro %}"
+                               "{% macro show() %}{{ store }}{% endmacro %}"
+                               "{% macro same(d) %}{{ store[0] == d }}{{ store[0] is sameas d }}{% endmacro %}"
+                               "{% macro g(l) %}{{ l }}{% set _ = l.append(1) %}{{ l|length }}{% endmacro %}"
+                               "{% set cycles = [] %}"
+                               "{% macro cyc(d) %}{% set _ = cycles.append(d) %}{% set _ = d.a.append(d) %}{{ d.a|length }}{% endmacro %}"
+                               "{% macro cyc2() %}{% set _ = cycles[0].a.append(cycles[0]) %}{{ cycles[0].a|length }}{% endmacro %}"
+                               "{% set held = [] %}"
+                               "{% macro nest(d) %}{% set l = [] %}{% set _ = l.append(l) %}{% set _ = d.update(l=l) %}{% set _ = held.append(d) %}{% endmacro %}"
+                               "{% macro drop() %}{% set _ = held.clear() %}{{ held|length }}{% endmacro %}"
+                               "{% macro selfref(d, f) %}{% set _ = d.update(self=d, f=f) %}{% endmacro %}"));
+        auto module = tpl.MakeModule({});
+        ASSERT_TRUE(!!module) << module.error().ToString();
+        const auto call = [&module](const char* name, jinja2::ValuesList args) {
+            jinja2::UserCallableParams params;
+            params.extraPosArgs = std::move(args);
+            const jinja2::Value result = module->exports[name].template As<jinja2::UserCallable>().callable(params);
+            return jc::AsText(result);
+        };
+        // The host reassigns the document between the calls, at the same address
+        typename TypeParam::Json doc = TypeParam::Parse(R"({"a":1})");
+        EXPECT_EQ("{'a': 1}", call("f", { jinja2::Reflect(std::as_const(doc)) }));
+        doc = TypeParam::Parse(R"({"a":2})");
+        EXPECT_EQ("{'a': 2}", call("f", { jinja2::Reflect(std::as_const(doc)) }));
+        // ... also while the host keeps a view of it, and while the module keeps one
+        {
+            const jinja2::Value kept = jinja2::Reflect(std::as_const(doc));
+            EXPECT_EQ("{'a': 2}", call("f", { kept }));
+            doc = TypeParam::Parse(R"({"a":3})");
+            EXPECT_EQ("{'a': 3}", call("f", { jinja2::Reflect(std::as_const(doc)) }));
+            EXPECT_EQ("True", call("keep", { kept }));
+        }
+        doc = TypeParam::Parse(R"({"a":4})");
+        EXPECT_EQ("{'a': 4}", call("f", { jinja2::Reflect(std::as_const(doc)) }));
+        // Traits without an Identity hook key a cell by the view's accessor, which the cell keeps alive: it stays
+        // across the calls as for any host container (0049 P2), and the view the host lends again keeps the writes
+        const bool hasIdentity = jinja2::detail::json::HasIdentity<typename TypeParam::Json>::value;
+        // The module's own value keeps what the call left in it
+        EXPECT_EQ(hasIdentity ? "[{'a': 3, 'k': 1}]" : "[{'a': 2, 'k': 1}]", call("show", {}));
+        // ... and is not the value the host put at the document's address since (Codex review of #778)
+        EXPECT_EQ("FalseFalse", call("same", { jinja2::Reflect(std::as_const(doc)) }));
+        // Within one call two views of the value are one object; the next call starts from the host's data, also for
+        // a view the host lends again (Python's would keep the writes: docs/tasks/0402)
+        const typename TypeParam::Json list = TypeParam::Parse(R"([0])");
+        const jinja2::Value kept = jinja2::Reflect(std::as_const(list));
+        EXPECT_EQ("[0]2", call("g", { kept }));
+        EXPECT_EQ(hasIdentity ? "[0]2" : "[0, 1]3", call("g", { kept }));
+        // Cycles through a cell the module keeps, made in its call and in a later one: freed with the module (LSan)
+        const typename TypeParam::Json withList = TypeParam::Parse(R"({"a":[0]})");
+        EXPECT_EQ("2", call("cyc", { jinja2::Reflect(std::as_const(withList)) }));
+        EXPECT_EQ("3", call("cyc2", {}));
+        // A cycle the module's values held through a kept cell, let go of in a later call (Codex review of #778)
+        EXPECT_EQ("", call("nest", { jinja2::Reflect(std::as_const(withList)) }));
+        EXPECT_EQ("0", call("drop", {}));
+        EXPECT_EQ("0", call("drop", {}));
+        // A cyclic generation of a value lent to every call goes with a later call, not only with the module
+        // (Codex review of #778): what the callable holds counts the generations still alive
+        auto token = std::make_shared<int>(0);
+        const jinja2::UserCallable counted([token](const jinja2::UserCallableParams&) { return jinja2::Value(); }, {});
+        const jinja2::Value lent = jinja2::Reflect(std::as_const(withList));
+        for (int n = 0; n != 40; ++n)
+        {
+            EXPECT_EQ("", call("selfref", { lent, counted }));
+        }
+        EXPECT_GT(20, token.use_count());
+    }
+}
+
 // Test names for INSTANTIATE_TYPED_TEST_SUITE_P: clang's -Wpedantic rejects the macro without its optional argument
 struct JsonBindingNames
 {
@@ -1012,6 +1157,6 @@ struct JsonBindingNames
     }
 };
 
-REGISTER_TYPED_TEST_SUITE_P(JsonConformance, Scalars, BigIntegers, Nesting, KeyOrder, MissingKeysAndIndexes, EmptyContainers, NullMemberAndNullItem, Strings, IterationAndFilters, EnumeratorPastTheEnd, Equality, DictMethods, ModuleExportLimits, LifetimeInTemplates, LifetimeOfItemsWithoutEngine, ConcurrentRenders, CopyLimits, RepeatedKeys, DeepViewRendersOrFailsCleanly);
+REGISTER_TYPED_TEST_SUITE_P(JsonConformance, Scalars, BigIntegers, Nesting, KeyOrder, MissingKeysAndIndexes, EmptyContainers, NullMemberAndNullItem, Strings, IterationAndFilters, EnumeratorPastTheEnd, Equality, DictMethods, ModuleExportLimits, LifetimeInTemplates, LifetimeOfItemsWithoutEngine, ConcurrentRenders, CopyLimits, RepeatedKeys, DeepViewRendersOrFailsCleanly, Identity, MidLoopCell, ModuleCallsOfABorrowedDocument);
 
 #endif // JINJA2CPP_TEST_BINDING_CONFORMANCE_H

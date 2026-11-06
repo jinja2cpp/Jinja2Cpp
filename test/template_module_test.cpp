@@ -406,6 +406,14 @@ TEST_F(TemplateModuleTest, SelfReferencingContainers)
     EXPECT_TRUE(module.exports["d"].AsMap().at("self").IsNone());
 }
 
+// A cycle a call makes below a value of the module that is in none is freed with the module (LSan)
+TEST_F(TemplateModuleTest, CycleMadeInACall)
+{
+    auto module = Make("{% set l = [{'a': []}] %}{% macro c() %}{% set _ = l[0].a.append(l[0]) %}{{ l[0].a|length }}{% endmacro %}");
+    EXPECT_EQ("1", Call(module.exports["c"]).AsString());
+    EXPECT_EQ("2", Call(module.exports["c"]).AsString());
+}
+
 // A dict with keys that are not strings is copied as its public view spells them, as str()
 // does, and a cycle through it is cut too (Codex review of #634)
 TEST_F(TemplateModuleTest, NonStringKeys)

@@ -45,13 +45,14 @@ void CellCounters::AdvanceEpochForTesting(uint64_t count) noexcept
 }
 } // namespace detail
 
-BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, const void* identity, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner)
+BorrowedCell::BorrowedCell(InternalValue storage, InternalValue source, const void* identity, bool isList, const BorrowedCells& registry, std::weak_ptr<const void> owner, bool unheldIdentity)
     : m_storage(std::move(storage))
     , m_source(std::move(source))
     , m_owner(std::move(owner))
     , m_identity(identity)
     , m_registry(&registry)
     , m_isList(isList)
+    , m_unheldIdentity(unheldIdentity)
 {
     Bind();
     // A frozen cell is held by the links of the values that outlived the render: a cycle through
@@ -397,7 +398,7 @@ const CellLink* CellLink::TraceSourceLink(const BorrowedCell& cell, bool isList)
 }
 #endif
 
-bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, bool listed, std::weak_ptr<const void> owner) const
+bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isList, InternalValue storage, bool held, bool listed, std::weak_ptr<const void> owner, bool unheldIdentity) const
 {
     // An adapter of a value kept after its render: nothing writes the frozen cell, and the caller
     // writes its copy instead (docs/tasks/0331)
@@ -417,7 +418,7 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     // registry and the adapter as they were
     std::unique_ptr<BorrowedCells::Table> table = cells->m_cells ? nullptr : std::make_unique<BorrowedCells::Table>();
     auto& target = table ? *table : *cells->m_cells;
-    auto cell = MakeRef<BorrowedCell>(std::move(storage), self, identity, isList, *cells, std::move(owner));
+    auto cell = MakeRef<BorrowedCell>(std::move(storage), self, identity, isList, *cells, std::move(owner), unheldIdentity);
     if (isList ? !cell->m_items : !cell->m_map)
     {
         JINJA2CPP_CELL_TRACE_EVENT("adoptno", Trace::Ptr("a", Trace::Space::Link, this), Trace::Num("why", 3), Trace::Num("c", 0));
@@ -429,6 +430,7 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     {
         ReserveLink(*cell, held, listed);
         target.try_emplace(identity, cell);
+        cells->m_hasUnheldIdentity = cells->m_hasUnheldIdentity || unheldIdentity;
     }
     else if (existing->IsList() == isList)
     {
@@ -476,16 +478,16 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     return true;
 }
 
-void BorrowedCells::DropUnheld() noexcept
+void BorrowedCells::DropUnheld(bool walk) noexcept
 {
     // A dropped cell lets go of its items, which may hold the only source of another cell (the
     // adapter of a nested list): again until a pass drops none
-    while (m_cells && DropUnheldOnce())
+    while (m_cells && DropUnheldOnce(walk))
     {
     }
 }
 
-bool BorrowedCells::DropUnheldOnce() noexcept
+bool BorrowedCells::DropUnheldOnce(bool walk) noexcept
 {
     size_t count = 0;
     for (const auto& [identity, cell] : *m_cells)
@@ -530,7 +532,33 @@ bool BorrowedCells::DropUnheldOnce() noexcept
         cell->m_source = InternalValue();
     }
     const auto removed = static_cast<uint32_t>(dropped.size());
+    // What the cells' items hold may be a cycle an earlier call of a template module made, which
+    // no note names any more (Codex review of #778): a walk from their storage frees it now, and
+    // with it the sources of the nested cells, which the next pass drops
+    std::vector<ValueObjectPtr> storages;
+    if (walk)
+    {
+        try
+        {
+            storages.reserve(2 * dropped.size());
+            for (const auto& cell : dropped)
+            {
+                for (const auto* storage : { &cell->m_storage, &cell->m_retired })
+                {
+                    if (auto object = OwnObjectOf(*storage))
+                    {
+                        storages.push_back(std::move(object));
+                    }
+                }
+            }
+        }
+        catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
+        {
+            // Out of memory: a cycle through the storages not walked leaks (docs/tasks/0283)
+        }
+    }
     dropped.clear();
+    CycleCollector::CollectFrom(std::move(storages));
     detail::CellCounters::RemoveLive(removed);
     JINJA2CPP_CELL_TRACE_EVENT("dropped", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("n", removed), Trace::Num("live", detail::CellCounters::Live()));
     return true;
@@ -587,6 +615,125 @@ void BorrowedCells::Finish(CycleCollector* collector) noexcept
     // An adapter that read a cell of this render, or found none while it ran, looks again
     [[maybe_unused]] const auto epoch = detail::CellCounters::NextEpoch();
     JINJA2CPP_CELL_TRACE_EVENT("finished", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("e", static_cast<int64_t>(epoch)), Trace::Num("live", detail::CellCounters::Live()));
+}
+
+void BorrowedCells::HandOverReleasedCallFrozen(CycleCollector* collector) noexcept
+{
+    // The kept cells nothing reads any more go to the call's collector, which walks from them: what
+    // they hold may be a cycle an earlier call made, which no note names any more (Codex review of
+    // #778). One it cannot take stays until the next call or the module's end
+    if (collector)
+    {
+        try
+        {
+            for (auto it = m_callFrozen.begin(); it != m_callFrozen.end();)
+            {
+                if ((*it)->use_count() != 1)
+                {
+                    ++it;
+                    continue;
+                }
+                collector->NoteRoot(*it);
+                it = m_callFrozen.erase(it);
+            }
+        }
+        catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
+        {
+            // Out of memory: the cells not handed over stay in the list
+        }
+    }
+    // A cell in a cycle is never the list's alone: a walk frees the generations nothing outside
+    // the cycle reads, as the list's reference counts as one of the walk's
+    if (m_callFrozen.size() >= m_callFrozenWalkAt)
+    {
+        CycleCollector::CollectKeeping(m_callFrozen);
+        m_callFrozenWalkAt = std::max(MinCallFrozenWalk, 2 * m_callFrozen.size());
+    }
+}
+
+void BorrowedCells::FreezeCallScopedSlow(CycleCollector* collector) noexcept
+{
+    HandOverReleasedCallFrozen(collector);
+    if (!m_cells || !m_hasUnheldIdentity)
+    {
+        return;
+    }
+    // Every such cell leaves the table below
+    m_hasUnheldIdentity = false;
+    // As Finish, for these cells only: the sources first, while every cell is live
+    uint32_t count = 0;
+    for (const auto& [identity, cell] : *m_cells)
+    {
+        if (cell->m_unheldIdentity)
+        {
+            cell->m_source = InternalValue();
+            ++count;
+        }
+    }
+    if (count == 0)
+    {
+        return;
+    }
+    for (auto entry = m_cells->begin(); entry != m_cells->end();)
+    {
+        if (!entry->second->m_unheldIdentity)
+        {
+            ++entry;
+            continue;
+        }
+        const IntrusivePtr<const BorrowedCell> cell = entry->second;
+        // Not an event of the cell trace yet: the model has no call-scoped cell (docs/tasks/0402)
+        cell->m_frozen = true;
+        for (const auto* link : cell->m_links)
+        {
+            link->m_cell = nullptr;
+            link->m_state = 0;
+        }
+        cell->m_links.clear();
+        cell->m_links.shrink_to_fit();
+        entry = m_cells->erase(entry);
+        // A value that still reads the cell may hold a cycle through it: the call's collector walks
+        // from it now, and the module's when it goes, as the cycle can form in a later call
+        if (cell->use_count() > 1)
+        {
+            try
+            {
+                if (collector)
+                {
+                    collector->NoteFrozen(ValueObjectPtr(cell));
+                }
+                m_callFrozen.emplace_back(cell);
+            }
+            catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
+            {
+                // Out of memory: a cycle through the cell leaks (docs/tasks/0283)
+            }
+        }
+    }
+    detail::CellCounters::RemoveLive(count);
+    // An adapter that read one of these cells, or found none while the call ran, looks again
+    detail::CellCounters::NextEpoch();
+}
+
+void BorrowedCells::ReleaseCallFrozen(CycleCollector* collector) noexcept
+{
+    if (collector)
+    {
+        try
+        {
+            // Also one nothing else reads: what it holds may be a cycle an earlier call made
+            for (const auto& cell : m_callFrozen)
+            {
+                collector->NoteRoot(cell);
+            }
+        }
+        catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
+        {
+            // Out of memory: the cycles through the cells not noted leak (docs/tasks/0283)
+        }
+    }
+    m_callFrozen.clear();
+    m_callFrozen.shrink_to_fit();
 }
 
 void BorrowedCells::AdoptExports(std::shared_ptr<CallExports> exports) noexcept

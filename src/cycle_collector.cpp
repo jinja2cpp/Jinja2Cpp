@@ -41,6 +41,10 @@ void CycleCollector::Finish() noexcept
         {
             m_outer->Add(candidate);
         }
+        for (const auto& root : m_notes->roots)
+        {
+            m_outer->NoteRoot(root);
+        }
     }
     catch (...) // NOLINT(bugprone-empty-catch): out of memory; the outer collector misses what is not handed over
     {
@@ -110,6 +114,15 @@ void CycleCollector::NoteStore(const InternalValue& container)
     }
 }
 
+void CycleCollector::NoteRoot(ValueObjectPtr cell)
+{
+    if (!m_notes)
+    {
+        m_notes = std::make_unique<Notes>();
+    }
+    m_notes->roots.push_back(std::move(cell));
+}
+
 void CycleCollector::Add(ValueObjectPtr object)
 {
     if (!m_notes)
@@ -134,7 +147,7 @@ void CycleCollector::Add(ValueObjectPtr object)
         candidates.pop_back();
         throw;
     }
-    if (candidates.size() < m_notes->pruneAt)
+    if (candidates.size() < m_notes->pruneAt || m_notes->walkFromEvery)
     {
         return;
     }
@@ -185,20 +198,16 @@ void CycleCollector::Collect() noexcept
     }
     m_notes->candidates.clear();
     m_notes->noted.clear();
+    m_notes->roots.clear();
 }
 
-void CycleCollector::CollectOnce()
+namespace
 {
-    // Most of what a render noted is garbage by now with no cycle in it (a list built and
-    // printed): releasing it frees it, and what only it held, without a walk
-    while (DropUnshared())
-    {
-    }
-    auto& candidates = m_notes->candidates;
-    if (candidates.empty())
-    {
-        return;
-    }
+// The walk of CollectOnce from `candidates` and `roots`, which it empties, or, with `keepRoots`,
+// leaves with the roots that are not garbage: the garbage among what they reach is emptied, which
+// breaks its cycles. Throws std::bad_alloc, and then changes nothing
+void WalkAndClear(std::vector<ValueObjectPtr>& candidates, std::vector<ValueObjectPtr>& roots, bool keepRoots = false)
+{
     std::unordered_map<const ValueObject*, Node> nodes;
     // In the order found: `order` grows while it is walked
     std::vector<Node*> order;
@@ -220,6 +229,10 @@ void CycleCollector::CollectOnce()
     for (const auto& candidate : candidates)
     {
         visit(candidate.get());
+    }
+    for (const auto& root : roots)
+    {
+        visit(root.get());
     }
     // NOLINTNEXTLINE(modernize-loop-convert): Traverse appends to `order`, which a range-for would not see
     for (size_t next = 0; next != order.size(); ++next)
@@ -269,10 +282,68 @@ void CycleCollector::CollectOnce()
     }
     // Nothing below allocates. The tables are not read again: emptying may free what they name
     candidates.clear();
+    if (keepRoots)
+    {
+        // The garbage holds the roots it takes
+        roots.erase(std::remove_if(roots.begin(), roots.end(), [&nodes](const ValueObjectPtr& root) {
+                        const auto node = nodes.find(root.get());
+                        return node != nodes.end() && !node->second.reachable;
+                    }),
+                    roots.end());
+    }
+    else
+    {
+        roots.clear();
+    }
     for (const auto& object : garbage)
     {
         object->Clear();
     }
+}
+} // namespace
+
+void CycleCollector::CollectKeeping(std::vector<ValueObjectPtr>& roots) noexcept
+{
+    std::vector<ValueObjectPtr> none;
+    try
+    {
+        WalkAndClear(none, roots, true);
+    }
+    catch (...) // NOLINT(bugprone-empty-catch): the roots stay as they were, for the next walk
+    {
+    }
+}
+
+void CycleCollector::CollectFrom(std::vector<ValueObjectPtr> roots) noexcept
+{
+    std::vector<ValueObjectPtr> none;
+    for (int attempt = 0; attempt != 2 && !roots.empty(); ++attempt)
+    {
+        try
+        {
+            WalkAndClear(none, roots);
+        }
+        catch (...) // NOLINT(bugprone-empty-catch): retried once, then the cycles not broken leak (docs/tasks/0283)
+        {
+        }
+    }
+}
+
+void CycleCollector::CollectOnce()
+{
+    // Most of what a render noted is garbage by now with no cycle in it (a list built and
+    // printed): releasing it frees it, and what only it held, without a walk
+    // Not when a dropped one may hold a cycle no note names (WalkFromEveryNote)
+    while (!m_notes->walkFromEvery && DropUnshared())
+    {
+    }
+    auto& candidates = m_notes->candidates;
+    auto& roots = m_notes->roots;
+    if (candidates.empty() && roots.empty())
+    {
+        return;
+    }
+    WalkAndClear(candidates, roots);
 }
 
 } // namespace v2

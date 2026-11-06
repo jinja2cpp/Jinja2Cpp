@@ -137,6 +137,26 @@ public:
     // A frozen cell that values outliving the render still read: a candidate of this collector
     // (BorrowedCells::Release, docs/tasks/0331). Throws std::bad_alloc
     void NoteFrozen(ValueObjectPtr cell) { Add(std::move(cell)); }
+    // A frozen cell a template module let go of: the walk starts from it although nothing else
+    // holds it, as what it holds may be a cycle that an earlier call made, whose note went with
+    // that call's collector (BorrowedCells::FreezeCallScoped). Throws std::bad_alloc
+    void NoteRoot(ValueObjectPtr cell);
+    // Walks from `roots` now, apart from any render's notes, and empties the garbage among what
+    // they reach: what the cells a template module's call drops held (BorrowedCells::DropUnheld)
+    static void CollectFrom(std::vector<ValueObjectPtr> roots) noexcept;
+    // The same, keeping in `roots` the ones that are not garbage: the call-scoped cells a template
+    // module keeps, whose cycles no later note may name (BorrowedCells::FreezeCallScoped)
+    static void CollectKeeping(std::vector<ValueObjectPtr>& roots) noexcept;
+    // The walk starts from every note, also one that nothing else holds any more: a template
+    // module's values when it goes, where such a value may hold a cycle that a call made and
+    // whose note went with that call's collector (docs/tasks/0212)
+    void WalkFromEveryNote() noexcept
+    {
+        if (m_notes)
+        {
+            m_notes->walkFromEvery = true;
+        }
+    }
 
 private:
     void Finish() noexcept;
@@ -159,6 +179,10 @@ private:
         // Candidates held by nothing else are dropped when there are this many (Add)
         static constexpr size_t MinPruneAt = 64;
         size_t pruneAt = MinPruneAt;
+        // WalkFromEveryNote: nothing is dropped before the walk
+        bool walkFromEvery = false;
+        // NoteRoot: walked, never dropped before the walk
+        std::vector<ValueObjectPtr> roots;
         // What KeepUntilEnd holds
         KeptObjects kept;
         // The render's copies of the host's data, released before the walk: detaching them
@@ -192,7 +216,12 @@ public:
         // values the call handed out keep what they read now, before a cell of theirs is dropped
         // (Complete did that already, unless the call failed)
         m_cells.PinExportsOrSkip();
-        m_cells.DropUnheld();
+        // The cells of borrowed JSON values live for the outermost call (docs/tasks/0212)
+        if (m_outerCall.call == 0)
+        {
+            m_cells.FreezeCallScoped(&m_collector);
+        }
+        m_cells.DropUnheld(true);
         m_cells.EndCall(std::move(m_outerCall));
     }
     // The call succeeded: its values keep what they read now, or the call fails with

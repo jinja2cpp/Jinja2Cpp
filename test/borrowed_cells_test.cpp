@@ -1451,3 +1451,17 @@ TEST(SharedOwnerTest, AddGlobalAfterARenderOnAnotherThreadLetGoOfTheMap)
     EXPECT_EQ("[1, 2]x", seen);
     EXPECT_EQ("3", tpl.RenderAsString({}).value());
 }
+
+// A loop over a generic list the body writes through its name: the enumeration, made from the
+// host's list before the cell, reads the cell from the index it reached, as Python's list
+// iterator does (docs/tasks/0212)
+TEST(BorrowedCellsSingle, GenericListLoopFollowsACellMadeInTheBody)
+{
+    const std::vector<int64_t> data{ 3, 1, 2 };
+    const ValuesMap params{ { "l", MakeGenericList(data.begin(), data.end()) } };
+    EXPECT_EQ("31|[3]", Render("{% for i in l %}{% set _ = l.pop() %}{{ i }}{% endfor %}|{{ l }}", params));
+    EXPECT_EQ("3129|[3, 1, 2, 9]", Render("{% for i in l %}{% if loop.first %}{% set _ = l.append(9) %}{% endif %}{{ i }}{% endfor %}|{{ l }}", params));
+    EXPECT_EQ("32|[1, 2]", Render("{% for i in l %}{% if loop.first %}{% set _ = l.pop(0) %}{% endif %}{{ i }}{% endfor %}|{{ l }}", params));
+    // An inner loop over the list after the write is the cell's own enumeration; the outer one goes on from its index
+    EXPECT_EQ("3:31;1:3;|[3]", Render("{% for i in l %}{% set _ = l.pop() %}{{ i }}:{% for k in l %}{{ k }}{% endfor %};{% endfor %}|{{ l }}", params));
+}
