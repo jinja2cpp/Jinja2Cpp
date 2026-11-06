@@ -59,7 +59,8 @@ struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
     {
         // A tuple can nest deeper than the stack: Python raises RecursionError
         CheckStack();
-        if (list.GetRangeInfo())
+        // A generator hashes by identity, as a Python object does (docs/tasks/0401)
+        if (list.GetRangeInfo() || list.GetIteratorKind() != IteratorKind::None)
         {
             return nullptr;
         }
@@ -237,6 +238,12 @@ struct KeyTokenBuilder
             AppendBytes(m_out, length);
             AppendBytes(m_out, start);
             AppendBytes(m_out, step);
+            return nullptr;
+        }
+        // A generator or iterator hashes by identity, which its copies share (docs/tasks/0401)
+        if (list.GetIteratorKind() != IteratorKind::None)
+        {
+            AppendObjectKey(m_out, list.GetIdentity());
             return nullptr;
         }
         if (!list.IsTuple())

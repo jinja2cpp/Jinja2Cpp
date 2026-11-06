@@ -887,6 +887,46 @@
    "env": {},
    "templates": {},
    "output": "<bound method Cycler.next of <jinja2.utils.Cycler object"
+  },
+  {
+   "id": "globals.cycler_reset_prints",
+   "template": "{{ (cycler(1).reset|string).split(' at ')[0] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<bound method Cycler.reset of <jinja2.utils.Cycler object"
+  },
+  {
+   "id": "globals.joiner_call_prints",
+   "template": "{{ (joiner().__call__|string).split(' at ')[0] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "<bound method Joiner.__call__ of <jinja2.utils.Joiner object"
+  },
+  {
+   "id": "globals.namespace_call_key_is_no_call",
+   "template": "{% set ns = namespace(**{'operator()': 1}) %}[{{ ns.__call__ }}]",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "[]"
+  },
+  {
+   "id": "globals.joiner_call_slot_hidden",
+   "template": "{{ joiner()['operator()'] is defined }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "False"
+  },
+  {
+   "id": "globals.cycler_method_equals",
+   "template": "{% set c = cycler(1, 2) %}{{ c.next == c.next }}|{{ c.next == c.reset }}|{{ c.next == cycler(1, 2).next }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "True|False|False"
   }
  ]
 }

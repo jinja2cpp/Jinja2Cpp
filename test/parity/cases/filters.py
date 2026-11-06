@@ -482,4 +482,7 @@ CASES = [
     ("lazy_result_truncate", "{{ [1, 2, 3]|select|truncate(5) is string }}"),
     ("lazy_result_unique_hash", "{% set g = [1, 2, 3]|select %}{{ [g, g]|unique|list|length }}"),
     ("range_tojson", "{{ range(2)|tojson }}"),
+    ("lazy_result_dict_key", "{% set g = [1]|map('string') %}{{ {g: 1}[g] }}|{{ [g, [1]|select]|unique|list|length }}"),
+    ("lazy_result_truncate_list", "{{ [1, 2, 3]|select|list|truncate(5) }}"),
+    ("range_truncate_killwords", "{{ range(300)|truncate(255, True) }}"),
 ]

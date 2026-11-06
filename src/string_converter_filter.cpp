@@ -1873,8 +1873,9 @@ InternalValue StringConverter::TruncateNonString(const InternalValue& baseVal, R
     {
         size = map->GetSize();
     }
-    else if (auto list = AsList(baseVal))
+    else if (auto list = AsList(baseVal); list && list->GetIteratorKind() == IteratorKind::None)
     {
+        // A generator has no len() (docs/tasks/0401)
         size = list->GetSize();
     }
     if (!size)
@@ -1893,6 +1894,11 @@ InternalValue StringConverter::TruncateNonString(const InternalValue& baseVal, R
     const std::string typeName = Apply<visitors::PythonTypeNameGetter>(baseVal);
     if (ConvertToBool(GetArgumentValue("killwords", context)))
     {
+        // A range slice is a range, which has no + (docs/tasks/0401)
+        if (auto list = AsList(baseVal); list && list->GetRangeInfo())
+        {
+            throw TemplateRuntimeError("unsupported operand type(s) for +: 'range' and 'str'");
+        }
         throw TemplateRuntimeError("can only concatenate " + typeName + " (not \"str\") to " + typeName);
     }
     throw TemplateRuntimeError("'" + typeName + "' object has no attribute 'rsplit'");

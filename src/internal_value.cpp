@@ -539,7 +539,8 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
 
     InternalValue operator()(const MapRef& values, const ListRef& key) const
     {
-        if (!values.IsHost() && !key.IsTuple() && !key.GetRangeInfo())
+        // A generator is a key by its identity (docs/tasks/0401)
+        if (!values.IsHost() && !key.IsTuple() && !key.GetRangeInfo() && key.GetIteratorKind() == IteratorKind::None)
         {
             return InternalValue();
         }
@@ -2851,6 +2852,7 @@ ListAdapter ListAdapter::CreateRange(int64_t start, int64_t stop, int64_t step)
         explicit Adapter(RangeInfo info)
             : m_info(info)
         {
+            SetRange();
             // Unsigned arithmetic: stop - start overflows int64_t for the widest ranges
             auto distance = [](int64_t from, int64_t to) { return static_cast<uint64_t>(to) - static_cast<uint64_t>(from); };
             if (info.step > 0 && info.start < info.stop)
@@ -2948,6 +2950,10 @@ public:
         , m_fieldNames(std::move(fieldNames))
     {
         SetTraversable();
+        if (m_items.GetRangeInfo())
+        {
+            SetRange();
+        }
     }
 
     [[nodiscard]] std::optional<size_t> GetSize() const override { return m_items.GetSize(); }

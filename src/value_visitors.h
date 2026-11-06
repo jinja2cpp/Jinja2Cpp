@@ -2055,6 +2055,10 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             return IteratorOperands(left, right);
         }
+        if (left.IsRange() || right.IsRange())
+        {
+            return RangeOperands(left, right);
+        }
         // A list and a tuple are never equal and do not combine
         if (left.IsTuple() != right.IsTuple())
         {
@@ -2146,10 +2150,36 @@ struct BinaryMathOperation : BaseVisitor<>
         ThrowUnsupported(left, right);
     }
 
+    // A range (docs/tasks/0401) equals only a range of the same items and has no other
+    // operation; a list or tuple on the left names itself, as list.__add__ does
+    [[nodiscard]] JINJA2CPP_COLD_INLINE ResultType RangeOperands(const ListRef& left, const ListRef& right) const
+    {
+        const auto* leftRange = left.GetRangeInfo();
+        const auto* rightRange = right.GetRangeInfo();
+        if (leftRange && rightRange && (m_oper == jinja2::BinaryExpression::LogicalEq || m_oper == jinja2::BinaryExpression::LogicalNe))
+        {
+            // range.__eq__ compares the items: by length, then the first item, then the step,
+            // without walking them
+            const auto length = left.GetSize().value_or(0);
+            bool isEqual = length == right.GetSize().value_or(0);
+            if (isEqual && length > 0)
+            {
+                isEqual = leftRange->start == rightRange->start && (length == 1 || leftRange->step == rightRange->step);
+            }
+            return isEqual == (m_oper == jinja2::BinaryExpression::LogicalEq);
+        }
+        if (m_oper == jinja2::BinaryExpression::Plus && !leftRange)
+        {
+            using namespace std::string_literals;
+            throw TemplateRuntimeError("can only concatenate "s + PythonTypeName(left) + " (not \"" + PythonTypeName(right) + "\") to " + PythonTypeName(left));
+        }
+        return Mismatch(left, right);
+    }
+
     template<typename L, typename R>
     [[nodiscard]] ResultType RepeatList(const ListRef& list, int64_t count, const L& left, const R& right) const
     {
-        if (m_oper != jinja2::BinaryExpression::Mul || list.GetIteratorKind() != IteratorKind::None)
+        if (m_oper != jinja2::BinaryExpression::Mul || list.GetIteratorKind() != IteratorKind::None || list.IsRange())
         {
             return Mismatch(left, right);
         }
