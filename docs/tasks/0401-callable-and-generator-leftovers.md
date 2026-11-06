@@ -59,3 +59,6 @@ New corpus cases: `operators.range_equals_range`, `list_concat_range`, `tuple_co
 `range_repeat`, `range_ordering`, `range_in_list`; `globals.cycler_reset_prints`,
 `joiner_call_prints`, `cycler_method_equals`; `filters.lazy_result_dict_key`,
 `lazy_result_truncate_list`.
+Verifier round 1 also brought: `range|truncate(n, True)` names range's missing + as Python;
+a namespace's `operator()` key is no `__call__` (`filters.range_truncate_killwords`,
+`globals.namespace_call_key_is_no_call`). Remaining range and engine-object gaps went to 0420.

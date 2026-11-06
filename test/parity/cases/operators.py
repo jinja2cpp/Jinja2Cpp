@@ -169,4 +169,9 @@ CASES = [
     ('range_repeat', "{{ range(2) * 2 }}"),
     ('range_ordering', "{{ range(3) < range(4) }}"),
     ('range_in_list', "{{ range(2) in [[0, 1]] }}|{{ range(2) in [range(0, 2)] }}"),
+    # task 0420: what remains of range and engine-object parity after 0401
+    ('range_slice_is_range', "{{ range(3)[1:] }}"),
+    ('range_attributes', "{{ range(1, 9, 2).start }}|{{ range(1, 9, 2).stop }}|{{ range(1, 9, 2)|attr('step') }}"),
+    ('sequence_times_range', "{{ [1] * range(3) }}"),
+    ('max_of_ranges_message', "{{ [range(3), range(2)]|max }}"),
 ]

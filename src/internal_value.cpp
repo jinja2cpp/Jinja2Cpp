@@ -471,7 +471,7 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     [[nodiscard]] static InternalValue GetField(const MapRef& values, const std::string& field)
     {
         // An engine object that is called (joiner()) names its call __call__ (docs/tasks/0401)
-        if (field == "__call__" && values.GetObjectClass() != nullptr && values.HasValue("operator()"))
+        if (field == "__call__" && values.GetObjectClass() != nullptr && !values.IsNamespace() && values.HasValue("operator()"))
         {
             return values.GetValueByName("operator()");
         }

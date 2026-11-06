@@ -3661,6 +3661,102 @@
    "env": {},
    "templates": {},
    "output": "False|True"
+  },
+  {
+   "id": "operators.range_slice_is_range",
+   "template": "{{ range(3)[1:] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "range(1, 3)"
+  },
+  {
+   "id": "operators.range_attributes",
+   "template": "{{ range(1, 9, 2).start }}|{{ range(1, 9, 2).stop }}|{{ range(1, 9, 2)|attr('step') }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "1|9|2"
+  },
+  {
+   "id": "operators.sequence_times_range",
+   "template": "{{ [1] * range(3) }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "can't multiply sequence by non-int of type 'range'"
+   }
+  },
+  {
+   "id": "operators.max_of_ranges_message",
+   "template": "{{ [range(3), range(2)]|max }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'>' not supported between instances of 'range' and 'range'"
+   }
   }
  ]
 }

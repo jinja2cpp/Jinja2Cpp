@@ -102,5 +102,8 @@ CASES = [
     ('cycler_method_prints', "{{ (cycler(1).next|string).split(' at ')[0] }}"),
     ('cycler_reset_prints', "{{ (cycler(1).reset|string).split(' at ')[0] }}"),
     ('joiner_call_prints', "{{ (joiner().__call__|string).split(' at ')[0] }}"),
+    ('namespace_call_key_is_no_call', "{% set ns = namespace(**{'operator()': 1}) %}[{{ ns.__call__ }}]"),
+    # task 0420: the engine's call slot is not an item of a joiner
+    ('joiner_call_slot_hidden', "[{{ joiner()['operator()'] }}]"),
     ('cycler_method_equals', "{% set c = cycler(1, 2) %}{{ c.next == c.next }}|{{ c.next == c.reset }}|{{ c.next == cycler(1, 2).next }}"),
 ]
