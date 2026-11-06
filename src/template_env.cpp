@@ -337,7 +337,7 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
             // The freshness check is host code (a handler may load another template), so it runs
             // outside the lock: a nested load takes it exclusively. The entry is copied under
             // the lock
-            auto cachedTpl = decltype(cache.begin()->second.tpl)();
+            std::optional<decltype(cache.begin()->second.tpl)> cachedTpl; // empty on a hit: a default template allocates
             FilesystemHandlerPtr cachedHandler;
             std::optional<TimePoint> cachedModification;
             {
@@ -364,11 +364,11 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
                     auto p = cache.find(fileName);
                     // Still the entry that was checked; if it was replaced meanwhile, the template
                     // just checked is still a valid answer for this call
-                    if (p != cache.end() && p->second.tpl == cachedTpl)
+                    if (p != cache.end() && p->second.tpl == *cachedTpl)
                     {
                         p->second.lastUse.store(NewCacheTick(), std::memory_order_relaxed);
                     }
-                    return ResultType(cachedTpl);
+                    return ResultType(*cachedTpl);
                 }
             }
         }
