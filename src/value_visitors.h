@@ -1350,13 +1350,13 @@ struct BinaryMathOperation : BaseVisitor<>
         }
         if constexpr (std::is_same_v<L, MapRef> || std::is_same_v<R, MapRef>)
         {
-            if (HasHostOperand(left, right))
+            // One flag test on the way through; everything for a host object is out of line
+            if (IsHostOperand(left) || IsHostOperand(right))
             {
-                return HostCompare(left, right);
-            }
-            if (auto result = HostSequenceOperation(left, right))
-            {
-                return std::move(*result);
+                if (auto result = HostMismatch(left, right))
+                {
+                    return std::move(*result);
+                }
             }
         }
         if (m_oper == BinaryExpression::LogicalEq)
@@ -1388,6 +1388,32 @@ struct BinaryMathOperation : BaseVisitor<>
             result = result || right.IsHost();
         }
         return result;
+    }
+
+    template<typename T>
+    [[nodiscard]] static bool IsHostOperand(const T& val)
+    {
+        if constexpr (std::is_same_v<T, MapRef>)
+        {
+            return val.IsHost();
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    // The operation of a host object with another operand, when one of them is a host object:
+    // == and != (HostCompare), else the operation of a host list or tuple on the engine's own
+    // list. Out of line and cold, as the operands of a hot loop are never hosts (docs/tasks/0353)
+    template<typename L, typename R>
+    [[nodiscard]] JINJA2CPP_COLD_INLINE std::optional<InternalValue> HostMismatch(const L& left, const R& right) const
+    {
+        if (m_oper == BinaryExpression::LogicalEq || m_oper == BinaryExpression::LogicalNe)
+        {
+            return HostCompare(left, right);
+        }
+        return HostSequenceOperation(left, right);
     }
 
     // == or != with a host object on either side (host::Equal). Out of line and cold: inlined,
