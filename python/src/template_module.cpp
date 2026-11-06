@@ -61,6 +61,7 @@ public:
     jinja2::Value Convert(nb::handle object)
     {
         CheckStack();
+        CountValue();
         PyObject* raw = object.ptr();
         if (raw == Py_None)
         {
@@ -135,6 +136,18 @@ public:
 
 private:
     static constexpr std::size_t kMaxDepth = 1000;
+    // The copy repeats a container each time it is reached (`x = [x, x]` thirty times is a
+    // small graph and a billion copies): the values of one argument are counted, and a copy
+    // that grows past this many stops before it allocates them
+    static constexpr std::size_t kMaxValues = std::size_t{ 1 } << 20;
+    void CountValue()
+    {
+        if (++m_values > kMaxValues)
+        {
+            PyErr_SetString(PyExc_MemoryError, "a module argument expands to more than 1048576 values");
+            throw nb::python_error();
+        }
+    }
     bool Enter(PyObject* container)
     {
         if (!m_path.insert(container).second)
@@ -151,13 +164,9 @@ private:
     }
 
     std::size_t m_depth = 0;
+    std::size_t m_values = 0;
     std::unordered_set<PyObject*> m_path;
 };
-
-jinja2::Value ForModule(nb::handle object)
-{
-    return ModuleParams().Convert(object);
-}
 
 // A macro of a module (Template.make_module, Template.module): it runs in its module, which
 // the callable keeps alive with the template, so it stays callable after the template, the
@@ -188,16 +197,18 @@ public:
         }
         auto& env = nb::cast<PyEnvironment&>(m_environment);
         env.CheckAlive();
+        // One budget for all the arguments of the call
+        ModuleParams convert;
         jinja2::ValuesList positional;
         positional.reserve(args.size());
         for (auto arg : args)
         {
-            positional.push_back(ForModule(arg));
+            positional.push_back(convert.Convert(arg));
         }
         jinja2::ValuesMap keywords;
         for (auto [name, value] : kwargs)
         {
-            keywords[Utf8(name)] = ForModule(value);
+            keywords[Utf8(name)] = convert.Convert(value);
         }
         jinja2::UserCallableParams params;
         params.extraPosArgs = jinja2::Value(std::move(positional));
@@ -339,12 +350,13 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
     {
         RaiseTypeError("make_module takes a dict of variables");
     }
+    ModuleParams convert;
     jinja2::ValuesMap values;
     for (auto [name, value] : nb::borrow<nb::dict>(params))
     {
         if (PyUnicode_Check(name.ptr()))
         {
-            values[std::string(Utf8View(name))] = ForModule(value);
+            values[std::string(Utf8View(name))] = convert.Convert(value);
         }
     }
     RenderState state;

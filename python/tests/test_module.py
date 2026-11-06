@@ -302,6 +302,25 @@ def test_deeply_nested_module_arguments_raise_recursion_error(kind, depth):
     del value
 
 
+
+def test_shared_references_in_module_arguments_are_bounded():
+    # A small acyclic graph whose copy doubles at each level: refused before it allocates
+    tpl = jinja2cpp.Template("{% macro m(x) %}{{ 1 }}{% endmacro %}")
+    x = []
+    for _ in range(30):
+        x = [x, x]
+    with pytest.raises(MemoryError):
+        tpl.module.m(x)
+    with pytest.raises(MemoryError):
+        tpl.make_module({"x": x})
+    # The budget is per call, not per argument
+    y = []
+    for _ in range(19):
+        y = [y, y]
+    with pytest.raises(MemoryError):
+        tpl.module.m(y, y, y)
+    assert tpl.module.m(y) == "1"
+
 def test_moderately_nested_module_arguments_work_and_cycles_are_cut():
     tpl = jinja2cpp.Template("{% macro m(x) %}{{ x|length }}{% endmacro %}")
     assert tpl.module.m(_nested("list", 500)) == "1"

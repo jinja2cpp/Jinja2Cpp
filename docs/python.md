@@ -155,7 +155,7 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `namespace` becomes a dict, a `cycler` a dict, a `range` a list, a tuple a list, an `Undefined` is
   `None`, a dict key that is no str is spelled as `str()` spells it, and a Python object (not a str, number,
   list, dict, Markup or callable) stays itself in the module (attributes and methods are Python's), but a list or dict read off it and exported with `{% set %}` arrives as `{}`, and `dictsort` entries as `{key, value}` dicts. The params of a module are
-  copied (Jinja2's module shares the dicts) and nested at most 1000 deep (`RecursionError`, 0418), and `shared=True` leaves out the environment's
+  copied (Jinja2's module shares the dicts) and nested at most 1000 deep (`RecursionError`, 0418), with at most 1048576 values per call once shared references are copied out (`MemoryError`), and `shared=True` leaves out the environment's
   globals but not the engine's own (`range`, `dict`, `cycler`, `namespace`, `lipsum`) (0411).
 - `env.parse` is a full load: it also reports what the compile reports (an unknown filter or test
   raises `TemplateAssertionError`), and returns an opaque object that only `jinja2cpp.meta`
