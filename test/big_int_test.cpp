@@ -695,6 +695,6 @@ TEST(BigIntTest, FromDigitsAndToDigitsRejectBadInput)
     EXPECT_THROW(BigInt::FromDigits(std::string(300000, '1'), 16, false), std::length_error);
     // Past the estimate by a few bits: 315653 nines are 1048577 bits, one over the cap
     EXPECT_THROW(BigInt::FromDigits(std::string(315653, '9'), 10, false), std::length_error);
-    EXPECT_THROW(BigInt(5).ToDigits(1), std::invalid_argument);
-    EXPECT_THROW(BigInt(5).ToDigits(37), std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(BigInt(5).ToDigits(1)), std::invalid_argument);
+    EXPECT_THROW(static_cast<void>(BigInt(5).ToDigits(37)), std::invalid_argument);
 }
