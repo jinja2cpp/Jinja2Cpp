@@ -1058,6 +1058,8 @@ InternalValue Sum(const ListAdapter& list, const InternalValueList& path, std::o
     InternalValue resultVal = start ? std::move(*start) : InternalValue(static_cast<int64_t>(0));
     list.ForEach([&](InternalValue&& val) {
         auto item = path.empty() ? std::move(val) : GetAttributeByPath(val, path, InternalValue(), context);
+        // An undefined item fails the addition as Python's __radd__ does (the sandbox's unsafe attribute among them)
+        CheckUndefinedUse(item, UndefinedUse::Arithmetic);
         // An undefined start fails the first addition (docs/tasks/0310)
         CheckUndefinedUse(resultVal, UndefinedUse::Arithmetic);
         resultVal = Apply2<visitors::BinaryMathOperation>(resultVal, item, BinaryExpression::Plus);

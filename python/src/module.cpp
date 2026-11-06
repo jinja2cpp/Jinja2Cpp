@@ -90,6 +90,7 @@ const PyNames& Names()
         names->templateAssertionError = exceptions.attr("TemplateAssertionError");
         names->templateRuntimeError = exceptions.attr("TemplateRuntimeError");
         names->undefinedError = exceptions.attr("UndefinedError");
+        names->securityError = exceptions.attr("SecurityError");
         names->templateError = exceptions.attr("TemplateError");
         const auto builtins = nb::module_::import_("builtins");
         names->reversed = builtins.attr("reversed");

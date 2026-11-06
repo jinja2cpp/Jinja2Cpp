@@ -233,6 +233,7 @@ public:
         // What pass_environment, pass_eval_context and pass_context callables of the macro need
         state.environment = m_environment.ptr();
         state.templateGlobals = m_templateGlobals.ptr();
+        state.sandbox = SandboxOf(m_environment);
         const RenderScope scope(state);
         const HostPollScope poll;
         try
@@ -378,6 +379,7 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
     state.undefinedClass = env.UndefinedClass();
     state.environment = m_environment.ptr();
     state.templateGlobals = m_globals.ptr();
+    state.sandbox = SandboxOf(m_environment);
     const RenderScope scope(state);
     const HostPollScope poll;
     auto result = m_template.MakeModule(values);

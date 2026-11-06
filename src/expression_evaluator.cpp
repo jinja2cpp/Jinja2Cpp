@@ -1669,6 +1669,14 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
         {
             callee.SetParentData(receiver);
         }
+        if (callee.IsUndefined() && !GetUndefinedInfo(callee))
+        {
+            if (auto replacement = SandboxedNativeAttribute(receiver, *name))
+            {
+                callee = std::move(*replacement);
+                return false;
+            }
+        }
         // Python raises AttributeError; calling the missing attribute of a map, None or a
         // chainable undefined is an UndefinedError
         if (callee.IsUndefined() && !IsEmpty(receiver) && !AsMap(receiver))

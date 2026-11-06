@@ -1823,7 +1823,17 @@ JINJA2CPP_STR_METHOD(Rfind)
 JINJA2CPP_STR_METHOD(Index)
 JINJA2CPP_STR_METHOD(Rindex)
 JINJA2CPP_STR_METHOD(Count)
-JINJA2CPP_STR_METHOD(Format)
+InternalValue StrFormat(const InternalValue& self, const CallParams& params, RenderContext& context)
+{
+    if (auto* sandbox = ActiveHostSandbox())
+    {
+        return sandbox->Format(self, false, params, context);
+    }
+    return ApplyStringConverter(self, [&params, &context](auto sv) -> InternalValue {
+        using CharT = typename decltype(sv)::value_type;
+        return StrOps<CharT>::Format(sv, params, context);
+    });
+}
 JINJA2CPP_STR_METHOD(Isdigit)
 JINJA2CPP_STR_METHOD(Isdecimal)
 JINJA2CPP_STR_METHOD(Isnumeric)
@@ -1960,6 +1970,10 @@ InternalValue MarkupJoin(const InternalValue& self, const CallParams& params, Re
 
 InternalValue MarkupFormat(const InternalValue& self, const CallParams& params, RenderContext& context)
 {
+    if (auto* sandbox = ActiveHostSandbox())
+    {
+        return sandbox->Format(self, false, params, context);
+    }
     return MarkupResult(ApplyStringConverter(self, [&params, &context](auto sv) -> InternalValue {
         using CharT = typename decltype(sv)::value_type;
         return StrOps<CharT>::Format(sv, params, context, true);
@@ -2731,13 +2745,13 @@ InternalValue MakeBoundMethod(const InternalValue& self, const MethodInfo& metho
 
 bool IsReadOnlyContainers(const RenderContext& context)
 {
-    return context.GetDialect() == detail::Dialect::Transformers;
+    return detail::IsReadOnlyDialect(context.GetDialect());
 }
 
 InternalValue UnsafeMethod(const InternalValue& obj, std::string_view name, const RenderContext& context)
 {
     // ImmutableSandboxedEnvironment.getattr: unsafe_undefined, a SecurityError when used
-    return MakeUndefinedWithHint(context, "access to attribute '" + std::string(name) + "' of '" + TypeName(obj) + "' object is unsafe.");
+    return MakeUnsafeUndefined(context, "access to attribute '" + std::string(name) + "' of '" + TypeName(obj) + "' object is unsafe.");
 }
 
 namespace

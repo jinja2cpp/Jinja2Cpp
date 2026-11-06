@@ -3,6 +3,7 @@
 
 #include "common.h"
 
+#include "host_object.h"
 #include "internal_value.h"
 
 #include <memory>
@@ -31,9 +32,16 @@ struct RenderState
     // the render holds
     PyObject* environment = nullptr;
     PyObject* templateGlobals = nullptr;
+    // The environment when it is sandboxed (SandboxOf), whose is_safe_attribute and is_safe_callable the
+    // render asks for every attribute and call of a Python object (0354, the plan's D8); null for any other
+    PyObject* sandbox = nullptr;
     RenderState* outer = nullptr;
 };
 RenderState* CurrentRender() noexcept;
+// `environment` when its `sandboxed` attribute is true, else null
+PyObject* SandboxOf(nb::handle environment);
+// Sets the fields of `state` that depend on the environment object
+void InitRenderState(RenderState& state, nb::handle environment);
 // Whether this thread is known to hold the GIL (a render runs): PyRef::Release then needs no
 // PyGILState_Ensure, which the stable ABI has instead of PyGILState_Check
 bool HoldsGil() noexcept;
@@ -50,6 +58,8 @@ public:
 
 private:
     RenderState& m_state;
+    // The sandbox of a SandboxedEnvironment render (RenderState::sandbox)
+    jinja2::HostSandboxScope m_sandbox;
 };
 
 class TemplateValue;

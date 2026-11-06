@@ -10,6 +10,7 @@
 #include <jinja2cpp/template_env.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -75,6 +76,16 @@ std::string ObjectTypeRepr(const InternalValue& obj)
 }
 } // namespace
 
+std::optional<InternalValue> SandboxedNativeAttribute(const InternalValue& obj, const std::string& name)
+{
+    auto* sandbox = ActiveHostSandbox();
+    if (!sandbox || GetHostObject(obj))
+    {
+        return std::nullopt;
+    }
+    return sandbox->NativeAttribute(obj, name);
+}
+
 InternalValue MakeUndefined(const RenderContext& context, std::string name)
 {
     UndefinedInfo info;
@@ -97,6 +108,13 @@ InternalValue MakeUndefined(const RenderContext* context, const InternalValue& o
     {
         return obj;
     }
+    if (IsStringValue(key))
+    {
+        if (auto replacement = SandboxedNativeAttribute(obj, AsString(key)))
+        {
+            return std::move(*replacement);
+        }
+    }
     // A key a host map has but reads as undefined (a JSON null or an empty reflected field,
     // task 0047) is not missing: it stays a plain undefined, which fails no use
     auto map = AsMap(obj);
@@ -115,6 +133,10 @@ InternalValue MakeUndefined(const RenderContext* context, const InternalValue& o
 
 InternalValue MakeUndefinedAttr(const RenderContext* context, const InternalValue& obj, std::string name)
 {
+    if (auto replacement = SandboxedNativeAttribute(obj, name))
+    {
+        return std::move(*replacement);
+    }
     UndefinedInfo info;
     info.policy = PolicyOf(context);
     info.isAttr = true;
@@ -165,9 +187,18 @@ std::string DebugUndefinedText(const UndefinedInfo& info)
     return "{{ no such element: " + info.objType + "[" + name + "] }}";
 }
 
+InternalValue MakeUnsafeUndefined(const RenderContext& context, std::string hint)
+{
+    UndefinedInfo info;
+    info.policy = PolicyOf(&context);
+    info.hint = std::move(hint);
+    info.security = true;
+    return MakeUndefinedValue(std::move(info));
+}
+
 void ThrowUndefined(const UndefinedInfo& info)
 {
-    throw UndefinedError(UndefinedMessage(info));
+    throw UndefinedError(UndefinedMessage(info), info.security);
 }
 
 const char* UndefinedClassName(const UndefinedInfo& info)

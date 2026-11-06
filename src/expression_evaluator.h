@@ -1069,7 +1069,7 @@ public:
         : m_valueRef(valueRef)
         , m_params(ArenaCallParams::Make(nodes, params))
         , m_isNamedCallee(nodes.Is<ValueRefExpression>(m_valueRef))
-        , m_readOnlyContainers(detail::t_parseLimits.dialect == detail::Dialect::Transformers)
+        , m_readOnlyContainers(detail::IsReadOnlyDialect(detail::t_parseLimits.dialect))
     {
     }
 

@@ -231,7 +231,17 @@ std::optional<InternalValue> PyHost::GetAttr(const std::string& name) const
         }
         ThrowPending();
     }
-    return ToEngine(nb::steal(attr));
+    const auto value = nb::steal(attr);
+    if (const auto* render = CurrentRender(); render && render->sandbox)
+    {
+        // The one checkpoint of the sandbox (0248 D8): every attribute a template reads of a Python
+        // object, whatever syntax reads it (x.a, x[a], |attr, attribute=, a str.format field), comes
+        // here. The environment's _sandbox_attribute asks is_safe_attribute and gives the value, a
+        // wrapped str.format, or the unsafe undefined
+        const auto checked = Steal(PyObject_CallMethod(render->sandbox, "_sandbox_attribute", "OOO", m_object, pyName.ptr(), value.ptr()));
+        return ToEngine(checked);
+    }
+    return ToEngine(value);
 }
 
 std::optional<InternalValue> PyHost::GetItem(const InternalValue& key) const
@@ -282,6 +292,12 @@ bool PyHost::IsCallable() const
 
 InternalValue PyHost::Call(const CallParams& params, RenderContext& context) const
 {
+    if (const auto* render = CurrentRender(); render && render->sandbox)
+    {
+        // SandboxedEnvironment.call: is_safe_callable, else a SecurityError
+        const auto safe = Steal(PyObject_CallMethod(render->sandbox, "_sandbox_check_call", "O", m_object));
+        (void)safe;
+    }
     return CallPython(m_object, params, context);
 }
 
@@ -439,6 +455,136 @@ bool PyHost::IsMarkupLike() const
 std::string PyHost::Html() const
 {
     return Utf8(Steal(PyObject_CallMethod(m_object, "__html__", nullptr)));
+}
+
+namespace
+{
+nb::object Stub(const char* name)
+{
+    // A class of that name, for an object of the engine that has no Python class: loop, a macro, a cycler
+    const auto type = Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyType_Type), "s(O){}", name, reinterpret_cast<PyObject*>(&PyBaseObject_Type)));
+    return Steal(PyObject_CallNoArgs(type.ptr()));
+}
+
+// A Python object of the kind of `obj`, for is_safe_attribute to look at: the value itself when it is
+// small, an empty container otherwise (the checks look at the type; converting a list for each refused
+// name would cost its length)
+nb::object Representative(const InternalValue& obj, bool& synthetic)
+{
+    switch (obj.Kind())
+    {
+    case jinja2::ValueKind::None:
+        return nb::none();
+    case jinja2::ValueKind::Bool:
+    case jinja2::ValueKind::Int:
+    case jinja2::ValueKind::Double:
+    case jinja2::ValueKind::BigInt:
+    case jinja2::ValueKind::String:
+        return ToPython(obj);
+    case jinja2::ValueKind::List:
+    {
+        const auto list = *jinja2::AsList(obj);
+        if (list.GetRangeInfo())
+        {
+            return Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyRange_Type), "i", 0));
+        }
+        return list.IsTuple() ? Steal(PyTuple_New(0)) : Steal(PyList_New(0));
+    }
+    case jinja2::ValueKind::Map:
+    {
+        const auto map = *jinja2::AsMap(obj);
+        if (const char* objectClass = map.GetObjectClass())
+        {
+            synthetic = true;
+            return Stub(objectClass);
+        }
+        if (map.IsNamespace())
+        {
+            synthetic = true;
+            return Stub("Namespace");
+        }
+        return nb::dict();
+    }
+    case jinja2::ValueKind::KeyValuePair:
+        return Steal(PyTuple_New(0));
+    case jinja2::ValueKind::Callable:
+        synthetic = true;
+        return Stub(jinja2::GetIf<jinja2::Callable>(&obj)->GetKind() == jinja2::Callable::Macro ? "Macro" : "function");
+    default:
+        synthetic = true;
+        return Stub("object");
+    }
+}
+
+class PySandbox final : public jinja2::IHostSandbox
+{
+public:
+    [[nodiscard]] std::optional<InternalValue> NativeAttribute(const InternalValue& obj, const std::string& name) override
+    {
+        const auto* render = CurrentRender();
+        if (!render || !render->sandbox)
+        {
+            return std::nullopt;
+        }
+        if (name == "format_map" && jinja2::IsStringValue(obj))
+        {
+            // The engine's strings have no format_map; the sandbox's is SandboxedFormatter's
+            return InternalValue(jinja2::Callable(jinja2::Callable::UserCallable, [obj](const CallParams& params, RenderContext& context) { return PythonSandbox().Format(obj, true, params, context); }));
+        }
+        // Python's objects have attributes the engine's values have not: __class__, __init__, ...
+        // A name without the underscore of a private one is left to the environment's own policy
+        if (name.empty() || name[0] != '_')
+        {
+            return std::nullopt;
+        }
+        bool synthetic = false;
+        const auto representative = Representative(obj, synthetic);
+        const auto pyName = MakeStr(name);
+        nb::object owned = nb::none();
+        // A real Python object has the attribute or has not. An object of the engine that is only
+        // a stand-in (loop, a macro, self) is taken to have every private one: the refusal is the
+        // safe answer where Python's class might have it (its mangled names)
+        PyObject* value = synthetic ? nullptr : PyObject_GetAttr(representative.ptr(), pyName.ptr());
+        if (!value && !synthetic)
+        {
+            if (ClearAttributeError())
+            {
+                return std::nullopt;
+            }
+            ThrowPending();
+        }
+        if (value)
+        {
+            owned = nb::steal(value);
+        }
+        const auto checked = Steal(PyObject_CallMethod(render->sandbox, "_sandbox_attribute", "OOO", representative.ptr(), pyName.ptr(), owned.ptr()));
+        auto result = ToEngine(checked);
+        if (result.IsUndefined())
+        {
+            return result;
+        }
+        return std::nullopt;
+    }
+
+    InternalValue Format(const InternalValue& self, bool formatMap, const CallParams& params, RenderContext& context) override
+    {
+        const auto* render = CurrentRender();
+        const auto text = ToPython(self);
+        const auto method = Steal(PyObject_GetAttrString(text.ptr(), formatMap ? "format_map" : "format"));
+        auto wrapped = Steal(PyObject_CallMethod(render->sandbox, "wrap_str_format", "O", method.ptr()));
+        if (wrapped.is_none())
+        {
+            wrapped = method;
+        }
+        return CallPython(wrapped.ptr(), params, context);
+    }
+};
+} // namespace
+
+jinja2::IHostSandbox& PythonSandbox()
+{
+    static PySandbox sandbox;
+    return sandbox;
 }
 
 const PyHost* AsPyHost(const InternalValue& value)

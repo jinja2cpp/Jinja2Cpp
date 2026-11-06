@@ -202,6 +202,25 @@ InternalValue UndefinedToEngine(PyObject* object)
     {
         info.hint = Utf8(hint);
     }
+    // Jinja2's unsafe_undefined: exc is a SecurityError class
+    if (const auto exc = attr("_undefined_exception"); PyType_Check(exc.ptr()))
+    {
+        if (const auto mro = nb::steal(PyObject_GetAttrString(exc.ptr(), "__mro__")))
+        {
+            for (auto base : mro)
+            {
+                if (IsJinjaClass(base, "SecurityError"))
+                {
+                    info.security = true;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            PyErr_Clear();
+        }
+    }
     const auto shared = jinja2::MakeRef<const UndefinedInfo>(std::move(info));
     return InternalValue(jinja2::UndefinedValue{ shared.get() });
 }
@@ -226,6 +245,10 @@ nb::object UndefinedToPython(const InternalValue& value)
         if (!info->name.empty())
         {
             kwargs["name"] = MakeStr(info->name);
+        }
+        if (info->security)
+        {
+            kwargs["exc"] = Names().securityError;
         }
     }
     const auto noArgs = nb::steal(PyTuple_New(0));
@@ -402,8 +425,32 @@ RenderState* CurrentRender() noexcept
     return t_render;
 }
 
+PyObject* SandboxOf(nb::handle environment)
+{
+    PyObject* flag = PyObject_GetAttrString(environment.ptr(), "sandboxed");
+    if (!flag)
+    {
+        PyErr_Clear();
+        return nullptr;
+    }
+    const auto owned = nb::steal(flag);
+    const int truth = PyObject_IsTrue(flag);
+    if (truth < 0)
+    {
+        throw nb::python_error();
+    }
+    return truth != 0 ? environment.ptr() : nullptr;
+}
+
+void InitRenderState(RenderState& state, nb::handle environment)
+{
+    state.environment = environment.ptr();
+    state.sandbox = SandboxOf(environment);
+}
+
 RenderScope::RenderScope(RenderState& state) noexcept
     : m_state(state)
+    , m_sandbox(state.sandbox ? &PythonSandbox() : nullptr)
 {
     state.outer = t_render;
     t_render = &state;

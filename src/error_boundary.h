@@ -94,6 +94,10 @@ typename BasicErrorInfo<CharT>::Data ExceptionToData(std::exception_ptr exceptio
         code = ErrorCode::UndefinedError;
         message = ex.what();
         exception = nullptr;
+        if (ex.IsSecurity())
+        {
+            limitField = SecurityErrorMarker;
+        }
     }
     catch (const TemplateRuntimeError& ex)
     {
