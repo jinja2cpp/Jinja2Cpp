@@ -355,7 +355,7 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
                     cachedModification = p->second.lastModification;
                 }
             }
-            if (cachedHandler)
+            if (cachedHandler && cachedTpl)
             {
                 auto lastModified = cachedHandler->GetLastModificationDate(fileName);
                 if (!lastModified || (cachedModification && lastModified.value() <= cachedModification.value()))
