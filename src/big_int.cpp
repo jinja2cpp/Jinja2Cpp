@@ -281,6 +281,11 @@ BigInt BigInt::FromDigits(std::string_view digits, int base, bool negative)
     }
     BigInt result;
     result.m_decimal = FromLimbs(LimbsFromDigits(digits, base), negative);
+    // The estimate above lets a number a few bits too wide through: the exact width decides
+    if (ExceedsBitCap(negative ? std::string_view(result.m_decimal).substr(1) : std::string_view(result.m_decimal)))
+    {
+        throw std::length_error("BigInt::FromDigits: integer is wider than " + std::to_string(MaxBigIntBits) + " bits");
+    }
     return result;
 }
 

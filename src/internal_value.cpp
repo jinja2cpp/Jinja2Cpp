@@ -3342,6 +3342,9 @@ protected:
         {
             return std::nullopt;
         }
+        // The copy converts the values, so a dict that holds itself recurses here: Python's
+        // RecursionError where the stack runs out, never an overflow
+        CheckStack();
         // GetItems gives the entries under their own keys, which the string keyed copy cannot hold
         ValuesMap snapshot;
         std::vector<std::pair<Value, Value>> items;
@@ -4108,24 +4111,6 @@ MapAdapter CreateMapAdapter(const GenericMap& values)
 MapAdapter CreateMapAdapter(GenericMap&& values)
 {
     return MapAdapter(MakeRef<GenericMapAdapter<BySharedVal>>(std::move(values)));
-}
-
-InternalValue MapValueOf(const GenericMap& values)
-{
-    if (const auto* accessor = values.GetAccessor(); accessor && accessor->AsHostObject())
-    {
-        return HostMapToInternal(values);
-    }
-    return InternalValue(CreateMapAdapter(values));
-}
-
-InternalValue MapValueOf(GenericMap&& values)
-{
-    if (const auto* accessor = values.GetAccessor(); accessor && accessor->AsHostObject())
-    {
-        return HostMapToInternal(values);
-    }
-    return InternalValue(CreateMapAdapter(std::move(values)));
 }
 
 MapAdapter CreateMapAdapter(const ValuesMap& values)

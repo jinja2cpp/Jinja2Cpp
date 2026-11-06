@@ -85,7 +85,7 @@ else
   if [ $tidy_status = 0 ]; then
     record PASS "clang-tidy (changed lines, headers on their own)"
   else
-    record FAIL "clang-tidy: see "$logs/preflight-tidy.log""
+    record FAIL "clang-tidy: see $logs/preflight-tidy.log"
   fi
   query=clang-query-18; have $query || query=clang-query
   if python3 scripts/null_compare.py -p "$build" --changed "$base" --fail --clang-query "$query"; then

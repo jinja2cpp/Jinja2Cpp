@@ -920,6 +920,14 @@ TEST(PublicHostObjectTest, ExportedEngineContainersHaveAStableIdentity)
     EXPECT_EQ("1", Render("{% set d = {} %}{% do d.update(self=d) %}{{ walk(d) }}", params));
     walker = {};
     EXPECT_EQ("1", Render("{% set d = {'k': []} %}{% do d['k'].append(d) %}{{ walk(d) }}", params));
+    // A dict with a key that is not a string goes out as a copy (CreateSnapshot), so one that
+    // holds itself is RecursionError, never a stack overflow
+    for (const std::string source : { "{% set d = {1: 'a'} %}{% do d.update(self=d) %}{{ walk(d) }}", "{% set d = {1: 'a'} %}{% do d.update({(1, 2): d}) %}{{ walk(d) }}" })
+    {
+        walker = {};
+        const auto result = Render(source, params);
+        EXPECT_NE(std::string::npos, result.find("Maximum recursion depth exceeded")) << result;
+    }
 
     // Two exports of one list, one dict, one tuple: one identity; another list another
     Render("{% set xs = [1] %}{% set d = {'a': 1} %}{% set t = (1,) %}{{ probe(xs) }}{{ probe(xs) }}{{ probe(d) }}{{ probe(d) }}{{ probe(t) }}{{ probe(t) }}{{ probe([1]) }}", params);
