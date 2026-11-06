@@ -1516,6 +1516,22 @@ TEST(PromptEscaper, SeparatorSharesNoCharacterWithAPattern)
     EXPECT_FALSE(PromptEscaper::IsValid(options)) << "a pattern longer than 256 bytes";
     options.specialTokens.back().resize(256);
     EXPECT_TRUE(PromptEscaper::IsValid(options));
+    // Malformed UTF-8 would become U+FFFD in the wide patterns only: a separator \xFF there would equal the special's U+FFFD
+    {
+        PromptEscapeOptions bad;
+        bad.specialTokens = { "\xEF\xBF\xBD"
+                              "x" };
+        bad.separator = "\xFF";
+        EXPECT_FALSE(PromptEscaper::IsValid(bad));
+        bad.separator = " ";
+        EXPECT_TRUE(PromptEscaper::IsValid(bad));
+        bad.specialTokens = { "a\xC0\xAF"
+                              "b" };
+        EXPECT_FALSE(PromptEscaper::IsValid(bad)) << "overlong form";
+        bad.specialTokens = { "ab" };
+        bad.tags = { "d\xED\xA0\x80" };
+        EXPECT_FALSE(PromptEscaper::IsValid(bad)) << "surrogate";
+    }
     // A special of one code point cannot be broken by a separator after its first code point
     for (const char* single : { "x", "\xEE\x80\x80" })
     {

@@ -450,15 +450,79 @@ PromptEscaper::PromptEscaper(PromptEscapeOptions options)
 {
     if (!IsValid(options))
     {
-        throw std::invalid_argument("PromptEscapeOptions: the separator must be non-empty and share no character with a special token or tag pattern, no special may be a single character, and no pattern may be longer than 256 bytes");
+        throw std::invalid_argument("PromptEscapeOptions: the separator must be non-empty and share no character with a special token or tag pattern, no special may be a single character, all must be well-formed UTF-8, and no pattern may be longer than 256 bytes");
     }
     m_impl = std::make_shared<const detail::PromptEscaperImpl>(std::move(options));
 }
+
+namespace
+{
+// Whether text is well-formed UTF-8 (no overlong forms, surrogates or code points past U+10FFFF): the wide
+// patterns and separator are converted from it, and a malformed sequence would become U+FFFD there only
+bool IsUtf8(std::string_view text) noexcept
+{
+    for (std::size_t idx = 0; idx < text.size();)
+    {
+        const auto lead = static_cast<unsigned char>(text[idx]);
+        std::size_t length = 0;
+        std::uint32_t codePoint = 0;
+        if (lead < 0x80U)
+        {
+            ++idx;
+            continue;
+        }
+        if (lead >= 0xC2U && lead <= 0xDFU)
+        {
+            length = 2;
+            codePoint = lead & 0x1FU;
+        }
+        else if (lead >= 0xE0U && lead <= 0xEFU)
+        {
+            length = 3;
+            codePoint = lead & 0x0FU;
+        }
+        else if (lead >= 0xF0U && lead <= 0xF4U)
+        {
+            length = 4;
+            codePoint = lead & 0x07U;
+        }
+        else
+        {
+            return false;
+        }
+        if (text.size() - idx < length)
+        {
+            return false;
+        }
+        for (std::size_t next = 1; next < length; ++next)
+        {
+            const auto unit = static_cast<unsigned char>(text[idx + next]);
+            if ((unit & 0xC0U) != 0x80U)
+            {
+                return false;
+            }
+            codePoint = (codePoint << 6U) | (unit & 0x3FU);
+        }
+        const bool overlong = (length == 3 && codePoint < 0x800U) || (length == 4 && codePoint < 0x10000U);
+        if (overlong || (codePoint >= 0xD800U && codePoint <= 0xDFFFU) || codePoint > 0x10FFFFU)
+        {
+            return false;
+        }
+        idx += length;
+    }
+    return true;
+}
+
+} // namespace
 
 bool PromptEscaper::IsValid(const PromptEscapeOptions& options) noexcept
 {
     const std::string_view separator = options.separator;
     if (separator.empty())
+    {
+        return false;
+    }
+    if (!IsUtf8(separator) || !std::all_of(options.specialTokens.begin(), options.specialTokens.end(), [](const std::string& p) { return IsUtf8(p); }) || !std::all_of(options.tags.begin(), options.tags.end(), [](const std::string& p) { return IsUtf8(p); }))
     {
         return false;
     }

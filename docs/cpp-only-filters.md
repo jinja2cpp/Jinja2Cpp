@@ -132,7 +132,8 @@ of the 2.0 contract:
    joined cannot form a special.
 4. **Separator.** Default a space. It must be non-empty and share no character (ASCII case
    ignored) with any pattern, a special must be at least two code points (one cannot be broken
-   by an insertion), and no special or tag name may be longer than 256 bytes; anything
+   by an insertion), patterns and separator must be well-formed UTF-8, and no special or tag
+   name may be longer than 256 bytes; anything
    else is an argument error (and `PromptEscaper`'s constructor throws `std::invalid_argument`).
    A tag name followed in the output by a separator counts as followed by a boundary, so a
    special that starts with a tag name's last letter cannot turn `<ab` into the tag `<a b`.

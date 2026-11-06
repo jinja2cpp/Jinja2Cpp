@@ -185,7 +185,7 @@ InternalValue PromptFilter::Neutralize(const InternalValue& baseVal, RenderConte
         }
         if (!PromptEscaper::IsValid(options))
         {
-            throw TemplateRuntimeError("neutralize(): the separator must be non-empty and share no character with a special token or tag pattern, no special may be a single character, and no pattern may be longer than 256 bytes");
+            throw TemplateRuntimeError("neutralize(): the separator must be non-empty and share no character with a special token or tag pattern, no special may be a single character, all must be well-formed UTF-8, and no pattern may be longer than 256 bytes");
         }
         {
             const std::scoped_lock lock(m_cache->mutex);
