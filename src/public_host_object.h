@@ -23,6 +23,10 @@ struct UndefinedValue;
 // A value the host handed over as a value of the engine (internal_value.cpp)
 InternalValue Value2IntValue(Value&& val);
 
+// Whether the accessor is the library's own bridge, which keeps its object alive itself: a map of it needs no owner
+// when it is lent from a container (LendGenericItem)
+bool IsSelfOwningHostMap(const IMapItemAccessor& accessor);
+
 // An undefined value of the engine as MakeUndefined describes it
 Value UndefinedToHost(const UndefinedValue& undefined);
 

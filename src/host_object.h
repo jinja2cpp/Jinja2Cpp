@@ -67,6 +67,8 @@ public:
     [[nodiscard]] virtual std::optional<InternalValue> GetAttr(const std::string& name) const = 0;
     // x[key]; nullopt when there is no such item or the object has no items
     [[nodiscard]] virtual std::optional<InternalValue> GetItem(const InternalValue& /*key*/) const { return std::nullopt; }
+    // x[name] for a string key: GetItem without the key made into a value first (the default does that)
+    [[nodiscard]] virtual std::optional<InternalValue> GetItemByName(const std::string& name) const { return GetItem(InternalValue(name)); }
     // x[slice(start, stop, step)], where an omitted bound is None and an undefined one stays undefined; nullopt for
     // an object that has no items, which the engine reports as Python's TypeError. An object with
     // items that takes no slice throws its own error, as a mapping's KeyError

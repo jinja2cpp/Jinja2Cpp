@@ -8,9 +8,12 @@
 
 #include <cstddef>
 #include <memory>
+#include <new>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <tuple>
+#include <type_traits>
 #include <utility>
 
 JINJA2CPP_SUPPRESS_DLL_INTERFACE_WARNINGS_BEGIN
@@ -137,11 +140,36 @@ public:
  */
 JINJA2CPP_EXPORT Value MakeHostValue(std::shared_ptr<const IHostObject> object);
 
+namespace detail
+{
+/*!
+ * \brief \ref MakeHostValue of an object the library constructs in its own allocation
+ *
+ * `construct` places the object at `where` (`size` bytes aligned to `align`, not above the default `new` alignment)
+ * and returns it; `context` is passed through. The object is destroyed through its virtual destructor and freed
+ * with the value's last reference. One allocation holds the object, the engine's bridge and the ownership.
+ */
+JINJA2CPP_EXPORT Value MakeHostValueInPlace(size_t size, size_t align, const IHostObject* (*construct)(void* where, void* context), void* context);
+} // namespace detail
+
 //! \ref MakeHostValue of a new object of type `T`, made from `args`
 template<typename T, typename... Args>
 Value MakeHostValue(Args&&... args)
 {
-    return MakeHostValue(std::shared_ptr<const IHostObject>(std::make_shared<const T>(std::forward<Args>(args)...)));
+    if constexpr (alignof(T) <= __STDCPP_DEFAULT_NEW_ALIGNMENT__ && std::is_base_of_v<IHostObject, T>)
+    {
+        auto pack = std::forward_as_tuple(std::forward<Args>(args)...);
+        return detail::MakeHostValueInPlace(
+            sizeof(T), alignof(T),
+            [](void* where, void* context) -> const IHostObject* {
+                return std::apply([where](auto&&... a) -> const IHostObject* { return ::new (where) T(std::forward<decltype(a)>(a)...); }, std::move(*static_cast<decltype(pack)*>(context)));
+            },
+            &pack);
+    }
+    else
+    {
+        return MakeHostValue(std::shared_ptr<const IHostObject>(std::make_shared<const T>(std::forward<Args>(args)...)));
+    }
 }
 
 /*!

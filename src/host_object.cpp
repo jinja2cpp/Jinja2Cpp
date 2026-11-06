@@ -55,7 +55,7 @@ std::optional<InternalValue> AttrThenItem(const IEngineHostObject& host, const s
     {
         return attr;
     }
-    return host.GetItem(InternalValue(name));
+    return host.GetItemByName(name);
 }
 } // namespace
 

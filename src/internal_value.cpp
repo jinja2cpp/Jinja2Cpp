@@ -1296,7 +1296,7 @@ InternalValue LendGenericItem(const std::shared_ptr<const void>& owner, Value&& 
         {
             return Value2IntValue(Value(WithOwner(owner, std::move(*list))));
         }
-        if (auto* map = std::get_if<GenericMap>(&item.GetData()); map && map->GetAccessor())
+        if (auto* map = std::get_if<GenericMap>(&item.GetData()); map && map->GetAccessor() && !IsSelfOwningHostMap(*map->GetAccessor()))
         {
             return Value2IntValue(Value(WithOwner(owner, std::move(*map))));
         }
