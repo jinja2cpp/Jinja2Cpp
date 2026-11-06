@@ -458,7 +458,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0388](0388-migration-iterator-results.md) | MIGRATION.md: lazy filter results are no longer sequences | release | low | open |
 | [0389](0389-block-in-scoped-statement-of-child-template.md) | A block in a scoped statement of a child template also renders in place | parity | low | done |
 | [0390](0390-loop-length-and-kept-loop-leftovers.md) | Loop length and kept loops: leftovers of 0304 | parity | low | done |
-| [0391](0391-loop-last-peek-cost.md) | `loop.last` peeks out of line since 0304 | perf | low | open |
+| [0391](0391-loop-last-peek-cost.md) | `loop.last` peeks out of line since 0304 | perf | low | done |
 | [0392](0392-prompt-nfkc-specials.md) | NFKC-folded special token matching in `neutralize` | api | low | open |
 | [0393](0393-prompt-fragment-lint.md) | Warn about a special token fragment written next to `{{ }}` in prompt mode | api | low | open |
 | [0394](0394-chat-template-prompt-safe-params.md) | Name the prompt-safe chat template params and read specials from a tokenizer config | api | low | open |
