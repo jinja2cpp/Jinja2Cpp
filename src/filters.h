@@ -38,8 +38,7 @@ namespace filters
 {
 // What sort does, for filters that order or read items as it does (token_budget.cpp)
 //! The order sorted(key=...) gives the values by the key paths (SortKeyPaths of Jinja2's "a,b.c"), stable
-std::vector<size_t> SortedOrderByPaths(const InternalValueList& values, const std::vector<InternalValueList>& paths, BinaryExpression::Operation oper,
-                                       BinaryExpression::CompareType compType, RenderContext& context);
+std::vector<size_t> SortedOrderByPaths(const InternalValueList& values, const std::vector<InternalValueList>& paths, BinaryExpression::Operation oper, BinaryExpression::CompareType compType, RenderContext& context);
 std::vector<InternalValueList> AttributeSortPaths(const InternalValue& attrName, bool isSet);
 InternalValueList AttributePathOf(const InternalValue& attribute);
 InternalValue ItemAttribute(const InternalValue& item, const InternalValueList& path, RenderContext& context);

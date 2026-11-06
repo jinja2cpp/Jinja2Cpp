@@ -23,7 +23,7 @@ import jinja2.sandbox
 
 
 # settings.json keys that are Environment options; "wide" only switches the C++ driver to TemplateW,
-# "transformers" makes the environment transformers' apply_chat_template one (ConfigureForChatTemplates)
+# "cpp_only" skips the case (is_cpp_only), "transformers" makes the environment transformers' apply_chat_template one (ConfigureForChatTemplates)
 ENV_OPTIONS = ("trim_blocks", "lstrip_blocks", "autoescape")
 
 
@@ -55,6 +55,12 @@ def transformers_environment():
     env.globals["raise_exception"] = raise_exception
     env.globals["strftime_now"] = lambda fmt: datetime.datetime(2025, 3, 14, 9, 26, 53).strftime(fmt)
     return env
+
+
+def is_cpp_only(case_dir):
+    """A case that uses C++-only filters (docs/cpp-only-filters.md) has no Python run"""
+    settings_file = case_dir / "settings.json"
+    return bool(settings_file.exists() and json.loads(settings_file.read_text(encoding="utf-8")).get("cpp_only"))
 
 
 def load_case(case_dir):
@@ -93,7 +99,7 @@ def main():
     ap.add_argument("--filter", default="")
     args = ap.parse_args()
 
-    cases = sorted(d for d in args.cases_dir.iterdir() if (d / "main.j2").exists())
+    cases = sorted(d for d in args.cases_dir.iterdir() if (d / "main.j2").exists() and not is_cpp_only(d))
     if args.dump_dir:
         args.dump_dir.mkdir(parents=True, exist_ok=True)
         for d in cases:

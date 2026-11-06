@@ -5,7 +5,12 @@
 // so main.j2 can include, import or extend it. An optional settings.json sets environment
 // options (trim_blocks, lstrip_blocks, autoescape, as in Python) and "wide": true, which
 // runs the case with TemplateW and wide strings in the data. bench/python_bench.py runs the
-// same workloads with Python Jinja2, so the two engines can be compared on identical work.
+// same workloads with Python Jinja2, so the two engines can be compared on identical work; a
+// case that uses C++-only filters sets "cpp_only": true and Python skips it. The prompt cases
+// set "prompt_specials" and "prompt_tags" (Settings::promptEscaper) and "tokenizer": "words",
+// a tokenizer that counts whitespace-separated words and counts its calls; --dump-dir fails
+// when a render makes more calls than "max_token_calls" (docs/tasks/0359: pack measures each
+// item at most once).
 //
 // For each case two benchmarks are registered:
 //   Load/<case>    parse main.j2 (Template::Load)
@@ -45,6 +50,7 @@
 #include <jinja2cpp/chat_template.h>
 #endif
 #include <jinja2cpp/filesystem_handler.h>
+#include <jinja2cpp/prompt.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
@@ -58,6 +64,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstddef>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -263,6 +270,9 @@ struct Case
     jinja2::ValuesMap params;
     nlohmann::ordered_json data; // what params reflect with --data=reflect, in document order
     std::unique_ptr<jinja2::TemplateEnv> env;
+    // The calls of the "words" tokenizer, and the most one render may make (0: no limit)
+    std::shared_ptr<std::atomic<std::size_t>> tokenCalls = std::make_shared<std::atomic<std::size_t>>(0);
+    std::size_t maxTokenCalls = 0;
     // loaded once, for the multi-threaded benchmarks
     std::unique_ptr<jinja2::Template> shared;
     std::unique_ptr<jinja2::TemplateW> sharedW;
@@ -319,6 +329,29 @@ std::unique_ptr<Case> LoadCase(const fs::path& dir, bool reflect)
         envSettings.trimBlocks = settings.value("trim_blocks", false);
         envSettings.lstripBlocks = settings.value("lstrip_blocks", false);
         envSettings.autoescape = settings.value("autoescape", false);
+        if (settings.contains("prompt_specials") || settings.contains("prompt_tags"))
+        {
+            jinja2::PromptEscapeOptions options;
+            options.specialTokens = settings.value("prompt_specials", std::vector<std::string>());
+            options.tags = settings.value("prompt_tags", std::vector<std::string>());
+            envSettings.promptEscaper = jinja2::PromptEscaper(std::move(options));
+        }
+        if (settings.value("tokenizer", std::string()) == "words")
+        {
+            envSettings.tokenizer = jinja2::Tokenizer([calls = result->tokenCalls](std::string_view text) {
+                calls->fetch_add(1, std::memory_order_relaxed);
+                std::size_t words = 0;
+                bool inWord = false;
+                for (const char ch : text)
+                {
+                    const bool space = ch == ' ' || ch == '\n' || ch == '\t';
+                    words += (!space && !inWord) ? 1 : 0;
+                    inWord = !space;
+                }
+                return words;
+            });
+        }
+        result->maxTokenCalls = settings.value("max_token_calls", std::size_t{ 0 });
 #if JINJA2CPP_HAS_CHAT_TEMPLATES
         // A Hugging Face chat template, rendered as transformers does; strftime_now reads the
         // fixed clock python_bench.py sets
@@ -812,10 +845,16 @@ int Dump(const std::vector<std::unique_ptr<Case>>& cases, const fs::path& dumpDi
     {
         std::ofstream out(dumpDir / (c->name + ".txt"), std::ios::binary);
         std::string error;
+        c->tokenCalls->store(0);
         const bool ok = c->wide ? RenderToUtf8<wchar_t>(*c, out, error) : RenderToUtf8<char>(*c, out, error);
         if (!ok)
         {
             std::cerr << c->name << ": " << error << '\n';
+            ++failures;
+        }
+        else if (c->maxTokenCalls != 0 && c->tokenCalls->load() > c->maxTokenCalls)
+        {
+            std::cerr << c->name << ": " << c->tokenCalls->load() << " tokenizer calls in one render, at most " << c->maxTokenCalls << " allowed\n";
             ++failures;
         }
     }

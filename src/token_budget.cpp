@@ -69,7 +69,9 @@ std::uint64_t Utf8Size(std::wstring_view text) noexcept
     {
         char32_t cp = 0;
         text.remove_prefix(detail::DecodeWide(text, cp));
-        size += cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+        size += cp < 0x80 ? 1 : cp < 0x800 ? 2
+                            : cp < 0x10000 ? 3
+                                           : 4;
     }
     return size;
 }

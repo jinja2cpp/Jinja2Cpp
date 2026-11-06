@@ -265,8 +265,7 @@ bool IsLessKey(const InternalValue& key1, const InternalValue& key2, BinaryExpre
 
 // sorted(key=...) takes each item's key once, so a key that fails fails for one item too.
 // The key lists compare item by item, like Python lists
-std::vector<size_t> SortedOrderByPaths(const InternalValueList& values, const std::vector<InternalValueList>& paths, BinaryExpression::Operation oper,
-                                       BinaryExpression::CompareType compType, RenderContext& context)
+std::vector<size_t> SortedOrderByPaths(const InternalValueList& values, const std::vector<InternalValueList>& paths, BinaryExpression::Operation oper, BinaryExpression::CompareType compType, RenderContext& context)
 {
     const size_t width = paths.size();
     InternalValueList keys;

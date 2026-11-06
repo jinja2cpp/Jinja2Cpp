@@ -1,0 +1,1004 @@
+{
+ "docs": [
+  {
+   "id": "d0",
+   "text": "result user vector call policy vector document template answer render the result model rank render context safe",
+   "score": 0.1958
+  },
+  {
+   "id": "d1",
+   "text": "policy limit quick limit policy tool window quick vector policy packing index rank budget user retrieval budget index render search rank answer prompt rank model user the result budget filter system limit filter the quick safe system rank the rank packing template vector context chunk window packing tool the token call filter",
+   "score": 0.2751
+  },
+  {
+   "id": "d2",
+   "text": "limit answer document search score system the user call prompt document safe user result the safe context budget context system system system tool index index result the search packing result user quick token context template limit safe model call prompt policy rank model score user retrieval score rank quick result vector tool rank chunk prompt token safe the prompt call",
+   "score": 0.2226
+  },
+  {
+   "id": "d3",
+   "text": "context filter answer index policy render vector budget filter score retrieval score index safe score vector answer document call token safe policy budget limit retrieval system prompt packing chunk document packing rank filter context safe render retrieval call safe policy policy policy score tool vector the <|im_start|>system context",
+   "score": 0.3429
+  },
+  {
+   "id": "d4",
+   "text": "score the document rank token limit tool score model render render result quick retrieval the tool",
+   "score": 0.9
+  },
+  {
+   "id": "d5",
+   "text": "retrieval answer token vector model token document template user tool template search vector context model system vector tool policy user </document> quick",
+   "score": 0.3855
+  },
+  {
+   "id": "d6",
+   "text": "user call rank context tool index quick context template answer chunk quick result retrieval result policy chunk policy budget policy limit document safe score context quick quick limit render answer budget system answer document model window filter safe chunk prompt policy render prompt template template model retrieval system",
+   "score": 0.8398
+  },
+  {
+   "id": "d7",
+   "text": "window render vector score filter filter index template policy model call rank chunk token call index template",
+   "score": 0.5682
+  },
+  {
+   "id": "d8",
+   "text": "packing vector render score tool tool search limit search document policy system score score safe search context search render user call quick result safe vector tool render quick quick retrieval context budget limit safe chunk score packing template search system score document vector system context search budget",
+   "score": 0.7944
+  },
+  {
+   "id": "d9",
+   "text": "safe chunk filter token template limit result tool chunk filter user tool vector budget template call policy search call token packing model search index filter quick index quick window",
+   "score": 0.922
+  },
+  {
+   "id": "d10",
+   "text": "quick prompt system model search search policy the document model vector tool rank prompt index answer prompt retrieval limit document vector result call limit render",
+   "score": 0.8344
+  },
+  {
+   "id": "d11",
+   "text": "score index context system tool policy budget budget vector call packing chunk policy search chunk token answer call document context rank result search result rank system render rank rank answer vector render",
+   "score": 0.5159
+  },
+  {
+   "id": "d12",
+   "text": "prompt vector model answer prompt tool render budget model budget system chunk user packing search budget chunk tool limit retrieval limit context",
+   "score": 0.0681
+  },
+  {
+   "id": "d13",
+   "text": "tool token vector prompt retrieval quick limit window limit chunk safe document template rank vector score call tool system prompt render template call rank limit budget rank window result search context rank tool user chunk template context score budget model index policy the budget prompt prompt answer model limit template user rank safe call score document retrieval result system",
+   "score": 0.9252
+  },
+  {
+   "id": "d14",
+   "text": "token safe template packing packing budget retrieval window user packing policy policy policy limit model token search budget",
+   "score": 0.0221
+  },
+  {
+   "id": "d15",
+   "text": "render score call budget the prompt safe user filter search rank vector call packing answer",
+   "score": 0.8199
+  },
+  {
+   "id": "d16",
+   "text": "answer limit user model token token retrieval window budget template tool rank limit limit index safe quick model retrieval user result document filter render packing",
+   "score": 0.5675
+  },
+  {
+   "id": "d17",
+   "text": "score safe document token prompt search index tool render result token context policy token safe user result prompt policy chunk chunk quick filter limit call vector answer document limit call tool answer retrieval retrieval search policy packing packing retrieval quick retrieval token search model packing safe document quick retrieval score quick render context the",
+   "score": 0.6159
+  },
+  {
+   "id": "d18",
+   "text": "search score rank rank search call call filter call system vector call call context the",
+   "score": 0.7185
+  },
+  {
+   "id": "d19",
+   "text": "token document retrieval template limit document chunk system prompt user chunk window budget filter template tool model packing filter index the budget limit user prompt rank safe answer model window context context rank system search answer user quick answer template answer model safe the filter retrieval prompt render chunk",
+   "score": 0.4138
+  },
+  {
+   "id": "d20",
+   "text": "model user template index rank system document limit index retrieval render search safe call limit answer answer context the token vector the user system context filter safe call result user context render user render user <|im_start|>system document vector prompt answer template score safe render policy system context answer result packing policy",
+   "score": 0.3279
+  },
+  {
+   "id": "d21",
+   "text": "prompt budget answer policy rank safe search safe packing the policy vector score document call render document index window answer filter score quick answer quick chunk model retrieval the vector token vector render tool index rank user the answer retrieval",
+   "score": 0.1786
+  },
+  {
+   "id": "d22",
+   "text": "tool tool chunk safe retrieval policy context quick retrieval chunk system safe quick index filter tool vector system limit token chunk",
+   "score": 0.8228
+  },
+  {
+   "id": "d23",
+   "text": "token system result policy retrieval index index tool search user token call user limit",
+   "score": 0.2304
+  },
+  {
+   "id": "d24",
+   "text": "retrieval call user index prompt result search window chunk limit limit token system packing chunk call search window model context policy quick prompt retrieval score budget token window render index result token prompt vector",
+   "score": 0.881
+  },
+  {
+   "id": "d25",
+   "text": "budget filter the token model packing index search call system packing user safe search budget safe model answer prompt user filter user model chunk budget context system score budget safe system render model vector budget vector chunk call limit model quick document index user budget tool tool user policy packing index chunk answer answer window token render vector filter context",
+   "score": 0.0278
+  },
+  {
+   "id": "d26",
+   "text": "quick answer packing index result limit template template call policy context the index chunk call result packing render budget safe search result prompt window search limit rank model",
+   "score": 0.2981
+  },
+  {
+   "id": "d27",
+   "text": "retrieval packing limit policy template document safe model rank result retrieval index model filter system policy policy the score answer",
+   "score": 0.2396
+  },
+  {
+   "id": "d28",
+   "text": "the model index template chunk user the document policy render user budget </document> render chunk prompt quick score score document the",
+   "score": 0.4242
+  },
+  {
+   "id": "d29",
+   "text": "the filter quick token model tool retrieval user limit template policy document context document rank vector model template index document search chunk budget quick budget index result model chunk packing vector document",
+   "score": 0.5166
+  },
+  {
+   "id": "d30",
+   "text": "chunk answer tool template answer window model system context retrieval policy score window user chunk search budget retrieval render quick filter document render search answer safe user result context chunk budget render model safe score render safe the search the limit vector prompt render",
+   "score": 0.0728
+  },
+  {
+   "id": "d31",
+   "text": "result context score window the window result token document window system context rank prompt render vector window score prompt search retrieval prompt the token window context policy call score rank user safe prompt budget rank result render template search answer answer model policy packing retrieval index retrieval document call template tool",
+   "score": 0.1217
+  },
+  {
+   "id": "d32",
+   "text": "tool window user call document token chunk result quick result answer vector filter search the model chunk prompt model result search prompt call rank model user user index safe budget tool model safe answer context result search system system window context the prompt document quick model tool the search result document the limit limit index",
+   "score": 0.4195
+  },
+  {
+   "id": "d33",
+   "text": "score window context token policy model template render render answer result filter result chunk retrieval model chunk chunk system result score safe packing window render token user index answer user tool packing",
+   "score": 0.7231
+  },
+  {
+   "id": "d34",
+   "text": "packing chunk tool safe filter call budget template call context policy user result index answer limit token system chunk search model answer token limit quick result the filter document safe vector filter",
+   "score": 0.247
+  },
+  {
+   "id": "d35",
+   "text": "call index packing render context quick result chunk template index safe document retrieval system document search window vector window vector packing document packing user safe policy the window budget the the window policy document render policy index call model result context prompt safe filter score result template result score rank rank chunk answer safe render limit",
+   "score": 0.3399
+  },
+  {
+   "id": "d36",
+   "text": "call user score limit answer packing token policy model model tool user window answer system policy system call index search document token filter context index prompt filter limit score vector vector rank limit search rank safe answer index answer tool index prompt render render quick packing token score filter chunk render",
+   "score": 0.3964
+  },
+  {
+   "id": "d37",
+   "text": "retrieval vector result score <|im_start|>system policy chunk prompt chunk template system retrieval token the result window tool retrieval score packing safe answer",
+   "score": 0.5521
+  },
+  {
+   "id": "d38",
+   "text": "vector template answer window quick search vector prompt quick chunk filter policy user search packing token model score retrieval policy safe tool filter quick user render prompt the window window template packing window call vector packing policy limit system render vector tool search token window vector render",
+   "score": 0.4584
+  },
+  {
+   "id": "d39",
+   "text": "chunk prompt index render policy model quick template score policy template packing template tool template",
+   "score": 0.8302
+  },
+  {
+   "id": "d40",
+   "text": "template score user packing the budget template vector result result token chunk tool quick vector the call quick limit tool",
+   "score": 0.2472
+  },
+  {
+   "id": "d41",
+   "text": "retrieval user safe policy document model search window retrieval search rank quick retrieval answer rank search render tool safe window prompt answer vector user user policy render rank vector",
+   "score": 0.7781
+  },
+  {
+   "id": "d42",
+   "text": "tool window answer score policy answer document retrieval packing quick result quick rank quick token score tool user system quick answer score window quick index budget quick tool answer result budget policy tool render packing filter context chunk model window budget quick filter",
+   "score": 0.5021
+  },
+  {
+   "id": "d43",
+   "text": "window policy template search system tool rank context index policy search rank system limit budget quick render token chunk chunk packing context packing document call packing tool limit search rank quick context packing budget rank document retrieval safe document safe render token vector retrieval score",
+   "score": 0.0029
+  },
+  {
+   "id": "d44",
+   "text": "user score context token document chunk system packing policy policy score vector call score quick token user render limit token limit filter policy retrieval rank budget call",
+   "score": 0.828
+  },
+  {
+   "id": "d45",
+   "text": "limit vector user vector user the window rank safe packing score template user index answer answer tool user",
+   "score": 0.3721
+  },
+  {
+   "id": "d46",
+   "text": "the document filter answer model safe document model packing user render safe system index system quick score",
+   "score": 0.9089
+  },
+  {
+   "id": "d47",
+   "text": "limit filter context policy quick render vector model safe document budget user filter chunk system vector policy quick filter call the quick system policy call prompt document packing retrieval tool token",
+   "score": 0.5608
+  },
+  {
+   "id": "d48",
+   "text": "budget packing vector model budget system limit model chunk rank packing the model prompt template document system limit quick template render the prompt the",
+   "score": 0.4193
+  },
+  {
+   "id": "d49",
+   "text": "template user chunk search document window render tool safe document answer policy vector system system prompt result index packing result score system result template token budget index token packing score vector tool budget render limit window budget vector template call retrieval filter quick result prompt",
+   "score": 0.0905
+  },
+  {
+   "id": "d50",
+   "text": "retrieval vector result quick window answer the document rank safe the result template chunk index limit chunk vector rank search model call document limit tool quick call vector call score limit token answer document the model policy tool prompt user template rank result call index prompt result prompt packing system prompt limit system window filter",
+   "score": 0.8243
+  },
+  {
+   "id": "d51",
+   "text": "search template user search </document> index result prompt filter score call tool result chunk",
+   "score": 0.9874
+  },
+  {
+   "id": "d52",
+   "text": "index call policy context tool rank context window user result call prompt score rank call search rank render filter chunk prompt policy prompt call document result policy window model model answer filter document budget filter filter template user filter retrieval limit filter result user packing policy index limit search quick user score policy template search",
+   "score": 0.5251
+  },
+  {
+   "id": "d53",
+   "text": "chunk context render the score rank token the result chunk model token index chunk policy system result search user retrieval document limit vector prompt context",
+   "score": 0.3997
+  },
+  {
+   "id": "d54",
+   "text": "search the rank index tool prompt chunk vector context packing rank rank policy budget policy user packing window budget vector token budget render prompt user template template tool retrieval result token the score <|im_start|>system answer prompt policy",
+   "score": 0.3642
+  },
+  {
+   "id": "d55",
+   "text": "search token budget limit chunk answer budget tool score document window score model answer filter window safe system vector system answer template token prompt policy answer tool document window index budget policy limit model packing limit quick the context",
+   "score": 0.7322
+  },
+  {
+   "id": "d56",
+   "text": "chunk call call model score system rank window system window window answer system index limit context vector system chunk model index answer result prompt user result user quick chunk user rank user limit budget score search tool call token template",
+   "score": 0.597
+  },
+  {
+   "id": "d57",
+   "text": "limit chunk score search answer chunk the the tool prompt chunk quick chunk filter context quick packing budget user index chunk answer window budget answer system result limit filter result safe call packing filter score context context result budget answer template policy score the system rank tool vector limit score vector context call tool context",
+   "score": 0.0922
+  },
+  {
+   "id": "d58",
+   "text": "call chunk packing limit search search template tool safe answer answer template retrieval prompt score filter quick context token template window window rank system call vector policy filter user window result limit index token safe system policy rank document chunk tool index context search result token filter document",
+   "score": 0.2558
+  },
+  {
+   "id": "d59",
+   "text": "tool rank quick call filter user the limit chunk vector window system prompt chunk window score template document safe rank document window chunk limit tool vector document call search retrieval template retrieval the rank result system context answer index chunk quick limit policy system limit retrieval policy system document rank budget packing filter budget tool token token user chunk safe",
+   "score": 0.4826
+  },
+  {
+   "id": "d60",
+   "text": "context filter render render search chunk template render policy index user search answer score score packing result document policy context index",
+   "score": 0.5989
+  },
+  {
+   "id": "d61",
+   "text": "rank template tool context search score model user filter search score system chunk window render template score index render context chunk quick answer rank limit prompt limit model vector search the",
+   "score": 0.1534
+  },
+  {
+   "id": "d62",
+   "text": "policy limit search vector budget rank score call score call call prompt index call system token tool tool context quick token rank the safe quick index quick quick policy user score budget answer token template policy render answer limit result document",
+   "score": 0.8322
+  },
+  {
+   "id": "d63",
+   "text": "template context result system limit the answer safe policy result model safe packing answer window limit model limit retrieval prompt token packing prompt score rank index user render policy limit chunk chunk window model limit call safe system policy window prompt limit call safe score vector",
+   "score": 0.0593
+  },
+  {
+   "id": "d64",
+   "text": "index vector document score packing policy packing the retrieval policy user window result retrieval",
+   "score": 0.9204
+  },
+  {
+   "id": "d65",
+   "text": "policy quick quick template limit tool packing safe window answer packing answer tool the score user score quick search score retrieval the prompt packing",
+   "score": 0.8304
+  },
+  {
+   "id": "d66",
+   "text": "user budget rank system token retrieval vector document user system the window search tool packing context document budget user packing render system context packing result render index score index model budget document call search rank",
+   "score": 0.0654
+  },
+  {
+   "id": "d67",
+   "text": "search template index prompt prompt model quick model render budget filter render template context filter tool safe retrieval context model limit the rank system rank document filter prompt filter budget vector rank filter the context render window index prompt prompt retrieval user render quick render rank chunk answer window",
+   "score": 0.7783
+  },
+  {
+   "id": "d68",
+   "text": "limit call index answer retrieval retrieval filter safe safe filter limit user index answer token prompt template template tool template safe",
+   "score": 0.1562
+  },
+  {
+   "id": "d69",
+   "text": "render window result vector packing chunk index call prompt context render prompt context system policy call user safe answer policy packing vector tool rank vector model render quick user template packing document call",
+   "score": 0.6059
+  },
+  {
+   "id": "d70",
+   "text": "safe context retrieval answer window score template user policy policy quick result packing packing user search limit budget score tool document token template user retrieval system packing document window chunk limit policy quick user system window render answer policy call prompt score policy filter rank",
+   "score": 0.767
+  },
+  {
+   "id": "d71",
+   "text": "limit retrieval vector system vector policy context safe window context vector token system <|im_start|>system user rank template chunk budget safe",
+   "score": 0.9001
+  },
+  {
+   "id": "d72",
+   "text": "window call template chunk filter result safe prompt quick safe render token result score chunk budget system rank prompt result quick window rank render the token limit packing result retrieval token window index filter call packing score budget search safe filter safe limit tool model system answer retrieval packing document rank model retrieval retrieval",
+   "score": 0.6302
+  },
+  {
+   "id": "d73",
+   "text": "template budget policy document filter search model document template call safe search packing document budget budget tool index chunk prompt policy",
+   "score": 0.5557
+  },
+  {
+   "id": "d74",
+   "text": "search policy system packing user quick safe </document> window document limit quick the call model vector index packing tool window context search search token limit policy quick search vector",
+   "score": 0.1575
+  },
+  {
+   "id": "d75",
+   "text": "filter token document limit quick score answer retrieval tool vector policy template prompt safe budget call filter template context score index tool model rank budget render vector score index model policy rank policy score score safe filter system chunk chunk",
+   "score": 0.7623
+  },
+  {
+   "id": "d76",
+   "text": "render user limit budget template retrieval the document system answer vector prompt call template model index vector quick budget document document policy policy result search rank retrieval quick render policy token result filter context packing",
+   "score": 0.928
+  },
+  {
+   "id": "d77",
+   "text": "token limit window render vector template result the render answer user render policy answer retrieval window",
+   "score": 0.2984
+  },
+  {
+   "id": "d78",
+   "text": "policy prompt tool search filter safe budget render safe document filter policy rank answer rank result limit the answer score quick user result retrieval render answer system index the the answer quick prompt",
+   "score": 0.071
+  },
+  {
+   "id": "d79",
+   "text": "packing token answer score document retrieval window tool filter user template user render filter template call score score window call prompt score the budget window chunk answer model search result render chunk score budget window vector window document packing answer packing search",
+   "score": 0.5151
+  },
+  {
+   "id": "d80",
+   "text": "user template limit token template safe budget tool user tool packing model the window chunk call budget safe filter index prompt system vector render token score index chunk prompt system answer",
+   "score": 0.6716
+  },
+  {
+   "id": "d81",
+   "text": "score index tool answer packing result budget render search search chunk user answer policy window policy packing retrieval budget chunk render the tool rank result token document filter index call answer retrieval answer template window packing filter context template the chunk window call the model score",
+   "score": 0.3645
+  },
+  {
+   "id": "d82",
+   "text": "system filter filter quick prompt tool document filter context budget token score limit score safe policy packing answer render search budget policy retrieval answer user chunk the answer safe user retrieval call answer document policy window answer policy quick packing rank score rank tool result answer packing search",
+   "score": 0.9427
+  },
+  {
+   "id": "d83",
+   "text": "quick tool search answer render user retrieval render result quick result render retrieval the context budget retrieval the prompt model safe model prompt quick call chunk score window policy system retrieval safe vector policy safe window tool call token tool document document policy result rank packing document",
+   "score": 0.7627
+  },
+  {
+   "id": "d84",
+   "text": "prompt document retrieval result tool policy tool limit budget model the retrieval answer tool",
+   "score": 0.0457
+  },
+  {
+   "id": "d85",
+   "text": "safe prompt vector render context vector packing budget system token chunk answer rank packing render window context policy result user context",
+   "score": 0.1031
+  },
+  {
+   "id": "d86",
+   "text": "prompt limit window document call chunk answer template call retrieval render chunk policy model user token index window answer the template result packing prompt limit safe index filter search model model context budget vector index call chunk chunk call render budget filter answer budget window rank model",
+   "score": 0.0002
+  },
+  {
+   "id": "d87",
+   "text": "filter score template tool answer model token index render chunk vector tool safe safe render template budget score token answer token answer answer template tool context budget search prompt answer tool system tool document system filter retrieval result quick policy retrieval template result chunk template document window",
+   "score": 0.8968
+  },
+  {
+   "id": "d88",
+   "text": "safe score vector search answer call the window policy model tool user tool token index token prompt vector call result <|im_start|>system token rank search vector budget system template score policy system policy budget model prompt index packing search limit score budget vector the the window template chunk user call score filter user",
+   "score": 0.8757
+  },
+  {
+   "id": "d89",
+   "text": "chunk quick index answer score policy template filter model render quick quick score prompt packing model template policy chunk render",
+   "score": 0.3054
+  },
+  {
+   "id": "d90",
+   "text": "render vector retrieval limit system context retrieval budget token template call the system prompt template window retrieval call score render token result prompt tool index budget safe call packing document rank vector index chunk model index quick packing call chunk packing score packing tool filter limit budget",
+   "score": 0.12
+  },
+  {
+   "id": "d91",
+   "text": "filter model system score model budget prompt safe the result vector call call prompt document safe model limit",
+   "score": 0.9474
+  },
+  {
+   "id": "d92",
+   "text": "prompt packing document render limit context context quick chunk document quick vector retrieval search document answer index prompt answer prompt system context prompt context render filter render the context filter search window token user limit rank render policy prompt model limit document result model score rank window render policy render context",
+   "score": 0.4173
+  },
+  {
+   "id": "d93",
+   "text": "index safe index user vector system render answer result prompt index index prompt packing system chunk rank the document tool packing score retrieval the system filter user system index system token packing packing index system window system document score call policy",
+   "score": 0.4329
+  },
+  {
+   "id": "d94",
+   "text": "tool retrieval chunk filter limit tool model answer the filter result template filter safe token search policy prompt tool quick budget context token search system model window budget result document user policy retrieval search system safe index document chunk index call score call chunk template call rank prompt context system score system prompt token context",
+   "score": 0.9894
+  },
+  {
+   "id": "d95",
+   "text": "limit safe model tool chunk call window result index search render chunk answer policy vector budget search document system the answer safe render model safe index document answer render vector prompt search policy",
+   "score": 0.1656
+  },
+  {
+   "id": "d96",
+   "text": "policy packing token the template system window answer quick context prompt document rank window index call result filter prompt document search the score packing index retrieval the score vector window prompt score chunk answer vector vector score chunk prompt tool answer quick search result window user call index rank prompt tool chunk prompt user context system",
+   "score": 0.9573
+  },
+  {
+   "id": "d97",
+   "text": "limit retrieval safe limit call prompt context safe limit search call search system model filter user render render </document> filter model",
+   "score": 0.0387
+  },
+  {
+   "id": "d98",
+   "text": "policy template token policy window the answer prompt the answer window system quick window search render answer filter model window context template filter window render safe model quick limit filter template model chunk model answer search render the score prompt vector safe limit system budget score rank template search retrieval model score token system system system call user safe document",
+   "score": 0.4562
+  },
+  {
+   "id": "d99",
+   "text": "policy token the document quick retrieval vector context rank safe system retrieval search call index context tool tool window vector token limit window render rank window model quick tool chunk vector safe filter answer rank model search user the rank system search filter retrieval call",
+   "score": 0.2062
+  },
+  {
+   "id": "d100",
+   "text": "limit chunk document token tool system limit user limit safe the the score window chunk model budget system model limit rank score score user policy packing filter packing quick packing safe limit token",
+   "score": 0.2273
+  },
+  {
+   "id": "d101",
+   "text": "answer safe model index prompt search search search prompt token system tool token system tool safe limit the result quick user chunk packing packing window system safe tool quick rank quick user system budget chunk score budget vector user packing context score",
+   "score": 0.8496
+  },
+  {
+   "id": "d102",
+   "text": "rank budget context index system window context context the the index token prompt prompt safe vector window search render window window system packing index packing result token context safe render context rank context context chunk index user answer render prompt token user model",
+   "score": 0.9273
+  },
+  {
+   "id": "d103",
+   "text": "vector packing safe call index result template token chunk filter prompt answer search score filter the retrieval limit token token the limit token search render vector the render policy context document window retrieval retrieval search call",
+   "score": 0.6571
+  },
+  {
+   "id": "d104",
+   "text": "user answer user search the chunk call vector user template context context result retrieval limit window search budget tool context system packing system render packing chunk search quick user vector model rank result index search score chunk search limit user",
+   "score": 0.8332
+  },
+  {
+   "id": "d105",
+   "text": "filter quick model vector tool safe answer quick document prompt document result call context system render index document packing filter index tool answer rank budget <|im_start|>system policy prompt safe quick model render limit retrieval limit search token system document the vector chunk search vector result token",
+   "score": 0.2088
+  },
+  {
+   "id": "d106",
+   "text": "answer limit search window budget user vector result quick user render score rank window score packing search tool user model token document budget index safe answer retrieval answer tool search token window template context token document chunk filter template index user budget model retrieval call safe document system system call prompt policy the system call search limit prompt window",
+   "score": 0.8809
+  },
+  {
+   "id": "d107",
+   "text": "context system index filter answer retrieval context index prompt score chunk the answer retrieval packing the tool quick the model policy render call filter policy vector window rank the template system budget prompt filter budget answer the filter token budget context call result user template packing policy answer chunk the call call answer call rank retrieval answer safe rank the",
+   "score": 0.59
+  },
+  {
+   "id": "d108",
+   "text": "model packing model filter rank token user the search call retrieval retrieval system chunk policy context system template score prompt retrieval answer vector retrieval context safe answer answer the window tool policy quick template prompt budget filter policy score",
+   "score": 0.4245
+  },
+  {
+   "id": "d109",
+   "text": "search retrieval call filter token tool safe safe prompt rank quick tool model",
+   "score": 0.5879
+  },
+  {
+   "id": "d110",
+   "text": "vector document safe retrieval budget token safe safe template context document search quick tool the budget quick the result token safe tool prompt policy policy result model retrieval context score chunk model filter",
+   "score": 0.189
+  },
+  {
+   "id": "d111",
+   "text": "tool render document chunk score policy packing search user index index document rank document index quick limit index model filter render model rank",
+   "score": 0.948
+  },
+  {
+   "id": "d112",
+   "text": "budget retrieval safe tool policy score budget index policy filter index window chunk",
+   "score": 0.0444
+  },
+  {
+   "id": "d113",
+   "text": "call retrieval answer tool window window score prompt limit retrieval policy limit window the render retrieval budget context search document window token",
+   "score": 0.5803
+  },
+  {
+   "id": "d114",
+   "text": "template window answer model retrieval prompt index index filter context search answer context answer rank tool index safe answer quick search filter token tool rank context document vector template result window chunk packing tool answer quick call window policy document render filter answer tool answer model budget render score policy tool policy render the index index safe",
+   "score": 0.4336
+  },
+  {
+   "id": "d115",
+   "text": "safe model call policy packing packing quick tool policy the vector template quick index template template user the call user rank token filter prompt model model tool packing budget search packing the chunk user quick score context context chunk document policy",
+   "score": 0.4786
+  },
+  {
+   "id": "d116",
+   "text": "vector answer render call render user template score limit result model tool context vector window filter template document result render call call call document user render answer template search search search system search retrieval document chunk user policy chunk answer retrieval retrieval context answer vector safe context model rank filter chunk limit model retrieval safe render chunk tool filter",
+   "score": 0.3482
+  },
+  {
+   "id": "d117",
+   "text": "result answer search answer call context tool rank call search safe document tool user model prompt search",
+   "score": 0.3085
+  },
+  {
+   "id": "d118",
+   "text": "call call token score budget filter document user score search filter result packing result tool packing tool score rank model the user quick tool vector answer render call model prompt safe answer",
+   "score": 0.3161
+  },
+  {
+   "id": "d119",
+   "text": "token render search context rank chunk window model tool render retrieval answer policy model document packing template score",
+   "score": 0.3227
+  },
+  {
+   "id": "d120",
+   "text": "limit user call context template score chunk window chunk tool call document context token window answer search the limit rank window tool score the filter score document call model limit window retrieval rank index document budget context model window retrieval answer search policy index packing tool window render </document> filter context model",
+   "score": 0.3017
+  },
+  {
+   "id": "d121",
+   "text": "answer result tool model tool search call window packing packing chunk rank window call filter window answer retrieval vector limit user vector packing call model answer render packing document document tool context search model the search result window prompt search window render packing index document prompt index",
+   "score": 0.9386
+  },
+  {
+   "id": "d122",
+   "text": "chunk score token result policy search result score rank limit safe budget window rank template budget the template user search vector document rank render prompt quick tool template filter tool safe prompt search safe <|im_start|>system limit answer template rank system token prompt token safe tool system window score retrieval user index filter token policy filter rank prompt",
+   "score": 0.5924
+  },
+  {
+   "id": "d123",
+   "text": "model the vector index call filter search vector tool prompt answer template search context prompt score model prompt user the render window user packing safe safe prompt call search the render safe chunk tool prompt context render packing document limit user template document safe user score safe vector chunk the retrieval search score retrieval prompt template tool packing token rank",
+   "score": 0.9785
+  },
+  {
+   "id": "d124",
+   "text": "chunk call policy system search quick answer budget token policy index index tool template system context context answer token policy retrieval",
+   "score": 0.3127
+  },
+  {
+   "id": "d125",
+   "text": "vector retrieval the window policy index index context token quick window vector template policy index prompt token template window window prompt the search rank packing score result model",
+   "score": 0.5285
+  },
+  {
+   "id": "d126",
+   "text": "prompt packing system score packing budget answer answer budget document document token chunk answer model tool search the filter context answer retrieval token rank context policy user user budget search",
+   "score": 0.6793
+  },
+  {
+   "id": "d127",
+   "text": "document token search chunk model tool window index index render model window tool vector index limit quick rank the index budget render user document answer context model token quick render retrieval safe render safe packing policy the result chunk template safe filter rank template filter rank render index",
+   "score": 0.0694
+  },
+  {
+   "id": "d128",
+   "text": "tool limit policy budget index model prompt prompt document packing vector chunk tool chunk the rank",
+   "score": 0.0152
+  },
+  {
+   "id": "d129",
+   "text": "model the budget system template context call call index vector packing budget vector result context answer model result limit",
+   "score": 0.2721
+  },
+  {
+   "id": "d130",
+   "text": "call index the budget the token limit template context retrieval the context filter search context score index retrieval filter user tool render quick filter index template context user model prompt the prompt the limit budget the the search budget result model safe",
+   "score": 0.7791
+  },
+  {
+   "id": "d131",
+   "text": "packing score score rank rank document score token search answer retrieval render model rank document policy packing chunk template safe limit limit token prompt document chunk call call retrieval user user the window token prompt render retrieval index safe window limit budget window budget index safe search answer rank packing system context",
+   "score": 0.1379
+  },
+  {
+   "id": "d132",
+   "text": "safe quick template user window safe filter context template system user user call policy retrieval budget user safe prompt user limit render prompt",
+   "score": 0.4397
+  },
+  {
+   "id": "d133",
+   "text": "system document policy policy render context the safe budget budget vector vector",
+   "score": 0.248
+  },
+  {
+   "id": "d134",
+   "text": "the filter packing tool tool search result token template search render limit model budget safe system the system render user retrieval token score limit score result result render answer chunk budget window document system filter user template rank model prompt vector token user retrieval result score token system vector prompt packing safe prompt search quick template result budget",
+   "score": 0.5628
+  },
+  {
+   "id": "d135",
+   "text": "rank window context token quick index safe policy system document retrieval safe",
+   "score": 0.8226
+  },
+  {
+   "id": "d136",
+   "text": "chunk window render system budget token vector tool retrieval search score score model safe policy score model the the budget user prompt system search template context retrieval token call user search vector model prompt safe the vector filter",
+   "score": 0.9424
+  },
+  {
+   "id": "d137",
+   "text": "filter token context quick user document answer search rank search packing window policy search token render rank system the token system system model budget answer packing call system rank vector context document retrieval packing context score packing result tool filter safe answer template template filter user packing",
+   "score": 0.9858
+  },
+  {
+   "id": "d138",
+   "text": "packing limit prompt filter the vector score window retrieval retrieval call budget prompt quick policy token result vector answer render search call policy quick system rank rank window vector score prompt index policy render window prompt result window search user system retrieval template answer packing document rank context chunk",
+   "score": 0.1643
+  },
+  {
+   "id": "d139",
+   "text": "safe system call packing score limit chunk safe user answer prompt packing result template <|im_start|>system answer answer context model template call packing search chunk user search the score search search",
+   "score": 0.2321
+  },
+  {
+   "id": "d140",
+   "text": "model chunk policy model answer prompt index answer render index the rank",
+   "score": 0.2922
+  },
+  {
+   "id": "d141",
+   "text": "limit quick model safe window render chunk search safe packing tool token window filter chunk search score result rank template the packing retrieval score safe tool document system vector answer the safe limit result quick call token retrieval tool prompt policy document answer system rank retrieval system model context window call limit document score limit budget render",
+   "score": 0.3351
+  },
+  {
+   "id": "d142",
+   "text": "render search model document the index quick vector chunk safe document result window packing tool budget system template filter chunk system safe safe result",
+   "score": 0.1742
+  },
+  {
+   "id": "d143",
+   "text": "context render template model token rank system retrieval tool retrieval answer rank rank result limit index retrieval system token vector safe the budget retrieval filter policy document retrieval window prompt </document> answer render budget render document token safe budget retrieval chunk budget template tool rank model model retrieval chunk policy call render token",
+   "score": 0.4092
+  },
+  {
+   "id": "d144",
+   "text": "score answer system filter chunk document render template model system model search score prompt rank system search vector index result render answer system quick safe the token result limit the template policy chunk vector index safe budget context chunk limit the score model template retrieval call window render call",
+   "score": 0.4535
+  },
+  {
+   "id": "d145",
+   "text": "call token search render model call template tool model template rank limit answer search token result tool context score system document retrieval document document call",
+   "score": 0.2106
+  },
+  {
+   "id": "d146",
+   "text": "system filter filter index window score safe document search vector policy system system vector chunk retrieval tool document template window prompt answer quick answer vector prompt system system the search limit budget tool system safe tool result safe safe render index answer system template",
+   "score": 0.0125
+  },
+  {
+   "id": "d147",
+   "text": "retrieval vector template search filter tool limit search tool model safe prompt filter document user user index answer quick filter search limit window render context policy search render model call search prompt user template document render policy model prompt window window",
+   "score": 0.4941
+  },
+  {
+   "id": "d148",
+   "text": "limit filter document render call safe tool safe token context packing index prompt token user user",
+   "score": 0.25
+  },
+  {
+   "id": "d149",
+   "text": "tool score rank packing index chunk chunk safe index template index tool model window result safe retrieval retrieval the tool tool retrieval token template prompt chunk packing document budget the score the quick window model system filter call search document document document template prompt",
+   "score": 0.6406
+  },
+  {
+   "id": "d150",
+   "text": "tool chunk render render policy score render the retrieval search system retrieval chunk call user chunk user window call result policy budget the packing filter index search document tool search policy limit rank index chunk policy document chunk packing result document the tool tool quick prompt result budget render",
+   "score": 0.2504
+  },
+  {
+   "id": "d151",
+   "text": "model search score budget score quick template policy chunk index vector limit render user render model tool limit result template limit retrieval system",
+   "score": 0.9554
+  },
+  {
+   "id": "d152",
+   "text": "search chunk prompt vector document result vector filter policy index prompt document document safe filter prompt template tool context prompt the rank limit document policy score rank tool quick retrieval budget search safe rank token the",
+   "score": 0.5636
+  },
+  {
+   "id": "d153",
+   "text": "answer render document quick answer result model window user index the policy context quick filter vector packing rank score limit the token search token prompt answer token context policy vector system vector score filter safe system chunk template context token prompt system template result context model limit",
+   "score": 0.5472
+  },
+  {
+   "id": "d154",
+   "text": "score filter tool model budget search context search template filter limit document system template search limit token context safe",
+   "score": 0.6117
+  },
+  {
+   "id": "d155",
+   "text": "call model score user answer chunk document filter prompt window window render filter filter retrieval policy policy call retrieval retrieval retrieval system user prompt template retrieval policy user answer search policy retrieval tool packing render rank prompt retrieval rank limit template model vector search packing vector tool search",
+   "score": 0.6876
+  },
+  {
+   "id": "d156",
+   "text": "filter packing system quick quick vector call retrieval document search policy the tool render safe search search quick quick result safe result result rank budget packing packing call rank policy the retrieval chunk score user token answer tool index render model index <|im_start|>system policy prompt document score",
+   "score": 0.4121
+  },
+  {
+   "id": "d157",
+   "text": "chunk model user token answer rank call template rank limit the render render template render window packing prompt context filter result quick safe score search system call user window result policy context index limit context search search",
+   "score": 0.1685
+  },
+  {
+   "id": "d158",
+   "text": "context render search model score rank tool render index safe policy policy tool document score rank limit vector tool limit answer search user chunk document score quick budget packing window budget document call score template context safe packing answer template limit context chunk",
+   "score": 0.6462
+  },
+  {
+   "id": "d159",
+   "text": "policy search document index safe tool user quick filter safe tool vector window user tool token quick packing user quick render the call limit filter search chunk render chunk context render quick result index window packing vector render template answer",
+   "score": 0.5788
+  },
+  {
+   "id": "d160",
+   "text": "render call index result rank answer safe packing prompt window vector document prompt limit vector render limit window document the rank limit answer policy budget answer quick call filter limit policy limit retrieval call user score filter render token tool",
+   "score": 0.735
+  },
+  {
+   "id": "d161",
+   "text": "search filter score answer chunk safe render document filter limit answer document rank context prompt quick vector packing the search tool search vector template model context retrieval tool limit context token model index window filter retrieval packing result window budget",
+   "score": 0.8043
+  },
+  {
+   "id": "d162",
+   "text": "prompt call safe limit call window document prompt document packing the vector packing prompt budget context context answer token template vector render retrieval render rank score index context",
+   "score": 0.73
+  },
+  {
+   "id": "d163",
+   "text": "index token vector token system rank safe document tool packing template limit tool index search vector result tool render template packing answer packing policy index system model limit model tool quick system packing user context prompt call template document safe user vector render chunk rank chunk window quick token index search policy vector token call budget context result result prompt",
+   "score": 0.4326
+  },
+  {
+   "id": "d164",
+   "text": "limit result limit prompt index quick system limit system safe model call quick rank prompt token limit policy render model model quick context limit policy result model chunk template prompt search user index quick window call rank the score filter packing context context quick call vector context search filter filter system prompt call document policy retrieval policy call tool budget",
+   "score": 0.0625
+  },
+  {
+   "id": "d165",
+   "text": "budget safe window user context rank prompt retrieval retrieval context chunk packing index prompt result answer chunk template rank",
+   "score": 0.3197
+  },
+  {
+   "id": "d166",
+   "text": "token prompt answer score context prompt score the </document> result policy call limit answer tool document token prompt call filter safe filter token",
+   "score": 0.9696
+  },
+  {
+   "id": "d167",
+   "text": "user call render the window packing limit filter rank template budget chunk the filter template index score tool policy context chunk rank token window policy filter the system template policy call filter search result safe index quick document filter user template quick user token system prompt document call limit template the index window",
+   "score": 0.8418
+  },
+  {
+   "id": "d168",
+   "text": "rank quick user score call retrieval budget safe rank packing policy model render model result policy call token render document model context score tool filter template result vector quick window document system the",
+   "score": 0.1174
+  },
+  {
+   "id": "d169",
+   "text": "context prompt policy context search retrieval budget context render chunk packing policy chunk",
+   "score": 0.3054
+  },
+  {
+   "id": "d170",
+   "text": "quick safe vector tool system prompt window prompt the vector call document document result tool document rank model score user limit tool result render the result search budget answer token system context budget prompt the system render token template search chunk budget chunk policy context window index vector prompt filter document the render window render retrieval",
+   "score": 0.3059
+  },
+  {
+   "id": "d171",
+   "text": "search quick call result answer packing chunk tool token context window score context result retrieval limit document filter tool user context vector index score template context budget safe call filter answer document retrieval index the document answer search search document index index policy system quick filter user result",
+   "score": 0.3072
+  },
+  {
+   "id": "d172",
+   "text": "render quick tool render token index chunk document packing limit context token search model search policy rank quick answer tool chunk prompt search render rank window user search tool limit search limit render quick policy context tool document system call score user result the window policy vector template document template context chunk quick",
+   "score": 0.6473
+  },
+  {
+   "id": "d173",
+   "text": "answer budget rank safe vector context vector budget call tool tool vector index <|im_start|>system vector window system limit user search prompt quick context limit prompt template score result safe system",
+   "score": 0.2192
+  },
+  {
+   "id": "d174",
+   "text": "context window render rank retrieval safe the safe token system result budget token score limit render search call token the quick packing index tool render the safe token user rank quick the template filter safe search vector tool",
+   "score": 0.2659
+  },
+  {
+   "id": "d175",
+   "text": "render rank quick search template budget token policy chunk answer model system model template limit safe rank result safe window score document answer",
+   "score": 0.8487
+  },
+  {
+   "id": "d176",
+   "text": "model budget safe result call score result model the answer call filter document template rank context model call search rank search document score render prompt quick policy filter policy",
+   "score": 0.332
+  },
+  {
+   "id": "d177",
+   "text": "budget template document system context search chunk filter safe call policy retrieval",
+   "score": 0.471
+  },
+  {
+   "id": "d178",
+   "text": "policy budget filter template tool vector score user policy call window search render template context answer score index render document render user policy model call document rank model call retrieval template window tool safe retrieval safe window document template model search policy retrieval tool render template template model document model vector retrieval answer template index policy result document",
+   "score": 0.5982
+  },
+  {
+   "id": "d179",
+   "text": "answer system window safe packing render call call the call model prompt budget score score budget budget vector render tool result render limit model render policy result policy rank safe filter template budget search call chunk vector model chunk vector context chunk score retrieval call quick render system quick render policy answer template",
+   "score": 0.5484
+  },
+  {
+   "id": "d180",
+   "text": "context filter search template the search index render the the prompt context chunk safe budget user answer token packing limit template system window limit context filter",
+   "score": 0.1107
+  },
+  {
+   "id": "d181",
+   "text": "index score answer result index answer safe budget user token budget chunk template index retrieval result quick template system limit the context call budget policy retrieval token budget context answer result answer user limit user",
+   "score": 0.8137
+  },
+  {
+   "id": "d182",
+   "text": "system context quick quick filter template search vector answer window the limit limit budget safe call window tool search packing answer search document template system prompt packing search the search retrieval tool answer packing packing template",
+   "score": 0.3295
+  },
+  {
+   "id": "d183",
+   "text": "model chunk quick context score score packing answer index context index answer model call answer the context score search token limit window system score user",
+   "score": 0.1163
+  },
+  {
+   "id": "d184",
+   "text": "render result result tool user budget render policy the budget index limit template answer search result chunk chunk context score",
+   "score": 0.9696
+  },
+  {
+   "id": "d185",
+   "text": "index token user budget model chunk chunk vector quick context safe budget rank chunk user document the index score template token budget packing score budget context safe user user user limit render search index",
+   "score": 0.6444
+  },
+  {
+   "id": "d186",
+   "text": "model answer filter chunk system filter call render user limit window prompt quick prompt index budget score search rank safe context limit template model system limit user index index quick answer document prompt score system call score rank policy chunk call chunk retrieval prompt rank window limit score filter window the",
+   "score": 0.7552
+  },
+  {
+   "id": "d187",
+   "text": "call packing filter budget system document window context answer retrieval search the the render quick budget limit quick filter budget window system answer result filter user call render tool search prompt answer system tool chunk system the call packing score retrieval window context",
+   "score": 0.225
+  },
+  {
+   "id": "d188",
+   "text": "result context chunk result call limit filter prompt prompt tool index packing render call document policy filter budget token vector safe user quick document answer filter safe rank user search the packing template document render window safe template budget tool score answer budget the chunk prompt rank render window user render chunk template rank score retrieval index safe",
+   "score": 0.8167
+  },
+  {
+   "id": "d189",
+   "text": "the the vector policy answer model render budget template limit quick user search token </document> filter rank packing index limit template the result",
+   "score": 0.7497
+  },
+  {
+   "id": "d190",
+   "text": "safe retrieval model limit packing render budget packing call token policy index result template call retrieval limit index quick user score packing <|im_start|>system rank packing rank window policy system token tool quick chunk the render policy chunk policy prompt filter score user packing system safe model packing retrieval result policy retrieval filter",
+   "score": 0.2699
+  },
+  {
+   "id": "d191",
+   "text": "budget prompt vector model user document result the index template template quick window limit limit safe prompt answer tool search document index system policy limit rank system filter search search filter window safe filter score policy filter result window chunk quick user the context safe the vector search context user the rank quick rank model result",
+   "score": 0.6361
+  },
+  {
+   "id": "d192",
+   "text": "answer result model token the call call user tool call result template render retrieval render index the search answer system prompt packing budget vector chunk template template",
+   "score": 0.7893
+  },
+  {
+   "id": "d193",
+   "text": "render index the user safe budget model context context quick user packing model quick retrieval answer rank packing answer document",
+   "score": 0.1378
+  },
+  {
+   "id": "d194",
+   "text": "safe render render safe call packing token rank search answer template model render limit model policy the rank safe packing budget prompt result context score user render result result safe prompt search",
+   "score": 0.4961
+  },
+  {
+   "id": "d195",
+   "text": "user call window token quick score safe call policy window safe context prompt filter call policy packing budget search retrieval prompt policy vector policy call policy vector retrieval safe",
+   "score": 0.6227
+  },
+  {
+   "id": "d196",
+   "text": "search index the user result render document safe call user quick model packing context user window safe result render render limit render filter filter search the retrieval tool filter user score context retrieval window token budget render policy index score index score filter quick model prompt template",
+   "score": 0.653
+  },
+  {
+   "id": "d197",
+   "text": "token score vector window window score rank index safe model retrieval rank answer render call packing retrieval prompt rank score vector call packing limit the chunk score search token window context system vector",
+   "score": 0.5456
+  },
+  {
+   "id": "d198",
+   "text": "tool policy score quick search model prompt document template the budget prompt filter index model prompt score document template quick system call answer answer render render packing vector quick safe search chunk policy window chunk call vector model token filter model call chunk user context prompt system document render window tool user vector",
+   "score": 0.4979
+  },
+  {
+   "id": "d199",
+   "text": "chunk window rank model document chunk retrieval window filter limit answer result vector score vector packing index window answer index policy call answer user system score window token user prompt call score call limit quick call the limit window prompt template budget search quick index rank prompt chunk render user",
+   "score": 0.1635
+  }
+ ]
+}

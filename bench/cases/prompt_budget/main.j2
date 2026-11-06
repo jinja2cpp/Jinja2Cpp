@@ -1,0 +1,5 @@
+{% for d in docs|pack(900, attribute='text', by='score', reverse=true, reserve=60) %}
+<document id="{{ d.id }}">
+{{ d.text|neutralize|fence }}
+</document>
+{% endfor %}
