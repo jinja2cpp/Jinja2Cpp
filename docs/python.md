@@ -2,9 +2,8 @@
 
 `jinja2cpp` is a Python module that renders Jinja2 templates with the Jinja2C++ engine. Its
 API is Jinja2's, so `import jinja2cpp as jinja2` works for the subset below. This page
-describes phases P1b and P2 part A of docs/tasks/0248 (docs/tasks/0353, 0354). The decorators and
-i18n, the fallback to real Jinja2, the sandbox, streaming and the wheels are later phases
-(0354-0357).
+describes phases P1b and P2 part A of docs/tasks/0248 (docs/tasks/0353, 0354). The fallback to
+real Jinja2, streaming and the wheels are later phases (0354-0357).
 
 ## Install and test
 
@@ -103,7 +102,51 @@ engines on a Release build of the module.
   Newstyle gettext (`newstyle=True`, Flask-Babel's choice) runs in the engine
   (`TemplateEnv::InstallGettextCallables`); oldstyle, Jinja2's default, installs Python wrappers
   as the four globals.
+- The sandbox: `jinja2cpp.sandbox` with `SandboxedEnvironment`, `ImmutableSandboxedEnvironment`,
+  `SecurityError`, `is_internal_attribute`, `modifies_known_mutable`, `unsafe`, `safe_range`,
+  `MAX_RANGE` and the `UNSAFE_*` sets, ported from Jinja2 3.1.6 (see "Sandbox" below).
 - Ctrl-C (KeyboardInterrupt) stops a long render. The GIL is held for the whole render.
+
+## Sandbox
+
+`from jinja2cpp.sandbox import SandboxedEnvironment, ImmutableSandboxedEnvironment` are Jinja2's
+classes (`import jinja2cpp as jinja2` works for `jinja2.sandbox` code). They are Python
+subclasses of `jinja2cpp.Environment`, and a subclass may override `is_safe_attribute`,
+`is_safe_callable`, `unsafe_undefined` and `wrap_str_format`, as in Jinja2. The policy runs
+inside the adapters that let the engine read Python objects, not in generated code:
+
+- **One checkpoint for attributes.** Every attribute a template reads of a Python object
+  (`x.a`, `x[a]` that falls back to the attribute, `|attr`, `attribute=` of `map`, `sort`,
+  `groupby`, `selectattr`, `rejectattr`, `sum`, `unique`, `min`, `max`, the fields of
+  `str.format` and `format_map`) is one `PyHost::GetAttr`, which calls
+  `env._sandbox_attribute(obj, name, value)`: Jinja2's `wrap_str_format`, then
+  `is_safe_attribute(obj, name, value)`, then `unsafe_undefined`. A refused attribute is the
+  undefined value Jinja2 makes, with its message (`access to attribute '__class__' of 'int'
+  object is unsafe.`), that raises `SecurityError` when used (printing it is empty under the
+  default `Undefined`, an error under `StrictUndefined`). Items (`x['k']`, `d.k` of a dict) are
+  not attributes and are not asked, as in Jinja2.
+- **Calls.** Every call of a Python object (a global, a method, a callable in the context) first
+  calls `is_safe_callable`; `@unsafe` and `alters_data` raise `SecurityError("... is not safely
+  callable")`. Filters and tests are not checked, as in Jinja2.
+- **`range`.** `env.globals['range']` is `safe_range`, but a sandboxed render uses the engine's
+  own `range` with `Limits::maxRange = MAX_RANGE`, so no Python call is made; the error is
+  Jinja2's `OverflowError("Range too big. The sandbox blocks ranges larger than MAX_RANGE
+  (100000).")`.
+- **The engine's own values** (the template's strings, numbers, lists, dicts, `loop`, `cycler`,
+  macros) have no Python attributes. A private name (`__class__`, `__init__`, `_x`) on one is
+  asked of `is_safe_attribute` with a stand-in object of the Python type and is refused with the
+  same undefined; `format_map` of a string, which the engine lacks, and `str.format` are
+  Python's, run through `SandboxedFormatter`. `ImmutableSandboxedEnvironment` also refuses the
+  methods of the engine's lists and dicts that change them (`append`, `update`, ...) with
+  Jinja2's message, whatever `is_safe_attribute` says for them (`Dialect::ImmutableSandbox`,
+  the read-only containers of the transformers preset).
+- **Cost.** A plain `Environment` pays nothing: the checks are behind one pointer in the render
+  state, which only a sandboxed render sets. A sandboxed render calls `is_safe_attribute` once
+  per attribute of a Python object (not per dict key).
+- `intercepted_binops` / `intercepted_unops` are not supported: loading a template of an
+  environment with either set raises `UnsupportedError`, since ignoring them would let the
+  operators through (0412). `call_binop` and `call_unop` exist and work when called.
+
 
 ## How values cross
 
@@ -177,5 +220,16 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `_()` and `{% trans %}` render the message untranslated; Jinja2 raises `UndefinedError`
   because it has no `gettext` global yet (0417). A `gettext` set in `env.globals` replaces the
   installed one in both.
-- Not yet: the sandbox, custom extensions, async, the fallback to real Jinja2
-  (docs/tasks/0354).
+- Sandbox (0412, 0413, 0414): `intercepted_binops` and `intercepted_unops` raise
+  `UnsupportedError` (Jinja2's `test_binary_operator_intercepting` and
+  `test_unary_operator_intercepting` are `xfail`). A public name of the engine's own values
+  (`s.upper`, `d.items`) is not asked of `is_safe_attribute`, a dict key named like an
+  attribute (`{'__class__': 1}.__class__`) reads the key, `f.__call__` of a macro or global
+  function is the function itself (0214), and under `StrictUndefined` a private name an engine
+  object lacks (`loop._x`) raises `SecurityError` where Jinja2 raises `UndefinedError`. An
+  overridden `getattr` or `getitem` of the environment is not called; override
+  `is_safe_attribute`. The template's `{{ x|attr('__class__') }}` of an undefined `x` is an
+  `UndefinedError`. `sort` and `unique` of an unsafe or missing attribute under
+  `StrictUndefined` do not raise as Jinja2's do (0413). `sum(attribute=)` of a missing attribute
+  is now an `UndefinedError` as in Jinja2 (it was a `TemplateRuntimeError`).
+- Not yet: custom extensions, async, the fallback to real Jinja2 (docs/tasks/0354).
