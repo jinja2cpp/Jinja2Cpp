@@ -562,6 +562,11 @@ if (JINJA2CPP_BUILD_TESTS)
         test/value_ptr_test.cpp
         test/parity/parity_test.cpp
     )
+    # The referenced-templates walk is a header-only internal of the Python module, which links
+    # the library statically: it calls the parser, which a shared library does not export
+    if (NOT JINJA2CPP_BUILD_SHARED)
+        list(APPEND JINJA2CPP_TEST_SOURCES test/referenced_templates_test.cpp)
+    endif ()
     if (JINJA2CPP_WITH_CHAT_TEMPLATES)
         list(APPEND JINJA2CPP_TEST_SOURCES test/chat_templates/chat_template_test.cpp test/chat_template_preset_test.cpp)
     endif ()

@@ -26,6 +26,11 @@ using jinja2::InternalValue;
 struct RenderState
 {
     PyObject* undefinedClass = nullptr; // borrowed from the environment, which the render holds
+    // The jinja2cpp.Environment of the render (pass_environment, Context.environment) and the
+    // dict of the template's own globals (Context.get_all); borrowed from the template, which
+    // the render holds
+    PyObject* environment = nullptr;
+    PyObject* templateGlobals = nullptr;
     RenderState* outer = nullptr;
 };
 RenderState* CurrentRender() noexcept;
