@@ -141,6 +141,7 @@ if [ "$perf" = 1 ]; then
     # As CI: a base driver that does not know a newer settings.json key counts its own cases
     base_cases=bench/cases
     grep -q '"transformers"' "$wt/bench/jinja2cpp_bench.cpp" || base_cases=$wt/bench/cases
+    grep -q '"prompt_specials"' "$wt/bench/jinja2cpp_bench.cpp" || base_cases=$wt/bench/cases
     if [ $ok = 1 ] \
        && python3 bench/count.py --bench build-preflight-base/bench/jinja2cpp_bench --cases-dir "$base_cases" --out /tmp/preflight-base.json >/dev/null \
        && python3 bench/count.py --bench build-preflight-head/bench/jinja2cpp_bench \

@@ -2,6 +2,7 @@
 #include "token_budget.h"
 
 #include "engine_errors.h"
+#include "expression_evaluator.h"
 #include "filters.h"
 #include "function_base.h"
 #include "internal_value.h"
@@ -16,6 +17,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
+#include <memory>
 #include <new>
 #include <stdexcept>
 #include <string>
@@ -212,7 +215,7 @@ std::size_t TokenMeter::PrefixSize<wchar_t>(std::wstring_view text, std::size_t 
     const std::string utf8 = ConvertString<std::string>(text);
     const std::size_t bytes = PrefixUtf8(utf8, maxTokens);
     // The same number of code points of the wide text: the conversion keeps one per code point
-    std::size_t codePoints = static_cast<std::size_t>(std::count_if(utf8.begin(), utf8.begin() + static_cast<std::ptrdiff_t>(bytes), [](char ch) { return !IsContinuation(ch); }));
+    auto codePoints = static_cast<std::size_t>(std::count_if(utf8.begin(), utf8.begin() + static_cast<std::ptrdiff_t>(bytes), [](char ch) { return !IsContinuation(ch); }));
     std::size_t units = 0;
     while (codePoints > 0 && units < text.size())
     {
@@ -293,6 +296,21 @@ InternalValue TruncateText(const TokenMeter& meter, const InternalValue& value, 
         const std::size_t excess = tokens - static_cast<std::size_t>(length);
         budget = budget > excess ? budget - excess : 0;
     }
+}
+// The order pack considers the items in: that of sort(attribute=by, reverse=reverse), or their own, the last first with
+// reverse
+std::vector<std::size_t> ConsiderationOrder(const InternalValueList& items, bool byGiven, const InternalValue& by, bool reverse, RenderContext& context)
+{
+    if (byGiven)
+    {
+        return SortedOrderByPaths(items, AttributeSortPaths(by, true), reverse ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt, BinaryExpression::CaseInsensitive, context);
+    }
+    std::vector<std::size_t> order(items.size());
+    for (std::size_t n = 0; n != order.size(); ++n)
+    {
+        order[n] = reverse ? order.size() - 1 - n : n;
+    }
+    return order;
 }
 } // namespace
 
@@ -404,20 +422,7 @@ InternalValue TokenBudget::Pack(const InternalValue& baseVal, RenderContext& con
         return ListAdapter::CreateAdapter(InternalValueList());
     }
 
-    // The order the items are considered in
-    std::vector<std::size_t> order;
-    if (byGiven)
-    {
-        order = SortedOrderByPaths(items, AttributeSortPaths(by, true), reverse ? BinaryExpression::LogicalGt : BinaryExpression::LogicalLt, BinaryExpression::CaseInsensitive, context);
-    }
-    else
-    {
-        order.resize(items.size());
-        for (std::size_t n = 0; n != order.size(); ++n)
-        {
-            order[n] = reverse ? order.size() - 1 - n : n;
-        }
-    }
+    const auto order = ConsiderationOrder(items, byGiven, by, reverse, context);
 
     const InternalValueList path = attributeGiven ? AttributePathOf(attribute) : InternalValueList();
     const TokenMeter meter(callback->GetSettings().tokenizer);
