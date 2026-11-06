@@ -195,4 +195,9 @@ CASES = [
     ('number_data_attributes_kinds', "{{ true.real }}|{{ false.denominator }}|{{ (-3).numerator }}|{{ 2.5.real }}|{{ 1.5|attr('imag') }}|{{ 'a'|attr('real') }}|{{ '{0.imag}|{0.real}'.format(2.0) }}|{{ (12345678901234567890123).real }}|{{ (3).imag is integer }}|{{ {'real': 5}.real }}|{{ (3).nope is defined }}"),
     # an attribute= argument looks them up too: getitem falls back to getattr
     ('number_data_attributes_by_path', "{{ [7, 2.5]|map(attribute='real')|join(',') }}|{{ [1, 2]|sum(attribute='denominator') }}|{{ [3, 1]|sort(attribute='numerator')|join }}|{{ [0, 1]|selectattr('real')|list }}"),
+    # Unicode 15.1 changed U+4E24's numeric value, 16.0 added Garay digits and letters: the
+    # pinned 3.12 (15.0) says False to each (docs/tasks/0372)
+    ("unicode_15_1_isnumeric", r"{{ '两'.isnumeric() }}|{{ '\U0002ebf0'.isalpha() }}|{{ '\U0002ebf0'.isidentifier() }}"),
+    ("unicode_16_0_classes", r"{{ '\U00010d41'.isdigit() }}|{{ '\U00010d41'.isdecimal() }}|{{ '\U00010d50'.isalpha() }}|{{ '\U00010d50'.isupper() }}|{{ 'ƛ'.islower() }}|{{ '\U00010d50x'.isidentifier() }}"),
+    ("unicode_16_0_case_methods", r"{{ 'ƛ\U00010d70'.upper() == 'Ƛ\U00010d50' }}|{{ 'Ɤ'.casefold() == 'ɤ' }}|{{ 'Ᲊ'.swapcase() == 'ᲊ' }}"),
 ]

@@ -719,6 +719,70 @@
    "env": {},
    "templates": {},
    "output": "18446744073709551615|True|[18446744073709551615]|True"
+  },
+  {
+   "id": "literals.unicode_15_1_repr",
+   "template": "{{ ['\\U0002ebf0', '⿼', '㇯'] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "['\\U0002ebf0', '\\u2ffc', '\\u31ef']"
+  },
+  {
+   "id": "literals.unicode_16_0_repr",
+   "template": "{{ ['\\U00010d50', 'Ᲊ', 'ࢗ'] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "['\\U00010d50', '\\u1c89', '\\u0897']"
+  },
+  {
+   "id": "literals.unicode_15_1_named_computed",
+   "template": "{{ '\\N{CJK UNIFIED IDEOGRAPH-2EBF0}' == '\\U0002ebf0' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unknown Unicode character name"
+   }
+  },
+  {
+   "id": "literals.unicode_15_1_named_stored",
+   "template": "{{ '\\N{IDEOGRAPHIC DESCRIPTION CHARACTER SUBTRACTION}'|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unknown Unicode character name"
+   }
+  },
+  {
+   "id": "literals.unicode_16_0_named",
+   "template": "{{ '\\N{GARAY CAPITAL LETTER A}' == '\\U00010d50' }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unknown Unicode character name"
+   }
+  },
+  {
+   "id": "literals.unicode_16_0_named_any_case",
+   "template": "{{ '\\N{latin capital letter rams horn}'|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "TemplateSyntaxError",
+    "message": "unknown Unicode character name"
+   }
   }
  ]
 }
