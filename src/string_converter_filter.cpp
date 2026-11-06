@@ -1728,7 +1728,9 @@ InternalValue StringConverter::ApplyReplace(const InternalValue& baseVal, Render
     if (context.IsAutoescape())
     {
         auto* callback = context.GetRendererCallback();
-        if (oldVal.IsMarkup() || (newVal.IsMarkup() && !baseVal.IsMarkup()))
+        // Not in prompt mode, whose literals are Markup: deleting from neutralized text can put a special back together
+        // (`x|replace('\n', '')`), so a value that is not Markup is replaced as a str and escaped on output
+        if (!callback->IsPromptMode() && (oldVal.IsMarkup() || (newVal.IsMarkup() && !baseVal.IsMarkup())))
         {
             srcVal = MarkupEscape(baseVal, callback);
         }
@@ -1832,10 +1834,10 @@ InternalValue StringConverter::ApplyTruncate(const InternalValue& baseVal, Rende
         }
         // s[:n] + end, which an undefined end fails
         CheckUndefinedUse(endVal, UndefinedUse::Arithmetic);
-        // Markup + end escapes end
+        // Markup + end escapes end, with the active escaper
         if (baseVal.IsMarkup())
         {
-            end = EscapeHtml<CharT>(end);
+            end = EscapeText<CharT>(end, context.GetRendererCallback());
         }
         return InternalValue::FromText<CharT>({ truncated, end });
     });
@@ -2254,7 +2256,14 @@ InternalValue StringConverter::Filter(const InternalValue& baseVal, RenderContex
         return ApplyReplace(baseVal, context);
     }
     InternalValue resultVal = Convert(baseVal, context);
-    resultVal.SetMarkup(ReturnsMarkup(baseVal, context));
+    const bool markup = ReturnsMarkup(baseVal, context);
+    // urlize writes HTML, which is Markup for HTML: in prompt mode it is neutralized first (docs/tasks/0358)
+    auto* callback = context.GetRendererCallback();
+    if (const auto* prompt = callback->GetPromptEscaper(); prompt && markup && m_mode == UrlizeMode)
+    {
+        return detail::PromptEscape(resultVal, *prompt, callback);
+    }
+    resultVal.SetMarkup(markup);
     return resultVal;
 }
 

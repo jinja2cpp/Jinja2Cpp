@@ -4,8 +4,11 @@
 #include "host_object.h"
 #include "internal_value.h"
 #include "out_stream.h"
+#include "prompt_escape.h"
 #include "render_context.h"
 #include "span.h"
+
+#include <jinja2cpp/prompt.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -142,6 +145,24 @@ std::basic_string<CharT> EscapeHtml(std::basic_string_view<CharT> str)
     return result;
 }
 
+namespace detail
+{
+// MarkupEscape in AutoescapeMode::Prompt: the str() of a value that is not Markup, neutralized, as Markup; what has
+// __html__ is trusted as in HTML mode (prompt_filters.cpp, docs/tasks/0358)
+InternalValue PromptEscape(const InternalValue& val, const PromptEscaperImpl& escaper, IRendererCallback* callback);
+} // namespace detail
+
+// A string escaped with the active escaper: markupsafe.escape, or neutralized in prompt mode
+template<typename CharT>
+std::basic_string<CharT> EscapeText(std::basic_string_view<CharT> str, IRendererCallback* callback)
+{
+    if (const auto* prompt = callback->GetPromptEscaper())
+    {
+        return detail::NeutralizeString(*prompt, str);
+    }
+    return EscapeHtml(str);
+}
+
 // hasattr(x, '__html__'): Markup, a host object that has it, and a template module, whose
 // __html__ is its output as Markup (docs/tasks/0309, 0367)
 inline bool HasHtml(const InternalValue& val)
@@ -156,11 +177,16 @@ inline bool HasHtml(const InternalValue& val)
 
 // markupsafe.escape: Markup is returned as is, anything else becomes Markup of its escaped str().
 // A string of the template's character type is escaped from its own text (docs/tasks/0126).
+// In prompt mode the escape is neutralize (docs/tasks/0358)
 inline InternalValue MarkupEscape(const InternalValue& val, IRendererCallback* callback)
 {
     if (val.IsMarkup())
     {
         return val;
+    }
+    if (const auto* prompt = callback->GetPromptEscaper())
+    {
+        return detail::PromptEscape(val, *prompt, callback);
     }
     // A string of the template's character type is escaped from its own text into the result,
     // allocated once, or shared when it has nothing to escape (docs/tasks/0151)

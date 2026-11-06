@@ -4,6 +4,7 @@
 
 #include <jinja2cpp/prompt.h>
 #include <jinja2cpp/string_helpers.h>
+#include <jinja2cpp/template_env.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -433,6 +434,41 @@ bool PromptEscaperImpl::Neutralize(std::string_view text, std::string& out, bool
 bool PromptEscaperImpl::Neutralize(std::wstring_view text, std::wstring& out, bool checkLimit) const
 {
     return Run<wchar_t>(m_wide, m_wideSeparator, text, out, checkLimit);
+}
+
+const PromptEscaperImpl* AutoescapePromptEscaper(const Settings& settings) noexcept
+{
+    if (settings.autoescapeMode != AutoescapeMode::Prompt)
+    {
+        return nullptr;
+    }
+    if (const auto* impl = PromptEscaperAccess::Impl(settings.promptEscaper))
+    {
+        return impl;
+    }
+    // Prompt mode without patterns still must not write HTML entities: it changes nothing
+    static const PromptEscaperImpl empty{ PromptEscapeOptions{} };
+    return &empty;
+}
+
+std::string NeutralizeString(const PromptEscaperImpl& escaper, std::string_view text)
+{
+    std::string out;
+    if (!escaper.Neutralize(text, out, true))
+    {
+        return std::string(text);
+    }
+    return out;
+}
+
+std::wstring NeutralizeString(const PromptEscaperImpl& escaper, std::wstring_view text)
+{
+    std::wstring out;
+    if (!escaper.Neutralize(text, out, true))
+    {
+        return std::wstring(text);
+    }
+    return out;
 }
 
 } // namespace detail

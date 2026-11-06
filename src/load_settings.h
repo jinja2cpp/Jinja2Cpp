@@ -2,9 +2,11 @@
 #define JINJA2CPP_SRC_LOAD_SETTINGS_H
 
 #include "dialect.h"
+#include "prompt_escape.h"
 #include "recursion_guard.h"
 
 #include <jinja2cpp/big_int_backend.h>
+#include <jinja2cpp/prompt.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template_env.h>
 
@@ -111,6 +113,7 @@ struct LoadSettings
 #endif
         , bigIntBackend(backend)
         , dialect(templateDialect)
+        , promptEscaper(AutoescapePromptEscaper(settings))
     {
     }
 
@@ -138,6 +141,9 @@ struct LoadSettings
     const BigIntBackend* bigIntBackend;
     // What a preset changed besides the settings (ConfigureForChatTemplates)
     Dialect dialect;
+    // The escaper of AutoescapeMode::Prompt, null in HTML mode: chosen once here, so a render only copies it into its
+    // callback (docs/tasks/0358). Points into settings.promptEscaper, or to the one without patterns
+    const PromptEscaperImpl* promptEscaper;
 };
 
 using LoadSettingsPtr = std::shared_ptr<const LoadSettings>;

@@ -2,6 +2,7 @@
 #include "engine_errors.h"
 #include "filters.h"
 #include "function_base.h"
+#include "host_object.h"
 #include "internal_value.h"
 #include "markup.h"
 #include "prompt_escape.h"
@@ -203,8 +204,9 @@ InternalValue PromptFilter::Neutralize(const InternalValue& baseVal, RenderConte
     const auto* impl = detail::PromptEscaperAccess::Impl(*escaper);
     InternalValue text = TextValue(baseVal, callback);
     InternalValue result = NeutralizeValue(impl, text, callback);
-    // Markup in, Markup out: it is an explicit request, but the value stays what it was
-    result.SetMarkup(baseVal.IsMarkup());
+    // Markup in, Markup out: it is an explicit request, but the value stays what it was. A template that autoescapes in
+    // prompt mode gets Markup, which it would not escape again
+    result.SetMarkup(baseVal.IsMarkup() || (callback->IsPromptMode() && context.IsAutoescape()));
     return result;
 }
 
@@ -243,5 +245,22 @@ InternalValue PromptFilter::Fence(const InternalValue& baseVal, RenderContext& c
 }
 
 } // namespace filters
+
+InternalValue detail::PromptEscape(const InternalValue& val, const PromptEscaperImpl& escaper, IRendererCallback* callback)
+{
+    // What has __html__ is trusted as markupsafe.escape trusts it: a host object, a template module (as MarkupEscape)
+    if (const auto* host = GetHostObject(val); host && host->IsMarkupLike())
+    {
+        return host::Html(*host, callback->IsWideTarget());
+    }
+    if (const auto map = AsMap(val); map && map->GetStrValue())
+    {
+        return InternalValue(*map->GetStrValue()).SetMarkup();
+    }
+    InternalValue result = filters::NeutralizeValue(&escaper, TextValue(val, callback), callback);
+    result.SetMarkup();
+    return result;
+}
+
 } // namespace v2
 } // namespace jinja2

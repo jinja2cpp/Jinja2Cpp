@@ -543,7 +543,8 @@ InternalValue CallGettext(const GettextFunction& fn, const CallParams& params, R
     }
 
     InternalValue values = CreateMapAdapter(std::move(variables));
-    auto formatted = PythonPercentFormat(ApplyStringConverter(translated, [](auto str) { return ConvertString<std::string>(str); }), values, context.IsAutoescape());
+    auto formatted = PythonPercentFormat(ApplyStringConverter(translated, [](auto str) { return ConvertString<std::string>(str); }), values, context.IsAutoescape(),
+                                         context.GetRendererCallback()->GetPromptEscaper());
     InternalValue result = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted));
     result.SetMarkup(context.IsAutoescape());
     return result;

@@ -173,8 +173,23 @@ with the environment's `PromptEscaper`, and Markup means "prompt-safe". `|safe`,
   token and breaks one inside `role`; chat templates written for transformers work unchanged.
   Host values that carry special tokens on purpose (`bos_token`) are passed as `jinja2::Markup`.
 - `|e`, `|escape` and `|forceescape` neutralize instead of writing HTML entities, and the
-  results of `urlize`, `xmlattr` and `tojson` are neutralized.
+  results of `urlize`, `xmlattr` and `tojson` are neutralized (`tojson` always, as its result is
+  always Markup; the other two when autoescape is on, when theirs is).
+- Literals are Markup whether autoescape is on or off, so the Markup rules apply to them as to
+  `|safe` text: `'<|im_start|>' + x`, `'%s' % x`, `'{}'.format(x)` and `', '.join(xs)` neutralize
+  `x` even with autoescape off; `~` does under autoescape, also where Jinja2 joins as `str`
+  (constant operands, volatile `{% autoescape %}` code), so that a run of literals stays Markup.
+- `replace` on a value that is not Markup is a `str` replace, escaped on output, even when an
+  argument is a literal: deleting characters from neutralized text could put a special back
+  together (`content|replace('\n', '')`). On Markup it is Markup's replace, as in HTML mode.
+- The precision of `%s` cuts the neutralized text, as markupsafe cuts the escaped one.
+- With no `promptEscaper` set, prompt mode escapes nothing (and writes no HTML entities).
 - One environment escapes for one mode: HTML and prompt templates use separate environments.
+
+The guarantee holds for the escaping and composing constructs. A template that edits escaped
+text on purpose can still join two halves: slicing or reversing Markup, `trim` of it (the
+default separator is a space, which `trim` removes from the edges), or `neutralize` with
+arguments of its own. As with `<|{{ role }}|>`, that is the template author's text.
 
 `ConfigureForChatTemplates` does not switch prompt mode on: transformers renders with autoescape
 off.

@@ -216,6 +216,8 @@ private:
     InternalValue m_finalize;
     // Parse's isVolatile
     bool m_volatile = false;
+    // AutoescapeMode::Prompt: the template's string literals are prompt-safe, Markup (docs/tasks/0358)
+    bool m_trustedLiterals = false;
     // Nesting level of the expression being parsed, bounded by Settings::Limits::maxExpressionDepth
     unsigned m_depth = 0;
     // Operators chained on the current path (a + b + c, x|f|g, a.b.c, - - x), bounded by

@@ -98,6 +98,9 @@ void FuzzParse(const std::uint8_t* data, std::size_t size);
 void FuzzRender(const std::uint8_t* data, std::size_t size);
 void FuzzRenderWide(const std::uint8_t* data, std::size_t size);
 void FuzzMetadata(const std::uint8_t* data, std::size_t size);
+// AutoescapeMode::Prompt: no special token of the data reaches the output (prompt_escape_case.h), and any template
+// renders without a crash
+void FuzzPromptEscape(const std::uint8_t* data, std::size_t size);
 
 } // namespace jinja2_fuzz
 

@@ -1003,6 +1003,8 @@ private:
     InternalValue EvaluatePair(NodeRef<Expression> leftExpr, NodeRef<Expression> rightExpr, RenderContext& context) const;
     // Joined with str() rather than markup_join (SetFolded, SetFoldedByChoice)
     [[nodiscard]] bool IsFoldedAt(RenderContext& values) const;
+    // Under autoescape with a Markup operand: whether the operands are joined with markup_join
+    [[nodiscard]] bool IsMarkupJoinAt(RenderContext& values) const;
 
     ArenaSpan<NodeRef<Expression>> m_operands;
     uint32_t m_lendFrom;

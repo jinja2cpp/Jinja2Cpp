@@ -1742,7 +1742,7 @@ struct StrOps
             }
             return ToStr(value, false);
         }
-        return EscapeHtml<CharT>(FormatValue(value, spec));
+        return EscapeText<CharT>(FormatValue(value, spec), context.GetRendererCallback());
     }
 
     // CPython's build_string: the literal text with {{ and }} unescaped and each replacement

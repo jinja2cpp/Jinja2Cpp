@@ -1646,7 +1646,12 @@ InternalValue Serialize::Filter(const InternalValue& value, RenderContext& conte
     // Jinja2's do_tojson: json.dumps with sort_keys=True, then htmlsafe_json_dumps escapes
     // <, >, & and ' so the result is safe in HTML and <script> (PythonJsonWriter does both)
     InternalValue resultVal = PythonJsonWriter(context, std::move(options)).Write(value);
-    // tojson output is always Markup
+    // tojson output is always Markup: safe for HTML, so in prompt mode it is neutralized first (docs/tasks/0358)
+    auto* callback = context.GetRendererCallback();
+    if (const auto* prompt = callback->GetPromptEscaper())
+    {
+        return detail::PromptEscape(resultVal, *prompt, callback);
+    }
     resultVal.SetMarkup();
     return resultVal;
 }
@@ -1689,6 +1694,8 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
     }
     auto params = m_params.Evaluate(context);
     bool markup = baseVal.IsMarkup();
+    // Neutralizes the arguments of a Markup format in prompt mode
+    const auto* prompt = markup ? callback->GetPromptEscaper() : nullptr;
     std::string formatted;
     if (!params.kwParams.empty())
     {
@@ -1699,12 +1706,12 @@ InternalValue StringFormat::Filter(const InternalValue& baseVal, RenderContext& 
         }
         InternalValue values = CreateMapAdapter(std::move(mapping));
         // Markup % args escapes what the arguments convert to and stays Markup
-        formatted = m_constFormat ? m_constFormat->Format(values) : PythonPercentFormat(format, values, markup);
+        formatted = m_constFormat ? m_constFormat->Format(values) : PythonPercentFormat(format, values, markup, prompt);
     }
     else
     {
         formatted = m_constFormat ? m_constFormat->Format(params.posParams.data(), params.posParams.size())
-                                  : PythonPercentFormat(format, params.posParams.data(), params.posParams.size(), markup);
+                                  : PythonPercentFormat(format, params.posParams.data(), params.posParams.size(), markup, prompt);
     }
     InternalValue result(formatted);
     result.SetMarkup(baseVal.IsMarkup());
@@ -1769,8 +1776,14 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
     {
         result.insert(0, 1, ' ');
     }
-    // Markup under autoescape, a plain str otherwise
+    // Markup under autoescape, a plain str otherwise. The Markup is safe for HTML: in prompt mode it is neutralized
+    // first (docs/tasks/0358)
     InternalValue resultVal(std::move(result));
+    auto* callback = context.GetRendererCallback();
+    if (const auto* prompt = callback->GetPromptEscaper(); prompt && context.IsAutoescape())
+    {
+        return detail::PromptEscape(resultVal, *prompt, callback);
+    }
     resultVal.SetMarkup(context.IsAutoescape());
     return resultVal;
 }

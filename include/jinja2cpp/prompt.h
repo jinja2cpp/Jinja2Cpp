@@ -20,6 +20,17 @@ class PromptEscaperImpl;
 struct PromptEscaperAccess;
 } // namespace detail
 
+//! What autoescape escapes for (\ref Settings::autoescapeMode). Jinja2 has Html only
+enum class AutoescapeMode : unsigned char
+{
+    //! HTML entities, as Jinja2 and MarkupSafe write them
+    Html,
+    //! The special tokens and tags of \ref Settings::promptEscaper are broken, as the `neutralize` filter does; Markup
+    //! means prompt-safe, and the template's string literals are prompt-safe (docs/cpp-only-filters.md, "Prompt
+    //! escaping mode")
+    Prompt
+};
+
 /*!
  * \brief The strings \ref PromptEscaper breaks (docs/cpp-only-filters.md, "Prompt filters")
  *
