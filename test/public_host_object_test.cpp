@@ -517,6 +517,93 @@ TEST(PublicHostObjectTest, LengthTruthAndIteration)
     EXPECT_EQ("2|1,2,|1,2,|2", Render("{{ q|length }}|{% for i in q %}{{ i }},{% endfor %}|{% for i in q %}{{ i }},{% endfor %}|{{ q|list|length }}", { { "q", MakeToy(sequence) } }));
 }
 
+namespace
+{
+// A list that is walked once: no size, no indexer, and its enumerator can neither be copied nor rewound
+class OnePass final : public IListItemAccessor
+{
+public:
+    OnePass(std::vector<Value> items, std::shared_ptr<int> moves)
+        : m_items(std::move(items))
+        , m_moves(std::move(moves))
+    {
+    }
+
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return nullptr; }
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Enumerator>(m_items, m_moves); }
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return std::nullopt; }
+
+private:
+    class Enumerator final : public IListEnumerator
+    {
+    public:
+        Enumerator(std::vector<Value> items, std::shared_ptr<int> moves)
+            : m_items(std::move(items))
+            , m_moves(std::move(moves))
+        {
+        }
+        void Reset() override { throw std::logic_error("a single-pass list was rewound"); }
+        bool MoveNext() override
+        {
+            if (m_next == m_items.size())
+            {
+                return false;
+            }
+            ++*m_moves;
+            ++m_next;
+            return true;
+        }
+        [[nodiscard]] Value GetCurrent() const override { return m_items[m_next - 1]; }
+        [[nodiscard]] ListEnumeratorPtr Clone() const override { throw std::logic_error("a single-pass list was copied"); }
+        ListEnumeratorPtr Move() override { return MakeEnumerator<Enumerator>(std::move(m_items), m_moves); }
+
+    private:
+        std::vector<Value> m_items;
+        std::shared_ptr<int> m_moves;
+        size_t m_next = 0;
+    };
+
+    std::vector<Value> m_items;
+    std::shared_ptr<int> m_moves;
+};
+
+class OnePassObject final : public IHostObject
+{
+public:
+    explicit OnePassObject(std::shared_ptr<int> moves)
+        : m_moves(std::move(moves))
+    {
+    }
+
+    [[nodiscard]] const char* TypeName() const override { return "Gen"; }
+    [[nodiscard]] std::string Str() const override { return "gen"; }
+    [[nodiscard]] std::string Repr() const override { return "<gen>"; }
+    [[nodiscard]] std::optional<Value> GetAttr(std::string_view /*name*/) const override { return std::nullopt; }
+    [[nodiscard]] bool IsIterable() const override { return true; }
+    [[nodiscard]] std::optional<GenericList> Iterate() const override
+    {
+        return GenericList(std::make_shared<const OnePass>(std::vector<Value>{ Value(1), Value(2), Value(3) }, m_moves));
+    }
+
+private:
+    std::shared_ptr<int> m_moves;
+};
+} // namespace
+
+TEST(PublicHostObjectTest, SinglePassIterationIsLazyAndNeverRewound)
+{
+    auto moves = std::make_shared<int>(0);
+    const ValuesMap params{ { "it", MakeHostValue<OnePassObject>(moves) } };
+    // Asking whether it iterates, and making the list, take no step
+    EXPECT_EQ("True", Render("{{ it is iterable }}", params));
+    EXPECT_EQ(0, *moves);
+    EXPECT_EQ("1,2,3,", Render("{% for i in it %}{{ i }},{% endfor %}", params));
+    EXPECT_EQ(3, *moves);
+    *moves = 0;
+    EXPECT_EQ("[1, 2, 3]|1-2-3|1|True", Render("{{ it|list }}|{{ it|join('-') }}|{{ it|first }}|{{ 2 in it }}", params));
+    EXPECT_EQ(L"1,2,3,", RenderW(L"{% for i in it %}{{ i }},{% endfor %}", params));
+}
+
 TEST(PublicHostObjectTest, ContainsThenIterationAndReversed)
 {
     ToySpec withContains;

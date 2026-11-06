@@ -701,7 +701,9 @@ struct ArgDescrHasType<ArgInfoT<T>...> : std::true_type
  * `ident(x) is sameas x` holds, and a write through the result reaches `x`. One the host keeps and returns in a later
  * call comes back as a view of what it was given, which a write copies, so that two renders never share a mutable
  * object; a template callable kept past its call fails with TemplateExpired when called. An undefined argument reaches
- * the function as None, and so comes back as None, not as undefined (Python keeps the Undefined).
+ * the function as None, and so comes back as None, not as undefined (Python keeps the Undefined), unless
+ * \ref UserCallable::keepUndefined is set: the function then gets a value that \ref UndefinedOf describes, and a function that
+ * returns \ref MakeUndefined gives the template an undefined value.
  *
  * \param f  Function which should be called
  * \param ad Function param descriptors

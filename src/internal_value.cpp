@@ -4669,26 +4669,53 @@ bool MayHoldTemplateCallables(const GenericList& list)
     return accessor != nullptr && !accessor->IsBorrowed() && accessor->GetRangeInfo() == nullptr;
 }
 
-Value LendMembers(Value&& exported, const LendFrame& frame)
+// `exported` in a view that lends its callable members, whether or not it can hold any
+Value WrapLending(Value&& exported, const LendFrame& frame)
 {
-    if (auto* map = exported.GetIf<GenericMap>(); map && map->GetAccessor() && MayHoldTemplateCallables(*map))
+    if (auto* map = exported.GetIf<GenericMap>(); map && map->GetAccessor())
     {
         return Value(GenericMap(std::make_shared<const LendingMapView>(std::move(*map), frame)));
     }
-    if (auto* list = exported.GetIf<GenericList>(); list && list->IsValid() && MayHoldTemplateCallables(*list))
+    if (auto* list = exported.GetIf<GenericList>(); list && list->IsValid())
     {
         return Value(GenericList(std::make_shared<const LendingListView>(std::move(*list), frame)));
     }
     return std::move(exported);
 }
 
+Value LendMembers(Value&& exported, const LendFrame& frame)
+{
+    const auto* map = exported.GetIf<GenericMap>();
+    const auto* list = exported.GetIf<GenericList>();
+    if ((map && map->GetAccessor() && MayHoldTemplateCallables(*map)) || (list && list->IsValid() && MayHoldTemplateCallables(*list)))
+    {
+        return WrapLending(std::move(exported), frame);
+    }
+    return std::move(exported);
+}
+
+// Whether a container argument is the template's own, which may hold template callables: decided on the
+// engine's value, before any export is made
+bool MayHoldTemplateCallables(const InternalValue& container)
+{
+    if (const auto map = AsMap(container))
+    {
+        const auto* accessor = map->GetAccessor();
+        return accessor != nullptr && !map->IsHost() && (accessor->GetObjectClass() != nullptr || accessor->GetMutableItems() != nullptr);
+    }
+    if (const auto list = AsList(container))
+    {
+        const auto* accessor = list->GetAccessor();
+        return accessor != nullptr && !accessor->IsBorrowed() && accessor->GetRangeInfo() == nullptr;
+    }
+    return false;
+}
+
 // An argument that is a container, as the host gets it: its export, which lends its callable members
 JINJA2CPP_NOINLINE_INLINE Value ContainerToHost(const InternalValue& value, RenderContext& context, HostCallScope& scope)
 {
     auto exported = scope.keepUndefined ? ToHostValue(value) : IntValue2Value(value);
-    const auto* map = exported.GetIf<GenericMap>();
-    const auto* list = exported.GetIf<GenericList>();
-    if (!(map && map->GetAccessor() && MayHoldTemplateCallables(*map)) && !(list && list->IsValid() && MayHoldTemplateCallables(*list)))
+    if (!MayHoldTemplateCallables(value))
     {
         return exported;
     }
@@ -4696,7 +4723,7 @@ JINJA2CPP_NOINLINE_INLINE Value ContainerToHost(const InternalValue& value, Rend
     {
         scope.lease = std::make_shared<CallableLease>(CallableLease{ &context, CycleCollector::Current(), std::this_thread::get_id(), detail::t_renderLimits, &scope });
     }
-    return LendMembers(std::move(exported), LendFrame{ scope.lease, &scope });
+    return WrapLending(std::move(exported), LendFrame{ scope.lease, &scope });
 }
 
 // The host's form of an argument of a host's call made from `context`: a template callable is
