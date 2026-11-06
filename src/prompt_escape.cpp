@@ -436,7 +436,7 @@ bool PromptEscaperImpl::Neutralize(std::wstring_view text, std::wstring& out, bo
     return Run<wchar_t>(m_wide, m_wideSeparator, text, out, checkLimit);
 }
 
-const PromptEscaperImpl* AutoescapePromptEscaper(const Settings& settings) noexcept
+const PromptEscaperImpl* AutoescapePromptEscaper(const Settings& settings)
 {
     if (settings.autoescapeMode != AutoescapeMode::Prompt)
     {

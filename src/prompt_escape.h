@@ -111,7 +111,7 @@ private:
 
 // The escaper autoescape uses with these settings: null in AutoescapeMode::Html, else the environment's, or one without
 // patterns when none is set
-const PromptEscaperImpl* AutoescapePromptEscaper(const Settings& settings) noexcept;
+const PromptEscaperImpl* AutoescapePromptEscaper(const Settings& settings);
 
 // The text neutralized inside a render (its size checked against maxSequenceSize)
 std::string NeutralizeString(const PromptEscaperImpl& escaper, std::string_view text);
