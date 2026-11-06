@@ -12,6 +12,7 @@
 #include "template_slots.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/prompt.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/utils/i_comparable.h>
 #include <jinja2cpp/value.h>
@@ -149,6 +150,18 @@ struct IRendererCallback : IComparable
     // Returns a token for LeaveSharedModule, told whether the module was shared
     virtual std::size_t EnterSharedModule() { return 0; }
     virtual void LeaveSharedModule(std::size_t /*token*/, bool /*shared*/) {}
+
+    // The escaper of AutoescapeMode::Prompt, null in HTML mode. Read where a value is escaped (MarkupEscape,
+    // WriteEscaped), so that it costs a load, not a virtual call (docs/tasks/0358)
+    [[nodiscard]] const detail::PromptEscaperImpl* GetPromptEscaper() const noexcept { return m_promptEscaper; }
+    [[nodiscard]] bool IsPromptMode() const noexcept { return m_promptEscaper != nullptr; }
+
+protected:
+    // Called once, when the template's callback is made
+    void SetPromptEscaper(const detail::PromptEscaperImpl* escaper) noexcept { m_promptEscaper = escaper; }
+
+private:
+    const detail::PromptEscaperImpl* m_promptEscaper = nullptr;
 };
 
 // The slots where names were last found (docs/tasks/0100 idea 7). An entry holds the slot

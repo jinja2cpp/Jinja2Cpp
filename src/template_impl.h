@@ -788,7 +788,9 @@ private:
     public:
         explicit RendererCallback(const ThisType* host)
             : m_host(host)
-        {}
+        {
+            SetPromptEscaper(host->m_settings->promptEscaper);
+        }
 
         TargetString GetAsTargetString(const InternalValue& val) override
         {

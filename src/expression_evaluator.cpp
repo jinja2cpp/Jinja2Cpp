@@ -54,9 +54,9 @@ inline namespace v2
 // Out of line, so that the paths without autoescape stay small
 void WriteEscaped(OutStream& stream, const InternalValue& val, IRendererCallback* callback)
 {
-    // The escape buffer is the thread's: a sink called while the stream still holds the
-    // escaped text could render, and escape, into it
-    const auto view = callback->IsWideTarget() || stream.ReachesSink() ? std::nullopt : AsStringView<char>(val);
+    // The escape buffer is the thread's: a sink called while the stream still holds the escaped text could render, and
+    // escape, into it. Prompt mode neutralizes instead (MarkupEscape)
+    const auto view = callback->IsWideTarget() || stream.ReachesSink() || callback->IsPromptMode() ? std::nullopt : AsStringView<char>(val);
     if (view && view->size() <= detail::maxBufferedHtmlEscape)
     {
         auto escaped = detail::EscapeHtmlToBuffer(*view);
@@ -840,7 +840,7 @@ namespace
 {
 // str % values is Python's printf-style formatting; the result keeps the string's width.
 // Empty when the left operand is not a string
-std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, const InternalValue& rightVal)
+std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, const InternalValue& rightVal, RenderContext& context)
 {
     bool isWide = false;
     bool isString = ApplyStringConverter(leftVal, [&isWide](auto str) {
@@ -854,9 +854,10 @@ std::optional<InternalValue> ApplyPercentFormat(const InternalValue& leftVal, co
 
     // Markup % args escapes what the arguments convert to and stays Markup
     bool markup = leftVal.IsMarkup();
+    const auto* prompt = markup ? context.GetRendererCallback()->GetPromptEscaper() : nullptr;
     auto narrow = AsStringView<char>(leftVal);
-    auto formatted = narrow ? PythonPercentFormat(*narrow, rightVal, markup)
-                            : PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }), rightVal, markup);
+    auto formatted = narrow ? PythonPercentFormat(*narrow, rightVal, markup, prompt)
+                            : PythonPercentFormat(ApplyStringConverter(leftVal, [](auto str) { return ConvertString<std::string>(str); }), rightVal, markup, prompt);
     InternalValue formattedVal = isWide ? TargetString(ConvertString<std::wstring>(formatted)) : TargetString(std::move(formatted));
     formattedVal.SetMarkup(leftVal.IsMarkup());
     return formattedVal;
@@ -966,7 +967,7 @@ InternalValue BinaryExpression::Apply(const InternalValue& leftVal, const Intern
     // only where one converts it: `'xy' % missing` is 'xy' (docs/tasks/0297)
     if (m_oper == DivRemainder)
     {
-        if (auto formatted = ApplyPercentFormat(leftVal, rightVal))
+        if (auto formatted = ApplyPercentFormat(leftVal, rightVal, context))
         {
             return std::move(*formatted);
         }
@@ -1023,7 +1024,7 @@ JINJA2CPP_HOT_INLINE InternalValue ConcatExpression::EvaluatePair(NodeRef<Expres
             CheckUndefinedUse(left, UndefinedUse::Operator);
             CheckUndefinedUse(right, UndefinedUse::Operator);
             const std::array<LookupResult, 2> values{ LookupResult(left), LookupResult(right) };
-            if ((left.IsMarkup() || right.IsMarkup()) && context.IsOutputAutoescape() && !context.IsVolatileAutoescape() && !IsFoldedAt(context))
+            if ((left.IsMarkup() || right.IsMarkup()) && context.IsOutputAutoescape() && IsMarkupJoinAt(context))
             {
                 return MarkupJoin(values, context);
             }
@@ -1076,7 +1077,7 @@ InternalValue ConcatExpression::Evaluate(RenderContext& context)
     // escaped and the result is Markup. Jinja2 3.1.6 joins as str in volatile code: it reads
     // eval_ctx.volatile at run time, which is never set (docs/tasks/0216)
     auto* callback = context.GetRendererCallback();
-    if (anyMarkup && context.IsOutputAutoescape() && !context.IsVolatileAutoescape() && !IsFoldedAt(context))
+    if (anyMarkup && context.IsOutputAutoescape() && IsMarkupJoinAt(context))
     {
         return MarkupJoin(values, context);
     }
@@ -1115,6 +1116,13 @@ bool ConcatExpression::IsFoldableAt(RenderContext& values) const
     }
     const auto operands = values.Nodes()[m_operands];
     return std::all_of(operands.begin(), operands.end(), [&values](const NodeRef<Expression>& operand) { return OperandFoldsAt(values, operand); });
+}
+
+bool ConcatExpression::IsMarkupJoinAt(RenderContext& values) const
+{
+    // In prompt mode the template's literals are Markup and stay so when joined: folded or in volatile code a str()
+    // join would make `'<|im_start|>' ~ 'user'` text that is escaped on output (docs/tasks/0358)
+    return values.GetRendererCallback()->IsPromptMode() || (!values.IsVolatileAutoescape() && !IsFoldedAt(values));
 }
 
 bool ConcatExpression::IsFoldedAt(RenderContext& values) const

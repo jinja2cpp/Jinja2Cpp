@@ -6,6 +6,7 @@
 #include "host_object.h"
 #include "internal_value.h"
 #include "markup.h"
+#include "prompt_escape.h"
 #include "undefined.h"
 #include "value_visitors.h"
 
@@ -508,9 +509,10 @@ void ParsePercentFormat(std::string_view format, const Sink& sink)
 class Formatter
 {
 public:
-    Formatter(const InternalValue& values, bool markup)
+    Formatter(const InternalValue& values, bool markup, const detail::PromptEscaperImpl* prompt)
         : m_map(AsMap(values))
         , m_markup(markup)
+        , m_prompt(prompt)
     {
         // A host list or tuple is read as the engine's own (IHostObject::IsSequence)
         if (m_map && m_map->IsHost())
@@ -569,10 +571,11 @@ public:
         m_isMapping = m_map.has_value() || (list && !list->IsTuple()) || m_undefined != nullptr;
     }
 
-    Formatter(const InternalValue* args, size_t count, bool markup)
+    Formatter(const InternalValue* args, size_t count, bool markup, const detail::PromptEscaperImpl* prompt)
         : m_args(args)
         , m_count(count)
         , m_markup(markup)
+        , m_prompt(prompt)
     {
     }
 
@@ -744,7 +747,7 @@ private:
             {
                 CheckUndefinedUse(arg, UndefinedUse::Operator);
             }
-            ConvertText(out, arg, conversion, spec, m_markup);
+            ConvertText(out, arg, conversion, spec, m_markup, m_prompt);
             break;
         case 'x':
         case 'X':
@@ -850,7 +853,7 @@ private:
 
     // With `escape` (a Markup format) the text is escaped before precision cuts it, except
     // the str() of a Markup argument
-    static void ConvertText(std::string& out, const InternalValue& arg, char conversion, const Spec& spec, bool escape)
+    static void ConvertText(std::string& out, const InternalValue& arg, char conversion, const Spec& spec, bool escape, const detail::PromptEscaperImpl* prompt)
     {
         // str() of a narrow string is the string itself, so it is not copied
         std::string owned;
@@ -866,7 +869,7 @@ private:
         }
         if (escape && (conversion != 's' || !arg.IsMarkup()))
         {
-            owned = EscapeHtml(*view);
+            owned = prompt ? detail::NeutralizeString(*prompt, *view) : EscapeHtml(*view);
             view = owned;
         }
         auto text = *view;
@@ -1009,18 +1012,20 @@ private:
     bool m_keyedUsed = false;
     InternalValue m_keyedValue;
     bool m_markup = false;
+    // Neutralizes instead of HTML-escaping in prompt mode
+    const detail::PromptEscaperImpl* m_prompt = nullptr;
 };
 
 } // namespace
 
-std::string PythonPercentFormat(std::string_view format, const InternalValue& values, bool markup)
+std::string PythonPercentFormat(std::string_view format, const InternalValue& values, bool markup, const detail::PromptEscaperImpl* prompt)
 {
-    return Formatter(values, markup).Run(format);
+    return Formatter(values, markup, prompt).Run(format);
 }
 
-std::string PythonPercentFormat(std::string_view format, const InternalValue* args, size_t count, bool markup)
+std::string PythonPercentFormat(std::string_view format, const InternalValue* args, size_t count, bool markup, const detail::PromptEscaperImpl* prompt)
 {
-    return Formatter(args, count, markup).Run(format);
+    return Formatter(args, count, markup, prompt).Run(format);
 }
 
 CompiledPercentFormat::CompiledPercentFormat(std::string format)
@@ -1031,12 +1036,12 @@ CompiledPercentFormat::CompiledPercentFormat(std::string format)
 
 std::string CompiledPercentFormat::Format(const InternalValue& values) const
 {
-    return Formatter(values, false).Run(m_format, m_pieces);
+    return Formatter(values, false, nullptr).Run(m_format, m_pieces);
 }
 
 std::string CompiledPercentFormat::Format(const InternalValue* args, size_t count) const
 {
-    return Formatter(args, count, false).Run(m_format, m_pieces);
+    return Formatter(args, count, false, nullptr).Run(m_format, m_pieces);
 }
 
 } // namespace v2

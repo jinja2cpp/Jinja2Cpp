@@ -3,6 +3,8 @@
 
 #include "internal_value.h"
 
+#include <jinja2cpp/prompt.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -22,11 +24,12 @@ inline namespace v2
 // With `markup` the format is Markup and each argument is seen through markupsafe's
 // _MarkupEscapeHelper: %s, %r and %a write the escaped str(), repr() or ascii() of the
 // argument itself (a Markup argument's str() as it is), before precision and width apply.
-std::string PythonPercentFormat(std::string_view format, const InternalValue& values, bool markup = false);
+// `prompt`, set in AutoescapeMode::Prompt, neutralizes them instead of HTML-escaping them.
+std::string PythonPercentFormat(std::string_view format, const InternalValue& values, bool markup = false, const detail::PromptEscaperImpl* prompt = nullptr);
 
 // The same with positional arguments given as an array, as if they were a tuple: format()
 // passes its evaluated arguments here without building a list for them
-std::string PythonPercentFormat(std::string_view format, const InternalValue* args, size_t count, bool markup = false);
+std::string PythonPercentFormat(std::string_view format, const InternalValue* args, size_t count, bool markup = false, const detail::PromptEscaperImpl* prompt = nullptr);
 
 // One piece of a parsed format: literal text (a range of the format string) followed by a
 // conversion, if any. A piece that ends the format in an error carries the error, which is

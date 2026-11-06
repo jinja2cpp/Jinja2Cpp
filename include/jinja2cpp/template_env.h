@@ -146,6 +146,10 @@ struct Settings
     //! When set, decides \ref autoescape for each template by its name instead (Jinja2 `autoescape` given a callable),
     //! for example `SelectAutoescape({"html", "xml"})`. A template keeps what it was loaded with
     AutoescapeSelector autoescapeSelector;
+    //! What autoescape escapes for: HTML (Jinja2's) or the special tokens of \ref promptEscaper. With `Prompt`, Markup
+    //! means prompt-safe, `escape` neutralizes, and the template's string literals are prompt-safe. One mode for every
+    //! template of the environment (docs/cpp-only-filters.md, "Prompt escaping mode")
+    AutoescapeMode autoescapeMode = AutoescapeMode::Html;
     //! The special tokens and tags of the prompts the `neutralize` and `fence` filters protect (docs/cpp-only-filters.md,
     //! "Prompt filters"). None by default, so the filters change nothing until the host registers its model's tokens
     PromptEscaper promptEscaper;

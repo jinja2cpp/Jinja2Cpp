@@ -18,6 +18,7 @@
 #include "value_visitors.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/prompt.h>
 #include <jinja2cpp/template_env.h>
 
 #include <algorithm>
@@ -104,6 +105,7 @@ ExpressionParser::ExpressionParser(const Settings& settings, TemplateEnv* env, N
     , m_nodes(nodes)
     , m_names(names)
     , m_unknown(unknown)
+    , m_trustedLiterals(settings.autoescapeMode == AutoescapeMode::Prompt)
 {
     if (settings.finalize.callable)
     {
@@ -581,7 +583,12 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseValueE
         }
         else
         {
-            value = MakeConstant(m_nodes, ParseAdjacentStrings(lexer, std::move(first), invalid));
+            auto literal = ParseAdjacentStrings(lexer, std::move(first), invalid);
+            if (m_trustedLiterals)
+            {
+                literal.SetMarkup();
+            }
+            value = MakeConstant(m_nodes, std::move(literal));
         }
         if (invalid)
         {

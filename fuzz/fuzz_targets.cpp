@@ -1,7 +1,9 @@
 #include "fuzz_common.h"
+#include "prompt_escape_case.h"
 
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/filesystem_handler.h>
+#include <jinja2cpp/prompt.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 
@@ -9,6 +11,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
+#include <string_view>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -183,6 +186,49 @@ void FuzzMetadata(const std::uint8_t* data, std::size_t size)
         {
             (void)tpl.GetMetadata();
         }
+    }
+}
+
+void FuzzPromptEscape(const std::uint8_t* data, std::size_t size)
+{
+    if (size > MaxInputSize)
+    {
+        return;
+    }
+    // The property, narrow and wide, on the template and data the input chooses (prompt_escape_case.h)
+    const auto escapeCase = MakePromptEscapeCase(data, size);
+    if (RenderPromptEscapeCase<char>(escapeCase) == PromptEscapeResult::Leaked || RenderPromptEscapeCase<wchar_t>(escapeCase) == PromptEscapeResult::Leaked)
+    {
+        std::abort();
+    }
+    // Any template in prompt mode must not crash; the property is not checked, as a template can trust its data on
+    // purpose. The specials' private-use code points (EE 80 80-8F) and `safe` are mapped out of the source
+    std::string source(reinterpret_cast<const char*>(data), size);
+    for (std::size_t pos = 0; pos + 2 < source.size(); ++pos)
+    {
+        if (static_cast<unsigned char>(source[pos]) == 0xEE && static_cast<unsigned char>(source[pos + 1]) == 0x80 && (static_cast<unsigned char>(source[pos + 2]) & 0xF0) == 0x80)
+        {
+            source[pos] = '?';
+        }
+    }
+    for (auto pos = source.find("safe"); pos != std::string::npos; pos = source.find("safe", pos))
+    {
+        source[pos] = 'S';
+    }
+    jinja2::TemplateEnv env;
+    ConfigureEnv(env);
+    env.GetSettings().autoescape = true;
+    env.GetSettings().autoescapeMode = jinja2::AutoescapeMode::Prompt;
+    env.GetSettings().promptEscaper = jinja2::PromptEscaper({ escapeCase.specials, { "b", "document" }, "\xEE\x80\x8F" });
+    jinja2::Template tpl(&env);
+    if (tpl.Load(source))
+    {
+        auto params = MakeContext();
+        for (const auto& [name, value] : escapeCase.params)
+        {
+            params[name] = value;
+        }
+        (void)tpl.RenderAsString(params);
     }
 }
 

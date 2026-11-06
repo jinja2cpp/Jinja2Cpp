@@ -1,7 +1,10 @@
 #include "test_tools.h"
 
+#include "../fuzz/prompt_escape_case.h"
+
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/make_generic_list.h>
+#include <jinja2cpp/markup.h>
 #include <jinja2cpp/prompt.h>
 #include <jinja2cpp/reflected_value.h>
 #include <jinja2cpp/string_helpers.h>
@@ -13,6 +16,7 @@
 #include <cstdint>
 #include <iostream>
 #include <optional>
+#include <random>
 #include <regex>
 #include <set>
 #include <sstream>
@@ -1219,13 +1223,15 @@ struct PromptRow
     std::string result;
     bool autoescape = false;
     ValuesMap params = {};
+    AutoescapeMode mode = AutoescapeMode::Html;
 
     friend std::ostream& operator<<(std::ostream& os, const PromptRow& row) { return os << row.tpl << " -> " << row.result; }
 };
 
-void ConfigurePromptEnv(TemplateEnv& env, bool autoescape)
+void ConfigurePromptEnv(TemplateEnv& env, bool autoescape, AutoescapeMode mode = AutoescapeMode::Html)
 {
     env.GetSettings().autoescape = autoescape;
+    env.GetSettings().autoescapeMode = mode;
     env.GetSettings().promptEscaper = PromptEscaper(PromptTestOptions());
 }
 
@@ -1261,7 +1267,7 @@ TEST_P(PromptFilterTest, Narrow)
 {
     const auto& row = GetParam();
     TemplateEnv env;
-    ConfigurePromptEnv(env, row.autoescape);
+    ConfigurePromptEnv(env, row.autoescape, row.mode);
     Template tpl(&env);
     ASSERT_TRUE(tpl.Load(row.tpl).has_value());
     auto result = tpl.RenderAsString(row.params);
@@ -1273,7 +1279,7 @@ TEST_P(PromptFilterTest, Wide)
 {
     const auto& row = GetParam();
     TemplateEnv env;
-    ConfigurePromptEnv(env, row.autoescape);
+    ConfigurePromptEnv(env, row.autoescape, row.mode);
     TemplateW tpl(&env);
     ASSERT_TRUE(tpl.Load(ConvertString<std::wstring>(row.tpl)).has_value());
     auto result = tpl.RenderAsString(row.params);
@@ -1341,6 +1347,146 @@ INSTANTIATE_TEST_SUITE_P(
         PromptRow{ "{{ x|safe|fence }}", "```\n<b>\n```", true, { { "x", "<b>" } } },
         PromptRow{ "{{ x|safe|fence }}", "```\n<b>\n```", true, { { "x", "<b>" } } },
         PromptRow{ "{{ x|fence }}", "```\n&lt;a href=&#34;`\n```", true, { { "x", "<a href=\"`" } } }));
+
+// docs/tasks/0358, PR 2: AutoescapeMode::Prompt. Autoescape is on and neutralizes; Markup means prompt-safe, and the
+// template's string literals are Markup. x holds a special, y another, a and b the halves of one
+namespace
+{
+PromptRow PromptModeRow(std::string tpl, std::string result, ValuesMap params = {}, bool autoescape = true)
+{
+    params.emplace("x", "<|im_start|>");
+    params.emplace("y", "[INST]");
+    params.emplace("a", "<|im_");
+    params.emplace("b", "start|>");
+    params.emplace("h", "<b>&");
+    return PromptRow{ std::move(tpl), std::move(result), autoescape, std::move(params), AutoescapeMode::Prompt };
+}
+} // namespace
+
+INSTANTIATE_TEST_SUITE_P(
+    PromptMode,
+    PromptFilterTest,
+    ::testing::Values(
+        // {{ }} neutralizes what is not Markup; no HTML entities
+        PromptModeRow("{{ x }}|{{ y }}|{{ h }}", "< |im_start|>|[ INST]|<b>&"),
+        PromptModeRow("{{ 5 }}|{{ none }}|{{ [x] }}|{{ missing }}", "5|None|['< |im_start|>']|"),
+        // |safe and host Markup pass
+        PromptModeRow("{{ x|safe }}|{{ m }}", "<|im_start|>|<|im_end|>", { { "m", Markup("<|im_end|>") } }),
+        // Literals are prompt-safe: their specials stay, the value's are broken
+        PromptModeRow("{{ '<|im_start|>' }}{{ '<|im_start|>' ~ 'user' }}", "<|im_start|><|im_start|>user"),
+        PromptModeRow("{{ '<|im_start|>' ~ x ~ '<|im_end|>' }}", "<|im_start|>< |im_start|><|im_end|>"),
+        PromptModeRow("{{ '<|im_start|>' + x + '<|im_end|>' }}", "<|im_start|>< |im_start|><|im_end|>"),
+        PromptModeRow("{{ '<|im_start|>' ~ y ~ x }}", "<|im_start|>[ INST]< |im_start|>"),
+        PromptModeRow("{% autoescape t %}{{ '<|im_start|>' ~ x }}{% endautoescape %}", "<|im_start|>< |im_start|>", { { "t", true } }),
+        // format, %, join
+        PromptModeRow("{{ '{}<|im_end|>'.format(x) }}", "< |im_start|><|im_end|>"),
+        PromptModeRow("{{ '%s<|im_end|>'|format(x) }}|{{ '%s<|im_end|>' % x }}|{{ '%.3s' % x }}", "< |im_start|><|im_end|>|< |im_start|><|im_end|>|< |"),
+        PromptModeRow("{{ '<|im_end|>'.join([x, y]) }}|{{ [x, '<|im_end|>']|join(', ') }}", "< |im_start|><|im_end|>[ INST]|< |im_start|>, <|im_end|>"),
+        // Macro output and set blocks keep the template's specials and break the value's
+        PromptModeRow("{% macro m(v) %}<|im_start|>{{ v }}<|im_end|>{% endmacro %}{{ m(x) }}|{{ m(x) ~ x }}", "<|im_start|>< |im_start|><|im_end|>|<|im_start|>< |im_start|><|im_end|>< |im_start|>"),
+        PromptModeRow("{% set s %}<|im_start|>{{ x }}{% endset %}{{ s }}|{{ s ~ y }}", "<|im_start|>< |im_start|>|<|im_start|>< |im_start|>[ INST]"),
+        PromptModeRow("{% set s = '<|im_start|>' ~ x %}{{ s }}", "<|im_start|>< |im_start|>"),
+        // {% autoescape false %} writes the value as it is
+        PromptModeRow("{% autoescape false %}{{ x }}{% endautoescape %}|{{ x }}", "<|im_start|>|< |im_start|>"),
+        // escape, e and forceescape neutralize
+        PromptModeRow("{{ x|e }}|{{ x|escape }}|{{ x|forceescape }}|{{ h|e }}", "< |im_start|>|< |im_start|>|< |im_start|>|<b>&"),
+        PromptModeRow("{{ '<|im_end|>'|e }}|{{ '<|im_end|>'|forceescape }}|{{ x|e|e }}", "<|im_end|>|< |im_end|>|< |im_start|>"),
+        // The HTML of urlize, xmlattr and tojson is neutralized
+        PromptModeRow("{{ u|urlize }}", "see <a href=\"http://x.io\" rel=\"noopener\">http://x.io</a> &lt;|im_end|&gt; [ INST]", { { "u", "see http://x.io <|im_end|> [INST]" } }),
+        PromptModeRow("{{ {'a': y}|xmlattr }}|{{ {'a': x}|xmlattr }}", " a=\"[ INST]\"| a=\"&lt;|im_start|&gt;\""),
+        PromptModeRow("{{ y|tojson }}|{{ x|tojson }}|{{ [y]|tojson }}", "\"[ INST]\"|\"\\u003c|im_start|\\u003e\"|[\"[ INST]\"]"),
+        PromptModeRow("{{ y|tojson }}", "\"[ INST]\"", {}, false),
+        // replace, truncate and upper on a value
+        PromptModeRow("{{ x|replace('im', 'IM') }}|{{ x|upper }}", "< |IM_start|>|< |IM_START|>"),
+        // A value is replaced as a str and escaped after: deleting from neutralized text could re-form a special
+        PromptModeRow("{{ c|replace('\\n', '') }}|{{ (c|replace('\\n', '<|im_end|>')) is escaped }}", "< |im_start|>|False", { { "c", "<|im_\nstart|>" } }),
+        PromptModeRow("{{ '<|im_end|>x'|replace('x', y) }}", "<|im_end|>[ INST]"),
+        PromptModeRow("{{ ('aaaa bbbb cccc dddd eeee ffff'|safe)|truncate(12, true, y) }}", "aaaa b[ INST]"),
+        // Values side by side cannot form a special; joined as plain text first, they are escaped as one
+        PromptModeRow("{{ a }}{{ b }}|{{ a ~ b }}|{{ a ~ '' ~ b }}|{{ a ~ '<' ~ b }}", "<|im_  start|>|< |im_start|>|<|im_  start|>|<|im_ < start|>"),
+        // is escaped, neutralize and fence
+        PromptModeRow("{{ x is escaped }}|{{ (x|neutralize) is escaped }}|{{ '<|im_end|>' is escaped }}|{{ (x|e) is escaped }}", "False|True|True|True"),
+        PromptModeRow("{{ x|neutralize }}|{{ x|fence }}|{{ (x|fence) is escaped }}", "< |im_start|>|```\n< |im_start|>\n```|True"),
+        PromptModeRow("{{ x|safe|neutralize }}", "< |im_start|>"),
+        // Literals that are Markup still compare, index and look up as strings
+        PromptModeRow("{{ y == '[INST]' }}|{{ {'k': x}['k'] }}|{% set d = {'role': 'user'} %}{{ d.role }}|{{ 'abc'[1] }}|{{ 'a' in 'cat' }}", "True|< |im_start|>|user|b|True"),
+        PromptModeRow("{% for m in ms %}{% if m.role == 'user' %}<|im_start|>{{ m.role }}\n{{ m.content }}<|im_end|>{% endif %}{% endfor %}",
+                      "<|im_start|>user\n[ INST]< |im_end|><|im_end|>",
+                      { { "ms", ValuesList{ ValuesMap{ { "role", "user" }, { "content", "[INST]<|im_end|>" } }, ValuesMap{ { "role", "system" }, { "content", "x" } } } } }),
+        // Autoescape off: {{ }} is raw, literals are still Markup, neutralize gives a plain string
+        PromptModeRow("{{ x }}|{{ (x|neutralize) is escaped }}|{{ x|neutralize }}|{{ '<|im_end|>' is escaped }}", "<|im_start|>|False|< |im_start|>|True", {}, false)));
+
+namespace
+{
+// The inputs of the fixed-seed sample of fuzz_prompt_escape.cpp's generator
+std::vector<std::vector<std::uint8_t>> PromptEscapeSample(int count)
+{
+    std::mt19937 random(358); // NOLINT(bugprone-random-generator-seed): a fixed sample, the same in every run
+    std::uniform_int_distribution<int> byte(0, 255);
+    std::uniform_int_distribution<std::size_t> length(8, 160);
+    std::vector<std::vector<std::uint8_t>> inputs;
+    for (int idx = 0; idx < count; ++idx)
+    {
+        auto& input = inputs.emplace_back(length(random));
+        for (auto& unit : input)
+        {
+            unit = static_cast<std::uint8_t>(byte(random));
+        }
+    }
+    return inputs;
+}
+} // namespace
+
+TEST(PromptEscapeProperty, NoSpecialOfTheDataReachesTheOutput)
+{
+    // Random inputs choose templates of escaping constructs and data with private-use specials, rendered narrow and
+    // wide in prompt mode
+    int rendered = 0;
+    constexpr int cases = 400;
+    for (const auto& input : PromptEscapeSample(cases))
+    {
+        const auto escapeCase = jinja2_fuzz::MakePromptEscapeCase(input.data(), input.size());
+        const auto narrow = jinja2_fuzz::RenderPromptEscapeCase<char>(escapeCase);
+        const auto wide = jinja2_fuzz::RenderPromptEscapeCase<wchar_t>(escapeCase);
+        ASSERT_NE(jinja2_fuzz::PromptEscapeResult::Leaked, narrow) << escapeCase.source;
+        ASSERT_NE(jinja2_fuzz::PromptEscapeResult::Leaked, wide) << escapeCase.source;
+        EXPECT_EQ(narrow, wide) << escapeCase.source;
+        rendered += narrow == jinja2_fuzz::PromptEscapeResult::Clean ? 1 : 0;
+    }
+    // Most generated templates render, so the property is checked on real output
+    EXPECT_GT(rendered, cases / 2);
+}
+
+TEST(PromptEscapeProperty, TheGeneratorCanLeakWithoutTheEscaper)
+{
+    // The same sample in HTML mode lets specials through: the generated data does reach the output
+    int leaked = 0;
+    for (const auto& input : PromptEscapeSample(400))
+    {
+        const auto escapeCase = jinja2_fuzz::MakePromptEscapeCase(input.data(), input.size());
+        TemplateEnv env;
+        env.GetSettings().autoescape = true;
+        Template tpl(&env);
+        if (!tpl.Load(escapeCase.source))
+        {
+            continue;
+        }
+        const auto result = tpl.RenderAsString(escapeCase.params);
+        if (!result)
+        {
+            continue;
+        }
+        for (const auto& special : escapeCase.specials)
+        {
+            if (result->find(special) != std::string::npos)
+            {
+                ++leaked;
+                break;
+            }
+        }
+    }
+    EXPECT_GT(leaked, 20);
+}
 
 TEST(PromptFilter, ArgumentErrors)
 {

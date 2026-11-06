@@ -4,6 +4,7 @@
 // The matcher behind PromptEscaper and the neutralize filter (docs/tasks/0358, docs/cpp-only-filters.md)
 
 #include <jinja2cpp/prompt.h>
+#include <jinja2cpp/template_env.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -107,6 +108,14 @@ private:
     std::string m_narrowSeparator;
     std::wstring m_wideSeparator;
 };
+
+// The escaper autoescape uses with these settings: null in AutoescapeMode::Html, else the environment's, or one without
+// patterns when none is set
+const PromptEscaperImpl* AutoescapePromptEscaper(const Settings& settings);
+
+// The text neutralized inside a render (its size checked against maxSequenceSize)
+std::string NeutralizeString(const PromptEscaperImpl& escaper, std::string_view text);
+std::wstring NeutralizeString(const PromptEscaperImpl& escaper, std::wstring_view text);
 
 struct PromptEscaperAccess
 {

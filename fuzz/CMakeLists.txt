@@ -7,7 +7,7 @@
 
 set(_fuzz_dir ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_library(jinja2cpp_fuzz_targets STATIC ${_fuzz_dir}/fuzz_targets.cpp ${_fuzz_dir}/fuzz_common.h)
+add_library(jinja2cpp_fuzz_targets STATIC ${_fuzz_dir}/fuzz_targets.cpp ${_fuzz_dir}/fuzz_common.h ${_fuzz_dir}/prompt_escape_case.h)
 target_link_libraries(jinja2cpp_fuzz_targets PUBLIC ${LIB_TARGET_NAME})
 set_target_properties(jinja2cpp_fuzz_targets PROPERTIES
     CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}
@@ -35,7 +35,7 @@ if (JINJA2CPP_BUILD_FUZZERS)
     # libFuzzer runtime (it brings its own main).
     target_compile_options(${LIB_TARGET_NAME} PRIVATE -fsanitize=fuzzer-no-link)
     target_compile_options(jinja2cpp_fuzz_targets PRIVATE -fsanitize=fuzzer-no-link)
-    foreach (_target parse render render_wide metadata)
+    foreach (_target parse render render_wide metadata prompt_escape)
         add_executable(jinja2cpp_fuzz_${_target} ${_fuzz_dir}/fuzz_${_target}.cpp)
         target_link_libraries(jinja2cpp_fuzz_${_target} jinja2cpp_fuzz_targets)
         target_compile_options(jinja2cpp_fuzz_${_target} PRIVATE -fsanitize=fuzzer)
