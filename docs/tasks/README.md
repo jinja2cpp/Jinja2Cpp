@@ -308,7 +308,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0234](0234-github-tracker-cleanup.md) | Close GitHub issues that master already fixes, before 2.0 | release | medium | open |
 | [0235](0235-parity-feature-rows-drift.md) | `docs/parity.md` feature rows contradict master | parity | medium | open |
 | [0236](0236-meta-find-undeclared-variables.md) | Template introspection: `meta.find_undeclared_variables`, `Template.module` | api | low | done |
-| [0237](0237-python-bindings.md) | Python bindings, so Jinja2's own test suite can run against Jinja2C++ | parity | low | open |
+| [0237](0237-python-bindings.md) | Python bindings, so Jinja2's own test suite can run against Jinja2C++ | parity | low | dropped |
 | [0238](0238-msvc-static-debug-info.md) | Installed MSVC static Debug library has no usable debug information | build | low | open |
 | [0239](0239-site-build-and-deploy.md) | Website: pinned build, CI deploy and link check | docs | high | open |
 | [0240](0240-site-versioned-docs.md) | Website: 1.x and 2.x documentation side by side | docs | high | open |
@@ -422,7 +422,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0350](0350-tla-runs-in-ci.md) | Run the long TLC checks of the cell model in GitHub Actions, and halve the two-thread runs | ci | medium | done |
 | [0351](0351-cell-model-past-the-depth-bound.md) | Check the cell model past its depth bound | robustness | medium | open |
 | [0352](0352-python-host-object-seam.md) | Python module P1a: a private host-object seam in the engine | api | medium | done |
-| [0353](0353-python-module-core.md) | Python module P1b: build, Environment/Template/render, value crossing | api | medium | in-progress |
+| [0353](0353-python-module-core.md) | Python module P1b: build, Environment/Template/render, value crossing | api | medium | done |
 | [0354](0354-python-module-subset.md) | Python module P2: the supported subset, sandbox and fallback | api | medium | open |
 | [0355](0355-python-module-proof.md) | Python module P3: upstream test suite, parity corpus, chat templates, bench row | parity | medium | open |
 | [0356](0356-python-module-wheels.md) | Python module P4: wheels for Linux, macOS and Windows; free-threaded audit | build | medium | open |
