@@ -550,7 +550,8 @@ void BorrowedCells::Finish(CycleCollector* collector) noexcept
     // cell's items, or a cycle
     for (const auto& [identity, cell] : *m_cells)
     {
-        // Not an event of the cell trace yet: the model has no call-scoped cell (docs/tasks/0402)
+        JINJA2CPP_CELL_TRACE_EVENT("freeze", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Ptr("c", Trace::Space::Cell, cell.get()),
+                                   Trace::Links("held", cell->m_links.data(), cell->m_links.size()));
         cell->m_frozen = true;
         for (const auto* link : cell->m_links)
         {
