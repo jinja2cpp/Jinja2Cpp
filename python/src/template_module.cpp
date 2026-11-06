@@ -40,14 +40,27 @@ namespace
 // A Python value as a value of the host API, which a module takes by value, as Python's own data
 // would be copied: str, int, float, bool, None, Markup, list, tuple and dict item by item (a
 // container that contains itself is cut where it repeats, an empty Value, as in the engine's
-// exports). A callable goes in as itself, called with Python's own call (host::EngineUserCallable
-// is a Value the engine takes back as the object). Any other object is read through the host
-// adapter
+// exports). A callable or any other object goes in as itself (host::EngineUserCallable is a Value
+// the engine takes back as the object), so a method is called with Python's own call and an
+// attribute is Python's
 class ModuleParams
 {
 public:
+    // Nested containers stop where the engine's own recursion does: when the stack runs low
+    void CheckStack() const
+    {
+        // The engine copies a module's Values recursively with no guard of its own (0418): the
+        // depth stops at Python's own default recursion limit, far below the stack
+        if (m_depth > kMaxDepth || jinja2::StackNearlyExhausted())
+        {
+            PyErr_SetString(PyExc_RecursionError, "maximum recursion depth exceeded while converting a module argument");
+            throw nb::python_error();
+        }
+    }
+
     jinja2::Value Convert(nb::handle object)
     {
+        CheckStack();
         PyObject* raw = object.ptr();
         if (raw == Py_None)
         {
@@ -115,13 +128,29 @@ public:
         {
             return jinja2::Value(jinja2::host::EngineUserCallable(ToEngine(object)));
         }
-        return jinja2::IntValue2Value(ToEngine(object));
+        // Any other object stays itself in the module, as in a render: its attributes, lists and
+        // methods are Python's (the Value carries the engine's own value of it back in)
+        return jinja2::Value(jinja2::host::EngineUserCallable(ToEngine(object)));
     }
 
 private:
-    bool Enter(PyObject* container) { return m_path.insert(container).second; }
-    void Leave(PyObject* container) { m_path.erase(container); }
+    static constexpr std::size_t kMaxDepth = 1000;
+    bool Enter(PyObject* container)
+    {
+        if (!m_path.insert(container).second)
+        {
+            return false;
+        }
+        ++m_depth;
+        return true;
+    }
+    void Leave(PyObject* container)
+    {
+        --m_depth;
+        m_path.erase(container);
+    }
 
+    std::size_t m_depth = 0;
     std::unordered_set<PyObject*> m_path;
 };
 
@@ -137,9 +166,10 @@ jinja2::Value ForModule(nb::handle object)
 class ModuleMacro
 {
 public:
-    ModuleMacro(jinja2::UserCallable callable, nb::object environment, nb::object templateName, std::string name)
+    ModuleMacro(jinja2::UserCallable callable, nb::object environment, nb::object templateGlobals, nb::object templateName, std::string name)
         : m_callable(std::move(callable))
         , m_environment(std::move(environment))
+        , m_templateGlobals(std::move(templateGlobals))
         , m_templateName(std::move(templateName))
         , m_name(std::move(name))
     {
@@ -174,6 +204,9 @@ public:
         params.extraKwArgs = jinja2::Value(std::move(keywords));
         RenderState state;
         state.undefinedClass = env.UndefinedClass();
+        // What pass_environment, pass_eval_context and pass_context callables of the macro need
+        state.environment = m_environment.ptr();
+        state.templateGlobals = m_templateGlobals.ptr();
         const RenderScope scope(state);
         const HostPollScope poll;
         try
@@ -194,12 +227,14 @@ public:
     int Traverse(visitproc visit, void* arg) const
     {
         Py_VISIT(m_environment.ptr());
+        Py_VISIT(m_templateGlobals.ptr());
         Py_VISIT(m_templateName.ptr());
         return 0;
     }
     void Clear() noexcept
     {
         m_environment = nb::none();
+        m_templateGlobals = nb::none();
         m_templateName = nb::none();
         m_callable = jinja2::UserCallable();
     }
@@ -207,24 +242,30 @@ public:
 private:
     jinja2::UserCallable m_callable;
     nb::object m_environment;
+    nb::object m_templateGlobals;
     nb::object m_templateName;
     std::string m_name;
 };
 
 // An exported value as Python: the macros, also in lists and dicts, stay callable
 // (ModuleMacro); the rest as the engine's values become Python's (ToPython)
-nb::object ExportToPython(const jinja2::Value& value, const nb::object& environment, const nb::object& templateName, const std::string& name)
+nb::object ExportToPython(const jinja2::Value& value, const nb::object& environment, const nb::object& templateGlobals, const nb::object& templateName, const std::string& name)
 {
+    if (jinja2::StackNearlyExhausted())
+    {
+        PyErr_SetString(PyExc_RecursionError, "maximum recursion depth exceeded while converting a module export");
+        throw nb::python_error();
+    }
     if (const auto* callable = value.GetIf<jinja2::UserCallable>())
     {
-        return nb::cast(new ModuleMacro(*callable, environment, templateName, name), nb::rv_policy::take_ownership);
+        return nb::cast(new ModuleMacro(*callable, environment, templateGlobals, templateName, name), nb::rv_policy::take_ownership);
     }
     if (const auto* list = value.GetIf<jinja2::ValuesList>())
     {
         nb::list result;
         for (const auto& item : *list)
         {
-            result.append(ExportToPython(item, environment, templateName, name));
+            result.append(ExportToPython(item, environment, templateGlobals, templateName, name));
         }
         return result;
     }
@@ -233,7 +274,7 @@ nb::object ExportToPython(const jinja2::Value& value, const nb::object& environm
         nb::list result;
         for (const auto& item : *list)
         {
-            result.append(ExportToPython(item, environment, templateName, name));
+            result.append(ExportToPython(item, environment, templateGlobals, templateName, name));
         }
         return result;
     }
@@ -242,7 +283,7 @@ nb::object ExportToPython(const jinja2::Value& value, const nb::object& environm
         nb::dict result;
         for (const auto& [key, item] : *map)
         {
-            result[MakeStr(key)] = ExportToPython(item, environment, templateName, name);
+            result[MakeStr(key)] = ExportToPython(item, environment, templateGlobals, templateName, name);
         }
         return result;
     }
@@ -251,7 +292,7 @@ nb::object ExportToPython(const jinja2::Value& value, const nb::object& environm
         nb::dict result;
         for (const auto& [key, item] : *map)
         {
-            result[MakeStr(key)] = ExportToPython(item, environment, templateName, name);
+            result[MakeStr(key)] = ExportToPython(item, environment, templateGlobals, templateName, name);
         }
         return result;
     }
@@ -308,6 +349,8 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
     }
     RenderState state;
     state.undefinedClass = env.UndefinedClass();
+    state.environment = m_environment.ptr();
+    state.templateGlobals = m_globals.ptr();
     const RenderScope scope(state);
     const HostPollScope poll;
     auto result = m_template.MakeModule(values);
@@ -322,7 +365,7 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
     nb::dict exports;
     for (auto& [name, value] : module.exports)
     {
-        exports[MakeStr(name)] = ExportToPython(value, m_environment, m_name, name);
+        exports[MakeStr(name)] = ExportToPython(value, m_environment, m_globals, m_name, name);
     }
     return nb::make_tuple(MakeStr(module.body), exports);
 }

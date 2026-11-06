@@ -596,6 +596,11 @@ nb::object PyEnvironment::MakeTemplate(jinja2::Template tpl, nb::handle globals,
 jinja2::Template PyEnvironment::Load(nb::handle source, const std::string& name)
 {
     auto& env = Prepared();
+    if (!PyUnicode_Check(source.ptr()))
+    {
+        // Jinja2 compiles a str; bytes and numbers are a TypeError, not their repr
+        RaiseTypeError("source must be a str, not " + Utf8(nb::handle(reinterpret_cast<PyObject*>(Py_TYPE(source.ptr()))).attr("__name__")));
+    }
     const auto text = Utf8(source);
     auto result = env.FromString(std::string_view(text), name);
     if (!result)
@@ -800,7 +805,7 @@ void BindEnvironment(nb::module_& module)
                            .def(
                                "_load",
                                [](PyEnvironment& self, nb::handle name, nb::handle globals, nb::handle templateClass) { return self.LoadTemplate(name, globals, templateClass); },
-                               "name"_a,
+                               "name"_a.none(),
                                "globals"_a.none(),
                                "template_class"_a)
                            .def(
@@ -838,7 +843,7 @@ void BindEnvironment(nb::module_& module)
                            .def(
                                "uninstall_gettext_translations",
                                [](nb::handle self, nb::handle translations) { return nb::module_::import_("jinja2cpp.ext").attr("_uninstall")(self, translations); },
-                               "translations"_a)
+                               "translations"_a.none())
                            .def_prop_rw(
                                "globals", [](const PyEnvironment& self) { return self.GetDict("globals"); }, [](PyEnvironment& self, nb::handle value) { self.SetDict("globals", value); })
                            .def_prop_rw(
@@ -849,7 +854,7 @@ void BindEnvironment(nb::module_& module)
     {
         const std::string name = option;
         environment.def_prop_rw(
-            option, [name](const PyEnvironment& self) { return self.GetOption(name); }, [name](PyEnvironment& self, nb::handle value) { self.SetOption(name, value); });
+            option, [name](const PyEnvironment& self) { return self.GetOption(name); }, [name](PyEnvironment& self, nb::handle value) { self.SetOption(name, value); }, nb::arg("value").none());
     }
 
     nb::class_<PyTemplate>(module, "Template", nb::type_slots(g_templateSlots), nb::is_weak_referenceable())

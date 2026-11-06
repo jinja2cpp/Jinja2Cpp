@@ -14,6 +14,8 @@ no namespace, cycler, range or undefined. The Python module therefore gives a `d
 `None` for an exported `Undefined`, and spells a non-str dict key with `str()`. A Python object
 passed as a param goes through the host adapter and comes back as a map that cannot list its keys
 (an object with attributes exports as `{}`). `shared=True` cannot drop the engine's own globals.
+A list or dict that a template reads off a Python object (`{% set t = users[0].tags %}`) exports as `{}`:
+the export copy cannot enumerate a host object. `sorted(...)`/`dictsort` entries (tuples in Jinja2) export as `{key, value}` maps.
 None of this is a crash; code that uses `module.ns.count` or `module.cyc.next()` fails.
 
 **Proposal.** An internal export path for the Python module (not the public `MakeModule`):

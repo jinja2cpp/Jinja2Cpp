@@ -247,3 +247,33 @@ def test_positional_arguments_as_jinja2():
             module.Environment("<%", block_start_string="x")
         with pytest.raises(TypeError):
             module.Environment(*range(30))
+
+
+def test_none_and_non_str_arguments_as_jinja2():
+    for module in modules():
+        env = module.Environment(loader=module.DictLoader(TEMPLATES))
+        with pytest.raises(jinja2.TemplateNotFound):
+            env.get_template(None)
+        assert env.select_template([None, "a.html"]).render(x=1) == "A1"
+        for bad in (5, b"x"):
+            with pytest.raises(TypeError):
+                env.from_string(bad)
+        env.loader = None
+        env.finalize = None
+        env.line_statement_prefix = None
+        env.line_comment_prefix = None
+        env.bytecode_cache = None
+        assert env.loader is None and env.bytecode_cache is None
+
+
+def test_uninstall_gettext_translations_accepts_none():
+    env = jinja2cpp.Environment(extensions=[jinja2cpp.ext.i18n])
+    env.install_null_translations()
+    env.uninstall_gettext_translations(None)
+
+
+def test_jinja2cpp_loaders_work_in_a_jinja2_environment():
+    env = jinja2.Environment(loader=jinja2cpp.ChoiceLoader([jinja2cpp.DictLoader({"a": "A{{ 1 }}"}), jinja2cpp.PrefixLoader({"p": jinja2cpp.FunctionLoader(lambda n: "fn " + n)})]))
+    assert env.get_template("a").render() == "A1"
+    assert env.get_template("p/x").render() == "fn x"
+    assert env.loader.load(env, "a").render() == "A1"

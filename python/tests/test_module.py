@@ -282,3 +282,77 @@ def test_module_macro_called_from_another_render():
     assert env.from_string("{{ greet('x') }}|{{ greet(n='y') }}").render(greet=mod.greet) == "hi x|hi y"
     with pytest.raises(jinja2cpp.TemplateRuntimeError):
         env.from_string("{{ bad(0) }}").render(bad=mod.bad)
+
+
+def _nested(kind, depth):
+    value = []
+    for _ in range(depth):
+        value = [value] if kind == "list" else ({"a": value} if kind == "dict" else (value,))
+    return value
+
+
+@pytest.mark.parametrize("kind,depth", [("list", 10000), ("dict", 10000), ("tuple", 10000), ("list", 200000)])
+def test_deeply_nested_module_arguments_raise_recursion_error(kind, depth):
+    tpl = jinja2cpp.Template("{% macro m(x) %}{{ x|length }}{% endmacro %}{{ x|length }}")
+    value = _nested(kind, depth)
+    with pytest.raises(RecursionError):
+        tpl.make_module({"x": value})
+    with pytest.raises(RecursionError):
+        tpl.module.m(value)
+    del value
+
+
+def test_moderately_nested_module_arguments_work_and_cycles_are_cut():
+    tpl = jinja2cpp.Template("{% macro m(x) %}{{ x|length }}{% endmacro %}")
+    assert tpl.module.m(_nested("list", 500)) == "1"
+    cyc = []
+    cyc.append(cyc)
+    assert tpl.module.m(cyc) == "1"
+
+
+def _marked(module, kind):
+    def f(first, value):
+        return f"{type(first).__name__}:{value}"
+
+    return {"context": module.pass_context, "eval": module.pass_eval_context, "env": module.pass_environment}[kind](f)
+
+
+@pytest.mark.parametrize("kind", ["context", "eval", "env"])
+def test_pass_decorators_in_module_macros_and_bodies(kind):
+    outs = []
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment()
+        env.filters["f"] = _marked(module, kind)
+        mod = env.from_string("{% macro m(x) %}{{ x|f }}{% endmacro %}{{ 1|f }}").make_module()
+        outs.append((str(mod), mod.m(2), env.from_string("{{ 3|f }}").module.__html__()))
+    assert outs[0][0].split(":")[1:] == outs[1][0].split(":")[1:]
+    assert outs[0][1].split(":")[1:] == outs[1][1].split(":")[1:]
+    assert outs[0][2].split(":")[1:] == outs[1][2].split(":")[1:]
+
+
+def test_oldstyle_gettext_in_a_module_macro():
+    outs = []
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment(extensions=["jinja2.ext.i18n"] if module is jinja2 else [jinja2cpp.ext.i18n])
+        env.install_gettext_callables(lambda s: s.upper(), lambda s, p, n: s if n == 1 else p, newstyle=False)
+        mod = env.from_string("{% macro m(n) %}{{ _('hi') }} {{ ngettext('a', 'b', n) }}{% endmacro %}{{ _('top') }}").make_module()
+        outs.append((str(mod), mod.m(2)))
+    assert outs[0] == outs[1] == ("TOP", "HI b")
+
+
+class User:
+    def __init__(self):
+        self.tags = ["a", "b"]
+        self.name = "u"
+
+    def m(self):
+        return "called"
+
+
+def test_python_object_params_keep_attributes_lists_and_methods():
+    source = "{% set t = users[0].tags %}{% set called = users[0].m() %}{% macro g(u) %}{{ u.tags|join(',') }}{{ u.m() }}{% endmacro %}{{ users[0].name }}"
+    mods = [m.Environment().from_string(source).make_module({"users": [User()]}) for m in (jinja2cpp, jinja2)]
+    assert str(mods[0]) == str(mods[1]) == "u"
+    # an exported host list is not readable by the export copy yet (docs/tasks/0411)
+    assert mods[0].called == "called"
+    assert mods[0].g(User()) == mods[1].g(User()) == "a,bcalled"

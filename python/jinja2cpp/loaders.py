@@ -17,6 +17,7 @@ import typing as t
 import zipimport
 from importlib import import_module
 
+from . import _jinja2cpp
 from .exceptions import TemplateNotFound
 from .exceptions import UnsupportedError
 
@@ -47,7 +48,11 @@ class BaseLoader:
 
     def load(self, environment: t.Any, name: str, globals: t.Optional[t.MutableMapping[str, t.Any]] = None) -> t.Any:
         """Loads the template `name` from get_source, bypassing the environment's cache."""
-        source, filename, _uptodate = self.get_source(environment, name)
+        source, filename, uptodate = self.get_source(environment, name)
+        if not isinstance(environment, _jinja2cpp.Environment):
+            # Jinja2's own environment (these loaders work in it too): its compile and its template class
+            code = environment.compile(source, name, filename)
+            return environment.template_class.from_code(environment, code, globals, uptodate)
         return environment._compile(source, name, filename, globals, environment.template_class)
 
 
