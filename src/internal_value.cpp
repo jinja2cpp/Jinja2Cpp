@@ -3180,9 +3180,11 @@ private:
 class DictExportView final : public IMapItemAccessor
 {
 public:
-    DictExportView(GenericMap snapshot, std::vector<std::pair<Value, Value>> items, const void* identity)
+    // `owner` holds the storage `identity` addresses, so that no other dict reuses the address while the view lives
+    DictExportView(GenericMap snapshot, std::vector<std::pair<Value, Value>> items, IntrusivePtr<const IMapAccessor> owner, const void* identity)
         : m_snapshot(std::move(snapshot))
         , m_items(std::move(items))
+        , m_owner(std::move(owner))
         , m_identity(identity)
     {
     }
@@ -3204,6 +3206,7 @@ public:
 private:
     GenericMap m_snapshot;
     std::vector<std::pair<Value, Value>> m_items;
+    IntrusivePtr<const IMapAccessor> m_owner;
     const void* m_identity;
 };
 } // namespace
@@ -3356,7 +3359,7 @@ protected:
             snapshot[DictKeyText(key)] = exported;
             items.emplace_back(IntValue2Value(key), std::move(exported));
         }
-        return GenericMap(std::make_shared<const DictExportView>(CreateMapAdapter(std::move(snapshot)).CreateGenericMap(), std::move(items), &vals));
+        return GenericMap(std::make_shared<const DictExportView>(CreateMapAdapter(std::move(snapshot)).CreateGenericMap(), std::move(items), IntrusivePtr<const IMapAccessor>(this), &vals));
     }
 
     // Mutable for SetValue, the one writer (IMapAccessor::SetValue)

@@ -727,6 +727,10 @@ TEST(PublicHostObjectTest, UndefinedComesBackAsUndefined)
     EXPECT_NE(std::string::npos, printed.find("strict hint"));
     EXPECT_EQ(0u, printed.find("error:"));
     EXPECT_NE(std::string::npos, Render("{{ strict() }}", callables, { UndefinedPolicy::Default }).find("strict hint"));
+    // A description with no name or hint keeps its policy: strict still fails to print, debug prints
+    const ValuesMap unnamed{ { "strict", make({ UndefinedPolicy::Strict, "", "", true, "" }) }, { "debug", make({ UndefinedPolicy::Debug, "", "", true, "" }) } };
+    EXPECT_EQ(0u, Render("{{ strict() }}", unnamed).find("error:"));
+    EXPECT_EQ("True", Render("{{ strict() is undefined }}", unnamed));
 }
 
 TEST(PublicHostObjectTest, KeepUndefinedGivesCallablesUndefined)
@@ -937,6 +941,14 @@ TEST(PublicHostObjectTest, ExportedEngineContainersHaveAStableIdentity)
     EXPECT_EQ(seen[4].GetIf<GenericList>()->GetIdentity(), seen[5].GetIf<GenericList>()->GetIdentity());
     EXPECT_NE(seen[0].GetIf<GenericList>()->GetIdentity(), seen[6].GetIf<GenericList>()->GetIdentity());
     EXPECT_NE(nullptr, seen[0].GetIf<GenericList>()->GetIdentity());
+
+    // A dict with a key that is not a string goes out as a copy; the copy keeps the dict's storage, so a later dict
+    // never shares the identity of one a host still holds
+    seen.clear();
+    Render("{{ probe({1: 'a'}) }}", params);
+    Render("{{ probe({2: 'b'}) }}", params);
+    ASSERT_EQ(2u, seen.size());
+    EXPECT_NE(seen[0].GetIf<GenericMap>()->GetIdentity(), seen[1].GetIf<GenericMap>()->GetIdentity());
 }
 
 TEST(PublicHostObjectTest, MembersOfTemplateObjectsAreLentForTheCall)

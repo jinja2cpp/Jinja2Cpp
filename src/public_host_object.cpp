@@ -178,11 +178,11 @@ const UndefinedCarrier* AsCarrier(const IHostObject* object)
     return dynamic_cast<const UndefinedCarrier*>(object);
 }
 
-// The undefined value of the engine that a description stands for. A description with no name, object type or hint is a
-// plain undefined, which fails no use (what the engine hands out for a name it has no information about)
+// The undefined value of the engine that a description stands for. A Default description with no name, object type or
+// hint is a plain undefined, which fails no use (what the engine hands out for a name it has no information about)
 InternalValue UndefinedFromDescription(const UndefinedDescription& description)
 {
-    if (description.name.empty() && description.objType.empty() && description.hint.empty())
+    if (description.policy == UndefinedPolicy::Default && description.name.empty() && description.objType.empty() && description.hint.empty())
     {
         return InternalValue(UndefinedValue{});
     }
