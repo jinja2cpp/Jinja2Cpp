@@ -914,11 +914,11 @@
   },
   {
    "id": "globals.joiner_call_slot_hidden",
-   "template": "[{{ joiner()['operator()'] }}]",
+   "template": "{{ joiner()['operator()'] is defined }}",
    "context": {},
    "env": {},
    "templates": {},
-   "output": "[]"
+   "output": "False"
   },
   {
    "id": "globals.cycler_method_equals",
