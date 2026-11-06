@@ -53,8 +53,9 @@ ordering a TypeError; tojson refuses it. 5: give the cycler and joiner methods a
   `[1] + range(2)`; tojson refuses it. `RecursionLimitsTest.HugeSequencesFailFast` now
   checks the concat and repeat limits with a lazy tuple, as a range no longer combines.
 - cycler's `next`/`reset` and joiner's `__call__` are bound methods of a receiver that prints
-  `<jinja2.utils.Cycler object at 0x...>` with the object's address; `joiner().__call__`
-  reads the joiner's call.
+  `<jinja2.utils.Cycler object at 0x...>` with the object's address; a joiner holds its call
+  under `__call__` too, so `joiner().__call__` reads it (a check in every `x.name` lookup cost
+  the perf track up to +1.9% Render).
 New corpus cases: `operators.range_equals_range`, `list_concat_range`, `tuple_concat_range`,
 `range_repeat`, `range_ordering`, `range_in_list`; `globals.cycler_reset_prints`,
 `joiner_call_prints`, `cycler_method_equals`; `filters.lazy_result_dict_key`,

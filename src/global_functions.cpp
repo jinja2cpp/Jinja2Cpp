@@ -387,6 +387,8 @@ InternalValue CallJoiner(const CallParams& params, RenderContext&)
     joiner["sep"] = args["sep"];
     auto receiver = std::make_shared<UtilsObjectReceiver>("Joiner");
     joiner["operator()"] = MakeUtilsMethod(state, &CallJoinerObject, "__call__", receiver);
+    // j.__call__, and j['__call__'] as Jinja2's getitem falls back to the attribute (docs/tasks/0401)
+    joiner["__call__"] = joiner["operator()"];
     auto result = CreateObjectAdapter(std::move(joiner), "Joiner");
     receiver->address = result.GetIdentity();
     return result;
