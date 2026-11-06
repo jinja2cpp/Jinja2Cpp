@@ -616,7 +616,7 @@ void BorrowedCells::Finish(CycleCollector* collector) noexcept
     JINJA2CPP_CELL_TRACE_EVENT("finished", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("e", static_cast<int64_t>(epoch)), Trace::Num("live", detail::CellCounters::Live()));
 }
 
-void BorrowedCells::FreezeCallScoped(CycleCollector* collector) noexcept
+void BorrowedCells::HandOverReleasedCallFrozen(CycleCollector* collector) noexcept
 {
     // The kept cells nothing reads any more go to the call's collector, which walks from them: what
     // they hold may be a cycle an earlier call made, which no note names any more (Codex review of
@@ -641,6 +641,11 @@ void BorrowedCells::FreezeCallScoped(CycleCollector* collector) noexcept
             // Out of memory: the cells not handed over stay in the list
         }
     }
+}
+
+void BorrowedCells::FreezeCallScoped(CycleCollector* collector) noexcept
+{
+    HandOverReleasedCallFrozen(collector);
     if (!m_cells)
     {
         return;

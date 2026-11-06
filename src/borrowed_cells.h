@@ -637,6 +637,8 @@ private:
     void Finish(CycleCollector* collector) noexcept;
     // Gives `collector` the call-scoped cells values still read, and lets go of them
     void ReleaseCallFrozen(CycleCollector* collector) noexcept;
+    // Hands the call-scoped cells nothing reads any more to `collector` (FreezeCallScoped)
+    void HandOverReleasedCallFrozen(CycleCollector* collector) noexcept;
     // One pass of DropUnheld; false when it dropped none
     bool DropUnheldOnce(bool walk) noexcept;
 
