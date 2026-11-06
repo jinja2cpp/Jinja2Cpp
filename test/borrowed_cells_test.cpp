@@ -1376,6 +1376,50 @@ TEST(SharedOwnerTest, FirstLoadAfterACopyIsDroppedOnAnotherThread)
     EXPECT_EQ("1", tpl.RenderAsString({}).value());
 }
 
+TEST(SharedOwnerTest, ListGlobalReplacedWhileTwoThreadsRender)
+{
+    // 0327, TSan: two threads render while a third replaces a list global. Each change edits the
+    // map in place only when no snapshot holds it, after an acquire on the count the last render
+    // released (IsSoleOwner); a render sees one whole list, old or new
+    TemplateEnv env;
+    env.AddGlobal("g", ValuesList{ 0, 0, 0 });
+    Template tpl(&env);
+    ASSERT_TRUE(!!tpl.Load("{{ g|join(',') }}"));
+    std::atomic<bool> done{ false };
+    std::atomic<int> bad{ 0 };
+    std::vector<std::thread> renders;
+    for (int t = 0; t != 2; ++t)
+    {
+        renders.emplace_back([&tpl, &done, &bad]() {
+            do
+            {
+                const auto out = tpl.RenderAsString({}).value_or("error");
+                const auto n = out.substr(0, out.find(','));
+                std::string whole = n;
+                whole.append(1, ',').append(n).append(1, ',').append(n);
+                if (out != whole)
+                {
+                    bad.fetch_add(1, std::memory_order_relaxed);
+                }
+            } while (!done.load(std::memory_order_relaxed));
+        });
+    }
+    std::thread writer([&env, &done]() {
+        for (int i = 1; i != 200; ++i)
+        {
+            env.AddGlobal("g", ValuesList{ i, i, i });
+        }
+        done.store(true, std::memory_order_relaxed);
+    });
+    writer.join();
+    for (auto& render : renders)
+    {
+        render.join();
+    }
+    EXPECT_EQ(0, bad.load());
+    EXPECT_EQ("199,199,199", tpl.RenderAsString({}).value());
+}
+
 TEST(SharedOwnerTest, AddGlobalAfterARenderOnAnotherThreadLetGoOfTheMap)
 {
     // 0339, TSan: a render on another thread reads the globals map, and its thread's snapshot lets

@@ -208,6 +208,33 @@ struct TemplateFunctions<wchar_t>
     static auto& GetCache(TemplateEnvImpl& impl) JINJA2CPP_NO_THREAD_SAFETY_ANALYSIS { return impl.templateWCache; }
 };
 
+// Erases the least recently used entries of `cache` until it holds `cacheSize` (Python's
+// Environment.cache_size: a negative size never evicts) and moves their templates to `released`,
+// for the caller to release after the lock. The scan is linear, but it only runs on a miss, after
+// a file was opened and parsed
+template<typename Cache, typename TemplateT>
+void EvictLeastRecentlyUsed(Cache& cache, int cacheSize, std::vector<TemplateT>& released)
+{
+    if (cacheSize < 0)
+    {
+        return;
+    }
+    while (cache.size() > static_cast<size_t>(cacheSize))
+    {
+        auto oldest = cache.begin();
+        for (auto p = cache.begin(); p != cache.end(); ++p)
+        {
+            if (p->second.lastUse.load(std::memory_order_relaxed) < oldest->second.lastUse.load(std::memory_order_relaxed))
+            {
+                oldest = p;
+            }
+        }
+        released.reserve(released.size() + 1); // may throw: nothing is moved or erased yet
+        released.push_back(std::move(oldest->second.tpl));
+        cache.erase(oldest);
+    }
+}
+
 } // namespace
 
 bool TemplateEnvImpl::FsHandler::operator==(const FsHandler& rhs) const
@@ -217,7 +244,7 @@ bool TemplateEnvImpl::FsHandler::operator==(const FsHandler& rhs) const
 
 bool TemplateEnvImpl::BaseTemplateInfo::operator==(const BaseTemplateInfo& other) const
 {
-    return lastModification == other.lastModification && lastAccessTime == other.lastAccessTime && IsSameHandler(handler, other.handler);
+    return lastModification == other.lastModification && IsSameHandler(handler, other.handler);
 }
 
 bool TemplateEnvImpl::IsEqual(const TemplateEnvImpl& other) const
@@ -316,11 +343,13 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
                     auto lastModified = p->second.handler->GetLastModificationDate(fileName);
                     if (!lastModified || (p->second.lastModification && lastModified.value() <= p->second.lastModification.value()))
                     {
+                        p->second.lastUse.store(NewCacheTick(), std::memory_order_relaxed);
                         return ResultType(p->second.tpl);
                     }
                 }
                 else
                 {
+                    p->second.lastUse.store(NewCacheTick(), std::memory_order_relaxed);
                     return ResultType(p->second.tpl);
                 }
             }
@@ -347,18 +376,22 @@ auto TemplateEnvImpl::LoadTemplate(TemplateEnv* env, std::string fileName)
                 if (settings.cacheSize != 0)
                 {
                     auto lastModified = fh.handler->GetLastModificationDate(fileName);
-                    // A template this replaces (another thread loaded the same file concurrently) is
-                    // released after the lock: it may hold the last handle to this environment, and
-                    // ~TemplateEnv takes the same lock
-                    std::optional<decltype(tpl)> replaced;
+                    // Templates this replaces (another thread loaded the same file concurrently, or
+                    // a reload) or evicts are released after the lock: one may hold the last handle
+                    // to this environment, and ~TemplateEnv takes the same lock
+                    std::vector<decltype(tpl)> released;
+                    // Reserved before the cache changes: a bad_alloc then leaves no half-made entry
+                    released.reserve(1);
                     const detail::WriterLock<detail::SharedMutex> l(guard);
                     if (owner)
                     {
                         auto& cacheEntry = cache[fileName];
-                        replaced = std::move(cacheEntry.tpl);
+                        released.push_back(std::move(cacheEntry.tpl));
                         cacheEntry.tpl = tpl;
                         cacheEntry.handler = fh.handler;
                         cacheEntry.lastModification = lastModified;
+                        cacheEntry.lastUse.store(NewCacheTick(), std::memory_order_relaxed);
+                        EvictLeastRecentlyUsed(cache, settings.cacheSize, released);
                     }
                 }
 
@@ -484,6 +517,12 @@ ResultW<TemplateW> TemplateEnv::FromString(std::wstring_view source, std::string
         return MakeUnexpected(res.error());
     }
     return tpl;
+}
+
+uint64_t detail::TemplateEnvImpl::NewCacheTick() noexcept
+{
+    static std::atomic<uint64_t> lastTick{ 0 };
+    return lastTick.fetch_add(1, std::memory_order_relaxed) + 1;
 }
 
 uint64_t detail::TemplateEnvImpl::NewGlobalsGeneration()

@@ -1,5 +1,6 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/772
 priority: high
 area: robustness
 touches: [test/embedding_lifecycle_test.cpp, CMakeLists.txt#JINJA2CPP_TEST_SOURCES]
@@ -44,3 +45,5 @@ A6 and C7 with 0264. Found while writing the suite: 0319 (`MakeCallable` with a 
 parameter), 0326 (nested macro closure, F5), 0323 (stored `self` and the includer's names, F2),
 0324 (nested render and a global changed in place, F6), 0325 (reload date read after the text,
 C6).
+
+**Done.** A6 and C7 landed with 0264; every row of the plan passes.

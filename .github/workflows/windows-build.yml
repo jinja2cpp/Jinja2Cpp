@@ -46,7 +46,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { build-platform: x64, std: 17, build-runtime: /MT, build-config: Release, build-shared: FALSE }
+          - { build-platform: x64, std: 17, build-runtime: /MT, build-config: Release, build-shared: FALSE, artifact: true }
           - { build-platform: x64, std: 20, build-runtime: "",  build-config: Debug,   build-shared: TRUE,  bigint: boost }
           - { build-platform: x64, std: 23, build-runtime: /MD, build-config: Debug,   build-shared: FALSE }
 
@@ -90,3 +90,16 @@ jobs:
       run: |
         cd .build
         ctest -C %INPUT_BUILD_CONFIG% --output-on-failure
+
+    # The commit's source archive, built with tests off outside the checkout, installed and
+    # used by test/package with MSVC (docs/tasks/0225)
+    - name: Release source artifact
+      if: matrix.artifact
+      shell: cmd
+      run: python scripts\check_release_artifact.py --git-ref HEAD --work "%RUNNER_TEMP%\release-artifact" --report "%RUNNER_TEMP%\release-artifact.json"
+
+    - if: ${{ !cancelled() && matrix.artifact }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: release-artifact-windows
+        path: ${{ runner.temp }}/release-artifact.json

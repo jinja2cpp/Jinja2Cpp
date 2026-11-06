@@ -49,7 +49,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-15, cxx-standard: 17, build-config: Release }
+          - { os: macos-15, cxx-standard: 17, build-config: Release, artifact: true }
           - { os: macos-26, cxx-standard: 23, build-config: Release }
           - { os: macos-15, cxx-standard: 20, build-config: Release, bigint: boost }
           - { os: macos-15, cxx-standard: 20, build-config: Debug }
@@ -85,3 +85,14 @@ jobs:
 
     - name: Test
       run: ctest --test-dir .build --output-on-failure
+
+    # The commit's source archive as a shared library, outside the checkout (docs/tasks/0225)
+    - name: Release source artifact
+      if: matrix.artifact
+      run: python3 scripts/check_release_artifact.py --git-ref HEAD --shared --work "$RUNNER_TEMP/release-artifact" --report "$RUNNER_TEMP/release-artifact.json"
+
+    - if: ${{ !cancelled() && matrix.artifact }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: release-artifact-macos
+        path: ${{ runner.temp }}/release-artifact.json

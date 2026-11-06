@@ -144,6 +144,12 @@ Built in, whatever the settings:
 | Thread stack | checked in the parser, the evaluator and deep-value walks | 12 |
 | Template that includes, imports or extends itself | refused | 12 |
 
+The template cache keeps at most `Settings::cacheSize` templates per character width (default
+400, Jinja2's `cache_size`) and drops the least recently used one past it. It is keyed by the
+name as given, so names a template builds (`'./' * n ~ 'a.j2'`) take separate entries but
+stay within that count ([0264](tasks/0264-template-cache-bound.md)). A negative `cacheSize`
+removes the bound; do not use one in tier 1.
+
 Nesting is bounded by `Settings::Limits` fields with defaults set close to where Python Jinja2
 stops: render nesting `maxRenderDepth` 256, expression nesting `maxExpressionDepth` 70,
 operator chains `maxExpressionOperators` 491, block nesting `maxBlockNesting` 248, each
@@ -175,10 +181,6 @@ These apply to both tiers. The claims above stop here until these tasks land:
   allocating (`~` and `+` concatenation, list `+`/`extend`, `join`, `replace`, `%` totals,
   `lipsum`, `wordwrap`); a template can build large values and run the process out of
   memory: [0263](tasks/0263-per-operation-size-checks.md).
-- The template cache keys templates by their raw name and does not honour `cacheSize`, so a
-  long-running host loading user-chosen names grows without bound; `MemoryFileSystem` fills
-  its other-width copy in a const method without a lock:
-  [0264](tasks/0264-template-cache-bound.md).
 - One step, such as a filter over a long string, can overrun `maxRenderTime`:
   [0282](tasks/0282-settings-limits-followups.md).
 - Hardening build flags and fuzz targets for untrusted templates:
