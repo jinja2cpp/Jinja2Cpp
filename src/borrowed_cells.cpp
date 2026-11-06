@@ -430,6 +430,7 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     {
         ReserveLink(*cell, held, listed);
         target.try_emplace(identity, cell);
+        cells->m_hasUnheldIdentity = cells->m_hasUnheldIdentity || unheldIdentity;
     }
     else if (existing->IsList() == isList)
     {
@@ -650,13 +651,15 @@ void BorrowedCells::HandOverReleasedCallFrozen(CycleCollector* collector) noexce
     }
 }
 
-void BorrowedCells::FreezeCallScoped(CycleCollector* collector) noexcept
+void BorrowedCells::FreezeCallScopedSlow(CycleCollector* collector) noexcept
 {
     HandOverReleasedCallFrozen(collector);
-    if (!m_cells)
+    if (!m_cells || !m_hasUnheldIdentity)
     {
         return;
     }
+    // Every such cell leaves the table below
+    m_hasUnheldIdentity = false;
     // As Finish, for these cells only: the sources first, while every cell is live
     uint32_t count = 0;
     for (const auto& [identity, cell] : *m_cells)

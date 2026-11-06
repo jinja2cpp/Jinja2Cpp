@@ -627,7 +627,14 @@ public:
     // freeze and leave the registry, as a render's cells do at its end (Finish). The host may change
     // or free the document before the next call, which then reads the host's data; the values that
     // outlived the call keep the frozen cell they read (docs/tasks/0212)
-    void FreezeCallScoped(CycleCollector* collector) noexcept;
+    void FreezeCallScoped(CycleCollector* collector) noexcept
+    {
+        // Most modules read no borrowed JSON value: their calls end without a look at the table
+        if (m_hasUnheldIdentity || !m_callFrozen.empty())
+        {
+            FreezeCallScopedSlow(collector);
+        }
+    }
 
 private:
     friend class CellLink;
@@ -639,10 +646,14 @@ private:
     void ReleaseCallFrozen(CycleCollector* collector) noexcept;
     // Hands the call-scoped cells nothing reads any more to `collector` (FreezeCallScoped)
     void HandOverReleasedCallFrozen(CycleCollector* collector) noexcept;
+    void FreezeCallScopedSlow(CycleCollector* collector) noexcept;
     // One pass of DropUnheld; false when it dropped none
     bool DropUnheldOnce(bool walk) noexcept;
 
     std::unique_ptr<Table> m_cells;
+    // Whether the table may hold a cell with BorrowedCell::m_unheldIdentity: set when one goes in,
+    // cleared when FreezeCallScoped has taken them all out
+    bool m_hasUnheldIdentity = false;
     // The template module's call that runs, or 0 for a render's registry
     uint32_t m_call = 0;
     // The last call number given out
