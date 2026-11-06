@@ -707,6 +707,136 @@
    "output": "{<Namespace {}>: 1}"
   },
   {
+   "id": "globals.object_key_len",
+   "template": "{% set n = namespace() %}{{ {n: 1, namespace(): 2}|length }}|{{ {n: 1, n: 2}|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "2|1"
+  },
+  {
+   "id": "globals.object_key_lookup",
+   "template": "{% set n = namespace() %}{% set d = {n: 1} %}{{ d[n] }}|{{ n in d }}|{{ namespace() in d }}|{{ d.get(n) }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1|True|False|1"
+  },
+  {
+   "id": "globals.macro_key",
+   "template": "{% macro m() %}hi{% endmacro %}{{ {m: 1}[m] }}|{{ {m: 1} }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1|{<Macro 'm'>: 1}"
+  },
+  {
+   "id": "globals.class_key",
+   "template": "{{ {range: 1} }}|{{ {range: 1}[range] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{<class 'range'>: 1}|1"
+  },
+  {
+   "id": "globals.undefined_key",
+   "template": "{{ {missing: 1} }}|{{ {missing: 1, other: 2} }}|{{ {missing: 1}[other] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{Undefined: 1}|{Undefined: 2}|1"
+  },
+  {
+   "id": "globals.undefined_key_strict",
+   "template": "{{ {missing: 1} }}",
+   "context": {},
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'missing' is undefined"
+   }
+  },
+  {
+   "id": "globals.bound_method_key",
+   "template": "{% set l = [1] %}{{ {l.append: 1, l.append: 2}|length }}|{{ {[].append: 1}|length }}|{{ {l.append: 1}[l.append] }}|{{ l.append == l.append }}|{{ l.append == [].append }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1|1|1|True|False"
+  },
+  {
+   "id": "globals.cycler_key",
+   "template": "{% set c = cycler(1) %}{% set j = joiner() %}{{ {c: 1, c: 2, j: 3, cycler(1): 4}|length }}|{{ {c: 1}[c] }}|{{ {j: 3}[j] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "3|1|3"
+  },
+  {
+   "id": "globals.object_key_dictsort",
+   "template": "{% set n = namespace() %}{{ {n: 1}|dictsort|length }}|{{ ({n: 1}|list)[0] is sameas n }}|{{ ({n: 1}|list)[0] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1|True|<Namespace {}>"
+  },
+  {
+   "id": "globals.object_key_tojson",
+   "template": "{% set n = namespace() %}{{ {n: 1}|tojson }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "keys must be str, int, float, bool or None, not Namespace"
+   }
+  },
+  {
+   "id": "globals.object_key_mutated",
+   "template": "{% set n = namespace() %}{% set d = {n: 1} %}{% set n.a = 2 %}{{ d }}|{{ d[n] }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "{<Namespace {'a': 2}>: 1}|1"
+  },
+  {
+   "id": "globals.object_key_in_tuple",
+   "template": "{% set n = namespace() %}{% set d = {(n, 1): 2} %}{{ d[(n, 1)] }}|{{ (namespace(), 1) in d }}|{{ d }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "2|False|{(<Namespace {}>, 1): 2}"
+  },
+  {
+   "id": "globals.object_key_items",
+   "template": "{% set n = namespace(a=1) %}{% for k, v in {n: 'x'}.items() %}{{ k.a }}{{ v }}{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1x"
+  },
+  {
+   "id": "globals.loop_key",
+   "template": "{% for i in [1] %}{{ {loop: 1}[loop] }}|{{ {loop.cycle: 1}[loop.cycle] }}{% endfor %}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1|1"
+  },
+  {
+   "id": "globals.object_key_cycle",
+   "template": "{% set n = namespace() %}{% set n.d = {n: 1} %}{{ n.d|length }}",
+   "context": {},
+   "env": {},
+   "templates": {},
+   "output": "1"
+  },
+  {
    "id": "globals.dict_from_non_string_pairs",
    "template": "{{ dict([(1, 'a'), ((1, 2), 'b')]) }}|{{ dict({1: 'a'}, b=2) }}|{{ namespace({1: 2}) }}",
    "context": {},

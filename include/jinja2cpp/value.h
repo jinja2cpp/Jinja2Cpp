@@ -1159,6 +1159,9 @@ struct JINJA2CPP_EXPORT UserCallable
     std::vector<ArgInfo> argsInfo;
 
 private:
+    // The library keys a callable by its generation, as dict keys need (docs/tasks/0212)
+    friend struct detail::UserCallableAccess;
+
     static std::atomic_uint64_t m_gen; // NOLINT(readability-identifier-naming): include/ follows 0056
     uint64_t m_counter{};
 };

@@ -522,16 +522,19 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method): replaces BaseVisitor's deleted overload
     InternalValue operator()(const BigIntView& /*values*/, const BigIntView& /*index*/) const { return InternalValue(); }
 
-    // An object of the host language is a key by its identity (ObjectKey, template_dict.cpp).
+    // An object is a key by its identity (ObjectKey, template_dict.cpp): an object of the host
+    // language, or one of the engine's (namespace(), cycler(), a reflected struct; docs/tasks/0212).
     // A host object's own __getitem__ takes any key, hashable or not
     InternalValue operator()(const MapRef& values, const MapRef& key) const
     {
-        if (!values.IsHost() && !key.GetHostObject())
+        if (!values.IsHost() && !key.GetHostObject() && !key.GetObjectClass() && key.GetAttrPolicy() != MapAttrPolicy::KeysFirst)
         {
             return InternalValue();
         }
         return FindKey(values, InternalValue(key.ToAdapter()));
     }
+    // The undefined key (docs/tasks/0212); a callable key is looked up before the visitor (Subscript)
+    InternalValue operator()(const MapRef& values, const UndefinedValue& key) const { return FindKey(values, InternalValue(key)); }
 
     InternalValue operator()(const MapRef& values, const ListRef& key) const
     {
@@ -708,7 +711,9 @@ inline void ResolveCallOperator(InternalValue& result, RenderContext* values)
 
 InternalValue Subscript(const InternalValue& val, const InternalValue& subscript, RenderContext* values)
 {
-    auto result = Apply2<SubscriptionVisitor>(val, subscript);
+    // A function or macro key (docs/tasks/0212): looked up as it is, as the visitor would box a copy
+    const auto map = GetIf<Callable>(&subscript) ? AsMap(val) : std::nullopt;
+    auto result = map ? map->FindItem(subscript).value_or(InternalValue()) : Apply2<SubscriptionVisitor>(val, subscript);
     ResolveCallOperator(result, values);
     return result;
 }
@@ -4403,6 +4408,29 @@ void TraverseBoxed(const Callable& callable, const TraverseFn& fn)
     }
 }
 
+Callable::Identity Callable::GetIdentity() const
+{
+    if (m_boundSelf)
+    {
+        return { m_boundSelf, m_boundMethod, nullptr, 0 };
+    }
+    if (const auto* fnCall = std::get_if<ExpressionCallable>(m_callable.get()))
+    {
+        if (const auto* bound = fnCall->target<BoundMethodCall>())
+        {
+            return { nullptr, nullptr, bound, 0 };
+        }
+        if (m_kind == UserCallable)
+        {
+            if (const auto* body = fnCall->target<visitors::UserCallableBody>())
+            {
+                return { nullptr, nullptr, nullptr, detail::UserCallableAccess::Generation(body->val) };
+            }
+        }
+    }
+    return { m_callable.get(), nullptr, nullptr, 0 };
+}
+
 bool Callable::IsSame(const Callable& other) const
 {
     if (m_callable == other.m_callable)
@@ -4421,6 +4449,17 @@ bool Callable::IsSame(const Callable& other) const
     const auto* left = GetExpressionCallable().target<visitors::UserCallableBody>();
     const auto* right = other.GetExpressionCallable().target<visitors::UserCallableBody>();
     return left != nullptr && right != nullptr && left->val.IsEqual(right->val);
+}
+
+bool Callable::IsEqual(const Callable& other) const
+{
+    if (IsSame(other))
+    {
+        return true;
+    }
+    const auto left = GetIdentity();
+    const auto right = other.GetIdentity();
+    return left.call != nullptr && right.call != nullptr && left.call->invoke == right.call->invoke && SameMethodReceiver(left.call->self, right.call->self);
 }
 
 } // namespace v2
