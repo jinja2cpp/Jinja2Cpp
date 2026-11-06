@@ -6,6 +6,7 @@
 #include "intrusive_ptr.h"
 #include "recursion_guard.h"
 
+#include <jinja2cpp/big_int.h>
 #include <jinja2cpp/big_int_backend.h>
 
 #include <fmt/format.h>

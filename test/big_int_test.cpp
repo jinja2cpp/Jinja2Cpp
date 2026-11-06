@@ -592,7 +592,7 @@ TEST(BigIntTest, FromDigitsAndToDigitsRoundTrip)
     std::string wideMixed;
     for (int i = 0; i < 2000; ++i)
     {
-        wideMixed.push_back("0123456789abcdef"[(i * 7 + 3) % 16]);
+        wideMixed.push_back("0123456789abcdef"[((i * 7) + 3) % 16]);
     }
     wideMixed[0] = '9';
     struct Row

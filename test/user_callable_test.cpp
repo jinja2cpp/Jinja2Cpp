@@ -12,6 +12,7 @@
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -1591,7 +1592,7 @@ UserCallable MakeSiteProbe(const std::shared_ptr<SiteProbe>& probe, bool askForC
     std::vector<ArgInfo> args;
     if (askForContext)
     {
-        args.emplace_back(ArgInfo{ "*context" });
+        args.emplace_back("*context");
     }
     return UserCallable(
         [probe](const UserCallableParams& params) {

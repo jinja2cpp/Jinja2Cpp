@@ -162,7 +162,7 @@ public:
      *
      * \throw std::invalid_argument for a `base` outside 2 to 36
      */
-    JINJA2CPP_EXPORT std::string ToDigits(int base) const;
+    [[nodiscard]] JINJA2CPP_EXPORT std::string ToDigits(int base) const;
 
     //! The canonical decimal form, as Python's `str()` prints the number
     [[nodiscard]] const std::string& ToString() const noexcept { return m_decimal; }
