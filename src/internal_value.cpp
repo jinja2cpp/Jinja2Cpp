@@ -458,7 +458,14 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     template<typename CharT>
     InternalValue operator()(const MapRef& values, const std::basic_string_view<CharT>& fieldName) const
     {
-        return GetStringItem(values, ConvertString<std::string>(fieldName));
+        if constexpr (std::is_same_v<CharT, char>)
+        {
+            return GetStringItem(values, std::string(fieldName));
+        }
+        else
+        {
+            return GetStringItem(values, ConvertString<std::string>(fieldName));
+        }
     }
 
     // x['name']: an object of the host language looks among its items first, as Jinja2's
