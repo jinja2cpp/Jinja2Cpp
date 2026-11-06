@@ -1,5 +1,6 @@
 """jinja2cpp's exceptions are also Jinja2's when Jinja2 is importable, and stand alone without it."""
 
+import os
 import subprocess
 import sys
 import textwrap
@@ -92,5 +93,5 @@ def test_without_jinja2():
         """
         % CLASSES
     )
-    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=False, env={"PYTHONPATH": ":".join(p for p in sys.path if p), "PATH": ""})
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=False, env={**os.environ, "PYTHONPATH": ":".join(p for p in sys.path if p)})
     assert result.returncode == 0 and result.stdout.strip() == "ok", result.stderr
