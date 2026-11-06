@@ -576,11 +576,13 @@ void SetupGlobals(InternalValueMap& globalParams)
     globalParams.emplace("cycler", MakeClass(CallCycler, "<class 'jinja2.utils.Cycler'>"));
     globalParams.emplace("joiner", MakeClass(CallJoiner, "<class 'jinja2.utils.Joiner'>"));
     globalParams.emplace("namespace", MakeClass(CallNamespace, "<class 'jinja2.utils.Namespace'>"));
-    // A function, whose repr names its address: it prints nothing
-    globalParams.emplace("lipsum", MakeFunction([](const CallParams& params, RenderContext& context) {
-                             // Every render has a callback (TemplateImpl::Render)
-                             return CallLipsum(params, context.GetRendererCallback()->GetRandomEngine());
-                         }));
+    // A function, which prints as <function generate_lorem_ipsum at 0x...> (docs/tasks/0368)
+    auto lipsum = MakeFunction([](const CallParams& params, RenderContext& context) {
+        // Every render has a callback (TemplateImpl::Render)
+        return CallLipsum(params, context.GetRendererCallback()->GetRandomEngine());
+    });
+    lipsum.SetAttributes(std::make_shared<const InternalValueMap>(InternalValueMap{ { "__name__", InternalValue(std::string("generate_lorem_ipsum")) } }));
+    globalParams.emplace("lipsum", std::move(lipsum));
 }
 } // namespace
 

@@ -1757,6 +1757,55 @@
    },
    "templates": {},
    "output": "|N|"
+  },
+  {
+   "id": "undefined.debug_engine_object_types",
+   "template": "{% set ns = namespace(a=1) %}{{ ns.b }}|{{ cycler(1).b }}|{{ joiner().b }}|{% for i in [1] %}{{ loop.b }}{% endfor %}|{{ self.b }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "{{ no such element: jinja2.utils.Namespace object['b'] }}|{{ no such element: jinja2.utils.Cycler object['b'] }}|{{ no such element: jinja2.utils.Joiner object['b'] }}|{{ no such element: jinja2.runtime.LoopContext object['b'] }}|{{ no such element: jinja2.runtime.TemplateReference object['b'] }}"
+  },
+  {
+   "id": "undefined.debug_callable_object_types",
+   "template": "{{ range(2).b }}|{{ lipsum.b }}|{{ 'a'.upper.b }}|{% macro m() %}{% endmacro %}{{ m.b }}|{{ ([1]|select).b }}|{{ ([1]|reverse).b }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "debug"
+   },
+   "templates": {},
+   "output": "{{ no such element: range object['b'] }}|{{ no such element: function object['b'] }}|{{ no such element: builtin_function_or_method object['b'] }}|{{ no such element: jinja2.runtime.Macro object['b'] }}|{{ no such element: generator object['b'] }}|{{ no such element: list_reverseiterator object['b'] }}"
+  },
+  {
+   "id": "undefined.strict_engine_object_type",
+   "template": "{% set ns = namespace(a=1) %}{{ ns.b }}",
+   "context": {
+    "d": {
+     "a": 1
+    },
+    "n": null
+   },
+   "env": {
+    "undefined": "strict"
+   },
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "UndefinedError",
+    "message": "'jinja2.utils.Namespace object' has no attribute 'b'"
+   }
   }
  ]
 }

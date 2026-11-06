@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0197]
-touches: [src/internal_value.h, src/internal_value.cpp, include/jinja2cpp/value.h]
+touches: [src/template_dict.h, src/template_dict.cpp, src/internal_value.h, src/internal_value.cpp, src/value_visitors.h, include/jinja2cpp/user_callable.h, test/user_callable_test.cpp, test/binding/conformance.h, test/parity/cases/globals.py, test/parity/divergences/globals.txt, test/parity/divergences/reflect.txt]
 ---
 # Objects as dict keys and through user callables
 
@@ -37,8 +37,17 @@ through one read misses the other. The six `0212` lines in
 `test/parity/divergences/reflect.txt` (the 0322 pass) are these cases; they go when a view has
 a stable identity.
 
-**Plan (2026-11-03).** Architect plan with decisions D1-D8 for Ruslan:
-`/mnt/project-files/release-2.0/0212-plan.md`. 0370 already makes a JSON object unpack its keys
-(it answers `HasAttributes() == false` through the `IJsonNode` marker). Macros passed to a user
-callable no longer arrive as None (0300); what remains is the way back (`ident(m)()`).
-D6 answered 2026-11-05 (option a): `IJsonNode::NodeIdentity()` lands in 0370 (#752).
+**Plan (approved 2026-11-05, all recommended decisions).** Architect plan in the project files
+(release-2.0/0212-plan.md); three PRs:
+- P1, object keys: every engine object is a key by its identity (`ObjectKey` in
+  template_dict.cpp): namespace(), cycler(), joiner() and reflected structs by the identity their
+  copies share, functions and macros by `Callable::GetIdentity` (also what `==` compares, so
+  `l.append == l.append` holds as in Python), every undefined value as one key (StrictUndefined
+  raises). Corpus rows `globals.object_key_*`, `macro_key`, `class_key`, `undefined_key*`,
+  `bound_method_key`, `cycler_key`, `loop_key`. A string receiver of a method stands for itself
+  by value (Python compares `__self__` by identity), a deliberate approximation.
+- P2, round trip: an object a user callable is handed comes back as itself within that call (a
+  per-call export table). "A macro arrives as None" was fixed by 0300.
+- P3, JSON identity: `IJsonNode::NodeIdentity` (added by 0370) gives two reads of one JSON value
+  one identity; the GenericList enumerator follows a cell made mid-loop; the six `0212` lines in
+  reflect.txt go. PR #778; D6 (a) landed with 0370 (#752).

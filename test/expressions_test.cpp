@@ -799,3 +799,56 @@ TEST(ExpressionsTest, StringSliceByCodePoint)
     EXPECT_EQ(trailing, RenderNarrow("{{ s[::-1] }}", { { "s", leading } }));
     EXPECT_EQ(trailing, RenderNarrow("{{ s | reverse }}", { { "s", leading } }));
 }
+
+namespace
+{
+// The message of the error a template raises, narrow and wide
+std::string ErrorNarrow(const std::string& source, const ValuesMap& params = {})
+{
+    Template tpl;
+    EXPECT_TRUE(tpl.Load(source));
+    auto result = tpl.RenderAsString(params);
+    return result ? "no error: " + *result : result.error().ToString();
+}
+
+std::wstring ErrorWide(const std::string& source, const ValuesMap& params = {})
+{
+    TemplateW tpl;
+    EXPECT_TRUE(tpl.Load(std::wstring(source.begin(), source.end())));
+    auto result = tpl.RenderAsString(params);
+    return result ? L"no error: " + *result : result.error().ToString();
+}
+} // namespace
+
+// Errors name a callable by Python's type of it (docs/tasks/0368); the messages are
+// Jinja2 3.1.6's
+TEST(ExpressionsTest, CallableTypeNamesInErrors)
+{
+    const ValuesMap params{ { "f", MakeCallable([] { return 1; }) } };
+    struct Case
+    {
+        std::string source;
+        std::string message;
+    };
+    // clang-format off
+    const Case cases[] = {
+        {"{% macro m() %}{% endmacro %}{{ 1 in m }}", "argument of type 'Macro' is not iterable"},
+        {"{{ 1 in range }}",                          "argument of type 'type' is not iterable"},
+        {"{{ 1 in cycler }}",                         "argument of type 'type' is not iterable"},
+        {"{{ 1 in 'a'.upper }}",                      "argument of type 'builtin_function_or_method' is not iterable"},
+        {"{{ 1 in 'a'|attr('upper') }}",              "argument of type 'builtin_function_or_method' is not iterable"},
+        {"{% macro m() %}{% endmacro %}{{ 1 + m }}",  "unsupported operand type(s) for +: 'int' and 'Macro'"},
+        {"{{ 1 in lipsum }}",                         "argument of type 'function' is not iterable"},
+        {"{{ 1 in f }}",                              "argument of type 'function' is not iterable"},
+        {"{% for i in [1] %}{{ 1 in loop.cycle }}{% endfor %}", "argument of type 'method' is not iterable"},
+        {"{% macro m() %}{{ 1 in caller }}{% endmacro %}{% call m() %}{% endcall %}", "argument of type 'Macro' is not iterable"},
+    };
+    // clang-format on
+    for (const auto& c : cases)
+    {
+        const auto narrow = ErrorNarrow(c.source, params);
+        const auto wide = ErrorWide(c.source, params);
+        EXPECT_NE(std::string::npos, narrow.find(c.message)) << c.source << ": " << narrow;
+        EXPECT_NE(std::wstring::npos, wide.find(std::wstring(c.message.begin(), c.message.end()))) << c.source;
+    }
+}

@@ -159,4 +159,8 @@ CASES = [
     ('undefined_chained_lt_raises', "{{ 0 < nope < 5 }}"),
     ('undefined_pow_chainable_raises', "{{ nope ** 2 }}", {"env": {"undefined": "chainable"}}),
     ('undefined_eq_compares', "{{ 'T' if nope == 5 else 'F' }}|{{ 'T' if nope != 5 else 'F' }}|{{ 'T' if nope == nope else 'F' }}|{{ nope ~ 5 }}"),
+    # task 0401: a value's bound methods compare by receiver and name; a range is no list
+    ('bound_method_equals', "{{ 'a'.upper == 'a'.upper }}|{% set l = [1] %}{{ l.append == l.append }}"),
+    ('range_equals_list', "{{ range(3) == [0, 1, 2] }}"),
+    ('range_concat', "{{ range(3) + [1] }}"),
 ]

@@ -610,22 +610,22 @@ INSTANTIATE_TEST_SUITE_P(EscapeLong, FilterGenericTest, ::testing::Values(
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(Batch, FilterGenericTest, ::testing::Values(
                             InputOutputPair{
-                                "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] | batch(linecount=3) | pprint",
+                                "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] | batch(linecount=3) | list | pprint",
                                 "[[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12], [13, 14, 15], [16]]"
                             },
                             InputOutputPair{
-                                "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] | batch(3, 0) | pprint",
+                                "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] | batch(3, 0) | list | pprint",
                                 "[[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12], [13, 14, 15], [16, 0, 0]]"
                             },
                             InputOutputPair{
-                                "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] | batch(3, -1) | pprint",
+                                "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] | batch(3, -1) | list | pprint",
                                 "[[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12], [13, 14, 15], [16, 17, -1]]"
                             },
-                            InputOutputPair{"[1, 2, 3] | batch(0) | pprint", "[[], [1, 2, 3]]"},
-                            InputOutputPair{"[1, 2, 3, 4] | batch(2) | pprint", "[[1, 2], [3, 4]]"},
-                            InputOutputPair{"'some string' | batch(0) | pprint", "[[], ['s', 'o', 'm', 'e', ' ', 's', 't', 'r', 'i', 'n', 'g']]"},
-                            InputOutputPair{"[] | batch(0) | pprint", "[]"},
-                            InputOutputPair{"nope | batch(2) | pprint", "[]"}
+                            InputOutputPair{"[1, 2, 3] | batch(0) | list | pprint", "[[], [1, 2, 3]]"},
+                            InputOutputPair{"[1, 2, 3, 4] | batch(2) | list | pprint", "[[1, 2], [3, 4]]"},
+                            InputOutputPair{"'some string' | batch(0) | list | pprint", "[[], ['s', 'o', 'm', 'e', ' ', 's', 't', 'r', 'i', 'n', 'g']]"},
+                            InputOutputPair{"[] | batch(0) | list | pprint", "[]"},
+                            InputOutputPair{"nope | batch(2) | list | pprint", "[]"}
                             ));
 // clang-format on
 
@@ -660,15 +660,15 @@ INSTANTIATE_TEST_SUITE_P(Format, FilterGenericTest, ::testing::Values(
 
 // clang-format off
 INSTANTIATE_TEST_SUITE_P(ListSlice, ListSliceTest, ::testing::Values(
-                            InputOutputPair{"[] | slice(3) | pprint",                                "[[], [], []]"},
-                            InputOutputPair{"[1, 2, 3] | slice(3) | pprint",                         "[[1], [2], [3]]"},
-                            InputOutputPair{"[1, 2, 3] | slice(3, 0) | pprint",                      "[[1, 0], [2, 0], [3, 0]]"},
-                            InputOutputPair{"[1, 2] | slice(3) | pprint",                            "[[1], [2], []]"},
-                            InputOutputPair{"[1, 2] | slice(3, 0) | pprint",                         "[[1], [2], [0]]"},
-                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7, 8, 9] | slice(3) | pprint",       "[[1, 2, 3], [4, 5, 6], [7, 8, 9]]"},
-                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7, 8, 9] | slice(3, 0) | pprint",    "[[1, 2, 3, 0], [4, 5, 6, 0], [7, 8, 9, 0]]"},
-                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7] | slice(3) | pprint",             "[[1, 2, 3], [4, 5], [6, 7]]"},
-                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7] | slice(3, 0) | pprint",          "[[1, 2, 3], [4, 5, 0], [6, 7, 0]]"}
+                            InputOutputPair{"[] | slice(3) | list | pprint",                                "[[], [], []]"},
+                            InputOutputPair{"[1, 2, 3] | slice(3) | list | pprint",                         "[[1], [2], [3]]"},
+                            InputOutputPair{"[1, 2, 3] | slice(3, 0) | list | pprint",                      "[[1, 0], [2, 0], [3, 0]]"},
+                            InputOutputPair{"[1, 2] | slice(3) | list | pprint",                            "[[1], [2], []]"},
+                            InputOutputPair{"[1, 2] | slice(3, 0) | list | pprint",                         "[[1], [2], [0]]"},
+                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7, 8, 9] | slice(3) | list | pprint",       "[[1, 2, 3], [4, 5, 6], [7, 8, 9]]"},
+                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7, 8, 9] | slice(3, 0) | list | pprint",    "[[1, 2, 3, 0], [4, 5, 6, 0], [7, 8, 9, 0]]"},
+                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7] | slice(3) | list | pprint",             "[[1, 2, 3], [4, 5], [6, 7]]"},
+                            InputOutputPair{"[1, 2, 3, 4, 5, 6, 7] | slice(3, 0) | list | pprint",          "[[1, 2, 3], [4, 5, 0], [6, 7, 0]]"}
                             ));
 // clang-format on
 

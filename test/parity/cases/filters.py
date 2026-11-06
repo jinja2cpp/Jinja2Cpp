@@ -452,6 +452,19 @@ CASES = [
     ("lazy_result_equals", "{{ [1]|select == [1] }}|{{ [1]|reverse != [1] }}"),
     ("lazy_result_tojson", "{{ [1]|select|tojson }}"),
     ("lazy_result_concat", "{{ ([1]|select) + [2] }}"),
+    # task 0387: a generator equals only itself and has no + or *
+    ("lazy_result_equals_itself", "{% set g = [1]|select %}{% set r = [1]|reverse %}{{ g == g }}|{{ g != g }}|{{ r == r }}|{{ g == r }}|{{ g == 1 }}|{{ (1, 2)|reverse == (2, 1) }}"),
+    # task 0387: a generator prints as Python's repr; the address differs, so only the text before it is compared
+    ("lazy_result_prints", "{% for g in [[1]|select, [1]|reject, [1]|selectattr('real'), [1]|rejectattr('real'), [1]|map('string'), [1]|batch(1), [1]|slice(1), [1]|unique, {1: 2}|items, [1]|reverse, (1, 2)|reverse, range(2)|reverse, {1: 2}|reverse] %}{{ (g|string).split(' at ')[0] }}|{% endfor %}"),
+    ("lazy_result_repr_forms", "{{ ([[1]|select]|string).split(' at ')[0] }}|{{ (([1]|select)|pprint).split(' at ')[0] }}|{{ ('%s'|format([1]|select)).split(' at ')[0] }}|{% set g = [1]|select %}{{ g|string == g|string }}"),
+    ("callable_prints", "{{ (lipsum|string).split(' at ')[0] }}|{{ ('a'.upper|string).split(' at ')[0] }}|{{ ((1).bit_length|string).split(' at ')[0] }}|{{ ([].append|string).split(' at ')[0] }}|{{ ('a'|attr('upper')|string).split(' at ')[0] }}|{{ ([lipsum]|string).split(' at ')[0] }}"),
+    ("lazy_result_list_plus", "{{ [2] + [1]|select }}"),
+    ("lazy_result_tuple_plus", "{{ (2,) + [1]|reverse }}"),
+    ("lazy_result_repeat", "{{ ([1]|select) * 2 }}"),
+    ("lazy_result_repeat_left", "{{ 2 * ([1]|map('string')) }}"),
+    ("lazy_result_less", "{{ ([1]|select) < [2] }}"),
+    ("lazy_result_tojson_nested", "{{ {'a': [1]|reverse}|tojson }}"),
+    ("lazy_result_dictsort_pair_plus", "{% for p in {'a': 1}|dictsort %}{{ p + [1]|select }}{% endfor %}"),
     ("lazy_result_is_no_sequence", "{{ [1, 2]|select is sequence }}|{{ [1, 2]|select is iterable }}|{{ ([1, 2]|select)[0] is defined }}|{{ ([1, 2]|select).append is defined }}|{{ ([1, 2]|select|list).append is defined }}"),
     ("urlencode_undefined_debug", "[{{ missing|urlencode }}]", {"env": {"undefined": "debug"}}),
     ("urlencode_undefined_strict", "[{{ missing|urlencode }}]", {"env": {"undefined": "strict"}}),
@@ -459,4 +472,14 @@ CASES = [
     ("urlencode_loop", "{% for i in [1] %}[{{ loop|urlencode }}]{% endfor %}"),
     ("urlencode_loop_rest", "{% for i in [1, 2, 3] %}{% if loop.first %}[{{ loop|urlencode }}]{% endif %}{{ loop.index }}{{ i }};{% endfor %}"),
     ("urlencode_loop_rest_lists", "{% for i in [[1, 2], [3, 4], [5, 6]] %}{% if loop.first %}[{{ loop|urlencode }}]{% endif %}{{ loop.index }}{{ i }};{% endfor %}"),
+    # task 0371: a missing attribute is environment.undefined(obj=obj, name=name)
+    ("attr_missing_debug", "[{{ 'x'|attr('f') }}|{{ {'k': 1}|attr('k') }}|{{ 1|attr('nope') }}|{% set ns = namespace(a=1) %}{{ ns|attr('b') }}]", {"env": {"undefined": "debug"}}),
+    ("attr_missing_strict", "{{ 'x'|attr('f') }}", {"env": {"undefined": "strict"}}),
+    ("attr_missing_strict_dict_item", "{{ {'k': 1}|attr('k') }}", {"env": {"undefined": "strict"}}),
+    # task 0368: json.dumps names a callable's type
+    ("tojson_callable", "{{ lipsum|tojson }}"),
+    # task 0401: a generator still answers as a list to truncate's len() and to unique's hash
+    ("lazy_result_truncate", "{{ [1, 2, 3]|select|truncate(5) is string }}"),
+    ("lazy_result_unique_hash", "{% set g = [1, 2, 3]|select %}{{ [g, g]|unique|list|length }}"),
+    ("range_tojson", "{{ range(2)|tojson }}"),
 ]

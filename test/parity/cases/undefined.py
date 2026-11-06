@@ -123,4 +123,8 @@ CASES = [
     ("strict_finalize_gets_undefined", "{{ nope }}", {"env": {"finalize": "brackets", "undefined": "strict"}}),
     ("debug_finalize_gets_undefined", "{{ nope }}|{{ d.zz }}", {"env": {"finalize": "brackets", "undefined": "debug"}, "ctx": {"d": {}}}),
     ("finalize_none_not_undefined", "{{ nope }}|{{ none }}|{{ d.zz }}", {"env": {"finalize": "none_marker"}, "ctx": {"d": {}}}),
+    # task 0371: a missing attribute names the object's type as object_type_repr does
+    ("debug_engine_object_types", "{% set ns = namespace(a=1) %}{{ ns.b }}|{{ cycler(1).b }}|{{ joiner().b }}|{% for i in [1] %}{{ loop.b }}{% endfor %}|{{ self.b }}", {"env": {"undefined": "debug"}}),
+    ("debug_callable_object_types", "{{ range(2).b }}|{{ lipsum.b }}|{{ 'a'.upper.b }}|{% macro m() %}{% endmacro %}{{ m.b }}|{{ ([1]|select).b }}|{{ ([1]|reverse).b }}", {"env": {"undefined": "debug"}}),
+    ("strict_engine_object_type", "{% set ns = namespace(a=1) %}{{ ns.b }}", {"env": {"undefined": "strict"}}),
 ]

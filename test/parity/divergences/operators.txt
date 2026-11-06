@@ -4,3 +4,5 @@
 operators.int_big_pow                   rejects@nobigint 0178 build option: without a big-integer backend, arithmetic past int64 raises (-DJINJA2CPP_WITH_BIGINT=boost, docs/parity.md)
 operators.int_min_floordiv_overflow     rejects@nobigint 0178 build option: without a big-integer backend, arithmetic past int64 raises (-DJINJA2CPP_WITH_BIGINT=boost, docs/parity.md)
 operators.int_overflow_mul              rejects@nobigint 0178 build option: without a big-integer backend, arithmetic past int64 raises (-DJINJA2CPP_WITH_BIGINT=boost, docs/parity.md)
+operators.range_equals_list             output      0401 a range equals a list with its items; Python's range equals only a range
+operators.range_concat                  accepts     0401 a range concatenates with a list; Python has no + for range
