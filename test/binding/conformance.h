@@ -1081,6 +1081,7 @@ TYPED_TEST_P(JsonConformance, ModuleCallsOfABorrowedDocument)
                                "{% macro f(d) %}{{ d }}{% set _ = d.update(k=1) %}{% endmacro %}"
                                "{% macro keep(d) %}{% set _ = d.update(k=1) %}{% set _ = store.append(d) %}{{ d is sameas store[-1] }}{% endmacro %}"
                                "{% macro show() %}{{ store }}{% endmacro %}"
+                               "{% macro same(d) %}{{ store[0] == d }}{{ store[0] is sameas d }}{% endmacro %}"
                                "{% macro g(l) %}{{ l }}{% set _ = l.append(1) %}{{ l|length }}{% endmacro %}"
                                "{% set cycles = [] %}"
                                "{% macro cyc(d) %}{% set _ = cycles.append(d) %}{% set _ = d.a.append(d) %}{{ d.a|length }}{% endmacro %}"
@@ -1113,6 +1114,8 @@ TYPED_TEST_P(JsonConformance, ModuleCallsOfABorrowedDocument)
         const bool hasIdentity = jinja2::detail::json::HasIdentity<typename TypeParam::Json>::value;
         // The module's own value keeps what the call left in it
         EXPECT_EQ(hasIdentity ? "[{'a': 3, 'k': 1}]" : "[{'a': 2, 'k': 1}]", call("show", {}));
+        // ... and is not the value the host put at the document's address since (Codex review of #778)
+        EXPECT_EQ("FalseFalse", call("same", { jinja2::Reflect(std::as_const(doc)) }));
         // Within one call two views of the value are one object; the next call starts from the host's data, also for
         // a view the host lends again (Python's would keep the writes: docs/tasks/0402)
         const typename TypeParam::Json list = TypeParam::Parse(R"([0])");

@@ -1811,10 +1811,18 @@ const IJsonNode* JsonNodeOf(const Accessor* accessor) noexcept
 // The identity of a host container's views: for a JSON node, the document value it shows when the
 // traits tell it, so that two reads of one value are one object (docs/tasks/0212); else the
 // accessor, and each view is an object of its own
-const void* HostIdentity(const IJsonNode* node, const void* accessor) noexcept
+// A view that reads a frozen cell is that cell's generation of the value: once its call or render
+// ended the host may have changed or freed the document, and its address may name another value
+// by now, so the cell is the identity (Codex review of #778)
+const void* HostIdentity(const IJsonNode* node, const void* accessor, const CellLink& link) noexcept
 {
     const void* identity = node ? node->NodeIdentity() : nullptr;
-    return identity ? identity : accessor;
+    if (!identity)
+    {
+        return accessor;
+    }
+    const auto* cell = link.Current();
+    return cell && cell->IsFrozen() ? static_cast<const void*>(cell) : identity;
 }
 
 // Whether HostIdentity is the document value's address, which the accessor does not keep alive
@@ -2013,7 +2021,7 @@ public:
             return self;
         }
     }
-    [[nodiscard]] const void* GetIdentity() const override { return HostIdentity(m_node, m_values.Get().GetAccessor()); }
+    [[nodiscard]] const void* GetIdentity() const override { return HostIdentity(m_node, m_values.Get().GetAccessor(), m_link); }
     [[nodiscard]] InternalValueList* GetMutableItems() const override
     {
         const auto* cell = m_link.Get(*this);
@@ -3414,7 +3422,7 @@ public:
     // A JSON object is a dict (IJsonNode, docs/tasks/0370); the names of any other host map, such as a
     // reflected struct, are its attributes
     [[nodiscard]] bool HasAttributes() const override { return m_node == nullptr; }
-    [[nodiscard]] const void* GetIdentity() const override { return HostIdentity(m_node, m_values.Get().GetAccessor()); }
+    [[nodiscard]] const void* GetIdentity() const override { return HostIdentity(m_node, m_values.Get().GetAccessor(), m_link); }
     [[nodiscard]] TemplateDict* GetMutableItems() const override
     {
         const auto* cell = m_link.Get(*this);
