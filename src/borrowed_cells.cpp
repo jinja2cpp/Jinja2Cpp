@@ -477,16 +477,16 @@ bool CellLink::Adopt(const InternalValue& self, const void* identity, bool isLis
     return true;
 }
 
-void BorrowedCells::DropUnheld(CycleCollector* collector) noexcept
+void BorrowedCells::DropUnheld(bool walk) noexcept
 {
     // A dropped cell lets go of its items, which may hold the only source of another cell (the
     // adapter of a nested list): again until a pass drops none
-    while (m_cells && DropUnheldOnce(collector))
+    while (m_cells && DropUnheldOnce(walk))
     {
     }
 }
 
-bool BorrowedCells::DropUnheldOnce(CycleCollector* collector) noexcept
+bool BorrowedCells::DropUnheldOnce(bool walk) noexcept
 {
     size_t count = 0;
     for (const auto& [identity, cell] : *m_cells)
@@ -532,10 +532,10 @@ bool BorrowedCells::DropUnheldOnce(CycleCollector* collector) noexcept
     }
     const auto removed = static_cast<uint32_t>(dropped.size());
     // What the cells' items hold may be a cycle an earlier call of a template module made, which
-    // no note names any more (Codex review of #778): the call's collector walks from it. Only from
-    // what may be in one, so that the nested cells whose sources the rest held go in the next pass
+    // no note names any more (Codex review of #778): a walk from their storage frees it now, and
+    // with it the sources of the nested cells, which the next pass drops
     std::vector<ValueObjectPtr> storages;
-    if (collector)
+    if (walk)
     {
         try
         {
@@ -553,34 +553,11 @@ bool BorrowedCells::DropUnheldOnce(CycleCollector* collector) noexcept
         }
         catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
         {
-            // Out of memory: a cycle through the storages not handed over leaks (docs/tasks/0283)
+            // Out of memory: a cycle through the storages not walked leaks (docs/tasks/0283)
         }
     }
     dropped.clear();
-    try
-    {
-        for (const auto& storage : storages)
-        {
-            // Held by something else too, a cycle through it among them; else only what it holds
-            // may be in one
-            if (storage->use_count() > 1)
-            {
-                collector->NoteRoot(storage);
-                continue;
-            }
-            storage->Traverse([collector](const ValueObject* item) {
-                if (item->IsTraversable() && item->use_count() > 1)
-                {
-                    collector->NoteRoot(ValueObjectPtr(item));
-                }
-            });
-        }
-    }
-    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch): best effort, the comment says what is lost
-    {
-        // Out of memory: a cycle through the storages not handed over leaks (docs/tasks/0283)
-    }
-    storages.clear();
+    CycleCollector::CollectFrom(std::move(storages));
     detail::CellCounters::RemoveLive(removed);
     JINJA2CPP_CELL_TRACE_EVENT("dropped", Trace::Ptr("reg", Trace::Space::Reg, this), Trace::Num("n", removed), Trace::Num("live", detail::CellCounters::Live()));
     return true;

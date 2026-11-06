@@ -141,6 +141,9 @@ public:
     // holds it, as what it holds may be a cycle that an earlier call made, whose note went with
     // that call's collector (BorrowedCells::FreezeCallScoped). Throws std::bad_alloc
     void NoteRoot(ValueObjectPtr cell);
+    // Walks from `roots` now, apart from any render's notes, and empties the garbage among what
+    // they reach: what the cells a template module's call drops held (BorrowedCells::DropUnheld)
+    static void CollectFrom(std::vector<ValueObjectPtr> roots) noexcept;
     // The walk starts from every note, also one that nothing else holds any more: a template
     // module's values when it goes, where such a value may hold a cycle that a call made and
     // whose note went with that call's collector (docs/tasks/0212)
@@ -215,7 +218,7 @@ public:
         {
             m_cells.FreezeCallScoped(&m_collector);
         }
-        m_cells.DropUnheld(&m_collector);
+        m_cells.DropUnheld(true);
         m_cells.EndCall(std::move(m_outerCall));
     }
     // The call succeeded: its values keep what they read now, or the call fails with

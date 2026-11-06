@@ -201,20 +201,12 @@ void CycleCollector::Collect() noexcept
     m_notes->roots.clear();
 }
 
-void CycleCollector::CollectOnce()
+namespace
 {
-    // Most of what a render noted is garbage by now with no cycle in it (a list built and
-    // printed): releasing it frees it, and what only it held, without a walk
-    // Not when a dropped one may hold a cycle no note names (WalkFromEveryNote)
-    while (!m_notes->walkFromEvery && DropUnshared())
-    {
-    }
-    auto& candidates = m_notes->candidates;
-    auto& roots = m_notes->roots;
-    if (candidates.empty() && roots.empty())
-    {
-        return;
-    }
+// The walk of CollectOnce from `candidates` and `roots`, which it empties: the garbage among what
+// they reach is emptied, which breaks its cycles. Throws std::bad_alloc
+void WalkAndClear(std::vector<ValueObjectPtr>& candidates, std::vector<ValueObjectPtr>& roots)
+{
     std::unordered_map<const ValueObject*, Node> nodes;
     // In the order found: `order` grows while it is walked
     std::vector<Node*> order;
@@ -294,6 +286,39 @@ void CycleCollector::CollectOnce()
     {
         object->Clear();
     }
+}
+} // namespace
+
+void CycleCollector::CollectFrom(std::vector<ValueObjectPtr> roots) noexcept
+{
+    std::vector<ValueObjectPtr> none;
+    for (int attempt = 0; attempt != 2 && !roots.empty(); ++attempt)
+    {
+        try
+        {
+            WalkAndClear(none, roots);
+        }
+        catch (...) // NOLINT(bugprone-empty-catch): retried once, then the cycles not broken leak (docs/tasks/0283)
+        {
+        }
+    }
+}
+
+void CycleCollector::CollectOnce()
+{
+    // Most of what a render noted is garbage by now with no cycle in it (a list built and
+    // printed): releasing it frees it, and what only it held, without a walk
+    // Not when a dropped one may hold a cycle no note names (WalkFromEveryNote)
+    while (!m_notes->walkFromEvery && DropUnshared())
+    {
+    }
+    auto& candidates = m_notes->candidates;
+    auto& roots = m_notes->roots;
+    if (candidates.empty() && roots.empty())
+    {
+        return;
+    }
+    WalkAndClear(candidates, roots);
 }
 
 } // namespace v2

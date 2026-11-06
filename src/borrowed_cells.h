@@ -619,8 +619,9 @@ public:
     // Drops the cells nothing reads any more and nothing can find again: the cells of data that
     // lived for one call of a template module (an argument, a user callable's result), which
     // the module's cells would otherwise keep until the module goes. A cell of the host's data
-    // stays, as a later call may write it again. `collector` walks from what the cells held
-    void DropUnheld(CycleCollector* collector = nullptr) noexcept;
+    // stays, as a later call may write it again. `walk`: a walk from what the cells held frees
+    // the cycles in it (CycleCollector::CollectFrom)
+    void DropUnheld(bool walk = false) noexcept;
     // The outermost call of a template module ended: the cells whose identity is an address their
     // source does not keep alive (a borrowed JSON document's value, BorrowedCell::m_unheldIdentity)
     // freeze and leave the registry, as a render's cells do at its end (Finish). The host may change
@@ -637,7 +638,7 @@ private:
     // Gives `collector` the call-scoped cells values still read, and lets go of them
     void ReleaseCallFrozen(CycleCollector* collector) noexcept;
     // One pass of DropUnheld; false when it dropped none
-    bool DropUnheldOnce(CycleCollector* collector) noexcept;
+    bool DropUnheldOnce(bool walk) noexcept;
 
     std::unique_ptr<Table> m_cells;
     // The template module's call that runs, or 0 for a render's registry
