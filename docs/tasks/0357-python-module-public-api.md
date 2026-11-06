@@ -26,6 +26,8 @@ Then switch `python/src/` to the public API, build the module against the instal
 headers only, and delete `src/host_object.h`, or reduce it to an implementation detail of the
 public interface. The perf gate of 0353 and the pass rates of 0355 must not regress.
 
+**Plan (approved by Ruslan 2026-11-06).** [docs/design/0357-python-module-public-api.md](../design/0357-python-module-public-api.md): a seam inventory, public additions B1-B7, PR steps S0-S4, and decisions D1-D7, all taken as recommended (D6b: public `ISandboxPolicy`).
+
 **Done when.** The module compiles with only `include/jinja2cpp/` on its include path, from
 an installed package. `src/host_object.h` is gone or used only by the engine. The upstream
 pass rate and the bench row match the values before the switch. This lands before the G1
