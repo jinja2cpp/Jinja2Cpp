@@ -120,6 +120,29 @@ struct JINJA2CPP_EXPORT IMapItemAccessor : virtual IComparable
      * then a present item that returns an empty \ref Value is `none` to the template, as in Python.
      */
     [[nodiscard]] virtual bool EmptyIsNone() const { return false; }
+    /*!
+     * \brief The items with their own keys
+     *
+     * A dictionary whose keys are not all strings (a template's `{1: 'a', '1': 'b'}`) gives each key as itself, in the
+     * dictionary's order; \ref GetKeys can give only the string keys. The default pairs each of \ref GetKeys with its
+     * \ref Find.
+     */
+    [[nodiscard]] virtual std::vector<std::pair<Value, Value>> GetItems() const;
+    /*!
+     * \brief The dictionary behind this accessor
+     *
+     * Two accessors that view one dictionary return the same address (see \ref IListItemAccessor::GetIdentity). The
+     * default is `this`.
+     */
+    [[nodiscard]] virtual const void* GetIdentity() const { return this; }
+    /*!
+     * \brief The host object this accessor carries (\ref MakeHostValue, `jinja2cpp/host_object.h`)
+     *
+     * Overridden by the library's own accessor only; the engine asks it where a \ref GenericMap enters a render.
+     *
+     * @return The object, or null for every other map
+     */
+    [[nodiscard]] virtual const IHostObject* AsHostObject() const noexcept { return nullptr; }
 };
 
 /*!
@@ -234,6 +257,25 @@ public:
     [[nodiscard]] const IMapItemAccessor* GetAccessor() const noexcept
     {
         return m_accessor.get();
+    }
+
+    //! The items with their own keys (\ref IMapItemAccessor::GetItems); empty for an empty map
+    [[nodiscard]] std::vector<std::pair<Value, Value>> GetItems() const;
+
+    //! The dictionary's identity (\ref IMapItemAccessor::GetIdentity); null for an empty map
+    [[nodiscard]] const void* GetIdentity() const { return m_accessor ? m_accessor->GetIdentity() : nullptr; }
+
+    /*!
+     * \brief The host object the map carries (\ref MakeHostValue)
+     *
+     * The pointer shares ownership with the map, so it keeps the object alive.
+     *
+     * @return The object, or null for every other map
+     */
+    [[nodiscard]] std::shared_ptr<const IHostObject> AsHostObject() const noexcept
+    {
+        const IHostObject* object = m_accessor ? m_accessor->AsHostObject() : nullptr;
+        return object ? std::shared_ptr<const IHostObject>(m_accessor, object) : nullptr;
     }
 
     //! Same as \ref GetValueByName
@@ -1126,6 +1168,7 @@ struct JINJA2CPP_EXPORT UserCallable
         using std::swap;
         swap(callable, temp.callable);
         swap(argsInfo, temp.argsInfo);
+        swap(keepUndefined, temp.keepUndefined);
         swap(m_counter, temp.m_counter);
 
         return *this;
@@ -1134,6 +1177,7 @@ struct JINJA2CPP_EXPORT UserCallable
     UserCallable(UserCallable&& other) noexcept
         : callable(std::move(other.callable))
         , argsInfo(std::move(other.argsInfo))
+        , keepUndefined(other.keepUndefined)
         , m_counter(other.m_counter)
     {
     }
@@ -1142,6 +1186,7 @@ struct JINJA2CPP_EXPORT UserCallable
     {
         callable = std::move(other.callable);
         argsInfo = std::move(other.argsInfo);
+        keepUndefined = other.keepUndefined;
         m_counter = other.m_counter;
 
         return *this;
@@ -1157,6 +1202,13 @@ struct JINJA2CPP_EXPORT UserCallable
     Function callable;
     //! Information about arguments of the user-defined callable
     std::vector<ArgInfo> argsInfo;
+    /*!
+     * \brief Whether an undefined argument reaches the callable as undefined
+     *
+     * False (the default) gives the callable `None` for it. True gives a value that \ref UndefinedOf describes
+     * (`jinja2cpp/host_object.h`), as Python Jinja2 passes its `Undefined` objects.
+     */
+    bool keepUndefined = false;
 
 private:
     // The library keys a callable by its generation, as dict keys need (docs/tasks/0212)
