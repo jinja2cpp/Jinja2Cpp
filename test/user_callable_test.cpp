@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include "test_tools.h"
 
+#include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/markup.h>
 #include <jinja2cpp/generic_list_iterator.h> // IWYU pragma: keep (GenericList::iterator is only declared in generic_list.h)
@@ -1570,4 +1571,123 @@ TEST(UserCallableTestSingle, RestoredListObeysTheSequenceLimit)
     result = tpl.RenderAsString(params);
     ASSERT_FALSE(result);
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+}
+
+// Call-site information for a callable that asks for the context (task 0357 B4)
+
+namespace
+{
+struct SiteProbe
+{
+    std::vector<std::string> keys;
+    size_t size = 0;
+    std::string templateName = "unset";
+    bool autoescape = false;
+    bool called = false;
+};
+
+UserCallable MakeSiteProbe(const std::shared_ptr<SiteProbe>& probe, bool askForContext)
+{
+    std::vector<ArgInfo> args;
+    if (askForContext)
+    {
+        args.emplace_back(ArgInfo{ "*context" });
+    }
+    return UserCallable(
+        [probe](const UserCallableParams& params) {
+            probe->called = true;
+            probe->templateName = std::string(params.site.templateName);
+            probe->autoescape = params.site.autoescape;
+            if (const auto* map = params.context.GetIf<GenericMap>())
+            {
+                probe->keys = map->GetKeys();
+                probe->size = map->GetSize();
+            }
+            return Value(std::string());
+        },
+        args);
+}
+} // namespace
+
+TEST(CallSiteTest, ContextKeysListVisibleNames)
+{
+    auto probe = std::make_shared<SiteProbe>();
+    TemplateEnv env;
+    env.AddGlobal("probe", MakeSiteProbe(probe, true));
+    env.AddGlobal("site_global", Value(1));
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% set top = 1 %}{% macro m(arg) %}{% set inner = 2 %}{{ probe() }}{% endmacro %}{{ m(3) }}").has_value());
+    ASSERT_TRUE(tpl.RenderAsString({ { "param", 5 } }).has_value());
+    ASSERT_TRUE(probe->called);
+    const auto& keys = probe->keys;
+    for (const char* name : { "top", "arg", "inner", "param", "site_global", "probe", "m" })
+    {
+        EXPECT_EQ(1, std::count(keys.begin(), keys.end(), name)) << name;
+    }
+    EXPECT_TRUE(std::is_sorted(keys.begin(), keys.end()));
+    EXPECT_TRUE(std::adjacent_find(keys.begin(), keys.end()) == keys.end());
+    EXPECT_EQ(keys.size(), probe->size);
+    EXPECT_EQ(0, std::count(keys.begin(), keys.end(), "nothing_here"));
+}
+
+TEST(CallSiteTest, TemplateNameFromEnvironmentAndInline)
+{
+    auto probe = std::make_shared<SiteProbe>();
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("page.j2", "{{ probe() }}");
+    TemplateEnv env;
+    env.AddFilesystemHandler(std::string(), fs);
+    env.AddGlobal("probe", MakeSiteProbe(probe, true));
+
+    auto named = env.LoadTemplate("page.j2");
+    ASSERT_TRUE(named.has_value());
+    ASSERT_TRUE(named->RenderAsString({}).has_value());
+    EXPECT_EQ("page.j2", probe->templateName);
+
+    probe->templateName = "unset";
+    Template inlineTpl(&env);
+    ASSERT_TRUE(inlineTpl.Load("{{ probe() }}").has_value());
+    ASSERT_TRUE(inlineTpl.RenderAsString({}).has_value());
+    EXPECT_EQ("", probe->templateName);
+}
+
+TEST(CallSiteTest, AutoescapeState)
+{
+    auto probe = std::make_shared<SiteProbe>();
+    TemplateEnv env;
+    env.AddGlobal("probe", MakeSiteProbe(probe, true));
+    Template tpl(&env);
+
+    ASSERT_TRUE(tpl.Load("{{ probe() }}").has_value());
+    ASSERT_TRUE(tpl.RenderAsString({}).has_value());
+    EXPECT_FALSE(probe->autoescape);
+
+    ASSERT_TRUE(tpl.Load("{% autoescape true %}{{ probe() }}{% endautoescape %}").has_value());
+    ASSERT_TRUE(tpl.RenderAsString({}).has_value());
+    EXPECT_TRUE(probe->autoescape);
+
+    env.GetSettings().autoescape = true;
+    Template escaping(&env);
+    ASSERT_TRUE(escaping.Load("{{ probe() }}{% autoescape false %}{{ probe() }}{% endautoescape %}").has_value());
+    ASSERT_TRUE(escaping.RenderAsString({}).has_value());
+    EXPECT_FALSE(probe->autoescape);
+    ASSERT_TRUE(escaping.Load("{{ probe() }}").has_value());
+    ASSERT_TRUE(escaping.RenderAsString({}).has_value());
+    EXPECT_TRUE(probe->autoescape);
+}
+
+TEST(CallSiteTest, DefaultWithoutContextArgument)
+{
+    auto probe = std::make_shared<SiteProbe>();
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("page.j2", "{% autoescape true %}{{ probe() }}{% endautoescape %}");
+    TemplateEnv env;
+    env.AddFilesystemHandler(std::string(), fs);
+    env.AddGlobal("probe", MakeSiteProbe(probe, false));
+    auto named = env.LoadTemplate("page.j2");
+    ASSERT_TRUE(named.has_value());
+    ASSERT_TRUE(named->RenderAsString({}).has_value());
+    ASSERT_TRUE(probe->called);
+    EXPECT_EQ("", probe->templateName);
+    EXPECT_FALSE(probe->autoescape);
 }

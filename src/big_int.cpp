@@ -20,6 +20,7 @@
 #include <limits>
 #include <new>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -129,6 +130,38 @@ int DigitValue(char ch)
     return ch - 'A' + 10;
 }
 
+// The magnitude of `digits` (valid in `base` 2-36, no leading zero, not empty) in base 10^9
+Limbs LimbsFromDigits(std::string_view digits, int base)
+{
+    // As many digits at a time as fit 32 bits
+    auto chunkMult = static_cast<uint64_t>(base);
+    size_t chunkSize = 1;
+    while (chunkMult * static_cast<uint64_t>(base) <= std::numeric_limits<uint32_t>::max())
+    {
+        chunkMult *= static_cast<uint64_t>(base);
+        ++chunkSize;
+    }
+    Limbs limbs;
+    limbs.reserve(static_cast<size_t>(static_cast<double>(digits.size()) * std::log10(base) / LimbDigits) + 2);
+    size_t pos = 0;
+    // The first chunk takes the remainder, so that every later one is full
+    size_t take = digits.size() % chunkSize == 0 ? chunkSize : digits.size() % chunkSize;
+    while (pos != digits.size())
+    {
+        uint64_t chunk = 0;
+        uint64_t mult = 1;
+        for (size_t idx = 0; idx != take; ++idx)
+        {
+            chunk = (chunk * static_cast<uint64_t>(base)) + static_cast<uint64_t>(DigitValue(digits[pos + idx]));
+            mult *= static_cast<uint64_t>(base);
+        }
+        MulAdd(limbs, mult, chunk);
+        pos += take;
+        take = chunkSize;
+    }
+    return limbs;
+}
+
 bool IsPowerOfTwo(int base)
 {
     return (base & (base - 1)) == 0;
@@ -213,7 +246,56 @@ InternalValue IntegerFromDigits(std::string_view digits, int base, bool negative
     {
         ThrowTooManyBits();
     }
-    // As many digits at a time as fit 32 bits
+    return MakeBigIntValue(FromLimbs(LimbsFromDigits(digits, base), negative));
+}
+
+BigInt BigInt::FromDigits(std::string_view digits, int base, bool negative)
+{
+    if (base < 2 || base > 36)
+    {
+        throw std::invalid_argument("BigInt::FromDigits: base must be 2 to 36");
+    }
+    if (digits.empty())
+    {
+        throw std::invalid_argument("BigInt::FromDigits: no digits");
+    }
+    for (const char ch : digits)
+    {
+        const bool valid = (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
+        if (!valid || DigitValue(ch) >= base)
+        {
+            throw std::invalid_argument("BigInt::FromDigits: invalid digit for the base");
+        }
+    }
+    const auto first = digits.find_first_not_of('0');
+    if (first == std::string_view::npos)
+    {
+        return BigInt();
+    }
+    digits.remove_prefix(first);
+    // The conversion is quadratic in the length: past the width a Value may hold, refuse before starting
+    if (static_cast<double>(digits.size() - 1) * std::log2(base) >= static_cast<double>(MaxBigIntBits))
+    {
+        throw std::length_error("BigInt::FromDigits: integer is wider than " + std::to_string(MaxBigIntBits) + " bits");
+    }
+    BigInt result;
+    result.m_decimal = FromLimbs(LimbsFromDigits(digits, base), negative);
+    return result;
+}
+
+std::string BigInt::ToDigits(int base) const
+{
+    if (base < 2 || base > 36)
+    {
+        throw std::invalid_argument("BigInt::ToDigits: base must be 2 to 36");
+    }
+    std::string_view magnitude = m_decimal;
+    if (!magnitude.empty() && magnitude.front() == '-')
+    {
+        magnitude.remove_prefix(1);
+    }
+    auto limbs = ToLimbs(magnitude);
+    // Divide by base^chunkSize (within 32 bits) repeatedly; each remainder gives chunkSize digits
     auto chunkMult = static_cast<uint64_t>(base);
     size_t chunkSize = 1;
     while (chunkMult * static_cast<uint64_t>(base) <= std::numeric_limits<uint32_t>::max())
@@ -221,25 +303,38 @@ InternalValue IntegerFromDigits(std::string_view digits, int base, bool negative
         chunkMult *= static_cast<uint64_t>(base);
         ++chunkSize;
     }
-    Limbs limbs;
-    limbs.reserve(static_cast<size_t>(static_cast<double>(digits.size()) * std::log10(base) / LimbDigits) + 2);
-    size_t pos = 0;
-    // The first chunk takes the remainder, so that every later one is full
-    size_t take = digits.size() % chunkSize == 0 ? chunkSize : digits.size() % chunkSize;
-    while (pos != digits.size())
+    std::string reversed;
+    reversed.reserve(static_cast<size_t>(static_cast<double>(magnitude.size()) * BitsPerDigit / std::log2(base)) + chunkSize + 1);
+    auto top = limbs.size();
+    while (top != 0 && limbs[top - 1] == 0)
     {
-        uint64_t chunk = 0;
-        uint64_t mult = 1;
-        for (size_t idx = 0; idx != take; ++idx)
-        {
-            chunk = (chunk * static_cast<uint64_t>(base)) + static_cast<uint64_t>(DigitValue(digits[pos + idx]));
-            mult *= static_cast<uint64_t>(base);
-        }
-        MulAdd(limbs, mult, chunk);
-        pos += take;
-        take = chunkSize;
+        --top;
     }
-    return MakeBigIntValue(FromLimbs(limbs, negative));
+    while (top != 0)
+    {
+        uint64_t rem = 0;
+        for (auto idx = top; idx != 0; --idx)
+        {
+            const uint64_t cur = (rem * LimbBase) + limbs[idx - 1];
+            limbs[idx - 1] = static_cast<uint32_t>(cur / chunkMult);
+            rem = cur % chunkMult;
+        }
+        while (top != 0 && limbs[top - 1] == 0)
+        {
+            --top;
+        }
+        for (size_t idx = 0; idx != chunkSize && (top != 0 || rem != 0); ++idx)
+        {
+            reversed.push_back("0123456789abcdefghijklmnopqrstuvwxyz"[rem % static_cast<uint64_t>(base)]);
+            rem /= static_cast<uint64_t>(base);
+        }
+    }
+    if (reversed.empty())
+    {
+        reversed.push_back('0');
+    }
+    std::reverse(reversed.begin(), reversed.end());
+    return reversed;
 }
 
 InternalValue IntegerFromDouble(double val)

@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <limits>
 #include <new>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -581,4 +582,117 @@ TEST(BigIntBuiltin, MatchesTheBuildOption)
 #else
     EXPECT_EQ(nullptr, builtin);
 #endif
+}
+
+// BigInt in other bases (task 0357 B5)
+
+TEST(BigIntTest, FromDigitsAndToDigitsRoundTrip)
+{
+    const std::string wide(2000, 'f');
+    std::string wideMixed;
+    for (int i = 0; i < 2000; ++i)
+    {
+        wideMixed.push_back("0123456789abcdef"[(i * 7 + 3) % 16]);
+    }
+    wideMixed[0] = '9';
+    struct Row
+    {
+        std::string digits;
+        int base;
+        bool negative;
+        std::string decimal;
+    };
+    const std::vector<Row> rows = {
+        { "0", 16, false, "0" },
+        { "0", 2, true, "0" },
+        { "1", 2, false, "1" },
+        { "1", 36, true, "-1" },
+        { "ff", 16, false, "255" },
+        { "zz", 36, true, "-1295" },
+        { "10000000000000000", 16, false, "18446744073709551616" },
+        { "10000000000000000000000000000000000000000000000000000000000000000", 2, false, "18446744073709551616" },
+        { "7777777777777777777777", 8, false, "73786976294838206463" },
+        { "256", 10, true, "-256" },
+    };
+    for (const auto& row : rows)
+    {
+        const auto value = BigInt::FromDigits(row.digits, row.base, row.negative);
+        EXPECT_EQ(row.decimal, value.ToString()) << row.digits << " base " << row.base;
+        EXPECT_EQ(row.digits.size() > 1 && row.digits[0] == '0' ? row.digits.substr(row.digits.find_first_not_of('0')) : row.digits, value.ToDigits(row.base));
+    }
+
+    // 2^200 in the three bases, via the decimal form
+    const std::string pow200Dec = "1606938044258990275541962092341162602522202993782792835301376";
+    BigInt pow200;
+    ASSERT_TRUE(BigInt::TryParse(pow200Dec, pow200));
+    EXPECT_EQ("1" + std::string(50, '0'), pow200.ToDigits(16));
+    EXPECT_EQ("1" + std::string(200, '0'), pow200.ToDigits(2));
+    EXPECT_EQ(pow200, BigInt::FromDigits(pow200.ToDigits(36), 36, false));
+    EXPECT_EQ(pow200, BigInt::FromDigits("1" + std::string(200, '0'), 2, false));
+    BigInt negPow200;
+    ASSERT_TRUE(BigInt::TryParse("-" + pow200Dec, negPow200));
+    EXPECT_EQ(pow200.ToDigits(16), negPow200.ToDigits(16));
+    EXPECT_EQ(negPow200, BigInt::FromDigits(negPow200.ToDigits(36), 36, true));
+
+    // Thousands of digits, past Python's decimal limit of 4300 digits
+    for (const int base : { 2, 3, 8, 10, 16, 36 })
+    {
+        for (const auto& source : { wide, wideMixed })
+        {
+            std::string digits;
+            for (const char c : source)
+            {
+                digits.push_back(c);
+            }
+            if (base < 16)
+            {
+                for (auto& c : digits)
+                {
+                    c = static_cast<char>('0' + (c % base));
+                }
+                digits[0] = '1';
+            }
+            const auto value = BigInt::FromDigits(digits, base, false);
+            EXPECT_EQ(digits, value.ToDigits(base)) << "base " << base;
+        }
+    }
+    const std::string wider(5000, 'f');
+    const auto huge = BigInt::FromDigits(wider, 16, true);
+    EXPECT_EQ(-1, huge.Sign());
+    EXPECT_GT(huge.ToString().size(), 4300u);
+    EXPECT_EQ(wider, huge.ToDigits(16));
+    EXPECT_EQ(huge, BigInt::FromDigits(huge.ToDigits(10), 10, true));
+}
+
+TEST(BigIntTest, FromDigitsIsCaseInsensitiveAndDropsLeadingZeros)
+{
+    EXPECT_EQ(BigInt::FromDigits("DeadBEEF", 16, false), BigInt::FromDigits("deadbeef", 16, false));
+    EXPECT_EQ("3735928559", BigInt::FromDigits("DEADbeef", 16, false).ToString());
+    EXPECT_EQ("deadbeef", BigInt::FromDigits("DEADBEEF", 16, false).ToDigits(16));
+    EXPECT_EQ("255", BigInt::FromDigits("000ff", 16, false).ToString());
+    EXPECT_EQ("0", BigInt::FromDigits("0000", 16, true).ToString());
+    EXPECT_EQ(0, BigInt::FromDigits("0", 2, true).Sign());
+    EXPECT_EQ("0", BigInt().ToDigits(36));
+    EXPECT_EQ("z", BigInt(35).ToDigits(36));
+    EXPECT_EQ("10", BigInt(36).ToDigits(36));
+}
+
+TEST(BigIntTest, FromDigitsAndToDigitsRejectBadInput)
+{
+    EXPECT_THROW(BigInt::FromDigits("1", 1, false), std::invalid_argument);
+    EXPECT_THROW(BigInt::FromDigits("1", 37, false), std::invalid_argument);
+    EXPECT_THROW(BigInt::FromDigits("1", 0, false), std::invalid_argument);
+    EXPECT_THROW(BigInt::FromDigits("1", -16, false), std::invalid_argument);
+    EXPECT_THROW(BigInt::FromDigits("", 10, false), std::invalid_argument);
+    EXPECT_THROW(BigInt::FromDigits("2", 2, false), std::invalid_argument);
+    EXPECT_THROW(BigInt::FromDigits("g", 16, false), std::invalid_argument);
+    EXPECT_THROW(BigInt::FromDigits("-1", 10, false), std::invalid_argument);
+    EXPECT_THROW(BigInt::FromDigits("+1", 10, false), std::invalid_argument);
+    EXPECT_THROW(BigInt::FromDigits("0x1", 16, false), std::invalid_argument);
+    EXPECT_THROW(BigInt::FromDigits("1_0", 10, false), std::invalid_argument);
+    EXPECT_THROW(BigInt::FromDigits(" 1", 10, false), std::invalid_argument);
+    EXPECT_THROW(BigInt::FromDigits("1\xe9", 36, false), std::invalid_argument);
+    EXPECT_THROW(BigInt::FromDigits(std::string(300000, '1'), 16, false), std::length_error);
+    EXPECT_THROW(BigInt(5).ToDigits(1), std::invalid_argument);
+    EXPECT_THROW(BigInt(5).ToDigits(37), std::invalid_argument);
 }

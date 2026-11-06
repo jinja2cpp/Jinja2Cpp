@@ -1008,6 +1008,24 @@ struct ValuesMap : OrderedMap<std::string, Value>
 
 
 /*!
+ * \brief Where in a template a user-defined callable was called from (Jinja2's `eval_context` and `context.name`)
+ *
+ * Filled in \ref UserCallableParams::site only for a callable that asks for the context (\ref ArgInfo::Context)
+ */
+struct CallSite
+{
+    /*!
+     * \brief Name of the template whose code makes the call: the name it was loaded by from the environment (for an
+     * included, imported or inherited template, the one running the call), empty for a template loaded from a string
+     *
+     * The view is valid during the call only, like \ref UserCallableParams::context
+     */
+    std::string_view templateName;
+    //! Whether autoescaping is on where the call is made, `{% autoescape %}` blocks included (`eval_context.autoescape`)
+    bool autoescape = false;
+};
+
+/*!
  * \brief Information about user-callable parameters passed from Jinja2 call context
  *
  * This structure prepared by the Jinja2C++ engine and filled by information about call parameters gathered from the
@@ -1027,6 +1045,8 @@ struct UserCallableParams
     Value extraKwArgs;
     //! Context object which provides access to the current variables set of the template; valid during the call only
     Value context;
+    //! Where the call is made from; set only when \ref UserCallable::argsInfo has \ref ArgInfo::Context, default otherwise; valid during the call only
+    CallSite site;
     bool paramsParsed = false;
 
     Value operator[](const std::string& paramName) const

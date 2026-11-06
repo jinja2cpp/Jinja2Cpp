@@ -4137,7 +4137,8 @@ public:
     {
     }
 
-    [[nodiscard]] size_t GetSize() const override { return std::numeric_limits<size_t>::max(); }
+    // The number of names GetKeys lists
+    [[nodiscard]] size_t GetSize() const override { return m_context->CollectLookupNames().size(); }
     [[nodiscard]] bool HasValue(const std::string& name) const override
     {
         return static_cast<bool>(m_context->FindValue(name));
@@ -4147,7 +4148,8 @@ public:
         const auto value = m_context->FindValue(name);
         return value ? IntValue2Value(*value) : Value();
     }
-    [[nodiscard]] std::vector<std::string> GetKeys() const override { return std::vector<std::string>(); }
+    // The names a lookup finds, each once, sorted: the scopes, the external and global values and the built-ins
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return m_context->CollectLookupNames(); }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -4597,10 +4599,12 @@ void PrepareUserCallableParams(const ParsedArguments& args, RenderContext& conte
         return;
     }
 
+    bool asksForContext = false;
     for (const auto& argInfo : argsInfo)
     {
         if (argInfo.name.size() > 1 && argInfo.name[0] == '*')
         {
+            asksForContext = asksForContext || argInfo.name == "*context";
             continue;
         }
 
@@ -4629,6 +4633,12 @@ void PrepareUserCallableParams(const ParsedArguments& args, RenderContext& conte
     }
     result.extraPosArgs = Value(std::move(extraPosArgs));
     result.context = GenericMap(std::make_shared<const ContextMapper>(&context));
+    if (asksForContext)
+    {
+        const auto* frame = context.GetTemplateFrame();
+        result.site.templateName = frame ? frame->name : std::string_view();
+        result.site.autoescape = context.IsAutoescape();
+    }
 }
 } // namespace
 

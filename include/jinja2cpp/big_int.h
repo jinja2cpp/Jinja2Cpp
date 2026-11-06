@@ -10,6 +10,8 @@
 #include <type_traits>
 #include <utility>
 
+#include "config.h"
+
 namespace jinja2
 {
 inline namespace v2
@@ -139,6 +141,28 @@ public:
             return false;
         }
     }
+
+    /*!
+     * \brief The number whose magnitude is written by `digits` in `base`, negated when `negative`
+     *
+     * `digits` has the digits of `base` (2 to 36) only, `0`-`9` and `a`-`z` in either case: no sign, prefix,
+     * spaces or underscores, at least one digit. Leading zeros are dropped, and zero is never negative. Unlike
+     * Python's `int(text, base)` it has no limit on the length of a decimal or any other text, but the work grows
+     * with the square of the length.
+     *
+     * \throw std::invalid_argument for a `base` outside 2 to 36, an empty string or a character that is not a
+     * digit of `base`
+     * \throw std::length_error when the number is wider than 2^20 bits, the widest a \ref Value may hold
+     */
+    JINJA2CPP_EXPORT static BigInt FromDigits(std::string_view digits, int base, bool negative);
+
+    /*!
+     * \brief The magnitude in `base` (2 to 36): digits `0`-`9` and lower case `a`-`z`, no sign, prefix or leading
+     * zeros (`"0"` for zero); the sign is \ref Sign
+     *
+     * \throw std::invalid_argument for a `base` outside 2 to 36
+     */
+    JINJA2CPP_EXPORT std::string ToDigits(int base) const;
 
     //! The canonical decimal form, as Python's `str()` prints the number
     [[nodiscard]] const std::string& ToString() const noexcept { return m_decimal; }
