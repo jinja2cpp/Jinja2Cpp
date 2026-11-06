@@ -41,6 +41,7 @@ nanobind_add_module(_jinja2cpp STABLE_ABI NB_STATIC NB_SUPPRESS_WARNINGS NOMINSI
     src/environment.cpp
     src/errors.cpp
     src/loaders.cpp
+    src/template_module.cpp
 )
 # The library's private dependencies too (fmt): the private headers include them
 target_link_libraries(_jinja2cpp PRIVATE ${LIB_TARGET_NAME} ${JINJA2CPP_PRIVATE_LIBS})

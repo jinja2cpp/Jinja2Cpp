@@ -163,6 +163,7 @@ NB_MODULE(_jinja2cpp, module) // NOLINT: nanobind's entry point
     using namespace jinja2cpp_py;
     module.doc() = "Jinja2C++ rendering Jinja2 templates (docs/python.md)";
     BindEnvironment(module);
+    BindTemplateModule(module);
     nb::class_<TemplateValue>(module, "TemplateValue", nb::type_slots(g_templateValueSlots))
         .def("__call__", &TemplateValue::Call)
         .def("__getattr__", &TemplateValue::GetAttr)

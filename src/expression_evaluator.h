@@ -332,6 +332,9 @@ public:
     {
         m_tester = std::move(expr);
     }
+    // The expression, or a null link when a condition guards it (`a if c`): for a tag that
+    // names a template, whose names Jinja2 reads only when they are literal
+    [[nodiscard]] NodeRef<Expression> GetUnguarded() const { return m_tester ? NodeRef<Expression>() : m_expression; }
     InternalValue Evaluate(RenderContext& values) override;
     LookupResult EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? values.Nodes()[m_expression].EvaluateRef(values) : LookupResult(); }
     [[nodiscard]] bool IsPure(const NodeArena& nodes) const override { return m_expression && !m_tester && nodes[m_expression].IsPure(nodes); }

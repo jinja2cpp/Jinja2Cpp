@@ -944,6 +944,7 @@ StatementsParser::ParseResult StatementsParser::ParseExtends(LexScanner& lexer, 
     }
 
     auto renderer = m_nodes.Make<ExtendsStatement>(*expr);
+    m_root.referenced.push_back(*expr);
     m_bodies.Add(renderer, m_tagOffset);
     // A second one stops Jinja2's compile: a render fails there, nothing after it is checked
     if (m_root.knownExtends && statementsInfo.size() == 1)
@@ -1368,6 +1369,7 @@ StatementsParser::ParseResult StatementsParser::ParseInclude(LexScanner& lexer, 
         m_names.AddReadOfAll();
     }
     auto renderer = m_nodes.Make<IncludeStatement>(isIgnoreMissing, isWithContext);
+    m_root.referenced.push_back(valueExpr);
     m_nodes[renderer].SetIncludeNamesExpr(valueExpr, m_nodes[valueExpr].GetConstant(m_nodes) != nullptr);
     m_bodies.Add(renderer, m_tagOffset);
 
@@ -1433,6 +1435,7 @@ StatementsParser::ParseResult StatementsParser::ParseImport(LexScanner& lexer, S
         m_names.AddReadOfAll();
     }
     auto renderer = m_nodes.Make<ImportStatement>(isWithContext);
+    m_root.referenced.push_back(valueExpr);
     m_nodes[renderer].SetImportNameExpr(valueExpr);
     const auto namespaceName = lexer.GetAsString(name);
     const auto namespaceText = m_nodes.MakeText(namespaceName);
@@ -1573,6 +1576,7 @@ StatementsParser::ParseResult StatementsParser::ParseFrom(LexScanner& lexer, Sta
         m_names.AddReadOfAll();
     }
     auto renderer = m_nodes.Make<ImportStatement>(isWithContext);
+    m_root.referenced.push_back(valueExpr);
     m_nodes[renderer].SetImportNameExpr(valueExpr);
 
     // Every `name as alias` pair is kept in source order; a name imported twice binds both aliases

@@ -544,6 +544,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/arena_switch_test.cpp
         test/ordered_map_test.cpp
         test/recursion_limits_test.cpp
+        test/referenced_templates_test.cpp
         test/slot_frame_test.cpp
         test/statements_tets.cpp
         test/support_types_test.cpp

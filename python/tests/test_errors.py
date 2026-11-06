@@ -15,7 +15,9 @@ def raised(module, source, loader=None, **context):
 def test_hierarchy_matches_jinja2():
     for name in ("TemplateNotFound", "TemplatesNotFound", "TemplateSyntaxError", "TemplateAssertionError", "TemplateRuntimeError", "UndefinedError", "SecurityError", "FilterArgumentError"):
         ours, theirs = getattr(jinja2cpp, name), getattr(jinja2.exceptions, name)
-        assert [c.__name__ for c in ours.__mro__] == [c.__name__ for c in theirs.__mro__], name
+        # Without Jinja2's own classes (they are bases too), the order is Jinja2's
+        assert [c.__name__ for c in ours.__mro__ if not c.__module__.startswith("jinja2.")] == [c.__name__ for c in theirs.__mro__], name
+        assert issubclass(ours, theirs)
 
 
 @pytest.mark.parametrize("source", ["{% if %}", "{{ 1 +* 2 }}", "a\nb\n{% for x in %}", "{% endif %}", "{{ x "])

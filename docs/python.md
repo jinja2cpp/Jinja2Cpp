@@ -2,8 +2,9 @@
 
 `jinja2cpp` is a Python module that renders Jinja2 templates with the Jinja2C++ engine. Its
 API is Jinja2's, so `import jinja2cpp as jinja2` works for the subset below. This page
-describes phase P1b of docs/tasks/0248 (docs/tasks/0353). The rest of the subset, the fallback
-to real Jinja2, the sandbox and the wheels are later phases (0354-0357).
+describes phases P1b and P2 part A of docs/tasks/0248 (docs/tasks/0353, 0354). The decorators and
+i18n, the fallback to real Jinja2, the sandbox, streaming and the wheels are later phases
+(0354-0357).
 
 ## Install and test
 
@@ -49,8 +50,25 @@ engines on a Release build of the module.
   `undefined`, `finalize`, `loader`, `cache_size`, `auto_reload`, and the extensions
   `jinja2.ext.do` and `jinja2.ext.loopcontrols` (by name or class, Jinja2's or ours).
   `optimized`, `bytecode_cache` and `enable_async=False` are accepted and change nothing.
-- `env.from_string`, `env.get_template`, `Template(source, **options)`, and
-  `render(*args, **kwargs)` with Jinja2's `dict(*args, **kwargs)` rule.
+- `env.from_string`, `env.get_template(name, parent=None, globals=None)`, `Template(source, **options)`,
+  and `render(*args, **kwargs)` with Jinja2's `dict(*args, **kwargs)` rule.
+- Subclasses of `Environment` and `Template` in Python, as in Jinja2: an `__init__` that
+  forwards its keyword arguments, attributes of any name, and `env.template_class` (the class
+  `from_string`, `get_template` and `select_template` make; a subclass of `jinja2cpp.Template`).
+  `get_template(name, parent=...)` and `select_template` call `env.join_path`, which a subclass
+  may override.
+- `env.select_template`, `env.get_or_select_template`, `env.list_templates(extensions=None,
+  filter_func=None)` and `env.join_path`.
+- `template.generate()` and `template.stream()` with `TemplateStream` (`dump`,
+  `enable_buffering`, `disable_buffering`), which give the whole output as one item until
+  streaming lands (docs/tasks/0355).
+- `template.make_module(vars=None, shared=False, locals=None)` and `template.module`, from the
+  engine's `Template::MakeModule`: the exports are attributes of a `TemplateModule`, `str()` is
+  the rendered body, `__html__` is the same as Markup. An exported macro (also inside an exported
+  list or dict) is a callable that keeps its module, the template and the environment alive, so
+  it works after every other reference is gone.
+- `jinja2cpp.meta.find_undeclared_variables` and `find_referenced_templates`, which take the
+  result of `env.parse(source, name=None, filename=None)` (an opaque object).
 - `env.globals`, `env.filters` and `env.tests` as dicts of Python values and callables.
   A template binds the filters and tests when it loads, as Jinja2 does; globals are read at
   each render, and imported templates see them.
@@ -59,8 +77,17 @@ engines on a Release build of the module.
   instance of the environment's class.
 - `DictLoader` and `FileSystemLoader`, read by the engine (the file system through
   `ConfinedFileSystem`, which does not follow a link out of a search directory), and any other
-  loader through its `get_source`. Jinja2's loader classes work too.
+  loader through its `get_source`: `ChoiceLoader`, `PrefixLoader`, `FunctionLoader` and
+  `PackageLoader` (a directory package or one imported from a zip file), also nested, and any
+  `BaseLoader` subclass. Jinja2's loader classes work too. The `uptodate` function a `get_source`
+  returns decides on a reload when `auto_reload` is on, as in Jinja2. `loader.load(env, name)`
+  compiles a template from `get_source`. `ModuleLoader` raises `UnsupportedError`: it needs
+  Jinja2's compiled modules.
 - Jinja2's exception classes with their attributes (`lineno`, `name`, `filename`, `source`).
+  When Jinja2 is importable each is also a subclass of the Jinja2 class of its name, so
+  `except jinja2.TemplateNotFound` catches ours; without Jinja2 they stand alone.
+  `jinja2cpp.UnsupportedError` is a `TemplateError` and a `NotImplementedError`: what the subset
+  does not do raises it or `NotImplementedError`.
   An exception that a Python filter, test, global or attribute raises is raised as itself.
 - Ctrl-C (KeyboardInterrupt) stops a long render. The GIL is held for the whole render.
 
@@ -106,6 +133,21 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
 - An environment keeps every filter, test, `finalize`, `autoescape` callable and loader it was
   ever given alive for as long as it lives, because a template loaded earlier may still call
   one: replacing `env.filters` entries in a loop grows the environment (0406).
-- Not yet: the sandbox, `pass_context` and the other decorators, i18n, `make_module`,
-  `select_template`, the other loaders' engine paths, custom extensions, async, the fallback to
-  real Jinja2 (docs/tasks/0354).
+- `{% include %}`, `{% import %}`, `{% from %}` and `{% extends %}` read the loader through the
+  engine, not through `env.get_template(name, parent=...)`, so an overridden `join_path` is not
+  called for them (Jinja2 calls it with the including template's name); `get_template` and
+  `select_template` call it (0410).
+- `make_module` and `module` give the exports as Python values the host API can carry: a
+  `namespace` becomes a dict, a `cycler` a dict, a `range` a list, a tuple a list, an `Undefined` is
+  `None`, a dict key that is no str is spelled as `str()` spells it, and a Python object (not a str, number,
+  list, dict, Markup or callable) is read through the host adapter. The params of a module are
+  copied (Jinja2's module shares the dicts), and `shared=True` leaves out the environment's
+  globals but not the engine's own (`range`, `dict`, `cycler`, `namespace`, `lipsum`) (0411).
+- `env.parse` is a full load: it also reports what the compile reports (an unknown filter or test
+  raises `TemplateAssertionError`), and returns an opaque object that only `jinja2cpp.meta`
+  takes, not Jinja2's node tree. `find_referenced_templates` gives the names of the tags in
+  source order, `None` for a name that is not a literal.
+- `generate()` gives the output as one item, so `stream().enable_buffering(n)` has nothing to
+  combine and an error in the template surfaces at the first `next()` (0355).
+- Not yet: the sandbox, `pass_context` and the other decorators, i18n, custom extensions, async,
+  the fallback to real Jinja2 (docs/tasks/0354).

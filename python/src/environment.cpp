@@ -3,6 +3,7 @@
 #include "convert.h"
 #include "errors.h"
 #include "loaders.h"
+#include "poll.h"
 
 #include "host_object.h"
 #include "internal_value.h"
@@ -24,33 +25,6 @@ using namespace nb::literals;
 
 namespace
 {
-// Ctrl-C during a render: the engine calls this every few steps (detail::t_hostPoll), and
-// KeyboardInterrupt stops the render as it stops Python Jinja2's
-void PollSignals()
-{
-    if (PyErr_CheckSignals() != 0)
-    {
-        throw nb::python_error();
-    }
-}
-
-class HostPollScope
-{
-public:
-    HostPollScope() noexcept
-        : m_saved(std::exchange(jinja2::detail::t_hostPoll, &PollSignals))
-    {
-    }
-    ~HostPollScope() { jinja2::detail::t_hostPoll = m_saved; }
-    HostPollScope(const HostPollScope&) = delete;
-    HostPollScope& operator=(const HostPollScope&) = delete;
-    HostPollScope(HostPollScope&&) = delete;
-    HostPollScope& operator=(HostPollScope&&) = delete;
-
-private:
-    jinja2::detail::HostPoll m_saved;
-};
-
 bool Truth(nb::handle value)
 {
     const int truth = PyObject_IsTrue(value.ptr());
@@ -568,39 +542,56 @@ ErrorSource PyEnvironment::SourceOf(const std::string& name) const
     return source;
 }
 
-nb::object PyEnvironment::MakeTemplate(jinja2::Template tpl, nb::handle globals, nb::object name, nb::object filename)
+nb::object PyEnvironment::MakeTemplate(jinja2::Template tpl, nb::handle globals, nb::object name, nb::object filename, nb::handle templateClass)
 {
     auto self = nb::find(this);
     // A copy, as Jinja2's make_globals takes a ChainMap of it
     // (one mapping per template, which Template.globals shows and Render reads)
     nb::object templateGlobals = globals.is_none() ? nb::object(nb::dict()) : Names().dictType(globals);
-    return nb::cast(new PyTemplate(std::move(tpl), nb::borrow(self), std::move(templateGlobals), std::move(name), std::move(filename)), nb::rv_policy::take_ownership);
+    if (!templateClass.is_valid() || !PyType_Check(templateClass.ptr()) || !PyType_IsSubtype(reinterpret_cast<PyTypeObject*>(templateClass.ptr()), reinterpret_cast<PyTypeObject*>(nb::type<PyTemplate>().ptr())))
+    {
+        RaiseTypeError("template_class must be jinja2cpp.Template or a subclass of it");
+    }
+    // Like Jinja2's Template.from_code: an instance of the class, without calling its __init__
+    auto made = std::make_unique<PyTemplate>(std::move(tpl), nb::borrow(self), std::move(templateGlobals), std::move(name), std::move(filename));
+    nb::object instance = nb::inst_take_ownership(templateClass, made.get());
+    made.release(); // NOLINT(bugprone-unused-return-value): the instance owns it now
+    return instance;
 }
 
-jinja2::Template PyEnvironment::Load(nb::handle source)
+jinja2::Template PyEnvironment::Load(nb::handle source, const std::string& name)
 {
     auto& env = Prepared();
     const auto text = Utf8(source);
-    auto result = env.FromString(std::string_view(text));
+    auto result = env.FromString(std::string_view(text), name);
     if (!result)
     {
         ErrorSource where;
         where.source = nb::borrow(source);
+        if (!name.empty())
+        {
+            where.name = MakeStr(name);
+        }
         RaiseError(result.error(), where);
     }
     return std::move(result).value();
 }
 
-nb::object PyEnvironment::FromString(nb::handle source, nb::handle globals)
+nb::object PyEnvironment::FromString(nb::handle source, nb::handle globals, nb::handle templateClass)
 {
     if (nb::isinstance<PyTemplate>(source))
     {
         return nb::borrow(source);
     }
-    return MakeTemplate(Load(source), globals, nb::none(), nb::none());
+    return MakeTemplate(Load(source), globals, nb::none(), nb::none(), templateClass);
 }
 
-nb::object PyEnvironment::GetTemplate(nb::handle name, nb::handle /*parent*/, nb::handle globals)
+nb::object PyEnvironment::Compile(nb::handle source, nb::handle name, nb::handle filename, nb::handle globals, nb::handle templateClass)
+{
+    return MakeTemplate(Load(source, name.is_none() ? std::string() : Utf8(name)), globals, nb::borrow(name), nb::borrow(filename), templateClass);
+}
+
+nb::object PyEnvironment::LoadTemplate(nb::handle name, nb::handle globals, nb::handle templateClass)
 {
     if (nb::isinstance<PyTemplate>(name))
     {
@@ -632,7 +623,7 @@ nb::object PyEnvironment::GetTemplate(nb::handle name, nb::handle /*parent*/, nb
         RaiseError(error, SourceOf(text));
     }
     auto where = SourceOf(text);
-    return MakeTemplate(std::move(result).value(), globals, nb::borrow(name), where.filename);
+    return MakeTemplate(std::move(result).value(), globals, nb::borrow(name), where.filename, templateClass);
 }
 
 int PyEnvironment::Traverse(visitproc visit, void* arg) const
@@ -676,8 +667,8 @@ void PyEnvironment::Clear() noexcept
     m_kept.clear();
 }
 
-PyTemplate::PyTemplate(nb::handle source, nb::kwargs kwargs)
-    : m_environment(nb::cast(new PyEnvironment(kwargs), nb::rv_policy::take_ownership))
+PyTemplate::PyTemplate(nb::handle source, nb::handle environment, nb::kwargs kwargs)
+    : m_environment(environment.is_none() ? nb::cast(new PyEnvironment(kwargs), nb::rv_policy::take_ownership) : nb::borrow(environment))
     , m_globals(nb::dict())
     , m_name(nb::none())
     , m_filename(nb::none())
@@ -700,12 +691,7 @@ PyTemplate::PyTemplate(jinja2::Template tpl, nb::object environment, nb::object 
 
 nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
 {
-    if (!m_environment.is_valid() || m_environment.is_none())
-    {
-        RaiseTemplateRuntimeError("the template was cleared by the garbage collector");
-    }
-    auto& env = nb::cast<PyEnvironment&>(m_environment);
-    env.CheckAlive();
+    auto& env = LiveEnvironment();
     // dict(*args, **kwargs), as Jinja2's render
     jinja2::InternalValueMap params;
     if (args.size() > 1)
@@ -767,18 +753,30 @@ void BindEnvironment(nb::module_& module)
 {
     auto environment = nb::class_<PyEnvironment>(module, "Environment", nb::type_slots(g_environmentSlots), nb::is_weak_referenceable())
                            .def(nb::init<nb::kwargs>())
+                           // The Python layer (jinja2cpp/environment.py) has Jinja2's from_string,
+                           // get_template and the rest, and passes the template class
                            .def(
-                               "from_string",
-                               [](PyEnvironment& self, nb::handle source, nb::handle globals, nb::handle /*templateClass*/) { return self.FromString(source, globals); },
+                               "_from_string",
+                               [](PyEnvironment& self, nb::handle source, nb::handle globals, nb::handle templateClass) { return self.FromString(source, globals, templateClass); },
                                "source"_a,
-                               "globals"_a = nb::none(),
-                               "template_class"_a = nb::none())
+                               "globals"_a.none(),
+                               "template_class"_a)
                            .def(
-                               "get_template",
-                               [](PyEnvironment& self, nb::handle name, nb::handle parent, nb::handle globals) { return self.GetTemplate(name, parent, globals); },
+                               "_load",
+                               [](PyEnvironment& self, nb::handle name, nb::handle globals, nb::handle templateClass) { return self.LoadTemplate(name, globals, templateClass); },
                                "name"_a,
-                               "parent"_a = nb::none(),
-                               "globals"_a = nb::none())
+                               "globals"_a.none(),
+                               "template_class"_a)
+                           .def(
+                               "_compile",
+                               [](PyEnvironment& self, nb::handle source, nb::handle name, nb::handle filename, nb::handle globals, nb::handle templateClass) {
+                                   return self.Compile(source, name, filename, globals, templateClass);
+                               },
+                               "source"_a,
+                               "name"_a.none(),
+                               "filename"_a.none(),
+                               "globals"_a.none(),
+                               "template_class"_a)
                            .def_prop_rw(
                                "globals", [](const PyEnvironment& self) { return self.GetDict("globals"); }, [](PyEnvironment& self, nb::handle value) { self.SetDict("globals", value); })
                            .def_prop_rw(
@@ -793,8 +791,11 @@ void BindEnvironment(nb::module_& module)
     }
 
     nb::class_<PyTemplate>(module, "Template", nb::type_slots(g_templateSlots), nb::is_weak_referenceable())
-        .def(nb::init<nb::handle, nb::kwargs>(), "source"_a, "kwargs"_a)
+        .def(nb::init<nb::handle, nb::handle, nb::kwargs>(), "source"_a, "_environment"_a.none() = nb::none(), "kwargs"_a)
         .def("render", &PyTemplate::Render)
+        .def("_make_module", &PyTemplate::MakeModule, "params"_a)
+        .def("_undeclared", &PyTemplate::FindUndeclared)
+        .def("_referenced", &PyTemplate::FindReferenced)
         .def_prop_ro("environment", &PyTemplate::Environment)
         .def_prop_ro("name", &PyTemplate::Name)
         .def_prop_ro("filename", &PyTemplate::Filename)
