@@ -12,3 +12,11 @@ reflect.methods.alias_set_item_kept           output      0212 a JSON value read
 reflect.statements.for_ctx_kept_length_append_in_body  output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): l.append() misses the list the loop iterates
 reflect.statements.for_ctx_length_after_append  output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): l.append() misses the list the loop iterates
 reflect.statements.for_pop_context_list       output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): l.pop() misses the list the loop iterates
+reflect.statements.for_last_ctx_append_after_read output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): l.append misses the list the loop iterates
+reflect.statements.for_last_ctx_clear_after_read output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): l.clear() misses the list the loop iterates
+reflect.statements.for_last_ctx_include_append output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): l.append in the include misses the list the loop iterates
+reflect.statements.for_last_ctx_length_then_append output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): l.append misses the list the loop iterates
+reflect.statements.for_last_ctx_macro_append  output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): q.append in the macro misses the list the loop iterates
+reflect.statements.for_last_ctx_pop_front     output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): l.pop(0) misses the list the loop iterates
+reflect.statements.for_last_ctx_sort          output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): l.sort() misses the list the loop iterates
+reflect.statements.for_pop_context_list_last  output      0212 a JSON value read twice gives two accessors until 0049 P5's stable identity (moved to 0212): l.pop() misses the list the loop iterates

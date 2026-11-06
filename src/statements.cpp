@@ -858,8 +858,12 @@ public:
         return m_state == val->m_state;
     }
 
+    // The numbers and flags are written straight into `value`, and a `last` already peeked
+    // read in place; the rest is out of line (GetOtherLoopAttr), so that the common reads pay
+    // no stack frame for the callables and temporaries the others make (docs/tasks/0391)
     bool GetLoopAttr(LoopAttr attr, InternalValue& value) const override
     {
+        auto& state = *m_state;
         switch (attr)
         {
         // The neighbouring items share the loop's data, and `changed` makes a callable:
@@ -870,10 +874,37 @@ public:
         case LoopAttr::Changed:
         case LoopAttr::Call:
             return false;
-        default:
-            value = GetProperty(attr);
+        case LoopAttr::Index:
+            value.SetImmediate(static_cast<int64_t>(state.index0 + 1));
             return true;
+        case LoopAttr::Index0:
+            value.SetImmediate(static_cast<int64_t>(state.index0));
+            return true;
+        case LoopAttr::First:
+            value.SetImmediate(state.index0 == 0);
+            return true;
+        case LoopAttr::Last:
+            state.Peek();
+            value.SetImmediate(state.isLast);
+            return true;
+        case LoopAttr::Length:
+            if (!state.listSize || state.sizeOfList)
+            {
+                break;
+            }
+            value.SetImmediate(static_cast<int64_t>(*state.listSize));
+            return true;
+        case LoopAttr::Depth:
+            value.SetImmediate(static_cast<int64_t>(state.level) + 1);
+            return true;
+        case LoopAttr::Depth0:
+            value.SetImmediate(static_cast<int64_t>(state.level));
+            return true;
+        default:
+            break;
         }
+        GetOtherLoopAttr(attr, value);
+        return true;
     }
 
 private:
@@ -972,6 +1003,8 @@ private:
         }
         return InternalValue();
     }
+
+    JINJA2CPP_NOINLINE_INLINE void GetOtherLoopAttr(LoopAttr attr, InternalValue& value) const { value = GetProperty(attr); }
 
     LoopState* m_state;
     // Null for the accessor of a LoopFrame, which the frame owns
