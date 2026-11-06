@@ -23,10 +23,6 @@ struct UndefinedValue;
 // A value the host handed over as a value of the engine (internal_value.cpp)
 InternalValue Value2IntValue(Value&& val);
 
-// The engine's value of a GenericMap that carries a host object (IMapItemAccessor::AsHostObject is not null): a host
-// map over the bridge, or undefined where the object is MakeUndefined's carrier
-InternalValue HostMapToInternal(const GenericMap& map);
-
 // An undefined value of the engine as MakeUndefined describes it
 Value UndefinedToHost(const UndefinedValue& undefined);
 

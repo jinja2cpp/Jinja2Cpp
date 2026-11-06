@@ -1680,7 +1680,9 @@ MapAdapter CreateMapAdapter(GenericMap&& values);
 // The value of a host's map: a map over its accessor, or, where the accessor carries a host object
 // (IMapItemAccessor::AsHostObject, public_host_object.h), the object as the engine reads it. The
 // one virtual call is all a native map pays for the check
-// Defined in public_host_object.cpp; out of line, as few maps carry an object
+// The engine's value of a GenericMap that carries a host object (IMapItemAccessor::AsHostObject is not null): a host
+// map over the bridge, or undefined where the object is MakeUndefined's carrier. Out of line in public_host_object.cpp,
+// as few maps carry one
 InternalValue HostMapToInternal(const GenericMap& map);
 inline InternalValue MapValueOf(const GenericMap& values)
 {
