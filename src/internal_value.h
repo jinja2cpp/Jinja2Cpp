@@ -103,6 +103,13 @@ struct GenericAccessorAccess
     static const std::shared_ptr<const IListItemAccessor>& Get(const GenericList& list) noexcept { return list.m_accessor; }
     static const std::shared_ptr<const IMapItemAccessor>& Get(const GenericMap& map) noexcept { return map.m_accessor; }
 };
+
+// The generation of a jinja2::UserCallable, which its copies share: UserCallable::IsEqual as a
+// number, for a dict key (Callable::GetIdentity, docs/tasks/0212)
+struct UserCallableAccess
+{
+    static uint64_t Generation(const UserCallable& callable) noexcept { return callable.m_counter; }
+};
 } // namespace detail
 
 // A list value that is a Python iterator, not a sequence: the generator a lazy filter returns
@@ -115,7 +122,15 @@ enum class IteratorKind : uint8_t
     ListReverse,
     TupleReverse,
     RangeIterator,
-    DictReverseKey
+    DictReverseKey,
+    // Generators named by the Jinja2 function that makes them, which their repr prints
+    // (<generator object select_or_reject at 0x...>, docs/tasks/0387)
+    SelectOrReject,
+    MapGenerator,
+    BatchGenerator,
+    SliceGenerator,
+    UniqueGenerator,
+    ItemsGenerator
 };
 
 // The base of every object a value owns: a long string, a list or map accessor, a pair, a
@@ -214,7 +229,7 @@ private:
     static constexpr uint8_t TraverseFlag = 4;
     static constexpr uint8_t GlobalFlag = 8;
     static constexpr uint8_t IteratorShift = 4;
-    static constexpr uint8_t IteratorMask = 0x70;
+    static constexpr uint8_t IteratorMask = 0xF0;
     mutable std::atomic<unsigned> m_refCount{ 0 };
     uint8_t m_flags = 0;
     // In the padding after m_flags, so that the object keeps its size
@@ -576,10 +591,12 @@ struct IListAccessorEnumerator : virtual IComparable
 
 using ListAccessorEnumeratorPtr = types::ValuePtr<IListAccessorEnumerator>;
 
-static_assert(static_cast<uint8_t>(IteratorKind::DictReverseKey) < 8, "IteratorKind fits three bits of ValueObject's flags");
+static_assert(static_cast<uint8_t>(IteratorKind::ItemsGenerator) < 16, "IteratorKind fits four bits of ValueObject's flags");
 
 // The Python type of an iterator (generator, list_reverseiterator, ...), null for None
 const char* IteratorTypeName(IteratorKind kind) noexcept;
+// The function a generator's repr names (select_or_reject); null for the other kinds
+const char* GeneratorFunctionName(IteratorKind kind) noexcept;
 
 // The arguments of a range() call, kept so that the range prints as range(0, 3)
 struct RangeInfo
@@ -1337,6 +1354,16 @@ public:
 
     ~InternalValue() = default;
 
+    // Replaces the value with a number or a bool, written in place rather than moved from a
+    // temporary: for the hot attribute reads of LoopAccessor::GetLoopAttr (docs/tasks/0391)
+    template<typename T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0>
+    JINJA2CPP_HOT_INLINE void SetImmediate(T val) noexcept
+    {
+        ValueObjectPtr old;
+        old.swap(m_obj);
+        m_imm = InternalValue(val).m_imm;
+    }
+
     void SetParentData(const InternalValue& val);
 
     [[nodiscard]] bool ShouldExtendLifetime() const
@@ -1883,6 +1910,8 @@ public:
     [[nodiscard]] virtual std::string Repr() const = 0;
 };
 
+struct BoundMethodCall;
+
 class Callable
 {
 public:
@@ -1983,8 +2012,28 @@ public:
     void SetRepr(const char* repr) { m_repr = repr; }
     [[nodiscard]] const char* GetRepr() const { return m_repr; }
 
-    // Python compares functions and macros by identity: the copies of one callable share its
-    // function, and a user callable converted from the same jinja2::UserCallable is the same
+    // Who the callable is, as Python hashes and compares (==) a function or a method: dict keys
+    // (MakeDictKey) and IsEqual both read it, so the two cannot disagree (docs/tasks/0212)
+    struct Identity
+    {
+        // The function the copies share; for a bound method (SetBoundMethod), the object
+        const void* object = nullptr;
+        // A bound method's name (SetBoundMethod); null otherwise
+        const char* method = nullptr;
+        // A method bound to a value (BoundMethodCall): the function and the receiver decide
+        const BoundMethodCall* call = nullptr;
+        // A user callable: the generation of its jinja2::UserCallable, as each read of one from a
+        // host container converts it anew (object is null then)
+        uint64_t userCallable = 0;
+    };
+    [[nodiscard]] Identity GetIdentity() const;
+
+    // Python's ==: functions and macros equal themselves (the copies of one callable share its
+    // function), a user callable converted from the same jinja2::UserCallable is the same, and
+    // two reads of a method equal each other when their receivers are the same (l.append)
+    [[nodiscard]] bool IsEqual(const Callable& other) const;
+    // Python's `is` (sameas): as IsEqual, except that two reads of a method bound to a value
+    // are two objects, made anew on each read
     [[nodiscard]] bool IsSame(const Callable& other) const;
 
 private:

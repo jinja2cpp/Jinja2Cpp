@@ -542,9 +542,9 @@ struct PrettyPrinter : visitors::BaseVisitor<std::string>
     {
         CheckStack();
         std::string str;
-        if (list.GetRangeInfo())
+        if (list.GetRangeInfo() || list.GetIteratorKind() != IteratorKind::None)
         {
-            // A range prints as its repr: range(0, 3)
+            // A range prints as its repr: range(0, 3), a generator as <generator object ...>
             visitors::ValueRenderer<char>(str, true)(list);
             return str;
         }
@@ -1019,6 +1019,11 @@ private:
         }
         else if (auto list = AsList(value))
         {
+            if (const char* iterator = IteratorTypeName(list->GetIteratorKind()))
+            {
+                // A generator or reversed() iterator is no list to json.dumps (docs/tasks/0387)
+                throw TemplateRuntimeError("Object of type "s + iterator + " is not JSON serializable");
+            }
             WriteContainer('[', ']', *list, level, [this, level](const InternalValue& item) { WriteValue(item, level + 1); });
         }
         else if (auto map = AsMap(value))
@@ -1057,6 +1062,11 @@ private:
                 Append(m_keySeparator);
                 WriteValue(entries[item.second].value, level + 1);
             });
+        }
+        else if (const auto* callable = GetIf<Callable>(&value))
+        {
+            // json.dumps names the callable's type (docs/tasks/0368)
+            throw TemplateRuntimeError("Object of type "s + visitors::PythonTypeName(*callable) + " is not JSON serializable");
         }
         else
         {
@@ -1710,14 +1720,23 @@ InternalValue XmlAttrFilter::Filter(const InternalValue& baseVal, RenderContext&
 
     // Port of Jinja2's do_xmlattr: key="escaped str(value)" in the mapping's order, None and
     // undefined values left out. A macro, a class among the globals and a bound method print
-    // their repr; other callables have no str() here, Python's names an address (docs/tasks/0305)
+    // their repr, and so do lipsum and a value's method (docs/tasks/0368); a host callable has no
+    // str() here, Python's names an address (docs/tasks/0305)
     std::string result;
     for (auto& [keyValue, value] : map->GetEntries())
     {
-        const auto* callable = GetIf<Callable>(&value);
-        if (IsEmpty(value) || (callable && callable->GetKind() != Callable::Macro && !callable->GetRepr() && !callable->GetBoundReceiver()))
+        if (IsEmpty(value))
         {
             continue;
+        }
+        if (const auto* callable = GetIf<Callable>(&value))
+        {
+            std::string text;
+            visitors::ValueRenderer<char>(text, false)(*callable);
+            if (text.empty())
+            {
+                continue;
+            }
         }
         // Jinja2 searches the key for whitespace with a regular expression, which only takes text
         if (!IsStringValue(keyValue))

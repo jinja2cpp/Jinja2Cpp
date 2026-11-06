@@ -3443,6 +3443,76 @@
    "env": {},
    "templates": {},
    "output": "F|T|T|5"
+  },
+  {
+   "id": "operators.bound_method_equals",
+   "template": "{{ 'a'.upper == 'a'.upper }}|{% set l = [1] %}{{ l.append == l.append }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "True|True"
+  },
+  {
+   "id": "operators.range_equals_list",
+   "template": "{{ range(3) == [0, 1, 2] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "output": "False"
+  },
+  {
+   "id": "operators.range_concat",
+   "template": "{{ range(3) + [1] }}",
+   "context": {
+    "x": 3,
+    "y": 2.5,
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "s": "Hello",
+    "d": {
+     "a": 1
+    },
+    "n": null,
+    "z": 0
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "unsupported operand type(s) for +: 'range' and 'list'"
+   }
   }
  ]
 }

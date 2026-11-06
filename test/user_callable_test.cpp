@@ -618,10 +618,10 @@ INSTANTIATE_TEST_SUITE_P(UserDefinedFilter, UserCallableFilterTest, ::testing::V
                             InputOutputPair{"'Hello World' | surround('### ', ' ###')",    "### Hello World ###"},
                             InputOutputPair{"'Hello World' | joiner('1', '2', '3', delim=', ')", "Hello World, 1, 2, 3"},
                             InputOutputPair{"'Hello World' | joiner(delim=', ')", "Hello World"},
-                            InputOutputPair{"('A', 'B', 'C') | map('surround', before='> ', after=' <') | pprint", "['> A <', '> B <', '> C <']"},
+                            InputOutputPair{"('A', 'B', 'C') | map('surround', before='> ', after=' <') | list | pprint", "['> A <', '> B <', '> C <']"},
                             InputOutputPair{"'str1' if 'str1' is tester('str1') else 'str2'", "str1"},
                             InputOutputPair{"'str1' if 'str3' is tester(pattern='str1') else 'str2'", "str2"},
-                            InputOutputPair{"('str1', 'A', 'str1', 'B', 'str1', 'C') | select('tester', 'str1') | map('surround', before='> ', after=' <') | pprint", "['> str1 <', '> str1 <', '> str1 <']"}
+                            InputOutputPair{"('str1', 'A', 'str1', 'B', 'str1', 'C') | select('tester', 'str1') | map('surround', before='> ', after=' <') | list | pprint", "['> str1 <', '> str1 <', '> str1 <']"}
                             ));
 // clang-format on
 
@@ -1364,5 +1364,32 @@ TEST(UserCallableTestSingle, PerArgumentDispatch)
         auto resultW = tplW.RenderAsString(params);
         ASSERT_TRUE(resultW) << source << ": " << ConvertString<std::string>(resultW.error().ToString());
         EXPECT_EQ(ConvertString<std::wstring>(std::string(row.expected)), resultW.value()) << source;
+    }
+}
+
+// A user callable is a dict key by the jinja2::UserCallable it was converted from, however it was
+// read: each read from a host container converts it anew (docs/tasks/0212)
+TEST(UserCallableTestSingle, UserCallableAsDictKey)
+{
+    auto f = MakeCallable([](const Value& x) { return x; }, ArgInfo{ "x" });
+    auto g = MakeCallable([](const Value& x) { return x; }, ArgInfo{ "x" });
+    ValuesMap params{ { "f", f }, { "fs", ValuesList{ f, g } }, { "fm", ValuesMap{ { "f", f } } } };
+    struct Row
+    {
+        const char* source;
+        const char* expected;
+    };
+    const Row rows[] = {
+        { "{{ {f: 1}[f] }}|{{ f in {f: 1} }}|{{ {f: 1, f: 2}|length }}", "1|True|1" },
+        { "{{ {fs[0]: 1}[fs[0]] }}|{{ {fm.f: 1}[fm.f] }}|{{ {f: 1}[fm.f] }}|{{ {fs[0]: 1}[fs|first] }}", "1|1|1|1" },
+        { "{{ {fs[0]: 1, fs[0]: 2}|length }}|{{ {fs[0]: 1, fs[1]: 2}|length }}|{{ fs[1] in {f: 1} }}", "1|2|False" },
+    };
+    for (const auto& row : rows)
+    {
+        Template tpl;
+        ASSERT_TRUE(tpl.Load(row.source)) << row.source;
+        auto result = tpl.RenderAsString(params);
+        ASSERT_TRUE(result) << row.source << ": " << result.error().ToString();
+        EXPECT_EQ(row.expected, result.value()) << row.source;
     }
 }

@@ -3,6 +3,6 @@
 
 filters.select_single_pass              output      0101 deliberate: a select/map/reject result can be iterated again; a Python generator is empty the second time
 wide.filters.format_c_surrogate         output      0106 deliberate: % formats in UTF-8, where a lone surrogate from %c cannot survive the conversion back to a wide string
-filters.lazy_result_equals              output      0387 a generator or reversed() iterator compares equal to a list with its items; Python's equals only itself
-filters.lazy_result_tojson              accepts     0387 tojson serializes a generator as a list; Python's json refuses it
-filters.lazy_result_concat              accepts     0387 a generator concatenates with a list; Python has no + for it
+filters.lazy_result_truncate            accepts     0401 truncate takes the length of a generator as of a list; Python has no len() for it
+filters.lazy_result_unique_hash         rejects     0401 unique hashes a generator as a list; Python hashes it by identity
+filters.range_tojson                    accepts     0401 tojson serializes a range as a list; Python's json refuses it

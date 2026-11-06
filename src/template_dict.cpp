@@ -4,6 +4,7 @@
 #include "host_object.h"
 #include "internal_value.h"
 #include "recursion_guard.h"
+#include "undefined.h"
 #include "value_visitors.h"
 
 #include <jinja2cpp/string_helpers.h>
@@ -39,6 +40,10 @@ constexpr char KindRange = 'r';
 constexpr char KindString = 's';
 constexpr char KindBigInt = 'b';
 constexpr char KindObject = 'o';
+constexpr char KindBoundMethod = 'm';
+constexpr char KindMethodCall = 'f';
+constexpr char KindUndefined = 'u';
+constexpr char KindUserCallable = 'c';
 
 // The type of a value Python's hash() rejects, also inside a tuple
 struct UnhashableTypeGetter : visitors::BaseVisitor<const char*>
@@ -116,9 +121,10 @@ void AppendBigInt(std::string& out, std::string_view decimal)
 
 // ObjectKey: the key of an object by its identity, as Python's default __hash__ and __eq__
 // have it. The dict's table of first spellings (TemplateDict::KeyOf) holds the key, which keeps
-// the object, and so its address, alive while the entry is there. Only objects of the host
-// language have it so far (docs/tasks/0352, the address of IHostObject::Identity, so that two
-// views of one host object are one key); 0049 P4 extends it to the engine's own objects
+// the object, and so its address, alive while the entry is there. An object of the host
+// language is keyed by IHostObject::Identity (docs/tasks/0352), so that two views of one host
+// object are one key; the engine's objects by the identity their copies share (docs/tasks/0212).
+// A token that holds an address is never kept past the dict nor compared across renders
 void AppendObjectKey(std::string& out, const void* identity)
 {
     out.push_back(DictKeyMark);
@@ -147,9 +153,8 @@ uint64_t RangeLength(const RangeInfo& range)
 // Appends the token of a value, and returns the type that made it unhashable instead
 struct KeyTokenBuilder
 {
-    KeyTokenBuilder(std::string& out, bool& hasObject)
+    explicit KeyTokenBuilder(std::string& out)
         : m_out(out)
-        , m_hasObject(hasObject)
     {
     }
 
@@ -264,9 +269,11 @@ struct KeyTokenBuilder
             AppendObjectKey(m_out, host->Identity());
             return nullptr;
         }
+        // namespace(), cycler(), joiner() and reflected structs: the copies of a namespace share
+        // its storage, which is its identity
         if (map.GetObjectClass() || map.GetAttrPolicy() == MapAttrPolicy::KeysFirst)
         {
-            AddObject();
+            AppendObjectKey(m_out, map.GetIdentity());
             return nullptr;
         }
         return "dict";
@@ -284,12 +291,83 @@ struct KeyTokenBuilder
         }
         return AddElement(pair.value);
     }
-    // Undefined values, callables and renderers
-    template<typename T>
-    const char* operator()(const T& /*val*/) const
+    // Python hashes Undefined by its class, and the policy is one per render: every undefined value
+    // is one key. StrictUndefined refuses to be hashed
+    const char* operator()(const UndefinedValue& val) const
     {
-        AddObject();
+        CheckStrictUndefined(val);
+        m_out.push_back(DictKeyMark);
+        m_out.push_back(KindUndefined);
         return nullptr;
+    }
+    const char* operator()(const Callable& callable) const
+    {
+        AddCallable(m_out, callable);
+        return nullptr;
+    }
+    const char* operator()(const detail::RendererPtr& renderer) const
+    {
+        AppendObjectKey(m_out, renderer.get());
+        return nullptr;
+    }
+    // A reference to a host value (a lent default) by the value it refers to
+    const char* operator()(const ValueRef& ref) const
+    {
+        AppendObjectKey(m_out, &ref.get());
+        return nullptr;
+    }
+
+    // A function, a macro or a method by Callable::Identity, which == compares too
+    static void AddCallable(std::string& out, const Callable& callable)
+    {
+        const auto identity = callable.GetIdentity();
+        if (identity.method)
+        {
+            out.push_back(DictKeyMark);
+            out.push_back(KindBoundMethod);
+            AppendBytes(out, reinterpret_cast<uintptr_t>(identity.object)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the address is the key
+            AppendBytes(out, reinterpret_cast<uintptr_t>(identity.method)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the address is the key
+            return;
+        }
+        if (identity.call)
+        {
+            // Python's builtin method: the function, then its __self__
+            out.push_back(DictKeyMark);
+            out.push_back(KindMethodCall);
+            AppendBytes(out, identity.call->invoke);
+            AddReceiver(out, identity.call->self);
+            return;
+        }
+        if (identity.userCallable != 0)
+        {
+            out.push_back(DictKeyMark);
+            out.push_back(KindUserCallable);
+            AppendBytes(out, identity.userCallable);
+            return;
+        }
+        AppendObjectKey(out, identity.object);
+    }
+
+    // The __self__ of a method: a container by its identity, as Python compares it (a list's
+    // methods hash although the list does not); a string or a number by its value, which
+    // stands in for an identity it does not have here
+    static void AddReceiver(std::string& out, const InternalValue& self)
+    {
+        if (const auto list = AsList(self))
+        {
+            AppendObjectKey(out, list->GetIdentity());
+            return;
+        }
+        if (const auto map = AsMap(self))
+        {
+            AppendObjectKey(out, map->GetIdentity());
+            return;
+        }
+        if (Apply<KeyTokenBuilder>(self, out))
+        {
+            // A value that hashes by neither (none is made today)
+            AppendObjectKey(out, detail::InternalValueAccess::Object(self));
+        }
     }
 
 private:
@@ -299,7 +377,7 @@ private:
         const auto lengthAt = m_out.size();
         AppendBytes(m_out, uint32_t{ 0 });
         const auto start = m_out.size();
-        if (const char* type = Apply<KeyTokenBuilder>(item, m_out, m_hasObject))
+        if (const char* type = Apply<KeyTokenBuilder>(item, m_out))
         {
             return type;
         }
@@ -307,11 +385,6 @@ private:
         std::memcpy(&m_out[lengthAt], &length, sizeof(length));
         return nullptr;
     }
-
-    // Objects, undefined values and callables have no key of their own yet (docs/tasks/0212):
-    // they add nothing, so as a key each stands for the empty string, as dict keys did before,
-    // and a lookup by one finds nothing (MakeDictKey's hasObject)
-    void AddObject() const { m_hasObject = true; }
 
     template<typename CharT>
     void AddString(std::basic_string_view<CharT> str) const
@@ -334,7 +407,6 @@ private:
     }
 
     std::string& m_out;
-    bool& m_hasObject;
 };
 
 std::string EscapeString(const std::string& name)
@@ -365,15 +437,10 @@ const char* UnhashableType(const InternalValue& value)
     return Apply<UnhashableTypeGetter>(value, items);
 }
 
-std::optional<std::string> MakeDictKey(const InternalValue& key, const char** unhashableType, bool* hasObject)
+std::optional<std::string> MakeDictKey(const InternalValue& key, const char** unhashableType)
 {
     std::string token;
-    bool objectFound = false;
-    const char* type = Apply<KeyTokenBuilder>(key, token, objectFound);
-    if (hasObject)
-    {
-        *hasObject = objectFound;
-    }
+    const char* type = Apply<KeyTokenBuilder>(key, token);
     if (type)
     {
         if (unhashableType)
@@ -383,6 +450,39 @@ std::optional<std::string> MakeDictKey(const InternalValue& key, const char** un
         return std::nullopt;
     }
     return token;
+}
+
+bool SameMethodReceiver(const InternalValue& left, const InternalValue& right)
+{
+    // Containers by identity, strings by their text, without copying either
+    const auto leftList = AsList(left);
+    const auto rightList = AsList(right);
+    if (leftList || rightList)
+    {
+        return leftList && rightList && leftList->GetIdentity() == rightList->GetIdentity();
+    }
+    const auto leftMap = AsMap(left);
+    const auto rightMap = AsMap(right);
+    if (leftMap || rightMap)
+    {
+        return leftMap && rightMap && leftMap->GetIdentity() == rightMap->GetIdentity();
+    }
+    if (const auto leftText = AsStringView<char>(left))
+    {
+        const auto rightText = AsStringView<char>(right);
+        return rightText && *leftText == *rightText;
+    }
+    if (const auto leftText = AsStringView<wchar_t>(left))
+    {
+        const auto rightText = AsStringView<wchar_t>(right);
+        return rightText && *leftText == *rightText;
+    }
+    // A number or none: a token of a few bytes
+    std::string leftKey;
+    std::string rightKey;
+    KeyTokenBuilder::AddReceiver(leftKey, left);
+    KeyTokenBuilder::AddReceiver(rightKey, right);
+    return leftKey == rightKey;
 }
 
 void ThrowUnhashable(const char* type)
@@ -440,16 +540,14 @@ TemplateDict::iterator TemplateDict::FindString(const std::string& name)
 
 TemplateDict::const_iterator TemplateDict::Find(const InternalValue& key) const
 {
-    bool hasObject = false;
-    auto token = MakeDictKey(key, nullptr, &hasObject);
-    return token && !hasObject ? m_items.find(*token) : m_items.end();
+    auto token = MakeDictKey(key);
+    return token ? m_items.find(*token) : m_items.end();
 }
 
 TemplateDict::iterator TemplateDict::Find(const InternalValue& key)
 {
-    bool hasObject = false;
-    auto token = MakeDictKey(key, nullptr, &hasObject);
-    return token && !hasObject ? m_items.find(*token) : m_items.end();
+    auto token = MakeDictKey(key);
+    return token ? m_items.find(*token) : m_items.end();
 }
 
 TemplateDict::iterator TemplateDict::Set(const InternalValue& key, InternalValue value)

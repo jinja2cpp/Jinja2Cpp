@@ -39,11 +39,16 @@ const char* UnhashableType(const InternalValue& value);
 
 // The token of a key, which is equal for the keys Python treats as one. Nullopt when the key
 // cannot be hashed, with the type to report in `unhashableType`: Python's TypeError
-// `unhashable type: 'list'`. An object of a host language (host_object.h) is keyed by its
-// identity (docs/tasks/0352). The engine's objects (namespace(), cycler(), reflected and JSON
-// values), undefined values and callables have no token of their own yet (docs/tasks/0212): they
-// read as the empty string, and `hasObject` tells a lookup that the token stands for no key of its own
-std::optional<std::string> MakeDictKey(const InternalValue& key, const char** unhashableType = nullptr, bool* hasObject = nullptr);
+// `unhashable type: 'list'`. Objects are keyed by identity, as Python's default hash has it: an
+// object of a host language (host_object.h) by IHostObject::Identity (docs/tasks/0352), the
+// engine's objects (namespace(), cycler(), joiner(), reflected structs, functions, macros and
+// bound methods) by the identity their copies share (docs/tasks/0212). Every undefined value is
+// one key, and a StrictUndefined one throws UndefinedError
+std::optional<std::string> MakeDictKey(const InternalValue& key, const char** unhashableType = nullptr);
+
+// Whether two receivers of a method (BoundMethodCall::self) make it the same method, as Python
+// compares builtin methods: a container by identity, anything else by value (Callable::IsEqual)
+bool SameMethodReceiver(const InternalValue& left, const InternalValue& right);
 
 // Throws Python's TypeError for a key MakeDictKey rejects
 [[noreturn]] void ThrowUnhashable(const char* type);
@@ -81,8 +86,7 @@ public:
     // A string key; end() when absent
     [[nodiscard]] const_iterator FindString(const std::string& name) const;
     [[nodiscard]] iterator FindString(const std::string& name);
-    // Any key; end() when absent or unhashable (the caller checks UnhashableType where Python
-    // raises), and for a key that holds an object, which has no token of its own yet (0212)
+    // Any key; end() when absent or unhashable (the caller checks UnhashableType where Python raises)
     [[nodiscard]] const_iterator Find(const InternalValue& key) const;
     [[nodiscard]] iterator Find(const InternalValue& key);
 

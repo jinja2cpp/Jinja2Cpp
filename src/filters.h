@@ -132,6 +132,36 @@ public:
     InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
 };
 
+// neutralize and fence (docs/tasks/0358): the filters that protect a prompt from the text put into it
+class PromptFilter : public FilterBase
+{
+public:
+    enum Mode
+    {
+        NeutralizeMode,
+        FenceMode
+    };
+
+    PromptFilter(const FilterParams& params, Mode mode);
+    PromptFilter(PromptFilter&&) noexcept;
+    PromptFilter(const PromptFilter&) = delete;
+    PromptFilter& operator=(const PromptFilter&) = delete;
+    PromptFilter& operator=(PromptFilter&&) = delete;
+    ~PromptFilter() override;
+
+    InternalValue Filter(const InternalValue& baseVal, RenderContext& context) override;
+
+private:
+    struct Cache;
+    InternalValue Neutralize(const InternalValue& baseVal, RenderContext& context);
+    InternalValue Fence(const InternalValue& baseVal, RenderContext& context);
+
+    Mode m_mode;
+    // The escaper built from the last arguments of neutralize that replace the environment's (a call from several
+    // threads shares it)
+    std::unique_ptr<Cache> m_cache;
+};
+
 class Random : public FilterBase
 {
 public:
