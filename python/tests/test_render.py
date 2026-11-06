@@ -86,7 +86,7 @@ def test_extension_classes():
     assert_same("{% do x.append(2) %}{{ x }}", {"x": [1]}, lambda m: {"extensions": [jinja2.ext.do]})
     assert jinja2cpp.Environment(extensions=[jinja2cpp.ext.loopcontrols]).from_string("{% for i in [1, 2] %}{% continue %}{% endfor %}").render() == ""
     with pytest.raises(NotImplementedError):
-        jinja2cpp.Environment(extensions=["jinja2.ext.debug"])
+        jinja2cpp.Environment(extensions=["jinja2.ext.debug"], fallback="never")
 
 
 def test_autoescape_callable():
@@ -112,7 +112,7 @@ def test_unknown_option_and_bad_newline():
     with pytest.raises(AssertionError):
         jinja2cpp.Environment(newline_sequence="x")
     with pytest.raises(NotImplementedError):
-        jinja2cpp.Environment(enable_async=True)
+        jinja2cpp.Environment(enable_async=True, fallback="never")
     env = jinja2cpp.Environment(optimized=False, bytecode_cache=None, cache_size=10, auto_reload=False)
     assert env.cache_size == 10 and env.auto_reload is False
 

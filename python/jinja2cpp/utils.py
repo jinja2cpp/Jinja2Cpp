@@ -6,18 +6,22 @@ import typing as t
 F = t.TypeVar("F", bound=t.Callable[..., t.Any])
 
 
-class _PassArg(enum.Enum):
-    """What a callable marked by pass_context and its kin gets as its first argument."""
+try:  # Jinja2's own marker, so that a function marked here also works in Jinja2 (the fallback)
+    from jinja2.utils import _PassArg
+except ImportError:  # pragma: no cover - the tests cover it in a subprocess
 
-    context = enum.auto()
-    eval_context = enum.auto()
-    environment = enum.auto()
+    class _PassArg(enum.Enum):  # type: ignore[no-redef]
+        """What a callable marked by pass_context and its kin gets as its first argument."""
 
-    @classmethod
-    def from_obj(cls, obj: t.Any) -> t.Optional["_PassArg"]:
-        if hasattr(obj, "jinja_pass_arg"):
-            return obj.jinja_pass_arg  # type: ignore[no-any-return]
-        return None
+        context = enum.auto()
+        eval_context = enum.auto()
+        environment = enum.auto()
+
+        @classmethod
+        def from_obj(cls, obj: t.Any) -> t.Optional["_PassArg"]:
+            if hasattr(obj, "jinja_pass_arg"):
+                return obj.jinja_pass_arg  # type: ignore[no-any-return]
+            return None
 
 
 def pass_context(f: F) -> F:

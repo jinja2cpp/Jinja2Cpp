@@ -9,6 +9,11 @@ from .environment import ParsedTemplate
 from .environment import Template
 
 
+def _is_jinja2_ast(ast: t.Any) -> bool:
+    """A node tree of Jinja2 (a delegating environment's ``parse``)."""
+    return type(ast).__module__ == "jinja2.nodes"
+
+
 def _template_of(ast: t.Any) -> Template:
     if isinstance(ast, ParsedTemplate):
         return ast._template
@@ -31,6 +36,10 @@ def find_undeclared_variables(ast: ParsedTemplate) -> t.Set[str]:
 
     Templates the template includes, imports or extends are not looked into.
     """
+    if _is_jinja2_ast(ast):
+        import jinja2.meta
+
+        return jinja2.meta.find_undeclared_variables(ast)
     template = _template_of(ast)
     # The engine leaves out its own globals; the environment's are Python's dict
     declared = template.globals
@@ -52,4 +61,9 @@ def find_referenced_templates(ast: ParsedTemplate) -> t.Iterator[t.Optional[str]
     This function is useful for dependency tracking, for example to build a database of
     dependencies for the templates.
     """
+    if _is_jinja2_ast(ast):
+        import jinja2.meta
+
+        yield from jinja2.meta.find_referenced_templates(ast)
+        return
     yield from _template_of(ast)._referenced()

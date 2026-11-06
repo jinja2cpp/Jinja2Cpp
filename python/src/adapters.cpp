@@ -611,8 +611,24 @@ const PyHost* AsPyHost(const InternalValue& value)
     return static_cast<const PyHost*>(jinja2::GetHostObject(value));
 }
 
+namespace
+{
+std::uint64_t g_pythonCalls = 0; // under the GIL
+} // namespace
+
+std::uint64_t PythonCallCount() noexcept
+{
+    return g_pythonCalls;
+}
+
+void NotePythonCall() noexcept
+{
+    ++g_pythonCalls;
+}
+
 InternalValue CallPython(PyObject* callable, const CallParams& params, RenderContext& context)
 {
+    NotePythonCall();
     const LeaseScope lease(context);
     // pass_context and its kin: the argument the callable asked for goes first
     const PassArg pass = PassArgOf(callable);

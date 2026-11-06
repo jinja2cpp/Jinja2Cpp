@@ -7,6 +7,7 @@
 
 #include "sandbox_policy.h"
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -85,6 +86,12 @@ std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle
 
 // The PyHost a value of the engine carries, if any
 const PyHost* AsPyHost(const InternalValue& value);
+
+// How many Python callables the engine has called (filters, tests, globals, finalize, the
+// autoescape callable, the gettext callables): the fallback retries a render only while this
+// has not moved (docs/python.md, "Fallback"). A loader's get_source is not counted
+std::uint64_t PythonCallCount() noexcept;
+void NotePythonCall() noexcept;
 
 // Calls `callable` with the engine's arguments, as a template calls it
 InternalValue CallPython(PyObject* callable, const CallParams& params, RenderContext& context);

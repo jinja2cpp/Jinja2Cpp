@@ -179,6 +179,8 @@ class SandboxedEnvironment(Environment):
 
     sandboxed = True
 
+    _jinja2_class_path = "jinja2.sandbox.SandboxedEnvironment"
+
     #: whether the engine's lists and dicts refuse the methods that change them
     #: (ImmutableSandboxedEnvironment)
     _sandbox_immutable = False
@@ -216,9 +218,29 @@ class SandboxedEnvironment(Environment):
 
     def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
         super().__init__(*args, **kwargs)
-        self.globals["range"] = safe_range
+        if "_delegate" not in self.__dict__:  # Jinja2's sandbox has its own range
+            self.globals["range"] = safe_range
         self.binop_table = self.default_binop_table.copy()
         self.unop_table = self.default_unop_table.copy()
+
+    #: the methods of the policy: Jinja2 stands in for the environment only when none is overridden
+    _POLICY_HOOKS = ("is_safe_attribute", "is_safe_callable", "unsafe_undefined", "wrap_str_format", "call_binop", "call_unop", "getattr", "getitem", "call")
+
+    def _fallback_blocker(self) -> t.Optional[str]:
+        """Why real Jinja2 may not take this environment over: its policy would not come along.
+
+        A subclass that overrides a hook of the policy (``is_safe_attribute`` and the rest), sets
+        one on the instance, or intercepts operators would run Jinja2's stock policy instead of its
+        own, so the fallback refuses (docs/python.md, "Fallback").
+        """
+        if self.intercepted_binops or self.intercepted_unops:
+            return "a sandbox that intercepts operators"
+        for name in self._POLICY_HOOKS:
+            if name in self.__dict__:
+                return f"a sandbox whose {name} is set on the instance"
+            if getattr(type(self), name, None).__module__ != __name__:  # type: ignore[union-attr]
+                return f"a sandbox that overrides {name}"
+        return None
 
     def _check_interception(self) -> None:
         """What a load checks. A template that goes to another engine is not the engine's to refuse; one that
@@ -437,6 +459,7 @@ class ImmutableSandboxedEnvironment(SandboxedEnvironment):
     """
 
     _sandbox_immutable = True
+    _jinja2_class_path = "jinja2.sandbox.ImmutableSandboxedEnvironment"
 
     def is_safe_attribute(self, obj: t.Any, attr: str, value: t.Any) -> bool:
         if not super().is_safe_attribute(obj, attr, value):

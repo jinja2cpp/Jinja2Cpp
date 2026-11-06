@@ -11,8 +11,15 @@ from markupsafe import Markup
 from .utils import pass_context
 
 
-class Extension:
-    """Base class of the extensions; custom extensions are not supported yet."""
+try:  # a custom extension subclasses this class and runs in Jinja2: the fallback (docs/python.md)
+    from jinja2.ext import Extension as _Base
+except ImportError:  # pragma: no cover - the tests cover it in a subprocess
+    _Base = object  # type: ignore[assignment, misc]
+
+
+class Extension(_Base):  # type: ignore[valid-type, misc]
+    """Base class of the extensions. The engine implements three; a custom extension makes its
+    environment a Jinja2 one (the fallback), which needs Jinja2 installed."""
 
 
 class ExprStmtExtension(Extension):

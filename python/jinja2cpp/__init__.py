@@ -12,6 +12,10 @@ from .environment import Environment as Environment
 from .environment import Template as Template
 from .environment import TemplateModule as TemplateModule
 from .environment import TemplateStream as TemplateStream
+from .fallback import FallbackWarning as FallbackWarning
+from .fallback import get_fallback as get_fallback
+from .fallback import set_fallback as set_fallback
+from .fallback import stats as stats
 from .exceptions import FilterArgumentError as FilterArgumentError
 from .exceptions import SecurityError as SecurityError
 from .exceptions import TemplateAssertionError as TemplateAssertionError
