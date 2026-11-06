@@ -1450,6 +1450,17 @@ TEST(PromptFilter, SizeLimits)
         // The built-in cap of 2^26 holds a longer text; no limit set
         EXPECT_EQ(expectedLength, render(0)) << wide;
     }
+    // A pattern list from a host generator obeys the cap while it is read, before the options are checked
+    {
+        TemplateEnv env;
+        env.GetSettings().limits.maxSequenceSize = 100;
+        Template tpl(&env);
+        ASSERT_TRUE(tpl.Load("{{ 'x'|neutralize(specials=g) }}").has_value());
+        auto endless = MakeGenericList([n = int64_t{ 0 }]() mutable -> std::optional<Value> { return Value("t" + std::to_string(n++)); });
+        auto result = tpl.RenderAsString({ { "g", endless } });
+        ASSERT_FALSE(result.has_value());
+        EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode());
+    }
     // fence has its own check
     TemplateEnv env;
     env.GetSettings().limits.maxSequenceSize = size;
@@ -1505,6 +1516,13 @@ TEST(PromptEscaper, SeparatorSharesNoCharacterWithAPattern)
     EXPECT_FALSE(PromptEscaper::IsValid(options)) << "a pattern longer than 256 bytes";
     options.specialTokens.back().resize(256);
     EXPECT_TRUE(PromptEscaper::IsValid(options));
+    // A special of one code point cannot be broken by a separator after its first code point
+    for (const char* single : { "x", "\xEE\x80\x80" })
+    {
+        PromptEscapeOptions one;
+        one.specialTokens = { single };
+        EXPECT_FALSE(PromptEscaper::IsValid(one)) << single;
+    }
 }
 
 TEST(PromptEscaper, SeparatorAfterATagNameCountsAsABoundary)

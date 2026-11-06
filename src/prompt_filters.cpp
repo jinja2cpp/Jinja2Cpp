@@ -53,6 +53,8 @@ std::vector<std::string> StringList(const InternalValue& value, const char* argu
         {
             throw TemplateRuntimeError("neutralize(): "s + argument + " must be a list of strings");
         }
+        // A generator may yield without end: the list obeys the sequence cap as every list the template makes
+        CheckSequenceSize(static_cast<uint64_t>(result.size()) + 1, "a pattern list");
         result.push_back(AsString(item));
         return true;
     });
@@ -183,7 +185,7 @@ InternalValue PromptFilter::Neutralize(const InternalValue& baseVal, RenderConte
         }
         if (!PromptEscaper::IsValid(options))
         {
-            throw TemplateRuntimeError("neutralize(): the separator must be non-empty and share no character with a special token or tag pattern, and no pattern may be longer than 256 bytes");
+            throw TemplateRuntimeError("neutralize(): the separator must be non-empty and share no character with a special token or tag pattern, no special may be a single character, and no pattern may be longer than 256 bytes");
         }
         {
             const std::scoped_lock lock(m_cache->mutex);

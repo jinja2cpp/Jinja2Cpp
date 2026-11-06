@@ -450,7 +450,7 @@ PromptEscaper::PromptEscaper(PromptEscapeOptions options)
 {
     if (!IsValid(options))
     {
-        throw std::invalid_argument("PromptEscapeOptions: the separator must be non-empty and share no character with a special token or tag pattern, and no pattern may be longer than 256 bytes");
+        throw std::invalid_argument("PromptEscapeOptions: the separator must be non-empty and share no character with a special token or tag pattern, no special may be a single character, and no pattern may be longer than 256 bytes");
     }
     m_impl = std::make_shared<const detail::PromptEscaperImpl>(std::move(options));
 }
@@ -464,6 +464,14 @@ bool PromptEscaper::IsValid(const PromptEscapeOptions& options) noexcept
     }
     const auto tooLong = [](const std::string& pattern) { return pattern.size() > detail::MaxPatternSize; };
     if (std::any_of(options.specialTokens.begin(), options.specialTokens.end(), tooLong) || std::any_of(options.tags.begin(), options.tags.end(), tooLong))
+    {
+        return false;
+    }
+    // A separator after the first code point cannot break a special of one code point: nothing would remove it
+    const auto oneCodePoint = [](const std::string& special) {
+        return !special.empty() && detail::PromptMatcher<char>::CodePointLength(special) == special.size();
+    };
+    if (std::any_of(options.specialTokens.begin(), options.specialTokens.end(), oneCodePoint))
     {
         return false;
     }
