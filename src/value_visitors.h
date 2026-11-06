@@ -2160,11 +2160,11 @@ struct BinaryMathOperation : BaseVisitor<>
         {
             // range.__eq__ compares the items: by length, then the first item, then the step,
             // without walking them
-            const auto length = left.GetSize();
-            bool isEqual = length == right.GetSize();
-            if (isEqual && length.value_or(0) > 0)
+            const auto length = left.GetSize().value_or(0);
+            bool isEqual = length == right.GetSize().value_or(0);
+            if (isEqual && length > 0)
             {
-                isEqual = leftRange->start == rightRange->start && (*length == 1 || leftRange->step == rightRange->step);
+                isEqual = leftRange->start == rightRange->start && (length == 1 || leftRange->step == rightRange->step);
             }
             return isEqual == (m_oper == jinja2::BinaryExpression::LogicalEq);
         }

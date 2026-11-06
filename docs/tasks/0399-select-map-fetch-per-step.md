@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: parity
 depends: [0101, 0383]
@@ -38,3 +38,10 @@ or the lifetime risk is too high.
 
 **Done when.** The three corpus lines naming 0399 are gone, or marked deliberate with
 Ruslan's word.
+
+**Resolution (Ruslan 2026-11-06: deliberate, as 0101, 0366 and 0390).** select, reject,
+selectattr, rejectattr and map stay eager. A per-step generator would have to own the
+evaluated arguments and reach the RenderContext at each step, so a result kept past its
+statement (or handed out by a template module's call) would outlive what it reads; 0101 already
+makes select eager (`tests.select_unread_extra_arg`). The three corpus lines are marked
+deliberate in `test/parity/divergences/statements.txt`; the host-generator item has no case.
