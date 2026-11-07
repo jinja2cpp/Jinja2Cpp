@@ -194,10 +194,18 @@ class Template(_jinja2cpp.Template):
             raise
 
     def generate(self, *args: t.Any, **kwargs: t.Any) -> t.Iterator[str]:
-        """Render the template as a generator of strings: one item for now, the whole output."""
-        output = self.render(*args, **kwargs)
-        if output:
-            yield output
+        """Render the template as a generator of strings: the chunks the engine writes (up to 512
+        characters each, docs/python.md). The render runs at the first item; an error it raises
+        comes after the chunks written before it, as in Jinja2."""
+        chunks: t.List[str] = []
+        error: t.Optional[BaseException] = None
+        try:
+            self._render_to(chunks.append, *args, **kwargs)
+        except Exception as raised:  # noqa: BLE001 - raised again after the chunks before it
+            error = raised
+        yield from chunks
+        if error is not None:
+            raise error
 
     def stream(self, *args: t.Any, **kwargs: t.Any) -> TemplateStream:
         """Like ``generate``, as a TemplateStream."""

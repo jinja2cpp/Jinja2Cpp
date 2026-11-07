@@ -130,6 +130,10 @@ public:
     PyTemplate& operator=(PyTemplate&&) = delete;
 
     nb::object Render(nb::args args, nb::kwargs kwargs) const;
+    // Template.generate: renders with the arguments of render(), calling `write` with each chunk
+    // the engine's sink receives (up to 512 characters), in order; an error comes after the chunks
+    // written before it
+    void RenderTo(nb::handle write, nb::args args, nb::kwargs kwargs) const;
     // The environment, checked to be alive
     PyEnvironment& LiveEnvironment() const;
     // Template.make_module of the Python layer (template_module.cpp): (body, exports) for the
@@ -151,6 +155,8 @@ public:
     void Clear() noexcept;
 
 private:
+    template<typename Target>
+    void RenderWith(Target& target, nb::args args, nb::kwargs kwargs) const;
     jinja2::Template m_template;
     nb::object m_environment;
     nb::object m_globals;

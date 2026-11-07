@@ -19,8 +19,8 @@ test_api.py::TestExtendedAPI::test_cycler                                       
 test_api.py::TestExtendedAPI::test_expressions                                         unsupported Environment.compile_expression
 test_api.py::TestLowLevel::test_custom_code_generator                                  internals   a custom code generator
 test_api.py::TestLowLevel::test_custom_context                                         unsupported a custom context_class
-test_api.py::TestStreaming::test_basic_streaming                                       divergence  0355 generate() and stream() yield the whole output as one item
-test_api.py::TestStreaming::test_buffered_streaming                                    divergence  0355 generate() and stream() yield the whole output as one item
+test_api.py::TestStreaming::test_basic_streaming                                       divergence  0436 generate() renders at the first item, in the engine's chunks
+test_api.py::TestStreaming::test_buffered_streaming                                    divergence  0436 generate() renders at the first item, in the engine's chunks
 test_api.py::TestUndefined::test_chainable_undefined                                   divergence  0434 ChainableUndefined._undefined_name names the first missing step
 test_api.py::TestUndefined::test_logging_undefined                                     unsupported make_logging_undefined
 test_api.py::TestUndefined::test_stopiteration_is_undefined                            divergence  0434 a callable raising StopIteration gives an undefined value

@@ -411,6 +411,19 @@ public:
         }
         return impl->template RenderCore<false>(os, params, nullptr);
     }
+    // The same, writing to a host's sink (the module's Template.generate)
+    static std::optional<BasicErrorInfo<CharT>> RenderInternal(const BasicTemplate<CharT>& tpl,
+                                                               BasicOutputSink<CharT>& sink,
+                                                               const InternalValueMap& params,
+                                                               const InternalValueMap* globals = nullptr)
+    {
+        const auto* impl = static_cast<const TemplateImpl*>(tpl.m_impl.get());
+        if (globals)
+        {
+            return impl->template RenderCore<true>(sink, params, globals);
+        }
+        return impl->template RenderCore<false>(sink, params, nullptr);
+    }
 
     // Renders with the params of a ValuesMap or a GenericMap, appending to a string or writing to a
     // host's sink. Rendering reads the template only, so several threads may render one template at once.

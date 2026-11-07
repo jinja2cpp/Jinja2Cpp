@@ -83,8 +83,10 @@ engines on a Release build of the module.
 - `env.select_template`, `env.get_or_select_template`, `env.list_templates(extensions=None,
   filter_func=None)` and `env.join_path`.
 - `template.generate()` and `template.stream()` with `TemplateStream` (`dump`,
-  `enable_buffering`, `disable_buffering`), which give the whole output as one item until
-  streaming lands (docs/tasks/0355).
+  `enable_buffering`, `disable_buffering`). They yield the chunks the engine writes to its
+  `OutputSink` (up to 512 characters each), and an error after the chunks written before it, as
+  Jinja2 does; but the whole render runs at the first item, and the chunks are not Jinja2's
+  one item per output node (lazy rendering is docs/tasks/0436).
 - `template.make_module(vars=None, shared=False, locals=None)` and `template.module`, from the
   engine's `Template::MakeModule`: the exports are attributes of a `TemplateModule`, `str()` is
   the rendered body, `__html__` is the same as Markup. An exported macro (also inside an exported
