@@ -446,7 +446,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0374](0374-number-data-attributes.md) | int and float data attributes: real, imag, numerator, denominator | parity | low | done |
 | [0375](0375-closure-capture-free-variables.md) | A kept closure copies only the names its body reads | perf | low | done |
 | [0376](0376-same-string-getter-round-trip.md) | GetAsSameString moves its string through the PLT | perf | low | done |
-| [0377](0377-chat-template-assistant-mask-and-security-error.md) | Chat templates: the assistant token mask and the sandbox's SecurityError | api | low | open |
+| [0377](0377-chat-template-assistant-mask-and-security-error.md) | Chat templates: the assistant token mask and the sandbox's SecurityError | api | medium | open |
 | [0380](0380-markup-escape-copy-assignment.md) | MarkupEscape calls InternalValue's copy assignment out of line | perf | low | open |
 | [0381](0381-host-object-operators.md) | Host objects: arithmetic and ordering operators | parity | low | open |
 | [0382](0382-urlencode-of-loop.md) | `loop|urlencode` iterates the rest of the loop | parity | low | done |
@@ -479,8 +479,14 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0409](0409-truncate-tokens-shrink-bound.md) | Bound the host calls of truncate_tokens' shrink loop | robustness | low | open |
 | [0410](0410-python-include-join-path.md) | `include`, `import` and `extends` do not call `env.join_path` | parity | low | open |
 | [0411](0411-python-module-export-types.md) | `make_module` exports lose the type of a namespace, a cycler, a range and an undefined | parity | low | open |
+| [0412](0412-python-sandbox-operator-interception.md) | Sandbox: `intercepted_binops`, `intercepted_unops`, `call_binop` and `call_unop` | api | low | open |
+| [0413](0413-strict-undefined-sort-unique-key.md) | `sort` and `unique` with `attribute=` do not fail on a StrictUndefined key | parity | low | open |
+| [0414](0414-python-sandbox-policy-on-engine-values.md) | Sandbox policy on the engine's own values | api | low | open |
 | [0415](0415-oldstyle-gettext-in-the-engine.md) | Oldstyle gettext (Jinja2's default) in the engine | parity | low | open |
 | [0416](0416-python-context-sees-only-top-level-names.md) | `pass_context`'s Context sees loop and `with` variables, Jinja2's does not | parity | low | open |
 | [0417](0417-python-i18n-before-install-is-lenient.md) | `_()` and `{% trans %}` work before translations are installed | parity | low | open |
 | [0418](0418-module-value-copy-recursion.md) | A deeply nested argument to a module macro overflows the stack in the engine | robustness | medium | open |
 | [0420](0420-range-and-engine-object-leftovers.md) | Range and engine-object leftovers of 0401 | parity | low | open |
+| [0425](0425-sandbox-parity-leftovers.md) | Sandbox parity leftovers of 0354 | parity | low | open |
+| [0426](0426-sandbox-refused-attribute-cost.md) | Cost of a refused attribute in the sandbox | perf | low | open |
+| [0427](0427-sandbox-policy-and-template-cache.md) | Sandbox policy and the template cache (for 0357) | api | low | open |
