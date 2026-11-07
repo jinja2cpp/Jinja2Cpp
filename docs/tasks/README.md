@@ -424,7 +424,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0352](0352-python-host-object-seam.md) | Python module P1a: a private host-object seam in the engine | api | medium | done |
 | [0353](0353-python-module-core.md) | Python module P1b: build, Environment/Template/render, value crossing | api | medium | done |
 | [0354](0354-python-module-subset.md) | Python module P2: the supported subset, sandbox and fallback | api | medium | open |
-| [0355](0355-python-module-proof.md) | Python module P3: upstream test suite, parity corpus, chat templates, bench row | parity | medium | open |
+| [0355](0355-python-module-proof.md) | Python module P3: upstream test suite, parity corpus, chat templates, bench row | parity | medium | done |
 | [0356](0356-python-module-wheels.md) | Python module P4: wheels for Linux, macOS and Windows; free-threaded audit | build | medium | open |
 | [0357](0357-python-module-public-api.md) | Python module: move from the private seam to the public API before the G1 freeze | api | medium | open |
 | [0358](0358-prompt-autoescape.md) | Prompt autoescape: `fence`, `neutralize` and an escaping mode for LLM prompts | api | medium | done |
@@ -494,3 +494,10 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0428](0428-python-fallback-leftovers.md) | Python fallback leftovers (from the review of 0354 PR3) | api | low | open |
 | [0429](0429-preflight-python-sources.md) | `scripts/preflight.sh` skips clang-tidy for `python/src/*.cpp` and needs `build/` | tooling | low | open |
 | [0430](0430-python-fallback-static-include-routing.md) | Route static include, import and extends names at load time (Python fallback) | api | low | open |
+| [0431](0431-upstream-suite-syntax-gaps.md) | Syntax gaps the upstream Jinja2 suite found | parity | medium | open |
+| [0432](0432-upstream-suite-error-types-and-messages.md) | Error classes, messages and tracebacks the upstream Jinja2 suite checks | parity | medium | open |
+| [0433](0433-python-template-cache-identity.md) | `get_template` returns a new Template object each time, and template globals of includes | parity | medium | open |
+| [0434](0434-python-values-leftovers-upstream-suite.md) | Values, filters and macros: leftovers the upstream Jinja2 suite found | parity | low | open |
+| [0435](0435-python-environment-policies.md) | `Environment.policies` | parity | low | open |
+| [0436](0436-python-lazy-generate.md) | `Template.generate` renders on demand, in Jinja2's chunks | parity | medium | open |
+| [0437](0437-python-gil-released-render.md) | Render with the GIL released when the data is JSON-like (0248 plan D5, phase 3) | perf | low | open |
