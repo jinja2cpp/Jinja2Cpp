@@ -315,7 +315,7 @@ def _owner_of(jenv: t.Any) -> t.Any:
 def _owner_override(owner: t.Any, name: str) -> t.Any:
     """The owner's method `name` when it is not the sandbox's own, else None: the stock one then runs, Jinja2's.
 
-    Stock means the original function (snapshot ``sandbox._STOCK_HOOKS``) bound to this very environment: an override
+    Stock means the original function (``sandbox.is_stock_sandbox_hook`` and its snapshots) bound to this very environment: an override
     of the class, a patch of it, a function set on the instance, or a method of another environment is an override.
     """
     from .sandbox import _STOCK_OTHER_HOOK_FUNCTIONS
