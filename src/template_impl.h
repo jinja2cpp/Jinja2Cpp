@@ -341,7 +341,7 @@ public:
                 parser.SetAutoescape(autoescape);
             }
 
-            const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect);
+            const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect, m_settings->sandboxPolicy != nullptr);
             auto parseResult = parser.Parse();
             if (!parseResult)
             {
@@ -665,7 +665,7 @@ public:
         }
         NodeArena nodes;
         TemplateParser<CharT> parser(m_template.get(), *m_settings, m_env, m_templateName, nodes);
-        const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect);
+        const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect, m_settings->sandboxPolicy != nullptr);
         auto parseResult = parser.Parse();
         if (!parseResult)
         {
@@ -711,7 +711,7 @@ public:
         NodeArena nodes;
         TemplateParser<CharT> parser(m_template.get(), *m_settings, m_env, m_templateName, nodes);
         parser.CollectReferenced();
-        const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect);
+        const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect, m_settings->sandboxPolicy != nullptr);
         auto parseResult = parser.Parse();
         if (!parseResult)
         {
@@ -862,6 +862,7 @@ private:
             : m_host(host)
         {
             SetPromptEscaper(host->m_settings->promptEscaper);
+            SetSandboxPolicy(host->m_settings->sandboxPolicy.get());
         }
 
         TargetString GetAsTargetString(const InternalValue& val) override

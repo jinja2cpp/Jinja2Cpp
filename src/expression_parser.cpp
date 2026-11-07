@@ -1278,7 +1278,8 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseSubscr
 // `loop.<attribute>` reads the attribute of a for loop's object directly (0117 P1)
 NodeRef<SubscriptExpression> ExpressionParser::MakeSubscript(NodeRef<Expression> value, const std::string& attrName)
 {
-    if (!attrName.empty() && m_nodes[value].GetKind() == NodeKind::NameRef && m_nodes.Get<ValueRefExpression>(value).GetName(m_nodes) == "loop")
+    // (a sandbox policy is asked about the attributes of loop by name, so the sandbox has no resolved attribute)
+    if (!attrName.empty() && !detail::t_parseLimits.sandboxed && m_nodes[value].GetKind() == NodeKind::NameRef && m_nodes.Get<ValueRefExpression>(value).GetName(m_nodes) == "loop")
     {
         if (const auto attr = FindLoopAttr(attrName); attr != LoopAttr::None)
         {

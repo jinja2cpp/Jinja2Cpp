@@ -3,6 +3,7 @@
 
 #include "common.h"
 
+#include "host_object.h"
 #include "internal_value.h"
 
 #include <memory>
@@ -31,9 +32,16 @@ struct RenderState
     // the render holds
     PyObject* environment = nullptr;
     PyObject* templateGlobals = nullptr;
+    // The environment when it is sandboxed (SandboxOf), whose is_safe_attribute and is_safe_callable the
+    // render asks for every attribute and call of a Python object (0354, the plan's D8); null for any other
+    PyObject* sandbox = nullptr;
     RenderState* outer = nullptr;
 };
 RenderState* CurrentRender() noexcept;
+// `environment` when its `sandboxed` attribute is true, else null
+PyObject* SandboxOf(nb::handle environment);
+// Sets the fields of `state` that depend on the environment object
+void InitRenderState(RenderState& state, nb::handle environment);
 // Whether this thread is known to hold the GIL (a render runs): PyRef::Release then needs no
 // PyGILState_Ensure, which the stable ABI has instead of PyGILState_Check
 bool HoldsGil() noexcept;
@@ -53,6 +61,10 @@ private:
 };
 
 class TemplateValue;
+
+// Runs the sandbox environment's `_check_native_hooks` (jinja2cpp/sandbox.py): an override of call, getattr or getitem
+// set after a template loaded is refused at each entry into the template's code, as at a load
+void CheckNativeSandboxHooks(PyObject* sandbox);
 
 // The template values a Python call got as arguments (a macro, `caller`, `loop`), lent for the
 // duration of that call: they refer to the render that made them, which may be gone once the

@@ -5,9 +5,12 @@
 #include "loaders.h"
 #include "poll.h"
 
+#include "adapters.h"
+#include "dialect.h"
 #include "host_object.h"
 #include "internal_value.h"
 #include "recursion_guard.h"
+#include "template_env_impl.h"
 #include "template_impl.h"
 
 #include <jinja2cpp/template.h>
@@ -97,6 +100,25 @@ void AddParams(jinja2::InternalValueMap& params, nb::handle mapping)
         {
             params[std::string(Utf8View(name))] = ToEngine(value);
         }
+    }
+}
+
+// The globals of a render. A sandbox replaces the global `range` (jinja2cpp.sandbox.safe_range, marked
+// `_native_range`) by the engine's own, which stops at the environment's Limits::maxRange without a call
+// to Python
+void AddGlobals(jinja2::InternalValueMap& params, nb::handle mapping, bool sandboxed)
+{
+    for (auto [name, value] : nb::borrow<nb::dict>(mapping))
+    {
+        if (!PyUnicode_Check(name.ptr()))
+        {
+            continue;
+        }
+        if (sandboxed && PyCallable_Check(value.ptr()) && PyObject_HasAttrString(value.ptr(), "_native_range") != 0 && Utf8View(name) == "range")
+        {
+            continue;
+        }
+        params[std::string(Utf8View(name))] = ToEngine(value);
     }
 }
 
@@ -484,7 +506,28 @@ void PyEnvironment::SetLoader(nb::handle loader)
 void PyEnvironment::Rebuild()
 {
     m_env = std::make_unique<jinja2::TemplateEnv>();
-    m_env->SetSettings(m_settings);
+    auto settings = m_settings;
+    bool immutable = false;
+    bool sandboxed = false;
+    if (const auto self = nb::find(this); self.is_valid() && SandboxOf(self))
+    {
+        sandboxed = true;
+        // SandboxedEnvironment: safe_range's MAX_RANGE is the engine's range limit, and the immutable
+        // form has the engine's list and dict methods that change their receiver refused
+        settings.limits.maxRange = nb::cast<std::uint64_t>(nb::module_::import_("jinja2cpp.sandbox").attr("MAX_RANGE"));
+        immutable = Truth(nb::getattr(self, "_sandbox_immutable", nb::bool_(false)));
+    }
+    m_env->SetSettings(settings);
+    if (immutable)
+    {
+        jinja2::detail::TemplateEnvAccess::GetImpl(*m_env)->SetDialect(jinja2::detail::Dialect::ImmutableSandbox);
+    }
+    m_sandboxed = sandboxed;
+    if (sandboxed)
+    {
+        m_sandboxPublicNames = SandboxJudgesPublicNames(nb::find(this));
+        jinja2::detail::TemplateEnvAccess::GetImpl(*m_env)->SetSandboxPolicy(MakePythonSandboxPolicy(nb::find(this), m_sandboxPublicNames));
+    }
     if (!m_loaderHandler && !m_loader.is_none())
     {
         m_loaderHandler = MakeLoader(m_loader, nb::find(this));
@@ -526,12 +569,31 @@ void PyEnvironment::SetGettext(nb::handle gettext, nb::handle ngettext, nb::hand
     ApplyGettext();
 }
 
+void PyEnvironment::CheckSandboxHooks() const
+{
+    if (!m_sandboxed)
+    {
+        return;
+    }
+    CheckNativeSandboxHooks(nb::find(this).ptr());
+}
+
 jinja2::TemplateEnv& PyEnvironment::Prepared()
 {
     CheckAlive();
     if (!m_env)
     {
         Rebuild();
+    }
+    if (m_sandboxed)
+    {
+        // is_safe_attribute may have been replaced since the last load, on the class or the instance
+        const auto self = nb::find(this);
+        if (const bool judges = SandboxJudgesPublicNames(self); judges != m_sandboxPublicNames)
+        {
+            m_sandboxPublicNames = judges;
+            jinja2::detail::TemplateEnvAccess::GetImpl(*m_env)->SetSandboxPolicy(MakePythonSandboxPolicy(self, judges));
+        }
     }
     // A template binds the filters and tests when it loads, as in Jinja2
     auto sync = [this](nb::handle dict, const char* what, std::vector<std::pair<std::string, PyObject*>>& bound, bool filters) {
@@ -731,6 +793,7 @@ PyTemplate::PyTemplate(jinja2::Template tpl, nb::object environment, nb::object 
 nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
 {
     auto& env = LiveEnvironment();
+    env.CheckSandboxHooks();
     // dict(*args, **kwargs), as Jinja2's render
     jinja2::InternalValueMap params;
     if (args.size() > 1)
@@ -743,17 +806,17 @@ nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
         AddParams(params, PyDict_CheckExact(first.ptr()) ? first : Names().dictType(first));
     }
     AddParams(params, kwargs);
-    // The globals: the environment's, then the template's over them
-    jinja2::InternalValueMap globals;
-    AddParams(globals, m_envGlobals);
-    if (!m_globals.is_none())
-    {
-        AddParams(globals, m_globals);
-    }
     RenderState state;
     state.undefinedClass = env.UndefinedClass();
-    state.environment = m_environment.ptr();
+    InitRenderState(state, m_environment);
     state.templateGlobals = m_globals.ptr();
+    // The globals: the environment's, then the template's over them
+    jinja2::InternalValueMap globals;
+    AddGlobals(globals, m_envGlobals, state.sandbox != nullptr);
+    if (!m_globals.is_none())
+    {
+        AddGlobals(globals, m_globals, state.sandbox != nullptr);
+    }
     std::string output;
     std::optional<jinja2::ErrorInfo> error;
     {

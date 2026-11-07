@@ -149,6 +149,20 @@ InternalValueList AttributePath(const InternalValue& attribute)
     return parts;
 }
 
+// A step of an attribute path in a sandbox: loop, a cycler, a namespace and a macro have their attributes judged by the
+// policy (methods::SandboxedSyntheticAttribute)
+InternalValue SandboxedSubscript(const InternalValue& obj, const InternalValue& part, RenderContext& context)
+{
+    if (IsStringValue(part))
+    {
+        if (auto replacement = methods::SandboxedSyntheticAttribute(&context, obj, AsString(part)))
+        {
+            return std::move(*replacement);
+        }
+    }
+    return Subscript(obj, part, &context);
+}
+
 // Jinja2's make_attrgetter: looks the path up item by item and replaces an undefined step
 // with `defaultVal` unless it is None or missing
 InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueList& path, const InternalValue& defaultVal, RenderContext& context)
@@ -158,7 +172,7 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
     {
         // An undefined step has no attributes, unless its policy is Chainable
         CheckUndefinedUse(result, UndefinedUse::Attribute);
-        auto next = Subscript(result, part, &context);
+        auto next = context.GetSandboxPolicy() ? SandboxedSubscript(result, part, context) : Subscript(result, part, &context);
         // getitem falls back to getattr: a number's data attributes (docs/tasks/0374)
         if (next.IsUndefined() && IsStringValue(part))
         {
@@ -491,12 +505,28 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     {
         if (isPlainDict || !map || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(attrName))
         {
-            return method->isMutating && methods::IsReadOnlyContainers(context) ? methods::UnsafeMethod(baseVal, attrName, context) : methods::MakeBoundMethod(baseVal, *method);
+            if (method->isMutating && methods::IsReadOnlyContainers(context))
+            {
+                return methods::UnsafeMethod(baseVal, attrName, context);
+            }
+            if (context.GetSandboxPolicy())
+            {
+                if (auto replacement = SandboxedNativeAttribute(&context, baseVal, attrName))
+                {
+                    return std::move(*replacement);
+                }
+            }
+            return methods::MakeBoundMethod(baseVal, *method);
         }
     }
     if (isPlainDict)
     {
         return missing();
+    }
+    // loop, a cycler, a namespace, a macro: the sandbox policy judges their attributes (zero cost without one)
+    if (auto replacement = methods::SandboxedSyntheticAttribute(&context, baseVal, attrName))
+    {
+        return std::move(*replacement);
     }
     if (auto attr = methods::GetNumberDataAttr(baseVal, attrName))
     {
@@ -1058,6 +1088,8 @@ InternalValue Sum(const ListAdapter& list, const InternalValueList& path, std::o
     InternalValue resultVal = start ? std::move(*start) : InternalValue(static_cast<int64_t>(0));
     list.ForEach([&](InternalValue&& val) {
         auto item = path.empty() ? std::move(val) : GetAttributeByPath(val, path, InternalValue(), context);
+        // An undefined item fails the addition as Python's __radd__ does (the sandbox's unsafe attribute among them)
+        CheckUndefinedUse(item, UndefinedUse::Arithmetic);
         // An undefined start fails the first addition (docs/tasks/0310)
         CheckUndefinedUse(resultVal, UndefinedUse::Arithmetic);
         resultVal = Apply2<visitors::BinaryMathOperation>(resultVal, item, BinaryExpression::Plus);

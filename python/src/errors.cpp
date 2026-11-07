@@ -2,6 +2,8 @@
 
 #include "error_boundary.h"
 
+#include "engine_errors.h"
+
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/value.h>
 
@@ -105,7 +107,21 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
     case ErrorCode::FileNotFound:
         Raise(names.templateNotFound, names.templateNotFound(message));
     case ErrorCode::UndefinedError:
+        // The use of an attribute the sandbox refused (jinja2::SecurityErrorMarker)
+        if (ParamText(error, 1) == jinja2::SecurityErrorMarker)
+        {
+            Raise(names.securityError, names.securityError(message));
+        }
         Raise(names.undefinedError, names.undefinedError(message));
+    case ErrorCode::ResourceLimitExceeded:
+        // The sandbox's range(): safe_range's OverflowError
+        if (ParamText(error, 1) == "maxRange")
+        {
+            const auto limit = Utf8(nb::steal(PyObject_Str(nb::module_::import_("jinja2cpp.sandbox").attr("MAX_RANGE").ptr())));
+            PyErr_SetObject(PyExc_OverflowError, MakeStr("Range too big. The sandbox blocks ranges larger than MAX_RANGE (" + limit + ").").ptr());
+            throw nb::python_error();
+        }
+        Raise(names.templateRuntimeError, names.templateRuntimeError(message));
     case ErrorCode::IntegerOutOfRange:
         PyErr_SetObject(PyExc_OverflowError, message.ptr());
         throw nb::python_error();

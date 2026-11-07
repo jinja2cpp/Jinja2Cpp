@@ -528,6 +528,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/global_functions_test.cpp
         test/helpers_tests.cpp
         test/host_object_test.cpp
+        test/sandbox_policy_test.cpp
         test/i18n_test.cpp
         test/limits_test.cpp
         test/if_test.cpp

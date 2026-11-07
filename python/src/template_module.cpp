@@ -212,6 +212,7 @@ public:
         }
         auto& env = nb::cast<PyEnvironment&>(m_environment);
         env.CheckAlive();
+        env.CheckSandboxHooks();
         // One budget for all the arguments of the call
         ModuleParams convert;
         jinja2::ValuesList positional;
@@ -233,6 +234,7 @@ public:
         // What pass_environment, pass_eval_context and pass_context callables of the macro need
         state.environment = m_environment.ptr();
         state.templateGlobals = m_templateGlobals.ptr();
+        state.sandbox = SandboxOf(m_environment);
         const RenderScope scope(state);
         const HostPollScope poll;
         try
@@ -361,6 +363,7 @@ PyEnvironment& PyTemplate::LiveEnvironment() const
 nb::tuple PyTemplate::MakeModule(nb::handle params) const
 {
     auto& env = LiveEnvironment();
+    env.CheckSandboxHooks();
     if (!PyDict_Check(params.ptr()))
     {
         RaiseTypeError("make_module takes a dict of variables");
@@ -378,6 +381,7 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
     state.undefinedClass = env.UndefinedClass();
     state.environment = m_environment.ptr();
     state.templateGlobals = m_globals.ptr();
+    state.sandbox = SandboxOf(m_environment);
     const RenderScope scope(state);
     const HostPollScope poll;
     auto result = m_template.MakeModule(values);

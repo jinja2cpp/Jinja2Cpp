@@ -221,12 +221,44 @@ class Environment(_jinja2cpp.Environment):
             kwargs[name] = value
         super().__init__(**kwargs)
 
+    #: whether the environment is a sandbox (jinja2cpp.sandbox), which checks every attribute and call
+    #: of a Python object a template reaches
+    sandboxed = False
+
     #: the class of the templates ``from_string`` and ``get_template`` make
     template_class: t.Type[Template] = Template
 
     def from_string(self, source: t.Any, globals: t.Optional[t.Mapping[str, t.Any]] = None, template_class: t.Optional[t.Type[Template]] = None) -> Template:
         """Load a template from a source string without using ``loader``."""
         return self._from_string(source, globals, template_class or self.template_class)  # type: ignore[no-any-return]
+
+    def getitem(self, obj: t.Any, argument: t.Union[str, t.Any]) -> t.Union[t.Any, Undefined]:
+        """Get an item or attribute of an object but prefer the item."""
+        try:
+            return obj[argument]
+        except (AttributeError, TypeError, LookupError):
+            if isinstance(argument, str):
+                try:
+                    attr = str(argument)
+                except Exception:
+                    pass
+                else:
+                    try:
+                        return getattr(obj, attr)
+                    except AttributeError:
+                        pass
+            return self.undefined(obj=obj, name=argument)  # type: ignore[attr-defined, no-any-return]
+
+    def getattr(self, obj: t.Any, attribute: str) -> t.Any:
+        """Get an item or attribute of an object but prefer the attribute."""
+        try:
+            return getattr(obj, attribute)
+        except AttributeError:
+            pass
+        try:
+            return obj[attribute]
+        except (TypeError, LookupError, AttributeError):
+            return self.undefined(obj=obj, name=attribute)  # type: ignore[attr-defined, no-any-return]
 
     def join_path(self, template: str, parent: str) -> str:
         """Join a template with the parent. By default all the lookups are relative to the loader root, so this is a noop; override it to change that."""
