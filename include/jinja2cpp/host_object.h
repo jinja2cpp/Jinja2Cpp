@@ -7,6 +7,7 @@
 #include <jinja2cpp/value.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <new> // IWYU pragma: keep (placement new)
 #include <optional>
@@ -22,6 +23,60 @@ namespace jinja2
 {
 inline namespace v2
 {
+namespace detail
+{
+struct HostResultAccess;
+} // namespace detail
+
+/*!
+ * \brief Where a host object writes the value of a read the engine asks for
+ *
+ * The fast forms of \ref IHostObject (\ref IHostObject::GetAttrTo, \ref IHostObject::GetItemTo, \ref
+ * IHostObject::ItemAtTo) write their result here instead of returning a \ref Value: a scalar or a string goes
+ * straight into the engine's own storage, with no \ref Value made and converted. Only the library makes one, for
+ * the duration of one call; the object writes it at most once per call, and the last write wins. A read that returns
+ * true without writing gives `None`.
+ */
+class JINJA2CPP_EXPORT HostResult
+{
+public:
+    HostResult(const HostResult&) = delete;
+    HostResult(HostResult&&) = delete;
+    HostResult& operator=(const HostResult&) = delete;
+    HostResult& operator=(HostResult&&) = delete;
+    ~HostResult() = default;
+
+    //! `None`
+    void SetNone();
+    //! A `bool`
+    void Set(bool value);
+    //! An `int` within int64
+    void Set(int64_t value);
+    //! Any other integer type, as an `int`; an unsigned value above `INT64_MAX` wraps, so pass it as a \ref Value
+    template<typename T, typename = std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<T, bool> && !std::is_same_v<T, int64_t>>>
+    void Set(T value)
+    {
+        Set(static_cast<int64_t>(value));
+    }
+    //! A `float`
+    void Set(double value);
+    //! A `str`, UTF-8; the text is copied
+    void SetString(std::string_view text);
+    //! A `Markup` (printed unescaped under autoescape), UTF-8; the text is copied
+    void SetMarkup(std::string_view text);
+    //! Any value, as \ref IHostObject::GetAttr would return it
+    void Set(Value value);
+    //! A pointer is not a `bool`: use \ref SetString for text
+    void Set(const char*) = delete;
+
+private:
+    friend struct detail::HostResultAccess;
+    explicit HostResult(void* target) noexcept;
+
+    // The engine's value the result goes to
+    void* m_target;
+};
+
 /*!
  * \brief An object of a host language that templates read as that language reads it
  *
@@ -33,11 +88,13 @@ inline namespace v2
  *
  * The template asks the object where Python asks the object:
  * - printing: \ref Str, and \ref Repr inside a container; \ref Html under autoescape when \ref IsMarkupLike
- * - `x.name`: \ref GetAttr, then \ref GetItem with the name (Jinja2's `Environment.getattr`)
- * - `x[key]`: \ref GetItem, then \ref GetAttr for a string key (Jinja2's `Environment.getitem`)
+ * - `x.name`: \ref GetAttrTo, then \ref GetItemTo with the name (Jinja2's `Environment.getattr`)
+ * - `x[key]`: \ref GetItemTo for a string key, else \ref GetItem; then \ref GetAttrTo for a string key (Jinja2's
+ *   `Environment.getitem`)
  * - `x[start:stop:step]`: \ref GetSlice, with no fallback
  * - `x(...)`: \ref Call, when \ref IsCallable
- * - iteration (`for`, `list`, `in` without \ref Contains): \ref Iterate
+ * - iteration (`for`, `list`, `in` without \ref Contains): \ref Len and \ref ItemAtTo for a \ref IsSequence object
+ *   with a length, else \ref Iterate
  * - `reversed`: \ref Reversed
  * - `len`: \ref Len; truth: \ref Truth
  * - `==`, `!=`: \ref Equals of the left operand, then of the right one, then \ref Identity
@@ -81,6 +138,40 @@ public:
     [[nodiscard]] virtual std::optional<Value> GetAttr(std::string_view name) const = 0;
     //! `x[key]`; empty when there is no such item or the object has no items
     [[nodiscard]] virtual std::optional<Value> GetItem(const Value& key) const;
+    /*!
+     * \brief \ref GetAttr, with the value written to `out`
+     *
+     * The engine reads `x.name` (and `x[key]`'s fallback) through this form only. The default forwards to \ref
+     * GetAttr; an object whose attributes are often scalars or strings overrides it to skip the \ref Value.
+     *
+     * @return false when there is no such attribute (\ref GetAttr's empty result); `out` is then not read
+     */
+    [[nodiscard]] virtual bool GetAttrTo(std::string_view name, HostResult& out) const;
+    /*!
+     * \brief \ref GetItem of a string key, with the value written to `out`
+     *
+     * The engine reads `x["key"]` (and `x.name`'s fallback) through this form only; a key of any other type goes to
+     * \ref GetItem. `key` may hold any byte, NUL included. The default forwards to \ref GetItem with
+     * `Value(std::string(key))`.
+     *
+     * @return false when there is no such item; `out` is then not read
+     */
+    [[nodiscard]] virtual bool GetItemTo(std::string_view key, HostResult& out) const;
+    /*!
+     * \brief Item `index` of a \ref IsSequence object, with the value written to `out`
+     *
+     * The engine iterates an \ref IsSequence object that has a \ref Len by index: it asks \ref Len before every step
+     * (a list the template shortens or extends while it loops ends where Python's list iterator ends), then this for
+     * the item, so one iteration step is two calls and no \ref GenericList. `index` is below the \ref Len the
+     * engine just read, unless the object changed in between.
+     *
+     * The default reads \ref Iterate: by index when its list has an indexer and a size, else by stepping an
+     * enumerator `index + 1` times. It is correct for any object, but makes a list per item; a sequence with
+     * random access should override it.
+     *
+     * @return false past the end (`IndexError`), or for an object that is no sequence; `out` is then not read
+     */
+    [[nodiscard]] virtual bool ItemAtTo(size_t index, HostResult& out) const;
     /*!
      * \brief `x[slice(start, stop, step)]`
      *

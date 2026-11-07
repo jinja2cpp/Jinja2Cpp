@@ -3,6 +3,7 @@
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/generic_list_iterator.h> // IWYU pragma: keep (GenericList::iterator is only declared in generic_list.h)
 #include <jinja2cpp/host_object.h>
+#include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
@@ -1193,4 +1194,260 @@ TEST(PublicHostObjectTest, ValueMadeInPlaceLivesAcrossThreads)
     EXPECT_EQ(1, count.alive);
     value = Value();
     EXPECT_EQ(0, count.alive);
+}
+
+namespace
+{
+// A host list with attributes and string keys, which the template can shorten while it loops (`s.pop()`), for the fast
+// reads (GetAttrTo, GetItemTo, ItemAtTo) against the D2a forms they default to
+struct SeqState
+{
+    std::vector<Value> items;
+    std::map<std::string, Value> attrs;
+    std::map<std::string, Value> keyed;
+    // The last key GetItemTo saw, bytes as given
+    std::string lastKey;
+    // How many reads the fast forms answered
+    int fastReads = 0;
+    // What Len adds to the number of items: a length that runs ahead of them
+    size_t extraLen = 0;
+};
+
+// The items as the host has them now: the size is read at each step
+class LiveList final : public IListItemAccessor
+    , private IIndexBasedAccessor
+{
+public:
+    explicit LiveList(std::shared_ptr<SeqState> state)
+        : m_state(std::move(state))
+    {
+    }
+
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return this; }
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Enumerator>(m_state); }
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return m_state->items.size(); }
+
+private:
+    class Enumerator final : public IListEnumerator
+    {
+    public:
+        explicit Enumerator(std::shared_ptr<SeqState> state)
+            : m_state(std::move(state))
+        {
+        }
+        void Reset() override { m_next = 0; }
+        bool MoveNext() override
+        {
+            if (m_next >= m_state->items.size())
+            {
+                return false;
+            }
+            m_current = m_next++;
+            return true;
+        }
+        [[nodiscard]] Value GetCurrent() const override { return m_current < m_state->items.size() ? m_state->items[m_current] : Value(); }
+        [[nodiscard]] ListEnumeratorPtr Clone() const override { return MakeEnumerator<Enumerator>(*this); }
+        ListEnumeratorPtr Move() override { return MakeEnumerator<Enumerator>(*this); }
+
+    private:
+        std::shared_ptr<SeqState> m_state;
+        size_t m_next = 0;
+        size_t m_current = 0;
+    };
+
+    [[nodiscard]] Value GetItemByIndex(int64_t idx) const override { return m_state->items[static_cast<size_t>(idx)]; }
+
+    std::shared_ptr<SeqState> m_state;
+};
+
+// `Fast` overrides the three fast reads, writing scalars and text straight into the result; the other answers the D2a
+// forms only
+template<bool Fast>
+class SeqObject final : public IHostObject
+{
+public:
+    explicit SeqObject(std::shared_ptr<SeqState> state)
+        : m_state(std::move(state))
+    {
+    }
+
+    [[nodiscard]] const char* TypeName() const override { return "Seq"; }
+    [[nodiscard]] std::string Str() const override { return "seq"; }
+    [[nodiscard]] std::string Repr() const override { return "<Seq>"; }
+    [[nodiscard]] std::optional<Value> GetAttr(std::string_view name) const override
+    {
+        if (name == "pop")
+        {
+            auto state = m_state;
+            return Value(UserCallable(
+                [state](const UserCallableParams& /*params*/) {
+                    Value last = state->items.back();
+                    state->items.pop_back();
+                    return last;
+                },
+                {}));
+        }
+        return Find(m_state->attrs, std::string(name));
+    }
+    [[nodiscard]] std::optional<Value> GetItem(const Value& key) const override
+    {
+        if (key.IsString())
+        {
+            m_state->lastKey = key.AsString();
+            return Find(m_state->keyed, key.AsString());
+        }
+        if (key.IsInt() && key.AsInt() >= 0 && static_cast<size_t>(key.AsInt()) < m_state->items.size())
+        {
+            return m_state->items[static_cast<size_t>(key.AsInt())];
+        }
+        return std::nullopt;
+    }
+    [[nodiscard]] bool GetAttrTo(std::string_view name, HostResult& out) const override
+    {
+        if constexpr (!Fast)
+        {
+            return IHostObject::GetAttrTo(name, out);
+        }
+        if (name == "pop")
+        {
+            return IHostObject::GetAttrTo(name, out);
+        }
+        const auto pos = m_state->attrs.find(std::string(name));
+        return pos != m_state->attrs.end() && Write(pos->second, out);
+    }
+    [[nodiscard]] bool GetItemTo(std::string_view key, HostResult& out) const override
+    {
+        if constexpr (!Fast)
+        {
+            return IHostObject::GetItemTo(key, out);
+        }
+        m_state->lastKey = std::string(key);
+        const auto pos = m_state->keyed.find(m_state->lastKey);
+        return pos != m_state->keyed.end() && Write(pos->second, out);
+    }
+    [[nodiscard]] bool ItemAtTo(size_t index, HostResult& out) const override
+    {
+        if constexpr (!Fast)
+        {
+            return IHostObject::ItemAtTo(index, out);
+        }
+        return index < m_state->items.size() && Write(m_state->items[index], out);
+    }
+    [[nodiscard]] bool IsIterable() const override { return true; }
+    [[nodiscard]] std::optional<GenericList> Iterate() const override { return GenericList(std::make_shared<const LiveList>(m_state)); }
+    [[nodiscard]] std::optional<size_t> Len() const override { return m_state->items.size() + m_state->extraLen; }
+    [[nodiscard]] bool IsSequence() const override { return true; }
+    [[nodiscard]] const void* Identity() const override { return m_state.get(); }
+
+private:
+    bool Write(const Value& value, HostResult& out) const
+    {
+        ++m_state->fastReads;
+        if (value.IsNone())
+        {
+            out.SetNone();
+        }
+        else if (const auto* flag = value.GetIf<bool>())
+        {
+            out.Set(*flag);
+        }
+        else if (const auto* number = value.GetIf<int64_t>())
+        {
+            out.Set(*number);
+        }
+        else if (const auto* real = value.GetIf<double>())
+        {
+            out.Set(*real);
+        }
+        else if (value.IsMarkup())
+        {
+            out.SetMarkup(value.AsString());
+        }
+        else if (const auto* text = value.GetIf<std::string>())
+        {
+            out.SetString(*text);
+        }
+        else
+        {
+            out.Set(value);
+        }
+        return true;
+    }
+    static std::optional<Value> Find(const std::map<std::string, Value>& map, const std::string& key)
+    {
+        auto pos = map.find(key);
+        return pos == map.end() ? std::nullopt : std::make_optional(pos->second);
+    }
+
+    std::shared_ptr<SeqState> m_state;
+};
+
+std::shared_ptr<SeqState> MakeSeqState()
+{
+    auto state = std::make_shared<SeqState>();
+    state->items = { Value(1), Value("b"), Value(2.5), Value(true), Value(), Value(Markup("<i>")), MakeToy(Rich()) };
+    state->attrs = { { "name", Value("attr-name") }, { "both", Value("attr-both") }, { "n", Value(int64_t{ 7 }) }, { "f", Value(0.5) }, { "flag", Value(false) }, { "none", Value() }, { "html", Value(Markup("<b>")) }, { "toy", MakeToy(Rich()) } };
+    state->keyed = { { "key", Value("item-key") }, { "both", Value("item-both") }, { std::string("a\0b", 3), Value("nul-key") } };
+    return state;
+}
+} // namespace
+
+TEST(PublicHostObjectTest, FastReadsRenderAsTheValueForms)
+{
+    const std::string source = "{{ s.name }}|{{ s.both }}|{{ s['both'] }}|{{ s.key }}|{{ s['name'] }}|{{ s.n + 1 }}|{{ s.f }}|{{ s.flag }}|{{ s.none }}|{{ s.none is none }}"
+                               "|{{ s.missing is defined }}|{{ s['missing'] is defined }}|{{ s.toy.name }}|{{ s.html }}"
+                               "|{% for i in s %}{{ i }},{% endfor %}|{{ s|list }}|{{ s|join('-') }}|{{ s|length }}|{{ s|first }}|{{ s[1] }}"
+                               "|{% for i in s %}{{ loop.index }}/{{ loop.length }}{{ '' if loop.last else ' ' }}{% endfor %}|{{ s|select('number')|list }}";
+    auto slow = MakeSeqState();
+    auto fast = MakeSeqState();
+    const auto slowText = Render(source, { { "s", MakeHostValue<SeqObject<false>>(slow) } }, { UndefinedPolicy::Default, true });
+    const auto fastText = Render(source, { { "s", MakeHostValue<SeqObject<true>>(fast) } }, { UndefinedPolicy::Default, true });
+    EXPECT_EQ(slowText, fastText);
+    EXPECT_EQ("attr-name|attr-both|item-both|item-key|attr-name|8|0.5|False|None|True|False|False|attr-name|<b>"
+              "|1,b,2.5,True,None,<i>,Тоу,|[1, &#39;b&#39;, 2.5, True, None, Markup(&#39;&lt;i&gt;&#39;), &lt;Toy&gt;]|1-b-2.5-True-None-<i>-Тоу|7|1|b"
+              "|1/7 2/7 3/7 4/7 5/7 6/7 7/7|[1, 2.5, True]",
+              fastText);
+    EXPECT_EQ(0, slow->fastReads);
+    EXPECT_LT(0, fast->fastReads);
+    const std::wstring wide = L"{{ s.name }}|{{ s['key'] }}|{% for i in s %}{{ i }},{% endfor %}";
+    EXPECT_EQ(Render<wchar_t>(wide, { { "s", MakeHostValue<SeqObject<false>>(MakeSeqState()) } }), Render<wchar_t>(wide, { { "s", MakeHostValue<SeqObject<true>>(MakeSeqState()) } }));
+}
+
+TEST(PublicHostObjectTest, FastItemReadKeepsAnEmbeddedNul)
+{
+    for (const bool fast : { false, true })
+    {
+        auto state = MakeSeqState();
+        const Value s = fast ? MakeHostValue<SeqObject<true>>(state) : MakeHostValue<SeqObject<false>>(state);
+        const ValuesMap params{ { "s", s }, { "k", Value(std::string("a\0b", 3)) } };
+        EXPECT_EQ("nul-key|False", Render("{{ s[k] }}|{{ s['a'] is defined }}", params)) << fast;
+        EXPECT_EQ(std::string("a", 1), state->lastKey) << fast;
+        EXPECT_EQ("nul-key", Render("{{ s[k] }}", params)) << fast;
+        EXPECT_EQ(std::string("a\0b", 3), state->lastKey) << fast;
+    }
+}
+
+TEST(PublicHostObjectTest, FastSequenceReadFollowsTheLiveLength)
+{
+    for (const bool fast : { false, true })
+    {
+        auto state = MakeSeqState();
+        state->items = { Value(1), Value(2), Value(3), Value(4) };
+        const Value s = fast ? MakeHostValue<SeqObject<true>>(state) : MakeHostValue<SeqObject<false>>(state);
+        // Python: the list iterator stops at the live end, [1, 2]
+        EXPECT_EQ("1,2,|[1, 2]", Render("{% for i in s %}{{ i }},{% do s.pop() %}{% endfor %}|{{ s|list }}", { { "s", s } })) << fast;
+        // Emptied in the loop's first step
+        state->items = { Value(1), Value(2) };
+        EXPECT_EQ("1;|0", Render("{% for i in s %}{{ i }};{% do s.pop() %}{% do s.pop() %}{% endfor %}|{{ s|length }}", { { "s", s } })) << fast;
+        EXPECT_EQ("|", Render("{% for i in s %}{{ i }}{% endfor %}|{{ s|join }}", { { "s", s } })) << fast;
+    }
+    // An object whose length is ahead of its items: the read past the end is false, and the step is undefined
+    for (const bool fast : { false, true })
+    {
+        auto state = MakeSeqState();
+        state->items = { Value(1) };
+        state->extraLen = 1;
+        const Value s = fast ? MakeHostValue<SeqObject<true>>(state) : MakeHostValue<SeqObject<false>>(state);
+        EXPECT_EQ("1,False,|1", Render("{% for i in s %}{{ i if i is defined else (i is defined) }},{% endfor %}|{{ s[0] }}{{ s[5] }}", { { "s", s } })) << fast;
+    }
 }
