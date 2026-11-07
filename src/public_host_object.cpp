@@ -298,7 +298,7 @@ public:
     }
 
     // The bridge and the object after it are one block
-    static void operator delete(void* block) noexcept { ::operator delete(block); }
+    static void operator delete(void* block) noexcept { ::operator delete(block); } // NOLINT(misc-new-delete-overloads): allocated by NewInlineBridge
 
     [[nodiscard]] const IHostObject& Object() const noexcept { return *m_engine.Object(); }
     // The description when the object is MakeUndefined's, else null
@@ -306,7 +306,7 @@ public:
     void SetUndefined(const UndefinedDescription* description) noexcept { m_undefined = description; }
 
     // The GenericMap that holds `bridge`
-    static GenericMap Share(IntrusivePtr<const HostBridge> bridge) { return GenericMap(bridge->MakeShared()); }
+    static GenericMap Share(const IntrusivePtr<const HostBridge>& bridge) { return GenericMap(bridge->MakeShared()); }
 
     // The engine's accessor
     [[nodiscard]] const IEngineHostObject* GetHostObject() const override { return &m_engine; }
@@ -380,7 +380,7 @@ private:
             : bridge(other.bridge)
         {
         }
-        U* allocate(size_t count)
+        U* allocate(size_t count) // NOLINT(readability-identifier-naming): the Allocator requirements
         {
             intrusive_ptr_add_ref(bridge);
             if (sizeof(U) * count <= sizeof(HostBridge::m_slot) && alignof(U) <= alignof(std::max_align_t) && !bridge->m_slotBusy.exchange(true, std::memory_order_acquire))
@@ -397,7 +397,7 @@ private:
                 throw;
             }
         }
-        void deallocate(U* block, size_t /*count*/) noexcept
+        void deallocate(U* block, size_t /*count*/) noexcept // NOLINT(readability-identifier-naming): the Allocator requirements
         {
             const HostBridge* owner = bridge; // the bridge may go with its reference, below
             if (reinterpret_cast<unsigned char*>(block) == owner->m_slot)
@@ -440,11 +440,15 @@ private:
     alignas(std::max_align_t) mutable unsigned char m_slot[48]{};
 };
 
+constexpr size_t AlignUp(size_t value, size_t align) noexcept
+{
+    return (value + align - 1) / align * align;
+}
+
 // A bridge for an object `construct` places in the same block (the object is not owned elsewhere)
 IntrusivePtr<HostBridge> NewInlineBridge(size_t size, size_t align, const IHostObject* (*construct)(void* where, void* context), void* context)
 {
-    constexpr size_t Header = (sizeof(HostBridge) + alignof(std::max_align_t) - 1) / alignof(std::max_align_t) * alignof(std::max_align_t);
-    const size_t offset = (Header + align - 1) / align * align;
+    const size_t offset = AlignUp(AlignUp(sizeof(HostBridge), alignof(std::max_align_t)), align);
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory): owned by the bridge below
     void* block = ::operator new(offset + size);
     const IHostObject* object = nullptr;

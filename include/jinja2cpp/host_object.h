@@ -8,7 +8,7 @@
 
 #include <cstddef>
 #include <memory>
-#include <new>
+#include <new> // IWYU pragma: keep (placement new)
 #include <optional>
 #include <string>
 #include <string_view>

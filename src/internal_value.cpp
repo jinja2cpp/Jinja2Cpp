@@ -1955,7 +1955,7 @@ public:
             {
                 return {};
             }
-            Enumerator copy = m_indexer ? Enumerator(m_accessor, m_indexer, m_owner, m_list) : Enumerator((*m_enum)->Clone(), m_owner, m_list);
+            auto copy = m_enum ? Enumerator((*m_enum)->Clone(), m_owner, m_list) : Enumerator(m_accessor, m_indexer, m_owner, m_list);
             copy.m_next = m_next;
             copy.m_onCell = m_onCell;
             return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(copy));
@@ -1966,7 +1966,7 @@ public:
             {
                 return {};
             }
-            Enumerator moved = m_indexer ? Enumerator(m_accessor, m_indexer, std::move(m_owner), m_list) : Enumerator(std::move(m_enum), std::move(m_owner), m_list);
+            auto moved = m_enum ? Enumerator(std::move(m_enum), std::move(m_owner), m_list) : Enumerator(m_accessor, m_indexer, std::move(m_owner), m_list);
             moved.m_next = m_next;
             moved.m_onCell = m_onCell;
             return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(moved));
@@ -2138,9 +2138,12 @@ public:
         {
             return {};
         }
-        if (const auto* indexer = accessor->GetIndexer(); indexer && accessor->GetSize())
+        if (const auto* indexer = accessor->GetIndexer())
         {
-            return ListAccessorEnumeratorPtr(Enumerator(accessor, indexer, GenericOwner(m_values), this));
+            if (accessor->GetSize().has_value())
+            {
+                return ListAccessorEnumeratorPtr(Enumerator(accessor, indexer, GenericOwner(m_values), this));
+            }
         }
         return ListAccessorEnumeratorPtr(Enumerator(accessor->CreateEnumerator(), GenericOwner(m_values), this));
     }

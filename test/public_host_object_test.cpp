@@ -1169,6 +1169,7 @@ TEST(PublicHostObjectTest, ValueMadeInPlaceLivesAcrossThreads)
     LifeCount count;
     Value value = MakeHostValue<Counted>(count, "obj");
     std::vector<std::thread> threads;
+    threads.reserve(4);
     std::atomic<int> rendered{ 0 };
     for (int i = 0; i < 4; ++i)
     {
