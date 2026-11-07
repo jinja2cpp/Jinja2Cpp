@@ -319,3 +319,17 @@ def test_folded_output_with_raising_finalize_under_autoescape(source):
         env = module.Environment(autoescape=True, finalize=finalize)
         results.append(env.from_string(source).render(x="<"))
     assert results[0] == results[1]
+
+
+@pytest.mark.parametrize("error", [KeyboardInterrupt, SystemExit, GeneratorExit])
+def test_folded_output_finalize_base_exception_ends_the_render(error):
+    # Jinja2's fold catches Exception only: KeyboardInterrupt and the other BaseExceptions go through
+    def finalize(value):
+        if isinstance(value, jinja2cpp.Markup):
+            raise error("stop")
+        return value
+
+    for module in modules():
+        env = module.Environment(autoescape=True, finalize=finalize)
+        with pytest.raises(error, match="stop"):
+            env.from_string("{{ 1 }}").render()

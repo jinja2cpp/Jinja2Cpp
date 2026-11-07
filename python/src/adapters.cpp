@@ -2,6 +2,7 @@
 
 #include "context.h"
 #include "convert.h"
+#include "engine_errors.h"
 
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
@@ -614,7 +615,41 @@ const PyHost* AsPyHost(const InternalValue& value)
     return static_cast<const PyHost*>(jinja2::GetHostObject(value));
 }
 
+namespace
+{
+// A Python BaseException outside Exception (KeyboardInterrupt, SystemExit): the engine lets it
+// through where Jinja2's `except Exception` does (engine_errors.h), and the render raises it whole
+class PyUnrecoverableError final : public nb::python_error, public jinja2::detail::HostUnrecoverableError
+{
+public:
+    explicit PyUnrecoverableError(nb::python_error&& error) noexcept
+        : nb::python_error(std::move(error))
+    {
+    }
+};
+
+InternalValue CallPythonImpl(PyObject* callable, const CallParams& params, RenderContext& context);
+} // namespace
+
 InternalValue CallPython(PyObject* callable, const CallParams& params, RenderContext& context)
+{
+    try
+    {
+        return CallPythonImpl(callable, params, context);
+    }
+    catch (nb::python_error& error)
+    {
+        if (error.matches(PyExc_Exception))
+        {
+            throw;
+        }
+        throw PyUnrecoverableError(std::move(error));
+    }
+}
+
+namespace
+{
+InternalValue CallPythonImpl(PyObject* callable, const CallParams& params, RenderContext& context)
 {
     const LeaseScope lease(context);
     // pass_context and its kin: the argument the callable asked for goes first
@@ -654,5 +689,6 @@ InternalValue CallPython(PyObject* callable, const CallParams& params, RenderCon
     const auto result = Steal(PyObject_Vectorcall(callable, args.data() + 1, positional | PY_VECTORCALL_ARGUMENTS_OFFSET, names.ptr()));
     return ToEngine(result);
 }
+} // namespace
 
 } // namespace jinja2cpp_py
