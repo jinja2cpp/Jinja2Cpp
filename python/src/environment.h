@@ -40,6 +40,10 @@ public:
     // The translation callables of the i18n extension, as the engine takes them (None for none):
     // gettext, ngettext, pgettext, npgettext. The environment keeps them alive
     void SetGettext(nb::handle gettext, nb::handle ngettext, nb::handle pgettext, nb::handle npgettext);
+    // transformers' chat-template environment (jinja2cpp.integrations.transformers): the engine's
+    // ConfigureForChatTemplates on every rebuild, with `clock` (a callable giving a POSIX
+    // timestamp, kept alive by the environment; None for the system clock) as strftime_now's clock
+    void SetChatTemplates(nb::handle clock);
     [[nodiscard]] bool NewstyleGettext() const noexcept { return m_newstyleGettext; }
     void SetNewstyleGettext(bool newstyle) noexcept { m_newstyleGettext = newstyle; }
 
@@ -61,6 +65,9 @@ public:
     // load must not be ignored); nothing for another environment
     void CheckSandboxHooks() const;
     [[nodiscard]] const nb::object& Globals() const noexcept { return m_globals; }
+    // The globals the engine's environment has of its own (ConfigureForChatTemplates' raise_exception
+    // and strftime_now), which a render adds below env.globals; null when there are none
+    [[nodiscard]] const std::shared_ptr<const jinja2::ValuesMap>& EngineGlobals() const noexcept { return m_engineGlobals; }
     // Where a template the loader gives came from, for its errors and Template.filename
     ErrorSource SourceOf(const std::string& name) const;
     void CheckAlive() const;
@@ -75,6 +82,7 @@ private:
     void SetExtensions(nb::handle value);
     void Keep(nb::handle object);
     void ApplyGettext();
+    void ApplyChatTemplates();
     nb::object MakeTemplate(jinja2::Template tpl, nb::handle globals, nb::object name, nb::object filename, nb::handle templateClass);
 
     std::unique_ptr<jinja2::TemplateEnv> m_env;
@@ -100,6 +108,10 @@ private:
     // The i18n callables, borrowed from m_kept; null for none
     PyObject* m_gettext[4] = {};
     bool m_newstyleGettext = false;
+    // SetChatTemplates: on, and its clock, borrowed from m_kept (null for the system clock)
+    bool m_chatTemplates = false;
+    PyObject* m_chatClock = nullptr;
+    std::shared_ptr<const jinja2::ValuesMap> m_engineGlobals;
     bool m_cleared = false;
 };
 

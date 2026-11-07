@@ -9,10 +9,10 @@ performance gate (docs/tasks/0353): jinja2cpp is faster on Load and on Render fo
 Run it on a Release build of the module:
     PYTHONPATH=build-py-rel/python python3 python/bench/bench_module.py [--min-time S] [--filter RE] [--json FILE]
 
-A case whose settings.json asks for transformers' environment (hf_*) runs with an environment
-configured as bench/python_bench.py configures Jinja2's, without the sandbox, which the module
-does not have yet (docs/tasks/0354): trim_blocks, lstrip_blocks, loopcontrols, and Python's
-tojson, raise_exception and strftime_now. Python Jinja2 runs as bench/python_bench.py runs it.
+A case whose settings.json asks for transformers' environment (hf_*) runs in the environment
+jinja2cpp.integrations.transformers.patch() uses (chat_template_environment: the sandbox, and
+tojson, raise_exception and strftime_now in the engine); Python Jinja2 runs as
+bench/python_bench.py runs it.
 """
 import argparse
 import datetime
@@ -25,8 +25,11 @@ import sys
 
 import jinja2
 import jinja2cpp
+from jinja2cpp.integrations.transformers import chat_template_environment
 
 HERE = pathlib.Path(__file__).resolve().parent
+# bench/python_bench.py's clock for strftime_now
+FIXED_NOW = datetime.datetime(2025, 3, 14, 9, 26, 53).timestamp()
 ROOT = HERE.parent.parent
 
 
@@ -41,17 +44,8 @@ def load_reference():
 def module_environment(case_dir, settings):
     templates = {p.name: p.read_text(encoding="utf-8") for p in case_dir.glob("*.j2") if p.name != "main.j2"}
     if settings.get("transformers"):
-        def raise_exception(message):
-            raise jinja2cpp.TemplateError(message)
-
-        def tojson(x, ensure_ascii=False, indent=None, separators=None, sort_keys=False):
-            return json.dumps(x, ensure_ascii=ensure_ascii, indent=indent, separators=separators, sort_keys=sort_keys)
-
-        env = jinja2cpp.Environment(trim_blocks=True, lstrip_blocks=True, extensions=["jinja2.ext.loopcontrols"])
-        env.filters["tojson"] = tojson
-        env.globals["raise_exception"] = raise_exception
-        env.globals["strftime_now"] = lambda fmt: datetime.datetime(2025, 3, 14, 9, 26, 53).strftime(fmt)
-        return env
+        # What jinja2cpp.integrations.transformers.patch() compiles chat templates in
+        return chat_template_environment(lambda: FIXED_NOW)
     options = {k: v for k, v in settings.items() if k in ("trim_blocks", "lstrip_blocks", "autoescape")}
     return jinja2cpp.Environment(loader=jinja2cpp.DictLoader(templates), **options)
 

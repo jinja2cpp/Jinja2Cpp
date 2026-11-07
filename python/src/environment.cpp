@@ -13,8 +13,14 @@
 #include "template_env_impl.h"
 #include "template_impl.h"
 
+#include <jinja2cpp/features.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
+#if JINJA2CPP_HAS_CHAT_TEMPLATES
+#include <jinja2cpp/chat_template.h>
+#endif
+
+#include <chrono>
 
 #include <cstdint>
 #include <memory>
@@ -530,6 +536,10 @@ void PyEnvironment::Rebuild()
         m_sandboxPublicNames = SandboxJudgesPublicNames(nb::find(this));
         jinja2::detail::TemplateEnvAccess::GetImpl(*m_env)->SetSandboxPolicy(MakePythonSandboxPolicy(nb::find(this), m_sandboxPublicNames));
     }
+    if (m_chatTemplates)
+    {
+        ApplyChatTemplates();
+    }
     if (!m_loaderHandler && !m_loader.is_none())
     {
         m_loaderHandler = MakeLoader(m_loader, nb::find(this));
@@ -541,6 +551,44 @@ void PyEnvironment::Rebuild()
     m_boundFilters.clear();
     m_boundTests.clear();
     ApplyGettext();
+}
+
+void PyEnvironment::ApplyChatTemplates()
+{
+#if JINJA2CPP_HAS_CHAT_TEMPLATES
+    jinja2::ChatTemplateOptions options;
+    if (m_chatClock)
+    {
+        // Called on the rendering thread, which holds the GIL (the render does)
+        options.now = [clock = m_chatClock] {
+            const double seconds = nb::cast<double>(nb::handle(clock)());
+            return std::chrono::system_clock::time_point(std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::duration<double>(seconds)));
+        };
+    }
+    jinja2::ConfigureForChatTemplates(*m_env, std::move(options));
+    // A render passes its own globals, which replace the environment's: they are added to them
+    auto globals = std::make_shared<jinja2::ValuesMap>();
+    m_env->ApplyGlobals([&globals](const jinja2::ValuesMap& values) { *globals = values; });
+    m_engineGlobals = std::move(globals);
+#endif
+}
+
+void PyEnvironment::SetChatTemplates(nb::handle clock)
+{
+    CheckAlive();
+#if JINJA2CPP_HAS_CHAT_TEMPLATES
+    if (!clock.is_none())
+    {
+        Keep(clock);
+    }
+    m_chatClock = clock.is_none() ? nullptr : clock.ptr();
+    m_chatTemplates = true;
+    // Templates loaded before keep their environment; the next load rebuilds it with the preset
+    m_env.reset();
+#else
+    (void)clock;
+    RaiseTypeError("this jinja2cpp was built without chat templates (JINJA2CPP_WITH_CHAT_TEMPLATES=OFF)");
+#endif
 }
 
 void PyEnvironment::ApplyGettext()
@@ -815,6 +863,13 @@ nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
     state.templateGlobals = m_globals.ptr();
     // The globals: the environment's, then the template's over them
     jinja2::InternalValueMap globals;
+    if (const auto& engineGlobals = env.EngineGlobals())
+    {
+        for (const auto& [name, value] : *engineGlobals)
+        {
+            globals[name] = jinja2::LendGlobal(value, engineGlobals);
+        }
+    }
     AddGlobals(globals, m_envGlobals, state.sandbox != nullptr);
     if (!m_globals.is_none())
     {
@@ -887,6 +942,7 @@ void BindEnvironment(nb::module_& module)
                                "filename"_a.none(),
                                "globals"_a.none(),
                                "template_class"_a)
+                           .def("_set_chat_templates", &PyEnvironment::SetChatTemplates, "clock"_a.none())
                            .def("_set_gettext", &PyEnvironment::SetGettext, "gettext"_a.none(), "ngettext"_a.none(), "pgettext"_a.none(), "npgettext"_a.none())
                            .def_prop_rw(
                                "newstyle_gettext", [](const PyEnvironment& self) { return self.NewstyleGettext(); }, [](PyEnvironment& self, bool value) { self.SetNewstyleGettext(value); })

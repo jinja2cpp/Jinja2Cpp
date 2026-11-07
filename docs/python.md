@@ -180,6 +180,30 @@ engine and goes to real Jinja2 ("Fallback"). Tier C never works.
 modules), and the sandbox's `intercepted_binops` and `intercepted_unops`. They raise
 `UnsupportedError` (a `TemplateError` and a `NotImplementedError`), whatever `fallback` says.
 
+## transformers' chat templates
+
+`jinja2cpp.integrations.transformers.patch()` makes transformers compile chat templates with
+jinja2cpp: it replaces `transformers.utils.chat_template_utils._compile_jinja_template`, which
+`apply_chat_template` uses (vLLM and SGLang call it too). Nothing changes until it is called;
+`unpatch()` restores transformers' function and `is_patched()` tells.
+
+```python
+import jinja2cpp.integrations.transformers
+jinja2cpp.integrations.transformers.patch()
+```
+
+The templates load in `chat_template_environment()`: an `ImmutableSandboxedEnvironment` with
+`trim_blocks`, `lstrip_blocks` and `loopcontrols`, and transformers' `tojson`,
+`raise_exception` and `strftime_now` built into the engine (`ConfigureForChatTemplates`,
+docs/tasks/0360), so a render calls no Python. `{% generation %}` renders its body. What the
+engine does not do runs in transformers' own template of the same source, so the result is
+transformers': a template jinja2cpp cannot load, a render with
+`return_assistant_tokens_mask=True` (inside `activate_tracker`), and the environment's other
+attributes (`parse`, which transformers uses to list a template's variables).
+`python/tests/test_chat_templates.py` renders every template and conversation of
+`test/chat_templates` this way and requires transformers' output, and checks `patch()` against
+the pinned transformers.
+
 ## Fallback
 
 The engine never runs custom extensions, async or Jinja2's code generator. When Jinja2 is

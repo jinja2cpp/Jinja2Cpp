@@ -70,9 +70,10 @@ jobs:
       with:
         python-version: ${{ matrix.python }}
 
-    # pytest and trio at the versions the upstream Jinja2 suite pins (python/tests/upstream)
+    # pytest and trio at the versions the upstream Jinja2 suite pins (python/tests/upstream), and
+    # the pinned transformers that python/tests/test_chat_templates.py checks patch() against
     - name: Install the oracle and pytest
-      run: python -m pip install -r test/parity/requirements.txt -r python/tests/upstream/requirements.txt
+      run: python -m pip install -r test/parity/requirements.txt -r python/tests/upstream/requirements.txt -r test/chat_templates/requirements.txt
 
     - uses: ./.github/actions/setup-ccache
       with:
