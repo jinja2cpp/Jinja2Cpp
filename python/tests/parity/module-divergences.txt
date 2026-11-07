@@ -1,0 +1,4 @@
+# Cases of the parity corpus where the Python module's outcome differs from the C++ ParityTest's
+# (python/tests/test_parity_corpus.py, docs/tasks/0355). Same format as test/parity/divergences:
+#   <case id> <kind> <task> <reason>
+# The kind is the module's outcome (match where the C++ suite has a listed divergence).

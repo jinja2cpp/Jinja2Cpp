@@ -89,6 +89,9 @@ public:
         return ToEngine(item);
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
+    // A list the template can change through its methods ({% do l.append(x) %}), so loop.length is
+    // its len() when first read, as in Jinja2; a tuple's never changes
+    [[nodiscard]] bool HasLiveSize() const override { return m_isList; }
     [[nodiscard]] jinja2::GenericList CreateGenericList() const override { return jinja2::GenericList(std::make_shared<const PySequenceItems>(*this)); }
 
 private:
@@ -279,9 +282,9 @@ std::optional<InternalValue> PyHost::GetSlice(const InternalValue& start, const 
     {
         return std::nullopt;
     }
-    // An omitted bound is None (the engine passes an empty value)
-    const auto bound = [](const InternalValue& value) { return value.IsUndefined() ? nb::none() : ToPython(value); };
-    const auto slice = Steal(PySlice_New(bound(start).ptr(), bound(stop).ptr(), bound(step).ptr()));
+    // The engine passes None for an omitted bound; an undefined one stays an Undefined, which has no
+    // __index__, so Python's slice raises TypeError as in Jinja2 (`l[missing:]`)
+    const auto slice = Steal(PySlice_New(ToPython(start).ptr(), ToPython(stop).ptr(), ToPython(step).ptr()));
     return ToEngine(Steal(PyObject_GetItem(m_object, slice.ptr())));
 }
 

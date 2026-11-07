@@ -39,6 +39,28 @@ module, which uses its private headers (`src/host_object.h`). nanobind is pinned
 that they agree). pyproject.toml also turns on the built-in big-integer backend, so that
 integer arithmetic beyond 64 bits is exact, as in Python.
 
+### Validation against Jinja2
+
+Two suites hold the module to Python Jinja2 beyond its own tests (docs/tasks/0355):
+
+- `python/tests/test_parity_corpus.py` renders every case of the parity corpus
+  (`test/parity`) through the module. Each case must end as it does in the C++ `ParityTest`:
+  a match where `test/parity/divergences/` lists nothing, the listed kind where it does. A
+  difference is a bug of the crossing, unless `python/tests/parity/module-divergences.txt`
+  lists it with its task.
+- `python/tests/upstream/run.py` runs the pallets/jinja 3.1.6 `tests/` (from the sdist, checked
+  against its SHA256) with their `jinja2` imports pointed at `jinja2cpp` and `fallback="never"`.
+  `python/tests/upstream/expected-failures.txt` lists each failing test with a class:
+  `internals` (not counted), `async`, `extension`, `unsupported` (outside the subset),
+  `deliberate` or `divergence` with its task. The run prints the pass rate,
+  passed / (collected - internals), and the rate within the supported subset, and fails on an
+  unlisted failure or a listed test that passes.
+
+```bash
+pip install -r python/tests/upstream/requirements.txt   # pytest and trio, as the suite pins them
+cd build-py/python && PYTHONPATH=$PWD python3 ../../python/tests/upstream/run.py
+```
+
 `python/bench/bench_module.py` times Load and Render of every `bench/cases` case with both
 engines on a Release build of the module.
 

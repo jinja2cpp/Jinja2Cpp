@@ -255,7 +255,10 @@ private:
         return CallFinalize(m_finalize, std::move(value), values);
     }
 
-    // Finalize, or nothing when the callable raises an error of its own or of its call
+    // Finalize, or nothing when the callable raises an error of its own or of its call, as
+    // Jinja2's `except Exception` around the fold does. A host object's callable (a Python
+    // function through the module) throws its own exception rather than a HostCallableFailure
+    // (host_object.h); a limit, the recursion guard and an allocation failure still end the render
     std::optional<InternalValue> TryFinalize(InternalValue value, RenderContext& values) const
     {
         try
@@ -266,7 +269,19 @@ private:
         {
             return std::nullopt;
         }
-        catch (const TemplateRuntimeError&)
+        catch (const std::bad_alloc&)
+        {
+            throw;
+        }
+        catch (const ResourceLimitError&)
+        {
+            throw;
+        }
+        catch (const RecursionLimitError&)
+        {
+            throw;
+        }
+        catch (const std::exception&)
         {
             return std::nullopt;
         }

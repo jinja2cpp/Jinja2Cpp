@@ -70,8 +70,9 @@ jobs:
       with:
         python-version: ${{ matrix.python }}
 
+    # pytest and trio at the versions the upstream Jinja2 suite pins (python/tests/upstream)
     - name: Install the oracle and pytest
-      run: python -m pip install -r test/parity/requirements.txt pytest
+      run: python -m pip install -r test/parity/requirements.txt -r python/tests/upstream/requirements.txt
 
     - uses: ./.github/actions/setup-ccache
       with:
@@ -102,6 +103,14 @@ jobs:
       run: |
         export LD_PRELOAD="$("$CC" -print-file-name=libasan.so) $("$CXX" -print-file-name=libstdc++.so)"
         PYTHONPATH="$PWD" python -m pytest -p no:cacheprovider -ra "$GITHUB_WORKSPACE/python/tests"
+
+    # pallets/jinja 3.1.6 tests/ through the module with fallback="never" (docs/tasks/0355): prints
+    # the pass rate and fails on a failure python/tests/upstream/expected-failures.txt does not list
+    - name: Upstream Jinja2 suite under ASan
+      working-directory: .build/python
+      run: |
+        export LD_PRELOAD="$("$CC" -print-file-name=libasan.so) $("$CXX" -print-file-name=libstdc++.so)"
+        PYTHONPATH="$PWD" python "$GITHUB_WORKSPACE/python/tests/upstream/run.py"
 
     - name: pip install .
       run: |

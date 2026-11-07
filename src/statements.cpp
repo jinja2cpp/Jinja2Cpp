@@ -297,7 +297,7 @@ struct LoopState : ValueObject
     // enumerator runs over it (docs/tasks/0390)
     InternalValue lengthOf;
     // The statement's list, asked on the first read of the length whether the template can
-    // change it (GetMutableItems): then its len() at that read is the length, as Jinja2's
+    // change it (HasLiveSize): then its len() at that read is the length, as Jinja2's
     // LoopContext.length takes len(iterable) then, not listSize from the start
     // (docs/tasks/0390). A view, let go of when the statement ends; asked only then, so that
     // a loop that never reads its length pays no call for it
@@ -512,7 +512,7 @@ struct LoopState : ValueObject
     // lets go of the list
     JINJA2CPP_NOINLINE_INLINE void TakeListSize()
     {
-        if (sizeOfList->GetMutableItems()) // NOLINT(bugprone-unchecked-optional-access): asked only when set
+        if (sizeOfList->HasLiveSize()) // NOLINT(bugprone-unchecked-optional-access): asked only when set
         {
             listSize = sizeOfList->GetSize(); // NOLINT(bugprone-unchecked-optional-access): as above
         }
@@ -622,7 +622,7 @@ JINJA2CPP_NOINLINE_INLINE bool IsLoopObject(const InternalValue& loopVal)
 }
 
 // Where the loop's length comes from: the size of the list, known at the start unless the
-// template can change it (GetMutableItems), whose len() is taken when the length is first
+// template can change it (HasLiveSize), whose len() is taken when the length is first
 // read, as Jinja2's LoopContext.length takes len(iterable) (docs/tasks/0390); or len() of
 // the `loop` the loop runs over, read then too
 JINJA2CPP_ALWAYS_INLINE void SetLengthSource(LoopState& state, const ListAdapter& loopItems, const InternalValue& loopVal)

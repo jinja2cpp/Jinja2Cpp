@@ -658,6 +658,10 @@ struct IListAccessor : ValueObject
     // Python list is), so that methods like append() can change them; null for borrowed
     // and computed lists (docs/tasks/0020)
     [[nodiscard]] virtual InternalValueList* GetMutableItems() const { return nullptr; }
+    // Whether len() can change while the render runs: a list the template owns (GetMutableItems),
+    // or a host's list that the template changes through the host's own methods (a Python
+    // list's append). Then loop.length is len() at its first read, as Jinja2's (docs/tasks/0390)
+    [[nodiscard]] virtual bool HasLiveSize() const { return GetMutableItems() != nullptr; }
     // Whether this accessor alone holds the items GetMutableItems returns, so that releasing
     // them through it cannot change a list anything else sees (CycleCollector, docs/tasks/0110)
     [[nodiscard]] virtual bool OwnsMutableItemsAlone() const { return false; }
@@ -807,6 +811,7 @@ public:
     [[nodiscard]] bool IsRange() const noexcept { return m_accessor != nullptr && m_accessor->IsRange(); }
     [[nodiscard]] IteratorKind GetIteratorKind() const { return m_accessor ? m_accessor->GetIteratorKind() : IteratorKind::None; }
     [[nodiscard]] InternalValueList* GetMutableItems() const { return m_accessor ? m_accessor->GetMutableItems() : nullptr; }
+    [[nodiscard]] bool HasLiveSize() const { return m_accessor != nullptr && m_accessor->HasLiveSize(); }
     [[nodiscard]] GenericList CreateGenericList() const { return m_accessor ? m_accessor->CreateGenericList() : GenericList(); }
     [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> GetEnumerator() const;
     // Sets `enumerator` to the start of this list, reusing the one it holds when that can
