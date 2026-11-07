@@ -218,6 +218,13 @@ changes; Jinja2's own `get_template` cache (with the loader's `uptodate` check) 
 `env.get_template("a") is env.get_template("a")` holds as in Jinja2. Its filters, tests, globals and policies
 are chains over the live dicts of your environment: a change after a template was made is seen by it.
 
+**Untrusted template text and the sandbox.** Which engine renders a template can depend on the template text:
+syntax the engine lacks (a `{% print %}` statement, an extension tag) sends the template to Jinja2's
+sandbox, where the engine's caps (`MaxSequenceSize`, the `str.format` cap, `MAX_RANGE` as `Limits::maxRange`)
+do not apply, only Jinja2's own checks. A sandbox that renders text you do not trust, and relies on
+the engine's caps, should be constructed with `fallback="never"`: a template using such syntax then raises
+the engine's error instead of reaching Jinja2.
+
 What the fallback does not carry over:
 
 - **Overrides.** A Python subclass of `Environment` that overrides `join_path`, `getattr`,
