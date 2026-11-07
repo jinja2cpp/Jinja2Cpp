@@ -39,6 +39,28 @@ module, which uses its private headers (`src/host_object.h`). nanobind is pinned
 that they agree). pyproject.toml also turns on the built-in big-integer backend, so that
 integer arithmetic beyond 64 bits is exact, as in Python.
 
+### Validation against Jinja2
+
+Two suites hold the module to Python Jinja2 beyond its own tests (docs/tasks/0355):
+
+- `python/tests/test_parity_corpus.py` renders every case of the parity corpus
+  (`test/parity`) through the module. Each case must end as it does in the C++ `ParityTest`:
+  a match where `test/parity/divergences/` lists nothing, the listed kind where it does. A
+  difference is a bug of the crossing, unless `python/tests/parity/module-divergences.txt`
+  lists it with its task.
+- `python/tests/upstream/run.py` runs the pallets/jinja 3.1.6 `tests/` (from the sdist, checked
+  against its SHA256) with their `jinja2` imports pointed at `jinja2cpp` and `fallback="never"`.
+  `python/tests/upstream/expected-failures.txt` lists each failing test with a class:
+  `internals` (not counted), `async`, `extension`, `unsupported` (outside the subset),
+  `deliberate` or `divergence` with its task. The run prints the pass rate,
+  passed / (collected - internals), and the rate within the supported subset, and fails on an
+  unlisted failure or a listed test that passes.
+
+```bash
+pip install -r python/tests/upstream/requirements.txt   # pytest and trio, as the suite pins them
+cd build-py/python && PYTHONPATH=$PWD python3 ../../python/tests/upstream/run.py
+```
+
 `python/bench/bench_module.py` times Load and Render of every `bench/cases` case with both
 engines on a Release build of the module.
 
@@ -61,8 +83,10 @@ engines on a Release build of the module.
 - `env.select_template`, `env.get_or_select_template`, `env.list_templates(extensions=None,
   filter_func=None)` and `env.join_path`.
 - `template.generate()` and `template.stream()` with `TemplateStream` (`dump`,
-  `enable_buffering`, `disable_buffering`), which give the whole output as one item until
-  streaming lands (docs/tasks/0355).
+  `enable_buffering`, `disable_buffering`). They yield the chunks the engine writes to its
+  `OutputSink` (up to 512 characters each), and an error after the chunks written before it, as
+  Jinja2 does; but the whole render runs at the first item, and the chunks are not Jinja2's
+  one item per output node (lazy rendering is docs/tasks/0436).
 - `template.make_module(vars=None, shared=False, locals=None)` and `template.module`, from the
   engine's `Template::MakeModule`: the exports are attributes of a `TemplateModule`, `str()` is
   the rendered body, `__html__` is the same as Markup. An exported macro (also inside an exported
@@ -157,6 +181,30 @@ engine and goes to real Jinja2 ("Fallback"). Tier C never works.
 `jinja2cpp.meta`), `ModuleLoader` (Jinja2's compiled
 modules), and the sandbox's `intercepted_binops` and `intercepted_unops`. They raise
 `UnsupportedError` (a `TemplateError` and a `NotImplementedError`), whatever `fallback` says.
+
+## transformers' chat templates
+
+`jinja2cpp.integrations.transformers.patch()` makes transformers compile chat templates with
+jinja2cpp: it replaces `transformers.utils.chat_template_utils._compile_jinja_template`, which
+`apply_chat_template` uses (vLLM and SGLang call it too). Nothing changes until it is called;
+`unpatch()` restores transformers' function and `is_patched()` tells.
+
+```python
+import jinja2cpp.integrations.transformers
+jinja2cpp.integrations.transformers.patch()
+```
+
+The templates load in `chat_template_environment()`: an `ImmutableSandboxedEnvironment` with
+`trim_blocks`, `lstrip_blocks` and `loopcontrols`, and transformers' `tojson`,
+`raise_exception` and `strftime_now` built into the engine (`ConfigureForChatTemplates`,
+docs/tasks/0360), so a render calls no Python. `{% generation %}` renders its body. What the
+engine does not do runs in transformers' own template of the same source, so the result is
+transformers': a template jinja2cpp cannot load, a render with
+`return_assistant_tokens_mask=True` (inside `activate_tracker`), and the environment's other
+attributes (`parse`, which transformers uses to list a template's variables).
+`python/tests/test_chat_templates.py` renders every template and conversation of
+`test/chat_templates` this way and requires transformers' output, and checks `patch()` against
+the pinned transformers.
 
 ## Fallback
 

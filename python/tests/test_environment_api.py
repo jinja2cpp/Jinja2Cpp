@@ -277,3 +277,59 @@ def test_jinja2cpp_loaders_work_in_a_jinja2_environment():
     assert env.get_template("a").render() == "A1"
     assert env.get_template("p/x").render() == "fn x"
     assert env.loader.load(env, "a").render() == "A1"
+
+
+def test_generate_yields_the_sink_chunks():
+    # A long output comes in several chunks (the engine's OutputSink, up to 512 characters each)
+    tpl = jinja2cpp.Environment().from_string("{% for i in range(300) %}{{ i }}-{% endfor %}")
+    chunks = list(tpl.generate())
+    assert len(chunks) > 1
+    assert all(0 < len(chunk) <= 4096 for chunk in chunks)
+    assert "".join(chunks) == tpl.render()
+
+
+def test_generate_error_comes_after_the_chunks_before_it():
+    # As Jinja2: the items written before the error, then the error
+    big = "x" * 2000
+    source = big + "{{ fail() }}"
+
+    def fail():
+        raise ZeroDivisionError("boom")
+
+    for module in modules():
+        generator = module.Environment().from_string(source).generate(fail=fail)
+        got = []
+        with pytest.raises(ZeroDivisionError, match="boom"):
+            for chunk in generator:
+                got.append(chunk)
+        assert "".join(got) == big
+
+
+@pytest.mark.parametrize("source", ["{{ 1 }}|{{ x }}", "{{ 'a' }}{{ 1 + 1 }}"])
+def test_folded_output_with_raising_finalize_under_autoescape(source):
+    # Jinja2 folds a constant {{ }} as finalize(escape(value)); when that raises it evaluates the
+    # value at render time instead, with finalize of the plain value (docs/tasks/0355)
+    def finalize(value):
+        if isinstance(value, jinja2cpp.Markup):
+            raise ValueError("no Markup")
+        return value
+
+    results = []
+    for module in modules():
+        env = module.Environment(autoescape=True, finalize=finalize)
+        results.append(env.from_string(source).render(x="<"))
+    assert results[0] == results[1]
+
+
+@pytest.mark.parametrize("error", [KeyboardInterrupt, SystemExit, GeneratorExit])
+def test_folded_output_finalize_base_exception_ends_the_render(error):
+    # Jinja2's fold catches Exception only: KeyboardInterrupt and the other BaseExceptions go through
+    def finalize(value):
+        if isinstance(value, jinja2cpp.Markup):
+            raise error("stop")
+        return value
+
+    for module in modules():
+        env = module.Environment(autoescape=True, finalize=finalize)
+        with pytest.raises(error, match="stop"):
+            env.from_string("{{ 1 }}").render()

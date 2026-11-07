@@ -5,6 +5,7 @@
 #include "engine_errors.h"
 
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/exception.h>
 #include <jinja2cpp/value.h>
 
 #include <exception>
@@ -88,11 +89,25 @@ const char* const kIncludedSyntaxNote =
 void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
 {
     // Only an exception the engine did not raise is kept: Python's own, raised again as itself
+    const auto& names = Names();
     if (const auto& exception = error.GetException())
     {
-        std::rethrow_exception(exception);
+        try
+        {
+            std::rethrow_exception(exception);
+        }
+        catch (const jinja2::Exception& engine)
+        {
+            // A callable of the engine's own (ConfigureForChatTemplates' raise_exception) raised it,
+            // reported by its code as the engine reports its own errors
+            const auto text = MakeStr(engine.what());
+            if (engine.Code() == ErrorCode::UndefinedError)
+            {
+                Raise(names.undefinedError, names.undefinedError(text));
+            }
+            Raise(names.templateRuntimeError, names.templateRuntimeError(text));
+        }
     }
-    const auto& names = Names();
     const auto code = error.GetCode();
     const auto message = MakeStr(ErrorMessage(error));
     if (IsSyntaxError(code) || code == ErrorCode::UnknownFilter || code == ErrorCode::UnknownTest)

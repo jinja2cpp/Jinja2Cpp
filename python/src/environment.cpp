@@ -13,8 +13,14 @@
 #include "template_env_impl.h"
 #include "template_impl.h"
 
+#include <jinja2cpp/features.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
+#if JINJA2CPP_HAS_CHAT_TEMPLATES
+#include <jinja2cpp/chat_template.h>
+#endif
+
+#include <chrono>
 
 #include <cstdint>
 #include <memory>
@@ -530,6 +536,10 @@ void PyEnvironment::Rebuild()
         m_sandboxPublicNames = SandboxJudgesPublicNames(nb::find(this));
         jinja2::detail::TemplateEnvAccess::GetImpl(*m_env)->SetSandboxPolicy(MakePythonSandboxPolicy(nb::find(this), m_sandboxPublicNames));
     }
+    if (m_chatTemplates)
+    {
+        ApplyChatTemplates();
+    }
     if (!m_loaderHandler && !m_loader.is_none())
     {
         m_loaderHandler = MakeLoader(m_loader, nb::find(this));
@@ -541,6 +551,44 @@ void PyEnvironment::Rebuild()
     m_boundFilters.clear();
     m_boundTests.clear();
     ApplyGettext();
+}
+
+void PyEnvironment::ApplyChatTemplates()
+{
+#if JINJA2CPP_HAS_CHAT_TEMPLATES
+    jinja2::ChatTemplateOptions options;
+    if (m_chatClock)
+    {
+        // Called on the rendering thread, which holds the GIL (the render does)
+        options.now = [clock = m_chatClock] {
+            const double seconds = nb::cast<double>(nb::handle(clock)());
+            return std::chrono::system_clock::time_point(std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::duration<double>(seconds)));
+        };
+    }
+    jinja2::ConfigureForChatTemplates(*m_env, std::move(options));
+    // A render passes its own globals, which replace the environment's: they are added to them
+    auto globals = std::make_shared<jinja2::ValuesMap>();
+    m_env->ApplyGlobals([&globals](const jinja2::ValuesMap& values) { *globals = values; });
+    m_engineGlobals = std::move(globals);
+#endif
+}
+
+void PyEnvironment::SetChatTemplates(nb::handle clock)
+{
+    CheckAlive();
+#if JINJA2CPP_HAS_CHAT_TEMPLATES
+    if (!clock.is_none())
+    {
+        Keep(clock);
+    }
+    m_chatClock = clock.is_none() ? nullptr : clock.ptr();
+    m_chatTemplates = true;
+    // Templates loaded before keep their environment; the next load rebuilds it with the preset
+    m_env.reset();
+#else
+    (void)clock;
+    RaiseTypeError("this jinja2cpp was built without chat templates (JINJA2CPP_WITH_CHAT_TEMPLATES=OFF)");
+#endif
 }
 
 void PyEnvironment::ApplyGettext()
@@ -792,7 +840,8 @@ PyTemplate::PyTemplate(jinja2::Template tpl, nb::object environment, nb::object 
 {
 }
 
-nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
+template<typename Target>
+void PyTemplate::RenderWith(Target& target, nb::args args, nb::kwargs kwargs) const
 {
     ++g_renders;
     auto& env = LiveEnvironment();
@@ -815,17 +864,23 @@ nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
     state.templateGlobals = m_globals.ptr();
     // The globals: the environment's, then the template's over them
     jinja2::InternalValueMap globals;
+    if (const auto& engineGlobals = env.EngineGlobals())
+    {
+        for (const auto& [name, value] : *engineGlobals)
+        {
+            globals[name] = jinja2::LendGlobal(value, engineGlobals);
+        }
+    }
     AddGlobals(globals, m_envGlobals, state.sandbox != nullptr);
     if (!m_globals.is_none())
     {
         AddGlobals(globals, m_globals, state.sandbox != nullptr);
     }
-    std::string output;
     std::optional<jinja2::ErrorInfo> error;
     {
         const RenderScope scope(state);
         const HostPollScope poll;
-        error = jinja2::TemplateImpl<char>::RenderInternal(m_template, output, params, &globals);
+        error = jinja2::TemplateImpl<char>::RenderInternal(m_template, target, params, &globals);
     }
     if (error)
     {
@@ -836,7 +891,37 @@ nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
         where.syntaxNote = kIncludedSyntaxNote;
         RaiseError(*error, where);
     }
+}
+
+nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
+{
+    std::string output;
+    RenderWith(output, std::move(args), std::move(kwargs));
     return MakeStr(output);
+}
+
+namespace
+{
+// Each chunk of the render to a Python callable; what the callable raises ends the render and is
+// raised again as itself (the engine keeps a sink's exception)
+class CallbackSink final : public jinja2::OutputSink
+{
+public:
+    explicit CallbackSink(nb::handle write)
+        : m_write(write)
+    {
+    }
+    void Write(std::string_view text) override { m_write(MakeStr(text)); }
+
+private:
+    nb::handle m_write;
+};
+} // namespace
+
+void PyTemplate::RenderTo(nb::handle write, nb::args args, nb::kwargs kwargs) const
+{
+    CallbackSink sink(write);
+    RenderWith(sink, std::move(args), std::move(kwargs));
 }
 
 int PyTemplate::Traverse(visitproc visit, void* arg) const
@@ -887,6 +972,7 @@ void BindEnvironment(nb::module_& module)
                                "filename"_a.none(),
                                "globals"_a.none(),
                                "template_class"_a)
+                           .def("_set_chat_templates", &PyEnvironment::SetChatTemplates, "clock"_a.none())
                            .def("_set_gettext", &PyEnvironment::SetGettext, "gettext"_a.none(), "ngettext"_a.none(), "pgettext"_a.none(), "npgettext"_a.none())
                            .def_prop_rw(
                                "newstyle_gettext", [](const PyEnvironment& self) { return self.NewstyleGettext(); }, [](PyEnvironment& self, bool value) { self.SetNewstyleGettext(value); })
@@ -929,6 +1015,7 @@ void BindEnvironment(nb::module_& module)
     nb::class_<PyTemplate>(module, "Template", nb::type_slots(g_templateSlots), nb::is_weak_referenceable())
         .def(nb::init<nb::handle, nb::handle, nb::kwargs>(), "source"_a, "_environment"_a.none() = nb::none(), "kwargs"_a)
         .def("render", &PyTemplate::Render)
+        .def("_render_to", &PyTemplate::RenderTo)
         .def("_make_module", &PyTemplate::MakeModule, "params"_a)
         .def("_undeclared", &PyTemplate::FindUndeclared)
         .def("_referenced", &PyTemplate::FindReferenced)

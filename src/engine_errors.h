@@ -100,6 +100,22 @@ public:
 private:
     std::exception_ptr m_exception;
 };
+
+// A mix-in of a host's own exception type that no catch of the engine absorbs: Python's
+// BaseException outside Exception (KeyboardInterrupt, SystemExit) through the module, which
+// Jinja2's `except Exception` around the fold of a finalized output lets through (renderer.h)
+class HostUnrecoverableError
+{
+public:
+    virtual ~HostUnrecoverableError() = default;
+
+protected:
+    HostUnrecoverableError() = default;
+    HostUnrecoverableError(const HostUnrecoverableError&) = default;
+    HostUnrecoverableError(HostUnrecoverableError&&) noexcept = default;
+    HostUnrecoverableError& operator=(const HostUnrecoverableError&) = default;
+    HostUnrecoverableError& operator=(HostUnrecoverableError&&) noexcept = default;
+};
 } // namespace detail
 } // namespace v2
 } // namespace jinja2

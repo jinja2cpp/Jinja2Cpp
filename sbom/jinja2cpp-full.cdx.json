@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:1d18bee1-7fc5-5031-b3a1-60ba1c48ccdf",
+  "serialNumber": "urn:uuid:8638c972-c9b9-533f-9866-d6fffbd3e6cc",
   "version": 1,
   "metadata": {
     "timestamp": "2026-10-18T00:00:00Z",
@@ -1758,6 +1758,120 @@
     },
     {
       "type": "library",
+      "bom-ref": "python-pytest",
+      "name": "pytest",
+      "version": "8.3.4",
+      "supplier": {
+        "name": "pytest-dev"
+      },
+      "scope": "excluded",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/pytest@8.3.4",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/pytest-dev/pytest"
+        }
+      ],
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "test"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "dev"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "none"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "system"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "pip install -r python/tests/upstream/requirements.txt (Python module CI job)"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "Runs the Python module's tests and Jinja2 3.1.6's own test suite through the module (python/tests/upstream/run.py, docs/tasks/0355)"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "The upstream suite is written for pytest; pinned to the version it was measured with"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Not part of any build"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "python-trio",
+      "name": "Trio",
+      "version": "0.27.0",
+      "supplier": {
+        "name": "python-trio"
+      },
+      "scope": "excluded",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:pypi/trio@0.27.0",
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/python-trio/trio"
+        }
+      ],
+      "properties": [
+        {
+          "name": "jinja2cpp:role",
+          "value": "test"
+        },
+        {
+          "name": "jinja2cpp:phases",
+          "value": "dev"
+        },
+        {
+          "name": "jinja2cpp:exposure",
+          "value": "none"
+        },
+        {
+          "name": "jinja2cpp:delivery",
+          "value": "system"
+        },
+        {
+          "name": "jinja2cpp:selected-by",
+          "value": "pip install -r python/tests/upstream/requirements.txt (Python module CI job)"
+        },
+        {
+          "name": "jinja2cpp:used-for",
+          "value": "Imported by Jinja2's upstream async tests, so their files collect (python/tests/upstream/run.py, docs/tasks/0355)"
+        },
+        {
+          "name": "jinja2cpp:why",
+          "value": "Without it the async test files fail to collect; their tests are listed as outside the supported subset"
+        },
+        {
+          "name": "jinja2cpp:lighten",
+          "value": "Not part of any build"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "bom-ref": "python-transformers",
       "name": "transformers",
       "version": "5.22.1",
@@ -2741,6 +2855,8 @@
         "gperftools",
         "python-jinja2",
         "python-markupsafe",
+        "python-pytest",
+        "python-trio",
         "python-transformers",
         "python",
         "clang-tidy",

@@ -58,6 +58,13 @@ change against an earlier run and exits with status 2 when a benchmark got slowe
 `--threshold` (10% by default). `--filter REGEX` limits the run, for example
 `--filter 'Render/mitsuhiko'`.
 
+`--python-module` adds the `jinja2cpp (Python)` column: each case loaded and rendered through
+the Python module (docs/python.md), with its data as Python objects, and how many times faster
+than Python Jinja2 that is (docs/tasks/0355). The gap to the Jinja2C++ column is the cost of
+crossing from Python. Build the module in Release and put it on the path:
+`PYTHONPATH=build-py-rel/python python3 bench/run.py --bench ... --python-module`. A case the
+module renders differently from Python Jinja2 is left out of the column and named on stderr.
+
 The drivers can also run alone: `jinja2cpp_bench` takes the usual Google Benchmark flags
 plus `--cases-dir` and `--dump-dir` (write every rendered output and exit), and
 `python_bench.py` prints Google Benchmark style JSON.

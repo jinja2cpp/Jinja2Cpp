@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <new>
 #include <optional>
@@ -255,18 +256,38 @@ private:
         return CallFinalize(m_finalize, std::move(value), values);
     }
 
-    // Finalize, or nothing when the callable raises an error of its own or of its call
+    // Finalize, or nothing when the callable raises an error of its own or of its call, as
+    // Jinja2's `except Exception` around the fold does. A host object's callable (a Python
+    // function through the module) throws its own exception rather than a HostCallableFailure
+    // (host_object.h); a limit, the recursion guard, an allocation failure and a host error marked
+    // unrecoverable (Python's KeyboardInterrupt, SystemExit) still end the render
     std::optional<InternalValue> TryFinalize(InternalValue value, RenderContext& values) const
     {
         try
         {
             return Finalize(std::move(value), values);
         }
+        catch (const detail::HostUnrecoverableError&)
+        {
+            throw;
+        }
         catch (const detail::HostCallableFailure&)
         {
             return std::nullopt;
         }
-        catch (const TemplateRuntimeError&)
+        catch (const std::bad_alloc&)
+        {
+            throw;
+        }
+        catch (const ResourceLimitError&)
+        {
+            throw;
+        }
+        catch (const RecursionLimitError&)
+        {
+            throw;
+        }
+        catch (const std::exception&)
         {
             return std::nullopt;
         }
