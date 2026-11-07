@@ -73,6 +73,15 @@ def test_custom_extension_delegates_the_environment(extension):
     assert jinja2cpp.stats()["environments_fallback"] == 1
 
 
+def test_one_shot_extension_iterator_reaches_the_constructor():
+    # Choosing the engine reads the extensions first: an iterator must still reach the environment whole
+    native = jinja2cpp.Environment(extensions=iter(["jinja2.ext.do"]))
+    assert native.from_string("{% set l = [] %}{% do l.append(1) %}{{ l }}").render() == "[1]"
+    delegated = jinja2cpp.Environment(extensions=iter([HelloExtension]))
+    assert delegated.from_string('{% hello "i" %}').render() == "Hello i"
+    assert jinja2cpp.stats()["environments_fallback"] == 1
+
+
 def test_delegating_environment_has_the_attributes_and_live_dicts():
     loader = jinja2cpp.DictLoader({"t": "{{ x|twice }}{{ g }}"})
     env = jinja2cpp.Environment(extensions=[HelloExtension], loader=loader, autoescape=True, trim_blocks=True, undefined=jinja2cpp.StrictUndefined)

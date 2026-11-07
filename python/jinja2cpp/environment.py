@@ -433,6 +433,8 @@ class Environment(_jinja2cpp.Environment):
             fallback._check_mode(mode)
         self.__dict__["_fallback"] = mode
         self.__dict__["_policies"] = _default_policies()
+        if kwargs.get("extensions") is not None:  # read twice (the choice of engine, then the constructor): a one-shot iterator would be spent
+            kwargs["extensions"] = list(kwargs["extensions"])
         reason = fallback.options_reason(type(self), kwargs)
         if reason is None:
             super().__init__(**kwargs)
