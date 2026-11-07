@@ -229,13 +229,18 @@ What the fallback does not carry over:
 
 - **Overrides.** A Python subclass of `Environment` that overrides `join_path`, `getattr`,
   `getitem`, `call` and the like is not consulted by the Jinja2 environment that takes over.
-  A sandbox is stricter. The Jinja2 sandbox that takes over asks your environment for
-  `is_safe_attribute`, `is_safe_callable` and `unsafe_undefined` each time (an override of the class,
-  a method set on the instance, even after construction, or a patch of the class are all live). A
-  subclass that overrides `wrap_str_format`, `call_binop`, `call_unop`, `getattr`, `getitem` or
-  `call`, sets one on the instance, or intercepts operators gets `UnsupportedError` instead, since
-  Jinja2's sandbox would not run it. An overridden `unsafe_undefined` that makes its undefined with
-  `self.undefined` makes one of jinja2cpp's classes, which Jinja2's runtime does not know.
+  A sandbox is different: the Jinja2 sandbox that takes over asks your environment for every hook each time it
+  runs: `is_safe_attribute`, `is_safe_callable`, `unsafe_undefined`, `call`, `getattr`, `getitem`,
+  `wrap_str_format`, `call_binop`, `call_unop`, `intercepted_binops` and `intercepted_unops`. An override of the
+  class, a patch of the class, a function set on the instance, before or after a template was made, is what
+  runs, on every route (render, `generate`, `make_module`, `module`, `new_context`, `root_render_func`,
+  `render_async`, `compile_expression`), as in Jinja2 (the interception sets are read when a template is
+  compiled, as Jinja2 reads them). The *native* route refuses an overridden `call`, `getattr` or `getitem`, and
+  `intercepted_*`, with `UnsupportedError` when a template loads, because the engine would not call them. To
+  use them, run the whole environment on Jinja2: there is no option for that alone, but any Tier B option does
+  it (`extensions=[SomeExtension]`, even one that adds nothing, or `enable_async=True`). An overridden
+  `unsafe_undefined`, `getattr` or `getitem` that makes its undefined with `self.undefined` makes one of
+  jinja2cpp's classes, which Jinja2's runtime does not know (task 0428).
   `context_class` and `code_generator_class` are used by the Jinja2 environment. `template_class`
   is used for the fallback templates too, but one that overrides `render`, `generate`, `make_module`,
   `module` or the other methods a fallback template implements itself (nanobind allows one
@@ -297,7 +302,8 @@ inside the adapters that let the engine read Python objects, not in generated co
   per attribute of a Python object (not per dict key).
 - `intercepted_binops` / `intercepted_unops` are not supported: loading a template of an
   environment with either set raises `UnsupportedError`, since ignoring them would let the
-  operators through (0412). `call_binop` and `call_unop` exist and work when called.
+  operators through (0412). `call_binop` and `call_unop` exist and work when called. This is the native
+  route; an environment that Jinja2 runs (a Tier B option, "Fallback") honours both.
 
 
 ## How values cross

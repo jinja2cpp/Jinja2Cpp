@@ -223,30 +223,12 @@ class SandboxedEnvironment(Environment):
         self.binop_table = self.default_binop_table.copy()
         self.unop_table = self.default_unop_table.copy()
 
-    #: the methods of the policy that Jinja2 cannot be given: Jinja2 stands in for the environment only when none is
-    #: overridden. ``is_safe_attribute``, ``is_safe_callable`` and ``unsafe_undefined`` are not among them: the Jinja2
-    #: sandbox asks the environment's own, whenever they are set (fallback._forwarding_sandbox)
-    _POLICY_HOOKS = ("wrap_str_format", "call_binop", "call_unop", "getattr", "getitem", "call")
-
-    def _fallback_blocker(self) -> t.Optional[str]:
-        """Why real Jinja2 may not take this environment over: its policy would not come along.
-
-        A subclass that overrides ``wrap_str_format``, ``call_binop``, ``call_unop``, ``getattr``,
-        ``getitem`` or ``call``, sets one on the instance, or intercepts operators would run Jinja2's stock
-        policy instead of its own, so the fallback refuses (docs/python.md, "Fallback").
-        """
-        if self.intercepted_binops or self.intercepted_unops:
-            return "a sandbox that intercepts operators"
-        for name in self._POLICY_HOOKS:
-            if name in self.__dict__:
-                return f"a sandbox whose {name} is set on the instance"
-            if getattr(type(self), name, None).__module__ != __name__:  # type: ignore[union-attr]
-                return f"a sandbox that overrides {name}"
-        return None
-
     def _check_interception(self) -> None:
-        """What a load checks. A template that goes to another engine is not the engine's to refuse; one that
-        runs in this engine is checked again at each entry into it (:meth:`_check_native_hooks`)."""
+        """What a load checks. A template that goes to another engine (a Tier B environment, a template Jinja2 loads) is not
+        the engine's to refuse: the Jinja2 sandbox asks this environment for every hook. One that runs in this engine is
+        checked again at each entry into it (:meth:`_check_native_hooks`)."""
+        if self._uses_jinja2():
+            return
         self._check_native_hooks()
 
     def _check_native_hooks(self) -> None:

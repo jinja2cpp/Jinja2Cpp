@@ -309,15 +309,34 @@ def _owner_of(jenv: t.Any) -> t.Any:
     return owner
 
 
-def _forwarding_sandbox(base: type) -> type:
-    """`base` (a Jinja2 sandbox class) whose policy hooks ask the jinja2cpp environment that owns it, when they are called.
+def _owner_override(owner: t.Any, name: str) -> t.Any:
+    """The owner's method `name` when it is not the sandbox's own (an override of the class, a patch of it or a function
+    set on the instance), else None: the stock one then runs, Jinja2's, which makes Jinja2's undefined."""
+    from .sandbox import SandboxedEnvironment
 
-    So a hook set on the instance or patched onto the class after the Jinja2 environment was built is live
-    (docs/python.md, "Fallback"). ``unsafe_undefined`` is forwarded only when overridden: the stock one
-    makes the undefined of the owner's (jinja2cpp) class, which Jinja2 cannot use.
+    method = getattr(owner, name)
+    return None if getattr(method, "__func__", method) is getattr(SandboxedEnvironment, name) else method
+
+
+def _forwarding_sandbox(base: type) -> type:
+    """`base` (a Jinja2 sandbox class) whose policy hooks ask the jinja2cpp environment that owns it, each time they run.
+
+    All of them: ``is_safe_attribute``, ``is_safe_callable``, ``unsafe_undefined``, ``call``, ``getattr``, ``getitem``,
+    ``wrap_str_format``, ``call_binop``, ``call_unop`` and the compile-time ``intercepted_binops`` and
+    ``intercepted_unops``. So a hook overridden on the class, patched onto it or set on the instance, before or after a
+    template was made, is what Jinja2 runs, as in Jinja2 (docs/python.md, "Fallback"). A hook the owner has not
+    overridden is Jinja2's own: the owner's would make jinja2cpp undefined values, which Jinja2 cannot use.
     """
 
     class ForwardingSandbox(base):  # type: ignore[valid-type, misc]
+        @property  # type: ignore[misc]
+        def intercepted_binops(self) -> t.Any:  # read by the compiler of Jinja2, at compile time
+            return _owner_of(self).intercepted_binops
+
+        @property  # type: ignore[misc]
+        def intercepted_unops(self) -> t.Any:
+            return _owner_of(self).intercepted_unops
+
         def is_safe_attribute(self, obj: t.Any, attr: str, value: t.Any) -> bool:
             return t.cast(bool, _owner_of(self).is_safe_attribute(obj, attr, value))
 
@@ -325,12 +344,34 @@ def _forwarding_sandbox(base: type) -> type:
             return t.cast(bool, _owner_of(self).is_safe_callable(obj))
 
         def unsafe_undefined(self, obj: t.Any, attribute: str) -> t.Any:
-            from .sandbox import SandboxedEnvironment
+            method = _owner_override(_owner_of(self), "unsafe_undefined")
+            return method(obj, attribute) if method is not None else super().unsafe_undefined(obj, attribute)
 
-            method = _owner_of(self).unsafe_undefined
-            if getattr(method, "__func__", method) is not SandboxedEnvironment.unsafe_undefined:
-                return method(obj, attribute)
-            return super().unsafe_undefined(obj, attribute)
+        def wrap_str_format(self, value: t.Any) -> t.Any:
+            method = _owner_override(_owner_of(self), "wrap_str_format")
+            return method(value) if method is not None else super().wrap_str_format(value)
+
+        def getattr(self, obj: t.Any, attribute: str) -> t.Any:
+            method = _owner_override(_owner_of(self), "getattr")
+            return method(obj, attribute) if method is not None else super().getattr(obj, attribute)
+
+        def getitem(self, obj: t.Any, argument: t.Any) -> t.Any:
+            method = _owner_override(_owner_of(self), "getitem")
+            return method(obj, argument) if method is not None else super().getitem(obj, argument)
+
+        def call_binop(self, context: t.Any, operator: str, left: t.Any, right: t.Any) -> t.Any:
+            method = _owner_override(_owner_of(self), "call_binop")
+            return method(context, operator, left, right) if method is not None else super().call_binop(context, operator, left, right)
+
+        def call_unop(self, context: t.Any, operator: str, arg: t.Any) -> t.Any:
+            method = _owner_override(_owner_of(self), "call_unop")
+            return method(context, operator, arg) if method is not None else super().call_unop(context, operator, arg)
+
+        def call(__self, __context: t.Any, __obj: t.Any, *args: t.Any, **kwargs: t.Any) -> t.Any:  # noqa: B902, N805
+            method = _owner_override(_owner_of(__self), "call")
+            if method is not None:
+                return method(__context, __obj, *args, **kwargs)
+            return super().call(__context, __obj, *args, **kwargs)
 
     ForwardingSandbox.__name__ = base.__name__
     ForwardingSandbox.__qualname__ = base.__qualname__
@@ -506,9 +547,6 @@ def _via_jinja2(env: t.Any, error: BaseException, make: t.Callable[[t.Any], t.An
         raise error from exc
     with mapped():
         result = make(jenv)
-    blocker = env._fallback_blocker()
-    if blocker:
-        raise UnsupportedError(f"the {what} needs Jinja2 ({error}), which is not used for {blocker}") from error
     require(f"a {what} the engine cannot parse ({_first_line(error)})", mode)
     return result
 
@@ -536,9 +574,6 @@ def jinja2_template_of(template: t.Any, reason: str) -> t.Any:
         return jt
     env = template.environment
     require(reason, env._fallback_mode_)
-    blocker = env._fallback_blocker()
-    if blocker:
-        raise UnsupportedError(f"{reason} is not available for {blocker}")
     source = template.__dict__.get("_fb_source")
     name = template.__dict__.get("_fb_name")
     own_globals = dict(template.globals.maps[0])

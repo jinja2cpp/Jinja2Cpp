@@ -232,20 +232,12 @@ class FallbackTemplate:
     ``root_render_func``, ``render_async``) is Jinja2's own.
     """
 
-    def _check_blocker(self) -> None:
-        # A sandbox override set after the template was loaded: Jinja2's stock policy must not take its place
-        blocker = self.__dict__["_environment"]._fallback_blocker()
-        if blocker:
-            raise UnsupportedError(f"the template is Jinja2's, which is not used for {blocker}")
-
     def render(self, *args: t.Any, **kwargs: t.Any) -> str:
-        self._check_blocker()
         fallback._count("renders_fallback")
         with fallback.mapped():
             return t.cast(str, self._jinja2_template.render(*args, **kwargs))
 
     def generate(self, *args: t.Any, **kwargs: t.Any) -> t.Iterator[str]:
-        self._check_blocker()
         fallback._count("renders_fallback")
         with fallback.mapped():
             yield from self._jinja2_template.generate(*args, **kwargs)
@@ -415,9 +407,6 @@ class Environment(_jinja2cpp.Environment):
             return
         # Tier B: real Jinja2 is the environment
         fallback.require(reason, mode)
-        blocker = self._fallback_blocker()
-        if blocker:
-            raise UnsupportedError(f"{reason} needs Jinja2, which is not used for {blocker}")
         jenv = fallback.build_environment(self, kwargs)
         self.__dict__["_delegate"] = _Delegate(jenv, {k: v for k, v in kwargs.items() if k in _ORIGINAL})
         super().__init__()
@@ -433,10 +422,6 @@ class Environment(_jinja2cpp.Environment):
     @property
     def _fallback_mode_(self) -> str:
         return fallback.resolve_mode(self.__dict__.get("_fallback"))
-
-    def _fallback_blocker(self) -> t.Optional[str]:
-        """Why Jinja2 must not stand in for this environment (a sandbox with a policy of its own), or None."""
-        return None
 
     @property
     def policies(self) -> t.Dict[str, t.Any]:
@@ -470,9 +455,6 @@ class Environment(_jinja2cpp.Environment):
             reason = fallback.policies_reason(self.policies)
             assert reason is not None
             fallback.require(reason, self._fallback_mode_)
-            blocker = self._fallback_blocker()
-            if blocker:
-                raise UnsupportedError(f"{reason} needs Jinja2, which is not used for {blocker}")
             env = fallback.delegate_for(self)
         with fallback.mapped():
             jt = make(env)
@@ -618,9 +600,6 @@ class Environment(_jinja2cpp.Environment):
             env = delegate.env
         else:
             fallback.require(f"Environment.{method}", self._fallback_mode_)
-            blocker = self._fallback_blocker()
-            if blocker:
-                raise UnsupportedError(f"Environment.{method} needs Jinja2, which is not used for {blocker}")
             env = fallback.delegate_for(self)
         with fallback.mapped():
             return getattr(env, method)(*args, **kwargs)

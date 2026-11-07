@@ -482,31 +482,6 @@ def test_sandbox_parse_fallback_and_stock_policy():
         jinja2cpp.sandbox.SandboxedEnvironment().from_string("{% print x.__class__() %}").render(x=1)
 
 
-def test_sandbox_with_its_own_policy_never_falls_back():
-    class Mine(jinja2cpp.sandbox.SandboxedEnvironment):
-        def wrap_str_format(self, value):
-            return None
-
-    with pytest.raises(jinja2cpp.UnsupportedError, match="overrides wrap_str_format"):
-        Mine(extensions=[HelloExtension])
-    with pytest.raises(jinja2cpp.UnsupportedError, match="overrides wrap_str_format"):
-        Mine().from_string(UNPARSABLE)
-    with pytest.raises(jinja2cpp.TemplateSyntaxError):  # Jinja2 rejects too: the syntax error stands
-        Mine().from_string("{% if %}")
-    class Intercepting(jinja2cpp.sandbox.SandboxedEnvironment):
-        intercepted_binops = frozenset(["+"])
-
-    with pytest.raises(jinja2cpp.UnsupportedError, match="intercepts"):
-        Intercepting(enable_async=True)
-    env = jinja2cpp.sandbox.SandboxedEnvironment()
-    env.call_unop = lambda context, operator, arg: arg
-    with pytest.raises(jinja2cpp.UnsupportedError):
-        env.from_string(UNPARSABLE)
-    included = Mine(loader=jinja2cpp.DictLoader({"main": "{% include 'inc' %}", "inc": UNPARSABLE}))
-    with pytest.raises(jinja2cpp.TemplateSyntaxError):
-        included.get_template("main").render()
-
-
 # --- The loaders inside Jinja2 --------------------------------------------------------------
 
 
@@ -744,13 +719,6 @@ def test_sandbox_is_safe_callable_is_live_and_unsafe_undefined_too():
 
     Loud(extensions=[Ext]).from_string("{{ x.shown }}").render(x=Secret())
     assert seen == ["shown"]
-
-
-def test_sandbox_overrides_that_cannot_be_given_still_refuse():
-    env = jinja2cpp.sandbox.SandboxedEnvironment(extensions=[Ext])
-    env.getattr = lambda obj, attr: None
-    with pytest.raises(jinja2cpp.UnsupportedError):
-        env.from_string("{{ 1 }}")
 
 
 def test_context_class_and_code_generator_class_reach_jinja2():
@@ -1044,13 +1012,136 @@ def test_template_source_keyword_is_the_source():
         jinja2cpp.Template(source=UNPARSABLE, fallback="never")
 
 
-def test_sandbox_override_set_after_load_is_refused_by_fallback_templates():
-    for make in (lambda: jinja2cpp.sandbox.SandboxedEnvironment(), lambda: jinja2cpp.sandbox.SandboxedEnvironment(extensions=[Ext])):
-        env = make()
-        template = env.from_string("{{ x.shown }}{% print 0 %}")
-        assert template.render(x=Secret()) == "10"
-        env.call_unop = lambda context, operator, arg: arg
+
+
+# --- Review round 4: every sandbox hook is the owner's, on every route --------------------------
+
+
+def _deny_call(context, obj, *args, **kwargs):
+    raise jinja2.exceptions.SecurityError("denied by the override")
+
+
+_HOOKS = {
+    "call": (_deny_call, "{{ f() }}"),
+    "getattr": (lambda obj, attribute: "G", "{{ x.shown }}"),
+    "getitem": (lambda obj, argument: "I", "{{ x['shown'] }}"),
+    "wrap_str_format": (lambda value: (lambda *a, **k: "W") if getattr(value, "__name__", None) == "format" else None, "{{ 'a{}'.format(1) }}"),
+}
+
+
+def _install(env, how, name, function):
+    if how == "instance":
+        setattr(env, name, function)
+    else:
+        setattr(type(env), name, lambda self, *args, **kwargs: function(*args, **kwargs))
+
+
+def _outcome(function):
+    try:
+        return ("ok", function())
+    except Exception as exc:  # noqa: BLE001
+        return ("exc", type(exc).__name__)
+
+
+def _every_route(env, source, module_source=None):
+    """What each route that runs a template (or an expression) gives, as outcomes."""
+    template = env.from_string(source)
+    return template, {
+        "render": lambda: template.render(x=Secret()),
+        "make_module": lambda: str(template.make_module({"x": Secret()})),
+        "module": lambda: str(template.module),
+        "root": lambda: "".join(template.root_render_func(template.new_context({"x": Secret()}))),
+    }
+
+
+def _scenario(module, tier, when, how, hook):
+    function, body = _HOOKS[hook]
+    base = module.SandboxedEnvironment
+
+    class Env(base):
+        pass
+
+    env = Env(extensions=[Ext]) if tier == "B" else Env()
+    env.globals["f"] = lambda: "CALLED"
+    if when == "before":
+        _install(env, how, hook, function)
+    source = ("{% print 0 %}" if tier == "C" else "") + body
+    template = env.from_string(source)
+    expression = env.compile_expression("f()") if hook == "call" else None
+    if when == "after":
+        _install(env, how, hook, function)
+    results = {
+        "render": _outcome(lambda: template.render(x=Secret())),
+        "make_module": _outcome(lambda: str(template.make_module({"x": Secret()}))),
+        "module": _outcome(lambda: str(template.module)),
+        "root": _outcome(lambda: "".join(template.root_render_func(template.new_context({"x": Secret()})))),
+        "new template": _outcome(lambda: env.from_string(source).render(x=Secret())),
+    }
+    if expression is not None:
+        results["expression made before"] = _outcome(expression)
+        results["expression made after"] = _outcome(lambda: env.compile_expression("f()")())
+    return results
+
+
+@pytest.mark.parametrize("hook", sorted(_HOOKS))
+@pytest.mark.parametrize("how", ["instance", "class"])
+@pytest.mark.parametrize(
+    "tier, when",
+    [("B", "before"), ("B", "after"), ("C", "after")],
+)
+def test_every_fallback_route_runs_the_overridden_sandbox_hooks(tier, when, how, hook):
+    ours = _scenario(jinja2cpp.sandbox, tier, when, how, hook)
+    oracle = _scenario(jinja2.sandbox, tier, when, how, hook)
+    if tier == "C" and hook != "wrap_str_format":
+        # a template made after the override goes the native route first, which refuses it (#801)
+        assert ours.pop("new template") == ("exc", "UnsupportedError")
+        oracle.pop("new template")
+    assert ours == oracle
+    assert ours["render"] != _outcome(lambda: jinja2.sandbox.SandboxedEnvironment().from_string(_HOOKS[hook][1]).render(x=Secret()))  # not the stock policy
+
+
+def test_overridden_hooks_of_the_native_route_stay_refused():
+    for name in ("call", "getattr", "getitem"):
+        function = _HOOKS[name][0]
+        env = jinja2cpp.sandbox.SandboxedEnvironment()
+        _install(env, "instance", name, function)
         with pytest.raises(jinja2cpp.UnsupportedError):
-            template.render(x=Secret())
+            env.from_string("{{ 1 }}")
+        # a template that needs Jinja2 is refused too: the check comes first
         with pytest.raises(jinja2cpp.UnsupportedError):
-            list(template.generate(x=Secret()))
+            env.from_string(UNPARSABLE)
+    # forcing the whole environment onto Jinja2 (here by an extension) honours them
+    env = jinja2cpp.sandbox.SandboxedEnvironment(extensions=[Ext])
+    env.getattr = _HOOKS["getattr"][0]
+    assert env.from_string("{{ x.shown }}").render(x=Secret()) == "G"
+
+
+def test_intercepted_operators_are_compile_time_on_the_fallback_routes():
+    def make(module):
+        class Env(module.SandboxedEnvironment):
+            pass
+
+        env = Env(extensions=[Ext])
+        early = env.from_string("{{ 1 + 2 }}{{ -3 }}")
+        Env.intercepted_binops = frozenset(["+"])
+        Env.intercepted_unops = frozenset(["-"])
+        env.call_binop = lambda context, operator, left, right: 99
+        env.call_unop = lambda context, operator, arg: 77
+        return early.render(), env.from_string("{{ 1 + 2 }}{{ -3 }}").render()
+
+    assert make(jinja2cpp.sandbox) == make(jinja2.sandbox) == ("3-3", "9977")
+    with pytest.raises(jinja2cpp.UnsupportedError):  # the native route refuses interception
+        class Native(jinja2cpp.sandbox.SandboxedEnvironment):
+            intercepted_binops = frozenset(["+"])
+
+        Native().from_string("{{ 1 }}")
+
+
+def test_enable_async_sandbox_honours_a_call_override_set_after_load():
+    env = jinja2cpp.sandbox.SandboxedEnvironment(enable_async=True)
+    env.globals["f"] = lambda: "CALLED"
+    template = env.from_string("{{ f() }}")
+    assert asyncio.run(template.render_async()) == "CALLED"
+    env.call = _deny_call
+    with pytest.raises(jinja2.exceptions.SecurityError):
+        asyncio.run(template.render_async())
