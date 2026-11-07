@@ -217,7 +217,7 @@ The Jinja2 environment that stands for a native one is made once and rebuilt whe
 changes; Jinja2's own `get_template` cache (with the loader's `uptodate` check) serves the templates, so
 `env.get_template("a") is env.get_template("a")` holds as in Jinja2. No lock is held while a loader runs (a loader
 may call back into any environment), so threads racing on the first load of a name may each load it, as in Jinja2;
-`loads_fallback` can then count more than once, and once they settle one template is served. Its filters, tests, globals and policies
+only the first wrapper published is kept and counted in `loads_fallback`, and once they settle one template is served. Its filters, tests, globals and policies
 are chains over the live dicts of your environment: a change after a template was made is seen by it.
 
 **Untrusted template text and the sandbox.** Which engine renders a template can depend on the template text:
