@@ -1162,3 +1162,74 @@ def test_a_plain_environment_is_not_checked_at_render():
     template = env.from_string("{{ f() }}")
     env.call = _deny  # a plain Environment has no such hook; nothing reads it
     assert template.render() == "CALLED"
+
+
+def test_the_native_recheck_does_not_depend_on_the_load_time_check():
+    # What a load decides (_check_interception) is not what an entry into a native template checks
+    env = SandboxedEnvironment()
+    env.globals["f"] = _called
+    template = env.from_string("{{ f() }}")
+    env._check_interception = lambda: None
+    env.call = _deny
+    with pytest.raises(jinja2cpp.UnsupportedError, match="call"):
+        template.render()
+
+
+def test_a_macro_of_a_made_module_rechecks_the_hooks():
+    env = SandboxedEnvironment()
+    template = env.from_string("{% macro mm(x) %}{{ x.shown }}|{{ x.m() }}{% endmacro %}")
+    module = template.module
+
+    class Secret:
+        shown = "S"
+
+        def m(self):
+            return "called"
+
+    assert module.mm(Secret()) == "S|called"
+    env.getattr = lambda obj, attr: getattr(obj, attr)
+    env.call = lambda ctx, obj, *a, **k: "OVR"
+    with pytest.raises(jinja2cpp.UnsupportedError):
+        module.mm(Secret())
+
+
+def test_a_macro_a_python_callable_got_rechecks_the_hooks():
+    env = SandboxedEnvironment()
+    calls = []
+
+    def f(macro):
+        calls.append(macro())
+        env.call = _deny
+        return macro()
+
+    env.globals["f"] = f
+    template = env.from_string("{% macro mm() %}x{% endmacro %}{{ f(mm) }}")
+    with pytest.raises(jinja2cpp.UnsupportedError, match="call"):
+        template.render()
+    assert calls == ["x"]
+
+
+def test_a_stock_hook_of_another_environment_or_a_patched_class_is_an_override(monkeypatch):
+    from jinja2cpp.sandbox import is_stock_sandbox_hook
+
+    env = SandboxedEnvironment()
+    other = SandboxedEnvironment()
+    assert all(is_stock_sandbox_hook(env, name) for name in ("call", "getattr", "getitem"))
+    assert all(is_stock_sandbox_hook(ImmutableSandboxedEnvironment(), name) for name in ("call", "getattr", "getitem"))
+    env.globals["f"] = _called
+    template = env.from_string("{{ f() }}")
+    env.call = other.call
+    assert not is_stock_sandbox_hook(env, "call")
+    with pytest.raises(jinja2cpp.UnsupportedError, match="call"):
+        template.render()
+    del env.call
+    assert template.render() == "CALLED"
+    for name in ("call", "getattr", "getitem"):
+        with monkeypatch.context() as patch:
+            patch.setattr(SandboxedEnvironment, name, _deny)
+            assert not is_stock_sandbox_hook(env, name)
+            with pytest.raises(jinja2cpp.UnsupportedError, match=name):
+                template.render()
+            with pytest.raises(jinja2cpp.UnsupportedError, match=name):
+                SandboxedEnvironment().from_string("x")
+    assert template.render() == "CALLED"

@@ -221,6 +221,14 @@ class SandboxedEnvironment(Environment):
         self.unop_table = self.default_unop_table.copy()
 
     def _check_interception(self) -> None:
+        """What a load checks. A template that goes to another engine is not the engine's to refuse; one that
+        runs in this engine is checked again at each entry into it (:meth:`_check_native_hooks`)."""
+        self._check_native_hooks()
+
+    def _check_native_hooks(self) -> None:
+        """Refuses what the engine would ignore and Jinja2 would run: the environment's operator interception
+        and its call, getattr and getitem. Run at each entry into the code of a template of this engine
+        (a render, a module, a macro of one), whatever the environment now routes to."""
         if self.intercepted_binops or self.intercepted_unops:
             raise UnsupportedError(
                 "jinja2cpp does not support intercepted_binops and intercepted_unops of the sandbox yet (docs/python.md)"
@@ -228,9 +236,8 @@ class SandboxedEnvironment(Environment):
         # The engine calls getattr, getitem and call itself (is_safe_attribute and is_safe_callable are the hooks it
         # asks): an override, on the class or the instance, would be ignored, and ignoring a sandbox's override is
         # fail-open, so it is refused as the interception is
-        for name in ("call", "getattr", "getitem"):
-            method = getattr(self, name)
-            if getattr(method, "__func__", method) is not getattr(SandboxedEnvironment, name):
+        for name in _HOOKS:
+            if not is_stock_sandbox_hook(self, name):
                 raise UnsupportedError(
                     f"jinja2cpp does not support an overridden {name}() of the sandbox yet; override is_safe_attribute or "
                     "is_safe_callable (docs/python.md)"
@@ -403,6 +410,21 @@ class SandboxedEnvironment(Environment):
         if not __self.is_safe_callable(__obj):
             raise SecurityError(f"{__obj!r} is not safely callable")
         return __context.call(__obj, *args, **kwargs)
+
+
+#: the hooks of the sandbox that the engine does not call (it asks is_safe_attribute and is_safe_callable itself)
+_HOOKS = ("call", "getattr", "getitem")
+# The functions of the sandbox as defined here, taken at import: patching ``SandboxedEnvironment.call`` (or setting
+# one on an environment) is not the stock hook
+_STOCK_HOOK_FUNCTIONS = {name: SandboxedEnvironment.__dict__[name] for name in _HOOKS}
+
+
+def is_stock_sandbox_hook(env: t.Any, name: str) -> bool:
+    """Whether ``env.<name>`` (``call``, ``getattr`` or ``getitem``) is the sandbox's own function bound to ``env``
+    itself: not one set on the instance, patched onto a class (the stock one included), or taken from another
+    environment (a bound method of it)."""
+    method = getattr(env, name, None)
+    return getattr(method, "__self__", None) is env and getattr(method, "__func__", None) is _STOCK_HOOK_FUNCTIONS[name]
 
 
 class ImmutableSandboxedEnvironment(SandboxedEnvironment):

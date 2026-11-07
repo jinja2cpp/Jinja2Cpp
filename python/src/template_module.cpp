@@ -212,6 +212,7 @@ public:
         }
         auto& env = nb::cast<PyEnvironment&>(m_environment);
         env.CheckAlive();
+        env.CheckSandboxHooks();
         // One budget for all the arguments of the call
         ModuleParams convert;
         jinja2::ValuesList positional;

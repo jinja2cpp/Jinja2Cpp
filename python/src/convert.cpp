@@ -504,6 +504,15 @@ std::shared_ptr<CallLease> LeaseScope::Current()
     return scope->m_lease;
 }
 
+void CheckNativeSandboxHooks(PyObject* sandbox)
+{
+    const auto checked = nb::steal(PyObject_CallMethod(sandbox, "_check_native_hooks", nullptr));
+    if (!checked)
+    {
+        throw nb::python_error();
+    }
+}
+
 TemplateValue::TemplateValue(InternalValue value, std::shared_ptr<CallLease> lease)
     : m_value(std::move(value))
     , m_lease(std::move(lease))
@@ -553,6 +562,12 @@ const InternalValue& TemplateValue::Value() const
 
 nb::object TemplateValue::Call(nb::args args, nb::kwargs kwargs) const
 {
+    if (const auto* render = CurrentRender(); render && render->sandbox)
+    {
+        // A macro or caller a Python callable got runs template code the environment's hooks may have been
+        // overridden for since the template loaded
+        CheckNativeSandboxHooks(render->sandbox);
+    }
     const auto& value = Value();
     const auto* callable = jinja2::GetIf<Callable>(&value);
     if (!callable)

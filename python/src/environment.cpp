@@ -575,12 +575,7 @@ void PyEnvironment::CheckSandboxHooks() const
     {
         return;
     }
-    const auto self = nb::find(this);
-    const auto checked = nb::steal(PyObject_CallMethod(self.ptr(), "_check_interception", nullptr));
-    if (!checked)
-    {
-        throw nb::python_error();
-    }
+    CheckNativeSandboxHooks(nb::find(this).ptr());
 }
 
 jinja2::TemplateEnv& PyEnvironment::Prepared()

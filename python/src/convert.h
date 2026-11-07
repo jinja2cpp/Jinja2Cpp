@@ -62,6 +62,10 @@ private:
 
 class TemplateValue;
 
+// Runs the sandbox environment's `_check_native_hooks` (jinja2cpp/sandbox.py): an override of call, getattr or getitem
+// set after a template loaded is refused at each entry into the template's code, as at a load
+void CheckNativeSandboxHooks(PyObject* sandbox);
+
 // The template values a Python call got as arguments (a macro, `caller`, `loop`), lent for the
 // duration of that call: they refer to the render that made them, which may be gone once the
 // call returns. Afterwards each one is empty and using it raises (as the engine's own lease,

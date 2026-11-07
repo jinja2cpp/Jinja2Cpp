@@ -234,7 +234,7 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   function is the function itself (0214), and under `StrictUndefined` a private name an engine
   object lacks (`loop._x`) raises `SecurityError` where Jinja2 raises `UndefinedError`. An
   overridden `call`, `getattr` or `getitem` of the environment (on the subclass or the instance) is
-  refused with `UnsupportedError` when a template loads, renders or makes a module (so an override set after the load counts), as the engine would not call it and Jinja2
+  refused with `UnsupportedError` when a template loads, renders, makes a module, or a macro of a module or one handed to a Python callable runs (so an override set after the load counts; a hook is the stock one only if it is the sandbox's own function bound to that environment, so a method of another environment or a patched class is an override), as the engine would not call it and Jinja2
   does (a subclass that calls `super()` is refused too); override `is_safe_attribute` or
   `is_safe_callable`. A subclass whose `is_safe_attribute` is not Jinja2's is also asked about the
   public names of `loop`, `cycler`, a namespace and a macro (with `None` as the value, as the engine
