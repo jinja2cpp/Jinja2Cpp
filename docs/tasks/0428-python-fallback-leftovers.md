@@ -42,7 +42,7 @@ with a regression test in `python/tests/test_fallback.py`: copy the newstyle wra
 is replaced; bound `_warned`; pass the owning jinja2cpp environment to the inner loader; read the instance's `context_class`
 where it matters, or document that it is class-level; decide whether `jinja2` can be imported lazily (the exception classes subclass Jinja2's, so it may need a lazy-class design).
 
-**Done when.** The four cases have tests that fail before and pass after, and `docs/python.md`
+**Done when.** Each case has a test that fail before and pass after, and `docs/python.md`
 ("Fallback", what the fallback does not carry over) lists only what remains.
 
 For 7, hold the generated class on the user's class (as the fallback template class is) instead of in a
