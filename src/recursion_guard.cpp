@@ -35,6 +35,14 @@
 #ifdef __SANITIZE_ADDRESS__
 #define JINJA2CPP_ASAN 1
 #endif
+#ifdef __has_feature
+#if __has_feature(thread_sanitizer)
+#define JINJA2CPP_TSAN 1
+#endif
+#endif
+#ifdef __SANITIZE_THREAD__
+#define JINJA2CPP_TSAN 1
+#endif
 
 namespace jinja2
 {
@@ -48,6 +56,12 @@ namespace
 constexpr std::uintptr_t StackReserve = std::uintptr_t{ 512 } * 1024;
 #else
 constexpr std::uintptr_t StackReserve = std::uintptr_t{ 128 } * 1024;
+#endif
+
+#ifdef JINJA2CPP_TSAN
+// TSan keeps a shadow call stack of fixed capacity per thread, and a recursion of small frames (a container that holds
+// itself, copied) fills it long before a large stack (ulimit -s above 8 MiB) runs out: the checks use at most this much
+constexpr std::uintptr_t StackBudget = std::uintptr_t{ 4 } * 1024 * 1024;
 #endif
 
 struct StackBounds
@@ -109,6 +123,12 @@ bool StackNearlyExhaustedSlow(std::uintptr_t frame)
         const bool known = bounds.high - bounds.low > StackReserve;
         stack.low = known ? bounds.low : 0;
         stack.limit = known ? bounds.low + StackReserve : 0;
+#ifdef JINJA2CPP_TSAN
+        if (known && bounds.high - bounds.low > StackBudget)
+        {
+            stack.limit = std::max(stack.limit, bounds.high - StackBudget);
+        }
+#endif
         if (!t_renderLimits.active)
         {
             stack.renderLimit = stack.limit;
