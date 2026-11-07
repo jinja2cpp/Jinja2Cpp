@@ -203,19 +203,16 @@ const char* PyHost::TypeName() const
 
 std::string PyHost::Str() const
 {
-    Touch();
     return Utf8(Steal(PyObject_Str(m_object)));
 }
 
 std::string PyHost::Repr() const
 {
-    Touch();
     return Utf8(Steal(PyObject_Repr(m_object)));
 }
 
 std::optional<InternalValue> PyHost::GetAttr(const std::string& name) const
 {
-    Touch();
     if (m_kind != Kind::Other)
     {
         const auto& names = TypeAttributes(reinterpret_cast<PyObject*>(Py_TYPE(m_object)));
@@ -249,7 +246,6 @@ std::optional<InternalValue> PyHost::GetAttr(const std::string& name) const
 
 std::optional<InternalValue> PyHost::GetItem(const InternalValue& key) const
 {
-    Touch();
     const auto pyKey = KeyToPython(key);
     if (m_kind == Kind::Dict)
     {
@@ -279,7 +275,6 @@ std::optional<InternalValue> PyHost::GetItem(const InternalValue& key) const
 
 std::optional<InternalValue> PyHost::GetSlice(const InternalValue& start, const InternalValue& stop, const InternalValue& step) const
 {
-    Touch();
     if (m_kind == Kind::Other && !PySequence_Check(m_object) && !PyMapping_Check(m_object))
     {
         return std::nullopt;
@@ -308,7 +303,6 @@ InternalValue PyHost::Call(const CallParams& params, RenderContext& context) con
 
 bool PyHost::IsIterable() const
 {
-    Touch();
     if (m_kind != Kind::Other)
     {
         return true;
@@ -329,7 +323,6 @@ bool PyHost::IsIterable() const
 
 std::optional<ListAdapter> PyHost::Iterate() const
 {
-    Touch();
     if (m_kind == Kind::List || m_kind == Kind::Tuple)
     {
         return ListAdapter(jinja2::MakeRef<PySequenceItems>(PyRef::Borrow(m_object), m_kind == Kind::List));
@@ -348,7 +341,6 @@ std::optional<ListAdapter> PyHost::Iterate() const
 
 std::optional<ListAdapter> PyHost::Reversed() const
 {
-    Touch();
     PyObject* reversed = PyObject_CallFunctionObjArgs(Names().reversed.ptr(), m_object, nullptr);
     if (!reversed)
     {
@@ -363,7 +355,6 @@ std::optional<ListAdapter> PyHost::Reversed() const
 
 std::optional<bool> PyHost::Contains(const InternalValue& item) const
 {
-    Touch();
     const auto pyItem = KeyToPython(item);
     const int result = PySequence_Contains(m_object, pyItem.ptr());
     if (result < 0)
@@ -375,7 +366,6 @@ std::optional<bool> PyHost::Contains(const InternalValue& item) const
 
 std::optional<size_t> PyHost::Len() const
 {
-    Touch();
     const Py_ssize_t size = PyObject_Size(m_object);
     if (size < 0)
     {
@@ -390,7 +380,6 @@ std::optional<size_t> PyHost::Len() const
 
 bool PyHost::Truth() const
 {
-    Touch();
     const int result = PyObject_IsTrue(m_object);
     if (result < 0)
     {
@@ -401,7 +390,6 @@ bool PyHost::Truth() const
 
 std::optional<bool> PyHost::Equals(const InternalValue& other) const
 {
-    Touch();
     const auto pyOther = ToPython(other);
     // Python's ==: reflected operands and the identity fallback included
     const auto result = Steal(PyObject_RichCompare(m_object, pyOther.ptr(), Py_EQ));
@@ -415,7 +403,6 @@ std::optional<bool> PyHost::Equals(const InternalValue& other) const
 
 std::optional<size_t> PyHost::Hash() const
 {
-    Touch();
     const Py_hash_t hash = PyObject_Hash(m_object);
     if (hash == -1 && PyErr_Occurred())
     {
@@ -467,7 +454,6 @@ bool PyHost::IsMarkupLike() const
 
 std::string PyHost::Html() const
 {
-    Touch();
     return Utf8(Steal(PyObject_CallMethod(m_object, "__html__", nullptr)));
 }
 
@@ -625,17 +611,8 @@ const PyHost* AsPyHost(const InternalValue& value)
     return static_cast<const PyHost*>(jinja2::GetHostObject(value));
 }
 
-void NotePythonCall() noexcept
-{
-    if (auto* render = CurrentRender())
-    {
-        ++render->pythonCalls;
-    }
-}
-
 InternalValue CallPython(PyObject* callable, const CallParams& params, RenderContext& context)
 {
-    NotePythonCall();
     const LeaseScope lease(context);
     // pass_context and its kin: the argument the callable asked for goes first
     const PassArg pass = PassArgOf(callable);

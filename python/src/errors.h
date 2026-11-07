@@ -19,10 +19,6 @@ struct ErrorSource
 
 // Raises the Python exception of an error of the engine (jinja2cpp.exceptions): a Python
 // exception a callable raised is raised again as itself, with its traceback (0248 D9)
-// Whether the error is a template that failed to parse or compile (TemplateSyntaxError or
-// TemplateAssertionError), not one the engine raised from a Python exception: what the fallback
-// to Jinja2 retries
-bool IsLoadError(const jinja2::ErrorInfo& error);
 [[noreturn]] void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source = {});
 // The same for the exception being handled (call it from a catch handler)
 [[noreturn]] void RaiseCurrentEngineError();

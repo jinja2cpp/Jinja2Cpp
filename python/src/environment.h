@@ -118,8 +118,6 @@ public:
     PyTemplate& operator=(PyTemplate&&) = delete;
 
     nb::object Render(nb::args args, nb::kwargs kwargs) const;
-    // Render without the retry with Jinja2 (generate)
-    nb::object RenderOnce(nb::args args, nb::kwargs kwargs) const { return RenderImpl(args, kwargs, false); }
     // The environment, checked to be alive
     PyEnvironment& LiveEnvironment() const;
     // Template.make_module of the Python layer (template_module.cpp): (body, exports) for the
@@ -141,7 +139,6 @@ public:
     void Clear() noexcept;
 
 private:
-    nb::object RenderImpl(nb::args args, nb::kwargs kwargs, bool retry) const;
     jinja2::Template m_template;
     nb::object m_environment;
     nb::object m_globals;

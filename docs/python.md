@@ -176,7 +176,7 @@ it), or the environment variable `JINJA2CPP_FALLBACK=never` read once at first u
 sets `never` so that every use of Jinja2 is an error and its pass rate measures the engine.
 Without Jinja2 installed a Tier B use raises `UnsupportedError` whatever the mode says.
 
-It is decided in three places, never in the middle of an output:
+It is decided in two places, never in the middle of an output:
 
 1. **When an environment is constructed** with a Tier B option (a custom extension, `enable_async`,
    a `context_class` or `code_generator_class`, `NativeEnvironment`). The environment still
@@ -196,26 +196,20 @@ It is decided in three places, never in the middle of an output:
    environment of the same configuration: if it succeeds, the template is a Jinja2 one (as
    above); if it fails too, Jinja2's error is raised, as the jinja2cpp class, with Jinja2's
    message, line, name and source. Without Jinja2, or with `never`, the engine's own error stands.
-3. **When a render fails on an include, import or extends of a template the engine cannot
-   parse.** It is retried once, from the start, by Jinja2, only if the render touched no
-   Python object and only for the buffering `render()` (not `generate` or `stream`). A touch is
-   a call of a filter, test, global or `finalize` function, the `autoescape` callable or a
-   gettext callable, and any read of a host object that is not an exact `dict`, `list` or `tuple`:
-   an attribute, an item, an iteration (a generator or `iter(...)` is consumed by it), `len`, `str`,
-   a comparison, a truth test. The count is per render, so concurrent renders do not disturb
-   each other. A loader's `get_source` is not counted. Otherwise the engine's error propagates, since a
-   retry would repeat side effects or find a one-shot iterator consumed. The retry needs the template
-   to come from `from_string`, `get_template` or `Template(...)`.
+A native template that includes, imports or extends a template the engine cannot parse is **not**
+retried with Jinja2: the render raises the engine's `TemplateSyntaxError`, as `fallback="never"` does
+(a render cannot be proven free of Python side effects after it started, so there is no safe point to
+switch). Use an option that makes Jinja2 the environment (Tier B), or avoid the syntax the engine lacks in
+included templates; task 0430 would route static include names at load time.
 
 A divergence that is deliberate never triggers the fallback: a runtime error of the engine is
-never retried, only a failure to parse.
+never handed to Jinja2, only a failure to parse.
 
 `jinja2cpp.stats(reset=False)` returns a dict of counters, `environments_native`,
 `environments_fallback`, `loads_native`, `loads_fallback`, `renders_native` and `renders_fallback`.
 Loads are the templates the API calls make (`from_string`, `get_template`, `select_template`,
 `Template(...)`) and Jinja2 really loaded: a `get_template` answered from the cache is not counted
-again, nor is the template an include loads inside a render. A render retried with Jinja2 counts
-as one fallback render only, whether it succeeds or raises. The counters are locked, so they are exact
+again, nor is the template an include loads inside a render. The counters are locked, so they are exact
 under threads. `stats(reset=True)` returns the counts and starts from zero (and forgets which warnings
 were given).
 
@@ -250,7 +244,7 @@ What the fallback does not carry over:
   tree, and the meta functions take a fallback template too (Jinja2 parses its source again).
 - **Files.** `FileSystemLoader` does not follow a link out of its search directories in either
   engine (the Python `get_source` checks it too), where Jinja2's loader does.
-- **Cost.** A template remembers its source for the retry and for `blocks`.
+- **Cost.** A template remembers its source for `blocks`, `new_context` and the other attributes only Jinja2 has.
 - `env.extensions` of a delegating environment is the list you gave, not Jinja2's dict of instances.
 
 ## Sandbox

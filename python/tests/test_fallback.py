@@ -1,5 +1,5 @@
 """The fallback to real Jinja2 (docs/python.md, "Fallback"): Tier B options, templates the engine cannot
-parse, the render retry, the three modes, jinja2cpp.stats() and the behavior without Jinja2."""
+parse, the include of an unparsable template, the three modes, jinja2cpp.stats() and the behavior without Jinja2."""
 
 import asyncio
 import os
@@ -330,100 +330,40 @@ def test_a_filter_added_to_the_environment_still_resolves_natively():
     assert jinja2cpp.stats()["loads_fallback"] == 0
 
 
-# --- The render retry -----------------------------------------------------------------------
+# --- An include of a template the engine cannot parse -----------------------------------------------------------------------
 
 
 def make_includer(main, inc=UNPARSABLE, **options):
     return jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"main": main, "inc": inc}), **options)
 
 
-def test_include_of_an_unparsable_template_is_retried():
-    env = make_includer("[{% include 'inc' %}]{{ x }}")
-    assert env.get_template("main").render(x=1) == "[a1b]1"
+def test_include_of_an_unparsable_template_raises_the_engines_error():
+    # The engine renders the includer and cannot parse the included template: its own error is raised.
+    # (Routing the static names at load time is task 0430.)
+    for main in ("{% include 'inc' %}", "{% import 'inc' as m %}", "{% from 'inc' import x %}", "{% extends 'inc' %}"):
+        template = make_includer(main).get_template("main")
+        with pytest.raises(jinja2cpp.TemplateSyntaxError) as info:
+            template.render()
+        assert "print" in info.value.message  # the engine's own error, as fallback="never" gives
+    with pytest.raises(jinja2cpp.TemplateSyntaxError):
+        make_includer("{% include 'inc' %}", fallback="never").get_template("main").render()
     stats = jinja2cpp.stats()
-    assert stats["renders_fallback"] == 1 and stats["renders_native"] == 0 and stats["loads_fallback"] == 0
-    for main in ("{% import 'inc' as m %}{{ m }}", "{% from 'inc' import x %}", "{% extends 'inc' %}"):
-        make_includer(main, "{% print 1 %}").get_template("main").render()
-
-
-def test_retry_through_a_python_loader_and_from_string():
-    sources = {"main": "[{% include 'inc' %}]", "inc": UNPARSABLE}
-    asked = []
-
-    def load(name):
-        asked.append(name)
-        return sources.get(name)
-
-    env = jinja2cpp.Environment(loader=jinja2cpp.FunctionLoader(load))
-    assert env.get_template("main").render() == "[a1b]"
-    assert env.from_string("{% include 'inc' %}!").render() == "a1b!"
-    assert asked  # get_source is not a callable that stops the retry
-
-
-def test_retry_keeps_template_globals_and_arguments():
-    env = make_includer("{{ g }}{{ x }}{% include 'inc' %}")
-    template = env.get_template("main", globals={"g": "G"})
-    assert template.render({"x": 1}) == "G1a1b"
-
-
-def test_no_retry_after_a_python_callable_ran():
-    ran = []
-
-    def side_effect():
-        ran.append(1)
-        return "s"
-
-    env = make_includer("{{ f() }}{% include 'inc' %}")
-    env.globals["f"] = side_effect
-    with pytest.raises(jinja2cpp.TemplateSyntaxError):
-        env.get_template("main").render()
-    assert ran == [1]  # once: the error was not retried
-    assert jinja2cpp.stats()["renders_fallback"] == 0
-    # a filter and a test count, even without side effects
-    env = make_includer("{{ 'a'|up }}{% include 'inc' %}")
-    env.filters["up"] = str.upper
-    with pytest.raises(jinja2cpp.TemplateSyntaxError):
-        env.get_template("main").render()
-    env = make_includer("{% if 1 is odd2 %}{% endif %}{% include 'inc' %}")
-    env.tests["odd2"] = lambda v, *a: True
-    with pytest.raises(jinja2cpp.TemplateSyntaxError):
-        env.get_template("main").render()
-    # the engine's own filters do not
-    assert make_includer("{{ 'a'|upper }}{% include 'inc' %}").get_template("main").render() == "Aa1b"
-
-
-def test_finalize_and_autoescape_callables_count_as_calls():
-    env = make_includer("{{ 1 }}{% include 'inc' %}", finalize=lambda v: v)
-    with pytest.raises(jinja2cpp.TemplateSyntaxError):
-        env.get_template("main").render()
-
-
-def test_generate_is_not_retried():
+    assert stats["renders_fallback"] == 0 and stats["loads_fallback"] == 0 and stats["renders_native"] == 5
+    # generate and stream raise it too, and a runtime error is the engine's as before
     template = make_includer("{% include 'inc' %}").get_template("main")
     with pytest.raises(jinja2cpp.TemplateSyntaxError):
         list(template.generate())
-    with pytest.raises(jinja2cpp.TemplateSyntaxError):
-        "".join(template.stream())
-    assert template.render() == UNPARSABLE_RESULT
-
-
-def test_retry_error_is_jinja2s_when_it_fails_too():
-    env = make_includer("{% include 'inc' %}", "x\n{% if %}")
-    with pytest.raises(jinja2cpp.TemplateSyntaxError) as ours:
-        env.get_template("main").render()
-    with pytest.raises(jinja2.TemplateSyntaxError) as theirs:
-        jinja2.Environment(loader=jinja2.DictLoader({"main": "{% include 'inc' %}", "inc": "x\n{% if %}"})).get_template("main").render()
-    assert ours.value.message == theirs.value.message and ours.value.lineno == theirs.value.lineno
-
-
-def test_a_runtime_error_is_never_retried():
-    env = make_includer("{{ 1 // 0 }}{% include 'inc' %}")
     with pytest.raises(jinja2cpp.TemplateRuntimeError):
-        env.get_template("main").render()
-    assert jinja2cpp.stats()["renders_fallback"] == 0
-    env = make_includer("{% include 'missing' %}")
+        make_includer("{{ 1 // 0 }}{% include 'inc' %}").get_template("main").render()
     with pytest.raises(jinja2cpp.TemplateNotFound):
-        env.get_template("main").render()
+        make_includer("{% include 'missing' %}").get_template("main").render()
+
+
+def test_include_of_an_unparsable_template_is_silent_in_warn_mode():
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        with pytest.raises(jinja2cpp.TemplateSyntaxError):
+            make_includer("{% include 'inc' %}", fallback="warn").get_template("main").render()
 
 
 # --- Modes ----------------------------------------------------------------------------------
@@ -495,15 +435,6 @@ def test_warn_once_per_reason():
         jinja2cpp.stats(reset=True)
         jinja2cpp.Environment(fallback="warn", enable_async=True)
     assert record[0].filename == __file__
-
-
-def test_warn_on_the_retry_and_auto_is_silent():
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        make_includer("{% include 'inc' %}").get_template("main").render()
-        jinja2cpp.Environment(enable_async=True)
-    with pytest.warns(jinja2cpp.FallbackWarning, match="included template"):
-        make_includer("{% include 'inc' %}", fallback="warn").get_template("main").render()
 
 
 # --- Statistics -----------------------------------------------------------------------------
@@ -822,107 +753,6 @@ def test_sandbox_overrides_that_cannot_be_given_still_refuse():
         env.from_string("{{ 1 }}")
 
 
-def test_concurrent_renders_do_not_refuse_the_retry():
-    sys.setswitchinterval(1e-6)
-    try:
-        files = {"p": "{% print 1 %}"}
-
-        class SlowLoader(jinja2cpp.BaseLoader):
-            def get_source(self, env, name):
-                for _ in range(50):
-                    pass  # Python bytecode: the GIL can switch here
-                return files[name], None, None
-
-        env = jinja2cpp.Environment(loader=SlowLoader())
-        env.filters["f"] = lambda x: x
-        retried = env.from_string("{% include 'p' %}")
-        busy = env.from_string("{% for i in range(20) %}{{ i|f }}{% endfor %}")
-        stop = []
-        errors = []
-
-        def noise():
-            while not stop:
-                busy.render()
-
-        def work():
-            for _ in range(300):
-                try:
-                    assert retried.render() == "1"
-                except Exception as exc:  # noqa: BLE001
-                    errors.append(type(exc).__name__)
-
-        import threading
-
-        noisy = [threading.Thread(target=noise) for _ in range(3)]
-        workers = [threading.Thread(target=work) for _ in range(2)]
-        for thread in noisy + workers:
-            thread.start()
-        for thread in workers:
-            thread.join()
-        stop.append(1)
-        for thread in noisy:
-            thread.join()
-        assert errors == []
-    finally:
-        sys.setswitchinterval(0.005)
-
-
-class Counting:
-    reads = 0
-
-    @property
-    def prop(self):
-        Counting.reads += 1
-        return "v"
-
-
-@pytest.mark.parametrize(
-    "make",
-    [lambda: (i for i in range(3)), lambda: iter([0, 1, 2]), lambda: iter(range(3))],
-    ids=["generator", "iter-list", "iter-range"],
-)
-def test_retry_is_refused_after_a_one_shot_iterator_was_read(make):
-    env = make_includer("{% for i in items %}{{ i }},{% endfor %}|{% include 'inc' %}", "{% print 'P' %}")
-    template = env.get_template("main")
-    # a retry would find the iterator consumed and render '|P': the engine's error stands instead
-    with pytest.raises(jinja2cpp.TemplateSyntaxError):
-        template.render(items=make())
-    # a list is not consumed by the render, but a touch is a touch: no retry either
-    assert jinja2.Environment(loader=jinja2.DictLoader({"main": "{% for i in items %}{{ i }},{% endfor %}|{% include 'inc' %}", "inc": "{% print 'P' %}"})).get_template("main").render(items=make()) == "0,1,2,|P"
-
-
-def test_retry_is_refused_after_a_host_attribute_read_with_a_side_effect():
-    Counting.reads = 0
-    env = make_includer("{{ o.prop }}|{% include 'inc' %}", "{% print 'P' %}")
-    with pytest.raises(jinja2cpp.TemplateSyntaxError):
-        env.get_template("main").render(o=Counting())
-    assert Counting.reads == 1  # not repeated by a retry
-
-
-@pytest.mark.parametrize("main", ["{{ o|length }}", "{{ o }}", "{% if o.prop %}x{% endif %}", "{{ o['k'] }}", "{{ o.method() }}"])
-def test_retry_is_refused_after_any_touch_of_a_host_object(main):
-    class Host:
-        prop = 1
-
-        def __len__(self):
-            return 3
-
-        def __getitem__(self, key):
-            return "item"
-
-        def method(self):
-            return "m"
-
-    env = make_includer(main + "{% include 'inc' %}", "{% print 'P' %}")
-    with pytest.raises(jinja2cpp.TemplateSyntaxError):
-        env.get_template("main").render(o=Host())
-
-
-def test_retry_still_works_when_no_host_object_was_touched():
-    env = make_includer("{{ a }}{{ d.k }}{{ l[0] }}|{% include 'inc' %}", "{% print 'P' %}")
-    assert env.get_template("main").render(a=1, d={"k": 2}, l=[3]) == "123|P"
-
-
 def test_context_class_and_code_generator_class_reach_jinja2():
     class Ctx(jinja2.runtime.Context):
         def resolve_or_missing(self, key):
@@ -1069,14 +899,6 @@ def test_parse_and_meta_for_a_source_the_engine_cannot_parse():
         env.parse("{% if %}")
     with pytest.raises(jinja2cpp.TemplateSyntaxError):
         jinja2cpp.Environment(fallback="never").parse(UNPARSABLE)
-
-
-def test_stats_of_a_retried_render_that_raises():
-    env = make_includer("{{ 1 }}{% include 'inc' %}{{ undefined_name() }}", "{% print 1 %}")
-    with pytest.raises(jinja2.exceptions.TemplateError):
-        env.get_template("main").render()
-    stats = jinja2cpp.stats()
-    assert stats["renders_native"] == 0 and stats["renders_fallback"] == 1 and stats["loads_fallback"] == 0
 
 
 def test_stats_counters_are_exact_under_threads():

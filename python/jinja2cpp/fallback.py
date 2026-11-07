@@ -1,9 +1,9 @@
 """The fallback to real Jinja2 for what the engine does not do (docs/python.md, "Fallback").
 
-The decision is made in three places and never in the middle of an output: when an environment
-is constructed with an option outside the subset (Tier B), when a template is loaded that the
-engine cannot parse, and when a render of the buffering ``render()`` failed on an include,
-import or extends of such a template before any Python callable ran. The policy is
+The decision is made in two places and never in the middle of an output: when an environment
+is constructed with an option outside the subset (Tier B), and when a template is loaded that the
+engine cannot parse. A template the engine renders that includes one it cannot parse raises the
+engine's error (task 0430 would route those names at load time). The policy is
 ``fallback=`` of the environment, or the module default (``set_fallback``, the environment
 variable ``JINJA2CPP_FALLBACK``): ``"auto"``, ``"warn"`` or ``"never"``.
 """
@@ -41,8 +41,6 @@ _counts: t.Dict[str, int] = {
     "loads_fallback": 0,
     "renders_fallback": 0,
 }
-# renders the engine started and a retry with Jinja2 replaced
-_native_adjust = 0
 _native_base = 0
 _lock = threading.Lock()
 
@@ -82,17 +80,16 @@ def stats(reset: bool = False) -> t.Dict[str, int]:
 
     ``environments_*`` count constructed environments, ``loads_*`` the templates made by
     ``from_string``, ``get_template``, ``select_template`` and ``Template(...)``, and ``renders_*``
-    the calls of ``render``. A render that was retried with Jinja2 counts once, as a fallback.
+    the calls of ``render``.
     """
-    global _native_base, _native_adjust
+    global _native_base
     with _lock:
         result = dict(_counts)
-        result["renders_native"] = _jinja2cpp._native_renders() - _native_adjust - _native_base
+        result["renders_native"] = _jinja2cpp._native_renders() - _native_base
         if reset:
             for key in _counts:
                 _counts[key] = 0
             _native_base = _jinja2cpp._native_renders()
-            _native_adjust = 0
             _warned.clear()
     return {key: result[key] for key in sorted(result)}
 
@@ -533,7 +530,7 @@ def _first_line(error: BaseException) -> str:
     return str(message).splitlines()[0] if message else type(error).__name__
 
 
-def jinja2_template_of(template: t.Any, reason: str, count: bool = True) -> t.Any:
+def jinja2_template_of(template: t.Any, reason: str) -> t.Any:
     """Jinja2's template for a template of the engine (made from its source or name), for what only Jinja2 has."""
     jt = template.__dict__.get("_fb_jt")
     if jt is not None:
@@ -554,37 +551,13 @@ def jinja2_template_of(template: t.Any, reason: str, count: bool = True) -> t.An
             jt = jenv.get_template(name, None, own_globals)
         else:
             raise UnsupportedError(f"{reason}: this template was not made by from_string or get_template, so Jinja2 has no source for it")
-    if count:
-        _count("loads_fallback")
+    _count("loads_fallback")
     template.__dict__["_fb_jt"] = jt
     return jt
 
 
-def render_retry(template: t.Any, args: t.Tuple[t.Any, ...], kwargs: t.Dict[str, t.Any]) -> t.Optional[str]:
-    """The engine failed to parse a template the render included: render it all with Jinja2 (None: the engine's error stands).
-
-    Called by the engine, only when the render has touched no Python object (callable, attribute,
-    item, iterator, ``len``, ``str``): a retry repeats nothing then, and no one-shot iterator was consumed.
-    """
-    global _native_adjust
-    env = template.environment
-    if env._fallback_mode_ == "never" or _jinja2() is None or env._fallback_blocker():
-        return None
-    if template.__dict__.get("_fb_source") is None and template.__dict__.get("_fb_name") is None:
-        return None
-    reason = "an included template the engine cannot parse"
-    require(reason, env._fallback_mode_)
-    # From here the render is Jinja2's, whether it succeeds or raises: the engine's count of it is taken back
-    with _lock:
-        _native_adjust += 1
-        _counts["renders_fallback"] += 1
-    jt = jinja2_template_of(template, reason, count=False)
-    with mapped():
-        return t.cast(str, jt.render(*args, **kwargs))
-
-
 def remember(template: t.Any, source: t.Any = None, name: t.Any = None) -> t.Any:
-    """Keep what Jinja2 needs to load `template` again (``render_retry``, ``blocks``, ...)."""
+    """Keep what Jinja2 needs to load `template` again (``blocks``, ``new_context``, ...)."""
     try:
         if source is not None:
             template.__dict__["_fb_source"] = source

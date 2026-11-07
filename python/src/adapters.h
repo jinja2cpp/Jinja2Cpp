@@ -7,7 +7,6 @@
 
 #include "sandbox_policy.h"
 
-#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -18,11 +17,6 @@ using jinja2::CallParams;
 using jinja2::InternalValue;
 using jinja2::ListAdapter;
 using jinja2::RenderContext;
-
-// Notes in the render of this thread that it touched a Python object that can run code (RenderState::pythonCalls):
-// the fallback retries a render only while no such touch happened (docs/python.md, "Fallback"). A loader's
-// get_source is not counted
-void NotePythonCall() noexcept;
 
 // A Python object read by the engine as Python reads it (0248 D4): one adapter for every kind
 // of object, which asks Python for each operation, so a dict, a list, a tuple, a namedtuple, a
@@ -73,15 +67,6 @@ public:
     [[nodiscard]] std::string Html() const override;
 
 private:
-    // Notes a touch of an object that can run code; the exact dict, list and tuple run none
-    void Touch() const noexcept
-    {
-        if (m_kind == Kind::Other)
-        {
-            NotePythonCall();
-        }
-    }
-
     PyObject* m_object;
     bool m_borrowed;
     Kind m_kind;

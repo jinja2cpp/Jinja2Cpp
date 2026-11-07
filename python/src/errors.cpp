@@ -80,16 +80,6 @@ std::string ErrorMessage(const jinja2::ErrorInfo& error)
     return text;
 }
 
-bool IsLoadError(const jinja2::ErrorInfo& error)
-{
-    if (error.GetException())
-    {
-        return false;
-    }
-    const auto code = error.GetCode();
-    return IsSyntaxError(code) || code == ErrorCode::UnknownFilter || code == ErrorCode::UnknownTest;
-}
-
 void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
 {
     // Only an exception the engine did not raise is kept: Python's own, raised again as itself

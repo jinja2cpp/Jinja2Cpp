@@ -160,7 +160,7 @@ class Template(_jinja2cpp.Template):
 
     def generate(self, *args: t.Any, **kwargs: t.Any) -> t.Iterator[str]:
         """Render the template as a generator of strings: one item for now, the whole output."""
-        output = self._render_once(*args, **kwargs)
+        output = self.render(*args, **kwargs)
         if output:
             yield output
 
@@ -234,9 +234,6 @@ class FallbackTemplate:
         with fallback.mapped():
             return t.cast(str, self._jinja2_template.render(*args, **kwargs))
 
-    def _render_once(self, *args: t.Any, **kwargs: t.Any) -> str:
-        return self.render(*args, **kwargs)
-
     def generate(self, *args: t.Any, **kwargs: t.Any) -> t.Iterator[str]:
         fallback._count("renders_fallback")
         with fallback.mapped():
@@ -308,7 +305,7 @@ class FallbackTemplate:
 
 
 def patch_template_for_overrides() -> None:
-    """Make ``Template.render`` and ``_render_once`` (the engine's) render a Jinja2 template when the instance is one.
+    """Make ``Template.render`` (the engine's) render a Jinja2 template when the instance is one.
 
     Needed once a ``template_class`` of the user is used with the fallback: its override calls ``super().render()``,
     which reaches the engine's method with an instance that has no engine template. Until then the engine's
@@ -317,20 +314,13 @@ def patch_template_for_overrides() -> None:
     if Template.__dict__.get("_dispatching"):
         return
     native_render = _jinja2cpp.Template.render
-    native_once = _jinja2cpp.Template._render_once
 
     def render(self: Template, *args: t.Any, **kwargs: t.Any) -> str:
         if "_jt" in self.__dict__:
             return FallbackTemplate.render(self, *args, **kwargs)  # type: ignore[arg-type]
         return native_render(self, *args, **kwargs)  # type: ignore[no-any-return]
 
-    def render_once(self: Template, *args: t.Any, **kwargs: t.Any) -> str:
-        if "_jt" in self.__dict__:
-            return FallbackTemplate.render(self, *args, **kwargs)  # type: ignore[arg-type]
-        return native_once(self, *args, **kwargs)  # type: ignore[no-any-return]
-
     Template.render = render  # type: ignore[assignment]
-    Template._render_once = render_once  # type: ignore[assignment]
     Template._dispatching = True  # type: ignore[attr-defined]
 
 

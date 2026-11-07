@@ -1,6 +1,5 @@
 #include "environment.h"
 
-#include "adapters.h"
 #include "convert.h"
 #include "errors.h"
 #include "loaders.h"
@@ -436,7 +435,6 @@ void PyEnvironment::SetAutoescape(nb::handle value)
         // Jinja2 passes the template's name, None for a template from a string
         m_settings.autoescapeSelector = [selector](const std::string& templateName) {
             const auto name = templateName.empty() ? nb::none() : MakeStr(templateName);
-            NotePythonCall();
             PyObject* result = PyObject_CallFunctionObjArgs(selector, name.ptr(), nullptr);
             if (!result)
             {
@@ -796,11 +794,6 @@ PyTemplate::PyTemplate(jinja2::Template tpl, nb::object environment, nb::object 
 
 nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
 {
-    return RenderImpl(args, kwargs, true);
-}
-
-nb::object PyTemplate::RenderImpl(nb::args args, nb::kwargs kwargs, bool retry) const
-{
     ++g_renders;
     auto& env = LiveEnvironment();
     env.CheckSandboxHooks();
@@ -836,20 +829,6 @@ nb::object PyTemplate::RenderImpl(nb::args args, nb::kwargs kwargs, bool retry) 
     }
     if (error)
     {
-        // An include, import or extends of a template the engine cannot parse: Jinja2 may (the
-        // fallback, docs/python.md). Only while no Python callable has run, so that a retry
-        // repeats no side effect, and for the buffering render, which has written nothing
-        if (retry && IsLoadError(*error) && state.pythonCalls == 0)
-        {
-            if (const auto self = nb::find(this); self.is_valid())
-            {
-                auto result = nb::module_::import_("jinja2cpp.fallback").attr("render_retry")(self, args, kwargs);
-                if (!result.is_none())
-                {
-                    return result;
-                }
-            }
-        }
         ErrorSource where;
         where.name = m_name;
         where.filename = m_filename;
@@ -948,7 +927,6 @@ void BindEnvironment(nb::module_& module)
     nb::class_<PyTemplate>(module, "Template", nb::type_slots(g_templateSlots), nb::is_weak_referenceable())
         .def(nb::init<nb::handle, nb::handle, nb::kwargs>(), "source"_a, "_environment"_a.none() = nb::none(), "kwargs"_a)
         .def("render", &PyTemplate::Render)
-        .def("_render_once", &PyTemplate::RenderOnce)
         .def("_make_module", &PyTemplate::MakeModule, "params"_a)
         .def("_undeclared", &PyTemplate::FindUndeclared)
         .def("_referenced", &PyTemplate::FindReferenced)
