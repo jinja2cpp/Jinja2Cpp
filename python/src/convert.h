@@ -6,6 +6,7 @@
 #include "host_object.h"
 #include "internal_value.h"
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -35,6 +36,11 @@ struct RenderState
     // The environment when it is sandboxed (SandboxOf), whose is_safe_attribute and is_safe_callable the
     // render asks for every attribute and call of a Python object (0354, the plan's D8); null for any other
     PyObject* sandbox = nullptr;
+    // How many times this render touched a Python object that can run code (a callable, an attribute,
+    // an item, an iterator, len, str ...): the fallback retries a render only while this is zero, as
+    // a retry would repeat their effects or find a one-shot iterator consumed (docs/python.md, "Fallback").
+    // Per render and per thread, under the GIL
+    std::uint64_t pythonCalls = 0;
     RenderState* outer = nullptr;
 };
 RenderState* CurrentRender() noexcept;

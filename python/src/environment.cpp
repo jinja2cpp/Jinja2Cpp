@@ -802,7 +802,6 @@ nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
 nb::object PyTemplate::RenderImpl(nb::args args, nb::kwargs kwargs, bool retry) const
 {
     ++g_renders;
-    const auto callsBefore = PythonCallCount();
     auto& env = LiveEnvironment();
     env.CheckSandboxHooks();
     // dict(*args, **kwargs), as Jinja2's render
@@ -840,7 +839,7 @@ nb::object PyTemplate::RenderImpl(nb::args args, nb::kwargs kwargs, bool retry) 
         // An include, import or extends of a template the engine cannot parse: Jinja2 may (the
         // fallback, docs/python.md). Only while no Python callable has run, so that a retry
         // repeats no side effect, and for the buffering render, which has written nothing
-        if (retry && IsLoadError(*error) && PythonCallCount() == callsBefore)
+        if (retry && IsLoadError(*error) && state.pythonCalls == 0)
         {
             if (const auto self = nb::find(this); self.is_valid())
             {

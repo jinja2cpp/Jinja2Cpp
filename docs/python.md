@@ -197,12 +197,15 @@ It is decided in three places, never in the middle of an output:
    above); if it fails too, Jinja2's error is raised, as the jinja2cpp class, with Jinja2's
    message, line, name and source. Without Jinja2, or with `never`, the engine's own error stands.
 3. **When a render fails on an include, import or extends of a template the engine cannot
-   parse.** It is retried once, from the start, by Jinja2, only if no Python callable has run
-   in the render and only for the buffering `render()` (not `generate` or `stream`). A callable
-   is a filter, test, global or `finalize` function, the `autoescape` callable and the gettext
-   callables, with or without side effects; a loader's `get_source` and the attribute reads of
-   Python objects are not counted. Otherwise the error propagates. The retry needs the template to
-   come from `from_string`, `get_template` or `Template(...)`.
+   parse.** It is retried once, from the start, by Jinja2, only if the render touched no
+   Python object and only for the buffering `render()` (not `generate` or `stream`). A touch is
+   a call of a filter, test, global or `finalize` function, the `autoescape` callable or a
+   gettext callable, and any read of a host object that is not an exact `dict`, `list` or `tuple`:
+   an attribute, an item, an iteration (a generator or `iter(...)` is consumed by it), `len`, `str`,
+   a comparison, a truth test. The count is per render, so concurrent renders do not disturb
+   each other. A loader's `get_source` is not counted. Otherwise the engine's error propagates, since a
+   retry would repeat side effects or find a one-shot iterator consumed. The retry needs the template
+   to come from `from_string`, `get_template` or `Template(...)`.
 
 A divergence that is deliberate never triggers the fallback: a runtime error of the engine is
 never retried, only a failure to parse.
@@ -210,24 +213,41 @@ never retried, only a failure to parse.
 `jinja2cpp.stats(reset=False)` returns a dict of counters, `environments_native`,
 `environments_fallback`, `loads_native`, `loads_fallback`, `renders_native` and `renders_fallback`.
 Loads are the templates the API calls make (`from_string`, `get_template`, `select_template`,
-`Template(...)`), not those an include loads inside a render; a render retried with Jinja2 counts
-as one fallback render only. `stats(reset=True)` returns the counts and starts from zero (and
-forgets which warnings were given).
+`Template(...)`) and Jinja2 really loaded: a `get_template` answered from the cache is not counted
+again, nor is the template an include loads inside a render. A render retried with Jinja2 counts
+as one fallback render only, whether it succeeds or raises. The counters are locked, so they are exact
+under threads. `stats(reset=True)` returns the counts and starts from zero (and forgets which warnings
+were given).
+
+The Jinja2 environment that stands for a native one is made once and rebuilt when one of its options
+changes; Jinja2's own `get_template` cache (with the loader's `uptodate` check) serves the templates, so
+`env.get_template("a") is env.get_template("a")` holds as in Jinja2. Its filters, tests, globals and policies
+are chains over the live dicts of your environment: a change after a template was made is seen by it.
 
 What the fallback does not carry over:
 
 - **Overrides.** A Python subclass of `Environment` that overrides `join_path`, `getattr`,
   `getitem`, `call` and the like is not consulted by the Jinja2 environment that takes over.
-  A sandbox is stricter: `SandboxedEnvironment` falls back only with Jinja2's stock policy. A
-  subclass that overrides `is_safe_attribute`, `is_safe_callable`, `unsafe_undefined`,
-  `wrap_str_format`, `call_binop`, `call_unop`, `getattr`, `getitem` or `call`, sets one on the
-  instance, or intercepts operators gets `UnsupportedError` instead, since Jinja2's sandbox would
-  not run its policy.
+  A sandbox is stricter. The Jinja2 sandbox that takes over asks your environment for
+  `is_safe_attribute`, `is_safe_callable` and `unsafe_undefined` each time (an override of the class,
+  a method set on the instance, even after construction, or a patch of the class are all live). A
+  subclass that overrides `wrap_str_format`, `call_binop`, `call_unop`, `getattr`, `getitem` or
+  `call`, sets one on the instance, or intercepts operators gets `UnsupportedError` instead, since
+  Jinja2's sandbox would not run it. An overridden `unsafe_undefined` that makes its undefined with
+  `self.undefined` makes one of jinja2cpp's classes, which Jinja2's runtime does not know.
+  `template_class`, `context_class` and `code_generator_class` are used: the first for the
+  fallback templates too (its overrides win and its `super()` reaches Jinja2), the others by the
+  Jinja2 environment.
 - **Translations.** `install_gettext_translations` on a delegating environment is Jinja2's. For a
   native environment whose template falls back, the oldstyle wrappers in `env.globals` are copied,
   but newstyle gettext (which runs in the engine) is not.
-- **Undefined subclasses.** A subclass of jinja2cpp's `Undefined` is given to Jinja2 as it is;
-  only the four classes themselves are mapped to Jinja2's.
+- **Undefined subclasses.** The four classes of jinja2cpp are mapped to Jinja2's, and a subclass of
+  `jinja2.Undefined` is used as it is. A subclass of jinja2cpp's `Undefined` cannot be given to Jinja2
+  (it asserts a `jinja2.Undefined` subclass, and the subclass's `super()` calls cannot be moved onto
+  another base): the fallback raises `UnsupportedError` naming the class. Subclass `jinja2.Undefined`
+  to use a custom one with the fallback.
+- **`parse` and `jinja2cpp.meta`.** `env.parse` of a source the engine cannot parse gives Jinja2's node
+  tree, and the meta functions take a fallback template too (Jinja2 parses its source again).
 - **Files.** `FileSystemLoader` does not follow a link out of its search directories in either
   engine (the Python `get_source` checks it too), where Jinja2's loader does.
 - **Cost.** A template remembers its source for the retry and for `blocks`.

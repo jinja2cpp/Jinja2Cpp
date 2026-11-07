@@ -19,6 +19,11 @@ using jinja2::InternalValue;
 using jinja2::ListAdapter;
 using jinja2::RenderContext;
 
+// Notes in the render of this thread that it touched a Python object that can run code (RenderState::pythonCalls):
+// the fallback retries a render only while no such touch happened (docs/python.md, "Fallback"). A loader's
+// get_source is not counted
+void NotePythonCall() noexcept;
+
 // A Python object read by the engine as Python reads it (0248 D4): one adapter for every kind
 // of object, which asks Python for each operation, so a dict, a list, a tuple, a namedtuple, a
 // generator, a callable or any other object behaves as itself, and mutation is seen both ways.
@@ -68,6 +73,15 @@ public:
     [[nodiscard]] std::string Html() const override;
 
 private:
+    // Notes a touch of an object that can run code; the exact dict, list and tuple run none
+    void Touch() const noexcept
+    {
+        if (m_kind == Kind::Other)
+        {
+            NotePythonCall();
+        }
+    }
+
     PyObject* m_object;
     bool m_borrowed;
     Kind m_kind;
@@ -86,12 +100,6 @@ std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle
 
 // The PyHost a value of the engine carries, if any
 const PyHost* AsPyHost(const InternalValue& value);
-
-// How many Python callables the engine has called (filters, tests, globals, finalize, the
-// autoescape callable, the gettext callables): the fallback retries a render only while this
-// has not moved (docs/python.md, "Fallback"). A loader's get_source is not counted
-std::uint64_t PythonCallCount() noexcept;
-void NotePythonCall() noexcept;
 
 // Calls `callable` with the engine's arguments, as a template calls it
 InternalValue CallPython(PyObject* callable, const CallParams& params, RenderContext& context);

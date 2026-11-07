@@ -223,15 +223,17 @@ class SandboxedEnvironment(Environment):
         self.binop_table = self.default_binop_table.copy()
         self.unop_table = self.default_unop_table.copy()
 
-    #: the methods of the policy: Jinja2 stands in for the environment only when none is overridden
-    _POLICY_HOOKS = ("is_safe_attribute", "is_safe_callable", "unsafe_undefined", "wrap_str_format", "call_binop", "call_unop", "getattr", "getitem", "call")
+    #: the methods of the policy that Jinja2 cannot be given: Jinja2 stands in for the environment only when none is
+    #: overridden. ``is_safe_attribute``, ``is_safe_callable`` and ``unsafe_undefined`` are not among them: the Jinja2
+    #: sandbox asks the environment's own, whenever they are set (fallback._forwarding_sandbox)
+    _POLICY_HOOKS = ("wrap_str_format", "call_binop", "call_unop", "getattr", "getitem", "call")
 
     def _fallback_blocker(self) -> t.Optional[str]:
         """Why real Jinja2 may not take this environment over: its policy would not come along.
 
-        A subclass that overrides a hook of the policy (``is_safe_attribute`` and the rest), sets
-        one on the instance, or intercepts operators would run Jinja2's stock policy instead of its
-        own, so the fallback refuses (docs/python.md, "Fallback").
+        A subclass that overrides ``wrap_str_format``, ``call_binop``, ``call_unop``, ``getattr``,
+        ``getitem`` or ``call``, sets one on the instance, or intercepts operators would run Jinja2's stock
+        policy instead of its own, so the fallback refuses (docs/python.md, "Fallback").
         """
         if self.intercepted_binops or self.intercepted_unops:
             return "a sandbox that intercepts operators"

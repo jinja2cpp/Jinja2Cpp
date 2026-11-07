@@ -341,7 +341,7 @@ def test_include_of_an_unparsable_template_is_retried():
     env = make_includer("[{% include 'inc' %}]{{ x }}")
     assert env.get_template("main").render(x=1) == "[a1b]1"
     stats = jinja2cpp.stats()
-    assert stats["renders_fallback"] == 1 and stats["renders_native"] == 0 and stats["loads_fallback"] == 1
+    assert stats["renders_fallback"] == 1 and stats["renders_native"] == 0 and stats["loads_fallback"] == 0
     for main in ("{% import 'inc' as m %}{{ m }}", "{% from 'inc' import x %}", "{% extends 'inc' %}"):
         make_includer(main, "{% print 1 %}").get_template("main").render()
 
@@ -553,12 +553,12 @@ def test_sandbox_parse_fallback_and_stock_policy():
 
 def test_sandbox_with_its_own_policy_never_falls_back():
     class Mine(jinja2cpp.sandbox.SandboxedEnvironment):
-        def is_safe_attribute(self, obj, attr, value):
-            return attr != "secret"
+        def wrap_str_format(self, value):
+            return None
 
-    with pytest.raises(jinja2cpp.UnsupportedError, match="overrides is_safe_attribute"):
+    with pytest.raises(jinja2cpp.UnsupportedError, match="overrides wrap_str_format"):
         Mine(extensions=[HelloExtension])
-    with pytest.raises(jinja2cpp.UnsupportedError, match="overrides is_safe_attribute"):
+    with pytest.raises(jinja2cpp.UnsupportedError, match="overrides wrap_str_format"):
         Mine().from_string(UNPARSABLE)
     with pytest.raises(jinja2cpp.TemplateSyntaxError):  # Jinja2 rejects too: the syntax error stands
         Mine().from_string("{% if %}")
@@ -568,7 +568,7 @@ def test_sandbox_with_its_own_policy_never_falls_back():
     with pytest.raises(jinja2cpp.UnsupportedError, match="intercepts"):
         Intercepting(enable_async=True)
     env = jinja2cpp.sandbox.SandboxedEnvironment()
-    env.is_safe_callable = lambda obj: False
+    env.call_unop = lambda context, operator, arg: arg
     with pytest.raises(jinja2cpp.UnsupportedError):
         env.from_string(UNPARSABLE)
     included = Mine(loader=jinja2cpp.DictLoader({"main": "{% include 'inc' %}", "inc": UNPARSABLE}))
@@ -723,3 +723,398 @@ def test_without_jinja2_the_native_extensions_work():
         print("ok")
         """
     )
+
+
+# --- Review round 1: the verifier's findings ------------------------------------------------
+
+
+class Ext(jinja2.ext.Extension):
+    """An extension that adds nothing, to make an environment Tier B."""
+
+
+class Secret:
+    secret = 42
+    shown = 1
+
+    def act(self):
+        return "acted"
+
+
+def _oracle_and_ours(make_ours, make_oracle, source, **ctx):
+    ours = make_ours().from_string(source).render(**ctx)
+    return ours, make_oracle().from_string(source).render(**ctx)
+
+
+@pytest.mark.parametrize("tier", ["B", "C"])
+def test_sandbox_hooks_set_after_construction_are_live(tier):
+    # B: a custom extension makes Jinja2 the environment; C: the engine renders, Jinja2 takes a template it cannot parse
+    def make(module):
+        return module.SandboxedEnvironment(extensions=[Ext]) if tier == "B" else module.SandboxedEnvironment()
+
+    suffix = "" if tier == "B" else "{% print 0 %}"
+    ours, oracle = make(jinja2cpp.sandbox), jinja2.sandbox.SandboxedEnvironment(extensions=[Ext])
+    early = ours.from_string("{{ x.secret }}{{ x.shown }}" + suffix)  # made before the hook exists
+    for env in (ours, oracle):
+        env.is_safe_attribute = lambda obj, attr, value: attr != "secret"
+    expected = oracle.from_string("{{ x.secret }}{{ x.shown }}{% if 0 %}{% endif %}").render(x=Secret())
+    assert expected == "1"
+    assert early.render(x=Secret()) == "1" + ("0" if tier == "C" else "")
+    assert ours.from_string("{{ x.secret }}{{ x.shown }}" + suffix).render(x=Secret()) == "1" + ("0" if tier == "C" else "")
+
+
+def test_sandbox_hook_patched_onto_the_class_is_live():
+    env = jinja2cpp.sandbox.SandboxedEnvironment(extensions=[Ext])
+
+    class Mine(jinja2cpp.sandbox.SandboxedEnvironment):
+        pass
+
+    mine = Mine(extensions=[Ext])
+    assert mine.from_string("{{ x.secret }}").render(x=Secret()) == "42"
+    Mine.is_safe_attribute = lambda self, obj, attr, value: attr != "secret"
+    assert mine.from_string("{{ x.secret }}{{ x.shown }}").render(x=Secret()) == "1"
+    assert env.from_string("{{ x.secret }}").render(x=Secret()) == "42"  # not the base class
+
+
+def test_sandbox_hook_set_in_a_subclass_init_is_live():
+    class Mine(jinja2cpp.sandbox.SandboxedEnvironment):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.is_safe_attribute = lambda obj, attr, value: attr != "secret"
+
+    class Oracle(jinja2.sandbox.SandboxedEnvironment):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.is_safe_attribute = lambda obj, attr, value: attr != "secret"
+
+    assert Mine(extensions=[Ext]).from_string("{{ x.secret }}{{ x.shown }}").render(x=Secret()) == "1"
+    assert Oracle(extensions=[Ext]).from_string("{{ x.secret }}{{ x.shown }}").render(x=Secret()) == "1"
+
+
+def test_sandbox_is_safe_callable_is_live_and_unsafe_undefined_too():
+    ours = jinja2cpp.sandbox.SandboxedEnvironment(extensions=[Ext])
+    oracle = jinja2.sandbox.SandboxedEnvironment(extensions=[Ext])
+    for env in (ours, oracle):
+        template = env.from_string("{{ x.act() }}")
+        assert template.render(x=Secret()) == "acted"
+        env.is_safe_callable = lambda obj: False
+        with pytest.raises(jinja2.exceptions.SecurityError):
+            template.render(x=Secret())
+        with pytest.raises(jinja2.exceptions.SecurityError):
+            env.from_string("{{ x.act() }}").render(x=Secret())
+    seen = []
+
+    class Loud(jinja2cpp.sandbox.SandboxedEnvironment):
+        def is_safe_attribute(self, obj, attr, value):
+            return False
+
+        def unsafe_undefined(self, obj, attribute):
+            seen.append(attribute)
+            return super().unsafe_undefined(obj, attribute)
+
+    Loud(extensions=[Ext]).from_string("{{ x.shown }}").render(x=Secret())
+    assert seen == ["shown"]
+
+
+def test_sandbox_overrides_that_cannot_be_given_still_refuse():
+    env = jinja2cpp.sandbox.SandboxedEnvironment(extensions=[Ext])
+    env.getattr = lambda obj, attr: None
+    with pytest.raises(jinja2cpp.UnsupportedError):
+        env.from_string("{{ 1 }}")
+
+
+def test_concurrent_renders_do_not_refuse_the_retry():
+    sys.setswitchinterval(1e-6)
+    try:
+        files = {"p": "{% print 1 %}"}
+
+        class SlowLoader(jinja2cpp.BaseLoader):
+            def get_source(self, env, name):
+                for _ in range(50):
+                    pass  # Python bytecode: the GIL can switch here
+                return files[name], None, None
+
+        env = jinja2cpp.Environment(loader=SlowLoader())
+        env.filters["f"] = lambda x: x
+        retried = env.from_string("{% include 'p' %}")
+        busy = env.from_string("{% for i in range(20) %}{{ i|f }}{% endfor %}")
+        stop = []
+        errors = []
+
+        def noise():
+            while not stop:
+                busy.render()
+
+        def work():
+            for _ in range(300):
+                try:
+                    assert retried.render() == "1"
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(type(exc).__name__)
+
+        import threading
+
+        noisy = [threading.Thread(target=noise) for _ in range(3)]
+        workers = [threading.Thread(target=work) for _ in range(2)]
+        for thread in noisy + workers:
+            thread.start()
+        for thread in workers:
+            thread.join()
+        stop.append(1)
+        for thread in noisy:
+            thread.join()
+        assert errors == []
+    finally:
+        sys.setswitchinterval(0.005)
+
+
+class Counting:
+    reads = 0
+
+    @property
+    def prop(self):
+        Counting.reads += 1
+        return "v"
+
+
+@pytest.mark.parametrize(
+    "make",
+    [lambda: (i for i in range(3)), lambda: iter([0, 1, 2]), lambda: iter(range(3))],
+    ids=["generator", "iter-list", "iter-range"],
+)
+def test_retry_is_refused_after_a_one_shot_iterator_was_read(make):
+    env = make_includer("{% for i in items %}{{ i }},{% endfor %}|{% include 'inc' %}", "{% print 'P' %}")
+    template = env.get_template("main")
+    # a retry would find the iterator consumed and render '|P': the engine's error stands instead
+    with pytest.raises(jinja2cpp.TemplateSyntaxError):
+        template.render(items=make())
+    # a list is not consumed by the render, but a touch is a touch: no retry either
+    assert jinja2.Environment(loader=jinja2.DictLoader({"main": "{% for i in items %}{{ i }},{% endfor %}|{% include 'inc' %}", "inc": "{% print 'P' %}"})).get_template("main").render(items=make()) == "0,1,2,|P"
+
+
+def test_retry_is_refused_after_a_host_attribute_read_with_a_side_effect():
+    Counting.reads = 0
+    env = make_includer("{{ o.prop }}|{% include 'inc' %}", "{% print 'P' %}")
+    with pytest.raises(jinja2cpp.TemplateSyntaxError):
+        env.get_template("main").render(o=Counting())
+    assert Counting.reads == 1  # not repeated by a retry
+
+
+@pytest.mark.parametrize("main", ["{{ o|length }}", "{{ o }}", "{% if o.prop %}x{% endif %}", "{{ o['k'] }}", "{{ o.method() }}"])
+def test_retry_is_refused_after_any_touch_of_a_host_object(main):
+    class Host:
+        prop = 1
+
+        def __len__(self):
+            return 3
+
+        def __getitem__(self, key):
+            return "item"
+
+        def method(self):
+            return "m"
+
+    env = make_includer(main + "{% include 'inc' %}", "{% print 'P' %}")
+    with pytest.raises(jinja2cpp.TemplateSyntaxError):
+        env.get_template("main").render(o=Host())
+
+
+def test_retry_still_works_when_no_host_object_was_touched():
+    env = make_includer("{{ a }}{{ d.k }}{{ l[0] }}|{% include 'inc' %}", "{% print 'P' %}")
+    assert env.get_template("main").render(a=1, d={"k": 2}, l=[3]) == "123|P"
+
+
+def test_context_class_and_code_generator_class_reach_jinja2():
+    class Ctx(jinja2.runtime.Context):
+        def resolve_or_missing(self, key):
+            if key == "magic":
+                return "MAGIC"
+            return super().resolve_or_missing(key)
+
+    class Ours(jinja2cpp.Environment):
+        context_class = Ctx
+
+    class Theirs(jinja2.Environment):
+        context_class = Ctx
+
+    assert Theirs().from_string("{{ magic }}").render() == "MAGIC"
+    assert Ours().from_string("{{ magic }}").render() == "MAGIC"
+    assert Ours(loader=jinja2cpp.DictLoader({"t": "{{ magic }}{{ x }}"})).get_template("t").render(x=1) == "MAGIC1"
+
+    seen = []
+
+    class Gen(jinja2.compiler.CodeGenerator):
+        def visit_Template(self, node, frame=None):
+            seen.append(1)
+            return super().visit_Template(node, frame)
+
+    class OursGen(jinja2cpp.Environment):
+        code_generator_class = Gen
+
+    assert OursGen().from_string("{{ 1 }}").render() == "1"
+    assert seen
+
+
+def test_fallback_templates_are_cached_like_jinja2s():
+    loader = jinja2cpp.DictLoader({"a": "{% print 1 %}", "b": "{% print 2 %}"})
+    env = jinja2cpp.Environment(loader=loader)
+    first = env.get_template("a")
+    assert env.get_template("a") is first
+    assert env.get_template("b") is not first
+    assert jinja2cpp.stats()["loads_fallback"] == 2  # real loads only
+    assert env.select_template(["zz", "a"]) is first
+    assert jinja2cpp.stats()["loads_fallback"] == 2
+    oracle = jinja2.Environment(loader=jinja2.DictLoader({"a": "{% print 1 %}"}))
+    assert oracle.get_template("a") is oracle.get_template("a")
+    # Tier B wrappers too
+    delegating = jinja2cpp.Environment(extensions=[Ext], loader=jinja2cpp.DictLoader({"a": "x"}))
+    assert delegating.get_template("a") is delegating.get_template("a")
+    # from_string is not cached, as in Jinja2
+    assert env.from_string("{% print 1 %}") is not env.from_string("{% print 1 %}")
+
+
+def test_fallback_template_is_reloaded_when_the_loader_says_it_changed():
+    source = ["{% print 1 %}"]
+    stamp = [1]
+    loader = jinja2cpp.FunctionLoader(lambda name: (source[0], None, lambda: stamp[0] == 1))
+    env = jinja2cpp.Environment(loader=loader)
+    first = env.get_template("t")
+    assert first.render() == "1"
+    source[0], stamp[0] = "{% print 2 %}", 2
+    second = env.get_template("t")
+    assert second is not first and second.render() == "2"
+
+
+def test_delegate_environment_is_rebuilt_when_the_settings_change():
+    env = jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"a": "{% print x %}"}))
+    assert env.get_template("a").render(x="<") == "<"
+    env.autoescape = True
+    assert env.get_template("a").render(x="<") == "&lt;"
+
+
+def test_fallback_templates_see_the_live_globals_filters_and_tests():
+    env = jinja2cpp.Environment()
+    env.filters["up"] = str.upper
+    env.tests["odd2"] = lambda v: v % 2 == 1
+    template = env.from_string("{% print g %}{{ v|up }}{{ 1 is odd2 }}")
+    env.globals["g"] = "G"  # after the template was made
+    assert template.render(v='a') == "GATrue"
+    env.globals["g"] = "H"
+    assert template.render(v='a') == "HATrue"
+    env.filters["up"] = lambda v: "<" + v + ">"  # a filter replaced after: the template sees it
+    assert template.render(v='a') == "H<a>True"
+    template.globals["own"] = 1
+    assert "own" not in env.globals
+
+
+def test_template_class_overrides_win_on_fallback_templates():
+    class Mine(jinja2cpp.Template):
+        def render(self, *args, **kwargs):
+            return "<" + super().render(*args, **kwargs) + ">"
+
+        def __repr__(self):
+            return "MINE"
+
+    class Env(jinja2cpp.Environment):
+        template_class = Mine
+
+    env = Env(loader=jinja2cpp.DictLoader({"a": "{% print 1 %}", "n": "{{ 1 }}"}))
+    assert env.get_template("a").render() == "<1>"
+    assert env.get_template("n").render() == "<1>"
+    assert env.from_string("{% print 2 %}").render() == "<2>"
+    assert repr(env.get_template("a")) == "MINE"
+    assert isinstance(env.get_template("a"), Mine)
+    # a Tier B environment too, and the stream through the override
+    delegating = Env(extensions=[Ext])
+    assert delegating.from_string("{{ 3 }}").render() == "<3>"
+    assert "".join(delegating.from_string("{{ 3 }}").generate()) == "3"
+    # native templates are not slowed or changed
+    assert jinja2cpp.Environment().from_string("{{ 1 }}").render() == "1"
+
+
+def test_custom_undefined_subclass_is_refused_with_its_name():
+    class Mine(jinja2cpp.Undefined):
+        pass
+
+    env = jinja2cpp.Environment(undefined=Mine)
+    assert env.from_string("{{ x }}").render() == ""
+    with pytest.raises(jinja2cpp.UnsupportedError, match="Mine"):
+        env.from_string(UNPARSABLE)
+    with pytest.raises(jinja2cpp.UnsupportedError, match="Mine"):
+        jinja2cpp.Environment(undefined=Mine, extensions=[Ext])
+
+    class Theirs(jinja2.Undefined):
+        pass
+
+    assert jinja2cpp.Environment(undefined=Theirs, extensions=[Ext]).from_string("[{{ x }}]").render() == "[]"
+    assert jinja2cpp.Environment(undefined=jinja2cpp.StrictUndefined, extensions=[Ext]).undefined is jinja2cpp.StrictUndefined
+
+
+def test_parse_and_meta_for_a_source_the_engine_cannot_parse():
+    from jinja2cpp import meta
+
+    env = jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"t": "{% print x %}{% include 'o' %}", "o": "{{ 1 }}"}))
+    ast = env.parse("{% print x %}{{ y }}")
+    assert meta.find_undeclared_variables(ast) == {"x", "y"}
+    ast = env.parse("{% print x %}{% extends 'base' %}{% include 'q' %}")
+    assert sorted(meta.find_referenced_templates(ast)) == ["base", "q"]
+    template = env.get_template("t")
+    assert meta.find_undeclared_variables(template) == {"x"}
+    assert list(meta.find_referenced_templates(template)) == ["o"]
+    assert meta.find_undeclared_variables(env.from_string("{% print a %}{{ b }}")) == {"a", "b"}
+    assert template._undeclared() == {"x"}
+    assert template._referenced() == ["o"]
+    module = env.from_string("{% print 1 %}{% set v = 5 %}").make_module()
+    assert str(module).strip() == "1" and module.v == 5
+    with pytest.raises(jinja2cpp.TemplateSyntaxError):
+        env.parse("{% if %}")
+    with pytest.raises(jinja2cpp.TemplateSyntaxError):
+        jinja2cpp.Environment(fallback="never").parse(UNPARSABLE)
+
+
+def test_stats_of_a_retried_render_that_raises():
+    env = make_includer("{{ 1 }}{% include 'inc' %}{{ undefined_name() }}", "{% print 1 %}")
+    with pytest.raises(jinja2.exceptions.TemplateError):
+        env.get_template("main").render()
+    stats = jinja2cpp.stats()
+    assert stats["renders_native"] == 0 and stats["renders_fallback"] == 1 and stats["loads_fallback"] == 0
+
+
+def test_stats_counters_are_exact_under_threads():
+    import threading
+
+    env = jinja2cpp.Environment()
+    template = env.from_string("{% print 1 %}")
+
+    def work():
+        for _ in range(500):
+            template.render()
+
+    threads = [threading.Thread(target=work) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert jinja2cpp.stats()["renders_fallback"] == 2000
+
+
+def test_jinja2_exception_is_the_cause_of_the_mapped_one():
+    env = jinja2cpp.Environment(extensions=[Ext])
+    with pytest.raises(jinja2cpp.UndefinedError) as info:
+        env.from_string("{{ x.y }}", ).render(x=jinja2.Undefined(name="x"))
+    assert isinstance(info.value.__cause__, jinja2.exceptions.UndefinedError)
+    assert type(info.value.__cause__) is not type(info.value) or info.value.__cause__ is not info.value
+
+
+def test_warning_points_at_the_caller_of_a_tier_c_load():
+    env = jinja2cpp.Environment(fallback="warn", loader=jinja2cpp.DictLoader({"a": UNPARSABLE}))
+    for call in (lambda: env.from_string(UNPARSABLE), lambda: env.get_template("a"), lambda: jinja2cpp.Template(UNPARSABLE, fallback="warn"), lambda: env.select_template(["a"])):
+        jinja2cpp.stats(reset=True)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            call()
+        assert [w.filename for w in caught] == [__file__], [(w.filename, w.lineno) for w in caught]
+    jinja2cpp.stats(reset=True)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        jinja2cpp.sandbox.SandboxedEnvironment(fallback="warn").from_string(UNPARSABLE)
+    assert [w.filename for w in caught] == [__file__]

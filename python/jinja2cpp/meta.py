@@ -14,6 +14,16 @@ def _is_jinja2_ast(ast: t.Any) -> bool:
     return type(ast).__module__ == "jinja2.nodes"
 
 
+def _jinja2_tree(ast: t.Any) -> t.Any:
+    """Jinja2's node tree for `ast` when it is one, or the template of Jinja2 (a fallback template) parsed again; else None."""
+    if _is_jinja2_ast(ast):
+        return ast
+    template = ast._template if isinstance(ast, ParsedTemplate) else ast
+    if isinstance(template, Template) and "_jt" in template.__dict__:
+        return template._jinja2_ast()  # type: ignore[attr-defined]
+    return None
+
+
 def _template_of(ast: t.Any) -> Template:
     if isinstance(ast, ParsedTemplate):
         return ast._template
@@ -36,10 +46,11 @@ def find_undeclared_variables(ast: ParsedTemplate) -> t.Set[str]:
 
     Templates the template includes, imports or extends are not looked into.
     """
-    if _is_jinja2_ast(ast):
+    tree = _jinja2_tree(ast)
+    if tree is not None:
         import jinja2.meta
 
-        return jinja2.meta.find_undeclared_variables(ast)
+        return jinja2.meta.find_undeclared_variables(tree)
     template = _template_of(ast)
     # The engine leaves out its own globals; the environment's are Python's dict
     declared = template.globals
@@ -61,9 +72,10 @@ def find_referenced_templates(ast: ParsedTemplate) -> t.Iterator[t.Optional[str]
     This function is useful for dependency tracking, for example to build a database of
     dependencies for the templates.
     """
-    if _is_jinja2_ast(ast):
+    tree = _jinja2_tree(ast)
+    if tree is not None:
         import jinja2.meta
 
-        yield from jinja2.meta.find_referenced_templates(ast)
+        yield from jinja2.meta.find_referenced_templates(tree)
         return
     yield from _template_of(ast)._referenced()

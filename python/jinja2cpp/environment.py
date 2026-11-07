@@ -219,6 +219,121 @@ class Template(_jinja2cpp.Template):
         return f"<{type(self).__name__} {name}>"
 
 
+class FallbackTemplate:
+    """The methods of a template that real Jinja2 renders (docs/python.md, "Fallback"), copied by
+    ``fallback.fallback_class`` into a subclass of the environment's ``template_class``: only where that class
+    (and its bases up to ``Template``) leaves them alone, so what a user's ``template_class`` overrides wins.
+
+    The instance stands for a ``jinja2cpp.Template`` (``isinstance`` holds): ``environment`` is the jinja2cpp
+    environment, ``generate`` streams, and what the engine has no equivalent of (``blocks``, ``new_context``,
+    ``root_render_func``, ``render_async``) is Jinja2's own.
+    """
+
+    def render(self, *args: t.Any, **kwargs: t.Any) -> str:
+        fallback._count("renders_fallback")
+        with fallback.mapped():
+            return t.cast(str, self._jinja2_template.render(*args, **kwargs))
+
+    def _render_once(self, *args: t.Any, **kwargs: t.Any) -> str:
+        return self.render(*args, **kwargs)
+
+    def generate(self, *args: t.Any, **kwargs: t.Any) -> t.Iterator[str]:
+        fallback._count("renders_fallback")
+        with fallback.mapped():
+            yield from self._jinja2_template.generate(*args, **kwargs)
+
+    def make_module(self, vars: t.Optional[t.Dict[str, t.Any]] = None, shared: bool = False, locals: t.Optional[t.Mapping[str, t.Any]] = None) -> t.Any:
+        with fallback.mapped():
+            return self._jinja2_template.make_module(vars, shared, locals)
+
+    @property
+    def module(self) -> t.Any:
+        with fallback.mapped():
+            return self._jinja2_template.module
+
+    @property
+    def name(self) -> t.Optional[str]:
+        return t.cast(t.Optional[str], self._jinja2_template.name)
+
+    @property
+    def filename(self) -> t.Optional[str]:
+        return t.cast(t.Optional[str], self._jinja2_template.filename)
+
+    @property
+    def globals(self) -> t.Any:
+        return self._jinja2_template.globals
+
+    @property
+    def environment(self) -> t.Any:
+        return self.__dict__["_environment"]
+
+    @property
+    def _jinja2_template(self) -> t.Any:
+        return self.__dict__["_jt"]
+
+    def _jinja2_ast(self) -> t.Any:
+        """Jinja2's node tree of the template (``jinja2cpp.meta``): parsed again from its source."""
+        jt = self._jinja2_template
+        env = jt.environment
+        source = self.__dict__.get("_fb_source")
+        with fallback.mapped():
+            if source is None and jt.name is not None and env.loader is not None:
+                source = env.loader.get_source(env, jt.name)[0]
+            if source is None:
+                raise UnsupportedError("jinja2cpp.meta needs the source of the template, which Jinja2 does not keep for it")
+            return env.parse(source, jt.name, jt.filename)
+
+    def _undeclared(self) -> t.Set[str]:
+        import jinja2.meta
+
+        return t.cast(t.Set[str], jinja2.meta.find_undeclared_variables(self._jinja2_ast()))
+
+    def _referenced(self) -> t.List[t.Optional[str]]:
+        import jinja2.meta
+
+        return list(jinja2.meta.find_referenced_templates(self._jinja2_ast()))
+
+    def _make_module(self, params: t.Dict[str, t.Any]) -> t.Tuple[str, t.Dict[str, t.Any]]:
+        with fallback.mapped():
+            module = self._jinja2_template.make_module(params, True)
+        return str(module), {k: v for k, v in vars(module).items() if not k.startswith("_")}
+
+    def __getattr__(self, name: str) -> t.Any:
+        if name.startswith("__") or name in ("_jt", "_environment"):
+            raise AttributeError(name)
+        return getattr(self.__dict__["_jt"], name)
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} {self.name!r}>" if self.name is not None else f"<{type(self).__name__} memory:{id(self):x}>"
+
+
+def patch_template_for_overrides() -> None:
+    """Make ``Template.render`` and ``_render_once`` (the engine's) render a Jinja2 template when the instance is one.
+
+    Needed once a ``template_class`` of the user is used with the fallback: its override calls ``super().render()``,
+    which reaches the engine's method with an instance that has no engine template. Until then the engine's
+    methods are called directly and cost nothing extra.
+    """
+    if Template.__dict__.get("_dispatching"):
+        return
+    native_render = _jinja2cpp.Template.render
+    native_once = _jinja2cpp.Template._render_once
+
+    def render(self: Template, *args: t.Any, **kwargs: t.Any) -> str:
+        if "_jt" in self.__dict__:
+            return FallbackTemplate.render(self, *args, **kwargs)  # type: ignore[arg-type]
+        return native_render(self, *args, **kwargs)  # type: ignore[no-any-return]
+
+    def render_once(self: Template, *args: t.Any, **kwargs: t.Any) -> str:
+        if "_jt" in self.__dict__:
+            return FallbackTemplate.render(self, *args, **kwargs)  # type: ignore[arg-type]
+        return native_once(self, *args, **kwargs)  # type: ignore[no-any-return]
+
+    Template.render = render  # type: ignore[assignment]
+    Template._render_once = render_once  # type: ignore[assignment]
+    Template._dispatching = True  # type: ignore[attr-defined]
+
+
 # Environment's parameters in Jinja2's order, for the positional form
 _ENVIRONMENT_PARAMETERS = (
     "block_start_string",
@@ -321,7 +436,7 @@ class Environment(_jinja2cpp.Environment):
             fallback._count("environments_native")
             return
         # Tier B: real Jinja2 is the environment
-        fallback.require(reason, mode, stacklevel=3)
+        fallback.require(reason, mode)
         blocker = self._fallback_blocker()
         if blocker:
             raise UnsupportedError(f"{reason} needs Jinja2, which is not used for {blocker}")
@@ -368,7 +483,7 @@ class Environment(_jinja2cpp.Environment):
             raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
         return getattr(delegate.env, name)
 
-    def _from_jinja2(self, make: t.Callable[[t.Any], t.Any], template_class: t.Optional[type] = None) -> t.Any:
+    def _from_jinja2(self, make: t.Callable[[t.Any], t.Any], template_class: t.Optional[type] = None, source: t.Any = None) -> t.Any:
         """The template ``make(jinja2_environment)`` loads, as a jinja2cpp template."""
         delegate = self.__dict__.get("_delegate")
         if delegate is not None:
@@ -376,15 +491,14 @@ class Environment(_jinja2cpp.Environment):
         else:
             reason = fallback.policies_reason(self.policies)
             assert reason is not None
-            fallback.require(reason, self._fallback_mode_, stacklevel=5)
+            fallback.require(reason, self._fallback_mode_)
             blocker = self._fallback_blocker()
             if blocker:
                 raise UnsupportedError(f"{reason} needs Jinja2, which is not used for {blocker}")
-            env = fallback.build_environment(self)
+            env = fallback.delegate_for(self)
         with fallback.mapped():
             jt = make(env)
-        fallback._count("loads_fallback")
-        return fallback.fallback_template(self, jt, template_class)
+        return fallback.fallback_template(self, jt, template_class, source)
 
     def _uses_jinja2(self) -> bool:
         return "_delegate" in self.__dict__ or self.policies != fallback.DEFAULT_POLICIES
@@ -392,13 +506,13 @@ class Environment(_jinja2cpp.Environment):
     def from_string(self, source: t.Any, globals: t.Optional[t.Mapping[str, t.Any]] = None, template_class: t.Optional[t.Type[Template]] = None) -> Template:
         """Load a template from a source string without using ``loader``."""
         if self._uses_jinja2() and not isinstance(source, _jinja2cpp.Template):
-            return self._from_jinja2(lambda j: j.from_string(source, globals), template_class)  # type: ignore[no-any-return]
+            return self._from_jinja2(lambda j: j.from_string(source, globals), template_class, source)  # type: ignore[no-any-return]
         try:
             template = self._from_string(source, globals, template_class or self.template_class)
         except TemplateSyntaxError as error:
             if isinstance(source, _jinja2cpp.Template):
                 raise
-            return fallback.load_fallback(self, error, lambda j: j.from_string(source, globals), template_class)  # type: ignore[no-any-return]
+            return fallback.load_fallback(self, error, lambda j: j.from_string(source, globals), template_class, source)  # type: ignore[no-any-return]
         fallback._count("loads_native")
         if isinstance(source, str):
             fallback.remember(template, source=source)
@@ -512,7 +626,11 @@ class Environment(_jinja2cpp.Environment):
         if delegate is not None:
             with fallback.mapped():
                 return delegate.env.parse(source, name, filename)  # type: ignore[no-any-return]
-        return ParsedTemplate(self._compile(source, name, filename, None, self.template_class))
+        try:
+            return ParsedTemplate(self._compile(source, name, filename, None, self.template_class))
+        except TemplateSyntaxError as error:
+            # a source the engine cannot parse: Jinja2's node tree, which jinja2cpp.meta takes as well
+            return fallback.parse_fallback(self, error, lambda j: j.parse(source, name, filename))  # type: ignore[no-any-return]
 
     # What the engine has no equivalent of: Jinja2's own, called on an environment of the same
     # configuration (these read or produce code and run no template)
@@ -521,12 +639,11 @@ class Environment(_jinja2cpp.Environment):
         if delegate is not None:
             env = delegate.env
         else:
-            fallback.require(f"Environment.{method}", self._fallback_mode_, stacklevel=4)
+            fallback.require(f"Environment.{method}", self._fallback_mode_)
             blocker = self._fallback_blocker()
             if blocker:
                 raise UnsupportedError(f"Environment.{method} needs Jinja2, which is not used for {blocker}")
-            env = fallback.build_environment(self)
-            fallback._count("loads_fallback")
+            env = fallback.delegate_for(self)
         with fallback.mapped():
             return getattr(env, method)(*args, **kwargs)
 
