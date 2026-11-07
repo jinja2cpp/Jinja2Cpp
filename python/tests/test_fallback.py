@@ -940,3 +940,63 @@ def test_warning_points_at_the_caller_of_a_tier_c_load():
         warnings.simplefilter("always")
         jinja2cpp.sandbox.SandboxedEnvironment(fallback="warn").from_string(UNPARSABLE)
     assert [w.filename for w in caught] == [__file__]
+
+
+# --- Review round 2: the owner reference ------------------------------------------------------
+
+
+def test_compile_expression_keeps_the_sandbox_policy_of_a_collected_environment():
+    import gc
+
+    def factory():
+        env = jinja2cpp.sandbox.SandboxedEnvironment(extensions=[Ext])
+        env.is_safe_attribute = lambda obj, attr, value: attr != "secret"
+        return env.compile_expression("x.secret")
+
+    expression = factory()
+    gc.collect()
+    assert expression(x=Secret()) is None  # the refused attribute is undefined: None with undefined_to_none
+    assert jinja2cpp.sandbox.SandboxedEnvironment(extensions=[Ext]).compile_expression("x.secret")(x=Secret()) == 42
+
+
+def test_fallback_templates_keep_the_policy_after_the_environment_is_dropped():
+    import gc
+
+    def factory():
+        env = jinja2cpp.sandbox.SandboxedEnvironment()
+        env.is_safe_attribute = lambda obj, attr, value: attr != "secret"
+        return env.from_string("{{ x.secret }}{{ x.shown }}{% print 0 %}")
+
+    template = factory()
+    gc.collect()
+    assert template.render(x=Secret()) == "10"
+
+
+def test_a_delegate_without_an_owner_fails_closed():
+    from jinja2cpp import fallback
+
+    jenv = fallback.build_environment(jinja2cpp.sandbox.SandboxedEnvironment(), None)
+    del jenv.__dict__["_jinja2cpp_owner"]
+    with pytest.raises(jinja2.exceptions.SecurityError):
+        jenv.from_string("{{ x.shown }}").render(x=Secret())
+
+
+def test_environments_are_freed_by_the_collector():
+    import gc
+    import weakref
+
+    refs = []
+    for make in (
+        lambda: jinja2cpp.Environment(extensions=[Ext]),
+        lambda: jinja2cpp.sandbox.SandboxedEnvironment(extensions=[Ext]),
+        lambda: jinja2cpp.Environment(),
+    ):
+        env = make()
+        template = env.from_string("{{ 1 }}")
+        template.render()
+        if env.__class__ is jinja2cpp.Environment and "_delegate" not in env.__dict__:
+            env.from_string(UNPARSABLE).render()  # builds the Jinja2 environment of a native one
+        refs += [weakref.ref(env), weakref.ref(template)]
+        del env, template
+    gc.collect()
+    assert [r() for r in refs] == [None] * len(refs)

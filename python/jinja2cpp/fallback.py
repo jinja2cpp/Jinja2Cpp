@@ -15,7 +15,6 @@ import sys
 import threading
 import typing as t
 import warnings
-import weakref
 
 from . import _jinja2cpp
 from .exceptions import TemplateError
@@ -299,8 +298,14 @@ def _custom_class(env_class: type, name: str) -> t.Any:
 
 
 def _owner_of(jenv: t.Any) -> t.Any:
-    ref = jenv.__dict__.get("_jinja2cpp_owner")
-    return ref() if ref is not None else None
+    """The jinja2cpp environment a delegate Jinja2 environment stands for (a strong reference: a ``compile_expression``
+    result or a template can outlive every other reference to the jinja2cpp environment, and keeps its policy)."""
+    owner = jenv.__dict__.get("_jinja2cpp_owner")
+    if owner is None:
+        from .exceptions import SecurityError
+
+        raise SecurityError("the sandbox policy of this environment is not available")  # fail closed
+    return owner
 
 
 def _forwarding_sandbox(base: type) -> type:
@@ -313,25 +318,17 @@ def _forwarding_sandbox(base: type) -> type:
 
     class ForwardingSandbox(base):  # type: ignore[valid-type, misc]
         def is_safe_attribute(self, obj: t.Any, attr: str, value: t.Any) -> bool:
-            owner = _owner_of(self)
-            if owner is not None:
-                return t.cast(bool, owner.is_safe_attribute(obj, attr, value))
-            return t.cast(bool, super().is_safe_attribute(obj, attr, value))
+            return t.cast(bool, _owner_of(self).is_safe_attribute(obj, attr, value))
 
         def is_safe_callable(self, obj: t.Any) -> bool:
-            owner = _owner_of(self)
-            if owner is not None:
-                return t.cast(bool, owner.is_safe_callable(obj))
-            return t.cast(bool, super().is_safe_callable(obj))
+            return t.cast(bool, _owner_of(self).is_safe_callable(obj))
 
         def unsafe_undefined(self, obj: t.Any, attribute: str) -> t.Any:
-            owner = _owner_of(self)
-            if owner is not None:
-                from .sandbox import SandboxedEnvironment
+            from .sandbox import SandboxedEnvironment
 
-                method = owner.unsafe_undefined
-                if getattr(method, "__func__", method) is not SandboxedEnvironment.unsafe_undefined:
-                    return method(obj, attribute)
+            method = _owner_of(self).unsafe_undefined
+            if getattr(method, "__func__", method) is not SandboxedEnvironment.unsafe_undefined:
+                return method(obj, attribute)
             return super().unsafe_undefined(obj, attribute)
 
     ForwardingSandbox.__name__ = base.__name__
@@ -374,7 +371,7 @@ def build_environment(env: t.Any, options: t.Optional[t.Dict[str, t.Any]] = None
         options = {name: getattr(env, name) for name in OPTION_NAMES}
     kwargs = {name: _convert_option(jinja2, name, value) for name, value in options.items()}
     jenv = jinja2_class(jinja2, type(env))(**kwargs)
-    jenv.__dict__["_jinja2cpp_owner"] = weakref.ref(env)
+    jenv.__dict__["_jinja2cpp_owner"] = env
     if construction:
         return jenv  # the environment has no filters, tests or globals of its own yet
     for name in ("filters", "tests", "globals"):
