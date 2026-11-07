@@ -362,6 +362,7 @@ PyEnvironment& PyTemplate::LiveEnvironment() const
 nb::tuple PyTemplate::MakeModule(nb::handle params) const
 {
     auto& env = LiveEnvironment();
+    env.CheckSandboxHooks();
     if (!PyDict_Check(params.ptr()))
     {
         RaiseTypeError("make_module takes a dict of variables");

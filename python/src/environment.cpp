@@ -569,6 +569,20 @@ void PyEnvironment::SetGettext(nb::handle gettext, nb::handle ngettext, nb::hand
     ApplyGettext();
 }
 
+void PyEnvironment::CheckSandboxHooks() const
+{
+    if (!m_sandboxed)
+    {
+        return;
+    }
+    const auto self = nb::find(this);
+    const auto checked = nb::steal(PyObject_CallMethod(self.ptr(), "_check_interception", nullptr));
+    if (!checked)
+    {
+        throw nb::python_error();
+    }
+}
+
 jinja2::TemplateEnv& PyEnvironment::Prepared()
 {
     CheckAlive();
@@ -784,6 +798,7 @@ PyTemplate::PyTemplate(jinja2::Template tpl, nb::object environment, nb::object 
 nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
 {
     auto& env = LiveEnvironment();
+    env.CheckSandboxHooks();
     // dict(*args, **kwargs), as Jinja2's render
     jinja2::InternalValueMap params;
     if (args.size() > 1)

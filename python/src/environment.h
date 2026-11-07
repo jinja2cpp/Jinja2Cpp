@@ -56,6 +56,10 @@ public:
     // them when it loads
     jinja2::TemplateEnv& Prepared();
     [[nodiscard]] PyObject* UndefinedClass() const noexcept { return m_undefined.ptr(); }
+    // A SandboxedEnvironment: whether its hooks (call, getattr, getitem, intercepted operators) are the engine's
+    // are checked again, as at a load, before a template renders or makes a module (an override set after the
+    // load must not be ignored); nothing for another environment
+    void CheckSandboxHooks() const;
     [[nodiscard]] const nb::object& Globals() const noexcept { return m_globals; }
     // Where a template the loader gives came from, for its errors and Template.filename
     ErrorSource SourceOf(const std::string& name) const;

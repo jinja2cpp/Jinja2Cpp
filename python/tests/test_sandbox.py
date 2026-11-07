@@ -1109,3 +1109,56 @@ def test_attribute_filters_ask_is_safe_attribute_about_loop_namespace_and_macro(
     ours = type("Deny", (SandboxedEnvironment,), {"is_safe_attribute": deny})(undefined=jinja2cpp.StrictUndefined if strict else jinja2cpp.Undefined)
     oracle = type("DenyJ2", (j2sandbox.SandboxedEnvironment,), {"is_safe_attribute": deny})(undefined=jinja2.StrictUndefined if strict else jinja2.Undefined)
     assert _outcome_of(ours, source) == _outcome_of(oracle, source), source
+
+
+def _called():
+    return "CALLED"
+
+
+def _deny(*args, **kwargs):
+    raise SecurityError("no")
+
+
+ENTRY_POINTS = {
+    "render": lambda t: t.render(),
+    "generate": lambda t: list(t.generate()),
+    "stream": lambda t: t.stream().dump(__import__("io").StringIO()),
+    "make_module": lambda t: t.make_module(),
+    "module": lambda t: t.module,
+}
+
+
+@pytest.mark.parametrize("entry", list(ENTRY_POINTS))
+@pytest.mark.parametrize("hook", ["call", "getattr", "getitem"])
+@pytest.mark.parametrize("where", ["instance", "class"])
+def test_a_hook_overridden_after_the_load_is_refused_at_every_entry_point(entry, hook, where):
+    class Env(SandboxedEnvironment):
+        pass
+
+    env = Env()
+    env.globals["f"] = _called
+    template = env.from_string("{{ f() }}")
+    assert ENTRY_POINTS["render"](template) == "CALLED"
+    if where == "instance":
+        setattr(env, hook, _deny)
+    else:
+        setattr(Env, hook, _deny)
+    with pytest.raises(jinja2cpp.UnsupportedError, match=hook):
+        ENTRY_POINTS[entry](template)
+
+
+@pytest.mark.parametrize("entry", list(ENTRY_POINTS))
+def test_intercepted_operators_set_after_the_load_are_refused_at_every_entry_point(entry):
+    env = SandboxedEnvironment()
+    template = env.from_string("{{ 1 + 2 }}")
+    env.intercepted_binops = frozenset(["+"])
+    with pytest.raises(jinja2cpp.UnsupportedError):
+        ENTRY_POINTS[entry](template)
+
+
+def test_a_plain_environment_is_not_checked_at_render():
+    env = Environment()
+    env.globals["f"] = _called
+    template = env.from_string("{{ f() }}")
+    env.call = _deny  # a plain Environment has no such hook; nothing reads it
+    assert template.render() == "CALLED"
