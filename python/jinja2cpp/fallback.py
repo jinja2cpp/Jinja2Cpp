@@ -449,25 +449,28 @@ _fallback_classes: t.Dict[type, type] = {}
 def fallback_class(template_class: type) -> type:
     """The subclass of `template_class` whose instances are Jinja2's templates.
 
-    The methods of ``environment.FallbackTemplate`` are put into it where `template_class` has not overridden the
-    engine's, so what a user's ``template_class`` overrides wins; its ``super()`` reaches the engine's
-    ``render``, which hands a Jinja2 template to Jinja2 (``patch_template_for_overrides``).
+    ``environment.FallbackTemplate`` is put before `template_class`, so its methods win over the engine's. That is
+    also over a user's override, which is refused: ``UnsupportedError`` names the methods (nanobind allows
+    one nanobind base, so the mixin cannot sit between the user's class and the engine's ``Template``).
     """
     cls = _fallback_classes.get(template_class)
     if cls is None:
         from . import environment
 
         stock = (environment.Template, _jinja2cpp.Template, object)
-        namespace = {}
-        for name, attr in environment.FallbackTemplate.__dict__.items():
-            if name in ("__dict__", "__weakref__", "__module__", "__doc__", "__qualname__"):
-                continue
-            owner = next((c for c in template_class.__mro__ if name in c.__dict__), None)
-            if owner is None or owner in stock:
-                namespace[name] = attr
-        if template_class is not environment.Template:
-            environment.patch_template_for_overrides()
-        cls = _fallback_classes[template_class] = type(f"Fallback{template_class.__name__}", (template_class,), namespace)
+        overridden = sorted(
+            name
+            for name in environment.FallbackTemplate.__dict__
+            if name not in ("__dict__", "__weakref__", "__module__", "__doc__", "__qualname__")
+            and (owner := next((c for c in template_class.__mro__ if name in c.__dict__), None)) is not None
+            and owner not in stock
+        )
+        if overridden:
+            raise UnsupportedError(
+                f"the template_class {template_class.__qualname__} overrides {', '.join(overridden)}, which a template made by Jinja2 "
+                "(the fallback) implements itself: the override would be ignored (docs/python.md, \"Fallback\")"
+            )
+        cls = _fallback_classes[template_class] = type(f"Fallback{template_class.__name__}", (environment.FallbackTemplate, template_class), {})
     return cls
 
 

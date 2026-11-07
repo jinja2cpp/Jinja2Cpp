@@ -220,9 +220,10 @@ class Template(_jinja2cpp.Template):
 
 
 class FallbackTemplate:
-    """The methods of a template that real Jinja2 renders (docs/python.md, "Fallback"), copied by
-    ``fallback.fallback_class`` into a subclass of the environment's ``template_class``: only where that class
-    (and its bases up to ``Template``) leaves them alone, so what a user's ``template_class`` overrides wins.
+    """The methods of a template that real Jinja2 renders (docs/python.md, "Fallback"): a plain mixin that
+    ``fallback.fallback_class`` puts before the environment's ``template_class`` (nanobind allows one nanobind
+    base, so it cannot be a subclass of ``Template``; a ``template_class`` that overrides one of these methods is
+    refused with ``UnsupportedError``).
 
     The instance stands for a ``jinja2cpp.Template`` (``isinstance`` holds): ``environment`` is the jinja2cpp
     environment, ``generate`` streams, and what the engine has no equivalent of (``blocks``, ``new_context``,
@@ -299,29 +300,6 @@ class FallbackTemplate:
         if name.startswith("__") or name in ("_jt", "_environment"):
             raise AttributeError(name)
         return getattr(self.__dict__["_jt"], name)
-
-    def __repr__(self) -> str:
-        return f"<{type(self).__name__} {self.name!r}>" if self.name is not None else f"<{type(self).__name__} memory:{id(self):x}>"
-
-
-def patch_template_for_overrides() -> None:
-    """Make ``Template.render`` (the engine's) render a Jinja2 template when the instance is one.
-
-    Needed once a ``template_class`` of the user is used with the fallback: its override calls ``super().render()``,
-    which reaches the engine's method with an instance that has no engine template. Until then the engine's
-    methods are called directly and cost nothing extra.
-    """
-    if Template.__dict__.get("_dispatching"):
-        return
-    native_render = _jinja2cpp.Template.render
-
-    def render(self: Template, *args: t.Any, **kwargs: t.Any) -> str:
-        if "_jt" in self.__dict__:
-            return FallbackTemplate.render(self, *args, **kwargs)  # type: ignore[arg-type]
-        return native_render(self, *args, **kwargs)  # type: ignore[no-any-return]
-
-    Template.render = render  # type: ignore[assignment]
-    Template._dispatching = True  # type: ignore[attr-defined]
 
 
 # Environment's parameters in Jinja2's order, for the positional form

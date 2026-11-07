@@ -836,10 +836,10 @@ def test_fallback_templates_see_the_live_globals_filters_and_tests():
     assert "own" not in env.globals
 
 
-def test_template_class_overrides_win_on_fallback_templates():
+def test_template_class_without_overrides_of_render_methods_works_on_fallback_templates():
     class Mine(jinja2cpp.Template):
-        def render(self, *args, **kwargs):
-            return "<" + super().render(*args, **kwargs) + ">"
+        def shout(self):
+            return "!"
 
         def __repr__(self):
             return "MINE"
@@ -848,17 +848,29 @@ def test_template_class_overrides_win_on_fallback_templates():
         template_class = Mine
 
     env = Env(loader=jinja2cpp.DictLoader({"a": "{% print 1 %}", "n": "{{ 1 }}"}))
-    assert env.get_template("a").render() == "<1>"
-    assert env.get_template("n").render() == "<1>"
-    assert env.from_string("{% print 2 %}").render() == "<2>"
+    assert env.get_template("a").render() == "1"
+    assert env.get_template("a").shout() == "!" and isinstance(env.get_template("a"), Mine)
     assert repr(env.get_template("a")) == "MINE"
-    assert isinstance(env.get_template("a"), Mine)
-    # a Tier B environment too, and the stream through the override
-    delegating = Env(extensions=[Ext])
-    assert delegating.from_string("{{ 3 }}").render() == "<3>"
-    assert "".join(delegating.from_string("{{ 3 }}").generate()) == "3"
-    # native templates are not slowed or changed
-    assert jinja2cpp.Environment().from_string("{{ 1 }}").render() == "1"
+    assert Env(extensions=[Ext]).from_string("{{ 3 }}").render() == "3"
+    assert env.get_template("n").shout() == "!"
+    # the engine's own methods are untouched
+    assert jinja2cpp.Template.render is jinja2cpp._jinja2cpp.Template.render
+
+
+def test_template_class_that_overrides_render_is_refused_for_fallback_templates():
+    class Mine(jinja2cpp.Template):
+        def render(self, *args, **kwargs):
+            return "<" + super().render(*args, **kwargs) + ">"
+
+    class Env(jinja2cpp.Environment):
+        template_class = Mine
+
+    env = Env(loader=jinja2cpp.DictLoader({"a": "{% print 1 %}", "n": "{{ 1 }}"}))
+    assert env.get_template("n").render() == "<1>"  # native templates run the override
+    with pytest.raises(jinja2cpp.UnsupportedError, match="render"):
+        env.get_template("a")
+    with pytest.raises(jinja2cpp.UnsupportedError, match="Mine"):
+        Env(extensions=[Ext]).from_string("{{ 3 }}")
 
 
 def test_custom_undefined_subclass_is_refused_with_its_name():

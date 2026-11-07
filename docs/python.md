@@ -229,9 +229,11 @@ What the fallback does not carry over:
   `call`, sets one on the instance, or intercepts operators gets `UnsupportedError` instead, since
   Jinja2's sandbox would not run it. An overridden `unsafe_undefined` that makes its undefined with
   `self.undefined` makes one of jinja2cpp's classes, which Jinja2's runtime does not know.
-  `template_class`, `context_class` and `code_generator_class` are used: the first for the
-  fallback templates too (its overrides win and its `super()` reaches Jinja2), the others by the
-  Jinja2 environment.
+  `context_class` and `code_generator_class` are used by the Jinja2 environment. `template_class`
+  is used for the fallback templates too, but one that overrides `render`, `generate`, `make_module`,
+  `module` or the other methods a fallback template implements itself (nanobind allows one
+  nanobind base, so the fallback cannot sit between your class and the engine's) raises
+  `UnsupportedError` naming them when a template falls back; its native templates are unaffected.
 - **Translations.** `install_gettext_translations` on a delegating environment is Jinja2's. For a
   native environment whose template falls back, the oldstyle wrappers in `env.globals` are copied,
   but newstyle gettext (which runs in the engine) is not.
