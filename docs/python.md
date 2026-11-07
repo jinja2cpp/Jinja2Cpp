@@ -258,6 +258,10 @@ What the fallback does not carry over:
   tree, and the meta functions take a fallback template too (Jinja2 parses its source again).
 - **Files.** `FileSystemLoader` does not follow a link out of its search directories in either
   engine (the Python `get_source` checks it too), where Jinja2's loader does.
+- **`Template` subclasses.** A subclass with an `__init__` of its own makes its template with the engine, so a source the engine
+  cannot parse, or an option that makes Jinja2 the environment, raises `UnsupportedError` naming the class (Jinja2 rejecting the
+  source too gives Jinja2's error). Make such a template with `env.from_string()`, or drop the `__init__`.
+- **An include of an unparsable template** raises the engine's `TemplateSyntaxError` with a note (`__notes__`) that says what to do.
 - **Cost.** A template remembers its source for `blocks`, `new_context` and the other attributes only Jinja2 has.
 - `env.extensions` of a delegating environment is the list you gave, not Jinja2's dict of instances.
 

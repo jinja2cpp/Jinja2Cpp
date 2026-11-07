@@ -158,7 +158,24 @@ class Template(_jinja2cpp.Template):
     def __init__(self, source: t.Any, **kwargs: t.Any) -> None:
         if self.__dict__.pop("_made", False):
             return  # made by __new__
-        super().__init__(source, self.environment_class(**kwargs))
+        env = self.environment_class(**kwargs)
+        if type(self).__init__ is not Template.__init__ and env._uses_jinja2():
+            # The engine would take the source of a subclass with an __init__ of its own: Jinja2's environment cannot
+            raise UnsupportedError(
+                f"{type(self).__qualname__} has an __init__ of its own, so a Template(...) call cannot use Jinja2 for these options "
+                "(the fallback); make the template with env.from_string() or drop the __init__ (docs/python.md, \"Fallback\")"
+            )
+        try:
+            super().__init__(source, env)
+        except TemplateSyntaxError as error:
+            if type(self).__init__ is not Template.__init__ and env._fallback_mode_ != "never" and fallback._jinja2() is not None:
+                # Jinja2's own error when it rejects the source too
+                fallback.parse_fallback(env, error, lambda j: j.parse(source))
+                raise UnsupportedError(
+                    f"{type(self).__qualname__} has an __init__ of its own, so a source the engine cannot parse cannot fall back to Jinja2 "
+                    f"({fallback._first_line(error)}); make the template with env.from_string() or drop the __init__ (docs/python.md, \"Fallback\")"
+                ) from error
+            raise
 
     def generate(self, *args: t.Any, **kwargs: t.Any) -> t.Iterator[str]:
         """Render the template as a generator of strings: one item for now, the whole output."""
@@ -456,7 +473,7 @@ class Environment(_jinja2cpp.Environment):
             assert reason is not None
             fallback.require(reason, self._fallback_mode_)
             env = fallback.delegate_for(self)
-        with fallback.mapped():
+        with fallback.mapped(), fallback.build_lock:
             jt = make(env)
         return fallback.fallback_template(self, jt, template_class, source)
 

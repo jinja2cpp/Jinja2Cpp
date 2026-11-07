@@ -99,6 +99,10 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
         {
             nb::setattr(instance, "source", source.source);
         }
+        if (source.syntaxNote)
+        {
+            instance.attr("add_note")(source.syntaxNote);
+        }
         Raise(type, instance);
     }
     switch (code)

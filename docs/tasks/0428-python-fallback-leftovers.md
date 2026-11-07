@@ -7,7 +7,7 @@ touches: [python/jinja2cpp/fallback.py, python/jinja2cpp/environment.py, python/
 ---
 # Python fallback leftovers (from the review of 0354 PR3)
 
-**Problem.** The review of the automatic fallback to Jinja2 (0354, plan D7) found six small
+**Problem.** The review of the automatic fallback to Jinja2 (0354, plan D7) found eight small
 differences that were not fixed in the PR that introduced it:
 
 1. **Newstyle gettext in the fallback.** A native environment with `newstyle_gettext=True` whose template
@@ -28,6 +28,14 @@ differences that were not fixed in the PR that introduced it:
 6. **`import jinja2cpp` imports `jinja2`** eagerly (`exceptions.py` builds its classes on Jinja2's when it is installed), which costs start-up time and pulls
    Jinja2 into processes that never fall back. Import it at first use.
 
+7. **A leak through the class cache.** `fallback._jinja2_classes` is a `WeakKeyDictionary` keyed by the
+   jinja2cpp Environment class, but the generated Jinja2 class of an environment with a custom `context_class` or
+   `code_generator_class` that points back at the environment class keeps its key alive: such dynamic classes
+   are never freed.
+8. **`unsafe_undefined` with `self.undefined`.** An overridden `unsafe_undefined` (or `getattr`/`getitem`) that
+   makes its undefined with `self.undefined` gives a jinja2cpp Undefined, which Jinja2's runtime treats as a
+   defined value, so the refusal does not happen on the fallback routes. Map it to the matching Jinja2 class.
+
 **Proposal.** Fix each in `python/jinja2cpp/fallback.py` (and `environment.py` for the policies setter),
 with a regression test in `python/tests/test_fallback.py`: copy the newstyle wrappers or raise
 `UnsupportedError` naming newstyle gettext; validate that `policies` has every default key when it
@@ -36,3 +44,6 @@ where it matters, or document that it is class-level; decide whether `jinja2` ca
 
 **Done when.** The four cases have tests that fail before and pass after, and `docs/python.md`
 ("Fallback", what the fallback does not carry over) lists only what remains.
+
+For 7, hold the generated class on the user's class (as the fallback template class is) instead of in a
+global dict. For 8, convert a returned jinja2cpp Undefined into the Jinja2 class of the same kind.

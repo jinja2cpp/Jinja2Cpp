@@ -85,7 +85,7 @@ def test_delegating_environment_has_the_attributes_and_live_dicts():
     assert template.name == "t"
     assert template.environment is env and isinstance(template, jinja2cpp.Template)
     assert template.globals["g"] == "G"
-    assert repr(template).startswith("<Fallback")
+    assert repr(template).startswith("<Template")
     with pytest.raises(jinja2cpp.UndefinedError):
         env.from_string("{{ nope }}").render()
     env.autoescape = False
@@ -1145,3 +1145,93 @@ def test_enable_async_sandbox_honours_a_call_override_set_after_load():
     env.call = _deny_call
     with pytest.raises(jinja2.exceptions.SecurityError):
         asyncio.run(template.render_async())
+
+
+# --- Review round 4: hints, Template subclasses, threads ------------------------------------------
+
+
+def test_include_of_an_unparsable_template_explains_itself():
+    for main in ("{% include 'inc' %}", "{% import 'inc' as m %}", "{% extends 'inc' %}"):
+        with pytest.raises(jinja2cpp.TemplateSyntaxError) as info:
+            make_includer(main).get_template("main").render()
+        notes = "\n".join(getattr(info.value, "__notes__", []))
+        assert "includes, imports or extends" in notes and "0430" in notes and "enable_async=True" in notes
+    # a syntax error of the template itself (load time) has no such note
+    with pytest.raises(jinja2cpp.TemplateSyntaxError) as info:
+        jinja2cpp.Environment(fallback="never").from_string(UNPARSABLE)
+    assert not getattr(info.value, "__notes__", [])
+
+
+def test_template_subclass_with_its_own_init_names_itself_when_it_cannot_fall_back():
+    class Mine(jinja2cpp.Template):
+        def __init__(self, source, **kwargs):
+            super().__init__(source, **kwargs)
+
+    assert Mine("{{ 1 }}").render() == "1"
+    with pytest.raises(jinja2cpp.UnsupportedError, match="Mine"):
+        Mine(UNPARSABLE)
+    with pytest.raises(jinja2cpp.UnsupportedError, match="Mine"):
+        Mine("{{ 1 }}", extensions=[Ext])
+    with pytest.raises(jinja2cpp.TemplateSyntaxError):  # never: the engine's error stands
+        Mine(UNPARSABLE, fallback="never")
+    with pytest.raises(jinja2cpp.TemplateSyntaxError):  # Jinja2 rejects it too
+        Mine("{% if %}")
+
+
+def test_fallback_class_is_named_as_the_template_class_and_it_is_validated():
+    env = jinja2cpp.Environment()
+    template = env.from_string(UNPARSABLE)
+    assert type(template).__name__ == "Template" and repr(template).startswith("<Template ")
+    env.template_class = int
+    with pytest.raises(TypeError):
+        env.from_string(UNPARSABLE)
+
+
+def test_first_loads_under_threads_give_one_template_and_one_count():
+    import threading
+
+    for make in (
+        lambda: jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"a": "{% print 1 %}"})),
+        lambda: jinja2cpp.Environment(extensions=[Ext], loader=jinja2cpp.DictLoader({"a": "x"})),
+    ):
+        jinja2cpp.stats(reset=True)
+        sys.setswitchinterval(1e-6)
+        try:
+            env = make()
+            seen = []
+            barrier = threading.Barrier(8)
+
+            def work():
+                barrier.wait()
+                seen.append(env.get_template("a"))
+
+            threads = [threading.Thread(target=work) for _ in range(8)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        finally:
+            sys.setswitchinterval(0.005)
+        assert len({id(template) for template in seen}) == 1 and len(seen) == 8
+        assert jinja2cpp.stats()["loads_fallback"] == 1
+
+
+def test_template_class_first_use_under_threads_makes_one_class():
+    import threading
+
+    class Mine(jinja2cpp.Template):
+        pass
+
+    classes = []
+    barrier = threading.Barrier(8)
+
+    def work():
+        barrier.wait()
+        classes.append(type(jinja2cpp.Environment().from_string(UNPARSABLE, template_class=Mine)))
+
+    threads = [threading.Thread(target=work) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert len(set(classes)) == 1

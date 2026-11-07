@@ -43,6 +43,9 @@ _counts: t.Dict[str, int] = {
 }
 _native_base = 0
 _lock = threading.Lock()
+# Serializes the first creation of the Jinja2 environment, class and template of a name, so that two threads loading
+# the same name get the same object (Jinja2's own cache would compile it twice)
+build_lock = threading.RLock()
 
 
 def _check_mode(mode: t.Any) -> str:
@@ -230,7 +233,7 @@ def is_own_extension(extension: t.Any) -> bool:
     return False
 
 
-def _jinja2_extension(jinja2: t.Any, extension: t.Any) -> t.Any:
+def _jinja2_extension(extension: t.Any) -> t.Any:
     if not is_own_extension(extension):
         return extension
     name = extension.rpartition(".")[2] if isinstance(extension, str) else _EXTENSION_CLASSES[extension.__name__]
@@ -282,7 +285,7 @@ def _convert_undefined(jinja2: t.Any, value: t.Any) -> t.Any:
 
 def _convert_option(jinja2: t.Any, name: str, value: t.Any) -> t.Any:
     if name == "extensions":
-        return [_jinja2_extension(jinja2, e) for e in value]
+        return [_jinja2_extension(e) for e in value]
     if name == "undefined":
         return _convert_undefined(jinja2, value)
     if name == "loader":
@@ -384,6 +387,11 @@ _jinja2_classes: "weakref.WeakKeyDictionary[type, type]" = weakref.WeakKeyDictio
 def jinja2_class(jinja2: t.Any, env_class: type) -> t.Any:
     """The Jinja2 class a jinja2cpp Environment class stands for (``_jinja2_class_path``), with its ``context_class`` and
     ``code_generator_class`` and, for a sandbox, hooks that forward to the jinja2cpp environment."""
+    with build_lock:
+        return _jinja2_class_locked(jinja2, env_class)
+
+
+def _jinja2_class_locked(jinja2: t.Any, env_class: type) -> t.Any:
     import importlib
 
     cached = _jinja2_classes.get(env_class)
@@ -429,14 +437,15 @@ def delegate_for(env: t.Any) -> t.Any:
     """
     key = [getattr(env, name) for name in OPTION_NAMES]
     key += [type(env), env.filters, env.tests, env.globals, env.policies]
-    cached = env.__dict__.get("_fb_delegate")
-    if cached is not None:
-        old = cached[0]
-        if all(a is b or (not isinstance(a, dict) and a == b) for a, b in zip(old, key)):
-            return cached[1]
-    jenv = build_environment(env)
-    env.__dict__["_fb_delegate"] = (key, jenv)
-    return jenv
+    with build_lock:
+        cached = env.__dict__.get("_fb_delegate")
+        if cached is not None:
+            old = cached[0]
+            if all(a is b or (not isinstance(a, dict) and a == b) for a, b in zip(old, key)):
+                return cached[1]
+        jenv = build_environment(env)
+        env.__dict__["_fb_delegate"] = (key, jenv)
+        return jenv
 
 
 # ---------------------------------------------------------------------------------------------
@@ -492,10 +501,15 @@ def fallback_class(template_class: type) -> type:
     also over a user's override, which is refused: ``UnsupportedError`` names the methods (nanobind allows
     one nanobind base, so the mixin cannot sit between the user's class and the engine's ``Template``).
     """
+    with build_lock:
+        return _fallback_class_locked(template_class)
+
+
+def _fallback_class_locked(template_class: type) -> type:
+    from . import environment
+
     cls = template_class.__dict__.get("_jinja2cpp_fallback_class")  # on the class, so that it goes with it
     if cls is None:
-        from . import environment
-
         stock = (environment.Template, _jinja2cpp.Template, object)
         overridden = sorted(
             name
@@ -509,7 +523,9 @@ def fallback_class(template_class: type) -> type:
                 f"the template_class {template_class.__qualname__} overrides {', '.join(overridden)}, which a template made by Jinja2 "
                 "(the fallback) implements itself: the override would be ignored (docs/python.md, \"Fallback\")"
             )
-        cls = type(f"Fallback{template_class.__name__}", (environment.FallbackTemplate, template_class), {})
+        # named as the user's class, so that repr() and tracebacks show it
+        cls = type(template_class.__name__, (environment.FallbackTemplate, template_class), {"__module__": template_class.__module__})
+        cls.__qualname__ = template_class.__qualname__
         template_class._jinja2cpp_fallback_class = cls  # type: ignore[attr-defined]
     return t.cast(type, cls)
 
@@ -517,20 +533,24 @@ def fallback_class(template_class: type) -> type:
 def fallback_template(env: t.Any, jinja2_template: t.Any, template_class: t.Optional[type] = None, source: t.Any = None) -> t.Any:
     """The jinja2cpp template for a template of Jinja2 that `env` loaded: the same object while Jinja2 keeps the template
     (its ``get_template`` cache), counted as a load once."""
-    cls = fallback_class(template_class or env.template_class)
-    wrappers = jinja2_template.__dict__.setdefault("_jinja2cpp_wrappers", {})
-    found = wrappers.get(cls)
-    if found is not None:
-        return found
-    instance = cls.__new__(cls)
-    instance.__dict__["_jt"] = jinja2_template
-    instance.__dict__["_fb_jt"] = jinja2_template
-    instance.__dict__["_environment"] = env
-    if isinstance(source, str):
-        instance.__dict__["_fb_source"] = source
-    wrappers[cls] = instance
-    _count("loads_fallback")
-    return instance
+    template_class = template_class or env.template_class
+    if not (isinstance(template_class, type) and issubclass(template_class, _jinja2cpp.Template)):
+        raise TypeError(f"template_class must be a subclass of jinja2cpp.Template, not {template_class!r}")
+    cls = fallback_class(template_class)
+    with build_lock:
+        wrappers = jinja2_template.__dict__.setdefault("_jinja2cpp_wrappers", {})
+        found = wrappers.get(cls)
+        if found is not None:
+            return found
+        instance = cls.__new__(cls)
+        instance.__dict__["_jt"] = jinja2_template
+        instance.__dict__["_fb_jt"] = jinja2_template
+        instance.__dict__["_environment"] = env
+        if isinstance(source, str):
+            instance.__dict__["_fb_source"] = source
+        wrappers[cls] = instance
+        _count("loads_fallback")
+        return instance
 
 
 def _via_jinja2(env: t.Any, error: BaseException, make: t.Callable[[t.Any], t.Any], what: str) -> t.Any:
@@ -545,7 +565,7 @@ def _via_jinja2(env: t.Any, error: BaseException, make: t.Callable[[t.Any], t.An
         raise unsupported from error
     except Exception as exc:
         raise error from exc
-    with mapped():
+    with mapped(), build_lock:
         result = make(jenv)
     require(f"a {what} the engine cannot parse ({_first_line(error)})", mode)
     return result

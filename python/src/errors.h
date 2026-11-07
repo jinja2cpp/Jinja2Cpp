@@ -15,6 +15,8 @@ struct ErrorSource
     nb::object name = nb::none();
     nb::object filename = nb::none();
     nb::object source = nb::none();
+    // A note for a TemplateSyntaxError or TemplateAssertionError (a template the render loaded failed to parse)
+    const char* syntaxNote = nullptr;
 };
 
 // Raises the Python exception of an error of the engine (jinja2cpp.exceptions): a Python

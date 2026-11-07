@@ -832,6 +832,11 @@ nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
         ErrorSource where;
         where.name = m_name;
         where.filename = m_filename;
+        // The template itself parsed when it was loaded, so a syntax error here is in one it includes, imports or extends
+        where.syntaxNote =
+            "the error is in a template this one includes, imports or extends, which may use syntax the engine lacks. "
+            "Such templates fall back to Jinja2 only when loaded directly (task 0430). To run the whole environment on "
+            "Jinja2, give it a Tier B option, such as extensions=[an extension] or enable_async=True (docs/python.md, \"Fallback\")";
         RaiseError(*error, where);
     }
     return MakeStr(output);
