@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: medium
 area: parity
 depends: [0354]
@@ -37,3 +37,21 @@ which the corpus does not (Ruslan 2026-10-30).
 **Done when.** CI prints the upstream pass rate as passed / (collected − internals), with the
 deliberate and divergence counts. The corpus counts match. The chat templates are identical.
 0246 can read the bench row.
+
+**Result (2026-11-07).**
+- Upstream suite: `python/tests/upstream/run.py` (in `CI-python`, under ASan): 596 / 856 =
+  69.6% passed, 91.0% within the supported subset (596 / 655); listed: async 126, extension
+  10, unsupported 65 (a class added for API outside the subset: NativeEnvironment, compiled
+  modules, bytecode caches, ...), deliberate 0, divergence 59, filed as 0431-0436 and in the
+  open 0412 and 0415.
+- Parity corpus through the module (`python/tests/test_parity_corpus.py`): every case ends as
+  in the C++ ParityTest (3207 of 3225 match), after three crossing fixes found by it (folded
+  finalize under autoescape, loop.length of a Python list, an undefined slice bound).
+- Chat templates: the 72 templates of `test/chat_templates` (722 renders) match transformers
+  through `chat_template_environment()`; `jinja2cpp.integrations.transformers.patch()` is
+  checked against the pinned transformers in CI. The plan's ~15 templates are the existing
+  corpus of 0360.
+- Bench row: `bench/run.py --python-module`.
+- Streaming: `generate`/`stream` yield the `OutputSink` chunks; lazy rendering is 0436. The
+  GIL-released render of the plan's phase 3 is 0437.
+
