@@ -2766,14 +2766,14 @@ const MethodInfo* FindSafeMethod(const InternalValue& obj, std::string_view name
 }
 } // namespace
 
-std::optional<InternalValue> SandboxedSyntheticAttribute(RenderContext* context, const InternalValue& obj, const std::string& name, bool viaItem)
+std::optional<InternalValue> SandboxedSyntheticAttribute(RenderContext* context, const InternalValue& obj, const std::string& name)
 {
     if (!context || !context->GetSandboxPolicy())
     {
         return std::nullopt;
     }
     const auto map = AsMap(obj);
-    if ((map && (map->GetObjectClass() || (map->IsNamespace() && !viaItem))) || GetIf<Callable>(&obj))
+    if ((map && (map->GetObjectClass() || map->IsNamespace())) || GetIf<Callable>(&obj))
     {
         return SandboxedNativeAttribute(context, obj, name);
     }

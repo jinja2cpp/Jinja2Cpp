@@ -423,8 +423,19 @@ class ImmutableSandboxedEnvironment(SandboxedEnvironment):
         return not modifies_known_mutable(obj, attr)
 
 
-# [[fill]align][sign][z][#][0][width][grouping][.precision][type] (the format-spec mini-language)
-_FORMAT_SPEC = re.compile(r"(?:.?[<>=^])?[-+ ]?z?#?0?(?P<width>[0-9]+)?[,_]?(?:\.(?P<precision>[0-9]+))?(?P<type>[a-zA-Z%]?)\Z", re.DOTALL)
+# [[fill]align][sign][z][#][0][width][grouping][.precision][type] (the format-spec mini-language). \d is any Unicode
+# decimal digit, as CPython's parser takes for a width and a precision (int() reads them too)
+_FORMAT_SPEC = re.compile(r"(?:.?[<>=^])?[-+ ]?z?#?0?(?P<width>\d+)?[,_]?(?:\.(?P<precision>\d+))?(?P<type>[a-zA-Z%]?)\Z", re.DOTALL)
+_DIGITS = re.compile(r"\d+")
+# What int() refuses for its length is a number past any cap
+_TOO_BIG = 1 << 64
+
+
+def _digits_value(digits: str) -> int:
+    try:
+        return int(digits)
+    except ValueError:
+        return _TOO_BIG
 
 
 class SandboxedFormatter(Formatter):
@@ -437,12 +448,17 @@ class SandboxedFormatter(Formatter):
         # The width and the precision of a field build a string of that length before the engine sees it, so the
         # render's cap on sequences (MaxSequenceSize, Settings::Limits::maxSequenceSize) is checked first, as the
         # engine's own str.format does; so is what the fields have written together
-        match = _FORMAT_SPEC.match(format_spec) if format_spec else None
-        if match:
-            size = int(match.group("width") or 0)
-            # A precision only truncates a string; a number's pads with digits
-            if match.group("precision") and (match.group("type") in ("e", "E", "f", "F", "g", "G", "n", "%") or isinstance(value, float)):
-                size = max(size, int(match.group("precision")))
+        if format_spec:
+            match = _FORMAT_SPEC.match(format_spec)
+            if match:
+                size = _digits_value(match.group("width") or "0")
+                # A precision only truncates a string; a number's pads with digits
+                if match.group("precision") and (match.group("type") in ("e", "E", "f", "F", "g", "G", "n", "%") or isinstance(value, float)):
+                    size = max(size, _digits_value(match.group("precision")))
+            else:
+                # Not the standard grammar (a type's own __format__, or a spec CPython rejects): fail closed on
+                # the largest number in it, as any width or precision it might mean
+                size = max((_digits_value(run) for run in _DIGITS.findall(format_spec)), default=0)
             _jinja2cpp._check_sequence_size(size)
         text = super().format_field(value, format_spec)
         if isinstance(text, str):

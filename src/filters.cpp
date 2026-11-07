@@ -158,7 +158,9 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
     {
         // An undefined step has no attributes, unless its policy is Chainable
         CheckUndefinedUse(result, UndefinedUse::Attribute);
-        auto next = Subscript(result, part, &context);
+        // loop, a cycler, a namespace, a macro: the sandbox policy judges their attributes (zero cost without one)
+        auto synthetic = IsStringValue(part) ? methods::SandboxedSyntheticAttribute(&context, result, AsString(part)) : std::nullopt;
+        auto next = synthetic ? std::move(*synthetic) : Subscript(result, part, &context);
         // getitem falls back to getattr: a number's data attributes (docs/tasks/0374)
         if (next.IsUndefined() && IsStringValue(part))
         {

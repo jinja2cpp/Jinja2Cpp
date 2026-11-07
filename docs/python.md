@@ -244,7 +244,7 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `str.format`, `format_map` and `Markup.format` go through Jinja2's `SandboxedFormatter`; a field's
   width or precision, and the text the fields write together, are checked against the render's
   sequence cap (64 MiB or `Limits.max_sequence_size`) before Python builds the string, and fail with
-  the `TemplateRuntimeError` the engine's own `str.format` raises (Jinja2 itself builds it). The template's `{{ x|attr('__class__') }}` of an undefined `x` is an
+  the `TemplateRuntimeError` the engine's own `str.format` raises (Jinja2 itself builds it). Widths and precisions are read as CPython reads them, any Unicode decimal digit; a spec outside the standard grammar is bounded by the largest number in it. The template's `{{ x|attr('__class__') }}` of an undefined `x` is an
   `UndefinedError`. `sort` and `unique` of an unsafe or missing attribute under
   `StrictUndefined` do not raise as Jinja2's do (0413). `sum(attribute=)` of a missing attribute
   is now an `UndefinedError` as in Jinja2 (it was a `TemplateRuntimeError`).

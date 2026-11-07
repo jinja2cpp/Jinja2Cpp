@@ -1036,3 +1036,76 @@ def test_str_format_in_the_sandbox_still_formats_what_fits():
         "{{ '{0:08.3f}{0:+d}'.format(3) if false else '{0:08.3f}'.format(3.5) }}",
     ):
         assert _outcome_of(SandboxedEnvironment(), source) == _outcome_of(j2sandbox.SandboxedEnvironment(), source), source
+
+
+UNICODE_DIGITS = {
+    "arabic_indic": "١٠٠٠٠٠٠٠٠٠",
+    "fullwidth": "１０００００００００",
+    "devanagari": "१०००००००००",
+}
+
+
+@pytest.mark.parametrize("digits", UNICODE_DIGITS.values(), ids=UNICODE_DIGITS.keys())
+@pytest.mark.parametrize(
+    "template",
+    [
+        "{{ '{0:%s}'.format('x')|length }}",
+        "{{ '{0:.%sf}'.format(1.5)|length }}",
+        "{{ '{0:>%s}'.format('x')|length }}",
+        "{{ '{a:%s}'.format_map({'a': 'x'})|length }}",
+        "{{ ('{0:%s}'|safe).format('x')|length }}",
+        "{{ '{0:{1}}'.format('x', %s)|length }}",
+    ],
+)
+def test_str_format_cap_sees_unicode_digits_in_widths_and_precisions(template, digits):
+    source = template % digits
+    if "{1}" in template:
+        source = template % "1000000000"
+    with pytest.raises(TemplateRuntimeError, match="too (long|big)"):
+        SandboxedEnvironment().from_string(source).render()
+
+
+def test_str_format_cap_fails_closed_on_a_spec_outside_the_grammar():
+    # CPython rejects it (or a type's own __format__ reads it): the largest number in it is the bound
+    import datetime
+
+    env = SandboxedEnvironment()
+    with pytest.raises(TemplateRuntimeError, match="too (long|big)"):
+        env.from_string("{{ '{0:%Y 999999999}'.format(d) }}").render(d=datetime.date(2020, 1, 2))
+    assert env.from_string("{{ '{0:%Y-%m-%d}'.format(d) }}").render(d=datetime.date(2020, 1, 2)) == "2020-01-02"
+
+
+OBJECTS = [
+    ("{% set o = namespace(secret=42) %}", "secret"),
+    ("{% for i in [1] %}{% set o = loop %}", "index"),
+    ("{% macro m() %}x{% endmacro %}{% set o = m %}", "name"),
+    ("{% set o = cycler(1, 2) %}", "current"),
+]
+ATTRIBUTE_FILTERS = [
+    "{{ [o]|map(attribute='%s')|join }}",
+    "{{ [o]|selectattr('%s')|list|length }}",
+    "{{ [o]|rejectattr('%s')|list|length }}",
+    "{{ [o]|sort(attribute='%s')|list|length }}",
+    "{{ [o]|groupby('%s')|list|length }}",
+    "{{ [o]|unique(attribute='%s')|list|length }}",
+    "{{ [o]|min(attribute='%s') is defined }}",
+    "{{ [o]|max(attribute='%s') is defined }}",
+    "{{ [o]|sum(attribute='%s') }}",
+    "{{ [o]|map(attribute='%s.x', default='d')|join }}",
+]
+
+
+@pytest.mark.parametrize("filter_source", ATTRIBUTE_FILTERS)
+@pytest.mark.parametrize("prefix,name", OBJECTS, ids=["namespace", "loop", "macro", "cycler"])
+@pytest.mark.parametrize("strict", [False, True], ids=["default", "strict"])
+def test_attribute_filters_ask_is_safe_attribute_about_loop_namespace_and_macro(filter_source, prefix, name, strict):
+    if strict and "unique" in filter_source:
+        pytest.skip("documented difference: unique does not raise on a StrictUndefined key (docs/python.md, task 0413)")
+
+    def deny(self, obj, attr, value):
+        return False
+
+    source = prefix + filter_source % name + ("{% endfor %}" if "{% for" in prefix else "")
+    ours = type("Deny", (SandboxedEnvironment,), {"is_safe_attribute": deny})(undefined=jinja2cpp.StrictUndefined if strict else jinja2cpp.Undefined)
+    oracle = type("DenyJ2", (j2sandbox.SandboxedEnvironment,), {"is_safe_attribute": deny})(undefined=jinja2.StrictUndefined if strict else jinja2.Undefined)
+    assert _outcome_of(ours, source) == _outcome_of(oracle, source), source

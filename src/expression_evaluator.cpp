@@ -409,8 +409,8 @@ InternalValue SubscriptExpression::LookupDefinedIndex(const InternalValue& cur, 
 {
     if (idx.sandboxed)
     {
-        // x.name, and x["name"] of an object that has no __getitem__ in Python (loop, a cycler, a macro)
-        if (auto replacement = !key ? methods::SandboxedSyntheticAttribute(&values, cur, idx.attrName) : IsStringValue(*key) ? methods::SandboxedSyntheticAttribute(&values, cur, AsString(*key), true)
+        // x.name, and x["name"] of an object that has no __getitem__ in Python (loop, a cycler, a macro, a namespace)
+        if (auto replacement = !key ? methods::SandboxedSyntheticAttribute(&values, cur, idx.attrName) : IsStringValue(*key) ? methods::SandboxedSyntheticAttribute(&values, cur, AsString(*key))
                                                                                                                              : std::nullopt)
         {
             return std::move(*replacement);
