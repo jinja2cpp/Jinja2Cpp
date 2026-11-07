@@ -43,9 +43,9 @@ _counts: t.Dict[str, int] = {
 }
 _native_base = 0
 _lock = threading.Lock()
-# Serializes the first creation of the Jinja2 environment, class and template of a name, so that two threads loading
-# the same name get the same object (Jinja2's own cache would compile it twice)
-build_lock = threading.RLock()
+# Guards the checks and inserts of the caches below, never user code (loaders, extensions, finalize): a class,
+# a Jinja2 environment or a wrapper is built outside it, and the first to insert wins
+_cache_lock = threading.Lock()
 
 
 def _check_mode(mode: t.Any) -> str:
@@ -313,12 +313,45 @@ def _owner_of(jenv: t.Any) -> t.Any:
 
 
 def _owner_override(owner: t.Any, name: str) -> t.Any:
-    """The owner's method `name` when it is not the sandbox's own (an override of the class, a patch of it or a function
-    set on the instance), else None: the stock one then runs, Jinja2's, which makes Jinja2's undefined."""
-    from .sandbox import SandboxedEnvironment
+    """The owner's method `name` when it is not the sandbox's own, else None: the stock one then runs, Jinja2's.
+
+    Stock means the original function (snapshot ``sandbox._STOCK_HOOKS``) bound to this very environment: an override
+    of the class, a patch of it, a function set on the instance, or a method of another environment is an override.
+    """
+    from .sandbox import _STOCK_OTHER_HOOK_FUNCTIONS
+    from .sandbox import is_stock_sandbox_hook
 
     method = getattr(owner, name)
-    return None if getattr(method, "__func__", method) is getattr(SandboxedEnvironment, name) else method
+    if name in _STOCK_OTHER_HOOK_FUNCTIONS:
+        stock = getattr(method, "__self__", None) is owner and getattr(method, "__func__", None) is _STOCK_OTHER_HOOK_FUNCTIONS[name]
+    else:
+        stock = is_stock_sandbox_hook(owner, name)
+    if stock:
+        return None
+    return method
+
+
+def _to_jinja2_undefined(jenv: t.Any, value: t.Any) -> t.Any:
+    """`value` as a value of Jinja2's runtime: an undefined of jinja2cpp (made by ``super().getattr`` of an override,
+    ``self.undefined``) becomes the delegate's undefined class, with its hint, object, name and exception."""
+    from .runtime import Undefined as OurUndefined
+    from .runtime import missing as our_missing
+
+    if not isinstance(value, OurUndefined):
+        return value
+    obj = value._undefined_obj
+    return jenv.undefined(
+        hint=value._undefined_hint,
+        obj=jenv_missing() if obj is our_missing else obj,
+        name=value._undefined_name,
+        exc=value._undefined_exception,
+    )
+
+
+def jenv_missing() -> t.Any:
+    import jinja2.utils
+
+    return jinja2.utils.missing
 
 
 def _forwarding_sandbox(base: type) -> type:
@@ -328,7 +361,9 @@ def _forwarding_sandbox(base: type) -> type:
     ``wrap_str_format``, ``call_binop``, ``call_unop`` and the compile-time ``intercepted_binops`` and
     ``intercepted_unops``. So a hook overridden on the class, patched onto it or set on the instance, before or after a
     template was made, is what Jinja2 runs, as in Jinja2 (docs/python.md, "Fallback"). A hook the owner has not
-    overridden is Jinja2's own: the owner's would make jinja2cpp undefined values, which Jinja2 cannot use.
+    overridden is Jinja2's own (the owner's would make jinja2cpp undefined values); what an override returns as a
+    jinja2cpp undefined value becomes the delegate's undefined class. ``call_binop`` and ``call_unop`` always go to the
+    owner: the stock ones read its ``binop_table`` and ``unop_table``.
     """
 
     class ForwardingSandbox(base):  # type: ignore[valid-type, misc]
@@ -348,7 +383,7 @@ def _forwarding_sandbox(base: type) -> type:
 
         def unsafe_undefined(self, obj: t.Any, attribute: str) -> t.Any:
             method = _owner_override(_owner_of(self), "unsafe_undefined")
-            return method(obj, attribute) if method is not None else super().unsafe_undefined(obj, attribute)
+            return _to_jinja2_undefined(self, method(obj, attribute)) if method is not None else super().unsafe_undefined(obj, attribute)
 
         def wrap_str_format(self, value: t.Any) -> t.Any:
             method = _owner_override(_owner_of(self), "wrap_str_format")
@@ -356,24 +391,22 @@ def _forwarding_sandbox(base: type) -> type:
 
         def getattr(self, obj: t.Any, attribute: str) -> t.Any:
             method = _owner_override(_owner_of(self), "getattr")
-            return method(obj, attribute) if method is not None else super().getattr(obj, attribute)
+            return _to_jinja2_undefined(self, method(obj, attribute)) if method is not None else super().getattr(obj, attribute)
 
         def getitem(self, obj: t.Any, argument: t.Any) -> t.Any:
             method = _owner_override(_owner_of(self), "getitem")
-            return method(obj, argument) if method is not None else super().getitem(obj, argument)
+            return _to_jinja2_undefined(self, method(obj, argument)) if method is not None else super().getitem(obj, argument)
 
         def call_binop(self, context: t.Any, operator: str, left: t.Any, right: t.Any) -> t.Any:
-            method = _owner_override(_owner_of(self), "call_binop")
-            return method(context, operator, left, right) if method is not None else super().call_binop(context, operator, left, right)
+            return _owner_of(self).call_binop(context, operator, left, right)
 
         def call_unop(self, context: t.Any, operator: str, arg: t.Any) -> t.Any:
-            method = _owner_override(_owner_of(self), "call_unop")
-            return method(context, operator, arg) if method is not None else super().call_unop(context, operator, arg)
+            return _owner_of(self).call_unop(context, operator, arg)
 
         def call(__self, __context: t.Any, __obj: t.Any, *args: t.Any, **kwargs: t.Any) -> t.Any:  # noqa: B902, N805
             method = _owner_override(_owner_of(__self), "call")
             if method is not None:
-                return method(__context, __obj, *args, **kwargs)
+                return _to_jinja2_undefined(__self, method(__context, __obj, *args, **kwargs))
             return super().call(__context, __obj, *args, **kwargs)
 
     ForwardingSandbox.__name__ = base.__name__
@@ -387,11 +420,6 @@ _jinja2_classes: "weakref.WeakKeyDictionary[type, type]" = weakref.WeakKeyDictio
 def jinja2_class(jinja2: t.Any, env_class: type) -> t.Any:
     """The Jinja2 class a jinja2cpp Environment class stands for (``_jinja2_class_path``), with its ``context_class`` and
     ``code_generator_class`` and, for a sandbox, hooks that forward to the jinja2cpp environment."""
-    with build_lock:
-        return _jinja2_class_locked(jinja2, env_class)
-
-
-def _jinja2_class_locked(jinja2: t.Any, env_class: type) -> t.Any:
     import importlib
 
     cached = _jinja2_classes.get(env_class)
@@ -405,8 +433,8 @@ def _jinja2_class_locked(jinja2: t.Any, env_class: type) -> t.Any:
     extra = {n: v for n in ("context_class", "code_generator_class") if (v := _custom_class(env_class, n)) is not None}
     if extra:
         cls = type(cls.__name__, (cls,), extra)
-    _jinja2_classes[env_class] = cls
-    return t.cast(type, cls)
+    with _cache_lock:
+        return t.cast(type, _jinja2_classes.setdefault(env_class, cls))
 
 
 def build_environment(env: t.Any, options: t.Optional[t.Dict[str, t.Any]] = None) -> t.Any:
@@ -422,6 +450,7 @@ def build_environment(env: t.Any, options: t.Optional[t.Dict[str, t.Any]] = None
     kwargs = {name: _convert_option(jinja2, name, value) for name, value in options.items()}
     jenv = jinja2_class(jinja2, type(env))(**kwargs)
     jenv.__dict__["_jinja2cpp_owner"] = env
+    jenv.__dict__["_jinja2cpp_load_lock"] = threading.RLock()
     if construction:
         return jenv  # the environment has no filters, tests or globals of its own yet
     for name in ("filters", "tests", "globals"):
@@ -437,15 +466,23 @@ def delegate_for(env: t.Any) -> t.Any:
     """
     key = [getattr(env, name) for name in OPTION_NAMES]
     key += [type(env), env.filters, env.tests, env.globals, env.policies]
-    with build_lock:
+    def current() -> t.Any:
         cached = env.__dict__.get("_fb_delegate")
-        if cached is not None:
-            old = cached[0]
-            if all(a is b or (not isinstance(a, dict) and a == b) for a, b in zip(old, key)):
-                return cached[1]
-        jenv = build_environment(env)
-        env.__dict__["_fb_delegate"] = (key, jenv)
-        return jenv
+        if cached is not None and all(a is b or (not isinstance(a, dict) and a == b) for a, b in zip(cached[0], key)):
+            return cached[1]
+        return None
+
+    with _cache_lock:
+        found = current()
+    if found is not None:
+        return found
+    jenv = build_environment(env)  # user code (extensions' __init__) runs here, outside the lock
+    with _cache_lock:
+        found = current()
+        if found is None:
+            env.__dict__["_fb_delegate"] = (key, jenv)
+            found = jenv
+    return found
 
 
 # ---------------------------------------------------------------------------------------------
@@ -501,31 +538,29 @@ def fallback_class(template_class: type) -> type:
     also over a user's override, which is refused: ``UnsupportedError`` names the methods (nanobind allows
     one nanobind base, so the mixin cannot sit between the user's class and the engine's ``Template``).
     """
-    with build_lock:
-        return _fallback_class_locked(template_class)
-
-
-def _fallback_class_locked(template_class: type) -> type:
+    cls = template_class.__dict__.get("_jinja2cpp_fallback_class")  # on the class, so that it goes with it
+    if cls is not None:
+        return t.cast(type, cls)
     from . import environment
 
-    cls = template_class.__dict__.get("_jinja2cpp_fallback_class")  # on the class, so that it goes with it
-    if cls is None:
-        stock = (environment.Template, _jinja2cpp.Template, object)
-        overridden = sorted(
-            name
-            for name in environment.FallbackTemplate.__dict__
-            if name not in ("__dict__", "__weakref__", "__module__", "__doc__", "__qualname__")
-            and (owner := next((c for c in template_class.__mro__ if name in c.__dict__), None)) is not None
-            and owner not in stock
+    stock = (environment.Template, _jinja2cpp.Template, object)
+    overridden = sorted(
+        name
+        for name in environment.FallbackTemplate.__dict__
+        if name not in ("__dict__", "__weakref__", "__module__", "__doc__", "__qualname__")
+        and (owner := next((c for c in template_class.__mro__ if name in c.__dict__), None)) is not None
+        and owner not in stock
+    )
+    if overridden:
+        raise UnsupportedError(
+            f"the template_class {template_class.__qualname__} overrides {', '.join(overridden)}, which a template made by Jinja2 "
+            "(the fallback) implements itself: the override would be ignored (docs/python.md, \"Fallback\")"
         )
-        if overridden:
-            raise UnsupportedError(
-                f"the template_class {template_class.__qualname__} overrides {', '.join(overridden)}, which a template made by Jinja2 "
-                "(the fallback) implements itself: the override would be ignored (docs/python.md, \"Fallback\")"
-            )
-        # named as the user's class, so that repr() and tracebacks show it
-        cls = type(template_class.__name__, (environment.FallbackTemplate, template_class), {"__module__": template_class.__module__})
-        cls.__qualname__ = template_class.__qualname__
+    # named as the user's class, so that repr() and tracebacks show it
+    cls = type(template_class.__name__, (environment.FallbackTemplate, template_class), {"__module__": template_class.__module__})
+    cls.__qualname__ = template_class.__qualname__
+    with _cache_lock:
+        cls = template_class.__dict__.get("_jinja2cpp_fallback_class") or cls
         template_class._jinja2cpp_fallback_class = cls  # type: ignore[attr-defined]
     return t.cast(type, cls)
 
@@ -537,7 +572,7 @@ def fallback_template(env: t.Any, jinja2_template: t.Any, template_class: t.Opti
     if not (isinstance(template_class, type) and issubclass(template_class, _jinja2cpp.Template)):
         raise TypeError(f"template_class must be a subclass of jinja2cpp.Template, not {template_class!r}")
     cls = fallback_class(template_class)
-    with build_lock:
+    with _cache_lock:
         wrappers = jinja2_template.__dict__.setdefault("_jinja2cpp_wrappers", {})
         found = wrappers.get(cls)
         if found is not None:
@@ -549,8 +584,8 @@ def fallback_template(env: t.Any, jinja2_template: t.Any, template_class: t.Opti
         if isinstance(source, str):
             instance.__dict__["_fb_source"] = source
         wrappers[cls] = instance
-        _count("loads_fallback")
-        return instance
+    _count("loads_fallback")
+    return instance
 
 
 def _via_jinja2(env: t.Any, error: BaseException, make: t.Callable[[t.Any], t.Any], what: str) -> t.Any:
@@ -565,7 +600,7 @@ def _via_jinja2(env: t.Any, error: BaseException, make: t.Callable[[t.Any], t.An
         raise unsupported from error
     except Exception as exc:
         raise error from exc
-    with mapped(), build_lock:
+    with mapped(), jenv.__dict__["_jinja2cpp_load_lock"]:
         result = make(jenv)
     require(f"a {what} the engine cannot parse ({_first_line(error)})", mode)
     return result

@@ -1235,3 +1235,112 @@ def test_template_class_first_use_under_threads_makes_one_class():
     for thread in threads:
         thread.join()
     assert len(set(classes)) == 1
+
+
+# --- Review round 5 -------------------------------------------------------------------------
+
+
+def test_binop_and_unop_tables_of_the_owner_are_used_on_the_fallback_routes():
+    def make(module):
+        class Env(module.SandboxedEnvironment):
+            intercepted_binops = frozenset(["+"])
+            intercepted_unops = frozenset(["-"])
+
+        env = Env(extensions=[Ext])
+        env.binop_table["+"] = lambda a, b: 99
+        env.unop_table["-"] = lambda a: 77
+        return env.from_string("{{ 1 + 2 }}{{ -3 }}").render()
+
+    assert make(jinja2cpp.sandbox) == make(jinja2.sandbox) == "9977"
+
+
+_SUPER_SOURCE = (
+    "{{ x.missing is defined }}|{{ x.missing|default('D') }}|{{ x._hidden is defined }}|{{ x._hidden|default('D2') }}|"
+    "{{ x.shown }}|{{ d['nokey']|default('D3') }}|{{ d.nokey is defined }}"
+)
+
+
+class _Hidden:
+    shown = "S"
+    _hidden = "H"
+
+
+@pytest.mark.parametrize("undefined", ["Undefined", "StrictUndefined", "DebugUndefined", "ChainableUndefined"])
+def test_overrides_that_call_super_give_jinja2s_undefined_values(undefined):
+    def make(module, undefined_class):
+        class Env(module.SandboxedEnvironment):
+            def getattr(self, obj, attr):
+                return super().getattr(obj, attr)
+
+            def getitem(self, obj, argument):
+                return super().getitem(obj, argument)
+
+            def unsafe_undefined(self, obj, attribute):
+                return super().unsafe_undefined(obj, attribute)
+
+            def call(self, *args, **kwargs):
+                return super().call(*args, **kwargs)
+
+        return _outcome(lambda: Env(extensions=[Ext], undefined=undefined_class).from_string(_SUPER_SOURCE).render(x=_Hidden(), d={}))
+
+    assert make(jinja2cpp.sandbox, getattr(jinja2cpp, undefined)) == make(jinja2.sandbox, getattr(jinja2, undefined))
+
+
+def test_a_hook_of_another_environment_is_an_override_and_a_bound_stock_one_is_not():
+    other = jinja2cpp.sandbox.SandboxedEnvironment(extensions=[Ext])
+    other.globals["f"] = lambda: "CALLED"
+    other.is_safe_callable = lambda obj: False
+    env = jinja2cpp.sandbox.SandboxedEnvironment(extensions=[Ext])
+    env.globals["f"] = lambda: "CALLED"
+    env.call = other.call  # not stock: it is the stock function bound to another environment
+    with pytest.raises(jinja2.exceptions.SecurityError):
+        env.from_string("{{ f() }}").render()
+    plain = jinja2cpp.sandbox.SandboxedEnvironment(extensions=[Ext])
+    plain.globals["f"] = lambda: "CALLED"
+    assert plain.from_string("{{ f() }}").render() == "CALLED"
+
+
+def test_loads_in_two_environments_do_not_wait_for_each_other():
+    import threading
+    import time
+
+    release = threading.Event()
+    calls = []
+
+    class SlowLoader(jinja2cpp.BaseLoader):
+        def get_source(self, environment, template):
+            calls.append(template)
+            if template == "slow":
+                if not release.wait(10):
+                    raise RuntimeError("deadlock: the second environment never finished")
+                return "{% print 1 %}", None, lambda: True
+            raise jinja2cpp.TemplateNotFound(template)
+
+    for first in (jinja2cpp.Environment(loader=SlowLoader()), jinja2cpp.Environment(extensions=[Ext], loader=SlowLoader())):
+        release.clear()
+        results = {}
+
+        def slow():
+            results["a"] = first.get_template("slow").render()
+
+        def other():
+            time.sleep(0.3)
+            results["b"] = jinja2cpp.Environment().from_string("{% print 2 %}").render()
+            results["c"] = jinja2cpp.Environment(extensions=[Ext]).from_string("{{ 3 }}").render()
+            release.set()
+
+        threads = [threading.Thread(target=slow), threading.Thread(target=other)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(15)
+        assert not any(thread.is_alive() for thread in threads)
+        assert results == {"a": "1", "b": "2", "c": "3"}
+
+
+def test_make_module_and_module_of_an_includer_carry_the_note():
+    template = make_includer("{% include 'inc' %}").get_template("main")
+    for call in (lambda: template.make_module(), lambda: template.module):
+        with pytest.raises(jinja2cpp.TemplateSyntaxError) as info:
+            call()
+        assert "0430" in "\n".join(getattr(info.value, "__notes__", []))

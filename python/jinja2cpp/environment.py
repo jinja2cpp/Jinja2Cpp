@@ -6,6 +6,7 @@ of an environment are its ``template_class``. Ported from Jinja2 3.1.6 (BSD-3-Cl
 Projects) where the code is Jinja2's: the stream, select_template and list_templates.
 """
 
+import contextlib
 import typing as t
 from functools import partial
 from itertools import chain
@@ -473,7 +474,10 @@ class Environment(_jinja2cpp.Environment):
             assert reason is not None
             fallback.require(reason, self._fallback_mode_)
             env = fallback.delegate_for(self)
-        with fallback.mapped(), fallback.build_lock:
+        # One load of a name at a time per environment, so that two threads get the same template (Jinja2's cache would
+        # compile it twice); never a lock across environments
+        # (from_string is not cached: no lock)
+        with fallback.mapped(), env.__dict__["_jinja2cpp_load_lock"] if source is None else contextlib.nullcontext():
             jt = make(env)
         return fallback.fallback_template(self, jt, template_class, source)
 

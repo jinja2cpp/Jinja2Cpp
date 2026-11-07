@@ -238,9 +238,12 @@ What the fallback does not carry over:
   compiled, as Jinja2 reads them). The *native* route refuses an overridden `call`, `getattr` or `getitem`, and
   `intercepted_*`, with `UnsupportedError` when a template loads, because the engine would not call them. To
   use them, run the whole environment on Jinja2: there is no option for that alone, but any Tier B option does
-  it (`extensions=[SomeExtension]`, even one that adds nothing, or `enable_async=True`). An overridden
-  `unsafe_undefined`, `getattr` or `getitem` that makes its undefined with `self.undefined` makes one of
-  jinja2cpp's classes, which Jinja2's runtime does not know (task 0428).
+  it (`extensions=[SomeExtension]`, even one that adds nothing, or `enable_async=True`). A jinja2cpp
+  undefined value that an overridden `unsafe_undefined`, `getattr`, `getitem` or `call` returns (made by
+  `self.undefined` or `super()`) becomes an undefined of the Jinja2 environment's class, with its hint, object, name and
+  exception; one stored elsewhere (in a list, say) is not converted. `call_binop` and `call_unop` always go to your
+  environment, so its `binop_table` and `unop_table` apply. A hook is stock only if it is the sandbox's own
+  function bound to your environment itself: `env.getattr = other.getattr` is an override.
   `context_class` and `code_generator_class` are used by the Jinja2 environment. `template_class`
   is used for the fallback templates too, but one that overrides `render`, `generate`, `make_module`,
   `module` or the other methods a fallback template implements itself (nanobind allows one

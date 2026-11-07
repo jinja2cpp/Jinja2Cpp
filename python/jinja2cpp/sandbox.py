@@ -433,6 +433,10 @@ def is_stock_sandbox_hook(env: t.Any, name: str) -> bool:
     return getattr(method, "__self__", None) is env and getattr(method, "__func__", None) is _STOCK_HOOK_FUNCTIONS[name]
 
 
+#: The other hooks the fallback forwards, as defined here (see :func:`is_stock_sandbox_hook`; fallback._owner_override)
+_STOCK_OTHER_HOOK_FUNCTIONS = {name: SandboxedEnvironment.__dict__[name] for name in ("unsafe_undefined", "wrap_str_format")}
+
+
 class ImmutableSandboxedEnvironment(SandboxedEnvironment):
     """Works exactly like the regular `SandboxedEnvironment` but does not
     permit modifications on the builtin mutable objects `list`, `set`, and

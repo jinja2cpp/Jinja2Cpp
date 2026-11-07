@@ -19,6 +19,9 @@ struct ErrorSource
     const char* syntaxNote = nullptr;
 };
 
+// The note of a syntax error raised by a render: it is in a template the render included, imported or extended
+extern const char* const kIncludedSyntaxNote;
+
 // Raises the Python exception of an error of the engine (jinja2cpp.exceptions): a Python
 // exception a callable raised is raised again as itself, with its traceback (0248 D9)
 [[noreturn]] void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source = {});
