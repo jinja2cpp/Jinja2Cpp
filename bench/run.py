@@ -8,7 +8,12 @@
      (Python / C++; above 1 means Jinja2C++ is faster). With --baseline, adds the
      change against an earlier results file and exits with 2 when a benchmark got
      slower than --threshold.
-  4. With --engines build-rel/bench/engines_bench (-DJINJA2CPP_BENCH_WITH_OTHER_ENGINES=ON),
+  4. With --python-module, also times every case through the Python module jinja2cpp
+     (python/bench/bench_module.py --bench-json; the module must be importable, e.g.
+     PYTHONPATH=build-py-rel/python) and adds the `jinja2cpp (Python)` column: its time and
+     how many times faster than Python Jinja2 it is, so the cost of crossing from Python
+     shows next to both engines (docs/tasks/0355, 0246).
+  5. With --engines build-rel/bench/engines_bench (-DJINJA2CPP_BENCH_WITH_OTHER_ENGINES=ON),
      also runs inja and minja on every case where their output matches Python Jinja2's,
      and adds a column per engine: its time and how many times faster Jinja2C++ is.
      --engines repeats: build-rel/bench/rust_engines_bench (-DJINJA2CPP_BENCH_WITH_RUST_ENGINES=ON)
@@ -16,7 +21,7 @@
 
 Usage: run.py --bench build-rel/bench/jinja2cpp_bench [--out results.json]
               [--baseline old.json] [--threshold 0.10] [--repetitions 5] [--no-python]
-              [--engines build-rel/bench/engines_bench] [--engines build-rel/bench/rust_engines_bench]
+              [--python-module] [--engines build-rel/bench/engines_bench] [--engines build-rel/bench/rust_engines_bench]
 """
 import argparse
 import json
@@ -98,6 +103,16 @@ def run_python(cases_dir, min_time, bench_filter):
     return data["context"], {b["name"]: b["cpu_time"] for b in data["benchmarks"]}
 
 
+def run_module(cases_dir, min_time, bench_filter):
+    """The Python module's times, as run_python gives Jinja2's (python/bench/bench_module.py)."""
+    cmd = [sys.executable, HERE.parent / "python" / "bench" / "bench_module.py", "--bench-json",
+           "--cases-dir", cases_dir, "--min-time", str(min_time)]
+    if bench_filter:
+        cmd += ["--filter", bench_filter]
+    data = json.loads(subprocess.run(cmd, check=True, stdout=subprocess.PIPE, text=True).stdout)
+    return data["context"], {b["name"]: b["cpu_time"] for b in data["benchmarks"]}
+
+
 def fmt_ns(ns):
     for unit, scale in (("s", 1e9), ("ms", 1e6), ("µs", 1e3)):
         if ns >= scale:
@@ -116,11 +131,13 @@ def main():
     ap.add_argument("--min-time", type=float, default=0.2)
     ap.add_argument("--filter", default="")
     ap.add_argument("--no-python", action="store_true")
+    ap.add_argument("--python-module", action="store_true",
+                    help="add the jinja2cpp (Python) column: the cases through the Python module")
     ap.add_argument("--engines", type=pathlib.Path, action="append", default=[],
                     help="engines_bench (inja, minja) or rust_engines_bench (MiniJinja, Tera); repeatable")
     args = ap.parse_args()
-    if args.engines and args.no_python:
-        print("--engines needs Python Jinja2 to check the other engines' output", file=sys.stderr)
+    if (args.engines or args.python_module) and args.no_python:
+        print("--engines and --python-module need Python Jinja2 to check the output", file=sys.stderr)
         return 1
 
     bad = [] if args.no_python else check_outputs(args.bench, args.cases_dir)
@@ -130,6 +147,7 @@ def main():
 
     cpp_ctx, cpp, cv = run_cpp(args.bench, args.cases_dir, args.repetitions, args.min_time, args.filter)
     py_ctx, py = ({}, {}) if args.no_python else run_python(args.cases_dir, args.min_time, args.filter)
+    module_ctx, module = run_module(args.cases_dir, args.min_time, args.filter) if args.python_module else ({}, {})
     base = json.load(open(args.baseline))["cpp"] if args.baseline else {}
     supported, others = {}, {}
     if args.engines:
@@ -148,6 +166,9 @@ def main():
     if base:
         header += " vs baseline |"
         rule += "---:|"
+    if args.python_module:
+        header += " jinja2cpp (Python) |"
+        rule += "---:|"
     for engine in supported:
         header += f" {engine} |"
         rule += "---:|"
@@ -165,6 +186,9 @@ def main():
                     regressions.append((name, change))
             else:
                 row += " new |"
+        if args.python_module:
+            t = module.get(name)
+            row += f" {fmt_ns(t)} ({py[name] / t:.2f}x) |" if t and name in py else (f" {fmt_ns(t)} |" if t else " |")
         for engine in supported:
             t = others.get(engine, {}).get(name)
             row += f" {fmt_ns(t)} ({t / cpp[name]:.2f}x) |" if t else " |"
@@ -172,7 +196,7 @@ def main():
 
     if args.out:
         json.dump({"cpp_context": cpp_ctx, "python_context": py_ctx, "cpp": cpp, "cpp_cv": cv, "python": py,
-                   "engines": others},
+                   "engines": others, "python_module_context": module_ctx, "python_module": module},
                   open(args.out, "w"), indent=1)
     if regressions:
         print(f"\nslower than baseline by more than {args.threshold * 100:.0f}%:", file=sys.stderr)
