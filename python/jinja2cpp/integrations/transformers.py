@@ -100,6 +100,9 @@ class ChatTemplate:
         return self._template.generate(*args, **kwargs)  # type: ignore[no-any-return]
 
     def __getattr__(self, name: str) -> t.Any:
+        if name.startswith("_"):
+            # Not set yet (copy.copy, unpickling): no recursion through self._template
+            raise AttributeError(name)
         return getattr(self._template, name)
 
 
@@ -112,10 +115,7 @@ def _shared_environment() -> ImmutableSandboxedEnvironment:
 
 
 @functools.lru_cache(maxsize=128)
-def _compile(chat_template: str) -> t.Any:
-    original = _original
-    if original is None:
-        raise RuntimeError("jinja2cpp.integrations.transformers is not patched in")
+def _compile(chat_template: str, original: t.Callable[[str], t.Any]) -> t.Any:
     try:
         template = _shared_environment().from_string(chat_template)
     except (exceptions.TemplateSyntaxError, exceptions.UnsupportedError):
@@ -126,7 +126,12 @@ def _compile(chat_template: str) -> t.Any:
 
 def compile_jinja_template(chat_template: str) -> t.Any:
     """``_compile_jinja_template`` in jinja2cpp: what ``patch()`` installs."""
-    return _compile(chat_template)
+    with _lock:
+        original = _original
+    if original is None:
+        # unpatch() ran while this call was on its way: transformers' own function
+        return _module()._compile_jinja_template(chat_template)
+    return _compile(chat_template, original)
 
 
 def _module() -> t.Any:

@@ -16,7 +16,9 @@ jinja2cpp raises a different one. Each is a line of `python/tests/upstream/expec
   (`test_filters.py::TestFilter::test_xmlattr_key_invalid[...]`, seven ids); a trans block with
   two plural names raises TemplateAssertionError (`TestNewstyleInternationalization::test_complex_plural`);
   `{% include ["a", "b"] %}` raises TemplatesNotFound with `.templates` and `.name`
-  (`test_imports.py::TestIncludes::test_choice_includes`).
+  (`test_imports.py::TestIncludes::test_choice_includes`). Also `{{ s[missing:] }}` on a string
+  raises TemplateRuntimeError where Jinja2 raises TypeError (the engine's own slice path; the
+  host-object path was fixed in 0355).
 - Messages: unknown and unclosed tags ("Encountered unknown tag 'endif'. Jinja was looking for
   ...", `TestParser::test_error_messages`, `test_debug.py::TestDebug::test_syntax_error`), bad
   trans blocks ("trans blocks can't be nested", "saw `wibble`"), a name a template does not export

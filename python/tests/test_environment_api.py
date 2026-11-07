@@ -303,3 +303,19 @@ def test_generate_error_comes_after_the_chunks_before_it():
             for chunk in generator:
                 got.append(chunk)
         assert "".join(got) == big
+
+
+@pytest.mark.parametrize("source", ["{{ 1 }}|{{ x }}", "{{ 'a' }}{{ 1 + 1 }}"])
+def test_folded_output_with_raising_finalize_under_autoescape(source):
+    # Jinja2 folds a constant {{ }} as finalize(escape(value)); when that raises it evaluates the
+    # value at render time instead, with finalize of the plain value (docs/tasks/0355)
+    def finalize(value):
+        if isinstance(value, jinja2cpp.Markup):
+            raise ValueError("no Markup")
+        return value
+
+    results = []
+    for module in modules():
+        env = module.Environment(autoescape=True, finalize=finalize)
+        results.append(env.from_string(source).render(x="<"))
+    assert results[0] == results[1]

@@ -5,6 +5,7 @@
 #include "errors.h"
 #include "loaders.h"
 
+#include <jinja2cpp/features.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 
@@ -110,7 +111,9 @@ private:
     bool m_newstyleGettext = false;
     // SetChatTemplates: on, and its clock, borrowed from m_kept (null for the system clock)
     bool m_chatTemplates = false;
+#if JINJA2CPP_HAS_CHAT_TEMPLATES
     PyObject* m_chatClock = nullptr;
+#endif
     std::shared_ptr<const jinja2::ValuesMap> m_engineGlobals;
     bool m_cleared = false;
 };
