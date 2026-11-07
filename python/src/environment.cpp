@@ -28,6 +28,8 @@ using namespace nb::literals;
 
 namespace
 {
+std::uint64_t g_renders = 0; // under the GIL
+
 bool Truth(nb::handle value)
 {
     const int truth = PyObject_IsTrue(value.ptr());
@@ -792,6 +794,7 @@ PyTemplate::PyTemplate(jinja2::Template tpl, nb::object environment, nb::object 
 
 nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
 {
+    ++g_renders;
     auto& env = LiveEnvironment();
     env.CheckSandboxHooks();
     // dict(*args, **kwargs), as Jinja2's render
@@ -829,6 +832,8 @@ nb::object PyTemplate::Render(nb::args args, nb::kwargs kwargs) const
         ErrorSource where;
         where.name = m_name;
         where.filename = m_filename;
+        // The template itself parsed when it was loaded, so a syntax error here is in one it includes, imports or extends
+        where.syntaxNote = kIncludedSyntaxNote;
         RaiseError(*error, where);
     }
     return MakeStr(output);
@@ -855,6 +860,7 @@ void PyTemplate::Clear() noexcept
 
 void BindEnvironment(nb::module_& module)
 {
+    module.def("_native_renders", [] { return g_renders; });
     auto environment = nb::class_<PyEnvironment>(module, "Environment", nb::type_slots(g_environmentSlots), nb::is_weak_referenceable())
                            .def(nb::init<nb::kwargs>())
                            // The Python layer (jinja2cpp/environment.py) has Jinja2's from_string,

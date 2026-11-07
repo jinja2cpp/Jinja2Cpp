@@ -21,9 +21,12 @@ plan (D1), Jinja2's sandbox, and an explicit answer for everything outside the s
   attribute and call policy inside the adapters. Every attribute path passes one `GetAttr`
   checkpoint, and `MAX_RANGE` maps to `Limits::maxRange`.
 - **Fallback (D7, `auto` by default):** the decision is made when the environment is
-  constructed, when a template is loaded, and on a render retry only when no callable has
-  run. Modes are `auto`, `warn` and `never`, and `jinja2cpp.stats()` counts native versus
+  constructed and when a template is loaded (the render retry is deferred, below). Modes are `auto`, `warn` and `never`, and `jinja2cpp.stats()` counts native versus
   fallback renders. A divergence marked deliberate never triggers fallback.
+- **Deferred (D7 item 3, the render retry):** a render that failed on an include, import or extends of a
+  template the engine cannot parse is not retried with Jinja2. "No Python ran in the render" cannot be
+  proven (host objects call into Python in many adapters), so the engine's `TemplateSyntaxError` is raised
+  instead. Task 0430 proposes routing the static names at load time.
 - **Docs:** `docs/python.md` with the subset table and the known differences.
 
 **Done when.** Every row of the Tier A table has a test. Fallback is tested both with and

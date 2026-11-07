@@ -179,6 +179,8 @@ class SandboxedEnvironment(Environment):
 
     sandboxed = True
 
+    _jinja2_class_path = "jinja2.sandbox.SandboxedEnvironment"
+
     #: whether the engine's lists and dicts refuse the methods that change them
     #: (ImmutableSandboxedEnvironment)
     _sandbox_immutable = False
@@ -216,13 +218,17 @@ class SandboxedEnvironment(Environment):
 
     def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
         super().__init__(*args, **kwargs)
-        self.globals["range"] = safe_range
+        if "_delegate" not in self.__dict__:  # Jinja2's sandbox has its own range
+            self.globals["range"] = safe_range
         self.binop_table = self.default_binop_table.copy()
         self.unop_table = self.default_unop_table.copy()
 
     def _check_interception(self) -> None:
-        """What a load checks. A template that goes to another engine is not the engine's to refuse; one that
-        runs in this engine is checked again at each entry into it (:meth:`_check_native_hooks`)."""
+        """What a load checks. A template that goes to another engine (a Tier B environment, a template Jinja2 loads) is not
+        the engine's to refuse: the Jinja2 sandbox asks this environment for every hook. One that runs in this engine is
+        checked again at each entry into it (:meth:`_check_native_hooks`)."""
+        if self._uses_jinja2():
+            return
         self._check_native_hooks()
 
     def _check_native_hooks(self) -> None:
@@ -427,6 +433,10 @@ def is_stock_sandbox_hook(env: t.Any, name: str) -> bool:
     return getattr(method, "__self__", None) is env and getattr(method, "__func__", None) is _STOCK_HOOK_FUNCTIONS[name]
 
 
+#: The other hooks the fallback forwards, as defined here (see :func:`is_stock_sandbox_hook`; fallback._owner_override)
+_STOCK_OTHER_HOOK_FUNCTIONS = {name: SandboxedEnvironment.__dict__[name] for name in ("unsafe_undefined", "wrap_str_format")}
+
+
 class ImmutableSandboxedEnvironment(SandboxedEnvironment):
     """Works exactly like the regular `SandboxedEnvironment` but does not
     permit modifications on the builtin mutable objects `list`, `set`, and
@@ -437,6 +447,7 @@ class ImmutableSandboxedEnvironment(SandboxedEnvironment):
     """
 
     _sandbox_immutable = True
+    _jinja2_class_path = "jinja2.sandbox.ImmutableSandboxedEnvironment"
 
     def is_safe_attribute(self, obj: t.Any, attr: str, value: t.Any) -> bool:
         if not super().is_safe_attribute(obj, attr, value):

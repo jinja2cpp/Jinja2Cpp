@@ -80,6 +80,11 @@ std::string ErrorMessage(const jinja2::ErrorInfo& error)
     return text;
 }
 
+const char* const kIncludedSyntaxNote =
+            "the error is in a template this one includes, imports or extends, which may use syntax the engine lacks. "
+            "Such templates fall back to Jinja2 only when loaded directly (task 0430). To run the whole environment on "
+            "Jinja2, give it a Tier B option, such as extensions=[an extension] or enable_async=True (docs/python.md, \"Fallback\")";
+
 void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
 {
     // Only an exception the engine did not raise is kept: Python's own, raised again as itself
@@ -98,6 +103,10 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
         if (!source.source.is_none())
         {
             nb::setattr(instance, "source", source.source);
+        }
+        if (source.syntaxNote)
+        {
+            instance.attr("add_note")(source.syntaxNote);
         }
         Raise(type, instance);
     }

@@ -390,6 +390,7 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
         ErrorSource where;
         where.name = m_name;
         where.filename = m_filename;
+        where.syntaxNote = kIncludedSyntaxNote;
         RaiseError(result.error(), where);
     }
     auto module = std::move(result).value();

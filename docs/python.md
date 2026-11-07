@@ -1,9 +1,10 @@
 # Jinja2C++ for Python
 
 `jinja2cpp` is a Python module that renders Jinja2 templates with the Jinja2C++ engine. Its
-API is Jinja2's, so `import jinja2cpp as jinja2` works for the subset below. This page
-describes phases P1b and P2 part A of docs/tasks/0248 (docs/tasks/0353, 0354). The fallback to
-real Jinja2, streaming and the wheels are later phases (0354-0357).
+API is Jinja2's, so `import jinja2cpp as jinja2` works for the subset below, and what is outside
+the subset goes to real Jinja2 when it is installed (see "Fallback"). This page describes phases
+P1b and P2 of docs/tasks/0248 (docs/tasks/0353, 0354). Streaming and the wheels are later phases
+(0355-0357).
 
 ## Install and test
 
@@ -47,7 +48,8 @@ engines on a Release build of the module.
   `keep_trailing_newline`, `newline_sequence`, `line_statement_prefix`,
   `line_comment_prefix`, `autoescape` (a bool or a callable such as `select_autoescape()`),
   `undefined`, `finalize`, `loader`, `cache_size`, `auto_reload`, and the extensions
-  `jinja2.ext.do`, `jinja2.ext.loopcontrols` and `jinja2.ext.i18n` (by name or class, Jinja2's or ours).
+  `jinja2.ext.do`, `jinja2.ext.loopcontrols` and `jinja2.ext.i18n` (by name or class, Jinja2's or ours;
+  other extensions go to Jinja2, see "Fallback").
   `optimized`, `bytecode_cache` and `enable_async=False` are accepted and change nothing.
 - `env.from_string`, `env.get_template(name, parent=None, globals=None)`, `Template(source, **options)`,
   and `render(*args, **kwargs)` with Jinja2's `dict(*args, **kwargs)` rule.
@@ -107,6 +109,168 @@ engines on a Release build of the module.
   `MAX_RANGE` and the `UNSAFE_*` sets, ported from Jinja2 3.1.6 (see "Sandbox" below).
 - Ctrl-C (KeyboardInterrupt) stops a long render. The GIL is held for the whole render.
 
+## The supported subset
+
+Three tiers (docs/tasks/0248, D1). Tier A is what the engine does natively and the tests compare
+with Jinja2 3.1.6; each row names the test file (in `python/tests/`). Tier B is outside the
+engine and goes to real Jinja2 ("Fallback"). Tier C never works.
+
+**Tier A: native**
+
+| Feature | Tests |
+|---|---|
+| `Environment(...)` delimiters, `trim_blocks`, `lstrip_blocks`, `line_statement_prefix`, `line_comment_prefix`, `newline_sequence`, `keep_trailing_newline`, `cache_size`, `auto_reload`, `optimized`/`bytecode_cache` (ignored) | `test_render.py` |
+| `autoescape` as a bool, a callable or `select_autoescape()` | `test_render.py` |
+| `undefined` as the four Undefined classes (ours or Jinja2's) and their subclasses | `test_undefined.py` |
+| `finalize` | `test_render.py`, `test_context.py` |
+| `extensions`: `do`, `loopcontrols`, `i18n`, by name or class | `test_render.py`, `test_i18n.py` |
+| `SandboxedEnvironment`, `ImmutableSandboxedEnvironment` | `test_sandbox.py` |
+| `Template(source, **options)`, `from_string`, `get_template`, `select_template`, `get_or_select_template`, `list_templates`, `join_path` | `test_render.py`, `test_environment_api.py`, `test_loaders_more.py` |
+| `render(*args, **kwargs)`, `generate`, `stream`, `.name`, `.filename`, `.globals`, `.environment` | `test_render.py`, `test_environment_api.py` |
+| `make_module`, `module` | `test_module.py` |
+| `env.filters`, `env.tests`, `env.globals` as live dicts with Jinja2's binding times | `test_render.py` |
+| Python callables as filters, tests, globals and context values | `test_values.py`, `test_render.py` |
+| `pass_context`, `pass_eval_context`, `pass_environment` and the read-only `Context` | `test_context.py` |
+| Loaders: `FileSystemLoader`, `DictLoader`, `FunctionLoader`, `ChoiceLoader`, `PrefixLoader`, `PackageLoader`, any `BaseLoader` subclass, Jinja2's own loader instances | `test_loaders.py`, `test_loaders_more.py` |
+| The exception hierarchy with Jinja2's attributes, subclassing `jinja2.exceptions` when Jinja2 is installed | `test_errors.py`, `test_exceptions_jinja2.py` |
+| `Markup`, `escape`; `jinja2.meta.find_undeclared_variables` and `find_referenced_templates` | `test_values.py`, `test_module.py` |
+| i18n: `{% trans %}`, `gettext` and its kin, `install_*` | `test_i18n.py` |
+| Python subclasses of `Environment` and `Template`, `template_class` | `test_environment_api.py` |
+| Lifetimes: references, cycles, threads, Ctrl-C | `test_lifetime.py` |
+| The fallback itself | `test_fallback.py` |
+
+**Tier B: real Jinja2 when it is installed** (otherwise `UnsupportedError` with the reason)
+
+| Feature | What happens |
+|---|---|
+| A custom `Extension` class (not `do`, `loopcontrols`, `i18n`), a dotted name of one | the environment is a Jinja2 environment |
+| `enable_async=True`, `render_async`, `generate_async` | the environment is a Jinja2 environment; on a native template `render_async` is Jinja2's (it raises as Jinja2 does without `enable_async`) |
+| `context_class`, `code_generator_class` of your own on an `Environment` subclass | the environment is a Jinja2 environment |
+| `env.policies` with a key Jinja2C++ has no equivalent for or a changed value (it has none) | the templates loaded from then on are Jinja2's |
+| `jinja2cpp.nativetypes.NativeEnvironment` | the environment is `jinja2.nativetypes.NativeEnvironment` |
+| `compile_expression`, `lex`, `preprocess`, `compile` | called on a Jinja2 environment of the same configuration |
+| `Template.blocks`, `new_context`, `root_render_func` | read from the template loaded by Jinja2 from the same source or name |
+| A template the engine cannot parse (for example `{% print %}`) | Jinja2 parses it; if Jinja2 rejects it too, Jinja2's error is raised |
+
+**Tier C: never.** Bytecode-level internals of the engine: `jinja2.compiler` and
+`jinja2.nodes` as engine objects (`env.parse` of a native environment is opaque, for
+`jinja2cpp.meta`), `ModuleLoader` (Jinja2's compiled
+modules), and the sandbox's `intercepted_binops` and `intercepted_unops`. They raise
+`UnsupportedError` (a `TemplateError` and a `NotImplementedError`), whatever `fallback` says.
+
+## Fallback
+
+The engine never runs custom extensions, async or Jinja2's code generator. When Jinja2 is
+installed the module hands those to it instead of refusing. The policy is `fallback=`, an
+`Environment` keyword argument (also of `SandboxedEnvironment` and `Template(...)`):
+
+| Mode | Effect |
+|---|---|
+| `"auto"` (default) | use Jinja2 silently when the engine cannot |
+| `"warn"` | the same, and a `jinja2cpp.FallbackWarning` the first time for each reason |
+| `"never"` | raise `jinja2cpp.UnsupportedError` with the reason; for a template the engine cannot parse the engine's own `TemplateSyntaxError` stands |
+
+The default of environments that do not pass `fallback=` is a module setting:
+`jinja2cpp.set_fallback("never")` (returns the previous mode; `jinja2cpp.get_fallback()` reads
+it), or the environment variable `JINJA2CPP_FALLBACK=never` read once at first use. A test suite
+sets `never` so that every use of Jinja2 is an error and its pass rate measures the engine.
+Without Jinja2 installed a Tier B use raises `UnsupportedError` whatever the mode says.
+
+It is decided in two places, never in the middle of an output:
+
+1. **When an environment is constructed** with a Tier B option (a custom extension, `enable_async`,
+   a `context_class` or `code_generator_class`, `NativeEnvironment`). The environment still
+   satisfies `isinstance(env, jinja2cpp.Environment)` and has the same attributes, but a real
+   `jinja2.Environment` (`jinja2.sandbox` for the sandbox classes) does the work. The loader, filters, tests,
+   globals, `finalize` and `undefined` you give are used inside it: `env.filters`, `env.tests`
+   and `env.globals` are its live dicts, and the loaders of jinja2cpp work (their `get_source` is
+   asked; a loader that overrides `load` has it called). Its templates are `jinja2cpp.Template`
+   objects (`isinstance` holds) whose `environment` is yours; `generate` really streams;
+   `blocks`, `new_context`, `render_async` and the other Jinja2 attributes are the Jinja2
+   template's. Errors that are Jinja2's `TemplateError`s are raised as the jinja2cpp class of the
+   same name (so `except jinja2cpp.UndefinedError` catches them; they are also Jinja2's class);
+   Python's own errors from a delegated render (`ZeroDivisionError`) stay Python's, where the
+   engine raises `TemplateRuntimeError`. `env.parse` gives Jinja2's node tree, which
+   `jinja2cpp.meta` takes too.
+2. **When a template is loaded** and the engine cannot parse it. Jinja2 parses it with an
+   environment of the same configuration: if it succeeds, the template is a Jinja2 one (as
+   above); if it fails too, Jinja2's error is raised, as the jinja2cpp class, with Jinja2's
+   message, line, name and source. Without Jinja2, or with `never`, the engine's own error stands.
+A native template that includes, imports or extends a template the engine cannot parse is **not**
+retried with Jinja2: the render raises the engine's `TemplateSyntaxError`, as `fallback="never"` does
+(a render cannot be proven free of Python side effects after it started, so there is no safe point to
+switch). Use an option that makes Jinja2 the environment (Tier B), or avoid the syntax the engine lacks in
+included templates; task 0430 would route static include names at load time.
+
+A divergence that is deliberate never triggers the fallback: a runtime error of the engine is
+never handed to Jinja2, only a failure to parse.
+
+`jinja2cpp.stats(reset=False)` returns a dict of counters, `environments_native`,
+`environments_fallback`, `loads_native`, `loads_fallback`, `renders_native` and `renders_fallback`.
+Loads are the templates the API calls make (`from_string`, `get_template`, `select_template`,
+`Template(...)`) and Jinja2 really loaded: a `get_template` answered from the cache is not counted
+again, nor is the template an include loads inside a render. The counters are locked, so they are exact
+under threads. `stats(reset=True)` returns the counts and starts from zero (and forgets which warnings
+were given).
+
+The Jinja2 environment that stands for a native one is made once and rebuilt when one of its options
+changes; Jinja2's own `get_template` cache (with the loader's `uptodate` check) serves the templates, so
+`env.get_template("a") is env.get_template("a")` holds as in Jinja2. No lock is held while a loader runs (a loader
+may call back into any environment), so threads racing on the first load of a name may each load it, as in Jinja2;
+only the first wrapper published is kept and counted in `loads_fallback`, and once they settle one template is served. Its filters, tests, globals and policies
+are chains over the live dicts of your environment: a change after a template was made is seen by it.
+
+**Untrusted template text and the sandbox.** Which engine renders a template can depend on the template text:
+syntax the engine lacks (a `{% print %}` statement, an extension tag) sends the template to Jinja2's
+sandbox, where the engine's caps (`MaxSequenceSize`, the `str.format` cap, `MAX_RANGE` as `Limits::maxRange`)
+do not apply, only Jinja2's own checks. A sandbox that renders text you do not trust, and relies on
+the engine's caps, should be constructed with `fallback="never"`: a template using such syntax then raises
+the engine's error instead of reaching Jinja2.
+
+What the fallback does not carry over:
+
+- **Overrides.** A Python subclass of `Environment` that overrides `join_path`, `getattr`,
+  `getitem`, `call` and the like is not consulted by the Jinja2 environment that takes over.
+  A sandbox is different: the Jinja2 sandbox that takes over asks your environment for every hook each time it
+  runs: `is_safe_attribute`, `is_safe_callable`, `unsafe_undefined`, `call`, `getattr`, `getitem`,
+  `wrap_str_format`, `call_binop`, `call_unop`, `intercepted_binops` and `intercepted_unops`. An override of the
+  class, a patch of the class, a function set on the instance, before or after a template was made, is what
+  runs, on every route (render, `generate`, `make_module`, `module`, `new_context`, `root_render_func`,
+  `render_async`, `compile_expression`), as in Jinja2 (the interception sets are read when a template is
+  compiled, as Jinja2 reads them). The *native* route refuses an overridden `call`, `getattr` or `getitem`, and
+  `intercepted_*`, with `UnsupportedError` when a template loads, because the engine would not call them. To
+  use them, run the whole environment on Jinja2: there is no option for that alone, but any Tier B option does
+  it (`extensions=[SomeExtension]`, even one that adds nothing, or `enable_async=True`). A jinja2cpp
+  undefined value that an overridden `unsafe_undefined`, `getattr`, `getitem` or `call` returns (made by
+  `self.undefined` or `super()`) becomes an undefined of Jinja2 of the same kind (the environment's own `undefined` class
+  becomes the Jinja2 environment's; any other jinja2cpp `Undefined`, `ChainableUndefined`, `DebugUndefined` or
+  `StrictUndefined`, or a subclass, its nearest stock base), with its hint, object, name and exception; one stored elsewhere (in a list, say) is not converted. `call_binop` and `call_unop` always go to your
+  environment, so its `binop_table` and `unop_table` apply. A hook is stock only if it is the sandbox's own
+  function bound to your environment itself: `env.getattr = other.getattr` is an override.
+  `context_class` and `code_generator_class` are used by the Jinja2 environment. `template_class`
+  is used for the fallback templates too, but one that overrides `render`, `generate`, `make_module`,
+  `module` or the other methods a fallback template implements itself (nanobind allows one
+  nanobind base, so the fallback cannot sit between your class and the engine's) raises
+  `UnsupportedError` naming them when a template falls back; its native templates are unaffected.
+- **Translations.** `install_gettext_translations` on a delegating environment is Jinja2's. For a
+  native environment whose template falls back, the oldstyle wrappers in `env.globals` are copied,
+  but newstyle gettext (which runs in the engine) is not.
+- **Undefined subclasses.** The four classes of jinja2cpp are mapped to Jinja2's, and a subclass of
+  `jinja2.Undefined` is used as it is. A subclass of jinja2cpp's `Undefined` cannot be given to Jinja2
+  (it asserts a `jinja2.Undefined` subclass, and the subclass's `super()` calls cannot be moved onto
+  another base): the fallback raises `UnsupportedError` naming the class. Subclass `jinja2.Undefined`
+  to use a custom one with the fallback.
+- **`parse` and `jinja2cpp.meta`.** `env.parse` of a source the engine cannot parse gives Jinja2's node
+  tree, and the meta functions take a fallback template too (Jinja2 parses its source again).
+- **Files.** `FileSystemLoader` does not follow a link out of its search directories in either
+  engine (the Python `get_source` checks it too), where Jinja2's loader does.
+- **`Template` subclasses.** A subclass with an `__init__` of its own makes its template with the engine, so a source the engine
+  cannot parse, or an option that makes Jinja2 the environment, raises `UnsupportedError` naming the class (Jinja2 rejecting the
+  source too gives Jinja2's error). Make such a template with `env.from_string()`, or drop the `__init__`.
+- **An include of an unparsable template** raises the engine's `TemplateSyntaxError` with a note (`__notes__`) that says what to do.
+- **Cost.** A template remembers its source for `blocks`, `new_context` and the other attributes only Jinja2 has.
+- `env.extensions` of a delegating environment is the list you gave, not Jinja2's dict of instances.
+
 ## Sandbox
 
 `from jinja2cpp.sandbox import SandboxedEnvironment, ImmutableSandboxedEnvironment` are Jinja2's
@@ -148,7 +312,8 @@ inside the adapters that let the engine read Python objects, not in generated co
   per attribute of a Python object (not per dict key).
 - `intercepted_binops` / `intercepted_unops` are not supported: loading a template of an
   environment with either set raises `UnsupportedError`, since ignoring them would let the
-  operators through (0412). `call_binop` and `call_unop` exist and work when called.
+  operators through (0412). `call_binop` and `call_unop` exist and work when called. This is the native
+  route; an environment that Jinja2 runs (a Tier B option, "Fallback") honours both.
 
 
 ## How values cross
@@ -248,4 +413,4 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   `UndefinedError`. `sort` and `unique` of an unsafe or missing attribute under
   `StrictUndefined` do not raise as Jinja2's do (0413). `sum(attribute=)` of a missing attribute
   is now an `UndefinedError` as in Jinja2 (it was a `TemplateRuntimeError`).
-- Not yet: custom extensions, async, the fallback to real Jinja2 (docs/tasks/0354).
+- Not yet: real streaming (`generate` gives the whole output as one item, docs/tasks/0355).
