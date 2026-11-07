@@ -15,7 +15,6 @@ import sys
 import threading
 import typing as t
 import warnings
-import weakref
 
 from . import _jinja2cpp
 from .exceptions import TemplateError
@@ -426,7 +425,15 @@ def _forwarding_sandbox(base: type) -> type:
     return ForwardingSandbox
 
 
-_jinja2_classes: "weakref.WeakKeyDictionary[type, type]" = weakref.WeakKeyDictionary()
+def _publish_class(owner: type, attribute: str, cls: type) -> type:
+    """Keep `cls` on the class `owner` unless another thread did first; returns the one kept. Only a dict read and
+    a ``setattr`` under the lock: no hash or equality of the user's objects runs."""
+    with _cache_lock:
+        kept = owner.__dict__.get(attribute)
+        if kept is None:
+            setattr(owner, attribute, cls)  # (nanobind's metaclass has its own __setattr__)
+            kept = cls
+    return t.cast(type, kept)
 
 
 def jinja2_class(jinja2: t.Any, env_class: type) -> t.Any:
@@ -434,7 +441,7 @@ def jinja2_class(jinja2: t.Any, env_class: type) -> t.Any:
     ``code_generator_class`` and, for a sandbox, hooks that forward to the jinja2cpp environment."""
     import importlib
 
-    cached = _jinja2_classes.get(env_class)
+    cached = env_class.__dict__.get("_jinja2cpp_jinja2_class")  # on the class, so that it goes with it
     if cached is not None:
         return cached
     path: str = getattr(env_class, "_jinja2_class_path", "jinja2.Environment")
@@ -445,8 +452,7 @@ def jinja2_class(jinja2: t.Any, env_class: type) -> t.Any:
     extra = {n: v for n in ("context_class", "code_generator_class") if (v := _custom_class(env_class, n)) is not None}
     if extra:
         cls = type(cls.__name__, (cls,), extra)
-    with _cache_lock:
-        return t.cast(type, _jinja2_classes.setdefault(env_class, cls))
+    return _publish_class(env_class, "_jinja2cpp_jinja2_class", cls)
 
 
 def build_environment(env: t.Any, options: t.Optional[t.Dict[str, t.Any]] = None) -> t.Any:
@@ -477,23 +483,23 @@ def delegate_for(env: t.Any) -> t.Any:
     """
     key = [getattr(env, name) for name in OPTION_NAMES]
     key += [type(env), env.filters, env.tests, env.globals, env.policies]
-    def current() -> t.Any:
-        cached = env.__dict__.get("_fb_delegate")
-        if cached is not None and all(a is b or (not isinstance(a, dict) and a == b) for a, b in zip(cached[0], key)):
-            return cached[1]
-        return None
+    def matches(cached: t.Any) -> bool:  # compares the user's objects (loader, extensions): never under the lock
+        return cached is not None and all(a is b or (not isinstance(a, dict) and a == b) for a, b in zip(cached[0], key))
 
-    with _cache_lock:
-        found = current()
-    if found is not None:
-        return found
+    seen = env.__dict__.get("_fb_delegate")
+    if matches(seen):
+        return seen[1]
     jenv = build_environment(env)  # user code (extensions' __init__) runs here, outside the lock
     with _cache_lock:
-        found = current()
-        if found is None:
+        latest = env.__dict__.get("_fb_delegate")
+        if latest is seen:  # nobody published meanwhile
             env.__dict__["_fb_delegate"] = (key, jenv)
-            found = jenv
-    return found
+            return jenv
+    if matches(latest):  # another thread built it for the same settings: its environment (and cache) is the one
+        return latest[1]
+    with _cache_lock:
+        env.__dict__["_fb_delegate"] = (key, jenv)
+    return jenv
 
 
 # ---------------------------------------------------------------------------------------------
@@ -570,10 +576,7 @@ def fallback_class(template_class: type) -> type:
     # named as the user's class, so that repr() and tracebacks show it
     cls = type(template_class.__name__, (environment.FallbackTemplate, template_class), {"__module__": template_class.__module__})
     cls.__qualname__ = template_class.__qualname__
-    with _cache_lock:
-        cls = template_class.__dict__.get("_jinja2cpp_fallback_class") or cls
-        template_class._jinja2cpp_fallback_class = cls  # type: ignore[attr-defined]
-    return t.cast(type, cls)
+    return _publish_class(template_class, "_jinja2cpp_fallback_class", cls)
 
 
 def fallback_template(env: t.Any, jinja2_template: t.Any, template_class: t.Optional[type] = None, source: t.Any = None) -> t.Any:
@@ -583,18 +586,23 @@ def fallback_template(env: t.Any, jinja2_template: t.Any, template_class: t.Opti
     if not (isinstance(template_class, type) and issubclass(template_class, _jinja2cpp.Template)):
         raise TypeError(f"template_class must be a subclass of jinja2cpp.Template, not {template_class!r}")
     cls = fallback_class(template_class)
+    # Keyed by id(cls) (the instance keeps the class alive), so no hash of the user's class runs under the lock
+    wrappers = jinja2_template.__dict__.get("_jinja2cpp_wrappers")
+    if wrappers is not None and (found := wrappers.get(id(cls))) is not None:
+        return found
+    instance = cls.__new__(cls)  # the user's __new__ may load other templates: outside the lock
+    instance.__dict__["_jt"] = jinja2_template
+    instance.__dict__["_fb_jt"] = jinja2_template
+    instance.__dict__["_environment"] = env
+    if isinstance(source, str):
+        instance.__dict__["_fb_source"] = source
     with _cache_lock:
         wrappers = jinja2_template.__dict__.setdefault("_jinja2cpp_wrappers", {})
-        found = wrappers.get(cls)
-        if found is not None:
-            return found
-        instance = cls.__new__(cls)
-        instance.__dict__["_jt"] = jinja2_template
-        instance.__dict__["_fb_jt"] = jinja2_template
-        instance.__dict__["_environment"] = env
-        if isinstance(source, str):
-            instance.__dict__["_fb_source"] = source
-        wrappers[cls] = instance
+        found = wrappers.get(id(cls))
+        if found is None:
+            wrappers[id(cls)] = instance
+    if found is not None:
+        return found
     _count("loads_fallback")
     return instance
 

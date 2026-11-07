@@ -1468,3 +1468,71 @@ def _undefined_matrix(module):
 
 def test_undefined_values_of_overrides_keep_their_kind():
     assert _undefined_matrix(jinja2cpp) == _undefined_matrix(jinja2)
+
+
+# --- Review round 6: async errors are mapped, no user code under the cache lock -------------------
+
+
+def _strict_async_env():
+    return jinja2cpp.Environment(enable_async=True, undefined=jinja2cpp.StrictUndefined)
+
+
+def _sandbox_async_env():
+    env = jinja2cpp.sandbox.SandboxedEnvironment(enable_async=True)
+    env.globals["f"] = lambda: "CALLED"
+    env.is_safe_callable = lambda obj: False
+    return env
+
+
+@pytest.mark.parametrize(
+    "make, source, expected",
+    [
+        (_strict_async_env, "{{ missing }}", jinja2cpp.UndefinedError),
+        (_sandbox_async_env, "{{ f() }}", jinja2cpp.SecurityError),
+    ],
+    ids=["strict-undefined", "security-error"],
+)
+def test_async_errors_are_raised_as_jinja2cpps(make, source, expected):
+    template = make().from_string(source)
+
+    async def render():
+        return await template.render_async()
+
+    async def generate():
+        return [item async for item in template.generate_async()]
+
+    for run in (render, generate):
+        with pytest.raises(expected) as info:
+            asyncio.run(run())
+        assert type(info.value).__module__.startswith("jinja2cpp")  # the jinja2cpp class, not only Jinja2's
+        assert isinstance(info.value.__cause__, jinja2.exceptions.TemplateError)
+
+
+def test_async_results_are_unchanged():
+    template = jinja2cpp.Environment(enable_async=True).from_string("{% for i in range(3) %}{{ i }}{% endfor %}")
+
+    async def both():
+        return await template.render_async(), [item async for item in template.generate_async()]
+
+    rendered, items = asyncio.run(both())
+    assert rendered == "012" and "".join(items) == "012"
+
+
+def test_template_class_whose_new_loads_another_template_does_not_deadlock():
+    holder = {}
+
+    class Loading(jinja2cpp.Template):
+        def __new__(cls, *args, **kwargs):
+            instance = super().__new__(cls)
+            if not holder.get("busy"):
+                holder["busy"] = True
+                holder["inner"] = holder["env"].from_string(UNPARSABLE.replace("1", "2"))
+            return instance
+
+    class Env(jinja2cpp.Environment):
+        template_class = Loading
+
+    holder["env"] = env = Env(loader=jinja2cpp.DictLoader({"a": UNPARSABLE}))
+    template = _with_deadline(lambda: env.get_template("a"))
+    assert template.render() == UNPARSABLE_RESULT and holder["inner"].render() == "a2b"
+    assert env.get_template("a") is template

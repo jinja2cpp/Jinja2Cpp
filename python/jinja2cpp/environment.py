@@ -138,6 +138,22 @@ class ParsedTemplate:
         return f"<ParsedTemplate {self._template.name!r}>"
 
 
+async def _mapped_await(awaitable: t.Any) -> t.Any:
+    """Await Jinja2's coroutine with its template errors raised as jinja2cpp's (``fallback.mapped``)."""
+    with fallback.mapped():
+        return await awaitable
+
+
+async def _mapped_aiter(iterator: t.Any) -> t.AsyncIterator[str]:
+    """Iterate Jinja2's async generator with its template errors raised as jinja2cpp's."""
+    try:
+        with fallback.mapped():
+            async for item in iterator:
+                yield item
+    finally:
+        await iterator.aclose()
+
+
 class Template(_jinja2cpp.Template):
     """A compiled template: ``render``, ``generate``, ``stream`` and ``make_module``."""
 
@@ -224,11 +240,11 @@ class Template(_jinja2cpp.Template):
 
     def render_async(self, *args: t.Any, **kwargs: t.Any) -> t.Any:
         """Jinja2's ``render_async`` (it needs ``enable_async=True``)."""
-        return fallback.jinja2_template_of(self, "Template.render_async").render_async(*args, **kwargs)
+        return _mapped_await(fallback.jinja2_template_of(self, "Template.render_async").render_async(*args, **kwargs))
 
     def generate_async(self, *args: t.Any, **kwargs: t.Any) -> t.Any:
         """Jinja2's ``generate_async`` (it needs ``enable_async=True``)."""
-        return fallback.jinja2_template_of(self, "Template.generate_async").generate_async(*args, **kwargs)
+        return _mapped_aiter(fallback.jinja2_template_of(self, "Template.generate_async").generate_async(*args, **kwargs))
 
     def __repr__(self) -> str:
         if self.name is None:
