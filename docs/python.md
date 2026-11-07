@@ -215,7 +215,9 @@ were given).
 
 The Jinja2 environment that stands for a native one is made once and rebuilt when one of its options
 changes; Jinja2's own `get_template` cache (with the loader's `uptodate` check) serves the templates, so
-`env.get_template("a") is env.get_template("a")` holds as in Jinja2. Its filters, tests, globals and policies
+`env.get_template("a") is env.get_template("a")` holds as in Jinja2. No lock is held while a loader runs (a loader
+may call back into any environment), so threads racing on the first load of a name may each load it, as in Jinja2;
+`loads_fallback` can then count more than once, and once they settle one template is served. Its filters, tests, globals and policies
 are chains over the live dicts of your environment: a change after a template was made is seen by it.
 
 **Untrusted template text and the sandbox.** Which engine renders a template can depend on the template text:
@@ -240,8 +242,9 @@ What the fallback does not carry over:
   use them, run the whole environment on Jinja2: there is no option for that alone, but any Tier B option does
   it (`extensions=[SomeExtension]`, even one that adds nothing, or `enable_async=True`). A jinja2cpp
   undefined value that an overridden `unsafe_undefined`, `getattr`, `getitem` or `call` returns (made by
-  `self.undefined` or `super()`) becomes an undefined of the Jinja2 environment's class, with its hint, object, name and
-  exception; one stored elsewhere (in a list, say) is not converted. `call_binop` and `call_unop` always go to your
+  `self.undefined` or `super()`) becomes an undefined of Jinja2 of the same kind (the environment's own `undefined` class
+  becomes the Jinja2 environment's; any other jinja2cpp `Undefined`, `ChainableUndefined`, `DebugUndefined` or
+  `StrictUndefined`, or a subclass, its nearest stock base), with its hint, object, name and exception; one stored elsewhere (in a list, say) is not converted. `call_binop` and `call_unop` always go to your
   environment, so its `binop_table` and `unop_table` apply. A hook is stock only if it is the sandbox's own
   function bound to your environment itself: `env.getattr = other.getattr` is an override.
   `context_class` and `code_generator_class` are used by the Jinja2 environment. `template_class`

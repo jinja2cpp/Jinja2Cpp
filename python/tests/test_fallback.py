@@ -1187,7 +1187,7 @@ def test_fallback_class_is_named_as_the_template_class_and_it_is_validated():
         env.from_string(UNPARSABLE)
 
 
-def test_first_loads_under_threads_give_one_template_and_one_count():
+def test_first_loads_under_threads_settle_on_one_template():
     import threading
 
     for make in (
@@ -1212,8 +1212,14 @@ def test_first_loads_under_threads_give_one_template_and_one_count():
                 thread.join()
         finally:
             sys.setswitchinterval(0.005)
-        assert len({id(template) for template in seen}) == 1 and len(seen) == 8
-        assert jinja2cpp.stats()["loads_fallback"] == 1
+        # Racing first loads may each compile (as in Jinja2) and count; once they settle one template is served
+        assert len(seen) == 8
+        settled = env.get_template("a")
+        assert all(env.get_template("a") is settled for _ in range(3))
+        assert 1 <= jinja2cpp.stats()["loads_fallback"] <= 8
+        before = jinja2cpp.stats()["loads_fallback"]
+        env.get_template("a")
+        assert jinja2cpp.stats()["loads_fallback"] == before
 
 
 def test_template_class_first_use_under_threads_makes_one_class():
@@ -1344,3 +1350,121 @@ def test_make_module_and_module_of_an_includer_carry_the_note():
         with pytest.raises(jinja2cpp.TemplateSyntaxError) as info:
             call()
         assert "0430" in "\n".join(getattr(info.value, "__notes__", []))
+
+
+def _with_deadline(function, seconds=15):
+    import threading
+
+    box = {}
+
+    def run():
+        try:
+            box["value"] = function()
+        except BaseException as exc:  # noqa: BLE001
+            box["error"] = exc
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    thread.join(seconds)
+    assert not thread.is_alive(), "deadlock"
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
+
+
+@pytest.mark.parametrize("kind", ["tier-b", "tier-c"])
+def test_a_loader_that_loads_another_name_on_a_thread_and_joins_does_not_deadlock(kind):
+    import threading
+
+    holder = {}
+    joined = []
+
+    class Nested(jinja2cpp.BaseLoader):
+        def get_source(self, environment, name):
+            if name == "a":
+                out = []
+                worker = threading.Thread(target=lambda: out.append(holder["env"].get_template("b").render()))
+                worker.start()
+                worker.join(5)
+                joined.append((not worker.is_alive(), out))
+                return "{% print 0 %}A", name, lambda: True
+            return "{% print 0 %}B", name, lambda: True
+
+    holder["env"] = env = jinja2cpp.Environment(loader=Nested(), **({"extensions": [Ext]} if kind == "tier-b" else {}))
+    assert _with_deadline(lambda: env.get_template("a").render()) == "0A"
+    # (Tier C asks the loader twice: the engine, then Jinja2)
+    assert joined and all(entry == (True, ["0B"]) for entry in joined)
+
+
+def test_loaders_of_two_environments_that_call_each_other_do_not_deadlock():
+    import threading
+
+    envs = {}
+    events = [threading.Event(), threading.Event()]
+
+    class Crossing(jinja2cpp.BaseLoader):
+        def __init__(self, me):
+            self.me = me
+
+        def get_source(self, environment, name):
+            if name == "x":
+                events[self.me].set()
+                events[1 - self.me].wait(3)
+                envs[1 - self.me].get_template("y")
+            return "{% print 0 %}" + name.upper(), name, lambda: True
+
+    for i in (0, 1):
+        envs[i] = jinja2cpp.Environment(loader=Crossing(i))
+    results = {}
+
+    def work(i):
+        results[i] = envs[i].get_template("x").render()
+
+    def both():
+        threads = [threading.Thread(target=work, args=(i,), daemon=True) for i in (0, 1)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(12)
+        assert not any(thread.is_alive() for thread in threads), "deadlock"
+
+    _with_deadline(both, 20)
+    assert results == {0: "0X", 1: "0X"}
+
+
+class _Plain:
+    pass
+
+
+def _undefined_matrix(module):
+    import importlib
+
+    rt = importlib.import_module(module.__name__ + ".runtime")
+
+    class MyJ(jinja2.Undefined):  # a class of Jinja2's, valid as the option of both
+        def __str__(self):
+            return "MYJ"
+
+    class SubStrict(rt.StrictUndefined):
+        pass
+
+    source = "[{{ x.a }}][{{ x.a is defined }}][{{ x.a|default('D') }}][{{ x.a|string }}][{{ x.a ~ 's' }}][{% if x.a %}T{% else %}F{% endif %}][{{ x.a|list }}]"
+    results = {}
+    for name, option in (("Default", rt.Undefined), ("Strict", rt.StrictUndefined), ("Debug", rt.DebugUndefined), ("Chainable", rt.ChainableUndefined), ("MyJ", MyJ)):
+        for kind in ("self.undefined", "base", "strict", "debug", "chainable", "sub of strict"):
+            def getattr_(self, obj, attr, kind=kind):
+                if attr != "a":
+                    return super(type(self), self).getattr(obj, attr)
+                if kind == "self.undefined":
+                    return self.undefined(obj=obj, name="a")
+                make = {"base": rt.Undefined, "strict": rt.StrictUndefined, "debug": rt.DebugUndefined, "chainable": rt.ChainableUndefined, "sub of strict": SubStrict}[kind]
+                return make(name="n")
+
+            Env = type("Env", (module.sandbox.SandboxedEnvironment,), {"getattr": getattr_})
+            env = Env(undefined=option, extensions=[Ext])
+            results[(name, kind)] = _outcome(lambda: env.from_string(source).render(x=_Plain()))
+    return results
+
+
+def test_undefined_values_of_overrides_keep_their_kind():
+    assert _undefined_matrix(jinja2cpp) == _undefined_matrix(jinja2)

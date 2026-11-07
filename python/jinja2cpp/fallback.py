@@ -331,27 +331,39 @@ def _owner_override(owner: t.Any, name: str) -> t.Any:
     return method
 
 
+def _jinja2_missing() -> t.Any:
+    import jinja2.utils
+
+    return jinja2.utils.missing
+
+
 def _to_jinja2_undefined(jenv: t.Any, value: t.Any) -> t.Any:
     """`value` as a value of Jinja2's runtime: an undefined of jinja2cpp (made by ``super().getattr`` of an override,
-    ``self.undefined``) becomes the delegate's undefined class, with its hint, object, name and exception."""
+    ``self.undefined``) becomes an undefined of Jinja2 of the same kind, with its hint, object, name and exception.
+
+    A value of exactly the environment's own ``undefined`` class becomes the delegate's ``undefined`` (which keeps a
+    user subclass of Jinja2's); any other by its nearest stock base (Undefined, ChainableUndefined, DebugUndefined,
+    StrictUndefined), so a ``StrictUndefined`` an override returns stays strict on a default environment.
+    """
     from .runtime import Undefined as OurUndefined
     from .runtime import missing as our_missing
 
     if not isinstance(value, OurUndefined):
         return value
+    jinja2 = _jinja2()
+    cls = type(value)
+    owner = _owner_of(jenv)
+    if cls is owner.undefined:
+        target = jenv.undefined
+    else:
+        target = next((getattr(jinja2.runtime, c.__name__) for c in cls.__mro__ if c.__module__ == "jinja2cpp.runtime" and c.__name__ in _UNDEFINED_NAMES), jenv.undefined)
     obj = value._undefined_obj
-    return jenv.undefined(
+    return target(
         hint=value._undefined_hint,
-        obj=jenv_missing() if obj is our_missing else obj,
+        obj=_jinja2_missing() if obj is our_missing else obj,
         name=value._undefined_name,
         exc=value._undefined_exception,
     )
-
-
-def jenv_missing() -> t.Any:
-    import jinja2.utils
-
-    return jinja2.utils.missing
 
 
 def _forwarding_sandbox(base: type) -> type:
@@ -450,7 +462,6 @@ def build_environment(env: t.Any, options: t.Optional[t.Dict[str, t.Any]] = None
     kwargs = {name: _convert_option(jinja2, name, value) for name, value in options.items()}
     jenv = jinja2_class(jinja2, type(env))(**kwargs)
     jenv.__dict__["_jinja2cpp_owner"] = env
-    jenv.__dict__["_jinja2cpp_load_lock"] = threading.RLock()
     if construction:
         return jenv  # the environment has no filters, tests or globals of its own yet
     for name in ("filters", "tests", "globals"):
@@ -600,7 +611,7 @@ def _via_jinja2(env: t.Any, error: BaseException, make: t.Callable[[t.Any], t.An
         raise unsupported from error
     except Exception as exc:
         raise error from exc
-    with mapped(), jenv.__dict__["_jinja2cpp_load_lock"]:
+    with mapped():
         result = make(jenv)
     require(f"a {what} the engine cannot parse ({_first_line(error)})", mode)
     return result
