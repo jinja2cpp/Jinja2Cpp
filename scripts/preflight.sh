@@ -16,6 +16,8 @@ set -uo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 perf=0 build=build base=
+# Logs per run, so that two checkouts running preflight at once do not overwrite each other's
+logs=$(mktemp -d "${TMPDIR:-/tmp}/preflight.XXXXXX")
 while [ $# -gt 0 ]; do
   case "$1" in
     --perf) perf=1 ;;
@@ -45,8 +47,8 @@ tidy_excludes=(':!bindings/boost_*' ':!test/binding/boost_json*'
 
 # 1. clang-format, as .github/workflows/format-check.yml
 mapfile -t whole < <(changed 'src/**.h' 'src/**.cpp' 'include/**.h' 'bindings/**.h')
-if [ ${#whole[@]} -gt 0 ] && ! $fmt --dry-run --Werror "${whole[@]}" > /tmp/preflight-format.log 2>&1; then
-  head -20 /tmp/preflight-format.log
+if [ ${#whole[@]} -gt 0 ] && ! $fmt --dry-run --Werror "${whole[@]}" > "$logs/preflight-format.log" 2>&1; then
+  head -20 "$logs/preflight-format.log"
   record FAIL "clang-format: src/include files (run: $fmt -i <file>)"
 else
   out=$(git clang-format --binary "$fmt" --diff --extensions cpp,h,hpp "$base" -- test 2>&1)
@@ -76,14 +78,14 @@ else
     | python3 "$tidy_dir/clang-tidy-diff.py" -p1 -path "$build" -j "$(nproc)" -quiet \
         -clang-tidy-binary "$tidy_dir/clang-tidy" -extra-arg=-Wno-unknown-warning-option \
         -extra-arg=-I"$(realpath "$build")/generated/include" \
-    > /tmp/preflight-tidy.log 2>&1
+    > "$logs/preflight-tidy.log" 2>&1
   tidy_status=$?
-  grep -E ': (warning|error): ' /tmp/preflight-tidy.log | sort -u | head -30
+  grep -E ': (warning|error): ' "$logs/preflight-tidy.log" | sort -u | head -30
   # CI fails on the exit status (errors and WarningsAsErrors checks), not on plain warnings
   if [ $tidy_status = 0 ]; then
     record PASS "clang-tidy (changed lines, headers on their own)"
   else
-    record FAIL "clang-tidy: see /tmp/preflight-tidy.log"
+    record FAIL "clang-tidy: see $logs/preflight-tidy.log"
   fi
   query=clang-query-18; have $query || query=clang-query
   if python3 scripts/null_compare.py -p "$build" --changed "$base" --fail --clang-query "$query"; then
@@ -143,9 +145,9 @@ if [ "$perf" = 1 ]; then
     grep -q '"transformers"' "$wt/bench/jinja2cpp_bench.cpp" || base_cases=$wt/bench/cases
     grep -q '"prompt_specials"' "$wt/bench/jinja2cpp_bench.cpp" || base_cases=$wt/bench/cases
     if [ $ok = 1 ] \
-       && python3 bench/count.py --bench build-preflight-base/bench/jinja2cpp_bench --cases-dir "$base_cases" --out /tmp/preflight-base.json >/dev/null \
+       && python3 bench/count.py --bench build-preflight-base/bench/jinja2cpp_bench --cases-dir "$base_cases" --out "$logs/preflight-base.json" >/dev/null \
        && python3 bench/count.py --bench build-preflight-head/bench/jinja2cpp_bench \
-            --baseline /tmp/preflight-base.json --threshold 0.03; then
+            --baseline "$logs/preflight-base.json" --threshold 0.03; then
       record PASS "instruction gate (+3% per benchmark)"
     else
       record FAIL "instruction gate or bench build"

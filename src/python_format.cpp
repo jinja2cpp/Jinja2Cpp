@@ -514,7 +514,7 @@ public:
         , m_markup(markup)
         , m_prompt(prompt)
     {
-        // A host list or tuple is read as the engine's own (IHostObject::IsSequence)
+        // A host list or tuple is read as the engine's own (IEngineHostObject::IsSequence)
         if (m_map && m_map->IsHost())
         {
             if (auto items = host::AsSequence(*m_map->GetHostObject()))

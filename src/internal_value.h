@@ -708,7 +708,7 @@ enum class MapAttrPolicy
     Host
 };
 
-class IHostObject;
+class IEngineHostObject;
 
 struct IMapAccessor : ValueObject
 {
@@ -772,7 +772,7 @@ struct IMapAccessor : ValueObject
     // Whether GetIteration gives items, asked without making them
     [[nodiscard]] virtual bool Iterates() const { return false; }
     // The object of a host language this map stands for (host_object.h); null for the others
-    [[nodiscard]] virtual const IHostObject* GetHostObject() const { return nullptr; }
+    [[nodiscard]] virtual const IEngineHostObject* GetHostObject() const { return nullptr; }
 };
 
 // A non-owning view of a list: code outside internal_value.* reads list values through it,
@@ -987,7 +987,7 @@ public:
     // The object of a host language this map stands for (host_object.h); null for the others,
     // which IsHost tells without asking the accessor
     [[nodiscard]] bool IsHost() const noexcept { return m_isHost; }
-    [[nodiscard]] const IHostObject* GetHostObject() const { return m_isHost ? m_accessor->GetHostObject() : nullptr; }
+    [[nodiscard]] const IEngineHostObject* GetHostObject() const { return m_isHost ? m_accessor->GetHostObject() : nullptr; }
 
     // An owning copy, which shares the map as copying the value does
     [[nodiscard]] MapAdapter ToAdapter() const;
@@ -1039,7 +1039,7 @@ public:
     [[nodiscard]] GenericMap CreateGenericMap() const { return Ref().CreateGenericMap(); }
     // See IMapAccessor::GetLoopAttr
     bool GetLoopAttr(LoopAttr attr, InternalValue& value) const { return Ref().GetLoopAttr(attr, value); }
-    // Marks the accessor as a host object's (MakeHostValue)
+    // Marks the accessor as a host object's (MakeEngineHostValue)
     MapAdapter& MarkAsHost() noexcept
     {
         m_isHost = true;
@@ -1677,6 +1677,29 @@ MapAdapter CreateMapAdapter(const InternalValueMap* values);
 MapAdapter CreateMapAdapter(std::shared_ptr<InternalValueMap> values);
 MapAdapter CreateMapAdapter(const GenericMap& values);
 MapAdapter CreateMapAdapter(GenericMap&& values);
+// The value of a host's map: a map over its accessor, or, where the accessor carries a host object
+// (IMapItemAccessor::AsHostObject, public_host_object.h), the object as the engine reads it. The
+// one virtual call is all a native map pays for the check
+// The engine's value of a GenericMap that carries a host object (IMapItemAccessor::AsHostObject is not null): a host
+// map over the bridge, or undefined where the object is MakeUndefined's carrier. Out of line in public_host_object.cpp,
+// as few maps carry one
+InternalValue HostMapToInternal(const GenericMap& map);
+inline InternalValue MapValueOf(const GenericMap& values)
+{
+    if (const auto* accessor = values.GetAccessor(); accessor && accessor->AsHostObject())
+    {
+        return HostMapToInternal(values);
+    }
+    return InternalValue(CreateMapAdapter(values));
+}
+inline InternalValue MapValueOf(GenericMap&& values)
+{
+    if (const auto* accessor = values.GetAccessor(); accessor && accessor->AsHostObject())
+    {
+        return HostMapToInternal(values);
+    }
+    return InternalValue(CreateMapAdapter(std::move(values)));
+}
 MapAdapter CreateMapAdapter(const ValuesMap& values);
 MapAdapter CreateMapAdapter(ValuesMap&& values);
 

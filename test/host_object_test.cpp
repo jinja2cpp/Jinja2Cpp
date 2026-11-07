@@ -29,7 +29,7 @@ using namespace jinja2;
 #ifndef JINJA2CPP_LINK_AS_SHARED
 
 // The private seam the Python module builds on (docs/tasks/0352): a toy object of a "host
-// language" written in C++, with each operation of IHostObject switchable, read by templates
+// language" written in C++, with each operation of IEngineHostObject switchable, read by templates
 namespace
 {
 struct ToySpec
@@ -59,7 +59,7 @@ struct ToySpec
     bool tuple = false;
 };
 
-class ToyObject final : public IHostObject
+class ToyObject final : public IEngineHostObject
 {
 public:
     explicit ToyObject(std::shared_ptr<const ToySpec> spec)
@@ -113,7 +113,7 @@ public:
     {
         if (!m_spec->callable)
         {
-            return IHostObject::Call(params, context);
+            return IEngineHostObject::Call(params, context);
         }
         if (m_spec->callResult)
         {
@@ -154,7 +154,7 @@ public:
         return IsStringValue(item) && std::find(names.begin(), names.end(), AsString(item)) != names.end();
     }
     [[nodiscard]] std::optional<size_t> Len() const override { return m_spec->len; }
-    [[nodiscard]] bool Truth() const override { return m_spec->truth ? *m_spec->truth : IHostObject::Truth(); }
+    [[nodiscard]] bool Truth() const override { return m_spec->truth ? *m_spec->truth : IEngineHostObject::Truth(); }
     [[nodiscard]] std::optional<bool> Equals(const InternalValue& other) const override
     {
         const auto* number = GetIf<int64_t>(&other);
@@ -164,7 +164,7 @@ public:
         }
         return *number == *m_spec->equalsInt;
     }
-    [[nodiscard]] std::optional<size_t> Hash() const override { return m_spec->hashable ? IHostObject::Hash() : std::nullopt; }
+    [[nodiscard]] std::optional<size_t> Hash() const override { return m_spec->hashable ? IEngineHostObject::Hash() : std::nullopt; }
     // Every view of one spec is one object, as two proxies of one PyObject are
     [[nodiscard]] const void* Identity() const override { return m_spec.get(); }
     [[nodiscard]] bool IsMapping() const override { return m_spec->mapping; }
@@ -186,7 +186,7 @@ private:
 
 InternalValue MakeToy(std::shared_ptr<const ToySpec> spec)
 {
-    return MakeHostValue<ToyObject>(std::move(spec));
+    return MakeEngineHostValue<ToyObject>(std::move(spec));
 }
 
 InternalValue MakeToy(ToySpec spec = {})

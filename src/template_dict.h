@@ -40,7 +40,7 @@ const char* UnhashableType(const InternalValue& value);
 // The token of a key, which is equal for the keys Python treats as one. Nullopt when the key
 // cannot be hashed, with the type to report in `unhashableType`: Python's TypeError
 // `unhashable type: 'list'`. Objects are keyed by identity, as Python's default hash has it: an
-// object of a host language (host_object.h) by IHostObject::Identity (docs/tasks/0352), the
+// object of a host language (host_object.h) by IEngineHostObject::Identity (docs/tasks/0352), the
 // engine's objects (namespace(), cycler(), joiner(), reflected structs, functions, macros and
 // bound methods) by the identity their copies share (docs/tasks/0212). Every undefined value is
 // one key, and a StrictUndefined one throws UndefinedError

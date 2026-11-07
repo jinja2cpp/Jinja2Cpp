@@ -1,0 +1,421 @@
+#include "public_host_object.h"
+
+#include "engine_errors.h"
+#include "host_object.h"
+#include "internal_value.h"
+#include "intrusive_ptr.h"
+#include "undefined.h"
+
+#include <jinja2cpp/generic_list_iterator.h>
+#include <jinja2cpp/host_object.h>
+#include <jinja2cpp/value.h>
+
+#include <cstddef>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+namespace jinja2
+{
+inline namespace v2
+{
+// The defaults of the public interfaces that the library defines out of line
+
+IHostObject::~IHostObject() = default;
+
+std::optional<Value> IHostObject::GetItem(const Value& /*key*/) const
+{
+    return std::nullopt;
+}
+
+std::optional<Value> IHostObject::GetSlice(const Value& /*start*/, const Value& /*stop*/, const Value& /*step*/) const
+{
+    return std::nullopt;
+}
+
+bool IHostObject::IsCallable() const
+{
+    return false;
+}
+
+Value IHostObject::Call(const UserCallableParams& /*params*/) const
+{
+    throw TemplateRuntimeError(std::string("'") + TypeName() + "' object is not callable");
+}
+
+bool IHostObject::IsIterable() const
+{
+    return false;
+}
+
+std::optional<GenericList> IHostObject::Iterate() const
+{
+    return std::nullopt;
+}
+
+std::optional<GenericList> IHostObject::Reversed() const
+{
+    return std::nullopt;
+}
+
+std::optional<bool> IHostObject::Contains(const Value& /*item*/) const
+{
+    return std::nullopt;
+}
+
+std::optional<size_t> IHostObject::Len() const
+{
+    return std::nullopt;
+}
+
+bool IHostObject::Truth() const
+{
+    const auto length = Len();
+    return !length || *length != 0;
+}
+
+std::optional<bool> IHostObject::Equals(const Value& /*other*/) const
+{
+    return std::nullopt;
+}
+
+std::optional<size_t> IHostObject::Hash() const
+{
+    return std::hash<const void*>()(Identity());
+}
+
+const void* IHostObject::Identity() const
+{
+    return this;
+}
+
+bool IHostObject::IsMapping() const
+{
+    return false;
+}
+
+bool IHostObject::IsSequence() const
+{
+    return false;
+}
+
+bool IHostObject::IsTuple() const
+{
+    return false;
+}
+
+bool IHostObject::IsMarkupLike() const
+{
+    return false;
+}
+
+std::string IHostObject::Html() const
+{
+    return Str();
+}
+
+std::vector<std::pair<Value, Value>> IMapItemAccessor::GetItems() const
+{
+    std::vector<std::pair<Value, Value>> items;
+    for (auto& key : GetKeys())
+    {
+        auto value = Find(key);
+        items.emplace_back(Value(key), value ? std::move(*value) : Value());
+    }
+    return items;
+}
+
+std::vector<std::pair<Value, Value>> GenericMap::GetItems() const
+{
+    return m_accessor ? m_accessor->GetItems() : std::vector<std::pair<Value, Value>>();
+}
+
+namespace
+{
+// The value MakeUndefined makes: an object the engine reads as undefined, where it enters a render
+class UndefinedCarrier final : public IHostObject
+{
+public:
+    explicit UndefinedCarrier(UndefinedDescription description)
+        : m_description(std::move(description))
+    {
+    }
+
+    [[nodiscard]] const UndefinedDescription& Description() const noexcept { return m_description; }
+
+    [[nodiscard]] const char* TypeName() const override
+    {
+        switch (m_description.policy)
+        {
+        case UndefinedPolicy::Strict:
+            return "StrictUndefined";
+        case UndefinedPolicy::Chainable:
+            return "ChainableUndefined";
+        case UndefinedPolicy::Debug:
+            return "DebugUndefined";
+        case UndefinedPolicy::Default:
+            break;
+        }
+        return "Undefined";
+    }
+    [[nodiscard]] std::string Str() const override { return {}; }
+    [[nodiscard]] std::string Repr() const override { return TypeName(); }
+    [[nodiscard]] std::optional<Value> GetAttr(std::string_view /*name*/) const override { return std::nullopt; }
+    [[nodiscard]] bool Truth() const override { return false; }
+
+private:
+    UndefinedDescription m_description;
+};
+
+const UndefinedCarrier* AsCarrier(const IHostObject* object)
+{
+    return dynamic_cast<const UndefinedCarrier*>(object);
+}
+
+// The undefined value of the engine that a description stands for. A Default description with no name, object type or
+// hint is a plain undefined, which fails no use (what the engine hands out for a name it has no information about)
+InternalValue UndefinedFromDescription(const UndefinedDescription& description)
+{
+    if (description.policy == UndefinedPolicy::Default && description.name.empty() && description.objType.empty() && description.hint.empty())
+    {
+        return InternalValue(UndefinedValue{});
+    }
+    auto info = MakeRef<UndefinedInfo>();
+    info->policy = description.policy;
+    info->name = description.name;
+    info->objType = description.objType;
+    info->isAttr = description.isAttr;
+    info->hint = description.hint;
+    return InternalValue(UndefinedValue{ info.get() });
+}
+
+// The engine's operations on a public host object (the private interface), with the values converted at each
+class EngineBridge final : public IEngineHostObject
+{
+public:
+    explicit EngineBridge(std::shared_ptr<const IHostObject> object)
+        : m_object(std::move(object))
+    {
+    }
+
+    [[nodiscard]] const std::shared_ptr<const IHostObject>& Object() const noexcept { return m_object; }
+
+    [[nodiscard]] const char* TypeName() const override { return m_object->TypeName(); }
+    [[nodiscard]] std::string Str() const override { return m_object->Str(); }
+    [[nodiscard]] std::string Repr() const override { return m_object->Repr(); }
+    [[nodiscard]] std::optional<InternalValue> GetAttr(const std::string& name) const override { return ToEngine(m_object->GetAttr(name)); }
+    [[nodiscard]] std::optional<InternalValue> GetItem(const InternalValue& key) const override { return ToEngine(m_object->GetItem(ToHostValue(key))); }
+    [[nodiscard]] std::optional<InternalValue> GetSlice(const InternalValue& start, const InternalValue& stop, const InternalValue& step) const override
+    {
+        return ToEngine(m_object->GetSlice(ToHostValue(start), ToHostValue(stop), ToHostValue(step)));
+    }
+    [[nodiscard]] bool IsCallable() const override { return m_object->IsCallable(); }
+    InternalValue Call(const CallParams& params, RenderContext& context) const override
+    {
+        std::call_once(m_callOnce, [this] { m_call = MakeHostObjectCallable(m_object); });
+        const auto& fn = *GetIf<Callable>(&m_call);
+        return fn.GetExpressionCallable()(params, context);
+    }
+    [[nodiscard]] bool IsIterable() const override { return m_object->IsIterable(); }
+    [[nodiscard]] std::optional<ListAdapter> Iterate() const override { return ToEngine(m_object->Iterate()); }
+    [[nodiscard]] std::optional<ListAdapter> Reversed() const override { return ToEngine(m_object->Reversed()); }
+    [[nodiscard]] std::optional<bool> Contains(const InternalValue& item) const override { return m_object->Contains(ToHostValue(item)); }
+    [[nodiscard]] std::optional<size_t> Len() const override { return m_object->Len(); }
+    [[nodiscard]] bool Truth() const override { return m_object->Truth(); }
+    [[nodiscard]] std::optional<bool> Equals(const InternalValue& other) const override { return m_object->Equals(ToHostValue(other)); }
+    [[nodiscard]] std::optional<size_t> Hash() const override { return m_object->Hash(); }
+    [[nodiscard]] const void* Identity() const override { return m_object->Identity(); }
+    [[nodiscard]] bool IsMapping() const override { return m_object->IsMapping(); }
+    [[nodiscard]] bool IsSequence() const override { return m_object->IsSequence(); }
+    [[nodiscard]] bool IsTuple() const override { return m_object->IsTuple(); }
+    [[nodiscard]] bool IsMarkupLike() const override { return m_object->IsMarkupLike(); }
+    [[nodiscard]] std::string Html() const override { return m_object->Html(); }
+
+private:
+    static std::optional<InternalValue> ToEngine(std::optional<Value> value)
+    {
+        if (!value)
+        {
+            return std::nullopt;
+        }
+        return Value2IntValue(std::move(*value));
+    }
+    static std::optional<ListAdapter> ToEngine(std::optional<GenericList> list)
+    {
+        if (!list)
+        {
+            return std::nullopt;
+        }
+        return ListAdapter::CreateAdapter(std::move(*list));
+    }
+
+    std::shared_ptr<const IHostObject> m_object;
+    // The call of the object as a callable of the engine, made with the first call
+    mutable std::once_flag m_callOnce;
+    mutable InternalValue m_call;
+};
+
+// The accessor of a public host object, which is the engine's accessor (HostObjectAccessor) and the host's
+// (IMapItemAccessor) at once. The engine holds it by intrusive reference, GenericMap by shared_ptr whose deleter
+// releases one: the same object serves both, so a host value that enters a render allocates nothing
+class HostBridge final : public HostObjectAccessor
+    , public IMapItemAccessor
+{
+public:
+    explicit HostBridge(std::shared_ptr<const IHostObject> object)
+        : m_engine(std::move(object))
+        , m_undefined(AsCarrier(m_engine.Object().get()) != nullptr)
+    {
+    }
+    HostBridge(const HostBridge&) = delete;
+    HostBridge& operator=(const HostBridge&) = delete;
+    HostBridge(HostBridge&&) = delete;
+    HostBridge& operator=(HostBridge&&) = delete;
+    ~HostBridge() override = default;
+
+    [[nodiscard]] const std::shared_ptr<const IHostObject>& Object() const noexcept { return m_engine.Object(); }
+    // The description when the object is MakeUndefined's, else null
+    [[nodiscard]] const UndefinedDescription* Undefined() const noexcept { return m_undefined ? &AsCarrier(m_engine.Object().get())->Description() : nullptr; }
+
+    // The GenericMap that holds `bridge`
+    static GenericMap Share(IntrusivePtr<const HostBridge> bridge)
+    {
+        const HostBridge* raw = bridge.detach();
+        return GenericMap(std::shared_ptr<const IMapItemAccessor>(static_cast<const IMapItemAccessor*>(raw), [raw](const IMapItemAccessor*) { intrusive_ptr_release(raw); }));
+    }
+
+    // The engine's accessor
+    [[nodiscard]] const IEngineHostObject* GetHostObject() const override { return &m_engine; }
+    [[nodiscard]] GenericMap CreateGenericMap() const override { return Share(IntrusivePtr<const HostBridge>(this)); }
+
+    // Both interfaces: the object read as a template reads it
+    [[nodiscard]] size_t GetSize() const override { return HostObjectAccessor::GetSize(); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override
+    {
+        const auto& object = *m_engine.Object();
+        return object.GetAttr(name).has_value() || object.GetItem(Value(name)).has_value();
+    }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return HostObjectAccessor::GetKeys(); }
+    [[nodiscard]] const void* GetIdentity() const override { return m_engine.Object()->Identity(); }
+
+    // The host's accessor
+    [[nodiscard]] std::optional<Value> Find(std::string_view name) const override
+    {
+        const auto& object = *m_engine.Object();
+        if (auto attr = object.GetAttr(name))
+        {
+            return attr;
+        }
+        return object.GetItem(Value(std::string(name)));
+    }
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override
+    {
+        auto value = Find(name);
+        return value ? std::move(*value) : Value();
+    }
+    [[nodiscard]] std::vector<std::pair<Value, Value>> GetItems() const override
+    {
+        std::vector<std::pair<Value, Value>> items;
+        const auto& object = *m_engine.Object();
+        if (!object.IsMapping())
+        {
+            return items;
+        }
+        if (auto keys = object.Iterate())
+        {
+            for (auto it = keys->begin(); it != keys->end(); ++it)
+            {
+                Value key = *it;
+                auto value = object.GetItem(key);
+                items.emplace_back(std::move(key), value ? std::move(*value) : Value());
+            }
+        }
+        return items;
+    }
+    [[nodiscard]] const IHostObject* AsHostObject() const noexcept override { return m_engine.Object().get(); }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* view = dynamic_cast<const HostBridge*>(&other);
+        return view != nullptr && view->GetIdentity() == GetIdentity();
+    }
+
+private:
+    EngineBridge m_engine;
+    bool m_undefined;
+};
+} // namespace
+
+Value MakeHostValue(std::shared_ptr<const IHostObject> object)
+{
+    if (!object)
+    {
+        throw std::invalid_argument("jinja2::MakeHostValue: the object is null");
+    }
+    return Value(HostBridge::Share(MakeRef<const HostBridge>(std::move(object))));
+}
+
+Value MakeUndefined(UndefinedDescription description)
+{
+    return MakeHostValue(std::make_shared<const UndefinedCarrier>(std::move(description)));
+}
+
+std::optional<UndefinedDescription> UndefinedOf(const Value& value)
+{
+    const auto* map = value.GetIf<GenericMap>();
+    const auto* accessor = map ? map->GetAccessor() : nullptr;
+    if (const auto* carrier = accessor ? AsCarrier(accessor->AsHostObject()) : nullptr)
+    {
+        return carrier->Description();
+    }
+    return std::nullopt;
+}
+
+InternalValue HostMapToInternal(const GenericMap& map)
+{
+    const auto* accessor = map.GetAccessor();
+    if (const auto* bridge = dynamic_cast<const HostBridge*>(accessor))
+    {
+        if (const auto* undefined = bridge->Undefined())
+        {
+            return UndefinedFromDescription(*undefined);
+        }
+        return InternalValue(MapAdapter(IntrusivePtr<const HostBridge>(bridge)).MarkAsHost());
+    }
+    // An accessor of the host's own that carries an object
+    if (const auto* carrier = accessor ? AsCarrier(accessor->AsHostObject()) : nullptr)
+    {
+        return UndefinedFromDescription(carrier->Description());
+    }
+    return InternalValue(MapAdapter(MakeRef<const HostBridge>(map.AsHostObject())).MarkAsHost());
+}
+
+Value UndefinedToHost(const UndefinedValue& undefined)
+{
+    UndefinedDescription description;
+    if (const auto* info = undefined.info)
+    {
+        description.policy = info->policy;
+        description.name = info->name;
+        description.objType = info->objType;
+        description.isAttr = info->isAttr;
+        description.hint = info->hint;
+    }
+    return MakeUndefined(std::move(description));
+}
+
+Value ToHostValue(const InternalValue& value)
+{
+    if (const auto* undefined = GetIf<UndefinedValue>(&value))
+    {
+        return UndefinedToHost(*undefined);
+    }
+    return IntValue2Value(value);
+}
+} // namespace v2
+} // namespace jinja2

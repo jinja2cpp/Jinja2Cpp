@@ -29,6 +29,7 @@ struct IListItemAccessor;
 struct IIndexBasedAccessor;
 struct IListEnumerator;
 struct IMapItemAccessor;
+class IHostObject;
 class IFilesystemHandler;
 class MemoryFileSystem;
 class RealFileSystem;

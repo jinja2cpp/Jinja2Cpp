@@ -19,7 +19,7 @@ using jinja2::RenderContext;
 // of object, which asks Python for each operation, so a dict, a list, a tuple, a namedtuple, a
 // generator, a callable or any other object behaves as itself, and mutation is seen both ways.
 // The common kinds take shortcuts with the same results
-class PyHost final : public jinja2::IHostObject
+class PyHost final : public jinja2::IEngineHostObject
 {
 public:
     enum class Kind : unsigned char
