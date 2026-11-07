@@ -145,6 +145,8 @@ class Template(_jinja2cpp.Template):
     environment_class: t.Type["Environment"]
 
     def __new__(cls, *args: t.Any, **kwargs: t.Any) -> "Template":
+        if not args and "source" in kwargs:
+            args = (kwargs.pop("source"),)
         if len(args) == 1 and cls.__init__ is Template.__init__:
             # Template(source, **options) makes the environment and loads through it, so that an
             # option or a source outside the subset reaches Jinja2 (docs/python.md, "Fallback")
@@ -230,12 +232,20 @@ class FallbackTemplate:
     ``root_render_func``, ``render_async``) is Jinja2's own.
     """
 
+    def _check_blocker(self) -> None:
+        # A sandbox override set after the template was loaded: Jinja2's stock policy must not take its place
+        blocker = self.__dict__["_environment"]._fallback_blocker()
+        if blocker:
+            raise UnsupportedError(f"the template is Jinja2's, which is not used for {blocker}")
+
     def render(self, *args: t.Any, **kwargs: t.Any) -> str:
+        self._check_blocker()
         fallback._count("renders_fallback")
         with fallback.mapped():
             return t.cast(str, self._jinja2_template.render(*args, **kwargs))
 
     def generate(self, *args: t.Any, **kwargs: t.Any) -> t.Iterator[str]:
+        self._check_blocker()
         fallback._count("renders_fallback")
         with fallback.mapped():
             yield from self._jinja2_template.generate(*args, **kwargs)

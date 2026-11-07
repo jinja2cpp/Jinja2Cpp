@@ -1012,3 +1012,45 @@ def test_environments_are_freed_by_the_collector():
         del env, template
     gc.collect()
     assert [r() for r in refs] == [None] * len(refs)
+
+
+# --- Review round 2: small fixes ---------------------------------------------------------------
+
+
+def test_class_caches_do_not_keep_user_classes_alive():
+    import gc
+    import weakref
+
+    class Mine(jinja2cpp.Template):
+        pass
+
+    class Env(jinja2cpp.sandbox.SandboxedEnvironment):
+        template_class = Mine
+
+    env = Env(extensions=[Ext])
+    env.from_string("{{ 1 }}").render()
+    Env(loader=jinja2cpp.DictLoader({"a": UNPARSABLE})).get_template("a").render()
+    refs = [weakref.ref(Mine), weakref.ref(Env)]
+    del env, Mine, Env
+    gc.collect()
+    assert [r() for r in refs] == [None, None]
+
+
+def test_template_source_keyword_is_the_source():
+    assert jinja2cpp.Template(source="{{ 1 }}").render() == "1"
+    assert jinja2cpp.Template(source=UNPARSABLE).render() == UNPARSABLE_RESULT
+    assert jinja2cpp.Template(source="{{ x }}", autoescape=True).render(x="<") == "&lt;"
+    with pytest.raises(jinja2cpp.TemplateSyntaxError):
+        jinja2cpp.Template(source=UNPARSABLE, fallback="never")
+
+
+def test_sandbox_override_set_after_load_is_refused_by_fallback_templates():
+    for make in (lambda: jinja2cpp.sandbox.SandboxedEnvironment(), lambda: jinja2cpp.sandbox.SandboxedEnvironment(extensions=[Ext])):
+        env = make()
+        template = env.from_string("{{ x.shown }}{% print 0 %}")
+        assert template.render(x=Secret()) == "10"
+        env.call_unop = lambda context, operator, arg: arg
+        with pytest.raises(jinja2cpp.UnsupportedError):
+            template.render(x=Secret())
+        with pytest.raises(jinja2cpp.UnsupportedError):
+            list(template.generate(x=Secret()))

@@ -15,6 +15,7 @@ import sys
 import threading
 import typing as t
 import warnings
+import weakref
 
 from . import _jinja2cpp
 from .exceptions import TemplateError
@@ -336,7 +337,7 @@ def _forwarding_sandbox(base: type) -> type:
     return ForwardingSandbox
 
 
-_jinja2_classes: t.Dict[type, type] = {}
+_jinja2_classes: "weakref.WeakKeyDictionary[type, type]" = weakref.WeakKeyDictionary()
 
 
 def jinja2_class(jinja2: t.Any, env_class: type) -> t.Any:
@@ -443,9 +444,6 @@ def options_reason(env_class: type, options: t.Mapping[str, t.Any]) -> t.Optiona
 # Templates
 # ---------------------------------------------------------------------------------------------
 
-_fallback_classes: t.Dict[type, type] = {}
-
-
 def fallback_class(template_class: type) -> type:
     """The subclass of `template_class` whose instances are Jinja2's templates.
 
@@ -453,7 +451,7 @@ def fallback_class(template_class: type) -> type:
     also over a user's override, which is refused: ``UnsupportedError`` names the methods (nanobind allows
     one nanobind base, so the mixin cannot sit between the user's class and the engine's ``Template``).
     """
-    cls = _fallback_classes.get(template_class)
+    cls = template_class.__dict__.get("_jinja2cpp_fallback_class")  # on the class, so that it goes with it
     if cls is None:
         from . import environment
 
@@ -470,8 +468,9 @@ def fallback_class(template_class: type) -> type:
                 f"the template_class {template_class.__qualname__} overrides {', '.join(overridden)}, which a template made by Jinja2 "
                 "(the fallback) implements itself: the override would be ignored (docs/python.md, \"Fallback\")"
             )
-        cls = _fallback_classes[template_class] = type(f"Fallback{template_class.__name__}", (environment.FallbackTemplate, template_class), {})
-    return cls
+        cls = type(f"Fallback{template_class.__name__}", (environment.FallbackTemplate, template_class), {})
+        template_class._jinja2cpp_fallback_class = cls  # type: ignore[attr-defined]
+    return t.cast(type, cls)
 
 
 def fallback_template(env: t.Any, jinja2_template: t.Any, template_class: t.Optional[type] = None, source: t.Any = None) -> t.Any:
