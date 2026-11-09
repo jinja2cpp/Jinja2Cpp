@@ -302,8 +302,25 @@ nb::object UndefinedToPython(const UndefinedDescription& description)
 }
 
 // Containers seen while converting one value: a list that contains itself becomes a Python
-// list that contains itself
-using Memo = std::unordered_map<const void*, nb::object>;
+// list that contains itself. The memo keeps each container it records alive, so an address it records is never
+// reused for another container during the conversion: an export made per item (a dictsort pair) is released
+// as its list's iterator advances
+struct Memo
+{
+    std::unordered_map<const void*, nb::object> seen;
+    std::vector<Value> keep;
+
+    [[nodiscard]] const nb::object* Find(const void* identity) const
+    {
+        auto found = seen.find(identity);
+        return found == seen.end() ? nullptr : &found->second;
+    }
+    void Record(const void* identity, nb::object object, Value source)
+    {
+        seen.emplace(identity, std::move(object));
+        keep.push_back(std::move(source));
+    }
+};
 
 nb::object ToPythonImpl(const Value& value, Memo& memo);
 
@@ -353,15 +370,18 @@ nb::object ItemsToPython(const List& list, bool isTuple, const void* identity, M
     }
     if (identity)
     {
-        if (auto found = memo.find(identity); found != memo.end())
+        if (const auto* found = memo.Find(identity))
         {
-            return found->second;
+            return *found;
         }
     }
     nb::list items;
     if (identity)
     {
-        memo.emplace(identity, items);
+        if constexpr (std::is_same_v<List, jinja2::GenericList>)
+        {
+            memo.Record(identity, items, Value(list));
+        }
     }
     for (const auto& item : list)
     {
@@ -373,7 +393,7 @@ nb::object ItemsToPython(const List& list, bool isTuple, const void* identity, M
         auto tuple = nb::steal(PySequence_Tuple(items.ptr()));
         if (identity)
         {
-            memo[identity] = tuple;
+            memo.seen[identity] = tuple;
         }
         return tuple;
     }
@@ -396,12 +416,12 @@ nb::object MapToPython(const Value& value, const jinja2::GenericMap& map, Memo& 
         return WrapTemplateValue(value);
     }
     const void* identity = map.GetIdentity();
-    if (auto found = memo.find(identity); found != memo.end())
+    if (const auto* found = memo.Find(identity))
     {
-        return found->second;
+        return *found;
     }
     nb::dict items;
-    memo.emplace(identity, items);
+    memo.Record(identity, items, value);
     // The entries with their own keys: `{1: 'a', '1': 'b'}` stays two entries
     for (const auto& [key, item] : map.GetItems())
     {

@@ -247,6 +247,9 @@ def test_undefined_items_and_dictsort_pairs_reach_python_as_in_jinja2():
         ("{{ f({'m': missing}) }}", lambda d: type(d["m"]).__name__),
         ("{{ f({'a': 1}|dictsort) }}", repr),
         ("{{ f({'a': 1}.items()|list) }}", repr),
+        # Each pair is made as its list is read: a pair released early must not reuse an earlier pair's place
+        ("{{ f({'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5}|dictsort) }}", repr),
+        ("{{ f([{'a': 1, 'b': 2, 'c': 3}|dictsort, {'d': 4, 'e': 5}|dictsort]) }}", repr),
     ]
     for source, f in cases:
         assert jinja2cpp.Template(source).render(f=f) == jinja2.Template(source).render(f=f), source
