@@ -482,11 +482,13 @@ public:
     // The limits a render installs: the template's, or with a poll of its own and none, those that count its steps
     [[nodiscard]] const Settings::Limits* RenderLimitsOf(detail::HostPoll poll) const
     {
-        if (m_settings->hasRenderLimits)
+        // A poll counts steps even where the template's own limits count none (a big-integer backend alone installs
+        // them outside a boost build)
+        if (poll && !HasRenderLimits(m_settings->settings.limits))
         {
-            return &m_settings->settings.limits;
+            return &PollOnlyLimits();
         }
-        return poll ? &PollOnlyLimits() : nullptr;
+        return m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr;
     }
 
     // `hooks` (with hasHooks set) brings the render's own globals and poll (RenderHooks). A

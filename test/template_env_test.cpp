@@ -1,3 +1,5 @@
+#include "big_int_toy_backend.h"
+
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
@@ -274,6 +276,44 @@ TEST(RenderOptionsTest, PollKeepsTheTemplatesLimits)
     ASSERT_FALSE(result);
     EXPECT_EQ(ErrorCode::ResourceLimitExceeded, result.error().GetCode()) << result.error().ToString();
     EXPECT_GT(polls, 0);
+}
+
+TEST(RenderOptionsTest, PollReachesTheItemsALoopFilterSkips)
+{
+    // A template loaded without limits: the items the loop's filter drops render nothing, and are polled all the same
+    TemplateEnv env;
+    auto tpl = env.FromString("{% for i in range(20000) if false %}{{ i }}{% endfor %}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    int polls = 0;
+    RenderOptions options;
+    options.poll = [&polls] {
+        if (++polls == 3)
+        {
+            throw PollStop{};
+        }
+    };
+    std::string out;
+    auto result = tpl->RenderTo(out, {}, options);
+    ASSERT_FALSE(result);
+    EXPECT_EQ(3, polls);
+    ASSERT_TRUE(result.error().GetException());
+    EXPECT_THROW(std::rethrow_exception(result.error().GetException()), PollStop);
+}
+
+TEST(RenderOptionsTest, PollCountsStepsWithACustomBigIntBackendAndNoLimits)
+{
+    // A big-integer backend alone installs the template's limits scope, with no step limit to count against
+    TemplateEnv env;
+    ASSERT_TRUE(env.SetBigIntBackend(big_int_toy::Backend()));
+    auto tpl = env.FromString("{% for i in range(20000) %}{{ i }}{% endfor %}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    int polls = 0;
+    RenderOptions options;
+    options.poll = [&polls] { ++polls; };
+    std::string out;
+    auto result = tpl->RenderTo(out, {}, options);
+    ASSERT_TRUE(result) << result.error().ToString();
+    EXPECT_GT(polls, 5);
 }
 
 TEST(RenderOptionsTest, ARenderACallableStartsIsPolledToo)
