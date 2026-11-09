@@ -4282,20 +4282,20 @@ public:
     }
 
     // The number of names GetKeys lists
-    [[nodiscard]] size_t GetSize() const override { return m_context->CollectLookupNames().size(); }
+    [[nodiscard]] size_t GetSize() const override { return Live().CollectLookupNames().size(); }
     [[nodiscard]] bool HasValue(const std::string& name) const override
     {
-        return static_cast<bool>(m_context->FindValue(name));
+        return static_cast<bool>(Live().FindValue(name));
     }
     [[nodiscard]] Value GetValueByName(const std::string& name) const override
     {
-        const auto value = m_context->FindValue(name);
+        const auto value = Live().FindValue(name);
         return value ? ToHost(*value) : Value();
     }
     // A value the template sees, as the call's arguments are given: a macro, `range` or `loop` is lent for the call
     [[nodiscard]] std::optional<Value> Find(std::string_view name) const override
     {
-        const auto value = m_context->FindValue(std::string(name));
+        const auto value = Live().FindValue(std::string(name));
         if (!value)
         {
             return std::nullopt;
@@ -4303,7 +4303,15 @@ public:
         return ToHost(*value);
     }
     // The names a lookup finds, each once, sorted: the scopes, the external and global values and the built-ins
-    [[nodiscard]] std::vector<std::string> GetKeys() const override { return m_context->CollectLookupNames(); }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return Live().CollectLookupNames(); }
+
+    // The host's call this context was given to ended (UserCallableBody): its render context and scope are gone, so a
+    // copy the host kept fails with TemplateExpired, as a lent macro does
+    void Expire() const noexcept
+    {
+        m_context = nullptr;
+        m_scope = nullptr;
+    }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -4324,10 +4332,23 @@ public:
     }
 
 private:
+    [[nodiscard]] RenderContext& Live() const
+    {
+        if (!m_context)
+        {
+            ErrorInfo::Data errorData;
+            errorData.code = ErrorCode::TemplateExpired;
+            errorData.srcLoc.line = 1;
+            errorData.srcLoc.col = 1;
+            errorData.extraParams.emplace_back(std::string("lent"));
+            throw ErrorInfo(std::move(errorData));
+        }
+        return *m_context;
+    }
     [[nodiscard]] Value ToHost(const InternalValue& value) const { return m_lend && m_scope ? m_lend(value, *m_context, *m_scope) : IntValue2Value(value); }
 
-    RenderContext* m_context;
-    HostCallScope* m_scope;
+    mutable RenderContext* m_context;
+    mutable HostCallScope* m_scope;
     LendFn m_lend;
 };
 
@@ -4378,6 +4399,8 @@ struct HostCallScope
     std::shared_ptr<CallableLease> lease;
     const ParsedArguments* args = nullptr;
     const UserCallableParams* params = nullptr;
+    // The context the call was given, expired when the call ends (ContextEnd)
+    const ContextMapper* contextMap = nullptr;
     // The host's callable asks for undefined arguments as undefined (UserCallable::keepUndefined)
     bool keepUndefined = false;
 
@@ -4418,6 +4441,30 @@ private:
     // handed many, so that a list of them comes back in N log N
     mutable std::vector<HostCallExport> m_index;
     mutable bool m_indexed = false;
+};
+
+// Expires the context a host's call was given when the call ends (ContextMapper::Expire)
+class ContextEnd
+{
+public:
+    explicit ContextEnd(const HostCallScope& scope) noexcept
+        : m_scope(scope)
+    {
+    }
+    ContextEnd(const ContextEnd&) = delete;
+    ContextEnd(ContextEnd&&) = delete;
+    ContextEnd& operator=(const ContextEnd&) = delete;
+    ContextEnd& operator=(ContextEnd&&) = delete;
+    ~ContextEnd()
+    {
+        if (m_scope.contextMap)
+        {
+            m_scope.contextMap->Expire();
+        }
+    }
+
+private:
+    const HostCallScope& m_scope;
 };
 
 class LeaseEnd
@@ -5055,7 +5102,9 @@ void PrepareUserCallableParams(const ParsedArguments& args, RenderContext& conte
         extraPosArgs.push_back(ArgumentToHost(p, context, scope));
     }
     result.extraPosArgs = Value(std::move(extraPosArgs));
-    result.context = GenericMap(std::make_shared<const ContextMapper>(&context, &scope, &ArgumentToHost));
+    auto mapper = std::make_shared<const ContextMapper>(&context, &scope, &ArgumentToHost);
+    scope.contextMap = mapper.get();
+    result.context = GenericMap(std::move(mapper));
     if (asksForContext)
     {
         const auto* frame = context.GetTemplateFrame();
@@ -5083,6 +5132,8 @@ struct UserCallableBody
         const LeaseEnd leaseEnd(scope.lease);
         scope.keepUndefined = val.keepUndefined;
         UserCallableParams ucParams;
+        // Before ucParams goes: a context the host kept is expired while the call's own copy still holds it
+        const ContextEnd contextEnd(scope);
         // Kept for the call: the scope's records point into it
         const ParsedArguments args = helpers::ParseCallParams(argsInfo, params, ucParams.paramsParsed);
         PrepareUserCallableParams(args, context, argsInfo, ucParams, scope);

@@ -678,6 +678,31 @@ const jinja2::Value& TemplateValue::Value() const
     return m_value;
 }
 
+namespace
+{
+// A call of the template's from Python failed: a KeyboardInterrupt or SystemExit a Python callable raised inside it is
+// raised to the Python caller, which may catch it as in Jinja2, and is no longer the render's to raise (RenderState::abort)
+[[noreturn]] void RaiseFailedCall()
+{
+    if (auto* render = CurrentRender(); render && render->abort)
+    {
+        std::rethrow_exception(std::exchange(render->abort, nullptr));
+    }
+    try
+    {
+        throw;
+    }
+    catch (const nb::python_error&)
+    {
+        throw;
+    }
+    catch (...)
+    {
+        RaiseCurrentEngineError();
+    }
+}
+} // namespace
+
 nb::object TemplateValue::Call(nb::args args, nb::kwargs kwargs) const
 {
     if (const auto* render = CurrentRender(); render && render->sandbox)
@@ -699,13 +724,9 @@ nb::object TemplateValue::Call(nb::args args, nb::kwargs kwargs) const
                     {
                         return host->Call(ToCallParams(std::move(args), std::move(kwargs)));
                     }
-                    catch (const nb::python_error&)
-                    {
-                        throw;
-                    }
                     catch (...)
                     {
-                        RaiseCurrentEngineError();
+                        RaiseFailedCall();
                     }
                 }();
                 return ToPython(result);
@@ -718,13 +739,9 @@ nb::object TemplateValue::Call(nb::args args, nb::kwargs kwargs) const
     {
         result = callable->callable(MapToArgsInfo(*callable, ToCallParams(std::move(args), std::move(kwargs))));
     }
-    catch (const nb::python_error&)
-    {
-        throw;
-    }
     catch (...)
     {
-        RaiseCurrentEngineError();
+        RaiseFailedCall();
     }
     return ToPython(result);
 }

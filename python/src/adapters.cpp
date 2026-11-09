@@ -2,6 +2,7 @@
 
 #include "context.h"
 #include "convert.h"
+#include "errors.h"
 
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/host_object.h>
@@ -650,7 +651,27 @@ public:
         if (name == "format_map" && IsText(obj))
         {
             // The engine's strings have no format_map; the sandbox's is SandboxedFormatter's
-            jinja2::UserCallable formatMap([obj, this](const jinja2::UserCallableParams& params) { return FormatWith(obj, true, params); },
+            // The callable may be kept past the render (a host argument is not lent): it refers to the environment
+            // weakly, as a strong reference would make a cycle the garbage collector cannot see, and raises once the
+            // environment is gone
+            auto weak = PyRef::Steal(PyWeakref_NewRef(m_environment, nullptr));
+            if (!weak)
+            {
+                throw nb::python_error();
+            }
+            jinja2::UserCallable formatMap([obj, weak = std::move(weak)](const jinja2::UserCallableParams& params) {
+                // Calling the weak reference gives the environment or None (PyWeakref_GetRef is not in 3.12's stable ABI)
+                const auto owner = PyRef::Steal(PyObject_CallNoArgs(weak.Get()));
+                if (!owner.Get())
+                {
+                    throw nb::python_error();
+                }
+                if (owner.Get() == Py_None)
+                {
+                    RaiseTemplateRuntimeError("a value of the template was used after the call it was passed to ended");
+                }
+                return FormatWith(owner.Get(), obj, true, params);
+            },
                                            { jinja2::ArgInfo(jinja2::ArgInfo::VarArgs), jinja2::ArgInfo(jinja2::ArgInfo::VarKwArgs) });
             formatMap.keepUndefined = true;
             return jinja2::Value(std::move(formatMap));
@@ -695,15 +716,15 @@ public:
 
     [[nodiscard]] std::optional<jinja2::Value> Format(const jinja2::Value& self, bool formatMap, const jinja2::UserCallableParams& params) const override
     {
-        return FormatWith(self, formatMap, params);
+        return FormatWith(m_environment, self, formatMap, params);
     }
 
 private:
-    [[nodiscard]] jinja2::Value FormatWith(const jinja2::Value& self, bool formatMap, const jinja2::UserCallableParams& params) const
+    [[nodiscard]] static jinja2::Value FormatWith(PyObject* environment, const jinja2::Value& self, bool formatMap, const jinja2::UserCallableParams& params)
     {
         const auto text = ToPython(self);
         const auto method = Steal(PyObject_GetAttrString(text.ptr(), formatMap ? "format_map" : "format"));
-        auto wrapped = Steal(PyObject_CallMethod(m_environment, "wrap_str_format", "O", method.ptr()));
+        auto wrapped = Steal(PyObject_CallMethod(environment, "wrap_str_format", "O", method.ptr()));
         if (wrapped.is_none())
         {
             wrapped = method;
@@ -791,7 +812,8 @@ jinja2::Value CallPython(PyObject* callable, const jinja2::UserCallableParams& p
             // a failed call (RenderState::abort)
             if (auto* render = CurrentRender(); render && !render->abort)
             {
-                render->abort = std::current_exception();
+                // A copy: the error in flight may reach Python, which consumes it, before the render raises this one
+                render->abort = std::make_exception_ptr(nb::python_error(error));
             }
         }
         throw;

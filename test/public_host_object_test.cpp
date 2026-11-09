@@ -1780,6 +1780,26 @@ TEST(PublicHostObjectTest, AHostCallGetsTheSiteAndTheContextLendsTemplateCallabl
     EXPECT_TRUE(Throws([&] { (*kept)->callable(late); }, ErrorCode::TemplateExpired));
 }
 
+// The context a host's call got is valid for the call only: a copy the host kept fails with TemplateExpired after it
+// (it read the render's freed frames)
+TEST(PublicHostObjectTest, AKeptContextExpiresWithTheCall)
+{
+    auto kept = std::make_shared<GenericMap>();
+    const auto probe = Probing([kept](const UserCallableParams& params) {
+        const auto* context = params.context.GetIf<GenericMap>();
+        if (!context)
+        {
+            return Value("no context");
+        }
+        *kept = *context;
+        return Value(context->Find("x") ? "found" : "missing");
+    });
+    const ValuesMap params{ { "probe", probe }, { "x", 1 } };
+    EXPECT_EQ("found", Render("{% macro m() %}{% endmacro %}{{ probe() }}", params));
+    EXPECT_TRUE(Throws([&] { (void)kept->Find("m"); }, ErrorCode::TemplateExpired));
+    EXPECT_TRUE(Throws([&] { (void)kept->GetKeys(); }, ErrorCode::TemplateExpired));
+}
+
 // A lent macro that fails reports the engine's error as the public ErrorInfo, with its code
 TEST(PublicHostObjectTest, ALentMacroFailsWithThePublicError)
 {

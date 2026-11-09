@@ -95,5 +95,8 @@ freeze.
   `python/tests` (Python 3.13, the 6 failures known on master), the parity corpus through the
   module (3204 of 3225 on both) and the upstream suite (596 of 856 on both). Gaps filed: 0439
   (engine callables lent to Python print without a name), 0440 (no poll in `Template.module`
-  and module macro calls), 0441 (a list subclass with its own `__iter__` is iterated by index).
+  and module macro calls), 0441 (a list subclass with its own `__iter__` is iterated by index), 0442
+  (a sandbox stub type per attribute check, the repr of a cycler). The verifier found that a C++ host
+  keeping the context a call got read freed frames after the call (from before S3); it now fails
+  with `TemplateExpired`.
 
