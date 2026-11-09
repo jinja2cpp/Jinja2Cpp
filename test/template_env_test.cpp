@@ -338,9 +338,18 @@ TEST(RenderOptionsTest, PollCountsStepsWithACustomBigIntBackendAndNoLimits)
     EXPECT_GT(polls, 5);
 }
 
-TEST(RenderOptionsTest, ARenderACallableStartsIsPolledToo)
+class RenderOptionsNestedTest : public ::testing::TestWithParam<bool>
+{
+};
+
+TEST_P(RenderOptionsNestedTest, ARenderACallableStartsIsPolledToo)
 {
     TemplateEnv env;
+    // With a custom big-integer backend, the inner template installs a limits scope that sets no limit
+    if (GetParam())
+    {
+        ASSERT_TRUE(env.SetBigIntBackend(big_int_toy::Backend()));
+    }
     auto inner = env.FromString("{% for i in range(5000) %}.{% endfor %}");
     ASSERT_TRUE(inner) << inner.error().ToString();
     int innerPolls = -1;
@@ -361,3 +370,5 @@ TEST(RenderOptionsTest, ARenderACallableStartsIsPolledToo)
     EXPECT_EQ("5000", out);
     EXPECT_GT(innerPolls, 0);
 }
+
+INSTANTIATE_TEST_SUITE_P(BigIntBackend, RenderOptionsNestedTest, ::testing::Bool());
