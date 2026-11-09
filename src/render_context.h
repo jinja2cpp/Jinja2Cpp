@@ -128,7 +128,7 @@ struct IRendererCallback : IComparable
     [[nodiscard]] virtual detail::Dialect GetDialect() const { return detail::Dialect::Jinja2; }
     // The sandbox policy of the template (src/sandbox_policy.h), null for none. A field, not a virtual: the methods of
     // a value ask it each time one is found
-    [[nodiscard]] const ISandboxPolicy* GetSandboxPolicy() const noexcept { return m_sandboxPolicy; }
+    [[nodiscard]] const IEngineSandboxPolicy* GetSandboxPolicy() const noexcept { return m_sandboxPolicy; }
     // The environment the template was loaded in, if any
     [[nodiscard]] virtual TemplateEnv* GetEnv() const { return nullptr; }
     // The random generator of lipsum, one per render
@@ -163,11 +163,11 @@ struct IRendererCallback : IComparable
 protected:
     // Called once, when the template's callback is made
     void SetPromptEscaper(const detail::PromptEscaperImpl* escaper) noexcept { m_promptEscaper = escaper; }
-    void SetSandboxPolicy(const ISandboxPolicy* policy) noexcept { m_sandboxPolicy = policy; }
+    void SetSandboxPolicy(const IEngineSandboxPolicy* policy) noexcept { m_sandboxPolicy = policy; }
 
 private:
     const detail::PromptEscaperImpl* m_promptEscaper = nullptr;
-    const ISandboxPolicy* m_sandboxPolicy = nullptr;
+    const IEngineSandboxPolicy* m_sandboxPolicy = nullptr;
 };
 
 // The slots where names were last found (docs/tasks/0100 idea 7). An entry holds the slot
@@ -1051,7 +1051,7 @@ public:
         return m_rendererCallback ? m_rendererCallback->GetEnv() : nullptr;
     }
     // The sandbox policy of the template (src/sandbox_policy.h), null for none
-    [[nodiscard]] const ISandboxPolicy* GetSandboxPolicy() const noexcept { return m_rendererCallback ? m_rendererCallback->GetSandboxPolicy() : nullptr; }
+    [[nodiscard]] const IEngineSandboxPolicy* GetSandboxPolicy() const noexcept { return m_rendererCallback ? m_rendererCallback->GetSandboxPolicy() : nullptr; }
     [[nodiscard]] detail::Dialect GetDialect() const { return m_rendererCallback ? m_rendererCallback->GetDialect() : detail::Dialect::Jinja2; }
     // Settings::userCallablesAsFilters of the template: whether a name that is no filter or test
     // of the template may be a callable among the values

@@ -176,7 +176,9 @@ locations), 0255 (engine runtime errors).
   `Load` replaces the template for its own object only, and a module keeps its tree, reversing
   the second half of 0284 D1a. 0301 raises it for a stored macro of a module that ended with an
   earlier call; 0300 for a template callable lent to a host's call and called after it), 20 `DataReadError` (`ToValue` could not
-  read a JSON document: its `JsonTraits` reported an error; 0311). `UnexpectedException` (1) now means "an exception the
+  read a JSON document: its `JsonTraits` reported an error; 0311), 21 `SecurityError` (a sandbox refused an attribute or a
+  list or dict method: `ISandboxPolicy`, `Settings::immutableContainers`; 0357 B7, until then an `UndefinedError` with a
+  marker in `extraParams[1]`). `UnexpectedException` (1) now means "an exception the
   engine did not raise and could not attribute", with location and `GetException()`.
 
 **Against Python.** Same: syntax, undefined and not-found errors keep their codes, with
@@ -837,7 +839,9 @@ Recommend A now, C only if someone asks.
      `UserCallable::keepUndefined`. `None` stays the default.
    - **Rendering.** `RenderOptions`, with per-render globals and a `std::function` poll;
      call-site information for `*context` callables; hex digits for `BigInt`;
-     `Template::FindReferencedTemplates`.
+     `Template::FindReferencedTemplates`. The globals are a `shared_ptr<const ValuesMap>`, not a
+     call-scoped borrow: a value of them that a callable keeps stays valid after the render, as
+     an environment global's does (S2b).
    - **Sandbox.** An optional public `ISandboxPolicy`, at no cost when it is unset. Both the
      native attribute path and the direct method-call path honour it.
    - **Growth after the freeze.** Through `IHostObject2 : IHostObject`, found once per object.

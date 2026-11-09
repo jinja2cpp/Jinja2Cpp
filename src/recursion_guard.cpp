@@ -199,7 +199,7 @@ void StepsSlow()
     // Last, with the count refilled: the poll may throw, and the render stops
     if (const auto poll = t_hostPoll)
     {
-        poll();
+        (*poll)();
     }
 }
 } // namespace
@@ -236,6 +236,12 @@ void RenderLimitsScope::Install(const Settings::Limits* limitsOrNone, const BigI
     m_saved = detail::t_renderLimits;
     detail::RenderLimits state;
     state.bigInts = bigInts;
+    // A render a polled one starts (a host callable rendering another template) is polled too, also where its
+    // template's limits scope sets no limit (a big-integer backend alone installs one outside a boost build)
+    if (detail::t_hostPoll && (!limitsOrNone || !HasRenderLimits(*limitsOrNone)))
+    {
+        limitsOrNone = &PollOnlyLimits();
+    }
     if (!limitsOrNone)
     {
         detail::InstallRenderLimits(state);

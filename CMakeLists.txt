@@ -263,6 +263,7 @@ set(JINJA2CPP_SOURCES
     src/prompt_escape.cpp
     src/prompt_filters.cpp
     src/public_host_object.cpp
+    src/public_sandbox_policy.cpp
     src/token_budget.cpp
     src/python_format.cpp
     src/recursion_guard.cpp
@@ -272,6 +273,7 @@ set(JINJA2CPP_SOURCES
     src/statements.cpp
     src/string_converter_filter.cpp
     src/template.cpp
+    src/template_render_options.cpp
     src/template_dict.cpp
     src/template_env.cpp
     src/template_module.cpp
@@ -530,6 +532,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/helpers_tests.cpp
         test/host_object_test.cpp
         test/public_host_object_test.cpp
+        test/public_sandbox_policy_test.cpp
         test/sandbox_policy_test.cpp
         test/i18n_test.cpp
         test/limits_test.cpp
@@ -548,6 +551,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/arena_switch_test.cpp
         test/ordered_map_test.cpp
         test/recursion_limits_test.cpp
+        test/referenced_templates_test.cpp
         test/slot_frame_test.cpp
         test/statements_tets.cpp
         test/support_types_test.cpp
@@ -565,11 +569,6 @@ if (JINJA2CPP_BUILD_TESTS)
         test/value_ptr_test.cpp
         test/parity/parity_test.cpp
     )
-    # The referenced-templates walk is a header-only internal of the Python module, which links
-    # the library statically: it calls the parser, which a shared library does not export
-    if (NOT JINJA2CPP_BUILD_SHARED)
-        list(APPEND JINJA2CPP_TEST_SOURCES test/referenced_templates_test.cpp)
-    endif ()
     if (JINJA2CPP_WITH_CHAT_TEMPLATES)
         list(APPEND JINJA2CPP_TEST_SOURCES test/chat_templates/chat_template_test.cpp test/chat_template_preset_test.cpp)
     endif ()

@@ -1749,6 +1749,10 @@ bool ForStatement::FilterInFrame(IListAccessorEnumerator& items, Span<Slot> fram
     bool isFound = false;
     while (items.MoveNext())
     {
+        // The items the filter skips render no body, and a plain name or constant checks nothing: each item is a
+        // render step here (Settings::Limits::maxRenderSteps), and reaches a host's poll (RenderOptions::poll) in a
+        // template loaded without limits too
+        CheckStack();
         // A plain name, the common case, takes the item into its slot and gives it back when
         // it is kept, without a copy
         if (rootSlot)

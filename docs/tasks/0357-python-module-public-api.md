@@ -62,3 +62,23 @@ freeze.
   710,482; mitsuhiko_table 8,211,299 / 9,131,276 / 8,890,719. D7 is relaxed for host-data cases
   (api-2.0.md section 7 item 10); `detail::MakeHostValueInPlace` and
   `HostResult::SetHostObjectInPlace` are frozen ABI.
+- S2b (B3, B6), stacked on #800: `RenderOptions` (`globals` as `shared_ptr<const ValuesMap>`, so
+  a value a callable keeps outlives the render as an environment global does through
+  `LendGlobal`; `poll` as `std::function<void()>`) with `Template::RenderTo(out|sink, params,
+  options)` over the `RenderCore<true>` instantiation; a poll alone makes the render count its
+  steps, and a render a polled one starts (a callable rendering another template) is polled too.
+  `Template::FindReferencedTemplates()` is public, and `test/referenced_templates_test.cpp` now
+  builds in shared mode. Found on the way: in a wide template every referenced name came back as
+  `nullopt` (the walk read narrow strings only); fixed, with a row. The module's poll moved to
+  the `std::function` form of `detail::t_hostPoll`; its render entry is unchanged until S3.
+- S2c (B7, D6b), same PR as S2b: public `jinja2::ISandboxPolicy` (`jinja2cpp/sandbox_policy.h`):
+  `NativeAttribute(const Value&, string_view) -> optional<Value>` and `Format(self, formatMap, params) ->
+  optional<Value>`, nullopt by default for the engine's own `str.format`, which now reads a field's
+  attribute through `NativeAttribute` (Jinja2's `SandboxedFormatter`). Held by `Settings::sandboxPolicy`
+  (identity equality), bridged to the engine's policy, renamed `IEngineSandboxPolicy`
+  (`src/public_sandbox_policy.cpp`). `Settings::immutableContainers` is the public switch for
+  `Dialect::ImmutableSandbox`. `ErrorCode::SecurityError` (21) replaces the `extraParams[1]` marker on an
+  `UndefinedError`; `UndefinedDescription::security` makes and reads a refused attribute's undefined value.
+  0427 decided: a template keeps the policy it was loaded with. Template callables (a macro, `caller`)
+  reach `NativeAttribute` as an empty value, so S3 must keep the module's stand-in for them.
+

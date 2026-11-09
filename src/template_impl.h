@@ -36,6 +36,7 @@
 #include <cstdint>
 #include <exception>
 #include <forward_list>
+#include <functional>
 #include <memory>
 #include <new>
 #include <optional>
@@ -388,7 +389,7 @@ public:
     // (template_module.cpp)
     static nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params);
 
-    // FindReferencedTemplates of a loaded template, for the Python module (docs/tasks/0354)
+    // Template::FindReferencedTemplates; the Python module's meta.find_referenced_templates (docs/tasks/0354)
     static nonstd::expected<std::vector<std::optional<std::string>>, BasicErrorInfo<CharT>> ReferencedTemplatesOf(const BasicTemplate<CharT>& tpl)
     {
         return static_cast<const TemplateImpl*>(tpl.m_impl.get())->FindReferencedTemplates();
@@ -403,13 +404,7 @@ public:
                                                                const InternalValueMap& params,
                                                                const InternalValueMap* globals = nullptr)
     {
-        const auto* impl = static_cast<const TemplateImpl*>(tpl.m_impl.get());
-        // A separate instantiation, so that the ordinary Render keeps its shape and cost
-        if (globals)
-        {
-            return impl->template RenderCore<true>(os, params, globals);
-        }
-        return impl->template RenderCore<false>(os, params, nullptr);
+        return RenderInternalTo(tpl, os, params, globals);
     }
     // The same, writing to a host's sink (the module's Template.generate)
     static std::optional<BasicErrorInfo<CharT>> RenderInternal(const BasicTemplate<CharT>& tpl,
@@ -417,13 +412,38 @@ public:
                                                                const InternalValueMap& params,
                                                                const InternalValueMap* globals = nullptr)
     {
+        return RenderInternalTo(tpl, sink, params, globals);
+    }
+    template<typename Target>
+    static std::optional<BasicErrorInfo<CharT>> RenderInternalTo(const BasicTemplate<CharT>& tpl, Target& os, const InternalValueMap& params, const InternalValueMap* globals)
+    {
         const auto* impl = static_cast<const TemplateImpl*>(tpl.m_impl.get());
+        // A separate instantiation, so that the ordinary Render keeps its shape and cost
         if (globals)
         {
-            return impl->template RenderCore<true>(sink, params, globals);
+            const RenderHooks hooks{ globals, nullptr };
+            return impl->template RenderCore<true>(os, params, &hooks);
         }
-        return impl->template RenderCore<false>(sink, params, nullptr);
+        return impl->template RenderCore<false>(os, params, nullptr);
     }
+
+    // What a render takes besides its params (Template::RenderTo with RenderOptions, docs/tasks/0357 B3)
+    struct RenderHooks
+    {
+        // Replace the environment's globals when set
+        const InternalValueMap* globals = nullptr;
+        // Or the host's, converted in the render (RenderOptions::globals)
+        const std::shared_ptr<const ValuesMap>* hostGlobals = nullptr;
+        // The host's poll (detail::t_hostPoll) for the render, or null to keep the thread's
+        const std::function<void()>* poll = nullptr;
+    };
+
+    // The same with the public options: their globals, lent for the render and kept by any value a
+    // host keeps (LendGlobal), and their poll
+    // Defined in template_render_options.cpp, so that the RenderCore with hooks is not compiled in template.cpp:
+    // there it changed what GCC inlines into the ordinary render's ~RenderContext (+14 instructions a render)
+    template<typename Target>
+    std::optional<BasicErrorInfo<CharT>> RenderWithOptions(Target& os, const ValuesMap& params, const RenderOptions& options) const;
 
     // Renders with the params of a ValuesMap or a GenericMap, appending to a string or writing to a
     // host's sink. Rendering reads the template only, so several threads may render one template at once.
@@ -433,9 +453,53 @@ public:
         return RenderCore<false>(os, params, nullptr);
     }
 
-    // `hostGlobals` (with hasHostGlobals set) replaces the environment's globals (RenderInternal)
-    template<bool hasHostGlobals, typename Target, typename ParamsMap>
-    std::optional<BasicErrorInfo<CharT>> RenderCore(Target& os, const ParamsMap& params, const InternalValueMap* hostGlobals) const
+    // The poll of a render with hooks, installed in `scope`, or null
+    struct NoPollScope
+    {
+    };
+    static detail::HostPoll InstallPoll(NoPollScope& /*scope*/, const RenderHooks* /*hooks*/) { return nullptr; }
+    static detail::HostPoll InstallPoll(std::optional<HostPollScope>& scope, const RenderHooks* hooks)
+    {
+        if (hooks->poll)
+        {
+            scope.emplace(hooks->poll);
+        }
+        return hooks->poll;
+    }
+    // The globals of a render with hooks, converted into `converted` where the host gave its own, or null
+    struct NoGlobals
+    {
+    };
+    static const InternalValueMap* GlobalsOf(NoGlobals& /*converted*/, const RenderHooks* /*hooks*/) { return nullptr; }
+    static const InternalValueMap* GlobalsOf(InternalValueMap& converted, const RenderHooks* hooks)
+    {
+        if (!hooks->hostGlobals)
+        {
+            return hooks->globals;
+        }
+        const auto& host = *hooks->hostGlobals;
+        for (const auto& [name, value] : *host)
+        {
+            converted[name] = LendGlobal(value, host);
+        }
+        return &converted;
+    }
+    // The limits a render installs: the template's, or with a poll of its own and none, those that count its steps
+    [[nodiscard]] const Settings::Limits* RenderLimitsOf(detail::HostPoll poll) const
+    {
+        // A poll counts steps even where the template's own limits count none (a big-integer backend alone installs
+        // them outside a boost build)
+        if (poll && !HasRenderLimits(m_settings->settings.limits))
+        {
+            return &PollOnlyLimits();
+        }
+        return m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr;
+    }
+
+    // `hooks` (with hasHooks set) brings the render's own globals and poll (RenderHooks). A
+    // separate instantiation, so that the ordinary Render pays nothing for them
+    template<bool hasHooks, typename Target, typename ParamsMap>
+    std::optional<BasicErrorInfo<CharT>> RenderCore(Target& os, const ParamsMap& params, const RenderHooks* hooks) const
     {
         static_assert(std::is_same_v<Target, std::basic_string<CharT>> || std::is_same_v<Target, BasicOutputSink<CharT>>);
         std::optional<BasicErrorInfo<CharT>> normalResult;
@@ -459,8 +523,14 @@ public:
             // First, so that it ends last: when nothing of the render holds values any more
             // It also keeps the render's copies of the host's data (docs/tasks/0049)
             const CycleCollector cycles;
+            // Before the limits, which start counting the steps to the first poll. Nothing at all for an ordinary render
+            std::conditional_t<hasHooks, std::optional<HostPollScope>, NoPollScope> pollScope;
+            const auto poll = InstallPoll(pollScope, hooks);
             // Before anything else the render does, the conversion of the params included
-            const RenderLimitsScope limitsScope(m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr, m_settings->bigIntBackend);
+            const RenderLimitsScope limitsScope(RenderLimitsOf(poll), m_settings->bigIntBackend);
+            // Under the limits and in the error boundary, as the params are: a host global may be a big integer past the cap
+            std::conditional_t<hasHooks, InternalValueMap, NoGlobals> convertedGlobals;
+            const InternalValueMap* hostGlobals = GlobalsOf(convertedGlobals, hooks);
             // The tables of the params and the top scope are lent by the thread's workspace and
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;
@@ -471,7 +541,7 @@ public:
             };
 
             static const InternalValueMap noGlobals;
-            const auto globals = m_env && !hasHostGlobals ? GetGlobalsSnapshot(*detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
+            const auto globals = m_env && !hostGlobals ? GetGlobalsSnapshot(*detail::TemplateEnvAccess::GetImpl(*m_env)) : nullptr;
 
             // A GenericMap returns values by copy; the context refers to them, so they live here
             std::list<Value> genericValues;
@@ -498,8 +568,8 @@ public:
             }
             RendererCallback callback(this);
             callback.SetGlobals(globals.get());
-            const InternalValueMap& renderGlobals = hasHostGlobals ? *hostGlobals : globals ? globals->values
-                                                                                            : noGlobals;
+            const InternalValueMap& renderGlobals = hostGlobals ? *hostGlobals : globals ? globals->values
+                                                                                         : noGlobals;
             RenderContext context(intParams,
                                   renderGlobals,
                                   &callback,
@@ -737,8 +807,8 @@ public:
             // anything that is no constant
             if (const InternalValue* constant = nodes[ref].GetConstant(nodes))
             {
-                const auto text = AsStringView<char>(*constant);
-                names.push_back(text ? std::optional<std::string>(std::string(*text)) : std::nullopt);
+                // A wide template's names are converted, as its include converts them (LoadTemplate)
+                names.push_back(GetAsSameString(std::string(), *constant));
                 continue;
             }
             // Jinja2 sees through a tag's expression to a list or tuple literal, but not through a condition
@@ -762,9 +832,9 @@ public:
                 {
                     names.emplace_back();
                 }
-                else if (const auto text = AsStringView<char>(*constant))
+                else if (auto text = GetAsSameString(std::string(), *constant))
                 {
-                    names.emplace_back(std::string(*text));
+                    names.push_back(std::move(text));
                 }
             }
         }

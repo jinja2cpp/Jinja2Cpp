@@ -1,5 +1,5 @@
-// The engine's part of the Python module's sandbox (docs/tasks/0354): the SecurityError marker of an unsafe
-// attribute's error, Dialect::ImmutableSandbox, the undefined item of sum(attribute=), and the ISandboxPolicy
+// The engine's part of the Python module's sandbox (docs/tasks/0354): ErrorCode::SecurityError of an unsafe
+// attribute's error, Dialect::ImmutableSandbox, the undefined item of sum(attribute=), and the IEngineSandboxPolicy
 // callback an environment holds (src/sandbox_policy.h), tried with a toy policy written in C++
 
 #include "../src/dialect.h"
@@ -53,7 +53,7 @@ void UseDialect(TemplateEnv& env, detail::Dialect dialect)
 }
 
 // Refuses `secret`, answers a method it replaces by a callable, answers a missing name, and formats by itself
-class ToyPolicy final : public ISandboxPolicy
+class ToyPolicy final : public IEngineSandboxPolicy
 {
 public:
     [[nodiscard]] std::optional<InternalValue> NativeAttribute(const InternalValue&, const std::string& name) const override
@@ -73,7 +73,7 @@ public:
         }
         return std::nullopt;
     }
-    InternalValue Format(const InternalValue&, bool formatMap, const CallParams& params, RenderContext&) const override
+    std::optional<InternalValue> Format(const InternalValue&, bool formatMap, const CallParams& params, RenderContext&) const override
     {
         return InternalValue(std::string(formatMap ? "map:" : "format:") + std::to_string(params.posParams.size()));
     }
@@ -81,19 +81,18 @@ public:
 };
 } // namespace
 
-TEST(SandboxEngineTest, UnsafeAttributeErrorCarriesTheSecurityMarker)
+TEST(SandboxEngineTest, UnsafeAttributeErrorIsASecurityError)
 {
     TemplateEnv env;
     UseDialect(env, detail::Dialect::ImmutableSandbox);
     ErrorInfo error;
     const auto text = RenderOrError(env, "{{ [].append(1) }}", &error);
     EXPECT_NE(text.find("access to attribute 'append' of 'list' object is unsafe."), std::string::npos) << text;
-    EXPECT_EQ(error.GetCode(), ErrorCode::UndefinedError);
-    ASSERT_EQ(error.GetExtraParams().size(), 2u);
-    EXPECT_EQ(*error.GetExtraParams()[1].GetIf<std::string>(), SecurityErrorMarker);
+    EXPECT_EQ(error.GetCode(), ErrorCode::SecurityError);
+    EXPECT_EQ(error.GetExtraParams().size(), 1u);
 }
 
-TEST(SandboxEngineTest, PlainUndefinedErrorHasNoMarker)
+TEST(SandboxEngineTest, PlainUndefinedErrorIsNoSecurityError)
 {
     TemplateEnv env;
     ErrorInfo error;
@@ -113,7 +112,7 @@ TEST(SandboxEngineTest, ImmutableSandboxDialectRefusesOnlyTheMutatingMethods)
         ErrorInfo error;
         const auto text = RenderOrError(env, source, &error);
         EXPECT_NE(text.find("is unsafe."), std::string::npos) << source << ": " << text;
-        EXPECT_EQ(error.GetExtraParams().size(), 2u) << source;
+        EXPECT_EQ(error.GetCode(), ErrorCode::SecurityError) << source;
     }
     EXPECT_EQ(RenderOrError(env, "{% set l = [3, 1] %}{{ l.index(1) }}{{ l.count(3) }}{{ l.copy() }}{% set d = {'a': 1} %}{{ d.get('a') }}{{ d.keys()|list }}"), "11[3, 1]1['a']");
     // Not the transformers dialect: tojson stays Jinja2's

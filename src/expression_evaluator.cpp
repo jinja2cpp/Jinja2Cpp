@@ -1712,7 +1712,7 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
 
     if (values.GetSandboxPolicy())
     {
-        // The policy decides about a method of a value, as about an attribute (ISandboxPolicy::NativeAttribute)
+        // The policy decides about a method of a value, as about an attribute (IEngineSandboxPolicy::NativeAttribute)
         if (auto replacement = SandboxedNativeAttribute(&values, receiver, *name))
         {
             callee = std::move(*replacement);

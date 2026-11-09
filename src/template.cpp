@@ -268,6 +268,19 @@ Result<void, CharT> BasicTemplate<CharT>::RenderToGeneric(BasicOutputSink<CharT>
 }
 
 template<typename CharT>
+Result<void, CharT> BasicTemplate<CharT>::RenderTo(StringType& out, const ValuesMap& params, const RenderOptions& options) const
+{
+    TruncateOnError guard(out);
+    return ToResult(guard.Done(GetImpl<CharT>(m_impl)->RenderWithOptions(out, params, options)));
+}
+
+template<typename CharT>
+Result<void, CharT> BasicTemplate<CharT>::RenderTo(BasicOutputSink<CharT>& sink, const ValuesMap& params, const RenderOptions& options) const
+{
+    return ToResult(GetImpl<CharT>(m_impl)->RenderWithOptions(sink, params, options));
+}
+
+template<typename CharT>
 Result<GenericMap, CharT> BasicTemplate<CharT>::GetMetadata() const
 {
     return GetImpl<CharT>(m_impl)->GetMetadata();
@@ -283,6 +296,12 @@ template<typename CharT>
 Result<std::vector<std::string>, CharT> BasicTemplate<CharT>::FindUndeclaredVariables() const
 {
     return GetImpl<CharT>(m_impl)->FindUndeclaredVariables();
+}
+
+template<typename CharT>
+Result<std::vector<std::optional<std::string>>, CharT> BasicTemplate<CharT>::FindReferencedTemplates() const
+{
+    return GetImpl<CharT>(m_impl)->FindReferencedTemplates();
 }
 
 template<typename CharT>

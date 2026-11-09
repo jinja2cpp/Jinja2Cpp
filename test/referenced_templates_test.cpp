@@ -1,4 +1,3 @@
-#include "../src/template_impl.h"
 #include "test_tools.h"
 
 #include <jinja2cpp/error_info.h>
@@ -15,8 +14,8 @@
 
 using namespace jinja2;
 
-// The internal walk behind the Python module's jinja2.meta.find_referenced_templates
-// (docs/tasks/0354) against Jinja2 3.1.6's: the names of `extends`, `include`, `import` and
+// Template::FindReferencedTemplates (the Python module's jinja2.meta.find_referenced_templates,
+// docs/tasks/0354, public since 0357) against Jinja2 3.1.6's: the names of `extends`, `include`, `import` and
 // `from` in source order, "?" for a name that is no constant
 namespace
 {
@@ -66,7 +65,7 @@ TEST_P(ReferencedTemplatesTest, MatchesJinja2)
     TemplateEnv env;
     Template tpl(&env);
     ASSERT_TRUE(tpl.Load(GetParam().source).has_value());
-    auto found = TemplateImpl<char>::ReferencedTemplatesOf(tpl);
+    auto found = tpl.FindReferencedTemplates();
     ASSERT_TRUE(found.has_value()) << ErrorToString(found.error());
     EXPECT_EQ(SplitNames(GetParam().names), *found) << GetParam().source;
 }
@@ -77,7 +76,17 @@ TEST(ReferencedTemplatesNotLoadedTest, ReportsTheError)
 {
     TemplateEnv env;
     Template tpl(&env);
-    auto found = TemplateImpl<char>::ReferencedTemplatesOf(tpl);
+    auto found = tpl.FindReferencedTemplates();
     ASSERT_FALSE(found.has_value());
     EXPECT_EQ(ErrorCode::TemplateNotParsed, found.error().GetCode());
+}
+
+TEST(ReferencedTemplatesWideTest, GivesNarrowNames)
+{
+    TemplateEnv env;
+    TemplateW tpl(&env);
+    ASSERT_TRUE(tpl.Load(L"{% extends 'base' %}{% include ['a', x] %}{% import n as m %}").has_value());
+    auto found = tpl.FindReferencedTemplates();
+    ASSERT_TRUE(found.has_value()) << ErrorToString(found.error());
+    EXPECT_EQ(SplitNames("base a ? ?"), *found);
 }

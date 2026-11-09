@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 priority: low
 area: api
 depends: [0354, 0357]
@@ -20,3 +20,10 @@ it was loaded with (as it keeps the delimiters). Whichever is chosen, `TemplateE
 Python module's per-load refresh of the public-names flag follow it.
 
 **Done when.** The decision is in `docs/design/0357` and a C++ test pins it.
+
+**Decision (0357 S2c).** A template keeps the policy it was loaded with, as it keeps its delimiters and other
+settings: the public policy is `Settings::sandboxPolicy`, compared by identity in `Settings ==`, so a Load after a
+change gets a fresh `LoadSettings` and the cache's own comparison of settings applies as for any other setting.
+Pinned by `PublicSandboxPolicyTest.ATemplateKeepsThePolicyItWasLoadedWith`. The internal `SetSandboxPolicy` and
+`SetDialect` go with the Python module's switch (0357 S3/S4).
+

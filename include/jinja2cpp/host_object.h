@@ -327,6 +327,9 @@ struct UndefinedDescription
     bool isAttr = true;
     //! Replaces the message built from the fields above when not empty
     std::string hint;
+    //! A sandbox refused the attribute (Jinja2's `unsafe_undefined`): a use that fails reports
+    //! ErrorCode::SecurityError instead of ErrorCode::UndefinedError (\ref ISandboxPolicy)
+    bool security = false;
 };
 
 /*!

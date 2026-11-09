@@ -303,7 +303,7 @@ const UndefinedCarrier* AsCarrier(const IHostObject* object)
 // hint is a plain undefined, which fails no use (what the engine hands out for a name it has no information about)
 InternalValue UndefinedFromDescription(const UndefinedDescription& description)
 {
-    if (description.policy == UndefinedPolicy::Default && description.name.empty() && description.objType.empty() && description.hint.empty())
+    if (description.policy == UndefinedPolicy::Default && description.name.empty() && description.objType.empty() && description.hint.empty() && !description.security)
     {
         return InternalValue(UndefinedValue{});
     }
@@ -313,6 +313,7 @@ InternalValue UndefinedFromDescription(const UndefinedDescription& description)
     info->objType = description.objType;
     info->isAttr = description.isAttr;
     info->hint = description.hint;
+    info->security = description.security;
     return InternalValue(UndefinedValue{ info.get() });
 }
 
@@ -766,6 +767,7 @@ Value UndefinedToHost(const UndefinedValue& undefined)
         description.objType = info->objType;
         description.isAttr = info->isAttr;
         description.hint = info->hint;
+        description.security = info->security;
     }
     return MakeUndefined(std::move(description));
 }

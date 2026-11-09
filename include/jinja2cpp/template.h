@@ -17,8 +17,10 @@
 #error "Jinja2C++ needs expected-lite's nonstd::expected: define nsel_CONFIG_SELECT_EXPECTED=nsel_EXPECTED_NONSTD"
 #endif
 
+#include <functional>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -44,6 +46,35 @@ using ResultW = Result<U, wchar_t>;
 //! What `Result::value()` throws on an error; the spelling survives a switch of Result to std::expected
 template<typename CharT = char>
 using BadResultAccess = nonstd::bad_expected_access<BasicErrorInfo<CharT>>;
+
+/*!
+ * \brief What a render takes besides its params (\ref BasicTemplate::RenderTo)
+ *
+ * ```cpp
+ * jinja2::RenderOptions options;
+ * options.globals = std::make_shared<const jinja2::ValuesMap>(jinja2::ValuesMap{{"site", "example.org"}});
+ * options.poll = [&] { if (cancelled) throw Cancelled(); };
+ * auto result = tpl.RenderTo(out, params, options);
+ * ```
+ */
+struct RenderOptions
+{
+    /*!
+     * The render's globals instead of the environment's (\ref TemplateEnv::AddGlobal): the
+     * template and every template it includes, imports or extends see these, under its params.
+     * Null, the default, keeps the environment's. Shared, as a value of the map that a callable
+     * keeps stays valid after the render.
+     */
+    std::shared_ptr<const ValuesMap> globals;
+    /*!
+     * Called on the rendering thread about every 1024 render steps, and more often while a render
+     * time limit (Settings::Limits::maxRenderTime) runs: a way to cancel a render, or to check a
+     * host's signals. It may throw to stop the render; the render then fails with the exception in
+     * \ref BasicErrorInfo::GetException. A render that the poll's render starts with no poll of
+     * its own (a callable rendering another template) is polled with it too.
+     */
+    std::function<void()> poll;
+};
 
 /*!
  * \brief Raw contents of the {% meta %} tag
@@ -366,6 +397,19 @@ public:
         return RenderToGeneric(sink, params);
     }
     /*!
+     * \brief Render previously loaded template, appending the output to a string, with \ref RenderOptions
+     *
+     * As `RenderTo(out, params)`, with the render's own globals and poll.
+     */
+    [[nodiscard]] Result<void, CharT> RenderTo(StringType& out, const ValuesMap& params, const RenderOptions& options) const;
+    Result<void, CharT> RenderTo(StringType&& out, const ValuesMap& params, const RenderOptions& options) const = delete;
+    /*!
+     * \brief Render previously loaded template, streaming the output to a sink, with \ref RenderOptions
+     *
+     * As `RenderTo(sink, params)`, with the render's own globals and poll.
+     */
+    [[nodiscard]] Result<void, CharT> RenderTo(BasicOutputSink<CharT>& sink, const ValuesMap& params, const RenderOptions& options) const;
+    /*!
      * \brief Get metadata, provided in the {% meta %} tag
      *
      * @return Parsed metadata as a generic map value or instance of \ref BasicErrorInfo as an error
@@ -388,6 +432,17 @@ public:
      * @return The names, or the error of the parse (TemplateNotParsed before a successful Load)
      */
     [[nodiscard]] Result<std::vector<std::string>, CharT> FindUndeclaredVariables() const;
+    /*!
+     * \brief The names of the templates the template refers to, as `jinja2.meta.find_referenced_templates`
+     *
+     * The names the `extends`, `include`, `import` and `from` tags give, in source order. A tag
+     * whose name is a string literal gives it, a list or tuple literal of strings gives each of them,
+     * and any other expression gives `std::nullopt`, as Jinja2 gives `None`. The templates are not
+     * loaded or looked into. Parses the template's source again.
+     *
+     * @return The names, or the error of the parse (TemplateNotParsed before a successful Load)
+     */
+    [[nodiscard]] Result<std::vector<std::optional<std::string>>, CharT> FindReferencedTemplates() const;
     /*!
      * \brief Renders the template once and returns what it exports, as Jinja2's `make_module(vars)`
      *
