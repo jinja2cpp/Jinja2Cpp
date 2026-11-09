@@ -42,3 +42,23 @@ for per-tag costs that MiniJinja does not pay.
 **Done when.** `Render/substitute` is at or under 1,700 instructions (-23%, about Tera's
 time) and `Render/plain_text` is under 900, with no Render case worse than +0.3%. Load is a
 stretch goal: `Load/strings` within 5% of MiniJinja's time.
+
+**Scout 2026-11-09 (master 8a573d2,
+/mnt/project-files/perf-track/2026-11-09-scout.md).** The per-render fixed cost grew again
+in the week of 11-02: `Render/plain_text` went from 1,007 to 1,021 Ir (+14) and
+`Render/substitute` from 2,223 to 2,254 (+31). The new items:
+- #784 and #801 each copy one field into the `IRendererCallback` base on every render:
+  `promptEscaper` and `sandboxPolicy` (src/render_context.h:160-170, set at
+  src/template_impl.h:877-878). +2 Ir each.
+- #733's three RenderContext fields and #751's closure-frame state (`m_endsBeforeRender`,
+  `m_captures`). +5 Ir each.
+- #774's print path. +18 Ir on `substitute`.
+
+Fold them in this task's first step:
+- give `IRendererCallback` one `const LoadSettings*` instead of a field per feature;
+- initialise the closure and capture fields with one store, or on first use;
+- re-check #774's `ValueRenderer` layout.
+
+Expected: -6..-10 Ir on `plain_text` and up to -20 on `substitute`. Without this, every new
+per-template feature keeps adding a store to every render. Tera still renders `substitute`
+faster (0.92x).

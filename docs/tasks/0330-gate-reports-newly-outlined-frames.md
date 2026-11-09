@@ -67,3 +67,11 @@ the gate already has.
 **Done when.** On a local replay of #643's first head against its base, `frames.py` names
 the outlined `emplace_back` without a manual callgrind diff, and an unchanged-source
 rebuild reports nothing.
+
+**New case, scout 2026-11-09.** After #801 (2eb45cc), GCC calls `DictSort`'s
+`AsString(byVal) == "key"` / `== "value"` (src/filters.cpp:610, :633) out of line, as
+`std::operator==(const std::string&, const char*)` with `strlen` and `memcmp`. That is
+about 100 calls and 4.7k Ir per `Render/config_file`. #801 did not edit DictSort: the
+inlining budget of filters.cpp moved. The fix is to compare `std::string_view` against
+`std::string_view` literals, or to resolve `by` to an enum once per call. It recovers
+about -0.35..-0.4% of `config_file`. It is also a replay case `frames.py` should catch.
