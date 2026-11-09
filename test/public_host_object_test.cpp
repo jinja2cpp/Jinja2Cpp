@@ -282,9 +282,9 @@ private:
     std::shared_ptr<const ToySpec> m_spec;
 };
 
-Value MakeToy(std::shared_ptr<const ToySpec> spec)
+Value MakeToy(const std::shared_ptr<const ToySpec>& spec)
 {
-    return MakeHostValue<ToyObject>(std::move(spec));
+    return MakeHostValue<ToyObject>(spec);
 }
 
 Value MakeToy(ToySpec spec = {})
