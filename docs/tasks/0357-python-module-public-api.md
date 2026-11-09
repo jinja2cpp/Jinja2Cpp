@@ -50,3 +50,15 @@ freeze.
   by `shared_ptr`), and `MakeHostValue<T>` three; the probe decides whether one ownership model
   must give way. Follow-ups filed: 0421 (a tuple a host returns), 0422 (exports of a running
   module call), 0423 (callables nested deeper in a host call's argument).
+- 2026-11-09, Ruslan's decision on D2: option (c) plus one more sink, residual gap accepted.
+  The branch is rebased on master after #794, #801 and #805 (the sandbox policy's comment now
+  names `IEngineHostObject`). Taken: one allocation per host value with no `dynamic_cast` on the
+  host path, direct indexing of random-access host lists, `HostResult` with `GetAttrTo`,
+  `GetItemTo`, `ItemAtTo`, and `HostResult::SetHostObject` (shared or built in place) for nested
+  host objects, with tests in `test/public_host_object_test.cpp`. Callgrind instructions per
+  render through the probe module (PyHost on the public interface, nested dicts, lists and tuples
+  through the sink; throwaway branch `wt-0357-sink`), second of two runs, private seam / (c) /
+  (c) + sink: for_filter_if 818,610 / 894,552 / 853,131; chat_llama 636,918 / 726,761 /
+  710,482; mitsuhiko_table 8,211,299 / 9,131,276 / 8,890,719. D7 is relaxed for host-data cases
+  (api-2.0.md section 7 item 10); `detail::MakeHostValueInPlace` and
+  `HostResult::SetHostObjectInPlace` are frozen ABI.
