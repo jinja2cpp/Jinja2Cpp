@@ -147,13 +147,28 @@ cannot happen before a tag exists, or it has no end state a release could wait f
 | Publishing wheels to PyPI | publication part of 0248 | Like the other registries, it follows the tag. The drop-in module itself, its wheels built in CI and its test-suite pass rate are in scope (0248) |
 | Parity cases found after the freeze | — | The corpus keeps growing; new divergences found during the RC window are filed for 2.x unless they are crashes, leaks or silent wrong values, which block (G8) |
 
-**Deliberate divergences** stay documented, not bugs (13 corpus lines): integer overflow
-raises in the default build (0015; big integers are opt-in through 0178's backend),
-names captured by a closure that outlives its frame read as undefined (0165, 6 lines),
-`select`/`map`/`reject` results can be iterated twice (0101, 2 lines), `%c` of a lone
-surrogate in wide templates (0106). Outside the corpus, a call block escapes a callable's
-plain string result under autoescape, which Jinja2 writes raw (0362, Ruslan 2026-11-02).
-Corpus on master `b0fb0ef`: 1929 cases, 1886 match.
+**Deliberate divergences** stay documented, not bugs. The corpus has 16 `deliberate:` lines, plus
+3 `@nobigint` build lines:
+- integer overflow raises in the default build (0015; big integers are opt-in through 0178's
+  backend, hence the 3 `@nobigint` lines), and `range` bounds are int64 (0178, 1 line);
+- names captured by a closure that outlives its frame read as undefined (0165, 5 lines);
+- `select`/`map`/`reject` results can be iterated twice (0101, 2 lines) and are collected
+  when the filter is called, not one item per step (0399, 3 lines, Ruslan 2026-11-06);
+- a block reference and `f.__call__` are one stored callable, so each equals itself (0214,
+  2 lines);
+- a `loop.cycle` kept past a `break` out of a lazily filtered loop prints its length as `?`
+  (0366);
+- a loop kept past its statement takes its length when the statement ends (0390);
+- `%c` of a lone surrogate in wide templates (0106).
+
+Outside the corpus:
+- a call block escapes a callable's plain string result under autoescape, which Jinja2 writes
+  raw (0362, Ruslan 2026-11-02);
+- borrowed JSON views start fresh in each module call (0402 option b, Ruslan 2026-11-06).
+
+Corpus on master `4b8ed5be`: 3225 cases, 3204 match. The upstream pallets/jinja suite through
+the Python module (0355) passes 596 of 856, which is 596 of the 655 in the supported subset.
+Its divergences are filed as 0412, 0415 and 0431-0436.
 
 ## 6. Confirmed facts for this revision
 
