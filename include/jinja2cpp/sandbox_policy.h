@@ -25,7 +25,7 @@ inline namespace v2
  * The policy is asked:
  * - for every attribute or method a template reads from a value of the engine by name (`s.upper`, `l.append`,
  *   `x|attr('n')`, `loop.index`), found or not, before the engine's own answer is used;
- * - for `str.format` and `str.format_map`, which it may perform itself (\ref Format).
+ * - for `str.format`, which it may perform itself (\ref Format).
  *
  * Together with \ref Settings::immutableContainers, \ref ErrorCode::SecurityError and the `security` flag of
  * \ref UndefinedDescription it is what the Python module's `SandboxedEnvironment` and
@@ -61,8 +61,9 @@ public:
      *
      * Return the result, or `std::nullopt`, the default, for the engine's own `str.format`, which then reads the
      * attribute a format field names (`{0.name}`) through \ref NativeAttribute, as Jinja2's `SandboxedFormatter`
-     * does: a refused one formats as its undefined value. Strings of the engine have no `format_map` unless
-     * \ref NativeAttribute supplies one.
+     * does: a refused one formats as its undefined value. The engine asks with `formatMap` false only: its
+     * strings have no `format_map`, so a policy that wants one returns it from \ref NativeAttribute (a callable
+     * that calls `Format(self, true, ...)` itself), as the Python module does.
      *
      * @param self       The string
      * @param formatMap  Whether the call is `format_map`, whose one argument is the mapping
