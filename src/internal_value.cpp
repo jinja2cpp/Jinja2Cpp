@@ -2031,6 +2031,7 @@ public:
     {
         // As OwnedAdapter
         this->SetTraversable();
+        this->SetBorrowed();
     }
     void Traverse(const TraverseFn& fn) const override { m_link.TraverseFrozen(fn); }
 
@@ -2082,7 +2083,6 @@ public:
                             HasNodeIdentity(m_node));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
-    [[nodiscard]] bool IsBorrowed() const override { return true; }
     // An enumeration of the list's cell that finds the cell's storage again at each step: a
     // module call the loop body makes can copy the cell on write (decision D8) and let go of the
     // storage the loop started on (Codex review)
@@ -2286,6 +2286,7 @@ public:
     explicit ValuesListAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
+        this->SetBorrowed();
         if constexpr (std::is_same_v<Holder<int>, ByHeldRef<int>>)
         {
             this->MarkGlobalData();
@@ -2512,7 +2513,6 @@ public:
         return cell ? cell->MutableItems() : nullptr;
     }
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData(), this->IsInSnapshot(), AdaptersOwner(m_values)); }
-    [[nodiscard]] bool IsBorrowed() const override { return true; }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericList CreateGenericList() const override
     {
@@ -4734,7 +4734,7 @@ Value LendMembers(Value&& exported, const LendFrame& frame)
 }
 
 // Whether a container argument is the template's own, which may hold template callables: decided on the
-// engine's value, before any export is made
+// engine's value, before any export is made. Inline: every container argument of a host's call asks it
 bool MayHoldTemplateCallables(const InternalValue& container)
 {
     if (const auto map = AsMap(container))
@@ -4745,19 +4745,16 @@ bool MayHoldTemplateCallables(const InternalValue& container)
     if (const auto list = AsList(container))
     {
         const auto* accessor = list->GetAccessor();
-        return accessor != nullptr && !accessor->IsBorrowed() && accessor->GetRangeInfo() == nullptr;
+        return accessor != nullptr && !accessor->IsBorrowed() && !accessor->IsRange();
     }
     return false;
 }
 
-// An argument that is a container, as the host gets it: its export, which lends its callable members
-JINJA2CPP_NOINLINE_INLINE Value ContainerToHost(const InternalValue& value, RenderContext& context, HostCallScope& scope)
+// An argument that is a container the template owns (MayHoldTemplateCallables), as the host gets it: its export,
+// which lends its callable members. Out of line, as the host's own data takes none of it
+JINJA2CPP_COLD_INLINE Value LendContainerToHost(const InternalValue& value, RenderContext& context, HostCallScope& scope)
 {
     auto exported = scope.keepUndefined ? ToHostValue(value) : IntValue2Value(value);
-    if (!MayHoldTemplateCallables(value))
-    {
-        return exported;
-    }
     if (!scope.lease)
     {
         scope.lease = std::make_shared<CallableLease>(CallableLease{ &context, CycleCollector::Current(), std::this_thread::get_id(), detail::t_renderLimits, &scope });
@@ -4777,9 +4774,9 @@ JINJA2CPP_HOT_INLINE Value ArgumentToHost(const InternalValue& value, RenderCont
         }
         return LendToHost(value, context, scope);
     }
-    if (IsContainer(value))
+    if (MayHoldTemplateCallables(value))
     {
-        return ContainerToHost(value, context, scope);
+        return LendContainerToHost(value, context, scope);
     }
     if (scope.keepUndefined)
     {

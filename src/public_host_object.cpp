@@ -338,6 +338,7 @@ public:
         : m_object(object)
         , m_holder(std::move(holder))
     {
+        SetBorrowed();
     }
 
     [[nodiscard]] size_t GetItemsCountImpl() const { return m_object->Len().value_or(0); }
@@ -363,7 +364,6 @@ public:
     // The items own what they hold: strings are copied, host values own their objects
     [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
     // The host's data: list() copies it
-    [[nodiscard]] bool IsBorrowed() const override { return true; }
     [[nodiscard]] const void* GetIdentity() const override { return m_object->Identity(); }
     [[nodiscard]] GenericList CreateGenericList() const override { return GenericList(std::make_shared<const HostSequenceList>(m_object, m_holder)); }
 

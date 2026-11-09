@@ -146,20 +146,24 @@ public:
     // A copy is a new object: its count starts at zero
     ValueObject(const ValueObject& other) noexcept
         : m_flags(other.m_flags)
+        , m_isBorrowed(other.m_isBorrowed)
     {
     }
     ValueObject(ValueObject&& other) noexcept
         : m_flags(other.m_flags)
+        , m_isBorrowed(other.m_isBorrowed)
     {
     }
     ValueObject& operator=(const ValueObject& other) noexcept
     {
         m_flags = other.m_flags;
+        m_isBorrowed = other.m_isBorrowed;
         return *this;
     }
     ValueObject& operator=(ValueObject&& other) noexcept
     {
         m_flags = other.m_flags;
+        m_isBorrowed = other.m_isBorrowed;
         return *this;
     }
     virtual ~ValueObject() = default;
@@ -187,6 +191,9 @@ public:
     // Whether the object is the list accessor of a range() (IListAccessor::GetRangeInfo), so that
     // an operator on two lists tells a range without a virtual call (docs/tasks/0401)
     [[nodiscard]] bool IsRange() const noexcept { return m_isRange; }
+    // Whether the object is a list adapter of the host's data (IListAccessor::IsBorrowed), so that a host's call tells
+    // the host's list from the template's own without a virtual call
+    [[nodiscard]] bool IsBorrowedList() const noexcept { return m_isBorrowed; }
     // The thread's snapshot of the globals reaches the object: a global's own adapter, or an item
     // in the block of item adapters such an adapter reads now, whose link to a cell is listed in
     // the cell (CellLink, docs/tasks/0346). Set before the object is shared; cleared on the
@@ -227,6 +234,8 @@ protected:
     void SetIteratorKind(IteratorKind kind) noexcept { m_flags = static_cast<uint8_t>((m_flags & ~IteratorMask) | (static_cast<uint8_t>(kind) << IteratorShift)); }
     // Set by the constructor of a range()'s accessor
     void SetRange() noexcept { m_isRange = true; }
+    // Set by the constructor of a list adapter of the host's data
+    void SetBorrowed() noexcept { m_isBorrowed = true; }
 
 private:
     static constexpr uint8_t CloneFlag = 1;
@@ -240,6 +249,7 @@ private:
     // In the padding after m_flags, so that the object keeps its size
     mutable bool m_inSnapshot = false;
     bool m_isRange = false;
+    bool m_isBorrowed = false;
 };
 // The flags and m_isRange share the padding after the count: every value's object stays this size
 static_assert(sizeof(ValueObject) <= sizeof(void*) + sizeof(unsigned) + 4, "ValueObject grew");
@@ -672,7 +682,7 @@ struct IListAccessor : ValueObject
     virtual bool AdoptCopy(const InternalValue& /*self*/, const InternalValue& /*copy*/) const { return false; }
     // Whether the list is the host's data, which a write in the render changes for every name of
     // it (AdoptCopy), so that list() must copy it
-    [[nodiscard]] virtual bool IsBorrowed() const { return false; }
+    [[nodiscard]] bool IsBorrowed() const noexcept { return IsBorrowedList(); }
     // The link of an adapter of the host's data to the render's copy of it (borrowed_cells.h);
     // null for the other lists
     [[nodiscard]] virtual const CellLink* GetCellLink() const { return nullptr; }
