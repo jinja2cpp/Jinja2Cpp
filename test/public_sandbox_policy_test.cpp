@@ -35,7 +35,10 @@ public:
     {
         {
             const std::scoped_lock lock(m_guard);
-            m_asked.push_back(std::string(name) + (obj.IsString() ? " of '" + obj.AsString() + "'" : std::string()));
+            const auto* map = obj.GetIf<GenericMap>();
+            const char* objectClass = map ? map->GetObjectClass() : nullptr;
+            m_asked.push_back(std::string(name) + (obj.IsString() ? " of '" + obj.AsString() + "'" : objectClass ? " of " + std::string(objectClass)
+                                                                                                                 : std::string()));
         }
         if (!name.empty() && name[0] == '_')
         {
@@ -140,6 +143,21 @@ TEST(PublicSandboxPolicyTest, ThePolicyIsAskedAboutAttributesAndMethodsFoundOrNo
     EXPECT_NE(std::find(asked.begin(), asked.end(), "upper of 'abc'"), asked.end());
     EXPECT_NE(std::find(asked.begin(), asked.end(), "extra of 'abc'"), asked.end());
     EXPECT_NE(std::find(asked.begin(), asked.end(), "split of 'a b'"), asked.end());
+}
+
+// A template object reaches the policy with its class: `loop` and a namespace as snapshots, a macro and a global
+// function as empty maps of class "Macro" and "function" (0357 S3)
+TEST(PublicSandboxPolicyTest, TemplateObjectsReachThePolicyWithTheirClass)
+{
+    auto policy = std::make_shared<const ToyPolicy>();
+    TemplateEnv env;
+    env.GetSettings().sandboxPolicy = policy;
+    EXPECT_EQ("||1|", RenderOrError(env, "{% macro m() %}{% endmacro %}{{ m.a }}|{{ range.b }}|{% for x in 'a' %}{{ loop.index }}{% endfor %}|{{ namespace(n=1).c }}"));
+    const auto asked = policy->Asked();
+    for (const char* expected : { "a of Macro", "b of function", "index of LoopContext", "c of Namespace" })
+    {
+        EXPECT_NE(std::find(asked.begin(), asked.end(), expected), asked.end()) << expected;
+    }
 }
 
 TEST(PublicSandboxPolicyTest, TheEnginesFormatAsksAboutFieldAttributes)

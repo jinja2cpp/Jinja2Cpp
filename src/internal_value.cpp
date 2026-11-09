@@ -4,6 +4,7 @@
 #include "borrowed_cells.h"
 #include "cycle_collector.h"
 #include "engine_errors.h"
+#include "error_boundary.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
 #include "host_object.h"
@@ -4085,7 +4086,8 @@ InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value
         }
         return InternalValue(ListAdapter(std::move(adapter)));
     }
-    if (const auto* map = std::get_if<GenericMap>(&item.GetData()))
+    // A host object (MakeHostValue) is read as the object, as everywhere else it enters a render
+    if (const auto* map = std::get_if<GenericMap>(&item.GetData()); map && !(map->GetAccessor() && map->GetAccessor()->AsHostObject()))
     {
         auto adapter = MakeRef<GenericMapAdapter<BySharedVal>>(GenericMap(*map));
         adapter->MarkGlobalData();
@@ -4261,11 +4263,21 @@ Value IntValue2Value(const InternalValue& val)
     return Apply<OutputValueConvertor>(val);
 }
 
+namespace
+{
+struct HostCallScope;
+} // namespace
+
 class ContextMapper : public IMapItemAccessor
 {
 public:
-    explicit ContextMapper(RenderContext* context)
+    // How a host's call gets a value of the template: lent for the call as its arguments are (ArgumentToHost)
+    using LendFn = Value (*)(const InternalValue& value, RenderContext& context, HostCallScope& scope);
+
+    explicit ContextMapper(RenderContext* context, HostCallScope* scope = nullptr, LendFn lend = nullptr)
         : m_context(context)
+        , m_scope(scope)
+        , m_lend(lend)
     {
     }
 
@@ -4278,7 +4290,17 @@ public:
     [[nodiscard]] Value GetValueByName(const std::string& name) const override
     {
         const auto value = m_context->FindValue(name);
-        return value ? IntValue2Value(*value) : Value();
+        return value ? ToHost(*value) : Value();
+    }
+    // A value the template sees, as the call's arguments are given: a macro, `range` or `loop` is lent for the call
+    [[nodiscard]] std::optional<Value> Find(std::string_view name) const override
+    {
+        const auto value = m_context->FindValue(std::string(name));
+        if (!value)
+        {
+            return std::nullopt;
+        }
+        return ToHost(*value);
     }
     // The names a lookup finds, each once, sorted: the scopes, the external and global values and the built-ins
     [[nodiscard]] std::vector<std::string> GetKeys() const override { return m_context->CollectLookupNames(); }
@@ -4302,12 +4324,15 @@ public:
     }
 
 private:
+    [[nodiscard]] Value ToHost(const InternalValue& value) const { return m_lend && m_scope ? m_lend(value, *m_context, *m_scope) : IntValue2Value(value); }
+
     RenderContext* m_context;
+    HostCallScope* m_scope;
+    LendFn m_lend;
 };
 
 namespace
 {
-struct HostCallScope;
 
 // The template callables a host's call got as arguments, lent for the duration of that call
 // (docs/tasks/0300): a macro or `caller` passed to a module's macro (Template::MakeModule) from
@@ -4495,13 +4520,39 @@ struct LentCallable
         // body left on the render's context go, as a HomeCall that switched would drop them
         const HomeCall::Restore restore(context);
         const auto& fn = *GetIf<Callable>(&callable);
-        if (fn.GetType() == Callable::Type::Expression)
+        try
         {
-            return IntValue2Value(fn.GetExpressionCallable()(callParams, context));
+            if (fn.GetType() == Callable::Type::Expression)
+            {
+                return IntValue2Value(fn.GetExpressionCallable()(callParams, context));
+            }
+            InternalValue result = RenderToString(context.GetRendererCallback(), [&](OutStream& stream) { fn.GetStatementCallable()(callParams, stream, context); });
+            result.SetMarkup(context.IsAutoescape());
+            return IntValue2Value(result);
         }
-        InternalValue result = RenderToString(context.GetRendererCallback(), [&](OutStream& stream) { fn.GetStatementCallable()(callParams, stream, context); });
-        result.SetMarkup(context.IsAutoescape());
-        return IntValue2Value(result);
+        catch (const std::bad_alloc&)
+        {
+            throw;
+        }
+        catch (const ErrorInfo&)
+        {
+            throw;
+        }
+        catch (const ErrorInfoW&)
+        {
+            throw;
+        }
+        catch (const detail::RenderFailure& failure)
+        {
+            // A located error of the render (a limit, a failed include)
+            throw failure.ErrorAs<char>();
+        }
+        catch (...)
+        {
+            // The host sees the engine's errors as the public ErrorInfo (a SecurityError, an UndefinedError, ...),
+            // never as the engine's own exception types; a host's own exception stays in GetException
+            throw detail::CurrentExceptionToError<char>(std::string());
+        }
     }
 
     [[noreturn]] static void ThrowExpired()
@@ -4605,6 +4656,7 @@ public:
         return items;
     }
     [[nodiscard]] const void* GetIdentity() const override { return Inner().GetIdentity(); }
+    [[nodiscard]] const char* GetObjectClass() const override { return Inner().GetObjectClass(); }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* view = dynamic_cast<const LendingMapView*>(&other);
@@ -5003,7 +5055,7 @@ void PrepareUserCallableParams(const ParsedArguments& args, RenderContext& conte
         extraPosArgs.push_back(ArgumentToHost(p, context, scope));
     }
     result.extraPosArgs = Value(std::move(extraPosArgs));
-    result.context = GenericMap(std::make_shared<const ContextMapper>(&context));
+    result.context = GenericMap(std::make_shared<const ContextMapper>(&context, &scope, &ArgumentToHost));
     if (asksForContext)
     {
         const auto* frame = context.GetTemplateFrame();
@@ -5134,7 +5186,8 @@ InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const Use
 
 InternalValue MakeHostObjectCallable(std::shared_ptr<const IHostObject> object)
 {
-    UserCallable callable([object = std::move(object)](const UserCallableParams& params) { return object->Call(params); }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) });
+    // With the call site, which a host's callable that reads the context needs (Python's pass_context)
+    UserCallable callable([object = std::move(object)](const UserCallableParams& params) { return object->Call(params); }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs), ArgInfo(ArgInfo::Context) });
     callable.keepUndefined = true;
     return visitors::InputValueConvertor::ConvertUserCallable(callable);
 }

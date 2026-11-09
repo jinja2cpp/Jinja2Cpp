@@ -366,6 +366,9 @@ public:
     [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
     // The host's data: list() copies it
     [[nodiscard]] const void* GetIdentity() const override { return m_object->Identity(); }
+    // A list the template may change through the object's methods ({% do l.append(x) %}): loop.length is its Len
+    // when first read, as in Jinja2 (an object that never changes gives the same length either way)
+    [[nodiscard]] bool HasLiveSize() const override { return true; }
     [[nodiscard]] GenericList CreateGenericList() const override { return GenericList(std::make_shared<const HostSequenceList>(m_object, m_holder)); }
 
 private:

@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 
+#include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/generic_list.h>
 #include <jinja2cpp/generic_list_iterator.h> // IWYU pragma: keep (GenericList::iterator is only declared in generic_list.h)
 #include <jinja2cpp/host_object.h>
@@ -1677,4 +1678,124 @@ TEST(PublicHostObjectTest, LoopOverAListWithASteppingIndexerUsesItsEnumerator)
     EXPECT_EQ("123;2", result.value());
     // The subscript, never the loop
     EXPECT_EQ(1u, *indexReads);
+}
+
+namespace
+{
+// A callable host object that hands its call's parameters to `probe` while the call runs
+class CallProbe final : public IHostObject
+{
+public:
+    explicit CallProbe(std::function<Value(const UserCallableParams&)> probe)
+        : m_probe(std::move(probe))
+    {
+    }
+
+    [[nodiscard]] const char* TypeName() const override { return "CallProbe"; }
+    [[nodiscard]] std::string Str() const override { return "probe"; }
+    [[nodiscard]] std::string Repr() const override { return "<probe>"; }
+    [[nodiscard]] std::optional<Value> GetAttr(std::string_view name) const override
+    {
+        return name == "name" ? std::optional<Value>(Value("probe-name")) : std::nullopt;
+    }
+    [[nodiscard]] bool IsCallable() const override { return true; }
+    [[nodiscard]] Value Call(const UserCallableParams& params) const override { return m_probe(params); }
+
+private:
+    std::function<Value(const UserCallableParams&)> m_probe;
+};
+
+Value Probing(std::function<Value(const UserCallableParams&)> probe)
+{
+    return MakeHostValue(std::make_shared<const CallProbe>(std::move(probe)));
+}
+
+// The first positional argument of a host object's call
+const Value& FirstArg(const UserCallableParams& params)
+{
+    return params.extraPosArgs.AsList().at(0);
+}
+} // namespace
+
+// loop, namespace(), cycler() and joiner() reach a host with their Python class; a dict has none (0357 S3)
+TEST(PublicHostObjectTest, TemplateObjectsReachAHostWithTheirClass)
+{
+    const ValuesMap params{ { "cls", Probing([](const UserCallableParams& call) {
+                                  const auto* map = FirstArg(call).GetIf<GenericMap>();
+                                  const char* objectClass = map ? map->GetObjectClass() : nullptr;
+                                  return Value(objectClass ? std::string(objectClass) : std::string("none"));
+                              }) } };
+    EXPECT_EQ("LoopContext Namespace Cycler Joiner none", Render("{% for x in 'a' %}{{ cls(loop) }}{% endfor %} {{ cls(namespace(a=1)) }} {{ cls(cycler(1)) }} {{ cls(joiner()) }} {{ cls({'a': 1}) }}", params));
+}
+
+// A host object that is a global of the environment or of the render is read as the object, as a param is
+TEST(PublicHostObjectTest, AHostObjectGlobalIsReadAsTheObject)
+{
+    const auto probe = Probing([](const UserCallableParams&) { return Value("called"); });
+    TemplateEnv env;
+    env.AddGlobal("g", probe);
+    Template tpl(&env);
+    ASSERT_TRUE(!!tpl.Load("{{ g.name }} {{ g() }} {{ g }}"));
+    EXPECT_EQ("probe-name called probe", tpl.RenderAsString({}).value());
+    RenderOptions options;
+    options.globals = std::make_shared<const ValuesMap>(ValuesMap{ { "g", probe } });
+    std::string out;
+    ASSERT_TRUE(!!tpl.RenderTo(out, {}, options));
+    EXPECT_EQ("probe-name called probe", out);
+}
+
+// A host object's call gets the call site, and the context it gets lends a template callable it finds for the call,
+// as the call's arguments are (Python's pass_context reads both)
+TEST(PublicHostObjectTest, AHostCallGetsTheSiteAndTheContextLendsTemplateCallables)
+{
+    auto kept = std::make_shared<std::optional<UserCallable>>();
+    const auto probe = Probing([kept](const UserCallableParams& params) {
+        const auto* context = params.context.GetIf<GenericMap>();
+        auto macro = context ? context->Find("m") : std::nullopt;
+        const auto* callable = macro ? macro->GetIf<UserCallable>() : nullptr;
+        if (!callable)
+        {
+            return Value("no macro");
+        }
+        *kept = *callable;
+        UserCallableParams callParams;
+        callParams.extraPosArgs = ValuesList{ Value("x") };
+        callParams.extraKwArgs = ValuesMap{};
+        const auto result = callable->callable(callParams);
+        return Value(std::string(params.site.templateName) + "|" + (params.site.autoescape ? "escaped" : "plain") + "|" + result.ToString());
+    });
+    TemplateEnv env;
+    env.AddGlobal("probe", probe);
+    auto fs = std::make_shared<MemoryFileSystem>();
+    fs->AddFile("main.j2", "{% macro m(v) %}<{{ v }}>{% endmacro %}{% autoescape true %}{{ probe() }}{% endautoescape %}");
+    env.AddFilesystemHandler(std::string(), fs);
+    auto tpl = env.LoadTemplate("main.j2");
+    ASSERT_TRUE(!!tpl);
+    EXPECT_EQ("main.j2|escaped|&lt;x&gt;", tpl->RenderAsString({}).value());
+    // The macro was lent for the call only
+    ASSERT_TRUE(kept->has_value());
+    UserCallableParams late;
+    late.extraPosArgs = ValuesList{ Value("y") };
+    late.extraKwArgs = ValuesMap{};
+    EXPECT_TRUE(Throws([&] { (*kept)->callable(late); }, ErrorCode::TemplateExpired));
+}
+
+// A lent macro that fails reports the engine's error as the public ErrorInfo, with its code
+TEST(PublicHostObjectTest, ALentMacroFailsWithThePublicError)
+{
+    const ValuesMap params{ { "call", Probing([](const UserCallableParams& call) {
+                                  UserCallableParams callParams;
+                                  callParams.extraPosArgs = ValuesList{};
+                                  callParams.extraKwArgs = ValuesMap{};
+                                  try
+                                  {
+                                      (void)FirstArg(call).AsCallable().callable(callParams);
+                                  }
+                                  catch (const ErrorInfo& error)
+                                  {
+                                      return Value("code " + std::to_string(static_cast<int>(error.GetCode())));
+                                  }
+                                  return Value("no error");
+                              }) } };
+    EXPECT_EQ("code " + std::to_string(static_cast<int>(ErrorCode::UndefinedError)), Render("{% macro m() %}{{ missing.x }}{% endmacro %}{{ call(m) }}", params, { UndefinedPolicy::Strict }));
 }

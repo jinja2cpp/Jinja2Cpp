@@ -143,6 +143,16 @@ struct JINJA2CPP_EXPORT IMapItemAccessor : virtual IComparable
      * @return The object, or null for every other map
      */
     [[nodiscard]] virtual const IHostObject* AsHostObject() const noexcept { return nullptr; }
+    /*!
+     * \brief The Python class of a template object this accessor views (docs/tasks/0357)
+     *
+     * A template's `loop`, `namespace()`, `cycler()` and `joiner()` reach a host as maps of their attributes; this
+     * tells them from a dict, as Python's `type(x).__name__` does: "LoopContext", "Namespace", "Cycler", "Joiner".
+     * Such an object is no mapping to the template: it is not iterable and prints as itself.
+     *
+     * @return The class name, or null for a dictionary and every map of the host's
+     */
+    [[nodiscard]] virtual const char* GetObjectClass() const { return nullptr; }
 };
 
 /*!
@@ -264,6 +274,9 @@ public:
 
     //! The dictionary's identity (\ref IMapItemAccessor::GetIdentity); null for an empty map
     [[nodiscard]] const void* GetIdentity() const { return m_accessor ? m_accessor->GetIdentity() : nullptr; }
+
+    //! The class of the template object the map views (\ref IMapItemAccessor::GetObjectClass); null for a dictionary
+    [[nodiscard]] const char* GetObjectClass() const { return m_accessor ? m_accessor->GetObjectClass() : nullptr; }
 
     /*!
      * \brief The host object the map carries (\ref MakeHostValue)

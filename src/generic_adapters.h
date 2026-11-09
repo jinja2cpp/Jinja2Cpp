@@ -333,6 +333,8 @@ class MapAccessorImpl : public IMapAccessor
     , public MapItemAccessorImpl<T>
 {
 public:
+    // One overrider for both interfaces: the engine's class of an object stored as a map is the one a host sees
+    [[nodiscard]] const char* GetObjectClass() const override { return nullptr; }
 };
 
 template<typename T>
