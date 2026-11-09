@@ -494,7 +494,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0424](0424-host-kept-cycle-leak.md) | A template container that holds itself leaks when a host keeps its export | robustness | low | open |
 | [0425](0425-sandbox-parity-leftovers.md) | Sandbox parity leftovers of 0354 | parity | low | open |
 | [0426](0426-sandbox-refused-attribute-cost.md) | Cost of a refused attribute in the sandbox | perf | low | open |
-| [0427](0427-sandbox-policy-and-template-cache.md) | Sandbox policy and the template cache (for 0357) | api | low | open |
+| [0427](0427-sandbox-policy-and-template-cache.md) | Sandbox policy and the template cache (for 0357) | api | low | done |
 | [0428](0428-python-fallback-leftovers.md) | Python fallback leftovers (from the review of 0354 PR3) | api | low | open |
 | [0429](0429-preflight-python-sources.md) | `scripts/preflight.sh` skips clang-tidy for `python/src/*.cpp` and needs `build/` | tooling | low | open |
 | [0430](0430-python-fallback-static-include-routing.md) | Route static include, import and extends names at load time (Python fallback) | api | low | open |
