@@ -7,6 +7,7 @@
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <string_view>
