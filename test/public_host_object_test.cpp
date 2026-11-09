@@ -1070,7 +1070,12 @@ private:
     std::string m_name;
 };
 
-// More aligned than `new` guarantees: made in its own allocation, as the library cannot place it in a block of its own
+// More aligned than `new` guarantees: made in its own allocation, as the library cannot place it in a block of its own.
+// The padding is the point, which MSVC warns about (C4324)
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4324)
+#endif
 class alignas(64) WideCounted final : public IHostObject
 {
 public:
@@ -1091,6 +1096,9 @@ public:
 private:
     LifeCount* m_count;
 };
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 class ThrowsOnConstruction final : public IHostObject
 {
