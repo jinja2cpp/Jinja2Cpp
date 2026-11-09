@@ -1,6 +1,8 @@
 #include "adapters.h"
 
+#include "context.h"
 #include "convert.h"
+#include "engine_errors.h"
 
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
@@ -88,6 +90,9 @@ public:
         return ToEngine(item);
     }
     [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
+    // A list the template can change through its methods ({% do l.append(x) %}), so loop.length is
+    // its len() when first read, as in Jinja2; a tuple's never changes
+    [[nodiscard]] bool HasLiveSize() const override { return m_isList; }
     [[nodiscard]] jinja2::GenericList CreateGenericList() const override { return jinja2::GenericList(std::make_shared<const PySequenceItems>(*this)); }
 
 private:
@@ -230,7 +235,17 @@ std::optional<InternalValue> PyHost::GetAttr(const std::string& name) const
         }
         ThrowPending();
     }
-    return ToEngine(nb::steal(attr));
+    const auto value = nb::steal(attr);
+    if (const auto* render = CurrentRender(); render && render->sandbox)
+    {
+        // The one checkpoint of the sandbox (0248 D8): every attribute a template reads of a Python
+        // object, whatever syntax reads it (x.a, x[a], |attr, attribute=, a str.format field), comes
+        // here. The environment's _sandbox_attribute asks is_safe_attribute and gives the value, a
+        // wrapped str.format, or the unsafe undefined
+        const auto checked = Steal(PyObject_CallMethod(render->sandbox, "_sandbox_attribute", "OOO", m_object, pyName.ptr(), value.ptr()));
+        return ToEngine(checked);
+    }
+    return ToEngine(value);
 }
 
 std::optional<InternalValue> PyHost::GetItem(const InternalValue& key) const
@@ -268,9 +283,9 @@ std::optional<InternalValue> PyHost::GetSlice(const InternalValue& start, const 
     {
         return std::nullopt;
     }
-    // An omitted bound is None (the engine passes an empty value)
-    const auto bound = [](const InternalValue& value) { return value.IsUndefined() ? nb::none() : ToPython(value); };
-    const auto slice = Steal(PySlice_New(bound(start).ptr(), bound(stop).ptr(), bound(step).ptr()));
+    // The engine passes None for an omitted bound; an undefined one stays an Undefined, which has no
+    // __index__, so Python's slice raises TypeError as in Jinja2 (`l[missing:]`)
+    const auto slice = Steal(PySlice_New(ToPython(start).ptr(), ToPython(stop).ptr(), ToPython(step).ptr()));
     return ToEngine(Steal(PyObject_GetItem(m_object, slice.ptr())));
 }
 
@@ -281,6 +296,12 @@ bool PyHost::IsCallable() const
 
 InternalValue PyHost::Call(const CallParams& params, RenderContext& context) const
 {
+    if (const auto* render = CurrentRender(); render && render->sandbox)
+    {
+        // SandboxedEnvironment.call: is_safe_callable, else a SecurityError
+        const auto safe = Steal(PyObject_CallMethod(render->sandbox, "_sandbox_check_call", "O", m_object));
+        (void)safe;
+    }
     return CallPython(m_object, params, context);
 }
 
@@ -440,24 +461,214 @@ std::string PyHost::Html() const
     return Utf8(Steal(PyObject_CallMethod(m_object, "__html__", nullptr)));
 }
 
+namespace
+{
+nb::object Stub(const char* name)
+{
+    // A class of that name, for an object of the engine that has no Python class: loop, a macro, a cycler
+    const auto type = Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyType_Type), "s(O){}", name, reinterpret_cast<PyObject*>(&PyBaseObject_Type)));
+    return Steal(PyObject_CallNoArgs(type.ptr()));
+}
+
+// A Python object of the kind of `obj`, for is_safe_attribute to look at: the value itself when it is
+// small, an empty container otherwise (the checks look at the type; converting a list for each refused
+// name would cost its length)
+nb::object Representative(const InternalValue& obj, bool& synthetic)
+{
+    switch (obj.Kind())
+    {
+    case jinja2::ValueKind::None:
+        return nb::none();
+    case jinja2::ValueKind::Bool:
+    case jinja2::ValueKind::Int:
+    case jinja2::ValueKind::Double:
+    case jinja2::ValueKind::BigInt:
+    case jinja2::ValueKind::String:
+        return ToPython(obj);
+    case jinja2::ValueKind::List:
+    {
+        const auto list = *jinja2::AsList(obj);
+        if (list.GetRangeInfo())
+        {
+            return Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyRange_Type), "i", 0));
+        }
+        return list.IsTuple() ? Steal(PyTuple_New(0)) : Steal(PyList_New(0));
+    }
+    case jinja2::ValueKind::Map:
+    {
+        const auto map = *jinja2::AsMap(obj);
+        if (const char* objectClass = map.GetObjectClass())
+        {
+            synthetic = true;
+            return Stub(objectClass);
+        }
+        if (map.IsNamespace())
+        {
+            synthetic = true;
+            return Stub("Namespace");
+        }
+        return nb::dict();
+    }
+    case jinja2::ValueKind::KeyValuePair:
+        return Steal(PyTuple_New(0));
+    case jinja2::ValueKind::Callable:
+        synthetic = true;
+        return Stub(jinja2::GetIf<jinja2::Callable>(&obj)->GetKind() == jinja2::Callable::Macro ? "Macro" : "function");
+    default:
+        synthetic = true;
+        return Stub("object");
+    }
+}
+
+// The ISandboxPolicy of a SandboxedEnvironment: the environment's own is_safe_attribute and wrap_str_format, asked
+// for the engine's values. It borrows the environment, which holds the engine environment that holds this
+class PySandboxPolicy final : public jinja2::ISandboxPolicy
+{
+public:
+    PySandboxPolicy(PyObject* environment, bool allNames)
+        : m_environment(environment)
+        , m_allNames(allNames)
+    {
+    }
+
+    [[nodiscard]] std::optional<InternalValue> NativeAttribute(const InternalValue& obj, const std::string& name) const override
+    {
+        if (name == "format_map" && jinja2::IsStringValue(obj))
+        {
+            // The engine's strings have no format_map; the sandbox's is SandboxedFormatter's
+            return InternalValue(jinja2::Callable(jinja2::Callable::UserCallable, [obj, this](const CallParams& params, RenderContext& context) { return Format(obj, true, params, context); }));
+        }
+        // Python's objects have attributes the engine's values have not: __class__, __init__, ...
+        // A public name is the environment's to judge only when its is_safe_attribute is not Jinja2's, which
+        // refuses private names and the methods of lists and dicts that change them (the engine does the latter)
+        const bool isPrivate = !name.empty() && name[0] == '_';
+        if (!isPrivate && !m_allNames)
+        {
+            return std::nullopt;
+        }
+        bool synthetic = false;
+        const auto representative = Representative(obj, synthetic);
+        const auto pyName = MakeStr(name);
+        nb::object owned = nb::none();
+        // A real Python object has the attribute or has not. An object of the engine that is only
+        // a stand-in (loop, a macro, self) is taken to have every name, private or public that a custom
+        // is_safe_attribute judges: the refusal is the safe answer where Python's class might have it (its
+        // mangled names). Its `value` is None: the engine does not build one for the question
+        PyObject* value = synthetic ? nullptr : PyObject_GetAttr(representative.ptr(), pyName.ptr());
+        if (!value && !synthetic)
+        {
+            if (ClearAttributeError())
+            {
+                return std::nullopt;
+            }
+            ThrowPending();
+        }
+        if (value)
+        {
+            owned = nb::steal(value);
+        }
+        const auto checked = Steal(PyObject_CallMethod(m_environment, "_sandbox_attribute", "OOO", representative.ptr(), pyName.ptr(), owned.ptr()));
+        auto result = ToEngine(checked);
+        if (result.IsUndefined())
+        {
+            return result;
+        }
+        return std::nullopt;
+    }
+
+    InternalValue Format(const InternalValue& self, bool formatMap, const CallParams& params, RenderContext& context) const override
+    {
+        const auto text = ToPython(self);
+        const auto method = Steal(PyObject_GetAttrString(text.ptr(), formatMap ? "format_map" : "format"));
+        auto wrapped = Steal(PyObject_CallMethod(m_environment, "wrap_str_format", "O", method.ptr()));
+        if (wrapped.is_none())
+        {
+            wrapped = method;
+        }
+        return CallPython(wrapped.ptr(), params, context);
+    }
+
+private:
+    PyObject* m_environment;
+    bool m_allNames;
+};
+} // namespace
+
+bool SandboxJudgesPublicNames(nb::handle environment)
+{
+    const auto all = nb::steal(PyObject_CallMethod(environment.ptr(), "_sandbox_judges_public_names", nullptr));
+    if (!all)
+    {
+        throw nb::python_error();
+    }
+    return PyObject_IsTrue(all.ptr()) != 0;
+}
+
+std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle environment, bool allNames)
+{
+    return std::make_shared<PySandboxPolicy>(environment.ptr(), allNames);
+}
+
 const PyHost* AsPyHost(const InternalValue& value)
 {
     // The module makes every host object of the engine's values
     return static_cast<const PyHost*>(jinja2::GetHostObject(value));
 }
 
+namespace
+{
+// A Python BaseException outside Exception (KeyboardInterrupt, SystemExit): the engine lets it
+// through where Jinja2's `except Exception` does (engine_errors.h), and the render raises it whole
+class PyUnrecoverableError final : public nb::python_error, public jinja2::detail::HostUnrecoverableError
+{
+public:
+    explicit PyUnrecoverableError(nb::python_error&& error) noexcept
+        : nb::python_error(std::move(error))
+    {
+    }
+};
+
+InternalValue CallPythonImpl(PyObject* callable, const CallParams& params, RenderContext& context);
+} // namespace
+
 InternalValue CallPython(PyObject* callable, const CallParams& params, RenderContext& context)
 {
+    try
+    {
+        return CallPythonImpl(callable, params, context);
+    }
+    catch (nb::python_error& error)
+    {
+        if (error.matches(PyExc_Exception))
+        {
+            throw;
+        }
+        throw PyUnrecoverableError(std::move(error));
+    }
+}
+
+namespace
+{
+InternalValue CallPythonImpl(PyObject* callable, const CallParams& params, RenderContext& context)
+{
     const LeaseScope lease(context);
-    const size_t positional = params.posParams.size();
+    // pass_context and its kin: the argument the callable asked for goes first
+    const PassArg pass = PassArgOf(callable);
+    const size_t extra = pass != PassArg::None ? 1 : 0;
+    const size_t positional = extra + params.posParams.size();
     const size_t keywords = params.kwParams.size();
     // The arguments live in `objects`; `args` has a free first slot for the vectorcall protocol
     std::vector<nb::object> objects;
     objects.reserve(positional + keywords);
     std::vector<PyObject*> args(1 + positional + keywords, nullptr);
-    for (size_t i = 0; i < positional; ++i)
+    if (extra != 0)
     {
-        objects.push_back(ToPython(params.posParams[i]));
+        objects.push_back(MakePassArgument(pass, context));
+        args[1] = objects.back().ptr();
+    }
+    for (size_t i = extra; i < positional; ++i)
+    {
+        objects.push_back(ToPython(params.posParams[i - extra]));
         args[1 + i] = objects.back().ptr();
     }
     nb::object names;
@@ -478,5 +689,6 @@ InternalValue CallPython(PyObject* callable, const CallParams& params, RenderCon
     const auto result = Steal(PyObject_Vectorcall(callable, args.data() + 1, positional | PY_VECTORCALL_ARGUMENTS_OFFSET, names.ptr()));
     return ToEngine(result);
 }
+} // namespace
 
 } // namespace jinja2cpp_py

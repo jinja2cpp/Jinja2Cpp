@@ -7,8 +7,15 @@ from markupsafe import Markup as Markup
 from markupsafe import escape as escape
 
 from . import ext as ext
-from ._jinja2cpp import Environment as Environment
-from ._jinja2cpp import Template as Template
+from . import meta as meta
+from .environment import Environment as Environment
+from .environment import Template as Template
+from .environment import TemplateModule as TemplateModule
+from .environment import TemplateStream as TemplateStream
+from .fallback import FallbackWarning as FallbackWarning
+from .fallback import get_fallback as get_fallback
+from .fallback import set_fallback as set_fallback
+from .fallback import stats as stats
 from .exceptions import FilterArgumentError as FilterArgumentError
 from .exceptions import SecurityError as SecurityError
 from .exceptions import TemplateAssertionError as TemplateAssertionError
@@ -18,14 +25,23 @@ from .exceptions import TemplateRuntimeError as TemplateRuntimeError
 from .exceptions import TemplatesNotFound as TemplatesNotFound
 from .exceptions import TemplateSyntaxError as TemplateSyntaxError
 from .exceptions import UndefinedError as UndefinedError
+from .exceptions import UnsupportedError as UnsupportedError
 from .loaders import BaseLoader as BaseLoader
+from .loaders import ChoiceLoader as ChoiceLoader
 from .loaders import DictLoader as DictLoader
 from .loaders import FileSystemLoader as FileSystemLoader
+from .loaders import FunctionLoader as FunctionLoader
+from .loaders import ModuleLoader as ModuleLoader
+from .loaders import PackageLoader as PackageLoader
+from .loaders import PrefixLoader as PrefixLoader
 from .runtime import ChainableUndefined as ChainableUndefined
 from .runtime import DebugUndefined as DebugUndefined
 from .runtime import StrictUndefined as StrictUndefined
 from .runtime import Undefined as Undefined
 from .utils import is_undefined as is_undefined
+from .utils import pass_context as pass_context
+from .utils import pass_environment as pass_environment
+from .utils import pass_eval_context as pass_eval_context
 from .utils import select_autoescape as select_autoescape
 
 __version__ = "2.0.0"

@@ -224,6 +224,9 @@ void SubscriptExpression::AddIndex(const NodeArena& nodes, NodeRef<Expression> v
     idx.isAttr = !attrName.empty();
     idx.maybeMethod = idx.isAttr && methods::IsMethodName(attrName);
     idx.maybeDictMethod = idx.maybeMethod && methods::IsDictMethodName(attrName);
+    // x.name of a map is then no plain item lookup either: the policy is asked first
+    idx.sandboxed = detail::t_parseLimits.sandboxed;
+    idx.maybeDictMethod = idx.maybeDictMethod || (idx.sandboxed && idx.isAttr);
     if (m_subscriptExprs.empty())
     {
         m_firstIndexIsPure = idx.isAttr || nodes[idx.expr].IsPure(nodes);
@@ -404,6 +407,15 @@ InternalValue SubscriptExpression::LookupIndex(const InternalValue& cur, const I
 // One returned object, so that it is constructed in the caller's storage
 InternalValue SubscriptExpression::LookupDefinedIndex(const InternalValue& cur, const Index& idx, const InternalValue* key, RenderContext& values)
 {
+    if (idx.sandboxed)
+    {
+        // x.name, and x["name"] of an object that has no __getitem__ in Python (loop, a cycler, a macro, a namespace)
+        if (auto replacement = !key ? methods::SandboxedSyntheticAttribute(&values, cur, idx.attrName) : IsStringValue(*key) ? methods::SandboxedSyntheticAttribute(&values, cur, AsString(*key))
+                                                                                                                             : std::nullopt)
+        {
+            return std::move(*replacement);
+        }
+    }
     auto result = !key ? (idx.maybeMethod ? methods::GetAttr(cur, idx.attrName, &values) : Subscript(cur, idx.attrName, &values))
                        : methods::GetItem(cur, *key, &values);
     if (result.IsUndefined() && !GetUndefinedInfo(result))
@@ -1669,6 +1681,22 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
         {
             callee.SetParentData(receiver);
         }
+        if (m_sandboxed)
+        {
+            if (auto replacement = methods::SandboxedSyntheticAttribute(&values, receiver, *name))
+            {
+                callee = std::move(*replacement);
+                return false;
+            }
+        }
+        if (callee.IsUndefined() && !GetUndefinedInfo(callee))
+        {
+            if (auto replacement = SandboxedNativeAttribute(&values, receiver, *name))
+            {
+                callee = std::move(*replacement);
+                return false;
+            }
+        }
         // Python raises AttributeError; calling the missing attribute of a map, None or a
         // chainable undefined is an UndefinedError
         if (callee.IsUndefined() && !IsEmpty(receiver) && !AsMap(receiver))
@@ -1682,6 +1710,15 @@ bool CallExpression::TryCallMethod(RenderContext& values, InternalValue& result,
         return false;
     }
 
+    if (values.GetSandboxPolicy())
+    {
+        // The policy decides about a method of a value, as about an attribute (ISandboxPolicy::NativeAttribute)
+        if (auto replacement = SandboxedNativeAttribute(&values, receiver, *name))
+        {
+            callee = std::move(*replacement);
+            return false;
+        }
+    }
     if (method->isMutating)
     {
         if (m_readOnlyContainers)

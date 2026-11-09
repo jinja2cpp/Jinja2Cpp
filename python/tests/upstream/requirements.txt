@@ -1,0 +1,4 @@
+# The upstream suite's own test requirements (jinja2-3.1.6 requirements/tests.in), at the versions
+# its requirements/tests.txt pins. Jinja2 and MarkupSafe come from test/parity/requirements.txt
+pytest==8.3.4
+trio==0.27.0

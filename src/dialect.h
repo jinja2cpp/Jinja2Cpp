@@ -19,8 +19,17 @@ enum class Dialect : unsigned char
     // `tojson` is json.dumps (keys in insertion order, no HTML escaping, ensure_ascii, indent,
     // separators, sort_keys) and which knows the `{% generation %}` tag. The list and dict
     // methods that change their receiver are unsafe attributes there
-    Transformers
+    Transformers,
+    // Python Jinja2's ImmutableSandboxedEnvironment (the jinja2cpp.sandbox module): Jinja2 in everything
+    // but the list and dict methods that change their receiver, which are unsafe attributes
+    ImmutableSandbox
 };
+
+// Whether the lists and dicts of the dialect are read-only
+constexpr bool IsReadOnlyDialect(Dialect dialect) noexcept
+{
+    return dialect == Dialect::Transformers || dialect == Dialect::ImmutableSandbox;
+}
 
 } // namespace detail
 } // namespace v2

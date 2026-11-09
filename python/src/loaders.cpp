@@ -215,6 +215,7 @@ public:
         auto& entry = m_entries[name];
         entry.filename = PyRef::Borrow(nb::object(triple[1]).ptr());
         entry.uptodate = PyRef::Borrow(nb::object(triple[2]).ptr());
+        entry.fresh = true;
         return TextStream(Utf8(source));
     }
     [[nodiscard]] WCharFileStreamPtr OpenWStream(const std::string& /*name*/) const override { return NoWideStream(); }
@@ -225,6 +226,13 @@ public:
         {
             // No uptodate: Jinja2 never reloads it
             return std::nullopt;
+        }
+        if (found->second.fresh)
+        {
+            // The engine records the date of a source it has just read, which is current:
+            // Jinja2 asks uptodate only to decide on a reload, and not at all without auto_reload
+            found->second.fresh = false;
+            return m_versions.Current(name, false);
         }
         PyObject* result = PyObject_CallNoArgs(found->second.uptodate.Get());
         if (!result)
@@ -267,6 +275,8 @@ private:
     {
         PyRef filename;
         PyRef uptodate;
+        // Read by OpenStream, and the engine has not asked for its date yet
+        bool fresh = false;
     };
     PyObject* m_loader;
     PyObject* m_environment;

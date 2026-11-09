@@ -87,6 +87,7 @@ struct PyNames
     nb::object templateAssertionError;
     nb::object templateRuntimeError;
     nb::object undefinedError;
+    nb::object securityError;
     nb::object templateError;
     nb::object reversed;
     nb::object dictType;

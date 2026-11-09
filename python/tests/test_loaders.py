@@ -78,6 +78,27 @@ def test_file_system_loader_does_not_follow_a_link_out(tree):
         env.get_template("link.txt").render()
 
 
+@pytest.mark.parametrize("compose", ["choice", "prefix", "get_source"])
+def test_composed_file_system_loader_does_not_follow_a_link_out(tree, compose):
+    link = tree / "t" / "link.txt"
+    try:
+        link.symlink_to(tree / "outside.txt")
+    except OSError:
+        pytest.skip("no symbolic links here")
+    inner = jinja2cpp.FileSystemLoader(tree / "t")
+    if compose == "get_source":
+        with pytest.raises(jinja2cpp.TemplateNotFound):
+            inner.get_source(None, "link.txt")
+        return
+    if compose == "choice":
+        loader, name = jinja2cpp.ChoiceLoader([inner]), "link.txt"
+    else:
+        loader, name = jinja2cpp.PrefixLoader({"p": inner}), "p/link.txt"
+    env = jinja2cpp.Environment(loader=loader)
+    with pytest.raises(jinja2cpp.TemplateNotFound):
+        env.get_template(name).render()
+
+
 def test_file_system_loader_encoding(tree):
     (tree / "t" / "latin.txt").write_bytes("caf\xe9 {{ 1 }}".encode("latin-1"))
     env = jinja2cpp.Environment(loader=jinja2cpp.FileSystemLoader(tree / "t", encoding="latin-1"))

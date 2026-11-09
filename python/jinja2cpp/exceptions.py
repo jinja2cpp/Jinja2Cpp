@@ -7,8 +7,24 @@ render is raised again as itself, with its traceback.
 
 import typing as t
 
+try:  # Jinja2's classes, when it is installed: ours are also subclasses of them
+    import jinja2.exceptions as _jinja2_exceptions
+except ImportError:  # pragma: no cover - the tests cover it in a subprocess
+    _jinja2_exceptions = None  # type: ignore[assignment]
 
-class TemplateError(Exception):
+
+def _bases(name: str, *own: type) -> t.Tuple[type, ...]:
+    """The bases of the class `name`: Jinja2's class of that name when it is importable, then ours.
+
+    `except jinja2.TemplateNotFound` then catches ours. Jinja2's class comes first because its own
+    bases (OSError for TemplateNotFound) must precede the ones we list again.
+    """
+    if _jinja2_exceptions is None:
+        return own
+    return (getattr(_jinja2_exceptions, name), *own)
+
+
+class TemplateError(*_bases("TemplateError", Exception)):
     """Base class for all template errors."""
 
     def __init__(self, message: t.Optional[str] = None) -> None:
@@ -19,7 +35,7 @@ class TemplateError(Exception):
         return self.args[0] if self.args else None
 
 
-class TemplateNotFound(IOError, LookupError, TemplateError):
+class TemplateNotFound(*_bases("TemplateNotFound", IOError, LookupError, TemplateError)):
     """Raised if a template does not exist."""
 
     message: t.Optional[str] = None
@@ -40,7 +56,7 @@ class TemplateNotFound(IOError, LookupError, TemplateError):
         return str(self.message)
 
 
-class TemplatesNotFound(TemplateNotFound):
+class TemplatesNotFound(*_bases("TemplatesNotFound", TemplateNotFound)):
     """Like TemplateNotFound, raised when several templates are selected."""
 
     def __init__(self, names: t.Sequence[t.Any] = (), message: t.Optional[str] = None) -> None:
@@ -55,11 +71,12 @@ class TemplatesNotFound(TemplateNotFound):
                     parts.append(name)
             parts_str = ", ".join(map(str, parts))
             message = f"none of the templates given were found: {parts_str}"
-        super().__init__(names[-1] if names else None, message)
+        # Not super(): Jinja2's class, when it is a base, takes other arguments
+        TemplateNotFound.__init__(self, names[-1] if names else None, message)
         self.templates = list(names)
 
 
-class TemplateSyntaxError(TemplateError):
+class TemplateSyntaxError(*_bases("TemplateSyntaxError", TemplateError)):
     """Raised to tell the user that there is a problem with the template."""
 
     def __init__(
@@ -69,7 +86,7 @@ class TemplateSyntaxError(TemplateError):
         name: t.Optional[str] = None,
         filename: t.Optional[str] = None,
     ) -> None:
-        super().__init__(message)
+        TemplateError.__init__(self, message)
         self.lineno = lineno
         self.name = name
         self.filename = filename
@@ -97,21 +114,25 @@ class TemplateSyntaxError(TemplateError):
         return self.__class__, (self.message, self.lineno, self.name, self.filename)
 
 
-class TemplateAssertionError(TemplateSyntaxError):
+class TemplateAssertionError(*_bases("TemplateAssertionError", TemplateSyntaxError)):
     """A template's check failed at load: an unknown filter or test."""
 
 
-class TemplateRuntimeError(TemplateError):
+class TemplateRuntimeError(*_bases("TemplateRuntimeError", TemplateError)):
     """A generic runtime error in the template engine."""
 
 
-class UndefinedError(TemplateRuntimeError):
+class UndefinedError(*_bases("UndefinedError", TemplateRuntimeError)):
     """Raised if a template tries to operate on Undefined."""
 
 
-class SecurityError(TemplateRuntimeError):
-    """Raised if a template tries to do something insecure in a sandbox (not yet: P2)."""
+class SecurityError(*_bases("SecurityError", TemplateRuntimeError)):
+    """Raised if a template tries to do something insecure in a sandbox."""
 
 
-class FilterArgumentError(TemplateRuntimeError):
+class FilterArgumentError(*_bases("FilterArgumentError", TemplateRuntimeError)):
     """A filter was given an argument it cannot take."""
+
+
+class UnsupportedError(TemplateError, NotImplementedError):
+    """The feature is not in the jinja2cpp subset (docs/python.md); the fallback to Jinja2 handles it."""

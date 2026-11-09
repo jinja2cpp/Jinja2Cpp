@@ -1,11 +1,16 @@
 #include "common.h"
+#include "context.h"
 #include "convert.h"
 #include "environment.h"
 #include "errors.h"
 
+#include "engine_errors.h"
+#include "internal_value.h"
+
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 
+#include <limits>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -89,6 +94,7 @@ const PyNames& Names()
         names->templateAssertionError = exceptions.attr("TemplateAssertionError");
         names->templateRuntimeError = exceptions.attr("TemplateRuntimeError");
         names->undefinedError = exceptions.attr("UndefinedError");
+        names->securityError = exceptions.attr("SecurityError");
         names->templateError = exceptions.attr("TemplateError");
         const auto builtins = nb::module_::import_("builtins");
         names->reversed = builtins.attr("reversed");
@@ -155,6 +161,30 @@ int TemplateValueClear(PyObject* self)
 }
 
 PyType_Slot g_templateValueSlots[] = { { Py_tp_traverse, reinterpret_cast<void*>(&TemplateValueTraverse) }, { Py_tp_clear, reinterpret_cast<void*>(&TemplateValueClear) }, { 0, nullptr } };
+
+// The sandbox's formatter asks before it builds a string of `size` characters (jinja2cpp.sandbox): past the cap of
+// the running render (MaxSequenceSize, or Settings::Limits::maxSequenceSize) it raises what the engine's own
+// str.format raises, a TemplateRuntimeError, before Python allocates anything
+void CheckFormatSize(nb::handle size)
+{
+    unsigned long long count = PyLong_AsUnsignedLongLong(size.ptr());
+    if (count == static_cast<unsigned long long>(-1) && PyErr_Occurred())
+    {
+        // Larger than 64 bits (or negative, which has no width): treated as the largest
+        PyErr_Clear();
+        count = std::numeric_limits<unsigned long long>::max();
+    }
+    try
+    {
+        jinja2::CheckSequenceSize(count, "a list");
+    }
+    catch (const jinja2::ResourceLimitError& error)
+    {
+        const auto& type = Names().templateRuntimeError;
+        PyErr_SetObject(type.ptr(), type(MakeStr(error.what())).ptr());
+        throw nb::python_error();
+    }
+}
 } // namespace
 } // namespace jinja2cpp_py
 
@@ -162,7 +192,10 @@ NB_MODULE(_jinja2cpp, module) // NOLINT: nanobind's entry point
 {
     using namespace jinja2cpp_py;
     module.doc() = "Jinja2C++ rendering Jinja2 templates (docs/python.md)";
+    module.def("_check_sequence_size", &CheckFormatSize, "size"_a);
     BindEnvironment(module);
+    BindTemplateModule(module);
+    BindContext(module);
     nb::class_<TemplateValue>(module, "TemplateValue", nb::type_slots(g_templateValueSlots))
         .def("__call__", &TemplateValue::Call)
         .def("__getattr__", &TemplateValue::GetAttr)

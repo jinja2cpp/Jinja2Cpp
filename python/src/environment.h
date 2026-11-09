@@ -5,6 +5,7 @@
 #include "errors.h"
 #include "loaders.h"
 
+#include <jinja2cpp/features.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 
@@ -37,16 +38,37 @@ public:
     [[nodiscard]] nb::object GetDict(const std::string& name) const;
     void SetDict(const std::string& name, nb::handle value);
 
-    nb::object FromString(nb::handle source, nb::handle globals);
-    // The engine's template of a source
-    jinja2::Template Load(nb::handle source);
-    nb::object GetTemplate(nb::handle name, nb::handle parent, nb::handle globals);
+    // The translation callables of the i18n extension, as the engine takes them (None for none):
+    // gettext, ngettext, pgettext, npgettext. The environment keeps them alive
+    void SetGettext(nb::handle gettext, nb::handle ngettext, nb::handle pgettext, nb::handle npgettext);
+    // transformers' chat-template environment (jinja2cpp.integrations.transformers): the engine's
+    // ConfigureForChatTemplates on every rebuild, with `clock` (a callable giving a POSIX
+    // timestamp, kept alive by the environment; None for the system clock) as strftime_now's clock
+    void SetChatTemplates(nb::handle clock);
+    [[nodiscard]] bool NewstyleGettext() const noexcept { return m_newstyleGettext; }
+    void SetNewstyleGettext(bool newstyle) noexcept { m_newstyleGettext = newstyle; }
+
+    // The template of a source or of a loader's name, an instance of `templateClass` (Jinja2's
+    // Environment.template_class: a subclass of Template)
+    nb::object FromString(nb::handle source, nb::handle globals, nb::handle templateClass);
+    nb::object LoadTemplate(nb::handle name, nb::handle globals, nb::handle templateClass);
+    // A source a loader gave, with its name and filename (BaseLoader.load)
+    nb::object Compile(nb::handle source, nb::handle name, nb::handle filename, nb::handle globals, nb::handle templateClass);
+    // The engine's template of a source named `name` in its errors
+    jinja2::Template Load(nb::handle source, const std::string& name = std::string());
 
     // The engine's environment with the filters and tests of the dicts, as a template binds
     // them when it loads
     jinja2::TemplateEnv& Prepared();
     [[nodiscard]] PyObject* UndefinedClass() const noexcept { return m_undefined.ptr(); }
+    // A SandboxedEnvironment: whether its hooks (call, getattr, getitem, intercepted operators) are the engine's
+    // are checked again, as at a load, before a template renders or makes a module (an override set after the
+    // load must not be ignored); nothing for another environment
+    void CheckSandboxHooks() const;
     [[nodiscard]] const nb::object& Globals() const noexcept { return m_globals; }
+    // The globals the engine's environment has of its own (ConfigureForChatTemplates' raise_exception
+    // and strftime_now), which a render adds below env.globals; null when there are none
+    [[nodiscard]] const std::shared_ptr<const jinja2::ValuesMap>& EngineGlobals() const noexcept { return m_engineGlobals; }
     // Where a template the loader gives came from, for its errors and Template.filename
     ErrorSource SourceOf(const std::string& name) const;
     void CheckAlive() const;
@@ -60,9 +82,14 @@ private:
     void SetAutoescape(nb::handle value);
     void SetExtensions(nb::handle value);
     void Keep(nb::handle object);
-    nb::object MakeTemplate(jinja2::Template tpl, nb::handle globals, nb::object name, nb::object filename);
+    void ApplyGettext();
+    void ApplyChatTemplates();
+    nb::object MakeTemplate(jinja2::Template tpl, nb::handle globals, nb::object name, nb::object filename, nb::handle templateClass);
 
     std::unique_ptr<jinja2::TemplateEnv> m_env;
+    // A SandboxedEnvironment, and whether its is_safe_attribute judges the engine's public names (read at each load)
+    bool m_sandboxed = false;
+    bool m_sandboxPublicNames = false;
     jinja2::Settings m_settings;
     nb::object m_globals;
     nb::object m_filters;
@@ -79,6 +106,15 @@ private:
     std::vector<nb::object> m_kept;
     std::vector<std::pair<std::string, PyObject*>> m_boundFilters;
     std::vector<std::pair<std::string, PyObject*>> m_boundTests;
+    // The i18n callables, borrowed from m_kept; null for none
+    PyObject* m_gettext[4] = {};
+    bool m_newstyleGettext = false;
+    // SetChatTemplates: on, and its clock, borrowed from m_kept (null for the system clock)
+    bool m_chatTemplates = false;
+#if JINJA2CPP_HAS_CHAT_TEMPLATES
+    PyObject* m_chatClock = nullptr;
+#endif
+    std::shared_ptr<const jinja2::ValuesMap> m_engineGlobals;
     bool m_cleared = false;
 };
 
@@ -87,8 +123,9 @@ class PyTemplate
 {
 public:
     PyTemplate(jinja2::Template tpl, nb::object environment, nb::object globals, nb::object name, nb::object filename);
-    // Template(source, **options): the template of a new environment
-    PyTemplate(nb::handle source, nb::kwargs kwargs);
+    // Template(source, **options): the template of a new environment, or of `environment` when
+    // the Python layer made one (jinja2cpp.Template.__init__)
+    PyTemplate(nb::handle source, nb::handle environment, nb::kwargs kwargs);
     ~PyTemplate() = default;
     PyTemplate(const PyTemplate&) = delete;
     PyTemplate& operator=(const PyTemplate&) = delete;
@@ -96,7 +133,21 @@ public:
     PyTemplate& operator=(PyTemplate&&) = delete;
 
     nb::object Render(nb::args args, nb::kwargs kwargs) const;
+    // Template.generate: renders with the arguments of render(), calling `write` with each chunk
+    // the engine's sink receives (up to 512 characters), in order; an error comes after the chunks
+    // written before it
+    void RenderTo(nb::handle write, nb::args args, nb::kwargs kwargs) const;
+    // The environment, checked to be alive
+    PyEnvironment& LiveEnvironment() const;
+    // Template.make_module of the Python layer (template_module.cpp): (body, exports) for the
+    // params, a dict of str names, over the environment's globals
+    nb::tuple MakeModule(nb::handle params) const;
+    // jinja2.meta.find_undeclared_variables, as a sorted list; find_referenced_templates, as a
+    // list of the names (None for one that is not a constant)
+    nb::object FindUndeclared() const;
+    nb::object FindReferenced() const;
 
+    [[nodiscard]] const jinja2::Template& Engine() const { return m_template; }
     [[nodiscard]] const nb::object& Environment() const { return m_environment; }
     [[nodiscard]] const nb::object& Name() const { return m_name; }
     [[nodiscard]] const nb::object& Filename() const { return m_filename; }
@@ -107,6 +158,8 @@ public:
     void Clear() noexcept;
 
 private:
+    template<typename Target>
+    void RenderWith(Target& target, nb::args args, nb::kwargs kwargs) const;
     jinja2::Template m_template;
     nb::object m_environment;
     nb::object m_globals;
@@ -119,6 +172,8 @@ private:
 
 // Registers Environment and Template
 void BindEnvironment(nb::module_& module);
+// Registers the macros of a module (template_module.cpp)
+void BindTemplateModule(nb::module_& module);
 } // namespace jinja2cpp_py
 
 #endif // JINJA2CPP_PYTHON_ENVIRONMENT_H

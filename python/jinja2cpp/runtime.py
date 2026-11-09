@@ -133,3 +133,147 @@ class StrictUndefined(Undefined):
     __iter__ = __str__ = __len__ = Undefined._fail_with_undefined_error
     __eq__ = __ne__ = __bool__ = __hash__ = Undefined._fail_with_undefined_error
     __contains__ = Undefined._fail_with_undefined_error
+
+
+class EvalContext:
+    """Per-render evaluation state (jinja2.nodes.EvalContext): the autoescape setting in force."""
+
+    def __init__(self, environment: t.Any, template_name: t.Optional[str] = None) -> None:
+        self.environment = environment
+        if callable(environment.autoescape):
+            self.autoescape = environment.autoescape(template_name)
+        else:
+            self.autoescape = environment.autoescape
+        self.volatile = False
+
+    def save(self) -> t.Dict[str, t.Any]:
+        return self.__dict__.copy()
+
+    def revert(self, old: t.Dict[str, t.Any]) -> None:
+        self.__dict__.clear()
+        self.__dict__.update(old)
+
+
+def _make_eval_context(environment: t.Any, autoescape: bool) -> EvalContext:
+    ctx = EvalContext.__new__(EvalContext)
+    ctx.environment = environment
+    ctx.autoescape = autoescape
+    ctx.volatile = False
+    return ctx
+
+
+class Context:
+    """A read-only view of the variables a template sees where a pass_context callable is called.
+
+    It is lent for the call: using it after the call returned raises TemplateRuntimeError.
+    Unlike Jinja2's Context, ``vars`` and ``parent`` both hold every name the call site sees (the
+    engine does not tell a template's top-level names from its render arguments and globals), and
+    it sees the loop variables and macro locals Jinja2 hides from it.
+    """
+
+    def __init__(
+        self,
+        handle: t.Any,
+        environment: t.Any,
+        name: t.Optional[str],
+        eval_ctx: EvalContext,
+        template_globals: t.Any = None,
+    ) -> None:
+        self._handle = handle
+        self.environment = environment
+        self.name = name
+        self.eval_ctx = eval_ctx
+        self._template_globals = template_globals
+
+    def resolve_or_missing(self, key: str) -> t.Any:
+        if not isinstance(key, str):
+            return missing
+        found, value = self._handle.lookup(key)
+        return value if found else missing
+
+    def resolve(self, key: str) -> t.Union[t.Any, Undefined]:
+        rv = self.resolve_or_missing(key)
+        if rv is missing:
+            return self.environment.undefined(name=key)
+        return rv
+
+    def get(self, key: str, default: t.Any = None) -> t.Any:
+        rv = self.resolve_or_missing(key)
+        return default if rv is missing else rv
+
+    def call(self, obj: t.Callable[..., t.Any], /, *args: t.Any, **kwargs: t.Any) -> t.Any:
+        """Calls obj as a template does: a pass_context, pass_eval_context or pass_environment
+        callable gets the argument it asks for first."""
+        marker = getattr(obj, "jinja_pass_arg", None)
+        if marker is None:
+            marker = getattr(getattr(type(obj), "__call__", None), "jinja_pass_arg", None)
+        kind = getattr(marker, "name", None)
+        if kind == "context":
+            args = (self, *args)
+        elif kind == "eval_context":
+            args = (self.eval_ctx, *args)
+        elif kind == "environment":
+            args = (self.environment, *args)
+        return obj(*args, **kwargs)
+
+    def get_all(self) -> t.Dict[str, t.Any]:
+        names = self._handle.names()
+        names.extend(self.environment.globals)
+        if self._template_globals:
+            names.extend(self._template_globals)
+        names.extend(("cycler", "dict", "joiner", "lipsum", "namespace", "range"))
+        result = {}
+        for key in names:
+            if isinstance(key, str) and key not in result:
+                value = self.resolve_or_missing(key)
+                if value is not missing:
+                    result[key] = value
+        return result
+
+    @property
+    def parent(self) -> t.Dict[str, t.Any]:
+        return self.get_all()
+
+    @property
+    def vars(self) -> t.Dict[str, t.Any]:
+        return self.get_all()
+
+    @property
+    def exported_vars(self) -> t.Set[str]:
+        return set()
+
+    def get_exported(self) -> t.Dict[str, t.Any]:
+        return {}
+
+    def keys(self) -> t.KeysView[str]:
+        return self.get_all().keys()
+
+    def values(self) -> t.ValuesView[t.Any]:
+        return self.get_all().values()
+
+    def items(self) -> t.ItemsView[str, t.Any]:
+        return self.get_all().items()
+
+    def __contains__(self, name: str) -> bool:
+        return self.resolve_or_missing(name) is not missing
+
+    def __getitem__(self, key: str) -> t.Any:
+        item = self.resolve_or_missing(key)
+        if item is missing:
+            raise KeyError(key)
+        return item
+
+    def __iter__(self) -> t.Iterator[str]:
+        return iter(self.get_all())
+
+    def __len__(self) -> int:
+        return len(self.get_all())
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} {self.name!r}>"
+
+
+def _make_context(
+    handle: t.Any, environment: t.Any, name: t.Optional[str], eval_ctx: EvalContext, template_globals: t.Any
+) -> Context:
+    return Context(handle, environment, name, eval_ctx, template_globals)

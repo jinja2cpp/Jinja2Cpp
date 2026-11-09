@@ -5,6 +5,9 @@
 
 #include "host_object.h"
 
+#include "sandbox_policy.h"
+
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -72,6 +75,13 @@ private:
     mutable signed char m_mapping = -1;
     mutable std::string m_typeName;
 };
+
+// The sandbox policy the engine asks for the values it makes (src/sandbox_policy.h) in the renders of the
+// SandboxedEnvironment `environment`, which it borrows
+// Whether the sandboxed environment judges the public names of the engine's values too (its is_safe_attribute is not
+// Jinja2's): read again at each load, as the method may be replaced after the first
+bool SandboxJudgesPublicNames(nb::handle environment);
+std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle environment, bool allNames);
 
 // The PyHost a value of the engine carries, if any
 const PyHost* AsPyHost(const InternalValue& value);

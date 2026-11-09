@@ -2,7 +2,10 @@
 
 #include "error_boundary.h"
 
+#include "engine_errors.h"
+
 #include <jinja2cpp/error_info.h>
+#include <jinja2cpp/exception.h>
 #include <jinja2cpp/value.h>
 
 #include <exception>
@@ -78,14 +81,33 @@ std::string ErrorMessage(const jinja2::ErrorInfo& error)
     return text;
 }
 
+const char* const kIncludedSyntaxNote =
+            "the error is in a template this one includes, imports or extends, which may use syntax the engine lacks. "
+            "Such templates fall back to Jinja2 only when loaded directly (task 0430). To run the whole environment on "
+            "Jinja2, give it a Tier B option, such as extensions=[an extension] or enable_async=True (docs/python.md, \"Fallback\")";
+
 void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
 {
     // Only an exception the engine did not raise is kept: Python's own, raised again as itself
+    const auto& names = Names();
     if (const auto& exception = error.GetException())
     {
-        std::rethrow_exception(exception);
+        try
+        {
+            std::rethrow_exception(exception);
+        }
+        catch (const jinja2::Exception& engine)
+        {
+            // A callable of the engine's own (ConfigureForChatTemplates' raise_exception) raised it,
+            // reported by its code as the engine reports its own errors
+            const auto text = MakeStr(engine.what());
+            if (engine.Code() == ErrorCode::UndefinedError)
+            {
+                Raise(names.undefinedError, names.undefinedError(text));
+            }
+            Raise(names.templateRuntimeError, names.templateRuntimeError(text));
+        }
     }
-    const auto& names = Names();
     const auto code = error.GetCode();
     const auto message = MakeStr(ErrorMessage(error));
     if (IsSyntaxError(code) || code == ErrorCode::UnknownFilter || code == ErrorCode::UnknownTest)
@@ -97,6 +119,10 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
         {
             nb::setattr(instance, "source", source.source);
         }
+        if (source.syntaxNote)
+        {
+            instance.attr("add_note")(source.syntaxNote);
+        }
         Raise(type, instance);
     }
     switch (code)
@@ -105,7 +131,21 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
     case ErrorCode::FileNotFound:
         Raise(names.templateNotFound, names.templateNotFound(message));
     case ErrorCode::UndefinedError:
+        // The use of an attribute the sandbox refused (jinja2::SecurityErrorMarker)
+        if (ParamText(error, 1) == jinja2::SecurityErrorMarker)
+        {
+            Raise(names.securityError, names.securityError(message));
+        }
         Raise(names.undefinedError, names.undefinedError(message));
+    case ErrorCode::ResourceLimitExceeded:
+        // The sandbox's range(): safe_range's OverflowError
+        if (ParamText(error, 1) == "maxRange")
+        {
+            const auto limit = Utf8(nb::steal(PyObject_Str(nb::module_::import_("jinja2cpp.sandbox").attr("MAX_RANGE").ptr())));
+            PyErr_SetObject(PyExc_OverflowError, MakeStr("Range too big. The sandbox blocks ranges larger than MAX_RANGE (" + limit + ").").ptr());
+            throw nb::python_error();
+        }
+        Raise(names.templateRuntimeError, names.templateRuntimeError(message));
     case ErrorCode::IntegerOutOfRange:
         PyErr_SetObject(PyExc_OverflowError, message.ptr());
         throw nb::python_error();

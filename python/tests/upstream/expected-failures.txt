@@ -1,0 +1,119 @@
+# The pallets/jinja 3.1.6 tests that fail through jinja2cpp, with the reason (docs/tasks/0355).
+# python/tests/upstream/run.py runs the suite with fallback="never" and fails on a failure this
+# file does not list, on a listed test (its own line, not a prefix) that now passes, and on a
+# line that names no test.
+#
+#   <test id or prefix> <class> [task] <reason>
+#
+# A prefix (a file, a class, a test without its parameters) covers every test under it. An id
+# with spaces is written in double quotes. Classes:
+#   internals    Jinja2's lexer, nodes, compiler, debug and utils internals: not counted at all
+#   async        async rendering, outside the supported subset (docs/python.md)
+#   extension    a custom Extension class, or a builtin extension jinja2cpp lacks
+#   unsupported  other API outside the subset: NativeEnvironment, compiled modules, ...
+#   deliberate   behaviour Jinja2C++ keeps different on purpose; needs the deciding task
+#   divergence   a parity gap; needs the task that owns the fix
+# The pass rate is passed / (collected - internals); every other class counts as not passed.
+
+test_api.py::TestExtendedAPI::test_cycler                                              unsupported jinja2.utils.Cycler as a Python class
+test_api.py::TestExtendedAPI::test_expressions                                         unsupported Environment.compile_expression
+test_api.py::TestLowLevel::test_custom_code_generator                                  internals   a custom code generator
+test_api.py::TestLowLevel::test_custom_context                                         unsupported a custom context_class
+test_api.py::TestStreaming::test_basic_streaming                                       divergence  0436 generate() renders at the first item, in the engine's chunks
+test_api.py::TestStreaming::test_buffered_streaming                                    divergence  0436 generate() renders at the first item, in the engine's chunks
+test_api.py::TestUndefined::test_chainable_undefined                                   divergence  0434 ChainableUndefined._undefined_name names the first missing step
+test_api.py::TestUndefined::test_logging_undefined                                     unsupported make_logging_undefined
+test_api.py::TestUndefined::test_stopiteration_is_undefined                            divergence  0434 a callable raising StopIteration gives an undefined value
+test_api.py::test_overlay_enable_async                                                 async       Environment.is_async and overlay(enable_async=)
+test_async.py                                                                          async       async rendering (enable_async, render_async)
+test_async_filters.py                                                                  async       async filters (enable_async)
+test_bytecode_cache.py                                                                 unsupported bytecode caches (jinja2cpp accepts bytecode_cache and ignores it)
+test_compile.py                                                                        unsupported Environment.compile_templates (compiled Python modules)
+test_core_tags.py::TestForLoop::test_noniter                                           divergence  0432 iterating None raises TypeError
+test_core_tags.py::TestMacros::test_macro_api                                          divergence  0434 a module macro's name, arguments, catch_kwargs, catch_varargs and caller attributes
+test_debug.py::TestDebug::test_get_corresponding_lineno_traceback                      internals   Template.get_corresponding_lineno maps compiled Python lines
+test_debug.py::TestDebug::test_include_syntax_error_source                             divergence  0432 TemplateSyntaxError.source of an included template
+test_debug.py::TestDebug::test_local_extraction                                        internals   jinja2.debug.get_template_locals reads compiled frames
+test_debug.py::TestDebug::test_regular_syntax_error                                    divergence  0432 tracebacks with the template's own frames and Jinja2's messages
+test_debug.py::TestDebug::test_runtime_error                                           divergence  0432 tracebacks with the template's own frames and Jinja2's messages
+test_debug.py::TestDebug::test_syntax_error                                            divergence  0432 tracebacks with the template's own frames and Jinja2's messages
+test_ext.py::TestAutoEscape::test_overlay_scopes                                       extension   a custom Extension
+test_ext.py::TestAutoEscape::test_volatile_scoping                                     divergence  0434 `.__class__` of an output value; Environment.compile
+test_ext.py::TestExtensions                                                            extension   a custom Extension or jinja2.ext.debug
+test_ext.py::TestInternationalization::test_comment_extract                            unsupported babel_extract (message extraction)
+test_ext.py::TestInternationalization::test_complex_plural                             divergence  0415 oldstyle gettext formats the variables after the call
+test_ext.py::TestInternationalization::test_extract                                    unsupported babel_extract (message extraction)
+test_ext.py::TestInternationalization::test_extract_context                            unsupported babel_extract (message extraction)
+test_ext.py::TestInternationalization::test_extract_trimmed                            unsupported babel_extract (message extraction)
+test_ext.py::TestInternationalization::test_extract_trimmed_option                     unsupported babel_extract (message extraction)
+test_ext.py::TestInternationalization::test_nested_trans_error                         divergence  0432 Jinja2's message for a bad trans block
+test_ext.py::TestInternationalization::test_trans_block_error                          divergence  0432 Jinja2's message for a bad trans block
+test_ext.py::TestInternationalization::test_trans_plural                               divergence  0415 oldstyle gettext formats the variables after the call
+test_ext.py::TestInternationalization::test_trans_plural_with_functions                divergence  0415 oldstyle gettext formats the variables after the call
+test_ext.py::TestInternationalization::test_trimmed_policy                             divergence  0435 the ext.i18n.trimmed policy
+test_ext.py::TestInternationalization::test_trimmed_policy_override                    divergence  0435 the ext.i18n.trimmed policy
+test_ext.py::TestInternationalization::test_trimmed_varname_trimmed                    divergence  0415 oldstyle gettext formats the variables after the call
+test_ext.py::TestInternationalization::test_trimmed_vars                               divergence  0415 oldstyle gettext formats the variables after the call
+test_ext.py::TestNewstyleInternationalization::test_complex_plural                     divergence  0432 a trans block with two plural names raises TemplateAssertionError
+test_ext.py::TestNewstyleInternationalization::test_num_called_num                     unsupported Environment.compile
+test_ext.py::TestScope::test_basic_scope_behavior                                      extension   a custom Extension
+test_filters.py::TestFilter::test_filter_calling                                       unsupported Environment.call_filter
+test_filters.py::TestFilter::test_int_special_method                                   divergence  0434 int() of an object with __int__
+test_filters.py::TestFilter::test_json_dump                                            divergence  0435 the json.dumps_function and json.dumps_kwargs policies
+test_filters.py::TestFilter::test_pprint                                               divergence  0434 pprint wraps long output as Python's pprint.pformat
+test_filters.py::TestFilter::test_random                                               divergence  0434 random draws from Python's random module
+test_filters.py::TestFilter::test_urlize_rel_policy                                    divergence  0435 the urlize.rel policy
+"test_filters.py::TestFilter::test_xmlattr_key_invalid[ ]"                             divergence  0432 an invalid xmlattr key raises ValueError
+test_filters.py::TestFilter::test_xmlattr_key_invalid[/]                               divergence  0432 an invalid xmlattr key raises ValueError
+test_filters.py::TestFilter::test_xmlattr_key_invalid[=]                               divergence  0432 an invalid xmlattr key raises ValueError
+test_filters.py::TestFilter::test_xmlattr_key_invalid[>]                               divergence  0432 an invalid xmlattr key raises ValueError
+test_filters.py::TestFilter::test_xmlattr_key_invalid[\n]                              divergence  0432 an invalid xmlattr key raises ValueError
+test_filters.py::TestFilter::test_xmlattr_key_invalid[\t]                              divergence  0432 an invalid xmlattr key raises ValueError
+test_filters.py::TestFilter::test_xmlattr_key_invalid[\x0c]                            divergence  0432 an invalid xmlattr key raises ValueError
+test_idtracking.py                                                                     internals   the compiler's symbol tracking
+test_imports.py::TestImports::test_not_exported                                        divergence  0432 Jinja2's message for a name a template does not export
+test_imports.py::TestIncludes::test_choice_includes                                    divergence  0432 TemplatesNotFound with .templates and .name for an include list
+test_inheritance.py::TestInheritance::test_invalid_required                            divergence  0432 Jinja2's message for a required block with content
+test_lexnparse.py::TestLexer::test_lineno_with_strip                                   internals   Environment.lex
+test_lexnparse.py::TestLexer::test_name[\u1885-True]                                   divergence  0431 non-ASCII identifiers (Python's str.isidentifier)
+test_lexnparse.py::TestLexer::test_name[\u1886-True]                                   divergence  0431 non-ASCII identifiers (Python's str.isidentifier)
+test_lexnparse.py::TestLexer::test_name[\u2118-True]                                   divergence  0431 non-ASCII identifiers (Python's str.isidentifier)
+test_lexnparse.py::TestLexer::test_name[\u212e-True]                                   divergence  0431 non-ASCII identifiers (Python's str.isidentifier)
+test_lexnparse.py::TestLexer::test_name[\u304d-True]                                   divergence  0431 non-ASCII identifiers (Python's str.isidentifier)
+test_lexnparse.py::TestLexer::test_name[a\xb7-True]                                    divergence  0431 non-ASCII identifiers (Python's str.isidentifier)
+test_lexnparse.py::TestLexer::test_name[f\xf6\xf6-True]                                divergence  0431 non-ASCII identifiers (Python's str.isidentifier)
+test_lexnparse.py::TestLexer::test_operators                                           internals   jinja2.lexer.operators
+test_lexnparse.py::TestParser::test_error_messages                                     divergence  0432 Jinja2's messages for unknown and unclosed tags
+test_lexnparse.py::TestParser::test_line_syntax                                        divergence  0431 a line statement may end with ':'
+test_lexnparse.py::TestParser::test_line_syntax_priority                               divergence  0431 a line statement may end with ':'
+test_lexnparse.py::TestSyntax::test_neg_filter_priority                                internals   Environment.parse node types
+test_lexnparse.py::TestSyntax::test_short_conditional_expression                       divergence  0431 an attribute of `1 if false`'s undefined raises UndefinedError
+test_lexnparse.py::TestTokenStream                                                     internals   jinja2.lexer.TokenStream
+test_loader.py::TestFileSystemLoader::test_caches_template_based_on_mtime              divergence  0433 get_template returns the cached Template object
+test_loader.py::TestFileSystemLoader::test_error_includes_paths                        divergence  0432 TemplateNotFound names the search path
+test_loader.py::TestLoaders::test_caching                                              divergence  0433 get_template returns the cached Template object
+test_loader.py::TestLoaders::test_limited_size_cache                                   divergence  0433 get_template returns the cached Template object
+test_loader.py::TestModuleLoader                                                       unsupported ModuleLoader and compile_templates (compiled Python modules)
+test_nativetypes.py                                                                    unsupported NativeEnvironment
+test_pickle.py::test_environment                                                       unsupported pickling an Environment
+test_regression.py::TestBug::test_cached_extends[extends]                              divergence  0433 template globals given to get_template overlay the included template's
+test_regression.py::TestBug::test_cached_extends[include]                              divergence  0433 template globals given to get_template overlay the included template's
+test_regression.py::TestBug::test_custom_context                                       unsupported a custom context_class
+test_regression.py::TestBug::test_double_caller_no_default                             divergence  0431 a macro's caller argument needs a default; calling with two callers raises TypeError
+test_regression.py::TestBug::test_grouper_repr                                         internals   jinja2.filters._GroupTuple
+test_regression.py::TestBug::test_stacked_locals_scoping_bug                           divergence  0431 a line statement may end with ':' (and print, 0419)
+test_runtime.py                                                                        internals   jinja2.runtime.LoopContext built by hand
+test_security.py::TestSandbox::test_binary_operator_intercepting                       divergence  0412 sandbox operator interception
+test_security.py::TestSandbox::test_template_data                                      divergence  0434 a module macro called with an EvalContext as its first argument
+test_security.py::TestSandbox::test_unary_operator_intercepting                        divergence  0412 sandbox operator interception
+"test_tests.py::TestTestsCase::test_types[complex is number-True]"                     divergence  0434 a complex is a number
+test_tests.py::test_is_filter                                                          unsupported Environment.call_test
+test_tests.py::test_is_test                                                            unsupported Environment.call_test
+test_utils.py::TestEscapeUrlizeTarget                                                  unsupported jinja2.utils.urlize as a Python function
+test_utils.py::TestHelpers::test_object_type_repr                                      internals   jinja2.utils.object_type_repr
+test_utils.py::TestLRUCache                                                            internals   jinja2.utils.LRUCache
+test_utils.py::TestLoremIpsum                                                          unsupported jinja2.utils.generate_lorem_ipsum as a Python function
+test_utils.py::test_consume                                                            internals   jinja2.utils.consume
+test_utils.py::test_copy_missing                                                       internals   jinja2.utils.missing
+test_utils.py::test_missing                                                            internals   jinja2.utils.missing
+test_utils.py::test_pickle_missing                                                     internals   jinja2.utils.missing

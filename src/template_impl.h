@@ -4,6 +4,7 @@
 #include "cycle_collector.h"
 #include "dialect.h"
 #include "error_boundary.h"
+#include "expression_evaluator.h"
 #include "internal_value.h"
 #include "json_reader.h"
 #include "load_settings.h"
@@ -340,7 +341,7 @@ public:
                 parser.SetAutoescape(autoescape);
             }
 
-            const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect);
+            const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect, m_settings->sandboxPolicy != nullptr);
             auto parseResult = parser.Parse();
             if (!parseResult)
             {
@@ -387,6 +388,12 @@ public:
     // (template_module.cpp)
     static nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params);
 
+    // FindReferencedTemplates of a loaded template, for the Python module (docs/tasks/0354)
+    static nonstd::expected<std::vector<std::optional<std::string>>, BasicErrorInfo<CharT>> ReferencedTemplatesOf(const BasicTemplate<CharT>& tpl)
+    {
+        return static_cast<const TemplateImpl*>(tpl.m_impl.get())->FindReferencedTemplates();
+    }
+
     // Renders `tpl` with params that are values of the engine already, such as host objects
     // (host_object.h): the private entry of the Python module, which links the library
     // statically (docs/tasks/0352). `globals`, when given, are the render's globals instead of
@@ -403,6 +410,19 @@ public:
             return impl->template RenderCore<true>(os, params, globals);
         }
         return impl->template RenderCore<false>(os, params, nullptr);
+    }
+    // The same, writing to a host's sink (the module's Template.generate)
+    static std::optional<BasicErrorInfo<CharT>> RenderInternal(const BasicTemplate<CharT>& tpl,
+                                                               BasicOutputSink<CharT>& sink,
+                                                               const InternalValueMap& params,
+                                                               const InternalValueMap* globals = nullptr)
+    {
+        const auto* impl = static_cast<const TemplateImpl*>(tpl.m_impl.get());
+        if (globals)
+        {
+            return impl->template RenderCore<true>(sink, params, globals);
+        }
+        return impl->template RenderCore<false>(sink, params, nullptr);
     }
 
     // Renders with the params of a ValuesMap or a GenericMap, appending to a string or writing to a
@@ -658,7 +678,7 @@ public:
         }
         NodeArena nodes;
         TemplateParser<CharT> parser(m_template.get(), *m_settings, m_env, m_templateName, nodes);
-        const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect);
+        const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect, m_settings->sandboxPolicy != nullptr);
         auto parseResult = parser.Parse();
         if (!parseResult)
         {
@@ -683,6 +703,71 @@ public:
             return isHostGlobal;
         };
         names.erase(std::remove_if(names.begin(), names.end(), isGlobal), names.end());
+        return names;
+    }
+
+    // jinja2.meta.find_referenced_templates (docs/tasks/0354): the names of the templates the
+    // `extends`, `include`, `import` and `from` tags name, in source order. A tag whose name is a
+    // string gives it, a list or tuple of strings gives each, any other gives nullopt. Like
+    // FindUndeclaredVariables, it parses the source again
+    nonstd::expected<std::vector<std::optional<std::string>>, BasicErrorInfo<CharT>> FindReferencedTemplates() const
+    {
+        if (!m_renderer)
+        {
+            typename BasicErrorInfo<CharT>::Data errorData;
+            errorData.code = ErrorCode::TemplateNotParsed;
+            errorData.srcLoc.col = 1;
+            errorData.srcLoc.line = 1;
+            errorData.srcLoc.fileName = "<unknown file>";
+            return MakeUnexpected(BasicErrorInfo<CharT>(errorData));
+        }
+        NodeArena nodes;
+        TemplateParser<CharT> parser(m_template.get(), *m_settings, m_env, m_templateName, nodes);
+        parser.CollectReferenced();
+        const ParseLimitsScope parseLimits(m_settings->settings.limits, m_settings->dialect, m_settings->sandboxPolicy != nullptr);
+        auto parseResult = parser.Parse();
+        if (!parseResult)
+        {
+            return MakeUnexpected(parseResult.error()[0]);
+        }
+        std::vector<std::optional<std::string>> names;
+        for (const auto ref : parser.GetReferenced())
+        {
+            // A literal string is a name; any other constant is not one (None), and neither is
+            // anything that is no constant
+            if (const InternalValue* constant = nodes[ref].GetConstant(nodes))
+            {
+                const auto text = AsStringView<char>(*constant);
+                names.push_back(text ? std::optional<std::string>(std::string(*text)) : std::nullopt);
+                continue;
+            }
+            // Jinja2 sees through a tag's expression to a list or tuple literal, but not through a condition
+            NodeRef<Expression> inner = ref;
+            if (const auto full = nodes.As<FullExpressionEvaluator>(ref))
+            {
+                inner = nodes[full].GetUnguarded();
+            }
+            const auto list = inner ? nodes.As<TupleCreator>(inner) : NodeRef<TupleCreator>();
+            if (!list)
+            {
+                names.emplace_back();
+                continue;
+            }
+            // A list or tuple of strings gives each; other constants in it are skipped, as Jinja2
+            // does, and an item that is no constant is a None
+            for (const auto item : nodes[nodes[list].GetItems()])
+            {
+                const InternalValue* constant = nodes[item].GetConstant(nodes);
+                if (!constant)
+                {
+                    names.emplace_back();
+                }
+                else if (const auto text = AsStringView<char>(*constant))
+                {
+                    names.emplace_back(std::string(*text));
+                }
+            }
+        }
         return names;
     }
 
@@ -790,6 +875,7 @@ private:
             : m_host(host)
         {
             SetPromptEscaper(host->m_settings->promptEscaper);
+            SetSandboxPolicy(host->m_settings->sandboxPolicy.get());
         }
 
         TargetString GetAsTargetString(const InternalValue& val) override

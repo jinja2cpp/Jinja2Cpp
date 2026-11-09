@@ -332,6 +332,9 @@ public:
     {
         m_tester = std::move(expr);
     }
+    // The expression, or a null link when a condition guards it (`a if c`): for a tag that
+    // names a template, whose names Jinja2 reads only when they are literal
+    [[nodiscard]] NodeRef<Expression> GetUnguarded() const { return m_tester ? NodeRef<Expression>() : m_expression; }
     InternalValue Evaluate(RenderContext& values) override;
     LookupResult EvaluateRef(RenderContext& values) override { return m_expression && !m_tester ? values.Nodes()[m_expression].EvaluateRef(values) : LookupResult(); }
     [[nodiscard]] bool IsPure(const NodeArena& nodes) const override { return m_expression && !m_tester && nodes[m_expression].IsPure(nodes); }
@@ -498,6 +501,8 @@ protected:
         bool maybeMethod = false;
         // A dict has a method of this name: x.name of a map then is no plain item lookup
         bool maybeDictMethod = false;
+        // Loaded for an environment with a sandbox policy: the attribute is also asked of the policy (SandboxedSyntheticAttribute)
+        bool sandboxed = false;
     };
 
     static InternalValue ApplyIndex(const InternalValue& cur, const Index& idx, RenderContext& values);
@@ -1066,7 +1071,8 @@ public:
         : m_valueRef(valueRef)
         , m_params(ArenaCallParams::Make(nodes, params))
         , m_isNamedCallee(nodes.Is<ValueRefExpression>(m_valueRef))
-        , m_readOnlyContainers(detail::t_parseLimits.dialect == detail::Dialect::Transformers)
+        , m_readOnlyContainers(detail::IsReadOnlyDialect(detail::t_parseLimits.dialect))
+        , m_sandboxed(detail::t_parseLimits.sandboxed)
     {
     }
 
@@ -1095,6 +1101,8 @@ private:
     // Whether the template was loaded in a dialect whose list and dict methods that change their receiver are unsafe
     // (methods::IsReadOnlyContainers): read once at Load, so a render without the preset asks nothing (docs/tasks/0384)
     bool m_readOnlyContainers = false;
+    // Loaded for an environment with a sandbox policy (ParseLimits::sandboxed)
+    bool m_sandboxed = false;
 };
 
 class ExpressionFilter final : public ArenaNode
