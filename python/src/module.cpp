@@ -4,9 +4,6 @@
 #include "environment.h"
 #include "errors.h"
 
-#include "engine_errors.h"
-#include "internal_value.h"
-
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 
@@ -174,16 +171,19 @@ void CheckFormatSize(nb::handle size)
         PyErr_Clear();
         count = std::numeric_limits<unsigned long long>::max();
     }
-    try
+    // The engine's cap and message for a sequence too long (Settings::Limits::maxSequenceSize)
+    constexpr unsigned long long builtIn = 1ULL << 26;
+    const auto* render = CurrentRender();
+    const unsigned long long cap = render && render->maxSequenceSize != 0 ? render->maxSequenceSize : builtIn;
+    if (count <= cap)
     {
-        jinja2::CheckSequenceSize(count, "a list");
+        return;
     }
-    catch (const jinja2::ResourceLimitError& error)
-    {
-        const auto& type = Names().templateRuntimeError;
-        PyErr_SetObject(type.ptr(), type(MakeStr(error.what())).ptr());
-        throw nb::python_error();
-    }
+    const std::string length = "a list of length " + std::to_string(count);
+    const auto message = count > builtIn && cap == builtIn ? length + " is too long" : length + " is longer than " + std::to_string(cap);
+    const auto& type = Names().templateRuntimeError;
+    PyErr_SetObject(type.ptr(), type(MakeStr(message)).ptr());
+    throw nb::python_error();
 }
 } // namespace
 } // namespace jinja2cpp_py

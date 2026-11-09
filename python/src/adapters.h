@@ -3,26 +3,26 @@
 
 #include "common.h"
 
-#include "host_object.h"
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/host_object.h>
+#include <jinja2cpp/sandbox_policy.h>
+#include <jinja2cpp/user_callable.h>
+#include <jinja2cpp/value.h>
 
-#include "sandbox_policy.h"
-
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace jinja2cpp_py
 {
-using jinja2::CallParams;
-using jinja2::InternalValue;
-using jinja2::ListAdapter;
-using jinja2::RenderContext;
-
-// A Python object read by the engine as Python reads it (0248 D4): one adapter for every kind
-// of object, which asks Python for each operation, so a dict, a list, a tuple, a namedtuple, a
-// generator, a callable or any other object behaves as itself, and mutation is seen both ways.
-// The common kinds take shortcuts with the same results
-class PyHost final : public jinja2::IEngineHostObject
+// A Python object read by the engine as Python reads it (0248 D4), through the public host-object
+// interface (jinja2cpp/host_object.h, docs/tasks/0357): one adapter for every kind of object, which
+// asks Python for each operation, so a dict, a list, a tuple, a namedtuple, a generator, a callable
+// or any other object behaves as itself, and mutation is seen both ways. The common kinds take
+// shortcuts with the same results, and write their scalars straight into the engine (HostResult)
+class PyHost final : public jinja2::IHostObject
 {
 public:
     enum class Kind : unsigned char
@@ -33,7 +33,7 @@ public:
         Other
     };
 
-    // A strong reference, or a borrowed one the caller keeps alive (the environment's filters)
+    // A strong reference, or a borrowed one the caller keeps alive
     PyHost(nb::handle object, bool borrowed);
     ~PyHost() override;
     PyHost(const PyHost&) = delete;
@@ -46,18 +46,21 @@ public:
     [[nodiscard]] const char* TypeName() const override;
     [[nodiscard]] std::string Str() const override;
     [[nodiscard]] std::string Repr() const override;
-    [[nodiscard]] std::optional<InternalValue> GetAttr(const std::string& name) const override;
-    [[nodiscard]] std::optional<InternalValue> GetItem(const InternalValue& key) const override;
-    [[nodiscard]] std::optional<InternalValue> GetSlice(const InternalValue& start, const InternalValue& stop, const InternalValue& step) const override;
+    [[nodiscard]] std::optional<jinja2::Value> GetAttr(std::string_view name) const override;
+    [[nodiscard]] std::optional<jinja2::Value> GetItem(const jinja2::Value& key) const override;
+    [[nodiscard]] bool GetAttrTo(std::string_view name, jinja2::HostResult& out) const override;
+    [[nodiscard]] bool GetItemTo(std::string_view key, jinja2::HostResult& out) const override;
+    [[nodiscard]] bool ItemAtTo(size_t index, jinja2::HostResult& out) const override;
+    [[nodiscard]] std::optional<jinja2::Value> GetSlice(const jinja2::Value& start, const jinja2::Value& stop, const jinja2::Value& step) const override;
     [[nodiscard]] bool IsCallable() const override;
-    InternalValue Call(const CallParams& params, RenderContext& context) const override;
+    [[nodiscard]] jinja2::Value Call(const jinja2::UserCallableParams& params) const override;
     [[nodiscard]] bool IsIterable() const override;
-    [[nodiscard]] std::optional<ListAdapter> Iterate() const override;
-    [[nodiscard]] std::optional<ListAdapter> Reversed() const override;
-    [[nodiscard]] std::optional<bool> Contains(const InternalValue& item) const override;
+    [[nodiscard]] std::optional<jinja2::GenericList> Iterate() const override;
+    [[nodiscard]] std::optional<jinja2::GenericList> Reversed() const override;
+    [[nodiscard]] std::optional<bool> Contains(const jinja2::Value& item) const override;
     [[nodiscard]] std::optional<size_t> Len() const override;
     [[nodiscard]] bool Truth() const override;
-    [[nodiscard]] std::optional<bool> Equals(const InternalValue& other) const override;
+    [[nodiscard]] std::optional<bool> Equals(const jinja2::Value& other) const override;
     [[nodiscard]] std::optional<size_t> Hash() const override;
     [[nodiscard]] const void* Identity() const override { return m_object; }
     [[nodiscard]] bool IsMapping() const override;
@@ -67,6 +70,11 @@ public:
     [[nodiscard]] std::string Html() const override;
 
 private:
+    // The attribute `name`, checked by the sandbox of the render when there is one; null when there is none
+    [[nodiscard]] nb::object Attribute(std::string_view name) const;
+    // The item of a str key; null when there is none
+    [[nodiscard]] nb::object ItemOfName(std::string_view key) const;
+
     PyObject* m_object;
     bool m_borrowed;
     Kind m_kind;
@@ -76,18 +84,18 @@ private:
     mutable std::string m_typeName;
 };
 
-// The sandbox policy the engine asks for the values it makes (src/sandbox_policy.h) in the renders of the
-// SandboxedEnvironment `environment`, which it borrows
+// The PyHost a value of the engine carries, if any
+const PyHost* AsPyHost(const jinja2::Value& value);
+
 // Whether the sandboxed environment judges the public names of the engine's values too (its is_safe_attribute is not
 // Jinja2's): read again at each load, as the method may be replaced after the first
 bool SandboxJudgesPublicNames(nb::handle environment);
-std::shared_ptr<const jinja2::IEngineSandboxPolicy> MakePythonSandboxPolicy(nb::handle environment, bool allNames);
+// The sandbox policy the engine asks for the values it makes (Settings::sandboxPolicy) in the renders of the
+// SandboxedEnvironment `environment`, which it borrows
+std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle environment, bool allNames);
 
-// The PyHost a value of the engine carries, if any
-const PyHost* AsPyHost(const InternalValue& value);
-
-// Calls `callable` with the engine's arguments, as a template calls it
-InternalValue CallPython(PyObject* callable, const CallParams& params, RenderContext& context);
+// Calls `callable` with the engine's arguments (ArgInfo::VarArgs and ArgInfo::VarKwArgs), as a template calls it
+jinja2::Value CallPython(PyObject* callable, const jinja2::UserCallableParams& params);
 
 } // namespace jinja2cpp_py
 

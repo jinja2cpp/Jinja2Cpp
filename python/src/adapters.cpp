@@ -2,19 +2,23 @@
 
 #include "context.h"
 #include "convert.h"
-#include "engine_errors.h"
 
-#include "expression_evaluator.h"
-#include "generic_adapters.h"
-#include "host_object.h"
-#include "internal_value.h"
+#include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/host_object.h>
+#include <jinja2cpp/user_callable.h>
+#include <jinja2cpp/value.h>
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
+#include <set>
 #include <string>
-#include <unordered_set>
+#include <string_view>
+#include <type_traits>
+#include <typeinfo>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace jinja2cpp_py
@@ -61,45 +65,6 @@ bool ClearTypeError()
     throw nb::python_error();
 }
 
-// The items of a list or tuple by index, so the engine may read them more than once and knows
-// their length (loop.length). The length is the live one: iteration stops at the end of a list
-// the template shortens while it loops, and goes on into one it extends, as Python's list
-// iterator does (IndexedListAccessorImpl's enumerator asks GetItemsCountImpl at every step)
-class PySequenceItems final : public jinja2::IndexedListAccessorImpl<PySequenceItems>
-{
-public:
-    PySequenceItems(PyRef sequence, bool isList)
-        : m_sequence(std::move(sequence))
-        , m_isList(isList)
-    {
-    }
-
-    [[nodiscard]] size_t GetItemsCountImpl() const
-    {
-        return static_cast<size_t>(m_isList ? PyList_Size(m_sequence.Get()) : PyTuple_Size(m_sequence.Get()));
-    }
-    [[nodiscard]] std::optional<InternalValue> GetItem(int64_t idx) const override
-    {
-        PyObject* item = m_isList ? PyList_GetItem(m_sequence.Get(), static_cast<Py_ssize_t>(idx)) : PyTuple_GetItem(m_sequence.Get(), static_cast<Py_ssize_t>(idx));
-        if (!item)
-        {
-            // An index past the end the template shortened the list to
-            PyErr_Clear();
-            return std::nullopt;
-        }
-        return ToEngine(item);
-    }
-    [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
-    // A list the template can change through its methods ({% do l.append(x) %}), so loop.length is
-    // its len() when first read, as in Jinja2; a tuple's never changes
-    [[nodiscard]] bool HasLiveSize() const override { return m_isList; }
-    [[nodiscard]] jinja2::GenericList CreateGenericList() const override { return jinja2::GenericList(std::make_shared<const PySequenceItems>(*this)); }
-
-private:
-    PyRef m_sequence;
-    bool m_isList;
-};
-
 nb::object Steal(PyObject* object)
 {
     if (!object)
@@ -111,11 +76,11 @@ nb::object Steal(PyObject* object)
 
 // The attributes of a builtin type whose instances have no __dict__ (dict, list, tuple): a name
 // outside them is no attribute, which spares getattr's AttributeError on every `d.key`
-const std::unordered_set<std::string>& TypeAttributes(PyObject* type)
+const std::set<std::string, std::less<>>& TypeAttributes(PyObject* type)
 {
-    static std::unordered_set<std::string> dictNames;
-    static std::unordered_set<std::string> listNames;
-    static std::unordered_set<std::string> tupleNames;
+    static std::set<std::string, std::less<>> dictNames;
+    static std::set<std::string, std::less<>> listNames;
+    static std::set<std::string, std::less<>> tupleNames;
     auto& names = type == reinterpret_cast<PyObject*>(&PyDict_Type) ? dictNames : type == reinterpret_cast<PyObject*>(&PyList_Type) ? listNames
                                                                                                                                     : tupleNames;
     if (names.empty())
@@ -147,31 +112,110 @@ PyHost::Kind KindOf(PyObject* object)
 }
 
 // A Python key for the engine's key: a str made directly, the rest converted
-nb::object KeyToPython(const InternalValue& key)
+nb::object KeyToPython(const jinja2::Value& key)
 {
-    if (const auto text = jinja2::AsStringView<char>(key); text && !key.IsMarkup())
+    if (const auto* text = key.GetIf<std::string>(); text && !key.IsMarkup())
     {
         return MakeStr(*text);
     }
     return ToPython(key);
 }
 
-// The items of an iterator, read once
-ListAdapter IteratorAdapter(nb::object iterator)
+// The items of a Python iterator, read once: every enumerator of the list steps the one iterator, as
+// a second loop over a generator in Jinja2 sees what the first left
+class PyIteratorItems final : public jinja2::IListItemAccessor
 {
-    auto ref = PyRef::Steal(iterator.release().ptr());
-    return ListAdapter::CreateAdapter([ref = std::move(ref)]() -> std::optional<InternalValue> {
-        PyObject* item = PyIter_Next(ref.Get());
-        if (!item)
+public:
+    explicit PyIteratorItems(PyRef iterator)
+        : m_iterator(std::move(iterator))
+    {
+    }
+
+    [[nodiscard]] const jinja2::IIndexBasedAccessor* GetIndexer() const override { return nullptr; }
+    [[nodiscard]] std::optional<jinja2::ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Enumerator>(m_iterator); }
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return std::nullopt; }
+    [[nodiscard]] bool IsEqual(const jinja2::IComparable& other) const override { return this == &other; }
+
+private:
+    class Enumerator final : public jinja2::IListEnumerator
+    {
+    public:
+        explicit Enumerator(PyRef iterator)
+            : m_iterator(std::move(iterator))
         {
-            if (PyErr_Occurred())
-            {
-                ThrowPending();
-            }
-            return std::nullopt;
         }
-        return ToEngine(nb::steal(item));
-    });
+
+        void Reset() override {}
+        bool MoveNext() override
+        {
+            PyObject* item = PyIter_Next(m_iterator.Get());
+            if (!item)
+            {
+                if (PyErr_Occurred())
+                {
+                    ThrowPending();
+                }
+                m_current = jinja2::Value();
+                return false;
+            }
+            m_current = ToEngine(nb::steal(item));
+            return true;
+        }
+        [[nodiscard]] jinja2::Value GetCurrent() const override { return m_current; }
+        [[nodiscard]] jinja2::ListEnumeratorPtr Clone() const override
+        {
+            auto clone = MakeEnumerator<Enumerator>(m_iterator);
+            static_cast<Enumerator&>(*clone).m_current = m_current;
+            return clone;
+        }
+        jinja2::ListEnumeratorPtr Move() override
+        {
+            auto moved = MakeEnumerator<Enumerator>(std::move(m_iterator));
+            static_cast<Enumerator&>(*moved).m_current = std::move(m_current);
+            return moved;
+        }
+        [[nodiscard]] bool IsEqual(const jinja2::IComparable& other) const override { return this == &other; }
+
+    private:
+        PyRef m_iterator;
+        jinja2::Value m_current;
+    };
+
+    PyRef m_iterator;
+};
+
+jinja2::GenericList IteratorList(nb::object iterator)
+{
+    return jinja2::GenericList(std::make_shared<const PyIteratorItems>(PyRef::Steal(iterator.release().ptr())));
+}
+
+// Python's `object[key]` with Jinja2's missing errors cleared; null for a missing item
+nb::object ItemOf(PyObject* object, PyHost::Kind kind, PyObject* key)
+{
+    if (kind == PyHost::Kind::Dict)
+    {
+        // Borrowed; no KeyError made for a missing key
+        PyObject* item = PyDict_GetItemWithError(object, key);
+        if (item)
+        {
+            return nb::borrow(item);
+        }
+        if (!PyErr_Occurred() || ClearItemError())
+        {
+            return {};
+        }
+        ThrowPending();
+    }
+    PyObject* item = PyObject_GetItem(object, key);
+    if (!item)
+    {
+        if (ClearItemError())
+        {
+            return {};
+        }
+        ThrowPending();
+    }
+    return nb::steal(item);
 }
 } // namespace
 
@@ -215,14 +259,14 @@ std::string PyHost::Repr() const
     return Utf8(Steal(PyObject_Repr(m_object)));
 }
 
-std::optional<InternalValue> PyHost::GetAttr(const std::string& name) const
+nb::object PyHost::Attribute(std::string_view name) const
 {
     if (m_kind != Kind::Other)
     {
         const auto& names = TypeAttributes(reinterpret_cast<PyObject*>(Py_TYPE(m_object)));
         if (names.find(name) == names.end())
         {
-            return std::nullopt;
+            return {};
         }
     }
     const auto pyName = MakeStr(name);
@@ -231,53 +275,110 @@ std::optional<InternalValue> PyHost::GetAttr(const std::string& name) const
     {
         if (ClearAttributeError())
         {
-            return std::nullopt;
+            return {};
         }
         ThrowPending();
     }
-    const auto value = nb::steal(attr);
+    auto value = nb::steal(attr);
     if (const auto* render = CurrentRender(); render && render->sandbox)
     {
         // The one checkpoint of the sandbox (0248 D8): every attribute a template reads of a Python
         // object, whatever syntax reads it (x.a, x[a], |attr, attribute=, a str.format field), comes
         // here. The environment's _sandbox_attribute asks is_safe_attribute and gives the value, a
         // wrapped str.format, or the unsafe undefined
-        const auto checked = Steal(PyObject_CallMethod(render->sandbox, "_sandbox_attribute", "OOO", m_object, pyName.ptr(), value.ptr()));
-        return ToEngine(checked);
+        return Steal(PyObject_CallMethod(render->sandbox, "_sandbox_attribute", "OOO", m_object, pyName.ptr(), value.ptr()));
+    }
+    return value;
+}
+
+std::optional<jinja2::Value> PyHost::GetAttr(std::string_view name) const
+{
+    const auto value = Attribute(name);
+    if (!value.is_valid())
+    {
+        return std::nullopt;
     }
     return ToEngine(value);
 }
 
-std::optional<InternalValue> PyHost::GetItem(const InternalValue& key) const
+bool PyHost::GetAttrTo(std::string_view name, jinja2::HostResult& out) const
 {
-    const auto pyKey = KeyToPython(key);
-    if (m_kind == Kind::Dict)
+    const auto value = Attribute(name);
+    if (!value.is_valid())
     {
-        // Borrowed; no KeyError made for a missing key
-        PyObject* item = PyDict_GetItemWithError(m_object, pyKey.ptr());
-        if (item)
-        {
-            return ToEngine(item);
-        }
-        if (!PyErr_Occurred() || ClearItemError())
-        {
-            return std::nullopt;
-        }
-        ThrowPending();
+        return false;
     }
-    PyObject* item = PyObject_GetItem(m_object, pyKey.ptr());
-    if (!item)
-    {
-        if (ClearItemError())
-        {
-            return std::nullopt;
-        }
-        ThrowPending();
-    }
-    return ToEngine(nb::steal(item));
+    WriteToEngine(value, out);
+    return true;
 }
 
-std::optional<InternalValue> PyHost::GetSlice(const InternalValue& start, const InternalValue& stop, const InternalValue& step) const
+nb::object PyHost::ItemOfName(std::string_view key) const
+{
+    const auto pyKey = MakeStr(key);
+    return ItemOf(m_object, m_kind, pyKey.ptr());
+}
+
+std::optional<jinja2::Value> PyHost::GetItem(const jinja2::Value& key) const
+{
+    const auto pyKey = KeyToPython(key);
+    const auto item = ItemOf(m_object, m_kind, pyKey.ptr());
+    if (!item.is_valid())
+    {
+        return std::nullopt;
+    }
+    return ToEngine(item);
+}
+
+bool PyHost::GetItemTo(std::string_view key, jinja2::HostResult& out) const
+{
+    const auto item = ItemOfName(key);
+    if (!item.is_valid())
+    {
+        return false;
+    }
+    WriteToEngine(item, out);
+    return true;
+}
+
+bool PyHost::ItemAtTo(size_t index, jinja2::HostResult& out) const
+{
+    const auto at = static_cast<Py_ssize_t>(index);
+    PyObject* item = nullptr;
+    if (m_kind == Kind::List)
+    {
+        item = PyList_GetItem(m_object, at);
+    }
+    else if (m_kind == Kind::Tuple)
+    {
+        item = PyTuple_GetItem(m_object, at);
+    }
+    else
+    {
+        // A list or tuple subclass: its own __getitem__
+        PyObject* owned = PySequence_GetItem(m_object, at);
+        if (!owned)
+        {
+            if (PyErr_ExceptionMatches(PyExc_IndexError))
+            {
+                PyErr_Clear();
+                return false;
+            }
+            ThrowPending();
+        }
+        WriteToEngine(nb::steal(owned), out);
+        return true;
+    }
+    if (!item)
+    {
+        // An index past the end the template shortened the list to
+        PyErr_Clear();
+        return false;
+    }
+    WriteToEngine(item, out);
+    return true;
+}
+
+std::optional<jinja2::Value> PyHost::GetSlice(const jinja2::Value& start, const jinja2::Value& stop, const jinja2::Value& step) const
 {
     if (m_kind == Kind::Other && !PySequence_Check(m_object) && !PyMapping_Check(m_object))
     {
@@ -294,7 +395,7 @@ bool PyHost::IsCallable() const
     return m_kind == Kind::Other && PyCallable_Check(m_object) != 0;
 }
 
-InternalValue PyHost::Call(const CallParams& params, RenderContext& context) const
+jinja2::Value PyHost::Call(const jinja2::UserCallableParams& params) const
 {
     if (const auto* render = CurrentRender(); render && render->sandbox)
     {
@@ -302,7 +403,7 @@ InternalValue PyHost::Call(const CallParams& params, RenderContext& context) con
         const auto safe = Steal(PyObject_CallMethod(render->sandbox, "_sandbox_check_call", "O", m_object));
         (void)safe;
     }
-    return CallPython(m_object, params, context);
+    return CallPython(m_object, params);
 }
 
 bool PyHost::IsIterable() const
@@ -325,12 +426,9 @@ bool PyHost::IsIterable() const
     return true;
 }
 
-std::optional<ListAdapter> PyHost::Iterate() const
+std::optional<jinja2::GenericList> PyHost::Iterate() const
 {
-    if (m_kind == Kind::List || m_kind == Kind::Tuple)
-    {
-        return ListAdapter(jinja2::MakeRef<PySequenceItems>(PyRef::Borrow(m_object), m_kind == Kind::List));
-    }
+    // A list or tuple is read by index (Len and ItemAtTo); the rest, and a dict's keys, through iter()
     PyObject* iterator = PyObject_GetIter(m_object);
     if (!iterator)
     {
@@ -340,10 +438,10 @@ std::optional<ListAdapter> PyHost::Iterate() const
         }
         ThrowPending();
     }
-    return IteratorAdapter(nb::steal(iterator));
+    return IteratorList(nb::steal(iterator));
 }
 
-std::optional<ListAdapter> PyHost::Reversed() const
+std::optional<jinja2::GenericList> PyHost::Reversed() const
 {
     PyObject* reversed = PyObject_CallFunctionObjArgs(Names().reversed.ptr(), m_object, nullptr);
     if (!reversed)
@@ -354,10 +452,10 @@ std::optional<ListAdapter> PyHost::Reversed() const
         }
         ThrowPending();
     }
-    return IteratorAdapter(nb::steal(reversed));
+    return IteratorList(nb::steal(reversed));
 }
 
-std::optional<bool> PyHost::Contains(const InternalValue& item) const
+std::optional<bool> PyHost::Contains(const jinja2::Value& item) const
 {
     const auto pyItem = KeyToPython(item);
     const int result = PySequence_Contains(m_object, pyItem.ptr());
@@ -370,6 +468,10 @@ std::optional<bool> PyHost::Contains(const InternalValue& item) const
 
 std::optional<size_t> PyHost::Len() const
 {
+    if (m_kind == Kind::List)
+    {
+        return static_cast<size_t>(PyList_Size(m_object));
+    }
     const Py_ssize_t size = PyObject_Size(m_object);
     if (size < 0)
     {
@@ -392,7 +494,7 @@ bool PyHost::Truth() const
     return result != 0;
 }
 
-std::optional<bool> PyHost::Equals(const InternalValue& other) const
+std::optional<bool> PyHost::Equals(const jinja2::Value& other) const
 {
     const auto pyOther = ToPython(other);
     // Python's ==: reflected operands and the identity fallback included
@@ -461,6 +563,22 @@ std::string PyHost::Html() const
     return Utf8(Steal(PyObject_CallMethod(m_object, "__html__", nullptr)));
 }
 
+const PyHost* AsPyHost(const jinja2::Value& value)
+{
+    const auto* map = value.GetIf<jinja2::GenericMap>();
+    if (!map || !map->GetAccessor())
+    {
+        return nullptr;
+    }
+    const auto* host = map->GetAccessor()->AsHostObject();
+    // The module's objects are PyHost; an undefined value the module made (MakeUndefined) is another kind
+    if (!host || typeid(*host) != typeid(PyHost))
+    {
+        return nullptr;
+    }
+    return static_cast<const PyHost*>(host);
+}
+
 namespace
 {
 nb::object Stub(const char* name)
@@ -472,57 +590,53 @@ nb::object Stub(const char* name)
 
 // A Python object of the kind of `obj`, for is_safe_attribute to look at: the value itself when it is
 // small, an empty container otherwise (the checks look at the type; converting a list for each refused
-// name would cost its length)
-nb::object Representative(const InternalValue& obj, bool& synthetic)
+// name would cost its length). A macro or `caller` reaches the policy as an empty value (sandbox_policy.h),
+// which is None here: is_safe_attribute judges None's attributes for it
+nb::object Representative(const jinja2::Value& obj, bool& synthetic)
 {
-    switch (obj.Kind())
+    if (const auto* list = obj.GetIf<jinja2::GenericList>())
     {
-    case jinja2::ValueKind::None:
-        return nb::none();
-    case jinja2::ValueKind::Bool:
-    case jinja2::ValueKind::Int:
-    case jinja2::ValueKind::Double:
-    case jinja2::ValueKind::BigInt:
-    case jinja2::ValueKind::String:
-        return ToPython(obj);
-    case jinja2::ValueKind::List:
-    {
-        const auto list = *jinja2::AsList(obj);
-        if (list.GetRangeInfo())
-        {
-            return Steal(PyObject_CallFunction(reinterpret_cast<PyObject*>(&PyRange_Type), "i", 0));
-        }
-        return list.IsTuple() ? Steal(PyTuple_New(0)) : Steal(PyList_New(0));
+        return list->IsTuple() ? Steal(PyTuple_New(0)) : Steal(PyList_New(0));
     }
-    case jinja2::ValueKind::Map:
+    if (obj.GetIf<jinja2::ValuesList>())
     {
-        const auto map = *jinja2::AsMap(obj);
-        if (const char* objectClass = map.GetObjectClass())
+        return Steal(PyList_New(0));
+    }
+    if (const auto* map = obj.GetIf<jinja2::GenericMap>())
+    {
+        if (const char* objectClass = map->GetObjectClass())
         {
             synthetic = true;
             return Stub(objectClass);
         }
-        if (map.IsNamespace())
-        {
-            synthetic = true;
-            return Stub("Namespace");
-        }
         return nb::dict();
     }
-    case jinja2::ValueKind::KeyValuePair:
-        return Steal(PyTuple_New(0));
-    case jinja2::ValueKind::Callable:
-        synthetic = true;
-        return Stub(jinja2::GetIf<jinja2::Callable>(&obj)->GetKind() == jinja2::Callable::Macro ? "Macro" : "function");
-    default:
-        synthetic = true;
-        return Stub("object");
+    if (obj.GetIf<jinja2::ValuesMap>())
+    {
+        return nb::dict();
     }
+    if (obj.GetIf<jinja2::UserCallable>())
+    {
+        synthetic = true;
+        return Stub("function");
+    }
+    return ToPython(obj);
 }
 
-// The IEngineSandboxPolicy of a SandboxedEnvironment: the environment's own is_safe_attribute and wrap_str_format, asked
+// Whether `value` is a string of the template's, owned or viewed
+bool IsText(const jinja2::Value& value)
+{
+    return std::visit(
+        [](const auto& data) {
+            using T = std::decay_t<decltype(data)>;
+            return std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view> || std::is_same_v<T, std::wstring> || std::is_same_v<T, std::wstring_view> || std::is_same_v<T, jinja2::Markup> || std::is_same_v<T, jinja2::WMarkup>;
+        },
+        value.GetData());
+}
+
+// The ISandboxPolicy of a SandboxedEnvironment: the environment's own is_safe_attribute and wrap_str_format, asked
 // for the engine's values. It borrows the environment, which holds the engine environment that holds this
-class PySandboxPolicy final : public jinja2::IEngineSandboxPolicy
+class PySandboxPolicy final : public jinja2::ISandboxPolicy
 {
 public:
     PySandboxPolicy(PyObject* environment, bool allNames)
@@ -531,12 +645,15 @@ public:
     {
     }
 
-    [[nodiscard]] std::optional<InternalValue> NativeAttribute(const InternalValue& obj, const std::string& name) const override
+    [[nodiscard]] std::optional<jinja2::Value> NativeAttribute(const jinja2::Value& obj, std::string_view name) const override
     {
-        if (name == "format_map" && jinja2::IsStringValue(obj))
+        if (name == "format_map" && IsText(obj))
         {
             // The engine's strings have no format_map; the sandbox's is SandboxedFormatter's
-            return InternalValue(jinja2::Callable(jinja2::Callable::UserCallable, [obj, this](const CallParams& params, RenderContext& context) { return FormatWith(obj, true, params, context); }));
+            jinja2::UserCallable formatMap([obj, this](const jinja2::UserCallableParams& params) { return FormatWith(obj, true, params); },
+                                           { jinja2::ArgInfo(jinja2::ArgInfo::VarArgs), jinja2::ArgInfo(jinja2::ArgInfo::VarKwArgs) });
+            formatMap.keepUndefined = true;
+            return jinja2::Value(std::move(formatMap));
         }
         // Python's objects have attributes the engine's values have not: __class__, __init__, ...
         // A public name is the environment's to judge only when its is_safe_attribute is not Jinja2's, which
@@ -569,20 +686,20 @@ public:
         }
         const auto checked = Steal(PyObject_CallMethod(m_environment, "_sandbox_attribute", "OOO", representative.ptr(), pyName.ptr(), owned.ptr()));
         auto result = ToEngine(checked);
-        if (result.IsUndefined())
+        if (jinja2::UndefinedOf(result))
         {
             return result;
         }
         return std::nullopt;
     }
 
-    std::optional<InternalValue> Format(const InternalValue& self, bool formatMap, const CallParams& params, RenderContext& context) const override
+    [[nodiscard]] std::optional<jinja2::Value> Format(const jinja2::Value& self, bool formatMap, const jinja2::UserCallableParams& params) const override
     {
-        return FormatWith(self, formatMap, params, context);
+        return FormatWith(self, formatMap, params);
     }
 
 private:
-    InternalValue FormatWith(const InternalValue& self, bool formatMap, const CallParams& params, RenderContext& context) const
+    [[nodiscard]] jinja2::Value FormatWith(const jinja2::Value& self, bool formatMap, const jinja2::UserCallableParams& params) const
     {
         const auto text = ToPython(self);
         const auto method = Steal(PyObject_GetAttrString(text.ptr(), formatMap ? "format_map" : "format"));
@@ -591,7 +708,7 @@ private:
         {
             wrapped = method;
         }
-        return CallPython(wrapped.ptr(), params, context);
+        return CallPython(wrapped.ptr(), params);
     }
 
     PyObject* m_environment;
@@ -609,71 +726,35 @@ bool SandboxJudgesPublicNames(nb::handle environment)
     return PyObject_IsTrue(all.ptr()) != 0;
 }
 
-std::shared_ptr<const jinja2::IEngineSandboxPolicy> MakePythonSandboxPolicy(nb::handle environment, bool allNames)
+std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle environment, bool allNames)
 {
     return std::make_shared<PySandboxPolicy>(environment.ptr(), allNames);
 }
 
-const PyHost* AsPyHost(const InternalValue& value)
-{
-    // The module makes every host object of the engine's values
-    return static_cast<const PyHost*>(jinja2::GetHostObject(value));
-}
-
 namespace
 {
-// A Python BaseException outside Exception (KeyboardInterrupt, SystemExit): the engine lets it
-// through where Jinja2's `except Exception` does (engine_errors.h), and the render raises it whole
-class PyUnrecoverableError final : public nb::python_error, public jinja2::detail::HostUnrecoverableError
+jinja2::Value CallPythonImpl(PyObject* callable, const jinja2::UserCallableParams& params)
 {
-public:
-    explicit PyUnrecoverableError(nb::python_error&& error) noexcept
-        : nb::python_error(std::move(error))
-    {
-    }
-};
-
-InternalValue CallPythonImpl(PyObject* callable, const CallParams& params, RenderContext& context);
-} // namespace
-
-InternalValue CallPython(PyObject* callable, const CallParams& params, RenderContext& context)
-{
-    try
-    {
-        return CallPythonImpl(callable, params, context);
-    }
-    catch (nb::python_error& error)
-    {
-        if (error.matches(PyExc_Exception))
-        {
-            throw;
-        }
-        throw PyUnrecoverableError(std::move(error));
-    }
-}
-
-namespace
-{
-InternalValue CallPythonImpl(PyObject* callable, const CallParams& params, RenderContext& context)
-{
-    const LeaseScope lease(context);
+    const LeaseScope lease(params);
     // pass_context and its kin: the argument the callable asked for goes first
     const PassArg pass = PassArgOf(callable);
     const size_t extra = pass != PassArg::None ? 1 : 0;
-    const size_t positional = extra + params.posParams.size();
-    const size_t keywords = params.kwParams.size();
+    const auto* posArgs = params.extraPosArgs.GetIf<jinja2::ValuesList>();
+    const auto* kwArgs = params.extraKwArgs.GetIf<jinja2::ValuesMap>();
+    const size_t positional = extra + (posArgs ? posArgs->size() : 0);
+    const size_t keywords = kwArgs ? kwArgs->size() : 0;
     // The arguments live in `objects`; `args` has a free first slot for the vectorcall protocol
     std::vector<nb::object> objects;
     objects.reserve(positional + keywords);
     std::vector<PyObject*> args(1 + positional + keywords, nullptr);
     if (extra != 0)
     {
-        objects.push_back(MakePassArgument(pass, context));
+        objects.push_back(MakePassArgument(pass));
         args[1] = objects.back().ptr();
     }
     for (size_t i = extra; i < positional; ++i)
     {
-        objects.push_back(ToPython(params.posParams[i - extra]));
+        objects.push_back(ToPython((*posArgs)[i - extra]));
         args[1 + i] = objects.back().ptr();
     }
     nb::object names;
@@ -681,7 +762,7 @@ InternalValue CallPythonImpl(PyObject* callable, const CallParams& params, Rende
     {
         names = Steal(PyTuple_New(static_cast<Py_ssize_t>(keywords)));
         size_t i = 0;
-        for (const auto& [name, value] : params.kwParams)
+        for (const auto& [name, value] : *kwArgs)
         {
             auto pyName = MakeStr(name);
             // PyTuple_SetItem steals the reference
@@ -695,5 +776,26 @@ InternalValue CallPythonImpl(PyObject* callable, const CallParams& params, Rende
     return ToEngine(result);
 }
 } // namespace
+
+jinja2::Value CallPython(PyObject* callable, const jinja2::UserCallableParams& params)
+{
+    try
+    {
+        return CallPythonImpl(callable, params);
+    }
+    catch (nb::python_error& error)
+    {
+        if (!error.matches(PyExc_Exception))
+        {
+            // KeyboardInterrupt, SystemExit: noted for the render, which raises it even where the engine absorbs
+            // a failed call (RenderState::abort)
+            if (auto* render = CurrentRender(); render && !render->abort)
+            {
+                render->abort = std::current_exception();
+            }
+        }
+        throw;
+    }
+}
 
 } // namespace jinja2cpp_py

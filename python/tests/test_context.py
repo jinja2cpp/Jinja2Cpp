@@ -43,7 +43,19 @@ def make_env(module, loader=None, **options):
 
 def test_context_variables():
     both(make_env, "{% set a = 1 %}{{ show('a', 'w', 'nope') }}", w=2)
-    both(make_env, "{{ show('w') }}{{ show('g', 'range') }}", w=[1])
+    both(make_env, "{{ show('w') }}{{ show('g') }}", w=[1])
+
+
+def test_a_global_function_read_through_the_context_is_callable():
+    # The engine's own `range` reaches Python as a callable lent for the call; it prints by no name of its own,
+    # unlike Python's builtin (task 0439)
+    @jinja2cpp.pass_context
+    def call(ctx):
+        return str(list(ctx.get("range")(3)))
+
+    env = jinja2cpp.Environment()
+    env.globals["call"] = call
+    assert env.from_string("{{ call() }}").render() == "[0, 1, 2]"
 
 
 def test_context_in_included_and_imported_templates():
@@ -258,8 +270,16 @@ def test_values_read_through_a_context_are_lent_too():
     gc.collect()
     with pytest.raises(jinja2cpp.TemplateRuntimeError):
         kept[0]("y")
-    with pytest.raises(jinja2cpp.TemplateRuntimeError):
-        kept[1].a
+    # A namespace is a snapshot of its attributes, which stays readable (docs/tasks/0357, D5)
+    assert kept[1].a == 1
+
+
+def test_template_objects_print_as_in_jinja2():
+    source = ("{% set ns = namespace(a=1) %}{% for i in [1, 2] %}"
+              "{{ r(loop) }}|{{ s(loop) }}|{{ r(ns) }}|{{ s(ns) }};{% endfor %}")
+    out = [module.Template(source).render(r=repr, s=str) for module in MODULES]
+    assert out[0] == out[1]
+    assert out[0].startswith("<LoopContext 1/2>|<LoopContext 1/2>|<Namespace {'a': 1}>")
 
 
 def test_context_survives_nested_renders_and_errors():

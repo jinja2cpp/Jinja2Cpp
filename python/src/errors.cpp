@@ -1,14 +1,11 @@
 #include "errors.h"
 
-#include "error_boundary.h"
-
-#include "engine_errors.h"
-
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/exception.h>
 #include <jinja2cpp/value.h>
 
 #include <exception>
+#include <new>
 #include <string>
 
 namespace jinja2cpp_py
@@ -158,7 +155,43 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
 
 void RaiseCurrentEngineError()
 {
-    RaiseError(jinja2::detail::CurrentExceptionToError<char>(std::string()));
+    // What a callable of the template (a lent macro, `caller`) reports: the engine's ErrorInfo, or a
+    // jinja2::Exception of a callable of its own
+    try
+    {
+        throw;
+    }
+    catch (const nb::python_error&)
+    {
+        throw;
+    }
+    catch (const jinja2::ErrorInfo& error)
+    {
+        RaiseError(error);
+    }
+    catch (const jinja2::Exception& error)
+    {
+        const auto& names = Names();
+        const auto text = MakeStr(error.what());
+        if (error.Code() == ErrorCode::UndefinedError)
+        {
+            Raise(names.undefinedError, names.undefinedError(text));
+        }
+        Raise(names.templateRuntimeError, names.templateRuntimeError(text));
+    }
+    catch (const std::bad_alloc&)
+    {
+        PyErr_NoMemory();
+        throw nb::python_error();
+    }
+    catch (const std::exception& error)
+    {
+        RaiseTemplateRuntimeError(error.what());
+    }
+    catch (...)
+    {
+        RaiseTemplateRuntimeError("unknown error of the engine");
+    }
 }
 
 void RaiseTemplateRuntimeError(const std::string& message)

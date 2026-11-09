@@ -44,10 +44,9 @@ nanobind_add_module(_jinja2cpp STABLE_ABI NB_STATIC NB_SUPPRESS_WARNINGS NOMINSI
     src/loaders.cpp
     src/template_module.cpp
 )
-# The library's private dependencies too (fmt): the private headers include them
-target_link_libraries(_jinja2cpp PRIVATE ${LIB_TARGET_NAME} ${JINJA2CPP_PRIVATE_LIBS})
-# The module reads the library's private headers (src/host_object.h, src/template_impl.h)
-target_include_directories(_jinja2cpp PRIVATE "${PROJECT_SOURCE_DIR}/src" "${CMAKE_CURRENT_SOURCE_DIR}/src")
+# The module uses the library's public API only (docs/tasks/0357)
+target_link_libraries(_jinja2cpp PRIVATE ${LIB_TARGET_NAME})
+target_include_directories(_jinja2cpp PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_options(_jinja2cpp PRIVATE ${JINJA2CPP_TARGET_CXX_FLAGS})
 set_target_properties(_jinja2cpp PROPERTIES
     CXX_STANDARD ${JINJA2CPP_CXX_STANDARD}

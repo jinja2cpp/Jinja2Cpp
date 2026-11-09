@@ -6,10 +6,6 @@
 #include "errors.h"
 #include "poll.h"
 
-#include "host_object.h"
-#include "internal_value.h"
-#include "template_impl.h"
-
 #include <nanobind/stl/string.h>
 
 #include <jinja2cpp/generic_list_iterator.h>
@@ -21,16 +17,6 @@
 #include <unordered_set>
 #include <utility>
 
-namespace jinja2
-{
-inline namespace v2
-{
-// internal_value.cpp: a host Value as a value of the engine
-InternalValue Value2IntValue(const Value& val);
-InternalValue Value2IntValue(Value&& val);
-} // namespace v2
-} // namespace jinja2
-
 namespace jinja2cpp_py
 {
 using namespace nb::literals;
@@ -40,18 +26,17 @@ namespace
 // A Python value as a value of the host API, which a module takes by value, as Python's own data
 // would be copied: str, int, float, bool, None, Markup, list, tuple and dict item by item (a
 // container that contains itself is cut where it repeats, an empty Value, as in the engine's
-// exports). A callable or any other object goes in as itself (host::EngineUserCallable is a Value
-// the engine takes back as the object), so a method is called with Python's own call and an
-// attribute is Python's
+// exports). A callable or any other object goes in as itself (a host object, ToEngine), so a
+// method is called with Python's own call and an attribute is Python's
 class ModuleParams
 {
 public:
-    // Nested containers stop where the engine's own recursion does: when the stack runs low
+    // Nested containers stop at a depth
     void CheckStack() const
     {
         // The engine copies a module's Values recursively with no guard of its own (0418): the
         // depth stops at Python's own default recursion limit, far below the stack
-        if (m_depth > kMaxDepth || jinja2::StackNearlyExhausted())
+        if (m_depth > kMaxDepth)
         {
             PyErr_SetString(PyExc_RecursionError, "maximum recursion depth exceeded while converting a module argument");
             throw nb::python_error();
@@ -140,13 +125,9 @@ public:
         {
             return jinja2::Value(jinja2::Markup(Utf8(object)));
         }
-        if (PyCallable_Check(raw))
-        {
-            return jinja2::Value(jinja2::host::EngineUserCallable(ToEngine(object)));
-        }
-        // Any other object stays itself in the module, as in a render: its attributes, lists and
-        // methods are Python's (the Value carries the engine's own value of it back in)
-        return jinja2::Value(jinja2::host::EngineUserCallable(ToEngine(object)));
+        // A callable or any other object stays itself in the module, as in a render: its attributes,
+        // lists and methods are Python's
+        return ToEngine(object);
     }
 
 private:
@@ -236,10 +217,11 @@ public:
         state.templateGlobals = m_templateGlobals.ptr();
         state.sandbox = SandboxOf(m_environment);
         const RenderScope scope(state);
-        const HostPollScope poll;
         try
         {
-            return ToPython(jinja2::Value2IntValue(m_callable.callable(params)));
+            auto result = ToPython(m_callable.callable(params));
+            RaiseAbort(state);
+            return result;
         }
         catch (const jinja2::BadResultAccess<char>& failure)
         {
@@ -275,15 +257,29 @@ private:
     std::string m_name;
 };
 
+// One level of a nested export, counted against Python's recursion limit
+class ExportDepth
+{
+public:
+    ExportDepth()
+    {
+        if (Py_EnterRecursiveCall(" while converting a module export") != 0)
+        {
+            throw nb::python_error();
+        }
+    }
+    ~ExportDepth() { Py_LeaveRecursiveCall(); }
+    ExportDepth(const ExportDepth&) = delete;
+    ExportDepth& operator=(const ExportDepth&) = delete;
+    ExportDepth(ExportDepth&&) = delete;
+    ExportDepth& operator=(ExportDepth&&) = delete;
+};
+
 // An exported value as Python: the macros, also in lists and dicts, stay callable
 // (ModuleMacro); the rest as the engine's values become Python's (ToPython)
 nb::object ExportToPython(const jinja2::Value& value, const nb::object& environment, const nb::object& templateGlobals, const nb::object& templateName, const std::string& name)
 {
-    if (jinja2::StackNearlyExhausted())
-    {
-        PyErr_SetString(PyExc_RecursionError, "maximum recursion depth exceeded while converting a module export");
-        throw nb::python_error();
-    }
+    const ExportDepth depth;
     if (const auto* callable = value.GetIf<jinja2::UserCallable>())
     {
         return nb::cast(new ModuleMacro(*callable, environment, templateGlobals, templateName, name), nb::rv_policy::take_ownership);
@@ -324,7 +320,7 @@ nb::object ExportToPython(const jinja2::Value& value, const nb::object& environm
         }
         return result;
     }
-    return ToPython(jinja2::Value2IntValue(value));
+    return ToPython(value);
 }
 
 int MacroTraverse(PyObject* self, visitproc visit, void* arg)
@@ -382,9 +378,11 @@ nb::tuple PyTemplate::MakeModule(nb::handle params) const
     state.environment = m_environment.ptr();
     state.templateGlobals = m_globals.ptr();
     state.sandbox = SandboxOf(m_environment);
-    const RenderScope scope(state);
-    const HostPollScope poll;
-    auto result = m_template.MakeModule(values);
+    auto result = [&] {
+        const RenderScope scope(state);
+        return m_template.MakeModule(values);
+    }();
+    RaiseAbort(state);
     if (!result)
     {
         ErrorSource where;
@@ -424,7 +422,7 @@ nb::object PyTemplate::FindUndeclared() const
 nb::object PyTemplate::FindReferenced() const
 {
     LiveEnvironment();
-    auto result = jinja2::TemplateImpl<char>::ReferencedTemplatesOf(m_template);
+    auto result = m_template.FindReferencedTemplates();
     if (!result)
     {
         ErrorSource where;

@@ -3,25 +3,17 @@
 
 #include "common.h"
 
-#include "host_object.h"
-#include "internal_value.h"
+#include <jinja2cpp/host_object.h>
+#include <jinja2cpp/user_callable.h>
+#include <jinja2cpp/value.h>
 
+#include <cstdint>
+#include <exception>
 #include <memory>
-#include <vector>
-
-namespace jinja2
-{
-inline namespace v2
-{
-class RenderContext;
-class CycleCollector;
-}
-} // namespace jinja2
+#include <string>
 
 namespace jinja2cpp_py
 {
-using jinja2::InternalValue;
-
 // What a render on this thread converts with: the Undefined class of its environment, which an
 // undefined value passed to Python becomes (Template.render installs it, RenderScope)
 struct RenderState
@@ -35,6 +27,13 @@ struct RenderState
     // The environment when it is sandboxed (SandboxOf), whose is_safe_attribute and is_safe_callable the
     // render asks for every attribute and call of a Python object (0354, the plan's D8); null for any other
     PyObject* sandbox = nullptr;
+    // The environment's Limits::maxSequenceSize (0 for the engine's built-in cap), which the sandbox's
+    // formatter checks the strings it builds against (_check_sequence_size)
+    std::uint64_t maxSequenceSize = 0;
+    // A Python BaseException outside Exception (KeyboardInterrupt, SystemExit) that a callable raised: the
+    // engine's fold of a finalized output absorbs a failed call as Jinja2's `except Exception` does, so the
+    // render's poll and its end raise it again (Jinja2 lets it through)
+    std::exception_ptr abort;
     RenderState* outer = nullptr;
 };
 RenderState* CurrentRender() noexcept;
@@ -60,30 +59,26 @@ private:
     RenderState& m_state;
 };
 
-class TemplateValue;
-
 // Runs the sandbox environment's `_check_native_hooks` (jinja2cpp/sandbox.py): an override of call, getattr or getitem
 // set after a template loaded is refused at each entry into the template's code, as at a load
 void CheckNativeSandboxHooks(PyObject* sandbox);
 
-// The template values a Python call got as arguments (a macro, `caller`, `loop`), lent for the
-// duration of that call: they refer to the render that made them, which may be gone once the
-// call returns. Afterwards each one is empty and using it raises (as the engine's own lease,
-// docs/tasks/0300)
+// What a Python call the engine makes was handed besides its arguments: the template's context and the call site,
+// valid for the duration of the call only (UserCallableParams::context). A pass_context argument reads them while
+// the call runs and raises once it returned
 struct CallLease
 {
-    jinja2::RenderContext* context = nullptr;
-    // The render's, which the values' code notes its writes to
-    jinja2::CycleCollector* collector = nullptr;
     bool active = true;
-    std::vector<TemplateValue*> values;
+    jinja2::Value context;
+    std::string templateName;
+    bool autoescape = false;
 };
 
 // Installs a lease for the Python call it lives for and ends it after the call
 class LeaseScope
 {
 public:
-    explicit LeaseScope(jinja2::RenderContext& context) noexcept;
+    explicit LeaseScope(const jinja2::UserCallableParams& params) noexcept;
     ~LeaseScope();
     LeaseScope(const LeaseScope&) = delete;
     LeaseScope& operator=(const LeaseScope&) = delete;
@@ -94,26 +89,27 @@ public:
     static std::shared_ptr<CallLease> Current();
 
 private:
-    jinja2::RenderContext& m_context;
+    const jinja2::UserCallableParams& m_params;
     std::shared_ptr<CallLease> m_lease;
     LeaseScope* m_outer;
 };
 
-// A value of the template that has no Python type of its own, seen from Python: a macro,
-// `caller`, `loop`, a cycler, a namespace. It holds the value while its lease is active
+// A value of the template that has no Python type of its own, seen from Python: a macro, `caller`,
+// `loop`, a cycler, a namespace. A macro or `caller` is lent by the engine for the call it was passed
+// to and raises once that call returned (docs/tasks/0300); `loop` and the other objects are snapshots
+// that stay readable (the plan's D5)
 class TemplateValue
 {
 public:
-    TemplateValue(InternalValue value, std::shared_ptr<CallLease> lease);
-    ~TemplateValue();
+    explicit TemplateValue(jinja2::Value value);
+    ~TemplateValue() = default;
     TemplateValue(const TemplateValue&) = delete;
     TemplateValue& operator=(const TemplateValue&) = delete;
     TemplateValue(TemplateValue&&) = delete;
     TemplateValue& operator=(TemplateValue&&) = delete;
 
-    // The value, or a TemplateRuntimeError once its call ended
-    [[nodiscard]] const InternalValue& Value() const;
-    [[nodiscard]] bool Alive() const noexcept { return m_alive; }
+    // The value, or a TemplateRuntimeError once the garbage collector cleared it
+    [[nodiscard]] const jinja2::Value& Value() const;
     void Expire() noexcept;
 
     nb::object Call(nb::args args, nb::kwargs kwargs) const;
@@ -124,24 +120,24 @@ public:
     [[nodiscard]] std::string TypeName() const;
 
 private:
-    InternalValue m_value;
-    std::shared_ptr<CallLease> m_lease;
+    jinja2::Value m_value;
     bool m_alive = true;
 };
 
 // Python -> engine (0248 D4): scalars natively, a str copied to UTF-8, Markup as Markup, an
 // Undefined as undefined, a TemplateValue as its value, anything else as a host object
-InternalValue ToEngine(nb::handle object);
+jinja2::Value ToEngine(nb::handle object);
+// The same, written where the engine reads a host object's attribute or item (IHostObject::GetAttrTo)
+void WriteToEngine(nb::handle object, jinja2::HostResult& out);
 // Engine -> Python: values from Python as the same object, scalars natively, a template's lists
 // and dicts as list and dict, Markup as markupsafe.Markup, undefined as an instance of the
 // render's Undefined class, macros and other template objects as TemplateValue
-nb::object ToPython(const InternalValue& value);
+nb::object ToPython(const jinja2::Value& value);
 
-// A host value of `object` the engine does not own a reference to: the environment's filters,
-// tests and finalize, which the environment keeps alive (environment.h)
-InternalValue BorrowedHostValue(nb::handle object);
-// A callable of the engine (kind UserCallable) that calls `object`, which it borrows
-InternalValue BorrowedCallable(nb::handle object);
+// A callable of the engine that calls `object`, which it borrows: the environment's filters, tests,
+// finalize and translation callables, which the environment keeps alive (environment.h). An undefined
+// argument reaches Python as an Undefined
+jinja2::UserCallable BorrowedCallable(nb::handle object);
 
 } // namespace jinja2cpp_py
 
