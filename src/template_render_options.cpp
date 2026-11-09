@@ -5,7 +5,6 @@
 #include <jinja2cpp/value.h>
 
 #include <optional>
-#include <string>
 
 namespace jinja2
 {
