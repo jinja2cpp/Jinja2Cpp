@@ -628,7 +628,7 @@ public:
     using ParseResult = nonstd::expected<NodeRef<TemplateRenderer>, std::vector<ErrorInfo>>;
 
     // The tree goes to `nodes`
-    TemplateParser(const string_t* tpl, const detail::LoadSettings& setts, TemplateEnv* env, const std::string& tplName JINJA2CPP_LIFETIMEBOUND, NodeArena& nodes)
+    JINJA2CPP_HOT_INLINE TemplateParser(const string_t* tpl, const detail::LoadSettings& setts, TemplateEnv* env, const std::string& tplName JINJA2CPP_LIFETIMEBOUND, NodeArena& nodes)
         : m_template(tpl)
         , m_templateName(tplName)
         , m_settings(setts.settings)

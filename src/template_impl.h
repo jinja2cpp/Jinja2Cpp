@@ -440,20 +440,10 @@ public:
 
     // The same with the public options: their globals, lent for the render and kept by any value a
     // host keeps (LendGlobal), and their poll
+    // Defined in template_render_options.cpp, so that the RenderCore with hooks is not compiled in template.cpp:
+    // there it changed what GCC inlines into the ordinary render's ~RenderContext (+14 instructions a render)
     template<typename Target>
-    std::optional<BasicErrorInfo<CharT>> RenderWithOptions(Target& os, const ValuesMap& params, const RenderOptions& options) const
-    {
-        RenderHooks hooks;
-        if (options.globals)
-        {
-            hooks.hostGlobals = &options.globals;
-        }
-        if (options.poll)
-        {
-            hooks.poll = &options.poll;
-        }
-        return RenderCore<true>(os, params, &hooks);
-    }
+    std::optional<BasicErrorInfo<CharT>> RenderWithOptions(Target& os, const ValuesMap& params, const RenderOptions& options) const;
 
     // Renders with the params of a ValuesMap or a GenericMap, appending to a string or writing to a
     // host's sink. Rendering reads the template only, so several threads may render one template at once.
