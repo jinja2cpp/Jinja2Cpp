@@ -1604,3 +1604,69 @@ TEST(PublicHostObjectTest, NestedObjectWrittenToTheResultSurvivesTheRender)
     kept.clear();
     EXPECT_EQ(0, count.alive);
 }
+
+namespace
+{
+// A list whose indexer steps to an item, as a reflected std::set's does: it counts the reads by index
+class SteppingList final : public IListItemAccessor
+    , public IIndexBasedAccessor
+{
+public:
+    explicit SteppingList(std::vector<int64_t> items, std::shared_ptr<size_t> indexReads)
+        : m_items(std::move(items))
+        , m_indexReads(std::move(indexReads))
+    {
+    }
+
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return this; }
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override { return MakeEnumerator<Items>(&m_items); }
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return m_items.size(); }
+    [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
+    {
+        ++*m_indexReads;
+        return m_items.at(static_cast<size_t>(idx));
+    }
+
+private:
+    class Items final : public IListEnumerator
+    {
+    public:
+        explicit Items(const std::vector<int64_t>* items)
+            : m_items(items)
+        {
+        }
+        void Reset() override { m_next = 0; }
+        bool MoveNext() override
+        {
+            m_cur = m_next;
+            return m_next++ < m_items->size();
+        }
+        [[nodiscard]] Value GetCurrent() const override { return (*m_items)[m_cur]; }
+        [[nodiscard]] ListEnumeratorPtr Clone() const override { return MakeEnumerator<Items>(*this); }
+        ListEnumeratorPtr Move() override { return MakeEnumerator<Items>(*this); }
+
+    private:
+        const std::vector<int64_t>* m_items;
+        size_t m_cur = 0;
+        size_t m_next = 0;
+    };
+
+    std::vector<int64_t> m_items;
+    std::shared_ptr<size_t> m_indexReads;
+};
+} // namespace
+
+// A loop reads a host's list through its enumerator unless the library knows its indexer costs no step: indexing a
+// reflected std::set advances to the item, which made a loop over it quadratic
+TEST(PublicHostObjectTest, LoopOverAListWithASteppingIndexerUsesItsEnumerator)
+{
+    auto indexReads = std::make_shared<size_t>(0);
+    const ValuesMap params{ { "xs", GenericList(std::make_shared<const SteppingList>(std::vector<int64_t>{ 1, 2, 3 }, indexReads)) } };
+    Template tpl;
+    ASSERT_TRUE(tpl.Load("{% for x in xs %}{{ x }}{% endfor %};{{ xs[1] }}").has_value());
+    const auto result = tpl.RenderAsString(params);
+    ASSERT_TRUE(result.has_value()) << result.error().ToString();
+    EXPECT_EQ("123;2", result.value());
+    // The subscript, never the loop
+    EXPECT_EQ(1u, *indexReads);
+}

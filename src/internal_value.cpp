@@ -2138,7 +2138,8 @@ public:
         {
             return {};
         }
-        if (const auto* indexer = accessor->GetIndexer())
+        // By index only where an index costs no step: a reflected std::set indexes by advancing, quadratic over a loop
+        if (const auto* indexer = dynamic_cast<const IRandomAccessListItems*>(accessor) ? accessor->GetIndexer() : nullptr)
         {
             if (accessor->GetSize().has_value())
             {
