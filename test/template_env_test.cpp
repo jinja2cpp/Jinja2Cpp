@@ -7,8 +7,10 @@
 #include <gtest/gtest.h>
 
 #include <cstddef>
+#include <exception>
 #include <memory>
 #include <optional>
+#include <string>
 #include <utility>
 
 using namespace jinja2;

@@ -466,6 +466,32 @@ public:
         return RenderCore<false>(os, params, nullptr);
     }
 
+    // The poll of a render with hooks, installed in `scope`, or null
+    template<bool hasHooks>
+    static detail::HostPoll InstallPoll(std::optional<HostPollScope>& scope, const RenderHooks* hooks)
+    {
+        if constexpr (hasHooks)
+        {
+            if (hooks->poll)
+            {
+                scope.emplace(hooks->poll);
+                return hooks->poll;
+            }
+        }
+        static_cast<void>(scope);
+        static_cast<void>(hooks);
+        return nullptr;
+    }
+    // The limits a render installs: the template's, or with a poll of its own and none, those that count its steps
+    [[nodiscard]] const Settings::Limits* RenderLimitsOf(detail::HostPoll poll) const
+    {
+        if (m_settings->hasRenderLimits)
+        {
+            return &m_settings->settings.limits;
+        }
+        return poll ? &PollOnlyLimits() : nullptr;
+    }
+
     // `hooks` (with hasHooks set) brings the render's own globals and poll (RenderHooks). A
     // separate instantiation, so that the ordinary Render pays nothing for them
     template<bool hasHooks, typename Target, typename ParamsMap>
@@ -493,25 +519,12 @@ public:
             // First, so that it ends last: when nothing of the render holds values any more
             // It also keeps the render's copies of the host's data (docs/tasks/0049)
             const CycleCollector cycles;
-            const InternalValueMap* hostGlobals = nullptr;
-            const Settings::Limits* limits = m_settings->hasRenderLimits ? &m_settings->settings.limits : nullptr;
+            const InternalValueMap* hostGlobals = hasHooks ? hooks->globals : nullptr;
             // Before the limits, which start counting the steps to the first poll
             std::optional<HostPollScope> pollScope;
-            if constexpr (hasHooks)
-            {
-                hostGlobals = hooks->globals;
-                if (hooks->poll)
-                {
-                    pollScope.emplace(hooks->poll);
-                    // A poll alone makes the render count its steps
-                    if (!limits)
-                    {
-                        limits = &PollOnlyLimits();
-                    }
-                }
-            }
+            const auto* poll = InstallPoll<hasHooks>(pollScope, hooks);
             // Before anything else the render does, the conversion of the params included
-            const RenderLimitsScope limitsScope(limits, m_settings->bigIntBackend);
+            const RenderLimitsScope limitsScope(RenderLimitsOf(poll), m_settings->bigIntBackend);
             // The tables of the params and the top scope are lent by the thread's workspace and
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;
