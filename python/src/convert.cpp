@@ -49,19 +49,35 @@ struct PyCallable
 class RecursionGuard
 {
 public:
+    // Python's C recursion budget alone lets a deep conversion overflow the native stack where frames are large (a
+    // sanitizer build), so the conversions also count their own depth against sys.getrecursionlimit()
     explicit RecursionGuard(const char* where)
     {
+        if (t_depth >= Py_GetRecursionLimit())
+        {
+            PyErr_Format(PyExc_RecursionError, "maximum recursion depth exceeded%s", where);
+            throw nb::python_error();
+        }
         if (Py_EnterRecursiveCall(where) != 0)
         {
             throw nb::python_error();
         }
+        ++t_depth;
     }
-    ~RecursionGuard() { Py_LeaveRecursiveCall(); }
+    ~RecursionGuard()
+    {
+        --t_depth;
+        Py_LeaveRecursiveCall();
+    }
     RecursionGuard(const RecursionGuard&) = delete;
     RecursionGuard& operator=(const RecursionGuard&) = delete;
     RecursionGuard(RecursionGuard&&) = delete;
     RecursionGuard& operator=(RecursionGuard&&) = delete;
+
+private:
+    static thread_local int t_depth;
 };
+thread_local int RecursionGuard::t_depth = 0;
 
 Value IntToEngine(PyObject* number)
 {
