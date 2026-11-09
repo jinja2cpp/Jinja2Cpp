@@ -94,16 +94,10 @@ protected:
 
 // Marks a list item accessor whose indexer reads any item in constant time (a vector, an array, a host's list): the
 // engine's loop reads such a list by index. A list without the mark, whose indexer may step to an item (a reflected
-// std::set), is read through its own enumerator
+// std::set), is read through its own enumerator. An empty base with no virtual, so that it adds nothing to an
+// accessor's size: a dynamic_cast from the polymorphic IListItemAccessor still finds it
 class IRandomAccessListItems
 {
-public:
-    IRandomAccessListItems() = default;
-    IRandomAccessListItems(const IRandomAccessListItems&) = default;
-    IRandomAccessListItems(IRandomAccessListItems&&) = default;
-    IRandomAccessListItems& operator=(const IRandomAccessListItems&) = default;
-    IRandomAccessListItems& operator=(IRandomAccessListItems&&) = default;
-    virtual ~IRandomAccessListItems() = default;
 };
 
 template<typename T>
