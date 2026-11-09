@@ -167,6 +167,21 @@ struct JINJA2CPP_EXPORT IListItemAccessor : virtual IComparable
     [[nodiscard]] virtual std::optional<size_t> GetSize() const = 0;
 
     /*!
+     * \brief Tells whether the list is a tuple (Python's `tuple`, a template's `(1, 2)`)
+     *
+     * A tuple prints as `(1, 2)` and reaches a host language as its tuple type. The default is false.
+     */
+    [[nodiscard]] virtual bool IsTuple() const { return false; }
+
+    /*!
+     * \brief The list behind this accessor
+     *
+     * Two accessors that view one list return the same address: an engine list exported twice gives two accessors with
+     * one identity, so a host can recognise a list it has seen (a cycle, `x is y`). The default is `this`.
+     */
+    [[nodiscard]] virtual const void* GetIdentity() const { return this; }
+
+    /*!
      * \brief Helper factory method of particular enumerator implementation
      *
      * @tparam T Type of enumerator to create
@@ -289,6 +304,12 @@ public:
     {
         return m_accessor.get();
     }
+
+    //! Whether the list is a tuple (\ref IListItemAccessor::IsTuple); false for an invalid list
+    [[nodiscard]] bool IsTuple() const { return m_accessor ? m_accessor->IsTuple() : false; }
+
+    //! The list's identity (\ref IListItemAccessor::GetIdentity); null for an invalid list
+    [[nodiscard]] const void* GetIdentity() const { return m_accessor ? m_accessor->GetIdentity() : nullptr; }
 
     /*!
      * \brief Check the GenericList object state

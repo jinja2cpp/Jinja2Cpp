@@ -707,7 +707,7 @@ InternalValue ToEngine(nb::handle handle)
     // The common containers first: no question of their type
     if (PyDict_CheckExact(object) || PyList_CheckExact(object) || PyTuple_CheckExact(object))
     {
-        return jinja2::MakeHostValue<PyHost>(handle, false);
+        return jinja2::MakeEngineHostValue<PyHost>(handle, false);
     }
     if (nb::isinstance<TemplateValue>(handle))
     {
@@ -717,7 +717,7 @@ InternalValue ToEngine(nb::handle handle)
     {
         return UndefinedToEngine(object);
     }
-    return jinja2::MakeHostValue<PyHost>(handle, false);
+    return jinja2::MakeEngineHostValue<PyHost>(handle, false);
 }
 
 nb::object ToPython(const InternalValue& value)
@@ -728,7 +728,7 @@ nb::object ToPython(const InternalValue& value)
 
 InternalValue BorrowedHostValue(nb::handle object)
 {
-    return jinja2::MakeHostValue<PyHost>(object, true);
+    return jinja2::MakeEngineHostValue<PyHost>(object, true);
 }
 
 InternalValue BorrowedCallable(nb::handle object)

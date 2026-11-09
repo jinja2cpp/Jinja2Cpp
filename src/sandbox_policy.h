@@ -15,7 +15,7 @@ class RenderContext;
 
 // What a host decides about the operations of a template on the engine's own values, for a sandbox (docs/tasks/0354,
 // 0248 D8): Jinja2's SandboxedEnvironment.is_safe_attribute and wrap_str_format, for the values that are not host
-// objects (a host object is asked through IHostObject). Internal for now; docs/design/0357 makes it the public
+// objects (a host object is asked through IEngineHostObject). Internal for now; docs/design/0357 makes it the public
 // ISandboxPolicy, held by Settings. An environment holds it as a shared_ptr<const ISandboxPolicy> (LoadSettings), the
 // render context reaches it through its renderer callback, and a render without one pays a null check where it would
 // ask: after a method of a value is found, where an attribute is missing, and at str.format

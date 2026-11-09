@@ -25,7 +25,7 @@ class RenderContext;
 // 0357 moves the module to the public API before the G1 freeze.
 //
 // A host object is a map value whose accessor is a HostObjectAccessor (IMapAccessor::
-// GetHostObject), marked in the value (MapAdapter::MarkAsHost, MakeHostValue) so that native
+// GetHostObject), marked in the value (MapAdapter::MarkAsHost, MakeEngineHostValue) so that native
 // maps pay no virtual call for the check; ValueStorage has no alternative of its own for it. The engine asks the object
 // where Python asks the object:
 // - printing: Str(), and Repr() inside a container; Html() under autoescape when IsMarkupLike()
@@ -48,15 +48,15 @@ class RenderContext;
 // The implementation reports a host error by throwing; the render reports it as any other
 // exception. The object is immutable to the engine, which may call it from any render that
 // holds it (docs/tasks/0049: host data stays immutable across renders)
-class IHostObject
+class IEngineHostObject
 {
 public:
-    IHostObject() = default;
-    IHostObject(const IHostObject&) = default;
-    IHostObject(IHostObject&&) = default;
-    IHostObject& operator=(const IHostObject&) = default;
-    IHostObject& operator=(IHostObject&&) = default;
-    virtual ~IHostObject() = default;
+    IEngineHostObject() = default;
+    IEngineHostObject(const IEngineHostObject&) = default;
+    IEngineHostObject(IEngineHostObject&&) = default;
+    IEngineHostObject& operator=(const IEngineHostObject&) = default;
+    IEngineHostObject& operator=(IEngineHostObject&&) = default;
+    virtual ~IEngineHostObject() = default;
 
     // type(x).__name__, never null, for error messages; it lives as long as the object
     [[nodiscard]] virtual const char* TypeName() const = 0;
@@ -67,6 +67,8 @@ public:
     [[nodiscard]] virtual std::optional<InternalValue> GetAttr(const std::string& name) const = 0;
     // x[key]; nullopt when there is no such item or the object has no items
     [[nodiscard]] virtual std::optional<InternalValue> GetItem(const InternalValue& /*key*/) const { return std::nullopt; }
+    // x[name] for a string key: GetItem without the key made into a value first (the default does that)
+    [[nodiscard]] virtual std::optional<InternalValue> GetItemByName(const std::string& name) const { return GetItem(InternalValue(name)); }
     // x[slice(start, stop, step)], where an omitted bound is None and an undefined one stays undefined; nullopt for
     // an object that has no items, which the engine reports as Python's TypeError. An object with
     // items that takes no slice throws its own error, as a mapping's KeyError
@@ -125,7 +127,7 @@ public:
     // Every override is out of line: a body in sight lets GCC guess this class at each call
     // of an IMapAccessor virtual (speculative devirtualization), which costs the native maps
     // a compare per call
-    [[nodiscard]] const IHostObject* GetHostObject() const override = 0;
+    [[nodiscard]] const IEngineHostObject* GetHostObject() const override = 0;
 
     [[nodiscard]] size_t GetSize() const override;
     [[nodiscard]] bool HasValue(const std::string& name) const override;
@@ -155,7 +157,7 @@ public:
     {
     }
 
-    [[nodiscard]] const IHostObject* GetHostObject() const override { return &m_object; }
+    [[nodiscard]] const IEngineHostObject* GetHostObject() const override { return &m_object; }
 
 private:
     T m_object;
@@ -163,13 +165,13 @@ private:
 
 // A value of a new host object of type T, made from args
 template<typename T, typename... Args>
-InternalValue MakeHostValue(Args&&... args)
+InternalValue MakeEngineHostValue(Args&&... args)
 {
     return InternalValue(MapAdapter(MakeRef<HostObjectHolder<T>>(std::forward<Args>(args)...)).MarkAsHost());
 }
 
 // The host object a value carries; null for every other value
-inline const IHostObject* GetHostObject(const InternalValue& value)
+inline const IEngineHostObject* GetHostObject(const InternalValue& value)
 {
     const auto map = AsMap(value);
     return map ? map->GetHostObject() : nullptr;
@@ -186,21 +188,21 @@ inline bool IsMarkupLike(const InternalValue& value)
 }
 // x(...) of a host object as a callable value of the engine, which keeps the object alive;
 // throws Python's TypeError for an object that is not callable
-Callable MakeCall(const InternalValue& object, const IHostObject& host);
+Callable MakeCall(const InternalValue& object, const IEngineHostObject& host);
 // x.__html__() as Markup of the template's character type
-InternalValue Html(const IHostObject& host, bool wideTarget);
+InternalValue Html(const IEngineHostObject& host, bool wideTarget);
 // len(x), or Python's TypeError
-int64_t Len(const IHostObject& host);
+int64_t Len(const IEngineHostObject& host);
 // x[start:stop:step], or Python's TypeError for an object without items
-InternalValue Slice(const IHostObject& host, const InternalValue& start, const InternalValue& stop, const InternalValue& step);
+InternalValue Slice(const IEngineHostObject& host, const InternalValue& start, const InternalValue& stop, const InternalValue& step);
 // reversed(x), or Python's TypeError
-ListAdapter Reversed(const IHostObject& host);
+ListAdapter Reversed(const IEngineHostObject& host);
 // A list or tuple (IsSequence) as a list of the engine, marked as a tuple for a tuple; nullopt
 // for every other object
-std::optional<ListAdapter> AsSequence(const IHostObject& host);
+std::optional<ListAdapter> AsSequence(const IEngineHostObject& host);
 // x == other by Python's rules: left.__eq__, then right.__eq__, then identity. Null hosts
 // stand for operands that are no host objects
-bool Equal(const IHostObject* left, const InternalValue& leftValue, const IHostObject* right, const InternalValue& rightValue);
+bool Equal(const IEngineHostObject* left, const InternalValue& leftValue, const IEngineHostObject* right, const InternalValue& rightValue);
 
 // The function of a jinja2::UserCallable made by EngineUserCallable
 struct EngineCallableBody

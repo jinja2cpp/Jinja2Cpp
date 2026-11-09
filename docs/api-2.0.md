@@ -846,6 +846,24 @@ Recommend A now, C only if someone asks.
      macros still expire.
    - **Perf gate.** The module must beat Python Jinja2 on every case. No case may lose more
      than 5% of its margin, measured in instruction counts.
+   - **Host reads that write into the engine (decided by Ruslan 2026-11-09).** The S1b probe
+     lost more than 5% of the margin on host-data cases, so D2 was reopened. Taken: option (c),
+     a write-only `HostResult` over the engine's own storage with three fast reads on
+     `IHostObject` (`GetAttrTo`, `GetItemTo`, `ItemAtTo`, defaulting to `GetAttr`, `GetItem`
+     and `Iterate`), plus one more sink, `HostResult::SetHostObject`: a nested host object
+     (`shared_ptr` or `SetHostObject<T>(args...)` built in place) goes into the result
+     without a `Value` and a `GenericMap` made and converted back.
+   - **D7 relaxed for host-data cases.** "Beats Python Jinja2 on every case" stays the hard
+     gate. The 5% margin rule no longer binds cases dominated by host data; their remaining
+     gap against the private seam is accepted. Callgrind instructions per render, Python
+     module, private seam on the rebased branch / (c) / (c) with the sink:
+     for_filter_if 818,610 / 894,552 / 853,131, chat_llama 636,918 / 726,761 / 710,482,
+     mitsuhiko_table 8,211,299 / 9,131,276 / 8,890,719. The sink closes 54%, 18% and
+     26% of the gap (c) leaves.
+   - **Frozen ABI.** `detail::MakeHostValueInPlace` and the private exported
+     `HostResult::SetHostObjectInPlace` are called from header templates (`MakeHostValue<T>`,
+     `HostResult::SetHostObject<T>`), so their signatures and the `construct` contract are
+     frozen ABI for 2.x like any exported function.
 
 ## 8. Work breakdown
 

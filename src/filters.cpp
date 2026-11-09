@@ -82,7 +82,7 @@ OrderKind GetOrderKind(const InternalValue& val)
         return OrderKind::Sequence;
     case ValueKind::Map:
     {
-        // A host list or tuple orders as the engine's own (IHostObject::IsSequence)
+        // A host list or tuple orders as the engine's own (IEngineHostObject::IsSequence)
         const auto* host = GetHostObject(val);
         return host && host->IsSequence() ? OrderKind::Sequence : OrderKind::Unordered;
     }

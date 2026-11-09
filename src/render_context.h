@@ -957,6 +957,33 @@ public:
             names.emplace(name, value);
         }
     }
+    // Every name FindValue finds from here, once and in alphabetical order: CollectVisibleNames' names, `loop`,
+    // and the global and built-in names (a callable's context, ContextMapper::GetKeys)
+    [[nodiscard]] std::vector<std::string> CollectLookupNames() const
+    {
+        InternalValueMap visible;
+        CollectVisibleNames(visible);
+        std::vector<std::string> names;
+        for (const auto& entry : visible)
+        {
+            names.emplace_back(entry.first);
+        }
+        names.emplace_back("loop");
+        for (const auto* map : { m_globalScope, m_builtinScope })
+        {
+            if (map)
+            {
+                for (const auto& entry : *map)
+                {
+                    names.emplace_back(entry.first);
+                }
+            }
+        }
+        std::sort(names.begin(), names.end());
+        names.erase(std::unique(names.begin(), names.end()), names.end());
+        names.erase(std::remove_if(names.begin(), names.end(), [this](const std::string& name) { return !FindValue(name); }), names.end());
+        return names;
+    }
     // The innermost value of `name` among the scopes, the external scope and the globals for which `accepts`
     // is true: a lookup that passes over the values it refuses (the `loop` of an including loop)
     template<typename Accepts>

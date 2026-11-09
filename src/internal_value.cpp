@@ -8,6 +8,7 @@
 #include "generic_adapters.h"
 #include "host_object.h"
 #include "out_stream.h"
+#include "public_host_object.h"
 #include "intrusive_ptr.h"
 #include "recursion_guard.h"
 #include "render_context.h"
@@ -21,6 +22,7 @@
 #include <jinja2cpp/exception.h>
 #include <jinja2cpp/big_int.h>
 #include <jinja2cpp/generic_list.h>
+#include <jinja2cpp/host_object.h>
 #include <jinja2cpp/json_adapter.h>
 #include <jinja2cpp/markup.h>
 #include <jinja2cpp/string_helpers.h>
@@ -456,7 +458,14 @@ struct SubscriptionVisitor : public visitors::BaseVisitor<>
     template<typename CharT>
     InternalValue operator()(const MapRef& values, const std::basic_string_view<CharT>& fieldName) const
     {
-        return GetStringItem(values, ConvertString<std::string>(fieldName));
+        if constexpr (std::is_same_v<CharT, char>)
+        {
+            return GetStringItem(values, std::string(fieldName));
+        }
+        else
+        {
+            return GetStringItem(values, ConvertString<std::string>(fieldName));
+        }
     }
 
     // x['name']: an object of the host language looks among its items first, as Jinja2's
@@ -1280,6 +1289,11 @@ GenericMap WithOwner(std::shared_ptr<const void> owner, GenericMap&& nested)
 
 InternalValue LendGenericItem(const std::shared_ptr<const void>& owner, Value&& item)
 {
+    // A number is no container: no owner to lend, and no visit to find that out
+    if (const auto* number = std::get_if<int64_t>(&item.GetData()))
+    {
+        return InternalValue(*number);
+    }
     if (owner)
     {
         // An invalid container stays invalid: a wrapper's provider would hand out a null accessor
@@ -1287,7 +1301,7 @@ InternalValue LendGenericItem(const std::shared_ptr<const void>& owner, Value&& 
         {
             return Value2IntValue(Value(WithOwner(owner, std::move(*list))));
         }
-        if (auto* map = std::get_if<GenericMap>(&item.GetData()); map && map->GetAccessor())
+        if (auto* map = std::get_if<GenericMap>(&item.GetData()); map && map->GetAccessor() && !IsSelfOwningHostMap(*map->GetAccessor()))
         {
             return Value2IntValue(Value(WithOwner(owner, std::move(*map))));
         }
@@ -1875,6 +1889,10 @@ public:
         // The list the enumeration reads: the loop holds it while the enumeration runs, as for
         // CellEnumerator
         const GenericListAdapter* m_list = nullptr;
+        // A random-access list (a size and an indexer) is read by index, with no enumerator of the host's:
+        // the size is read at each step, as the host's own enumerator would (m_enum is empty then)
+        const IListItemAccessor* m_accessor = nullptr;
+        const IIndexBasedAccessor* m_indexer = nullptr;
         // The index of the next item, and whether the enumeration reads the cell from it on
         size_t m_next = 0;
         bool m_onCell = false;
@@ -1883,6 +1901,13 @@ public:
             : m_enum(std::move(e))
             , m_owner(std::move(owner))
             , m_list(list)
+        {
+        }
+        Enumerator(const IListItemAccessor* accessor, const IIndexBasedAccessor* indexer, std::shared_ptr<const void> owner, const GenericListAdapter* list)
+            : m_owner(std::move(owner))
+            , m_list(list)
+            , m_accessor(accessor)
+            , m_indexer(indexer)
         {
         }
 
@@ -1906,6 +1931,10 @@ public:
             // Counts the calls; a step past the end ends the enumeration, so the count is the
             // index of the next item while there is one
             ++m_next;
+            if (m_indexer)
+            {
+                return m_next <= m_accessor->GetSize().value_or(0);
+            }
             return m_enum && (*m_enum)->MoveNext();
         }
         [[nodiscard]] InternalValue GetCurrent() const override
@@ -1914,26 +1943,30 @@ public:
             {
                 return m_next == 0 ? InternalValue() : m_list->GetItem(static_cast<int64_t>(m_next - 1)).value_or(InternalValue());
             }
+            if (m_indexer)
+            {
+                return m_next == 0 ? InternalValue() : LendGenericItem(m_owner, m_indexer->GetItemByIndex(static_cast<int64_t>(m_next - 1)));
+            }
             return !m_enum ? InternalValue() : LendGenericItem(m_owner, (*m_enum)->GetCurrent());
         }
         [[nodiscard]] std::optional<ListAccessorEnumeratorPtr> Clone() const override
         {
-            if (!m_enum)
+            if (!m_enum && !m_indexer)
             {
                 return {};
             }
-            Enumerator copy((*m_enum)->Clone(), m_owner, m_list);
+            auto copy = m_enum ? Enumerator((*m_enum)->Clone(), m_owner, m_list) : Enumerator(m_accessor, m_indexer, m_owner, m_list);
             copy.m_next = m_next;
             copy.m_onCell = m_onCell;
             return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(copy));
         }
         std::optional<ListAccessorEnumeratorPtr> Transfer() override
         {
-            if (!m_enum)
+            if (!m_enum && !m_indexer)
             {
                 return {};
             }
-            Enumerator moved(std::move(m_enum), std::move(m_owner), m_list);
+            auto moved = m_enum ? Enumerator(std::move(m_enum), std::move(m_owner), m_list) : Enumerator(m_accessor, m_indexer, std::move(m_owner), m_list);
             moved.m_next = m_next;
             moved.m_onCell = m_onCell;
             return std::make_optional<ListAccessorEnumeratorPtr>(types::in_place_type_t<Enumerator>{}, std::move(moved));
@@ -1950,6 +1983,10 @@ public:
             if (!m_onCell)
             {
                 ++m_next;
+                if (m_indexer)
+                {
+                    return m_next <= m_accessor->GetSize().value_or(0);
+                }
                 return m_enum && (*m_enum)->MoveNext();
             }
             if (m_next >= m_list->GetSize().value_or(0))
@@ -1967,6 +2004,10 @@ public:
                 return false;
             }
             if (m_list != val->m_list || m_next != val->m_next || m_onCell != val->m_onCell)
+            {
+                return false;
+            }
+            if (m_indexer != val->m_indexer)
             {
                 return false;
             }
@@ -1990,6 +2031,7 @@ public:
     {
         // As OwnedAdapter
         this->SetTraversable();
+        this->SetBorrowed();
     }
     void Traverse(const TraverseFn& fn) const override { m_link.TraverseFrozen(fn); }
 
@@ -2041,7 +2083,6 @@ public:
                             HasNodeIdentity(m_node));
     }
     [[nodiscard]] bool MayBeLentAgain() const noexcept override { return AccessorHasOtherOwners(m_values.Get()); }
-    [[nodiscard]] bool IsBorrowed() const override { return true; }
     // An enumeration of the list's cell that finds the cell's storage again at each step: a
     // module call the loop body makes can copy the cell on write (decision D8) and let go of the
     // storage the loop started on (Codex review)
@@ -2096,6 +2137,14 @@ public:
         if (!accessor)
         {
             return {};
+        }
+        // By index only where an index costs no step: a reflected std::set indexes by advancing, quadratic over a loop
+        if (const auto* indexer = dynamic_cast<const IRandomAccessListItems*>(accessor) ? accessor->GetIndexer() : nullptr)
+        {
+            if (accessor->GetSize().has_value())
+            {
+                return ListAccessorEnumeratorPtr(Enumerator(accessor, indexer, GenericOwner(m_values), this));
+            }
         }
         return ListAccessorEnumeratorPtr(Enumerator(accessor->CreateEnumerator(), GenericOwner(m_values), this));
     }
@@ -2237,6 +2286,7 @@ public:
     explicit ValuesListAdapter(U&& values)
         : m_values(std::forward<U>(values))
     {
+        this->SetBorrowed();
         if constexpr (std::is_same_v<Holder<int>, ByHeldRef<int>>)
         {
             this->MarkGlobalData();
@@ -2463,7 +2513,6 @@ public:
         return cell ? cell->MutableItems() : nullptr;
     }
     bool AdoptCopy(const InternalValue& self, const InternalValue& copy) const override { return m_link.Adopt(self, GetIdentity(), true, copy, this->IsGlobalData(), this->IsInSnapshot(), AdaptersOwner(m_values)); }
-    [[nodiscard]] bool IsBorrowed() const override { return true; }
     [[nodiscard]] const CellLink* GetCellLink() const override { return &m_link; }
     [[nodiscard]] GenericList CreateGenericList() const override
     {
@@ -3143,6 +3192,72 @@ protected:
     mutable Holder<Map> m_values;
 };
 
+namespace
+{
+// A tuple of the engine as the host reads it: the list CreateGenericList gives, marked as a tuple
+// (IListItemAccessor::IsTuple). The items, the size and the identity are the list's
+class TupleExportView final : public IListItemAccessor
+{
+public:
+    explicit TupleExportView(GenericList items)
+        : m_items(std::move(items))
+    {
+    }
+
+    [[nodiscard]] const GenericList& Items() const noexcept { return m_items; }
+
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return m_items.GetAccessor()->GetIndexer(); }
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override { return m_items.GetAccessor()->CreateEnumerator(); }
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return m_items.GetSize(); }
+    [[nodiscard]] bool IsTuple() const override { return true; }
+    [[nodiscard]] const void* GetIdentity() const override { return m_items.GetIdentity(); }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* view = dynamic_cast<const TupleExportView*>(&other);
+        return view != nullptr && m_items.GetAccessor()->IsEqual(*view->m_items.GetAccessor());
+    }
+
+private:
+    GenericList m_items;
+};
+
+// The public map of a template dict with keys that are not all strings: the string keyed copy
+// (SharedDictAdapter::CreateSnapshot) for GetKeys and the lookups, and the entries under their own keys for
+// GetItems. The identity is the dict's
+class DictExportView final : public IMapItemAccessor
+{
+public:
+    // `owner` holds the storage `identity` addresses, so that no other dict reuses the address while the view lives
+    DictExportView(GenericMap snapshot, std::vector<std::pair<Value, Value>> items, IntrusivePtr<const IMapAccessor> owner, const void* identity)
+        : m_snapshot(std::move(snapshot))
+        , m_items(std::move(items))
+        , m_owner(std::move(owner))
+        , m_identity(identity)
+    {
+    }
+
+    [[nodiscard]] size_t GetSize() const override { return m_snapshot.GetAccessor()->GetSize(); }
+    [[nodiscard]] std::optional<Value> Find(std::string_view name) const override { return m_snapshot.GetAccessor()->Find(name); }
+    [[nodiscard]] bool Contains(std::string_view name) const override { return m_snapshot.GetAccessor()->Contains(name); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return m_snapshot.GetAccessor()->HasValue(name); }
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override { return m_snapshot.GetAccessor()->GetValueByName(name); }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return m_snapshot.GetAccessor()->GetKeys(); }
+    [[nodiscard]] std::vector<std::pair<Value, Value>> GetItems() const override { return m_items; }
+    [[nodiscard]] const void* GetIdentity() const override { return m_identity; }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* view = dynamic_cast<const DictExportView*>(&other);
+        return view != nullptr && m_snapshot.GetAccessor()->IsEqual(*view->m_snapshot.GetAccessor());
+    }
+
+private:
+    GenericMap m_snapshot;
+    std::vector<std::pair<Value, Value>> m_items;
+    IntrusivePtr<const IMapAccessor> m_owner;
+    const void* m_identity;
+};
+} // namespace
+
 // A dict the template owns (dict literals, kwargs, dict()): shared like a Python dict, and keyed
 // like one (TemplateDict). A string key costs one lookup as in any other map
 class SharedDictAdapter : public MapAccessorImpl<SharedDictAdapter>
@@ -3277,12 +3392,21 @@ protected:
         {
             return std::nullopt;
         }
+        // The copy converts the values, so a dict that holds itself recurses here: Python's
+        // RecursionError where the stack runs out, never an overflow
+        CheckStack();
+        // GetItems gives the entries under their own keys, which the string keyed copy cannot hold
         ValuesMap snapshot;
+        std::vector<std::pair<Value, Value>> items;
+        items.reserve(vals.size());
         for (const auto& [stored, value] : vals)
         {
-            snapshot[DictKeyText(vals.KeyOf(stored))] = IntValue2Value(value);
+            auto key = vals.KeyOf(stored);
+            auto exported = IntValue2Value(value);
+            snapshot[DictKeyText(key)] = exported;
+            items.emplace_back(IntValue2Value(key), std::move(exported));
         }
-        return CreateMapAdapter(std::move(snapshot)).CreateGenericMap();
+        return GenericMap(std::make_shared<const DictExportView>(CreateMapAdapter(std::move(snapshot)).CreateGenericMap(), std::move(items), IntrusivePtr<const IMapAccessor>(this), &vals));
     }
 
     // Mutable for SetValue, the one writer (IMapAccessor::SetValue)
@@ -4060,7 +4184,15 @@ struct OutputValueConvertor
     result_t operator()(const UndefinedValue&) const { return result_t(); }
     result_t operator()(const NoneValue&) const { return result_t(); }
     result_t operator()(const MapRef& adapter) const { return result_t(adapter.CreateGenericMap()); }
-    result_t operator()(const ListRef& adapter) const { return result_t(adapter.CreateGenericList()); }
+    result_t operator()(const ListRef& adapter) const
+    {
+        // A tuple is marked as one (IListItemAccessor::IsTuple); the list keeps its own identity
+        if (adapter.IsTuple())
+        {
+            return result_t(GenericList(std::make_shared<const TupleExportView>(adapter.CreateGenericList())));
+        }
+        return result_t(adapter.CreateGenericList());
+    }
     result_t operator()(const ValueRef& ref) const { return ref.get(); }
     result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", IntValue2Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }
     result_t operator()(const Callable& callable) const { return HostCallableOf(callable); }
@@ -4137,7 +4269,8 @@ public:
     {
     }
 
-    [[nodiscard]] size_t GetSize() const override { return std::numeric_limits<size_t>::max(); }
+    // The number of names GetKeys lists
+    [[nodiscard]] size_t GetSize() const override { return m_context->CollectLookupNames().size(); }
     [[nodiscard]] bool HasValue(const std::string& name) const override
     {
         return static_cast<bool>(m_context->FindValue(name));
@@ -4147,7 +4280,8 @@ public:
         const auto value = m_context->FindValue(name);
         return value ? IntValue2Value(*value) : Value();
     }
-    [[nodiscard]] std::vector<std::string> GetKeys() const override { return std::vector<std::string>(); }
+    // The names a lookup finds, each once, sorted: the scopes, the external and global values and the built-ins
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return m_context->CollectLookupNames(); }
 
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
@@ -4219,6 +4353,8 @@ struct HostCallScope
     std::shared_ptr<CallableLease> lease;
     const ParsedArguments* args = nullptr;
     const UserCallableParams* params = nullptr;
+    // The host's callable asks for undefined arguments as undefined (UserCallable::keepUndefined)
+    bool keepUndefined = false;
 
     // The value of the host's `value`, given back during the call made from `context`. A value
     // that cannot be a container or a callable it was handed converts as it always did, without
@@ -4391,6 +4527,241 @@ JINJA2CPP_NOINLINE_INLINE Value LendToHost(const InternalValue& value, RenderCon
     return Value(UserCallable(LentCallable{ lease, value }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) }));
 }
 
+bool IsContainer(const InternalValue& value)
+{
+    const auto& data = detail::InternalValueAccess::Data(value);
+    return std::holds_alternative<detail::MapHandle>(data) || std::holds_alternative<detail::ListHandle>(data);
+}
+
+// The members of a container a host's call was handed that are template callables (`loop.cycle`, a cycler's
+// `next`, `ns.fn`, a macro in a dict or list) are lent under the call's lease, as the top-level arguments are. The
+// container's export is wrapped by a view that reads through it with its frame current, so that converting a callable
+// member lends it (HostCallableOf) instead of giving None. Only containers the template owns are wrapped: the host's
+// own data holds no template callable. The frame holds the lease, which the call ends (LeaseEnd): a view the host
+// keeps reads as an export does once the call is over
+struct LendFrame
+{
+    std::shared_ptr<CallableLease> lease;
+    HostCallScope* scope;
+};
+
+thread_local const LendFrame* t_lendFrame = nullptr;
+
+class LendFrameScope
+{
+public:
+    explicit LendFrameScope(const LendFrame& frame)
+        : m_saved(t_lendFrame)
+    {
+        // The thread first: another thread must not read isActive
+        t_lendFrame = frame.lease->thread == std::this_thread::get_id() && frame.lease->isActive ? &frame : nullptr;
+    }
+    LendFrameScope(const LendFrameScope&) = delete;
+    LendFrameScope(LendFrameScope&&) = delete;
+    LendFrameScope& operator=(const LendFrameScope&) = delete;
+    LendFrameScope& operator=(LendFrameScope&&) = delete;
+    ~LendFrameScope() { t_lendFrame = m_saved; }
+
+private:
+    const LendFrame* m_saved;
+};
+
+// `exported`, wrapped when it may hold template callables
+Value LendMembers(Value&& exported, const LendFrame& frame);
+
+class LendingMapView final : public IMapItemAccessor
+{
+public:
+    LendingMapView(GenericMap inner, LendFrame frame)
+        : m_inner(std::move(inner))
+        , m_frame(std::move(frame))
+    {
+    }
+
+    [[nodiscard]] size_t GetSize() const override { return Inner().GetSize(); }
+    [[nodiscard]] std::optional<Value> Find(std::string_view name) const override
+    {
+        const LendFrameScope scope(m_frame);
+        auto value = Inner().Find(name);
+        return value ? std::optional<Value>(LendMembers(std::move(*value), m_frame)) : std::nullopt;
+    }
+    [[nodiscard]] bool Contains(std::string_view name) const override { return Inner().Contains(name); }
+    [[nodiscard]] bool HasValue(const std::string& name) const override { return Inner().HasValue(name); }
+    [[nodiscard]] Value GetValueByName(const std::string& name) const override
+    {
+        auto value = Find(name);
+        return value ? std::move(*value) : Value();
+    }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return Inner().GetKeys(); }
+    [[nodiscard]] bool EmptyIsNone() const override { return Inner().EmptyIsNone(); }
+    [[nodiscard]] std::vector<std::pair<Value, Value>> GetItems() const override
+    {
+        const LendFrameScope scope(m_frame);
+        auto items = Inner().GetItems();
+        for (auto& item : items)
+        {
+            item.second = LendMembers(std::move(item.second), m_frame);
+        }
+        return items;
+    }
+    [[nodiscard]] const void* GetIdentity() const override { return Inner().GetIdentity(); }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* view = dynamic_cast<const LendingMapView*>(&other);
+        return Inner().IsEqual(view ? view->Inner() : other);
+    }
+
+private:
+    [[nodiscard]] const IMapItemAccessor& Inner() const { return *m_inner.GetAccessor(); }
+
+    GenericMap m_inner;
+    LendFrame m_frame;
+};
+
+class LendingEnumerator final : public IListEnumerator
+{
+public:
+    LendingEnumerator(ListEnumeratorPtr inner, LendFrame frame)
+        : m_inner(std::move(inner))
+        , m_frame(std::move(frame))
+    {
+    }
+
+    void Reset() override { m_inner->Reset(); }
+    bool MoveNext() override { return m_inner->MoveNext(); }
+    [[nodiscard]] Value GetCurrent() const override
+    {
+        const LendFrameScope scope(m_frame);
+        return LendMembers(m_inner->GetCurrent(), m_frame);
+    }
+    [[nodiscard]] ListEnumeratorPtr Clone() const override
+    {
+        return IListItemAccessor::MakeEnumerator<LendingEnumerator>(m_inner->Clone(), m_frame);
+    }
+    ListEnumeratorPtr Move() override { return IListItemAccessor::MakeEnumerator<LendingEnumerator>(std::move(m_inner), m_frame); }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* enumerator = dynamic_cast<const LendingEnumerator*>(&other);
+        return enumerator != nullptr && m_inner->IsEqual(*enumerator->m_inner);
+    }
+
+private:
+    ListEnumeratorPtr m_inner;
+    LendFrame m_frame;
+};
+
+class LendingListView final : public IListItemAccessor
+    , public IIndexBasedAccessor
+{
+public:
+    LendingListView(GenericList inner, LendFrame frame)
+        : m_inner(std::move(inner))
+        , m_frame(std::move(frame))
+    {
+    }
+
+    [[nodiscard]] const IIndexBasedAccessor* GetIndexer() const override { return m_inner.GetAccessor()->GetIndexer() ? static_cast<const IIndexBasedAccessor*>(this) : nullptr; }
+    [[nodiscard]] std::optional<ListEnumeratorPtr> CreateEnumerator() const override
+    {
+        auto inner = m_inner.GetAccessor()->CreateEnumerator();
+        if (!inner)
+        {
+            return std::nullopt;
+        }
+        return IListItemAccessor::MakeEnumerator<LendingEnumerator>(std::move(*inner), m_frame);
+    }
+    [[nodiscard]] std::optional<size_t> GetSize() const override { return m_inner.GetSize(); }
+    [[nodiscard]] bool IsTuple() const override { return m_inner.IsTuple(); }
+    [[nodiscard]] const void* GetIdentity() const override { return m_inner.GetIdentity(); }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override
+    {
+        const auto* view = dynamic_cast<const LendingListView*>(&other);
+        return m_inner.GetAccessor()->IsEqual(view ? *view->m_inner.GetAccessor() : other);
+    }
+    [[nodiscard]] Value GetItemByIndex(int64_t idx) const override
+    {
+        const LendFrameScope scope(m_frame);
+        return LendMembers(m_inner.GetAccessor()->GetIndexer()->GetItemByIndex(idx), m_frame);
+    }
+
+private:
+    GenericList m_inner;
+    LendFrame m_frame;
+};
+
+// Whether the public view `map` or `list` is a template's own container, which may hold template callables
+bool MayHoldTemplateCallables(const GenericMap& map)
+{
+    const auto* accessor = dynamic_cast<const IMapAccessor*>(map.GetAccessor());
+    if (!accessor)
+    {
+        return false;
+    }
+    const bool isHost = accessor->GetHostObject() != nullptr;
+    return !isHost && (accessor->GetObjectClass() != nullptr || accessor->GetMutableItems() != nullptr);
+}
+
+bool MayHoldTemplateCallables(const GenericList& list)
+{
+    const auto* view = dynamic_cast<const TupleExportView*>(list.GetAccessor());
+    const auto* accessor = dynamic_cast<const IListAccessor*>(view ? view->Items().GetAccessor() : list.GetAccessor());
+    return accessor != nullptr && !accessor->IsBorrowed() && accessor->GetRangeInfo() == nullptr;
+}
+
+// `exported` in a view that lends its callable members, whether or not it can hold any
+Value WrapLending(Value&& exported, const LendFrame& frame)
+{
+    if (auto* map = exported.GetIf<GenericMap>(); map && map->GetAccessor())
+    {
+        return Value(GenericMap(std::make_shared<const LendingMapView>(std::move(*map), frame)));
+    }
+    if (auto* list = exported.GetIf<GenericList>(); list && list->IsValid())
+    {
+        return Value(GenericList(std::make_shared<const LendingListView>(std::move(*list), frame)));
+    }
+    return std::move(exported);
+}
+
+Value LendMembers(Value&& exported, const LendFrame& frame)
+{
+    const auto* map = exported.GetIf<GenericMap>();
+    const auto* list = exported.GetIf<GenericList>();
+    if ((map && map->GetAccessor() && MayHoldTemplateCallables(*map)) || (list && list->IsValid() && MayHoldTemplateCallables(*list)))
+    {
+        return WrapLending(std::move(exported), frame);
+    }
+    return std::move(exported);
+}
+
+// Whether a container argument is the template's own, which may hold template callables: decided on the
+// engine's value, before any export is made. Inline: every container argument of a host's call asks it
+bool MayHoldTemplateCallables(const InternalValue& container)
+{
+    if (const auto map = AsMap(container))
+    {
+        const auto* accessor = map->GetAccessor();
+        return accessor != nullptr && !map->IsHost() && (accessor->GetObjectClass() != nullptr || accessor->GetMutableItems() != nullptr);
+    }
+    if (const auto list = AsList(container))
+    {
+        const auto* accessor = list->GetAccessor();
+        return accessor != nullptr && !accessor->IsBorrowed() && !accessor->IsRange();
+    }
+    return false;
+}
+
+// An argument that is a container the template owns (MayHoldTemplateCallables), as the host gets it: its export,
+// which lends its callable members. Out of line, as the host's own data takes none of it
+JINJA2CPP_COLD_INLINE Value LendContainerToHost(const InternalValue& value, RenderContext& context, HostCallScope& scope)
+{
+    auto exported = scope.keepUndefined ? ToHostValue(value) : IntValue2Value(value);
+    if (!scope.lease)
+    {
+        scope.lease = std::make_shared<CallableLease>(CallableLease{ &context, CycleCollector::Current(), std::this_thread::get_id(), detail::t_renderLimits, &scope });
+    }
+    return WrapLending(std::move(exported), LendFrame{ scope.lease, &scope });
+}
+
 // The host's form of an argument of a host's call made from `context`: a template callable is
 // lent (LendToHost), the rest as IntValue2Value gives it
 JINJA2CPP_HOT_INLINE Value ArgumentToHost(const InternalValue& value, RenderContext& context, HostCallScope& scope)
@@ -4402,6 +4773,14 @@ JINJA2CPP_HOT_INLINE Value ArgumentToHost(const InternalValue& value, RenderCont
             return IntValue2Value(value);
         }
         return LendToHost(value, context, scope);
+    }
+    if (MayHoldTemplateCallables(value))
+    {
+        return LendContainerToHost(value, context, scope);
+    }
+    if (scope.keepUndefined)
+    {
+        return ToHostValue(value);
     }
     return IntValue2Value(value);
 }
@@ -4454,12 +4833,6 @@ const void* ExportedAccessor(const Value& value)
         return detail::GenericAccessorAccess::Get(*list).get();
     }
     return nullptr;
-}
-
-bool IsContainer(const InternalValue& value)
-{
-    const auto& data = detail::InternalValueAccess::Data(value);
-    return std::holds_alternative<detail::MapHandle>(data) || std::holds_alternative<detail::ListHandle>(data);
 }
 
 // Calls `fn(accessor, original)` with each container among the parsed arguments `args` and the
@@ -4597,10 +4970,12 @@ void PrepareUserCallableParams(const ParsedArguments& args, RenderContext& conte
         return;
     }
 
+    bool asksForContext = false;
     for (const auto& argInfo : argsInfo)
     {
         if (argInfo.name.size() > 1 && argInfo.name[0] == '*')
         {
+            asksForContext = asksForContext || argInfo.name == "*context";
             continue;
         }
 
@@ -4629,6 +5004,12 @@ void PrepareUserCallableParams(const ParsedArguments& args, RenderContext& conte
     }
     result.extraPosArgs = Value(std::move(extraPosArgs));
     result.context = GenericMap(std::make_shared<const ContextMapper>(&context));
+    if (asksForContext)
+    {
+        const auto* frame = context.GetTemplateFrame();
+        result.site.templateName = frame ? frame->name : std::string_view();
+        result.site.autoescape = context.IsAutoescape();
+    }
 }
 } // namespace
 
@@ -4648,6 +5029,7 @@ struct UserCallableBody
     {
         HostCallScope scope;
         const LeaseEnd leaseEnd(scope.lease);
+        scope.keepUndefined = val.keepUndefined;
         UserCallableParams ucParams;
         // Kept for the call: the scope's records point into it
         const ParsedArguments args = helpers::ParseCallParams(argsInfo, params, ucParams.paramsParsed);
@@ -4750,6 +5132,13 @@ InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const Use
 
 } // namespace visitors
 
+InternalValue MakeHostObjectCallable(std::shared_ptr<const IHostObject> object)
+{
+    UserCallable callable([object = std::move(object)](const UserCallableParams& params) { return object->Call(params); }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) });
+    callable.keepUndefined = true;
+    return visitors::InputValueConvertor::ConvertUserCallable(callable);
+}
+
 Value HostCallableOf(const Callable& callable)
 {
     if (callable.GetKind() == Callable::UserCallable && callable.GetType() == Callable::Type::Expression)
@@ -4758,6 +5147,11 @@ Value HostCallableOf(const Callable& callable)
         {
             return Value(body->val);
         }
+    }
+    // A template callable met while the host reads a container its call was handed (LendMembers): lent
+    if (const auto* frame = t_lendFrame; frame && callable.GetKind() != Callable::UserCallable)
+    {
+        return LendToHost(InternalValue(callable), *frame->lease->context, *frame->scope);
     }
     return Value();
 }

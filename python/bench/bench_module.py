@@ -107,6 +107,9 @@ def main():
             continue
         settings_file = d / "settings.json"
         settings = json.loads(settings_file.read_text(encoding="utf-8")) if settings_file.exists() else {}
+        # A case Python Jinja2 cannot run (bench/python_bench.py, is_cpp_only): the prompt filters
+        if settings.get("cpp_only"):
+            continue
         py_env, source, params = reference.load_case(d)
         cpp_env = module_environment(d, settings)
         py_tpl = py_env.from_string(source)
