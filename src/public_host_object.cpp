@@ -599,7 +599,7 @@ private:
         void deallocate(U* block, size_t /*count*/) noexcept // NOLINT(readability-identifier-naming): the Allocator requirements
         {
             const HostBridge* owner = bridge; // the bridge may go with its reference, below
-            if (reinterpret_cast<unsigned char*>(block) == owner->m_slot)
+            if (static_cast<void*>(block) == static_cast<void*>(owner->m_slot))
             {
                 owner->m_slotBusy.store(false, std::memory_order_release);
             }
@@ -636,7 +636,8 @@ private:
     const UndefinedDescription* m_undefined = nullptr;
     bool m_inline;
     mutable std::atomic<bool> m_slotBusy{ false };
-    alignas(std::max_align_t) mutable unsigned char m_slot[48]{};
+    // Aligned by its element type rather than alignas, which MSVC warns about when it pads (C4324)
+    mutable std::max_align_t m_slot[(48 + sizeof(std::max_align_t) - 1) / sizeof(std::max_align_t)]{};
 };
 
 constexpr size_t AlignUp(size_t value, size_t align) noexcept
