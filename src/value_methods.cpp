@@ -1488,6 +1488,12 @@ struct StrOps
         {
             result = host->GetAttr(attr);
         }
+        else if (auto replacement = SandboxedNativeAttribute(&context, value, attr))
+        {
+            // The sandbox's formatter reads a field's attribute as the sandbox lets the template read it: a refused
+            // one is its undefined value, which formats as one (SandboxedFormatter.get_field)
+            return std::move(*replacement);
+        }
         else if (const auto* method = FindMethod(value, attr); method && (!isObject || map->GetAttrPolicy() == MapAttrPolicy::MethodsFirst || !map->HasValue(attr)))
         {
             result = MakeBoundMethod(value, *method);
@@ -1827,7 +1833,10 @@ InternalValue StrFormat(const InternalValue& self, const CallParams& params, Ren
 {
     if (const auto* policy = context.GetSandboxPolicy())
     {
-        return policy->Format(self, false, params, context);
+        if (auto formatted = policy->Format(self, false, params, context))
+        {
+            return std::move(*formatted);
+        }
     }
     return ApplyStringConverter(self, [&params, &context](auto sv) -> InternalValue {
         using CharT = typename decltype(sv)::value_type;
@@ -1972,7 +1981,10 @@ InternalValue MarkupFormat(const InternalValue& self, const CallParams& params, 
 {
     if (const auto* policy = context.GetSandboxPolicy())
     {
-        return policy->Format(self, false, params, context);
+        if (auto formatted = policy->Format(self, false, params, context))
+        {
+            return std::move(*formatted);
+        }
     }
     return MarkupResult(ApplyStringConverter(self, [&params, &context](auto sv) -> InternalValue {
         using CharT = typename decltype(sv)::value_type;
@@ -2793,7 +2805,7 @@ InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderC
             {
                 return UnsafeMethod(obj, name, *context);
             }
-            // A sandbox policy decides about the method too (ISandboxPolicy::NativeAttribute)
+            // A sandbox policy decides about the method too (IEngineSandboxPolicy::NativeAttribute)
             if (context && context->GetSandboxPolicy())
             {
                 if (auto replacement = SandboxedNativeAttribute(context, obj, name))

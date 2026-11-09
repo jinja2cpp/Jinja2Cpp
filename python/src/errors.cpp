@@ -54,6 +54,7 @@ std::string ErrorMessage(const jinja2::ErrorInfo& error)
     case ErrorCode::UserCallableException:
     case ErrorCode::UnexpectedException:
     case ErrorCode::DataReadError:
+    case ErrorCode::SecurityError:
     case ErrorCode::TemplateNotFound:
     case ErrorCode::FileNotFound:
         if (auto text = ParamText(error, 0); !text.empty())
@@ -131,12 +132,10 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
     case ErrorCode::FileNotFound:
         Raise(names.templateNotFound, names.templateNotFound(message));
     case ErrorCode::UndefinedError:
-        // The use of an attribute the sandbox refused (jinja2::SecurityErrorMarker)
-        if (ParamText(error, 1) == jinja2::SecurityErrorMarker)
-        {
-            Raise(names.securityError, names.securityError(message));
-        }
         Raise(names.undefinedError, names.undefinedError(message));
+    case ErrorCode::SecurityError:
+        // The use of an attribute the sandbox refused, or of a list or dict method an immutable sandbox refuses
+        Raise(names.securityError, names.securityError(message));
     case ErrorCode::ResourceLimitExceeded:
         // The sandbox's range(): safe_range's OverflowError
         if (ParamText(error, 1) == "maxRange")

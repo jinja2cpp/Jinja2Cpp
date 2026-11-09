@@ -49,6 +49,7 @@ enum class ErrorCode
     ResourceLimitExceeded = 18,    //!< A limit was passed: one of Settings::Limits, a built-in cap or a host's budget. ExtraParams[0] contains the message, ExtraParams[1] (for Settings::Limits) the name of the limit (`"maxRenderSteps"`)
     TemplateExpired = 19,          //!< A macro of a \ref BasicTemplateModule called a macro an earlier call stored, whose module ended with that call (docs/tasks/0301). ExtraParams[0] contains the macro's name, ExtraParams[1] is "ended". A Load no longer ends a module (docs/tasks/0321). A macro or `caller` a host's call got as an argument and called after that call ended has ExtraParams[0] "lent" (docs/tasks/0300)
     DataReadError = 20,            //!< \ref ToValue could not read a JSON document: its JsonTraits reported an error. ExtraParams[0] contains the message, ExtraParams[1] the JSON path of the value
+    SecurityError = 21,            //!< A sandbox refused an operation (Jinja2's SecurityError): the use of an attribute \ref ISandboxPolicy refused (an undefined value with `security` set, \ref UndefinedDescription), a method that changes a list or dict under Settings::immutableContainers. ExtraParams[0] contains the message
     ExpectedStringLiteral = 1001,  //!< String literal expected
     ExpectedIdentifier = 1002,     //!< Identifier expected
     ExpectedSquareBracket = 1003,  //!< ']' expected

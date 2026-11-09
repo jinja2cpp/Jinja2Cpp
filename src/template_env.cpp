@@ -83,15 +83,15 @@ bool operator==(const Settings& lhs, const Settings& rhs)
     // Structured bindings name every field: a field added to Settings or Settings::Extensions stops this compiling
     // until it is compared here too
     const auto& [lTrim, lLstrip, lCacheSize, lAutoReload, lExt, lMetaType, lKeepNl, lNlSeq, lVarStart, lVarEnd, lBlockStart, lBlockEnd, lCommentStart,
-                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lAutoescapeSelector, lAutoescapeMode, lPromptEscaper, lTokenizer, lUndefined, lLookup, lCallablesAsFilters, lLimits] = lhs;
+                 lCommentEnd, lLineStmt, lLineComment, lFinalize, lAutoescape, lAutoescapeSelector, lAutoescapeMode, lPromptEscaper, lTokenizer, lUndefined, lLookup, lCallablesAsFilters, lImmutable, lSandbox, lLimits] = lhs;
     const auto& [rTrim, rLstrip, rCacheSize, rAutoReload, rExt, rMetaType, rKeepNl, rNlSeq, rVarStart, rVarEnd, rBlockStart, rBlockEnd, rCommentStart,
-                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rAutoescapeSelector, rAutoescapeMode, rPromptEscaper, rTokenizer, rUndefined, rLookup, rCallablesAsFilters, rLimits] = rhs;
+                 rCommentEnd, rLineStmt, rLineComment, rFinalize, rAutoescape, rAutoescapeSelector, rAutoescapeMode, rPromptEscaper, rTokenizer, rUndefined, rLookup, rCallablesAsFilters, rImmutable, rSandbox, rLimits] = rhs;
     const auto& [lDo, lLoopControls, lI18n] = lExt;
     const auto& [rDo, rLoopControls, rI18n] = rExt;
 
     // The flags and numbers first, then the strings
-    if (std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lKeepNl, lAutoescape, lAutoescapeSelector, lAutoescapeMode, lPromptEscaper, lTokenizer, lUndefined, lLookup, lCallablesAsFilters)
-        != std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rKeepNl, rAutoescape, rAutoescapeSelector, rAutoescapeMode, rPromptEscaper, rTokenizer, rUndefined, rLookup, rCallablesAsFilters))
+    if (std::tie(lTrim, lLstrip, lCacheSize, lAutoReload, lDo, lLoopControls, lI18n, lKeepNl, lAutoescape, lAutoescapeSelector, lAutoescapeMode, lPromptEscaper, lTokenizer, lUndefined, lLookup, lCallablesAsFilters, lImmutable, lSandbox)
+        != std::tie(rTrim, rLstrip, rCacheSize, rAutoReload, rDo, rLoopControls, rI18n, rKeepNl, rAutoescape, rAutoescapeSelector, rAutoescapeMode, rPromptEscaper, rTokenizer, rUndefined, rLookup, rCallablesAsFilters, rImmutable, rSandbox))
     {
         return false;
     }
@@ -310,7 +310,7 @@ void TemplateEnvImpl::SetDialect(Dialect dialect)
     m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), dialect, SandboxPolicyLocked());
 }
 
-void TemplateEnvImpl::SetSandboxPolicy(std::shared_ptr<const ISandboxPolicy> policy)
+void TemplateEnvImpl::SetSandboxPolicy(std::shared_ptr<const IEngineSandboxPolicy> policy)
 {
     const WriterLock<Mutex> l(m_loadSettingsGuard);
     if (policy == SandboxPolicyLocked())
@@ -320,7 +320,7 @@ void TemplateEnvImpl::SetSandboxPolicy(std::shared_ptr<const ISandboxPolicy> pol
     m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), DialectLocked(), std::move(policy));
 }
 
-std::shared_ptr<const ISandboxPolicy> TemplateEnvImpl::GetSandboxPolicy() const
+std::shared_ptr<const IEngineSandboxPolicy> TemplateEnvImpl::GetSandboxPolicy() const
 {
     const WriterLock<Mutex> l(m_loadSettingsGuard);
     return SandboxPolicyLocked();

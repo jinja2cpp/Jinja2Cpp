@@ -108,15 +108,15 @@ public:
     void SetDialect(Dialect dialect);
     Dialect GetDialect() const;
     // The sandbox policy of templates loaded from now on, kept in m_loadSettings too (src/sandbox_policy.h)
-    void SetSandboxPolicy(std::shared_ptr<const ISandboxPolicy> policy);
-    std::shared_ptr<const ISandboxPolicy> GetSandboxPolicy() const;
+    void SetSandboxPolicy(std::shared_ptr<const IEngineSandboxPolicy> policy);
+    std::shared_ptr<const IEngineSandboxPolicy> GetSandboxPolicy() const;
 
 private:
     const BigIntBackend* BigIntBackendLocked() const noexcept JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_loadSettings ? m_loadSettings->bigIntBackend : GetBuiltinBigIntBackend(); }
 
-    Dialect DialectLocked() const noexcept JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_loadSettings ? m_loadSettings->dialect : Dialect::Jinja2; }
+    Dialect DialectLocked() const noexcept JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_loadSettings ? m_loadSettings->environmentDialect : Dialect::Jinja2; }
 
-    std::shared_ptr<const ISandboxPolicy> SandboxPolicyLocked() const JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_loadSettings ? m_loadSettings->sandboxPolicy : nullptr; }
+    std::shared_ptr<const IEngineSandboxPolicy> SandboxPolicyLocked() const JINJA2CPP_REQUIRES(m_loadSettingsGuard) { return m_loadSettings ? m_loadSettings->environmentSandboxPolicy : nullptr; }
 
     mutable Mutex m_loadSettingsGuard;
     // Made on the first Load, or by SetBigIntBackend or SetDialect when they change what it holds

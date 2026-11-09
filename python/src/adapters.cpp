@@ -520,9 +520,9 @@ nb::object Representative(const InternalValue& obj, bool& synthetic)
     }
 }
 
-// The ISandboxPolicy of a SandboxedEnvironment: the environment's own is_safe_attribute and wrap_str_format, asked
+// The IEngineSandboxPolicy of a SandboxedEnvironment: the environment's own is_safe_attribute and wrap_str_format, asked
 // for the engine's values. It borrows the environment, which holds the engine environment that holds this
-class PySandboxPolicy final : public jinja2::ISandboxPolicy
+class PySandboxPolicy final : public jinja2::IEngineSandboxPolicy
 {
 public:
     PySandboxPolicy(PyObject* environment, bool allNames)
@@ -536,7 +536,7 @@ public:
         if (name == "format_map" && jinja2::IsStringValue(obj))
         {
             // The engine's strings have no format_map; the sandbox's is SandboxedFormatter's
-            return InternalValue(jinja2::Callable(jinja2::Callable::UserCallable, [obj, this](const CallParams& params, RenderContext& context) { return Format(obj, true, params, context); }));
+            return InternalValue(jinja2::Callable(jinja2::Callable::UserCallable, [obj, this](const CallParams& params, RenderContext& context) { return FormatWith(obj, true, params, context); }));
         }
         // Python's objects have attributes the engine's values have not: __class__, __init__, ...
         // A public name is the environment's to judge only when its is_safe_attribute is not Jinja2's, which
@@ -576,7 +576,13 @@ public:
         return std::nullopt;
     }
 
-    InternalValue Format(const InternalValue& self, bool formatMap, const CallParams& params, RenderContext& context) const override
+    std::optional<InternalValue> Format(const InternalValue& self, bool formatMap, const CallParams& params, RenderContext& context) const override
+    {
+        return FormatWith(self, formatMap, params, context);
+    }
+
+private:
+    InternalValue FormatWith(const InternalValue& self, bool formatMap, const CallParams& params, RenderContext& context) const
     {
         const auto text = ToPython(self);
         const auto method = Steal(PyObject_GetAttrString(text.ptr(), formatMap ? "format_map" : "format"));
@@ -588,7 +594,6 @@ public:
         return CallPython(wrapped.ptr(), params, context);
     }
 
-private:
     PyObject* m_environment;
     bool m_allNames;
 };
@@ -604,7 +609,7 @@ bool SandboxJudgesPublicNames(nb::handle environment)
     return PyObject_IsTrue(all.ptr()) != 0;
 }
 
-std::shared_ptr<const jinja2::ISandboxPolicy> MakePythonSandboxPolicy(nb::handle environment, bool allNames)
+std::shared_ptr<const jinja2::IEngineSandboxPolicy> MakePythonSandboxPolicy(nb::handle environment, bool allNames)
 {
     return std::make_shared<PySandboxPolicy>(environment.ptr(), allNames);
 }

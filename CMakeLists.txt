@@ -263,6 +263,7 @@ set(JINJA2CPP_SOURCES
     src/prompt_escape.cpp
     src/prompt_filters.cpp
     src/public_host_object.cpp
+    src/public_sandbox_policy.cpp
     src/token_budget.cpp
     src/python_format.cpp
     src/recursion_guard.cpp
@@ -530,6 +531,7 @@ if (JINJA2CPP_BUILD_TESTS)
         test/helpers_tests.cpp
         test/host_object_test.cpp
         test/public_host_object_test.cpp
+        test/public_sandbox_policy_test.cpp
         test/sandbox_policy_test.cpp
         test/i18n_test.cpp
         test/limits_test.cpp

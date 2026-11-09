@@ -176,7 +176,9 @@ locations), 0255 (engine runtime errors).
   `Load` replaces the template for its own object only, and a module keeps its tree, reversing
   the second half of 0284 D1a. 0301 raises it for a stored macro of a module that ended with an
   earlier call; 0300 for a template callable lent to a host's call and called after it), 20 `DataReadError` (`ToValue` could not
-  read a JSON document: its `JsonTraits` reported an error; 0311). `UnexpectedException` (1) now means "an exception the
+  read a JSON document: its `JsonTraits` reported an error; 0311), 21 `SecurityError` (a sandbox refused an attribute or a
+  list or dict method: `ISandboxPolicy`, `Settings::immutableContainers`; 0357 B7, until then an `UndefinedError` with a
+  marker in `extraParams[1]`). `UnexpectedException` (1) now means "an exception the
   engine did not raise and could not attribute", with location and `GetException()`.
 
 **Against Python.** Same: syntax, undefined and not-found errors keep their codes, with

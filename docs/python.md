@@ -345,15 +345,15 @@ inside the adapters that let the engine read Python objects, not in generated co
   Jinja2's `OverflowError("Range too big. The sandbox blocks ranges larger than MAX_RANGE
   (100000).")`.
 - **The engine's own values** (the template's strings, numbers, lists, dicts, `loop`, `cycler`,
-  macros) have no Python attributes. The environment holds an `ISandboxPolicy` (src/sandbox_policy.h,
-  internal until 0357 makes it public) that the engine asks where a native value's attribute is
+  macros) have no Python attributes. The environment holds an `IEngineSandboxPolicy` (src/sandbox_policy.h,
+  the engine's side of the public `ISandboxPolicy` the module moves to in 0357 S3) that the engine asks where a native value's attribute is
   missing, after it finds one of its methods, and at `str.format`. A private name (`__class__`,
   `__init__`, `_x`) on one is asked of `is_safe_attribute` with a stand-in object of the Python
   type and is refused with the same undefined; so is a public name when the subclass's
   `is_safe_attribute` is not Jinja2's. `format_map` of a string, which the engine lacks, and
   `str.format` are Python's, run through `SandboxedFormatter`. `ImmutableSandboxedEnvironment`
   also refuses the methods of the engine's lists and dicts that change them (`append`, `update`,
-  ...) with Jinja2's message (`Dialect::ImmutableSandbox`, the read-only containers of the
+  ...) with Jinja2's message and `ErrorCode::SecurityError` (`Dialect::ImmutableSandbox`, the read-only containers of the
   transformers preset).
 - **Cost.** A plain `Environment` pays a null check where the policy would be asked: the checks
   are behind a pointer the render already holds, which only a sandboxed environment sets. A sandboxed render calls `is_safe_attribute` once

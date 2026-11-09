@@ -91,13 +91,10 @@ typename BasicErrorInfo<CharT>::Data ExceptionToData(std::exception_ptr exceptio
     }
     catch (const UndefinedError& ex)
     {
-        code = ErrorCode::UndefinedError;
+        // A refused attribute's undefined value fails as Jinja2's SecurityError
+        code = ex.IsSecurity() ? ErrorCode::SecurityError : ErrorCode::UndefinedError;
         message = ex.what();
         exception = nullptr;
-        if (ex.IsSecurity())
-        {
-            limitField = SecurityErrorMarker;
-        }
     }
     catch (const TemplateRuntimeError& ex)
     {

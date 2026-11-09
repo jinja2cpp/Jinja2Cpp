@@ -52,11 +52,6 @@ public:
     using std::runtime_error::runtime_error;
 };
 
-// extraParams[1] of an ErrorCode::UndefinedError that Jinja2 reports as a SecurityError: the use of an attribute the
-// sandbox refused (the jinja2cpp Python module's SandboxedEnvironment, and the list and dict methods of its
-// immutable form)
-inline constexpr const char* SecurityErrorMarker = "SecurityError";
-
 // Python's UndefinedError: ErrorCode::UndefinedError
 class UndefinedError : public std::exception
 {
@@ -67,7 +62,7 @@ public:
     {
     }
     [[nodiscard]] const char* what() const noexcept override { return m_message.c_str(); }
-    // Jinja2's SecurityError, which the sandbox's unsafe undefined raises on use (SecurityErrorMarker)
+    // Jinja2's SecurityError, which the sandbox's unsafe undefined raises on use (ErrorCode::SecurityError)
     [[nodiscard]] bool IsSecurity() const noexcept { return m_security; }
 
 private:

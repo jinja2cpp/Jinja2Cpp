@@ -31,7 +31,7 @@ struct UndefinedInfo final : ValueObject
     // A string key, reported as an attribute
     bool isAttr = true;
     // The sandbox refused the attribute (Jinja2's unsafe_undefined, exc=SecurityError): a use that fails
-    // reports a SecurityError, which ErrorInfo marks with extraParams[1] == SecurityErrorMarker
+    // reports ErrorCode::SecurityError
     bool security = false;
     // Replaces the message built from the fields above when set
     std::string hint;
@@ -47,7 +47,7 @@ enum class UndefinedUse
     Method,     // what Undefined has no method for: dictsort's items(), indent's +=, wordwrap; every policy refuses
 };
 
-// What the sandbox policy of the render (ISandboxPolicy) gives for the attribute `name` that the value `obj` of the engine has
+// What the sandbox policy of the render (IEngineSandboxPolicy) gives for the attribute `name` that the value `obj` of the engine has
 // none of: the unsafe undefined of an attribute Python's object has and the sandbox refuses, or a method the engine
 // lacks; nothing without a sandbox, and for a host object, which the host reads itself
 std::optional<InternalValue> SandboxedNativeAttribute(const RenderContext* context, const InternalValue& obj, const std::string& name);
@@ -78,8 +78,7 @@ std::string UndefinedMessage(const UndefinedInfo& info);
 // {{ undefined value printed: hint }}
 std::string DebugUndefinedText(const UndefinedInfo& info);
 [[noreturn]] void ThrowUndefined(const UndefinedInfo& info);
-// The undefined value of an attribute the sandbox refuses: its use fails with a SecurityError (UndefinedError
-// code, extraParams[1] SecurityErrorMarker)
+// The undefined value of an attribute the sandbox refuses: its use fails with ErrorCode::SecurityError
 InternalValue MakeUnsafeUndefined(const RenderContext& context, std::string hint);
 // The Python class of the undefined value, as a TypeError names it: Undefined, StrictUndefined,
 // ChainableUndefined or DebugUndefined

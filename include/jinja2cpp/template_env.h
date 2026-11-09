@@ -93,6 +93,8 @@ JINJA2CPP_EXPORT AutoescapeSelector SelectAutoescape(std::vector<std::string> en
                                                      bool defaultValue = false);
 
 //! Global template environment settings
+class ISandboxPolicy;
+
 struct Settings
 {
     /// Extensions set which should be supported
@@ -170,6 +172,13 @@ struct Settings
     //! (ErrorCode::UnknownFilter, ErrorCode::UnknownTest) unless it is inside an `if`, where it fails when it runs.
     //! With this flag such names are looked up when they run instead
     bool userCallablesAsFilters = false;
+    //! Makes the methods that change a list or dict in place (`append`, `pop`, `update`, `clear`, ...) unsafe
+    //! attributes, as Jinja2's `ImmutableSandboxedEnvironment` does: calling one fails with ErrorCode::SecurityError.
+    //! Off by default
+    bool immutableContainers = false;
+    //! A sandbox for the engine's values (\ref ISandboxPolicy, jinja2cpp/sandbox_policy.h). Unset by default. Compared
+    //! by identity; a template keeps the policy it was loaded with
+    std::shared_ptr<const ISandboxPolicy> sandboxPolicy;
 
     //! Bounds on what one Load or Render may do, for templates that are not trusted (docs/api-2.0.md). A Render that
     //! passes one fails with ErrorCode::ResourceLimitExceeded, `extraParams[0]` the message and `extraParams[1]` the

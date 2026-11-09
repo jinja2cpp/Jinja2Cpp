@@ -103,7 +103,7 @@ private:
 // (TemplateEnvImpl::GetLoadSettings), instead of each copying the settings and rebuilding the delimiters
 struct LoadSettings
 {
-    explicit LoadSettings(const Settings& setts, const BigIntBackend* backend = nullptr, Dialect templateDialect = Dialect::Jinja2, std::shared_ptr<const ISandboxPolicy> policy = nullptr)
+    explicit LoadSettings(const Settings& setts, const BigIntBackend* backend = nullptr, Dialect templateDialect = Dialect::Jinja2, std::shared_ptr<const IEngineSandboxPolicy> policy = nullptr)
         : settings(setts)
         , narrow(setts)
         , wide(setts)
@@ -112,9 +112,11 @@ struct LoadSettings
 #else
         , hasRenderLimits(jinja2::HasRenderLimits(setts.limits) || backend != nullptr)
 #endif
-        , dialect(templateDialect)
+        , dialect(templateDialect == Dialect::Jinja2 && setts.immutableContainers ? Dialect::ImmutableSandbox : templateDialect)
+        , environmentDialect(templateDialect)
         , bigIntBackend(backend)
-        , sandboxPolicy(std::move(policy))
+        , sandboxPolicy(policy || !setts.sandboxPolicy ? policy : MakeEngineSandboxPolicy(setts.sandboxPolicy))
+        , environmentSandboxPolicy(std::move(policy))
         , promptEscaper(AutoescapePromptEscaper(settings))
     {
     }
@@ -139,12 +141,18 @@ struct LoadSettings
     // settings.limits differs from the defaults, or (outside a -DJINJA2CPP_WITH_BIGINT=boost build, where every
     // template has one and RenderLimitsScope swaps just the pointer, docs/tasks/0272) the template has a backend
     bool hasRenderLimits;
-    // What a preset changed besides the settings (ConfigureForChatTemplates)
+    // What a preset changed besides the settings (ConfigureForChatTemplates), or Settings::immutableContainers
     Dialect dialect;
+    // The dialect the environment set (TemplateEnvImpl::SetDialect), without Settings::immutableContainers: what the
+    // next LoadSettings of the environment starts from
+    Dialect environmentDialect;
     // The big-integer arithmetic the template's renders use (TemplateEnv::SetBigIntBackend); null for none
     const BigIntBackend* bigIntBackend;
-    // The sandbox of templates loaded with these settings (src/sandbox_policy.h); null for none
-    std::shared_ptr<const ISandboxPolicy> sandboxPolicy;
+    // The sandbox of templates loaded with these settings (src/sandbox_policy.h): the environment's own (the Python
+    // module's, until 0357 S3) or a bridge over Settings::sandboxPolicy; null for none
+    std::shared_ptr<const IEngineSandboxPolicy> sandboxPolicy;
+    // The environment's own (TemplateEnvImpl::SetSandboxPolicy), without the bridge: what its next LoadSettings starts from
+    std::shared_ptr<const IEngineSandboxPolicy> environmentSandboxPolicy;
     // The escaper of AutoescapeMode::Prompt, null in HTML mode: chosen once here, so a render only copies it into its
     // callback (docs/tasks/0358). Points into settings.promptEscaper, or to the one without patterns
     const PromptEscaperImpl* promptEscaper;
