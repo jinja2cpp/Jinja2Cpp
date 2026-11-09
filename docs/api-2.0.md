@@ -837,7 +837,9 @@ Recommend A now, C only if someone asks.
      `UserCallable::keepUndefined`. `None` stays the default.
    - **Rendering.** `RenderOptions`, with per-render globals and a `std::function` poll;
      call-site information for `*context` callables; hex digits for `BigInt`;
-     `Template::FindReferencedTemplates`.
+     `Template::FindReferencedTemplates`. The globals are a `shared_ptr<const ValuesMap>`, not a
+     call-scoped borrow: a value of them that a callable keeps stays valid after the render, as
+     an environment global's does (S2b).
    - **Sandbox.** An optional public `ISandboxPolicy`, at no cost when it is unset. Both the
      native attribute path and the direct method-call path honour it.
    - **Growth after the freeze.** Through `IHostObject2 : IHostObject`, found once per object.

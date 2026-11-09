@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <functional>
 #include <optional>
 #include <string>
 #include <type_traits>
@@ -140,14 +141,45 @@ inline thread_local RenderLimits t_renderLimits JINJA2CPP_HOT_TLS;
 void PollDeadline();
 void InstallRenderLimits(const RenderLimits& limits);
 
-// A host's poll of the renders on this thread (docs/tasks/0353): the Python module checks for
-// signals there, so Ctrl-C stops a long render. A render with limits calls it every
-// HostPollSteps steps; it may throw to stop the render. Null, the default, costs nothing: the
-// slow path of the step count reads it, not the step
-using HostPoll = void (*)();
+// A host's poll of the renders on this thread (RenderOptions::poll, docs/tasks/0357 B3; the
+// Python module checks for signals there, so Ctrl-C stops a long render, 0353). A render with
+// limits calls it every HostPollSteps steps; it may throw to stop the render. Null, the
+// default, costs nothing: the slow path of the step count reads it, not the step
+using HostPoll = const std::function<void()>*;
 inline thread_local HostPoll t_hostPoll JINJA2CPP_HOT_TLS = nullptr;
 inline constexpr std::uint64_t HostPollSteps = 1024;
 } // namespace detail
+
+// Installs a host's poll for as long as it lives and puts back the one it replaces. A render
+// it interrupts, or one it starts with no poll of its own, polls with the same
+class HostPollScope
+{
+public:
+    explicit HostPollScope(detail::HostPoll poll) noexcept
+        : m_saved(std::exchange(detail::t_hostPoll, poll))
+    {
+    }
+    ~HostPollScope() { detail::t_hostPoll = m_saved; }
+    HostPollScope(const HostPollScope&) = delete;
+    HostPollScope& operator=(const HostPollScope&) = delete;
+    HostPollScope(HostPollScope&&) = delete;
+    HostPollScope& operator=(HostPollScope&&) = delete;
+
+private:
+    detail::HostPoll m_saved;
+};
+
+// The limits of a render that has a poll but no limits of its own: it counts its steps, to
+// reach the poll, and limits nothing (UINT64_MAX steps are no limit)
+inline const Settings::Limits& PollOnlyLimits()
+{
+    static const Settings::Limits limits = [] {
+        Settings::Limits result;
+        result.maxRenderSteps = UINT64_MAX;
+        return result;
+    }();
+    return limits;
+}
 
 // Installs a render's limits for as long as it lives and puts back the ones of the render it
 // interrupts (a host callable may render another template). A render without limits (null)

@@ -199,7 +199,7 @@ void StepsSlow()
     // Last, with the count refilled: the poll may throw, and the render stops
     if (const auto poll = t_hostPoll)
     {
-        poll();
+        (*poll)();
     }
 }
 } // namespace
@@ -236,6 +236,11 @@ void RenderLimitsScope::Install(const Settings::Limits* limitsOrNone, const BigI
     m_saved = detail::t_renderLimits;
     detail::RenderLimits state;
     state.bigInts = bigInts;
+    // A render a polled one starts (a host callable rendering another template) is polled too
+    if (!limitsOrNone && detail::t_hostPoll)
+    {
+        limitsOrNone = &PollOnlyLimits();
+    }
     if (!limitsOrNone)
     {
         detail::InstallRenderLimits(state);

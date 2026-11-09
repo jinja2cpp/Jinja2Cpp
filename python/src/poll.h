@@ -5,7 +5,7 @@
 
 #include "recursion_guard.h"
 
-#include <utility>
+#include <functional>
 
 namespace jinja2cpp_py
 {
@@ -19,21 +19,23 @@ inline void PollSignals()
     }
 }
 
+// Installs PollSignals as the thread's poll for the scope
 class HostPollScope
 {
 public:
     HostPollScope() noexcept
-        : m_saved(std::exchange(jinja2::detail::t_hostPoll, &PollSignals))
+        : m_scope(&Poll())
     {
     }
-    ~HostPollScope() { jinja2::detail::t_hostPoll = m_saved; }
-    HostPollScope(const HostPollScope&) = delete;
-    HostPollScope& operator=(const HostPollScope&) = delete;
-    HostPollScope(HostPollScope&&) = delete;
-    HostPollScope& operator=(HostPollScope&&) = delete;
 
 private:
-    jinja2::detail::HostPoll m_saved;
+    static const std::function<void()>& Poll()
+    {
+        static const std::function<void()> poll(&PollSignals);
+        return poll;
+    }
+
+    jinja2::HostPollScope m_scope;
 };
 } // namespace jinja2cpp_py
 
