@@ -1780,6 +1780,52 @@ TEST(PublicHostObjectTest, AHostCallGetsTheSiteAndTheContextLendsTemplateCallabl
     EXPECT_TRUE(Throws([&] { (*kept)->callable(late); }, ErrorCode::TemplateExpired));
 }
 
+// A callable that keeps undefined values reads the template's values in its containers as Python Jinja2 passes them:
+// an undefined item is described, a dictsort pair is a 2-tuple. Without the flag they stay None and a key/value map
+TEST(PublicHostObjectTest, KeepUndefinedHoldsAtAnyDepth)
+{
+    const auto itemsOf = [](const Value& value) {
+        std::vector<Value> items;
+        if (const auto* list = value.GetIf<GenericList>())
+        {
+            for (const auto& item : *list)
+            {
+                items.push_back(item);
+            }
+        }
+        return items;
+    };
+    const auto describe = [itemsOf](const UserCallableParams& params) {
+        const auto& args = params.extraPosArgs.AsList();
+        const auto items = itemsOf(args[0]);
+        const auto pairs = itemsOf(args[1]);
+        if (items.empty() || pairs.empty())
+        {
+            return Value("no lists");
+        }
+        std::string text = UndefinedOf(items[0]) ? "undefined" : (items[0].IsNone() ? "none" : "other");
+        const auto& pair = pairs[0];
+        if (const auto* list = pair.GetIf<GenericList>(); list && list->IsTuple())
+        {
+            const auto both = itemsOf(pair);
+            text += "|tuple " + both.at(0).ToString() + "=" + both.at(1).ToString();
+        }
+        else if (pair.GetIf<ValuesMap>())
+        {
+            text += "|map";
+        }
+        return Value(text);
+    };
+    UserCallable plain({ describe }, { ArgInfo(ArgInfo::VarArgs) });
+    UserCallable keeping = plain;
+    keeping.keepUndefined = true;
+    const ValuesMap params{ { "plain", plain }, { "keeping", keeping } };
+    EXPECT_EQ("undefined|tuple a=1", Render("{{ keeping([missing], {'a': 1}|dictsort) }}", params));
+    EXPECT_EQ("none|map", Render("{{ plain([missing], {'a': 1}|dictsort) }}", params));
+    // A plain callable the keeping one calls back reads as a plain one
+    EXPECT_EQ("none|map", Render("{{ keeping([missing], {'a': 1}|dictsort) and plain([missing], {'a': 1}|dictsort) }}", params));
+}
+
 // The context a host's call got is valid for the call only: a copy the host kept fails with TemplateExpired after it
 // (it read the render's freed frames)
 TEST(PublicHostObjectTest, AKeptContextExpiresWithTheCall)

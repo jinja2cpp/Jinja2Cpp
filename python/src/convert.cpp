@@ -14,6 +14,7 @@
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <memory>
@@ -340,6 +341,16 @@ nb::object BigIntToPython(const jinja2::BigInt& big)
 template<typename List>
 nb::object ItemsToPython(const List& list, bool isTuple, const void* identity, Memo& memo)
 {
+    // A list of the engine may be lazy (range(10**12)): its items count against the sequence cap before they
+    // are made, as the engine's own conversions count them
+    std::size_t count = 0;
+    if constexpr (std::is_same_v<List, jinja2::GenericList>)
+    {
+        if (const auto size = list.GetSize())
+        {
+            CheckSequenceSize(*size);
+        }
+    }
     if (identity)
     {
         if (auto found = memo.find(identity); found != memo.end())
@@ -354,6 +365,7 @@ nb::object ItemsToPython(const List& list, bool isTuple, const void* identity, M
     }
     for (const auto& item : list)
     {
+        CheckSequenceSize(++count);
         items.append(ToPythonImpl(item, memo));
     }
     if (isTuple)
@@ -676,6 +688,21 @@ const jinja2::Value& TemplateValue::Value() const
         RaiseTemplateRuntimeError("a value of the template was used after the call it was passed to ended");
     }
     return m_value;
+}
+
+void CheckSequenceSize(unsigned long long count)
+{
+    // The engine's cap and message for a sequence too long (Settings::Limits::maxSequenceSize)
+    constexpr unsigned long long builtIn = 1ULL << 26;
+    const auto* render = CurrentRender();
+    const unsigned long long cap = render && render->maxSequenceSize != 0 ? render->maxSequenceSize : builtIn;
+    if (count <= cap)
+    {
+        return;
+    }
+    const std::string length = "a list of length " + std::to_string(count);
+    const auto message = count > builtIn && cap == builtIn ? length + " is too long" : length + " is longer than " + std::to_string(cap);
+    RaiseTemplateRuntimeError(message);
 }
 
 namespace

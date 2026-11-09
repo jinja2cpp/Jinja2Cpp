@@ -124,6 +124,10 @@ private:
     bool m_alive = true;
 };
 
+// Raises the engine's TemplateRuntimeError for a sequence of `count` items longer than the render's
+// Limits::maxSequenceSize (the engine's built-in cap when it sets none), with the engine's message
+void CheckSequenceSize(unsigned long long count);
+
 // Python -> engine (0248 D4): scalars natively, a str copied to UTF-8, Markup as Markup, an
 // Undefined as undefined, a TemplateValue as its value, anything else as a host object
 jinja2::Value ToEngine(nb::handle object);

@@ -171,19 +171,7 @@ void CheckFormatSize(nb::handle size)
         PyErr_Clear();
         count = std::numeric_limits<unsigned long long>::max();
     }
-    // The engine's cap and message for a sequence too long (Settings::Limits::maxSequenceSize)
-    constexpr unsigned long long builtIn = 1ULL << 26;
-    const auto* render = CurrentRender();
-    const unsigned long long cap = render && render->maxSequenceSize != 0 ? render->maxSequenceSize : builtIn;
-    if (count <= cap)
-    {
-        return;
-    }
-    const std::string length = "a list of length " + std::to_string(count);
-    const auto message = count > builtIn && cap == builtIn ? length + " is too long" : length + " is longer than " + std::to_string(cap);
-    const auto& type = Names().templateRuntimeError;
-    PyErr_SetObject(type.ptr(), type(MakeStr(message)).ptr());
-    throw nb::python_error();
+    CheckSequenceSize(count);
 }
 } // namespace
 } // namespace jinja2cpp_py

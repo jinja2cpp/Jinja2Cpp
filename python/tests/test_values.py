@@ -231,3 +231,22 @@ def test_deeply_nested_python_list_in_is_safe():
         env.from_string("{{ x }}{{ x|length }}{{ x|tojson }}").render(x=deep)
     except (RecursionError, jinja2cpp.TemplateError):
         pass
+
+
+def test_a_huge_range_passed_to_python_counts_against_the_sequence_cap():
+    # A range reaches Python as a list (an accepted divergence of 0357); a lazy one is not built past the cap
+    env = jinja2cpp.Environment()
+    with pytest.raises(jinja2cpp.TemplateRuntimeError, match="too long"):
+        env.from_string("{{ f(range(1000000000000)) }}").render(f=len)
+    assert env.from_string("{{ f(range(5)) }}").render(f=len) == "5"
+
+
+def test_undefined_items_and_dictsort_pairs_reach_python_as_in_jinja2():
+    cases = [
+        ("{{ f([missing]) }}", lambda xs: type(xs[0]).__name__),
+        ("{{ f({'m': missing}) }}", lambda d: type(d["m"]).__name__),
+        ("{{ f({'a': 1}|dictsort) }}", repr),
+        ("{{ f({'a': 1}.items()|list) }}", repr),
+    ]
+    for source, f in cases:
+        assert jinja2cpp.Template(source).render(f=f) == jinja2.Template(source).render(f=f), source

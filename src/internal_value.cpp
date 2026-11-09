@@ -4181,11 +4181,16 @@ MapAdapter CreateMapAdapter(ValuesMap&& values)
 // which goes back as it came; an empty Value for a template callable. Defined below
 Value HostCallableOf(const Callable& callable);
 
+// Set while the host's callable that runs keeps undefined values (UserCallable::keepUndefined, KeepUndefinedScope): the
+// values it reads in the containers it got, at any depth, are the template's own then, an undefined value as
+// MakeUndefined's and a dictsort pair as a 2-tuple. Read only for those two kinds, so other values pay nothing
+thread_local bool t_keepUndefinedExport = false;
+
 struct OutputValueConvertor
 {
     using result_t = Value;
 
-    result_t operator()(const UndefinedValue&) const { return result_t(); }
+    result_t operator()(const UndefinedValue& undefined) const { return t_keepUndefinedExport ? UndefinedToHost(undefined) : result_t(); }
     result_t operator()(const NoneValue&) const { return result_t(); }
     result_t operator()(const MapRef& adapter) const { return result_t(adapter.CreateGenericMap()); }
     result_t operator()(const ListRef& adapter) const
@@ -4198,7 +4203,14 @@ struct OutputValueConvertor
         return result_t(adapter.CreateGenericList());
     }
     result_t operator()(const ValueRef& ref) const { return ref.get(); }
-    result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", IntValue2Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }
+    result_t operator()(const KeyValuePair& pair) const
+    {
+        if (t_keepUndefinedExport)
+        {
+            return IntValue2Value(InternalValue(visitors::PairAsTuple(pair)));
+        }
+        return ValuesMap{ { "key", IntValue2Value(pair.key) }, { "value", IntValue2Value(pair.value) } };
+    }
     result_t operator()(const Callable& callable) const { return HostCallableOf(callable); }
     result_t operator()(const UserCallable&) const { return result_t(); }
     result_t operator()(const std::shared_ptr<IRendererBase>&) const { return result_t(); }
@@ -4443,6 +4455,24 @@ private:
     // handed many, so that a list of them comes back in N log N
     mutable std::vector<HostCallExport> m_index;
     mutable bool m_indexed = false;
+};
+
+// What a host's call reads of the template's values while it runs (t_keepUndefinedExport); the outer call's again after
+class KeepUndefinedScope
+{
+public:
+    explicit KeepUndefinedScope(bool keep) noexcept
+        : m_outer(std::exchange(t_keepUndefinedExport, keep))
+    {
+    }
+    KeepUndefinedScope(const KeepUndefinedScope&) = delete;
+    KeepUndefinedScope(KeepUndefinedScope&&) = delete;
+    KeepUndefinedScope& operator=(const KeepUndefinedScope&) = delete;
+    KeepUndefinedScope& operator=(KeepUndefinedScope&&) = delete;
+    ~KeepUndefinedScope() { t_keepUndefinedExport = m_outer; }
+
+private:
+    bool m_outer;
 };
 
 // Expires the context a host's call was given when the call ends (ContextMapper::Expire)
@@ -5136,6 +5166,7 @@ struct UserCallableBody
         UserCallableParams ucParams;
         // Before ucParams goes: a context the host kept is expired while the call's own copy still holds it
         const ContextEnd contextEnd(scope);
+        const KeepUndefinedScope keepUndefined(val.keepUndefined);
         // Kept for the call: the scope's records point into it
         const ParsedArguments args = helpers::ParseCallParams(argsInfo, params, ucParams.paramsParsed);
         PrepareUserCallableParams(args, context, argsInfo, ucParams, scope);

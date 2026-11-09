@@ -1236,10 +1236,12 @@ struct JINJA2CPP_EXPORT UserCallable
     //! Information about arguments of the user-defined callable
     std::vector<ArgInfo> argsInfo;
     /*!
-     * \brief Whether an undefined argument reaches the callable as undefined
+     * \brief Whether the callable gets the template's values as Python Jinja2 passes them
      *
-     * False (the default) gives the callable `None` for it. True gives a value that \ref UndefinedOf describes
-     * (`jinja2cpp/host_object.h`), as Python Jinja2 passes its `Undefined` objects.
+     * False (the default) gives the callable `None` for an undefined value, and a `dictsort`/`items()` pair as a
+     * ValuesMap with "key" and "value". True gives, as an argument and at any depth of the containers the call reads
+     * while it runs, a value that \ref UndefinedOf describes (`jinja2cpp/host_object.h`) for an undefined value, as
+     * Python Jinja2 passes its `Undefined` objects, and a pair as a 2-item tuple (GenericList::IsTuple).
      */
     bool keepUndefined = false;
 
