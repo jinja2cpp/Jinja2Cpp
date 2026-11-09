@@ -675,6 +675,30 @@ Value MakeHostValue(std::shared_ptr<const IHostObject> object)
     return Value(HostBridge::Share(MakeRef<const HostBridge>(raw, std::move(object), false)));
 }
 
+void HostResult::SetHostObject(std::shared_ptr<const IHostObject> object)
+{
+    if (!object)
+    {
+        throw std::invalid_argument("jinja2::HostResult::SetHostObject: the object is null");
+    }
+    auto& target = *static_cast<InternalValue*>(m_target);
+    // An object MakeUndefined made, taken from its value: the undefined value it describes, as HostMapToInternal reads it
+    if (const auto* carrier = AsCarrier(object.get()))
+    {
+        target = UndefinedFromDescription(carrier->Description());
+        return;
+    }
+    const IHostObject* raw = object.get();
+    target = InternalValue(MapAdapter(MakeRef<const HostBridge>(raw, std::move(object), false)).MarkAsHost());
+}
+
+void HostResult::SetHostObjectInPlace(size_t size, size_t align, const IHostObject* (*construct)(void* where, void* context), void* context)
+{
+    // The old value goes only once the new one is made: `construct` may still read it through its arguments
+    InternalValue value(MapAdapter(IntrusivePtr<const HostBridge>(NewInlineBridge(size, align, construct, context))).MarkAsHost());
+    *static_cast<InternalValue*>(m_target) = std::move(value);
+}
+
 namespace detail
 {
 Value MakeHostValueInPlace(size_t size, size_t align, const IHostObject* (*construct)(void* where, void* context), void* context)

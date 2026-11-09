@@ -68,10 +68,33 @@ public:
     void Set(Value value);
     //! A pointer is not a `bool`: use \ref SetString for text
     void Set(const char*) = delete;
+    /*!
+     * \brief A host object, as `Set(MakeHostValue(object))` would write it
+     *
+     * The engine reads the object as \ref IHostObject describes, with no \ref Value or \ref GenericMap made on the way:
+     * a nested object of the host (a member that is itself a dict, a list or any other object) costs one bridge
+     * allocation. The object lives as long as the engine or the host holds the value. Two reads that write objects with
+     * one \ref IHostObject::Identity are `sameas`.
+     *
+     * @param object The object; must not be null
+     */
+    void SetHostObject(std::shared_ptr<const IHostObject> object);
+    /*!
+     * \brief A new host object of type `T`, made from `args`, as `Set(MakeHostValue<T>(args...))` would write it
+     *
+     * The object is constructed in the engine's own allocation, as \ref MakeHostValue<T> constructs it: one
+     * allocation holds the object and the engine's bridge, and nothing else is made. An object more aligned than `new`
+     * guarantees is made in an allocation of its own.
+     */
+    template<typename T, typename... Args>
+    void SetHostObject(Args&&... args);
 
 private:
     friend struct detail::HostResultAccess;
     explicit HostResult(void* target) noexcept;
+    // SetHostObject<T>: `construct` places the object at `where`, as detail::MakeHostValueInPlace's does. Frozen ABI
+    // with it (docs/api-2.0.md, section 7 item 10)
+    void SetHostObjectInPlace(size_t size, size_t align, const IHostObject* (*construct)(void* where, void* context), void* context);
 
     // The engine's value the result goes to
     void* m_target;
@@ -243,23 +266,46 @@ namespace detail
 JINJA2CPP_EXPORT Value MakeHostValueInPlace(size_t size, size_t align, const IHostObject* (*construct)(void* where, void* context), void* context);
 } // namespace detail
 
+namespace detail
+{
+// Whether the library can place a `T` in a block of its own (MakeHostValueInPlace)
+template<typename T>
+constexpr bool HostObjectFitsInPlace = alignof(T) <= __STDCPP_DEFAULT_NEW_ALIGNMENT__ && std::is_base_of_v<IHostObject, T>;
+
+// The `construct` of MakeHostValueInPlace for a `T` made from the arguments `context` (a `Pack`) forwards
+template<typename T, typename Pack>
+const IHostObject* PlaceHostObject(void* where, void* context)
+{
+    return std::apply([where](auto&&... a) -> const IHostObject* { return ::new (where) T(std::forward<decltype(a)>(a)...); }, std::move(*static_cast<Pack*>(context)));
+}
+} // namespace detail
+
 //! \ref MakeHostValue of a new object of type `T`, made from `args`
 template<typename T, typename... Args>
 Value MakeHostValue(Args&&... args)
 {
-    if constexpr (alignof(T) <= __STDCPP_DEFAULT_NEW_ALIGNMENT__ && std::is_base_of_v<IHostObject, T>)
+    if constexpr (detail::HostObjectFitsInPlace<T>)
     {
         auto pack = std::forward_as_tuple(std::forward<Args>(args)...);
-        return detail::MakeHostValueInPlace(
-            sizeof(T), alignof(T),
-            [](void* where, void* context) -> const IHostObject* {
-                return std::apply([where](auto&&... a) -> const IHostObject* { return ::new (where) T(std::forward<decltype(a)>(a)...); }, std::move(*static_cast<decltype(pack)*>(context)));
-            },
-            &pack);
+        return detail::MakeHostValueInPlace(sizeof(T), alignof(T), &detail::PlaceHostObject<T, decltype(pack)>, &pack);
     }
     else
     {
         return MakeHostValue(std::shared_ptr<const IHostObject>(std::make_shared<const T>(std::forward<Args>(args)...)));
+    }
+}
+
+template<typename T, typename... Args>
+void HostResult::SetHostObject(Args&&... args)
+{
+    if constexpr (detail::HostObjectFitsInPlace<T>)
+    {
+        auto pack = std::forward_as_tuple(std::forward<Args>(args)...);
+        SetHostObjectInPlace(sizeof(T), alignof(T), &detail::PlaceHostObject<T, decltype(pack)>, &pack);
+    }
+    else
+    {
+        SetHostObject(std::shared_ptr<const IHostObject>(std::make_shared<const T>(std::forward<Args>(args)...)));
     }
 }
 

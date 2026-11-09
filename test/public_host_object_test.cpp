@@ -1451,3 +1451,156 @@ TEST(PublicHostObjectTest, FastSequenceReadFollowsTheLiveLength)
         EXPECT_EQ("1,False,|1", Render("{% for i in s %}{{ i if i is defined else (i is defined) }},{% endfor %}|{{ s[0] }}{{ s[5] }}", { { "s", s } })) << fast;
     }
 }
+
+namespace
+{
+// A tree of the host whose members are host objects of their own, handed to the engine through
+// HostResult::SetHostObject: `first` and each item are a new view made in place per read, whose Identity is the node it
+// shows; `shared` is one object the root keeps (the shared_ptr form); `wide` is over-aligned, `gone` undefined
+struct Node
+{
+    std::string name;
+    std::vector<std::shared_ptr<const Node>> children;
+};
+
+class NodeView final : public IHostObject
+{
+public:
+    NodeView(LifeCount& count, std::shared_ptr<const Node> node, std::shared_ptr<const IHostObject> shared = nullptr)
+        : m_count(&count)
+        , m_node(std::move(node))
+        , m_shared(std::move(shared))
+    {
+        ++m_count->alive;
+        ++m_count->made;
+    }
+    NodeView(const NodeView&) = delete;
+    NodeView& operator=(const NodeView&) = delete;
+    ~NodeView() override { --m_count->alive; }
+
+    [[nodiscard]] const char* TypeName() const override { return "Node"; }
+    [[nodiscard]] std::string Str() const override { return m_node->name; }
+    [[nodiscard]] std::string Repr() const override { return "<" + m_node->name + ">"; }
+    [[nodiscard]] std::optional<Value> GetAttr(std::string_view /*name*/) const override { return std::nullopt; }
+    [[nodiscard]] bool GetAttrTo(std::string_view name, HostResult& out) const override
+    {
+        if (name == "name")
+        {
+            out.SetString(m_node->name);
+            return true;
+        }
+        if (name == "first" && !m_node->children.empty())
+        {
+            out.SetHostObject<NodeView>(*m_count, m_node->children.front());
+            return true;
+        }
+        if (name == "shared" && m_shared)
+        {
+            out.SetHostObject(m_shared);
+            return true;
+        }
+        if (name == "wide")
+        {
+            out.SetHostObject<WideCounted>(*m_count);
+            return true;
+        }
+        if (name == "gone")
+        {
+            out.SetHostObject(MakeUndefined({ UndefinedPolicy::Default, "gone", "Node", true, {} }).GetIf<GenericMap>()->AsHostObject());
+            return true;
+        }
+        if (name == "null")
+        {
+            out.SetHostObject(std::shared_ptr<const IHostObject>());
+            return true;
+        }
+        return false;
+    }
+    [[nodiscard]] bool ItemAtTo(size_t index, HostResult& out) const override
+    {
+        if (index >= m_node->children.size())
+        {
+            return false;
+        }
+        out.SetHostObject<NodeView>(*m_count, m_node->children[index]);
+        return true;
+    }
+    [[nodiscard]] std::optional<size_t> Len() const override { return m_node->children.size(); }
+    [[nodiscard]] bool IsIterable() const override { return true; }
+    [[nodiscard]] bool IsSequence() const override { return true; }
+    [[nodiscard]] const void* Identity() const override { return m_node.get(); }
+
+private:
+    LifeCount* m_count;
+    std::shared_ptr<const Node> m_node;
+    std::shared_ptr<const IHostObject> m_shared;
+};
+
+std::shared_ptr<const Node> MakeTree()
+{
+    auto leaf = std::make_shared<Node>(Node{ "leaf", {} });
+    auto a = std::make_shared<Node>(Node{ "a", { leaf } });
+    auto b = std::make_shared<Node>(Node{ "b", {} });
+    return std::make_shared<Node>(Node{ "root", { a, b } });
+}
+
+Value MakeTreeValue(LifeCount& count)
+{
+    auto shared = std::make_shared<const NodeView>(count, std::make_shared<Node>(Node{ "shared", {} }));
+    return MakeHostValue<NodeView>(count, MakeTree(), std::move(shared));
+}
+} // namespace
+
+TEST(PublicHostObjectTest, NestedObjectWrittenToTheResultRenders)
+{
+    LifeCount count;
+    {
+        const ValuesMap params{ { "t", MakeTreeValue(count) } };
+        EXPECT_EQ("a|a|leaf|leaf|a,b,|[<a>, <leaf>]|shared|0|False|2", Render("{{ t.first }}|{{ t.first.name }}|{{ t.first.first }}|{{ t.first.first.name }}"
+                                                                              "|{% for c in t %}{{ c }},{% endfor %}|{{ [t|first, t.first.first] }}|{{ t.shared.name }}|{{ t.wide }}"
+                                                                              "|{{ t.gone is defined }}|{{ t|length }}",
+                                                                              params));
+        EXPECT_EQ(L"a|leaf", RenderW(L"{{ t.first.name }}|{% for c in t.first %}{{ c }}{% endfor %}", params));
+        EXPECT_EQ(0, Render("{{ t.null }}", params).rfind("error: ", 0));
+        // The views made for the reads went with the render; the root and its shared object stay
+        EXPECT_EQ(2, count.alive);
+    }
+    EXPECT_EQ(0, count.alive);
+}
+
+TEST(PublicHostObjectTest, NestedObjectWrittenToTheResultKeepsItsIdentity)
+{
+    LifeCount count;
+    const ValuesMap params{ { "t", MakeTreeValue(count) }, { "ident", Ident() } };
+    EXPECT_EQ("True|True|True,False,|True|False|True", Render("{{ t.first is sameas t.first }}|{{ t.shared is sameas t.shared }}"
+                                                              "|{% for c in t %}{{ c is sameas t.first }},{% endfor %}|{{ ident(t.first) is sameas t.first }}"
+                                                              "|{{ t.first is sameas t.shared }}|{{ {t.first: 1}[t.first] == 1 }}",
+                                                              params));
+}
+
+TEST(PublicHostObjectTest, NestedObjectWrittenToTheResultSurvivesTheRender)
+{
+    LifeCount count;
+    std::vector<Value> kept;
+    auto keep = Probe([&kept](const UserCallableParams& params) {
+        kept.push_back(params["x"]);
+        return Value();
+    });
+    {
+        const ValuesMap params{ { "keep", std::move(keep) }, { "t", MakeTreeValue(count) } };
+        EXPECT_EQ("", Render("{% do keep(t.first) %}{% do keep(t.shared) %}{% for c in t %}{% do keep(c) %}{% endfor %}", params));
+        // The root, its shared object and the three views the host keeps
+        EXPECT_EQ(5, count.alive);
+    }
+    // The root is gone; what the host was handed holds its own objects
+    ASSERT_EQ(4U, kept.size());
+    EXPECT_EQ(4, count.alive);
+    for (const auto& value : kept)
+    {
+        ASSERT_NE(nullptr, value.GetIf<GenericMap>());
+        ASSERT_NE(nullptr, value.GetIf<GenericMap>()->AsHostObject());
+    }
+    EXPECT_EQ("a|leaf|shared|a|b|True", Render("{{ k[0] }}|{{ k[0].first }}|{{ k[1].name }}|{{ k[2] }}|{{ k[3] }}|{{ k[0] is sameas k[2] }}", { { "k", ValuesList(kept.begin(), kept.end()) } }));
+    kept.clear();
+    EXPECT_EQ(0, count.alive);
+}
