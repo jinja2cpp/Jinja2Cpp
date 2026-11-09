@@ -467,20 +467,17 @@ public:
     }
 
     // The poll of a render with hooks, installed in `scope`, or null
-    template<bool hasHooks>
+    struct NoPollScope
+    {
+    };
+    static detail::HostPoll InstallPoll(NoPollScope& /*scope*/, const RenderHooks* /*hooks*/) { return nullptr; }
     static detail::HostPoll InstallPoll(std::optional<HostPollScope>& scope, const RenderHooks* hooks)
     {
-        if constexpr (hasHooks)
+        if (hooks->poll)
         {
-            if (hooks->poll)
-            {
-                scope.emplace(hooks->poll);
-                return hooks->poll;
-            }
+            scope.emplace(hooks->poll);
         }
-        static_cast<void>(scope);
-        static_cast<void>(hooks);
-        return nullptr;
+        return hooks->poll;
     }
     // The limits a render installs: the template's, or with a poll of its own and none, those that count its steps
     [[nodiscard]] const Settings::Limits* RenderLimitsOf(detail::HostPoll poll) const
@@ -520,9 +517,9 @@ public:
             // It also keeps the render's copies of the host's data (docs/tasks/0049)
             const CycleCollector cycles;
             const InternalValueMap* hostGlobals = hasHooks ? hooks->globals : nullptr;
-            // Before the limits, which start counting the steps to the first poll
-            std::optional<HostPollScope> pollScope;
-            const auto* poll = InstallPoll<hasHooks>(pollScope, hooks);
+            // Before the limits, which start counting the steps to the first poll. Nothing at all for an ordinary render
+            std::conditional_t<hasHooks, std::optional<HostPollScope>, NoPollScope> pollScope;
+            const auto poll = InstallPoll(pollScope, hooks);
             // Before anything else the render does, the conversion of the params included
             const RenderLimitsScope limitsScope(RenderLimitsOf(poll), m_settings->bigIntBackend);
             // The tables of the params and the top scope are lent by the thread's workspace and

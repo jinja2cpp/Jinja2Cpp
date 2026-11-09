@@ -34,7 +34,7 @@ public:
     [[nodiscard]] std::optional<Value> NativeAttribute(const Value& obj, std::string_view name) const override
     {
         {
-            const std::lock_guard<std::mutex> lock(m_guard);
+            const std::scoped_lock lock(m_guard);
             m_asked.push_back(std::string(name) + (obj.IsString() ? " of '" + obj.AsString() + "'" : std::string()));
         }
         if (!name.empty() && name[0] == '_')
@@ -58,7 +58,7 @@ public:
 
     [[nodiscard]] std::vector<std::string> Asked() const
     {
-        const std::lock_guard<std::mutex> lock(m_guard);
+        const std::scoped_lock lock(m_guard);
         return m_asked;
     }
 
@@ -88,7 +88,7 @@ public:
     }
 };
 
-std::string RenderOrError(TemplateEnv& env, const std::string& source, ErrorInfo* errorOut = nullptr, ValuesMap params = {})
+std::string RenderOrError(TemplateEnv& env, const std::string& source, ErrorInfo* errorOut = nullptr, const ValuesMap& params = {})
 {
     auto tpl = env.FromString(source);
     if (!tpl)
@@ -122,7 +122,11 @@ TEST(PublicSandboxPolicyTest, ARefusedAttributeIsASecurityErrorOnUse)
     EXPECT_EQ(ErrorCode::SecurityError, error.GetCode()) << text;
     EXPECT_NE(text.find("access to attribute '__class__' is unsafe."), std::string::npos) << text;
     // An undefined value the host made is described with the flag
-    EXPECT_TRUE(UndefinedOf(*policy->NativeAttribute(Value(), "_x"))->security);
+    const auto refused = policy->NativeAttribute(Value(), "_x");
+    ASSERT_TRUE(refused.has_value());
+    const auto description = UndefinedOf(*refused);
+    ASSERT_TRUE(description.has_value());
+    EXPECT_TRUE(description->security);
 }
 
 TEST(PublicSandboxPolicyTest, ThePolicyIsAskedAboutAttributesAndMethodsFoundOrNot)
