@@ -432,6 +432,8 @@ public:
     {
         // Replace the environment's globals when set
         const InternalValueMap* globals = nullptr;
+        // Or the host's, converted in the render (RenderOptions::globals)
+        const std::shared_ptr<const ValuesMap>* hostGlobals = nullptr;
         // The host's poll (detail::t_hostPoll) for the render, or null to keep the thread's
         const std::function<void()>* poll = nullptr;
     };
@@ -442,14 +444,9 @@ public:
     std::optional<BasicErrorInfo<CharT>> RenderWithOptions(Target& os, const ValuesMap& params, const RenderOptions& options) const
     {
         RenderHooks hooks;
-        InternalValueMap globals;
         if (options.globals)
         {
-            for (const auto& [name, value] : *options.globals)
-            {
-                globals[name] = LendGlobal(value, options.globals);
-            }
-            hooks.globals = &globals;
+            hooks.hostGlobals = &options.globals;
         }
         if (options.poll)
         {
@@ -478,6 +475,24 @@ public:
             scope.emplace(hooks->poll);
         }
         return hooks->poll;
+    }
+    // The globals of a render with hooks, converted into `converted` where the host gave its own, or null
+    struct NoGlobals
+    {
+    };
+    static const InternalValueMap* GlobalsOf(NoGlobals& /*converted*/, const RenderHooks* /*hooks*/) { return nullptr; }
+    static const InternalValueMap* GlobalsOf(InternalValueMap& converted, const RenderHooks* hooks)
+    {
+        if (!hooks->hostGlobals)
+        {
+            return hooks->globals;
+        }
+        const auto& host = *hooks->hostGlobals;
+        for (const auto& [name, value] : *host)
+        {
+            converted[name] = LendGlobal(value, host);
+        }
+        return &converted;
     }
     // The limits a render installs: the template's, or with a poll of its own and none, those that count its steps
     [[nodiscard]] const Settings::Limits* RenderLimitsOf(detail::HostPoll poll) const
@@ -518,12 +533,14 @@ public:
             // First, so that it ends last: when nothing of the render holds values any more
             // It also keeps the render's copies of the host's data (docs/tasks/0049)
             const CycleCollector cycles;
-            const InternalValueMap* hostGlobals = hasHooks ? hooks->globals : nullptr;
             // Before the limits, which start counting the steps to the first poll. Nothing at all for an ordinary render
             std::conditional_t<hasHooks, std::optional<HostPollScope>, NoPollScope> pollScope;
             const auto poll = InstallPoll(pollScope, hooks);
             // Before anything else the render does, the conversion of the params included
             const RenderLimitsScope limitsScope(RenderLimitsOf(poll), m_settings->bigIntBackend);
+            // Under the limits and in the error boundary, as the params are: a host global may be a big integer past the cap
+            std::conditional_t<hasHooks, InternalValueMap, NoGlobals> convertedGlobals;
+            const InternalValueMap* hostGlobals = GlobalsOf(convertedGlobals, hooks);
             // The tables of the params and the top scope are lent by the thread's workspace and
             // go back to it, emptied, when the render ends (docs/tasks/0160)
             const WorkspaceMaps maps;

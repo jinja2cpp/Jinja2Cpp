@@ -1,5 +1,7 @@
 #include "big_int_toy_backend.h"
 
+#include <jinja2cpp/big_int.h>
+#include <jinja2cpp/error_info.h>
 #include <jinja2cpp/filesystem_handler.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
@@ -198,6 +200,26 @@ TEST(RenderOptionsTest, GlobalsWorkForWideTemplatesAndSinks)
     ContainerSink<std::wstring, wchar_t> sink(collected);
     ASSERT_TRUE(tpl->RenderTo(sink, {}, options));
     EXPECT_EQ(L"w42", collected);
+}
+
+TEST(RenderOptionsTest, AGlobalPastTheBigIntCapFailsTheRenderAsAParamDoes)
+{
+    TemplateEnv env;
+    BigInt huge;
+    ASSERT_TRUE(BigInt::TryParse(std::string(400000, '7'), huge));
+    auto tpl = env.FromString("{{ n }}");
+    ASSERT_TRUE(tpl) << tpl.error().ToString();
+    std::string out;
+    auto asParam = tpl->RenderTo(out, { { "n", huge } }, RenderOptions{});
+    ASSERT_FALSE(asParam);
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, asParam.error().GetCode()) << asParam.error().ToString();
+
+    RenderOptions options;
+    options.globals = GlobalsOf({ { "n", huge } });
+    // Threw out of RenderTo before the fix: gtest reports an escaping exception as a failure
+    auto asGlobal = tpl->RenderTo(out, {}, options);
+    ASSERT_FALSE(asGlobal);
+    EXPECT_EQ(ErrorCode::ResourceLimitExceeded, asGlobal.error().GetCode()) << asGlobal.error().ToString();
 }
 
 TEST(RenderOptionsTest, AGlobalACallableKeepsOutlivesTheOptions)
