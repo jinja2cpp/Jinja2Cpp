@@ -426,7 +426,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0354](0354-python-module-subset.md) | Python module P2: the supported subset, sandbox and fallback | api | medium | open |
 | [0355](0355-python-module-proof.md) | Python module P3: upstream test suite, parity corpus, chat templates, bench row | parity | medium | done |
 | [0356](0356-python-module-wheels.md) | Python module P4: wheels for Linux, macOS and Windows; free-threaded audit | build | medium | open |
-| [0357](0357-python-module-public-api.md) | Python module: move from the private seam to the public API before the G1 freeze | api | medium | open |
+| [0357](0357-python-module-public-api.md) | Python module: move from the private seam to the public API before the G1 freeze | api | medium | in-progress |
 | [0358](0358-prompt-autoescape.md) | Prompt autoescape: `fence`, `neutralize` and an escaping mode for LLM prompts | api | medium | done |
 | [0359](0359-token-budget-filters.md) | Token budget filters: `count_tokens`, `truncate_tokens` and `pack` | api | medium | done |
 | [0360](0360-hf-chat-template-compat.md) | Render Hugging Face chat templates as transformers does | parity | high | done |
@@ -488,6 +488,10 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0418](0418-module-value-copy-recursion.md) | A deeply nested argument to a module macro overflows the stack in the engine | robustness | medium | open |
 | [0419](0419-print-statement.md) | `{% print expr %}` is a parse error in the engine | parity | low | open |
 | [0420](0420-range-and-engine-object-leftovers.md) | Range and engine-object leftovers of 0401 | parity | low | open |
+| [0421](0421-host-tuple-inbound.md) | A tuple a host returns stays a tuple | api | low | open |
+| [0422](0422-module-call-exports-views.md) | Exports of a running module call keep tuples, keys and lent members | api | low | open |
+| [0423](0423-lent-members-nested.md) | Template callables nested two levels deep in a host call's argument | api | low | open |
+| [0424](0424-host-kept-cycle-leak.md) | A template container that holds itself leaks when a host keeps its export | robustness | low | open |
 | [0425](0425-sandbox-parity-leftovers.md) | Sandbox parity leftovers of 0354 | parity | low | open |
 | [0426](0426-sandbox-refused-attribute-cost.md) | Cost of a refused attribute in the sandbox | perf | low | open |
 | [0427](0427-sandbox-policy-and-template-cache.md) | Sandbox policy and the template cache (for 0357) | api | low | open |
@@ -501,3 +505,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0435](0435-python-environment-policies.md) | `Environment.policies` | parity | low | open |
 | [0436](0436-python-lazy-generate.md) | `Template.generate` renders on demand, in Jinja2's chunks | parity | medium | open |
 | [0437](0437-python-gil-released-render.md) | Render with the GIL released when the data is JSON-like (0248 plan D5, phase 3) | perf | low | open |
+| [0438](0438-sandbox-arms-cold-without-policy.md) | Sandbox checks cost nothing when no policy is installed | perf | low | open |
