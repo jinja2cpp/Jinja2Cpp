@@ -124,9 +124,9 @@ TEST(PublicSandboxPolicyTest, ARefusedAttributeIsASecurityErrorOnUse)
     // An undefined value the host made is described with the flag
     const auto refused = policy->NativeAttribute(Value(), "_x");
     ASSERT_TRUE(refused.has_value());
-    const auto description = UndefinedOf(*refused);
+    const auto description = UndefinedOf(refused.value());
     ASSERT_TRUE(description.has_value());
-    EXPECT_TRUE(description->security);
+    EXPECT_TRUE(description.value().security);
 }
 
 TEST(PublicSandboxPolicyTest, ThePolicyIsAskedAboutAttributesAndMethodsFoundOrNot)
