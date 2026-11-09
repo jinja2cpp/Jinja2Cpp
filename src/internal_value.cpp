@@ -691,7 +691,9 @@ void ResolveMapCallOperator(InternalValue& result, MapRef map, RenderContext* va
 {
     static const std::string callOperName = "value()";
 
-    if (!map.HasValue(callOperName))
+    // The 1.x reflected call operator: a host object has no such member, and asking it costs a lookup in the host
+    // language for every object a subscript gives (a method read, `d.get`)
+    if (map.IsHost() || !map.HasValue(callOperName))
     {
         return;
     }
