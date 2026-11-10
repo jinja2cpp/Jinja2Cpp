@@ -1,5 +1,6 @@
 # Renders where Jinja2C++ differs from transformers: "<template>.<conversation> <kind> <task> <reason>".
-# kind: output (both render, texts differ), rejects (only Jinja2C++ fails), accepts (only
-# transformers fails), message (both fail, raise_exception's message is lost). A "wide." prefix
+# kind: output (both render, texts differ), generation (the texts agree, the generation spans differ),
+# rejects (only Jinja2C++ fails), accepts (only transformers fails), message (both fail,
+# raise_exception's message is lost). A "wide." prefix
 # limits a line to the wide run. A listed case that matches fails the suite, so the list stays
 # exact; regenerate it from a run with JINJA2CPP_CHAT_TEMPLATES_RESULTS (README.md).

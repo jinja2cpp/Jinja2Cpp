@@ -1,9 +1,10 @@
 ---
-status: open
+status: done
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/820
 priority: medium
 area: api
 depends: [0360]
-touches: [include/jinja2cpp/chat_template.h, src/chat_template.cpp]
+touches: [include/jinja2cpp/chat_template.h, include/jinja2cpp/template.h, src/generation_tracker.h, src/out_stream.h, src/render_context.h, src/template_impl.h, src/template_render_options.cpp, src/node_arena.h, src/node_arena.cpp, src/statements.h, src/statements.cpp, src/expression_evaluator.cpp, src/template_parser.cpp, test/chat_template_preset_test.cpp, test/chat_templates, docs/api-2.0.md]
 shares: [src/template_parser.cpp#ParseGeneration, src/value_methods.cpp#UnsafeMethod, include/jinja2cpp/error_info.h]
 ---
 # Chat templates: the assistant token mask and the sandbox's SecurityError
@@ -32,3 +33,12 @@ test/chat_templates conversations.
 
 **Timing (Ruslan 2026-11-06).** Lands before the G1 freeze, with the API wave: it adds to the
 public headers `chat_template.h` and `error_info.h`.
+
+**Decision (Ruslan 2026-11-10).** The mask is `RenderOptions::generationSpans`, a host-owned `std::vector<GenerationSpan>*`
+(`start`, `end` in units of the output, counted from the first character the render writes, in the
+order the blocks end, as transformers' `generation_indices`); the field is an ABI change of
+`RenderOptions`, recorded in docs/api-2.0.md and landed before G1. The `SecurityError` half was
+already done by 0357 S2c (an unsafe method fails with `ErrorCode::SecurityError`); only the docs
+(chat_template.h, template_parser.cpp, api-2.0.md) were stale and a test now pins it. Nothing is
+recorded without the option: the freeze hooks at macro calls, call blocks and recursive loops cost a
+null-pointer check.
