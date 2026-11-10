@@ -45,3 +45,6 @@ filter (`filters.cpp`) and `str.join`/`str.replace`/`str.format` (`value_methods
 (`python_format.cpp`); the str-method width cap, now the `maxSequenceSize` cap instead of a separate
 2^28 (`WidthArg`); `lipsum` (`global_functions.cpp`); `wordwrap` (`string_converter_filter.cpp`).
 `|length` of a string or dict no longer builds a list (`filters.cpp`).
+A `%` width (literal or `*`) is no longer clamped at 2^20, which padded `'%2000000s' % 'x'` short
+of Python's 2000000 characters: widths pad as Python's do, checked against the cap before the
+padding is built. `str.expandtabs` is missing altogether: filed as 0452.

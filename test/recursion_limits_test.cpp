@@ -406,6 +406,10 @@ TEST_F(RecursionLimitsTest, HugeSequencesFailFast)
     Template tpl(&m_env);
     ASSERT_TRUE(tpl.Load("{{ range(3)|list }}{{ 'x'|center(5) }}{{ 'ab' * 2 }}{{ range(2**40)|random is number }}").has_value());
     EXPECT_EQ("[0, 1, 2]  x  ababTrue", tpl.RenderAsString({}).value());
+    // A width past 2**20 pads as Python does, up to the cap (docs/tasks/0263)
+    Template padded(&m_env);
+    ASSERT_TRUE(padded.Load("{{ ('%2000000s' % 'x')|length }} {{ ('%-*d' % (2000000, 1))|length }}").has_value());
+    EXPECT_EQ("2000000 2000000", padded.RenderAsString({}).value());
     TemplateW wide(&m_env);
     ASSERT_TRUE(wide.Load(L"{{ 'x'|center(2**40) }}").has_value());
     EXPECT_FALSE(wide.RenderAsString({}).has_value());
