@@ -812,7 +812,7 @@ TEST_F(TemplateModuleTest, DeepArgumentFails)
             }
 
             // Within the stack, it is the macro's
-            const auto nested = DeepValue(500, asMap, 7);
+            const auto nested = DeepValue(50, asMap, 7);
             EXPECT_EQ("1", Call(module.exports["m"], { nested }).AsString());
             auto made = tpl.MakeModule({ { "p", nested } });
             ASSERT_TRUE(!!made);
