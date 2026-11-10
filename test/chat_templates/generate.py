@@ -13,7 +13,8 @@ Outputs, read by chat_template_test.cpp:
   tokens and the reasoning aliases transformers adds, so both sides render the same data;
 - ``expected/<template>.json``: per conversation, the rendered text or the error; a
   conversation id ``<template>:<name>`` (conversations.TEMPLATE_CONVERSATIONS) belongs to that
-  template only.
+  template only. A template with a ``{% generation %}`` block also stores ``generation``, the
+  ``[start, end]`` code-point spans of its blocks in the output (the assistant token mask).
 
     python3 test/chat_templates/generate.py           # rewrite expected/
     python3 test/chat_templates/generate.py --check   # fail if expected/ or SOURCES.json is stale
@@ -27,6 +28,7 @@ import json
 import logging
 import os
 import pathlib
+import re
 import sys
 
 sys.dont_write_bytecode = True
@@ -38,6 +40,8 @@ import transformers  # noqa: E402
 from transformers.utils import chat_template_utils  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
+# transformers' check that a template has a generation block (apply_chat_template, return_assistant_tokens_mask)
+GENERATION_TAG = re.compile(r"\{\%-?\s*generation\s*-?\%\}")
 
 
 def pinned_version(requirements, package):
@@ -94,7 +98,12 @@ def build_contexts():
 def render(source, ctx):
     try:
         template = chat_template_utils._compile_jinja_template(source)
-        return {"output": template.render(**copy.deepcopy(ctx))}
+        result = {"output": template.render(**copy.deepcopy(ctx))}
+        if GENERATION_TAG.search(source):
+            # The assistant token mask, in code points (return_assistant_tokens_mask=True; docs/tasks/0377)
+            _, indices = chat_template_utils._render_with_assistant_indices(template, **copy.deepcopy(ctx))
+            result["generation"] = [[start, end] for start, end in indices]
+        return result
     except Exception as e:  # noqa: BLE001 - every error is an expected result
         result = {"error": type(e).__name__}
         if isinstance(e, jinja2.TemplateError) and not isinstance(e, jinja2.TemplateSyntaxError):

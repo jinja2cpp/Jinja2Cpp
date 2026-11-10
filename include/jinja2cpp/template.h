@@ -17,6 +17,7 @@
 #error "Jinja2C++ needs expected-lite's nonstd::expected: define nsel_CONFIG_SELECT_EXPECTED=nsel_EXPECTED_NONSTD"
 #endif
 
+#include <cstddef>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -48,6 +49,18 @@ template<typename CharT = char>
 using BadResultAccess = nonstd::bad_expected_access<BasicErrorInfo<CharT>>;
 
 /*!
+ * \brief Where the output of one `{% generation %}` block lies (\ref RenderOptions::generationSpans)
+ *
+ * The half-open range `[start, end)` of the block's text in the output, in the units of the
+ * output: bytes of UTF-8 for a narrow template, `wchar_t` units for a wide one.
+ */
+struct GenerationSpan
+{
+    std::size_t start = 0;
+    std::size_t end = 0;
+};
+
+/*!
  * \brief What a render takes besides its params (\ref BasicTemplate::RenderTo)
  *
  * ```cpp
@@ -74,6 +87,33 @@ struct RenderOptions
      * its own (a callable rendering another template) is polled with it too.
      */
     std::function<void()> poll;
+    /*!
+     * Receives where the `{% generation %}` blocks of the chat-template preset
+     * (\ref ConfigureForChatTemplates) put their text: the assistant token mask of transformers'
+     * `apply_chat_template(return_assistant_tokens_mask=True)`. Null, the default, records nothing
+     * and costs nothing.
+     *
+     * - The vector is the host's and must live through the call; it is not shared with another
+     *   render running at the same time (a callable's render included). The render clears it first.
+     * - Offsets are in units of the output (UTF-8 bytes for a narrow template, `wchar_t` units for a
+     *   wide one) counted from the first character this render writes: a render that appends to a
+     *   string already holding text counts from the end of that text, so add its size.
+     * - The order is the order in which the blocks end, so a nested block comes before the block that
+     *   holds it, as in transformers. A block whose body is empty gives an empty span.
+     * - A render that fails leaves the vector empty, as it leaves a string target without the output.
+     * - As in transformers, a block whose text a buffered part keeps (a `{% set %}` or `{% filter %}`
+     *   block, a macro's result used in an expression) is placed where that part began, so its span
+     *   need not lie inside the output: check it against the output's size before slicing.
+     * - Only `{% generation %}` records spans. A template without one leaves the vector empty; a
+     *   host that wants the pre-check of `apply_chat_template` (an error when the template has no
+     *   generation tag) can match the template source with transformers' regex
+     *   `\{\%-?\s*generation\s*-?\%\}`.
+     * - transformers counts characters of a Python str (code points). Convert the byte offsets of a
+     *   narrow render to code points (or to tokenizer offsets) before comparing them with its mask.
+     * - Each recorded span counts against Settings::Limits::maxSequenceSize: a render with more
+     *   blocks than the limit fails with ErrorCode::ResourceLimitExceeded.
+     */
+    std::vector<GenerationSpan>* generationSpans = nullptr;
 };
 
 /*!

@@ -2,7 +2,8 @@
  "template": "IFM-K2-Horizon.jinja",
  "renders": {
   "single": {
-   "output": "<|bos|><|ifm|im_start|>user\nHello!<|ifm|im_end|><|ifm|im_start|>assistant\n<ifm|think>\n"
+   "output": "<|bos|><|ifm|im_start|>user\nHello!<|ifm|im_end|><|ifm|im_start|>assistant\n<ifm|think>\n",
+   "generation": []
   },
   "system": {
    "error": "TemplateError",
@@ -21,19 +22,28 @@
    "message": "Assistant message is missing a thinking field. Provide one of: think, reasoning, reasoning_content, think_fast, think_faster."
   },
   "reasoning": {
-   "output": "<|bos|><|ifm|im_start|>user\nIs 17 prime?<|ifm|im_end|><|ifm|im_start|>assistant\n<ifm|think>\n17 has no divisors other than 1 and itself.</ifm|think>Yes, 17 is prime.<|ifm|im_end|><|ifm|im_start|>user\nAnd 21?<|ifm|im_end|><|ifm|im_start|>assistant\n<ifm|think>\n"
+   "output": "<|bos|><|ifm|im_start|>user\nIs 17 prime?<|ifm|im_end|><|ifm|im_start|>assistant\n<ifm|think>\n17 has no divisors other than 1 and itself.</ifm|think>Yes, 17 is prime.<|ifm|im_end|><|ifm|im_start|>user\nAnd 21?<|ifm|im_end|><|ifm|im_start|>assistant\n<ifm|think>\n",
+   "generation": [
+    [
+     80,
+     178
+    ]
+   ]
   },
   "no_thinking": {
-   "output": "<|bos|><|ifm|im_start|>user\nQuick: capital of France?<|ifm|im_end|><|ifm|im_start|>assistant\n<ifm|think>\n"
+   "output": "<|bos|><|ifm|im_start|>user\nQuick: capital of France?<|ifm|im_end|><|ifm|im_start|>assistant\n<ifm|think>\n",
+   "generation": []
   },
   "parts": {
    "error": "TypeError"
   },
   "documents": {
-   "output": "<|bos|><|ifm|im_start|>user\nWho wrote it?<|ifm|im_end|><|ifm|im_start|>assistant\n<ifm|think>\n"
+   "output": "<|bos|><|ifm|im_start|>user\nWho wrote it?<|ifm|im_end|><|ifm|im_start|>assistant\n<ifm|think>\n",
+   "generation": []
   },
   "no_alternation": {
-   "output": "<|bos|><|ifm|im_start|>user\nFirst<|ifm|im_end|><|ifm|im_start|>user\nSecond<|ifm|im_end|><|ifm|im_start|>assistant\n<ifm|think>\n"
+   "output": "<|bos|><|ifm|im_start|>user\nFirst<|ifm|im_end|><|ifm|im_start|>user\nSecond<|ifm|im_end|><|ifm|im_start|>assistant\n<ifm|think>\n",
+   "generation": []
   }
  }
 }
