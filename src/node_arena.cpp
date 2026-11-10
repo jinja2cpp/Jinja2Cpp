@@ -1,5 +1,6 @@
 #include "node_arena.h"
 
+#include "contracts.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "renderer.h"
@@ -8,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -106,8 +108,9 @@ constexpr auto OpsTable = AllNodeClasses::MakeOpsTable();
 
 const NodeOps& OpsOf(NodeKind kind)
 {
-    // Only a node the arena made is relocated or destroyed, and Make records its kind
-    JINJA2CPP_ASSERT(kind != NodeKind::None);
+    // Only a node the arena made is relocated or destroyed, and Make records its kind. A plain
+    // assert: the destructors' DestroyNodes, which are noexcept, call this (contracts.h)
+    assert(kind != NodeKind::None);
     return OpsTable[static_cast<std::size_t>(kind)];
 }
 

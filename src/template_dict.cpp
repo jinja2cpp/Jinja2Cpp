@@ -1,5 +1,6 @@
 #include "template_dict.h"
 
+#include "contracts.h"
 #include "engine_errors.h"
 #include "host_object.h"
 #include "internal_value.h"

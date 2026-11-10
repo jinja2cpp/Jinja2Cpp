@@ -1,6 +1,7 @@
 #include "contracts.h"
 
 #include <string>
+#include <string_view>
 
 namespace jinja2
 {
@@ -10,7 +11,11 @@ namespace detail
 {
 void ContractFailed(const char* kind, const char* condition, const char* file, int line)
 {
-    throw ContractViolation(std::string("jinja2cpp: ") + kind + " violated: " + condition + " (" + file + ":" + std::to_string(line) + ")");
+    // The file's name without the build machine's directories: the message reaches whoever renders
+    const std::string_view path(file);
+    const auto slash = path.find_last_of("/\\");
+    const auto name = slash == std::string_view::npos ? path : path.substr(slash + 1);
+    throw ContractViolation(std::string("jinja2cpp: ") + kind + " violated: " + condition + " (" + std::string(name) + ":" + std::to_string(line) + ")");
 }
 } // namespace detail
 } // namespace v2

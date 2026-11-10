@@ -20,3 +20,8 @@ Measure the Release build stays unchanged (`bench/count.py`: the members must no
 
 **Done when** a RelWithDebInfo FULL build has the members and runs the checks, and a Release
 ON build's instruction counts are unchanged.
+
+**Also.** Fuzz and sanitizer builds now run `JINJA2CPP_ASSERT` at FULL, and a violation becomes an
+`UnexpectedException` error Result instead of an abort, which a fuzz target accepts as an ordinary
+error. The targets in `fuzz/` should treat an error whose text carries " violated: " as a finding
+(abort there), so that an invariant failure the fuzzer reaches is reported (0265 verifier).

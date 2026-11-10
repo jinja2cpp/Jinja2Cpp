@@ -9,7 +9,6 @@
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
-#include <stdexcept>
 #include <string>
 
 // src/contracts.h (docs/tasks/0265): a violated check throws, and the boundary reports it as an error

@@ -1,5 +1,6 @@
 #include "statements.h"
 
+#include "contracts.h"
 #include "cycle_collector.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"

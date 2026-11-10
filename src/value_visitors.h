@@ -177,7 +177,7 @@ private:
     template<size_t... indices, typename... Args>
     [[nodiscard]] auto Call(std::index_sequence<indices...> /*sequence*/, const Args&... args) const
     {
-        JINJA2CPP_ASSERT(m_visitor != nullptr);
+        JINJA2CPP_ASSERT(m_visitor);
         return [this](const auto&... unwrapped) { return (*m_visitor)(unwrapped...); }(UnwrapRecursive(args, m_owners[indices])...);
     }
 };

@@ -11,8 +11,7 @@
 //
 // CMake JINJA2CPP_CONTRACT_CHECKS picks the level: OFF checks nothing, ON (the Release
 // default) checks EXPECTS, FULL (Debug, sanitizer and fuzz builds) checks both. An unchecked
-// condition is not evaluated but still compiled, so what it names stays "used". It sits in
-// an unevaluated operand, which in C++17 cannot hold a lambda: name one before the check.
+// condition is not evaluated but still compiled, so what it names stays "used".
 //
 // In a C++26 build whose compiler has P2900 contracts, and with the opt-in CMake option
 // JINJA2CPP_LANGUAGE_CONTRACTS, the macros expand to contract_assert and contracts.cpp installs
@@ -52,7 +51,7 @@ public:
 };
 
 // The cold path of a failed check: out of line, so a check costs one compare and a branch
-JINJA2CPP_EXPORT [[noreturn]] void ContractFailed(const char* kind, const char* condition, const char* file, int line);
+[[noreturn]] JINJA2CPP_EXPORT void ContractFailed(const char* kind, const char* condition, const char* file, int line);
 } // namespace detail
 } // namespace v2
 } // namespace jinja2
@@ -65,23 +64,15 @@ JINJA2CPP_EXPORT [[noreturn]] void ContractFailed(const char* kind, const char* 
         { \
             contract_assert(cond); \
         } \
-        else \
-        { \
-            (void)sizeof(!(cond)); \
-        } \
     } while (false)
 #else
+// Unchecked, the condition sits in the discarded branch of the if constexpr: compiled, never run
 #define JINJA2CPP_CONTRACT_CHECK_(level, kind, cond) \
     do \
     { \
         if constexpr (::jinja2::detail::ContractChecks >= (level)) \
         { \
-            if (!(cond)) \
-                ::jinja2::detail::ContractFailed(kind, #cond, __FILE__, __LINE__); \
-        } \
-        else \
-        { \
-            (void)sizeof(!(cond)); \
+            static_cast<bool>(cond) ? static_cast<void>(0) : ::jinja2::detail::ContractFailed(kind, #cond, __FILE__, __LINE__); \
         } \
     } while (false)
 #endif
