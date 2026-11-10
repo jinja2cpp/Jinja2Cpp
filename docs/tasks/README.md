@@ -485,7 +485,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0415](0415-oldstyle-gettext-in-the-engine.md) | Oldstyle gettext (Jinja2's default) in the engine | parity | low | open |
 | [0416](0416-python-context-sees-only-top-level-names.md) | `pass_context`'s Context sees loop and `with` variables, Jinja2's does not | parity | low | open |
 | [0417](0417-python-i18n-before-install-is-lenient.md) | `_()` and `{% trans %}` work before translations are installed | parity | low | open |
-| [0418](0418-module-value-copy-recursion.md) | A deeply nested argument to a module macro overflows the stack in the engine | robustness | medium | open |
+| [0418](0418-module-value-copy-recursion.md) | A deeply nested argument to a module macro overflows the stack in the engine | robustness | medium | done |
 | [0419](0419-print-statement.md) | `{% print expr %}` is a parse error in the engine | parity | low | done |
 | [0420](0420-range-and-engine-object-leftovers.md) | Range and engine-object leftovers of 0401 | parity | low | open |
 | [0421](0421-host-tuple-inbound.md) | A tuple a host returns stays a tuple | api | low | open |
@@ -511,9 +511,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0441](0441-host-sequence-own-iteration.md) | A host sequence with its own iteration is iterated by index | api | medium | open |
 | [0442](0442-python-sandbox-stub-and-cycler-repr.md) | Python module: one sandbox stub type per class, and the repr of a cycler or joiner | perf | low | open |
 | [0443](0443-str-format-map.md) | str.format_map is missing from the engine's string methods | parity | low | open |
-| [0444](0444-fuzz-loop-frame-pool-leak.md) | A loop frame the frame pool hands out leaks under the prompt_escape fuzzer | robustness | medium | open |
+| [0444](0444-fuzz-loop-frame-pool-leak.md) | A loop frame the frame pool hands out leaks under the prompt_escape fuzzer | robustness | medium | done |
 | [0445](0445-subscript-tuple-of-slices.md) | A subscript of a literal by a tuple of slices is a parse error in the engine | parity | low | open |
 | [0446](0446-nfkc-template-names.md) | Names a template sets are not NFKC-normalised | parity | low | open |
 | [0447](0447-chained-if-unicode-space.md) | Chained else-less conditionals and Unicode spaces inside tags | parity | low | open |
 | [0448](0448-generation-block-hides-caller.md) | `caller()` inside a `{% generation %}` block of a macro must be undefined | parity | low | open |
+| [0449](0449-host-value-copy-destroy-recursion.md) | A host Value nested deeper than the stack allows cannot be copied or destroyed | robustness | low | open |
+| [0450](0450-module-call-collector-quadratic.md) | A module whose calls grow a module-level container walks all of it on every call | robustness | medium | open |
 | [0451](0451-python-module-trans-percent-and-range.md) | Python module: `{% trans %}100%{% endtrans %}` prints `100%%`; `range()` prints nothing | api | low | open |
