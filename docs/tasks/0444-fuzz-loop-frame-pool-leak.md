@@ -5,6 +5,7 @@ area: robustness
 depends: []
 touches: [src/value_methods.cpp]
 shares: [test/expressions_test.cpp]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/822
 ---
 # A loop frame the frame pool hands out leaks under the prompt_escape fuzzer
 

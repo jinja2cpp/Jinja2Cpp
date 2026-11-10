@@ -5,6 +5,7 @@ area: robustness
 depends: [0284]
 touches: [src/template_module.cpp, test/template_module_test.cpp]
 shares: [test/template_module_test.cpp, python/tests/test_module.py]
+pr: https://github.com/jinja2cpp/Jinja2Cpp/pull/822
 ---
 # A deeply nested argument to a module macro overflows the stack in the engine
 
