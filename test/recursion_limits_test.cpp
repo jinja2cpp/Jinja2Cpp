@@ -425,6 +425,8 @@ TEST_F(RecursionLimitsTest, GrowthOperationsCheckSizeFirst)
         "{% set ns = namespace(l=[1]) %}{% for i in range(40) %}{% set ns.l = ns.l + ns.l %}{% endfor %}",
         "{% set l = [1] %}{% for i in range(40) %}{% set _ = l.extend(l) %}{% endfor %}",
         "{% set l = [1] %}{% for i in range(2000) %}{% set _ = l.insert(0, 1) %}{% endfor %}",
+        "{% set l = [] %}{% for i in range(2000) %}{% set _ = l.append(i) %}{% endfor %}",
+        "{% set ns = namespace(s=1) %}{% for i in range(40) %}{% set ns.s = 1 ~ ns.s ~ ns.s %}{% endfor %}",
         "{{ [1] * 2**40 }}",
         "{{ [1] * 2000 }}",
         "{{ [1] * 600 + [2] * 600 }}",

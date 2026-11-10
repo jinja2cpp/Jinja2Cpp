@@ -3,8 +3,8 @@ status: open
 priority: high
 area: robustness
 depends: [0262]
-touches: [src/value_methods.cpp, src/value_visitors.h, src/python_format.cpp, src/global_functions.cpp, src/string_converter_filter.cpp, test/recursion_limits_test.cpp]
-shares: [src/filters.cpp, src/internal_value.h]
+touches: [src/value_methods.cpp, src/value_visitors.h, src/python_format.cpp, src/expression_evaluator.cpp, src/filters.cpp, src/global_functions.cpp, src/string_converter_filter.cpp, test/recursion_limits_test.cpp]
+shares: [src/internal_value.h]
 ---
 # Every growth operation checks its size before allocating
 
@@ -48,3 +48,10 @@ filter (`filters.cpp`) and `str.join`/`str.replace`/`str.format` (`value_methods
 A `%` width (literal or `*`) is no longer clamped at 2^20, which padded `'%2000000s' % 'x'` short
 of Python's 2000000 characters: widths pad as Python's do, checked against the cap before the
 padding is built. `str.expandtabs` is missing altogether: filed as 0452.
+
+Stricter than Python by design, past the `maxSequenceSize` cap (2^26): a lazy repeated list
+(`([1] * 100000000)|length`), strings of 64M to 128M built by `+`, `~`, `replace`, `join` or `%`,
+and str-method widths between 2^26 and 2^28 (the old separate cap) now fail with
+`ResourceLimitExceeded` where Python renders. A `%` width past the cap fails at its own directive,
+so `'%99999999s %d' % ('a', 'x')` reports the size where Python's TypeError on the later `%d` comes
+first; both reject. Below the cap nothing changes.

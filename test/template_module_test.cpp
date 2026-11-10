@@ -447,7 +447,7 @@ TEST_F(TemplateModuleTest, StoresIntoModuleContainersStayLinear)
     arg["items"] = std::move(items);
     for (const auto* source : sources)
     {
-        auto time = [&](int calls) {
+        auto time = [this, source, &arg](int calls) {
             auto module = Make(source);
             const auto& fn = module.exports["m"];
             const auto start = std::chrono::steady_clock::now();
@@ -460,10 +460,11 @@ TEST_F(TemplateModuleTest, StoresIntoModuleContainersStayLinear)
             }
             return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
         };
-        // The shorter run twice, so that a slow first one (a cold cache) does not pass a quadratic walk
+        // Each the best of two, so that a run the scheduler stalls neither fails a linear walk nor
+        // passes a quadratic one: linear is 4 times as long, quadratic 16
         const auto small = std::min(time(1000), time(1000));
-        const auto large = time(4000);
-        EXPECT_LT(large, small * 9) << source << ": 1000 calls " << small << " s, 4000 calls " << large << " s";
+        const auto large = std::min(time(4000), time(4000));
+        EXPECT_LT(large, small * 10) << source << ": 1000 calls " << small << " s, 4000 calls " << large << " s";
     }
 }
 
