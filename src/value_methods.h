@@ -31,8 +31,10 @@ struct MethodInfo
 // Whether any value kind has a method or a data attribute (0374) of this name; the parser asks once per `x.name`, so a
 // name that is no method costs nothing at render time
 bool IsMethodName(std::string_view name);
-// x.real, x.imag, x.numerator or x.denominator of an int, bool or float, or nothing
-std::optional<InternalValue> GetNumberDataAttr(const InternalValue& self, std::string_view name);
+// x.real, x.imag, x.numerator or x.denominator of an int, bool or float, or nothing. In a sandbox the render's policy
+// judges the attribute as any other (is_safe_attribute): its replacement, the unsafe undefined of a refused one, is the
+// answer; nullptr `context` asks no policy
+std::optional<InternalValue> GetNumberDataAttr(const InternalValue& self, std::string_view name, const RenderContext* context);
 // Whether a dict has a method of this name (items, get, ...), for a parser that tells
 // map attributes apart from the methods of other kinds (title of a string)
 bool IsDictMethodName(std::string_view name);

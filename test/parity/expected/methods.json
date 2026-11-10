@@ -4174,6 +4174,77 @@
    "output": "1|1|-3|2.5|0.0||0.0|2.0|12345678901234567890123|True|5|False"
   },
   {
+   "id": "methods.number_data_attributes_not_format_items",
+   "template": "{{ '{0[real]}'.format(5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'int' object is not subscriptable"
+   }
+  },
+  {
+   "id": "methods.number_data_attributes_not_format_items_float",
+   "template": "{{ '{0[imag]}'.format(1.5) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "render",
+    "type": "TypeError",
+    "message": "'float' object is not subscriptable"
+   }
+  },
+  {
+   "id": "methods.number_data_attributes_by_item",
+   "template": "{{ (3)['real'] }}|{{ 2.5['imag'] }}|{{ (4)['numerator'] }}|{{ true['denominator'] }}|{{ l[0]['real'] }}|{{ (3)['nope'] is defined }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "3|0.0|4|1|3|False"
+  },
+  {
    "id": "methods.number_data_attributes_by_path",
    "template": "{{ [7, 2.5]|map(attribute='real')|join(',') }}|{{ [1, 2]|sum(attribute='denominator') }}|{{ [3, 1]|sort(attribute='numerator')|join }}|{{ [0, 1]|selectattr('real')|list }}",
    "context": {
