@@ -726,7 +726,7 @@ TEST_F(TemplateModuleTest, DeepArgumentFails)
         jinja2::ValuesMap params;
         params.emplace("p", DeepValue(DeepArgument, asMap));
         auto failed = tpl.MakeModule(params);
-        kept.values.push_back(std::move(params));
+        kept.values.emplace_back(std::move(params));
         ASSERT_FALSE(failed);
         EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, failed.error().GetCode()) << failed.error().ToString();
 
