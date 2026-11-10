@@ -1555,6 +1555,12 @@ struct StrOps
         {
             Raise("'" + TypeName(value) + "' object is not subscriptable");
         }
+        else if (const auto kind = value.Kind(); !context.GetSandboxPolicy() && (kind == ValueKind::Int || kind == ValueKind::BigInt || kind == ValueKind::Double || kind == ValueKind::Bool))
+        {
+            // Python's str.format reads obj[key], which a number has not; only the sandbox's formatter goes through
+            // getitem, which falls back to the number's data attributes (GetItem)
+            Raise("'" + TypeName(value) + "' object is not subscriptable");
+        }
         else
         {
             result = GetItem(value, key, &context);

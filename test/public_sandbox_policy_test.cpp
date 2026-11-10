@@ -159,8 +159,6 @@ TEST(PublicSandboxPolicyTest, EveryPathToAMethodAsksThePolicy)
     EXPECT_EQ("x|False", RenderOrError(env, "{{ 'X'.lower() }}|{{ 'x'.absent is defined }}"));
 }
 
-// A template object reaches the policy with its class: `loop` and a namespace as snapshots, a macro and a global
-// function as empty maps of class "Macro" and "function" (0357 S3)
 namespace
 {
 // Refuses every attribute, as a SandboxedEnvironment whose is_safe_attribute returns False
@@ -189,6 +187,7 @@ TEST(PublicSandboxPolicyTest, NumberDataAttributesAskThePolicy)
         "{{ f.imag is defined }}",
         "{{ b.numerator is defined }}",
         "{{ n.denominator is defined }}",
+        "{{ n['real'] is defined }}",
         "{{ ([n]|map(attribute='real')|first) is defined }}",
         "{{ ([{'a': n}]|map(attribute='a.real')|first) is defined }}",
     };
@@ -207,6 +206,8 @@ TEST(PublicSandboxPolicyTest, NumberDataAttributesAskThePolicy)
     EXPECT_EQ("5", RenderOrError(plain, "{{ [n]|sum(attribute='real') }}", nullptr, params));
 }
 
+// A template object reaches the policy with its class: `loop` and a namespace as snapshots, a macro and a global
+// function as empty maps of class "Macro" and "function" (0357 S3)
 TEST(PublicSandboxPolicyTest, TemplateObjectsReachThePolicyWithTheirClass)
 {
     auto policy = std::make_shared<const ToyPolicy>();
