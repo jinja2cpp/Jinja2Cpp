@@ -95,9 +95,18 @@ owner threads always ask for it explicitly:
   review). Scope: changes in `src/`, `include/`, `test/`, `cmake/`, `thirdparty/`,
   `CMakeLists.txt`, `.github/workflows/` or the agent instructions (AGENTS.md,
   CLAUDE.md, REVIEW.md, `.claude/`). Skip other docs-only and task-only PRs, bench
-  re-measures, mechanical clang-tidy batches and merge-steward train PRs. Add
-  `@codex security review` when the diff touches the lexer, parsers, evaluator,
-  loaders or escaping.
+  re-measures, mechanical clang-tidy batches and merge-steward train PRs.
+- When the diff touches the lexer, parsers, evaluator, loaders or escaping, also ask
+  for `@codex security review`, in a comment of its own. It is a separate Codex
+  product that must be enabled in the Codex settings (Review security
+  vulnerabilities). When it is not enabled the command is accepted but runs another
+  plain code review: from #683 to #815 no request started one, on drafts and on
+  ready PRs alike (#755). So check the hidden `codex-review-state` line in the
+  "Codex Review Summary" comment: only `security_review.status: completed` counts
+  as a security review. A receipt titled "Codex Review" is a code review. If the
+  status is still null after about 20 minutes, write "Codex security review: did
+  not run" in the PR body rather than counting the code review, and tell Ruslan
+  when the task's definition of done requires one.
 - Re-request only after a substantive change (new logic, not nit fixes), at most
   twice per PR.
 - Triage: P0/P1 are blocking like a red-circle finding (fix, or reply with the traced
