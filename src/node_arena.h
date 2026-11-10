@@ -107,6 +107,7 @@ enum class NodeKind : std::uint8_t
     TransStmt,
     LoopControlStmt,
     WithStmt,
+    GenerationStmt,
     FilterStmt,
     AutoescapeStmt,
     BindUndefinedStmt,

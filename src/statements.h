@@ -981,6 +981,22 @@ private:
     NodeRef<IRendererBase> m_mainBody;
 };
 
+// transformers' `{% generation %}` (docs/tasks/0377): renders its body in a scope of its own as `{% with %}` does and,
+// when the render asks (RenderOptions::generationSpans), records where the body's text lands in the output
+class GenerationStatement final : public Statement
+{
+public:
+    static constexpr NodeKind Kind = NodeKind::GenerationStmt;
+    void VisitRefs(detail::RefChecker& refs) const { refs(m_mainBody); }
+
+    void SetMainBody(NodeRef<IRendererBase> renderer) { m_mainBody = renderer; }
+
+    void Render(OutStream& os, RenderContext& values) override;
+
+private:
+    NodeRef<IRendererBase> m_mainBody;
+};
+
 class FilterStatement final : public Statement
 {
 public:

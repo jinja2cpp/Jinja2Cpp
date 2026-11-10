@@ -446,7 +446,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0374](0374-number-data-attributes.md) | int and float data attributes: real, imag, numerator, denominator | parity | low | done |
 | [0375](0375-closure-capture-free-variables.md) | A kept closure copies only the names its body reads | perf | low | done |
 | [0376](0376-same-string-getter-round-trip.md) | GetAsSameString moves its string through the PLT | perf | low | done |
-| [0377](0377-chat-template-assistant-mask-and-security-error.md) | Chat templates: the assistant token mask and the sandbox's SecurityError | api | medium | open |
+| [0377](0377-chat-template-assistant-mask-and-security-error.md) | Chat templates: the assistant token mask and the sandbox's SecurityError | api | medium | done |
 | [0380](0380-markup-escape-copy-assignment.md) | MarkupEscape calls InternalValue's copy assignment out of line | perf | low | open |
 | [0381](0381-host-object-operators.md) | Host objects: arithmetic and ordering operators | parity | low | open |
 | [0382](0382-urlencode-of-loop.md) | `loop|urlencode` iterates the rest of the loop | parity | low | done |
@@ -512,3 +512,4 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0442](0442-python-sandbox-stub-and-cycler-repr.md) | Python module: one sandbox stub type per class, and the repr of a cycler or joiner | perf | low | open |
 | [0443](0443-str-format-map.md) | str.format_map is missing from the engine's string methods | parity | low | open |
 | [0444](0444-fuzz-loop-frame-pool-leak.md) | A loop frame the frame pool hands out leaks under the prompt_escape fuzzer | robustness | medium | open |
+| [0448](0448-generation-block-hides-caller.md) | `caller()` inside a `{% generation %}` block of a macro must be undefined | parity | low | open |

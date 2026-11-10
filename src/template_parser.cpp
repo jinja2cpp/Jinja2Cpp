@@ -1734,7 +1734,8 @@ StatementsParser::ParseResult StatementsParser::ParseEndWith(LexScanner& /*lexer
 
 // transformers' `{% generation %}...{% endgeneration %}` renders its body, which is a call block's in transformers:
 // a scope of its own, as `{% with %}` opens, where `break` and `continue` do not reach an enclosing loop. transformers
-// records where the body's output lands only for return_assistant_tokens_mask, which Jinja2C++ does not offer
+// records where the body's output lands for return_assistant_tokens_mask: GenerationStatement does so when the render
+// asks (RenderOptions::generationSpans, docs/tasks/0377)
 StatementsParser::ParseResult StatementsParser::ParseGeneration(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)
 {
     auto nextTok = lexer.PeekNextToken();
@@ -1744,7 +1745,7 @@ StatementsParser::ParseResult StatementsParser::ParseGeneration(LexScanner& lexe
     }
     StatementInfo statementInfo = StatementInfo::Create(StatementInfo::GenerationStatement, stmtTok, m_tagOffset);
     statementInfo.frame = m_names.PushWith(m_names.Current());
-    statementInfo.renderer = m_nodes.Make<WithStatement>();
+    statementInfo.renderer = m_nodes.Make<GenerationStatement>();
     Push(statementsInfo, std::move(statementInfo));
     return ParseResult();
 }
@@ -1756,7 +1757,7 @@ StatementsParser::ParseResult StatementsParser::ParseEndGeneration(LexScanner& /
         return MakeParseError(ErrorCode::UnexpectedStatement, stmtTok);
     }
     auto info = PopStatement(statementsInfo);
-    m_nodes.Get<WithStatement>(info.renderer).SetMainBody(TakeBody(info));
+    m_nodes.Get<GenerationStatement>(info.renderer).SetMainBody(TakeBody(info));
     m_bodies.Add(info.renderer, info.tagOffset);
     return ParseResult();
 }

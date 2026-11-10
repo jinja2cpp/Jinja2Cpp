@@ -3,6 +3,7 @@
 #include "cycle_collector.h"
 #include "engine_errors.h"
 #include "expression_evaluator.h"
+#include "generation_tracker.h"
 #include "generic_adapters.h"
 #include "host_object.h"
 #include "internal_value.h"
@@ -58,6 +59,13 @@ void ForStatement::Render(OutStream& os, RenderContext& values)
 {
     InternalValue loopVal = values.Nodes()[m_value].Evaluate(values);
 
+    if (m_isRecursive)
+    {
+        // Jinja2 renders a recursive loop into a buffer: loop(x) is a call of a macro
+        const detail::GenerationFreeze freeze(values);
+        RenderLoop(loopVal, os, values, 0);
+        return;
+    }
     RenderLoop(loopVal, os, values, 0);
 }
 
@@ -3801,6 +3809,8 @@ void MacroCallStatement::Render(OutStream& os, RenderContext& values)
         WriteOutput(os, result, values);
         return;
     }
+    // A call block's caller runs into a buffer in Jinja2
+    const detail::GenerationFreeze freeze(values);
     callable->GetStatementCallable()(callParams, os, values);
 }
 
@@ -3821,6 +3831,34 @@ void WithStatement::Render(OutStream& os, RenderContext& values)
     }
 
     values.Nodes()[m_mainBody].Render(os, innerValues);
+
+    innerValues.CaptureClosuresAtSoftEnd();
+    innerValues.ExitScope();
+    values.SetLoopControl(innerValues.GetLoopControl());
+}
+
+void GenerationStatement::Render(OutStream& os, RenderContext& values)
+{
+    auto innerValues = values.Clone(true);
+    static_cast<void>(innerValues.EnterScope());
+
+    auto* tracker = values.GetRendererCallback()->GetGenerationTracker();
+    if (!tracker)
+    {
+        values.Nodes()[m_mainBody].Render(os, innerValues);
+    }
+    else
+    {
+        // A nested block is frozen at the start of the outer one's body: transformers measures what the generator has
+        // yielded, and the outer block yields nothing until it ends
+        const size_t start = tracker->StartPos();
+        const size_t before = os.Written();
+        {
+            const detail::GenerationFreeze freeze(values);
+            values.Nodes()[m_mainBody].Render(os, innerValues);
+        }
+        tracker->Push(start, start + (os.Written() - before));
+    }
 
     innerValues.CaptureClosuresAtSoftEnd();
     innerValues.ExitScope();

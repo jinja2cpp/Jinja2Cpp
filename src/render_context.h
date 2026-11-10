@@ -62,6 +62,10 @@ struct BlocksStack;
 class TemplateRenderer;
 class ImportedModule;
 class RenderContext;
+namespace detail
+{
+struct GenerationTracker;
+}
 
 // One template's code running, in an inheritance chain: Jinja2's root render function
 struct TemplateFrame
@@ -159,6 +163,10 @@ struct IRendererCallback : IComparable
     // WriteEscaped), so that it costs a load, not a virtual call (docs/tasks/0358)
     [[nodiscard]] const detail::PromptEscaperImpl* GetPromptEscaper() const noexcept { return m_promptEscaper; }
     [[nodiscard]] bool IsPromptMode() const noexcept { return m_promptEscaper != nullptr; }
+    // Where the render records its `{% generation %}` blocks (RenderOptions::generationSpans), null for none. A field,
+    // as the sandbox policy is: GenerationFreeze asks it where a macro or a call block runs (docs/tasks/0377)
+    [[nodiscard]] detail::GenerationTracker* GetGenerationTracker() const noexcept { return m_generationTracker; }
+    void SetGenerationTracker(detail::GenerationTracker* tracker) noexcept { m_generationTracker = tracker; }
 
 protected:
     // Called once, when the template's callback is made
@@ -168,6 +176,7 @@ protected:
 private:
     const detail::PromptEscaperImpl* m_promptEscaper = nullptr;
     const IEngineSandboxPolicy* m_sandboxPolicy = nullptr;
+    detail::GenerationTracker* m_generationTracker = nullptr;
 };
 
 // The slots where names were last found (docs/tasks/0100 idea 7). An entry holds the slot
