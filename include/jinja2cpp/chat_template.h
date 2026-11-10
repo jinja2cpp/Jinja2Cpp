@@ -38,10 +38,11 @@ struct ChatTemplateOptions
  *   `limits.maxRange` at most 100000 (the sandbox's `MAX_RANGE`); the other settings stay as they are;
  * - transformers' `tojson(x, ensure_ascii=False, indent=None, separators=None, sort_keys=False)` in place of Jinja2's:
  *   keys in insertion order, no HTML escaping, a plain string;
- * - the `{% generation %}...{% endgeneration %}` tag, which renders its body (Jinja2C++ does not compute the
- *   assistant token mask);
+ * - the `{% generation %}...{% endgeneration %}` tag, which renders its body; a render records where each body lands
+ *   in the output (the assistant token mask) when it is given \ref RenderOptions::generationSpans;
  * - read-only lists and dicts, as in `ImmutableSandboxedEnvironment`: `append`, `pop`, `update` and the other methods
- *   that change their receiver are unsafe attributes, undefined whose use fails with the sandbox's message;
+ *   that change their receiver are unsafe attributes: calling one fails with ErrorCode::SecurityError and the
+ *   sandbox's message;
  * - the globals `raise_exception(message)`, which fails the render with ErrorCode::TemplateRuntimeError and the
  *   message (`str(message)`), and `strftime_now(format)`, the time of `options.now` formatted as CPython on Linux
  *   formats it in the "C" locale: the C++ `std::put_time` directives, `%f`, empty `%z`/`%Z` and glibc's `-` flag

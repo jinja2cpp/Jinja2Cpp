@@ -5,6 +5,7 @@
 #include "dialect.h"
 #include "error_boundary.h"
 #include "expression_evaluator.h"
+#include "generation_tracker.h"
 #include "internal_value.h"
 #include "json_reader.h"
 #include "load_settings.h"
@@ -396,6 +397,8 @@ public:
         const std::shared_ptr<const ValuesMap>* hostGlobals = nullptr;
         // The host's poll (detail::t_hostPoll) for the render, or null to keep the thread's
         const std::function<void()>* poll = nullptr;
+        // Where the render records its generation blocks (RenderOptions::generationSpans), or null
+        std::vector<GenerationSpan>* generationSpans = nullptr;
     };
 
     // The same with the public options: their globals, lent for the render and kept by any value a
@@ -532,6 +535,19 @@ public:
             context.SetNodes(Nodes());
             const auto output = BeginOutput(os);
             OutStream outStream(os);
+            // On the render's stack, so that it outlives every use of the callback's pointer to it
+            std::conditional_t<hasHooks, detail::GenerationTracker, std::monostate> tracker;
+            if constexpr (hasHooks)
+            {
+                if (hooks->generationSpans)
+                {
+                    hooks->generationSpans->clear();
+                    tracker.root = &outStream;
+                    tracker.base = output.start;
+                    tracker.spans = hooks->generationSpans;
+                    callback.SetGenerationTracker(&tracker);
+                }
+            }
             if (m_settings->hasRenderLimits)
             {
                 LimitOutput(os, output, outStream);

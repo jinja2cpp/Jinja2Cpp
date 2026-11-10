@@ -2,6 +2,7 @@
 
 #include "engine_errors.h"
 #include "filters.h"
+#include "generation_tracker.h"
 #include "host_object.h"
 #include "internal_value.h"
 #include "lookup_result.h"
@@ -1817,6 +1818,8 @@ void CallExpression::RenderCallable(OutStream& stream, RenderContext& values, co
     }
     else
     {
+        // Jinja2 renders a macro into a buffer that the call then yields
+        const detail::GenerationFreeze freeze(values);
         callable.GetStatementCallable()(callParams, stream, values);
     }
 }

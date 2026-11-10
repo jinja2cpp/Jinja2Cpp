@@ -25,6 +25,7 @@ std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::RenderWithOptions(Targ
     {
         hooks.poll = &options.poll;
     }
+    hooks.generationSpans = options.generationSpans;
     return RenderCore<true>(os, params, &hooks);
 }
 

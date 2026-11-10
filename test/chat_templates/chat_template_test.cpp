@@ -16,6 +16,7 @@
 #include <nlohmann/json.hpp>
 
 #include <cctype>
+#include <cstddef>
 #include <chrono>
 #include <cstdlib>
 #include <ctime>
@@ -184,7 +185,34 @@ struct Result
 {
     bool ok = false;
     std::string text; // output, or error description
+    // The code-point spans of the template's generation blocks (RenderOptions::generationSpans, docs/tasks/0377)
+    std::vector<std::pair<size_t, size_t>> generation;
 };
+
+// An offset in the units of a narrow (UTF-8 bytes) or wide (wchar_t, UTF-16 units where it has two bytes) output
+// as the code points transformers counts
+template<typename CharT>
+size_t CodePoints(const std::basic_string<CharT>& out, size_t units)
+{
+    size_t count = 0;
+    for (size_t i = 0; i < units; ++i)
+    {
+        const auto c = static_cast<unsigned long>(static_cast<std::make_unsigned_t<CharT>>(out[i]));
+        if constexpr (sizeof(CharT) == 1)
+        {
+            count += (c & 0xC0UL) != 0x80UL;
+        }
+        else if constexpr (sizeof(CharT) == 2)
+        {
+            count += (c & 0xFC00UL) != 0xDC00UL;
+        }
+        else
+        {
+            ++count;
+        }
+    }
+    return count;
+}
 
 template<typename CharT>
 Result Render(const ChatCase& c)
@@ -200,7 +228,7 @@ Result Render(const ChatCase& c)
         auto value = jinja2::ToValue(it.value());
         if (!value)
         {
-            return { false, "context: " + value.error().ToString() };
+            return { false, "context: " + value.error().ToString(), {} };
         }
         params[it.key()] = std::move(*value);
     }
@@ -221,18 +249,27 @@ Result Render(const ChatCase& c)
         }();
         if (!load)
         {
-            return { false, jinja2::ToString(load.error().ToString()) };
+            return { false, jinja2::ToString(load.error().ToString()), {} };
         }
-        auto rendered = tpl.RenderAsString(params);
-        if (!rendered)
+        std::vector<jinja2::GenerationSpan> spans;
+        jinja2::RenderOptions options;
+        options.generationSpans = &spans;
+        std::basic_string<CharT> rendered;
+        auto result = tpl.RenderTo(rendered, params, options);
+        if (!result)
         {
-            return { false, jinja2::ToString(rendered.error().ToString()) };
+            return { false, jinja2::ToString(result.error().ToString()), {} };
         }
-        return { true, jinja2::ToString(*rendered) };
+        Result r{ true, jinja2::ToString(rendered), {} };
+        for (const auto& span : spans)
+        {
+            r.generation.emplace_back(CodePoints(rendered, span.start), CodePoints(rendered, span.end));
+        }
+        return r;
     }
     catch (const std::exception& e)
     {
-        return { false, std::string("exception: ") + e.what() };
+        return { false, std::string("exception: ") + e.what(), {} };
     }
 }
 
@@ -245,7 +282,21 @@ std::string Compare(const Json& expected, const Result& r)
         {
             return "rejects";
         }
-        return r.text == expected["output"].get<std::string>() ? "" : "output";
+        if (r.text != expected["output"].get<std::string>())
+        {
+            return "output";
+        }
+        // The assistant token mask, stored for the templates that have a generation block
+        if (expected.contains("generation"))
+        {
+            std::vector<std::pair<size_t, size_t>> spans;
+            for (const auto& span : expected["generation"])
+            {
+                spans.emplace_back(span[0].get<size_t>(), span[1].get<size_t>());
+            }
+            return spans == r.generation ? "" : "generation";
+        }
+        return "";
     }
     if (r.ok)
     {
@@ -377,7 +428,7 @@ TEST(ChatTemplateRegistry, DivergencesNameExistingCases)
     {
         ids.insert(c.id);
     }
-    static const std::set<std::string> kinds = { "output", "rejects", "accepts", "message" };
+    static const std::set<std::string> kinds = { "output", "rejects", "accepts", "message", "generation" };
     for (const auto& [id, d] : Divergences())
     {
         const auto plain = id.compare(0, 5, "wide.") == 0 ? id.substr(5) : id;
@@ -422,14 +473,14 @@ Result RenderInPromptMode(const std::string& templateFile, jinja2::ValuesMap par
     }();
     if (!load)
     {
-        return { false, jinja2::ToString(load.error().ToString()) };
+        return { false, jinja2::ToString(load.error().ToString()), {} };
     }
     auto rendered = tpl.RenderAsString(params);
     if (!rendered)
     {
-        return { false, jinja2::ToString(rendered.error().ToString()) };
+        return { false, jinja2::ToString(rendered.error().ToString()), {} };
     }
-    return { true, jinja2::ToString(*rendered) };
+    return { true, jinja2::ToString(*rendered), {} };
 }
 
 jinja2::ValuesMap ContextOf(const std::string& conversation)

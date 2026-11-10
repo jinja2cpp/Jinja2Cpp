@@ -286,8 +286,9 @@ Only int64 overflow calls the backend, so int64 arithmetic costs the same with o
 transformers' `apply_chat_template` does: trim/lstrip blocks, loop controls, autoescape off,
 `limits.maxRange` at most 100000, transformers' `tojson` (`json.dumps` with `ensure_ascii=False`,
 keys in insertion order, no HTML escaping, `indent`/`separators`/`sort_keys`), the
-`{% generation %}` tag (body rendered; no assistant mask), read-only lists and dicts
-(`ImmutableSandboxedEnvironment`: `append`, `update`, ... are unsafe attributes) and the globals
+`{% generation %}` tag (body rendered; the assistant mask is `RenderOptions::generationSpans`, below),
+read-only lists and dicts (`ImmutableSandboxedEnvironment`: calling `append`, `update`, ... fails
+with `ErrorCode::SecurityError` and the sandbox's message) and the globals
 `raise_exception` (`ErrorCode::TemplateRuntimeError`) and `strftime_now` (clock in
 `ChatTemplateOptions::now`). Later knobs are new fields of `ChatTemplateOptions`, not new entry points.
 The header and its one source file are built and installed only with the CMake option
@@ -302,6 +303,19 @@ need the core anyway) and an `ApplyChatTemplate(tpl, messages, ...)` mirror of t
 (can be added after 2.0 without breaking this one). Known limits: it is not the rest of
 `apply_chat_template` (the host builds `messages`, `tools`, `bos_token`, ...) and no security
 sandbox beyond what it lists.
+
+**Assistant token mask (task 0377, Ruslan 2026-11-10, before G1).** `RenderOptions::generationSpans`, a
+`std::vector<GenerationSpan>*` (`struct GenerationSpan { size_t start, end; }`) the host owns: the
+render clears it and appends the `[start, end)` range of each `{% generation %}` body, in the order
+the blocks end (inner before outer), as transformers' `generation_indices`. Offsets are in units of
+the output (UTF-8 bytes narrow, `wchar_t` units wide) counted from the first character the render
+writes; the host converts to code points or tokens (transformers counts `str` characters). A
+buffered part in Jinja2 (a macro's result, a call block, a recursive loop) places its blocks where
+the buffer began, as transformers does. Considered: a field of `ChatTemplateOptions` (the mask is a
+property of a render, not of the environment) and a render overload returning the pairs (a second
+overload set next to the three of `RenderTo`). `RenderOptions` grows by a pointer, an ABI change of
+a public struct that must land before G1, after which it cannot grow. The `SecurityError` half of
+the task was done by 0357 S2c; only the docs changed.
 
 **Prompt escaping and token budgets (tasks 0358, 0359, decided by Ruslan 2026-11-05).** A new,
 always installed header `jinja2cpp/prompt.h` (core, included by `template_env.h`, not behind

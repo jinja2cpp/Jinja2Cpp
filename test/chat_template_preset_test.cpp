@@ -7,6 +7,7 @@
 #include <jinja2cpp/chat_template.h>
 #include <jinja2cpp/error_info.h>
 #include <jinja2cpp/features.h>
+#include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
 #include <jinja2cpp/value.h>
@@ -14,9 +15,13 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cstddef>
 #include <ctime>
+#include <memory>
 #include <string>
+#include <string_view>
 #include <type_traits>
+#include <vector>
 
 namespace
 {
@@ -236,6 +241,260 @@ TEST(ChatTemplatePreset, PlainEnvironmentsStayJinja2)
     jinja2::TemplateEnv other;
     jinja2::Template tpl(&other);
     EXPECT_FALSE(tpl.Load("{% generation %}{% endgeneration %}"));
+}
+
+// The error of a method the sandbox refuses is transformers' SecurityError, with the sandbox's message
+TEST(ChatTemplatePreset, UnsafeMethodIsSecurityError)
+{
+    for (const char* source : { "{% set _ = messages.append(1) %}", "{{ messages.append(1) }}", "{% set d = {'a': 1} %}{% set _ = d.update({'b': 2}) %}" })
+    {
+        {
+            jinja2::TemplateEnv env;
+            jinja2::ConfigureForChatTemplates(env);
+            jinja2::Template tpl(&env);
+            ASSERT_TRUE(tpl.Load(source)) << source;
+            auto result = tpl.RenderAsString({ { "messages", jinja2::ValuesList{ 1 } } });
+            ASSERT_FALSE(result) << source;
+            EXPECT_EQ(result.error().GetCode(), jinja2::ErrorCode::SecurityError) << source;
+            EXPECT_NE(jinja2::ToString(result.error().ToString()).find("is unsafe."), std::string::npos) << source;
+        }
+        {
+            jinja2::TemplateEnv env;
+            jinja2::ConfigureForChatTemplates(env);
+            jinja2::TemplateW tpl(&env);
+            ASSERT_TRUE(tpl.Load(jinja2::ConvertString<std::wstring>(std::string(source)))) << source;
+            auto result = tpl.RenderAsString({ { "messages", jinja2::ValuesList{ 1 } } });
+            ASSERT_FALSE(result) << source;
+            EXPECT_EQ(result.error().GetCode(), jinja2::ErrorCode::SecurityError) << source;
+        }
+    }
+}
+
+// The assistant token mask (docs/tasks/0377): RenderOptions::generationSpans. Expected spans are
+// what transformers 5.22.1 records in activate_tracker's generation_indices, in code points
+struct SpanCase
+{
+    const char* tpl;
+    std::vector<jinja2::GenerationSpan> spans;
+};
+
+std::shared_ptr<jinja2::MemoryFileSystem> SpanFiles()
+{
+    auto fs = std::make_shared<jinja2::MemoryFileSystem>();
+    fs->AddFile("inc", "i{% generation %}gg{% endgeneration %}");
+    fs->AddFile("base", "b{% block x %}{% endblock %}e");
+    fs->AddFile("base2", "b{% block x %}p{% generation %}r{% endgeneration %}{% endblock %}e");
+    return fs;
+}
+
+// Converts an offset in the units of `out` to code points (UTF-8 bytes, or UTF-16 units where wchar_t has two bytes)
+template<typename CharT>
+std::size_t CodePoints(const std::basic_string<CharT>& out, std::size_t units)
+{
+    std::size_t count = 0;
+    for (std::size_t i = 0; i < units; ++i)
+    {
+        const auto c = static_cast<unsigned long>(static_cast<std::make_unsigned_t<CharT>>(out[i]));
+        if constexpr (sizeof(CharT) == 1)
+        {
+            count += (c & 0xC0U) != 0x80U;
+        }
+        else if constexpr (sizeof(CharT) == 2)
+        {
+            count += (c & 0xFC00U) != 0xDC00U;
+        }
+        else
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
+template<typename CharT>
+void CheckSpanCase(const SpanCase& c)
+{
+    using Tpl = std::conditional_t<std::is_same_v<CharT, char>, jinja2::Template, jinja2::TemplateW>;
+    jinja2::TemplateEnv env;
+    jinja2::ConfigureForChatTemplates(env);
+    env.AddFilesystemHandler(std::string(), SpanFiles());
+    Tpl tpl(&env);
+    ASSERT_TRUE(tpl.Load(jinja2::ConvertString<std::basic_string<CharT>>(std::string(c.tpl)))) << c.tpl;
+    std::vector<jinja2::GenerationSpan> spans{ { 7, 7 } }; // cleared by the render
+    jinja2::RenderOptions options;
+    options.generationSpans = &spans;
+    std::basic_string<CharT> out;
+    auto result = tpl.RenderTo(out, {}, options);
+    ASSERT_TRUE(result) << c.tpl << ": " << jinja2::ToString(result.error().ToString());
+    ASSERT_EQ(spans.size(), c.spans.size()) << c.tpl;
+    for (std::size_t i = 0; i < spans.size(); ++i)
+    {
+        EXPECT_EQ(CodePoints(out, spans[i].start), c.spans[i].start) << c.tpl << " #" << i;
+        EXPECT_EQ(CodePoints(out, spans[i].end), c.spans[i].end) << c.tpl << " #" << i;
+    }
+}
+
+class GenerationSpansTest : public ::testing::TestWithParam<SpanCase>
+{
+};
+
+TEST_P(GenerationSpansTest, Narrow)
+{
+    CheckSpanCase<char>(GetParam());
+}
+
+TEST_P(GenerationSpansTest, Wide)
+{
+    CheckSpanCase<wchar_t>(GetParam());
+}
+
+// clang-format off
+INSTANTIATE_TEST_SUITE_P(Rows, GenerationSpansTest, ::testing::Values(
+    SpanCase{ "ab{% generation %}cd{% endgeneration %}e{% generation %}é€\U0001F600{% endgeneration %}", { { 2, 4 }, { 5, 8 } } },
+    SpanCase{ "a{% generation %}b{% generation %}cc{% endgeneration %}d{% endgeneration %}", { { 1, 3 }, { 1, 5 } } },
+    SpanCase{ "ab{% set x %}{% generation %}cd{% endgeneration %}{% endset %}", { { 2, 4 } } },
+    SpanCase{ "ab{% set x %}q{% endset %}{% generation %}{{ x }}c{% endgeneration %}", { { 2, 4 } } },
+    SpanCase{ "ab{% filter upper %}{% generation %}xxyy{% endgeneration %}{% endfilter %}", { { 2, 6 } } },
+    SpanCase{ "ab{% for i in [1,2] %}x{% generation %}y{% endgeneration %}{% endfor %}", { { 3, 4 }, { 5, 6 } } },
+    SpanCase{ "abc{% with a=1 %}{% generation %}{{ a }}{% endgeneration %}{% endwith %}", { { 3, 4 } } },
+    SpanCase{ "abc{% if true %}{% generation %}d{% endgeneration %}{% endif %}", { { 3, 4 } } },
+    SpanCase{ "a{% generation %}{% endgeneration %}b", { { 1, 1 } } },
+    SpanCase{ "a{% block x %}bb{% generation %}cc{% endgeneration %}{% endblock %}", { { 3, 5 } } },
+    SpanCase{ "{% macro m() %}xx{% generation %}yy{% endgeneration %}{% endmacro %}ab{% generation %}{{ m() }}{% endgeneration %}", { { 2, 4 }, { 2, 6 } } },
+    SpanCase{ "ab\n{% generation %}\n  cd\n{% endgeneration %}\nef", { { 3, 8 } } },
+    SpanCase{ "{% for i in [1,2,3] %}{% if i == 2 %}{% continue %}{% endif %}{% generation %}{{ i }}{% endgeneration %}{% endfor %}", { { 0, 1 }, { 1, 2 } } },
+    SpanCase{ "{% macro m() %}xx{% generation %}yy{% endgeneration %}{% endmacro %}ab{{ 'q' ~ m() }}", { { 2, 4 } } },
+    // Jinja2 renders these into a buffer that is yielded whole: the block begins where the buffer did
+    SpanCase{ "{% macro m() %}xx{% generation %}yy{% endgeneration %}{% endmacro %}ab{{ m() }}", { { 2, 4 } } },
+    SpanCase{ "{% macro m() %}xx{{ caller() }}{% endmacro %}ab{% call m() %}z{% generation %}yy{% endgeneration %}{% endcall %}", { { 2, 4 } } },
+    SpanCase{ "{% macro m() %}xx{{ caller() }}{% endmacro %}ab{% generation %}{% call m() %}z{% generation %}y{% endgeneration %}{% endcall %}{% endgeneration %}", { { 2, 3 }, { 2, 6 } } },
+    SpanCase{ "ab{% for i in [[1],[2]] recursive %}x{% generation %}y{{ i }}{% endgeneration %}{% if i is iterable %}{{ loop(i) }}{% endif %}{% endfor %}", { { 2, 6 }, { 2, 4 }, { 2, 6 }, { 2, 4 } } },
+    SpanCase{ "{% block x %}x{% generation %}yy{% endgeneration %}{% endblock %}{{ self.x() }}", { { 1, 3 }, { 3, 5 } } },
+    SpanCase{ "ab{% include 'inc' %}c", { { 3, 5 } } },
+    SpanCase{ "{% macro m() %}zz{% include 'inc' %}{% endmacro %}ab{{ m() }}", { { 2, 4 } } },
+    SpanCase{ "{% extends 'base' %}{% block x %}x{% generation %}yy{% endgeneration %}{% endblock %}", { { 2, 4 } } },
+    SpanCase{ "{% extends 'base2' %}{% block x %}q{{ super() }}{% endblock %}", { { 2, 3 } } },
+    SpanCase{ "abc", {} }));
+// clang-format on
+
+template<typename CharT>
+class AppendingSink final : public jinja2::BasicOutputSink<CharT>
+{
+public:
+    void Write(std::basic_string_view<CharT> text) override { output.append(text); }
+    std::basic_string<CharT> output;
+};
+
+TEST(ChatTemplatePreset, GenerationSpansRawUnitsAndTargets)
+{
+    jinja2::TemplateEnv env;
+    jinja2::ConfigureForChatTemplates(env);
+    const std::string source = "ab{% generation %}cd{% endgeneration %}e{% generation %}é€\U0001F600{% endgeneration %}";
+    jinja2::Template tpl(&env);
+    ASSERT_TRUE(tpl.Load(source));
+    std::vector<jinja2::GenerationSpan> spans;
+    jinja2::RenderOptions options;
+    options.generationSpans = &spans;
+
+    // UTF-8 bytes
+    std::string out;
+    ASSERT_TRUE(tpl.RenderTo(out, {}, options));
+    ASSERT_EQ(spans.size(), 2U);
+    EXPECT_EQ(spans[1].start, 5U);
+    EXPECT_EQ(spans[1].end, 14U);
+
+    // Counted from what this render writes, whatever the string held
+    std::string prefilled = "pre";
+    ASSERT_TRUE(tpl.RenderTo(prefilled, {}, options));
+    ASSERT_EQ(spans.size(), 2U);
+    EXPECT_EQ(spans[0].start, 2U);
+    EXPECT_EQ(spans[1].end, 14U);
+
+    // A sink, which receives the output in chunks
+    AppendingSink<char> sink;
+    spans.assign(3, jinja2::GenerationSpan{ 1, 1 });
+    ASSERT_TRUE(tpl.RenderTo(sink, {}, options));
+    EXPECT_EQ(sink.output, out);
+    ASSERT_EQ(spans.size(), 2U);
+    EXPECT_EQ(spans[1].end, 14U);
+
+    // wchar_t units
+    jinja2::TemplateW wide(&env);
+    ASSERT_TRUE(wide.Load(jinja2::ConvertString<std::wstring>(source)));
+    std::wstring wout;
+    ASSERT_TRUE(wide.RenderTo(wout, {}, options));
+    ASSERT_EQ(spans.size(), 2U);
+    EXPECT_EQ(spans[1].start, 5U);
+    EXPECT_EQ(spans[1].end, sizeof(wchar_t) == 2 ? 9U : 8U);
+    AppendingSink<wchar_t> wsink;
+    ASSERT_TRUE(wide.RenderTo(wsink, {}, options));
+    EXPECT_EQ(spans[1].end, sizeof(wchar_t) == 2 ? 9U : 8U);
+
+    // Nothing asked, nothing recorded
+    std::string plain;
+    ASSERT_TRUE(tpl.RenderTo(plain, {}, jinja2::RenderOptions{}));
+    EXPECT_EQ(plain, out);
+}
+
+TEST(ChatTemplatePreset, GenerationSpansOnErrorAndLimit)
+{
+    jinja2::TemplateEnv env;
+    jinja2::ConfigureForChatTemplates(env);
+    std::vector<jinja2::GenerationSpan> spans;
+    jinja2::RenderOptions options;
+    options.generationSpans = &spans;
+
+    jinja2::Template failing(&env);
+    ASSERT_TRUE(failing.Load("{% generation %}a{% endgeneration %}{% generation %}{{ raise_exception('x') }}{% endgeneration %}"));
+    std::string out;
+    ASSERT_FALSE(failing.RenderTo(out, {}, options));
+    ASSERT_EQ(spans.size(), 1U);
+    EXPECT_EQ(spans[0].start, 0U);
+    EXPECT_EQ(spans[0].end, 1U);
+
+    env.GetSettings().limits.maxSequenceSize = 3;
+    jinja2::Template many(&env);
+    ASSERT_TRUE(many.Load("{% generation %}a{% endgeneration %}{% generation %}b{% endgeneration %}{% generation %}c{% endgeneration %}{% generation %}d{% endgeneration %}"));
+    out.clear();
+    auto result = many.RenderTo(out, {}, options);
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error().GetCode(), jinja2::ErrorCode::ResourceLimitExceeded) << jinja2::ToString(result.error().ToString());
+    EXPECT_EQ(spans.size(), 3U);
+}
+
+TEST(ChatTemplatePreset, GenerationSpansPlainEnvironmentAndNoTag)
+{
+    jinja2::TemplateEnv plain;
+    jinja2::Template tpl(&plain);
+    ASSERT_TRUE(tpl.Load("abc"));
+    std::vector<jinja2::GenerationSpan> spans{ { 1, 2 } };
+    jinja2::RenderOptions options;
+    options.generationSpans = &spans;
+    std::string out;
+    ASSERT_TRUE(tpl.RenderTo(out, {}, options));
+    EXPECT_TRUE(spans.empty());
+    EXPECT_EQ(out, "abc");
+}
+
+// A callable that renders another template starts a render of its own: it records nothing in the outer vector
+TEST(ChatTemplatePreset, GenerationSpansIgnoreNestedHostRenders)
+{
+    jinja2::TemplateEnv env;
+    jinja2::ConfigureForChatTemplates(env);
+    jinja2::Template inner(&env);
+    ASSERT_TRUE(inner.Load("x{% generation %}y{% endgeneration %}"));
+    env.AddGlobal("inner", jinja2::UserCallable([&inner](const jinja2::UserCallableParams&) { return jinja2::Value(inner.RenderAsString({}).value()); }, {}));
+    jinja2::Template outer(&env);
+    ASSERT_TRUE(outer.Load("ab{% generation %}{{ inner() }}{% endgeneration %}"));
+    std::vector<jinja2::GenerationSpan> spans;
+    jinja2::RenderOptions options;
+    options.generationSpans = &spans;
+    std::string out;
+    ASSERT_TRUE(outer.RenderTo(out, {}, options));
+    EXPECT_EQ(out, "abxy");
+    ASSERT_EQ(spans.size(), 1U);
+    EXPECT_EQ(spans[0].start, 2U);
+    EXPECT_EQ(spans[0].end, 4U);
 }
 
 } // namespace

@@ -112,6 +112,22 @@ public:
     [[nodiscard]] bool ReachesSink() const { return m_sink != nullptr; }
     // The characters written to the sink so far (Settings::Limits::maxOutputSize)
     [[nodiscard]] const size_t& SinkWritten() const { return m_sinkWritten; }
+    // The characters this stream has taken since its target was given: the target's size (so including what the
+    // string held before the render) or the sink's count, and the buffered part. Off the hot path: the assistant
+    // token mask asks it at a generation block's ends (RenderOptions::generationSpans). 0 for a writer stream
+    [[nodiscard]] size_t Written() const
+    {
+        size_t written = static_cast<size_t>(m_cur - m_buffer) / m_charSize;
+        if (m_sink)
+        {
+            written += m_sinkWritten;
+        }
+        else if (m_target)
+        {
+            written += m_charSize == 1 ? static_cast<const std::string*>(m_target)->size() : static_cast<const std::wstring*>(m_target)->size();
+        }
+        return written;
+    }
     // The sink a writer stream made from this one passes on (ReachesSink)
     [[nodiscard]] void* SinkToPassOn() const { return m_sink; }
 
