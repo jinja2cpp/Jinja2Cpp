@@ -3,8 +3,10 @@
 
 #include "internal_value.h"
 #include "lexertk.h"
+#include "unicode_tables.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -209,6 +211,8 @@ struct LexerHelper
     // call; the flag is cleared
     virtual bool TakeLiteralError() = 0;
     virtual Keyword GetKeyword(const CharRange& range) = 0;
+    // The line, from 1, of the source offset
+    virtual unsigned GetLineNumber(size_t offset) = 0;
 };
 
 using TokensList = std::vector<Token>;
@@ -380,12 +384,17 @@ private:
         {
             return ScanOperator(pos, end, tok);
         }
-        if (traits::is_letter(ch) || ch == '_')
+        if (const auto first = NameCharLength(pos, end, true))
         {
-            auto last = pos + 1;
-            while (last != end && (traits::is_letter_or_digit(m_src[last]) || m_src[last] == '_'))
+            auto last = pos + first;
+            while (last != end)
             {
-                ++last;
+                const auto len = NameCharLength(last, end, false);
+                if (!len)
+                {
+                    break;
+                }
+                last += len;
             }
             SetSymbol(pos, last, tok);
             return true;
@@ -404,6 +413,26 @@ private:
             return ScanString(pos, end, tok);
         }
         return false;
+    }
+
+    // The length of the character at `pos` if a name can have it there, or 0. Jinja2 lexes a name
+    // as a run of word characters and requires str.isidentifier() of it: the first character is
+    // XID_Start or '_', the others XID_Continue (Unicode as in the pinned Python, unicode_tables.h)
+    [[nodiscard]] size_t NameCharLength(size_t pos, size_t end, bool first) const
+    {
+        const auto ch = m_src[pos];
+        if (traits::is_ascii(ch))
+        {
+            return traits::is_letter(ch) || ch == '_' || (!first && traits::is_digit(ch)) ? 1 : 0;
+        }
+        uint32_t cp = 0;
+        const auto len = detail::DecodeCodePoint(m_src.substr(0, end), pos, cp);
+        // A malformed sequence decodes as its first unit, which is no character of a name
+        if (sizeof(CharT) == 1 && len == 1)
+        {
+            return 0;
+        }
+        return (first ? unicode::IsXidStart(cp) : unicode::IsXidContinue(cp)) ? len : 0;
     }
 
     bool ScanOperator(size_t pos, size_t end, Token& tok)
@@ -881,6 +910,8 @@ public:
 
     // True if GetValue met a string literal with a malformed escape sequence (Python's SyntaxError)
     [[nodiscard]] bool TakeLiteralError() const { return m_helper->TakeLiteralError(); }
+    // The line, from 1, of the source offset
+    [[nodiscard]] unsigned LineOf(size_t offset) const { return m_helper->GetLineNumber(offset); }
 
     bool EatIfEqual(Keyword kwType, Token* tok = nullptr)
     {

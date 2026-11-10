@@ -56,6 +56,9 @@ std::optional<InternalValue> SandboxedNativeAttribute(const RenderContext* conte
 InternalValue MakeUndefined(const RenderContext& context, std::string name);
 // An undefined value whose message is hint, as Python's environment.undefined(hint)
 InternalValue MakeUndefinedWithHint(const RenderContext& context, std::string hint);
+// An undefined value of the default policy whose message is hint, whatever the policy of the
+// render: Jinja2's cond_expr_undefined, which is jinja2.Undefined in every environment
+InternalValue MakeDefaultUndefinedWithHint(std::string hint);
 // The undefined result of the missing attribute or item key of obj. A value that is
 // already undefined with info is returned as is
 InternalValue MakeUndefined(const RenderContext* context, const InternalValue& obj, const InternalValue& key);

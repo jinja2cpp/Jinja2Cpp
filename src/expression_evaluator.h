@@ -1181,9 +1181,11 @@ public:
         refs(m_altValue);
     }
 
-    IfExpression(NodeRef<Expression> testExpr, NodeRef<Expression> altValue)
+    // line: where the conditional is in the source, for the undefined it gives without `else`
+    IfExpression(NodeRef<Expression> testExpr, NodeRef<Expression> altValue, unsigned line)
         : m_testExpr(std::move(testExpr))
         , m_altValue(std::move(altValue))
+        , m_line(line)
     {
     }
 
@@ -1205,6 +1207,7 @@ public:
 private:
     NodeRef<Expression> m_testExpr;
     NodeRef<Expression> m_altValue;
+    unsigned m_line = 0;
     // How the test, the value and the alternative fold (FoldBits), by PrepareFold
     std::uint8_t m_testFold = 0;
     std::uint8_t m_valueFold = 0;

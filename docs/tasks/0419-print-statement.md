@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: low
 area: parity
 depends: [0354]
@@ -20,3 +20,10 @@ would (same escaping and finalize path), so the engine and the module render it 
 
 **Done when.** A parity case for `{% print a, b %}` (with and without autoescape) renders as
 Jinja2 does in narrow and wide templates, and the module renders it without a fallback.
+
+**Result.** `print` is parsed where a statement name is expected (it stays a variable name
+elsewhere, as in Jinja2): each comma-separated expression becomes an output node made as
+`{{ }}`'s is (finalize, autoescape, volatile autoescape, dropped or guarded after `extends`, its
+unknown filters placed as an output tag's). Parity cases `statements.print_*` (16). The Python
+module's tests had used `{% print %}` as the syntax the engine lacks; they now use a subscript of
+a literal by a tuple of slices, the one such syntax left (task 0445).

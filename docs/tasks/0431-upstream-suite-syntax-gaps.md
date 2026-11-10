@@ -1,5 +1,5 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: parity
 depends: [0355]
@@ -31,3 +31,19 @@ line in `python/tests/upstream/expected-failures.txt`:
 Unicode data), and delete the expected-failures lines.
 
 **Done when.** The listed upstream tests pass through the module and the parity cases match.
+
+**Result.**
+- Names: the lexer takes a name's characters from the XID_Start and XID_Continue tables of
+  `src/unicode_tables.h` (generated from the pinned Python 3.12, Unicode 15.0), in narrow
+  (UTF-8) and wide (UTF-16 or UTF-32) templates. A run Jinja2 rejects with "Invalid character in
+  identifier" (`a²`, `·a`) is a parse error here too. Cases `statements.name_*`.
+- Colon: `for`, `if`, `elif`, `else`, `block`, `macro`, `call`, `filter`, `autoescape` and a
+  `set` block may end with `:`, as Jinja2's `parse_statements` allows (not `with`, an assigning
+  `set`, `include` or an end tag). Cases `statements.colon_*`.
+- `x if c` without `else` gives Jinja2's `cond_expr_undefined`: a default-policy undefined, whatever
+  the environment's, with the hint "the inline if-expression on line N evaluated to false and no
+  else section was defined." (Jinja2 adds ` in 'name'` for a named template; the engine's error
+  location names it). Cases `statements.if_expr_no_else_*`.
+- `{% macro x(caller) %}` was already rejected; what the upstream test checks is the class
+  (TemplateAssertionError), the message and a TypeError for two callers, which need an error
+  code of their own: moved to 0432 with its expected-failures line.

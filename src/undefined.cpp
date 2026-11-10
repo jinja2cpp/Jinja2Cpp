@@ -102,6 +102,13 @@ InternalValue MakeUndefinedWithHint(const RenderContext& context, std::string hi
     return MakeUndefinedValue(std::move(info));
 }
 
+InternalValue MakeDefaultUndefinedWithHint(std::string hint)
+{
+    UndefinedInfo info;
+    info.hint = std::move(hint);
+    return MakeUndefinedValue(std::move(info));
+}
+
 InternalValue MakeUndefined(const RenderContext* context, const InternalValue& obj, const InternalValue& key)
 {
     if (GetUndefinedInfo(obj))

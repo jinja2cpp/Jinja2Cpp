@@ -165,6 +165,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
     }
     LexScanner::StateSaver saver(lexer);
     const auto unknownMark = m_unknown.Mark();
+    const auto valueOffset = lexer.PeekNextToken().range.startOffset;
 
     auto value = ParseBinary(lexer, Precedence::Or);
     if (!value)
@@ -176,7 +177,7 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
     // Only an inline `if` needs the wrapper: every compound node checks the stack itself
     if (includeIfPart && lexer.EatIfEqual(Keyword::If))
     {
-        auto ifExpr = ParseIfExpression(lexer);
+        auto ifExpr = ParseIfExpression(lexer, valueOffset);
         // Jinja2 checks the filters and tests of an inline if, its value among them, when they run
         m_unknown.DeferSince(unknownMark);
         if (!ifExpr)
@@ -1371,7 +1372,7 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
     return result;
 }
 
-ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfExpression(LexScanner& lexer)
+ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfExpression(LexScanner& lexer, size_t valueOffset)
 {
     NodeRef<IfExpression> result;
     const auto& startTok = lexer.PeekNextToken();
@@ -1403,7 +1404,8 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
             altValue = *value;
         }
 
-        result = m_nodes.Make<IfExpression>(*testExpr, *altValue);
+        // Without `else` the line goes into the undefined it gives (IfExpression::EvaluateAltValue)
+        result = m_nodes.Make<IfExpression>(*testExpr, *altValue, *altValue ? 0U : lexer.LineOf(valueOffset));
     }
     catch (const ParseError& error)
     {

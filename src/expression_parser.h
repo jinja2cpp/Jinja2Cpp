@@ -200,7 +200,8 @@ private:
     ParseResult<NodeRef<Expression>> ParseCall(LexScanner& lexer, NodeRef<Expression> valueRef);
     ParseResult<NodeRef<Expression>> ParseSubscript(LexScanner& lexer, NodeRef<Expression> valueRef);
     NodeRef<SubscriptExpression> MakeSubscript(NodeRef<Expression> value, const std::string& attrName);
-    ParseResult<NodeRef<IfExpression>> ParseIfExpression(LexScanner& lexer);
+    // valueOffset: where the value before `if` starts, the position Jinja2 reports for the conditional
+    ParseResult<NodeRef<IfExpression>> ParseIfExpression(LexScanner& lexer, size_t valueOffset);
     // Counts one more chained operator; false past Settings::Limits::maxExpressionOperators
     bool AddOperator();
     // The filter or test the environment adds under this name, as a callable; undefined if there is none

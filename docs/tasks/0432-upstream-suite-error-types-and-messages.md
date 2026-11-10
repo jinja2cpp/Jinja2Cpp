@@ -24,6 +24,11 @@ jinja2cpp raises a different one. Each is a line of `python/tests/upstream/expec
   trans blocks ("trans blocks can't be nested", "saw `wibble`"), a name a template does not export
   ("does not export the requested name"), a required block with content, and
   TemplateNotFound naming the search path (`TestFileSystemLoader::test_error_includes_paths`).
+- `{% macro x(caller) %}`, whose body calls `caller`, is a TemplateAssertionError ("When defining
+  macros or call blocks the special \"caller\" argument must be omitted or be given a default.");
+  the engine reports UnexpectedToken. Calling a macro with a caller parameter both by position
+  and as `caller=` raises TypeError, TemplateRuntimeError here
+  (`test_regression.py::TestBug::test_double_caller_no_default`, moved from 0431).
 - `TemplateSyntaxError.source` of an included template is None
   (`TestDebug::test_include_syntax_error_source`).
 - Tracebacks: Jinja2 rewrites the traceback so it shows the template's file and line as a frame
