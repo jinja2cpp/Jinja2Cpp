@@ -386,10 +386,10 @@ private:
             return ScanOperator(pos, end, tok);
         }
         // ASCII only: the locale's classes (a global locale an embedder sets) do not decide a name
-        if (traits::is_ascii(ch) && (traits::is_letter(ch) || ch == '_'))
+        if (IsAsciiNameChar(ch) && !(ch >= '0' && ch <= '9'))
         {
             auto last = pos + 1;
-            while (last != end && traits::is_ascii(m_src[last]) && (traits::is_letter_or_digit(m_src[last]) || m_src[last] == '_'))
+            while (last != end && IsAsciiNameChar(m_src[last]))
             {
                 ++last;
             }
@@ -416,6 +416,9 @@ private:
         }
         return !traits::is_ascii(ch) && ScanNonAsciiName(pos, pos, end, tok);
     }
+
+    // A letter, digit or '_' of ASCII; false for any other unit, a negative char included
+    static bool IsAsciiNameChar(CharT ch) { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'; }
 
     // A name with a character above ASCII, from `pos`, whose characters up to `last` were taken
     // (none when last == pos); false when `pos` starts no name. Jinja2 lexes a name as a run of
