@@ -73,7 +73,7 @@ public:
     // Limits::maxSequenceSize of the environment, or the engine's built-in cap
     [[nodiscard]] std::uint64_t MaxSequenceSize() const noexcept { return m_settings.limits.maxSequenceSize != 0 ? m_settings.limits.maxSequenceSize : std::uint64_t{ 1 } << 26; }
     // Where a template the loader gives came from, for its errors and Template.filename
-    ErrorSource SourceOf(const std::string& name) const;
+    ErrorSource SourceOf(const std::string& name, bool withSource = true) const;
     void CheckAlive() const;
 
     int Traverse(visitproc visit, void* arg) const;
@@ -136,13 +136,10 @@ public:
     PyTemplate& operator=(PyTemplate&&) = delete;
 
     nb::object Render(nb::args args, nb::kwargs kwargs) const;
-    // Template.generate: renders with the arguments of render(), calling `write` with each chunk
-    // the engine's sink receives (up to 512 characters), in order; an error comes after the chunks
+    // Template.generate: renders with the arguments of render(), calling `write` with each piece of
+    // output in order, Jinja2's items (RenderOptions::writeEachPiece); an error comes after the items
     // written before it
     void RenderTo(nb::handle write, nb::args args, nb::kwargs kwargs) const;
-    // The same into the engine's sink, which gets each piece of output on its own: Jinja2's items (Template.generate,
-    // generate.cpp)
-    void RenderToSink(jinja2::OutputSink& sink, nb::args args, nb::kwargs kwargs) const;
     // The environment, checked to be alive
     PyEnvironment& LiveEnvironment() const;
     // Template.make_module of the Python layer (template_module.cpp): (body, exports) for the

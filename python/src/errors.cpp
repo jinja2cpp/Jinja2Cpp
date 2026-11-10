@@ -47,19 +47,30 @@ void AddTemplateFrame(nb::handle exception, const jinja2::SourceLocation& locati
     }
     try
     {
-        nb::object file = filename.is_none() ? (location.fileName.empty() ? nb::object(nb::none()) : MakeStr(location.fileName)) : nb::borrow(filename);
-        nb::module_::import_("jinja2cpp._debug").attr("add_template_frame")(exception, file, location.line, function);
+        // A template without a file is "<template>", as in Jinja2: its name is no path linecache should read
+        nb::module_::import_("jinja2cpp._debug").attr("add_template_frame")(exception, filename, location.line, function);
     }
     catch (const nb::python_error&) // NOLINT(bugprone-empty-catch): the frame is a diagnostic only
     {
     }
 }
 
+// Whether the error's template `name` is the one `source` describes: the engine names an unnamed template
+// noname.j2tpl, which no loader gives
+bool IsOwnTemplate(const std::string& name, const ErrorSource& source)
+{
+    if (source.name.is_none())
+    {
+        return name.empty() || name == "noname.j2tpl";
+    }
+    return name.empty() || Utf8(source.name) == name;
+}
+
 // The file of the template the error is in: the source's, when the error is in that template
 nb::object FileOfError(const jinja2::ErrorInfo& error, const ErrorSource& source)
 {
     const auto& name = error.GetErrorLocation().fileName;
-    if (name.empty() || (!source.name.is_none() && Utf8(source.name) == name))
+    if (IsOwnTemplate(name, source))
     {
         return source.filename;
     }
@@ -67,7 +78,7 @@ nb::object FileOfError(const jinja2::ErrorInfo& error, const ErrorSource& source
     {
         try
         {
-            return SourceOfTemplate(source.environment, name).filename;
+            return SourceOfTemplate(source.environment, name, false).filename;
         }
         catch (const nb::python_error&) // NOLINT(bugprone-empty-catch): a diagnostic only
         {
@@ -165,7 +176,7 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
         // template's name, file and source, as Jinja2 reports it
         const ErrorSource* where = &source;
         ErrorSource other;
-        if (!location.fileName.empty() && !source.environment.is_none() && (source.name.is_none() || Utf8(source.name) != location.fileName))
+        if (!IsOwnTemplate(location.fileName, source) && !source.environment.is_none())
         {
             other = SourceOfTemplate(source.environment, location.fileName);
             other.syntaxNote = source.syntaxNote;
@@ -183,7 +194,7 @@ void RaiseError(const jinja2::ErrorInfo& error, const ErrorSource& source)
         }
         jinja2::SourceLocation frame = location;
         frame.line = line == 0 ? 1U : location.line;
-        AddTemplateFrame(instance, frame, where->filename.is_none() ? where->name : where->filename, "template");
+        AddTemplateFrame(instance, frame, where->filename, "template");
         Raise(type, instance);
     }
     switch (code)

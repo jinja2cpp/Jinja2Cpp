@@ -21,8 +21,9 @@ def add_template_frame(exc: BaseException, filename: t.Optional[str], lineno: in
     # A str and nothing else names a file: compile() refuses an embedded NUL
     if not isinstance(filename, str) or "\0" in filename:
         filename = "<template>"
-    code = compile("\n" * (lineno - 1) + "raise __jinja_exception__", filename, "exec")
-    code = code.replace(co_name=function)
+    # One line of code moved to `lineno`, rather than lineno - 1 blank lines before it
+    code = compile("raise __jinja_exception__", filename, "exec")
+    code = code.replace(co_name=function, co_firstlineno=lineno)
     namespace = {"__name__": filename, "__file__": filename, "__jinja_exception__": exc}
     # The traceback of the raise continues the one exc has: this frame, the template's, then exc's own
     try:

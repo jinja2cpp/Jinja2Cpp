@@ -672,18 +672,18 @@ void PyEnvironment::CheckAlive() const
     }
 }
 
-ErrorSource SourceOfTemplate(nb::handle environment, const std::string& name)
+ErrorSource SourceOfTemplate(nb::handle environment, const std::string& name, bool withSource)
 {
-    auto source = nb::cast<const PyEnvironment&>(environment).SourceOf(name);
+    auto source = nb::cast<const PyEnvironment&>(environment).SourceOf(name, withSource);
     source.environment = nb::borrow(environment);
     return source;
 }
 
-ErrorSource PyEnvironment::SourceOf(const std::string& name) const
+ErrorSource PyEnvironment::SourceOf(const std::string& name, bool withSource) const
 {
     if (m_loaderHandler)
     {
-        return m_loaderHandler->SourceOf(name);
+        return m_loaderHandler->SourceOf(name, withSource);
     }
     ErrorSource source;
     source.name = MakeStr(name);
@@ -778,7 +778,8 @@ nb::object PyEnvironment::LoadTemplate(nb::handle name, nb::handle globals, nb::
         where.environment = nb::find(this);
         RaiseError(error, where);
     }
-    auto where = SourceOf(text);
+    // Only the filename: the source is read for an error alone
+    auto where = SourceOf(text, false);
     return MakeTemplate(std::move(result).value(), globals, nb::borrow(name), where.filename, templateClass);
 }
 
@@ -925,11 +926,6 @@ private:
 void PyTemplate::RenderTo(nb::handle write, nb::args args, nb::kwargs kwargs) const
 {
     CallbackSink sink(write);
-    RenderWith(sink, std::move(args), std::move(kwargs));
-}
-
-void PyTemplate::RenderToSink(jinja2::OutputSink& sink, nb::args args, nb::kwargs kwargs) const
-{
     RenderWith(sink, std::move(args), std::move(kwargs), true);
 }
 

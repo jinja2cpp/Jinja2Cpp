@@ -194,16 +194,18 @@ class Template(_jinja2cpp.Template):
             raise
 
     def generate(self, *args: t.Any, **kwargs: t.Any) -> t.Iterator[str]:
-        """Render the template as a generator of strings, on demand as in Jinja2 (docs/python.md).
-
-        The template runs as the items are asked for, on a worker thread that takes turns with the
-        caller: it runs ahead of the items taken by at most about 512 characters of output. An
-        error comes after the items written before it; closing the generator ends the render."""
-        render = _jinja2cpp._Generation(self, args, kwargs)
+        """Render the template as a generator of strings: Jinja2's items (a run of text, the value of a
+        ``{{ }}``, a macro's output). The render runs at the first item, on the caller's thread
+        (docs/python.md); an error comes after the items written before it, as in Jinja2."""
+        items: t.List[str] = []
+        error: t.Optional[BaseException] = None
         try:
-            yield from render
-        finally:
-            render.close()
+            self._render_to(items.append, *args, **kwargs)
+        except Exception as raised:  # noqa: BLE001 - raised again after the items before it
+            error = raised
+        yield from items
+        if error is not None:
+            raise error
 
     def stream(self, *args: t.Any, **kwargs: t.Any) -> TemplateStream:
         """Like ``generate``, as a TemplateStream."""

@@ -176,3 +176,22 @@ def test_tracebacks_show_the_templates_line(tmp_path):
         env.get_template("syntax.html")
     last = traceback.extract_tb(info.tb)[-1]
     assert (os.path.basename(last.filename), last.lineno, last.name, last.line) == ("syntax.html", 3, "template", "{% endif %}")
+
+
+def test_get_template_asks_a_python_loader_once():
+    # The source of a diagnostic is read for an error only, not on each get_template
+    for module in (jinja2cpp, jinja2):
+        calls = []
+        env = module.Environment(loader=module.FunctionLoader(lambda name: calls.append(name) or ("x{% include 'b' %}" if name == "a" else "B")))
+        env.get_template("a")
+        env.get_template("a").render()
+        assert calls == ["a", "b"], module.__name__
+
+
+def test_template_frame_of_a_template_without_a_file_is_template():
+    import traceback
+
+    with pytest.raises(ZeroDivisionError) as info:
+        jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"os.py": "\n{{ f() }}"})).get_template("os.py").render(f=lambda: 1 / 0)
+    frame = traceback.extract_tb(info.tb)[-2]
+    assert (frame.filename, frame.lineno, frame.line) == ("<template>", 2, "")

@@ -3,7 +3,7 @@ status: in-progress
 priority: medium
 area: parity
 depends: [0355]
-touches: [python/src/generate.cpp, python/src/generate.h, python/src/environment.cpp, python/src/poll.h, python/jinja2cpp/environment.py, include/jinja2cpp/template.h, src/renderer.h, src/out_stream.h]
+touches: [python/src/environment.cpp, python/jinja2cpp/environment.py, include/jinja2cpp/template.h, src/renderer.h, src/out_stream.h, src/statements.cpp]
 shares: [python/tests/upstream/expected-failures.txt]
 ---
 # `Template.generate` renders on demand, in Jinja2's chunks
@@ -30,24 +30,19 @@ callable with a side effect shows it), and the two upstream tests pass or are `d
 
 ## Decisions
 
-- On demand (part 1): `_jinja2cpp._Generation` runs the render on a Python daemon thread
-  (`threading.Thread`, so the stack is a Python thread's: 16 MiB on macOS) inside
-  `contextvars.copy_context().run`. Worker and consumer take turns under one mutex: one runs while the
-  other waits without the GIL, so items, errors and Python objects are only touched by the side whose
-  turn it is. The worker hands over once it gathered 512 characters of items (or at the end); the
-  template thus runs at most one batch ahead of the consumer (recommended option of the decision
-  card, 2026-11-10, taken while Ruslan's answer was open). Close, `del` and the generator's finalizer
-  cancel the render through the sink and the poll; an `atexit` hook closes parked renders before
-  finalization; at finalization a parked worker is left to the process exit.
-- Ctrl-C: a consumer on the main thread wakes every 50 ms, asks the worker for the GIL (the worker's
-  poll yields it), runs `PyErr_CheckSignals`; a KeyboardInterrupt cancels the render, is sent to a
-  Python callable running on the worker (`PyThreadState_SetAsyncExc`) and is raised in the consumer.
-- Items (part 2): `RenderOptions::writeEachPiece` (public, additive): a body flushes the render's
-  sink stream after each node, a macro or call block holds the flush (`OutStream::PieceHold`) so its
-  output is one item, as Jinja2's. Costs one register test per body node when off.
-- Measured: `"".join(generate())` of a 1.7 MB output takes about 2x `render()` (a handoff about
-  25 us per 512 characters); a 130-character template 0.4 ms against 0.2 ms (thread start).
+- Items (part 2, done): `RenderOptions::writeEachPiece` (public, additive): a body flushes the
+  render's sink stream after each node; a macro or call block holds the flush
+  (`OutStream::PieceHold`), so its output is one item, as Jinja2's. It costs one register test per
+  body node when off (preflight `--perf`: largest change +0.64%). `generate()` renders with it at the
+  first item on the caller's thread and yields the items.
+- On demand (part 1): a worker-thread render was built and verified on this branch (commit
+  dc2a6fd9: daemon thread taking turns with the consumer, back-pressure of one 512-character
+  batch, contextvars copy, Ctrl-C through the poll). The verifier found it cannot keep Jinja2's
+  semantics: the template's callables run on another OS thread, so sqlite objects, `threading.local`
+  state and locks the caller holds break, gevent's patched Thread deadlocks, and a daemon consumer at
+  interpreter exit aborts (pthread_exit unwinding through noexcept destructors). Moved to 0454 for a
+  render that resumes on the caller's thread (decision card 2026-11-10, recommended option, taken
+  while Ruslan's answer was open).
 
 **Result.** `test_basic_streaming` and `test_buffered_streaming` pass (upstream 626 -> 628 of 856).
-Left (task 0452): Jinja2's constant folding (`a{{ 1 }}b` is one item), `super()` and a recursive
-loop's call as one item.
+Left: 0452 (items Jinja2 folds into one), 0454 (lazy rendering).

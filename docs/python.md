@@ -112,13 +112,10 @@ engines on a Release build of the module.
 - `env.select_template`, `env.get_or_select_template`, `env.list_templates(extensions=None,
   filter_func=None)` and `env.join_path`.
 - `template.generate()` and `template.stream()` with `TemplateStream` (`dump`,
-  `enable_buffering`, `disable_buffering`). They render on demand (docs/tasks/0436): the render
-  runs on a worker thread that takes turns with the caller, so the template runs as items are asked
-  for, at most about 512 characters of output ahead of them, and closing or dropping the generator
-  ends the render. The items are Jinja2's (a run of text, the value of a `{{ }}`, a macro or call
-  block's output; the engine's `RenderOptions::writeEachPiece`), and an error comes after the items
-  written before it. The render runs in a copy of the caller's `contextvars` context, and Ctrl-C
-  while the caller waits stops it with `KeyboardInterrupt`.
+  `enable_buffering`, `disable_buffering`). They yield Jinja2's items (a run of text, the value of
+  a `{{ }}`, a macro or call block's output; the engine's `RenderOptions::writeEachPiece`, 0436),
+  and an error after the items written before it, as Jinja2 does; but the whole render runs at the
+  first item, on the caller's thread (lazy rendering is docs/tasks/0454).
 - `template.make_module(vars=None, shared=False, locals=None)` and `template.module`, from the
   engine's `Template::MakeModule`: the exports are attributes of a `TemplateModule`, `str()` is
   the rendered body, `__html__` is the same as Markup. An exported macro (also inside an exported
@@ -452,11 +449,10 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   raises `TemplateAssertionError`), and returns an opaque object that only `jinja2cpp.meta`
   takes, not Jinja2's node tree. `find_referenced_templates` gives the names of the tags in
   source order, `None` for a name that is not a literal.
-- `generate()` runs the template ahead of the items taken by up to about 512 characters of
-  output, where Jinja2 runs it item by item, so a side effect of a callable shows up to that much
-  early. A `ContextVar` a callable sets during `generate()` stays in the render's copy of the
-  context. Jinja2 folds constant output into the text around it (`a{{ 1 }}b` is one item, here
-  three), and yields `super()` and a recursive loop's call as one item (0436).
+- `generate()` runs the whole template at the first item, where Jinja2 runs it item by item (0454).
+  Jinja2 folds constant output into the text around it (`a{{ 1 }}b` is one item, here three), and
+  yields `super()`, `self.block()` and a recursive loop's call as one item, and an empty `{{ }}` as
+  `''` (0452).
 - Tracebacks name the classes `jinja2cpp.exceptions.*`, where Jinja2's say `jinja2.exceptions.*`
   (0432). They show the template's file and line as a frame, as Jinja2's do: the line of the call
   for an error a callable raised, and the line of a syntax error.

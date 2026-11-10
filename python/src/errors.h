@@ -23,7 +23,7 @@ struct ErrorSource
 };
 
 // The source of the template `name` in the loader of `environment` (a jinja2cpp.Environment)
-ErrorSource SourceOfTemplate(nb::handle environment, const std::string& name);
+ErrorSource SourceOfTemplate(nb::handle environment, const std::string& name, bool withSource = true);
 
 // The note of a syntax error raised by a render: it is in a template the render included, imported or extended
 extern const char* const kIncludedSyntaxNote;
