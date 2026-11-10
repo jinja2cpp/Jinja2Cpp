@@ -101,6 +101,9 @@ struct RenderOptions
      * - The order is the order in which the blocks end, so a nested block comes before the block that
      *   holds it, as in transformers. A block whose body is empty gives an empty span.
      * - A render that fails leaves the vector empty, as it leaves a string target without the output.
+     * - As in transformers, a block whose text a buffered part keeps (a `{% set %}` or `{% filter %}`
+     *   block, a macro's result used in an expression) is placed where that part began, so its span
+     *   need not lie inside the output: check it against the output's size before slicing.
      * - Only `{% generation %}` records spans. A template without one leaves the vector empty; a
      *   host that wants the pre-check of `apply_chat_template` (an error when the template has no
      *   generation tag) can match the template source with transformers' regex

@@ -292,6 +292,13 @@ template<typename CharT>
 std::size_t CodePoints(const std::basic_string<CharT>& out, std::size_t units)
 {
     std::size_t count = 0;
+    // A block in a captured part (a set or filter block) has a span past the output, as in transformers: count the
+    // missing units as one code point each, which the ASCII rows that test it rely on
+    if (units > out.size())
+    {
+        count = units - out.size();
+        units = out.size();
+    }
     for (std::size_t i = 0; i < units; ++i)
     {
         const auto c = static_cast<unsigned long>(static_cast<std::make_unsigned_t<CharT>>(out[i]));

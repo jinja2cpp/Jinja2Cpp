@@ -31,7 +31,7 @@ std::optional<BasicErrorInfo<CharT>> TemplateImpl<CharT>::RenderWithOptions(Targ
         options.generationSpans->clear();
     }
     auto error = RenderCore<true>(os, params, &hooks);
-    // A failed render keeps no spans: a string target holds no output then, and a span past its end is a trap
+    // A failed render keeps no spans: a string target holds no output then
     if (error && options.generationSpans)
     {
         options.generationSpans->clear();
