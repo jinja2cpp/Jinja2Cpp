@@ -1551,14 +1551,11 @@ struct StrOps
         {
             result = host->GetItem(key);
         }
-        else if (value.Kind() == ValueKind::Callable || (map && map->GetAttrPolicy() == MapAttrPolicy::KeysOnly))
+        // Python's str.format reads obj[key], which a number has not; only the sandbox's formatter goes through
+        // getitem, which falls back to the number's data attributes (GetItem)
+        else if (const auto kind = value.Kind(); kind == ValueKind::Callable || (map && map->GetAttrPolicy() == MapAttrPolicy::KeysOnly)
+                                                 || (!context.GetSandboxPolicy() && (kind == ValueKind::Int || kind == ValueKind::BigInt || kind == ValueKind::Double || kind == ValueKind::Bool)))
         {
-            Raise("'" + TypeName(value) + "' object is not subscriptable");
-        }
-        else if (const auto kind = value.Kind(); !context.GetSandboxPolicy() && (kind == ValueKind::Int || kind == ValueKind::BigInt || kind == ValueKind::Double || kind == ValueKind::Bool))
-        {
-            // Python's str.format reads obj[key], which a number has not; only the sandbox's formatter goes through
-            // getitem, which falls back to the number's data attributes (GetItem)
             Raise("'" + TypeName(value) + "' object is not subscriptable");
         }
         else
