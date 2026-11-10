@@ -19,7 +19,6 @@
 #include <iterator>
 #include <limits>
 #include <memory>
-#include <new>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -1474,7 +1473,15 @@ inline void Value::DestroyContainer() noexcept
     if (depth < detail::MaxRecursiveDestroy)
     {
         ++depth;
-        m_data.emplace<NoneValue>();
+        // Moved out and destroyed here, with the depth counted; what stays is valueless
+        if (auto* list = std::get_if<ListIndex>(&m_data))
+        {
+            const RecWrapper<ValuesList> doomed(std::move(*list));
+        }
+        else if (auto* map = std::get_if<MapIndex>(&m_data))
+        {
+            const RecWrapper<ValuesMap> doomed(std::move(*map));
+        }
         --depth;
         return;
     }
@@ -1496,7 +1503,7 @@ inline void Value::DestroyNested() noexcept
             item.TakeFilledContainers(pending);
         }
     }
-    catch (const std::bad_alloc&) // NOLINT(bugprone-empty-catch)
+    catch (...) // NOLINT(bugprone-empty-catch)
     {
     }
 }
