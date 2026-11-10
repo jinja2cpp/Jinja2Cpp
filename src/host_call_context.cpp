@@ -7,6 +7,7 @@
 
 #include <jinja2cpp/error_info.h>
 
+#include <cstddef>
 #include <memory>
 #include <new>
 #include <optional>
