@@ -10,6 +10,7 @@
 #include <jinja2cpp/utils/ordered_map.h>
 #include <jinja2cpp/value_ptr.h>
 
+#include <algorithm>
 #include <atomic>
 #include <charconv>
 #include <cstddef>
@@ -1001,6 +1002,19 @@ private:
         return out != nullptr;
     }
 
+    // A ValuesList or ValuesMap that holds items: one whose destruction recurses
+    [[nodiscard]] bool IsFilledContainer() const noexcept;
+    // Whether the value holds a filled container
+    [[nodiscard]] bool HoldsFilledContainer() const noexcept;
+    // Whether destroying the value recurses more than twice: a container it holds holds a
+    // filled container
+    [[nodiscard]] bool HoldsNestedContainer() const noexcept;
+    // Moves the filled containers the value holds to `pending`
+    void TakeFilledContainers(std::vector<Value>& pending) noexcept;
+    // Destroys the containers nested in the value one at a time, so that a list nested
+    // deeper than the stack allows is destroyed without recursing once per level (docs/tasks/0418)
+    void DestroyNested() noexcept;
+
     ValueData m_data;
 };
 
@@ -1401,7 +1415,87 @@ inline Value::Value(Value&& val) noexcept
     : m_data(std::move(val.m_data))
 {
 }
-inline Value::~Value() = default;
+inline Value::~Value()
+{
+    if (HoldsNestedContainer())
+    {
+        DestroyNested();
+    }
+}
+inline bool Value::IsFilledContainer() const noexcept
+{
+    if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&m_data))
+    {
+        return !list->valueless_after_move() && !(*list)->empty();
+    }
+    if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&m_data))
+    {
+        return !map->valueless_after_move() && !(*map)->empty();
+    }
+    return false;
+}
+inline bool Value::HoldsFilledContainer() const noexcept
+{
+    if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&m_data))
+    {
+        return !list->valueless_after_move() && std::any_of((*list)->begin(), (*list)->end(), [](const Value& item) { return item.IsFilledContainer(); });
+    }
+    if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&m_data))
+    {
+        return !map->valueless_after_move() && std::any_of((*map)->begin(), (*map)->end(), [](const auto& entry) { return entry.second.IsFilledContainer(); });
+    }
+    return false;
+}
+inline bool Value::HoldsNestedContainer() const noexcept
+{
+    if (const auto* list = std::get_if<RecWrapper<ValuesList>>(&m_data))
+    {
+        return !list->valueless_after_move() && std::any_of((*list)->begin(), (*list)->end(), [](const Value& item) { return item.HoldsFilledContainer(); });
+    }
+    if (const auto* map = std::get_if<RecWrapper<ValuesMap>>(&m_data))
+    {
+        return !map->valueless_after_move() && std::any_of((*map)->begin(), (*map)->end(), [](const auto& entry) { return entry.second.HoldsFilledContainer(); });
+    }
+    return false;
+}
+inline void Value::TakeFilledContainers(std::vector<Value>& pending) noexcept
+{
+    const auto take = [&pending](Value& item) {
+        if (item.IsFilledContainer())
+        {
+            pending.push_back(std::move(item));
+        }
+    };
+    if (auto* list = std::get_if<RecWrapper<ValuesList>>(&m_data))
+    {
+        if (!list->valueless_after_move())
+        {
+            std::for_each((*list)->begin(), (*list)->end(), take);
+        }
+    }
+    else if (auto* map = std::get_if<RecWrapper<ValuesMap>>(&m_data))
+    {
+        if (!map->valueless_after_move())
+        {
+            std::for_each((*map)->begin(), (*map)->end(), [&take](auto& entry) { take(entry.second); });
+        }
+    }
+}
+inline void Value::DestroyNested() noexcept
+{
+    // A value nested three deep or more: all of it is destroyed here, with nothing left that
+    // recurses. Out of memory for the list of pending containers terminates, as std::bad_alloc in a
+    // destructor would
+    std::vector<Value> pending;
+    TakeFilledContainers(pending);
+    while (!pending.empty())
+    {
+        // Its own filled containers go to the list first: it is then destroyed without recursing
+        Value item = std::move(pending.back());
+        pending.pop_back();
+        item.TakeFilledContainers(pending);
+    }
+}
 inline Value& Value::operator=(const Value&) = default;
 inline Value& Value::operator=(Value&& val) noexcept
 {

@@ -1,0 +1,1 @@
+{% set ns = namespace(c=none) %}{% for x in [ns] %}{% set ns.c = loop.nope %}{% endfor %}{{ ns.c is defined }}{% set l = [] %}{% for x in [l] %}{% set _ = l.append(loop.nope) %}{% endfor %}{{ l|length }}

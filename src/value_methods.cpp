@@ -2864,7 +2864,10 @@ bool IsMutatingName(std::string_view name)
 void NoteContainerStore(const InternalValue& container, const InternalValue& item)
 {
     const auto kind = item.Kind();
-    if (kind == ValueKind::List || kind == ValueKind::Map || kind == ValueKind::Callable || kind == ValueKind::KeyValuePair)
+    // Any other value refers to objects only through the anchor of the container it was read
+    // from (SetParentData): an undefined `loop.nope` keeps the loop's frame (docs/tasks/0444)
+    const auto* object = detail::InternalValueAccess::Object(item);
+    if (kind == ValueKind::List || kind == ValueKind::Map || kind == ValueKind::Callable || kind == ValueKind::KeyValuePair || (object && object->IsTraversable()))
     {
         CycleCollector::NoteStore(container);
     }

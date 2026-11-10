@@ -193,11 +193,46 @@ InternalValue InvokeInModule(RenderContext& context, const Callable& callable, c
     return result;
 }
 
-// A host Value as an argument the call owns: copied and converted by value, so that a module
+// A copy of the host's `value`, which stops with RecursionLimitError where its nesting would
+// overflow the stack: Value's copy recurses once per level of its lists and dicts
+// (docs/tasks/0418). What it copied so far is destroyed without recursing (Value::~Value)
+Value OwnedCopy(const Value& value)
+{
+    if (const auto* list = value.GetIf<ValuesList>())
+    {
+        if (StackNearlyExhausted())
+        {
+            throw RecursionLimitError();
+        }
+        ValuesList copy;
+        copy.reserve(list->size());
+        for (const auto& item : *list)
+        {
+            copy.push_back(OwnedCopy(item));
+        }
+        return Value(std::move(copy));
+    }
+    if (const auto* map = value.GetIf<ValuesMap>())
+    {
+        if (StackNearlyExhausted())
+        {
+            throw RecursionLimitError();
+        }
+        ValuesMap copy;
+        for (const auto& [key, item] : *map)
+        {
+            copy.emplace(key, OwnedCopy(item));
+        }
+        return Value(std::move(copy));
+    }
+    return value;
+}
+
+// A host Value as a value the module owns: copied and converted by value, so that a module
 // value the macro stores it in (a namespace) never refers to the host's
 InternalValue OwnedArgument(const Value& value)
 {
-    Value copy = value;
+    Value copy = OwnedCopy(value);
     return visit(visitors::InputValueConvertor(true, false), copy.GetData());
 }
 } // namespace
@@ -304,13 +339,9 @@ struct TemplateModuleState : std::enable_shared_from_this<TemplateModuleState<Ch
         std::size_t m_sharedDepth;
     };
 
-    TemplateModuleState(std::shared_ptr<const Impl> tpl, const ValuesMap& params)
+    explicit TemplateModuleState(std::shared_ptr<const Impl> tpl)
         : impl(std::move(tpl))
     {
-        for (const auto& [name, value] : params)
-        {
-            convertedParams[name] = visit(visitors::InputValueConvertor(true, false), value.GetData());
-        }
     }
     TemplateModuleState(const TemplateModuleState&) = delete;
     TemplateModuleState(TemplateModuleState&&) = delete;
@@ -557,10 +588,15 @@ nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> TemplateImpl
         return MakeUnexpected(BasicErrorInfo<CharT>(errorData));
     }
 
-    auto state = std::make_shared<TemplateModuleState<CharT>>(self, params);
+    auto state = std::make_shared<TemplateModuleState<CharT>>(self);
     BasicTemplateModule<CharT> result;
     try
     {
+        // In the try: a param nested too deep fails as a render does
+        for (const auto& [name, value] : params)
+        {
+            state->convertedParams[name] = OwnedArgument(value);
+        }
         ModuleCallCollector cycles(state->cells, state->kept);
         const auto limitsScope = state->MakeLimitsScope();
         // Into result.body, which outlives the limits that keep a pointer to it

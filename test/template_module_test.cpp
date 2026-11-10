@@ -621,3 +621,74 @@ TEST_F(TemplateModuleTest, Wide)
         EXPECT_EQ(2u, failure.error().GetExtraParams().size());
     }
 }
+
+namespace
+{
+// A host value nested `depth` deep: a list or a dict holding the next level, `leaf` at the bottom
+jinja2::Value DeepValue(std::size_t depth, bool asMap, jinja2::Value leaf = jinja2::Value())
+{
+    jinja2::Value value = std::move(leaf);
+    for (std::size_t level = 0; level < depth; ++level)
+    {
+        if (asMap)
+        {
+            jinja2::ValuesMap map;
+            map.emplace("a", std::move(value));
+            value = jinja2::Value(std::move(map));
+        }
+        else
+        {
+            jinja2::ValuesList list;
+            list.push_back(std::move(value));
+            value = jinja2::Value(std::move(list));
+        }
+    }
+    return value;
+}
+
+constexpr std::size_t DeepArgument = 200000;
+} // namespace
+
+// The host's value is copied for the module, a copy that recursed once per level and
+// overflowed the stack; it stops with RecursionLimitExceeded as a render does, and a deep
+// host value is destroyed without recursing (docs/tasks/0418)
+TEST_F(TemplateModuleTest, DeepArgumentFails)
+{
+    auto module = Make("{% macro m(p) %}{{ p|length }}{% endmacro %}");
+    for (const bool asMap : { false, true })
+    {
+        // Moved, never copied: Value's own copy recurses
+        const auto args = [asMap] {
+            jinja2::ValuesList list;
+            list.push_back(DeepValue(DeepArgument, asMap));
+            return list;
+        };
+        const auto kwArgs = [asMap] {
+            jinja2::ValuesMap map;
+            map.emplace("p", DeepValue(DeepArgument, asMap));
+            return map;
+        };
+        try
+        {
+            Call(module.exports["m"], args());
+            FAIL() << "expected RecursionLimitExceeded";
+        }
+        catch (const jinja2::BadResultAccess<>& failure)
+        {
+            EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, failure.error().GetCode()) << failure.error().ToString();
+        }
+        EXPECT_THROW(Call(module.exports["m"], {}, kwArgs()), jinja2::BadResultAccess<>);
+
+        auto tpl = Load("{{ p|length }}");
+        auto failed = tpl.MakeModule(kwArgs());
+        ASSERT_FALSE(failed);
+        EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, failed.error().GetCode()) << failed.error().ToString();
+
+        // Within the stack, it is the macro's
+        const auto nested = DeepValue(500, asMap, 7);
+        EXPECT_EQ("1", Call(module.exports["m"], { nested }).AsString());
+        auto made = tpl.MakeModule({ { "p", nested } });
+        ASSERT_TRUE(!!made);
+        EXPECT_EQ("1", made->body);
+    }
+}

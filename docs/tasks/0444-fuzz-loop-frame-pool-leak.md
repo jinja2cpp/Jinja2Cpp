@@ -25,3 +25,15 @@ project's worst defect class (AGENTS.md), so check the fix against the cell prot
 
 **Done when.** The minimised input replays clean under LeakSanitizer and is added to
 `fuzz/regressions/` (fuzz/README.md), with a unit test for the leaking path.
+
+**Resolution.** The input came from the run's log (libFuzzer prints the reproducer):
+`{% set ns = namespace(c=none) %}{% for x in [ns] %}{% set ns.c = loop.cyc2e %}{% endfor %}{{ ns.c('a', 'b') }}`.
+The frame was not lost by the pool: it was held by a reference cycle the render's collector
+never saw. `loop.cyc2e` is undefined, and `SetParentData` gives it an `Anchor` that keeps the
+`loop` object, hence the frame, whose items hold `ns`. `NoteContainerStore`
+(src/value_methods.cpp) noted a store only when the stored value was a list, dict, callable or
+pair, so `set ns.c = <undefined>` (or `l.append(...)`) closed a cycle without a note. It now
+also notes a store of any value whose object is traversable, which is what an anchor is. The
+fix is in src/value_methods.cpp, not src/statements.cpp. Regression input
+`fuzz/regressions/cycle-through-undefined-loop-attribute.j2` (leaks before the fix under
+LeakSanitizer) and two rows of `ExpressionTest.CyclesThroughObjects`.
