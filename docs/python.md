@@ -115,7 +115,7 @@ engines on a Release build of the module.
   `enable_buffering`, `disable_buffering`). They yield Jinja2's items (a run of text, the value of
   a `{{ }}`, a macro or call block's output; the engine's `RenderOptions::writeEachPiece`, 0436),
   and an error after the items written before it, as Jinja2 does; but the whole render runs at the
-  first item, on the caller's thread (lazy rendering is docs/tasks/0454).
+  first item, on the caller's thread (lazy rendering is docs/tasks/0457).
 - `template.make_module(vars=None, shared=False, locals=None)` and `template.module`, from the
   engine's `Template::MakeModule`: the exports are attributes of a `TemplateModule`, `str()` is
   the rendered body, `__html__` is the same as Markup. An exported macro (also inside an exported
@@ -449,10 +449,10 @@ that call: using it after the call returns raises `TemplateRuntimeError`.
   raises `TemplateAssertionError`), and returns an opaque object that only `jinja2cpp.meta`
   takes, not Jinja2's node tree. `find_referenced_templates` gives the names of the tags in
   source order, `None` for a name that is not a literal.
-- `generate()` runs the whole template at the first item, where Jinja2 runs it item by item (0454).
+- `generate()` runs the whole template at the first item, where Jinja2 runs it item by item (0457).
   Jinja2 folds constant output into the text around it (`a{{ 1 }}b` is one item, here three), and
   yields `super()`, `self.block()` and a recursive loop's call as one item, and an empty `{{ }}` as
-  `''` (0452).
+  `''` (0456).
 - Tracebacks name the classes `jinja2cpp.exceptions.*`, where Jinja2's say `jinja2.exceptions.*`
   (0432). They show the template's file and line as a frame, as Jinja2's do: the line of the call
   for an error a callable raised, and the line of a syntax error.

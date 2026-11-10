@@ -40,9 +40,9 @@ callable with a side effect shows it), and the two upstream tests pass or are `d
   batch, contextvars copy, Ctrl-C through the poll). The verifier found it cannot keep Jinja2's
   semantics: the template's callables run on another OS thread, so sqlite objects, `threading.local`
   state and locks the caller holds break, gevent's patched Thread deadlocks, and a daemon consumer at
-  interpreter exit aborts (pthread_exit unwinding through noexcept destructors). Moved to 0454 for a
+  interpreter exit aborts (pthread_exit unwinding through noexcept destructors). Moved to 0457 for a
   render that resumes on the caller's thread (decision card 2026-11-10, recommended option, taken
   while Ruslan's answer was open).
 
 **Result.** `test_basic_streaming` and `test_buffered_streaming` pass (upstream 626 -> 628 of 856).
-Left: 0452 (items Jinja2 folds into one), 0454 (lazy rendering).
+Left: 0456 (items Jinja2 folds into one), 0457 (lazy rendering).
