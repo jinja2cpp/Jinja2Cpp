@@ -22,6 +22,7 @@
 #include <jinja2cpp/template_env.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>

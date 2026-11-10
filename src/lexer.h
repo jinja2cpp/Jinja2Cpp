@@ -376,25 +376,26 @@ private:
     }
 
     // The token that starts at `pos` (not whitespace), lexed up to `end` at most; false on a
-    // lexing error. m_next gets where the next one may start.
-    bool ScanToken(size_t pos, size_t end, Token& tok)
+    // lexing error. m_next gets where the next one may start. Inlined in the two loops that lex
+    // a tag, the hottest code of a load
+    JINJA2CPP_HOT_INLINE bool ScanToken(size_t pos, size_t end, Token& tok)
     {
         const auto ch = m_src[pos];
         if (traits::is_operator_char(ch))
         {
             return ScanOperator(pos, end, tok);
         }
-        if (const auto first = NameCharLength(pos, end, true))
+        if (traits::is_letter(ch) || ch == '_')
         {
-            auto last = pos + first;
-            while (last != end)
+            auto last = pos + 1;
+            while (last != end && (traits::is_letter_or_digit(m_src[last]) || m_src[last] == '_'))
             {
-                const auto len = NameCharLength(last, end, false);
-                if (!len)
-                {
-                    break;
-                }
-                last += len;
+                ++last;
+            }
+            // A name with a character above ASCII goes on out of line, so this stays inlined
+            if (last != end && !traits::is_ascii(m_src[last]))
+            {
+                return ScanNonAsciiName(pos, last, end, tok);
             }
             SetSymbol(pos, last, tok);
             return true;
@@ -412,27 +413,43 @@ private:
         {
             return ScanString(pos, end, tok);
         }
-        return false;
+        return !traits::is_ascii(ch) && ScanNonAsciiName(pos, pos, end, tok);
     }
 
-    // The length of the character at `pos` if a name can have it there, or 0. Jinja2 lexes a name
-    // as a run of word characters and requires str.isidentifier() of it: the first character is
-    // XID_Start or '_', the others XID_Continue (Unicode as in the pinned Python, unicode_tables.h)
-    [[nodiscard]] size_t NameCharLength(size_t pos, size_t end, bool first) const
+    // A name with a character above ASCII, from `pos`, whose characters up to `last` were taken
+    // (none when last == pos); false when `pos` starts no name. Jinja2 lexes a name as a run of
+    // word characters and requires str.isidentifier() of it: the first character is XID_Start or
+    // '_', the others XID_Continue (Unicode as in the pinned Python, unicode_tables.h)
+    JINJA2CPP_COLD_INLINE bool ScanNonAsciiName(size_t pos, size_t last, size_t end, Token& tok)
     {
-        const auto ch = m_src[pos];
-        if (traits::is_ascii(ch))
+        const auto src = m_src.substr(0, end);
+        while (last != end)
         {
-            return traits::is_letter(ch) || ch == '_' || (!first && traits::is_digit(ch)) ? 1 : 0;
+            const auto unit = m_src[last];
+            if (traits::is_ascii(unit))
+            {
+                if ((last == pos || !traits::is_digit(unit)) && !traits::is_letter(unit) && unit != '_')
+                {
+                    break;
+                }
+                ++last;
+                continue;
+            }
+            uint32_t cp = 0;
+            const auto len = detail::DecodeCodePoint(src, last, cp);
+            // A malformed sequence decodes as its first unit, which is no character of a name
+            if ((sizeof(CharT) == 1 && len == 1) || !(last == pos ? unicode::IsXidStart(cp) : unicode::IsXidContinue(cp)))
+            {
+                break;
+            }
+            last += len;
         }
-        uint32_t cp = 0;
-        const auto len = detail::DecodeCodePoint(m_src.substr(0, end), pos, cp);
-        // A malformed sequence decodes as its first unit, which is no character of a name
-        if (sizeof(CharT) == 1 && len == 1)
+        if (last == pos)
         {
-            return 0;
+            return false;
         }
-        return (first ? unicode::IsXidStart(cp) : unicode::IsXidContinue(cp)) ? len : 0;
+        SetSymbol(pos, last, tok);
+        return true;
     }
 
     bool ScanOperator(size_t pos, size_t end, Token& tok)
