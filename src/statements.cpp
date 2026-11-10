@@ -550,7 +550,7 @@ struct LoopState : ValueObject
         {
             if (const auto hostLength = host->Len())
             {
-                listSize = *hostLength;
+                listSize = hostLength;
                 return true;
             }
             lengthOf = InternalValue();
