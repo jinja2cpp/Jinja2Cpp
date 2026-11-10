@@ -41,7 +41,7 @@ docs/cpp-only-filters.md. Steps, one PR each, in order:
    over the reversed patterns for the edge rule, a first-unit table so text without a first
    character is one scan), the `neutralize` and `fence` filters, a `PromptFilterTest` fixture
    (narrow and wide) with the specials `<|im_start|>`, `<|im_end|>`, `[INST]` and the tag
-   `document`. Codex review and security review.
+   `document`. Codex review and our own security review (CLAUDE.md).
 3. PR 2: `Settings::autoescapeMode`, prompt mode (escaper chosen in the slow path of
    `WriteEscaped`/`MarkupEscape` through a non-virtual accessor on the renderer callback; no
    change to `WriteOutput`), string literals prompt-safe in prompt mode, the escape-site audit

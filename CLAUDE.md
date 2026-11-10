@@ -95,9 +95,17 @@ owner threads always ask for it explicitly:
   review). Scope: changes in `src/`, `include/`, `test/`, `cmake/`, `thirdparty/`,
   `CMakeLists.txt`, `.github/workflows/` or the agent instructions (AGENTS.md,
   CLAUDE.md, REVIEW.md, `.claude/`). Skip other docs-only and task-only PRs, bench
-  re-measures, mechanical clang-tidy batches and merge-steward train PRs. Add
-  `@codex security review` when the diff touches the lexer, parsers, evaluator,
-  loaders or escaping.
+  re-measures, mechanical clang-tidy batches and merge-steward train PRs.
+- Do not ask for `@codex security review`. Codex Security Review needs a ChatGPT Pro,
+  Business, Enterprise or Edu workspace, and this project's is Plus: the command is
+  accepted but runs another plain code review (#683 to #815) or nothing (#818). Codex's code
+  review still reports security issues it sees, and its findings count as usual.
+- When the diff touches the lexer, parsers, evaluator, loaders, escaping, the sandbox
+  or the Python module's host boundary, the owner thread runs its own security
+  review before reporting final: the `security-review` skill over the PR diff
+  (`git diff origin/master...HEAD`), or a `verifier` pass with that brief where the
+  skill is missing, judged against REVIEW.md's untrusted-input rules. Triage its findings like Codex P0/P1, and add `Security review: N
+  findings, M fixed, K declined` next to the verifier line in the PR body.
 - Re-request only after a substantive change (new logic, not nit fixes), at most
   twice per PR.
 - Triage: P0/P1 are blocking like a red-circle finding (fix, or reply with the traced
