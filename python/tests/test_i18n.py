@@ -226,3 +226,26 @@ def test_without_installed_translations_the_engine_leaves_messages_as_they_are()
     assert env.from_string("{{ _('Hello') }}{% trans %}Hi{% endtrans %}").render() == "HelloHi"
     with pytest.raises(jinja2.exceptions.UndefinedError):
         jinja2.Environment(extensions=["jinja2.ext.i18n"]).from_string("{{ _('Hello') }}").render()
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{{ gettext('%(a)1000000000s', a=1)|length }}",
+        "{{ gettext('%(a).1000000000f', a=1.5)|length }}",
+        "{{ gettext('%(a)s%(a)s%(a)s', a=s)|length }}",
+    ],
+)
+def test_formatting_a_translation_is_capped_before_it_allocates(source):
+    # Oldstyle calls format in Python (newstyle ones in the engine, capped there): Python would build the string
+    # first (a 1 GB width); the render's cap (MaxSequenceSize) is checked from the widths, a number's precision and
+    # the strings the fields repeat, as for str.format in the sandbox
+    env = jinja2cpp.Environment(extensions=["jinja2.ext.i18n"])
+    env.install_null_translations(newstyle=False)
+    with pytest.raises(jinja2cpp.exceptions.TemplateRuntimeError, match="too long"):
+        env.from_string(source).render(s="y" * 30000000)
+
+
+@pytest.mark.parametrize("autoescape", [False, True])
+def test_formatting_a_translation_that_fits_is_as_jinja2(autoescape):
+    same("{{ gettext('%(a)5s|%(b).2f|100%%|%(c)s', a='x', b=1.5, c='<i>') }}", translations(True), autoescape=autoescape)

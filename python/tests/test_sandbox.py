@@ -1304,3 +1304,20 @@ def test_format_map_kept_past_the_render():
     gc.collect()
     with pytest.raises(jinja2cpp.TemplateRuntimeError):
         kept[0]({"a": 1})
+
+
+def test_a_long_string_reaches_is_safe_attribute_as_an_empty_one_of_its_type():
+    # Security review of 0354: a refused name read in a loop copied the whole string into Python each time
+    # (O(length) per read). A custom is_safe_attribute sees a short string itself, a long one as '' of its type
+    seen = []
+
+    class Recording(SandboxedEnvironment):
+        def is_safe_attribute(self, obj, attr, value):
+            seen.append((type(obj), len(obj)))
+            return False
+
+    env = Recording()
+    source = "{% for i in range(3) %}{{ s.__class__ }}{{ m.__class__ }}{% endfor %}{{ t.__class__ }}"
+    assert env.from_string("{% set s = 'x' * 1000000 %}{% set m = s|safe %}" + source).render(t="abc") == ""
+    assert seen.count((str, 0)) == 3 and seen.count((Markup, 0)) == 3, seen
+    assert seen[-1] == (str, 3), seen

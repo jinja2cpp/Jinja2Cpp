@@ -4,10 +4,12 @@ Environment(extensions=[...]) takes these, Jinja2's own classes or their dotted 
 ("jinja2.ext.do", "jinja2.ext.loopcontrols", "jinja2.ext.i18n").
 """
 
+import re
 import typing as t
 
 from markupsafe import Markup
 
+from . import _jinja2cpp
 from .utils import pass_context
 
 
@@ -115,11 +117,42 @@ def _remove_globals(env: t.Any) -> None:
             del env.globals[name]
 
 
+# A %-conversion: (key), flags, width, .precision, length modifier, type (printf-style formatting)
+_PERCENT = re.compile(r"%(?:\((?P<key>[^)]*)\))?[#0\- +]*(?P<width>\*|[0-9]+)?(?:\.(?P<precision>\*|[0-9]+))?[hlL]?(?P<type>.?)", re.DOTALL)
+_NUMBER_TYPES = frozenset("diouxXeEfFgGc")
+
+
+def _check_percent_size(translated: str, variables: t.Mapping[str, t.Any]) -> None:
+    # Python builds the string first; the render's cap on sequences (MaxSequenceSize) is checked before, as for
+    # str.format in the sandbox (SandboxedFormatter): each field's width, a number's precision, and an estimate of
+    # the whole, the literal text and each field's string (a field may repeat a long value)
+    total = 0
+    position = 0
+    for match in _PERCENT.finditer(translated):
+        total += match.start() - position
+        position = match.end()
+        if match.group("type") == "%":
+            total += 1
+            continue
+        size = int(match.group("width")) if match.group("width") not in (None, "*") else 0
+        if match.group("precision") not in (None, "*") and match.group("type") in _NUMBER_TYPES:
+            size = max(size, int(match.group("precision")))
+        _jinja2cpp._check_sequence_size(size)
+        value = variables.get(match.group("key")) if match.group("key") is not None and isinstance(variables, dict) else None
+        if isinstance(value, str):
+            size = max(size, len(value))
+        total += size
+        _jinja2cpp._check_sequence_size(total)
+    _jinja2cpp._check_sequence_size(total + len(translated) - position)
+
+
 def _format(ctx: t.Any, translated: t.Any, variables: t.Dict[str, t.Any]) -> t.Any:
     if not variables:
         return translated
     if ctx.eval_ctx.autoescape:
         translated = Markup(translated)
+    if isinstance(translated, str):
+        _check_percent_size(translated, variables)
     return translated % variables
 
 

@@ -375,7 +375,8 @@ bool PyHost::ItemAtTo(size_t index, jinja2::HostResult& out) const
         PyErr_Clear();
         return false;
     }
-    WriteToEngine(item, out);
+    // A borrowed item: held while it is converted, which can run Python that drops it from the list
+    WriteToEngine(nb::borrow(item), out);
     return true;
 }
 
@@ -621,7 +622,23 @@ nb::object Representative(const jinja2::Value& obj, bool& synthetic)
         synthetic = true;
         return Stub("function");
     }
-    return ToPython(obj);
+    // A long string, likewise, is an empty one of its type (str or Markup): a refused name read in a loop would
+    // otherwise copy it into Python each time. A custom is_safe_attribute sees the value itself up to this length
+    constexpr size_t longText = 4096;
+    auto empty = std::visit(
+        [](const auto& data) -> std::optional<jinja2::Value> {
+            using T = std::decay_t<decltype(data)>;
+            if constexpr (std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view> || std::is_same_v<T, std::wstring> || std::is_same_v<T, std::wstring_view> || std::is_same_v<T, jinja2::Markup> || std::is_same_v<T, jinja2::WMarkup>)
+            {
+                if (data.size() > longText)
+                {
+                    return jinja2::Value(T{});
+                }
+            }
+            return std::nullopt;
+        },
+        obj.GetData());
+    return ToPython(empty ? *empty : obj);
 }
 
 // Whether `value` is a string of the template's, owned or viewed
