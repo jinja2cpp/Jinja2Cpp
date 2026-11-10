@@ -430,6 +430,11 @@ TEST_F(TemplateModuleTest, CycleMadeInACall)
 // walk of the whole container per call takes 16 times as long
 TEST_F(TemplateModuleTest, StoresIntoModuleContainersStayLinear)
 {
+#ifdef JINJA2CPP_CELL_TRACE
+    // 20000 calls log some 270000 cell events, more than TLC checks as one trace (tla/check.py
+    // --trace); the build times nothing, and the other module tests trace the same steps
+    GTEST_SKIP() << "a timing test: its trace is too long for TLC";
+#endif
     const char* const sources[] = {
         "{% set cache = [] %}{% macro m(a, k) %}{% set _ = cache.append([1]) %}{% endmacro %}",
         "{% set cache = [] %}{% macro m(a, k) %}{% set _ = cache.append({'n': a.name}) %}{% endmacro %}",
