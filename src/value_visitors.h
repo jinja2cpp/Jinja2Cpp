@@ -425,59 +425,6 @@ void ValueRendererBase<CharT>::AppendCodePointEscape(uint32_t cp) const
     }
 }
 
-namespace detail
-{
-// Decodes one code point from UTF-8 (char) or UTF-16/UTF-32 (wchar_t) starting at pos and
-// returns the number of code units it takes. Malformed input yields one unit as is.
-inline size_t DecodeCodePoint(std::string_view str, size_t pos, uint32_t& cp)
-{
-    auto unit = [&str](size_t idx) { return static_cast<uint32_t>(static_cast<unsigned char>(str[idx])); };
-    uint32_t lead = unit(pos);
-    size_t len = lead < 0x80 ? 1 : (lead >> 5) == 0x6 ? 2
-                               : (lead >> 4) == 0xe   ? 3
-                               : (lead >> 3) == 0x1e  ? 4
-                                                      : 0;
-    cp = lead;
-    if (len <= 1 || pos + len > str.size())
-    {
-        return 1;
-    }
-
-    uint32_t result = lead & (0xff >> (len + 1));
-    for (size_t idx = 1; idx != len; ++idx)
-    {
-        uint32_t next = unit(pos + idx);
-        if ((next & 0xc0) != 0x80)
-        {
-            return 1;
-        }
-        result = (result << 6) | (next & 0x3f);
-    }
-    static const uint32_t minValue[] = { 0, 0, 0x80, 0x800, 0x10000 };
-    if (result < minValue[len] || result > 0x10ffff || (result >= 0xd800 && result <= 0xdfff))
-    {
-        return 1;
-    }
-    cp = result;
-    return len;
-}
-
-inline size_t DecodeCodePoint(std::wstring_view str, size_t pos, uint32_t& cp)
-{
-    cp = CodeUnit(str[pos]);
-    if (sizeof(wchar_t) == 2 && cp >= 0xd800 && cp <= 0xdbff && pos + 1 < str.size())
-    {
-        auto low = CodeUnit(str[pos + 1]);
-        if (low >= 0xdc00 && low <= 0xdfff)
-        {
-            cp = 0x10000 + ((cp - 0xd800) << 10) + (low - 0xdc00);
-            return 2;
-        }
-    }
-    return 1;
-}
-} // namespace detail
-
 template<typename CharT>
 void ValueRendererBase<CharT>::AppendString(std::basic_string_view<CharT> str) const
 {

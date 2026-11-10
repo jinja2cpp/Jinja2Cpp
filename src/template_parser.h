@@ -387,6 +387,9 @@ struct TemplateRootInfo
     // A `{% autoescape %}` with a value that is not constant was parsed: only then can a tag
     // be in volatile code (TemplateParser::IsInVolatileCode)
     bool hasVolatileAutoescape = false;
+    // Set by the statement parser when the tag it parsed outputs like `{{ }}` (`print`), so
+    // that its unknown filters and tests are placed as an output tag's (PlaceUnknownCallables)
+    bool lastTagIsOutput = false;
     // The template names of the `extends`, `include`, `import` and `from` tags in source order
     // (jinja2.meta.find_referenced_templates), read after the parse. Collected only by the parse
     // of that walk (collectReferenced), so that a Load allocates nothing for it
@@ -464,6 +467,25 @@ inline OutputCheck OutputCheckOf(const TemplateRootInfo& root, const StatementIn
 }
 
 
+// Whether the innermost tag is in volatile code: inside `{% autoescape %}` with a value that
+// is not constant (RenderContext::IsVolatileAutoescape). A block body is not, as Jinja2
+// compiles it on its own
+inline bool InVolatileCode(const TemplateRootInfo& root, const NodeArena& nodes, const StatementInfoList& stack)
+{
+    if (!root.hasVolatileAutoescape)
+    {
+        return false;
+    }
+    for (auto info = stack.rbegin(); info != stack.rend() && info->type != StatementInfo::BlockStatement; ++info)
+    {
+        if (info->type == StatementInfo::AutoescapeStatement && nodes.Get<AutoescapeStatement>(info->renderer).IsVolatile())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 // An assignment target, and whether it names `loop`, which a loop may not bind
 struct ParsedTarget
 {
@@ -513,6 +535,7 @@ private:
     ParseResult ParseImport(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseFrom(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
     ParseResult ParseDo(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok);
+    ParseResult ParsePrint(LexScanner& lexer, StatementInfoList& statementsInfo);
     // Whether a `set` or `macro` there binds at the template's top level, which exports its names
     // again from a module, an import's too (SetStatement::SetReexports, docs/tasks/0299)
     static bool AtTopLevel(const StatementInfoList& statementsInfo);
@@ -1821,12 +1844,13 @@ private:
     {
         const auto unknownMark = m_unknown.Mark();
         const auto depth = statementsStack.size();
+        m_root.lastTagIsOutput = false;
         auto parseResult = InvokeParser<void, StatementsParser>(block, statementsStack);
         if (m_unknown.Mark() != unknownMark)
         {
             // A statement opens its body after its expressions: they are where it starts
             const bool isTrans = statementsStack.size() > depth && statementsStack.back().type == StatementInfo::TransStatement;
-            PlaceUnknownCallables(statementsStack, std::min(depth, statementsStack.size()), unknownMark, isTrans);
+            PlaceUnknownCallables(statementsStack, std::min(depth, statementsStack.size()), unknownMark, isTrans || m_root.lastTagIsOutput);
         }
         if (!parseResult)
         {
@@ -1959,23 +1983,10 @@ private:
         }
     }
 
-    // Whether the innermost tag is in volatile code: inside `{% autoescape %}` with a value that
-    // is not constant (RenderContext::IsVolatileAutoescape). A block body is not, as Jinja2
-    // compiles it on its own
+    // Whether the innermost tag is in volatile code (InVolatileCode)
     bool IsInVolatileCode(const StatementInfoList& statementsStack) const
     {
-        if (!m_root.hasVolatileAutoescape)
-        {
-            return false;
-        }
-        for (auto info = statementsStack.rbegin(); info != statementsStack.rend() && info->type != StatementInfo::BlockStatement; ++info)
-        {
-            if (info->type == StatementInfo::AutoescapeStatement && m_nodes.Get<AutoescapeStatement>(info->renderer).IsVolatile())
-            {
-                return true;
-            }
-        }
-        return false;
+        return InVolatileCode(m_root, m_nodes, statementsStack);
     }
 
     // Jinja2: required blocks can only contain comments or whitespace
@@ -2021,6 +2032,10 @@ private:
         }
 
         MarkMacroSpecialNames(tokens, std::is_same_v<P, StatementsParser>);
+        if constexpr (std::is_same_v<P, StatementsParser>)
+        {
+            DropBodyColon(tokens);
+        }
 
         auto praser = MakeParser<P>(block);
         LexScanner scanner(tokens, this);
@@ -2031,6 +2046,54 @@ private:
         }
 
         return result;
+    }
+
+    // Jinja2 skips a colon before the end of a statement that opens a body, for Python
+    // compatibility (Parser.parse_statements): `{% for x in l: %}`, `% if x:` as a line statement.
+    // A set statement opens a body only without an `=` outside brackets
+    static void DropBodyColon(TokensList& tokens)
+    {
+        const auto count = tokens.size();
+        if (count < 3 || tokens[count - 2] != ':')
+        {
+            return;
+        }
+        switch (tokens[0].keyword)
+        {
+        case Keyword::For:
+        case Keyword::If:
+        case Keyword::ElIf:
+        case Keyword::Else:
+        case Keyword::Block:
+        case Keyword::Macro:
+        case Keyword::Call:
+        case Keyword::Filter:
+        case Keyword::Autoescape:
+            break;
+        case Keyword::Set:
+        {
+            int depth = 0;
+            for (const auto& tok : tokens)
+            {
+                if (tok == '(' || tok == '[' || tok == '{')
+                {
+                    ++depth;
+                }
+                else if (tok == ')' || tok == ']' || tok == '}')
+                {
+                    --depth;
+                }
+                else if (depth == 0 && tok == '=')
+                {
+                    return;
+                }
+            }
+            break;
+        }
+        default:
+            return;
+        }
+        tokens.erase(tokens.end() - 2);
     }
 
     // A parser for one tag: a statement's adds the blocks it defines to the root's
@@ -2380,6 +2443,21 @@ public:
         return m_convertedName;
     }
     InternalValue GetAsValue(const CharRange& range, Token::Type type) override { return LiteralValue(range, type); }
+    unsigned GetLineNumber(size_t offset) override
+    {
+        // Counts the '\n's before the offset from where the last call stopped (the parser asks
+        // in source order), without splitting the template into lines
+        const auto& tpl = *m_template;
+        offset = std::min(offset, tpl.size());
+        if (offset < m_lineCountOffset)
+        {
+            m_lineCountOffset = 0;
+            m_lineCount = 0;
+        }
+        m_lineCount += static_cast<unsigned>(std::count(tpl.begin() + static_cast<std::ptrdiff_t>(m_lineCountOffset), tpl.begin() + static_cast<std::ptrdiff_t>(offset), '\n'));
+        m_lineCountOffset = offset;
+        return m_lineCount + 1;
+    }
     bool TakeLiteralError() override { return std::exchange(m_literalError, false); }
     Keyword GetKeyword(const CharRange& range) override
     {
@@ -2417,6 +2495,9 @@ private:
     const Delimiters& m_delims;
     // Inline room for the lines of small templates
     SmallVector<LineInfo, 8, SmallVectorDoubling> m_lines;
+    // GetLineNumber's position: the '\n's before m_lineCountOffset
+    size_t m_lineCountOffset = 0;
+    unsigned m_lineCount = 0;
     StatementInfoList* m_openStatements = nullptr;
     // The children of the open statements' bodies
     StatementBodies m_bodies;

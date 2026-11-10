@@ -1891,6 +1891,55 @@
    },
    "templates": {},
    "output": "[{{ no such element: int object[slice(1, None, None)] }}]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_literal",
+   "template": "[{{ [1, 2][1:2, 3] }}|{% if false %}{{ ()[:, :] }}{% endif %}]",
+   "context": {
+    "l": [
+     3,
+     1,
+     2,
+     5
+    ],
+    "s": "Hello World",
+    "d": {
+     "a": 1,
+     "b": {
+      "c": 2
+     },
+     "key with space": 3,
+     "items": "own"
+    },
+    "users": [
+     {
+      "name": "bob"
+     },
+     {
+      "name": "alice"
+     }
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "output": "[|]"
+  },
+  {
+   "id": "subscripts.tuple_of_slices_name",
+   "template": "{{ l[1:2, 3] }}",
+   "context": {
+    "l": [
+     1,
+     2
+    ]
+   },
+   "env": {},
+   "templates": {},
+   "error": {
+    "phase": "compile",
+    "type": "SyntaxError",
+    "message": "invalid syntax (<template>, line 12)"
+   }
   }
  ]
 }

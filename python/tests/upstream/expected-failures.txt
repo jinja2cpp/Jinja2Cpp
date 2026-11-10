@@ -75,19 +75,9 @@ test_imports.py::TestImports::test_not_exported                                 
 test_imports.py::TestIncludes::test_choice_includes                                    divergence  0432 TemplatesNotFound with .templates and .name for an include list
 test_inheritance.py::TestInheritance::test_invalid_required                            divergence  0432 Jinja2's message for a required block with content
 test_lexnparse.py::TestLexer::test_lineno_with_strip                                   internals   Environment.lex
-test_lexnparse.py::TestLexer::test_name[\u1885-True]                                   divergence  0431 non-ASCII identifiers (Python's str.isidentifier)
-test_lexnparse.py::TestLexer::test_name[\u1886-True]                                   divergence  0431 non-ASCII identifiers (Python's str.isidentifier)
-test_lexnparse.py::TestLexer::test_name[\u2118-True]                                   divergence  0431 non-ASCII identifiers (Python's str.isidentifier)
-test_lexnparse.py::TestLexer::test_name[\u212e-True]                                   divergence  0431 non-ASCII identifiers (Python's str.isidentifier)
-test_lexnparse.py::TestLexer::test_name[\u304d-True]                                   divergence  0431 non-ASCII identifiers (Python's str.isidentifier)
-test_lexnparse.py::TestLexer::test_name[a\xb7-True]                                    divergence  0431 non-ASCII identifiers (Python's str.isidentifier)
-test_lexnparse.py::TestLexer::test_name[f\xf6\xf6-True]                                divergence  0431 non-ASCII identifiers (Python's str.isidentifier)
 test_lexnparse.py::TestLexer::test_operators                                           internals   jinja2.lexer.operators
 test_lexnparse.py::TestParser::test_error_messages                                     divergence  0432 Jinja2's messages for unknown and unclosed tags
-test_lexnparse.py::TestParser::test_line_syntax                                        divergence  0431 a line statement may end with ':'
-test_lexnparse.py::TestParser::test_line_syntax_priority                               divergence  0431 a line statement may end with ':'
 test_lexnparse.py::TestSyntax::test_neg_filter_priority                                internals   Environment.parse node types
-test_lexnparse.py::TestSyntax::test_short_conditional_expression                       divergence  0431 an attribute of `1 if false`'s undefined raises UndefinedError
 test_lexnparse.py::TestTokenStream                                                     internals   jinja2.lexer.TokenStream
 test_loader.py::TestFileSystemLoader::test_caches_template_based_on_mtime              divergence  0433 get_template returns the cached Template object
 test_loader.py::TestFileSystemLoader::test_error_includes_paths                        divergence  0432 TemplateNotFound names the search path
@@ -99,9 +89,8 @@ test_pickle.py::test_environment                                                
 test_regression.py::TestBug::test_cached_extends[extends]                              divergence  0433 template globals given to get_template overlay the included template's
 test_regression.py::TestBug::test_cached_extends[include]                              divergence  0433 template globals given to get_template overlay the included template's
 test_regression.py::TestBug::test_custom_context                                       unsupported a custom context_class
-test_regression.py::TestBug::test_double_caller_no_default                             divergence  0431 a macro's caller argument needs a default; calling with two callers raises TypeError
+test_regression.py::TestBug::test_double_caller_no_default                             divergence  0432 a caller parameter without a default is TemplateAssertionError; a call with two callers raises TypeError
 test_regression.py::TestBug::test_grouper_repr                                         internals   jinja2.filters._GroupTuple
-test_regression.py::TestBug::test_stacked_locals_scoping_bug                           divergence  0431 a line statement may end with ':' (and print, 0419)
 test_runtime.py                                                                        internals   jinja2.runtime.LoopContext built by hand
 test_security.py::TestSandbox::test_binary_operator_intercepting                       divergence  0412 sandbox operator interception
 test_security.py::TestSandbox::test_template_data                                      divergence  0434 a module macro called with an EvalContext as its first argument

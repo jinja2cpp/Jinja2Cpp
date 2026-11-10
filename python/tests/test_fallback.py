@@ -17,8 +17,11 @@ import pytest
 from jinja2 import nodes
 from jinja2cpp.nativetypes import NativeEnvironment
 
-# A statement of Jinja2 the engine does not parse (a candidate; test_candidate_is_unparsable checks it)
-UNPARSABLE = "a{% print 1 %}b"
+# A syntax of Jinja2 the engine does not parse: a subscript of a literal by a tuple of slices (task
+# 0445), which Jinja2 folds to an undefined, here to "" whatever the environment (unfolded, it
+# compiles to invalid Python). A template with NOPARSE in it goes to Jinja2; test_candidate_is_unparsable checks it
+NOPARSE = '{{ ()[:, :] is undefined and "" }}'
+UNPARSABLE = "a" + NOPARSE + "{{ 1 }}b"
 UNPARSABLE_RESULT = "a1b"
 
 
@@ -353,7 +356,7 @@ def test_include_of_an_unparsable_template_raises_the_engines_error():
         template = make_includer(main).get_template("main")
         with pytest.raises(jinja2cpp.TemplateSyntaxError) as info:
             template.render()
-        assert "print" in info.value.message  # the engine's own error, as fallback="never" gives
+        assert "']' expected" in info.value.message  # the engine's own error, as fallback="never" gives
     with pytest.raises(jinja2cpp.TemplateSyntaxError):
         make_includer("{% include 'inc' %}", fallback="never").get_template("main").render()
     stats = jinja2cpp.stats()
@@ -488,7 +491,7 @@ def test_sandbox_parse_fallback_and_stock_policy():
     env = jinja2cpp.sandbox.SandboxedEnvironment()
     assert env.from_string(UNPARSABLE).render() == UNPARSABLE_RESULT
     with pytest.raises(jinja2cpp.SecurityError):
-        jinja2cpp.sandbox.SandboxedEnvironment().from_string("{% print x.__class__() %}").render(x=1)
+        jinja2cpp.sandbox.SandboxedEnvironment().from_string("{{ x.__class__() }}" + NOPARSE).render(x=1)
 
 
 # --- The loaders inside Jinja2 --------------------------------------------------------------
@@ -666,7 +669,7 @@ def test_sandbox_hooks_set_after_construction_are_live(tier):
     def make(module):
         return module.SandboxedEnvironment(extensions=[Ext]) if tier == "B" else module.SandboxedEnvironment()
 
-    suffix = "" if tier == "B" else "{% print 0 %}"
+    suffix = "" if tier == "B" else "{{ 0 }}" + NOPARSE
     ours, oracle = make(jinja2cpp.sandbox), jinja2.sandbox.SandboxedEnvironment(extensions=[Ext])
     early = ours.from_string("{{ x.secret }}{{ x.shown }}" + suffix)  # made before the hook exists
     for env in (ours, oracle):
@@ -762,7 +765,7 @@ def test_context_class_and_code_generator_class_reach_jinja2():
 
 
 def test_fallback_templates_are_cached_like_jinja2s():
-    loader = jinja2cpp.DictLoader({"a": "{% print 1 %}", "b": "{% print 2 %}"})
+    loader = jinja2cpp.DictLoader({"a": "{{ 1 }}" + NOPARSE, "b": "{{ 2 }}" + NOPARSE})
     env = jinja2cpp.Environment(loader=loader)
     first = env.get_template("a")
     assert env.get_template("a") is first
@@ -770,29 +773,29 @@ def test_fallback_templates_are_cached_like_jinja2s():
     assert jinja2cpp.stats()["loads_fallback"] == 2  # real loads only
     assert env.select_template(["zz", "a"]) is first
     assert jinja2cpp.stats()["loads_fallback"] == 2
-    oracle = jinja2.Environment(loader=jinja2.DictLoader({"a": "{% print 1 %}"}))
+    oracle = jinja2.Environment(loader=jinja2.DictLoader({"a": "{{ 1 }}" + NOPARSE}))
     assert oracle.get_template("a") is oracle.get_template("a")
     # Tier B wrappers too
     delegating = jinja2cpp.Environment(extensions=[Ext], loader=jinja2cpp.DictLoader({"a": "x"}))
     assert delegating.get_template("a") is delegating.get_template("a")
     # from_string is not cached, as in Jinja2
-    assert env.from_string("{% print 1 %}") is not env.from_string("{% print 1 %}")
+    assert env.from_string("{{ 1 }}" + NOPARSE) is not env.from_string("{{ 1 }}" + NOPARSE)
 
 
 def test_fallback_template_is_reloaded_when_the_loader_says_it_changed():
-    source = ["{% print 1 %}"]
+    source = ["{{ 1 }}" + NOPARSE]
     stamp = [1]
     loader = jinja2cpp.FunctionLoader(lambda name: (source[0], None, lambda: stamp[0] == 1))
     env = jinja2cpp.Environment(loader=loader)
     first = env.get_template("t")
     assert first.render() == "1"
-    source[0], stamp[0] = "{% print 2 %}", 2
+    source[0], stamp[0] = "{{ 2 }}" + NOPARSE, 2
     second = env.get_template("t")
     assert second is not first and second.render() == "2"
 
 
 def test_delegate_environment_is_rebuilt_when_the_settings_change():
-    env = jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"a": "{% print x %}"}))
+    env = jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"a": "{{ x }}" + NOPARSE}))
     assert env.get_template("a").render(x="<") == "<"
     env.autoescape = True
     assert env.get_template("a").render(x="<") == "&lt;"
@@ -802,7 +805,7 @@ def test_fallback_templates_see_the_live_globals_filters_and_tests():
     env = jinja2cpp.Environment()
     env.filters["up"] = str.upper
     env.tests["odd2"] = lambda v: v % 2 == 1
-    template = env.from_string("{% print g %}{{ v|up }}{{ 1 is odd2 }}")
+    template = env.from_string("{{ g }}" + NOPARSE + "{{ v|up }}{{ 1 is odd2 }}")
     env.globals["g"] = "G"  # after the template was made
     assert template.render(v='a') == "GATrue"
     env.globals["g"] = "H"
@@ -824,7 +827,7 @@ def test_template_class_without_overrides_of_render_methods_works_on_fallback_te
     class Env(jinja2cpp.Environment):
         template_class = Mine
 
-    env = Env(loader=jinja2cpp.DictLoader({"a": "{% print 1 %}", "n": "{{ 1 }}"}))
+    env = Env(loader=jinja2cpp.DictLoader({"a": "{{ 1 }}" + NOPARSE, "n": "{{ 1 }}"}))
     assert env.get_template("a").render() == "1"
     assert env.get_template("a").shout() == "!" and isinstance(env.get_template("a"), Mine)
     assert repr(env.get_template("a")) == "MINE"
@@ -842,7 +845,7 @@ def test_template_class_that_overrides_render_is_refused_for_fallback_templates(
     class Env(jinja2cpp.Environment):
         template_class = Mine
 
-    env = Env(loader=jinja2cpp.DictLoader({"a": "{% print 1 %}", "n": "{{ 1 }}"}))
+    env = Env(loader=jinja2cpp.DictLoader({"a": "{{ 1 }}" + NOPARSE, "n": "{{ 1 }}"}))
     assert env.get_template("n").render() == "<1>"  # native templates run the override
     with pytest.raises(jinja2cpp.UnsupportedError, match="render"):
         env.get_template("a")
@@ -871,18 +874,18 @@ def test_custom_undefined_subclass_is_refused_with_its_name():
 def test_parse_and_meta_for_a_source_the_engine_cannot_parse():
     from jinja2cpp import meta
 
-    env = jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"t": "{% print x %}{% include 'o' %}", "o": "{{ 1 }}"}))
-    ast = env.parse("{% print x %}{{ y }}")
+    env = jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"t": "{{ x }}" + NOPARSE + "{% include 'o' %}", "o": "{{ 1 }}"}))
+    ast = env.parse("{{ x }}" + NOPARSE + "{{ y }}")
     assert meta.find_undeclared_variables(ast) == {"x", "y"}
-    ast = env.parse("{% print x %}{% extends 'base' %}{% include 'q' %}")
+    ast = env.parse("{{ x }}" + NOPARSE + "{% extends 'base' %}{% include 'q' %}")
     assert sorted(meta.find_referenced_templates(ast)) == ["base", "q"]
     template = env.get_template("t")
     assert meta.find_undeclared_variables(template) == {"x"}
     assert list(meta.find_referenced_templates(template)) == ["o"]
-    assert meta.find_undeclared_variables(env.from_string("{% print a %}{{ b }}")) == {"a", "b"}
+    assert meta.find_undeclared_variables(env.from_string("{{ a }}" + NOPARSE + "{{ b }}")) == {"a", "b"}
     assert template._undeclared() == {"x"}
     assert template._referenced() == ["o"]
-    module = env.from_string("{% print 1 %}{% set v = 5 %}").make_module()
+    module = env.from_string("{{ 1 }}" + NOPARSE + "{% set v = 5 %}").make_module()
     assert str(module).strip() == "1" and module.v == 5
     with pytest.raises(jinja2cpp.TemplateSyntaxError):
         env.parse("{% if %}")
@@ -894,7 +897,7 @@ def test_stats_counters_are_exact_under_threads():
     import threading
 
     env = jinja2cpp.Environment()
-    template = env.from_string("{% print 1 %}")
+    template = env.from_string("{{ 1 }}" + NOPARSE)
 
     def work():
         for _ in range(500):
@@ -954,7 +957,7 @@ def test_fallback_templates_keep_the_policy_after_the_environment_is_dropped():
     def factory():
         env = jinja2cpp.sandbox.SandboxedEnvironment()
         env.is_safe_attribute = lambda obj, attr, value: attr != "secret"
-        return env.from_string("{{ x.secret }}{{ x.shown }}{% print 0 %}")
+        return env.from_string("{{ x.secret }}{{ x.shown }}{{ 0 }}" + NOPARSE)
 
     template = factory()
     gc.collect()
@@ -1074,7 +1077,7 @@ def _scenario(module, tier, when, how, hook):
     env.globals["f"] = lambda: "CALLED"
     if when == "before":
         _install(env, how, hook, function)
-    source = ("{% print 0 %}" if tier == "C" else "") + body
+    source = ("{{ 0 }}" + NOPARSE if tier == "C" else "") + body
     template = env.from_string(source)
     expression = env.compile_expression("f()") if hook == "call" else None
     if when == "after":
@@ -1200,7 +1203,7 @@ def test_first_loads_under_threads_settle_on_one_template():
     import threading
 
     for make in (
-        lambda: jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"a": "{% print 1 %}"})),
+        lambda: jinja2cpp.Environment(loader=jinja2cpp.DictLoader({"a": "{{ 1 }}" + NOPARSE})),
         lambda: jinja2cpp.Environment(extensions=[Ext], loader=jinja2cpp.DictLoader({"a": "x"})),
     ):
         jinja2cpp.stats(reset=True)
@@ -1328,7 +1331,7 @@ def test_loads_in_two_environments_do_not_wait_for_each_other():
             if template == "slow":
                 if not release.wait(10):
                     raise RuntimeError("deadlock: the second environment never finished")
-                return "{% print 1 %}", None, lambda: True
+                return "{{ 1 }}" + NOPARSE, None, lambda: True
             raise jinja2cpp.TemplateNotFound(template)
 
     for first in (jinja2cpp.Environment(loader=SlowLoader()), jinja2cpp.Environment(extensions=[Ext], loader=SlowLoader())):
@@ -1340,7 +1343,7 @@ def test_loads_in_two_environments_do_not_wait_for_each_other():
 
         def other():
             time.sleep(0.3)
-            results["b"] = jinja2cpp.Environment().from_string("{% print 2 %}").render()
+            results["b"] = jinja2cpp.Environment().from_string("{{ 2 }}" + NOPARSE).render()
             results["c"] = jinja2cpp.Environment(extensions=[Ext]).from_string("{{ 3 }}").render()
             release.set()
 
@@ -1396,8 +1399,8 @@ def test_a_loader_that_loads_another_name_on_a_thread_and_joins_does_not_deadloc
                 worker.start()
                 worker.join(5)
                 joined.append((not worker.is_alive(), out))
-                return "{% print 0 %}A", name, lambda: True
-            return "{% print 0 %}B", name, lambda: True
+                return "{{ 0 }}" + NOPARSE + "A", name, lambda: True
+            return "{{ 0 }}" + NOPARSE + "B", name, lambda: True
 
     holder["env"] = env = jinja2cpp.Environment(loader=Nested(), **({"extensions": [Ext]} if kind == "tier-b" else {}))
     assert _with_deadline(lambda: env.get_template("a").render()) == "0A"
@@ -1420,7 +1423,7 @@ def test_loaders_of_two_environments_that_call_each_other_do_not_deadlock():
                 events[self.me].set()
                 events[1 - self.me].wait(3)
                 envs[1 - self.me].get_template("y")
-            return "{% print 0 %}" + name.upper(), name, lambda: True
+            return "{{ 0 }}" + NOPARSE + name.upper(), name, lambda: True
 
     for i in (0, 1):
         envs[i] = jinja2cpp.Environment(loader=Crossing(i))

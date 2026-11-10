@@ -198,6 +198,11 @@ StatementsParser::ParseResult StatementsParser::ParseNonKeywordStatement(LexScan
         }
         return ParseLoopControl(statementsInfo, tok, lexer.GetAsString(tok) == "break" ? LoopControl::Break : LoopControl::Continue);
     }
+    // `print` is not a keyword either: Jinja2 names it only in statement position
+    if (tok == Token::Identifier && tok.range.size() == 5 && lexer.GetAsView(tok) == "print")
+    {
+        return ParsePrint(lexer, statementsInfo);
+    }
     if (m_settings.extensions.i18n && tok == Token::Identifier && lexer.GetAsString(tok) == "trans")
     {
         return ParseTrans(lexer, statementsInfo, tok);
@@ -1617,6 +1622,39 @@ StatementsParser::ParseResult StatementsParser::ParseDo(LexScanner& lexer, State
     m_bodies.Add(renderer, m_tagOffset);
 
     return jinja2::StatementsParser::ParseResult();
+}
+
+// Jinja2's `{% print a, b %}` (Parser.parse_print): each expression is output as `{{ }}` would
+StatementsParser::ParseResult StatementsParser::ParsePrint(LexScanner& lexer, StatementInfoList& statementsInfo)
+{
+    m_root.lastTagIsOutput = true;
+    const auto check = OutputCheckOf(m_root, statementsInfo);
+    const bool isVolatile = InVolatileCode(m_root, m_nodes, statementsInfo);
+    ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(isVolatile);
+    bool first = true;
+    while (lexer.PeekNextToken() != Token::Eof)
+    {
+        if (!first && !lexer.EatIfEqual(','))
+        {
+            return MakeParseErrorTL(ErrorCode::ExpectedToken, lexer.PeekNextToken(), ',');
+        }
+        first = false;
+        exprParser.NextTopLevelExpression();
+        auto expr = exprParser.ParseFullExpression(lexer);
+        if (!expr)
+        {
+            return MakeUnexpected(expr.error());
+        }
+        // Parsed all the same: Jinja2 reports what does not parse after `extends` too
+        if (check == OutputCheck::Drop)
+        {
+            continue;
+        }
+        auto output = MakeExpressionRenderer(m_nodes, *expr, exprParser.GetFinalize(), isVolatile);
+        m_bodies.Add(check == OutputCheck::Guard ? m_nodes.Make<OutputCheckStatement>(output) : output, m_tagOffset);
+    }
+    return {};
 }
 
 StatementsParser::ParseResult StatementsParser::ParseWith(LexScanner& lexer, StatementInfoList& statementsInfo, const Token& stmtTok)

@@ -147,6 +147,9 @@ public:
     // Before each of several top-level expressions of one statement (with bindings, macro
     // defaults): their operators do not add up
     void NextTopLevelExpression() { m_operators = 0; }
+    // The expressions that follow are output in volatile code (Parse sets it for `{{ }}`; a
+    // `print` statement sets it itself): their filters and tests are not folded
+    void SetVolatile(bool isVolatile) { m_volatile = isVolatile; }
     ParseResult<NodeRef<Expression>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
     // Jinja2's parse_tuple without parentheses: 'a, b' is a tuple, 'a' stays an expression
     ParseResult<NodeRef<Expression>> ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart = true);
@@ -200,7 +203,8 @@ private:
     ParseResult<NodeRef<Expression>> ParseCall(LexScanner& lexer, NodeRef<Expression> valueRef);
     ParseResult<NodeRef<Expression>> ParseSubscript(LexScanner& lexer, NodeRef<Expression> valueRef);
     NodeRef<SubscriptExpression> MakeSubscript(NodeRef<Expression> value, const std::string& attrName);
-    ParseResult<NodeRef<IfExpression>> ParseIfExpression(LexScanner& lexer);
+    // valueOffset: where the value before `if` starts, the position Jinja2 reports for the conditional
+    ParseResult<NodeRef<IfExpression>> ParseIfExpression(LexScanner& lexer, size_t valueOffset);
     // Counts one more chained operator; false past Settings::Limits::maxExpressionOperators
     bool AddOperator();
     // The filter or test the environment adds under this name, as a callable; undefined if there is none
