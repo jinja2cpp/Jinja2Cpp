@@ -38,4 +38,11 @@ the items without a subclass's `__getitem__`, as Python does. The probe gives `x
 `python/tests/test_values.py::test_list_and_tuple_subclasses_iterate_as_python_does` (contexts
 built afresh per engine, since a deep copy of a list subclass is rebuilt from its `__iter__`) and
 `PublicHostObjectTest.SequenceThatIteratesByItsOwnIterate`. Decision record: docs/api-2.0.md
-section 7 item 10. `loop.length` and operators over such a subclass still differ: task 0453.
+section 7 item 10.
+
+Codex on #827 (2 P2): `loop.length` must stay `len()` of the object, and `+`, `*`, comparisons
+and `str % x` must keep reading the stored items. Fixed: a loop over any host object takes
+`loop.length` from its `Len` when first read (`SetLengthOfValue`, src/statements.cpp; counted
+from the items when it has none), and `host::AsSequence` reads the new private
+`IEngineHostObject::SequenceItems` (by index for a sequence with a `Len`). `pprint` still
+differs: task 0453.

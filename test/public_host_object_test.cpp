@@ -673,9 +673,10 @@ TEST(PublicHostObjectTest, SequenceThatIteratesByItsOwnIterate)
 {
     const ValuesMap params{ { "own", MakeHostValue<OwnIterationSequence>(false) }, { "indexed", MakeHostValue<OwnIterationSequence>(true) } };
     EXPECT_EQ("xy|123", Render("{% for i in own %}{{ i }}{% endfor %}|{% for i in indexed %}{{ i }}{% endfor %}", params));
-    EXPECT_EQ("x-y|['x', 'y']|2", Render("{{ own|join('-') }}|{{ own|list }}|{% for i in own %}{{ loop.length if loop.last }}{% endfor %}", params));
-    // Its items by index stay its own
-    EXPECT_EQ("2|3", Render("{{ own[1] }}|{{ own|length }}", params));
+    // The loop's length is the object's Len, as Jinja2's is len(iterable); `last` is where its iteration ends
+    EXPECT_EQ("x-y|['x', 'y']|3True", Render("{{ own|join('-') }}|{{ own|list }}|{% for i in own %}{{ loop.length if loop.last }}{{ loop.last if loop.last }}{% endfor %}", params));
+    // Its items by index stay its own, and so do the operators of a list
+    EXPECT_EQ("2|3|[1, 2, 3, 0]|[1, 2, 3, 1, 2, 3]", Render("{{ own[1] }}|{{ own|length }}|{{ own + [0] }}|{{ own * 2 }}", params));
     EXPECT_EQ(L"xy", RenderW(L"{% for i in own %}{{ i }}{% endfor %}", params));
 }
 

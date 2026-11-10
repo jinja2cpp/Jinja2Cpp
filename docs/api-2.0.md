@@ -897,7 +897,8 @@ Recommend A now, C only if someone asks.
    - **A sequence with its own iteration (task 0441, before the freeze).** The engine iterates
      an `IsSequence` object with a `Len` by index only when `IHostObject::IteratesByIndex()`
      (true by default) says so; otherwise through `Iterate`. The module answers true only for an
-     exact `list` or `tuple`, so a subclass loops through `iter()` as in Python. It
+     exact `list` or `tuple`, so a subclass loops through `iter()` as in Python. `loop.length`
+     stays `Len`, and list operators still read the items by index. It
      adds a vtable slot before the freeze.
 
 ## 8. Work breakdown

@@ -544,6 +544,18 @@ struct LoopState : ValueObject
         }
         InternalValue length;
         const auto map = AsMap(lengthOf);
+        // A host object: its len() when first read, as Jinja2 takes len(iterable) (docs/tasks/0441); counted from its
+        // items when it has none
+        if (const auto* host = map ? map->GetHostObject() : nullptr)
+        {
+            if (const auto hostLength = host->Len())
+            {
+                listSize = *hostLength;
+                return true;
+            }
+            lengthOf = InternalValue();
+            return false;
+        }
         if (map && map->GetLoopAttr(LoopAttr::Length, length))
         {
             if (const auto* count = GetIf<int64_t>(&length))
@@ -632,14 +644,34 @@ JINJA2CPP_NOINLINE_INLINE bool IsLoopObject(const InternalValue& loopVal)
 // Where the loop's length comes from: the size of the list, known at the start unless the
 // template can change it (HasLiveSize), whose len() is taken when the length is first
 // read, as Jinja2's LoopContext.length takes len(iterable) (docs/tasks/0390); or len() of
-// the `loop` the loop runs over, read then too
+// the `loop` or the host object the loop runs over, read then too
+// The length of a loop over items without a size is len() of the `loop` it runs over; a loop over a host object's
+// items takes len() of the object, whatever its items give (a list subclass that overrides __iter__), as Jinja2 takes
+// len(iterable) (docs/tasks/0390, 0441)
+JINJA2CPP_NOINLINE_INLINE void SetLengthOfValue(LoopState& state, const InternalValue& loopVal, bool isHost)
+{
+    if (isHost)
+    {
+        state.listSize.reset();
+        state.sizeOfList.reset();
+        state.lengthOf = loopVal;
+        return;
+    }
+    if (!state.listSize && IsLoopObject(loopVal))
+    {
+        state.lengthOf = loopVal;
+    }
+}
+
 JINJA2CPP_ALWAYS_INLINE void SetLengthSource(LoopState& state, const ListAdapter& loopItems, const InternalValue& loopVal)
 {
     state.sizeOfList = loopItems.Ref();
     state.listSize = loopItems.GetSize();
-    if (!state.listSize && IsLoopObject(loopVal))
+    const auto* map = std::get_if<detail::MapHandle>(&detail::InternalValueAccess::Data(loopVal));
+    const bool isHost = map != nullptr && map->isHost;
+    if (!state.listSize || isHost)
     {
-        state.lengthOf = loopVal;
+        SetLengthOfValue(state, loopVal, isHost);
     }
 }
 

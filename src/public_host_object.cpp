@@ -437,7 +437,16 @@ public:
     {
         if (m_object->IsSequence() && m_object->IteratesByIndex() && m_object->Len())
         {
-            return ListAdapter(MakeRef<const HostSequenceList>(m_object, IntrusivePtr<const HostObjectAccessor>(m_holder)));
+            return ByIndex();
+        }
+        return ToEngine(m_object->Iterate());
+    }
+    // + * < and `%` read a list or tuple's stored items, whatever its iteration gives
+    [[nodiscard]] std::optional<ListAdapter> SequenceItems() const override
+    {
+        if (m_object->Len())
+        {
+            return ByIndex();
         }
         return ToEngine(m_object->Iterate());
     }
@@ -455,6 +464,10 @@ public:
     [[nodiscard]] std::string Html() const override { return m_object->Html(); }
 
 private:
+    [[nodiscard]] ListAdapter ByIndex() const
+    {
+        return ListAdapter(MakeRef<const HostSequenceList>(m_object, IntrusivePtr<const HostObjectAccessor>(m_holder)));
+    }
     [[nodiscard]] std::optional<InternalValue> GetItemByView(std::string_view key) const
     {
         return ReadTo([this, key](HostResult& out) { return m_object->GetItemTo(key, out); });

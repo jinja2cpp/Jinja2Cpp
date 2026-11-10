@@ -246,7 +246,7 @@ std::optional<ListAdapter> AsSequence(const IEngineHostObject& host)
     {
         return std::nullopt;
     }
-    auto items = host.Iterate();
+    auto items = host.SequenceItems();
     if (items && host.IsTuple())
     {
         items->MarkAsTuple();

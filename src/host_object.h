@@ -105,11 +105,14 @@ public:
     // operation still asks the object, as above
     [[nodiscard]] virtual bool IsMapping() const { return false; }
     // isinstance(x, (list, tuple)): the engine reads the object as a list of its own (the items
-    // of Iterate, host::AsSequence) where Python's list or tuple has an operation the object's
+    // of SequenceItems, host::AsSequence) where Python's list or tuple has an operation the object's
     // own methods do not give the template: + * < <= > >= (and sort, min, max through them),
     // `str % x`, and tojson's JSON array. IsTuple marks a tuple (a namedtuple too)
     [[nodiscard]] virtual bool IsSequence() const { return false; }
     [[nodiscard]] virtual bool IsTuple() const { return false; }
+    // The items of an IsSequence object as Python's list or tuple operations read them, which may differ from
+    // Iterate (a list subclass that overrides __iter__, docs/tasks/0441); the default is Iterate
+    [[nodiscard]] virtual std::optional<ListAdapter> SequenceItems() const { return Iterate(); }
     // Whether the object has __html__, and its result: the object prints as that Markup under
     // autoescape, and is `escaped`
     [[nodiscard]] virtual bool IsMarkupLike() const { return false; }

@@ -84,6 +84,16 @@ class OwnItemTuple(tuple):
 class PlainSubList(list):
     pass
 
+
+class SizedIterable:
+    """Not a sequence: a length of its own and an iteration of another length"""
+
+    def __len__(self):
+        return 7
+
+    def __iter__(self):
+        return iter("ab")
+
 CASES = [
     # dict: items, attributes, methods, non-string keys, filters that want a mapping
     ("{{ d.a }} {{ d['a'] }} {{ d.get('z', 0) }} {{ d.items()|list }} {{ d|length }}", {"d": {"a": 1, "b": 2}}),
@@ -291,6 +301,10 @@ SUBCLASS_CASES = [
     "{% for i in g %}{{ i }}{% endfor %}|{% for i in gt %}{{ i }}{% endfor %}|{{ g|list }} {{ g|join }} {{ g|first }}",
     "{{ g|sort }} {{ g|sum }} {{ g|reverse|list }} {{ g[0] }} {{ gt[0] }}",
     "{% for i in p %}{{ i }}{{ p.pop() if loop.first else '' }}{% endfor %}",
+    # loop.length is len() of the object; operators and `%` read the stored items
+    "{% for i in l %}{{ loop.length }}{{ loop.revindex }}{{ loop.revindex0 }}{{ loop.last }};{% endfor %}",
+    "{% for i in t %}{{ loop.length }}{% endfor %}|{% for i in n %}{{ i }}{{ loop.length }}{{ loop.last }}{% endfor %}",
+    "{{ l + ['z'] }} {{ l * 2 }} {{ t + ('z',) }} {{ l < [1, 3] }} {{ t > (1,) }} {{ '%s-%s-%s' % t }} {{ l|length }}",
 ]
 
 
@@ -301,6 +315,7 @@ def _subclass_context():
         "p": PlainSubList([1, 2, 3]),
         "g": OwnItemList([1, 2, 3]),
         "gt": OwnItemTuple((1, 2, 3)),
+        "n": SizedIterable(),
     }
 
 

@@ -238,7 +238,9 @@ public:
      * \brief Whether the engine iterates this \ref IsSequence object by index
      *
      * True by default: a loop over a sequence with a \ref Len reads \ref Len and \ref ItemAtTo at each step. A sequence whose `iter(x)` does not give its items by index, such as a Python `list` subclass that
-     * overrides `__iter__`, answers false, and the engine iterates it through \ref Iterate instead.
+     * overrides `__iter__`, answers false, and the engine iterates it through \ref Iterate instead. A loop's
+     * `loop.length` is still \ref Len, read when the template first asks for it, and the operations of a list (`+`, `*`,
+     * comparisons, `str % x`) still read the items by index, as Python's do.
      */
     [[nodiscard]] virtual bool IteratesByIndex() const;
     //! `isinstance(x, tuple)`, a namedtuple too
