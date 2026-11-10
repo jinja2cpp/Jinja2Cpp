@@ -7,6 +7,7 @@ import jinja2.ext
 import jinja2cpp
 import jinja2cpp.ext
 import pytest
+import time
 
 MODULES = (jinja2, jinja2cpp)
 
@@ -249,3 +250,14 @@ def test_formatting_a_translation_is_capped_before_it_allocates(source):
 @pytest.mark.parametrize("autoescape", [False, True])
 def test_formatting_a_translation_that_fits_is_as_jinja2(autoescape):
     same("{{ gettext('%(a)5s|%(b).2f|100%%|%(c)s', a='x', b=1.5, c='<i>') }}", translations(True), autoescape=autoescape)
+
+
+def test_formatting_a_translation_checks_what_fits_in_one_pass():
+    # Codex on #823: a precision truncates a repeated long string, and a run of unclosed keys is not rescanned
+    env = jinja2cpp.Environment(extensions=["jinja2.ext.i18n"])
+    env.install_null_translations(newstyle=False)
+    assert env.from_string("{{ gettext('%(a).1s%(a).1s%(a).1s|%((b))s', a=s, **{'(b)': 2}) }}").render(s="y" * 30000000) == "yyy|2"
+    started = time.perf_counter()
+    with pytest.raises(ValueError, match="incomplete format key"):
+        env.from_string("{{ gettext(t, a=1) }}").render(t="%(" * 80000)
+    assert time.perf_counter() - started < 2
