@@ -506,3 +506,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0436](0436-python-lazy-generate.md) | `Template.generate` renders on demand, in Jinja2's chunks | parity | medium | open |
 | [0437](0437-python-gil-released-render.md) | Render with the GIL released when the data is JSON-like (0248 plan D5, phase 3) | perf | low | open |
 | [0438](0438-sandbox-arms-cold-without-policy.md) | Sandbox checks cost nothing when no policy is installed | perf | low | open |
+| [0439](0439-python-lent-engine-callable-name.md) | Python module: an engine callable lent to Python prints without its name | parity | low | open |
+| [0440](0440-python-module-call-poll.md) | Python module: Ctrl-C does not stop `Template.module` or a call of a module's macro | parity | low | open |
+| [0441](0441-host-sequence-own-iteration.md) | A host sequence with its own iteration is iterated by index | api | medium | open |
+| [0442](0442-python-sandbox-stub-and-cycler-repr.md) | Python module: one sandbox stub type per class, and the repr of a cycler or joiner | perf | low | open |
