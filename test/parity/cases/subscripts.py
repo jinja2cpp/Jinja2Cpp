@@ -68,4 +68,8 @@ CASES = [
     ("slice_of_folded_slice", "{{ 5[1:][1:] }}"),
     ("slice_folded_strict", "[{{ 5[1:] }}]", {"env": {"undefined": "strict"}}),
     ("slice_folded_debug", "[{{ 5[1:] }}]", {"env": {"undefined": "debug"}}),
+    # a subscript by a tuple of slices (0445): Jinja2 folds it on a literal, to an undefined on a
+    # list; of a name it compiles to invalid Python (SyntaxError at load)
+    ("tuple_of_slices_literal", "[{{ [1, 2][1:2, 3] }}|{% if false %}{{ ()[:, :] }}{% endif %}]"),
+    ("tuple_of_slices_name", "{{ l[1:2, 3] }}", {"ctx": {"l": [1, 2]}}),
 ]

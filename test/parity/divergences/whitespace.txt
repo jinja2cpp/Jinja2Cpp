@@ -1,3 +1,4 @@
 # Known divergences of Jinja2C++ from Python Jinja2 in the whitespace area (cases/whitespace.py).
 # Format and kinds: test/parity/README.md.
 
+whitespace.tag_unicode_space rejects 0447 a Unicode space (U+00A0, U+2003) between the tokens of a tag is a lexing error; Jinja2 lexes it as whitespace

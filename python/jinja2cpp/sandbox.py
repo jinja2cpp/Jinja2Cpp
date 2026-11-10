@@ -397,7 +397,9 @@ class SandboxedEnvironment(Environment):
                 kwargs = args[0]
                 args = ()
 
-            formatter._written = 0
+            # The literal text between the fields is written too: counted before the fields build anything
+            formatter._written = _literal_length(formatter, f_self)
+            _jinja2cpp._check_sequence_size(formatter._written)
             return str_type(vformat(f_self, args, kwargs))
 
         return update_wrapper(wrapper, value)
@@ -469,6 +471,18 @@ def _digits_value(digits: str) -> int:
         return int(digits)
     except ValueError:
         return _TOO_BIG
+
+
+def _literal_length(formatter: Formatter, format_string: str) -> int:
+    # The text of a format string outside its fields, at the top level (a field's spec is checked as its width).
+    # A malformed string stops the count where it fails: formatting it raises as Python's does, in Python's order
+    length = 0
+    try:
+        for literal_text, _, _, _ in formatter.parse(format_string):
+            length += len(literal_text)
+    except ValueError:
+        pass
+    return length
 
 
 class SandboxedFormatter(Formatter):

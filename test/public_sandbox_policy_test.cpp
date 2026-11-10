@@ -159,6 +159,53 @@ TEST(PublicSandboxPolicyTest, EveryPathToAMethodAsksThePolicy)
     EXPECT_EQ("x|False", RenderOrError(env, "{{ 'X'.lower() }}|{{ 'x'.absent is defined }}"));
 }
 
+namespace
+{
+// Refuses every attribute, as a SandboxedEnvironment whose is_safe_attribute returns False
+class RefusingPolicy final : public ISandboxPolicy
+{
+public:
+    [[nodiscard]] std::optional<Value> NativeAttribute(const Value&, std::string_view name) const override
+    {
+        UndefinedDescription refused;
+        refused.name = std::string(name);
+        refused.hint = "access to attribute '" + std::string(name) + "' is unsafe.";
+        refused.security = true;
+        return MakeUndefined(std::move(refused));
+    }
+};
+} // namespace
+
+// The data attributes of a number (real, imag, numerator, denominator, 0374) are attributes like any other: every
+// path to them asks the policy, as Jinja2's getattr asks is_safe_attribute
+TEST(PublicSandboxPolicyTest, NumberDataAttributesAskThePolicy)
+{
+    const ValuesMap params{ { "n", 5 }, { "f", 1.5 }, { "b", true } };
+    const char* const sources[] = {
+        "{{ n.real is defined }}",
+        "{{ n|attr('real') is defined }}",
+        "{{ f.imag is defined }}",
+        "{{ b.numerator is defined }}",
+        "{{ n.denominator is defined }}",
+        "{{ n['real'] is defined }}",
+        "{{ ([n]|map(attribute='real')|first) is defined }}",
+        "{{ ([{'a': n}]|map(attribute='a.real')|first) is defined }}",
+    };
+    TemplateEnv plain;
+    TemplateEnv env;
+    env.GetSettings().sandboxPolicy = std::make_shared<const RefusingPolicy>();
+    for (const char* source : sources)
+    {
+        EXPECT_EQ("True", RenderOrError(plain, source, nullptr, params)) << source;
+        EXPECT_EQ("False", RenderOrError(env, source, nullptr, params)) << source;
+    }
+    // Used, a refused one fails as Jinja2's SecurityError
+    ErrorInfo error;
+    const auto text = RenderOrError(env, "{{ [n]|sum(attribute='real') }}", &error, params);
+    EXPECT_EQ(ErrorCode::SecurityError, error.GetCode()) << text;
+    EXPECT_EQ("5", RenderOrError(plain, "{{ [n]|sum(attribute='real') }}", nullptr, params));
+}
+
 // A template object reaches the policy with its class: `loop` and a namespace as snapshots, a macro and a global
 // function as empty maps of class "Macro" and "function" (0357 S3)
 TEST(PublicSandboxPolicyTest, TemplateObjectsReachThePolicyWithTheirClass)

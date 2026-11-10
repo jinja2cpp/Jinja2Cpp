@@ -1498,7 +1498,7 @@ struct StrOps
         {
             result = MakeBoundMethod(value, *method);
         }
-        else if (auto attrValue = GetNumberDataAttr(value, attr))
+        else if (auto attrValue = GetNumberDataAttr(value, attr, nullptr)) // the policy was asked above
         {
             result = std::move(attrValue);
         }
@@ -1551,7 +1551,10 @@ struct StrOps
         {
             result = host->GetItem(key);
         }
-        else if (value.Kind() == ValueKind::Callable || (map && map->GetAttrPolicy() == MapAttrPolicy::KeysOnly))
+        // Python's str.format reads obj[key], which a number has not; only the sandbox's formatter goes through
+        // getitem, which falls back to the number's data attributes (GetItem)
+        else if (const auto kind = value.Kind(); kind == ValueKind::Callable || (map && map->GetAttrPolicy() == MapAttrPolicy::KeysOnly)
+                                                 || (!context.GetSandboxPolicy() && (kind == ValueKind::Int || kind == ValueKind::BigInt || kind == ValueKind::Double || kind == ValueKind::Bool)))
         {
             Raise("'" + TypeName(value) + "' object is not subscriptable");
         }
@@ -2696,7 +2699,9 @@ bool IsMethodName(std::string_view name)
     return std::binary_search(sameLength.begin(), sameLength.end(), name);
 }
 
-std::optional<InternalValue> GetNumberDataAttr(const InternalValue& self, std::string_view name)
+namespace
+{
+std::optional<InternalValue> NumberDataAttr(const InternalValue& self, std::string_view name)
 {
     const auto kind = self.Kind();
     if (kind == ValueKind::Double)
@@ -2732,6 +2737,20 @@ std::optional<InternalValue> GetNumberDataAttr(const InternalValue& self, std::s
         return InternalValue(static_cast<int64_t>(1));
     }
     return std::nullopt;
+}
+} // namespace
+
+std::optional<InternalValue> GetNumberDataAttr(const InternalValue& self, std::string_view name, const RenderContext* context)
+{
+    auto attr = NumberDataAttr(self, name);
+    if (attr && context && context->GetSandboxPolicy())
+    {
+        if (auto replacement = SandboxedNativeAttribute(context, self, std::string(name)))
+        {
+            return replacement;
+        }
+    }
+    return attr;
 }
 
 bool IsDictMethodName(std::string_view name)
@@ -2816,7 +2835,7 @@ InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderC
             return MakeBoundMethod(obj, *method);
         }
     }
-    if (auto attr = GetNumberDataAttr(obj, name))
+    if (auto attr = GetNumberDataAttr(obj, name, context))
     {
         return std::move(*attr);
     }
@@ -2850,6 +2869,11 @@ InternalValue GetItem(const InternalValue& obj, const InternalValue& key, Render
         {
             return UnsafeMethod(obj, AsString(key), *context);
         }
+        // A number has no items: Jinja2's getitem falls back to getattr, its data attributes (0374)
+        if (auto attr = GetNumberDataAttr(obj, AsString(key), context))
+        {
+            return std::move(*attr);
+        }
     }
     return result;
 }
@@ -2864,7 +2888,10 @@ bool IsMutatingName(std::string_view name)
 void NoteContainerStore(const InternalValue& container, const InternalValue& item)
 {
     const auto kind = item.Kind();
-    if (kind == ValueKind::List || kind == ValueKind::Map || kind == ValueKind::Callable || kind == ValueKind::KeyValuePair)
+    // Any other value refers to objects only through the anchor of the container it was read
+    // from (SetParentData): an undefined `loop.nope` keeps the loop's frame (docs/tasks/0444)
+    const auto* object = detail::InternalValueAccess::Object(item);
+    if (kind == ValueKind::List || kind == ValueKind::Map || kind == ValueKind::Callable || kind == ValueKind::KeyValuePair || (object && object->IsTraversable()))
     {
         CycleCollector::NoteStore(container);
     }

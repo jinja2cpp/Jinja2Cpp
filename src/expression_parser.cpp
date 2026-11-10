@@ -1,4 +1,5 @@
 #include "expression_parser.h"
+#include "undefined.h"
 
 #include "engine_errors.h"
 #include "error_handling.h"
@@ -22,6 +23,7 @@
 #include <jinja2cpp/template_env.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -176,7 +178,9 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
     // Only an inline `if` needs the wrapper: every compound node checks the stack itself
     if (includeIfPart && lexer.EatIfEqual(Keyword::If))
     {
-        auto ifExpr = ParseIfExpression(lexer);
+        // The line Jinja2 reports is the one the conditional's value starts on: its first token,
+        // which ParseBinary took
+        auto ifExpr = ParseIfExpression(lexer, saver.m_state.m_cur->range.startOffset);
         // Jinja2 checks the filters and tests of an inline if, its value among them, when they run
         m_unknown.DeferSince(unknownMark);
         if (!ifExpr)
@@ -1371,7 +1375,7 @@ ExpressionParser::ParseResult<NodeRef<ExpressionFilter>> ExpressionParser::Parse
     return result;
 }
 
-ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfExpression(LexScanner& lexer)
+ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfExpression(LexScanner& lexer, size_t valueOffset)
 {
     NodeRef<IfExpression> result;
     const auto& startTok = lexer.PeekNextToken();
@@ -1403,7 +1407,15 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
             altValue = *value;
         }
 
-        result = m_nodes.Make<IfExpression>(*testExpr, *altValue);
+        // Without `else`, Jinja2's cond_expr_undefined: a jinja2.Undefined whatever the environment's
+        // undefined, which prints empty and whose attribute, item or call fails. Made here, so
+        // that a render copies it
+        const bool noElse = !*altValue;
+        if (noElse)
+        {
+            *altValue = m_nodes.Make<ConstantExpression>(MakeCondExprUndefined(lexer.LineOf(valueOffset)));
+        }
+        result = m_nodes.Make<IfExpression>(*testExpr, *altValue, noElse);
     }
     catch (const ParseError& error)
     {

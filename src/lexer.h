@@ -3,10 +3,14 @@
 
 #include "internal_value.h"
 #include "lexertk.h"
+#include "unicode_tables.h"
 
+#include <array>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -209,6 +213,8 @@ struct LexerHelper
     // call; the flag is cleared
     virtual bool TakeLiteralError() = 0;
     virtual Keyword GetKeyword(const CharRange& range) = 0;
+    // The line, from 1, of the source offset
+    virtual unsigned GetLineNumber(size_t offset) = 0;
 };
 
 using TokensList = std::vector<Token>;
@@ -216,6 +222,64 @@ using TokensList = std::vector<Token>;
 // A numeric literal as the lexer has checked it: an int (a big integer beyond int64), or a
 // double when it is not an integer
 InternalValue ParseNumberLiteral(std::string number);
+
+// The class of a template unit in a tag, as bits, one table load per unit: an ASCII unit by
+// its table row, any other unit (UTF-8 lead and continuation bytes, wide units above 0x7F) is
+// NonAscii. The locale never decides a class
+namespace char_class
+{
+enum : uint8_t
+{
+    Operator = 1,
+    NameStart = 2,
+    NameContinue = 4,
+    Digit = 8,
+    Quote = 16,
+    NonAscii = 32,
+};
+
+constexpr std::array<uint8_t, 256> MakeTable()
+{
+    std::array<uint8_t, 256> table{};
+    for (const char ch : std::string_view("+-*/^<>=,!()[]{}%:?&|;~"))
+    {
+        table[static_cast<unsigned char>(ch)] = Operator;
+    }
+    for (unsigned ch = 'a'; ch <= 'z'; ++ch)
+    {
+        table[ch] = NameStart | NameContinue;
+        table[ch - 'a' + 'A'] = NameStart | NameContinue;
+    }
+    for (unsigned ch = '0'; ch <= '9'; ++ch)
+    {
+        table[ch] = NameContinue | Digit;
+    }
+    table['_'] = NameStart | NameContinue;
+    table['\''] = Quote;
+    table['"'] = Quote;
+    for (unsigned ch = 0x80; ch < 0x100; ++ch)
+    {
+        table[ch] = NonAscii;
+    }
+    return table;
+}
+
+inline constexpr std::array<uint8_t, 256> kTable = MakeTable();
+
+template<typename CharT>
+constexpr uint8_t Of(CharT ch)
+{
+    const auto unit = static_cast<std::make_unsigned_t<CharT>>(ch);
+    if constexpr (sizeof(CharT) == 1)
+    {
+        return kTable[unit];
+    }
+    else
+    {
+        return unit < 0x80 ? kTable[unit] : uint8_t{ NonAscii };
+    }
+}
+} // namespace char_class
 
 // The lexer of a tag's body (docs/tasks/0142). It reads the template source in place and makes
 // the parser's tokens straight away. LexToEnd also finds where the tag ends, so the splitter does
@@ -372,38 +436,85 @@ private:
     }
 
     // The token that starts at `pos` (not whitespace), lexed up to `end` at most; false on a
-    // lexing error. m_next gets where the next one may start.
-    bool ScanToken(size_t pos, size_t end, Token& tok)
+    // lexing error. m_next gets where the next one may start. Inlined in the two loops that lex
+    // a tag, the hottest code of a load
+    JINJA2CPP_HOT_INLINE bool ScanToken(size_t pos, size_t end, Token& tok)
     {
-        const auto ch = m_src[pos];
-        if (traits::is_operator_char(ch))
+        const auto cls = char_class::Of(m_src[pos]);
+        if (cls & char_class::Operator)
         {
             return ScanOperator(pos, end, tok);
         }
-        if (traits::is_letter(ch) || ch == '_')
+        if (cls & char_class::NameStart)
         {
             auto last = pos + 1;
-            while (last != end && (traits::is_letter_or_digit(m_src[last]) || m_src[last] == '_'))
+            uint8_t next = 0;
+            while (last != end && ((next = char_class::Of(m_src[last])) & char_class::NameContinue))
             {
                 ++last;
+            }
+            // A name with a character above ASCII goes on out of line, so this stays inlined
+            if (last != end && (next & char_class::NonAscii))
+            {
+                return ScanNonAsciiName(pos, last, end, tok);
             }
             SetSymbol(pos, last, tok);
             return true;
         }
-        if (ch == '.')
+        if (m_src[pos] == '.')
         {
             // Python has no .5 literal: the dot is an attribute or subscript operator
             return ScanOperator(pos, end, tok);
         }
-        if (traits::is_digit(ch))
+        if (cls & char_class::Digit)
         {
             return ScanNumber(pos, end, tok);
         }
-        if (ch == '\'' || ch == '"')
+        if (cls & char_class::Quote)
         {
             return ScanString(pos, end, tok);
         }
-        return false;
+        return (cls & char_class::NonAscii) && ScanNonAsciiName(pos, pos, end, tok);
+    }
+
+    // Jinja2's numbers start with an ASCII digit: the locale's classes (MSVC's iswdigit takes
+    // U+0663) do not decide one
+    static bool IsAsciiDigit(CharT ch) { return (char_class::Of(ch) & char_class::Digit) != 0; }
+
+    // A name with a character above ASCII, from `pos`, whose characters up to `last` were taken
+    // (none when last == pos); false when `pos` starts no name. Jinja2 lexes a name as a run of
+    // word characters and requires str.isidentifier() of it: the first character is XID_Start or
+    // '_', the others XID_Continue (Unicode as in the pinned Python, unicode_tables.h)
+    JINJA2CPP_COLD_INLINE bool ScanNonAsciiName(size_t pos, size_t last, size_t end, Token& tok)
+    {
+        const auto src = m_src.substr(0, end);
+        while (last != end)
+        {
+            const auto cls = char_class::Of(m_src[last]);
+            if (!(cls & char_class::NonAscii))
+            {
+                if (!(cls & (last == pos ? char_class::NameStart : char_class::NameContinue)))
+                {
+                    break;
+                }
+                ++last;
+                continue;
+            }
+            uint32_t cp = 0;
+            const auto len = detail::DecodeCodePoint(src, last, cp);
+            // A malformed sequence decodes as its first unit, which is no character of a name
+            if ((sizeof(CharT) == 1 && len == 1) || !(last == pos ? unicode::IsXidStart(cp) : unicode::IsXidContinue(cp)))
+            {
+                break;
+            }
+            last += len;
+        }
+        if (last == pos)
+        {
+            return false;
+        }
+        SetSymbol(pos, last, tok);
+        return true;
     }
 
     bool ScanOperator(size_t pos, size_t end, Token& tok)
@@ -511,7 +622,7 @@ private:
         }
     }
 
-    [[nodiscard]] bool IsDigitAt(size_t pos, size_t end) const { return pos < end && traits::is_digit(m_src[pos]); }
+    [[nodiscard]] bool IsDigitAt(size_t pos, size_t end) const { return pos < end && IsAsciiDigit(m_src[pos]); }
 
     // A numeric literal as Python writes it: 123, 1.5, 1e3, 1.5E-3, 1_000, 0x1F, 0o17, 0b101
     bool ScanNumber(size_t begin, size_t end, Token& tok)
@@ -585,7 +696,7 @@ private:
         // As in Jinja2, a literal has one exponent: 1e1e-1 is 1e1 e - 1
         if ((ch == 'e' || ch == 'E') && !state.afterDot && !state.exponent)
         {
-            if (pos + 1 == end || (m_src[pos + 1] != '+' && m_src[pos + 1] != '-' && !traits::is_digit(m_src[pos + 1])))
+            if (pos + 1 == end || (m_src[pos + 1] != '+' && m_src[pos + 1] != '-' && !IsAsciiDigit(m_src[pos + 1])))
             {
                 return Step::Error;
             }
@@ -601,13 +712,13 @@ private:
             state.exponentSign = true;
             return Step::Consume;
         }
-        if (traits::is_digit(ch))
+        if (IsAsciiDigit(ch))
         {
             state.exponentDigit = state.exponentDigit || state.exponent;
             return Step::Consume;
         }
         // Digit separator, as in Python: 1_000, 1_000.5, 1e1_0
-        if (ch == '_' && pos != begin && traits::is_digit(m_src[pos - 1]) && IsDigitAt(pos + 1, end))
+        if (ch == '_' && pos != begin && IsAsciiDigit(m_src[pos - 1]) && IsDigitAt(pos + 1, end))
         {
             return Step::Consume;
         }
@@ -881,6 +992,8 @@ public:
 
     // True if GetValue met a string literal with a malformed escape sequence (Python's SyntaxError)
     [[nodiscard]] bool TakeLiteralError() const { return m_helper->TakeLiteralError(); }
+    // The line, from 1, of the source offset
+    [[nodiscard]] unsigned LineOf(size_t offset) const { return m_helper->GetLineNumber(offset); }
 
     bool EatIfEqual(Keyword kwType, Token* tok = nullptr)
     {

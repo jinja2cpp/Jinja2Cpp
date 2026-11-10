@@ -1005,6 +1005,31 @@ def test_attr_filter_and_items_of_loop_namespace_and_macro_reach_is_safe_attribu
     assert default[0] == "ok" and default[1] != "||", source
 
 
+NUMBER_ATTRIBUTE_SOURCES = [
+    "{{ n|attr('real') }}|{{ n.real }}|{{ n['real'] }}|{{ (n|attr('real')) is defined }}",
+    "{{ f.imag }}|{{ f|attr('real') }}|{{ b.numerator }}|{{ n.denominator }}",
+    "{{ [n]|map(attribute='real')|list }}|{{ [{'a': n}]|map(attribute='a.real')|list }}",
+    "{{ [n]|sum(attribute='real') }}",
+    "{{ '{0.real}|{0.imag}'.format(n) }}",
+]
+
+
+@pytest.mark.parametrize("source", NUMBER_ATTRIBUTE_SOURCES)
+@pytest.mark.parametrize("immutable", [False, True], ids=["sandbox", "immutable"])
+def test_number_data_attributes_reach_is_safe_attribute(source, immutable):
+    # n.real is an attribute as any other: refused by an is_safe_attribute that refuses it, on every path to it
+    def deny(self, obj, attr, value):
+        return False
+
+    base_ours, base_oracle = (ImmutableSandboxedEnvironment, j2sandbox.ImmutableSandboxedEnvironment) if immutable else (SandboxedEnvironment, j2sandbox.SandboxedEnvironment)
+    ours = type("Deny", (base_ours,), {"is_safe_attribute": deny})()
+    oracle = type("DenyJ2", (base_oracle,), {"is_safe_attribute": deny})()
+    params = {"n": 5, "f": 1.5, "b": True}
+    assert _outcome_of(ours, source, **params) == _outcome_of(oracle, source, **params), source
+    # and the default sandbox reads them
+    assert _outcome_of(base_ours(), source, **params) == _outcome_of(base_oracle(), source, **params), source
+
+
 TOO_LONG = [
     "{{ '{0:200000000}'.format('x')|length }}",
     "{{ '{0:>200000000}'.format('x')|length }}",
@@ -1026,6 +1051,37 @@ def test_str_format_in_the_sandbox_is_capped_before_it_allocates(source, env_cla
         env_class().from_string(source).render()
     with pytest.raises(TemplateRuntimeError, match="too (long|big)"):
         Environment().from_string(source.replace("'{a:200000000}'.format_map({'a': 'x'})", "'{0:200000000}'.format('x')")).render()
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "{{ (('a' * 40000000) ~ '{0}').format('b' * 40000000)|length }}",
+        "{{ (('a' * 40000000) ~ '{x}').format_map({'x': 'b' * 40000000})|length }}",
+        "{{ ((('a' * 40000000) ~ '{0}')|safe).format('b' * 40000000)|length }}",
+    ],
+)
+def test_str_format_cap_counts_the_literal_text_before_joining(source, monkeypatch):
+    # Codex on #801: the text between the fields is written too. The formatter checks it with the fields, so the
+    # joined string of 80M characters is never built (the size the cap sees is the whole result)
+    import jinja2cpp.sandbox as sandbox_module
+
+    checked = []
+    real_check = sandbox_module._jinja2cpp._check_sequence_size
+
+    def spy(size):
+        checked.append(size)
+        real_check(size)
+
+    monkeypatch.setattr(sandbox_module._jinja2cpp, "_check_sequence_size", spy)
+    with pytest.raises(TemplateRuntimeError, match="too long"):
+        SandboxedEnvironment().from_string(source).render()
+    assert max(checked) >= 80000000, checked
+
+
+def test_str_format_literal_count_keeps_python_errors_of_a_malformed_string():
+    for source in ("{{ '{x} {'.format() }}", "{{ 'a } b'.format() }}", "{{ '{0} {'.format(1) }}"):
+        assert _outcome_of(SandboxedEnvironment(), source) == _outcome_of(j2sandbox.SandboxedEnvironment(), source), source
 
 
 def test_str_format_in_the_sandbox_still_formats_what_fits():
@@ -1248,3 +1304,20 @@ def test_format_map_kept_past_the_render():
     gc.collect()
     with pytest.raises(jinja2cpp.TemplateRuntimeError):
         kept[0]({"a": 1})
+
+
+def test_a_long_string_reaches_is_safe_attribute_as_an_empty_one_of_its_type():
+    # Security review of 0354: a refused name read in a loop copied the whole string into Python each time
+    # (O(length) per read). A custom is_safe_attribute sees a short string itself, a long one as '' of its type
+    seen = []
+
+    class Recording(SandboxedEnvironment):
+        def is_safe_attribute(self, obj, attr, value):
+            seen.append((type(obj), len(obj)))
+            return False
+
+    env = Recording()
+    source = "{% for i in range(3) %}{{ s.__class__ }}{{ m.__class__ }}{% endfor %}{{ t.__class__ }}"
+    assert env.from_string("{% set s = 'x' * 1000000 %}{% set m = s|safe %}" + source).render(t="abc") == ""
+    assert seen.count((str, 0)) == 3 and seen.count((Markup, 0)) == 3, seen
+    assert seen[-1] == (str, 3), seen

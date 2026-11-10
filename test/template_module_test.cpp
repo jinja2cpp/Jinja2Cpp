@@ -10,9 +10,19 @@
 
 #include <gtest/gtest.h>
 
+#if defined(__linux__) || defined(__APPLE__)
+#include <pthread.h>
+#endif
+
+#include <algorithm>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <iterator>
+#include <memory>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -620,4 +630,216 @@ TEST_F(TemplateModuleTest, Wide)
         EXPECT_EQ(jinja2::ErrorCode::TemplateExpired, failure.error().GetCode());
         EXPECT_EQ(2u, failure.error().GetExtraParams().size());
     }
+}
+
+namespace
+{
+// A host value nested `depth` deep: a list or a dict holding the next level, `leaf` at the bottom
+jinja2::Value DeepValue(std::size_t depth, bool asMap, jinja2::Value leaf = jinja2::Value())
+{
+    jinja2::Value value = std::move(leaf);
+    for (std::size_t level = 0; level < depth; ++level)
+    {
+        if (asMap)
+        {
+            jinja2::ValuesMap map;
+            map.emplace("a", std::move(value));
+            value = jinja2::Value(std::move(map));
+        }
+        else
+        {
+            jinja2::ValuesList list;
+            list.push_back(std::move(value));
+            value = jinja2::Value(std::move(list));
+        }
+    }
+    return value;
+}
+
+// Destroys a value of DeepValue one level at a time: Value's destructor recurses once per
+// level, as its copy does (docs/tasks/0449)
+void DestroyDeep(jinja2::Value value)
+{
+    // Each container's items move to the list before it is destroyed, so none recurses
+    std::vector<jinja2::Value> pending;
+    pending.push_back(std::move(value));
+    while (!pending.empty())
+    {
+        jinja2::Value item = std::move(pending.back());
+        pending.pop_back();
+        if (auto* list = item.GetIf<jinja2::ValuesList>())
+        {
+            std::move(list->begin(), list->end(), std::back_inserter(pending));
+        }
+        else if (auto* map = item.GetIf<jinja2::ValuesMap>())
+        {
+            for (auto& entry : *map)
+            {
+                pending.push_back(std::move(entry.second));
+            }
+        }
+    }
+}
+
+// A list of values of DeepValue, destroyed with DestroyDeep
+struct DeepValues
+{
+    std::vector<jinja2::Value> values;
+    ~DeepValues()
+    {
+        for (auto& value : values)
+        {
+            DestroyDeep(std::move(value));
+        }
+    }
+};
+
+constexpr std::size_t DeepArgument = 200000;
+
+#if defined(__linux__) || defined(__APPLE__)
+void* RunJob(void* job)
+{
+    (*static_cast<const std::function<void()>*>(job))();
+    return nullptr;
+}
+#endif
+
+// On a thread of a known stack, which the copy of DeepArgument levels surely overflows: a main
+// thread's may be deep enough for it (8 MB on macOS, with a Release build's small frames)
+void RunOnSmallStack(const std::function<void()>& job)
+{
+#if defined(__linux__) || defined(__APPLE__)
+    pthread_attr_t attr;
+    ASSERT_EQ(0, pthread_attr_init(&attr));
+    ASSERT_EQ(0, pthread_attr_setstacksize(&attr, std::size_t{ 2 } * 1024 * 1024));
+    pthread_t thread{};
+    ASSERT_EQ(0, pthread_create(&thread, &attr, RunJob, const_cast<std::function<void()>*>(&job)));
+    pthread_join(thread, nullptr);
+    pthread_attr_destroy(&attr);
+#else
+    job();
+#endif
+}
+} // namespace
+
+// The host's value is copied for the module, a copy that recursed once per level and
+// overflowed the stack; it stops with RecursionLimitExceeded as a render does (docs/tasks/0418)
+TEST_F(TemplateModuleTest, DeepArgumentFails)
+{
+    RunOnSmallStack([this] {
+        auto module = Make("{% macro m(p) %}{{ p|length }}{% endmacro %}");
+        for (const bool asMap : { false, true })
+        {
+            // Moved, never copied, and destroyed by DestroyDeep: Value's own copy and destructor recurse
+            DeepValues kept;
+            const auto callError = [&module, &kept, asMap](bool asKeyword) {
+                jinja2::UserCallableParams params;
+                if (asKeyword)
+                {
+                    params.extraKwArgs = jinja2::ValuesMap{};
+                    params.extraKwArgs.GetIf<jinja2::ValuesMap>()->emplace("p", DeepValue(DeepArgument, asMap));
+                }
+                else
+                {
+                    params.extraPosArgs = jinja2::ValuesList{};
+                    params.extraPosArgs.GetIf<jinja2::ValuesList>()->push_back(DeepValue(DeepArgument, asMap));
+                }
+                auto code = jinja2::ErrorCode::Unspecified;
+                try
+                {
+                    module.exports["m"].As<jinja2::UserCallable>().callable(params);
+                }
+                catch (const jinja2::BadResultAccess<>& failure)
+                {
+                    code = failure.error().GetCode();
+                }
+                kept.values.push_back(std::move(asKeyword ? params.extraKwArgs : params.extraPosArgs));
+                return code;
+            };
+            EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, callError(false));
+            EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, callError(true));
+
+            auto tpl = Load("{{ p|length }}");
+            jinja2::ValuesMap params;
+            params.emplace("p", DeepValue(DeepArgument, asMap));
+            auto failed = tpl.MakeModule(params);
+            kept.values.emplace_back(std::move(params));
+            ASSERT_FALSE(failed);
+            EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, failed.error().GetCode()) << failed.error().ToString();
+
+            // A global of the environment the module copies too. The environment is never
+            // destroyed, which would recurse; it stays reachable, so it does not leak
+            static auto* const env = new jinja2::TemplateEnv();
+            env->AddGlobal(asMap ? "pm" : "pl", DeepValue(DeepArgument, asMap));
+            jinja2::Template withGlobal(env);
+            ASSERT_TRUE(!!withGlobal.Load("{{ 1 }}"));
+            auto globalFailed = withGlobal.MakeModule();
+            ASSERT_FALSE(globalFailed);
+            EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, globalFailed.error().GetCode()) << globalFailed.error().ToString();
+
+            // Copied within the stack, the copy must also be destroyed within it: Value's
+            // destructor takes several times the stack its copy takes. Deep enough that a copy
+            // checked against the stack alone overflows in its destruction; the module either
+            // fails or ends without a crash, also when the deep item follows a sibling it copied
+            for (const std::size_t depth : { std::size_t{ 3000 }, std::size_t{ 20000 } })
+            {
+                jinja2::ValuesList pair;
+                pair.push_back(DeepValue(depth, asMap));
+                pair.push_back(DeepValue(DeepArgument, asMap));
+                for (std::size_t items = 1; items != 3; ++items)
+                {
+                    jinja2::ValuesMap deepParams;
+                    jinja2::ValuesList list;
+                    std::move(pair.begin(), pair.begin() + static_cast<std::ptrdiff_t>(items), std::back_inserter(list));
+                    deepParams.emplace("p", std::move(list));
+                    {
+                        auto deepModule = tpl.MakeModule(deepParams);
+                        if (deepModule)
+                        {
+                            EXPECT_EQ(std::to_string(items), deepModule->body);
+                        }
+                        else
+                        {
+                            EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, deepModule.error().GetCode()) << deepModule.error().ToString();
+                        }
+                    }
+                    // Back for the next round
+                    auto& back = deepParams["p"].As<jinja2::ValuesList>();
+                    std::move(back.begin(), back.end(), pair.begin());
+                    kept.values.emplace_back(std::move(deepParams));
+                }
+                kept.values.emplace_back(std::move(pair));
+            }
+
+            // Within the stack, it is the macro's
+            const auto nested = DeepValue(50, asMap, 7);
+            EXPECT_EQ("1", Call(module.exports["m"], { nested }).AsString());
+            auto made = tpl.MakeModule({ { "p", nested } });
+            ASSERT_TRUE(!!made);
+            EXPECT_EQ("1", made->body);
+        }
+    });
+}
+
+// A view of the host's text is copied: the module's values outlive the call that passed it
+TEST_F(TemplateModuleTest, ViewArgumentIsCopied)
+{
+    auto module = Make("{% set ns = namespace(s=none) %}{% macro put(a) %}{% set ns.s = a %}{% endmacro %}{% macro get() %}{{ ns.s }}{% endmacro %}");
+    auto text = std::make_unique<std::string>("first text, long enough for the heap");
+    Call(module.exports["put"], { std::string_view(*text) });
+    text.reset();
+    EXPECT_EQ("first text, long enough for the heap", Call(module.exports["get"]).AsString());
+
+    // Built with emplace_back: a braced `{ list }` copies the list on Clang and MSVC
+    jinja2::ValuesList inner;
+    inner.emplace_back(std::string_view("x"));
+    jinja2::ValuesList nested;
+    nested.emplace_back(std::move(inner));
+    auto wide = std::make_unique<std::wstring>(L"wide text, long enough for the heap");
+    nested.emplace_back(std::wstring_view(*wide));
+    jinja2::ValuesList args;
+    args.emplace_back(std::move(nested));
+    Call(module.exports["put"], std::move(args));
+    wide.reset();
+    EXPECT_EQ("[['x'], 'wide text, long enough for the heap']", Call(module.exports["get"]).AsString());
 }

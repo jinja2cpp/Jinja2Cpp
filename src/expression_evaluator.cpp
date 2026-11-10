@@ -1513,12 +1513,13 @@ bool IfExpression::IsFoldable(const NodeArena& nodes, NodeRef<Expression> value)
     {
         return false;
     }
+    const auto altValue = GetAltValue();
     if (const auto* test = nodes[m_testExpr].GetConstant(nodes))
     {
-        const auto chosen = ConvertToBool(*test) ? value : m_altValue;
+        const auto chosen = ConvertToBool(*test) ? value : altValue;
         return chosen && nodes[chosen].IsFoldable(nodes);
     }
-    return nodes[m_testExpr].IsFoldable(nodes) && m_altValue && nodes[value].IsFoldable(nodes) && nodes[m_altValue].IsFoldable(nodes);
+    return nodes[m_testExpr].IsFoldable(nodes) && altValue && nodes[value].IsFoldable(nodes) && nodes[altValue].IsFoldable(nodes);
 }
 
 std::uint8_t IfExpression::PrepareFold(const NodeArena& nodes, NodeRef<Expression> value)
@@ -1529,13 +1530,14 @@ std::uint8_t IfExpression::PrepareFold(const NodeArena& nodes, NodeRef<Expressio
     }
     m_testFold = PrepareOperandFold(nodes, m_testExpr);
     m_valueFold = PrepareOperandFold(nodes, value);
-    m_altFold = PrepareOperandFold(nodes, m_altValue);
+    const auto altValue = GetAltValue();
+    m_altFold = PrepareOperandFold(nodes, altValue);
     // As IsFoldable: a literal test and the branch it picks, or a folded test and two branches
     if (const auto* test = nodes[m_testExpr].GetConstant(nodes))
     {
         return ConvertToBool(*test) ? m_valueFold : m_altFold;
     }
-    if (m_testFold == FoldAlways && m_altValue && m_valueFold == FoldAlways && m_altFold == FoldAlways)
+    if (m_testFold == FoldAlways && altValue && m_valueFold == FoldAlways && m_altFold == FoldAlways)
     {
         return FoldAlways;
     }
@@ -1553,7 +1555,7 @@ bool IfExpression::IsFoldableAt(RenderContext& values, NodeRef<Expression> value
     {
         return false;
     }
-    return *test ? OperandFoldsAt(values, value, m_valueFold) : (m_altValue && OperandFoldsAt(values, m_altValue, m_altFold));
+    return *test ? OperandFoldsAt(values, value, m_valueFold) : (GetAltValue() && OperandFoldsAt(values, m_altValue, m_altFold));
 }
 
 std::uint8_t FullExpressionEvaluator::PrepareFold(const NodeArena& nodes)
@@ -1629,7 +1631,8 @@ bool IfExpression::Evaluate(RenderContext& context)
 
 InternalValue IfExpression::EvaluateAltValue(RenderContext& context)
 {
-    return m_altValue ? context.Nodes()[m_altValue].Evaluate(context) : InternalValue();
+    // Without `else`, a copy of the constant cond_expr_undefined
+    return context.Nodes()[m_altValue].Evaluate(context);
 }
 
 /*

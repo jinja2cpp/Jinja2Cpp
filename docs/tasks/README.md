@@ -423,7 +423,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0351](0351-cell-model-past-the-depth-bound.md) | Check the cell model past its depth bound | robustness | medium | open |
 | [0352](0352-python-host-object-seam.md) | Python module P1a: a private host-object seam in the engine | api | medium | done |
 | [0353](0353-python-module-core.md) | Python module P1b: build, Environment/Template/render, value crossing | api | medium | done |
-| [0354](0354-python-module-subset.md) | Python module P2: the supported subset, sandbox and fallback | api | medium | open |
+| [0354](0354-python-module-subset.md) | Python module P2: the supported subset, sandbox and fallback | api | medium | done |
 | [0355](0355-python-module-proof.md) | Python module P3: upstream test suite, parity corpus, chat templates, bench row | parity | medium | done |
 | [0356](0356-python-module-wheels.md) | Python module P4: wheels for Linux, macOS and Windows; free-threaded audit | build | medium | open |
 | [0357](0357-python-module-public-api.md) | Python module: move from the private seam to the public API before the G1 freeze | api | medium | done |
@@ -485,8 +485,8 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0415](0415-oldstyle-gettext-in-the-engine.md) | Oldstyle gettext (Jinja2's default) in the engine | parity | low | open |
 | [0416](0416-python-context-sees-only-top-level-names.md) | `pass_context`'s Context sees loop and `with` variables, Jinja2's does not | parity | low | open |
 | [0417](0417-python-i18n-before-install-is-lenient.md) | `_()` and `{% trans %}` work before translations are installed | parity | low | open |
-| [0418](0418-module-value-copy-recursion.md) | A deeply nested argument to a module macro overflows the stack in the engine | robustness | medium | open |
-| [0419](0419-print-statement.md) | `{% print expr %}` is a parse error in the engine | parity | low | open |
+| [0418](0418-module-value-copy-recursion.md) | A deeply nested argument to a module macro overflows the stack in the engine | robustness | medium | done |
+| [0419](0419-print-statement.md) | `{% print expr %}` is a parse error in the engine | parity | low | done |
 | [0420](0420-range-and-engine-object-leftovers.md) | Range and engine-object leftovers of 0401 | parity | low | open |
 | [0421](0421-host-tuple-inbound.md) | A tuple a host returns stays a tuple | api | low | open |
 | [0422](0422-module-call-exports-views.md) | Exports of a running module call keep tuples, keys and lent members | api | low | open |
@@ -498,7 +498,7 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0428](0428-python-fallback-leftovers.md) | Python fallback leftovers (from the review of 0354 PR3) | api | low | open |
 | [0429](0429-preflight-python-sources.md) | `scripts/preflight.sh` skips clang-tidy for `python/src/*.cpp` and needs `build/` | tooling | low | open |
 | [0430](0430-python-fallback-static-include-routing.md) | Route static include, import and extends names at load time (Python fallback) | api | low | open |
-| [0431](0431-upstream-suite-syntax-gaps.md) | Syntax gaps the upstream Jinja2 suite found | parity | medium | open |
+| [0431](0431-upstream-suite-syntax-gaps.md) | Syntax gaps the upstream Jinja2 suite found | parity | medium | done |
 | [0432](0432-upstream-suite-error-types-and-messages.md) | Error classes, messages and tracebacks the upstream Jinja2 suite checks | parity | medium | open |
 | [0433](0433-python-template-cache-identity.md) | `get_template` returns a new Template object each time, and template globals of includes | parity | medium | open |
 | [0434](0434-python-values-leftovers-upstream-suite.md) | Values, filters and macros: leftovers the upstream Jinja2 suite found | parity | low | open |
@@ -511,5 +511,11 @@ files go under `touches` (0012 and 0024 each rewrite about a hundred rows).
 | [0441](0441-host-sequence-own-iteration.md) | A host sequence with its own iteration is iterated by index | api | medium | open |
 | [0442](0442-python-sandbox-stub-and-cycler-repr.md) | Python module: one sandbox stub type per class, and the repr of a cycler or joiner | perf | low | open |
 | [0443](0443-str-format-map.md) | str.format_map is missing from the engine's string methods | parity | low | open |
-| [0444](0444-fuzz-loop-frame-pool-leak.md) | A loop frame the frame pool hands out leaks under the prompt_escape fuzzer | robustness | medium | open |
+| [0444](0444-fuzz-loop-frame-pool-leak.md) | A loop frame the frame pool hands out leaks under the prompt_escape fuzzer | robustness | medium | done |
+| [0445](0445-subscript-tuple-of-slices.md) | A subscript of a literal by a tuple of slices is a parse error in the engine | parity | low | open |
+| [0446](0446-nfkc-template-names.md) | Names a template sets are not NFKC-normalised | parity | low | open |
+| [0447](0447-chained-if-unicode-space.md) | Chained else-less conditionals and Unicode spaces inside tags | parity | low | open |
 | [0448](0448-generation-block-hides-caller.md) | `caller()` inside a `{% generation %}` block of a macro must be undefined | parity | low | open |
+| [0449](0449-host-value-copy-destroy-recursion.md) | A host Value nested deeper than the stack allows cannot be copied or destroyed | robustness | low | open |
+| [0450](0450-module-call-collector-quadratic.md) | A module whose calls grow a module-level container walks all of it on every call | robustness | medium | open |
+| [0451](0451-python-module-trans-percent-and-range.md) | Python module: `{% trans %}100%{% endtrans %}` prints `100%%`; `range()` prints nothing | api | low | open |
