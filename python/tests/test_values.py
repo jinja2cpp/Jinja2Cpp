@@ -56,6 +56,44 @@ class Box(collections.abc.Mapping):
         return len(self._items)
 
 
+
+class OwnIterList(list):
+    """A list subclass with its own iteration: Python loops through __iter__, items stay the list's (task 0441)"""
+
+    def __iter__(self):
+        return iter(["x", "y"])
+
+
+class OwnIterTuple(tuple):
+    def __iter__(self):
+        return iter(["x", "y"])
+
+
+class OwnItemList(list):
+    """Overrides only __getitem__: Python's list iterator still gives the list's own items"""
+
+    def __getitem__(self, index):
+        return "G"
+
+
+class OwnItemTuple(tuple):
+    def __getitem__(self, index):
+        return "G"
+
+
+class PlainSubList(list):
+    pass
+
+
+class SizedIterable:
+    """Not a sequence: a length of its own and an iteration of another length"""
+
+    def __len__(self):
+        return 7
+
+    def __iter__(self):
+        return iter("ab")
+
 CASES = [
     # dict: items, attributes, methods, non-string keys, filters that want a mapping
     ("{{ d.a }} {{ d['a'] }} {{ d.get('z', 0) }} {{ d.items()|list }} {{ d|length }}", {"d": {"a": 1, "b": 2}}),
@@ -253,3 +291,38 @@ def test_undefined_items_and_dictsort_pairs_reach_python_as_in_jinja2():
     ]
     for source, f in cases:
         assert jinja2cpp.Template(source).render(f=f) == jinja2.Template(source).render(f=f), source
+
+
+# Built afresh for each engine: render_both deep-copies its context, and a deep copy of a list subclass is rebuilt from
+# its __iter__, which would hide what these rows check (task 0441)
+SUBCLASS_CASES = [
+    "{% for i in l %}{{ i }}{% endfor %}|{% for i in t %}{{ i }}{% endfor %}|{% for i in p %}{{ i }}{% endfor %}",
+    "{{ l|join('-') }} {{ l|list }} {{ l[1] }} {{ l|length }} {{ t|list }} {{ 'x' in l }} {{ l|first }} {{ l|sort }}",
+    "{% for i in g %}{{ i }}{% endfor %}|{% for i in gt %}{{ i }}{% endfor %}|{{ g|list }} {{ g|join }} {{ g|first }}",
+    "{{ g|sort }} {{ g|sum }} {{ g|reverse|list }} {{ g[0] }} {{ gt[0] }}",
+    "{% for i in p %}{{ i }}{{ p.pop() if loop.first else '' }}{% endfor %}",
+    # loop.length is len() of the object; operators and `%` read the stored items
+    "{% for i in l %}{{ loop.length }}{{ loop.revindex }}{{ loop.revindex0 }}{{ loop.last }};{% endfor %}",
+    "{% for i in t %}{{ loop.length }}{% endfor %}|{% for i in n %}{{ i }}{{ loop.length }}{{ loop.last }}{% endfor %}",
+    "{{ l + ['z'] }} {{ l * 2 }} {{ t + ('z',) }} {{ l < [1, 3] }} {{ t > (1,) }} {{ '%s-%s-%s' % t }} {{ l|length }}",
+]
+
+
+def _subclass_context():
+    return {
+        "l": OwnIterList([1, 2, 3]),
+        "t": OwnIterTuple((1, 2, 3)),
+        "p": PlainSubList([1, 2, 3]),
+        "g": OwnItemList([1, 2, 3]),
+        "gt": OwnItemTuple((1, 2, 3)),
+        "n": SizedIterable(),
+    }
+
+
+@pytest.mark.parametrize("source", SUBCLASS_CASES)
+def test_list_and_tuple_subclasses_iterate_as_python_does(source):
+    results = []
+    for module in (jinja2cpp, jinja2):
+        env = module.Environment()
+        results.append(env.from_string(source).render(**_subclass_context()))
+    assert results[0] == results[1], f"{source!r}: jinja2cpp {results[0]!r}, Jinja2 {results[1]!r}"

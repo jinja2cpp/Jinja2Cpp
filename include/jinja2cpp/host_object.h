@@ -183,7 +183,7 @@ public:
     /*!
      * \brief Item `index` of a \ref IsSequence object, with the value written to `out`
      *
-     * The engine iterates an \ref IsSequence object that has a \ref Len by index: it asks \ref Len before every step
+     * The engine iterates an \ref IsSequence object that has a \ref Len and \ref IteratesByIndex by index: it asks \ref Len before every step
      * (a list the template shortens or extends while it loops ends where Python's list iterator ends), then this for
      * the item, so one iteration step is two calls and no \ref GenericList. `index` is below the \ref Len the
      * engine just read, unless the object changed in between.
@@ -234,6 +234,15 @@ public:
     [[nodiscard]] virtual bool IsMapping() const;
     //! `isinstance(x, (list, tuple))`
     [[nodiscard]] virtual bool IsSequence() const;
+    /*!
+     * \brief Whether the engine iterates this \ref IsSequence object by index
+     *
+     * True by default: a loop over a sequence with a \ref Len reads \ref Len and \ref ItemAtTo at each step. A sequence whose `iter(x)` does not give its items by index, such as a Python `list` subclass that
+     * overrides `__iter__`, answers false, and the engine iterates it through \ref Iterate instead. A loop's
+     * `loop.length` is still \ref Len, read when the template first asks for it, and the operations of a list (`+`, `*`,
+     * comparisons, `str % x`) still read the items by index, as Python's do.
+     */
+    [[nodiscard]] virtual bool IteratesByIndex() const;
     //! `isinstance(x, tuple)`, a namedtuple too
     [[nodiscard]] virtual bool IsTuple() const;
     //! `hasattr(x, '__html__')`: the object prints as \ref Html under autoescape and is `escaped`

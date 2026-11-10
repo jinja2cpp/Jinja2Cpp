@@ -1,9 +1,9 @@
 ---
-status: open
+status: in-progress
 priority: medium
 area: api
 depends: [0357]
-touches: [src/public_host_object.cpp, python/src/adapters.cpp]
+touches: [src/public_host_object.cpp, python/src/adapters.cpp, python/src/adapters.h]
 shares: [include/jinja2cpp/host_object.h]
 ---
 # A host sequence with its own iteration is iterated by index
@@ -29,3 +29,20 @@ before the G1 freeze or goes through `IHostObject2`.
 
 **Done when.** The probe gives `xy`, with a row in `python/tests` and one in
 `test/public_host_object_test.cpp` for a C++ host that iterates by its own `Iterate`.
+
+**Progress (2026-11-10).** `IHostObject::IteratesByIndex()` (true by default) is checked where
+`HostBridge::Iterate` picks `HostSequenceList`. `PyHost` answers true only for an exact `list`
+or `tuple`: a subclass is iterated through `iter()`, which is its own `__iter__` when it has one,
+and otherwise the base type's iterator, which (unlike `ItemAtTo`, which calls `__getitem__`) reads
+the items without a subclass's `__getitem__`, as Python does. The probe gives `xy`. Rows:
+`python/tests/test_values.py::test_list_and_tuple_subclasses_iterate_as_python_does` (contexts
+built afresh per engine, since a deep copy of a list subclass is rebuilt from its `__iter__`) and
+`PublicHostObjectTest.SequenceThatIteratesByItsOwnIterate`. Decision record: docs/api-2.0.md
+section 7 item 10.
+
+Codex on #827 (2 P2): `loop.length` must stay `len()` of the object, and `+`, `*`, comparisons
+and `str % x` must keep reading the stored items. Fixed: a loop over any host object takes
+`loop.length` from its `Len` when first read (`SetLengthOfValue`, src/statements.cpp; counted
+from the items when it has none), and `host::AsSequence` reads the new private
+`IEngineHostObject::SequenceItems` (by index for a sequence with a `Len`). `pprint` still
+differs: task 0453.

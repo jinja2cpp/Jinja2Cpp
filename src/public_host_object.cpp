@@ -224,6 +224,11 @@ bool IHostObject::IsSequence() const
     return false;
 }
 
+bool IHostObject::IteratesByIndex() const
+{
+    return true;
+}
+
 bool IHostObject::IsTuple() const
 {
     return false;
@@ -329,7 +334,7 @@ std::optional<InternalValue> ReadTo(Read&& read)
     return result;
 }
 
-// The engine's list of an IsSequence object with a length, read straight from the object: Len before each step (the
+// The engine's list of an IsSequence object with a length that IteratesByIndex, read straight from the object: Len before each step (the
 // live length, as Python's list iterator reads it) and ItemAtTo for the item, with no GenericList of the host's
 class HostSequenceList final : public IndexedListAccessorImpl<HostSequenceList>
 {
@@ -430,9 +435,18 @@ public:
     [[nodiscard]] bool IsIterable() const override { return m_object->IsIterable(); }
     [[nodiscard]] std::optional<ListAdapter> Iterate() const override
     {
-        if (m_object->IsSequence() && m_object->Len())
+        if (m_object->IsSequence() && m_object->IteratesByIndex() && m_object->Len())
         {
-            return ListAdapter(MakeRef<const HostSequenceList>(m_object, IntrusivePtr<const HostObjectAccessor>(m_holder)));
+            return ByIndex();
+        }
+        return ToEngine(m_object->Iterate());
+    }
+    // + * < and `%` read a list or tuple's stored items, whatever its iteration gives
+    [[nodiscard]] std::optional<ListAdapter> SequenceItems() const override
+    {
+        if (m_object->Len())
+        {
+            return ByIndex();
         }
         return ToEngine(m_object->Iterate());
     }
@@ -450,6 +464,10 @@ public:
     [[nodiscard]] std::string Html() const override { return m_object->Html(); }
 
 private:
+    [[nodiscard]] ListAdapter ByIndex() const
+    {
+        return ListAdapter(MakeRef<const HostSequenceList>(m_object, IntrusivePtr<const HostObjectAccessor>(m_holder)));
+    }
     [[nodiscard]] std::optional<InternalValue> GetItemByView(std::string_view key) const
     {
         return ReadTo([this, key](HostResult& out) { return m_object->GetItemTo(key, out); });
