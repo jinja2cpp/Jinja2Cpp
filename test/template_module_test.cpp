@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <thread>
@@ -668,16 +669,19 @@ TEST_F(TemplateModuleTest, DeepArgumentFails)
             map.emplace("p", DeepValue(DeepArgument, asMap));
             return map;
         };
-        try
-        {
-            Call(module.exports["m"], args());
-            FAIL() << "expected RecursionLimitExceeded";
-        }
-        catch (const jinja2::BadResultAccess<>& failure)
-        {
-            EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, failure.error().GetCode()) << failure.error().ToString();
-        }
-        EXPECT_THROW(Call(module.exports["m"], {}, kwArgs()), jinja2::BadResultAccess<>);
+        const auto callError = [&module](jinja2::ValuesList pos, jinja2::ValuesMap kw) {
+            try
+            {
+                Call(module.exports["m"], std::move(pos), std::move(kw));
+            }
+            catch (const jinja2::BadResultAccess<>& failure)
+            {
+                return failure.error().GetCode();
+            }
+            return jinja2::ErrorCode::Unspecified;
+        };
+        EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, callError(args(), {}));
+        EXPECT_EQ(jinja2::ErrorCode::RecursionLimitExceeded, callError({}, kwArgs()));
 
         auto tpl = Load("{{ p|length }}");
         auto failed = tpl.MakeModule(kwArgs());
