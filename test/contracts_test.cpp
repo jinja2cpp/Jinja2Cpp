@@ -52,14 +52,18 @@ TEST(ContractsTest, ExpectsViolationThrows)
 
 TEST(ContractsTest, AssertViolationThrowsOnlyAtFull)
 {
-    if constexpr (ContractChecks >= 2)
+    // One expectation, not one per branch of an if constexpr: MSVC warns (C4102) of the gtest
+    // label left in the discarded branch
+    bool thrown = false;
+    try
     {
-        EXPECT_THROW(JINJA2CPP_ASSERT(false), ContractViolation);
+        JINJA2CPP_ASSERT(false);
     }
-    else
+    catch (const ContractViolation&)
     {
-        EXPECT_NO_THROW(JINJA2CPP_ASSERT(false));
+        thrown = true;
     }
+    EXPECT_EQ(ContractChecks >= 2, thrown);
 }
 
 TEST(ContractsTest, UncheckedConditionIsNotEvaluated)
