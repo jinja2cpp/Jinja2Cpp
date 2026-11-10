@@ -406,7 +406,7 @@ private:
             // Python has no .5 literal: the dot is an attribute or subscript operator
             return ScanOperator(pos, end, tok);
         }
-        if (traits::is_digit(ch))
+        if (IsAsciiDigit(ch))
         {
             return ScanNumber(pos, end, tok);
         }
@@ -416,6 +416,10 @@ private:
         }
         return !traits::is_ascii(ch) && ScanNonAsciiName(pos, pos, end, tok);
     }
+
+    // Jinja2's numbers start with an ASCII digit: the locale's classes (MSVC's iswdigit takes
+    // U+0663) do not decide one
+    static bool IsAsciiDigit(CharT ch) { return ch >= '0' && ch <= '9'; }
 
     // A letter, digit or '_' of ASCII; false for any other unit, a negative char included
     static bool IsAsciiNameChar(CharT ch) { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'; }
@@ -432,7 +436,7 @@ private:
             const auto unit = m_src[last];
             if (traits::is_ascii(unit))
             {
-                if ((last == pos || !traits::is_digit(unit)) && !traits::is_letter(unit) && unit != '_')
+                if ((last == pos || !IsAsciiDigit(unit)) && !traits::is_letter(unit) && unit != '_')
                 {
                     break;
                 }
@@ -561,7 +565,7 @@ private:
         }
     }
 
-    [[nodiscard]] bool IsDigitAt(size_t pos, size_t end) const { return pos < end && traits::is_digit(m_src[pos]); }
+    [[nodiscard]] bool IsDigitAt(size_t pos, size_t end) const { return pos < end && IsAsciiDigit(m_src[pos]); }
 
     // A numeric literal as Python writes it: 123, 1.5, 1e3, 1.5E-3, 1_000, 0x1F, 0o17, 0b101
     bool ScanNumber(size_t begin, size_t end, Token& tok)
@@ -635,7 +639,7 @@ private:
         // As in Jinja2, a literal has one exponent: 1e1e-1 is 1e1 e - 1
         if ((ch == 'e' || ch == 'E') && !state.afterDot && !state.exponent)
         {
-            if (pos + 1 == end || (m_src[pos + 1] != '+' && m_src[pos + 1] != '-' && !traits::is_digit(m_src[pos + 1])))
+            if (pos + 1 == end || (m_src[pos + 1] != '+' && m_src[pos + 1] != '-' && !IsAsciiDigit(m_src[pos + 1])))
             {
                 return Step::Error;
             }
@@ -651,13 +655,13 @@ private:
             state.exponentSign = true;
             return Step::Consume;
         }
-        if (traits::is_digit(ch))
+        if (IsAsciiDigit(ch))
         {
             state.exponentDigit = state.exponentDigit || state.exponent;
             return Step::Consume;
         }
         // Digit separator, as in Python: 1_000, 1_000.5, 1e1_0
-        if (ch == '_' && pos != begin && traits::is_digit(m_src[pos - 1]) && IsDigitAt(pos + 1, end))
+        if (ch == '_' && pos != begin && IsAsciiDigit(m_src[pos - 1]) && IsDigitAt(pos + 1, end))
         {
             return Step::Consume;
         }
