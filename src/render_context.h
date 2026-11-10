@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_RENDER_CONTEXT_H
 #define JINJA2CPP_SRC_RENDER_CONTEXT_H
 
+#include "contracts.h"
 #include "dialect.h"
 #include "internal_value.h"
 #include "lookup_result.h"
@@ -541,7 +542,7 @@ public:
     {
         // A render's top context keeps EvalContext id 0, with no atomic count in every
         // render: the other ids are counted from 1
-        assert(topScope.empty());
+        JINJA2CPP_ASSERT(topScope.empty());
         // A map that never had a table has nothing to lend
         if (topScope.mask() != 0)
         {
@@ -578,7 +579,7 @@ public:
     {
         // The closures defined in `other` stay at home there: a copy is another context. Only
         // a context that defined none is copied (Clone returns one before its first use)
-        assert(!other.m_anchor);
+        JINJA2CPP_ASSERT(!other.m_anchor);
         UpdateCurrentScope();
         NewEpoch();
     }
@@ -724,7 +725,7 @@ public:
     void ExitScope(InternalValueMap& map)
     {
         // A view attached to the scope would attach to the next scope pushed at its index
-        assert(m_views.empty() || m_views.back().scopeIndex < m_scopes.size() - 1);
+        JINJA2CPP_ASSERT(m_views.empty() || m_views.back().scopeIndex < m_scopes.size() - 1);
         auto& scope = *m_currentScope;
         if (!scope.empty())
         {
@@ -792,16 +793,18 @@ public:
     {
         // A body called under its caller's epoch reads no name through the cache
         // (HomeCall::Run)
-        assert(m_noCachedLookups == 0);
+#ifndef NDEBUG // the counter exists only without NDEBUG
+        JINJA2CPP_ASSERT(m_noCachedLookups == 0);
+#endif
         if (m_lookupCache)
         {
             // Epochs are unique per cache, not across caches: a context is used only on the
             // thread whose cache it holds
-            assert(m_lookupCache == &LookupCache::ForThisThread());
+            JINJA2CPP_ASSERT(m_lookupCache == &LookupCache::ForThisThread());
             const auto& entry = m_lookupCache->At(slot);
             if (m_lookupCache->KeyAt(slot) == key && entry.epoch == m_epoch)
             {
-                assert(FindValue(nameOf()).IsSame(entry.slot));
+                JINJA2CPP_ASSERT(FindValue(nameOf()).IsSame(entry.slot));
                 return entry.slot;
             }
         }
@@ -1164,11 +1167,11 @@ public:
     // scope also hides the scopes from that index up to the current one
     void PushFrameView(const FrameView& view, size_t linkBelow = ScopeView::NoLink)
     {
-        assert(!m_scopes.empty() && (m_views.empty() || m_views.back().scopeIndex <= m_scopes.size() - 1));
+        JINJA2CPP_ASSERT(!m_scopes.empty() && (m_views.empty() || m_views.back().scopeIndex <= m_scopes.size() - 1));
         // A lookup by name reads the slot of each name
-        assert(view.slots.size() >= view.names.size());
+        JINJA2CPP_ASSERT(view.slots.size() >= view.names.size());
         // A link hides scopes below its own, and is the first view of its scope
-        assert(linkBelow == ScopeView::NoLink || (linkBelow < GetScopesCount() && (m_views.empty() || m_views.back().scopeIndex < m_scopes.size() - 1)));
+        JINJA2CPP_ASSERT(linkBelow == ScopeView::NoLink || (linkBelow < GetScopesCount() && (m_views.empty() || m_views.back().scopeIndex < m_scopes.size() - 1)));
         m_views.push_back({ view, m_scopes.size() - 1, linkBelow });
         m_fullWalk = true;
     }
@@ -1472,7 +1475,7 @@ private:
                 }
                 if (link != ScopeView::NoLink)
                 {
-                    assert(link <= depth);
+                    JINJA2CPP_ASSERT(link <= depth);
                     if (link > cur->m_parentDepth)
                     {
                         // On at scope `link - 1` of this context, after the decrement
@@ -1564,7 +1567,7 @@ private:
                 // A link is on the first view of its scope (PushFrameView): the scope is done
                 if (view.linkBelow != ScopeView::NoLink)
                 {
-                    assert(view.linkBelow < m_parentDepth + idx);
+                    JINJA2CPP_ASSERT(view.linkBelow < m_parentDepth + idx);
                     link = view.linkBelow;
                     return {};
                 }
@@ -1581,7 +1584,7 @@ private:
     }
     // The scopes a child sees of its parent are still there (see the constructor): the
     // parent pushes and pops only above them
-    void CheckPrefix() const { assert(!m_parent || m_parent->GetScopesCount() >= m_parentDepth); }
+    void CheckPrefix() const { JINJA2CPP_ASSERT(!m_parent || m_parent->GetScopesCount() >= m_parentDepth); }
     // The current scope is the innermost one
     ScopeRef CurrentScopeRef() { return { *this, m_scopes.back(), CurrentBuckets() }; }
     uint32_t& CurrentBuckets() { return m_scopes.Buckets(m_scopes.size() - 1); }

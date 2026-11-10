@@ -8,7 +8,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -108,7 +107,7 @@ constexpr auto OpsTable = AllNodeClasses::MakeOpsTable();
 const NodeOps& OpsOf(NodeKind kind)
 {
     // Only a node the arena made is relocated or destroyed, and Make records its kind
-    assert(kind != NodeKind::None);
+    JINJA2CPP_ASSERT(kind != NodeKind::None);
     return OpsTable[static_cast<std::size_t>(kind)];
 }
 
@@ -213,12 +212,12 @@ void NodeArena::MoveNodes(std::byte* base, detail::RefChecker* refs, std::byte* 
         }
         throw;
     }
-    assert(owner == m_owners);
+    JINJA2CPP_ASSERT(owner == m_owners);
 }
 
 SealedArena NodeArena::SealWith(Span<const detail::RootRef> roots)
 {
-    assert(!m_sealed);
+    JINJA2CPP_ASSERT(!m_sealed);
     // Only the parse interns names: the table goes before the sealed buffer comes
     m_heapSymbols.reset();
     const auto layout = detail::LayoutOf(m_used, m_owners);

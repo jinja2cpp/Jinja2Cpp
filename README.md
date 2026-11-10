@@ -248,6 +248,9 @@ You can define (via -D command-line CMake option) the following build flags:
 
 -  **JINJA2CPP_BUILD_TESTS** (default TRUE) - to build or not to Jinja2C++ tests.
 -  **JINJA2CPP_STRICT_WARNINGS** (default TRUE) - Enable strict mode compile-warnings(-Wall -Werror, etc).
+-  **JINJA2CPP_HARDENING** (default TRUE) - build the library with `-fstack-protector-strong`, `-fstack-clash-protection`, `-fcf-protection` (x86) and `-D_FORTIFY_SOURCE=3` (optimised configurations; 2 where the toolchain lacks 3), each only where the compiler knows it; MSVC gets `/GS` and `/guard:cf`. The flags apply to the library target only, not to the code that links it, and the CMake configure step prints the ones it applied. They trap on memory corruption only; none of them is the aborting `_GLIBCXX_ASSERTIONS` or `_LIBCPP_HARDENING_MODE`.
+-  **JINJA2CPP_CONTRACT_CHECKS** (default empty) - the engine's own precondition and invariant checks (`src/contracts.h`): `OFF`, `ON` (preconditions) or `FULL` (invariants too). A violation fails the render or load with an error result, it does not abort. Empty means `FULL` in Debug, sanitizer and fuzz builds and `ON` otherwise.
+-  **JINJA2CPP_LANGUAGE_CONTRACTS** (default FALSE) - with a C++26 compiler that has contracts (P2900), check with `contract_assert` and install a violation handler that throws. The handler is program-global, so this stays opt-in. Without compiler support the option only warns.
 -  **JINJA2CPP_MSVC_RUNTIME_TYPE** (default /MD) - MSVC runtime type to link with (if you use Microsoft Visual Studio compiler).
 -  **JINJA2CPP_DEPS_MODE** (default "internal") - modes for dependency handling. Following values possible:
     -  `internal` In this mode Jinja2C++ build script uses dependencies shipped as subprojects. Nothing needs to be provided externally.

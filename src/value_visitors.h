@@ -1,6 +1,7 @@
 #ifndef JINJA2CPP_SRC_VALUE_VISITORS_H
 #define JINJA2CPP_SRC_VALUE_VISITORS_H
 
+#include "contracts.h"
 #include "big_int.h"
 #include "decimal_number.h"
 #include "expression_evaluator.h"
@@ -27,7 +28,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -177,7 +177,7 @@ private:
     template<size_t... indices, typename... Args>
     [[nodiscard]] auto Call(std::index_sequence<indices...> /*sequence*/, const Args&... args) const
     {
-        assert(m_visitor != nullptr);
+        JINJA2CPP_ASSERT(m_visitor != nullptr);
         return [this](const auto&... unwrapped) { return (*m_visitor)(unwrapped...); }(UnwrapRecursive(args, m_owners[indices])...);
     }
 };
@@ -217,19 +217,19 @@ struct BaseVisitor
 {
     R operator()(const GenericMap&) const
     {
-        assert(false);
+        JINJA2CPP_ASSERT(false);
         return R();
     }
 
     R operator()(const GenericList&) const
     {
-        assert(false);
+        JINJA2CPP_ASSERT(false);
         return R();
     }
 
     R operator()(const ValueRef&) const
     {
-        assert(false);
+        JINJA2CPP_ASSERT(false);
         return R();
     }
 

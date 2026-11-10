@@ -1,9 +1,9 @@
 #ifndef JINJA2CPP_SRC_LOOKUP_RESULT_H
 #define JINJA2CPP_SRC_LOOKUP_RESULT_H
 
+#include "contracts.h"
 #include "internal_value.h"
 
-#include <cassert>
 
 namespace jinja2
 {
@@ -30,12 +30,12 @@ public:
     explicit operator bool() const noexcept { return m_value != nullptr; }
     T& operator*() const
     {
-        assert(m_value);
+        JINJA2CPP_ASSERT(m_value);
         return *m_value;
     }
     T* operator->() const
     {
-        assert(m_value);
+        JINJA2CPP_ASSERT(m_value);
         return m_value;
     }
     // Whether both refer to the same stored value (or both to none)

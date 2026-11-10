@@ -179,8 +179,10 @@ These apply to both tiers. The claims above stop here until these tasks land:
 
 - One step, such as a filter over a long string, can overrun `maxRenderTime`:
   [0282](tasks/0282-settings-limits-followups.md).
-- Hardening build flags and fuzz targets for untrusted templates:
-  [0265](tasks/0265-hardening-by-default.md), [0267](tasks/0267-untrusted-mode-fuzzing.md).
+- Fuzz targets for untrusted templates: [0267](tasks/0267-untrusted-mode-fuzzing.md).
+  The library builds with hardening flags by default (`JINJA2CPP_HARDENING`) and its
+  internal invariant checks fail the render, not the process
+  ([0265](tasks/0265-hardening-by-default.md)); a consumer's own build flags are its own.
 - Cancellation, stack bounds for fibers and coroutines, error redaction:
   [0268](tasks/0268-untrusted-mode-followups.md).
 
