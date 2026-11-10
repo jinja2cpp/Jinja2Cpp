@@ -832,7 +832,7 @@ TEST_F(TemplateModuleTest, ViewArgumentIsCopied)
 
     jinja2::ValuesList nested{ jinja2::ValuesList{ std::string_view("x") } };
     auto wide = std::make_unique<std::wstring>(L"wide text, long enough for the heap");
-    nested.push_back(std::wstring_view(*wide));
+    nested.emplace_back(std::wstring_view(*wide));
     Call(module.exports["put"], { nested });
     nested.clear();
     wide.reset();
