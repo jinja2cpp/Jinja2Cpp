@@ -193,44 +193,73 @@ InternalValue InvokeInModule(RenderContext& context, const Callable& callable, c
     return result;
 }
 
-// A copy of the host's `value`, which stops with RecursionLimitError where its nesting would
-// overflow the stack: Value's copy recurses once per level of its lists and dicts
-// (docs/tasks/0418). What it copied so far is destroyed without recursing (Value::~Value)
-Value OwnedCopy(const Value& value)
+// How many times the stack a copy of nested lists takes their destruction may take: Value's
+// destructor recurses through several frames a level where the copy takes one
+constexpr std::uintptr_t DestroyStackFactor = 8;
+
+// Whether the copy started at the frame `entry` may not go a level deeper: the stack is nearly
+// used up, or what is left would not destroy the copy. The copy and its destruction run at
+// about the depth of `entry` (a macro call, MakeModule), and the destructor of a partial copy
+// unwinding from here as deep as the copy (docs/tasks/0418)
+bool CopyTooDeep(std::uintptr_t entry)
 {
+    if (StackNearlyExhausted())
+    {
+        return true;
+    }
+#if defined(_MSC_VER) && !defined(__clang__)
+    const auto frame = reinterpret_cast<std::uintptr_t>(_AddressOfReturnAddress());
+#else
+    const auto frame = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
+#endif
+    const auto& stack = detail::t_threadStack;
+    // Bounds unknown (limit 0), or a frame on another stack: unchecked, as StackNearlyExhausted
+    if (stack.limit == 0 || frame < stack.low || frame > entry)
+    {
+        return false;
+    }
+    return (entry - frame) * DestroyStackFactor > frame - stack.low;
+}
+
+// A copy of the host's `value` the module owns, which stops with RecursionLimitError where its
+// nesting, copied or destroyed, would overflow the stack: Value's copy and destructor recurse
+// once per level of its lists and dicts (docs/tasks/0418, 0449). A view of the host's text
+// becomes a string of its own, since the module's values outlive the call
+Value OwnedCopy(const Value& value, std::uintptr_t entry)
+{
+    if (const auto* view = value.GetIf<std::string_view>())
+    {
+        return std::string(*view);
+    }
+    if (const auto* view = value.GetIf<std::wstring_view>())
+    {
+        return std::wstring(*view);
+    }
     const auto& data = value.GetData();
     if (!std::holds_alternative<RecWrapper<ValuesList>>(data) && !std::holds_alternative<RecWrapper<ValuesMap>>(data))
     {
         return value;
     }
+    if (CopyTooDeep(entry))
+    {
+        throw RecursionLimitError();
+    }
     if (const auto* list = value.GetIf<ValuesList>())
     {
-        if (StackNearlyExhausted())
-        {
-            throw RecursionLimitError();
-        }
         ValuesList copy;
         copy.reserve(list->size());
         for (const auto& item : *list)
         {
-            copy.push_back(OwnedCopy(item));
+            copy.push_back(OwnedCopy(item, entry));
         }
         return Value(std::move(copy));
     }
-    if (const auto* map = value.GetIf<ValuesMap>())
+    ValuesMap copy;
+    for (const auto& [key, item] : value.As<ValuesMap>())
     {
-        if (StackNearlyExhausted())
-        {
-            throw RecursionLimitError();
-        }
-        ValuesMap copy;
-        for (const auto& [key, item] : *map)
-        {
-            copy.emplace(key, OwnedCopy(item));
-        }
-        return Value(std::move(copy));
+        copy.emplace(key, OwnedCopy(item, entry));
     }
-    return value;
+    return Value(std::move(copy));
 }
 
 // A host Value as a value the module owns: copied and converted by value, so that a module
@@ -239,11 +268,17 @@ InternalValue OwnedArgument(const Value& value)
 {
     // A scalar or a host's list or map, converted by value as it is
     const auto& data = value.GetData();
-    if (!std::holds_alternative<RecWrapper<ValuesList>>(data) && !std::holds_alternative<RecWrapper<ValuesMap>>(data))
+    if (!std::holds_alternative<RecWrapper<ValuesList>>(data) && !std::holds_alternative<RecWrapper<ValuesMap>>(data) && !std::holds_alternative<std::string_view>(data)
+        && !std::holds_alternative<std::wstring_view>(data))
     {
         return visit(visitors::InputValueConvertor(true, false), data);
     }
-    Value copy = OwnedCopy(value);
+#if defined(_MSC_VER) && !defined(__clang__)
+    const auto entry = reinterpret_cast<std::uintptr_t>(_AddressOfReturnAddress());
+#else
+    const auto entry = reinterpret_cast<std::uintptr_t>(__builtin_frame_address(0));
+#endif
+    Value copy = OwnedCopy(value, entry);
     return visit(visitors::InputValueConvertor(true, false), copy.GetData());
 }
 } // namespace
