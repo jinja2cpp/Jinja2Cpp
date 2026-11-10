@@ -186,12 +186,23 @@ TEST(InternalValueLayoutTest, ValuesOfOwnedStringsCopyTheText)
 
 TEST(InternalValueLayoutTest, ParentDataKeepsTheValueItWasTakenFrom)
 {
-    InternalValue parent = ListAdapter::CreateAdapter(InternalValueList{ InternalValue(std::string(20, 'p')) });
+    // Text the item only views needs its container; text, numbers and undefined the item owns
+    // do not, so they get no anchor and storing them back makes no cycle (docs/tasks/0450)
+    const std::string text(20, 'p');
+    InternalValue parent = ListAdapter::CreateAdapter(
+        InternalValueList{ InternalValue(std::string_view(text)), InternalValue(std::string(20, 'o')), InternalValue(int64_t{ 1 }), InternalValue() });
+    for (int64_t idx : { int64_t{ 1 }, int64_t{ 2 }, int64_t{ 3 } })
+    {
+        InternalValue owned = Item(parent, idx);
+        owned.SetParentData(parent);
+        EXPECT_FALSE(owned.ShouldExtendLifetime()) << idx;
+    }
+
     InternalValue item = Item(parent, 0);
     EXPECT_FALSE(item.ShouldExtendLifetime());
     item.SetParentData(parent);
     EXPECT_TRUE(item.ShouldExtendLifetime());
-    EXPECT_EQ(std::string(20, 'p'), Text(item));
+    EXPECT_EQ(text, Text(item));
 
     InternalValue same = Item(parent, 0);
     same.SetParentData(parent);

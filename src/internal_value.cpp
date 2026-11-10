@@ -183,10 +183,35 @@ ValueObjectPtr OwnObjectOf(const InternalValue& val)
     return OwnObject(detail::InternalValueAccess::ObjectPtr(val));
 }
 
+namespace
+{
+// Whether a value read from a container points into what the container owns. A number, bool,
+// none, undefined, inline string or string whose text the value's own object holds does not: an
+// anchor would only keep the container alive, and storing the value back into it would make a
+// cycle the collector has to walk for (docs/tasks/0444, 0450)
+bool NeedsParent(const detail::ValueStorage& imm, const ValueObject* inner)
+{
+    const auto index = imm.index();
+    if (index < detail::IndexOf<detail::HeapString<char>>)
+    {
+        return inner != nullptr;
+    }
+    if (const auto* str = std::get_if<detail::HeapString<char>>(&imm))
+    {
+        return inner != str->object;
+    }
+    if (const auto* str = std::get_if<detail::HeapString<wchar_t>>(&imm))
+    {
+        return inner != str->object;
+    }
+    return true;
+}
+} // namespace
+
 void InternalValue::SetParentData(const InternalValue& val)
 {
     ValueObjectPtr inner = OwnObject(m_obj);
-    if (val.IsUndefined())
+    if (val.IsUndefined() || !NeedsParent(m_imm, inner.get()))
     {
         m_obj = std::move(inner);
         return;

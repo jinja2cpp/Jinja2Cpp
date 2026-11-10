@@ -24,7 +24,10 @@ times with a dict argument:
 
 `[1]` was quadratic before #822. #822 (0444) also notes the store of a value whose object is
 traversable, such as a string read from a lent map, which carries an anchor
-(`SetParentData`), so `a.name` became quadratic too. Within one render the cost is amortised
+(`SetParentData`), so `a.name` became quadratic too. After Codex's review #822 also stopped
+anchoring values that own their data (numbers, bool, none, undefined, inline and owned strings):
+`a.name` and `a.n` are linear again (4000 calls: 82 ms and 78 ms). What remains quadratic is a
+stored list or dict (`[1]`, 4000 calls: 5.8 s) and a string that only views its container's text. Within one render the cost is amortised
 (each container is noted once, candidates are pruned), so only module calls are hit. A host that
 calls an exported macro in a loop (a chat-template server keeping a log in the module) is the
 case to fix.
@@ -35,7 +38,7 @@ the module's collector only the containers the call itself made or changed since
 Alternatively, skip the walk of a candidate the module state holds directly (its top-level
 names) when the call stored only values that cannot reach the call's own new objects.
 
-**Done when** the table above is linear in N for all three expressions (a
+**Done when** the table above is linear in N for `[1]` and for a stored view string (a
 `TemplateModuleTest` row with a step-count or time budget), and the cycle cases in
 `ExpressionTest.CyclesThroughObjects` and `TemplateModuleTest` still free their cycles under
 LeakSanitizer.
