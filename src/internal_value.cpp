@@ -4,9 +4,9 @@
 #include "borrowed_cells.h"
 #include "cycle_collector.h"
 #include "engine_errors.h"
-#include "error_boundary.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
+#include "host_call_context.h"
 #include "host_object.h"
 #include "out_stream.h"
 #include "public_host_object.h"
@@ -4277,97 +4277,10 @@ Value IntValue2Value(const InternalValue& val)
     return Apply<OutputValueConvertor>(val);
 }
 
+
 namespace
 {
 struct HostCallScope;
-} // namespace
-
-class ContextMapper : public IMapItemAccessor
-{
-public:
-    // How a host's call gets a value of the template: lent for the call as its arguments are (ArgumentToHost)
-    using LendFn = Value (*)(const InternalValue& value, RenderContext& context, HostCallScope& scope);
-
-    explicit ContextMapper(RenderContext* context, HostCallScope* scope = nullptr, LendFn lend = nullptr)
-        : m_context(context)
-        , m_scope(scope)
-        , m_lend(lend)
-    {
-    }
-
-    // The number of names GetKeys lists
-    [[nodiscard]] size_t GetSize() const override { return Live().CollectLookupNames().size(); }
-    [[nodiscard]] bool HasValue(const std::string& name) const override
-    {
-        return static_cast<bool>(Live().FindValue(name));
-    }
-    [[nodiscard]] Value GetValueByName(const std::string& name) const override
-    {
-        const auto value = Live().FindValue(name);
-        return value ? ToHost(*value) : Value();
-    }
-    // A value the template sees, as the call's arguments are given: a macro, `range` or `loop` is lent for the call
-    [[nodiscard]] std::optional<Value> Find(std::string_view name) const override
-    {
-        const auto value = Live().FindValue(std::string(name));
-        if (!value)
-        {
-            return std::nullopt;
-        }
-        return ToHost(*value);
-    }
-    // The names a lookup finds, each once, sorted: the scopes, the external and global values and the built-ins
-    [[nodiscard]] std::vector<std::string> GetKeys() const override { return Live().CollectLookupNames(); }
-
-    // The host's call this context was given to ended (UserCallableBody): its render context and scope are gone, so a
-    // copy the host kept fails with TemplateExpired, as a lent macro does
-    void Expire() const noexcept
-    {
-        m_context = nullptr;
-        m_scope = nullptr;
-    }
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const ContextMapper*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_context && val->m_context && !m_context->IsEqual(*val->m_context))
-        {
-            return false;
-        }
-        if ((m_context && !val->m_context) || (!m_context && val->m_context))
-        {
-            return false;
-        }
-        return true;
-    }
-
-private:
-    [[nodiscard]] RenderContext& Live() const
-    {
-        if (!m_context)
-        {
-            ErrorInfo::Data errorData;
-            errorData.code = ErrorCode::TemplateExpired;
-            errorData.srcLoc.line = 1;
-            errorData.srcLoc.col = 1;
-            errorData.extraParams.emplace_back(std::string("lent"));
-            throw ErrorInfo(std::move(errorData));
-        }
-        return *m_context;
-    }
-    [[nodiscard]] Value ToHost(const InternalValue& value) const { return m_lend && m_scope ? m_lend(value, *m_context, *m_scope) : IntValue2Value(value); }
-
-    mutable RenderContext* m_context;
-    mutable HostCallScope* m_scope;
-    LendFn m_lend;
-};
-
-namespace
-{
 
 // The template callables a host's call got as arguments, lent for the duration of that call
 // (docs/tasks/0300): a macro or `caller` passed to a module's macro (Template::MakeModule) from
@@ -4414,7 +4327,7 @@ struct HostCallScope
     const ParsedArguments* args = nullptr;
     const UserCallableParams* params = nullptr;
     // The context the call was given, expired when the call ends (ContextEnd)
-    const ContextMapper* contextMap = nullptr;
+    const IMapItemAccessor* contextMap = nullptr;
     // The host's callable asks for undefined arguments as undefined (UserCallable::keepUndefined)
     bool keepUndefined = false;
 
@@ -4475,7 +4388,7 @@ private:
     bool m_outer;
 };
 
-// Expires the context a host's call was given when the call ends (ContextMapper::Expire)
+// Expires the context a host's call was given when the call ends (host_call::ExpireContextMap)
 class ContextEnd
 {
 public:
@@ -4489,10 +4402,7 @@ public:
     ContextEnd& operator=(ContextEnd&&) = delete;
     ~ContextEnd()
     {
-        if (m_scope.contextMap)
-        {
-            m_scope.contextMap->Expire();
-        }
+        host_call::ExpireContextMap(m_scope.contextMap);
     }
 
 private:
@@ -4609,28 +4519,9 @@ struct LentCallable
             result.SetMarkup(context.IsAutoescape());
             return IntValue2Value(result);
         }
-        catch (const std::bad_alloc&)
-        {
-            throw;
-        }
-        catch (const ErrorInfo&)
-        {
-            throw;
-        }
-        catch (const ErrorInfoW&)
-        {
-            throw;
-        }
-        catch (const detail::RenderFailure& failure)
-        {
-            // A located error of the render (a limit, a failed include)
-            throw failure.ErrorAs<char>();
-        }
         catch (...)
         {
-            // The host sees the engine's errors as the public ErrorInfo (a SecurityError, an UndefinedError, ...),
-            // never as the engine's own exception types; a host's own exception stays in GetException
-            throw detail::CurrentExceptionToError<char>(std::string());
+            host_call::RethrowAsPublicError();
         }
     }
 
@@ -5134,9 +5025,11 @@ void PrepareUserCallableParams(const ParsedArguments& args, RenderContext& conte
         extraPosArgs.push_back(ArgumentToHost(p, context, scope));
     }
     result.extraPosArgs = Value(std::move(extraPosArgs));
-    auto mapper = std::make_shared<const ContextMapper>(&context, &scope, &ArgumentToHost);
-    scope.contextMap = mapper.get();
-    result.context = GenericMap(std::move(mapper));
+    auto contextMap = host_call::MakeContextMap(context, &scope, [](const InternalValue& value, RenderContext& ctx, void* callScope) {
+        return ArgumentToHost(value, ctx, *static_cast<HostCallScope*>(callScope));
+    });
+    scope.contextMap = contextMap.handle;
+    result.context = std::move(contextMap.map);
     if (asksForContext)
     {
         const auto* frame = context.GetTemplateFrame();
