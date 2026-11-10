@@ -21,8 +21,10 @@ def headers(build_dir):
     current = None
     for line in out.splitlines():
         if not line.startswith(" "):
-            # "<object>: #deps N, deps mtime ..."; the module's objects only
-            current = line.split(":", 1)[0] if "_jinja2cpp" in line else None
+            # "<output>: #deps N, deps mtime ..."; the module's compiled objects only, not its link step,
+            # whose recorded dependencies (a linker depfile) are objects and libraries
+            output = line.split(":", 1)[0]
+            current = output if "_jinja2cpp" in output and output.endswith((".o", ".obj")) else None
             continue
         if current and line.strip():
             path = line.strip()
