@@ -176,7 +176,7 @@ InternalValue GetAttributeByPath(const InternalValue& item, const InternalValueL
         // getitem falls back to getattr: a number's data attributes (docs/tasks/0374)
         if (next.IsUndefined() && IsStringValue(part))
         {
-            if (auto attr = methods::GetNumberDataAttr(result, AsString(part)))
+            if (auto attr = methods::GetNumberDataAttr(result, AsString(part), &context))
             {
                 next = std::move(*attr);
             }
@@ -528,7 +528,7 @@ InternalValue Attribute::Filter(const InternalValue& baseVal, RenderContext& con
     {
         return std::move(*replacement);
     }
-    if (auto attr = methods::GetNumberDataAttr(baseVal, attrName))
+    if (auto attr = methods::GetNumberDataAttr(baseVal, attrName, &context))
     {
         return std::move(*attr);
     }

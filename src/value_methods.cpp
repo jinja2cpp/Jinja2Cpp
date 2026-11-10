@@ -1498,7 +1498,7 @@ struct StrOps
         {
             result = MakeBoundMethod(value, *method);
         }
-        else if (auto attrValue = GetNumberDataAttr(value, attr))
+        else if (auto attrValue = GetNumberDataAttr(value, attr, nullptr)) // the policy was asked above
         {
             result = std::move(attrValue);
         }
@@ -2696,7 +2696,9 @@ bool IsMethodName(std::string_view name)
     return std::binary_search(sameLength.begin(), sameLength.end(), name);
 }
 
-std::optional<InternalValue> GetNumberDataAttr(const InternalValue& self, std::string_view name)
+namespace
+{
+std::optional<InternalValue> NumberDataAttr(const InternalValue& self, std::string_view name)
 {
     const auto kind = self.Kind();
     if (kind == ValueKind::Double)
@@ -2732,6 +2734,20 @@ std::optional<InternalValue> GetNumberDataAttr(const InternalValue& self, std::s
         return InternalValue(static_cast<int64_t>(1));
     }
     return std::nullopt;
+}
+} // namespace
+
+std::optional<InternalValue> GetNumberDataAttr(const InternalValue& self, std::string_view name, const RenderContext* context)
+{
+    auto attr = NumberDataAttr(self, name);
+    if (attr && context && context->GetSandboxPolicy())
+    {
+        if (auto replacement = SandboxedNativeAttribute(context, self, std::string(name)))
+        {
+            return replacement;
+        }
+    }
+    return attr;
 }
 
 bool IsDictMethodName(std::string_view name)
@@ -2816,7 +2832,7 @@ InternalValue GetAttr(const InternalValue& obj, const std::string& name, RenderC
             return MakeBoundMethod(obj, *method);
         }
     }
-    if (auto attr = GetNumberDataAttr(obj, name))
+    if (auto attr = GetNumberDataAttr(obj, name, context))
     {
         return std::move(*attr);
     }
@@ -2849,6 +2865,11 @@ InternalValue GetItem(const InternalValue& obj, const InternalValue& key, Render
         if (unsafe)
         {
             return UnsafeMethod(obj, AsString(key), *context);
+        }
+        // A number has no items: Jinja2's getitem falls back to getattr, its data attributes (0374)
+        if (auto attr = GetNumberDataAttr(obj, AsString(key), context))
+        {
+            return std::move(*attr);
         }
     }
     return result;

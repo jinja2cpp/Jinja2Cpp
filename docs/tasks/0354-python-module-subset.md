@@ -32,3 +32,10 @@ plan (D1), Jinja2's sandbox, and an explicit answer for everything outside the s
 **Done when.** Every row of the Tier A table has a test. Fallback is tested both with and
 without Jinja2 installed. The sandbox passes Jinja2's `test_security.py` cases, and the PR
 had a Codex security review.
+
+**Follow-up (2026-11-10).** Codex's review of merged #801 found two sandbox gaps, fixed in the follow-up PR:
+the sandboxed `str.format` counted only the fields against `MaxSequenceSize`, so the literal text could double
+the joined string past the cap before the check (now counted first); and a number's data attributes
+(`real`, `imag`, `numerator`, `denominator`, 0374) skipped the sandbox policy on `x.real`, `|attr`, `[]` and
+`attribute=` paths (now asked like any attribute). `x['real']` of a number also falls back to the attribute,
+as Jinja2's getitem does (corpus case `methods.number_data_attributes_by_item`).

@@ -194,6 +194,8 @@ CASES = [
     ('number_data_attributes', "{{ (3).real }}|{{ (3).denominator }}|{{ 2.5.imag }}|{{ '{0.numerator}'.format(4) }}|{{ 7|attr('real') }}"),
     # A bool and a big int have them too; attr finds them, a dict's key of that name stays an item (0374)
     ('number_data_attributes_kinds', "{{ true.real }}|{{ false.denominator }}|{{ (-3).numerator }}|{{ 2.5.real }}|{{ 1.5|attr('imag') }}|{{ 'a'|attr('real') }}|{{ '{0.imag}|{0.real}'.format(2.0) }}|{{ (12345678901234567890123).real }}|{{ (3).imag is integer }}|{{ {'real': 5}.real }}|{{ (3).nope is defined }}"),
+    # x['real'] of a number: getitem falls back to getattr
+    ('number_data_attributes_by_item', "{{ (3)['real'] }}|{{ 2.5['imag'] }}|{{ (4)['numerator'] }}|{{ true['denominator'] }}|{{ l[0]['real'] }}|{{ (3)['nope'] is defined }}"),
     # an attribute= argument looks them up too: getitem falls back to getattr
     ('number_data_attributes_by_path', "{{ [7, 2.5]|map(attribute='real')|join(',') }}|{{ [1, 2]|sum(attribute='denominator') }}|{{ [3, 1]|sort(attribute='numerator')|join }}|{{ [0, 1]|selectattr('real')|list }}"),
     # Unicode 15.1 changed U+4E24's numeric value, 16.0 added Garay digits and letters: the
