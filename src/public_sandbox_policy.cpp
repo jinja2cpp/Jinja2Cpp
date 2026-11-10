@@ -7,8 +7,11 @@
 #include <jinja2cpp/user_callable.h>
 #include <jinja2cpp/value.h>
 
+#include <cstddef>
 #include <memory>
 #include <optional>
+#include <string_view>
+#include <vector>
 #include <string>
 #include <utility>
 
@@ -28,6 +31,36 @@ std::optional<Value> ISandboxPolicy::Format(const Value& /*self*/, bool /*format
 
 namespace
 {
+// What the policy is asked about for a template callable that has no value of the host's (a macro, `caller`, a
+// global function such as `range`): an object of its Python class with no attributes (sandbox_policy.h)
+class CallableStandIn final : public IMapItemAccessor
+{
+public:
+    explicit CallableStandIn(const char* objectClass)
+        : m_class(objectClass)
+    {
+    }
+
+    [[nodiscard]] size_t GetSize() const override { return 0; }
+    [[nodiscard]] std::optional<Value> Find(std::string_view /*name*/) const override { return std::nullopt; }
+    [[nodiscard]] std::vector<std::string> GetKeys() const override { return {}; }
+    [[nodiscard]] const char* GetObjectClass() const override { return m_class; }
+    [[nodiscard]] bool IsEqual(const IComparable& other) const override { return this == &other; }
+
+private:
+    const char* m_class;
+};
+
+// `obj` as the policy gets it
+Value PolicyValue(const InternalValue& obj)
+{
+    if (const auto* callable = GetIf<Callable>(&obj); callable && callable->GetKind() != Callable::UserCallable)
+    {
+        return Value(GenericMap(std::make_shared<const CallableStandIn>(callable->GetKind() == Callable::Macro ? "Macro" : "function")));
+    }
+    return ToHostValue(obj);
+}
+
 class SandboxPolicyBridge final : public IEngineSandboxPolicy
 {
 public:
@@ -38,7 +71,7 @@ public:
 
     [[nodiscard]] std::optional<InternalValue> NativeAttribute(const InternalValue& obj, const std::string& name) const override
     {
-        auto replacement = m_policy->NativeAttribute(ToHostValue(obj), name);
+        auto replacement = m_policy->NativeAttribute(PolicyValue(obj), name);
         if (!replacement)
         {
             return std::nullopt;

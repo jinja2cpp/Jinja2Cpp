@@ -17,7 +17,6 @@
 #include <new>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -366,6 +365,9 @@ public:
     [[nodiscard]] bool ShouldExtendLifetime() const override { return false; }
     // The host's data: list() copies it
     [[nodiscard]] const void* GetIdentity() const override { return m_object->Identity(); }
+    // A list the template may change through the object's methods ({% do l.append(x) %}): loop.length is its Len
+    // when first read, as in Jinja2 (an object that never changes gives the same length either way)
+    [[nodiscard]] bool HasLiveSize() const override { return true; }
     [[nodiscard]] GenericList CreateGenericList() const override { return GenericList(std::make_shared<const HostSequenceList>(m_object, m_holder)); }
 
 private:
@@ -386,6 +388,12 @@ public:
         , m_holder(holder)
     {
     }
+
+    ~EngineBridge() override { delete m_call.load(std::memory_order_acquire); }
+    EngineBridge(const EngineBridge&) = delete;
+    EngineBridge& operator=(const EngineBridge&) = delete;
+    EngineBridge(EngineBridge&&) = delete;
+    EngineBridge& operator=(EngineBridge&&) = delete;
 
     [[nodiscard]] const IHostObject* Object() const noexcept { return m_object; }
     [[nodiscard]] const std::shared_ptr<const IHostObject>& Owner() const noexcept { return m_owner; }
@@ -416,8 +424,7 @@ public:
     [[nodiscard]] bool IsCallable() const override { return m_object->IsCallable(); }
     InternalValue Call(const CallParams& params, RenderContext& context) const override
     {
-        std::call_once(m_callOnce, [this] { m_call = MakeHostObjectCallable(m_owner ? m_owner : std::shared_ptr<const IHostObject>(std::shared_ptr<void>(), m_object)); }); // the callable lives in the bridge, which owns the object
-        const auto& fn = *GetIf<Callable>(&m_call);
+        const auto& fn = *GetIf<Callable>(&CallValue());
         return fn.GetExpressionCallable()(params, context);
     }
     [[nodiscard]] bool IsIterable() const override { return m_object->IsIterable(); }
@@ -464,12 +471,30 @@ private:
         return ListAdapter::CreateAdapter(std::move(*list));
     }
 
+    // The call of the object as a callable of the engine, made with the first call. Published with a compare-exchange
+    // rather than std::call_once, whose first call makes a futex syscall on glibc: a bound method a template reads
+    // (`d.get(...)`) is a fresh object, called once
+    [[nodiscard]] const InternalValue& CallValue() const
+    {
+        if (const auto* call = m_call.load(std::memory_order_acquire))
+        {
+            return *call;
+        }
+        // The callable lives in the bridge, which owns the object
+        auto made = std::make_unique<const InternalValue>(MakeHostObjectCallable(m_owner ? m_owner : std::shared_ptr<const IHostObject>(std::shared_ptr<void>(), m_object)));
+        const InternalValue* expected = nullptr;
+        if (m_call.compare_exchange_strong(expected, made.get(), std::memory_order_acq_rel, std::memory_order_acquire))
+        {
+            return *made.release();
+        }
+        return *expected; // another thread published first
+    }
+
     std::shared_ptr<const IHostObject> m_owner;
     const IHostObject* m_object;
     const HostObjectAccessor* m_holder;
-    // The call of the object as a callable of the engine, made with the first call
-    mutable std::once_flag m_callOnce;
-    mutable InternalValue m_call;
+    // Owned: deleted with the bridge (CallValue)
+    mutable std::atomic<const InternalValue*> m_call{ nullptr };
 };
 
 // The accessor of a public host object, which is the engine's accessor (HostObjectAccessor) and the host's

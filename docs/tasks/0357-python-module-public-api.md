@@ -81,4 +81,22 @@ freeze.
   `UndefinedError`; `UndefinedDescription::security` makes and reads a refused attribute's undefined value.
   0427 decided: a template keeps the policy it was loaded with. Template callables (a macro, `caller`)
   reach `NativeAttribute` as an empty value, so S3 must keep the module's stand-in for them.
+- S3 (2026-11-09): `python/src/` includes only `jinja2cpp/` headers and links only the library.
+  `PyHost` is an `IHostObject` with the fast reads; Python callables are `UserCallable`s
+  (`ArgInfo::VarArgs`, `VarKwArgs`, `Context`, `keepUndefined`); renders go through
+  `Template::RenderTo` with `RenderOptions` (globals, poll); the sandbox is a `PySandboxPolicy`.
+  A `KeyboardInterrupt` that the finalize fold absorbs is kept in `RenderState::abort` and raised
+  by the poll and after the run, instead of the private `HostUnrecoverableError`. Engine changes
+  found on the way: `GetObjectClass` (api-2.0.md section 7 item 10); a host object passed as a
+  global is read as the object (it became a plain map, also for C++ users); a host call gets the
+  call site, and the context it gets lends template callables; a lent callable fails with the
+  public `ErrorInfo`, not an engine exception; a sandbox policy sees macros and functions by
+  class; a host sequence keeps its live length in `loop.length`. Same results as master:
+  `python/tests` (Python 3.13, the 6 failures known on master), the parity corpus through the
+  module (3204 of 3225 on both) and the upstream suite (596 of 856 on both). Gaps filed: 0439
+  (engine callables lent to Python print without a name), 0440 (no poll in `Template.module`
+  and module macro calls), 0441 (a list subclass with its own `__iter__` is iterated by index), 0442
+  (a sandbox stub type per attribute check, the repr of a cycler). The verifier found that a C++ host
+  keeping the context a call got read freed frames after the call (from before S3); it now fails
+  with `TemplateExpired`.
 

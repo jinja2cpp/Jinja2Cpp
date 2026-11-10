@@ -51,7 +51,8 @@ public:
      * the engine lacks (a method of Python's `str`) may be any value, a \ref UserCallable among them.
      *
      * @param obj   The value, as a host callable gets it: `loop` and a namespace as a snapshot of their
-     *              attributes, a macro or `caller` as an empty value
+     *              attributes (\ref GenericMap::GetObjectClass names their class), a macro, `caller` or a
+     *              global function such as `range` as an empty map of class "Macro" or "function"
      * @param name  The attribute's name
      */
     [[nodiscard]] virtual std::optional<Value> NativeAttribute(const Value& obj, std::string_view name) const = 0;

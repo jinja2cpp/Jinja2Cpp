@@ -253,6 +253,7 @@ set(JINJA2CPP_SOURCES
     src/json_reader.cpp
     src/generic_list.cpp
     src/global_functions.cpp
+    src/host_call_context.cpp
     src/host_object.cpp
     src/internal_value.cpp
     src/lexer.cpp

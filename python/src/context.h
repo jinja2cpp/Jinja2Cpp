@@ -3,16 +3,10 @@
 
 #include "common.h"
 
+#include <jinja2cpp/value.h>
+
 #include <memory>
 #include <string>
-
-namespace jinja2
-{
-inline namespace v2
-{
-class RenderContext;
-}
-} // namespace jinja2
 
 namespace jinja2cpp_py
 {
@@ -31,10 +25,10 @@ enum class PassArg : unsigned char
 // The marker of `callable`, or of its __call__, as Jinja2's Context.call reads it
 PassArg PassArgOf(PyObject* callable);
 
-// The extra first argument of a call that asked for one, made for the render `context` runs in:
-// the environment of the render, an EvalContext, or a read-only Context lent for the call (the
-// innermost LeaseScope), which raises TemplateRuntimeError once the call has returned
-nb::object MakePassArgument(PassArg kind, jinja2::RenderContext& context);
+// The extra first argument of a call that asked for one, made for the innermost call the engine makes
+// (LeaseScope): the environment of the render, an EvalContext, or a read-only Context lent for the
+// call, which raises TemplateRuntimeError once the call has returned
+nb::object MakePassArgument(PassArg kind);
 
 // The part of a Context that reads the render (jinja2cpp.runtime.Context holds one): lent for the
 // duration of the call that received it
@@ -49,7 +43,8 @@ public:
     nb::list Names() const;
 
 private:
-    jinja2::RenderContext& Live() const;
+    // The template's context (UserCallableParams::context), or TemplateRuntimeError after the call
+    const jinja2::GenericMap& Live() const;
 
     std::shared_ptr<CallLease> m_lease;
 };

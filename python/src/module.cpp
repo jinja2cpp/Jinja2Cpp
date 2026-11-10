@@ -4,9 +4,6 @@
 #include "environment.h"
 #include "errors.h"
 
-#include "engine_errors.h"
-#include "internal_value.h"
-
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 
@@ -174,16 +171,7 @@ void CheckFormatSize(nb::handle size)
         PyErr_Clear();
         count = std::numeric_limits<unsigned long long>::max();
     }
-    try
-    {
-        jinja2::CheckSequenceSize(count, "a list");
-    }
-    catch (const jinja2::ResourceLimitError& error)
-    {
-        const auto& type = Names().templateRuntimeError;
-        PyErr_SetObject(type.ptr(), type(MakeStr(error.what())).ptr());
-        throw nb::python_error();
-    }
+    CheckSequenceSize(count);
 }
 } // namespace
 } // namespace jinja2cpp_py

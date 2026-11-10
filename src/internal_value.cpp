@@ -6,6 +6,7 @@
 #include "engine_errors.h"
 #include "expression_evaluator.h"
 #include "generic_adapters.h"
+#include "host_call_context.h"
 #include "host_object.h"
 #include "out_stream.h"
 #include "public_host_object.h"
@@ -690,7 +691,9 @@ void ResolveMapCallOperator(InternalValue& result, MapRef map, RenderContext* va
 {
     static const std::string callOperName = "value()";
 
-    if (!map.HasValue(callOperName))
+    // The 1.x reflected call operator: a host object has no such member, and asking it costs a lookup in the host
+    // language for every object a subscript gives (a method read, `d.get`)
+    if (map.IsHost() || !map.HasValue(callOperName))
     {
         return;
     }
@@ -4085,7 +4088,8 @@ InternalValue LendHeldItem(const std::shared_ptr<const void>& owner, const Value
         }
         return InternalValue(ListAdapter(std::move(adapter)));
     }
-    if (const auto* map = std::get_if<GenericMap>(&item.GetData()))
+    // A host object (MakeHostValue) is read as the object, as everywhere else it enters a render
+    if (const auto* map = std::get_if<GenericMap>(&item.GetData()); map && !(map->GetAccessor() && map->GetAccessor()->AsHostObject()))
     {
         auto adapter = MakeRef<GenericMapAdapter<BySharedVal>>(GenericMap(*map));
         adapter->MarkGlobalData();
@@ -4177,11 +4181,16 @@ MapAdapter CreateMapAdapter(ValuesMap&& values)
 // which goes back as it came; an empty Value for a template callable. Defined below
 Value HostCallableOf(const Callable& callable);
 
+// Set while the host's callable that runs keeps undefined values (UserCallable::keepUndefined, KeepUndefinedScope): the
+// values it reads in the containers it got, at any depth, are the template's own then, an undefined value as
+// MakeUndefined's and a dictsort pair as a 2-tuple. Read only for those two kinds, so other values pay nothing
+thread_local bool t_keepUndefinedExport = false;
+
 struct OutputValueConvertor
 {
     using result_t = Value;
 
-    result_t operator()(const UndefinedValue&) const { return result_t(); }
+    result_t operator()(const UndefinedValue& undefined) const { return t_keepUndefinedExport ? UndefinedToHost(undefined) : result_t(); }
     result_t operator()(const NoneValue&) const { return result_t(); }
     result_t operator()(const MapRef& adapter) const { return result_t(adapter.CreateGenericMap()); }
     result_t operator()(const ListRef& adapter) const
@@ -4194,7 +4203,14 @@ struct OutputValueConvertor
         return result_t(adapter.CreateGenericList());
     }
     result_t operator()(const ValueRef& ref) const { return ref.get(); }
-    result_t operator()(const KeyValuePair& pair) const { return ValuesMap{ { "key", IntValue2Value(pair.key) }, { "value", IntValue2Value(pair.value) } }; }
+    result_t operator()(const KeyValuePair& pair) const
+    {
+        if (t_keepUndefinedExport)
+        {
+            return IntValue2Value(InternalValue(visitors::PairAsTuple(pair)));
+        }
+        return ValuesMap{ { "key", IntValue2Value(pair.key) }, { "value", IntValue2Value(pair.value) } };
+    }
     result_t operator()(const Callable& callable) const { return HostCallableOf(callable); }
     result_t operator()(const UserCallable&) const { return result_t(); }
     result_t operator()(const std::shared_ptr<IRendererBase>&) const { return result_t(); }
@@ -4261,49 +4277,6 @@ Value IntValue2Value(const InternalValue& val)
     return Apply<OutputValueConvertor>(val);
 }
 
-class ContextMapper : public IMapItemAccessor
-{
-public:
-    explicit ContextMapper(RenderContext* context)
-        : m_context(context)
-    {
-    }
-
-    // The number of names GetKeys lists
-    [[nodiscard]] size_t GetSize() const override { return m_context->CollectLookupNames().size(); }
-    [[nodiscard]] bool HasValue(const std::string& name) const override
-    {
-        return static_cast<bool>(m_context->FindValue(name));
-    }
-    [[nodiscard]] Value GetValueByName(const std::string& name) const override
-    {
-        const auto value = m_context->FindValue(name);
-        return value ? IntValue2Value(*value) : Value();
-    }
-    // The names a lookup finds, each once, sorted: the scopes, the external and global values and the built-ins
-    [[nodiscard]] std::vector<std::string> GetKeys() const override { return m_context->CollectLookupNames(); }
-
-    [[nodiscard]] bool IsEqual(const IComparable& other) const override
-    {
-        const auto* val = dynamic_cast<const ContextMapper*>(&other);
-        if (!val)
-        {
-            return false;
-        }
-        if (m_context && val->m_context && !m_context->IsEqual(*val->m_context))
-        {
-            return false;
-        }
-        if ((m_context && !val->m_context) || (!m_context && val->m_context))
-        {
-            return false;
-        }
-        return true;
-    }
-
-private:
-    RenderContext* m_context;
-};
 
 namespace
 {
@@ -4353,6 +4326,8 @@ struct HostCallScope
     std::shared_ptr<CallableLease> lease;
     const ParsedArguments* args = nullptr;
     const UserCallableParams* params = nullptr;
+    // The context the call was given, expired when the call ends (ContextEnd)
+    const IMapItemAccessor* contextMap = nullptr;
     // The host's callable asks for undefined arguments as undefined (UserCallable::keepUndefined)
     bool keepUndefined = false;
 
@@ -4393,6 +4368,45 @@ private:
     // handed many, so that a list of them comes back in N log N
     mutable std::vector<HostCallExport> m_index;
     mutable bool m_indexed = false;
+};
+
+// What a host's call reads of the template's values while it runs (t_keepUndefinedExport); the outer call's again after
+class KeepUndefinedScope
+{
+public:
+    explicit KeepUndefinedScope(bool keep) noexcept
+        : m_outer(std::exchange(t_keepUndefinedExport, keep))
+    {
+    }
+    KeepUndefinedScope(const KeepUndefinedScope&) = delete;
+    KeepUndefinedScope(KeepUndefinedScope&&) = delete;
+    KeepUndefinedScope& operator=(const KeepUndefinedScope&) = delete;
+    KeepUndefinedScope& operator=(KeepUndefinedScope&&) = delete;
+    ~KeepUndefinedScope() { t_keepUndefinedExport = m_outer; }
+
+private:
+    bool m_outer;
+};
+
+// Expires the context a host's call was given when the call ends (host_call::ExpireContextMap)
+class ContextEnd
+{
+public:
+    explicit ContextEnd(const HostCallScope& scope) noexcept
+        : m_scope(scope)
+    {
+    }
+    ContextEnd(const ContextEnd&) = delete;
+    ContextEnd(ContextEnd&&) = delete;
+    ContextEnd& operator=(const ContextEnd&) = delete;
+    ContextEnd& operator=(ContextEnd&&) = delete;
+    ~ContextEnd()
+    {
+        host_call::ExpireContextMap(m_scope.contextMap);
+    }
+
+private:
+    const HostCallScope& m_scope;
 };
 
 class LeaseEnd
@@ -4495,13 +4509,20 @@ struct LentCallable
         // body left on the render's context go, as a HomeCall that switched would drop them
         const HomeCall::Restore restore(context);
         const auto& fn = *GetIf<Callable>(&callable);
-        if (fn.GetType() == Callable::Type::Expression)
+        try
         {
-            return IntValue2Value(fn.GetExpressionCallable()(callParams, context));
+            if (fn.GetType() == Callable::Type::Expression)
+            {
+                return IntValue2Value(fn.GetExpressionCallable()(callParams, context));
+            }
+            InternalValue result = RenderToString(context.GetRendererCallback(), [&](OutStream& stream) { fn.GetStatementCallable()(callParams, stream, context); });
+            result.SetMarkup(context.IsAutoescape());
+            return IntValue2Value(result);
         }
-        InternalValue result = RenderToString(context.GetRendererCallback(), [&](OutStream& stream) { fn.GetStatementCallable()(callParams, stream, context); });
-        result.SetMarkup(context.IsAutoescape());
-        return IntValue2Value(result);
+        catch (...)
+        {
+            host_call::RethrowAsPublicError();
+        }
     }
 
     [[noreturn]] static void ThrowExpired()
@@ -4605,6 +4626,7 @@ public:
         return items;
     }
     [[nodiscard]] const void* GetIdentity() const override { return Inner().GetIdentity(); }
+    [[nodiscard]] const char* GetObjectClass() const override { return Inner().GetObjectClass(); }
     [[nodiscard]] bool IsEqual(const IComparable& other) const override
     {
         const auto* view = dynamic_cast<const LendingMapView*>(&other);
@@ -5003,7 +5025,11 @@ void PrepareUserCallableParams(const ParsedArguments& args, RenderContext& conte
         extraPosArgs.push_back(ArgumentToHost(p, context, scope));
     }
     result.extraPosArgs = Value(std::move(extraPosArgs));
-    result.context = GenericMap(std::make_shared<const ContextMapper>(&context));
+    auto contextMap = host_call::MakeContextMap(context, &scope, [](const InternalValue& value, RenderContext& ctx, void* callScope) {
+        return ArgumentToHost(value, ctx, *static_cast<HostCallScope*>(callScope));
+    });
+    scope.contextMap = contextMap.handle;
+    result.context = std::move(contextMap.map);
     if (asksForContext)
     {
         const auto* frame = context.GetTemplateFrame();
@@ -5031,6 +5057,9 @@ struct UserCallableBody
         const LeaseEnd leaseEnd(scope.lease);
         scope.keepUndefined = val.keepUndefined;
         UserCallableParams ucParams;
+        // Before ucParams goes: a context the host kept is expired while the call's own copy still holds it
+        const ContextEnd contextEnd(scope);
+        const KeepUndefinedScope keepUndefined(val.keepUndefined);
         // Kept for the call: the scope's records point into it
         const ParsedArguments args = helpers::ParseCallParams(argsInfo, params, ucParams.paramsParsed);
         PrepareUserCallableParams(args, context, argsInfo, ucParams, scope);
@@ -5134,7 +5163,8 @@ InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const Use
 
 InternalValue MakeHostObjectCallable(std::shared_ptr<const IHostObject> object)
 {
-    UserCallable callable([object = std::move(object)](const UserCallableParams& params) { return object->Call(params); }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) });
+    // With the call site, which a host's callable that reads the context needs (Python's pass_context)
+    UserCallable callable([object = std::move(object)](const UserCallableParams& params) { return object->Call(params); }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs), ArgInfo(ArgInfo::Context) });
     callable.keepUndefined = true;
     return visitors::InputValueConvertor::ConvertUserCallable(callable);
 }

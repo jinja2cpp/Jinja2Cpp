@@ -333,3 +333,24 @@ def test_folded_output_finalize_base_exception_ends_the_render(error):
         env = module.Environment(autoescape=True, finalize=finalize)
         with pytest.raises(error, match="stop"):
             env.from_string("{{ 1 }}").render()
+
+
+def test_base_exception_through_a_lent_macro_reaches_the_python_caller():
+    # A KeyboardInterrupt raised inside a macro a Python callable calls goes to that callable, which may catch it
+    def boom():
+        raise KeyboardInterrupt("stop")
+
+    def swallow(m):
+        try:
+            return m()
+        except KeyboardInterrupt:
+            return "swallowed"
+
+    source = "{% macro m() %}{{ boom() }}{% endmacro %}{{ outer(m) }}"
+    for module in modules():
+        env = module.Environment()
+        env.globals.update(boom=boom, outer=lambda m: m())
+        with pytest.raises(KeyboardInterrupt, match="stop"):
+            env.from_string(source).render()
+        env.globals["outer"] = swallow
+        assert env.from_string(source).render() == "swallowed"

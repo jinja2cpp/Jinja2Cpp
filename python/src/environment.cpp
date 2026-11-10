@@ -6,16 +6,11 @@
 #include "poll.h"
 
 #include "adapters.h"
-#include "dialect.h"
-#include "host_object.h"
-#include "internal_value.h"
-#include "recursion_guard.h"
-#include "template_env_impl.h"
-#include "template_impl.h"
 
 #include <jinja2cpp/features.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/template_env.h>
+#include <jinja2cpp/value.h>
 #if JINJA2CPP_HAS_CHAT_TEMPLATES
 #include <jinja2cpp/chat_template.h>
 #endif
@@ -100,7 +95,7 @@ std::vector<std::pair<std::string, PyObject*>> Entries(nb::handle mapping, const
 }
 
 // The params of a render: the str keys of a mapping as values of the engine
-void AddParams(jinja2::InternalValueMap& params, nb::handle mapping)
+void AddParams(jinja2::ValuesMap& params, nb::handle mapping)
 {
     for (auto [name, value] : nb::borrow<nb::dict>(mapping))
     {
@@ -114,7 +109,7 @@ void AddParams(jinja2::InternalValueMap& params, nb::handle mapping)
 // The globals of a render. A sandbox replaces the global `range` (jinja2cpp.sandbox.safe_range, marked
 // `_native_range`) by the engine's own, which stops at the environment's Limits::maxRange without a call
 // to Python
-void AddGlobals(jinja2::InternalValueMap& params, nb::handle mapping, bool sandboxed)
+void AddGlobals(jinja2::ValuesMap& params, nb::handle mapping, bool sandboxed)
 {
     for (auto [name, value] : nb::borrow<nb::dict>(mapping))
     {
@@ -290,7 +285,7 @@ void PyEnvironment::SetOption(const std::string& name, nb::handle value)
         else
         {
             Keep(value);
-            settings.finalize = jinja2::host::EngineUserCallable(BorrowedCallable(value));
+            settings.finalize = BorrowedCallable(value);
         }
     }
     else if (name == "autoescape")
@@ -525,17 +520,14 @@ void PyEnvironment::Rebuild()
         settings.limits.maxRange = nb::cast<std::uint64_t>(nb::module_::import_("jinja2cpp.sandbox").attr("MAX_RANGE"));
         immutable = Truth(nb::getattr(self, "_sandbox_immutable", nb::bool_(false)));
     }
-    m_env->SetSettings(settings);
-    if (immutable)
-    {
-        jinja2::detail::TemplateEnvAccess::GetImpl(*m_env)->SetDialect(jinja2::detail::Dialect::ImmutableSandbox);
-    }
+    settings.immutableContainers = immutable;
     m_sandboxed = sandboxed;
     if (sandboxed)
     {
         m_sandboxPublicNames = SandboxJudgesPublicNames(nb::find(this));
-        jinja2::detail::TemplateEnvAccess::GetImpl(*m_env)->SetSandboxPolicy(MakePythonSandboxPolicy(nb::find(this), m_sandboxPublicNames));
+        settings.sandboxPolicy = MakePythonSandboxPolicy(nb::find(this), m_sandboxPublicNames);
     }
+    m_env->SetSettings(settings);
     if (m_chatTemplates)
     {
         ApplyChatTemplates();
@@ -598,7 +590,7 @@ void PyEnvironment::ApplyGettext()
         return;
     }
     // A callable left out stays unset: the message is not translated
-    const auto callable = [](PyObject* object) { return object ? jinja2::host::EngineUserCallable(BorrowedCallable(object)) : jinja2::UserCallable(); };
+    const auto callable = [](PyObject* object) { return object ? BorrowedCallable(object) : jinja2::UserCallable(); };
     m_env->InstallGettextCallables(callable(m_gettext[0]), callable(m_gettext[1]), callable(m_gettext[2]), callable(m_gettext[3]));
 }
 
@@ -642,7 +634,10 @@ jinja2::TemplateEnv& PyEnvironment::Prepared()
         if (const bool judges = SandboxJudgesPublicNames(self); judges != m_sandboxPublicNames)
         {
             m_sandboxPublicNames = judges;
-            jinja2::detail::TemplateEnvAccess::GetImpl(*m_env)->SetSandboxPolicy(MakePythonSandboxPolicy(self, judges));
+            // A template keeps the policy it was loaded with; the next loads take this one
+            auto settings = m_env->GetSettings();
+            settings.sandboxPolicy = MakePythonSandboxPolicy(self, judges);
+            m_env->SetSettings(settings);
         }
     }
     // A template binds the filters and tests when it loads, as in Jinja2
@@ -659,7 +654,7 @@ jinja2::TemplateEnv& PyEnvironment::Prepared()
         for (const auto& [name, object] : entries)
         {
             Keep(object);
-            auto callable = jinja2::host::EngineUserCallable(BorrowedCallable(object));
+            auto callable = BorrowedCallable(object);
             filters ? m_env->AddFilter(name, std::move(callable)) : m_env->AddTest(name, std::move(callable));
         }
         bound = std::move(entries);
@@ -847,7 +842,7 @@ void PyTemplate::RenderWith(Target& target, nb::args args, nb::kwargs kwargs) co
     auto& env = LiveEnvironment();
     env.CheckSandboxHooks();
     // dict(*args, **kwargs), as Jinja2's render
-    jinja2::InternalValueMap params;
+    jinja2::ValuesMap params;
     if (args.size() > 1)
     {
         RaiseTypeError("dict expected at most 1 argument, got " + std::to_string(args.size()));
@@ -862,34 +857,31 @@ void PyTemplate::RenderWith(Target& target, nb::args args, nb::kwargs kwargs) co
     state.undefinedClass = env.UndefinedClass();
     InitRenderState(state, m_environment);
     state.templateGlobals = m_globals.ptr();
+    state.maxSequenceSize = env.MaxSequenceSize();
     // The globals: the environment's, then the template's over them
-    jinja2::InternalValueMap globals;
-    if (const auto& engineGlobals = env.EngineGlobals())
-    {
-        for (const auto& [name, value] : *engineGlobals)
-        {
-            globals[name] = jinja2::LendGlobal(value, engineGlobals);
-        }
-    }
-    AddGlobals(globals, m_envGlobals, state.sandbox != nullptr);
+    auto globals = env.EngineGlobals() ? std::make_shared<jinja2::ValuesMap>(*env.EngineGlobals()) : std::make_shared<jinja2::ValuesMap>();
+    AddGlobals(*globals, m_envGlobals, state.sandbox != nullptr);
     if (!m_globals.is_none())
     {
-        AddGlobals(globals, m_globals, state.sandbox != nullptr);
+        AddGlobals(*globals, m_globals, state.sandbox != nullptr);
     }
-    std::optional<jinja2::ErrorInfo> error;
-    {
+    jinja2::RenderOptions options;
+    options.globals = std::move(globals);
+    options.poll = RenderPoll();
+    auto result = [&] {
         const RenderScope scope(state);
-        const HostPollScope poll;
-        error = jinja2::TemplateImpl<char>::RenderInternal(m_template, target, params, &globals);
-    }
-    if (error)
+        return m_template.RenderTo(target, params, options);
+    }();
+    RaiseAbort(state);
+    if (!result)
     {
+        const auto& error = result.error();
         ErrorSource where;
         where.name = m_name;
         where.filename = m_filename;
         // The template itself parsed when it was loaded, so a syntax error here is in one it includes, imports or extends
         where.syntaxNote = kIncludedSyntaxNote;
-        RaiseError(*error, where);
+        RaiseError(error, where);
     }
 }
 

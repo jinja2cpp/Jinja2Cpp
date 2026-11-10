@@ -868,6 +868,12 @@ Recommend A now, C only if someone asks.
      `HostResult::SetHostObjectInPlace` are called from header templates (`MakeHostValue<T>`,
      `HostResult::SetHostObject<T>`), so their signatures and the `construct` contract are
      frozen ABI for 2.x like any exported function.
+   - **Template objects keep their class (decided by Ruslan 2026-11-09).** S3 found that a
+     `loop`, namespace, cycler or joiner a callable receives through the public API is only a
+     map, so Python saw a dict. Taken: a virtual `IMapItemAccessor::GetObjectClass()`
+     (`nullptr` by default) and `GenericMap::GetObjectClass()`, giving `LoopContext`,
+     `Namespace`, `Cycler` or `Joiner`. A sandbox policy gets a template macro or function as
+     an empty map of class `Macro` or `function`. It adds a vtable slot before the freeze.
 
 ## 8. Work breakdown
 

@@ -3,8 +3,6 @@
 #include "convert.h"
 #include "errors.h"
 
-#include "render_context.h"
-
 #include <nanobind/stl/string.h>
 
 #include <string>
@@ -79,14 +77,14 @@ nb::object RuntimeFunction(const char* name)
     return nb::module_::import_("jinja2cpp.runtime").attr(name);
 }
 
-nb::object MakeEvalContext(jinja2::RenderContext& context)
+nb::object MakeEvalContext(const CallLease& lease)
 {
     auto* state = CurrentRender();
     if (!state || !state->environment)
     {
         RaiseTemplateRuntimeError("pass_eval_context needs a render of an environment");
     }
-    return RuntimeFunction("_make_eval_context")(nb::borrow(state->environment), context.IsAutoescape());
+    return RuntimeFunction("_make_eval_context")(nb::borrow(state->environment), lease.autoescape);
 }
 } // namespace
 
@@ -107,7 +105,7 @@ PassArg PassArgOf(PyObject* callable)
     return MarkerOf(call);
 }
 
-nb::object MakePassArgument(PassArg kind, jinja2::RenderContext& context)
+nb::object MakePassArgument(PassArg kind)
 {
     auto* state = CurrentRender();
     if (kind == PassArg::Environment)
@@ -118,22 +116,18 @@ nb::object MakePassArgument(PassArg kind, jinja2::RenderContext& context)
         }
         return nb::borrow(state->environment);
     }
-    auto evalContext = MakeEvalContext(context);
-    if (kind == PassArg::EvalContext)
-    {
-        return evalContext;
-    }
     auto lease = LeaseScope::Current();
     if (!lease)
     {
         RaiseTemplateRuntimeError("pass_context needs a call of the template");
     }
-    // The template's own name; None for a template made from a string
-    nb::object name = nb::none();
-    if (const auto* frame = context.GetTemplateFrame(); frame && !frame->name.empty())
+    auto evalContext = MakeEvalContext(*lease);
+    if (kind == PassArg::EvalContext)
     {
-        name = MakeStr(frame->name);
+        return evalContext;
     }
+    // The template's own name; None for a template made from a string
+    nb::object name = lease->templateName.empty() ? nb::none() : MakeStr(lease->templateName);
     auto handle = nb::cast(new ContextHandle(std::move(lease)), nb::rv_policy::take_ownership);
     nb::object globals = state->templateGlobals ? nb::borrow(state->templateGlobals) : nb::none();
     return RuntimeFunction("_make_context")(handle, nb::borrow(state->environment), name, evalContext, globals);
@@ -144,19 +138,19 @@ ContextHandle::ContextHandle(std::shared_ptr<CallLease> lease)
 {
 }
 
-jinja2::RenderContext& ContextHandle::Live() const
+const jinja2::GenericMap& ContextHandle::Live() const
 {
-    if (!m_lease || !m_lease->active || !m_lease->context)
+    const auto* context = m_lease && m_lease->active ? m_lease->context.GetIf<jinja2::GenericMap>() : nullptr;
+    if (!context)
     {
         RaiseTemplateRuntimeError("the context was used after the call it was passed to ended");
     }
-    return *m_lease->context;
+    return *context;
 }
 
 nb::object ContextHandle::Lookup(const std::string& name, bool& found) const
 {
-    auto& context = Live();
-    const auto value = context.FindValue(name);
+    const auto value = Live().Find(name);
     found = static_cast<bool>(value);
     if (!found)
     {
@@ -167,13 +161,10 @@ nb::object ContextHandle::Lookup(const std::string& name, bool& found) const
 
 nb::list ContextHandle::Names() const
 {
-    auto& context = Live();
-    jinja2::InternalValueMap names;
-    context.CollectVisibleNames(names);
     nb::list result;
-    for (const auto& entry : names)
+    for (const auto& name : Live().GetKeys())
     {
-        result.append(MakeStr(entry.first));
+        result.append(MakeStr(name));
     }
     return result;
 }

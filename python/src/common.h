@@ -1,13 +1,12 @@
 #ifndef JINJA2CPP_PYTHON_COMMON_H
 #define JINJA2CPP_PYTHON_COMMON_H
 
-// The Python module jinja2cpp._jinja2cpp (docs/python.md, docs/tasks/0353). It links the library
-// statically and builds on its private seam (src/host_object.h, TemplateImpl::RenderInternal).
-// Every function here runs with the GIL held: a render holds it from start to end (0248 D5)
+// The Python module jinja2cpp._jinja2cpp (docs/python.md, docs/tasks/0353). It builds on the
+// library's public API only (docs/tasks/0357): host objects (jinja2cpp/host_object.h), callables,
+// RenderOptions and the sandbox policy. Every function here runs with the GIL held: a render holds
+// it from start to end (0248 D5)
 
 #include <nanobind/nanobind.h>
-
-#include "internal_value.h"
 
 #include <cstddef>
 #include <string>

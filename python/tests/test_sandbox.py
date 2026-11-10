@@ -9,6 +9,7 @@ and in the helper classes being module level. The rest compares the two sandboxe
 
 import collections
 import copy
+import gc
 import re
 
 import jinja2
@@ -1233,3 +1234,17 @@ def test_a_stock_hook_of_another_environment_or_a_patched_class_is_an_override(m
             with pytest.raises(jinja2cpp.UnsupportedError, match=name):
                 SandboxedEnvironment().from_string("x")
     assert template.render() == "CALLED"
+
+
+def test_format_map_kept_past_the_render():
+    # The sandbox's str.format_map is a callable of the environment's: one a callable keeps formats while the
+    # environment lives and raises once it is gone (it used to read the freed environment)
+    kept = []
+    env = jinja2cpp.sandbox.SandboxedEnvironment()
+    env.globals["keep"] = lambda f: kept.append(f) or ""
+    assert env.from_string("{{ keep('{a}'.format_map) }}").render() == ""
+    assert kept[0]({"a": 1}) == "1"
+    del env
+    gc.collect()
+    with pytest.raises(jinja2cpp.TemplateRuntimeError):
+        kept[0]({"a": 1})
