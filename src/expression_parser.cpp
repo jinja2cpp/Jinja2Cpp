@@ -167,7 +167,6 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
     }
     LexScanner::StateSaver saver(lexer);
     const auto unknownMark = m_unknown.Mark();
-    const auto valueOffset = lexer.PeekNextToken().range.startOffset;
 
     auto value = ParseBinary(lexer, Precedence::Or);
     if (!value)
@@ -179,7 +178,9 @@ ExpressionParser::ParseResult<NodeRef<Expression>> ExpressionParser::ParseFullEx
     // Only an inline `if` needs the wrapper: every compound node checks the stack itself
     if (includeIfPart && lexer.EatIfEqual(Keyword::If))
     {
-        auto ifExpr = ParseIfExpression(lexer, valueOffset);
+        // The line Jinja2 reports is the one the conditional's value starts on: its first token,
+        // which ParseBinary took
+        auto ifExpr = ParseIfExpression(lexer, saver.m_state.m_cur->range.startOffset);
         // Jinja2 checks the filters and tests of an inline if, its value among them, when they run
         m_unknown.DeferSince(unknownMark);
         if (!ifExpr)
@@ -1409,11 +1410,10 @@ ExpressionParser::ParseResult<NodeRef<IfExpression>> ExpressionParser::ParseIfEx
         // Without `else`, Jinja2's cond_expr_undefined: a jinja2.Undefined whatever the environment's
         // undefined, which prints empty and whose attribute, item or call fails. Made here, so
         // that a render copies it
-        NodeRef<ConstantExpression> noElse;
-        if (!*altValue)
+        const bool noElse = !*altValue;
+        if (noElse)
         {
-            noElse = m_nodes.Make<ConstantExpression>(MakeDefaultUndefinedWithHint("the inline if-expression on line " + std::to_string(lexer.LineOf(valueOffset))
-                                                                                   + " evaluated to false and no else section was defined."));
+            *altValue = m_nodes.Make<ConstantExpression>(MakeCondExprUndefined(lexer.LineOf(valueOffset)));
         }
         result = m_nodes.Make<IfExpression>(*testExpr, *altValue, noElse);
     }

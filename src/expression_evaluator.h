@@ -1179,12 +1179,13 @@ public:
     {
         refs(m_testExpr);
         refs(m_altValue);
-        refs(m_noElse);
     }
 
-    // noElse: without `else`, what the conditional gives when its test is false (Jinja2's
-    // cond_expr_undefined), made once at load in a node of its own, so that this one owns nothing
-    IfExpression(NodeRef<Expression> testExpr, NodeRef<Expression> altValue, NodeRef<ConstantExpression> noElse)
+    // noElse (true): there is no `else`, and altValue is what the conditional gives when its
+    // test is false (Jinja2's cond_expr_undefined), a constant made once at load in a node of its
+    // own, so that this one owns nothing. It is no branch: it never folds and is not rendered as
+    // one
+    IfExpression(NodeRef<Expression> testExpr, NodeRef<Expression> altValue, bool noElse)
         : m_testExpr(std::move(testExpr))
         , m_altValue(std::move(altValue))
         , m_noElse(noElse)
@@ -1199,21 +1200,17 @@ public:
     // Expression::PrepareFold and IsFoldableAt of `value if test else alt`
     std::uint8_t PrepareFold(const NodeArena& nodes, NodeRef<Expression> value);
     [[nodiscard]] bool IsFoldableAt(RenderContext& values, NodeRef<Expression> value) const;
-    [[nodiscard]] NodeRef<Expression> GetAltValue() const { return m_altValue; }
-
-    void SetAltValue(NodeRef<Expression> altValue)
-    {
-        m_altValue = altValue;
-    }
+    // The `else` branch; none without `else`
+    [[nodiscard]] NodeRef<Expression> GetAltValue() const { return m_noElse ? NodeRef<Expression>() : m_altValue; }
 
 private:
     NodeRef<Expression> m_testExpr;
     NodeRef<Expression> m_altValue;
-    NodeRef<ConstantExpression> m_noElse;
     // How the test, the value and the alternative fold (FoldBits), by PrepareFold
     std::uint8_t m_testFold = 0;
     std::uint8_t m_valueFold = 0;
     std::uint8_t m_altFold = 0;
+    bool m_noElse = false;
 };
 
 namespace helpers

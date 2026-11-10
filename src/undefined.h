@@ -33,6 +33,10 @@ struct UndefinedInfo final : ValueObject
     // The sandbox refused the attribute (Jinja2's unsafe_undefined, exc=SecurityError): a use that fails
     // reports ErrorCode::SecurityError
     bool security = false;
+    // Not 0: the line of the inline if-expression without else this is the value of, whose
+    // message replaces the one built from the other fields (MakeCondExprUndefined). It sits in
+    // the padding after the flags, so the info is no larger
+    unsigned condExprLine = 0;
     // Replaces the message built from the fields above when set
     std::string hint;
 };
@@ -56,9 +60,10 @@ std::optional<InternalValue> SandboxedNativeAttribute(const RenderContext* conte
 InternalValue MakeUndefined(const RenderContext& context, std::string name);
 // An undefined value whose message is hint, as Python's environment.undefined(hint)
 InternalValue MakeUndefinedWithHint(const RenderContext& context, std::string hint);
-// An undefined value of the default policy whose message is hint, whatever the policy of the
-// render: Jinja2's cond_expr_undefined, which is jinja2.Undefined in every environment
-InternalValue MakeDefaultUndefinedWithHint(std::string hint);
+// Jinja2's cond_expr_undefined for an inline if-expression on `line` without else: an undefined
+// of the default policy whatever the policy of the render (jinja2.Undefined in every
+// environment); its message is formatted only when it is reported
+InternalValue MakeCondExprUndefined(unsigned line);
 // The undefined result of the missing attribute or item key of obj. A value that is
 // already undefined with info is returned as is
 InternalValue MakeUndefined(const RenderContext* context, const InternalValue& obj, const InternalValue& key);

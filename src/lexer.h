@@ -5,10 +5,12 @@
 #include "lexertk.h"
 #include "unicode_tables.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -221,6 +223,64 @@ using TokensList = std::vector<Token>;
 // double when it is not an integer
 InternalValue ParseNumberLiteral(std::string number);
 
+// The class of a template unit in a tag, as bits, one table load per unit: an ASCII unit by
+// its table row, any other unit (UTF-8 lead and continuation bytes, wide units above 0x7F) is
+// NonAscii. The locale never decides a class
+namespace char_class
+{
+enum : uint8_t
+{
+    Operator = 1,
+    NameStart = 2,
+    NameContinue = 4,
+    Digit = 8,
+    Quote = 16,
+    NonAscii = 32,
+};
+
+constexpr std::array<uint8_t, 256> MakeTable()
+{
+    std::array<uint8_t, 256> table{};
+    for (const char ch : std::string_view("+-*/^<>=,!()[]{}%:?&|;~"))
+    {
+        table[static_cast<unsigned char>(ch)] = Operator;
+    }
+    for (unsigned ch = 'a'; ch <= 'z'; ++ch)
+    {
+        table[ch] = NameStart | NameContinue;
+        table[ch - 'a' + 'A'] = NameStart | NameContinue;
+    }
+    for (unsigned ch = '0'; ch <= '9'; ++ch)
+    {
+        table[ch] = NameContinue | Digit;
+    }
+    table['_'] = NameStart | NameContinue;
+    table['\''] = Quote;
+    table['"'] = Quote;
+    for (unsigned ch = 0x80; ch < 0x100; ++ch)
+    {
+        table[ch] = NonAscii;
+    }
+    return table;
+}
+
+inline constexpr std::array<uint8_t, 256> kTable = MakeTable();
+
+template<typename CharT>
+constexpr uint8_t Of(CharT ch)
+{
+    const auto unit = static_cast<std::make_unsigned_t<CharT>>(ch);
+    if constexpr (sizeof(CharT) == 1)
+    {
+        return kTable[unit];
+    }
+    else
+    {
+        return unit < 0x80 ? kTable[unit] : uint8_t{ NonAscii };
+    }
+}
+} // namespace char_class
+
 // The lexer of a tag's body (docs/tasks/0142). It reads the template source in place and makes
 // the parser's tokens straight away. LexToEnd also finds where the tag ends, so the splitter does
 // not scan a tag before it is lexed. `Helper` gives the keyword a name is (GetKeyword).
@@ -380,49 +440,46 @@ private:
     // a tag, the hottest code of a load
     JINJA2CPP_HOT_INLINE bool ScanToken(size_t pos, size_t end, Token& tok)
     {
-        const auto ch = m_src[pos];
-        if (traits::is_operator_char(ch))
+        const auto cls = char_class::Of(m_src[pos]);
+        if (cls & char_class::Operator)
         {
             return ScanOperator(pos, end, tok);
         }
-        // ASCII only: the locale's classes (a global locale an embedder sets) do not decide a name
-        if (IsAsciiNameChar(ch) && !(ch >= '0' && ch <= '9'))
+        if (cls & char_class::NameStart)
         {
             auto last = pos + 1;
-            while (last != end && IsAsciiNameChar(m_src[last]))
+            uint8_t next = 0;
+            while (last != end && ((next = char_class::Of(m_src[last])) & char_class::NameContinue))
             {
                 ++last;
             }
             // A name with a character above ASCII goes on out of line, so this stays inlined
-            if (last != end && !traits::is_ascii(m_src[last]))
+            if (last != end && (next & char_class::NonAscii))
             {
                 return ScanNonAsciiName(pos, last, end, tok);
             }
             SetSymbol(pos, last, tok);
             return true;
         }
-        if (ch == '.')
+        if (m_src[pos] == '.')
         {
             // Python has no .5 literal: the dot is an attribute or subscript operator
             return ScanOperator(pos, end, tok);
         }
-        if (IsAsciiDigit(ch))
+        if (cls & char_class::Digit)
         {
             return ScanNumber(pos, end, tok);
         }
-        if (ch == '\'' || ch == '"')
+        if (cls & char_class::Quote)
         {
             return ScanString(pos, end, tok);
         }
-        return !traits::is_ascii(ch) && ScanNonAsciiName(pos, pos, end, tok);
+        return (cls & char_class::NonAscii) && ScanNonAsciiName(pos, pos, end, tok);
     }
 
     // Jinja2's numbers start with an ASCII digit: the locale's classes (MSVC's iswdigit takes
     // U+0663) do not decide one
-    static bool IsAsciiDigit(CharT ch) { return ch >= '0' && ch <= '9'; }
-
-    // A letter, digit or '_' of ASCII; false for any other unit, a negative char included
-    static bool IsAsciiNameChar(CharT ch) { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'; }
+    static bool IsAsciiDigit(CharT ch) { return (char_class::Of(ch) & char_class::Digit) != 0; }
 
     // A name with a character above ASCII, from `pos`, whose characters up to `last` were taken
     // (none when last == pos); false when `pos` starts no name. Jinja2 lexes a name as a run of
@@ -433,10 +490,10 @@ private:
         const auto src = m_src.substr(0, end);
         while (last != end)
         {
-            const auto unit = m_src[last];
-            if (traits::is_ascii(unit))
+            const auto cls = char_class::Of(m_src[last]);
+            if (!(cls & char_class::NonAscii))
             {
-                if ((last == pos || !IsAsciiDigit(unit)) && !traits::is_letter(unit) && unit != '_')
+                if (!(cls & (last == pos ? char_class::NameStart : char_class::NameContinue)))
                 {
                     break;
                 }

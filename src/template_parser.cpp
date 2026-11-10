@@ -199,7 +199,7 @@ StatementsParser::ParseResult StatementsParser::ParseNonKeywordStatement(LexScan
         return ParseLoopControl(statementsInfo, tok, lexer.GetAsString(tok) == "break" ? LoopControl::Break : LoopControl::Continue);
     }
     // `print` is not a keyword either: Jinja2 names it only in statement position
-    if (tok == Token::Identifier && lexer.GetAsString(tok) == "print")
+    if (tok == Token::Identifier && tok.range.size() == 5 && lexer.GetAsView(tok) == "print")
     {
         return ParsePrint(lexer, statementsInfo);
     }

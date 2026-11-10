@@ -102,12 +102,24 @@ InternalValue MakeUndefinedWithHint(const RenderContext& context, std::string hi
     return MakeUndefinedValue(std::move(info));
 }
 
-InternalValue MakeDefaultUndefinedWithHint(std::string hint)
+InternalValue MakeCondExprUndefined(unsigned line)
 {
     UndefinedInfo info;
-    info.hint = std::move(hint);
+    info.condExprLine = line;
     return MakeUndefinedValue(std::move(info));
 }
+
+namespace
+{
+std::string HintOf(const UndefinedInfo& info)
+{
+    if (info.condExprLine)
+    {
+        return "the inline if-expression on line " + std::to_string(info.condExprLine) + " evaluated to false and no else section was defined.";
+    }
+    return info.hint;
+}
+} // namespace
 
 InternalValue MakeUndefined(const RenderContext* context, const InternalValue& obj, const InternalValue& key)
 {
@@ -164,9 +176,9 @@ InternalValue MakeUndefinedItem(const RenderContext* context, const InternalValu
 
 std::string UndefinedMessage(const UndefinedInfo& info)
 {
-    if (!info.hint.empty())
+    if (auto hint = HintOf(info); !hint.empty())
     {
-        return info.hint;
+        return hint;
     }
     if (info.objType.empty())
     {
@@ -181,9 +193,9 @@ std::string UndefinedMessage(const UndefinedInfo& info)
 
 std::string DebugUndefinedText(const UndefinedInfo& info)
 {
-    if (!info.hint.empty())
+    if (auto hint = HintOf(info); !hint.empty())
     {
-        return "{{ undefined value printed: " + info.hint + " }}";
+        return "{{ undefined value printed: " + hint + " }}";
     }
     if (info.objType.empty())
     {

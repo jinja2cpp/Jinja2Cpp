@@ -2445,10 +2445,18 @@ public:
     InternalValue GetAsValue(const CharRange& range, Token::Type type) override { return LiteralValue(range, type); }
     unsigned GetLineNumber(size_t offset) override
     {
-        SplitLines();
-        // The first line that ends at or after the offset; a line's range ends before its '\n'
-        const auto p = std::lower_bound(m_lines.begin(), m_lines.end(), offset, [](const LineInfo& info, size_t value) { return info.range.endOffset < value; });
-        return p == m_lines.end() ? m_lines.back().lineNumber + 1 : p->lineNumber + 1;
+        // Counts the '\n's before the offset from where the last call stopped (the parser asks
+        // in source order), without splitting the template into lines
+        const auto& tpl = *m_template;
+        offset = std::min(offset, tpl.size());
+        if (offset < m_lineCountOffset)
+        {
+            m_lineCountOffset = 0;
+            m_lineCount = 0;
+        }
+        m_lineCount += static_cast<unsigned>(std::count(tpl.begin() + static_cast<std::ptrdiff_t>(m_lineCountOffset), tpl.begin() + static_cast<std::ptrdiff_t>(offset), '\n'));
+        m_lineCountOffset = offset;
+        return m_lineCount + 1;
     }
     bool TakeLiteralError() override { return std::exchange(m_literalError, false); }
     Keyword GetKeyword(const CharRange& range) override
@@ -2487,6 +2495,9 @@ private:
     const Delimiters& m_delims;
     // Inline room for the lines of small templates
     SmallVector<LineInfo, 8, SmallVectorDoubling> m_lines;
+    // GetLineNumber's position: the '\n's before m_lineCountOffset
+    size_t m_lineCountOffset = 0;
+    unsigned m_lineCount = 0;
     StatementInfoList* m_openStatements = nullptr;
     // The children of the open statements' bodies
     StatementBodies m_bodies;
