@@ -830,11 +830,16 @@ TEST_F(TemplateModuleTest, ViewArgumentIsCopied)
     text.reset();
     EXPECT_EQ("first text, long enough for the heap", Call(module.exports["get"]).AsString());
 
-    jinja2::ValuesList nested{ jinja2::ValuesList{ std::string_view("x") } };
+    // Built with emplace_back: a braced `{ list }` copies the list on Clang and MSVC
+    jinja2::ValuesList inner;
+    inner.emplace_back(std::string_view("x"));
+    jinja2::ValuesList nested;
+    nested.emplace_back(std::move(inner));
     auto wide = std::make_unique<std::wstring>(L"wide text, long enough for the heap");
     nested.emplace_back(std::wstring_view(*wide));
-    Call(module.exports["put"], { nested });
-    nested.clear();
+    jinja2::ValuesList args;
+    args.emplace_back(std::move(nested));
+    Call(module.exports["put"], std::move(args));
     wide.reset();
     EXPECT_EQ("[['x'], 'wide text, long enough for the heap']", Call(module.exports["get"]).AsString());
 }
