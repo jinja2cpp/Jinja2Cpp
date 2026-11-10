@@ -236,7 +236,7 @@ bool IsNotIterable(const InternalValue& val)
 
 [[noreturn]] void ThrowNotIterable(const InternalValue& val)
 {
-    throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(val) + "' object is not iterable");
+    throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "'"s + Apply<visitors::PythonTypeNameGetter>(val) + "' object is not iterable");
 }
 
 // Jinja2's make_multi_attrgetter: "a,b.c" sorts by the list [item.a, item.b.c]
@@ -1798,7 +1798,7 @@ struct ValueConverterImpl : visitors::BaseVisitor<>
         }
         if (const char* objectClass = val.GetObjectClass())
         {
-            throw TemplateRuntimeError("'"s + objectClass + "' object is not iterable");
+            throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "'"s + objectClass + "' object is not iterable");
         }
 
         auto keys = val.GetKeyValues();

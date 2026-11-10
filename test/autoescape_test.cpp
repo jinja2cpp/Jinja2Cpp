@@ -135,7 +135,7 @@ TEST(AutoescapeTest, BlockOverridesSetting)
 
 TEST(AutoescapeTest, BlockSyntaxErrors)
 {
-    EXPECT_EQ(std::string("noname.j2tpl:1:5: error: Unexpected statement: 'endautoescape'\nx{% endautoescape %}\n ---^-------"),
+    EXPECT_EQ(std::string("noname.j2tpl:1:5: error: Encountered unknown tag 'endautoescape'.\nx{% endautoescape %}\n ---^-------"),
               ParseError(std::string("x{% endautoescape %}")));
     EXPECT_FALSE(ParseError(std::string("{% autoescape %}x{% endautoescape %}")).empty());
     EXPECT_FALSE(ParseError(std::string("{% autoescape true %}x")).empty());

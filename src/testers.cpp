@@ -534,7 +534,7 @@ bool IsValueIn(const InternalValue& baseVal, const InternalValue& seq)
         {
             return *found;
         }
-        throw TemplateRuntimeError("argument of type '"s + Apply<visitors::PythonTypeNameGetter>(seq) + "' is not iterable");
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "argument of type '"s + Apply<visitors::PythonTypeNameGetter>(seq) + "' is not iterable");
     }
     return result;
 }

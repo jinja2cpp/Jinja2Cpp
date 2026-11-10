@@ -25,6 +25,7 @@
 #include <string_view>
 #include <thread>
 #include <utility>
+#include <variant>
 #include <vector>
 
 using namespace jinja2;
@@ -2091,4 +2092,35 @@ TEST(PublicHostObjectTest, ListOrTupleOperatesAsTheEnginesOwn)
     {
         spec->seen.clear();
     }
+}
+
+// `{% include x %}` with a host sequence tries its names in turn, as for a template list (docs/tasks/0432)
+TEST(PublicHostObjectTest, IncludeTriesTheNamesOfAHostSequence)
+{
+    TemplateEnv env;
+    auto files = std::make_shared<MemoryFileSystem>();
+    files->AddFile("header", "[header]");
+    env.AddFilesystemHandler(std::string(), files);
+    Template tpl(&env);
+    ASSERT_TRUE(tpl.Load("{% include x %}").has_value());
+
+    ToySpec spec;
+    spec.iteration = std::vector<Value>{ Value("missing"), Value("header") };
+    auto found = tpl.RenderAsString({ { "x", MakeToy(spec) } });
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ("[header]", found.value());
+
+    // None found: the error lists the names tried
+    spec.iteration = std::vector<Value>{ Value("missing"), Value("missing2") };
+    auto missing = tpl.RenderAsString({ { "x", MakeToy(spec) } });
+    ASSERT_FALSE(missing.has_value());
+    EXPECT_EQ(ErrorCode::TemplateNotFound, missing.error().GetCode());
+    const auto* tried = std::get_if<GenericList>(&missing.error().GetExtraParams().at(0).GetData());
+    ASSERT_NE(nullptr, tried);
+    EXPECT_EQ(2U, tried->GetSize().value());
+
+    // An object that does not iterate is still not a template name
+    auto notIterable = tpl.RenderAsString({ { "x", MakeToy() } });
+    ASSERT_FALSE(notIterable.has_value());
+    EXPECT_EQ(ErrorCode::InvalidTemplateName, notIterable.error().GetCode());
 }

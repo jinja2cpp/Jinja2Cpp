@@ -80,7 +80,7 @@ void CheckIterable(const InternalValue& value)
         CheckUndefinedUse(value, UndefinedUse::Operator);
         return;
     }
-    throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(value) + "' object is not iterable");
+    throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "'"s + Apply<visitors::PythonTypeNameGetter>(value) + "' object is not iterable");
 }
 
 
@@ -3068,6 +3068,16 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
     auto templateNames = values.Nodes()[m_expr].Evaluate(values);
     bool isConverted = false;
     ListAdapter list = ConvertToList(templateNames, isConverted);
+    // A host sequence is stored as a map and iterates: Python's select_template takes any iterable
+    if (!isConverted && AsMap(templateNames))
+    {
+        list = ConvertToList(templateNames, isConverted, false);
+        // It may iterate once, and the names tried are reported
+        if (isConverted)
+        {
+            list = ListAdapter::CreateAdapter(list.ToValueList());
+        }
+    }
 
     bool rendered = false;
     if (isConverted)
@@ -3102,7 +3112,7 @@ void IncludeStatement::Render(OutStream& os, RenderContext& values)
         ValuesList extraParams;
         if (isConverted)
         {
-            extraParams.push_back(IntValue2Value(templateNames));
+            extraParams.push_back(IntValue2Value(InternalValue(list)));
         }
         else
         {
@@ -3200,7 +3210,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     {
         if (const auto* shared = callback.FindModule(tpl))
         {
-            ImportNames(values, nodes, *shared);
+            ImportNames(values, nodes, *shared, name);
             return;
         }
     }
@@ -3219,7 +3229,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
             module.Render(*tplPtr);
             return true;
         });
-        ImportNames(values, nodes, module);
+        ImportNames(values, nodes, module, name);
         return;
     }
     class SharedModuleScope
@@ -3250,7 +3260,7 @@ void ImportStatement::Render(OutStream& /*os*/, RenderContext& values)
     // Shared once complete: a module that imports itself recurses, as in Jinja2
     callback.ShareModule(tpl, module);
     scope.Shared();
-    ImportNames(values, nodes, module);
+    ImportNames(values, nodes, module, name);
 }
 
 namespace
@@ -3270,6 +3280,14 @@ bool IsImported(const InternalValue& value)
 
 namespace
 {
+// Python's repr() of a value
+std::string ReprOf(const InternalValue& value)
+{
+    std::string result;
+    Apply<visitors::ValueRenderer<char>>(value, result, true);
+    return result;
+}
+
 // An import at a module's top level hides the name from the module's exports, until a `set`
 // binds it again (SetStatement::SetReexports)
 void NoteModuleImport(const RenderContext& values, std::string_view name)
@@ -3287,7 +3305,7 @@ void NoteModuleImport(const RenderContext& values, std::string_view name)
 } // namespace
 
 // Copies: the module keeps every name, which its own macros read in its context
-void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes, const ImportedModule& module) const
+void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes, const ImportedModule& module, const InternalValue& moduleName) const
 {
     const auto& moduleNames = module.Names();
     if (m_namespace.empty())
@@ -3301,7 +3319,17 @@ void ImportStatement::ImportNames(RenderContext& values, const ArenaView& nodes,
             // is an import, which this module does not export
             auto& bound = scope.ForName({ nodes.Text(name.alias), name.aliasHash });
             const bool exported = p != moduleNames.end() && IsImported(p->second) && module.Exports(p->first);
-            bound = exported ? p->second : MakeUndefined(values, std::string(nodes.Text(name.alias)));
+            if (exported)
+            {
+                bound = p->second;
+            }
+            else
+            {
+                // Jinja2's message names the module and the import's position
+                bound = MakeUndefinedWithHint(values,
+                                              "the template " + ReprOf(moduleName) + " (imported on " + std::string(nodes.Text(m_position)) + ") does not export the requested name "
+                                                  + ReprOf(InternalValue(std::string(nodes.Text(name.name)))));
+            }
             NoteModuleImport(values, nodes.Text(name.alias));
         }
         return;
@@ -3613,7 +3641,7 @@ template<typename DisplayName>
             }
             if (kwParams.find("caller"s) != kwParams.end() && binder.IsExtraKeyword("caller"))
             {
-                throw TemplateRuntimeError("macro " + displayName() + " was invoked with two values for the special caller argument. This is most likely a bug.");
+                throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "macro " + displayName() + " was invoked with two values for the special caller argument. This is most likely a bug.");
             }
             throw TemplateRuntimeError("macro " + displayName() + " takes no keyword argument '" + name + "'");
         }

@@ -194,7 +194,7 @@ void CollectDictItems(const CallParams& params, const char* fnName, TemplateDict
         // None and an object such as namespace() are not iterable
         if (source.IsNone() || (map && map->GetObjectClass()))
         {
-            throw TemplateRuntimeError("'"s + Apply<visitors::PythonTypeNameGetter>(source) + "' object is not iterable");
+            throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "'"s + Apply<visitors::PythonTypeNameGetter>(source) + "' object is not iterable");
         }
         if (map)
         {

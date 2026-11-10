@@ -41,3 +41,23 @@ raises (CPython allows a synthetic frame through `types.TracebackType`).
 
 **Done when.** The listed upstream tests pass through the module, and the C++ messages are
 the same where the C++ API reports them.
+
+## Decisions
+
+Engine half (additive public API):
+
+- `ErrorCode::TemplateSyntaxError = 1023` and `ErrorCode::TemplateAssertionError = 1024`: a construct
+  Jinja2 rejects with a message of its own (its `TemplateSyntaxError`, and the compile-time
+  `TemplateAssertionError`). `ExtraParams[0]` is Jinja2's message. A template that ends inside a
+  statement, trans-block misuse and a required block with content are `TemplateSyntaxError`; an unknown
+  pluralization variable, a trans variable defined twice and a `caller` parameter with no default that the
+  body uses are `TemplateAssertionError`.
+- `UnexpectedStatement` keeps `ExtraParams[0]` = the tag and gains `ExtraParams[1]` = Jinja2's sentence
+  (`Encountered unknown tag 'endif'. Jinja was looking for ...`, parser.py `_fail_ut_eof`); `ToString` prints
+  it. A tag name that is no tag at all now reports it too (it was `UnexpectedToken`).
+- `ErrorCode::TemplateRuntimeError` gets `ExtraParams[1]` = `"TypeError"` or `"ValueError"` where the engine
+  knows the class Jinja2 raises (not iterable, undefined slice bound, doubled `caller`, invalid `xmlattr`
+  key); absent otherwise. The `xmlattr` message is Jinja2's, with the key's repr.
+- A name a `from ... import` cannot find is an undefined value with Jinja2's message (`the template 'm'
+  (imported on line 1) does not export the requested name 'x'`).
+- `{% include x %}` tries the names of a host sequence in turn, as for a template list.

@@ -1231,7 +1231,7 @@ InternalValue SliceExpression::Evaluate(RenderContext& context)
     // An omitted bound is None; an undefined one has no __index__, under every policy
     if ((m_start && start.IsUndefined()) || (m_stop && stop.IsUndefined()) || (m_step && step.IsUndefined()))
     {
-        throw TemplateRuntimeError("slice indices must be integers or None or have an __index__ method");
+        throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "slice indices must be integers or None or have an __index__ method");
     }
     auto result = Slice(value, start, stop, step);
     // A slice of Markup is Markup

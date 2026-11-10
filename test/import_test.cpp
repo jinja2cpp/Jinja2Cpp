@@ -1,5 +1,6 @@
 #include "test_tools.h"
 
+#include <jinja2cpp/error_info.h>
 #include <jinja2cpp/string_helpers.h>
 #include <jinja2cpp/template.h>
 #include <jinja2cpp/user_callable.h>
@@ -144,4 +145,26 @@ TEST_F(ImportTest, ImportedMacroRunsInItsModule)
     AddFile("apply", "{% macro apply(f) %}<{{ f() }}>{% endmacro %}");
     EXPECT_EQ("<V>", Render(R"({% from 'apply' import apply %}{% from 'mv' import show %}{{ apply(show) }})"));
     EXPECT_EQ("V", Render(R"({% set ns = namespace(f=none) %}{% macro load() %}{% from 'mv' import show %}{% set ns.f = show %}{% endmacro %}{{ load() }}{{ ns.f() }})"));
+}
+
+// A name the module does not export is an undefined value with Jinja2's message (docs/tasks/0432)
+TEST_F(ImportTest, MissingNameFromImportMessage)
+{
+    for (const char* use : { "{{ nothing() }}", "{{ nothing + 1 }}" })
+    {
+        jinja2::Template tpl(&m_env);
+        ASSERT_TRUE(tpl.Load(std::string("\n{% from 'module' import nothing %}") + use).has_value());
+        const auto result = tpl.RenderAsString({});
+        ASSERT_FALSE(result.has_value()) << use;
+        EXPECT_EQ(jinja2::ErrorCode::UndefinedError, result.error().GetCode());
+        EXPECT_EQ("the template 'module' (imported on line 2) does not export the requested name 'nothing'", result.error().GetExtraParams().at(0).AsString());
+    }
+
+    // Unused it stays undefined, and a named template says where the import is
+    EXPECT_EQ("d", Render("{% from 'module' import nothing %}{% if nothing is undefined %}d{% endif %}"));
+    jinja2::Template named(&m_env);
+    ASSERT_TRUE(named.Load("{% from 'module' import nothing as other %}{{ other.x }}", "page.html").has_value());
+    const auto result = named.RenderAsString({});
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ("the template 'module' (imported on line 1 in 'page.html') does not export the requested name 'nothing'", result.error().GetExtraParams().at(0).AsString());
 }

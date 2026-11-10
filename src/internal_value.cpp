@@ -963,7 +963,7 @@ struct SliceVisitor : public visitors::BaseVisitor<>
         std::optional<int64_t> step;
         if (!GetIndex(m_start, start) || !GetIndex(m_stop, stop) || !GetIndex(m_step, step))
         {
-            throw TemplateRuntimeError("slice indices must be integers or None or have an __index__ method");
+            throw TemplateRuntimeError(TemplateRuntimeError::PythonClass::TypeError, "slice indices must be integers or None or have an __index__ method");
         }
         indices.step = step.value_or(1);
         if (indices.step == 0)

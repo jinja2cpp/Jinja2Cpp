@@ -43,6 +43,7 @@ ParseError::ParseError(ParseError&& other) noexcept
     : errorCode(other.errorCode)
     , errorToken(std::move(other.errorToken))
     , relatedTokens(std::move(other.relatedTokens))
+    , message(std::move(other.message))
 {
 }
 ParseError& ParseError::operator=(const ParseError&) = default;
@@ -56,6 +57,7 @@ ParseError& ParseError::operator=(ParseError&& error) noexcept
     std::swap(errorCode, error.errorCode);
     std::swap(errorToken, error.errorToken);
     std::swap(relatedTokens, error.relatedTokens);
+    std::swap(message, error.message);
 
     return *this;
 }
