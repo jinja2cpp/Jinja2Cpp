@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: medium
 area: api
 depends: [0353, 0212]
@@ -99,4 +99,21 @@ freeze.
   (a sandbox stub type per attribute check, the repr of a cycler). The verifier found that a C++ host
   keeping the context a call got read freed frames after the call (from before S3); it now fails
   with `TemplateExpired`.
+- S4 (2026-11-10): `python/CMakeLists.txt` also builds alone against an installed package
+  (`find_package(jinja2cpp)`, nanobind from the build's Python); the root build keeps linking the
+  wheel's static copy. New `JINJA2CPP_TLS_INITIAL_EXEC` option for a static library installed for
+  the module (`JINJA2CPP_BUILD_PYTHON` sets it). `python.yml` gains the `installed` job: install
+  the library (static, PIC, initial-exec TLS, boost big ints), build `python/` alone against it,
+  check with `python/check_includes.py` that every header the module includes comes from the
+  prefix, nanobind, Python or the system, and run `python/tests`. Removed the private entry points:
+  `TemplateImpl::RenderInternal` (with the `InternalValueMap` params and globals of `RenderCore`),
+  `ReferencedTemplatesOf`, `host::EngineUserCallable` (and its probe in every `UserCallable`
+  conversion), `TemplateEnvImpl::SetSandboxPolicy`/`GetSandboxPolicy` (a policy comes from
+  `Settings::sandboxPolicy` only). `SetDialect` stays engine-only (`ConfigureForChatTemplates`);
+  `t_hostPoll` is reached through `RenderOptions::poll` only. `test/sandbox_policy_test.cpp` uses
+  the public switches; the private host-object tests moved onto the public bridge
+  (`test/public_host_object_test.cpp`), so `src/host_object.h` is the bridge's engine side only.
+  Fixed on the way: on Python 3.13 the fallback refused every `template_class` subclass, taking
+  `__firstlineno__` and `__static_attributes__` for overrides (5 of the 6 known 3.13 failures; the
+  sixth is the Unicode version, 0372). Filed 0443 (`str.format_map` missing from the engine).
 

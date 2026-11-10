@@ -5143,11 +5143,6 @@ struct UserCallableBody
 
 InputValueConvertor::result_t InputValueConvertor::ConvertUserCallable(const UserCallable& val)
 {
-    // A callable of the engine the host registered as itself (host::EngineUserCallable)
-    if (const auto* engine = val.callable.target<host::EngineCallableBody>())
-    {
-        return engine->callable;
-    }
     std::vector<ArgumentInfo> args;
     args.reserve(val.argsInfo.size());
     for (const auto& pi : val.argsInfo)

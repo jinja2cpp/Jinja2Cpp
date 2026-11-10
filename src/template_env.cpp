@@ -255,7 +255,7 @@ bool TemplateEnvImpl::IsEqual(const TemplateEnvImpl& other) const
         return true;
     }
     const ReaderLockPair lock(guard, other.guard);
-    return filesystemHandlers == other.filesystemHandlers && settings == other.settings && GetBigIntBackend() == other.GetBigIntBackend() && GetDialect() == other.GetDialect() && GetSandboxPolicy() == other.GetSandboxPolicy() && *globalValues == *other.globalValues && IsSameCallables(filters, other.filters) && IsSameCallables(tests, other.tests) && IsSameCallables(translations, other.translations) && templateCache == other.templateCache && templateWCache == other.templateWCache;
+    return filesystemHandlers == other.filesystemHandlers && settings == other.settings && GetBigIntBackend() == other.GetBigIntBackend() && GetDialect() == other.GetDialect() && *globalValues == *other.globalValues && IsSameCallables(filters, other.filters) && IsSameCallables(tests, other.tests) && IsSameCallables(translations, other.translations) && templateCache == other.templateCache && templateWCache == other.templateWCache;
 }
 
 LoadSettingsPtr TemplateEnvImpl::GetLoadSettings() const
@@ -267,11 +267,11 @@ LoadSettingsPtr TemplateEnvImpl::GetLoadSettings() const
     const WriterLock<Mutex> l(m_loadSettingsGuard);
     if (settings.finalize.callable)
     {
-        return std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), DialectLocked(), SandboxPolicyLocked());
+        return std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), DialectLocked());
     }
     if (!m_loadSettings || m_loadSettings->settings != settings)
     {
-        m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), DialectLocked(), SandboxPolicyLocked());
+        m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), DialectLocked());
     }
     return m_loadSettings;
 }
@@ -285,7 +285,7 @@ bool TemplateEnvImpl::SetBigIntBackend(const BigIntBackend* backend) noexcept
     }
     try
     {
-        m_loadSettings = std::make_shared<const LoadSettings>(settings, backend, DialectLocked(), SandboxPolicyLocked());
+        m_loadSettings = std::make_shared<const LoadSettings>(settings, backend, DialectLocked());
     }
     catch (...)
     {
@@ -307,23 +307,7 @@ void TemplateEnvImpl::SetDialect(Dialect dialect)
     {
         return;
     }
-    m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), dialect, SandboxPolicyLocked());
-}
-
-void TemplateEnvImpl::SetSandboxPolicy(std::shared_ptr<const IEngineSandboxPolicy> policy)
-{
-    const WriterLock<Mutex> l(m_loadSettingsGuard);
-    if (policy == SandboxPolicyLocked())
-    {
-        return;
-    }
-    m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), DialectLocked(), std::move(policy));
-}
-
-std::shared_ptr<const IEngineSandboxPolicy> TemplateEnvImpl::GetSandboxPolicy() const
-{
-    const WriterLock<Mutex> l(m_loadSettingsGuard);
-    return SandboxPolicyLocked();
+    m_loadSettings = std::make_shared<const LoadSettings>(settings, BigIntBackendLocked(), dialect);
 }
 
 Dialect TemplateEnvImpl::GetDialect() const

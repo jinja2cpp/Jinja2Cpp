@@ -1054,7 +1054,7 @@ public:
     [[nodiscard]] GenericMap CreateGenericMap() const { return Ref().CreateGenericMap(); }
     // See IMapAccessor::GetLoopAttr
     bool GetLoopAttr(LoopAttr attr, InternalValue& value) const { return Ref().GetLoopAttr(attr, value); }
-    // Marks the accessor as a host object's (MakeEngineHostValue)
+    // Marks the accessor as a host object's (src/public_host_object.cpp)
     MapAdapter& MarkAsHost() noexcept
     {
         m_isHost = true;

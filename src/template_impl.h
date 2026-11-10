@@ -389,50 +389,10 @@ public:
     // (template_module.cpp)
     static nonstd::expected<BasicTemplateModule<CharT>, BasicErrorInfo<CharT>> MakeModule(const std::shared_ptr<const TemplateImpl>& self, const ValuesMap& params);
 
-    // Template::FindReferencedTemplates; the Python module's meta.find_referenced_templates (docs/tasks/0354)
-    static nonstd::expected<std::vector<std::optional<std::string>>, BasicErrorInfo<CharT>> ReferencedTemplatesOf(const BasicTemplate<CharT>& tpl)
-    {
-        return static_cast<const TemplateImpl*>(tpl.m_impl.get())->FindReferencedTemplates();
-    }
-
-    // Renders `tpl` with params that are values of the engine already, such as host objects
-    // (host_object.h): the private entry of the Python module, which links the library
-    // statically (docs/tasks/0352). `globals`, when given, are the render's globals instead of
-    // the environment's: the module's env.globals, which imported templates see too (0353)
-    static std::optional<BasicErrorInfo<CharT>> RenderInternal(const BasicTemplate<CharT>& tpl,
-                                                               std::basic_string<CharT>& os,
-                                                               const InternalValueMap& params,
-                                                               const InternalValueMap* globals = nullptr)
-    {
-        return RenderInternalTo(tpl, os, params, globals);
-    }
-    // The same, writing to a host's sink (the module's Template.generate)
-    static std::optional<BasicErrorInfo<CharT>> RenderInternal(const BasicTemplate<CharT>& tpl,
-                                                               BasicOutputSink<CharT>& sink,
-                                                               const InternalValueMap& params,
-                                                               const InternalValueMap* globals = nullptr)
-    {
-        return RenderInternalTo(tpl, sink, params, globals);
-    }
-    template<typename Target>
-    static std::optional<BasicErrorInfo<CharT>> RenderInternalTo(const BasicTemplate<CharT>& tpl, Target& os, const InternalValueMap& params, const InternalValueMap* globals)
-    {
-        const auto* impl = static_cast<const TemplateImpl*>(tpl.m_impl.get());
-        // A separate instantiation, so that the ordinary Render keeps its shape and cost
-        if (globals)
-        {
-            const RenderHooks hooks{ globals, nullptr };
-            return impl->template RenderCore<true>(os, params, &hooks);
-        }
-        return impl->template RenderCore<false>(os, params, nullptr);
-    }
-
     // What a render takes besides its params (Template::RenderTo with RenderOptions, docs/tasks/0357 B3)
     struct RenderHooks
     {
-        // Replace the environment's globals when set
-        const InternalValueMap* globals = nullptr;
-        // Or the host's, converted in the render (RenderOptions::globals)
+        // The host's globals in place of the environment's, converted in the render (RenderOptions::globals)
         const std::shared_ptr<const ValuesMap>* hostGlobals = nullptr;
         // The host's poll (detail::t_hostPoll) for the render, or null to keep the thread's
         const std::function<void()>* poll = nullptr;
@@ -475,7 +435,7 @@ public:
     {
         if (!hooks->hostGlobals)
         {
-            return hooks->globals;
+            return nullptr;
         }
         const auto& host = *hooks->hostGlobals;
         for (const auto& [name, value] : *host)
@@ -545,14 +505,7 @@ public:
 
             // A GenericMap returns values by copy; the context refers to them, so they live here
             std::list<Value> genericValues;
-            if constexpr (std::is_same_v<ParamsMap, InternalValueMap>)
-            {
-                for (const auto& [name, value] : params)
-                {
-                    intParams[name] = value;
-                }
-            }
-            else if constexpr (std::is_same_v<ParamsMap, GenericMap>)
+            if constexpr (std::is_same_v<ParamsMap, GenericMap>)
             {
                 for (auto& name : params.GetKeys())
                 {

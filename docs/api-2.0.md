@@ -829,7 +829,12 @@ Recommend A now, C only if someone asks.
 10. **The Python module on the public API only** (0357, plan in
    [design/0357-python-module-public-api.md](design/0357-python-module-public-api.md)).
    *Decided by Ruslan 2026-11-06: every recommendation, after the advisor's and Codex's
-   reviews.*
+   reviews.* **Status: implemented** (S1-S4: #800, #811, #813 and the S4 PR). `python/`
+   includes only `jinja2cpp/` headers, and CI builds it alone against an installed library
+   (`python.yml`, job `installed`, with a check of every header it includes). The engine's
+   private entry points for the module are gone: `TemplateImpl::RenderInternal` and
+   `ReferencedTemplatesOf`, `host::EngineUserCallable` and `TemplateEnvImpl::SetSandboxPolicy`.
+   `src/host_object.h` is the engine's side of the public bridge only.
    - **What is added.** A standalone public `jinja2::IHostObject` in `jinja2cpp/host_object.h`,
      built by composition: `MakeHostValue`, plus an `AsHostObject()` slot on
      `IMapItemAccessor`. It does not derive from the map accessor.

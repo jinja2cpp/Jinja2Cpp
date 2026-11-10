@@ -1,6 +1,11 @@
 // Built against the installed package by check_package.cmake (docs/tasks/0068)
 // The umbrella header is installed and self-contained (docs/tasks/0076)
 #include <jinja2cpp/jinja2cpp.h>
+// Outside the umbrella header, installed and self-contained too: what the Python module, built
+// against the installed package, includes besides it (docs/tasks/0357)
+#include <jinja2cpp/host_object.h>    // IWYU pragma: keep
+#include <jinja2cpp/markup.h>         // IWYU pragma: keep
+#include <jinja2cpp/sandbox_policy.h> // IWYU pragma: keep
 
 #include <exception>
 #include <iostream>

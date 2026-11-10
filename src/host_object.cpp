@@ -13,7 +13,6 @@
 #include <functional>
 #include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -273,16 +272,6 @@ bool Equal(const IEngineHostObject* left, const InternalValue& leftValue, const 
     }
     // Python's default __eq__: the same object
     return left != nullptr && right != nullptr && left->Identity() == right->Identity();
-}
-
-Value EngineCallableBody::operator()(const UserCallableParams& /*params*/) const
-{
-    throw std::logic_error("a filter or test of the engine's values is called by templates only");
-}
-
-UserCallable EngineUserCallable(InternalValue callable)
-{
-    return UserCallable(EngineCallableBody{ std::move(callable) }, { ArgInfo(ArgInfo::VarArgs), ArgInfo(ArgInfo::VarKwArgs) });
 }
 } // namespace host
 

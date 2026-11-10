@@ -564,7 +564,8 @@ def fallback_class(template_class: type) -> type:
     overridden = sorted(
         name
         for name in environment.FallbackTemplate.__dict__
-        if name not in ("__dict__", "__weakref__", "__module__", "__doc__", "__qualname__")
+        # What Python itself puts in every class's __dict__ (3.13 adds __firstlineno__ and __static_attributes__)
+        if name not in ("__dict__", "__weakref__", "__module__", "__doc__", "__qualname__", "__firstlineno__", "__static_attributes__")
         and (owner := next((c for c in template_class.__mro__ if name in c.__dict__), None)) is not None
         and owner not in stock
     )

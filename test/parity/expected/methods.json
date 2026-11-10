@@ -423,6 +423,27 @@
    "output": "5!"
   },
   {
+   "id": "methods.str_format_map",
+   "template": "{{ '{a}!'.format_map({'a': 5}) }}",
+   "context": {
+    "s": "Hello World",
+    "l": [
+     3,
+     1,
+     2
+    ],
+    "d": {
+     "a": 1,
+     "b": 2
+    },
+    "csv": "a,b,,c",
+    "pad": "  x  "
+   },
+   "env": {},
+   "templates": {},
+   "output": "5!"
+  },
+  {
    "id": "methods.str_isdigit",
    "template": "{{ '123'.isdigit() }}",
    "context": {
