@@ -608,6 +608,7 @@ CASES = [
     ("print_autoescape", "{% print h, h | safe %}", {"env": {"autoescape": True}, "ctx": {"h": "<b>"}}),
     ("print_autoescape_block", "{% autoescape true %}{% print '<', h %}{% endautoescape %}{% print h %}", {"ctx": {"h": "<b>"}}),
     ("print_volatile_autoescape", "{% autoescape on %}{% print '<', '<' | safe %}{% endautoescape %}", {"ctx": {"on": True}}),
+    ("print_volatile_folded", "{% autoescape true %}{% autoescape on %}{% print '<' | upper, '<' ~ 'a', '<' is string, '<' if true %}{% endautoescape %}{% endautoescape %}", {"ctx": {"on": False}}),
     ("print_none", "{% print none, 1 %}"),
     ("print_finalize", "{% print none, x, '<' %}{{ none }}", {"env": {"autoescape": True, "finalize": "brackets"}}),
     ("print_name_elsewhere", "{% set print = 'p' %}{{ print }}{% for print in [1] %}{{ print }}{% endfor %}"),

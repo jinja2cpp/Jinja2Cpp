@@ -22357,6 +22357,16 @@
    "output": "<<"
   },
   {
+   "id": "statements.print_volatile_folded",
+   "template": "{% autoescape true %}{% autoescape on %}{% print '<' | upper, '<' ~ 'a', '<' is string, '<' if true %}{% endautoescape %}{% endautoescape %}",
+   "context": {
+    "on": false
+   },
+   "env": {},
+   "templates": {},
+   "output": "<&lt;aTrue&lt;"
+  },
+  {
    "id": "statements.print_none",
    "template": "{% print none, 1 %}",
    "context": {

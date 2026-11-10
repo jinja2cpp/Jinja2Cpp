@@ -1631,6 +1631,7 @@ StatementsParser::ParseResult StatementsParser::ParsePrint(LexScanner& lexer, St
     const auto check = OutputCheckOf(m_root, statementsInfo);
     const bool isVolatile = InVolatileCode(m_root, m_nodes, statementsInfo);
     ExpressionParser exprParser(m_settings, m_env, m_nodes, m_names, m_unknown);
+    exprParser.SetVolatile(isVolatile);
     bool first = true;
     while (lexer.PeekNextToken() != Token::Eof)
     {

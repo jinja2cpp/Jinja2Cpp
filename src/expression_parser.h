@@ -147,6 +147,9 @@ public:
     // Before each of several top-level expressions of one statement (with bindings, macro
     // defaults): their operators do not add up
     void NextTopLevelExpression() { m_operators = 0; }
+    // The expressions that follow are output in volatile code (Parse sets it for `{{ }}`; a
+    // `print` statement sets it itself): their filters and tests are not folded
+    void SetVolatile(bool isVolatile) { m_volatile = isVolatile; }
     ParseResult<NodeRef<Expression>> ParseFullExpression(LexScanner& lexer, bool includeIfPart = true);
     // Jinja2's parse_tuple without parentheses: 'a, b' is a tuple, 'a' stays an expression
     ParseResult<NodeRef<Expression>> ParseTupleOrExpression(LexScanner& lexer, bool includeIfPart = true);
